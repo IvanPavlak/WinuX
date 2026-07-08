@@ -1,0 +1,60 @@
+# ==========================================================================
+# Centralized PostgreSQL Docker Compose (WinuX)
+# ==========================================================================
+# This compose file is NOT committed to individual projects.
+# It is part of the WinuX repository and provides a shared
+# PostgreSQL environment for local development across all projects.
+#
+# Projects connect to localhost:5432 (PG17) or localhost:5433 (PG16)
+# with the same credentials they already use (postgres/admin),
+# making this a transparent drop-in replacement for locally installed PostgreSQL.
+#
+# Usage:
+#   docker compose -f docker-compose.postgresql.yml up -d
+#   docker compose -f docker-compose.postgresql.yml down
+#
+# Managed automatically by Run-Project when a project uses PostgreSQL.
+# ==========================================================================
+
+name: PostgreSQL
+
+services:
+  postgres-17:
+    image: postgres:17
+    container_name: postgres-17
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: admin
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-17-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+
+  postgres-16:
+    image: postgres:16
+    container_name: postgres-16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: admin
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres-16-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+
+volumes:
+  postgres-17-data:
+  postgres-16-data:

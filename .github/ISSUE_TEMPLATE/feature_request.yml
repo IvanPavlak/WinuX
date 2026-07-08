@@ -1,0 +1,89 @@
+name: Feature request
+description: Suggest a new function, configuration option, or improvement for WinuX
+title: "[Feature]: "
+labels: ["enhancement", "triage"]
+body:
+    - type: markdown
+      attributes:
+          value: |
+              Thanks for suggesting an improvement to WinuX! 🤔
+
+              For open-ended ideas or "would this fit?" questions, consider starting a
+              [Discussion](https://github.com/IvanPavlak/WinuX/discussions) instead - it's a better
+              place for brainstorming, and non-trivial changes should be agreed there first.
+
+              Please search [existing issues](https://github.com/IvanPavlak/WinuX/issues) first to
+              avoid duplicates.
+    - type: checkboxes
+      id: prerequisites
+      attributes:
+          label: Prerequisites
+          options:
+              - label: I searched existing issues and discussions and this is not a duplicate.
+                required: true
+    - type: textarea
+      id: problem
+      attributes:
+          label: Problem / motivation
+          description: What problem does this solve? What are you trying to do that WinuX can't do today?
+          placeholder: I'm always frustrated when ...
+      validations:
+          required: true
+    - type: textarea
+      id: proposal
+      attributes:
+          label: Proposed solution
+          description: Describe the feature. If it's a new function, suggest a `Verb-Noun` name and parameters.
+          placeholder: Add a function `Set-MonitorBrightness` that ...
+      validations:
+          required: true
+    - type: dropdown
+      id: area
+      attributes:
+          label: Area
+          description: Which part of WinuX does this touch?
+          multiple: true
+          options:
+              - Bootstrap / installation
+              - Configuration.psd1
+              - Application (software install)
+              - Git
+              - Helper
+              - System
+              - Window (layouts / positioning)
+              - Workflow (workspaces / browser groups)
+              - Theming (wallpapers / FancyZones)
+              - Documentation
+              - Tests
+              - Other
+      validations:
+          required: true
+    - type: checkboxes
+      id: core-principle
+      attributes:
+          label: Configuration-first design
+          description: WinuX's core principle is that everything user-facing is driven by Configuration.psd1, never hardcoded in functions.
+          options:
+              - label: This feature can be configured via `Configuration.psd1` rather than hardcoded in a function.
+    - type: textarea
+      id: config-shape
+      attributes:
+          label: Proposed Configuration.psd1 shape (optional)
+          description: If this introduces a new config entry, sketch the hashtable shape (use placeholder paths like `{User}`, `{Dev}`).
+          render: powershell
+    - type: textarea
+      id: alternatives
+      attributes:
+          label: Alternatives considered
+          description: Other approaches you thought about, and why this one is better.
+    - type: checkboxes
+      id: contribution
+      attributes:
+          label: Contribution
+          options:
+              - label: I would be willing to open a pull request to implement this.
+    - type: textarea
+      id: additional
+      attributes:
+          label: Additional context
+          description: Mockups, links, screenshots, or anything else.

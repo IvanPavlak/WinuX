@@ -1,0 +1,20 @@
+gui:
+    authorColors:
+        "*": "#ff69b4"
+    theme:
+        activeBorderColor:
+            - "#ff8c00"
+            - bold
+        inactiveBorderColor:
+            - "#1e90ff"
+        searchingActiveBorderColor:
+            - "#ff8c00"
+            - bold
+        optionsTextColor:
+            - "#1e90ff"
+        selectedLineBgColor:
+            - "#1e90ff"
+        inactiveViewSelectedLineBgColor:
+            - bold
+        unstagedChangesColor:
+            - "red"

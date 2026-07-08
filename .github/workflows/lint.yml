@@ -1,0 +1,40 @@
+name: Lint
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  psscriptanalyzer:
+    name: PSScriptAnalyzer
+    runs-on: windows-latest
+    # Starts non-blocking so style findings don't block merges while the tree is
+    # brought into compliance. Flip `continue-on-error` off (and add it to the
+    # ruleset's required checks) once it is clean.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install PSScriptAnalyzer
+        shell: pwsh
+        run: Install-Module PSScriptAnalyzer -Force -Scope CurrentUser
+
+      - name: Analyze PowerShell
+        shell: pwsh
+        run: |
+          $results = Invoke-ScriptAnalyzer `
+            -Path "$env:GITHUB_WORKSPACE/Windows/PowerShell" `
+            -Recurse `
+            -Severity @('Error','Warning') `
+            -ExcludeRule @('PSAvoidUsingWriteHost','PSUseApprovedVerbs')
+          $results | Format-Table -AutoSize
+          foreach ($r in $results) {
+            $lvl = if ($r.Severity -eq 'Error') { 'error' } else { 'warning' }
+            Write-Host "::$lvl file=$($r.ScriptPath),line=$($r.Line),col=$($r.Column)::$($r.RuleName): $($r.Message)"
+          }
+          if (($results | Where-Object Severity -eq 'Error').Count -gt 0) { exit 1 }

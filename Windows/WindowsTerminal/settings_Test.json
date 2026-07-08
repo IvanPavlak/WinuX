@@ -1,0 +1,196 @@
+{
+	"$help": "https://aka.ms/terminal-documentation",
+	"$schema": "https://aka.ms/terminal-profiles-schema",
+	"actions": [
+		{
+			"command": {
+				"action": "newTab"
+			},
+			"id": "User.newTab.5DEADB41"
+		},
+		{
+			"command": "paste",
+			"id": "User.paste"
+		},
+		{
+			"command": {
+				"action": "commandPalette"
+			},
+			"id": "User.commandPalette.D3F0B923"
+		},
+		{
+			"command": {
+				"action": "moveTab",
+				"window": "new"
+			},
+			"id": "User.moveTab.EA39957B"
+		},
+		{
+			"command": "toggleFocusMode",
+			"id": "User.toggleFocusMode"
+		},
+		{
+			"command": {
+				"action": "splitPane",
+				"split": "auto",
+				"splitMode": "duplicate"
+			},
+			"id": "User.splitPane.A6751878"
+		},
+		{
+			"command": {
+				"action": "copy",
+				"singleLine": false
+			},
+			"id": "User.copy.644BA8F2"
+		},
+		{
+			"command": "toggleAlwaysOnTop",
+			"id": "User.toggleAlwaysOnTop"
+		},
+		{
+			"command": "closePane",
+			"id": "User.closePane"
+		},
+		{
+			"command": {
+				"action": "splitPane"
+			},
+			"id": "User.splitPane.91AB55B1"
+		},
+		{
+			"command": "find",
+			"id": "User.find"
+		},
+		{
+			"command": {
+				"action": "openSettings",
+				"target": "settingsUI"
+			},
+			"id": "User.openSettings.6CD791B"
+		}
+	],
+	"confirmCloseAllTabs": false,
+	"copyFormatting": "none",
+	"copyOnSelect": false,
+	"defaultProfile": "{574e775e-4f2a-5b96-ac1e-a2962a402336}",
+	"keybindings": [
+		{
+			"id": "User.copy.644BA8F2",
+			"keys": "ctrl+c"
+		},
+		{
+			"id": "User.newTab.5DEADB41",
+			"keys": "ctrl+t"
+		},
+		{
+			"id": "User.splitPane.A6751878",
+			"keys": "alt+shift+d"
+		},
+		{
+			"id": "User.commandPalette.D3F0B923",
+			"keys": "ctrl+shift+p"
+		},
+		{
+			"id": "User.splitPane.91AB55B1",
+			"keys": "ctrl+shift+minus"
+		},
+		{
+			"id": "User.toggleAlwaysOnTop",
+			"keys": "alt+shift+f11"
+		},
+		{
+			"id": "User.find",
+			"keys": "ctrl+shift+f"
+		},
+		{
+			"id": "User.paste",
+			"keys": "ctrl+v"
+		},
+		{
+			"id": "User.closePane",
+			"keys": "ctrl+w"
+		},
+		{
+			"id": "User.toggleFocusMode",
+			"keys": "shift+f11"
+		},
+		{
+			"id": null,
+			"keys": "ctrl+d"
+		},
+		{
+			"id": "User.openSettings.6CD791B",
+			"keys": "ctrl+shift+comma"
+		},
+		{
+			"id": "User.moveTab.EA39957B",
+			"keys": "alt+x"
+		}
+	],
+	"newTabMenu": [
+		{
+			"type": "remainingProfiles"
+		}
+	],
+	"profiles": {
+		"defaults": {
+			"adjustIndistinguishableColors": "never",
+			"font": {
+				"face": "JetBrainsMono Nerd Font",
+				"weight": "normal"
+			},
+			"opacity": 70,
+			"startingDirectory": "%USERPROFILE%\\Desktop",
+			"useAcrylic": false
+		},
+		"list": [
+			{
+				"commandline": "pwsh.exe -NoLogo -NoProfileLoadTime",
+				"guid": "{9ff90d3d-5cc1-4529-b5e2-de57b638f26d}",
+				"hidden": false,
+				"icon": "ms-appx:///ProfileIcons/pwsh.png",
+				"name": "PowerShell"
+			},
+			{
+				"guid": "{2c4de342-38b7-51cf-b940-2309a097f518}",
+				"hidden": false,
+				"icon": "ms-appx:///ProfileIcons/{9acb9455-ca41-5af7-950f-6bca1bc9722f}.png",
+				"name": "Ubuntu",
+				"source": "Windows.Terminal.Wsl"
+			},
+			{
+				"adjustIndistinguishableColors": "always",
+				"colorScheme": "Solarized Dark",
+				"commandline": "powershell.exe -ExecutionPolicy ByPass -NoExit -Command & '%conda%\\\\shell\\\\condabin\\\\conda-hook.ps1' ; conda activate '%conda%' ; fastfetch --config \"%USERPROFILE%/.config/fastfetch/config_Conda.jsonc\"",
+				"experimental.retroTerminalEffect": false,
+				"font": {
+					"weight": "normal"
+				},
+				"guid": "{20325b70-bf39-44f7-a99c-52f044a55bf2}",
+				"hidden": false,
+				"icon": "%USERPROFILE%\\AppData\\Local\\Packages\\Microsoft.WindowsTerminal_8wekyb3d8bbwe\\LocalState\\CondaLogo.png",
+				"name": "Conda",
+				"startingDirectory": "%USERPROFILE%"
+			},
+			{
+				"guid": "{2ece5bfe-50ed-5f3a-ab87-5cd4baafed2b}",
+				"hidden": false,
+				"name": "Git Bash",
+				"source": "Git"
+			},
+			{
+				"commandline": "%SystemRoot%\\System32\\cmd.exe",
+				"guid": "{0caa0dad-35be-5f56-a8ff-afceeeaa6101}",
+				"hidden": false,
+				"name": "Command Prompt"
+			}
+		]
+	},
+	"schemes": [],
+	"showTabsInTitlebar": true,
+	"theme": "system",
+	"themes": [],
+	"useAcrylicInTabRow": true,
+	"windowingBehavior": "useNew"
+}

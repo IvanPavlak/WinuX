@@ -1,0 +1,84 @@
+name: Tests
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+# Cancel superseded runs on the same ref (saves Windows minutes).
+concurrency:
+  group: tests-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  checks: write          # dorny/test-reporter creates a Check Run
+  pull-requests: write   # annotations / check summary on PRs
+
+jobs:
+  test:
+    name: Pester Tests
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Pester 5
+        shell: pwsh
+        run: |
+          Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+          # windows-latest ships Pester 3.4.0; install/pin the 5.x line.
+          Install-Module -Name Pester -MinimumVersion 5.5.0 -MaximumVersion 5.99.99 `
+            -Force -SkipPublisherCheck -Scope CurrentUser
+          $p = Get-Module -ListAvailable Pester |
+               Where-Object Version -ge ([Version]'5.0.0') |
+               Sort-Object Version -Descending | Select-Object -First 1
+          Write-Host "Using Pester $($p.Version)"
+
+      - name: Run Pester
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Import-Module Pester -MinimumVersion 5.0.0 -Force
+
+          # The Pester suite mirrors a profile-loaded session: tests Mock cross-module
+          # commands (Write-LogTitle, Resolve-Selection, Start-Application, Test-AdminPrivileges,
+          # ...), so those modules must be importable first or the mocks fail with
+          # "Could not find Command". Put the Modules dir on PSModulePath and import them.
+          $modRoot = Join-Path $env:GITHUB_WORKSPACE 'Windows/PowerShell/Modules'
+          $env:PSModulePath = $modRoot + [IO.Path]::PathSeparator + $env:PSModulePath
+          $global:Configuration = Import-PowerShellDataFile (Join-Path $env:GITHUB_WORKSPACE 'Windows/PowerShell/Configuration.psd1')
+          foreach ($m in 'Logging','Helper','System','Application','Git','Window','Workflow','Configuration','Bootstrap') {
+            Import-Module $m -Force -Global -WarningAction SilentlyContinue -ErrorAction SilentlyContinue
+          }
+
+          $testsRoot = Join-Path $env:GITHUB_WORKSPACE 'Windows/PowerShell/Modules/Tests/Modules'
+
+          $cfg = New-PesterConfiguration
+          $cfg.Run.Path         = $testsRoot      # auto-discovers **/*.Tests.ps1
+          $cfg.Run.Exit         = $true           # non-zero exit on failure -> job fails
+          $cfg.Run.PassThru     = $true
+          $cfg.Output.Verbosity = 'Detailed'
+          $cfg.TestResult.Enabled      = $true
+          $cfg.TestResult.OutputFormat = 'NUnit3'
+          $cfg.TestResult.OutputPath   = Join-Path $env:GITHUB_WORKSPACE 'pester-results.xml'
+
+          Invoke-Pester -Configuration $cfg
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pester-results
+          path: pester-results.xml
+          if-no-files-found: error
+
+      - name: Publish test report
+        if: always()
+        uses: dorny/test-reporter@v1
+        with:
+          name: Pester Results
+          path: pester-results.xml
+          reporter: dotnet-nunit       # matches Pester's NUnit3 output schema
+          fail-on-error: true

@@ -1,0 +1,53 @@
+{
+	// ==========================================================================
+	// PowerShell editing - one unified style across the repo.
+	//
+	// Format-on-save is scoped to PowerShell ONLY (not markdown/json/etc.) and formats the
+	// WHOLE file on save. Every PowerShell file in the repo has already been formatted to
+	// this exact style, so saving a clean file is a no-op - the whole codebase stays
+	// consistent no matter who is working on it. The formatter is the PowerShell extension's
+	// Invoke-Formatter, configured below to match that style (tabs, Stroustrup braces,
+	// aligned hashtable "="). (Vendored code under **/vendor/ is not part of this style.)
+	// ==========================================================================
+
+	// Do not auto-format non-PowerShell files on save.
+	"editor.formatOnSave": false,
+	"editor.formatOnSaveMode": "file",
+
+	"[powershell]": {
+		"editor.defaultFormatter": "ms-vscode.PowerShell",
+		"editor.formatOnSave": true,
+		"editor.insertSpaces": false,
+		"editor.tabSize": 4,
+		"editor.detectIndentation": false,
+		// Trailing-whitespace + final-newline hygiene, scoped to PowerShell so markdown/json
+		// are untouched. (Invoke-Formatter alone does not strip trailing whitespace.)
+		"files.trimTrailingWhitespace": true,
+		"files.insertFinalNewline": true,
+		"files.trimFinalNewlines": true
+	},
+
+	// Diagnostics come from the repo's PSScriptAnalyzer settings (formatting rules and
+	// intentional conventions are excluded there, so the Problems panel shows real signal).
+	"powershell.scriptAnalysis.enable": true,
+	"powershell.scriptAnalysis.settingsPath": "PSScriptAnalyzerSettings.psd1",
+
+	// Formatting rules -> match the existing code style exactly.
+	"powershell.codeFormatting.preset": "Stroustrup",
+	"powershell.codeFormatting.autoCorrectAliases": true,
+	"powershell.codeFormatting.useCorrectCasing": true,
+	"powershell.codeFormatting.alignPropertyValuePairs": true,
+	"powershell.codeFormatting.ignoreOneLineBlock": true,
+	"powershell.codeFormatting.pipelineIndentationStyle": "IncreaseIndentationForFirstPipeline",
+	"powershell.codeFormatting.whitespaceBeforeOpenBrace": true,
+	"powershell.codeFormatting.whitespaceBeforeOpenParen": true,
+	"powershell.codeFormatting.whitespaceAroundOperator": true,
+	"powershell.codeFormatting.whitespaceAfterSeparator": true,
+	"powershell.codeFormatting.whitespaceInsideBrace": true,
+	"powershell.codeFormatting.whitespaceBetweenParameters": false,
+	"powershell.codeFormatting.addWhitespaceAroundPipe": true,
+	"powershell.codeFormatting.useConstantStrings": false,
+
+	// Repo convention: UTF-8 without BOM.
+	"files.encoding": "utf8"
+}

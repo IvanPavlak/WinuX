@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+contact_links:
+    - name: 💬 Questions & Discussions
+      url: https://github.com/IvanPavlak/WinuX/discussions
+      about: Ask questions, share setups, and discuss ideas. Please don't open an issue for general questions.
+    - name: 🔒 Report a security vulnerability
+      url: https://github.com/IvanPavlak/WinuX/security/advisories/new
+      about: Report security issues privately via a GitHub Security Advisory - never in a public issue.
+    - name: 📖 Documentation
+      url: https://ivanpavlak.github.io/WinuX/
+      about: Browse the WinuX documentation (installation, configuration, and the full function reference).
+    - name: ☕ Support WinuX on Ko-fi
+      url: https://ko-fi.com/ivanpavlak
+      about: WinuX is free and maintained in spare time. If it helps you, consider buying me a coffee!

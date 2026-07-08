@@ -1,0 +1,5 @@
+App,Version,Global,Machine
+
+# Scoop packages. Columns: App,Version,Global,Machine
+# (Machine = "All", "Test", or your own types, combinable like "PC/Laptop").
+# Add your own below.

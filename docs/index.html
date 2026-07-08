@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>WinuX Documentation</title>
+  <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+  <meta name="description" content="WinuX - Windows 11 Linuxified - Comprehensive PowerShell dotfiles system">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0">
+  
+  <!-- Theme stylesheets - loaded dynamically -->
+  <link id="theme-dark" rel="stylesheet" href="https://cdn.jsdelivr.net/npm/docsify-themeable@0/dist/css/theme-simple-dark.min.css" disabled>
+  <link id="theme-light" rel="stylesheet" href="https://cdn.jsdelivr.net/npm/docsify-themeable@0/dist/css/theme-simple.min.css" disabled>
+  
+  <!-- Custom styles -->
+  <style>
+    /* Shared theme variables */
+    :root {
+      --sidebar-width: 280px;
+    }
+    
+    /* Dark theme variables */
+    [data-theme="dark"] {
+      --theme-color: #3b82f6;
+      --sidebar-nav-link-color--active: #3b82f6;
+      --sidebar-nav-link-border-color--active: #3b82f6;
+      --code-theme-background: #1e1e1e;
+      --code-inline-background: #2d2d2d;
+      --table-head-background: #2d2d2d;
+      --table-row-border-color: #333;
+      --body-background: #1c1c1e;
+      
+      /* Docsify-themeable overrides */
+      --base-background-color: #1c1c1e;
+      --cover-background-color: #1c1c1e;
+      --heading-color: #fff;
+      --link-color: #3b82f6;
+      --link-color--hover: #60a5fa;
+      --blockquote-border-color: #3b82f6;
+      --table-row-odd-background: rgba(59, 130, 246, 0.08);
+      --table-row-even-background: transparent;
+      --notice-tip-border-color: #3b82f6;
+      --notice-important-border-color: #3b82f6;
+      --search-result-keyword-background: rgba(59, 130, 246, 0.3);
+      --docsifytabs-tab-highlight-color: #3b82f6;
+      
+      /* Sidebar overrides */
+      --sidebar-background: #252528;
+      --sidebar-border-color: #333;
+      --sidebar-nav-link-color: #b0b0b0;
+      --sidebar-nav-link-color--hover: #fff;
+      --sidebar-name-background: #252528;
+      --search-background-color: #333;
+      --search-input-background-color: #2d2d2d;
+      --search-input-color: #fff;
+    }
+    
+    /* Light theme variables */
+    [data-theme="light"] {
+      --theme-color: #3b82f6;
+      --sidebar-nav-link-color--active: #3b82f6;
+      --sidebar-nav-link-border-color--active: #3b82f6;
+      --code-theme-background: #f5f5f5;
+      --code-inline-background: #e8e8e8;
+      --table-head-background: #f0f0f0;
+      --table-row-border-color: #ddd;
+      --body-background: #fff;
+    }
+    
+    /* ═══════════════════════════════════════════════════════════════════════ */
+    /* THEME TOGGLE BUTTON                                                      */
+    /* ═══════════════════════════════════════════════════════════════════════ */
+    
+    /* Force sidebar background in dark theme */
+    [data-theme="dark"] .sidebar,
+    [data-theme="dark"] .sidebar-nav {
+      background-color: #252528 !important;
+    }
+    
+    [data-theme="dark"] .search {
+      background-color: #252528 !important;
+    }
+    
+    .theme-toggle {
+      position: fixed;
+      top: 15px;
+      right: 20px;
+      z-index: 100;
+      background: var(--theme-color);
+      border: none;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.3s ease, background-color 0.3s ease;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+    }
+    
+    .theme-toggle:hover {
+      transform: scale(1.1);
+    }
+    
+    .theme-toggle svg {
+      width: 20px;
+      height: 20px;
+      fill: white;
+      transition: transform 0.3s ease;
+    }
+    
+    .theme-toggle:hover svg {
+      transform: rotate(15deg);
+    }
+    
+    /* Hide icons based on theme */
+    [data-theme="dark"] .theme-toggle .icon-sun { display: block; }
+    [data-theme="dark"] .theme-toggle .icon-moon { display: none; }
+    [data-theme="light"] .theme-toggle .icon-sun { display: none; }
+    [data-theme="light"] .theme-toggle .icon-moon { display: block; }
+    
+    /* Homepage button */
+    .home-button {
+      position: fixed;
+      top: 15px;
+      right: 70px;
+      z-index: 100;
+      background: var(--theme-color);
+      border: none;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.3s ease, background-color 0.3s ease;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+      text-decoration: none;
+    }
+    
+    .home-button:hover {
+      transform: scale(1.1);
+    }
+    
+    .home-button svg {
+      width: 20px;
+      height: 20px;
+      fill: white;
+    }
+    
+    /* Logo styling */
+    .app-name-link img {
+      max-width: 120px;
+      margin: 20px auto 10px auto;
+      display: block;
+    }
+    
+    /* Sidebar buttons under logo */
+    .sidebar-buttons {
+      display: flex;
+      justify-content: center;
+      gap: 16px;
+      margin-bottom: 15px;
+    }
+    
+    .sidebar-buttons a {
+      color: #808080;
+      transition: color 0.2s ease, transform 0.2s ease;
+      display: flex;
+      align-items: center;
+    }
+    
+    .sidebar-buttons a:hover {
+      color: var(--theme-color);
+      transform: scale(1.1);
+    }
+    
+    .sidebar-buttons svg {
+      width: 22px;
+      height: 22px;
+    }
+    
+    /* Parameter tables */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    
+    table th, table td {
+      padding: 12px;
+      text-align: left;
+      border-bottom: 1px solid var(--table-row-border-color, #333);
+    }
+    
+    table th {
+      background-color: var(--table-head-background, #2d2d2d);
+      font-weight: 600;
+    }
+    
+    /* Video container */
+    .video-container {
+      position: relative;
+      padding-bottom: 56.25%;
+      height: 0;
+      overflow: hidden;
+      max-width: 100%;
+      margin: 20px 0;
+    }
+    
+    .video-container iframe {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+    }
+    
+    /* Callout boxes */
+    .tip, .warning, .note {
+      padding: 16px;
+      border-radius: 4px;
+      margin: 16px 0;
+    }
+    
+    .tip {
+      background-color: rgba(59, 130, 246, 0.1);
+      border-left: 4px solid var(--theme-color);
+    }
+    
+    .warning {
+      background-color: rgba(255, 193, 7, 0.1);
+      border-left: 4px solid #ffc107;
+    }
+    
+    .note {
+      background-color: rgba(33, 150, 243, 0.1);
+      border-left: 4px solid #2196f3;
+    }
+    
+    /* Function signature */
+    .function-signature {
+      background-color: #2d2d2d;
+      padding: 16px;
+      border-radius: 4px;
+      font-family: 'Consolas', 'Monaco', monospace;
+      overflow-x: auto;
+    }
+    
+    /* Badge styling */
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-right: 4px;
+    }
+    
+    .badge-module {
+      background-color: var(--theme-color);
+      color: #fff;
+    }
+    
+    .badge-alias {
+      background-color: #e91e63;
+      color: #fff;
+    }
+    
+
+  </style>
+</head>
+<body>
+  <!-- Theme Toggle Button -->
+  <button class="theme-toggle" onclick="toggleTheme()" title="Toggle theme">
+    <svg class="icon-sun" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+      <path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zM2 13h2c.55 0 1-.45 1-1s-.45-1-1-1H2c-.55 0-1 .45-1 1s.45 1 1 1zm18 0h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1s.45 1 1 1zM11 2v2c0 .55.45 1 1 1s1-.45 1-1V2c0-.55-.45-1-1-1s-1 .45-1 1zm0 18v2c0 .55.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1zM5.99 4.58c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0s.39-1.03 0-1.41L5.99 4.58zm12.37 12.37c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0 .39-.39.39-1.03 0-1.41l-1.06-1.06zm1.06-10.96c.39-.39.39-1.03 0-1.41-.39-.39-1.03-.39-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06zM7.05 18.36c.39-.39.39-1.03 0-1.41-.39-.39-1.03-.39-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06z"/>
+    </svg>
+    <svg class="icon-moon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+      <path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9c0-.46-.04-.92-.1-1.36-.98 1.37-2.58 2.26-4.4 2.26-2.98 0-5.4-2.42-5.4-5.4 0-1.81.89-3.42 2.26-4.4-.44-.06-.9-.1-1.36-.1z"/>
+    </svg>
+  </button>
+  
+  <!-- Homepage Button -->
+  <a href="#/" class="home-button" title="Go to homepage">
+    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+      <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
+    </svg>
+  </a>
+  
+  <div id="app"></div>
+  
+  <!-- Theme Initialization (must run before Docsify) -->
+  <script>
+    // Theme toggle functionality
+    function getPreferredTheme() {
+      const stored = localStorage.getItem('theme');
+      if (stored) return stored;
+      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+    
+    function setTheme(theme) {
+      document.documentElement.setAttribute('data-theme', theme);
+      localStorage.setItem('theme', theme);
+      
+      // Enable/disable stylesheets
+      document.getElementById('theme-dark').disabled = (theme !== 'dark');
+      document.getElementById('theme-light').disabled = (theme !== 'light');
+    }
+    
+    function toggleTheme() {
+      const current = document.documentElement.getAttribute('data-theme');
+      const newTheme = current === 'dark' ? 'light' : 'dark';
+      setTheme(newTheme);
+    }
+    
+    // Initialize theme immediately
+    setTheme(getPreferredTheme());
+    
+    // Listen for system theme changes
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+      if (!localStorage.getItem('theme')) {
+        setTheme(e.matches ? 'dark' : 'light');
+      }
+    });
+  </script>
+  
+  <script>
+    window.$docsify = {
+      name: '<img src="assets/logo.png" alt="WinuX"><div class="sidebar-buttons"><a href="https://github.com/IvanPavlak/WinuX" target="_blank" rel="noopener" title="GitHub"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg></a><a href="https://ko-fi.com/ivanpavlak" target="_blank" rel="noopener" title="Support on Ko-fi"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M23.881 8.948c-.773-4.085-4.859-4.593-4.859-4.593H.723c-.604 0-.679.798-.679.798s-.082 7.324-.022 11.822c.164 2.424 2.586 2.672 2.586 2.672s8.267-.023 11.966-.049c2.438-.426 2.683-2.566 2.658-3.734 4.352.24 7.422-2.831 6.649-6.916zm-11.062 3.511c-1.246 1.453-4.011 3.976-4.011 3.976s-.121.119-.31.023c-.076-.057-.108-.09-.108-.09-.443-.441-3.368-3.049-4.034-3.954-.709-.965-1.041-2.7-.091-3.71.951-1.01 3.005-1.086 4.363.407 0 0 1.565-1.782 3.468-.963 1.904.82 1.832 3.011.723 4.311zm6.173.478c-.928.116-1.682.028-1.682.028V7.284h1.77s1.971.551 1.971 2.638c0 1.913-.985 2.667-2.059 3.015z"/></svg></a></div>',
+      nameLink: 'https://github.com/IvanPavlak/WinuX',
+      
+      // Sidebar
+      loadSidebar: true,
+      subMaxLevel: 3,
+      sidebarDisplayLevel: 1,
+      
+      // Search
+      search: {
+        maxAge: 86400000,
+        paths: 'auto',
+        placeholder: 'Search documentation...',
+        noData: 'No results found',
+        depth: 3,
+        hideOtherSidebarContent: false,
+      },
+      
+      // Other settings
+      auto2top: true,
+      mergeNavbar: true,
+      relativePath: true,
+      
+      // Tabs plugin
+      tabs: {
+        persist: true,
+        sync: true,
+        theme: 'classic',
+        tabComments: true,
+        tabHeadings: true
+      },
+      
+      // Copy code
+      copyCode: {
+        buttonText: 'Copy',
+        errorText: 'Error',
+        successText: 'Copied!'
+      },
+      
+      // Pagination
+      pagination: {
+        previousText: '← Previous',
+        nextText: 'Next →',
+        crossChapter: true,
+        crossChapterText: true,
+      },
+      
+      // Footer
+      footer: {
+        copy: '<span>WinuX &copy; 2024-2026</span>',
+        auth: 'Made with ❤️ by Ivan Pavlak',
+        style: 'text-align: center;',
+      }
+    }
+  </script>
+  
+  <!-- Docsify core -->
+  <script src="https://cdn.jsdelivr.net/npm/docsify@4/lib/docsify.min.js"></script>
+  
+  <!-- Plugins -->
+  <script src="https://cdn.jsdelivr.net/npm/docsify@4/lib/plugins/search.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/docsify-copy-code@2/dist/docsify-copy-code.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/docsify-pagination@2/dist/docsify-pagination.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/docsify-themeable@0/dist/js/docsify-themeable.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/docsify-tabs@1/dist/docsify-tabs.min.js"></script>
+  
+  <!-- Syntax highlighting -->
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-powershell.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-bash.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-json.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-yaml.min.js"></script>
+  
+  <!-- Make sidebar logo open in new tab -->
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // Wait for Docsify to render the sidebar
+      const observer = new MutationObserver(function(mutations, obs) {
+        const nameLink = document.querySelector('.sidebar .app-name-link');
+        if (nameLink) {
+          nameLink.setAttribute('target', '_blank');
+          nameLink.setAttribute('rel', 'noopener noreferrer');
+          obs.disconnect();
+        }
+      });
+      observer.observe(document.body, { childList: true, subtree: true });
+    });
+  </script>
+</body>
+</html>

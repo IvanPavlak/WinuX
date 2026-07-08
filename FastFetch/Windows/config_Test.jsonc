@@ -1,0 +1,196 @@
+{
+	"$schema": "https://github.com/fastfetch-cli/fastfetch/raw/dev/doc/json_schema.json",
+	"logo": {
+		"type": "file",
+		"padding": {
+			"top": 7
+		},
+		"source": "~/.config/fastfetch/FastFetchLogo_Test.txt",
+		"color": {
+			"1": "38;2;30;144;255"
+		}
+	},
+	"display": {
+		"separator": " -> ",
+		"color": {
+			"separator": "38;2;255;0;0"
+		}
+	},
+	"modules": [
+		{
+			"type": "custom",
+			"format": "╭───────╮"
+		},
+		{
+			"type": "title",
+			"color": {
+				"user": "38;2;30;144;255",
+				"at": "38;2;255;0;0",
+				"host": "38;2;30;144;255"
+			}
+		},
+		{
+			"type": "custom",
+			"format": "╰───────╯"
+		},
+		{
+			"type": "custom",
+			"format": "╭────────────────────────────────────────────────────────────────╮"
+		},
+		//"break",
+		{
+			"type": "os",
+			"key": "    OS",
+			"keyColor": "38;2;30;144;255",
+			"outputColor": "white"
+		},
+		//"host",
+		//"bios",
+		//"bootmgr",
+		//"board",
+		//"chassis",
+		//"kernel",
+		//"initsystem",
+		//"loadavg",
+		//"processes",
+		//"packages",
+		{
+			"type": "shell",
+			"key": "    Shell",
+			"keyColor": "38;2;30;144;255",
+			"outputColor": "white"
+		},
+		//"editor",
+		{
+			"type": "cpu",
+			"key": "  󰻠  CPU",
+			"showPeCoreCount": true,
+			"temp": true,
+			"keyColor": "38;2;30;144;255",
+			"outputColor": "white"
+		},
+		//"cpucache",
+		//"cpuusage",
+		{
+			"type": "gpu",
+			"temp": true,
+			"key": "  󰍛  GPU",
+			"keyColor": "38;2;30;144;255",
+			"outputColor": "white"
+		},
+		{
+			"type": "memory",
+			"key": "  󰑭  Memory",
+			"keyColor": "38;2;30;144;255",
+			"outputColor": "white"
+		},
+		{
+			"type": "display",
+			"key": "  󰍹  Display",
+			"keyColor": "38;2;30;144;255",
+			"outputColor": "white"
+		},
+		//"brightness",
+		//"monitor",
+		//"lm",
+		//"de",
+		//"wm",
+		//"wmtheme",
+		//"theme",
+		//"icons",
+		//"font",
+		//"cursor",
+		//"wallpaper",
+		//"terminal",
+		//"terminalfont",
+		//"terminalsize",
+		//"terminaltheme",
+		//"physicalmemory",
+		//"swap",
+		{
+			"type": "custom",
+			"format": "• ────────────────────────────────────────────────────────────── •"
+		},
+		{
+			"type": "disk",
+			"key": "    Disk",
+			"keyColor": "38;2;30;144;255",
+			"outputColor": "white"
+		},
+		//"poweradapter",
+		//"player",
+		//"media",
+		//"publicip",
+		//{
+		//"type": "localip",
+		//"showIpv6": true,
+		//"showMac": true
+		//},
+		//"wifi",
+		//"datetime",
+		//"locale",
+		//"vulkan",
+		//"opengl",
+		//"opencl",
+		//"users",
+		//"bluetooth",
+		//"sound",
+		//"camera",
+		//"gamepad",
+		//"netio",
+		//"diskio",
+		//{
+		//"type": "physicaldisk",
+		//"temp": true
+		//},
+		//"version",
+		//"break",
+		{
+			"type": "custom",
+			"format": "• ────────────────────────────────────────────────────────────── •"
+		},
+		{
+			"type": "battery",
+			"key": "  󰁹  Battery",
+			"keyColor": "38;2;30;144;255",
+			"outputColor": "white"
+		},
+		{
+			"type": "uptime",
+			"key": "  󰅐  Uptime",
+			"keyColor": "38;2;30;144;255",
+			"outputColor": "white"
+		},
+		// {
+		// 	"type": "custom",
+		//  "format": "• ────────────────────────────────────────────────────────────── •"
+		// },
+		// {
+		// 	"type": "bluetooth",
+		// 	"key": "  󰂯 Bluetooth",
+		// 	"showDisconnected": true,
+		// 	"keyColor": "38;2;30;144;255",
+		// 	"outputColor": "white"
+		// },
+		// {
+		// 	"type": "custom",
+		// 	"format": "• ──────────────────────────────────────────────────────────────── •"
+		// },
+		// {
+		// 	"type": "weather",
+		// 	"key": "  󰖕 Weather",
+		// 	"timeout": 1000,
+		// 	"keyColor": "38;2;30;144;255"
+		// },
+		{
+			"type": "custom",
+			"format": "╰────────────────────────────────────────────────────────────────╯"
+		},
+		{
+			"type": "colors",
+			"paddingLeft": 2,
+			"symbol": "circle"
+		},
+		"break"
+	]
+}

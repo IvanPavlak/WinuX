@@ -1,0 +1,6 @@
+App,Version,Params,Force,Machine
+
+# Chocolatey packages. Columns: App,Version,Params,Force,Machine
+# (Machine = "All", "Test", or your own types, combinable like "PC/Laptop").
+# Empty by default - add your own below, e.g.:
+#someapp,latest,,false,All

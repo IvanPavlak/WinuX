@@ -1,0 +1,13 @@
+# Your Git identity is set at first run (see Initialize-Configuration) from your
+# install-time input, so no personal identity is committed here. Set it yourself
+# with: git config --global user.name "..."  /  git config --global user.email "..."
+[user]
+	name =
+	email =
+[filter "lfs"]
+	process = git-lfs filter-process
+	required = true
+	clean = git-lfs clean -- %f
+	smudge = git-lfs smudge -- %f
+[core]
+	longpaths = true

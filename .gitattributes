@@ -1,0 +1,28 @@
+# .gitattributes - fork protection for WinuX and its forks.
+#
+# WinuX is meant to be forked. Your fork keeps its own version of the files listed below while still
+# pulling engine, module, and documentation improvements from upstream. The "ours" merge driver makes
+# `git merge upstream/master` keep YOUR copy of each listed file and never overwrite it with WinuX's
+# generic/example one.
+#
+# The driver is registered per clone by the bootstrap (it runs `git config merge.ours.driver true`).
+# If you set up without the bootstrap, run that one command yourself, once. Git will not auto-register
+# a merge driver from a cloned repo (a security boundary), so it is always a one-time local step.
+#
+# Personal CONFIG is handled differently and needs no attribute here: Configuration.psd1 stays the
+# generic base and SHOULD track upstream; your personal values go in Configuration.local.psd1, which is
+# deep-merged over the base at load. Upstream never tracks that file, so it never conflicts. (Commit it
+# in your fork if you want it to sync across your machines.)
+#
+# NOTE for WinuX maintainers: these rules apply to this repo too, so a LOCAL merge of a PR that edits
+# one of these files would keep the repo's version. Merge such PRs on GitHub, or reconcile by hand.
+
+# Application install lists - each fork curates its own; WinuX ships a minimal example set.
+Windows/PowerShell/Modules/Bootstrap/Data/WinGetApps.csv       merge=ours
+Windows/PowerShell/Modules/Bootstrap/Data/ScoopApps.csv        merge=ours
+Windows/PowerShell/Modules/Bootstrap/Data/ChocolateyApps.csv   merge=ours
+
+# Personal payload configs - your real values; WinuX ships generic/blank templates.
+Git/.gitconfig                                                 merge=ours
+NuGet/nuget.config                                             merge=ours
+Firefox/user.js                                                merge=ours

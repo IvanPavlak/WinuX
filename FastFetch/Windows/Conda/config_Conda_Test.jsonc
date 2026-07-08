@@ -1,0 +1,117 @@
+{
+	"$schema": "https://github.com/fastfetch-cli/fastfetch/raw/dev/doc/json_schema.json",
+	"logo": {
+		"type": "file",
+		"padding": {
+			"top": 2
+		},
+		"source": "~/.config/fastfetch/FastFetchLogo_Conda.txt",
+		"color": {
+			"1": "38;2;68;204;102"
+		}
+	},
+	"display": {
+		"separator": " -> ",
+		"color": {
+			"separator": "38;2;68;204;102"
+		}
+	},
+	"modules": [
+		{
+			"type": "custom",
+			"format": "╭───────────╮"
+		},
+		{
+			"type": "title",
+			"color": {
+				"user": "38;2;68;204;102",
+				"at": "38;2;255;255;255",
+				"host": "38;2;68;204;102"
+			}
+		},
+		{
+			"type": "custom",
+			"format": "╰───────────╯"
+		},
+		{
+			"type": "custom",
+			"format": "╭──────────────────────────────────────────────────────────────────────────────╮"
+		},
+		{
+			"type": "os",
+			"key": "   OS",
+			"keyColor": "38;2;68;204;102",
+			"outputColor": "white"
+		},
+		{
+			"type": "shell",
+			"key": "   Shell",
+			"keyColor": "38;2;68;204;102",
+			"outputColor": "white"
+		},
+		{
+			"type": "custom",
+			"key": "  󱔎 Environment",
+			"format": "{$CONDA_DEFAULT_ENV}",
+			"keyColor": "38;2;68;204;102",
+			"outputColor": "white"
+		},
+		{
+			"type": "cpu",
+			"key": "  󰻠 CPU",
+			"showPeCoreCount": true,
+			"temp": true,
+			"keyColor": "38;2;68;204;102",
+			"outputColor": "white"
+		},
+		{
+			"type": "gpu",
+			"temp": true,
+			"key": "  󰍛 GPU",
+			"keyColor": "38;2;68;204;102",
+			"outputColor": "white"
+		},
+		{
+			"type": "memory",
+			"key": "  󰑭 Memory",
+			"keyColor": "38;2;68;204;102",
+			"outputColor": "white"
+		},
+		{
+			"type": "display",
+			"key": "  󰍹 Display",
+			"keyColor": "38;2;68;204;102",
+			"outputColor": "white"
+		},
+		{
+			"type": "custom",
+			"format": "• ──────────────────────────────────────────────────────────────────────────── •"
+		},
+		{
+			"type": "disk",
+			"key": "   Disk",
+			"keyColor": "38;2;68;204;102",
+			"outputColor": "white"
+		},
+		{
+			"type": "custom",
+			"format": "• ──────────────────────────────────────────────────────────────────────────── •"
+		},
+		{
+			"type": "uptime",
+			"key": "  󰅐 Uptime",
+			"keyColor": "38;2;68;204;102",
+			"outputColor": "white"
+		},
+		{
+			"type": "custom",
+			"format": "╰──────────────────────────────────────────────────────────────────────────────╯"
+		},
+		{
+			"type": "colors",
+			"paddingLeft": 2,
+			"symbol": "circle"
+		},
+		"break"
+	]
+}

@@ -1,0 +1,292 @@
+{
+  "custom-layouts": [
+    {
+      "uuid": "{149532AD-B0F3-40A3-B137-4FC819FEB890}",
+      "name": "Zero",
+      "type": "grid",
+      "info": {
+        "rows": 1,
+        "columns": 1,
+        "rows-percentage": [
+          10000
+        ],
+        "columns-percentage": [
+          10000
+        ],
+        "cell-child-map": [
+          [
+            0
+          ]
+        ],
+        "show-spacing": true,
+        "spacing": 3,
+        "sensitivity-radius": 20
+      }
+    },
+    {
+      "uuid": "{9D07C01E-877C-4B03-B2D9-3DCC0C1E961F}",
+      "name": "One",
+      "type": "grid",
+      "info": {
+        "rows": 1,
+        "columns": 2,
+        "rows-percentage": [
+          10000
+        ],
+        "columns-percentage": [
+          5000,
+          5000
+        ],
+        "cell-child-map": [
+          [
+            0,
+            1
+          ]
+        ],
+        "show-spacing": true,
+        "spacing": 3,
+        "sensitivity-radius": 20
+      }
+    },
+    {
+      "uuid": "{92545C34-65A3-46F6-980D-50882B6534F0}",
+      "name": "Two",
+      "type": "grid",
+      "info": {
+        "rows": 1,
+        "columns": 3,
+        "rows-percentage": [
+          10000
+        ],
+        "columns-percentage": [
+          3333,
+          3333,
+          3334
+        ],
+        "cell-child-map": [
+          [
+            0,
+            1,
+            2
+          ]
+        ],
+        "show-spacing": true,
+        "spacing": 3,
+        "sensitivity-radius": 20
+      }
+    },
+    {
+      "uuid": "{C0EFD259-3416-454B-A472-EAB15FE837DB}",
+      "name": "Three",
+      "type": "grid",
+      "info": {
+        "rows": 1,
+        "columns": 4,
+        "rows-percentage": [
+          10000
+        ],
+        "columns-percentage": [
+          2500,
+          2500,
+          2500,
+          2500
+        ],
+        "cell-child-map": [
+          [
+            0,
+            1,
+            2,
+            3
+          ]
+        ],
+        "show-spacing": true,
+        "spacing": 3,
+        "sensitivity-radius": 20
+      }
+    },
+    {
+      "uuid": "{9D7F7A9A-12E0-4B76-87EC-62BCE6566D10}",
+      "name": "Four",
+      "type": "grid",
+      "info": {
+        "rows": 2,
+        "columns": 2,
+        "rows-percentage": [
+          5000,
+          5000
+        ],
+        "columns-percentage": [
+          5000,
+          5000
+        ],
+        "cell-child-map": [
+          [
+            0,
+            2
+          ],
+          [
+            1,
+            3
+          ]
+        ],
+        "show-spacing": true,
+        "spacing": 3,
+        "sensitivity-radius": 20
+      }
+    },
+    {
+      "uuid": "{B3D5C2FA-4D0C-4A6A-A68C-226D7E037630}",
+      "name": "Five",
+      "type": "grid",
+      "info": {
+        "rows": 1,
+        "columns": 2,
+        "rows-percentage": [
+          10000
+        ],
+        "columns-percentage": [
+          6725,
+          3275
+        ],
+        "cell-child-map": [
+          [
+            0,
+            1
+          ]
+        ],
+        "show-spacing": true,
+        "spacing": 3,
+        "sensitivity-radius": 20
+      }
+    },
+    {
+      "uuid": "{C1CC65EA-AC0F-4DD4-8B10-CA28E6C09EF6}",
+      "name": "Six",
+      "type": "grid",
+      "info": {
+        "rows": 2,
+        "columns": 2,
+        "rows-percentage": [
+          5000,
+          5000
+        ],
+        "columns-percentage": [
+          5000,
+          5000
+        ],
+        "cell-child-map": [
+          [
+            0,
+            1
+          ],
+          [
+            0,
+            2
+          ]
+        ],
+        "show-spacing": true,
+        "spacing": 3,
+        "sensitivity-radius": 20
+      }
+    },
+    {
+      "uuid": "{28D5E14B-461F-4192-A823-F50BB8ACE387}",
+      "name": "Seven",
+      "type": "grid",
+      "info": {
+        "rows": 2,
+        "columns": 3,
+        "rows-percentage": [
+          5000,
+          5000
+        ],
+        "columns-percentage": [
+          3333,
+          3333,
+          3334
+        ],
+        "cell-child-map": [
+          [
+            0,
+            1,
+            2
+          ],
+          [
+            0,
+            1,
+            3
+          ]
+        ],
+        "show-spacing": true,
+        "spacing": 3,
+        "sensitivity-radius": 20
+      }
+    },
+    {
+      "uuid": "{92927B2F-DA5E-467D-8B53-35730E1D9885}",
+      "name": "Eight",
+      "type": "grid",
+      "info": {
+        "rows": 2,
+        "columns": 3,
+        "rows-percentage": [
+          5000,
+          5000
+        ],
+        "columns-percentage": [
+          3333,
+          3333,
+          3334
+        ],
+        "cell-child-map": [
+          [
+            0,
+            1,
+            3
+          ],
+          [
+            0,
+            2,
+            4
+          ]
+        ],
+        "show-spacing": true,
+        "spacing": 3,
+        "sensitivity-radius": 20
+      }
+    },
+    {
+      "uuid": "{52CF32A8-DAF0-4AB2-9630-9038D96150E3}",
+      "name": "Nine",
+      "type": "grid",
+      "info": {
+        "rows": 2,
+        "columns": 3,
+        "rows-percentage": [
+          5000,
+          5000
+        ],
+        "columns-percentage": [
+          3333,
+          3333,
+          3334
+        ],
+        "cell-child-map": [
+          [
+            0,
+            2,
+            4
+          ],
+          [
+            1,
+            3,
+            5
+          ]
+        ],
+        "show-spacing": true,
+        "spacing": 3,
+        "sensitivity-radius": 20
+      }
+    }
+  ]
+}

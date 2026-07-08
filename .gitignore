@@ -1,0 +1,26 @@
+Ubuntu
+ArchLinux
+Obsidian/workspace.json
+
+# Personal config override - your machine-specific values (identity, paths, hostnames, ...),
+# deep-merged over Configuration.psd1 at load time by Load-PathConfiguration. Written by
+# Initialize-Configuration. Keep it on your machine / in your fork; never committed to WinuX.
+# Match by filename (no leading path) so it is ignored wherever it lands - it holds a real Git
+# identity and paths, and must never be published even if a stray/older copy sits in another dir.
+Configuration.local.psd1
+
+# Logging module - generated logs (kept locally for inspection, never committed)
+Windows/PowerShell/Modules/Logging/Logs/*
+!Windows/PowerShell/Modules/Logging/Logs/.gitkeep
+!Windows/PowerShell/Modules/Logging/Logs/Pinned/
+Windows/PowerShell/Modules/Logging/Logs/Pinned/*
+!Windows/PowerShell/Modules/Logging/Logs/Pinned/.gitkeep
+
+# Window module - per-machine runtime snapshot of the most recently applied workspace
+# (written by Save-CurrentLayout, overwritten on every open). Machine-specific, never committed.
+Windows/PowerShell/Modules/Window/Layouts/CurrentLayout.txt
+
+# WinuX.exe is a BUILD OUTPUT - compiled from WinuX.ps1 by New-WinuXExecutable.ps1 and attached
+# to every tagged GitHub release by .github/workflows/release.yml. Never commit the binary;
+# download it from <repo>/releases/latest/download/WinuX.exe instead.
+Windows/WinuX/WinuX.exe

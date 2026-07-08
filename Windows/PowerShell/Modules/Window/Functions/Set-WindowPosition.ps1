@@ -1,0 +1,97 @@
+function Set-WindowPosition {
+	<#
+	.SYNOPSIS
+		Sets the position and size of a window.
+
+	.DESCRIPTION
+		Moves and resizes a window to specific coordinates. This can be used to position
+		windows to match FancyZones layouts by calculating the zone coordinates.
+
+	.PARAMETER WindowHandle
+		The window handle (HWND) to move.
+
+	.PARAMETER X
+		The X coordinate (left position) in pixels.
+
+	.PARAMETER Y
+		The Y coordinate (top position) in pixels.
+
+	.PARAMETER Width
+		The width of the window in pixels.
+
+	.PARAMETER Height
+		The height of the window in pixels.
+
+	.EXAMPLE
+		$handle = (Get-WindowHandle -ProcessName "chrome")[0].Handle
+		Set-WindowPosition -WindowHandle $handle -X 0 -Y 0 -Width 1920 -Height 1080
+
+	#>
+	[CmdletBinding()]
+	param (
+		[Parameter(Mandatory = $true)]
+		[IntPtr]$WindowHandle,
+
+		[Parameter(Mandatory = $true)]
+		[int]$X,
+
+		[Parameter(Mandatory = $true)]
+		[int]$Y,
+
+		[Parameter(Mandatory = $true)]
+		[int]$Width,
+
+		[Parameter(Mandatory = $true)]
+		[int]$Height
+	)
+
+	# Use consolidated native types from WindowNative.cs (loaded in Window.psm1)
+	try {
+		# First, ensure window is not maximized or minimized
+		$isMaximized = [WindowModule.Native]::IsZoomed($WindowHandle)
+
+		if ($isMaximized) {
+			Write-LogDebug "  Restoring window from maximized state..." -Style Step
+			[void][WindowModule.Native]::ShowWindow($WindowHandle, [WindowModule.Native]::SW_RESTORE)
+			Start-Sleep -Milliseconds $script:WindowModuleDelays.WindowRestoreMs
+		}
+
+		# Restore to normal state (handles snapped windows)
+		[void][WindowModule.Native]::ShowWindow($WindowHandle, [WindowModule.Native]::SW_SHOWNORMAL)
+		Start-Sleep -Milliseconds $script:WindowModuleDelays.WindowRestoreMs
+
+		# Set window position and size
+		# Use FRAMECHANGED to ensure window updates properly
+		$flags = [WindowModule.Native]::SWP_NOZORDER -bor [WindowModule.Native]::SWP_SHOWWINDOW -bor [WindowModule.Native]::SWP_FRAMECHANGED
+
+		$result = [WindowModule.Native]::SetWindowPos(
+			$WindowHandle,
+			[IntPtr]::Zero,
+			$X,
+			$Y,
+			$Width,
+			$Height,
+			$flags
+		)
+
+		if ($result) {
+			# Small delay to let the window settle
+			Start-Sleep -Milliseconds $script:WindowModuleDelays.WindowPositionMs
+			Write-LogDebug "     ✓ Window positioned at => ($X, $Y) with size [${Width}x${Height}]" -Style Success
+			return $true
+		}
+		else {
+			if (Test-LogVerbose) {
+				$errorCode = [System.Runtime.InteropServices.Marshal]::GetLastWin32Error()
+				Write-LogDebug "Failed to set window position (Error code: $errorCode)" -Style Warning
+			}
+			return $false
+		}
+	}
+	catch {
+		if (Test-LogVerbose) {
+			Write-LogDebug "Failed to set window position: $_" -Style Error
+		}
+		return $false
+	}
+}

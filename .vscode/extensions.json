@@ -1,0 +1,7 @@
+{
+	// Recommended extension for this repo's PowerShell tooling (formatting + analysis).
+	// VS Code prompts to install it when the folder is opened.
+	"recommendations": [
+		"ms-vscode.PowerShell"
+	]
+}

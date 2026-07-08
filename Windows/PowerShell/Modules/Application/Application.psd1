@@ -1,0 +1,50 @@
+@{
+	ModuleVersion     = "1.0"
+	Author            = "Ivan Pavlak"
+	Description       = ""
+	RootModule        = "Application.psm1"
+	FunctionsToExport = @(
+		'Create-CondaEnvironments',
+		'Install-ChocolateyApps',
+		'Install-ChocolateyPackageManager',
+		'Install-DotnetEf',
+		'Install-FromExecutable',
+		'Install-PowerShellModules',
+		'Install-ScoopApps',
+		'Install-ScoopPackageManager',
+		'Install-WingetApps',
+		'Invoke-Browser',
+		'Open-Acrobat',
+		'Open-Browser',
+		'Open-ClaudeDesktop',
+		'Open-DBeaver',
+		'Open-Discord',
+		'Open-Docker',
+		'Open-FoundryVTT',
+		'Open-LeagueOfLegends',
+		'Open-NotepadPlusPlus',
+		'Open-Obsidian',
+		'Open-Outlook',
+		'Open-RiseupVPN',
+		'Open-SecureBrowser',
+		'Open-Slack',
+		'Open-Steam',
+		'Open-TeamViewer',
+		'Open-Terminal',
+		'Open-VirtualBox',
+		'Open-VisualStudio',
+		'Open-VSCode',
+		'Open-VSCodeWorkspace',
+		'Get-VSCodeWorkspaceNames',
+		'Open-WhatsApp',
+		'Open-WSLTab',
+		'Stop-PowerToysCompletely',
+		'Start-Application',
+		'Start-FancyZones',
+		'Start-MicrosoftActivationScripts',
+		'Start-Win11Debloat',
+		'Update-Win11DebloatVendor',
+		'Test-BrowserGroupAlreadyOpen',
+		'Test-ProjectAlreadyOpen'
+	)
+}

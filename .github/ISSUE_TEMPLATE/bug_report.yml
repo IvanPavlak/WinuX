@@ -1,0 +1,116 @@
+name: Bug report
+description: Report a problem with WinuX (bootstrap, a function, theming, etc.)
+title: "[Bug]: "
+labels: ["bug", "triage"]
+body:
+    - type: markdown
+      attributes:
+          value: |
+              Thanks for taking the time to file a bug report! 🐛
+
+              ⚠️ **Security issues:** Do **not** report security vulnerabilities here. Follow our
+              [Security Policy](https://github.com/IvanPavlak/WinuX/security/advisories/new) instead
+              (private GitHub Security Advisory).
+
+              Please search [existing issues](https://github.com/IvanPavlak/WinuX/issues) first to
+              avoid duplicates.
+    - type: checkboxes
+      id: prerequisites
+      attributes:
+          label: Prerequisites
+          options:
+              - label: I am running the latest `master` (or have updated before reporting).
+                required: true
+              - label: I searched existing issues and this is not a duplicate.
+                required: true
+              - label: This is **not** a security vulnerability (those go through a private advisory).
+                required: true
+    - type: textarea
+      id: description
+      attributes:
+          label: Describe the bug
+          description: A clear and concise description of what went wrong.
+          placeholder: When I run ..., WinuX does ... instead of ...
+      validations:
+          required: true
+    - type: textarea
+      id: reproduction
+      attributes:
+          label: Steps to reproduce
+          description: Exact commands and configuration. Redact tokens and personal paths.
+          placeholder: |
+              1. Run `Open-Workspace -Name "MyWorkspace"`
+              2. Observe ...
+          render: shell
+      validations:
+          required: true
+    - type: textarea
+      id: expected
+      attributes:
+          label: Expected behavior
+          description: What did you expect to happen?
+      validations:
+          required: true
+    - type: textarea
+      id: actual
+      attributes:
+          label: Actual behavior / error output
+          description: Paste the full error, stack trace, or relevant log lines. Redact secrets.
+          render: shell
+      validations:
+          required: true
+    - type: input
+      id: function
+      attributes:
+          label: Affected function / module
+          description: Which function or module is involved, if known?
+          placeholder: e.g. Resize-Windows (Window module)
+    - type: input
+      id: os-version
+      attributes:
+          label: Windows version
+          description: Run `winver` or `[System.Environment]::OSVersion.Version`.
+          placeholder: e.g. Windows 11 Pro 24H2 (10.0.26200)
+      validations:
+          required: true
+    - type: input
+      id: pwsh-version
+      attributes:
+          label: PowerShell version
+          description: Output of `$PSVersionTable.PSVersion`.
+          placeholder: e.g. 7.5.0
+      validations:
+          required: true
+    - type: input
+      id: winux-version
+      attributes:
+          label: WinuX commit / ref
+          description: Output of `git -C <repo> rev-parse --short HEAD`, or the branch/tag you installed.
+          placeholder: e.g. a1b2c3d (master)
+      validations:
+          required: true
+    - type: dropdown
+      id: machine-type
+      attributes:
+          label: Machine type
+          description: Which MachineType is configured for this host?
+          options:
+              - Test
+              - Machine
+              - Other / custom
+    - type: textarea
+      id: config
+      attributes:
+          label: Relevant Configuration.psd1 snippet
+          description: The minimal config entry that triggers the bug. **Redact any real paths, hostnames, tokens, or personal data.**
+          render: powershell
+    - type: textarea
+      id: logs
+      attributes:
+          label: Bootstrap / session log
+          description: If relevant, attach the `BootstrapLog_*.log` from your Desktop (redacted).
+    - type: textarea
+      id: additional
+      attributes:
+          label: Additional context
+          description: Anything else that might help - screenshots, recent changes, workarounds tried.
