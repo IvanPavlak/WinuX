@@ -11,8 +11,9 @@ See [VERSIONING.md](VERSIONING.md) for how we version and release.
 
 ## [Unreleased]
 
-The first public release of WinuX. Everything below will be promoted to `## [0.1.0]` when the
-initial release is tagged.
+## [0.1.0] - 2026-07-08
+
+The first public release of WinuX.
 
 ### Added
 
@@ -31,4 +32,5 @@ initial release is tagged.
   `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the
   GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/commits/master
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/IvanPavlak/WinuX/releases/tag/v0.1.0

@@ -39,16 +39,13 @@ From one bootstrap command or a simple executable, all driven by a single config
 **The documentation is the single source of truth for WinuX** - installation, configuration, every
 module, and a man-style reference for every PowerShell function (each linked to its source).
 
-Browse it in this repository under [**`docs/`**](docs/README.md), or serve the live
-docsify site locally:
+**Read it live at [ivanpavlak.github.io/WinuX](https://ivanpavlak.github.io/WinuX/)** - or browse it
+in this repository under [**`docs/`**](docs/README.md), or serve the site locally:
 
 ```powershell
 # From the repository root
 npx docsify-cli serve docs
 ```
-
-<!-- Once GitHub Pages is enabled for the docs folder, link the hosted site here,
-     e.g. https://ivanpavlak.github.io/WinuX/ -->
 
 ## License
 
