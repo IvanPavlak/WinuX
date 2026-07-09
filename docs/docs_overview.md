@@ -129,7 +129,7 @@ Phase 4 (Packages):              Install-WinGetPackageManager → Install-WinGet
 Phase 5 (Dev Tools):             PersonalSteps (fork-defined; base runs none) → Install-DotnetEF
 Phase 6 (Environment):           Set-EnvironmentVariables -Auto → Create-CondaEnvironments
                                  → Configure-NuGetConfig
-Phase 7 (Taskbar):               Configure-Taskbar -FromBootstrap → Set-TaskbarAutoHide -Auto
+Phase 7 (Taskbar):               Configure-Taskbar -FromBootstrap → Set-TaskbarAutoHide -Auto → Set-VisualEffects
 Phase 8 (WSL & Symlinks):        Initialize-WSLEnvironment → SymbolicLinkMaker → Configure-WSLSSH (WSL steps config-gated)
 Phase 9 (Finalize):              Lock taskbar → Restart-Explorer → Restart-Machine
 ```

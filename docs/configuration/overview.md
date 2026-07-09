@@ -45,6 +45,7 @@ The configuration uses a hierarchical structure designed to eliminate duplicatio
 | `KeyboardLayouts`          | Keyboard layout codes            | `Set-KeyboardLayouts`           |
 | `NerdFonts`                | Font configurations              | `Configure-NerdFont`            |
 | `ExplorerOptions`          | Windows Explorer settings        | `Set-ExplorerOptions`           |
+| `VisualEffects`            | Visual effects (Performance tab) | `Set-VisualEffects`             |
 | `AutoEnvironmentVariables` | Environment variables            | `Set-EnvironmentVariables`      |
 | `PostgreSqlPasswords`      | Database credentials             | `Configure-PostgreSqlPasswords` |
 | `NuGetConfig`              | NuGet source/destination         | `Configure-NuGetConfig`         |

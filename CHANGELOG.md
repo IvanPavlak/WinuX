@@ -11,6 +11,18 @@ See [VERSIONING.md](VERSIONING.md) for how we version and release.
 
 ## [Unreleased]
 
+### Added
+
+- `Set-VisualEffects` (System module): applies the Performance Options "Visual Effects" settings
+  programmatically from the new `VisualEffects` configuration section - one human-readable boolean
+  per dialog checkbox, written via the registry and `SystemParametersInfo`. Config-gated: the base
+  configuration ships the section fully commented so a vanilla bootstrap changes nothing; forks opt
+  in via `Configuration.local.psd1`. Runs during Bootstrap right after `Set-TaskbarAutoHide`.
+  Every managed effect is reported on its own colored row: green = enabled, red = disabled,
+  yellow `[skipped]` = already at the configured value.
+- `Write-LogStep -Style` (Logging module): render a step row in another level's color (e.g. a
+  green/red outcome row) while keeping the plain Step layout, visibility, and STEP file-log tag.
+
 ## [0.1.0] - 2026-07-08
 
 The first public release of WinuX.

@@ -83,6 +83,13 @@ Describe "Write-Log engine" {
 			& $Wrapper "msg"
 			Should -Invoke -ModuleName Logging Write-Host -ParameterFilter { $ForegroundColor -eq $Color }
 		}
+
+		It "renders a Step row in the -Style override color while keeping the plain Step layout and STEP file tag" {
+			Write-LogStep " row => [disabled]" -Style Error
+			# Red color, but the plain Step layout (no "=>" prefix added by the engine)
+			Should -Invoke -ModuleName Logging Write-Host -ParameterFilter { $ForegroundColor -eq 'Red' -and $Object -eq "`n row => [disabled]" }
+			(Get-Content (Get-LogPath) -Raw) | Should -Match '\[STEP\].*row => \[disabled\]'
+		}
 	}
 
 	Context "Verbose gating" {
