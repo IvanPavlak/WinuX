@@ -11,6 +11,8 @@ See [VERSIONING.md](VERSIONING.md) for how we version and release.
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-07-09
+
 ### Added
 
 - `Set-VisualEffects` (System module): applies the Performance Options "Visual Effects" settings
@@ -22,6 +24,12 @@ See [VERSIONING.md](VERSIONING.md) for how we version and release.
   yellow `[skipped]` = already at the configured value.
 - `Write-LogStep -Style` (Logging module): render a step row in another level's color (e.g. a
   green/red outcome row) while keeping the plain Step layout, visibility, and STEP file-log tag.
+
+### Changed
+
+- Versioning policy (`VERSIONING.md`): below 1.0, `0.x.0` releases are reserved for milestone-ladder
+  gates, and backward-compatible additions that land between milestones ship as `0.1.x` patch
+  releases. The strict SemVer split (new function/config option = MINOR) resumes at 1.0.0.
 
 ## [0.1.0] - 2026-07-08
 
@@ -44,5 +52,6 @@ The first public release of WinuX.
   `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the
   GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/IvanPavlak/WinuX/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/IvanPavlak/WinuX/releases/tag/v0.1.0
