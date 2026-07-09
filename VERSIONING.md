@@ -14,8 +14,23 @@ of exported functions.**
 
 ### Pre-1.0 (the 0.x series)
 
-Per SemVer §4, anything MAY change while we are below 1.0. Breaking changes bump **MINOR**
-(not MAJOR) and MUST appear under a `### Breaking` heading with migration notes.
+Per SemVer §4, anything MAY change while we are below 1.0. In the 0.x series the version number
+tracks the **milestone ladder below**, which overrides the general PATCH/MINOR split in the
+table above:
+
+- **MINOR (`0.x.0`)** is reserved for reaching a numbered milestone on the ladder (e.g. `0.2.0`
+  is the fully config-driven bootstrap). A milestone release naturally also carries whatever
+  additions and fixes accumulated on the way to it.
+- **PATCH (`0.1.x`, `0.2.x`, ...)** carries everything that ships *between* milestones - new
+  functions, new config options, bug fixes, doc/theming/dependency changes - as long as it is
+  backward compatible. This deliberately relaxes the table's PATCH definition (where a new
+  function/config option is a MINOR); the strict split resumes at `1.0.0`.
+- **Breaking changes** still bump the **MINOR** (not MAJOR) and MUST appear under a `### Breaking`
+  heading with migration notes.
+
+So a backward-compatible addition that does not itself reach the next milestone - e.g. adding
+`Set-VisualEffects` and its `VisualEffects` config section - ships as a **PATCH** (`0.1.1`),
+leaving `0.2.0` reserved for the milestone it names.
 
 **1.0.0** is reached when all four pillars are simultaneously true and proven on clean
 machines:

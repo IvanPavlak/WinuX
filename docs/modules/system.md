@@ -868,6 +868,20 @@ Set-TaskbarAutoHide -Enabled $true
 Set-TaskbarAutoHide -Enabled $false
 ```
 
+## [Set-VisualEffects](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Set-VisualEffects.ps1)
+
+- **Description:** Applies the Performance Options "Visual Effects" settings (System Properties > Performance Options > Visual Effects tab) from the `VisualEffects` section in the configuration. Every key mirrors one dialog checkbox one-to-one (`$true` = effect on / appearance, `$false` = effect off / performance); keys left out of the configuration are not touched, and when the section is absent or empty the function changes nothing - the vanilla default. Explorer/DWM-backed effects are written to the registry; the remaining effects go through `SystemParametersInfo` (the dialog's own mechanism), which persists them to the user profile and applies them live. Sets the dialog's radio button to "Custom" (`VisualFXSetting = 3`) whenever at least one effect is managed, and runs `Restart-Explorer` only when a registry-backed effect actually changed. Idempotent - returns early when every configured effect already matches; when changes are applied, every managed effect is reported on its own colored row (green = enabled, red = disabled, yellow `[skipped]` = already at the configured value). Unknown keys are skipped with a warning. Takes no parameters - all settings come from the configuration.
+- **Usage:** `Set-VisualEffects`
+
+Called during Bootstrap (after `Set-TaskbarAutoHide`), making visual effects an opt-in provisioning step: the base configuration ships the `VisualEffects` section fully commented (no effects touched) and a fork defines its preferences in `Configuration.local.psd1`. Valid keys: `AnimateControlsAndElementsInsideWindows`, `AnimateWindowsWhenMinimisingAndMaximising`, `AnimationsInTheTaskbar`, `EnablePeek`, `FadeOrSlideMenusIntoView`, `FadeOrSlideToolTipsIntoView`, `FadeOutMenuItemsAfterClicking`, `SaveTaskbarThumbnailPreviews`, `ShowShadowsUnderMousePointer`, `ShowShadowsUnderWindows`, `ShowThumbnailsInsteadOfIcons`, `ShowTranslucentSelectionRectangle`, `ShowWindowContentsWhileDragging`, `SlideOpenComboBoxes`, `SmoothEdgesOfScreenFonts`, `SmoothScrollListBoxes`, `UseDropShadowsForIconLabelsOnTheDesktop`.
+
+```powershell
+# Apply all effects configured in the VisualEffects section
+Set-VisualEffects
+```
+
+**See also:** [Set-ExplorerOptions](system.md#set-exploreroptions), [Set-TaskbarAutoHide](system.md#set-taskbarautohide)
+
 ## [Set-Wallpaper](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Set-Wallpaper.ps1)
 
 - **Description:** Sets the desktop wallpaper based on `MachineType` and theme. With `-Auto` it reads paths from `WallpaperDarkSettings`/`WallpaperLightSettings` in `Configuration.psd1` (selecting the entry for the current machine type, falling back to `Default`); without `-Auto` it presents an interactive picker of available wallpapers and styles. Supports multi-monitor configurations with per-monitor wallpaper and style assignment via the `IDesktopWallpaper` COM interface, automatically filtering out disconnected/phantom monitors so only active displays are configured. When the `VirtualDesktop` module is available it applies the wallpaper across all virtual desktops; otherwise only the current desktop. Wallpaper style (Fill, Fit, Stretch, Tile, Center, Span) is read from `WallpaperStyles`. Requires administrator privileges, uses COM retry logic for transient failures, and is idempotent - skipping when wallpaper, style, and tile values are already correct.

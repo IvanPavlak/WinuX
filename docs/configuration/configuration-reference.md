@@ -641,6 +641,38 @@ correct with a visible taskbar too. A fork opts in via `Configuration.local.psd1
 
 **Consumer function:** `Set-TaskbarAutoHide`
 
+### Visual Effects
+
+**Key:** `VisualEffects` → Hashtable of per-effect booleans; the programmatic equivalent of the
+"Custom" profile in System Properties > Performance Options > Visual Effects. Every key mirrors
+one dialog checkbox one-to-one: `$true` = effect on (appearance), `$false` = effect off
+(performance). Keys left out of the configuration are not touched; when the section is absent or
+empty (the shipped default - it is fully commented), Bootstrap changes nothing. A fork opts in
+via `Configuration.local.psd1`. Explorer/DWM-backed effects are written to the registry, the
+rest through `SystemParametersInfo`; when at least one effect is managed the dialog's radio
+button is set to "Custom" (`VisualFXSetting = 3`).
+
+**Valid keys** (the dialog checkboxes in PascalCase): `AnimateControlsAndElementsInsideWindows`,
+`AnimateWindowsWhenMinimisingAndMaximising`, `AnimationsInTheTaskbar`, `EnablePeek`,
+`FadeOrSlideMenusIntoView`, `FadeOrSlideToolTipsIntoView`, `FadeOutMenuItemsAfterClicking`,
+`SaveTaskbarThumbnailPreviews`, `ShowShadowsUnderMousePointer`, `ShowShadowsUnderWindows`,
+`ShowThumbnailsInsteadOfIcons`, `ShowTranslucentSelectionRectangle`,
+`ShowWindowContentsWhileDragging`, `SlideOpenComboBoxes`, `SmoothEdgesOfScreenFonts`,
+`SmoothScrollListBoxes`, `UseDropShadowsForIconLabelsOnTheDesktop`
+
+**Example:**
+
+```powershell
+VisualEffects = @{
+    SmoothEdgesOfScreenFonts        = $true
+    ShowWindowContentsWhileDragging = $true
+    AnimationsInTheTaskbar          = $false
+    EnablePeek                      = $false
+}
+```
+
+**Consumer function:** `Set-VisualEffects`
+
 ---
 
 ## More Sections (quick reference)

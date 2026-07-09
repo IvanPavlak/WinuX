@@ -41,6 +41,7 @@
 # → KeyboardLayouts                     : Set-KeyboardLayouts
 # → NerdFonts, DefaultNerdFont          : Configure-NerdFont
 # → ExplorerOptions                     : Set-ExplorerOptions
+# → VisualEffects                       : Set-VisualEffects
 # → AutoEnvironmentVariables            : Set-EnvironmentVariables
 # → DotnetProjectsSearchPath            : Determine-DotnetDependencies
 # → PostgreSqlPasswords                 : Configure-PostgreSqlPasswords
@@ -850,6 +851,37 @@
 			Description = "Do not show frequently used folders in Quick access"
 		}
 	)
+
+	# ==========================================================================
+	# Visual Effects
+	# ==========================================================================
+	# Performance Options visual effects (System Properties → Performance Options
+	# → Visual Effects tab), applied by Set-VisualEffects during Bootstrap. Every
+	# key mirrors one dialog checkbox one-to-one: $true = effect on (appearance),
+	# $false = effect off (performance). Keys left commented out are not touched;
+	# with everything commented (the shipped default) Bootstrap changes NOTHING -
+	# a fork opts in via Configuration.local.psd1. When at least one effect is
+	# managed, the dialog's radio button is set to "Custom" (VisualFXSetting = 3).
+	# ==========================================================================
+	VisualEffects                 = @{
+		# AnimateControlsAndElementsInsideWindows   = $false
+		# AnimateWindowsWhenMinimisingAndMaximising = $false
+		# AnimationsInTheTaskbar                    = $false
+		# EnablePeek                                = $false
+		# FadeOrSlideMenusIntoView                  = $false
+		# FadeOrSlideToolTipsIntoView               = $false
+		# FadeOutMenuItemsAfterClicking             = $false
+		# SaveTaskbarThumbnailPreviews              = $true
+		# ShowShadowsUnderMousePointer              = $false
+		# ShowShadowsUnderWindows                   = $false
+		# ShowThumbnailsInsteadOfIcons              = $true
+		# ShowTranslucentSelectionRectangle         = $true
+		# ShowWindowContentsWhileDragging           = $true
+		# SlideOpenComboBoxes                       = $false
+		# SmoothEdgesOfScreenFonts                  = $true
+		# SmoothScrollListBoxes                     = $false
+		# UseDropShadowsForIconLabelsOnTheDesktop   = $false
+	}
 
 	# ==========================================================================
 	# Environment Variables

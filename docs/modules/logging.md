@@ -73,7 +73,7 @@ console verbosity, so the on-disk record is always complete.
 
 ## [Write-Log](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Logging/Functions/Write-Log.ps1)
 
-- **Description:** Core logging engine that every `Write-Log*` wrapper calls. Renders a styled, leveled message to the console (house style per level) and mirrors it to the structured session log; errors are additionally appended verbosely to the error log. Prefer the wrappers in normal code; call `Write-Log` directly only when the level must be chosen dynamically. Pass the message text only - the engine adds the leading newline and level decoration.
+- **Description:** Core logging engine that every `Write-Log*` wrapper calls. Renders a styled, leveled message to the console (house style per level) and mirrors it to the structured session log; errors are additionally appended verbosely to the error log. `-Style` overrides the render color for the `Debug` and `Step` levels while keeping the level's own layout, visibility gating, and file-log tag. Prefer the wrappers in normal code; call `Write-Log` directly only when the level must be chosen dynamically. Pass the message text only - the engine adds the leading newline and level decoration.
 - **Parameters:** `-Message` `[-Level]` `[-Style]` `[-NoNewLine]` `[-NoLeadingNewline]` `[-Exception]` `[-BlankLineAfter]`
 - **Usage:** `Write-Log -Level Success -Message "Workspace opened!"`
 
@@ -97,9 +97,9 @@ console verbosity, so the on-disk record is always complete.
 
 ## [Write-LogStep](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Logging/Functions/Write-LogStep.ps1)
 
-- **Description:** Writes a plain step/progress statement (White), replacing the `Write-Host -ForegroundColor White` idiom. Leading-space indentation in the message is preserved so nested sub-steps keep their alignment.
-- **Parameters:** `-Message` `[-NoNewLine]` `[-NoLeadingNewline]` `[-BlankLineAfter]`
-- **Usage:** `Write-LogStep "Opening training file..."`
+- **Description:** Writes a plain step/progress statement (White), replacing the `Write-Host -ForegroundColor White` idiom. Leading-space indentation in the message is preserved so nested sub-steps keep their alignment. `-Style` renders the step in another level's color while keeping the plain Step layout, visibility, and STEP file-log tag - used for per-item outcome rows (e.g. green/red/yellow effect rows in `Set-VisualEffects`).
+- **Parameters:** `-Message` `[-Style]` `[-NoNewLine]` `[-NoLeadingNewline]` `[-BlankLineAfter]`
+- **Usage:** `Write-LogStep "Opening training file..."`, `Write-LogStep " ItemName => [enabled]" -Style Success`
 
 ## [Write-LogSuccess](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Logging/Functions/Write-LogSuccess.ps1)
 

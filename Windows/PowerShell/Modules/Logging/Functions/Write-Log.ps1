@@ -38,8 +38,9 @@ function Write-Log {
 		Title | Step | Success | Warning | Error | Debug. Defaults to Step.
 
 	.PARAMETER Style
-		Only meaningful when Level=Debug: render the verbose-gated message in another level's color
-		(e.g. -Style Success keeps a green diagnostic). Defaults to the Debug color (DarkCyan).
+		Only meaningful when Level=Debug or Level=Step: render the message in another level's color
+		while keeping the level's own layout, gating, and file-log tag (e.g. -Style Success keeps a
+		green diagnostic, or colors a Step row by outcome). Defaults to the level's own color.
 
 	.PARAMETER NoNewLine
 		Suppress the trailing newline (maps to Write-Host -NoNewline) for composing a line across
@@ -96,7 +97,8 @@ function Write-Log {
 	$state = $global:LoggingState
 
 	# --- Resolve palette (config-driven, documented defaults) ---
-	$renderStyle = if ($Level -eq "Debug" -and $Style) { $Style } else { $Level }
+	# Debug and Step accept a -Style color override (layout/gating stay the level's own)
+	$renderStyle = if (($Level -eq "Debug" -or $Level -eq "Step") -and $Style) { $Style } else { $Level }
 	$color = $state.Colors[$renderStyle]
 	if (-not $color) { $color = "White" }
 

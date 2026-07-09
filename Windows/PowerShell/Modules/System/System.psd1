@@ -49,6 +49,7 @@
 		'Set-SpecialFolders',
 		'Set-SystemTheme',
 		'Set-TaskbarAutoHide',
+		'Set-VisualEffects',
 		'Set-Wallpaper',
 		'Show-PinnedAppsWarning',
 		'SymbolicLinkMaker',

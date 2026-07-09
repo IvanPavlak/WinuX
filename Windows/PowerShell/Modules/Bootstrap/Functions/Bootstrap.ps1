@@ -214,6 +214,10 @@ function Bootstrap {
 		# geometry is work-area based and correct either way - this is UX parity only.
 		Set-TaskbarAutoHide -Auto
 
+		# Config-driven (VisualEffects); no-op unless the fork opts in. Applies the
+		# Performance Options visual-effects profile (registry + SystemParametersInfo).
+		Set-VisualEffects
+
 		if ($wslSetupEnabled) {
 			Initialize-WSLEnvironment
 		}
