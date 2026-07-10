@@ -8,6 +8,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-07-10
+
+### Added
+
+- `Open-Project -InSameShell` (Workflow module): when explicitly passed, overrides the configured `InSameShell` value of the `Open-ProjectTerminals-Or-RunProject` action so the project's terminal tabs open in the caller's Windows Terminal window. Used by `Open-Workspace -Alongside` to gather all tabs in the relaunched shell window.
+
+### Changed
+
+- `Open-Workspace -Alongside` (Workflow module) now always runs in a completely new shell: the invocation relaunches itself in a fresh Windows Terminal window and hands the calling shell its prompt back immediately. The new window is created under an explicit window ID that is passed to the relaunched shell via `WT_WINDOW_ID`, terminal-opening actions inside it are forced to `-InSameShell` so the workspace's terminal tabs join that exact window (never the most-recently-used one), the window layout places the new window on the workspace's virtual desktops like any other workspace window, and a configured `Terminate-WindowsTerminalTabs -OnlyCurrent` closes the now-redundant bootstrap tab as its final step.
+- `Open-Terminal -InSameShell` (Application module) targets the exact caller window via `$env:WT_WINDOW_ID` when the calling shell knows its own window ID, falling back to window ID 0 as before. Windows Terminal resolves `-w 0` to the *most recently used* window, so with multiple terminal windows open the fallback can land tabs in a different window than the caller's - setting `WT_WINDOW_ID` removes that ambiguity.
+
+### Fixed
+
+- `Open-Workspace -Alongside` (Workflow module) is far less prone to failing partway through with virtual-desktop "RPC server may be unavailable" errors (or a silently ignored `Switch-Desktop`). The Windows `VirtualDesktop` COM/RPC session that creating, switching, and removing desktops relies on tends to go stale in a long-running shell, and `-Alongside` is the heaviest user of those calls (it creates desktops to the right of existing ones, moves the new windows onto them, and prunes empties). Because the whole flow now runs in a brand-new shell (see Changed), those calls execute against a fresh RPC session from the start, which circumvents the stale-session failures in practice - it does not fix a session wedged outside the WinuX process, hence "far less prone" rather than "never".
+
 ## [0.1.2] - 2026-07-09
 
 ### Changed
@@ -42,7 +57,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/IvanPavlak/WinuX/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/IvanPavlak/WinuX/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/IvanPavlak/WinuX/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/IvanPavlak/WinuX/releases/tag/v0.1.0

@@ -194,17 +194,18 @@ Open-DnD -Campaign "AnotherCampaign" -FoundryVTT
 ## [Open-Project](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Workflow/Functions/Open-Project.ps1)
 
 - **Description:** Opens a development project with all its configured tools, applications and terminal tabs. Reads the project's action list from `ProjectActions` in `Configuration.psd1` and executes each action in order; with `-RunApp` it starts the project's server instead of opening terminal tabs. Omit the project name to pick from an interactive menu.
-- **Parameters:** -Project, -RunApp, -VSCodeWorkspace
+- **Parameters:** -Project, -RunApp, -VSCodeWorkspace, -InSameShell
 - **Usage:** `Open-Project`, `Open-Project MyProject`, `Open-Project MyProject -RunApp`
 - **Projects:** MyProject, OtherProject (the entries of the `Projects` array in `Configuration.psd1`)
 
-Each action in `ProjectActions` is a named PowerShell function (e.g. `Open-VSCode`, `Open-VisualStudio`, `Open-Browser`) whose parameters are resolved at runtime. The `{ProjectName}` placeholder in any action parameter is replaced with the actual project name at execution time. When no project name is supplied, an interactive menu lists every project in the `Projects` array; multiple projects may be selected and each is opened in sequence. The special action `Open-ProjectTerminals-Or-RunProject` is context-sensitive: with `-RunApp` it starts the server via `Run-Project`, otherwise it opens terminal tabs via `Open-ProjectTerminals`. When `-VSCodeWorkspace <name>` is set, the project's `Open-VSCode` action opens the given `.code-workspace` (via `Open-VSCodeWorkspace`) in place of the project folder. The function returns the list of project names that were opened.
+Each action in `ProjectActions` is a named PowerShell function (e.g. `Open-VSCode`, `Open-VisualStudio`, `Open-Browser`) whose parameters are resolved at runtime. The `{ProjectName}` placeholder in any action parameter is replaced with the actual project name at execution time. When no project name is supplied, an interactive menu lists every project in the `Projects` array; multiple projects may be selected and each is opened in sequence. The special action `Open-ProjectTerminals-Or-RunProject` is context-sensitive: with `-RunApp` it starts the server via `Run-Project`, otherwise it opens terminal tabs via `Open-ProjectTerminals`. When `-VSCodeWorkspace <name>` is set, the project's `Open-VSCode` action opens the given `.code-workspace` (via `Open-VSCodeWorkspace`) in place of the project folder. An explicitly passed `-InSameShell` overrides the configured value of the `Open-ProjectTerminals-Or-RunProject` action - `Open-Workspace`'s `-Alongside` relaunch uses this to gather the project's terminal tabs in the relaunched shell window. The function returns the list of project names that were opened.
 
 | Parameter          | Description                                                                                                                                |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | `-Project`         | One or more project names from the `Projects` configuration array. Omit to show the interactive selection menu.                            |
 | `-RunApp`          | Starts the project's runnable app instead of opening terminals (applies to the `Open-ProjectTerminals-Or-RunProject` action only).         |
 | `-VSCodeWorkspace` | When set, the project's `Open-VSCode` action opens the given `.code-workspace` (via `Open-VSCodeWorkspace`) instead of the project folder. |
+| `-InSameShell`     | When explicitly passed, overrides the configured `InSameShell` of the `Open-ProjectTerminals-Or-RunProject` action so terminal tabs open in the caller's window. |
 
 ```powershell
 # Interactive project selection menu
@@ -299,7 +300,7 @@ Open-ProjectTerminals -Project "MyProject" -Force
 
 ## [Open-Workspace](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Workflow/Functions/Open-Workspace.ps1)
 
-- **Description:** The main entry point for starting work. Opens a predefined workspace by executing a configured sequence of actions (projects, browser tab groups, applications, and window layouts) across virtual desktops. Use `-Alongside` to spawn the workspace on new virtual desktops to the right of existing ones, letting multiple workspaces run simultaneously without interfering. In alongside mode the computed desktop offset is injected into the workspace's actions so they land on the new desktops - both `Set-WorkspaceWindowLayout` and the final `Focus-VirtualDesktop` action receive `-DesktopOffset`, so the configured landing (e.g. `DesktopNumber = 1`) focuses the new workspace's own first desktop instead of the original desktop 1. Automatically reconciles the calling terminal tab via `Terminate-WindowsTerminalTabs -OnlyCurrent` (skipped when running alongside or re-running from a same-workspace project tab). Diagnostic output for the workspace and its actions is shown when run under `Set-LogLevel Verbose`.
+- **Description:** The main entry point for starting work. Opens a predefined workspace by executing a configured sequence of actions (projects, browser tab groups, applications, and window layouts) across virtual desktops. Use `-Alongside` to spawn the workspace on new virtual desktops to the right of existing ones, letting multiple workspaces run simultaneously without interfering. An `-Alongside` invocation always runs in a completely new shell: it relaunches itself in a fresh Windows Terminal window (the calling shell gets its prompt back immediately) and, inside that window, forces `-InSameShell` on terminal-opening actions so the workspace's terminal tabs join the new window instead of spawning further windows. In alongside mode the computed desktop offset is injected into the workspace's actions so they land on the new desktops - both `Set-WorkspaceWindowLayout` and the final `Focus-VirtualDesktop` action receive `-DesktopOffset`, so the configured landing (e.g. `DesktopNumber = 1`) focuses the new workspace's own first desktop instead of the original desktop 1. Automatically reconciles the calling terminal tab via `Terminate-WindowsTerminalTabs -OnlyCurrent` (skipped when re-running from a same-workspace project tab; in alongside mode it runs inside the relaunched window and closes that window's now-redundant bootstrap tab). Diagnostic output for the workspace and its actions is shown when run under `Set-LogLevel Verbose`.
 - **Parameters:** -Workspace, -Project, -Alongside, -VSCodeWorkspace
 - **Usage:** `Open-Workspace`, `Open-Workspace MyWorkspace`, `Open-Workspace MyWorkspace MyProject`, `Open-Workspace MyWorkspace -Alongside`, `w dotfiles -VSCodeWorkspace Consolidation`, `w MyWorkspace`
 - **Alias:** w
@@ -312,7 +313,7 @@ Everything the flow spawns inherits the invoking shell's token, so running from 
 | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `-Workspace`       | One or more workspace names to open. Omit to show the selection menu.                                                                                                                                                                                                               |
 | `-Project`         | Optional project name(s) forwarded to the `Open-Project` action within the workspace.                                                                                                                                                                                               |
-| `-Alongside`       | Opens the workspace on new virtual desktop(s) added to the right of existing ones, so multiple workspaces coexist.                                                                                                                                                                  |
+| `-Alongside`       | Opens the workspace on new virtual desktop(s) added to the right of existing ones, so multiple workspaces coexist. Always relaunches in a new Windows Terminal window; the workspace's terminal tabs open in that window (`-InSameShell` is forced on terminal-opening actions).     |
 | `-VSCodeWorkspace` | Opens `<name>.code-workspace` (from `VSCode\Workspaces`) in place of the project folder. Pass a bare `-VSCodeWorkspace` for a selection menu; omit it to use the `DefaultVSCodeWorkspaces` config entry (if any) or normal folder behaviour. |
 
 ```powershell
@@ -326,6 +327,7 @@ Open-Workspace MyWorkspace
 Open-Workspace MyWorkspace MyProject
 
 # Open another workspace on new desktops alongside the current one
+# (relaunches in a new shell window; its terminal tabs open in that window)
 Open-Workspace OtherProject -Alongside
 
 # Open a workspace but load a .code-workspace file instead of the project folder
