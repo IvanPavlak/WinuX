@@ -96,11 +96,15 @@ function Open-Workspace {
 	try {
 		# -Alongside always runs in a completely new shell: replay this exact invocation
 		# in a fresh Windows Terminal window and hand the calling shell its prompt back.
-		# The bootstrap command marks the new shell via $alongsideShellEnvVar (so it
-		# executes the flow instead of relaunching again), carries the timer start across
-		# so the reported duration includes the relaunch, and clears WT_PROJECT_TAB
-		# because the new window's WT process can inherit it from a project-tab caller
-		# and the bootstrap tab must not pass for a project tab. Inside the new shell,
+		# The new window is created under a GUID chosen HERE and handed to the child as
+		# WT_WINDOW_ID, so every InSameShell tab the child opens targets this exact
+		# window - "wt -w 0" resolves to the most recently used window, which with the
+		# caller's window still open is not necessarily the new one. The bootstrap
+		# command also marks the new shell via $alongsideShellEnvVar (so it executes
+		# the flow instead of relaunching again), carries the timer start across so the
+		# reported duration includes the relaunch, and clears WT_PROJECT_TAB because
+		# the new window's WT process can inherit it from a project-tab caller and the
+		# bootstrap tab must not pass for a project tab. Inside the new shell,
 		# terminal-opening actions are forced to -InSameShell (see the action loop) so
 		# their tabs join the new window, and a configured
 		# Terminate-WindowsTerminalTabs -OnlyCurrent closes the redundant bootstrap tab
@@ -133,8 +137,10 @@ function Open-Workspace {
 				}
 			}
 
+			$alongsideWindowId = [guid]::NewGuid().ToString()
 			$effectiveStartUtc = $currentInvocationStartUtc - $carryOverElapsed
 			$bootstrapCommand = "`$env:WT_PROJECT_TAB = `$null; " +
+			"`$env:WT_WINDOW_ID = '$alongsideWindowId'; " +
 			"`$env:$workspaceTimerEnvVar = '$($effectiveStartUtc.ToString('o'))'; " +
 			"`$env:$alongsideShellEnvVar = '1'; " +
 			($invocationTokens -join ' ')
@@ -142,7 +148,8 @@ function Open-Workspace {
 			$workspaceLabel = if ($Workspace) { " $($Workspace -join ', ')" } else { "" }
 			Write-LogTitle "Relaunching [Open-Workspace$workspaceLabel -Alongside] in a new shell window"
 			Write-LogDebug " [Open-Workspace] Alongside relaunch command => [$($invocationTokens -join ' ')]" -Style Success
-			Open-Terminal -Command $bootstrapCommand
+			Write-LogDebug " [Open-Workspace] Alongside shell window ID => [$alongsideWindowId]" -Style Success
+			Open-Terminal -Command $bootstrapCommand -WindowId $alongsideWindowId
 			return
 		}
 
@@ -153,6 +160,39 @@ function Open-Workspace {
 		# unchanged.
 		if (Test-AdminPrivileges -CheckOnly) {
 			Write-LogWarning "Running from an elevated shell - spawned windows (and PowerToys, if started by this flow) will be elevated. FancyZones cannot snap elevated windows unless PowerToys itself runs elevated. Prefer running workspaces from a non-admin shell."
+		}
+
+		# The relaunched shell's own hosting window IS the new workspace's terminal
+		# window (project tabs join it via InSameShell), but it was spawned by the
+		# parent invocation moments before this run - so the per-workspace "existing
+		# windows" capture below would classify it as pre-existing, and the alongside
+		# layout (which skips existing windows to protect other workspaces) would
+		# never place it on the workspace desktops. Identify it up front by flashing
+		# a unique marker into this shell's window title and finding which Windows
+		# Terminal window reflects it, so each capture can exclude it.
+		$ownTerminalWindowHandle = $null
+		if ($Alongside -and $isAlongsideShell) {
+			$originalHostTitle = $Host.UI.RawUI.WindowTitle
+			try {
+				$titleProbe = "AlongsideShell_" + [guid]::NewGuid().ToString()
+				$Host.UI.RawUI.WindowTitle = $titleProbe
+				Start-Sleep -Milliseconds 50
+
+				$ownTerminalWindow = Get-WindowHandle -ProcessName "WindowsTerminal" -ErrorAction SilentlyContinue |
+					Where-Object { $_.Title -like "*$titleProbe*" } |
+					Select-Object -First 1
+
+				if ($ownTerminalWindow) {
+					$ownTerminalWindowHandle = $ownTerminalWindow.Handle
+					Write-LogDebug " [Open-Workspace] Alongside shell hosting window => [$ownTerminalWindowHandle]" -Style Success
+				}
+				else {
+					Write-LogDebug " [Open-Workspace] Could not identify the alongside shell's own window (title probe not reflected) - the new terminal window will not be laid out" -Style Warning
+				}
+			}
+			finally {
+				try { $Host.UI.RawUI.WindowTitle = $originalHostTitle } catch {}
+			}
 		}
 
 		$resolveParams = @{
@@ -268,6 +308,12 @@ function Open-Workspace {
 				foreach ($win in $existingWindowsBeforeOpen) {
 					$existingHandlesBeforeOpen.Add($win.Handle) | Out-Null
 				}
+			}
+
+			# The relaunched shell's own window hosts this workspace's terminal tabs -
+			# treat it as NEW so the alongside layout places it on the workspace desktops.
+			if ($ownTerminalWindowHandle) {
+				$existingHandlesBeforeOpen.Remove($ownTerminalWindowHandle) | Out-Null
 			}
 
 			$selectedProjects = @()
