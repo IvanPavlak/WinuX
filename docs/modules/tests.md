@@ -7,11 +7,11 @@ The Tests module provides **Pester test execution** for WinuX. It validates Appl
 
 ## [Run-Tests](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Tests/Functions/Run-Tests.ps1)
 
-- **Description:** Discovers and runs all `.Tests.ps1` Pester tests in the PowerShell Modules Tests directory (every module's test folder plus the Infrastructure checks). Supports filtering by test name pattern, detailed output, and returning the Pester result object. Works with both Pester 3.x/4.x (legacy parameters) and 5.x (configuration object).
+- **Description:** Discovers and runs all `.Tests.ps1` Pester tests in the PowerShell Modules Tests directory (every module's test folder plus the Infrastructure checks), and by default also the fork-owned Custom area (`Modules/Custom/<Module>/Tests`). Supports filtering by test name pattern, detailed output, and returning the Pester result object. Works with both Pester 3.x/4.x (legacy parameters) and 5.x (configuration object).
 - **Parameters:** -TestName, -Path, -Detailed, -PassThru
 - **Usage:** `Run-Tests`, `Run-Tests -TestName "Open-Terminal"`, `Run-Tests -Detailed`, `$results = Run-Tests -PassThru`
 
-Recursively discovers `*.Tests.ps1` files under the Tests directory (or a custom `-Path`), lists the files to be run, and invokes Pester. Detects the installed Pester version and errors with guidance to run `Install-PowerShellModules` if Pester is missing. After running, it reloads the PowerShell profile and prints a pass/fail summary. With `-PassThru`, the raw Pester result object is returned for scripting (e.g. CI/CD).
+Recursively discovers `*.Tests.ps1` files under the Tests directory and, when present, the `Modules/Custom` fork area (or only under a custom `-Path` when one is given), lists the files to be run, and invokes Pester. Detects the installed Pester version and errors with guidance to run `Install-PowerShellModules` if Pester is missing. After running, it reloads the PowerShell profile and prints a pass/fail summary. With `-PassThru`, the raw Pester result object is returned for scripting (e.g. CI/CD).
 
 | Parameter   | Description                                                           |
 | ----------- | --------------------------------------------------------------------- |

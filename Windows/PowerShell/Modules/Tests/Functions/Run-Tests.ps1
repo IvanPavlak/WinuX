@@ -5,7 +5,8 @@ function Run-Tests {
 
     .DESCRIPTION
         Discovers and runs all .Tests.ps1 files in the PowerShell Modules Tests directory.
-        Supports filtering by test name pattern and various output options.
+        Default discovery also sweeps the fork-owned Custom area (Modules/Custom/<Module>/Tests)
+        when present. Supports filtering by test name pattern and various output options.
 
     .PARAMETER TestName
         Optional filter to run only tests matching a specific pattern (e.g., "Open-Terminal")
@@ -55,11 +56,21 @@ function Run-Tests {
 		$TestsRoot = Resolve-Path $Path
 	}
 
+	# Default discovery also sweeps the fork-owned Custom area (Modules\Custom\<Module>\Tests),
+	# so fork-local functions meet the same "tests required" bar before graduating upstream.
+	$SearchRoots = @($TestsRoot)
+	if (-not $Path) {
+		$CustomRoot = Join-Path -Path (Split-Path -Path $TestsRoot -Parent) -ChildPath "Custom"
+		if (Test-Path -Path $CustomRoot) {
+			$SearchRoots += (Resolve-Path $CustomRoot)
+		}
+	}
+
 	Write-LogTitle "Running Pester Tests"
 
 	# Find test files
 	if ($TestName) {
-		$TestFiles = Get-ChildItem -Path $TestsRoot -Recurse -Filter "*$TestName*.Tests.ps1"
+		$TestFiles = Get-ChildItem -Path $SearchRoots -Recurse -Filter "*$TestName*.Tests.ps1"
 		if ($TestFiles.Count -eq 0) {
 			Write-LogWarning "No test files found matching pattern: $TestName"
 			return
@@ -67,7 +78,7 @@ function Run-Tests {
 		Write-LogStep "Running tests matching: $TestName"
 	}
 	else {
-		$TestFiles = Get-ChildItem -Path $TestsRoot -Recurse -Filter "*.Tests.ps1"
+		$TestFiles = Get-ChildItem -Path $SearchRoots -Recurse -Filter "*.Tests.ps1"
 		if ($TestFiles.Count -eq 0) {
 			Write-LogWarning "No test files found in: $TestsRoot"
 			return

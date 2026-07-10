@@ -4,10 +4,10 @@ BeforeAll {
 	$ModuleRoot = (Get-RepositoryPath).Modules
 	$FunctionsPath = Join-Path $ModuleRoot "System\Functions"
 
-	. "$FunctionsPath\Reload-CustomModules.ps1"
+	. "$FunctionsPath\Reload-WinuXModules.ps1"
 }
 
-Describe "Reload-CustomModules" {
+Describe "Reload-WinuXModules" {
 	BeforeEach {
 		Mock Write-Host { }
 		Mock Resolve-Path { [PSCustomObject]@{ Path = "C:\\Repo\\Windows\\PowerShell\\Modules" } }
@@ -15,7 +15,7 @@ Describe "Reload-CustomModules" {
 	}
 
 	It "completes without errors when no module folders are returned" {
-		{ Reload-CustomModules } | Should -Not -Throw
+		{ Reload-WinuXModules } | Should -Not -Throw
 		Should -Invoke Get-ChildItem -Times 1
 	}
 }

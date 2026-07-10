@@ -244,4 +244,6 @@ The function reference lives in `docs/modules/<module>.md`. Each function is ONE
 
 `List-Functions` (Helper module) PARSES these module pages. After adding, renaming, or removing a function: update its entry alphabetically in `modules/<module>.md`, update the module `.psd1` `FunctionsToExport`, and run `List-Functions -ListDiscrepancies` (must report none).
 
+Fork-only (Custom area) functions follow the same entry format in `docs/custom/<module>.md`, with no `FunctionsToExport` involvement (the `Custom` module exports them).
+
 `docs/docs_overview.md` is the internal maintenance reference (process + per-module index). `_sidebar.md` changes only when adding or removing a page.

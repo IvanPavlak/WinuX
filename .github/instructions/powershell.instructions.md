@@ -33,6 +33,8 @@ These are man-style `## [Name](url)` entries - NOT a `## Overview` function tabl
 2. Update the module `.psd1` `FunctionsToExport`.
 3. Run `List-Functions -ListDiscrepancies` (Helper module) - it PARSES the module pages and must report none.
 
+Fork-only functions (not yet upstreamed) live under `Modules/Custom/<Module>/Functions/` with no `.psd1` entry (the `Custom` module exports them) and are documented in `docs/custom/<module>.md` using the same entry format. See `Windows/PowerShell/Modules/Custom/README.md`.
+
 `docs/docs_overview.md` is the internal maintenance reference (process + per-module index). `_sidebar.md` changes only when adding/removing a page.
 
 ## ⚠️ CRITICAL SAFETY - Never Act Destructively On Your Own

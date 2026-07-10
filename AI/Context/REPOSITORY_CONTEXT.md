@@ -152,7 +152,8 @@ When you need to add or modify something, these are the typical operations:
 5. **Add a symbolic link** → Add entry to `SymbolicLinks` section
 6. **Add a window layout** → Add/modify layout `.psd1` file in appropriate machine-type folder
 7. **Add a new function** → Create `.ps1` in the relevant module's `Functions/` dir, add to `.psd1` FunctionsToExport
-8. **Add a new machine type** → Add to `ValidMachineTypes`, `HostnameToMachineType`, create machine-specific configs
+8. **Add a fork-only function (not yet upstreamed)** → Create `.ps1` under `Modules/Custom/<Module>/Functions/` (no `.psd1` change - the `Custom` module exports it), document it in `docs/custom/<module>.md`
+9. **Add a new machine type** → Add to `ValidMachineTypes`, `HostnameToMachineType`, create machine-specific configs
 
 ## Related Directories
 

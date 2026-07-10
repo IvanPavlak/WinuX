@@ -92,6 +92,40 @@ lose the "keep mine" behavior.
 payloads that are wholly yours. If WinuX later restructures one and you want the new shape, diff it against
 upstream and port what you want by hand.
 
+## The Custom area - your code, upstream's layout
+
+`Configuration.local.psd1` covers your **settings** and `merge=ours` covers your **data files**; the
+**Custom area** covers your **code and docs** - everything you build that WinuX does not (yet) ship. It is
+a fork-owned subtree that mirrors the module tree, so upstream pulls never touch it and promoting something
+into WinuX later is a mechanical move:
+
+```
+Windows/PowerShell/Modules/
+├── Application/                          # upstream engine - your fork never edits these
+├── ...
+└── Custom/                               # fork-owned; upstream ships only the loader + README
+    ├── Application/
+    │   ├── Functions/Open-MyApp.ps1      # extends the Application family
+    │   └── Tests/Open-MyApp.Tests.ps1    # discovered by Run-Tests
+    └── MyModule/                         # a whole fork-owned module (own .psd1 + .psm1)
+
+docs/
+├── modules/application.md                # upstream reference - your fork never edits these
+└── custom/application.md                 # your entries, same man-style format
+```
+
+- Mirror payload functions are loaded and exported by the `Custom` module, which the profile imports at
+  startup; whole modules under `Modules/Custom/` autoload from their own manifests like any engine module.
+- Upstream never writes inside your payload directories or your `docs/custom/<module>.md` pages, so pulling
+  upstream can never conflict with them - no merge driver needed.
+- The engine wins on a name collision: a Custom file cannot silently shadow upstream behavior.
+- The same quality bar applies: `Run-Tests` discovers Custom tests, and `List-Functions
+  -ListDiscrepancies` checks Custom functions against their `docs/custom/` pages.
+
+When something matures, **graduate it**: `git mv` the function, tests, and doc entry into their upstream
+locations and open a PR. The step-by-step checklist lives in
+[`Windows/PowerShell/Modules/Custom/README.md`](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Custom/README.md).
+
 ## Setting up your fork
 
 1. **Fork** WinuX on GitHub and clone your fork.
@@ -116,8 +150,9 @@ git merge upstream/master      # or: git rebase upstream/master
 
 Because your personal settings live in the override (not the tracked base config), and your app lists +
 payload configs are protected by `merge=ours` (see above - just make sure the driver is registered once),
-these updates apply cleanly: neither your configuration nor your owned files are a source of conflicts. If
-you have edited _other_ tracked files (engine, docs), resolve those as you normally would.
+these updates apply cleanly: neither your configuration nor your owned files are a source of conflicts.
+Custom-area code and docs live in fork-owned paths upstream never touches, so they never conflict either.
+If you have edited _other_ tracked files (engine, docs), resolve those as you normally would.
 
 > [!NOTE]
 > Keeping personal values out of tracked files is what makes this work. Avoid editing

@@ -12,8 +12,9 @@ function Load-PathConfiguration {
 		- `$global:MachineType`          - detected machine type (PC, Laptop, Work, Test)
 		- `$global:MachineSpecificPaths` - all PathTemplate paths expanded for the current machine
 
-		Also ensures the custom Modules directory is present in `$env:PSModulePath` so that all
-		nine modules are available for autoloading.
+		Also ensures the WinuX Modules directory is present in `$env:PSModulePath` so that all
+		modules are available for autoloading, and registers the `Modules\Custom` fork area as an
+		additional module root so whole fork-owned modules autoload the same way.
 
 	.PARAMETER RepoRoot
 		Absolute path to the WinuX repository root. Used to locate Configuration.psd1 at
@@ -119,7 +120,7 @@ function Load-PathConfiguration {
 			Write-LogSuccess "Detected Machine Type [$global:MachineType]"
 		}
 
-		# Ensure the custom modules folder is in PSModulePath so PowerShell can
+		# Ensure the WinuX modules folder is in PSModulePath so PowerShell can
 		# autoload any module the first time one of its exported functions is called.
 		$ModulesPath = Join-Path $RepoRoot "Windows\PowerShell\Modules"
 		$CurrentModulePath = $env:PSModulePath -split ';'
@@ -128,6 +129,15 @@ function Load-PathConfiguration {
 			if (-not $Quiet) {
 				Write-LogSuccess "Added modules path to PSModulePath"
 			}
+		}
+
+		# The Custom area (Modules\Custom) can also host WHOLE fork-owned modules, each with its
+		# own manifest and loader. Register it as an additional module root (after the engine
+		# path) so those autoload exactly like engine modules; mirror payload folders carry no
+		# manifest and are ignored by module discovery.
+		$CustomPath = Join-Path $ModulesPath "Custom"
+		if ((Test-Path $CustomPath) -and ($CurrentModulePath -notcontains $CustomPath)) {
+			$env:PSModulePath = $env:PSModulePath + ';' + $CustomPath
 		}
 
 		# Expand path placeholders - triggers autoload of the Helper module on first call.

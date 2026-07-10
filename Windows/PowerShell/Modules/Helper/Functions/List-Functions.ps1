@@ -4,8 +4,9 @@ function List-Functions {
         List all PowerShell functions from the docsify documentation with optional filtering.
 
     .DESCRIPTION
-        Parses the per-module documentation pages under docs/modules/*.md to extract function
-        names, signatures, and descriptions. Each function is documented as a man-style entry whose
+        Parses the per-module documentation pages under docs/modules/*.md - plus the fork-owned
+        Custom area pages under docs/custom/*.md, when present - to extract function names,
+        signatures, and descriptions. Each function is documented as a man-style entry whose
         machine-readable summary is the contiguous block of "- **Key:** value" bullets directly beneath
         its "## [FunctionName](source-url)" heading. Supports filtering by category (module), specific
         functions, or finding documentation discrepancies against the loaded session functions.
@@ -54,6 +55,15 @@ function List-Functions {
 		$docFiles = Get-ChildItem -Path $modulesDocsPath -Filter '*.md' -File | Sort-Object Name
 		if (-not $docFiles) {
 			throw "No module documentation pages (*.md) found in: $modulesDocsPath"
+		}
+
+		# Fork-owned Custom area pages (docs/custom/<module>.md) document fork-local functions
+		# in the same man-style format; include them so Custom functions face the same
+		# discrepancy checks. README.md is the area's landing page/template, not a module page.
+		$customDocsPath = Join-Path -Path $docsRoot -ChildPath 'custom'
+		if (Test-Path -Path $customDocsPath -PathType Container) {
+			$docFiles += @(Get-ChildItem -Path $customDocsPath -Filter '*.md' -File |
+					Where-Object { $_.Name -ne 'README.md' } | Sort-Object Name)
 		}
 	}
 	catch {

@@ -26,3 +26,8 @@ Windows/PowerShell/Modules/Bootstrap/Data/ChocolateyApps.csv   merge=ours
 Git/.gitconfig                                                 merge=ours
 NuGet/nuget.config                                             merge=ours
 Firefox/user.js                                                merge=ours
+
+# Custom-area docs landing page - upstream ships a template; your fork lists its own custom
+# pages there. (Custom code and per-module custom doc pages need no attribute: upstream never
+# tracks those paths, so they can never conflict.)
+docs/custom/README.md                                          merge=ours
