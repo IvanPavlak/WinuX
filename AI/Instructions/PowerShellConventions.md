@@ -44,10 +44,9 @@ ModuleName/
 - `FunctionsToExport` must list every exported function explicitly - no wildcards
 - `RequiredModules` only for modules this module directly depends on
 - Adding a new function requires updating `FunctionsToExport`
-- The one exception is the fork-owned `Custom` module (`Modules/Custom`): it exports with a
-  wildcard by design (upstream cannot know fork function names) and is imported eagerly by the
-  profile instead of autoloading. Do not copy that pattern into engine modules. See
-  `Modules/Custom/README.md`.
+- This applies to the fork-owned `Custom` module too (`Modules/Custom`): it autoloads like any
+  module via an explicit `FunctionsToExport`. Upstream ships that list empty; a fork adds one
+  entry per Custom function it defines. See `Modules/Custom/README.md`.
 
 ### Loader (.psm1)
 
@@ -184,7 +183,7 @@ When you **add** a function:
 1. Create `FunctionName.ps1` in the appropriate module's `Functions/` directory (fork-only
    functions not yet upstreamed go under `Modules/Custom/<Module>/Functions/` instead - see
    `Modules/Custom/README.md`)
-2. Add `'FunctionName'` to the module's `.psd1` `FunctionsToExport` array (the manifest filters exports - a function missing here is NOT available even though the loader dot-sources it). Fork-only functions skip this step - the `Custom` module exports them.
+2. Add `'FunctionName'` to the module's `.psd1` `FunctionsToExport` array (the manifest filters exports - a function missing here is NOT available even though the loader dot-sources it). Fork-only functions do the same, but in `Custom.psd1` (the fork-owned manifest) instead of an engine module's.
 3. Follow existing patterns in that module for style consistency
 4. If the function needs a profile alias, add it to `Microsoft.PowerShell_profile.ps1`
 5. If it reads configuration, document the config section it consumes

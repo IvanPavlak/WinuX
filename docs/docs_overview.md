@@ -106,7 +106,7 @@ The profile (`Microsoft.PowerShell_profile.ps1`) executes this exact sequence:
     (avoids loading the entire System module for one startup check)
 ```
 
-> **Module autoload:** All WinuX modules declare `FunctionsToExport` in their `.psd1` manifests. PowerShell builds an autoload index at startup (no code executed) and imports a module automatically the first time one of its exported functions is called. `Logging` and `Bootstrap` are imported eagerly by the profile (in that order, so Bootstrap and all other modules can log from the start); the fork-owned `Custom` module is also imported eagerly (its wildcard manifest cannot autoload; empty on a pure-upstream setup); `Helper` is the first to autoload (during path-expansion in step 5). `Start-Logging`/`Stop-Logging` live in the `Logging` module (moved out of `Helper`).
+> **Module autoload:** All WinuX modules declare `FunctionsToExport` in their `.psd1` manifests. PowerShell builds an autoload index at startup (no code executed) and imports a module automatically the first time one of its exported functions is called. `Logging` and `Bootstrap` are imported eagerly by the profile (in that order, so Bootstrap and all other modules can log from the start); `Helper` is the first to autoload (during path-expansion in step 5); the fork-owned `Custom` module autoloads the same way via its `FunctionsToExport` (which the fork maintains, one entry per Custom function; empty on a pure-upstream setup). `Start-Logging`/`Stop-Logging` live in the `Logging` module (moved out of `Helper`).
 
 ---
 

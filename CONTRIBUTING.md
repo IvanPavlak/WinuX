@@ -125,7 +125,8 @@ Every new exported function should ship with tests.
 - **Module layout:** each module is a `.psd1` manifest + `.psm1` loader + `Functions/`
   directory. When you add, rename, or remove an exported function, update that module's
   `FunctionsToExport` accordingly. Fork-only functions are the exception - they live in the
-  Custom area (see "Develop in your fork's Custom area first" below) and have no manifest entry.
+  Custom area (see "Develop in your fork's Custom area first" below); their names go in the
+  fork-owned `Custom.psd1` manifest rather than an engine module's.
 
 ---
 
@@ -160,7 +161,8 @@ npx docsify-cli serve docs
 ## Develop in your fork's Custom area first
 
 Anything you build that WinuX does not (yet) ship should start in the **Custom area** of your
-fork: `Windows/PowerShell/Modules/Custom/<Module>/Functions/` for code,
+fork: `Windows/PowerShell/Modules/Custom/<Module>/Functions/` for code (adding its name to
+`Custom.psd1`'s `FunctionsToExport`, which is what makes it autoload),
 `Windows/PowerShell/Modules/Custom/<Module>/Tests/` for its Pester tests, and
 `docs/custom/<module>.md` for its documentation (same man-style entry format as the module
 pages). Upstream never writes those paths, so your work survives every

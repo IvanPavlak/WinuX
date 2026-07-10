@@ -128,7 +128,7 @@ Docs must always reflect the current system. Every change to a documented surfac
 | Change                                                                              | Page(s) to update                                                                |
 | ----------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
 | Exported function added/renamed/removed, or its behavior/parameters change          | `modules/<module>.md` (+ module `.psd1` `FunctionsToExport`, `docs_overview.md`) |
-| Fork-only (Custom area) function added/renamed/removed, or its behavior changes     | `custom/<module>.md` (same man-style format; no `FunctionsToExport` involved)    |
+| Fork-only (Custom area) function added/renamed/removed, or its behavior changes     | `custom/<module>.md` (+ `Custom.psd1` `FunctionsToExport`; same man-style format) |
 | `Configuration.psd1` key added/renamed/removed, placeholder change                  | `configuration/configuration-reference.md` (+ `placeholder-system.md`)           |
 | New machine type or detection change                                                | `configuration/machine-types.md`                                                 |
 | App/package list or any `Data/` CSV change                                          | `reference/software-list.md`                                                     |
@@ -153,8 +153,8 @@ When adding/renaming/removing a function:
 4. Update `docs_overview.md`'s per-module index if the function set changed
 
 Fork-only (Custom area) functions follow the same steps except: the entry lives in
-`custom/<module>.md`, and there is no `FunctionsToExport` update (the `Custom` module exports
-them).
+`custom/<module>.md`, and the `FunctionsToExport` update is to `Custom.psd1` (the fork-owned
+manifest) rather than an engine module's.
 
 ## README.md (Root) - Minimal Pointer Only
 

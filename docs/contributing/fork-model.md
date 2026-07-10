@@ -114,8 +114,9 @@ docs/
 └── custom/application.md                 # your entries, same man-style format
 ```
 
-- Mirror payload functions are loaded and exported by the `Custom` module, which the profile imports at
-  startup; whole modules under `Modules/Custom/` autoload from their own manifests like any engine module.
+- Mirror payload functions are loaded and exported by the `Custom` module, which autoloads on first use
+  via its `FunctionsToExport` (empty upstream; your fork adds one entry per function, like any module);
+  whole modules under `Modules/Custom/` autoload from their own manifests the same way.
 - Upstream never writes inside your payload directories or your `docs/custom/<module>.md` pages, so pulling
   upstream can never conflict with them - no merge driver needed.
 - The engine wins on a name collision: a Custom file cannot silently shadow upstream behavior.

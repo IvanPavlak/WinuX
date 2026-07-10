@@ -73,16 +73,6 @@ if (-not (Load-PathConfiguration -RepoRoot $RepoRoot -Configuration $global:Conf
 # warnings are muted during the Bootstrap import above.
 Test-ConfigurationSchema -WarningAction Continue
 
-# Import the fork-owned Custom module so fork-local functions (Modules\Custom - see the Fork
-# Model docs) are available immediately; its wildcard manifest cannot participate in autoload.
-# On a pure-upstream setup the Custom area ships empty, so this is effectively a no-op.
-try {
-	Import-Module -Name Custom -Force -ErrorAction Stop -Global | Out-Null
-}
-catch {
-	Write-Host -ForegroundColor Red "`n=> Failed to import Custom module => $_"
-}
-
 # | ------------------------------ < Enhance Console Experience > ------------------------------ | #
 
 # Oh-My-Posh - binary resolution + init live in Initialize-OhMyPosh. Dot-invoked so the

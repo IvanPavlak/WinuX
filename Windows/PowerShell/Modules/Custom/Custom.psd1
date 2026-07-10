@@ -3,9 +3,11 @@
 	Author            = "Ivan Pavlak"
 	Description       = "Fork-owned Custom area loader - aggregates fork-local functions kept under Modules/Custom. See docs/contributing/fork-model.md (the Custom area)."
 	RootModule        = "Custom.psm1"
-	# The Custom area is fork-owned: upstream cannot know fork function names ahead of time, so
-	# this manifest intentionally exports with a wildcard and the profile imports this module
-	# eagerly at startup (autoload discovery is never relied upon for Custom functions). Engine
-	# modules keep explicit FunctionsToExport lists - do not copy this pattern into them.
-	FunctionsToExport = '*'
+	# Upstream ships this list EMPTY. Your fork adds one entry per Custom function it defines,
+	# exactly like every engine module's manifest - and that is what lets the Custom module
+	# AUTOLOAD lazily on first use (PowerShell builds its autoload index from these names; a
+	# wildcard would disable it). Whole fork-owned modules under Modules/Custom/<Name> carry
+	# their own manifest and are NOT listed here. Keep this in sync with the function files under
+	# Modules/Custom/<Module>/Functions/*.ps1.
+	FunctionsToExport = @()
 }
