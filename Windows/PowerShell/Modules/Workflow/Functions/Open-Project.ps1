@@ -28,6 +28,12 @@ function Open-Project {
 		Switch to start the project's runnable app instead of opening terminals.
 		Applies to the `Open-ProjectTerminals-Or-RunProject` action only.
 
+	.PARAMETER InSameShell
+		Forces the project's terminal tabs to open in the current Windows Terminal
+		window. When explicitly provided it overrides the configured value of the
+		`Open-ProjectTerminals-Or-RunProject` action. Open-Workspace's -Alongside
+		relaunch relies on this to gather all tabs in the relaunched shell window.
+
 	.EXAMPLE
 		Open-Project
 		Shows the project selection menu.
@@ -49,7 +55,10 @@ function Open-Project {
 		[switch]$RunApp,
 
 		[Parameter()]
-		[string]$VSCodeWorkspace
+		[string]$VSCodeWorkspace,
+
+		[Parameter()]
+		[switch]$InSameShell
 	)
 
 	$resolveParams = @{
@@ -108,6 +117,12 @@ function Open-Project {
 				}
 			}
 			elseif ($action -eq "Open-ProjectTerminals-Or-RunProject") {
+				# An explicitly bound InSameShell overrides the configured value so callers
+				# (e.g. Open-Workspace's -Alongside relaunch) can force the terminal tabs
+				# into their own window.
+				if ($PSBoundParameters.ContainsKey('InSameShell')) {
+					$actionParams["InSameShell"] = $InSameShell
+				}
 				if ($RunAppBool) {
 					& "Run-Project" @actionParams
 				}
