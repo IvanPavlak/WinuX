@@ -37,6 +37,22 @@ Describe "Open-ProjectTerminals" {
 			)
 			DefaultWSLDistribution = "Ubuntu"
 		}
+
+		# Shells descended from an Open-Workspace -Alongside bootstrap carry a real
+		# WT_WINDOW_ID, which the caller-window resolution prefers over "0" - clear it
+		# so the window-id assertions below are deterministic regardless of where the
+		# test run was started from.
+		$script:previousWtWindowId = $env:WT_WINDOW_ID
+		Remove-Item Env:WT_WINDOW_ID -ErrorAction SilentlyContinue
+	}
+
+	AfterEach {
+		if ($null -ne $script:previousWtWindowId) {
+			$env:WT_WINDOW_ID = $script:previousWtWindowId
+		}
+		else {
+			Remove-Item Env:WT_WINDOW_ID -ErrorAction SilentlyContinue
+		}
 	}
 
 	Context "Parameter validation" {
@@ -86,6 +102,16 @@ Describe "Open-ProjectTerminals" {
 
 			Should -Invoke Open-Terminal -Times 2 -ParameterFilter {
 				$WindowId -eq "0"
+			}
+		}
+
+		It "Should prefer WT_WINDOW_ID over window 0 when the calling shell knows its window" {
+			$env:WT_WINDOW_ID = "caller-window-guid"
+
+			Open-ProjectTerminals -Project "TestProject" -InSameShell
+
+			Should -Invoke Open-Terminal -Times 2 -ParameterFilter {
+				$WindowId -eq "caller-window-guid"
 			}
 		}
 

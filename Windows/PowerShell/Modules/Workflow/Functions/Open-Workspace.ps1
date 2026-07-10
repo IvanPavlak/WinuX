@@ -172,8 +172,9 @@ function Open-Workspace {
 		# Terminal window reflects it, so each capture can exclude it.
 		$ownTerminalWindowHandle = $null
 		if ($Alongside -and $isAlongsideShell) {
-			$originalHostTitle = $Host.UI.RawUI.WindowTitle
+			$originalHostTitle = $null
 			try {
+				$originalHostTitle = $Host.UI.RawUI.WindowTitle
 				$titleProbe = "AlongsideShell_" + [guid]::NewGuid().ToString()
 				$Host.UI.RawUI.WindowTitle = $titleProbe
 				Start-Sleep -Milliseconds 50
@@ -190,8 +191,13 @@ function Open-Workspace {
 					Write-LogDebug " [Open-Workspace] Could not identify the alongside shell's own window (title probe not reflected) - the new terminal window will not be laid out" -Style Warning
 				}
 			}
+			catch {
+				Write-LogDebug " [Open-Workspace] Window title probe failed => $($_.Exception.Message)" -Style Warning
+			}
 			finally {
-				try { $Host.UI.RawUI.WindowTitle = $originalHostTitle } catch {}
+				if ($null -ne $originalHostTitle) {
+					try { $Host.UI.RawUI.WindowTitle = $originalHostTitle } catch {}
+				}
 			}
 		}
 
