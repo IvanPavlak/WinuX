@@ -18,8 +18,12 @@ function Open-Terminal {
 		Opens Windows Terminal with administrator privileges.
 
 	.PARAMETER InSameShell
-		Opens all tabs in the current Windows Terminal window (window ID 0) instead of creating a new window.
+		Opens all tabs in the current Windows Terminal window instead of creating a new window.
 		Default: $false (creates a new window)
+		The current window is targeted via $env:WT_WINDOW_ID when the calling shell knows its
+		own window ID (set by Open-Workspace's -Alongside bootstrap). Without it, window ID 0
+		is used - note that "wt -w 0" targets the MOST RECENTLY USED window, which with
+		multiple Windows Terminal windows open is not necessarily the caller's window.
 
 	.PARAMETER WindowId
 		Specifies an explicit Windows Terminal window ID to open tabs in.
@@ -67,7 +71,19 @@ function Open-Terminal {
 		$PwshPath = Join-Path -Path $PSHOME -ChildPath "pwsh.exe"
 
 		if ($Command.Count -gt 0) {
-			$resolvedWindowId = if ($PSBoundParameters.ContainsKey('WindowId')) { $WindowId } elseif ($InSameShell) { 0 } else { [guid]::NewGuid().ToString() }
+			# InSameShell prefers the exact window ID when the calling shell knows it
+			# (WT_WINDOW_ID, set by Open-Workspace's -Alongside bootstrap): "wt -w 0"
+			# targets the MOST RECENTLY USED window, so with multiple Windows Terminal
+			# windows open it can land tabs in a different window than the caller's.
+			$resolvedWindowId = if ($PSBoundParameters.ContainsKey('WindowId')) {
+				$WindowId
+			}
+			elseif ($InSameShell) {
+				if ($env:WT_WINDOW_ID) { $env:WT_WINDOW_ID } else { 0 }
+			}
+			else {
+				[guid]::NewGuid().ToString()
+			}
 			$StartWT = $false
 
 			for ($i = 0; $i -lt $Command.Count; $i++) {

@@ -29,10 +29,11 @@ BeforeAll {
 		$Params
 	}
 
-	function Get-WindowHandle { @() }
+	function Get-WindowHandle { param($ProcessName) @() }
 	function Get-NextAvailableDesktopIndex { 0 }
 	function Test-BrowserGroupAlreadyOpen { $false }
 	function Open-Browser { param($Groups, $Browser) }
+	function Open-Terminal { param($Command, [switch]$Administrator, [switch]$InSameShell, $WindowId, $TabTitles) }
 	function Set-WorkspaceWindowLayout { param($WorkspaceName, $PreCapturedExistingWindows, $DesktopOffset, [switch]$Alongside) }
 
 	function Open-Project {
@@ -50,6 +51,11 @@ BeforeAll {
 		$script:invokedActions += [PSCustomObject]@{ Name = 'Test-ActionTwo'; Beta = $Beta }
 	}
 
+	function Test-ShellAwareAction {
+		param($Alpha, [switch]$InSameShell)
+		$script:invokedActions += [PSCustomObject]@{ Name = 'Test-ShellAwareAction'; Alpha = $Alpha; InSameShell = [bool]$InSameShell }
+	}
+
 	function Test-ThrowingAction {
 		param()
 		throw 'intentional action failure'
@@ -62,11 +68,27 @@ Describe "Open-Workspace" {
 		$script:terminateCalls = @()
 		$script:browserCalls = @()
 		$script:setLayoutCalls = @()
+		$script:openTerminalCalls = @()
 
 		Mock Write-Host { }
 		Mock Resolve-Selection { param($InputObject) $InputObject }
 		Mock Get-WindowHandle { @() }
-		Mock Get-FilteredParams { param($CommandName, $Params) $Params }
+		# Mirror the real Get-FilteredParams contract: only parameters the target command
+		# declares survive. Open-Workspace force-injects InSameShell in the relaunched
+		# alongside shell and relies on this filtering to drop it from actions that do
+		# not support it (e.g. Terminate-WindowsTerminalTabs).
+		Mock Get-FilteredParams {
+			param($CommandName, $Params)
+			$cmdInfo = Get-Command $CommandName -ErrorAction SilentlyContinue
+			if (-not $cmdInfo) { return $Params }
+			$filtered = @{}
+			foreach ($key in $Params.Keys) {
+				if ($cmdInfo.Parameters.Keys -contains $key) {
+					$filtered[$key] = $Params[$key]
+				}
+			}
+			return $filtered
+		}
 		Mock Get-NextAvailableDesktopIndex { 3 }
 		Mock Open-Project { param($Project) $Project }
 		Mock Open-Browser {
@@ -84,8 +106,13 @@ Describe "Open-Workspace" {
 		}
 		Mock Terminate-WindowsTerminalTabs { param([switch]$OnlyCurrent) $script:terminateCalls += [PSCustomObject]@{ OnlyCurrent = [bool]$OnlyCurrent } }
 		Mock Test-BrowserGroupAlreadyOpen { $false }
+		Mock Open-Terminal {
+			param($Command, [switch]$Administrator, [switch]$InSameShell, $WindowId, $TabTitles)
+			$script:openTerminalCalls += [PSCustomObject]@{ Command = $Command; WindowId = $WindowId }
+		}
 		Mock Test-ActionOne { param($Alpha) $script:invokedActions += [PSCustomObject]@{ Name = 'Test-ActionOne'; Alpha = $Alpha } }
 		Mock Test-ActionTwo { param($Beta) $script:invokedActions += [PSCustomObject]@{ Name = 'Test-ActionTwo'; Beta = $Beta } }
+		Mock Test-ShellAwareAction { param($Alpha, [switch]$InSameShell) $script:invokedActions += [PSCustomObject]@{ Name = 'Test-ShellAwareAction'; Alpha = $Alpha; InSameShell = [bool]$InSameShell } }
 		Mock Test-ThrowingAction { throw 'intentional action failure' }
 
 		$script:Configuration = @{
@@ -98,6 +125,9 @@ Describe "Open-Workspace" {
 
 		$script:previousWtProjectTab = $env:WT_PROJECT_TAB
 		Remove-Item Env:WT_PROJECT_TAB -ErrorAction SilentlyContinue
+
+		$script:previousAlongsideShellMarker = $env:OPEN_WORKSPACE_ALONGSIDE_SHELL
+		Remove-Item Env:OPEN_WORKSPACE_ALONGSIDE_SHELL -ErrorAction SilentlyContinue
 	}
 
 	AfterEach {
@@ -106,6 +136,13 @@ Describe "Open-Workspace" {
 		}
 		else {
 			Remove-Item Env:WT_PROJECT_TAB -ErrorAction SilentlyContinue
+		}
+
+		if ($null -ne $script:previousAlongsideShellMarker) {
+			$env:OPEN_WORKSPACE_ALONGSIDE_SHELL = $script:previousAlongsideShellMarker
+		}
+		else {
+			Remove-Item Env:OPEN_WORKSPACE_ALONGSIDE_SHELL -ErrorAction SilentlyContinue
 		}
 	}
 
@@ -139,15 +176,89 @@ Describe "Open-Workspace" {
 		$script:invokedActions[1].Beta | Should -Be 2
 	}
 
-	It "skips Terminate-WindowsTerminalTabs -OnlyCurrent when Alongside is used" {
+	It "relaunches -Alongside into a new shell window without running any actions" {
+		$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+			@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } }
+		)
+
+		Open-Workspace -Workspace 'TestWorkspace' -Alongside
+
+		$script:invokedActions.Count | Should -Be 0
+		Should -Invoke Get-NextAvailableDesktopIndex -Times 0 -Exactly
+		$script:openTerminalCalls.Count | Should -Be 1
+		$command = $script:openTerminalCalls[0].Command
+		$command | Should -BeLike "*`$env:WT_PROJECT_TAB = `$null;*"
+		$command | Should -BeLike "*`$env:OPEN_WORKSPACE_START_UTC = '*'*"
+		$command | Should -BeLike "*`$env:OPEN_WORKSPACE_ALONGSIDE_SHELL = '1';*"
+		$command | Should -BeLike "*Open-Workspace -Workspace 'TestWorkspace' -Alongside"
+	}
+
+	It "creates the relaunch window under an explicit ID and hands it to the child via WT_WINDOW_ID" {
+		$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+			@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } }
+		)
+
+		Open-Workspace -Workspace 'TestWorkspace' -Alongside
+
+		$script:openTerminalCalls.Count | Should -Be 1
+		$windowId = $script:openTerminalCalls[0].WindowId
+		$windowId | Should -Not -BeNullOrEmpty
+		{ [guid]::Parse($windowId) } | Should -Not -Throw
+		$script:openTerminalCalls[0].Command | Should -BeLike "*`$env:WT_WINDOW_ID = '$windowId';*"
+	}
+
+	It "forwards Project and ExtraArgs in the relaunch command" {
+		$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+			@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } }
+		)
+
+		Open-Workspace -Workspace 'TestWorkspace' -Project 'ProjectA' -Alongside -Override -CustomParam 'some value'
+
+		$script:openTerminalCalls.Count | Should -Be 1
+		$script:openTerminalCalls[0].Command |
+			Should -BeLike "*Open-Workspace -Workspace 'TestWorkspace' -Project 'ProjectA' -Alongside -Override -CustomParam 'some value'"
+	}
+
+	It "runs Terminate-WindowsTerminalTabs -OnlyCurrent inside the relaunched alongside shell" {
+		$env:OPEN_WORKSPACE_ALONGSIDE_SHELL = '1'
 		$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
 			@{ Action = 'Terminate-WindowsTerminalTabs'; Parameters = @{ OnlyCurrent = $true } }
 		)
 
 		Open-Workspace -Workspace 'TestWorkspace' -Alongside
 
-		$script:terminateCalls.Count | Should -Be 0
+		$script:openTerminalCalls.Count | Should -Be 0
+		$script:terminateCalls.Count | Should -Be 1
+		$script:terminateCalls[0].OnlyCurrent | Should -BeTrue
 		Should -Invoke Get-NextAvailableDesktopIndex -Times 1 -Exactly
+	}
+
+	It "forces InSameShell on actions inside the relaunched alongside shell and consumes the marker" {
+		$env:OPEN_WORKSPACE_ALONGSIDE_SHELL = '1'
+		$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+			@{ Action = 'Test-ShellAwareAction'; Parameters = @{ Alpha = 5 } }
+		)
+
+		Open-Workspace -Workspace 'TestWorkspace' -Alongside
+
+		$script:openTerminalCalls.Count | Should -Be 0
+		$script:invokedActions.Count | Should -Be 1
+		$script:invokedActions[0].Name | Should -Be 'Test-ShellAwareAction'
+		$script:invokedActions[0].Alpha | Should -Be 5
+		$script:invokedActions[0].InSameShell | Should -BeTrue
+		$env:OPEN_WORKSPACE_ALONGSIDE_SHELL | Should -BeNullOrEmpty
+	}
+
+	It "does not force InSameShell when opening without Alongside" {
+		$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+			@{ Action = 'Test-ShellAwareAction'; Parameters = @{ Alpha = 6 } }
+		)
+
+		Open-Workspace -Workspace 'TestWorkspace'
+
+		$script:openTerminalCalls.Count | Should -Be 0
+		$script:invokedActions.Count | Should -Be 1
+		$script:invokedActions[0].InSameShell | Should -BeFalse
 	}
 
 	It "skips Terminate-WindowsTerminalTabs -OnlyCurrent when caller tab belongs to same workspace project" {
@@ -233,6 +344,7 @@ Describe "Open-Workspace" {
 	}
 
 	It "recomputes desktop offset per selected workspace when opening alongside" {
+		$env:OPEN_WORKSPACE_ALONGSIDE_SHELL = '1'
 		$script:Configuration.Workspaces = @('WorkspaceA', 'WorkspaceB')
 		$script:Configuration.WorkspaceActions['WorkspaceA'] = @(
 			@{ Action = 'Set-WorkspaceWindowLayout'; Parameters = @{ WorkspaceName = 'WorkspaceA' } }
@@ -261,6 +373,7 @@ Describe "Open-Workspace" {
 	}
 
 	It "forwards desktop offset and pre-captured windows to Set-WorkspaceWindowLayout when opening alongside" {
+		$env:OPEN_WORKSPACE_ALONGSIDE_SHELL = '1'
 		Mock Get-WindowHandle {
 			@([PSCustomObject]@{ Handle = [IntPtr]55; Title = 'Existing'; ProcessId = 1 })
 		}
@@ -276,6 +389,51 @@ Describe "Open-Workspace" {
 		$script:setLayoutCalls[0].DesktopOffset | Should -Be 3
 		$script:setLayoutCalls[0].Alongside | Should -BeTrue
 		$script:setLayoutCalls[0].PreCapturedExistingWindows.Count | Should -Be 1
+	}
+
+	It "excludes its own hosting terminal window from pre-captured windows in the alongside shell" {
+		$env:OPEN_WORKSPACE_ALONGSIDE_SHELL = '1'
+
+		# The title-probe query (-ProcessName WindowsTerminal) sees the probe marker in
+		# this shell's own window title; the plain capture query returns both windows.
+		Mock Get-WindowHandle {
+			param($ProcessName)
+			if ($ProcessName -eq 'WindowsTerminal') {
+				@([PSCustomObject]@{ Handle = [IntPtr]777; Title = $Host.UI.RawUI.WindowTitle; ProcessId = 42 })
+			}
+			else {
+				@(
+					[PSCustomObject]@{ Handle = [IntPtr]555; Title = 'OtherWorkspaceWindow'; ProcessId = 1 },
+					[PSCustomObject]@{ Handle = [IntPtr]777; Title = 'BootstrapWindow'; ProcessId = 42 }
+				)
+			}
+		}
+
+		$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+			@{ Action = 'Set-WorkspaceWindowLayout'; Parameters = @{ WorkspaceName = 'TestWorkspace' } }
+		)
+
+		Open-Workspace -Workspace 'TestWorkspace' -Alongside
+
+		$script:setLayoutCalls.Count | Should -Be 1
+		$script:setLayoutCalls[0].PreCapturedExistingWindows.Contains([IntPtr]555) | Should -BeTrue
+		$script:setLayoutCalls[0].PreCapturedExistingWindows.Contains([IntPtr]777) | Should -BeFalse
+	}
+
+	It "keeps all pre-captured windows when opening without Alongside" {
+		Mock Get-WindowHandle {
+			param($ProcessName)
+			@([PSCustomObject]@{ Handle = [IntPtr]777; Title = 'SomeWindow'; ProcessId = 42 })
+		}
+
+		$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+			@{ Action = 'Set-WorkspaceWindowLayout'; Parameters = @{ WorkspaceName = 'TestWorkspace' } }
+		)
+
+		Open-Workspace -Workspace 'TestWorkspace'
+
+		$script:setLayoutCalls.Count | Should -Be 1
+		$script:setLayoutCalls[0].PreCapturedExistingWindows.Contains([IntPtr]777) | Should -BeTrue
 	}
 
 	It "adds swagger group to Open-Browser when project swagger is not already open" {

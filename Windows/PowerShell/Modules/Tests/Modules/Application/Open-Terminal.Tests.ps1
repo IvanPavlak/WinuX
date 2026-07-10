@@ -11,6 +11,18 @@ Describe "Open-Terminal" {
 	BeforeEach {
 		Mock Start-Process { }
 		Mock Start-Sleep { }
+
+		$script:previousWtWindowId = $env:WT_WINDOW_ID
+		Remove-Item Env:WT_WINDOW_ID -ErrorAction SilentlyContinue
+	}
+
+	AfterEach {
+		if ($null -ne $script:previousWtWindowId) {
+			$env:WT_WINDOW_ID = $script:previousWtWindowId
+		}
+		else {
+			Remove-Item Env:WT_WINDOW_ID -ErrorAction SilentlyContinue
+		}
 	}
 
 	Context "Parameter validation" {
@@ -91,11 +103,31 @@ Describe "Open-Terminal" {
 	}
 
 	Context "When InSameShell is specified without WindowId" {
-		It "Should use window ID 0" {
+		It "Should use window ID 0 when WT_WINDOW_ID is not set" {
 			Open-Terminal -Command "echo test" -InSameShell
 
 			Should -Invoke Start-Process -Times 1 -ParameterFilter {
 				$ArgumentList -contains "0"
+			}
+		}
+
+		It "Should prefer WT_WINDOW_ID over window ID 0 when the calling shell knows its window" {
+			$env:WT_WINDOW_ID = "caller-window-guid"
+
+			Open-Terminal -Command "echo test" -InSameShell
+
+			Should -Invoke Start-Process -Times 1 -ParameterFilter {
+				$ArgumentList -contains "caller-window-guid"
+			}
+		}
+
+		It "Should use an explicit WindowId over WT_WINDOW_ID" {
+			$env:WT_WINDOW_ID = "caller-window-guid"
+
+			Open-Terminal -Command "echo test" -WindowId "explicit-id" -InSameShell
+
+			Should -Invoke Start-Process -Times 1 -ParameterFilter {
+				$ArgumentList -contains "explicit-id"
 			}
 		}
 	}

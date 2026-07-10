@@ -396,7 +396,7 @@ Opens a fresh Windows Terminal window by default. When `-Command` is supplied, e
 | ---------------- | ------------------------------------------------------------------------------------------------------ |
 | `-Command`       | Array of commands to execute, each in its own tab (base64-encoded internally).                         |
 | `-Administrator` | Opens Windows Terminal with elevated privileges.                                                       |
-| `-InSameShell`   | Opens tabs in the current Windows Terminal window (ID 0) instead of a new window. Default: new window. |
+| `-InSameShell`   | Opens tabs in the current Windows Terminal window instead of a new window (targets `$env:WT_WINDOW_ID` when the calling shell knows its window, e.g. inside `Open-Workspace -Alongside`; otherwise ID 0 = the most recently used window). Default: new window. |
 | `-WindowId`      | Explicit Windows Terminal window ID to open tabs in; overrides `-InSameShell`.                         |
 | `-TabTitles`     | Array of custom tab titles; should match the number of commands.                                       |
 
