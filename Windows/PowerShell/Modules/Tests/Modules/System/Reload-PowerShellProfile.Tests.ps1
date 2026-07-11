@@ -26,12 +26,12 @@ Describe "Reload-PowerShellProfile" {
 		$script:reloadedModules = $false
 
 		Mock Write-Host { }
-		Mock Reload-CustomModules {
+		Mock Reload-WinuXModules {
 			$script:reloadedModules = $true
 		}
 	}
 
-	It "reloads custom modules and dot-sources all existing profile scripts" {
+	It "reloads WinuX modules and dot-sources all existing profile scripts" {
 		$auah = Join-Path $TestDrive "AllUsersAllHosts.ps1"
 		$auch = Join-Path $TestDrive "AllUsersCurrentHost.ps1"
 		$cuah = Join-Path $TestDrive "CurrentUserAllHosts.ps1"

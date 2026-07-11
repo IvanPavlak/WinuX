@@ -43,6 +43,7 @@ WinuX/
     │       │       ├── ScoopApps.csv               # Scoop applications
     │       │       └── ChocolateyApps.csv          # Chocolatey applications
     │       ├── Configuration/                      # Programmatic config modifications
+    │       ├── Custom/                             # Fork-owned functions & modules (see Fork Model)
     │       ├── Git/                                # Repository management
     │       ├── Helper/                             # Utility functions
     │       ├── Logging/                            # Unified terminal & file logging

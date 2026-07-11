@@ -124,7 +124,9 @@ Every new exported function should ship with tests.
   module's `Functions/` directory; keep caller functions thin.
 - **Module layout:** each module is a `.psd1` manifest + `.psm1` loader + `Functions/`
   directory. When you add, rename, or remove an exported function, update that module's
-  `FunctionsToExport` accordingly.
+  `FunctionsToExport` accordingly. Fork-only functions are the exception - they live in the
+  Custom area (see "Develop in your fork's Custom area first" below); their names go in the
+  fork-owned `Custom.psd1` manifest rather than an engine module's.
 
 ---
 
@@ -153,6 +155,27 @@ Preview the docs locally:
 ```powershell
 npx docsify-cli serve docs
 ```
+
+---
+
+## Develop in your fork's Custom area first
+
+Anything you build that WinuX does not (yet) ship should start in the **Custom area** of your
+fork: `Windows/PowerShell/Modules/Custom/<Module>/Functions/` for code (adding its name to
+`Custom.psd1`'s `FunctionsToExport`, which is what makes it autoload),
+`Windows/PowerShell/Modules/Custom/<Module>/Tests/` for its Pester tests, and
+`docs/custom/<module>.md` for its documentation (same man-style entry format as the module
+pages). Upstream never writes those paths, so your work survives every
+`git merge upstream/master` untouched - while still facing the same quality bar: `Run-Tests`
+discovers Custom tests, and `List-Functions -ListDiscrepancies` checks Custom functions against
+their `docs/custom/` entries.
+
+When a function is stable, tested, and documented, **graduate it** with a focused PR: `git mv`
+the function into `Modules/<Module>/Functions/`, move its tests and doc entry to their upstream
+locations, add it to the module's `FunctionsToExport`, and promote any config keys it reads into
+the base `Configuration.psd1` with generic values. The step-by-step checklist lives in
+`Windows/PowerShell/Modules/Custom/README.md`; the concept is explained in the
+[Fork Model](docs/contributing/fork-model.md).
 
 ---
 

@@ -1,11 +1,11 @@
 function Reload-PowerShellProfile {
 	<#
 	.SYNOPSIS
-		Reloads all custom modules and the PowerShell profile dot-sources.
+		Reloads all WinuX modules and the PowerShell profile dot-sources.
 
 	.DESCRIPTION
-		First calls `Reload-CustomModules` to re-import all 9 custom modules,
-		then dot-sources `AllUsersAllHosts` and `CurrentUserAllHosts` profile files
+		First calls `Reload-WinuXModules` to re-import all WinuX modules (including the
+		Custom area), then dot-sources `AllUsersAllHosts` and `CurrentUserAllHosts` profile files
 		to pick up any profile-level changes without restarting the terminal.
 
 	.EXAMPLE
@@ -15,7 +15,7 @@ function Reload-PowerShellProfile {
 	[CmdletBinding()]
 	param()
 
-	Reload-CustomModules
+	Reload-WinuXModules
 
 	if (-not (Test-LogVerbose)) {
 		Write-LogTitle "Reloading PowerShell Profile" -BlankLineAfter

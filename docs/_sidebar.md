@@ -36,6 +36,9 @@
     - [Workflow](/modules/workflow.md)
     - [Tests](/modules/tests.md)
 
+- **Custom**
+    - [Overview](/custom/README.md)
+
 - **AI Integration**
     - [Overview](/ai/overview.md)
     - [Agent System](/ai/agent-system.md)

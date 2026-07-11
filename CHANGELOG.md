@@ -8,6 +8,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-07-11
+
+### Added
+
+- The **Custom area** (`Modules/Custom` + `docs/custom`): a fork-owned half of the module tree, laid out as a mirror of `Modules/`, where a fork keeps the functions and whole modules that are not (yet) part of upstream WinuX. Upstream ships only the aggregator (`Custom.psd1` + `Custom.psm1`) and a README/landing page; a fork adds function files under `Custom/<Module>/Functions/`, their tests under `Custom/<Module>/Tests/`, and man-style docs under `docs/custom/<module>.md`. Because upstream never writes inside those payload paths, an upstream pull never conflicts with a fork's own code, and promoting something into WinuX later is a mechanical `git mv`. The `Custom` module autoloads lazily like every engine module - its `FunctionsToExport` ships empty and each fork lists its own functions there - and the loader skips, with a warning, any payload file whose name would shadow an existing engine function, so the Custom area only ever adds behavior. `Load-PathConfiguration` registers `Modules\Custom` as an additional module root so whole fork-owned modules (`Custom/<Name>` with their own manifest) autoload too. See the [Fork Model](docs/contributing/fork-model.md) and `Modules/Custom/README.md`.
+- `Reload-WinuXModules` (System module): removes and re-imports every WinuX module, additionally scanning `Modules/Custom` for whole fork modules. Replaces `Reload-CustomModules` (see Changed).
+
+### Changed
+
+- Renamed `Reload-CustomModules` to `Reload-WinuXModules` (System module) to remove the ambiguity the Custom area introduces ("custom modules" previously meant the project's own modules). No compatibility alias is kept: update any call sites or aliases to the new name. `Reload-PowerShellProfile` calls it internally and is otherwise unchanged.
+- `Run-Tests` (Tests module) now also discovers Pester tests under the Custom area (`Modules/Custom/<Module>/Tests`), so fork functions meet the same test bar as engine functions.
+- `Test-ManifestCompleteness` (Helper module) and the "Manifest Completeness" Pester test now also verify the Custom area: every `Custom/<Module>/Functions/*.ps1` must be listed in `Custom.psd1`, and a whole fork module is checked against its own manifest. Both pass unchanged on a pure-upstream setup, where the Custom area is empty.
+- `List-Functions` (Helper module) now parses `docs/custom/*.md` alongside `docs/modules/*.md`, so `-ListDiscrepancies` checks fork functions against the loaded `Custom` module exactly as it does engine functions.
+
 ## [0.1.3] - 2026-07-10
 
 ### Added
@@ -57,7 +71,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.3...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.4...HEAD
+[0.1.4]: https://github.com/IvanPavlak/WinuX/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/IvanPavlak/WinuX/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/IvanPavlak/WinuX/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/IvanPavlak/WinuX/compare/v0.1.0...v0.1.1

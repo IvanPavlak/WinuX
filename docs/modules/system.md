@@ -390,26 +390,12 @@ Rebuild-IconCache
 
 **See also:** [Configuration: Machine Types](../configuration/machine-types.md)
 
-## [Reload-CustomModules](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Reload-CustomModules.ps1)
-
-- **Description:** Removes and re-imports all custom PowerShell modules to pick up code changes. Scans the parent `Modules/` directory for folders containing both a `.psd1` manifest and a `.psm1` loader, removes any currently loaded version, and force-reimports each module globally. Folders missing either file are skipped with a verbose message.
-- **Usage:** `Reload-CustomModules`
-
-Iterates every folder under `Modules/`, and for each one expecting a matching `<ModuleName>.psd1` and `<ModuleName>.psm1` pair runs `Import-Module -Force -Global` so edited functions are reloaded into the current session without restarting PowerShell. Modules that fail to import are reported in red but do not stop the loop.
-
-```powershell
-# Re-import every custom module after editing function source
-Reload-CustomModules
-```
-
-**See also:** [Reload-PowerShellProfile](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Reload-PowerShellProfile.ps1)
-
 ## [Reload-PowerShellProfile](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Reload-PowerShellProfile.ps1)
 
-- **Description:** Reloads all custom modules and the PowerShell profile. First calls `Reload-CustomModules` to re-import every custom module, then dot-sources the profile files to pick up profile-level changes without restarting the terminal.
+- **Description:** Reloads all WinuX modules and the PowerShell profile. First calls `Reload-WinuXModules` to re-import every WinuX module, then dot-sources the profile files to pick up profile-level changes without restarting the terminal.
 - **Usage:** `Reload-PowerShellProfile`
 
-After re-importing the custom modules, the function dot-sources each of the `AllUsersAllHosts`, `AllUsersCurrentHost`, `CurrentUserAllHosts`, and `CurrentUserCurrentHost` profile scripts that exist, so any profile-level edits take effect in the current session.
+After re-importing the WinuX modules, the function dot-sources each of the `AllUsersAllHosts`, `AllUsersCurrentHost`, `CurrentUserAllHosts`, and `CurrentUserCurrentHost` profile scripts that exist, so any profile-level edits take effect in the current session.
 
 Under verbose logging (`Set-LogLevel Verbose`) the `[Reloading PowerShell Profile]` header and the success message are suppressed. Add `-Verbose` to also log each profile file as it is sourced.
 
@@ -420,6 +406,20 @@ Reload-PowerShellProfile
 # Suppress the header/success banner and log each profile file as it is sourced
 Reload-PowerShellProfile -Verbose
 ```
+
+## [Reload-WinuXModules](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Reload-WinuXModules.ps1)
+
+- **Description:** Removes and re-imports all WinuX PowerShell modules to pick up code changes. Scans the `Modules/` directory (and the `Modules/Custom` fork area, when populated) for folders containing both a `.psd1` manifest and a `.psm1` loader, removes any currently loaded version, and force-reimports each module globally. Folders missing either file are skipped with a verbose message.
+- **Usage:** `Reload-WinuXModules`
+
+Iterates every folder under `Modules/` (plus `Modules/Custom/` for whole fork-owned modules), and for each one expecting a matching `<ModuleName>.psd1` and `<ModuleName>.psm1` pair runs `Import-Module -Force -Global` so edited functions are reloaded into the current session without restarting PowerShell. Custom mirror payload folders carry no manifest and are skipped here - their function files reload with the `Custom` module itself. Modules that fail to import are reported in red but do not stop the loop.
+
+```powershell
+# Re-import every WinuX module after editing function source
+Reload-WinuXModules
+```
+
+**See also:** [Reload-PowerShellProfile](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Reload-PowerShellProfile.ps1), [Fork Model: the Custom area](../contributing/fork-model.md)
 
 ## [Remove-VirtualDesktops](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Remove-VirtualDesktops.ps1)
 

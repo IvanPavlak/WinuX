@@ -122,7 +122,7 @@ Every time you open PowerShell, the profile (`Microsoft.PowerShell_profile.ps1`)
 ```
 
 > [!NOTE]
-> Custom modules are **not imported at startup**. Each `.psd1` manifest declares `FunctionsToExport`, enabling PowerShell autoload. A module loads automatically - and silently - the first time one of its exported functions is called. Only `Logging` and `Bootstrap` (imported explicitly by the profile, in that order) and `Helper` (autoloaded during path-expansion) are guaranteed to be in memory at startup.
+> WinuX modules are **not imported at startup**. Each `.psd1` manifest declares `FunctionsToExport`, enabling PowerShell autoload. A module loads automatically - and silently - the first time one of its exported functions is called; this includes the fork-owned `Custom` module, whose `FunctionsToExport` the fork maintains (empty on a pure-upstream setup). Only `Logging` and `Bootstrap` (imported explicitly by the profile, in that order) and `Helper` (autoloaded during path-expansion) are guaranteed to be in memory at startup.
 
 > [!NOTE]
 > `Test-PowerPlan` is dot-sourced directly from its `.ps1` file rather than importing the entire `System` module at startup. This avoids loading ~46 system functions just for one startup check.

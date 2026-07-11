@@ -32,6 +32,8 @@ Every change that adds, renames, removes, or modifies the **behavior, parameters
 
 `List-Functions` (Helper module) PARSES the module pages. After adding/renaming/removing a function, update its entry alphabetically in `modules/<Module>.md`, update the module `.psd1` `FunctionsToExport`, and run `List-Functions -ListDiscrepancies` (must report none).
 
+**Fork-only functions (the Custom area):** functions not (yet) shipped by WinuX live under `Windows/PowerShell/Modules/Custom/<Module>/Functions/` and are documented with the SAME man-style entry format in `docs/custom/<module>.md` (the heading link points at the fork's source URL). Their name goes in `Custom.psd1`'s `FunctionsToExport` (the fork-owned manifest, not an engine module's) - which is what makes them autoload - and `List-Functions -ListDiscrepancies` checks them against their `docs/custom/` pages. Graduation into WinuX follows `Windows/PowerShell/Modules/Custom/README.md`.
+
 Use **genericized example values** in docs (placeholders like MyProject, MyRepo, GroupName, Work-PC) - no real personal/work identifiers.
 
 Triggers that require a docs update:
@@ -41,6 +43,7 @@ Functions (module reference):
 - New exported function (add a `## [Name](url)` man-style entry alphabetically in the matching `docs/modules/<Module>.md`, add it to `FunctionsToExport`, and update `docs_overview.md`)
 - Renamed function (rename the entry and its `FunctionsToExport` line; update `docs_overview.md`)
 - Removed function (remove the entry and its `FunctionsToExport` line; update `docs_overview.md`)
+- New/changed fork-only function (same entry format, but in `docs/custom/<module>.md`; its name goes in `Custom.psd1` `FunctionsToExport`, not an engine module's)
 - Parameter added/removed/renamed (update the `**Parameters:**` bullet in the module page entry)
 - Behavioral change visible to a caller (update the `**Description:**` bullet in the module page entry)
 - New cross-function interaction (e.g. function A now invokes function B for recovery) - note it in the relevant module page entry
