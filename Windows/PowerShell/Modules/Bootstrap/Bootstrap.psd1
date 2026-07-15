@@ -11,6 +11,7 @@
 		'Initialize-Configuration',
 		'Install-WinGetPackageManager',
 		'Load-PathConfiguration',
-		'Merge-Hashtable'
+		'Merge-Hashtable',
+		'Test-MachineTypeScope'
 	)
 }

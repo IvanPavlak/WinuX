@@ -19,7 +19,7 @@ Execution sequence:
 5. Nerd Font, PowerShell modules, special folder redirections
 6. WSL configuration
 7. WinGet, Scoop, and Chocolatey - install package managers then apps from CSVs
-8. Upgrade all packages, fork-defined personal steps (BootstrapConfig.PersonalSteps), .NET EF CLI
+8. Upgrade all packages, fork-defined personal steps (BootstrapConfig.PersonalSteps, each entry optionally machine-gated like the app CSVs' `Machine` column), .NET EF CLI
 9. Environment variables, Conda environments, NuGet config, taskbar pins
 10. WSL environment initialization, symbolic links, WSL SSH setup
 11. Lock taskbar layout, restart Explorer, restart machine
@@ -238,6 +238,28 @@ Merge-Hashtable -Target $config -Overrides $overrides
 ```
 
 **See also:** [Expand-ConfigPaths](#expand-configpaths)
+
+## [Test-MachineTypeScope](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Bootstrap/Functions/Test-MachineTypeScope.ps1)
+
+- **Description:** Tests whether a machine-scope string (`All`, `PC`, `PC/Laptop`, ...) applies to a machine type, validating every token against `ValidMachineTypes` plus the `All` wildcard. Unknown tokens - e.g. a `Labtop` typo - are reported via `Write-LogError` together with the valid values and contribute nothing to the match, so a misspelled scope can never silently install or skip anything. Matching is case-insensitive. The single gate behind the app CSVs' `Machine` column (`Install-WingetApps`, `Install-ScoopApps`, `Install-ChocolateyApps`) and `BootstrapConfig.PersonalSteps` entries.
+- **Parameters:** -Scope, -MachineType, -Context
+- **Usage:** `Test-MachineTypeScope -Scope "PC/Laptop" -MachineType "Laptop"`
+
+| Parameter      | Description                                                                                                     |
+| -------------- | --------------------------------------------------------------------------------------------------------------- |
+| `-Scope`       | Machine-scope string: machine types separated by `/`, or `All`. A blank scope is reported and never matches.    |
+| `-MachineType` | Machine type to test the scope against. Defaults to `$global:MachineType`; when empty, only `All` scopes match. |
+| `-Context`     | Optional data-source label (e.g. `WinGetApps.csv [Git.Git]`) included in error messages for instant diagnosis.  |
+
+```powershell
+# True - the scope covers Laptop
+Test-MachineTypeScope -Scope "PC/Laptop" -MachineType "Laptop"
+
+# False, and reports the unknown token [Labtop] with the list of valid values
+Test-MachineTypeScope -Scope "Labtop" -MachineType "Laptop" -Context "WinGetApps.csv [MyApp]"
+```
+
+**See also:** [DetermineMachineType](#determinemachinetype)
 
 ## Two-Stage Architecture
 

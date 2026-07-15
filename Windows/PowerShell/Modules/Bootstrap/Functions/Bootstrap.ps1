@@ -16,7 +16,7 @@ function Bootstrap {
 		5. Nerd Font, PowerShell modules, special folder redirections
 		6. WSL configuration (config-gated per machine type via BootstrapConfig.WSLSetup)
 		7. WinGet, Scoop, and Chocolatey - install package managers then apps from CSVs
-		8. Upgrade all packages, fork-defined personal steps (BootstrapConfig.PersonalSteps), .NET EF CLI
+		8. Upgrade all packages, fork-defined personal steps (BootstrapConfig.PersonalSteps, optionally machine-gated), .NET EF CLI
 		9. Environment variables, Conda environments, NuGet config, taskbar pins
 		10. WSL environment initialization, symbolic links, WSL SSH setup (WSL steps use the same gate)
 		11. Lock taskbar layout, restart Explorer, restart machine
@@ -190,12 +190,30 @@ function Bootstrap {
 		# Fork-defined optional install steps (BootstrapConfig.PersonalSteps) - the base config
 		# ships an empty list, so a vanilla WinuX bootstrap runs nothing here. Forks name their
 		# personal tools in Configuration.local.psd1; each entry must be an exported function.
+		# An entry is either a plain function name (runs on every machine type) or a hashtable
+		# @{ Function = "Name"; Machine = "PC/Laptop" } gated per machine type exactly like the
+		# app CSVs' Machine column (tokens validated by Test-MachineTypeScope).
 		foreach ($personalStep in @($global:Configuration.BootstrapConfig.PersonalSteps)) {
-			if ($personalStep -and (Get-Command $personalStep -ErrorAction SilentlyContinue)) {
-				& $personalStep
+			if (-not $personalStep) { continue }
+
+			$stepName = if ($personalStep -is [System.Collections.IDictionary]) { "$($personalStep['Function'])" } else { "$personalStep" }
+			$stepScope = if ($personalStep -is [System.Collections.IDictionary] -and $null -ne $personalStep['Machine']) { "$($personalStep['Machine'])" } else { "All" }
+
+			if (-not $stepName) {
+				Write-LogWarning "Personal step entry has no Function name - skipping"
+				continue
 			}
-			elseif ($personalStep) {
-				Write-LogWarning "Personal step [$personalStep] not found - skipping"
+
+			if (-not (Test-MachineTypeScope -Scope $stepScope -Context "PersonalSteps [$stepName]")) {
+				Write-LogDebug "Personal step [$stepName] skipped (machine scope => [$stepScope])"
+				continue
+			}
+
+			if (Get-Command $stepName -ErrorAction SilentlyContinue) {
+				& $stepName
+			}
+			else {
+				Write-LogWarning "Personal step [$stepName] not found - skipping"
 			}
 		}
 

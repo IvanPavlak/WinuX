@@ -620,10 +620,14 @@ Settings used during the Bootstrap process.
   (`"All"` / `"Private"` / `"Work"` / `"None"`; `Default` covers unlisted types; absent → `"All"`).
 - `WSLSetup` - Whether Bootstrap provisions WSL, per machine type (`$true`/`$false`; `Default`
   covers unlisted types; absent → `$true`). The shipped `Test` profile skips WSL.
-- `PersonalSteps` - Fork-defined optional bootstrap steps (function names) run right after
-  `Upgrade-All`. The base ships an empty list, so a vanilla bootstrap runs none; a fork lists
-  its personal tools in `Configuration.local.psd1`. Steps that do not resolve are skipped with
-  a warning.
+- `PersonalSteps` - Fork-defined optional bootstrap steps run right after `Upgrade-All`. Each
+  entry is either a function name string (runs on every machine type) or a hashtable
+  `@{ Function = "Install-MyTool"; Machine = "PC/Laptop" }` gated per machine type exactly like
+  the app CSVs' `Machine` column (`All` covers every machine; tokens are validated via
+  `Test-MachineTypeScope`, so unknown machine types are reported instead of silently never
+  matching). The base ships an empty list, so a vanilla bootstrap runs none; a fork lists its
+  personal tools in `Configuration.local.psd1`. Steps that do not resolve are skipped with a
+  warning.
 - `ExternalScripts` / `LocalScripts` - URLs and vendored script paths used by optional steps
   (Microsoft Activation Scripts, Win11Debloat).
 - `PromptForActivation` / `PromptForDebloat` - Whether the optional first-run steps prompt.
