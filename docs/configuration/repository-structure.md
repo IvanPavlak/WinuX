@@ -54,8 +54,6 @@ WinuX/
     │       │       └── Test/                       # Layouts for the shipped Test profile
     │       │           └── {Workspace}_Test.psd1   # e.g., Example_Test.psd1 (add a folder per machine type you define)
     │       └── Workflow/                           # Development workflows
-    ├── TaskbarConfiguration/                       # Taskbar XML layouts
-    │   └── taskbar_layout.xml                      # Taskbar pin configuration
     ├── Win11Debloat/                               # Vendored Win11Debloat + saved settings
     │   ├── CustomAppsList                          # Apps to remove
     │   └── LastUsedSettings.json                   # Last used settings

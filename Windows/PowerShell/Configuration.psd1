@@ -349,7 +349,10 @@
 		ObsidianDirectory       = "{Dev}\Obsidian"
 		ObsidianStartupScript   = "{RepoRoot}\Obsidian\ObsidianStartupScript.pyw"
 		TrainingBackupDirectory = "{Dev}\ExampleBackup"
-		TaskbarConfigurationDir = "{RepoRoot}\Windows\TaskbarConfiguration"
+		# Machine-local destination for the generated taskbar layout XML (the StartLayoutFile the
+		# Explorer Group Policy points at). Written directly by Configure-Taskbar / Unpin-TaskbarApps;
+		# never versioned in the repo. Each machine keeps its own copy under C:\ProgramData.
+		TaskbarLayoutFile       = "C:\ProgramData\provisioning\taskbar_layout.xml"
 		DockerDirectory         = "{RepoRoot}\Docker"
 		LearningBook            = "{User}\Learning\ExampleBook.pdf"
 		TrainingDirectory       = "{User}\Training\2026"
@@ -435,10 +438,9 @@
 			# ships in the public repo (it would expose private hosts). To manage your own,
 			# add an entry here pointing at a config file you keep in your fork, e.g.:
 			#   SSH = @{ Path = "{User}\.ssh\config"; Target = "{RepoRoot}\.ssh\config" }
-			TaskbarConfiguration = @{
-				Path   = "C:\ProgramData\provisioning\taskbar_layout.xml"
-				Target = "{RepoRoot}\Windows\TaskbarConfiguration\taskbar_layout.xml"
-			}
+			# No taskbar symlink: the layout is generated per-machine and written straight to its
+			# machine-local path (PathTemplates.TaskbarLayoutFile) by Configure-Taskbar /
+			# Unpin-TaskbarApps, so there is nothing in the repo to link to.
 			# App-specific symlinks whose payloads the template does not ship. Define them in
 			# your Configuration.local.psd1 when you use the app - a symlink entry only makes
 			# sense once the target exists in your fork (SymbolicLinkMaker skips missing
@@ -1458,25 +1460,36 @@
 	#
 	# Use Get-StartApps in PowerShell to determine AppID (AUMID or Path)
 	# ==========================================================================
-	# Taskbar pinned applications configuration. Used by Configure-Taskbar.
-	# Order of entries determines pin order on the taskbar.
+	# Taskbar pinned applications configuration. Used by Configure-Taskbar. Order of entries
+	# determines pin order on the taskbar.
+	#
+	# Each row may carry a Machine scope, matched against the current machine type by
+	# Test-MachineTypeScope (identical to the app CSVs' Machine column): "All" pins on every
+	# machine, "Test" only on Test, "PC/Laptop" on PC or Laptop. Any type used here must exist
+	# in ValidMachineTypes or it is reported as an unknown token. A row without a Machine key
+	# (or a blank one) defaults to "All", so one list can drive every machine.
+	#
+	# This is the shipped example (every row tagged "All"); keep your real, machine-tagged list
+	# in Configuration.local.psd1 - it replaces this array wholesale on merge. See
+	# docs/configuration/guides/add-new-machine.md.
 	#
 	# Example:
 	#   TaskbarConfiguration = @(
-	#       @{ Name = "Terminal"; Type = "AUMID"; Value = "Microsoft.WindowsTerminal_8wekyb3d8bbwe!App" }
-	#       @{ Name = "Browser";  Type = "Path";  Value = "C:\Program Files\Mozilla Firefox\firefox.exe" }
+	#       @{ Name = "Terminal"; Type = "AUMID"; Value = "Microsoft.WindowsTerminal_8wekyb3d8bbwe!App"; Machine = "All" }
+	#       @{ Name = "Browser";  Type = "Path";  Value = "C:\Program Files\Mozilla Firefox\firefox.exe"; Machine = "All" }
+	#       @{ Name = "WorkTool";  Type = "AUMID"; Value = "Contoso.Tool";                                Machine = "PC/Work" }
 	#   )
 	# ==========================================================================
 	TaskbarConfiguration          = @(
-		@{ Name = "WindowsTerminal"; Type = "AUMID"; Value = "Microsoft.WindowsTerminal_8wekyb3d8bbwe!App" }
-		@{ Name = "Obsidian"; Type = "AUMID"; Value = "md.obsidian" }
-		@{ Name = "Firefox"; Type = "AUMID"; Value = "308046B0AF4A39CB" }
-		@{ Name = "VSCode"; Type = "AUMID"; Value = "Microsoft.VisualStudioCode" }
-		#@{ Name = "VisualStudio2026Community"; Type = "Path"; Value = "C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE\devenv.exe" }
-		@{ Name = "DBeaver"; Type = "Path"; Value = "{User}\AppData\Local\DBeaver\dbeaver.exe" }
-		#@{ Name = "WhatsappDesktop"; Type = "AUMID"; Value = "5319275A.WhatsAppDesktop_cv1g1gvanyjgm!App" }
-		#@{ Name = "BitWarden"; Type = "AUMID"; Value = "com.bitwarden.desktop" }
-		@{ Name = "FileExplorer"; Type = "AUMID"; Value = "Microsoft.Windows.Explorer" }
+		@{ Name = "WindowsTerminal"; Type = "AUMID"; Value = "Microsoft.WindowsTerminal_8wekyb3d8bbwe!App"; Machine = "All" }
+		@{ Name = "Obsidian"; Type = "AUMID"; Value = "md.obsidian"; Machine = "All" }
+		@{ Name = "Firefox"; Type = "AUMID"; Value = "308046B0AF4A39CB"; Machine = "All" }
+		@{ Name = "VSCode"; Type = "AUMID"; Value = "Microsoft.VisualStudioCode"; Machine = "All" }
+		#@{ Name = "VisualStudio2026Community"; Type = "Path"; Value = "C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE\devenv.exe"; Machine = "All" }
+		@{ Name = "DBeaver"; Type = "Path"; Value = "{User}\AppData\Local\DBeaver\dbeaver.exe"; Machine = "All" }
+		#@{ Name = "WhatsappDesktop"; Type = "AUMID"; Value = "5319275A.WhatsAppDesktop_cv1g1gvanyjgm!App"; Machine = "All" }
+		#@{ Name = "BitWarden"; Type = "AUMID"; Value = "com.bitwarden.desktop"; Machine = "All" }
+		@{ Name = "FileExplorer"; Type = "AUMID"; Value = "Microsoft.Windows.Explorer"; Machine = "All" }
 	)
 
 	# ==========================================================================

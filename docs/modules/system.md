@@ -129,7 +129,7 @@ Configure-PostgreSqlPasswords -DefaultOrCurrentPassword foo -NewPassword bar
 - **Parameters:** -FromBootstrap
 - **Usage:** `Configure-Taskbar`, `Configure-Taskbar -FromBootstrap`
 
-Reads the pin list from `TaskbarConfiguration` (each entry is either an `AUMID` or a `Path`, with `{User}` tokens expanded to the current profile) and writes a `taskbar_layout.xml` provisioning file. It sets the `StartLayoutFile` and `LockedStartLayout` registry policies under `HKLM:\SOFTWARE\Policies\Microsoft\Windows\Explorer`, recreates the taskbar symbolic link, restarts Explorer (`Restart-Explorer`), and rebuilds the icon cache (`Rebuild-IconCache`). With `-FromBootstrap`, it skips the 5-second Explorer-initialization wait and leaves the layout unlocked so the Bootstrap script can lock it after its own Explorer restart.
+Resolves the current machine type (via `DetermineMachineType`) and states in the output which machine the pins are being configured for (or that the hostname is unmapped and the default set is used). Reads the pin list from `TaskbarConfiguration` (each entry is either an `AUMID` or a `Path`, with `{User}` tokens expanded to the current profile), keeping only rows whose `Machine` scope matches the machine type - the same `Test-MachineTypeScope` gate the app CSVs use; a row without `Machine` defaults to `All`. It writes the generated layout directly to the machine-local `TaskbarLayoutFile` (`C:\ProgramData\provisioning\taskbar_layout.xml`) - not versioned in the repo and needing no symlink - sets the `StartLayoutFile` and `LockedStartLayout` registry policies under `HKLM:\SOFTWARE\Policies\Microsoft\Windows\Explorer`, restarts Explorer (`Restart-Explorer`), and rebuilds the icon cache (`Rebuild-IconCache`). With `-FromBootstrap`, it skips the 5-second Explorer-initialization wait and leaves the layout unlocked so the Bootstrap script can lock it after its own Explorer restart.
 
 | Parameter        | Description                                                                                                                                                |
 | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1157,12 +1157,12 @@ Test-WindowTitleMatch -WindowTitle "Gmail Inbox" -Patterns @("(.*Gmail.*|.*Inbox
 - **Parameters:** -SkipExplorerRestart, -FromBootstrap
 - **Usage:** `Unpin-TaskbarApps`, `Unpin-TaskbarApps -SkipExplorerRestart`
 
-Optimized for Windows 11 (Build 26100+). The empty layout XML is written to `TaskbarConfigurationDir`, registered as `StartLayoutFile`, and the layout is locked via `LockedStartLayout`; a symbolic link to the provisioning path is also (re)created. `-FromBootstrap` is used internally during bootstrap: it skips the Explorer restart, defers the layout lock and symbolic-link creation to the caller, and passes `-SkipExplorerRestart` down to `Clear-TaskbarPins`.
+Optimized for Windows 11 (Build 26100+). The empty layout XML is written directly to the machine-local `TaskbarLayoutFile` (`C:\ProgramData\provisioning\taskbar_layout.xml`), registered as `StartLayoutFile`, and the layout is locked via `LockedStartLayout` - no repo file and no symlink are involved. `-FromBootstrap` is used internally during bootstrap: it skips the Explorer restart, defers the layout lock to the caller, and passes `-SkipExplorerRestart` down to `Clear-TaskbarPins`.
 
 | Parameter              | Description                                                                                                                        |
 | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
 | `-SkipExplorerRestart` | Skips the Explorer restart after clearing pins.                                                                                    |
-| `-FromBootstrap`       | Internal use during bootstrap; skips the Explorer restart, defers locking the layout and creating the symbolic link to the caller. |
+| `-FromBootstrap`       | Internal use during bootstrap; skips the Explorer restart and defers locking the layout to the caller. |
 
 ```powershell
 # Clear taskbar pins and apply the locking policy (restarts Explorer)

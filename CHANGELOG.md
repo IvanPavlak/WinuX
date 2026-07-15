@@ -8,6 +8,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-07-15
+
+### Changed
+
+- `Configure-Taskbar` (System module) now machine-scopes the taskbar pin list: each `TaskbarConfiguration` row may carry a `Machine` field (`All`, `Test`, `PC/Laptop`, ...) matched against the current machine type through `Test-MachineTypeScope` — the same gate the app CSVs use — so one list drives every machine. A row that omits `Machine` (or leaves it blank) defaults to `All`, preserving the previous "pin everywhere" behavior for untagged rows. The shipped `Configuration.psd1` list is a tagged example; keep your real, machine-specific list in `Configuration.local.psd1` (it replaces the base array wholesale on merge).
+- `Configure-Taskbar` and `Unpin-TaskbarApps` (System module) now write the generated `taskbar_layout.xml` directly to a machine-local path (`PathTemplates.TaskbarLayoutFile`, default `C:\ProgramData\provisioning\taskbar_layout.xml`) that the `StartLayoutFile` policy points at, instead of writing it into the repository and symlinking the provisioning path to it. The layout is produced entirely from configuration, so nothing needs to be versioned and no symlink is created; each machine keeps its own copy. On a machine provisioned by the old design, a pre-existing symlink at that path (live or dangling) is removed before writing, so the first run migrates cleanly to a real file instead of writing back through the link into the repo.
+
+### Removed
+
+- The versioned `Windows/TaskbarConfiguration/taskbar_layout.xml` file and the `SymbolicLinks.TaskbarConfiguration` / `PathTemplates.TaskbarConfigurationDir` configuration keys. The taskbar layout is now generated straight to its machine-local path (see Changed), so the committed copy — which had drifted out of sync with `TaskbarConfiguration` — and its symlink are no longer needed.
+
+### Fixed
+
+- `Rebuild-IconCache` (System module) no longer surfaces a `Remove-Item: … cannot find the file specified` error while clearing the icon cache. With Explorer stopped, a file enumerated in the cache folder can vanish before it is deleted; the cleanup now checks the folder exists, re-checks each file immediately before removing it, and ignores per-file failures — so nothing is removed when there is nothing to remove.
+
 ## [0.1.5] - 2026-07-15
 
 ### Added
@@ -86,7 +101,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.5...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.6...HEAD
+[0.1.6]: https://github.com/IvanPavlak/WinuX/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/IvanPavlak/WinuX/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/IvanPavlak/WinuX/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/IvanPavlak/WinuX/compare/v0.1.2...v0.1.3

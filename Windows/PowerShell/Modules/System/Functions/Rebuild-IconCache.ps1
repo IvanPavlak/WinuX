@@ -27,7 +27,18 @@ function Rebuild-IconCache {
 		Remove-Item -Path $iconCachePath -Force -ErrorAction SilentlyContinue
 	}
 
-	Get-ChildItem -Path $Configuration.Universal.IconCacheFolder -Filter "iconcache*" -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
+	# Only touch files that are actually present. Explorer was stopped just above, but a file that
+	# Get-ChildItem enumerated can disappear before Remove-Item reaches it, which otherwise surfaces
+	# a "cannot find the file specified" error; re-check each file and ignore per-file failures.
+	$iconCacheFolder = $Configuration.Universal.IconCacheFolder
+	if ($iconCacheFolder -and (Test-Path -LiteralPath $iconCacheFolder)) {
+		foreach ($iconCacheFile in @(Get-ChildItem -Path $iconCacheFolder -Filter "iconcache*" -ErrorAction SilentlyContinue)) {
+			if (Test-Path -LiteralPath $iconCacheFile.FullName) {
+				try { Remove-Item -LiteralPath $iconCacheFile.FullName -Force -ErrorAction Stop }
+				catch { }
+			}
+		}
+	}
 
 	Write-LogStep " Starting Explorer..."
 	Start-Process explorer.exe -ArgumentList "/factory,{682159d9-c321-47ca-b3f1-30e36b2ec8b9}"

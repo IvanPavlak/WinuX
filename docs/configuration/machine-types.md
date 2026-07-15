@@ -302,16 +302,25 @@ Rename-Computer -NewName "NewHostname" -Restart
 
 ## Taskbar Configuration
 
+One `TaskbarConfiguration` list serves every machine; each row's `Machine` scope decides where it
+pins. `Test-MachineTypeScope` matches the scope against the current machine type exactly like the
+app CSVs' `Machine` column: `All` pins everywhere, `PC/Work` only on PC or Work, and a row with no
+`Machine` key (or a blank one) defaults to `All`. Every type you use must exist in
+`ValidMachineTypes`, or it is reported as an unknown token.
+
 ```powershell
-# Different apps pinned per machine
 TaskbarConfiguration = @(
-    @{ Name = "WindowsTerminal"; Type = "AUMID"; Value = "Microsoft.WindowsTerminal_8wekyb3d8bbwe!App" }
-    @{ Name = "Obsidian"; Type = "AUMID"; Value = "md.obsidian" }
-    @{ Name = "Firefox"; Type = "AUMID"; Value = "308046B0AF4A39CB" }
-    @{ Name = "VSCode"; Type = "AUMID"; Value = "Microsoft.VisualStudioCode" }
-    ...
+    @{ Name = "WindowsTerminal"; Type = "AUMID"; Value = "Microsoft.WindowsTerminal_8wekyb3d8bbwe!App"; Machine = "All" }
+    @{ Name = "Obsidian";        Type = "AUMID"; Value = "md.obsidian";                                 Machine = "All" }
+    @{ Name = "VSCode";          Type = "AUMID"; Value = "Microsoft.VisualStudioCode";                  Machine = "PC/Work" }
+    @{ Name = "DBeaver";         Type = "Path";  Value = "{User}\AppData\Local\DBeaver\dbeaver.exe";    Machine = "PC" }
 )
 ```
+
+Keep your real, machine-tagged list in `Configuration.local.psd1` (it replaces the base array
+wholesale on merge). `Configure-Taskbar` states which machine type it is configuring for, then
+writes the generated layout per-machine to `TaskbarLayoutFile`
+(`C:\ProgramData\provisioning\taskbar_layout.xml`) — not versioned in the repo, no symlink.
 
 ### Window Layouts
 
