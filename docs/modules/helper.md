@@ -1041,7 +1041,7 @@ Show-FunctionDetails -FunctionName "Open-Browser" -FunctionInfo $info
 - **Parameters:** -CheckOnly
 - **Usage:** `Test-AdminPrivileges`, `if (Test-AdminPrivileges -CheckOnly) { ... }`
 
-When invoked without `-CheckOnly` and the session is not elevated, it captures the current directory and the calling command from the PowerShell call stack, then offers (via `Resolve-Selection`) to relaunch in an Administrator shell that re-runs the original command in place. It throws a `PipelineStoppedException` to halt the non-elevated pipeline. Use `-CheckOnly` as a lightweight, non-interactive guard that returns `$true`/`$false` without prompting or elevating.
+When invoked without `-CheckOnly` and the session is not elevated, it captures the current directory and the originally typed command - the outermost call-stack frame, falling back to the immediate caller when the host records no line (inner frames would replay engine source lines like `& $stepName` that do not exist in a fresh shell) - then offers (via `Resolve-Selection`) to relaunch in an Administrator shell that re-runs the original command in place. It throws a `PipelineStoppedException` to halt the non-elevated pipeline. Use `-CheckOnly` as a lightweight, non-interactive guard that returns `$true`/`$false` without prompting or elevating.
 
 | Parameter    | Description                                                                                              |
 | ------------ | -------------------------------------------------------------------------------------------------------- |

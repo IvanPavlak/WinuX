@@ -188,34 +188,9 @@ function Bootstrap {
 		Upgrade-All
 
 		# Fork-defined optional install steps (BootstrapConfig.PersonalSteps) - the base config
-		# ships an empty list, so a vanilla WinuX bootstrap runs nothing here. Forks name their
-		# personal tools in Configuration.local.psd1; each entry must be an exported function.
-		# An entry is either a plain function name (runs on every machine type) or a hashtable
-		# @{ Function = "Name"; Machine = "PC/Laptop" } gated per machine type exactly like the
-		# app CSVs' Machine column (tokens validated by Test-MachineTypeScope).
-		foreach ($personalStep in @($global:Configuration.BootstrapConfig.PersonalSteps)) {
-			if (-not $personalStep) { continue }
-
-			$stepName = if ($personalStep -is [System.Collections.IDictionary]) { "$($personalStep['Function'])" } else { "$personalStep" }
-			$stepScope = if ($personalStep -is [System.Collections.IDictionary] -and $null -ne $personalStep['Machine']) { "$($personalStep['Machine'])" } else { "All" }
-
-			if (-not $stepName) {
-				Write-LogWarning "Personal step entry has no Function name - skipping"
-				continue
-			}
-
-			if (-not (Test-MachineTypeScope -Scope $stepScope -Context "PersonalSteps [$stepName]")) {
-				Write-LogDebug "Personal step [$stepName] skipped (machine scope => [$stepScope])"
-				continue
-			}
-
-			if (Get-Command $stepName -ErrorAction SilentlyContinue) {
-				& $stepName
-			}
-			else {
-				Write-LogWarning "Personal step [$stepName] not found - skipping"
-			}
-		}
+		# ships an empty list, so a vanilla WinuX bootstrap runs nothing here. Entries are plain
+		# function names or machine-gated hashtables; see Invoke-PersonalSteps.
+		Invoke-PersonalSteps
 
 		Install-DotnetEf
 

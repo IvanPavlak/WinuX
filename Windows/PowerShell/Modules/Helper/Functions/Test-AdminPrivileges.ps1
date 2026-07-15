@@ -29,7 +29,18 @@ function Test-AdminPrivileges {
 
 	if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
 		$currentDirectory = (Get-Location).Path
-		$triggeringCommand = (Get-PSCallStack)[1].InvocationInfo.Line
+		# Replay the command the user actually typed. Each frame's InvocationInfo.Line is the
+		# source line that invoked that frame, so the OUTERMOST frame that recorded a line holds
+		# the original typed command (the interactive prompt's own frame records none). Inner
+		# frames carry engine source lines (e.g. "& $stepName" dispatching a personal step) that
+		# are meaningless in a fresh elevated shell, where those variables do not exist and the
+		# rerun dies with "The expression after '&' ... was not valid".
+		$callStack = Get-PSCallStack
+		$triggeringCommand = ""
+		for ($frameIndex = $callStack.Count - 1; $frameIndex -ge 1; $frameIndex--) {
+			$triggeringCommand = "$($callStack[$frameIndex].InvocationInfo.Line)".Trim()
+			if ($triggeringCommand) { break }
+		}
 
 		Write-LogError "This must be run with Administrator privileges!"
 

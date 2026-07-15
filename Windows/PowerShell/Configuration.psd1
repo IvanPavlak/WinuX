@@ -629,8 +629,9 @@
 		}
 
 		# Fork-defined optional bootstrap steps, run right after Upgrade-All (consumed by
-		# Bootstrap). Each entry is either the name of a function the fork's modules export
-		# (runs on every machine type), or a hashtable @{ Function = "Name"; Machine = "PC/Laptop" }
+		# Bootstrap -> Invoke-PersonalSteps). Each entry is either the name of a function the
+		# fork's modules export (runs on every machine type), or a hashtable
+		# @{ Function = "Name"; Machine = "PC/Laptop" }
 		# gated per machine type exactly like the app CSVs' Machine column ("All" covers every
 		# machine; tokens are validated by Test-MachineTypeScope, so typos are reported instead
 		# of silently never matching). Entries that do not resolve are skipped with a warning.

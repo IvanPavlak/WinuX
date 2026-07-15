@@ -6,9 +6,9 @@ BeforeAll {
 
 	$BootstrapFunctionsPath = Join-Path (Get-RepositoryPath).Modules "Bootstrap\Functions"
 	. "$BootstrapFunctionsPath\Bootstrap.ps1"
-	# Dot-source the machine-scope gate so PersonalSteps gating resolves even in sessions whose
-	# imported Bootstrap module predates the Test-MachineTypeScope export.
-	. "$BootstrapFunctionsPath\Test-MachineTypeScope.ps1"
+	# Dot-source the personal-steps runner so it exists to Mock even in sessions whose imported
+	# Bootstrap module predates the Invoke-PersonalSteps export.
+	. "$BootstrapFunctionsPath\Invoke-PersonalSteps.ps1"
 }
 
 AfterAll {
@@ -33,7 +33,7 @@ Describe "Bootstrap" {
 		Mock Write-LogSuccess { }
 		Mock Write-LogWarning { }
 		Mock Write-LogError { }
-		Mock Write-LogDebug { }
+		Mock Invoke-PersonalSteps { }
 		Mock Test-AdminPrivileges { }
 		Mock Start-Logging { $global:startTime = Get-Date }
 		Mock Stop-Logging { }
@@ -123,63 +123,11 @@ Describe "Bootstrap" {
 		Should -Invoke Configure-WSLSSH -Times 1 -Exactly
 	}
 
-	It "runs resolvable PersonalSteps and warns on unresolvable ones" {
+	It "runs the fork-defined personal steps via Invoke-PersonalSteps" {
 		$global:MachineType = 'Test'
-		# Rename-Machine is a real exported command that plain Bootstrap (no -WithInitialSetup)
-		# never calls, so it doubles as a clean probe that PersonalSteps invoked it exactly once.
-		$global:Configuration.BootstrapConfig = @{ PersonalSteps = @('Rename-Machine', 'Install-MissingPersonalTool') }
 
 		Bootstrap
 
-		Should -Invoke Rename-Machine -Times 1 -Exactly
-		Should -Invoke Write-LogWarning -Times 1 -Exactly -ParameterFilter { $Message -like "*Install-MissingPersonalTool*" }
-	}
-
-	It "treats an empty PersonalSteps list as a no-op" {
-		$global:MachineType = 'Test'
-		$global:Configuration.BootstrapConfig = @{ PersonalSteps = @() }
-
-		Bootstrap
-
-		Should -Invoke Write-LogWarning -Times 0 -ParameterFilter { $Message -like "*Personal step*" }
-	}
-
-	It "runs hashtable PersonalSteps whose Machine scope covers the machine type and skips the rest" {
-		$global:MachineType = 'Test'
-		$global:Configuration.ValidMachineTypes = @('PC', 'Laptop', 'Work', 'Test')
-		# Rename-Machine / Start-Win11Debloat are real exported commands that plain Bootstrap
-		# (no -WithInitialSetup) never calls, so they cleanly probe which entries actually ran.
-		$global:Configuration.BootstrapConfig = @{
-			PersonalSteps = @(
-				@{ Function = 'Rename-Machine'; Machine = 'Test' },
-				@{ Function = 'Start-Win11Debloat'; Machine = 'PC/Laptop' }
-			)
-		}
-
-		Bootstrap
-
-		Should -Invoke Rename-Machine -Times 1 -Exactly
-		Should -Invoke Start-Win11Debloat -Times 0
-		Should -Invoke Write-LogWarning -Times 0 -ParameterFilter { $Message -like "*Personal step*" }
-	}
-
-	It "reports invalid machine tokens in a personal step scope and does not run the step" {
-		$global:MachineType = 'Test'
-		$global:Configuration.ValidMachineTypes = @('PC', 'Laptop', 'Work', 'Test')
-		$global:Configuration.BootstrapConfig = @{ PersonalSteps = @(@{ Function = 'Rename-Machine'; Machine = 'Tset' }) }
-
-		Bootstrap
-
-		Should -Invoke Rename-Machine -Times 0
-		Should -Invoke Write-LogError -Times 1 -Exactly -ParameterFilter { $Message -like "*Tset*" }
-	}
-
-	It "warns on a personal step entry without a Function name" {
-		$global:MachineType = 'Test'
-		$global:Configuration.BootstrapConfig = @{ PersonalSteps = @(@{ Machine = 'All' }) }
-
-		Bootstrap
-
-		Should -Invoke Write-LogWarning -Times 1 -Exactly -ParameterFilter { $Message -like "*no Function name*" }
+		Should -Invoke Invoke-PersonalSteps -Times 1 -Exactly
 	}
 }
