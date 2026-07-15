@@ -6,6 +6,9 @@ BeforeAll {
 
 	$AppFunctionsPath = Join-Path (Get-RepositoryPath).Modules "Application\Functions"
 	. "$AppFunctionsPath\Install-ScoopApps.ps1"
+	# Dot-source the machine-scope gate so the Machine-column filtering resolves even in
+	# sessions whose imported Bootstrap module predates the Test-MachineTypeScope export.
+	. (Join-Path (Get-RepositoryPath).Modules "Bootstrap\Functions\Test-MachineTypeScope.ps1")
 
 	# scoop is absent on clean CI runners; a throwing stub makes 'scoop export' fail
 	# deterministically without Mock scoop (which would require scoop to pre-exist).

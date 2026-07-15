@@ -16,6 +16,8 @@ page documents the shipped template.
 - **Scope**: `d` (default), `m` (machine-wide), `u` (user). **Source**: `w` (winget), `s` (msstore).
 - **Machine** is matched against the machine types you define in `Configuration.psd1` - only
   `All` is special, and `/` combines several types (`PC/Laptop`). The base config ships only `Test`.
+  Tokens are validated against `ValidMachineTypes` via `Test-MachineTypeScope` - unknown machine
+  types are reported via `Write-LogError` and never match.
 - All three package managers are installed by Bootstrap even when their CSV is empty - add rows
   and re-run to install more.
 

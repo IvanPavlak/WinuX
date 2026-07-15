@@ -10,7 +10,9 @@
 		'Expand-Hashtable',
 		'Initialize-Configuration',
 		'Install-WinGetPackageManager',
+		'Invoke-PersonalSteps',
 		'Load-PathConfiguration',
-		'Merge-Hashtable'
+		'Merge-Hashtable',
+		'Test-MachineTypeScope'
 	)
 }

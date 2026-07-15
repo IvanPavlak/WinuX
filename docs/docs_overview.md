@@ -65,7 +65,7 @@ The authoritative, always-current function reference is the set of per-module pa
 | Config Section                                     | Used By                                            |
 | -------------------------------------------------- | -------------------------------------------------- |
 | `GitConfig` (WingetPackageId, UserName, UserEmail) | `Install-Git`                                      |
-| `HostnameToMachineType`, `ValidMachineTypes`       | `DetermineMachineType`                             |
+| `HostnameToMachineType`, `ValidMachineTypes`       | `DetermineMachineType`, `Test-MachineTypeScope`    |
 | `BasePaths`, `PathTemplates`                       | `Expand-ConfigPaths`, all path-dependent functions |
 | `SymbolicLinks`                                    | `SymbolicLinkMaker`                                |
 | `RepositoryGroups`                                 | `Update-Repositories`, `Initialize-Repository`     |

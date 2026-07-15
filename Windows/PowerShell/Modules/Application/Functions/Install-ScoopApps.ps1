@@ -34,9 +34,7 @@ function Install-ScoopApps {
 	}
 
 	foreach ($app in $scoopApps) {
-		$validMachines = ("$($app.Machine)").Trim() -split "/" | ForEach-Object { $_.Trim() }
-
-		if ($MachineType -notin $validMachines -and "All" -notin $validMachines) { continue }
+		if (-not (Test-MachineTypeScope -Scope "$($app.Machine)" -MachineType $MachineType -Context "ScoopApps.csv [$($app.App)]")) { continue }
 
 		$global = if ($app.Global -eq "true") { "--global" } else { "" }
 		$version = if ($app.Version -and $app.Version -ne "latest") { "@$($app.Version)" } else { "" }

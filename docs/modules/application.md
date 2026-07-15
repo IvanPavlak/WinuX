@@ -30,7 +30,7 @@ Get-VSCodeWorkspaceNames
 
 ## [Install-ChocolateyApps](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Install-ChocolateyApps.ps1)
 
-- **Description:** Installs Chocolatey-managed apps from the WinuX CSV, filtered by machine type. Reads the app list from `ChocolateyApps.csv`, installs entries matching the current machine type (plus any "All" entries), and skips the rest. Requires administrator privileges and is called automatically by Bootstrap.
+- **Description:** Installs Chocolatey-managed apps from the WinuX CSV, filtered by machine type. Reads the app list from `ChocolateyApps.csv`, installs entries matching the current machine type (plus any "All" entries), and skips the rest. `Machine`-column tokens are validated via `Test-MachineTypeScope` - unknown machine types are reported and never match. Requires administrator privileges and is called automatically by Bootstrap.
 - **Usage:** `Install-ChocolateyApps`
 
 Reads the app list from the CSV at `BootstrapConfig.DataFiles.ChocolateyApps` in `Configuration.psd1`. Each row specifies an app ID and the machine types it applies to ("All", "PC", "Laptop", etc.), and may also carry optional `Version`, `Params`, and `Force` columns that are passed through to `choco install`. Apps for the current machine type and All-type apps are installed; others are skipped. Administrator privileges are verified up front via `Test-AdminPrivileges`.
@@ -123,7 +123,7 @@ Install-PowerShellModules
 
 ## [Install-ScoopApps](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Install-ScoopApps.ps1)
 
-- **Description:** Installs Scoop-managed apps from the WinuX CSV, filtered by the current machine type. Apps matching the current machine type (or marked `All`) are installed; others are skipped. Requires administrator privileges and is called automatically by Bootstrap.
+- **Description:** Installs Scoop-managed apps from the WinuX CSV, filtered by the current machine type. Apps matching the current machine type (or marked `All`) are installed; others are skipped. `Machine`-column tokens are validated via `Test-MachineTypeScope` - unknown machine types are reported and never match. Requires administrator privileges and is called automatically by Bootstrap.
 - **Usage:** `Install-ScoopApps`
 
 Reads the app list from the CSV at `BootstrapConfig.DataFiles.ScoopApps` in `Configuration.psd1`. Each row specifies an app name, optional bucket, version, global flag, and the machine types it applies to. The function determines the current machine type, queries `scoop export` for already-installed apps, and for each applicable row either installs the app, updates it (when already installed and not version-pinned), or skips it (when already installed with a pinned version).
@@ -147,7 +147,7 @@ Install-ScoopPackageManager
 
 ## [Install-WingetApps](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Install-WingetApps.ps1)
 
-- **Description:** Installs WinGet-managed apps from the WinuX CSV, filtered by machine type. Reads the app list from `BootstrapConfig.DataFiles.WinGetApps` in `Configuration.psd1`; apps matching the current machine type (or marked `All`) are installed, others are skipped. Requires administrator privileges and is called automatically by Bootstrap.
+- **Description:** Installs WinGet-managed apps from the WinuX CSV, filtered by machine type. Reads the app list from `BootstrapConfig.DataFiles.WinGetApps` in `Configuration.psd1`; apps matching the current machine type (or marked `All`) are installed, others are skipped. `Machine`-column tokens are validated via `Test-MachineTypeScope` - unknown machine types are reported and never match. Requires administrator privileges and is called automatically by Bootstrap.
 - **Usage:** `Install-WingetApps`
 
 Each CSV row specifies an app ID, version, installation scope (`d` default / `m` machine / `u` user), interactive flag, source (`w` winget / `s` msstore), and the machine types it applies to. The machine type is resolved at runtime and rows whose `Machine` column does not include the current type or `All` are skipped. For apps pinned at `Latest`, an existing WinGet pin is removed first so the latest version can install cleanly.

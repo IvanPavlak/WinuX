@@ -25,9 +25,7 @@ function Install-ChocolateyApps {
 	$chocoApps = Import-Csv $csvPath | Where-Object { -not [string]::IsNullOrWhiteSpace($_.App) -and -not $_.App.TrimStart().StartsWith('#') }
 
 	foreach ($app in $chocoApps) {
-		$validMachines = ("$($app.Machine)").Trim() -split "/" | ForEach-Object { $_.Trim() }
-
-		if ($MachineType -notin $validMachines -and "All" -notin $validMachines) { continue }
+		if (-not (Test-MachineTypeScope -Scope "$($app.Machine)" -MachineType $MachineType -Context "ChocolateyApps.csv [$($app.App)]")) { continue }
 
 		$appName = $app.App
 		Write-LogTitle "$appName"

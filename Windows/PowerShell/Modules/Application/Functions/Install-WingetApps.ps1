@@ -43,9 +43,7 @@ function Install-WinGetApps {
 	$failedApps = @()
 
 	foreach ($app in $wingetApps) {
-		$validMachines = ("$($app.Machine)").Trim() -split "/" | ForEach-Object { $_.Trim() }
-
-		if ($MachineType -notin $validMachines -and "All" -notin $validMachines) { continue }
+		if (-not (Test-MachineTypeScope -Scope "$($app.Machine)" -MachineType $MachineType -Context "WinGetApps.csv [$($app.App)]")) { continue }
 
 		$scope = switch ($app.Scope) {
 			"d" { "" }

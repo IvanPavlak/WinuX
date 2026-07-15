@@ -8,6 +8,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-07-15
+
+### Added
+
+- `Test-MachineTypeScope` (Bootstrap module): the single gate behind every machine-scoped data source - the `Machine` column of the WinGet/Scoop/Chocolatey CSVs and `BootstrapConfig.PersonalSteps`. Splits a scope like `PC/Laptop` on `/`, matches case-insensitively, treats `All` as the wildcard, and validates every token against `ValidMachineTypes`: an unknown token (e.g. the typo `Labtop`) is reported via `Write-LogError` together with its data source and the list of valid values, and contributes nothing to the match - a misspelled scope can no longer silently install or skip anything.
+- `Invoke-PersonalSteps` (Bootstrap module): runs the fork-defined `BootstrapConfig.PersonalSteps`, extracted out of `Bootstrap` into its own exported function. Entries are now machine-gated: a plain function name runs on every machine type (exactly as before), while `@{ Function = "Install-MyTool"; Machine = "PC/Laptop" }` runs only where its `Machine` scope matches - mirroring the app CSVs' `Machine` column.
+
+### Changed
+
+- `Install-WingetApps`, `Install-ScoopApps`, and `Install-ChocolateyApps` (Application module) route their `Machine`-column filtering through `Test-MachineTypeScope`, so CSV rows gain the same unknown-token validation instead of three copies of a silent inline filter.
+
+### Fixed
+
+- `Test-AdminPrivileges` (Helper module): the elevate-and-rerun offer replayed the immediate caller's source line, which at call depth two or more is an engine line such as `& $stepName` - the fresh elevated shell has no such variable, so the rerun died with "The expression after '&' in a pipeline element produced an object that was not valid". It now replays the outermost call-stack frame that recorded a line - the command the user actually typed - with unchanged behavior for every existing depth-one caller.
+
 ## [0.1.4] - 2026-07-11
 
 ### Added
@@ -71,7 +86,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.4...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.5...HEAD
+[0.1.5]: https://github.com/IvanPavlak/WinuX/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/IvanPavlak/WinuX/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/IvanPavlak/WinuX/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/IvanPavlak/WinuX/compare/v0.1.1...v0.1.2

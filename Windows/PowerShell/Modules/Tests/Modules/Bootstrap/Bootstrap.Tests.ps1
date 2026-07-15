@@ -6,6 +6,9 @@ BeforeAll {
 
 	$BootstrapFunctionsPath = Join-Path (Get-RepositoryPath).Modules "Bootstrap\Functions"
 	. "$BootstrapFunctionsPath\Bootstrap.ps1"
+	# Dot-source the personal-steps runner so it exists to Mock even in sessions whose imported
+	# Bootstrap module predates the Invoke-PersonalSteps export.
+	. "$BootstrapFunctionsPath\Invoke-PersonalSteps.ps1"
 }
 
 AfterAll {
@@ -30,6 +33,7 @@ Describe "Bootstrap" {
 		Mock Write-LogSuccess { }
 		Mock Write-LogWarning { }
 		Mock Write-LogError { }
+		Mock Invoke-PersonalSteps { }
 		Mock Test-AdminPrivileges { }
 		Mock Start-Logging { $global:startTime = Get-Date }
 		Mock Stop-Logging { }
@@ -119,24 +123,11 @@ Describe "Bootstrap" {
 		Should -Invoke Configure-WSLSSH -Times 1 -Exactly
 	}
 
-	It "runs resolvable PersonalSteps and warns on unresolvable ones" {
+	It "runs the fork-defined personal steps via Invoke-PersonalSteps" {
 		$global:MachineType = 'Test'
-		# Rename-Machine is a real exported command that plain Bootstrap (no -WithInitialSetup)
-		# never calls, so it doubles as a clean probe that PersonalSteps invoked it exactly once.
-		$global:Configuration.BootstrapConfig = @{ PersonalSteps = @('Rename-Machine', 'Install-MissingPersonalTool') }
 
 		Bootstrap
 
-		Should -Invoke Rename-Machine -Times 1 -Exactly
-		Should -Invoke Write-LogWarning -Times 1 -Exactly -ParameterFilter { $Message -like "*Install-MissingPersonalTool*" }
-	}
-
-	It "treats an empty PersonalSteps list as a no-op" {
-		$global:MachineType = 'Test'
-		$global:Configuration.BootstrapConfig = @{ PersonalSteps = @() }
-
-		Bootstrap
-
-		Should -Invoke Write-LogWarning -Times 0 -ParameterFilter { $Message -like "*Personal step*" }
+		Should -Invoke Invoke-PersonalSteps -Times 1 -Exactly
 	}
 }

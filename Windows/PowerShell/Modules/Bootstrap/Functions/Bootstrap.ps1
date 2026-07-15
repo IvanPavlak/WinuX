@@ -16,7 +16,7 @@ function Bootstrap {
 		5. Nerd Font, PowerShell modules, special folder redirections
 		6. WSL configuration (config-gated per machine type via BootstrapConfig.WSLSetup)
 		7. WinGet, Scoop, and Chocolatey - install package managers then apps from CSVs
-		8. Upgrade all packages, fork-defined personal steps (BootstrapConfig.PersonalSteps), .NET EF CLI
+		8. Upgrade all packages, fork-defined personal steps (BootstrapConfig.PersonalSteps, optionally machine-gated), .NET EF CLI
 		9. Environment variables, Conda environments, NuGet config, taskbar pins
 		10. WSL environment initialization, symbolic links, WSL SSH setup (WSL steps use the same gate)
 		11. Lock taskbar layout, restart Explorer, restart machine
@@ -188,16 +188,9 @@ function Bootstrap {
 		Upgrade-All
 
 		# Fork-defined optional install steps (BootstrapConfig.PersonalSteps) - the base config
-		# ships an empty list, so a vanilla WinuX bootstrap runs nothing here. Forks name their
-		# personal tools in Configuration.local.psd1; each entry must be an exported function.
-		foreach ($personalStep in @($global:Configuration.BootstrapConfig.PersonalSteps)) {
-			if ($personalStep -and (Get-Command $personalStep -ErrorAction SilentlyContinue)) {
-				& $personalStep
-			}
-			elseif ($personalStep) {
-				Write-LogWarning "Personal step [$personalStep] not found - skipping"
-			}
-		}
+		# ships an empty list, so a vanilla WinuX bootstrap runs nothing here. Entries are plain
+		# function names or machine-gated hashtables; see Invoke-PersonalSteps.
+		Invoke-PersonalSteps
 
 		Install-DotnetEf
 
