@@ -8,6 +8,9 @@ function Unpin-TaskbarApps {
 		The policy prevents users from modifying the taskbar layout until `Remove-Item` is called
 		on the policy registry key.
 
+		The empty layout XML is written directly to the machine-local `TaskbarLayoutFile` path
+		(the StartLayoutFile the policy points at); it is not versioned in the repository.
+
 		With `-FromBootstrap`, skips Explorer restart after clearing pins (let the caller handle it).
 		With `-SkipExplorerRestart`, also skips the Explorer restart.
 
@@ -57,30 +60,31 @@ function Unpin-TaskbarApps {
 </LayoutModificationTemplate>
 "@
 
-	$taskbarConfigDir = $MachineSpecificPaths.TaskbarConfigurationDir
-	if (-not $taskbarConfigDir) {
-		Write-LogError "TaskbarConfigurationDir not found in configuration!"
+	$layoutFile = $MachineSpecificPaths.TaskbarLayoutFile
+	if (-not $layoutFile) {
+		Write-LogError "TaskbarLayoutFile not found in configuration!"
 		return
 	}
 
-	if (-not (Test-Path $taskbarConfigDir)) {
-		New-Item -Path $taskbarConfigDir -ItemType Directory -Force | Out-Null
+	$layoutDir = Split-Path -Parent $layoutFile
+	if ($layoutDir -and -not (Test-Path $layoutDir)) {
+		New-Item -Path $layoutDir -ItemType Directory -Force | Out-Null
 	}
 
-	$xmlPath = Join-Path -Path $taskbarConfigDir -ChildPath "taskbar_layout.xml"
+	# A machine provisioned by the old design has a symlink here pointing into the repo; writing
+	# through it would modify the versioned file. Remove any such link (live or dangling) first so
+	# the empty layout is written as a real machine-local file.
+	$existingLayout = Get-Item -LiteralPath $layoutFile -Force -ErrorAction SilentlyContinue
+	if ($existingLayout -and $existingLayout.LinkType) {
+		Remove-Item -LiteralPath $layoutFile -Force -ErrorAction SilentlyContinue
+	}
 
 	try {
-		$taskbarLayout | Out-File $xmlPath -Encoding utf8 -Force
-		Write-LogStep "=> Created empty taskbar layout at [$xmlPath]"
+		$taskbarLayout | Out-File $layoutFile -Encoding utf8 -Force
+		Write-LogStep "=> Created empty taskbar layout at [$layoutFile]"
 	}
 	catch {
 		Write-LogError "Failed to save taskbar layout XML: $($_.Exception.Message)"
-		return
-	}
-
-	$provisioningPath = $Configuration.PathTemplates.SymbolicLinks.TaskbarConfiguration.Path
-	if (-not $provisioningPath) {
-		Write-LogError "Taskbar provisioning path not found in configuration!"
 		return
 	}
 
@@ -91,7 +95,7 @@ function Unpin-TaskbarApps {
 			New-Item -Path $explorerPolicyRegistryPath -Force | Out-Null
 		}
 
-		Set-ItemProperty -Path $explorerPolicyRegistryPath -Name "StartLayoutFile" -Value $provisioningPath -Type ExpandString -Force
+		Set-ItemProperty -Path $explorerPolicyRegistryPath -Name "StartLayoutFile" -Value $layoutFile -Type ExpandString -Force
 
 		if (-not $FromBootstrap) {
 			Set-ItemProperty -Path $explorerPolicyRegistryPath -Name "LockedStartLayout" -Value 1 -Type DWord -Force
@@ -104,37 +108,6 @@ function Unpin-TaskbarApps {
 	catch {
 		Write-LogError "Failed to configure registry keys: $($_.Exception.Message)"
 		return
-	}
-
-	if (-not $FromBootstrap) {
-		$taskbarSymlinkConfig = $MachineSpecificPaths.SymbolicLinks.TaskbarConfiguration
-		if ($taskbarSymlinkConfig -and $taskbarSymlinkConfig.Path -and $taskbarSymlinkConfig.Target) {
-			$symlinkPath = $taskbarSymlinkConfig.Path
-			$symlinkTarget = $taskbarSymlinkConfig.Target
-
-			if (Test-Path $symlinkPath) {
-				Remove-Item -Path $symlinkPath -Force -ErrorAction SilentlyContinue
-			}
-
-			$parentDir = Split-Path -Parent $symlinkPath
-			if ($parentDir -and -not (Test-Path $parentDir)) {
-				New-Item -Path $parentDir -ItemType Directory -Force | Out-Null
-			}
-
-			try {
-				New-Item -ItemType SymbolicLink -Path $symlinkPath -Target $symlinkTarget -Force | Out-Null
-				Write-LogSuccess "Symbolic link overriden => [$symlinkPath] => [$symlinkTarget]"
-			}
-			catch {
-				Write-LogError "Failed to create symbolic link [$($_.Exception.Message)]"
-			}
-		}
-		else {
-			Write-LogWarning "Taskbar symbolic link configuration not found!"
-		}
-	}
-	else {
-		Write-LogStep "=> Symbolic link will be created by Bootstrap!"
 	}
 
 	if (-not $SkipExplorerRestart -and -not $FromBootstrap) {

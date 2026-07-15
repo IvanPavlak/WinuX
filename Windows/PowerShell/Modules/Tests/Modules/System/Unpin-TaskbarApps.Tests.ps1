@@ -10,14 +10,14 @@ BeforeAll {
 Describe "Unpin-TaskbarApps" {
 	BeforeEach {
 		$script:MachineSpecificPaths = [PSCustomObject]@{
-			TaskbarConfigurationDir = $null
+			TaskbarLayoutFile = $null
 		}
 		Mock Test-AdminPrivileges { }
 		Mock Clear-TaskbarPins { }
 		Mock Write-Host { }
 	}
 
-	It "returns when TaskbarConfigurationDir is missing" {
+	It "returns when TaskbarLayoutFile is missing" {
 		{ Unpin-TaskbarApps } | Should -Not -Throw
 		Should -Invoke Clear-TaskbarPins -Times 1
 	}

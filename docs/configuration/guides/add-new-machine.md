@@ -91,12 +91,19 @@ WallpaperDarkSettings = @{
 
 ## Step 5: (Optional) Taskbar Configuration
 
-If you want different taskbar pins:
+`TaskbarConfiguration` is one flat list shared by every machine; each row's `Machine` scope
+decides where it pins. Tag a row for one or more machine types (validated against
+`ValidMachineTypes`), use `All` for everywhere, and omit `Machine` to default to `All`:
 
 ```powershell
-# The default TaskbarConfiguration applies to all machines
-# For machine-specific configs, you'd modify the function
+TaskbarConfiguration = @(
+    @{ Name = "Terminal"; Type = "AUMID"; Value = "Microsoft.WindowsTerminal_8wekyb3d8bbwe!App"; Machine = "All" }
+    @{ Name = "VSCode";   Type = "AUMID"; Value = "Microsoft.VisualStudioCode";                  Machine = "PC/Work" }
+)
 ```
+
+Matching is handled by `Test-MachineTypeScope`, exactly like the app CSVs' `Machine` column. Keep
+your real list in `Configuration.local.psd1` (it replaces the base array wholesale on merge).
 
 ## Step 6: Create Window Layout Files
 

@@ -534,9 +534,15 @@ Power button and lid close behavior per machine type.
 
 ### Taskbar Configuration
 
-Pinned app configurations per machine type.
+Pinned apps, applied by `Configure-Taskbar`. A flat, ordered array (entry order sets pin order);
+each row is machine-scoped through its `Machine` field.
 
-**Key:** `TaskbarConfiguration.{MachineType}` → Array of application names or paths to pin
+**Key:** `TaskbarConfiguration` → Array of `@{ Name; Type; Value; Machine }` rows, where `Type`
+is `AUMID` or `Path` and `Machine` is a scope string (`All`, `Test`, `PC/Laptop`, ...) matched
+against the current machine type by `Test-MachineTypeScope` — the same gate the app CSVs use. A
+row without `Machine` (or a blank one) defaults to `All`, so one list can drive every machine.
+Keep your real, machine-tagged list in `Configuration.local.psd1` (it replaces the base array
+wholesale on merge).
 
 **Consumer functions:** `Configure-Taskbar`, `Clear-TaskbarPins`, `Unpin-TaskbarApps`
 

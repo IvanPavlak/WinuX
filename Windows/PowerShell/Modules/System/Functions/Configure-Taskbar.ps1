@@ -4,8 +4,15 @@ function Configure-Taskbar {
 		Configures taskbar pins from the configuration.
 
 	.DESCRIPTION
-		Clears all existing taskbar pins, creates the taskbar pin folder, and applies
-		new pin shortcuts from `TaskbarConfiguration` in Configuration.psd1.
+		Clears all existing taskbar pins and applies the pins from `TaskbarConfiguration` in
+		Configuration.psd1. The layout XML is generated entirely from configuration and written
+		directly to the machine-local `TaskbarLayoutFile` path that the StartLayoutFile Group
+		Policy points at - it is not versioned in the repository and needs no symlink.
+
+		Each `TaskbarConfiguration` row may carry a `Machine` scope ("All", "Test",
+		"PC/Laptop", ...) matched against the current machine type by Test-MachineTypeScope -
+		the same gate the app CSVs use - so one list can drive every machine. A row without a
+		`Machine` key (or a blank one) defaults to "All" and pins on every machine.
 
 		With `-FromBootstrap`, skips a 5-second initialization delay (used when called
 		during the bootstrap sequence before all processes are fully settled).
@@ -58,8 +65,28 @@ function Configure-Taskbar {
 		return
 	}
 
+	# Resolve the machine type and state it up front, so the output makes clear which machine's
+	# pins are being applied (or that the hostname is unmapped and the default set is used).
+	$MachineType = DetermineMachineType
+	$hostname = $env:COMPUTERNAME
+	$hostnameMapped = ($Configuration.HostnameToMachineType -is [hashtable]) -and $Configuration.HostnameToMachineType.ContainsKey($hostname)
+	if ($hostnameMapped) {
+		Write-LogStep "Configuring taskbar for machine type => [$MachineType]"
+	}
+	else {
+		Write-LogStep "Configuring taskbar for the default machine set (hostname [$hostname] is not mapped) => [$MachineType]"
+	}
+
 	$taskbarPinList = ""
 	foreach ($app in $taskbarConfig) {
+		# A row's Machine scope ("All", "Test", "PC/Laptop", ...) is validated and matched by
+		# Test-MachineTypeScope, mirroring the app CSVs' Machine column. A missing or blank
+		# Machine defaults to "All", so an untagged app pins on every machine.
+		$machineScope = if ($app.Machine) { "$($app.Machine)" } else { "All" }
+		if (-not (Test-MachineTypeScope -Scope $machineScope -MachineType $MachineType -Context "TaskbarConfiguration [$($app.Name)]")) {
+			continue
+		}
+
 		if ($app.Type -eq "AUMID") {
 			$taskbarPinList += "`n        <taskbar:DesktopApp DesktopApplicationID=`"$($app.Value)`" />"
 		}
@@ -86,29 +113,33 @@ function Configure-Taskbar {
 </LayoutModificationTemplate>
 "@
 
-	$taskbarConfigDir = $MachineSpecificPaths.TaskbarConfigurationDir
-	if (-not $taskbarConfigDir) {
-		Write-LogError "TaskbarConfigurationDir not found in configuration!"
+	$layoutFile = $MachineSpecificPaths.TaskbarLayoutFile
+	if (-not $layoutFile) {
+		Write-LogError "TaskbarLayoutFile not found in configuration!"
 		return
 	}
 
-	if (-not (Test-Path $taskbarConfigDir)) {
-		New-Item -Path $taskbarConfigDir -ItemType Directory -Force | Out-Null
+	# The layout is produced entirely from configuration, so it is written straight to its
+	# machine-local path (created if missing) - no versioned copy in the repo, no symlink.
+	$layoutDir = Split-Path -Parent $layoutFile
+	if ($layoutDir -and -not (Test-Path $layoutDir)) {
+		New-Item -Path $layoutDir -ItemType Directory -Force | Out-Null
 	}
 
-	$xmlPath = Join-Path -Path $taskbarConfigDir -ChildPath "taskbar_layout.xml"
+	# A machine provisioned by the old design has a symlink here pointing into the repo; writing
+	# through it would modify the versioned file. Remove any such link (live or dangling) first so
+	# the layout is written as a real machine-local file.
+	$existingLayout = Get-Item -LiteralPath $layoutFile -Force -ErrorAction SilentlyContinue
+	if ($existingLayout -and $existingLayout.LinkType) {
+		Remove-Item -LiteralPath $layoutFile -Force -ErrorAction SilentlyContinue
+	}
 
 	try {
-		$taskbarLayout | Out-File $xmlPath -Encoding utf8 -Force
+		$taskbarLayout | Out-File $layoutFile -Encoding utf8 -Force
+		Write-LogSuccess "Taskbar layout written => [$layoutFile]"
 	}
 	catch {
 		Write-LogError "Failed to save taskbar layout XML => $($_.Exception.Message)"
-		return
-	}
-
-	$provisioningPath = $Configuration.PathTemplates.SymbolicLinks.TaskbarConfiguration.Path
-	if (-not $provisioningPath) {
-		Write-LogError "Taskbar provisioning path not found in configuration!"
 		return
 	}
 
@@ -119,7 +150,7 @@ function Configure-Taskbar {
 			New-Item -Path $explorerPolicyRegistryPath -Force | Out-Null
 		}
 
-		Set-ItemProperty -Path $explorerPolicyRegistryPath -Name "StartLayoutFile" -Value $provisioningPath -Type ExpandString -Force
+		Set-ItemProperty -Path $explorerPolicyRegistryPath -Name "StartLayoutFile" -Value $layoutFile -Type ExpandString -Force
 
 		Write-LogStep "Unlocking layout to apply XML configuration..."
 		Set-ItemProperty -Path $explorerPolicyRegistryPath -Name "LockedStartLayout" -Value 0 -Type DWord -Force
@@ -130,33 +161,6 @@ function Configure-Taskbar {
 	}
 
 	if (-not $FromBootstrap) {
-		$taskbarSymlinkConfig = $MachineSpecificPaths.SymbolicLinks.TaskbarConfiguration
-		if ($taskbarSymlinkConfig -and $taskbarSymlinkConfig.Path -and $taskbarSymlinkConfig.Target) {
-			$symlinkPath = $taskbarSymlinkConfig.Path
-			$symlinkTarget = $taskbarSymlinkConfig.Target
-
-			if (Test-Path $symlinkPath) {
-				Remove-Item -Path $symlinkPath -Force -ErrorAction SilentlyContinue
-			}
-
-			$parentDir = Split-Path -Parent $symlinkPath
-			if ($parentDir -and -not (Test-Path $parentDir)) {
-				New-Item -Path $parentDir -ItemType Directory -Force | Out-Null
-			}
-
-			try {
-				New-Item -ItemType SymbolicLink -Path $symlinkPath -Target $symlinkTarget -Force | Out-Null
-				Write-LogSuccess "Symbolic link created [$symlinkPath] => [$symlinkTarget]"
-			}
-			catch {
-				Write-LogError "Failed to create symbolic link => [$($_.Exception.Message)]"
-			}
-		}
-		else {
-			Write-LogWarning "Taskbar symbolic link configuration not found!"
-		}
-
-
 		try {
 			$explorerPolicyRegistryPath = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Explorer"
 			Set-ItemProperty -Path $explorerPolicyRegistryPath -Name "LockedStartLayout" -Value 1 -Type DWord -Force
@@ -170,10 +174,10 @@ function Configure-Taskbar {
 
 		Rebuild-IconCache
 
-		Write-LogSuccess "Taskbar configuration completed!"
+		Write-LogSuccess "Taskbar configuration completed for [$MachineType]!"
 	}
 	else {
-		Write-LogSuccess "Layout configuration ready!"
+		Write-LogSuccess "Layout configuration ready for [$MachineType]!"
 		Write-LogWarning "Note: Layout is currently unlocked. Bootstrap will lock it after Explorer restart!"
 	}
 

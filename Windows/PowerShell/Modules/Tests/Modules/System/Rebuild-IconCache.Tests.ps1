@@ -32,4 +32,17 @@ Describe "Rebuild-IconCache" {
 		Should -Invoke Remove-Item -Times 2
 		Should -Invoke Start-Process -Times 1 -ParameterFilter { $FilePath -eq "explorer.exe" }
 	}
+
+	It "does not attempt to remove an icon cache file that has already vanished" {
+		# The IconCache.db still exists, but the enumerated iconcache_32.db is gone by removal time.
+		Mock Test-Path {
+			$target = if ("$LiteralPath") { "$LiteralPath" } else { "$Path" }
+			$target -ne "C:\\Temp\\iconcache_32.db"
+		}
+
+		{ Rebuild-IconCache } | Should -Not -Throw
+
+		# Only the IconCache.db removal runs; the vanished iconcache_32.db is skipped, not removed.
+		Should -Invoke Remove-Item -Times 1 -Exactly
+	}
 }
