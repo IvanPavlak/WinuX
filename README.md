@@ -1,5 +1,5 @@
 <p align="center">
-  <img width="359" height="440" alt="WinuX" src="https://github.com/user-attachments/assets/54344fab-c731-4f3a-92f4-62bcbd3e3ac4" />
+  <img width="359" height="440" alt="WinuX" src="https://raw.githubusercontent.com/IvanPavlak/WinuX/master/Windows/WinuX/WinuXLogo.png" />
 </p>
 
 <h1 align="center">WinuX</h1>
