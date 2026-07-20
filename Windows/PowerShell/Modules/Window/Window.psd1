@@ -47,6 +47,7 @@
 		'Move-WindowToVirtualDesktop',
 		'Resize-PositionedWindows',
 		'Resize-Windows',
+		'Reset-KeyboardModifiers',
 		'Reset-Windows',
 		'Resolve-CenteredWindowPercent',
 		'Resolve-LayoutTokens',

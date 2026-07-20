@@ -8,6 +8,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.8] - 2026-07-20
+
+### Added
+
+- `Reset-KeyboardModifiers` (Window module): releases modifier keys (Shift/Ctrl/Alt/Win, left/right/neutral variants) that the session reports as logically held down, plus optionally a stranded left mouse button (`-IncludeMouseButton`). This clears the stuck-modifier state an interrupted synthesized-input sequence leaves behind - the "terminal input locks up during workspace orchestration" known issue - in place, without signing out. No-op when nothing is stuck; toggle keys (Caps Lock, Num Lock) are never touched.
+
+### Fixed
+
+- Workspace orchestration no longer requires a sign-out when a synthesized-input sequence is interrupted and a modifier key stays logically held (typed letters arrive as caps, Enter stops submitting commands):
+  - `ShiftDragSnap` (Window module, `WindowNative.cs`) - the ~400 ms window where Shift and the left mouse button are held for the FancyZones drag now releases both in a `finally` block, and the Shift press/release event flags are symmetric (the press previously carried `KEYEVENTF_EXTENDEDKEY`, the release did not), so a failure mid-drag cannot strand them.
+  - `SendKeyCombination` (Window module, `WindowNative.cs`) - the `SendInput` result is now checked; a partially inserted batch (key-downs in, key-ups cut off) is immediately compensated with explicit key-ups for every key in the combination.
+  - The orchestration flow self-heals at its checkpoints: `Snap-AllWindows` clears stuck modifiers at pass start, before each snap retry, and (mouse button included) when a pass fails; `Set-WorkspaceWindowLayout` and `Rerun-LastCommand` clear them before a rerun respawns the shell; `Open-Workspace` clears them when the flow ends. A stuck modifier previously also corrupted the snap combos themselves (a held Shift turns `Win+Up` into `Win+Shift+Up`), so snap retries now converge instead of repeatedly failing into the rerun loop.
+
 ## [0.1.7] - 2026-07-20
 
 ### Changed
@@ -117,7 +130,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.7...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.8...HEAD
+[0.1.8]: https://github.com/IvanPavlak/WinuX/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/IvanPavlak/WinuX/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/IvanPavlak/WinuX/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/IvanPavlak/WinuX/compare/v0.1.4...v0.1.5

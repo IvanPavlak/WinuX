@@ -212,6 +212,9 @@ namespace WindowModule
 		[DllImport("user32.dll")]
 		public static extern void mouse_event(uint dwFlags, int dx, int dy, uint dwData, int dwExtraInfo);
 
+		[DllImport("user32.dll")]
+		public static extern short GetAsyncKeyState(int vKey);
+
 		[DllImport("user32.dll", SetLastError = true)]
 		public static extern bool SetProcessDpiAwarenessContext(IntPtr value);
 
@@ -228,9 +231,17 @@ namespace WindowModule
 
 		// Virtual Key Codes
 		public const byte VK_LWIN = 0x5B;
+		public const byte VK_RWIN = 0x5C;
 		public const byte VK_CONTROL = 0x11;
 		public const byte VK_MENU = 0x12;  // Alt key
 		public const byte VK_SHIFT = 0x10;
+		public const byte VK_LBUTTON = 0x01;
+		public const byte VK_LSHIFT = 0xA0;
+		public const byte VK_RSHIFT = 0xA1;
+		public const byte VK_LCONTROL = 0xA2;
+		public const byte VK_RCONTROL = 0xA3;
+		public const byte VK_LMENU = 0xA4;
+		public const byte VK_RMENU = 0xA5;
 		public const byte VK_UP = 0x26;
 		public const byte VK_DOWN = 0x28;
 		public const byte VK_LEFT = 0x25;
@@ -541,7 +552,132 @@ namespace WindowModule
 				inputs[releaseIndex].u.ki.dwFlags = KEYEVENTF_KEYUP;
 			}
 
-			SendInput((uint)inputCount, inputs, Marshal.SizeOf(typeof(INPUT)));
+			uint injected = SendInput((uint)inputCount, inputs, Marshal.SizeOf(typeof(INPUT)));
+
+			// A partially inserted batch (input blocked mid-stream by another thread)
+			// can deliver key-downs whose matching key-ups never made it in, leaving a
+			// modifier logically held for the whole session. Compensate immediately
+			// with an explicit key-up for every key in the combination. Key-ups for
+			// keys that never went down are ignored by the input system, so this is
+			// safe even when only the down half was cut off. When nothing was inserted
+			// (injected == 0) no key is stranded and no compensation is needed.
+			if (injected > 0 && injected < (uint)inputCount)
+			{
+				INPUT[] compensation = new INPUT[vkCodes.Length];
+				for (int i = 0; i < vkCodes.Length; i++)
+				{
+					int keyIndex = vkCodes.Length - 1 - i;
+					compensation[i].type = INPUT_KEYBOARD;
+					compensation[i].u.ki.wVk = vkCodes[keyIndex];
+					compensation[i].u.ki.dwFlags = KEYEVENTF_KEYUP;
+				}
+				SendInput((uint)compensation.Length, compensation, Marshal.SizeOf(typeof(INPUT)));
+			}
+		}
+
+		/// <summary>
+		/// Modifier keys an interrupted synthesized-input sequence can leave logically
+		/// stuck, checked and released as left/right/neutral variants because the input
+		/// system tracks each virtual key separately. Extended marks keys whose scan
+		/// codes carry the 0xE0 prefix so an injected key-up mirrors the key-down shape.
+		/// </summary>
+		private sealed class ModifierKeyInfo
+		{
+			public readonly ushort Vk;
+			public readonly string Name;
+			public readonly bool Extended;
+
+			public ModifierKeyInfo(ushort vk, string name, bool extended)
+			{
+				Vk = vk;
+				Name = name;
+				Extended = extended;
+			}
+		}
+
+		private static readonly ModifierKeyInfo[] _releasableModifiers = new ModifierKeyInfo[]
+		{
+			new ModifierKeyInfo(VK_LSHIFT,   "LShift", false),
+			new ModifierKeyInfo(VK_RSHIFT,   "RShift", false),
+			new ModifierKeyInfo(VK_SHIFT,    "Shift",  false),
+			new ModifierKeyInfo(VK_LCONTROL, "LCtrl",  false),
+			new ModifierKeyInfo(VK_RCONTROL, "RCtrl",  true),
+			new ModifierKeyInfo(VK_CONTROL,  "Ctrl",   false),
+			new ModifierKeyInfo(VK_LMENU,    "LAlt",   false),
+			new ModifierKeyInfo(VK_RMENU,    "RAlt",   true),
+			new ModifierKeyInfo(VK_MENU,     "Alt",    false),
+			new ModifierKeyInfo(VK_LWIN,     "LWin",   true),
+			new ModifierKeyInfo(VK_RWIN,     "RWin",   true)
+		};
+
+		/// <summary>
+		/// Names of the modifier keys the session currently reports as held down
+		/// (GetAsyncKeyState high bit), whether pressed physically or injected.
+		/// Diagnostic companion to ReleaseModifierKeys - performs no injection.
+		/// </summary>
+		public static List<string> GetStuckModifierKeys()
+		{
+			List<string> down = new List<string>();
+			foreach (ModifierKeyInfo mod in _releasableModifiers)
+			{
+				if ((GetAsyncKeyState(mod.Vk) & 0x8000) != 0)
+				{
+					down.Add(mod.Name);
+				}
+			}
+			return down;
+		}
+
+		/// <summary>
+		/// Releases every modifier key the session currently reports as held down by
+		/// injecting the matching key-up events in a single SendInput batch. This clears
+		/// a modifier left logically stuck by an interrupted synthesized-input sequence -
+		/// the same keyboard state a sign-out/sign-in resets - without touching toggle
+		/// keys such as Caps Lock. Keys that are not held are never sent, so a quiescent
+		/// keyboard makes this a read-only no-op. Optionally releases a stuck left mouse
+		/// button (an interrupted ShiftDragSnap strands it in the pressed state).
+		/// Returns the names of the keys that were released; empty when none were stuck.
+		/// </summary>
+		public static List<string> ReleaseModifierKeys(bool includeMouseButton)
+		{
+			List<string> released = new List<string>();
+			List<INPUT> inputs = new List<INPUT>();
+
+			foreach (ModifierKeyInfo mod in _releasableModifiers)
+			{
+				if ((GetAsyncKeyState(mod.Vk) & 0x8000) == 0)
+				{
+					continue;
+				}
+
+				INPUT input = new INPUT();
+				input.type = INPUT_KEYBOARD;
+				input.u.ki.wVk = mod.Vk;
+				input.u.ki.dwFlags = mod.Extended ? (KEYEVENTF_KEYUP | KEYEVENTF_EXTENDEDKEY) : KEYEVENTF_KEYUP;
+				inputs.Add(input);
+				released.Add(mod.Name);
+			}
+
+			if (inputs.Count > 0)
+			{
+				SendInput((uint)inputs.Count, inputs.ToArray(), Marshal.SizeOf(typeof(INPUT)));
+			}
+
+			if (includeMouseButton && (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0)
+			{
+				mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
+				released.Add("LButton");
+			}
+
+			return released;
+		}
+
+		/// <summary>
+		/// Releases stuck modifier keys only (keyboard state, no mouse buttons).
+		/// </summary>
+		public static List<string> ReleaseModifierKeys()
+		{
+			return ReleaseModifierKeys(false);
 		}
 
 		/// <summary>
@@ -619,33 +755,53 @@ namespace WindowModule
 			SetCursorPos(titleBarX, titleBarY);
 			Thread.Sleep(30);
 
-			// Press Shift key
-			keybd_event(VK_SHIFT, 0, KEYEVENTF_EXTENDEDKEY, UIntPtr.Zero);
-			Thread.Sleep(20);
+			// Press Shift key. No KEYEVENTF_EXTENDEDKEY: Shift is not an extended key,
+			// and the release in the finally block must mirror the press exactly - an
+			// asymmetric down/up pair risks registering as different key variants and
+			// leaving a phantom held Shift for the session.
+			keybd_event(VK_SHIFT, 0, 0, UIntPtr.Zero);
 
-			// Mouse down on title bar
-			mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0);
-			Thread.Sleep(30);
-
-			// Move to target zone center (in small steps to ensure FancyZones detects the drag)
-			int steps = 10;
-			for (int i = 1; i <= steps; i++)
+			// The held Shift and mouse button are SESSION-GLOBAL state: anything that
+			// cuts this sequence short between press and release leaves them logically
+			// held until something injects the matching up events (the "terminal input
+			// locks up / letters come out as caps" known issue). The finally block
+			// guarantees release on every managed exit path; only a hard process kill
+			// mid-drag can still strand them, which Reset-KeyboardModifiers heals.
+			bool mouseIsDown = false;
+			try
 			{
-				int currentX = titleBarX + (zoneCenterX - titleBarX) * i / steps;
-				int currentY = titleBarY + (zoneCenterY - titleBarY) * i / steps;
-				SetCursorPos(currentX, currentY);
-				Thread.Sleep(10);
+				Thread.Sleep(20);
+
+				// Mouse down on title bar
+				mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0);
+				mouseIsDown = true;
+				Thread.Sleep(30);
+
+				// Move to target zone center (in small steps to ensure FancyZones detects the drag)
+				int steps = 10;
+				for (int i = 1; i <= steps; i++)
+				{
+					int currentX = titleBarX + (zoneCenterX - titleBarX) * i / steps;
+					int currentY = titleBarY + (zoneCenterY - titleBarY) * i / steps;
+					SetCursorPos(currentX, currentY);
+					Thread.Sleep(10);
+				}
+
+				// Small pause at destination for FancyZones to show zone
+				Thread.Sleep(100);
 			}
+			finally
+			{
+				// Release mouse
+				if (mouseIsDown)
+				{
+					mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
+					Thread.Sleep(30);
+				}
 
-			// Small pause at destination for FancyZones to show zone
-			Thread.Sleep(100);
-
-			// Release mouse
-			mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
-			Thread.Sleep(30);
-
-			// Release Shift key
-			keybd_event(VK_SHIFT, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
+				// Release Shift key
+				keybd_event(VK_SHIFT, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
+			}
 			Thread.Sleep(50);
 
 			return true;

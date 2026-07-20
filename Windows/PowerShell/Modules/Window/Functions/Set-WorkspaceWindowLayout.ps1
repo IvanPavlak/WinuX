@@ -164,6 +164,15 @@ function Set-WorkspaceWindowLayout {
 		}
 	}
 
+	# The rerun respawns the shell. A modifier (or the shift-drag's mouse button)
+	# left logically held by the failed run would lock terminal input up for the
+	# whole session and corrupt the rerun's own synthesized input - release everything before handing off.
+	$resetKeyboardStateBeforeRerun = {
+		if (Get-Command Reset-KeyboardModifiers -ErrorAction SilentlyContinue) {
+			$null = Reset-KeyboardModifiers -IncludeMouseButton
+		}
+	}
+
 	# Consume one-shot retry markers up front so they only affect the immediate rerun.
 	if ($windowOnlyRetryActive) {
 		[Environment]::SetEnvironmentVariable($windowOnlyRetryEnvVar, $null, 'Process')
@@ -892,6 +901,7 @@ function Set-WorkspaceWindowLayout {
 				if ($failedWindow) {
 					$null = Resize-Windows -WindowHandle $failedWindow.Handle
 				}
+				[void](& $resetKeyboardStateBeforeRerun)
 				[void](& $ensureFancyZonesBeforeRerun)
 				ReRun-LastCommand -AutoAccept -ErrorMessage " Rerunning workspace setup due to snap failure (window-only retry)! (attempt $($rerunCount + 1)/$maxReruns)"
 			}
@@ -961,6 +971,7 @@ function Set-WorkspaceWindowLayout {
 				if ($failedWindow) {
 					$null = Resize-Windows -WindowHandle $failedWindow.Handle
 				}
+				[void](& $resetKeyboardStateBeforeRerun)
 				[void](& $ensureFancyZonesBeforeRerun)
 				ReRun-LastCommand -AutoAccept -ErrorMessage " Rerunning workspace setup due to mispositioned windows (window-only retry)! (attempt $($rerunCount + 1)/$maxReruns)"
 			}
@@ -1058,6 +1069,7 @@ function Set-WorkspaceWindowLayout {
 			if ($failedWindow) {
 				$null = Resize-Windows -WindowHandle $failedWindow.Handle
 			}
+			[void](& $resetKeyboardStateBeforeRerun)
 			[void](& $ensureFancyZonesBeforeRerun)
 			ReRun-LastCommand -AutoAccept -ErrorMessage " Rerunning workspace setup (window-only retry)! (attempt $($rerunCount + 1)/$maxReruns)"
 		}

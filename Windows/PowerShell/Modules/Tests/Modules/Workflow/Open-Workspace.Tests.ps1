@@ -31,6 +31,7 @@ BeforeAll {
 
 	function Get-WindowHandle { param($ProcessName) @() }
 	function Get-NextAvailableDesktopIndex { 0 }
+	function Reset-KeyboardModifiers { param([switch]$IncludeMouseButton) @() }
 	function Test-BrowserGroupAlreadyOpen { $false }
 	function Open-Browser { param($Groups, $Browser) }
 	function Open-Terminal { param($Command, [switch]$Administrator, [switch]$InSameShell, $WindowId, $TabTitles) }
