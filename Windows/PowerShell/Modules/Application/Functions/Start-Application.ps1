@@ -19,7 +19,7 @@ function Start-Application {
     .PARAMETER StartMethod
         Method to start the application:
         - ConfigPath: Uses $Configuration.Universal.[ConfigKey]
-        - AppxPackage: Uses Get-AppxPackage to find and start UWP apps
+        - AppxPackage: Uses Get-AppxPackage to find a UWP/Store app and activates it via its AppUserModelID
         - DirectPath: Uses a direct file path
         - Custom: Uses a custom scriptblock for complex scenarios
 
@@ -28,9 +28,6 @@ function Start-Application {
 
     .PARAMETER PackageName
         Package name pattern for AppxPackage method (e.g., 'Microsoft.Outlook').
-
-    .PARAMETER ExecutableName
-        Executable name within package for AppxPackage method (e.g., 'olk.exe').
 
     .PARAMETER ExecutablePath
         Direct path to executable for DirectPath method.
@@ -65,8 +62,8 @@ function Start-Application {
         # Starts VirtualBox (non-blocking by default)
 
     .EXAMPLE
-        Start-Application -AppName "Outlook" -ProcessName "Outlook" -StartMethod AppxPackage -PackageName "Microsoft.Outlook" -ExecutableName "olk.exe"
-        # Starts Outlook UWP app (non-blocking by default)
+        Start-Application -AppName "WhatsApp" -ProcessName "WhatsApp.Root" -StartMethod AppxPackage -PackageName "WhatsApp"
+        # Activates the WhatsApp UWP app via its AppUserModelID (non-blocking by default)
 
     .EXAMPLE
         Start-Application -AppName "Docker" -ProcessName "Docker Desktop" -StartMethod DirectPath -ExecutablePath $dockerExe -Sync
@@ -89,9 +86,6 @@ function Start-Application {
 
 		[Parameter()]
 		[string]$PackageName,
-
-		[Parameter()]
-		[string]$ExecutableName,
 
 		[Parameter()]
 		[string]$ExecutablePath,
@@ -172,9 +166,6 @@ function Start-Application {
 				if ([string]::IsNullOrWhiteSpace($PackageName)) {
 					throw "PackageName parameter is required for AppxPackage method"
 				}
-				if ([string]::IsNullOrWhiteSpace($ExecutableName)) {
-					throw "ExecutableName parameter is required for AppxPackage method"
-				}
 
 				$package = Get-AppxPackage "*$PackageName*" -ErrorAction Stop | Select-Object -First 1
 
@@ -182,24 +173,20 @@ function Start-Application {
 					throw "$AppName is not installed!"
 				}
 
-				$appPath = Join-Path $package.InstallLocation $ExecutableName
+				# UWP/Store apps must be activated through their AppUserModelID (AUMID).
+				# The packaged executable lives under the ACL-locked WindowsApps folder and
+				# cannot be launched directly with Start-Process ("Access is denied"), so
+				# resolve the AUMID (PackageFamilyName!AppId) from the manifest and let the
+				# shell activate the package.
+				$appId = (Get-AppxPackageManifest $package).Package.Applications.Application.Id | Select-Object -First 1
 
-				if (-not (Test-Path $appPath)) {
-					throw "$ExecutableName not found at expected location"
+				if ([string]::IsNullOrWhiteSpace($appId)) {
+					throw "Could not resolve the AppUserModelID for $AppName"
 				}
 
 				$startParams = @{
-					FilePath    = $appPath
+					FilePath    = "shell:AppsFolder\$($package.PackageFamilyName)!$appId"
 					ErrorAction = 'Stop'
-				}
-				if ($Arguments) { $startParams['ArgumentList'] = $Arguments }
-				if ($Sync) { $startParams['Wait'] = $true }
-				if ($SuppressOutput) {
-					$startParams['RedirectStandardOutput'] = [System.IO.Path]::GetTempFileName()
-					$startParams['RedirectStandardError'] = [System.IO.Path]::GetTempFileName()
-					if (-not $startParams.ContainsKey('NoNewWindow')) {
-						$startParams['NoNewWindow'] = $true
-					}
 				}
 
 				Start-Process @startParams

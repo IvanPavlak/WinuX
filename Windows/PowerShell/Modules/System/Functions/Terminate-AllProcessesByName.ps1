@@ -4,9 +4,11 @@ function Terminate-AllProcessesByName {
 		Terminates specific processes by their names.
 
 	.DESCRIPTION
-		Forcefully terminates a predefined list of processes: Code, WhatsApp, Outlook,
-		riseup-vpn, VirtualBoxVM, and VBoxSVC.
-		Docker is handled separately by DockerWizard before this function runs.
+		Forcefully terminates every process named in the
+		Configuration.Universal.TerminateProcessNames list. Missing processes are
+		silently ignored; when the list is absent or empty the function warns and
+		terminates nothing. Docker is intentionally not part of this cleanup - it is
+		handled separately by DockerWizard before this function runs.
 		Processes with windows matching exclusion patterns will be skipped.
 
 	.PARAMETER Exclude
@@ -30,14 +32,15 @@ function Terminate-AllProcessesByName {
 
 	Write-LogTitle "Terminating All Named Processes"
 
-	$processNames = @(
-		"Code",
-		"WhatsApp",
-		"Outlook",
-		"riseup-vpn",
-		"VirtualBoxVM",
-		"VBoxSVC"
-	)
+	$processNames = @()
+	if ($Configuration -and $Configuration.Universal -and $Configuration.Universal.TerminateProcessNames) {
+		$processNames = @($Configuration.Universal.TerminateProcessNames)
+	}
+
+	if (-not $processNames) {
+		Write-LogWarning "No process names configured (Universal.TerminateProcessNames) - nothing to terminate!"
+		return
+	}
 
 	Write-LogDebug " Target processes => [$($processNames -join ', ')]" -Style Step
 

@@ -213,6 +213,33 @@
 		DockerExe                = "C:\Program Files\Docker\Docker\frontend\Docker Desktop.exe"
 		WindowsTerminalHome      = "{User}"
 
+		# Process Cleanup
+		# → Consumer: Terminate-AllProcessesByName (via Kill-All)
+		# Process names force-terminated by Terminate-AllProcessesByName. The base ships a
+		# minimal example list - keep your real cleanup targets in Configuration.local.psd1
+		# (the override replaces this array wholesale on merge). Docker is intentionally not
+		# listed: DockerWizard stops it before this function runs.
+		TerminateProcessNames    = @(
+			"Code"
+		)
+
+		# → Consumer: Terminate-AllProcessesWithVisibleWindows (via Kill-All)
+		# Process names never force-killed by Terminate-AllProcessesWithVisibleWindows. Browser
+		# processes from Browsers below are excluded automatically (Terminate-AllBrowserProcesses
+		# closes those windows gracefully instead). The PowerToys entries are load-bearing:
+		# killing only the visible PowerToys.Settings window leaves the supervisor in a "running
+		# but FancyZones absent" half-state that breaks subsequent workspace layout application
+		# and forces an expensive Start-FancyZones -ForceRestart. Never remove them.
+		VisibleWindowExclusions  = @(
+			"Rainmeter"
+			"WindowsTerminal"
+			"Docker Desktop"
+			"obs64"
+			"PowerToys"
+			"PowerToys.FancyZones"
+			"PowerToys.Settings"
+		)
+
 		# Browser Configuration
 		# Maps browser names to their executable paths and command-line arguments
 		# Used by Open-Browser function to support multiple browsers
