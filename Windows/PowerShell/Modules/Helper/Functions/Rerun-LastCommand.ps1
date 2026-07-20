@@ -104,6 +104,14 @@ function ReRun-LastCommand {
 
 	Write-LogSuccess "Opening new shell with command..."
 
+	# Heal any modifier left logically stuck by the failed run BEFORE driving the
+	# terminal with more synthesized input below (tab cycling via Ctrl+Tab/Ctrl+W,
+	# window close via Ctrl+Shift+W) - a held Shift/Win would corrupt those combos -
+	# and so the fresh shell takes over a session with clean keyboard state.
+	if (Get-Command Reset-KeyboardModifiers -ErrorAction SilentlyContinue) {
+		$null = Reset-KeyboardModifiers -IncludeMouseButton
+	}
+
 	# Add Win32 API for window focusing
 	if (-not ([System.Management.Automation.PSTypeName]'RerunWindowHelper').Type) {
 		Add-Type @"

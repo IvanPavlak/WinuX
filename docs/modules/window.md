@@ -868,6 +868,28 @@ Set-LogLevel Verbose { Move-WindowToVirtualDesktop -WindowHandle $handle -Deskto
 
 **See also:** [Get-WindowHandle](window.md), [Ensure-VirtualDesktops](window.md)
 
+## [Reset-KeyboardModifiers](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Reset-KeyboardModifiers.ps1)
+
+- **Description:** Releases modifier keys (Shift, Ctrl, Alt, Win - left, right, and neutral variants) that the session reports as logically held down, by injecting the matching key-up events in a single `SendInput` batch. This clears the state an interrupted synthesized-input sequence leaves behind - the "terminal input locks up during workspace orchestration" known issue, where typed letters come out as caps and Enter stops submitting - without signing out. Keys that are not held are never touched, toggle keys (Caps Lock, Num Lock) are never sent, and on a quiescent keyboard the call is a read-only no-op. Called automatically by `Snap-AllWindows` (at pass start, before each snap retry, and on pass failure), by `Set-WorkspaceWindowLayout` and `Rerun-LastCommand` before a rerun respawns the shell, and by `Open-Workspace` when the flow ends.
+- **Parameters:** -IncludeMouseButton
+- **Usage:** `Reset-KeyboardModifiers`, `Reset-KeyboardModifiers -IncludeMouseButton`
+
+Returns the names of the keys that were released (empty when none were stuck) and logs a warning listing them. If a stuck Shift prevents submitting the command in the first place (Enter inserts a new line instead of executing - PSReadLine reads it as `Shift+Enter`), tap both Shift keys first: a physical press and release also clears the stuck state for that key, after which the command can be run to release any remaining variants.
+
+| Parameter             | Type   | Default | Description                                                                                                                                        |
+| --------------------- | ------ | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `-IncludeMouseButton` | switch | -       | Also release the left mouse button when reported held (an interrupted shift-drag snap strands it pressed). Orchestration failure paths enable it. |
+
+```powershell
+# Release any stuck Shift/Ctrl/Alt/Win keys
+Reset-KeyboardModifiers
+
+# Post-failure cleanup: additionally release a stuck left mouse button
+Reset-KeyboardModifiers -IncludeMouseButton
+```
+
+**See also:** [Snap-AllWindows](window.md#snap-allwindows), [Set-WorkspaceWindowLayout](window.md#set-workspacewindowlayout)
+
 ## [Reset-Windows](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Reset-Windows.ps1)
 
 - **Description:** Convenience wrapper that resets the window layout to a clean slate for layout testing. Runs four steps in order: `Remove-VirtualDesktops` (collapse down to a single virtual desktop), `Move-Windows` (move every window to the target virtual desktop and, optionally, a target monitor), `Center-Windows` (center every window on its monitor), and finally `Focus-TerminalTab` (focuses Windows Terminal to continue working). Defaults for `-VirtualDesktop` and `-Monitor` are read per machine from configuration.
@@ -1182,7 +1204,7 @@ Set-LogLevel Verbose { Set-WindowPosition -WindowHandle $handle -X 0 -Y 0 -Width
 
 ## [Set-WorkspaceWindowLayout](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Set-WorkspaceWindowLayout.ps1)
 
-- **Description:** Loads and applies a predefined, machine-specific window layout for a workspace. Layout files live in machine-type subfolders of the module's `Layouts` directory (e.g. `Layouts/PC/`, `Layouts/Laptop/`, `Layouts/Work/`) and define both FancyZones monitor layouts and per-window placement rules. The function ensures the required virtual desktops exist, waits for workspace windows to appear and stabilize, applies FancyZones, positions and snaps each window into its zone, then verifies every entry. On snap or verification failure it auto-recovers by force-starting FancyZones and rerunning in a window-only retry mode that preserves already-configured desktops and retries only the failed window.
+- **Description:** Loads and applies a predefined, machine-specific window layout for a workspace. Layout files live in machine-type subfolders of the module's `Layouts` directory (e.g. `Layouts/PC/`, `Layouts/Laptop/`, `Layouts/Work/`) and define both FancyZones monitor layouts and per-window placement rules. The function ensures the required virtual desktops exist, waits for workspace windows to appear and stabilize, applies FancyZones, positions and snaps each window into its zone, then verifies every entry. On snap or verification failure it auto-recovers by force-starting FancyZones and rerunning in a window-only retry mode that preserves already-configured desktops and retries only the failed window; before every rerun it also releases stuck keyboard modifiers and a stranded mouse button via `Reset-KeyboardModifiers` so the respawned shell takes over a clean input session.
 - **Parameters:** -WorkspaceName, -LayoutPath, -TimeoutSeconds, -SnapDelayMs, -DisableAutoWait, -PreCapturedExistingWindows, -DesktopOffset, -Alongside
 - **Usage:** `Set-WorkspaceWindowLayout -WorkspaceName MyWorkspace`, `Set-WorkspaceWindowLayout -WorkspaceName OtherProject -DesktopOffset 2 -Alongside`, `Set-WorkspaceWindowLayout -LayoutPath C:\Users\<User>\MyLayouts\custom.psd1 -TimeoutSeconds 30`, `Set-WorkspaceWindowLayout -WorkspaceName MyWorkspace -DisableAutoWait`
 
@@ -1224,7 +1246,7 @@ On success Windows Terminal is refocused just before the success banner so outpu
 
 ## [Snap-AllWindows](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Snap-AllWindows.ps1)
 
-- **Description:** Intelligently snaps windows to FancyZones by sending `Win+Up` (or `Win+Down` for top-position, vertically split windows) with reliable focus acquisition. Groups windows by virtual desktop and switches desktops as needed, validates positions pre-snap, re-positions when drifted, and falls back to shift-drag snapping if keyboard snap fails. Default mode snaps only windows previously positioned by `Set-WindowLayouts` (the workspace flow); `-All` snaps all visible windows standalone.
+- **Description:** Intelligently snaps windows to FancyZones by sending `Win+Up` (or `Win+Down` for top-position, vertically split windows) with reliable focus acquisition. Groups windows by virtual desktop and switches desktops as needed, validates positions pre-snap, re-positions when drifted, and falls back to shift-drag snapping if keyboard snap fails. Default mode snaps only windows previously positioned by `Set-WindowLayouts` (the workspace flow); `-All` snaps all visible windows standalone. Stuck keyboard modifiers are cleared via `Reset-KeyboardModifiers` at pass start, before each snap retry, and (mouse button included) when a pass fails, so an interrupted earlier sequence can neither corrupt the injected combos (a held Shift turns `Win+Up` into `Win+Shift+Up`) nor leave terminal input locked up.
 - **Parameters:** -All, -CurrentDesktopOnly, -SnapDelayMs, -DesktopOffset, -DesktopCount
 - **Usage:** `Snap-AllWindows`, `Snap-AllWindows -All`, `Snap-AllWindows -All -CurrentDesktopOnly`, `Snap-AllWindows -All -SnapDelayMs 100`, `Snap-AllWindows -DesktopOffset 2 -DesktopCount 3`
 

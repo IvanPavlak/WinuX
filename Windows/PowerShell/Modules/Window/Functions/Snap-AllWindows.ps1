@@ -87,6 +87,11 @@ function Snap-AllWindows {
 		if ($All) {
 			Write-LogDebug "[Snapping All Visible Windows to FancyZones]"
 
+			# Start from a clean keyboard state: a modifier left logically stuck by an
+			# earlier interrupted sequence corrupts every combo sent below (a held Shift
+			# turns Win+Up into Win+Shift+Up) and locks up terminal input session-wide.
+			$null = Reset-KeyboardModifiers
+
 			$allWindows = [WindowModule.Native]::GetAllWindows()
 
 			# GetAllWindows() (EnumWindows) returns windows across ALL virtual desktops.
@@ -171,6 +176,11 @@ function Snap-AllWindows {
 		$monitors = @()
 
 		Write-LogDebug "[Snapping Windows to FancyZones]"
+
+		# Start from a clean keyboard state: a modifier left logically stuck by an
+		# earlier interrupted sequence corrupts every combo sent below (a held Shift
+		# turns Win+Up into Win+Shift+Up) and locks up terminal input session-wide.
+		$null = Reset-KeyboardModifiers
 
 		$snappedCount = 0
 		$failedSnaps = [System.Collections.Generic.List[object]]::new()
@@ -537,6 +547,12 @@ function Snap-AllWindows {
 					if ($snapAttempt -gt 1) {
 						Write-LogDebug "     ↻ Retry $snapAttempt/$maxSnapRetries for [$title] (delay: ${retryDelayMs}ms)..."
 
+						# The failed attempt itself may have stranded a modifier (or the
+						# attempt failed BECAUSE one was already stuck and corrupted the
+						# combo). Clear the keyboard state before injecting again so the
+						# retry starts from a known-good baseline.
+						$null = Reset-KeyboardModifiers
+
 						# Re-position window before retrying (it may have been left in a bad state)
 						try {
 							$null = Resize-Windows `
@@ -734,6 +750,11 @@ function Snap-AllWindows {
 		}
 
 		if ($failedSnaps.Count -gt 0) {
+			# A failed/aborted pass is exactly when an interrupted sequence may have
+			# stranded a modifier or the shift-drag's mouse button. Leave the session
+			# clean before the caller's rerun path respawns the shell.
+			$null = Reset-KeyboardModifiers -IncludeMouseButton
+
 			Write-LogWarning "Snapped [$snappedCount] window(s), but [$($failedSnaps.Count)] failed:"
 			foreach ($failure in $failedSnaps) {
 				Write-LogError "   $($failure.Error)" -NoLeadingNewline

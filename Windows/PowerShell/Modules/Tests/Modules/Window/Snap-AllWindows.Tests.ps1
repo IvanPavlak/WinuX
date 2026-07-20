@@ -12,6 +12,7 @@ Describe "Snap-AllWindows" {
 		Mock Ensure-WindowsFormsLoaded { }
 		Mock Start-FancyZones { $true }
 		Mock Get-PositionedWindowCount { 0 }
+		Mock Reset-KeyboardModifiers { @() }
 		Mock Write-Host { }
 	}
 

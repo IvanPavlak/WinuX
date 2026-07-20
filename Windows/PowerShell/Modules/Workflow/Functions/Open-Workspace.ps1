@@ -487,5 +487,13 @@ function Open-Workspace {
 	}
 	finally {
 		[Environment]::SetEnvironmentVariable($workspaceTimerEnvVar, $null, 'Process')
+
+		# The flow above synthesizes keyboard input (FancyZones shortcuts, Win+Arrow
+		# snaps, shift-drag, terminal tab cycling). Guarantee the session never leaves
+		# this flow with a modifier logically held down. No-op when
+		# nothing is stuck.
+		if (Get-Command Reset-KeyboardModifiers -ErrorAction SilentlyContinue) {
+			$null = Reset-KeyboardModifiers
+		}
 	}
 }
