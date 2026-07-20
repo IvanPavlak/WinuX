@@ -179,16 +179,7 @@ Describe "Start-Application" {
 			Mock Start-Process { }
 
 			Start-Application -AppName "TestApp" -ProcessName "nonexistent_test_proc_xyz" `
-				-StartMethod AppxPackage -ExecutableName "app.exe" 2>&1
-
-			Should -Invoke Start-Process -Times 0
-		}
-
-		It "Should throw when ExecutableName is not provided" {
-			Mock Start-Process { }
-
-			Start-Application -AppName "TestApp" -ProcessName "nonexistent_test_proc_xyz" `
-				-StartMethod AppxPackage -PackageName "Microsoft.Test" 2>&1
+				-StartMethod AppxPackage 2>&1
 
 			Should -Invoke Start-Process -Times 0
 		}
@@ -231,18 +222,26 @@ Describe "Start-Application" {
 			}
 		}
 
-		It "Should start AppxPackage executable when package and executable path resolve" {
+		It "Should activate AppxPackage app via its AppUserModelID when the package resolves" {
 			Mock Get-AppxPackage {
-				[PSCustomObject]@{ InstallLocation = 'C:\Apps\TestPkg' }
+				[PSCustomObject]@{ PackageFamilyName = 'Microsoft.Test_8wekyb3d8bbwe' }
 			}
-			Mock Test-Path { $true }
+			Mock Get-AppxPackageManifest {
+				[PSCustomObject]@{
+					Package = [PSCustomObject]@{
+						Applications = [PSCustomObject]@{
+							Application = [PSCustomObject]@{ Id = 'App' }
+						}
+					}
+				}
+			}
 			Mock Start-Process { }
 
 			Start-Application -AppName "TestApp" -ProcessName "nonexistent_test_proc_xyz" `
-				-StartMethod AppxPackage -PackageName "Microsoft.Test" -ExecutableName "test.exe"
+				-StartMethod AppxPackage -PackageName "Microsoft.Test"
 
 			Should -Invoke Start-Process -Times 1 -Exactly -ParameterFilter {
-				$FilePath -eq 'C:\Apps\TestPkg\test.exe'
+				$FilePath -eq 'shell:AppsFolder\Microsoft.Test_8wekyb3d8bbwe!App'
 			}
 		}
 	}

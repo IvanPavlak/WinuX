@@ -8,6 +8,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-07-20
+
+### Changed
+
+- `Terminate-AllProcessesByName` (System module) reads its target list from the new `Universal.TerminateProcessNames` configuration key instead of a hardcoded list. The base configuration ships a minimal example (`Code`); keep your real cleanup targets in `Configuration.local.psd1` (the override replaces the array wholesale on merge). When the list is absent or empty the function warns and terminates nothing.
+- `Terminate-AllProcessesWithVisibleWindows` (System module) reads its always-excluded process names from the new `Universal.VisibleWindowExclusions` configuration key instead of a hardcoded list; browser processes from `Universal.Browsers` are still excluded automatically. The base configuration ships the full previous default list (`Rainmeter`, `WindowsTerminal`, `Docker Desktop`, `obs64`, and the three PowerToys processes - those are load-bearing, never remove them). When the list is absent or empty the function warns and terminates nothing, since running without exclusions would force-kill `WindowsTerminal` - the very shell executing the cleanup.
+
+### Removed
+
+- `Start-Application -ExecutableName`: the `AppxPackage` start method no longer launches an executable out of the package's install folder, so the parameter is gone. Callers migrate by dropping `-ExecutableName` from `AppxPackage` invocations - the app to activate is resolved from the package manifest automatically (see Fixed).
+
+### Fixed
+
+- `Start-Application` (Application module): the `AppxPackage` method failed with "Access is denied" for packaged UWP/Store apps - their executables live under the ACL-locked `WindowsApps` folder and cannot be started directly with `Start-Process`. The method now resolves the app's AppUserModelID (`PackageFamilyName!AppId`) from the package manifest and activates it through `shell:AppsFolder`, the supported launch path for packaged apps. `Open-WhatsApp`, the method's only shipped caller, works again.
+- WhatsApp Desktop actually runs as `WhatsApp.Root`, not `WhatsApp`, so `Open-WhatsApp`'s already-running guard never detected a running instance and `Clear-WhatsAppLocalStorage` never stopped the app before clearing its storage. Both now target `WhatsApp.Root` (the default `Terminate-AllProcessesByName` cleanup target moved into configuration - see Changed).
+
 ## [0.1.6] - 2026-07-15
 
 ### Changed
@@ -101,7 +117,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.6...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.7...HEAD
+[0.1.7]: https://github.com/IvanPavlak/WinuX/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/IvanPavlak/WinuX/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/IvanPavlak/WinuX/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/IvanPavlak/WinuX/compare/v0.1.3...v0.1.4

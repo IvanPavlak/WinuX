@@ -17,9 +17,9 @@ function Clear-WhatsAppLocalStorage {
 	Write-LogTitle "Clearing Local WhatsApp Storage"
 
 	Write-LogStep "Checking if WhatsApp is closed!"
-	if (Get-Process -Name "WhatsApp" -ErrorAction SilentlyContinue) {
+	if (Get-Process -Name "WhatsApp.Root" -ErrorAction SilentlyContinue) {
 		try {
-			Stop-Process -Name "WhatsApp" -Force -ErrorAction Stop
+			Stop-Process -Name "WhatsApp.Root" -Force -ErrorAction Stop
 			Write-LogSuccess "WhatsApp closed!"
 		}
 		catch {

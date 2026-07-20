@@ -15,10 +15,9 @@ Describe "Open-WhatsApp" {
 
 		Should -Invoke Start-Application -Times 1 -Exactly -ParameterFilter {
 			$AppName -eq 'WhatsApp' -and
-			$ProcessName -eq 'WhatsApp' -and
+			$ProcessName -eq 'WhatsApp.Root' -and
 			$StartMethod -eq 'AppxPackage' -and
-			$PackageName -eq 'WhatsApp' -and
-			$ExecutableName -eq 'WhatsApp.Root.exe'
+			$PackageName -eq 'WhatsApp'
 		}
 	}
 }

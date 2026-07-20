@@ -495,7 +495,7 @@ Open-VSCodeWorkspace Consolidation
 
 ## [Open-WhatsApp](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Open-WhatsApp.ps1)
 
-- **Description:** Opens the WhatsApp Microsoft Store app via its AppxPackage using `Start-Application`. Does nothing if WhatsApp is already running.
+- **Description:** Opens the WhatsApp Microsoft Store app by activating its UWP package via its AppUserModelID using `Start-Application`. Does nothing if WhatsApp is already running.
 - **Usage:** `Open-WhatsApp`
 
 ## [Open-WSLTab](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Open-WSLTab.ps1)
@@ -505,16 +505,16 @@ Open-VSCodeWorkspace Consolidation
 
 ## [Start-Application](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Start-Application.ps1)
 
-- **Description:** Common (DRY) helper to start applications with standardized error handling, process checking, and user feedback. Supports four start methods: ConfigPath (resolves `$Configuration.Universal.[ConfigKey]`), AppxPackage (UWP/Store apps via `Get-AppxPackage`), DirectPath (a direct executable path), and Custom (a scriptblock for complex scenarios). Applications are non-blocking by default since `Start-Process` is inherently async; use `-Sync` to wait for the process to exit before continuing.
-- **Parameters:** -AppName, -ProcessName, -StartMethod, -ConfigKey, -PackageName, -ExecutableName, -ExecutablePath, -Arguments, -NoNewWindow, -SkipProcessCheck, -ProcessPathFilter, -SkipPathValidation, -Sync, -SuppressOutput, -CustomStartLogic
-- **Usage:** `Start-Application -AppName "VirtualBox" -ProcessName "VirtualBox" -StartMethod ConfigPath -ConfigKey "VirtualBoxExe" -NoNewWindow`, `Start-Application -AppName "Outlook" -ProcessName "olk" -StartMethod AppxPackage -PackageName "Microsoft.Outlook" -ExecutableName "olk.exe"`, `Start-Application -AppName "Docker" -ProcessName "Docker Desktop" -StartMethod DirectPath -ExecutablePath $dockerExe -Sync`, `Start-Application -AppName "Docker Desktop" -ProcessName "Docker Desktop" -StartMethod ConfigPath -ConfigKey "DockerExe" -Arguments "--minimized" -SuppressOutput`
+- **Description:** Common (DRY) helper to start applications with standardized error handling, process checking, and user feedback. Supports four start methods: ConfigPath (resolves `$Configuration.Universal.[ConfigKey]`), AppxPackage (activates UWP/Store apps via their AppUserModelID, resolved from `Get-AppxPackage`), DirectPath (a direct executable path), and Custom (a scriptblock for complex scenarios). Applications are non-blocking by default since `Start-Process` is inherently async; use `-Sync` to wait for the process to exit before continuing.
+- **Parameters:** -AppName, -ProcessName, -StartMethod, -ConfigKey, -PackageName, -ExecutablePath, -Arguments, -NoNewWindow, -SkipProcessCheck, -ProcessPathFilter, -SkipPathValidation, -Sync, -SuppressOutput, -CustomStartLogic
+- **Usage:** `Start-Application -AppName "VirtualBox" -ProcessName "VirtualBox" -StartMethod ConfigPath -ConfigKey "VirtualBoxExe" -NoNewWindow`, `Start-Application -AppName "WhatsApp" -ProcessName "WhatsApp.Root" -StartMethod AppxPackage -PackageName "WhatsApp"`, `Start-Application -AppName "Docker" -ProcessName "Docker Desktop" -StartMethod DirectPath -ExecutablePath $dockerExe -Sync`, `Start-Application -AppName "Docker Desktop" -ProcessName "Docker Desktop" -StartMethod ConfigPath -ConfigKey "DockerExe" -Arguments "--minimized" -SuppressOutput`
 
-A generic application launcher that consolidates the common patterns of checking whether a process is already running, starting it via one of four methods, and reporting success or failure. Before launching it checks for an existing process (unless `-SkipProcessCheck`) and short-circuits with a notice if the app is already running. When two apps share a process name (e.g. Claude Desktop and the Claude Code CLI both run as `claude`), pass `-ProcessPathFilter` to scope that check to a specific install location so one app is not mistaken for the other. All four methods share consistent handling of `-Arguments`, `-Sync` (maps to `-Wait`), `-NoNewWindow`, and `-SuppressOutput` (redirects stdout/stderr to temp files, silencing console noise from chatty apps such as Electron-based Docker Desktop).
+A generic application launcher that consolidates the common patterns of checking whether a process is already running, starting it via one of four methods, and reporting success or failure. Before launching it checks for an existing process (unless `-SkipProcessCheck`) and short-circuits with a notice if the app is already running. When two apps share a process name (e.g. Claude Desktop and the Claude Code CLI both run as `claude`), pass `-ProcessPathFilter` to scope that check to a specific install location so one app is not mistaken for the other. The `ConfigPath` and `DirectPath` methods share consistent handling of `-Arguments`, `-Sync` (maps to `-Wait`), `-NoNewWindow`, and `-SuppressOutput` (redirects stdout/stderr to temp files, silencing console noise from chatty apps such as Electron-based Docker Desktop). The `AppxPackage` method activates the package through the shell and ignores those launch options.
 
 | Method        | Description                                                                                                                                        |
 | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `ConfigPath`  | Resolves the executable from `$Configuration.Universal.[ConfigKey]`. Requires `-ConfigKey`.                                                        |
-| `AppxPackage` | Locates a UWP/Store app via `Get-AppxPackage` and runs `-ExecutableName` from its install location. Requires `-PackageName` and `-ExecutableName`. |
+| `AppxPackage` | Locates a UWP/Store app via `Get-AppxPackage`, resolves its AppUserModelID (`PackageFamilyName!AppId`) from the manifest, and activates it through `shell:AppsFolder`. Requires `-PackageName`. |
 | `DirectPath`  | Launches `-ExecutablePath` directly (validated unless `-SkipPathValidation`).                                                                      |
 | `Custom`      | Invokes the `-CustomStartLogic` scriptblock for complex scenarios.                                                                                 |
 
@@ -524,8 +524,7 @@ A generic application launcher that consolidates the common patterns of checking
 | `-ProcessName`        | Process name used to check whether the app is already running. Mandatory.                                                                 |
 | `-StartMethod`        | One of `ConfigPath`, `AppxPackage`, `DirectPath`, `Custom`. Mandatory.                                                                    |
 | `-ConfigKey`          | Configuration key under `Universal` for the ConfigPath method (e.g. `VirtualBoxExe`).                                                     |
-| `-PackageName`        | Package name pattern for the AppxPackage method (e.g. `Microsoft.Outlook`).                                                               |
-| `-ExecutableName`     | Executable within the package for the AppxPackage method (e.g. `olk.exe`).                                                                |
+| `-PackageName`        | Package name pattern for the AppxPackage method (e.g. `WhatsApp`).                                                                        |
 | `-ExecutablePath`     | Direct path to the executable for the DirectPath method.                                                                                  |
 | `-Arguments`          | Optional arguments passed to `Start-Process`.                                                                                             |
 | `-NoNewWindow`        | Passes `-NoNewWindow` to `Start-Process`.                                                                                                 |
@@ -541,10 +540,9 @@ A generic application launcher that consolidates the common patterns of checking
 Start-Application -AppName "DBeaver" -ProcessName "dbeaver" `
     -StartMethod ConfigPath -ConfigKey "DbeaverExe"
 
-# UWP/Store app via AppxPackage
-Start-Application -AppName "Outlook" -ProcessName "olk" `
-    -StartMethod AppxPackage -PackageName "Microsoft.Outlook" `
-    -ExecutableName "olk.exe"
+# UWP/Store app via AppxPackage (activated by its AppUserModelID)
+Start-Application -AppName "WhatsApp" -ProcessName "WhatsApp.Root" `
+    -StartMethod AppxPackage -PackageName "WhatsApp"
 
 # Direct path launch
 Start-Application -AppName "Discord" -ProcessName "Discord" `

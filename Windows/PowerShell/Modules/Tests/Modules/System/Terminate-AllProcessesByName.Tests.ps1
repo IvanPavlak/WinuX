@@ -8,12 +8,24 @@ BeforeAll {
 
 	# Stub Test-WindowTitleMatch since it's from the same module
 	function Test-WindowTitleMatch { param($ProcessName, $WindowTitle, $Patterns) $false }
+
+	$script:OriginalConfiguration = $global:Configuration
+}
+
+AfterAll {
+	$global:Configuration = $script:OriginalConfiguration
 }
 
 Describe "Terminate-AllProcessesByName" {
 	BeforeEach {
 		Mock Write-Host { }
 		Mock Stop-Process { }
+
+		$global:Configuration = @{
+			Universal = @{
+				TerminateProcessNames = @("Code")
+			}
+		}
 	}
 
 	Context "When target processes are running" {
@@ -63,6 +75,46 @@ Describe "Terminate-AllProcessesByName" {
 			Terminate-AllProcessesByName -Exclude "*Excluded*"
 
 			Should -Invoke Stop-Process -Times 1
+		}
+	}
+
+	Context "Configuration-driven target list" {
+		It "Should terminate every process name in the configured list" {
+			$global:Configuration = @{
+				Universal = @{
+					TerminateProcessNames = @("Code", "notepad")
+				}
+			}
+			Mock Get-Process { [PSCustomObject]@{ ProcessName = $Name; Id = 1; MainWindowTitle = "Window" } }
+
+			Terminate-AllProcessesByName
+
+			Should -Invoke Stop-Process -Times 2 -Exactly
+			Should -Invoke Get-Process -Times 2 -Exactly
+		}
+
+		It "Should terminate nothing when no process names are configured" {
+			$global:Configuration = @{ Universal = @{ } }
+			Mock Get-Process { [PSCustomObject]@{ ProcessName = "Code"; Id = 1; MainWindowTitle = "Window" } }
+
+			Terminate-AllProcessesByName
+
+			Should -Invoke Stop-Process -Times 0
+			Should -Invoke Get-Process -Times 0
+		}
+
+		It "Should terminate nothing when the configured list is empty" {
+			$global:Configuration = @{
+				Universal = @{
+					TerminateProcessNames = @()
+				}
+			}
+			Mock Get-Process { [PSCustomObject]@{ ProcessName = "Code"; Id = 1; MainWindowTitle = "Window" } }
+
+			Terminate-AllProcessesByName
+
+			Should -Invoke Stop-Process -Times 0
+			Should -Invoke Get-Process -Times 0
 		}
 	}
 }

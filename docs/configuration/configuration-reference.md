@@ -76,6 +76,33 @@ Common system paths that do not vary by machine.
 - `OhMyPoshThemeFile` - Oh-My-Posh theme location
 - `WhatsAppLocalStoragePath` - WhatsApp cache directory
 
+### Process Cleanup
+
+Process lists consumed by the `Kill-All` desktop cleanup flow.
+
+**Keys:**
+
+- `TerminateProcessNames` - Process names force-terminated by `Terminate-AllProcessesByName`. The base configuration ships a minimal example list (`Code`); keep your real cleanup targets in `Configuration.local.psd1` (the override replaces the array wholesale on merge).
+- `VisibleWindowExclusions` - Process names `Terminate-AllProcessesWithVisibleWindows` never force-kills. Browser processes from `Browsers` are excluded automatically. The PowerToys entries are load-bearing (see the warning in the [System module](../modules/system.md#terminate-allprocesseswithvisiblewindows)); never remove them.
+
+Both functions warn and terminate nothing when their list is absent or empty.
+
+**Consumer functions:** `Terminate-AllProcessesByName`, `Terminate-AllProcessesWithVisibleWindows`
+
+**Example:**
+
+```powershell
+TerminateProcessNames   = @(
+    "Code"
+    "WhatsApp.Root"
+)
+VisibleWindowExclusions = @(
+    "Rainmeter"
+    "WindowsTerminal"
+    "PowerToys"
+)
+```
+
 ---
 
 ## Machine Type Detection

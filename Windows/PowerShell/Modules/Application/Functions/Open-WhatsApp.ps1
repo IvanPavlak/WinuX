@@ -4,7 +4,7 @@ function Open-WhatsApp {
 		Opens WhatsApp (Microsoft Store app).
 
 	.DESCRIPTION
-		Starts WhatsApp via its AppxPackage using Start-Application.
+		Starts WhatsApp by activating its UWP package via its AppUserModelID using Start-Application.
 		Does nothing if WhatsApp is already running.
 
 	.EXAMPLE
@@ -13,8 +13,7 @@ function Open-WhatsApp {
 	#>
 	Start-Application `
 		-AppName "WhatsApp" `
-		-ProcessName "WhatsApp" `
+		-ProcessName "WhatsApp.Root" `
 		-StartMethod AppxPackage `
-		-PackageName "WhatsApp" `
-		-ExecutableName "WhatsApp.Root.exe"
+		-PackageName "WhatsApp"
 }

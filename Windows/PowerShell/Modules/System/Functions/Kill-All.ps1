@@ -6,8 +6,9 @@ function Kill-All {
 	.DESCRIPTION
 		Removes all virtual desktops except the first one, then terminates:
 		- All configured browser processes (gracefully via WM_CLOSE)
-		- All processes with visible windows (except browsers, Rainmeter, WindowsTerminal)
-		- Named processes (Code, WhatsApp, Outlook, riseup-vpn)
+		- All processes with visible windows (except browsers and the
+		  Universal.VisibleWindowExclusions list)
+		- Named processes (the Universal.TerminateProcessNames list)
 		- Extra Windows Terminal tabs
 		Optionally reloads the PowerShell profile.
 

@@ -8,12 +8,35 @@ BeforeAll {
 
 	# Stub Test-WindowTitleMatch since it's from the same module
 	function Test-WindowTitleMatch { param($ProcessName, $WindowTitle, $Patterns) $false }
+
+	$script:OriginalConfiguration = $global:Configuration
+}
+
+AfterAll {
+	$global:Configuration = $script:OriginalConfiguration
 }
 
 Describe "Terminate-AllProcessesWithVisibleWindows" {
 	BeforeEach {
 		Mock Write-Host { }
 		Mock Stop-Process { }
+
+		$global:Configuration = @{
+			Universal = @{
+				VisibleWindowExclusions = @(
+					"Rainmeter"
+					"WindowsTerminal"
+					"Docker Desktop"
+					"obs64"
+					"PowerToys"
+					"PowerToys.FancyZones"
+					"PowerToys.Settings"
+				)
+				Browsers                = @{
+					Firefox = @{ Exe = "C:\Program Files\Mozilla Firefox\firefox.exe" }
+				}
+			}
+		}
 	}
 
 	Context "When processes with visible windows exist" {
@@ -81,6 +104,32 @@ Describe "Terminate-AllProcessesWithVisibleWindows" {
 			Terminate-AllProcessesWithVisibleWindows
 
 			Should -Invoke Stop-Process -Times 0
+		}
+	}
+
+	Context "When no exclusions are configured" {
+		It "Should terminate nothing when the exclusion list is absent" {
+			$global:Configuration = @{ Universal = @{ } }
+			Mock Get-Process { [PSCustomObject]@{ ProcessName = "notepad"; MainWindowTitle = "Untitled"; Id = 1 } }
+
+			Terminate-AllProcessesWithVisibleWindows
+
+			Should -Invoke Stop-Process -Times 0
+			Should -Invoke Get-Process -Times 0
+		}
+
+		It "Should terminate nothing when the exclusion list is empty" {
+			$global:Configuration = @{
+				Universal = @{
+					VisibleWindowExclusions = @()
+				}
+			}
+			Mock Get-Process { [PSCustomObject]@{ ProcessName = "notepad"; MainWindowTitle = "Untitled"; Id = 1 } }
+
+			Terminate-AllProcessesWithVisibleWindows
+
+			Should -Invoke Stop-Process -Times 0
+			Should -Invoke Get-Process -Times 0
 		}
 	}
 }

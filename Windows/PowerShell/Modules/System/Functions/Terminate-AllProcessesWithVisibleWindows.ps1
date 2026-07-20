@@ -4,10 +4,12 @@ function Terminate-AllProcessesWithVisibleWindows {
 		Terminates all processes with visible windows except excluded ones.
 
 	.DESCRIPTION
-		Forcefully terminates all processes that have visible windows,
-		excluding Rainmeter, WindowsTerminal, Docker Desktop, obs64, and every
-		browser declared in `Configuration.Universal.Browsers` (which are handled
-		gracefully by `Terminate-AllBrowserProcesses` instead) by default.
+		Forcefully terminates all processes that have visible windows, excluding
+		every process named in Configuration.Universal.VisibleWindowExclusions and
+		every browser declared in Configuration.Universal.Browsers (which are handled
+		gracefully by Terminate-AllBrowserProcesses instead). When the exclusion list
+		is absent or empty the function warns and terminates nothing, since running
+		without it would force-kill WindowsTerminal - the shell running the cleanup.
 		Additional windows can be excluded using the -Exclude parameter.
 
 	.PARAMETER Exclude
@@ -34,6 +36,20 @@ function Terminate-AllProcessesWithVisibleWindows {
 
 	Write-LogTitle "Terminating All Processes with Visible Windows"
 
+	# Static exclusions come from Configuration.Universal.VisibleWindowExclusions (see the
+	# key's comment there - the PowerToys entries in particular are load-bearing). Refuse
+	# to run without them: with no exclusions this would force-kill WindowsTerminal,
+	# taking down the very shell (and Kill-All run) executing this function.
+	$configuredExclusions = @()
+	if ($Configuration -and $Configuration.Universal -and $Configuration.Universal.VisibleWindowExclusions) {
+		$configuredExclusions = @($Configuration.Universal.VisibleWindowExclusions)
+	}
+
+	if (-not $configuredExclusions) {
+		Write-LogWarning "No exclusions configured (Universal.VisibleWindowExclusions) - terminating nothing!"
+		return
+	}
+
 	# Build the default-exclusion process-name list dynamically. Browser process names
 	# are pulled from Configuration.Universal.Browsers so this stays in sync with
 	# Terminate-AllBrowserProcesses (which has already gracefully closed those windows
@@ -41,17 +57,9 @@ function Terminate-AllProcessesWithVisibleWindows {
 	# which would also kill excluded browser windows like a kept YouTube tab).
 	$defaultExcludedProcessNames = [System.Collections.Generic.HashSet[string]]::new(
 		[System.StringComparer]::OrdinalIgnoreCase)
-	$null = $defaultExcludedProcessNames.Add("Rainmeter")
-	$null = $defaultExcludedProcessNames.Add("WindowsTerminal")
-	$null = $defaultExcludedProcessNames.Add("Docker Desktop")
-	$null = $defaultExcludedProcessNames.Add("obs64")
-	# PowerToys supervisor + FancyZones + Settings must NEVER be force-killed here.
-	# Killing only the visible PowerToys.Settings window leaves the supervisor in a
-	# "running but FancyZones absent" half-state, which breaks subsequent workspace
-	# layout application and forces an expensive Start-FancyZones -ForceRestart.
-	$null = $defaultExcludedProcessNames.Add("PowerToys")
-	$null = $defaultExcludedProcessNames.Add("PowerToys.FancyZones")
-	$null = $defaultExcludedProcessNames.Add("PowerToys.Settings")
+	foreach ($exclusion in $configuredExclusions) {
+		$null = $defaultExcludedProcessNames.Add($exclusion)
+	}
 
 	if ($Configuration -and $Configuration.Universal -and $Configuration.Universal.Browsers) {
 		foreach ($browserDef in $Configuration.Universal.Browsers.Values) {
