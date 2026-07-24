@@ -34,69 +34,80 @@ function ReRun-LastCommand {
 		[string]$ErrorMessage = "An error that typically requires a fresh shell to resolve occured!",
 
 		[Parameter()]
-		[switch]$AutoAccept
+		[switch]$AutoAccept,
+
+		# Exact command to rerun. When provided, PSReadLine history is not consulted at all -
+		# the shared history file is written incrementally by EVERY open pwsh session, so
+		# "most recent line" can be a command the user typed in another window meanwhile.
+		[Parameter()]
+		[string]$Command
 	)
 
 	Write-LogWarning "$ErrorMessage"
 
-	# Get PSReadLine history file path (contains actual typed commands)
-	try {
-		$historyPath = (Get-PSReadLineOption).HistorySavePath
-	}
-	catch {
-		Write-LogError "Error: Could not access PSReadLine history. $($_.Exception.Message)"
-		return
-	}
-
-	if (-not (Test-Path $historyPath)) {
-		Write-LogError "No command history file found. Please rerun your command manually."
-		return
-	}
-
-	# Read history file and get recent commands
-	$allCommands = Get-Content $historyPath -ErrorAction SilentlyContinue
-
-	if (-not $allCommands -or $allCommands.Count -eq 0) {
-		Write-LogError "No command history available. Please rerun your command manually."
-		return
-	}
-
-	# Get last N commands (in reverse order - most recent first), filtering out ReRun-LastCommand
-	$commands = @()
-	for ($i = $allCommands.Count - 1; $i -ge 0 -and $commands.Count -lt $NumberOfLastTriggeringCommands; $i--) {
-		$cmd = $allCommands[$i].Trim()
-
-		# Skip empty lines, ReRun-LastCommand invocations, and duplicates
-		if ($cmd -and
-			$cmd -notmatch '^\s*ReRun-LastCommand' -and
-			$cmd -notmatch '^\s*ReRun-LastCommand' -and
-			$commands -notcontains $cmd) {
-			$commands += $cmd
-		}
-	}
-
-	if ($commands.Count -eq 0) {
-		Write-LogError "No commands available. Please rerun your command manually."
-		return
-	}
-
 	$selectedCommand = $null
 
-	if ($AutoAccept) {
-		$selectedCommand = $commands[0]
-		Write-LogSuccess "Auto-accepting most recent command => [$selectedCommand]"
+	if (-not [string]::IsNullOrWhiteSpace($Command)) {
+		$selectedCommand = $Command
+		Write-LogSuccess "Re-running caller-supplied command => [$selectedCommand]"
 	}
 	else {
-		$selectedCommand = Resolve-Selection `
-			-OptionList $commands `
-			-MenuTitle "[Select a command to re-run in a new shell]" `
-			-PromptMessage "Select a command number or press Enter to select [1]" `
-			-AllowEmptyPromptResponse:$true
+		# Get PSReadLine history file path (contains actual typed commands)
+		try {
+			$historyPath = (Get-PSReadLineOption).HistorySavePath
+		}
+		catch {
+			Write-LogError "Error: Could not access PSReadLine history. $($_.Exception.Message)"
+			return
+		}
 
-		# Default to first command (most recent) if no selection made
-		if ([string]::IsNullOrEmpty($selectedCommand)) {
+		if (-not (Test-Path $historyPath)) {
+			Write-LogError "No command history file found. Please rerun your command manually."
+			return
+		}
+
+		# Read history file and get recent commands
+		$allCommands = Get-Content $historyPath -ErrorAction SilentlyContinue
+
+		if (-not $allCommands -or $allCommands.Count -eq 0) {
+			Write-LogError "No command history available. Please rerun your command manually."
+			return
+		}
+
+		# Get last N commands (in reverse order - most recent first), filtering out ReRun-LastCommand
+		$commands = @()
+		for ($i = $allCommands.Count - 1; $i -ge 0 -and $commands.Count -lt $NumberOfLastTriggeringCommands; $i--) {
+			$cmd = $allCommands[$i].Trim()
+
+			# Skip empty lines, ReRun-LastCommand invocations, and duplicates
+			if ($cmd -and
+				$cmd -notmatch '^\s*ReRun-LastCommand' -and
+				$commands -notcontains $cmd) {
+				$commands += $cmd
+			}
+		}
+
+		if ($commands.Count -eq 0) {
+			Write-LogError "No commands available. Please rerun your command manually."
+			return
+		}
+
+		if ($AutoAccept) {
 			$selectedCommand = $commands[0]
-			Write-LogSuccess "Defaulting to most recent command => [$selectedCommand]"
+			Write-LogSuccess "Auto-accepting most recent command => [$selectedCommand]"
+		}
+		else {
+			$selectedCommand = Resolve-Selection `
+				-OptionList $commands `
+				-MenuTitle "[Select a command to re-run in a new shell]" `
+				-PromptMessage "Select a command number or press Enter to select [1]" `
+				-AllowEmptyPromptResponse:$true
+
+			# Default to first command (most recent) if no selection made
+			if ([string]::IsNullOrEmpty($selectedCommand)) {
+				$selectedCommand = $commands[0]
+				Write-LogSuccess "Defaulting to most recent command => [$selectedCommand]"
+			}
 		}
 	}
 
@@ -129,7 +140,16 @@ function ReRun-LastCommand {
 
 	$wtProcess = Get-Process -Name "WindowsTerminal" -ErrorAction SilentlyContinue
 	if ($wtProcess) {
-		[Microsoft.VisualBasic.Interaction]::AppActivate($wtProcess.Id)
+		# AppActivate lives in Microsoft.VisualBasic, which is NOT loaded by default - an
+		# unhandled type-resolution error here used to abort the rerun AFTER the retry
+		# markers were persisted, leaving the next open in stale window-only retry mode.
+		try {
+			Add-Type -AssemblyName Microsoft.VisualBasic -ErrorAction Stop
+			[Microsoft.VisualBasic.Interaction]::AppActivate($wtProcess.Id)
+		}
+		catch {
+			Write-LogDebug " Could not activate Windows Terminal before respawn: $($_.Exception.Message)" -Style Warning
+		}
 	}
 
 	# Capture the original window handle BEFORE opening new terminal

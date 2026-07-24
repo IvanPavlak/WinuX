@@ -26,7 +26,37 @@ decision" section. Line numbers below refer to pre-change state; they shift as p
 
 ### Tier 1 - structural
 
-- [ ] **1. In-process retry before terminal-respawn rerun** (analysis Tier 1 #1)
+- [x] **1. In-process retry before terminal-respawn rerun** (analysis Tier 1 #1)
+  - DONE (`Set-WorkspaceWindowLayout.ps1` restructure + `Rerun-LastCommand.ps1` + `Open-Workspace.ps1`):
+    - Position→snap→verify now runs in a bounded loop (1 initial + 2 in-process retries).
+      Retries reset keyboard state, re-check FancyZones (cheap - cached), refresh the
+      existing-window snapshot (non-alongside) so already-correct windows are skipped by the
+      position check, and re-run the FULL pipeline. Alongside gets in-process retries too
+      (previously had NO retry); the terminal respawn stays disabled there.
+    - Verification (in-loop and final) always runs against the FULL `$config.Layout` -
+      previously the rerun verified only the single filtered entry.
+    - Sub-fix a) DONE: the `$targetedLayoutConfig` single-entry filter is REMOVED - a
+      window-only retry applies the full layout config (idempotent skips keep it cheap);
+      markers are informational/diagnostic only now.
+    - Sub-fix b) RESOLVED VIA a): with full-config retries, `$results` covers every configured
+      entry, so the success-path Save-CurrentLayout snapshot is complete again - no merge
+      needed (design decision: simpler than a merge path in Save-CurrentLayout).
+    - Sub-fix c) DONE: both ReRun-LastCommand call sites are wrapped in try/finally that clears
+      the three one-shot markers - reaching that code at all means the respawn did NOT happen
+      ([Environment]::Exit skips finally blocks), so stale 10-min retry mode can no longer leak
+      into the next open.
+    - Sub-fix d) DONE: Rerun-LastCommand loads Microsoft.VisualBasic before AppActivate inside
+      try/catch (warning instead of aborting the respawn). Also removed a duplicated
+      `-notmatch '^\s*ReRun-LastCommand'` condition while in the block.
+    - Sub-fix e) DONE: `ReRun-LastCommand -Command <exact>` bypasses history entirely;
+      Open-Workspace records its resolved invocation (post-menu workspace names, Project,
+      Alongside, ExtraArgs) in process-scoped `$env:WORKSPACE_RERUN_COMMAND` (cleared in
+      finally), and both escalation sites in Set-WorkspaceWindowLayout pass it when present.
+      Standalone Set-WorkspaceWindowLayout calls keep the history fallback (the typed command
+      IS the most recent history line there).
+  - Escalation-path behavior notes: max terminal respawns still 2 (`WORKSPACE_RERUN_COUNT`
+    semantics unchanged); snap-failure and verification-failure report blocks preserved
+    verbatim, now printed per attempt.
   - Current: any snap/verify failure in `Set-WorkspaceWindowLayout.ps1:857-913,:930-983,:1035-1080`
     writes 4 User-scope env markers, force-restarts PowerToys, and calls `ReRun-LastCommand`
     → kills all other WT tabs via SendKeys, spawns new pwsh WITHOUT `-NoProfile` (2-6s module

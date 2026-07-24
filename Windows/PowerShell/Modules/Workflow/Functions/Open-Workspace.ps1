@@ -243,6 +243,38 @@ function Open-Workspace {
 			return
 		}
 
+		# Record this exact invocation (with RESOLVED workspace names - the user may have picked
+		# them from the interactive menu) so a failure-path respawn reruns precisely this command
+		# instead of scraping the shared PSReadLine history, where any other session may have
+		# written a newer line meanwhile. Cleared in the finally block; consumed by
+		# Set-WorkspaceWindowLayout when it escalates to ReRun-LastCommand.
+		$quoteRerunToken = { param($value) "'" + ([string]$value -replace "'", "''") + "'" }
+		$rerunTokens = @('Open-Workspace')
+		$rerunTokens += '-Workspace'
+		$rerunTokens += (@($workspaces) | ForEach-Object { & $quoteRerunToken $_ }) -join ', '
+		if ($Project) {
+			$rerunTokens += '-Project'
+			$rerunTokens += (@($Project) | ForEach-Object { & $quoteRerunToken $_ }) -join ', '
+		}
+		if ($Alongside) {
+			$rerunTokens += '-Alongside'
+		}
+		foreach ($extraArg in $ExtraArgs) {
+			if ($extraArg -is [string] -and $extraArg.StartsWith('-')) {
+				$rerunTokens += $extraArg
+			}
+			elseif ($extraArg -is [bool]) {
+				$rerunTokens += '$' + $extraArg.ToString().ToLower()
+			}
+			elseif ($extraArg -is [array]) {
+				$rerunTokens += (@($extraArg) | ForEach-Object { & $quoteRerunToken $_ }) -join ', '
+			}
+			else {
+				$rerunTokens += & $quoteRerunToken $extraArg
+			}
+		}
+		$env:WORKSPACE_RERUN_COMMAND = $rerunTokens -join ' '
+
 		foreach ($workspaceName in $workspaces) {
 			# Calculate desktop offset if -Alongside flag is used
 			$desktopOffset = 0
@@ -493,6 +525,7 @@ function Open-Workspace {
 	}
 	finally {
 		[Environment]::SetEnvironmentVariable($workspaceTimerEnvVar, $null, 'Process')
+		[Environment]::SetEnvironmentVariable('WORKSPACE_RERUN_COMMAND', $null, 'Process')
 
 		# The flow above synthesizes keyboard input (FancyZones shortcuts, Win+Arrow
 		# snaps, shift-drag, terminal tab cycling). Guarantee the session never leaves

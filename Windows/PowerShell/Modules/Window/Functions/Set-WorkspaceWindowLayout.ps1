@@ -270,19 +270,13 @@ function Set-WorkspaceWindowLayout {
 			Write-LogDebug "Window-Only Retry Mode: preserving virtual desktops, reapplying FancyZones"
 		}
 
-		if ($windowOnlyRetryActive -and $layoutConfigToApply) {
-			$targetedLayoutConfig = @($layoutConfigToApply | Where-Object {
-					($windowOnlyRetryTitle -and $_.WindowTitle -eq $windowOnlyRetryTitle) -or
-					($windowOnlyRetryProcess -and $_.ProcessName -eq $windowOnlyRetryProcess)
-				})
-
-			if ($targetedLayoutConfig.Count -gt 0) {
-				$layoutConfigToApply = $targetedLayoutConfig
-				Write-LogDebug " Retrying only targeted window layout entries => [$($layoutConfigToApply.Count)]" -Style Warning
-			}
-			elseif (Test-LogVerbose) {
-				Write-LogDebug "Target retry window marker did not match layout entries - applying full layout config" -Style Warning
-			}
+		# Window-only retry applies the FULL layout config: a snap pass aborts at the first
+		# exhausted window, so entries after it were never snapped - filtering the retry to the
+		# single recorded failure used to strand those windows at their inset size and verify
+		# only the filtered subset. Idempotent skips keep the full pass cheap (already-correct
+		# windows are position-checked and left alone). The recorded markers are diagnostics.
+		if ($windowOnlyRetryActive -and ($windowOnlyRetryTitle -or $windowOnlyRetryProcess)) {
+			Write-LogDebug " Window-only retry trigger => [$(@($windowOnlyRetryProcess, $windowOnlyRetryTitle) | Where-Object { $_ } | Select-Object -First 1)] (applying full layout config)" -Style Warning
 		}
 
 		$simpleLayoutWorkspaces = $global:Configuration.SimpleLayoutWorkspaces
@@ -822,117 +816,123 @@ function Set-WorkspaceWindowLayout {
 		if ($pinnedHandleMap -and $pinnedHandleMap.Count -gt 0) {
 			$setLayoutParams["PinnedHandleMap"] = $pinnedHandleMap
 		}
-		$results = Set-WindowLayouts @setLayoutParams
-
-		$successful = ($results | Where-Object { $_.Status -eq "Configured" }).Count
-		$notFound = ($results | Where-Object { $_.Status -eq "Not Found" }).Count
-
-		if ($notFound -gt 0) {
-			Write-LogDebug " Not Found => [$notFound]" -Style Warning
-		}
-
-		Write-LogDebug "=> [$successful] layout(s) applied successfully!" -Style Success
-		Write-LogDebug " Waiting for windows to stabilize..."
-
-		Start-Sleep -Milliseconds $SnapDelayMs
-
-		$resizeResult = Resize-PositionedWindows -Tolerance 0
-		if ((Test-LogVerbose) -and $resizeResult.FailedWindows.Count -gt 0) {
-			Write-LogDebug "Pre-snap resize failures => [$($resizeResult.FailedWindows.Count)]" -Style Warning
-		}
-
-		$snapDesktopOffset = if ($Alongside) { 0 } else { $DesktopOffset }
-		$null = Snap-AllWindows -DesktopOffset $snapDesktopOffset -DesktopCount $requiredVirtualDesktops
-		$snapResult = $script:LastSnapAllWindowsResult
-
-		if ($Alongside) {
-			Remove-VirtualDesktops -EmptyOnly
-		}
-
+		# --- Position -> snap -> verify, with bounded IN-PROCESS retries ---
+		# A failed snap/verification used to escalate straight to a full terminal-respawn rerun
+		# (15-45s: other tabs killed, fresh shell + full module load, whole action list re-run).
+		# The stale-COM state that once justified a fresh shell is self-healed in-process by the
+		# RPC probe at entry, so wrong windows are retried HERE first: refresh the
+		# existing-window snapshot (already-correct windows then skip via the position check),
+		# re-position, re-snap, re-verify. Verification runs against the FULL layout config,
+		# which also covers windows an aborted snap pass never reached. The terminal respawn
+		# remains as the last resort only.
+		$maxInProcessAttempts = 3   # 1 initial pass + 2 in-process retries
+		$layoutApplied = $false
+		$verificationResult = $null
 		$snapFailures = @()
-		if ($snapResult) {
-			$failedWindowsProperty = $snapResult.PSObject.Properties['FailedWindows']
-			if ($failedWindowsProperty -and $failedWindowsProperty.Value) {
-				$snapFailures = @($failedWindowsProperty.Value)
-			}
-		}
+		$results = $null
 
-		if ($snapFailures.Count -gt 0) {
-			if (-not (Test-LogVerbose)) {
-				Loading-Spinner -Stop -Spinner $spinner
-			}
+		for ($layoutAttempt = 1; $layoutAttempt -le $maxInProcessAttempts; $layoutAttempt++) {
+			if ($layoutAttempt -gt 1) {
+				Write-LogWarning "In-process window retry (attempt $($layoutAttempt - 1)/$($maxInProcessAttempts - 1))..."
 
-			Write-LogWarning "Snap-AllWindows failed after retry logic - $($snapFailures.Count) window(s) did not snap:"
-
-			foreach ($failure in $snapFailures) {
-				Write-Host -ForegroundColor DarkCyan "`n   [$($failure.WindowTitle)]"
-				if ($failure.Expected) {
-					Write-LogSuccess "     Expected => $($failure.Expected)" -NoLeadingNewline
+				# Synthesized input from the failed pass may have stranded a modifier, and
+				# FancyZones may have died mid-pass (cheap check - readiness is cached).
+				if (Get-Command Reset-KeyboardModifiers -ErrorAction SilentlyContinue) {
+					$null = Reset-KeyboardModifiers -IncludeMouseButton
 				}
-				if ($failure.Actual) {
-					Write-LogWarning "     Actual   => $($failure.Actual)" -NoLeadingNewline
-				}
-				if ($failure.Error) {
-					Write-LogError "     Error    => $($failure.Error)" -NoLeadingNewline
-				}
-			}
+				$null = Start-FancyZones
 
-			# Rerun protection: track the rerun count across terminal spawns (process env
-			# with a one-shot User-scope mirror - see $readRerunState above)
-			$maxReruns = 2
-			$rerunCount = [int](& $readRerunState 'WORKSPACE_RERUN_COUNT')
-
-			if ($rerunCount -ge $maxReruns) {
-				Write-LogError "Maximum auto-reruns ($maxReruns) reached - stopping to prevent infinite loop!"
-				& $writeRerunState 'WORKSPACE_RERUN_COUNT' $null
-				return
+				# Refresh the existing-handles snapshot so windows that are ALREADY correct are
+				# skipped by Set-WindowLayouts' position check and only wrong windows get redone.
+				# Not in alongside mode: there ExistingWindowHandles means "another workspace's
+				# windows - do not touch" and must stay the original pre-open capture.
+				if (-not $Alongside) {
+					Clear-WindowCache
+					$retrySnapshotWindows = Get-WindowHandle -ErrorAction SilentlyContinue
+					$retryExistingHandles = New-Object 'System.Collections.Generic.HashSet[IntPtr]'
+					if ($retrySnapshotWindows) {
+						foreach ($retryWindow in $retrySnapshotWindows) {
+							[void]$retryExistingHandles.Add($retryWindow.Handle)
+						}
+					}
+					$setLayoutParams["ExistingWindowHandles"] = $retryExistingHandles
+				}
 			}
 
-			& $writeRerunState 'WORKSPACE_RERUN_COUNT' ([string]($rerunCount + 1))
-			if (-not $Alongside) {
-				$failedWindow = $snapFailures | Where-Object { $null -ne $_.Handle -and $_.Handle -ne [IntPtr]::Zero } | Select-Object -First 1
-				$failedSnap = $snapFailures | Select-Object -First 1
+			$results = Set-WindowLayouts @setLayoutParams
 
-				if ($failedSnap -and $failedSnap.WindowTitle) {
-					& $writeRerunState $windowOnlyRetryTitleEnvVar $failedSnap.WindowTitle
-				}
-				if ($failedSnap -and $failedSnap.ProcessName) {
-					& $writeRerunState $windowOnlyRetryProcessEnvVar $failedSnap.ProcessName
-				}
-				& $writeRerunState $windowOnlyRetryEnvVar '1'
-				[void](Initialize-WorkspaceWindowLayoutRerun -WindowOnlyRetry)
+			$successful = ($results | Where-Object { $_.Status -eq "Configured" }).Count
+			$notFound = ($results | Where-Object { $_.Status -eq "Not Found" }).Count
 
-				if ($failedWindow) {
-					$null = Resize-Windows -WindowHandle $failedWindow.Handle
+			if ($notFound -gt 0) {
+				Write-LogDebug " Not Found => [$notFound]" -Style Warning
+			}
+
+			Write-LogDebug "=> [$successful] layout(s) applied successfully!" -Style Success
+			Write-LogDebug " Waiting for windows to stabilize..."
+
+			Start-Sleep -Milliseconds $SnapDelayMs
+
+			$resizeResult = Resize-PositionedWindows -Tolerance 0
+			if ((Test-LogVerbose) -and $resizeResult.FailedWindows.Count -gt 0) {
+				Write-LogDebug "Pre-snap resize failures => [$($resizeResult.FailedWindows.Count)]" -Style Warning
+			}
+
+			$snapDesktopOffset = if ($Alongside) { 0 } else { $DesktopOffset }
+			$null = Snap-AllWindows -DesktopOffset $snapDesktopOffset -DesktopCount $requiredVirtualDesktops
+			$snapResult = $script:LastSnapAllWindowsResult
+
+			if ($Alongside) {
+				Remove-VirtualDesktops -EmptyOnly
+			}
+
+			$snapFailures = @()
+			if ($snapResult) {
+				$failedWindowsProperty = $snapResult.PSObject.Properties['FailedWindows']
+				if ($failedWindowsProperty -and $failedWindowsProperty.Value) {
+					$snapFailures = @($failedWindowsProperty.Value)
 				}
-				[void](& $resetKeyboardStateBeforeRerun)
-				[void](& $ensureFancyZonesBeforeRerun)
-				ReRun-LastCommand -AutoAccept -ErrorMessage " Rerunning workspace setup due to snap failure (window-only retry)! (attempt $($rerunCount + 1)/$maxReruns)"
+			}
+
+			if ($snapFailures.Count -gt 0) {
+				Write-LogWarning "Snap-AllWindows failed after retry logic - $($snapFailures.Count) window(s) did not snap:"
+
+				foreach ($failure in $snapFailures) {
+					Write-Host -ForegroundColor DarkCyan "`n   [$($failure.WindowTitle)]"
+					if ($failure.Expected) {
+						Write-LogSuccess "     Expected => $($failure.Expected)" -NoLeadingNewline
+					}
+					if ($failure.Actual) {
+						Write-LogWarning "     Actual   => $($failure.Actual)" -NoLeadingNewline
+					}
+					if ($failure.Error) {
+						Write-LogError "     Error    => $($failure.Error)" -NoLeadingNewline
+					}
+				}
+
+				# Next in-process attempt (or escalation after the loop).
+				continue
+			}
+
+			# Final fast verification - confirm every layout entry has a live, correctly-positioned
+			# window. Runs against the FULL layout config so entries a previous aborted snap pass
+			# never reached are covered too. Skipped in alongside mode - shared windows between
+			# workspaces make position checks unreliable (windows may legitimately belong to the
+			# other workspace's layout).
+			$verificationResult = if (-not $Alongside) {
+				Confirm-WorkspaceWindowPositions `
+					-LayoutConfig $config.Layout `
+					-MonitorInfo $cachedMonitorInfo `
+					-MonitorConfig $config.Monitors `
+					-DesktopOffset $DesktopOffset
 			}
 			else {
-				Write-LogWarning "   Auto-rerun disabled for alongside mode - please rerun manually if needed." -NoLeadingNewline
+				@{ Success = $true }
 			}
-			return
-		}
 
-		# Final fast verification - confirm every layout entry has a live, correctly-positioned window
-		# Skip verification in alongside mode - shared windows between workspaces make position
-		# checks unreliable (windows may legitimately belong to the other workspace's layout)
-		$verificationResult = if (-not $Alongside) {
-			Confirm-WorkspaceWindowPositions `
-				-LayoutConfig $layoutConfigToApply `
-				-MonitorInfo $cachedMonitorInfo `
-				-MonitorConfig $config.Monitors `
-				-DesktopOffset $DesktopOffset
-		}
-		else {
-			@{ Success = $true }
-		}
-
-
-		if (-not $verificationResult.Success) {
-			if (-not (Test-LogVerbose)) {
-				Loading-Spinner -Stop -Spinner $spinner
+			if ($verificationResult.Success) {
+				$layoutApplied = $true
+				break
 			}
 
 			$failCount = $verificationResult.Failures.Count
@@ -944,9 +944,15 @@ function Set-WorkspaceWindowLayout {
 				Write-LogSuccess "     Expected => $($failure.Expected)" -NoLeadingNewline
 				Write-LogWarning "     Actual   => $($failure.Actual)" -NoLeadingNewline
 			}
+		}
 
-			# Rerun protection: track the rerun count across terminal spawns (process env
-			# with a one-shot User-scope mirror - see $readRerunState above)
+		if (-not $layoutApplied) {
+			if (-not (Test-LogVerbose)) {
+				Loading-Spinner -Stop -Spinner $spinner
+			}
+
+			# Escalation: in-process retries exhausted. Track the terminal-respawn count across
+			# spawns (process env with a one-shot User-scope mirror - see $readRerunState above).
 			$maxReruns = 2
 			$rerunCount = [int](& $readRerunState 'WORKSPACE_RERUN_COUNT')
 
@@ -958,16 +964,26 @@ function Set-WorkspaceWindowLayout {
 
 			& $writeRerunState 'WORKSPACE_RERUN_COUNT' ([string]($rerunCount + 1))
 			if (-not $Alongside) {
-				$failedWindow = $verificationResult.Failures | Where-Object { $null -ne $_.Handle -and $_.Handle -ne [IntPtr]::Zero } | Select-Object -First 1
-				if (-not $failedWindow -and $snapResult -and $snapResult.FailedWindows) {
-					$failedWindow = $snapResult.FailedWindows | Where-Object { $null -ne $_.Handle -and $_.Handle -ne [IntPtr]::Zero } | Select-Object -First 1
+				$escalationFailures = if ($snapFailures.Count -gt 0) {
+					$snapFailures
 				}
-				$failedLayoutEntry = $verificationResult.Failures | Select-Object -First 1
-				if ($failedLayoutEntry -and $failedLayoutEntry.WindowTitle) {
-					& $writeRerunState $windowOnlyRetryTitleEnvVar $failedLayoutEntry.WindowTitle
+				elseif ($verificationResult -and $verificationResult.Failures) {
+					@($verificationResult.Failures)
 				}
-				if ($failedLayoutEntry -and $failedLayoutEntry.ProcessName) {
-					& $writeRerunState $windowOnlyRetryProcessEnvVar $failedLayoutEntry.ProcessName
+				else {
+					@()
+				}
+				$failedWindow = $escalationFailures | Where-Object { $null -ne $_.Handle -and $_.Handle -ne [IntPtr]::Zero } | Select-Object -First 1
+				$firstFailure = $escalationFailures | Select-Object -First 1
+
+				# The markers are informational only (logged by the respawned run): the retry
+				# applies the FULL layout config, so windows an aborted snap pass never reached
+				# are not stranded by a single-entry filter.
+				if ($firstFailure -and $firstFailure.WindowTitle) {
+					& $writeRerunState $windowOnlyRetryTitleEnvVar $firstFailure.WindowTitle
+				}
+				if ($firstFailure -and $firstFailure.ProcessName) {
+					& $writeRerunState $windowOnlyRetryProcessEnvVar $firstFailure.ProcessName
 				}
 				& $writeRerunState $windowOnlyRetryEnvVar '1'
 				[void](Initialize-WorkspaceWindowLayoutRerun -WindowOnlyRetry)
@@ -977,10 +993,32 @@ function Set-WorkspaceWindowLayout {
 				}
 				[void](& $resetKeyboardStateBeforeRerun)
 				[void](& $ensureFancyZonesBeforeRerun)
-				ReRun-LastCommand -AutoAccept -ErrorMessage " Rerunning workspace setup due to mispositioned windows (window-only retry)! (attempt $($rerunCount + 1)/$maxReruns)"
+
+				$rerunParams = @{
+					AutoAccept   = $true
+					ErrorMessage = " Rerunning workspace setup in a fresh shell (in-process retries exhausted)! (attempt $($rerunCount + 1)/$maxReruns)"
+				}
+				# Prefer the exact recorded invocation over PSReadLine history scraping - the
+				# shared history file may contain a newer command typed in another session.
+				if (-not [string]::IsNullOrWhiteSpace($env:WORKSPACE_RERUN_COMMAND)) {
+					$rerunParams["Command"] = $env:WORKSPACE_RERUN_COMMAND
+				}
+
+				try {
+					ReRun-LastCommand @rerunParams
+				}
+				finally {
+					# ReRun-LastCommand ends this process on success ([Environment]::Exit skips
+					# finally blocks) - so REACHING this point means the respawn did NOT happen
+					# (early return or spawn failure). Clear the one-shot markers so the next
+					# manual open does not silently run in window-only retry mode.
+					& $writeRerunState $windowOnlyRetryEnvVar $null
+					& $writeRerunState $windowOnlyRetryTitleEnvVar $null
+					& $writeRerunState $windowOnlyRetryProcessEnvVar $null
+				}
 			}
 			else {
-				Write-LogWarning "   Auto-rerun disabled for alongside mode - please rerun manually if needed." -NoLeadingNewline
+				Write-LogWarning "   In-process retries exhausted for alongside mode - please rerun manually if needed." -NoLeadingNewline
 			}
 			return
 		}
@@ -1075,7 +1113,25 @@ function Set-WorkspaceWindowLayout {
 			}
 			[void](& $resetKeyboardStateBeforeRerun)
 			[void](& $ensureFancyZonesBeforeRerun)
-			ReRun-LastCommand -AutoAccept -ErrorMessage " Rerunning workspace setup (window-only retry)! (attempt $($rerunCount + 1)/$maxReruns)"
+
+			$rerunParams = @{
+				AutoAccept   = $true
+				ErrorMessage = " Rerunning workspace setup (window-only retry)! (attempt $($rerunCount + 1)/$maxReruns)"
+			}
+			if (-not [string]::IsNullOrWhiteSpace($env:WORKSPACE_RERUN_COMMAND)) {
+				$rerunParams["Command"] = $env:WORKSPACE_RERUN_COMMAND
+			}
+
+			try {
+				ReRun-LastCommand @rerunParams
+			}
+			finally {
+				# Reaching this point means the respawn did NOT happen (see the matching
+				# cleanup in the escalation path above) - clear the one-shot markers.
+				& $writeRerunState $windowOnlyRetryEnvVar $null
+				& $writeRerunState $windowOnlyRetryTitleEnvVar $null
+				& $writeRerunState $windowOnlyRetryProcessEnvVar $null
+			}
 		}
 		else {
 			Write-LogWarning "   Auto-rerun disabled for alongside mode - please rerun manually if needed." -NoLeadingNewline
