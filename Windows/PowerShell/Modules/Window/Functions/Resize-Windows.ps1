@@ -374,10 +374,11 @@ function Resize-Windows {
 		if (Test-LogVerbose) {
 			Write-LogDebug "Resized [$resizedCount] window(s)$(if ($skippedCount -gt 0) { ", skipped [$skippedCount]" })"
 		}
-		elseif (-not $useTargetBoundsMode -and $PSBoundParameters.ContainsKey('WindowHandle')) {
-			Write-LogSuccess "Resized target window to $Percent%!"
-		}
-		elseif (-not $useTargetBoundsMode) {
+		elseif (-not $useTargetBoundsMode -and -not $PSBoundParameters.ContainsKey('WindowHandle')) {
+			# Only the user-facing "resize all/matching windows" invocation prints a summary.
+			# Single-handle percent mode is an internal per-window call (first-open
+			# normalization runs it once per new window) - a success line per window spammed
+			# the workspace-open output; verbose mode still logs each via the branch above.
 			Write-LogSuccess "Resized $resizedCount window(s) to $Percent%!"
 		}
 
