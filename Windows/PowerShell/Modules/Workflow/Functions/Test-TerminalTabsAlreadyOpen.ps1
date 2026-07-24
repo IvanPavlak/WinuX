@@ -100,7 +100,9 @@ function Test-TerminalTabsAlreadyOpen {
 
 			# Cycle through remaining tabs in this window
 			for ($i = 0; $i -lt $maxTabs; $i++) {
-				[System.Windows.Forms.SendKeys]::SendWait("^{TAB}")
+				# Shared mockable wrapper (defined with Open-ProjectTerminals in this module)
+				# so tests never inject real keystrokes.
+				Send-TerminalKeys "^{TAB}"
 				Start-Sleep -Milliseconds 10
 
 				$currentWindow = Get-WindowHandle -ProcessName "WindowsTerminal" -ErrorAction SilentlyContinue |

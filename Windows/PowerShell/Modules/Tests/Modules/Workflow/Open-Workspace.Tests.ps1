@@ -234,6 +234,21 @@ Describe "Open-Workspace" {
 		Should -Invoke Get-NextAvailableDesktopIndex -Times 1 -Exactly
 	}
 
+	It "skips the alongside open when the next desktop index cannot be determined" {
+		$env:OPEN_WORKSPACE_ALONGSIDE_SHELL = '1'
+		$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+			@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } }
+		)
+		# Desktop enumeration failed (stale RPC): the offset is unknown. Proceeding with
+		# offset 0 would open this workspace ON TOP of the existing one - the exact thing
+		# -Alongside exists to prevent - so the workspace must be skipped entirely.
+		Mock Get-NextAvailableDesktopIndex { $null }
+
+		Open-Workspace -Workspace 'TestWorkspace' -Alongside
+
+		$script:invokedActions.Count | Should -Be 0
+	}
+
 	It "forces InSameShell on actions inside the relaunched alongside shell and consumes the marker" {
 		$env:OPEN_WORKSPACE_ALONGSIDE_SHELL = '1'
 		$script:Configuration.WorkspaceActions['TestWorkspace'] = @(

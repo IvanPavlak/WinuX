@@ -677,6 +677,23 @@ function Wait-ForWorkspaceWindows {
 
 	# If we exit the loop without finding all windows, show what's missing with diagnostics
 	if (-not $allWindowsFound) {
+		# Return the state of windows that DID stabilize (tracked with a live handle and at
+		# least two consistent sightings) - downstream title-drift fallbacks can still use
+		# them even though the wait as a whole failed.
+		$timeoutWindowStates = @{}
+		foreach ($historyEntry in $windowTitleHistory.GetEnumerator()) {
+			$state = $historyEntry.Value
+			if ($null -eq $state.Handle) { continue }
+			if (-not $state.ConsecutiveMatches -or $state.ConsecutiveMatches -lt 2) { continue }
+			$timeoutWindowStates[$state.Handle] = @{
+				Title  = $state.Title
+				X      = $state.Left
+				Y      = $state.Top
+				Width  = $state.Width
+				Height = $state.Height
+			}
+		}
+
 		if (Test-LogVerbose) {
 			Write-LogDebug "Windows still not found:" -Style Warning
 
@@ -740,7 +757,8 @@ function Wait-ForWorkspaceWindows {
 		# Return failure with empty window states
 		return @{
 			Success      = $false
-			WindowStates = @{}
+			WindowStates = $timeoutWindowStates
+			Abandoned    = @($abandonedEntries)
 		}
 	}
 
@@ -748,5 +766,6 @@ function Wait-ForWorkspaceWindows {
 	return @{
 		Success      = $true
 		WindowStates = @{}
+		Abandoned    = @($abandonedEntries)
 	}
 }

@@ -102,6 +102,43 @@ Describe "Open-Terminal" {
 		}
 	}
 
+	Context "Batched tab creation" {
+		It "Should chain multiple tabs into ONE wt invocation with ';' separators" {
+			$script:capturedArgs = $null
+			Mock Start-Process { $script:capturedArgs = @($ArgumentList) }
+
+			Open-Terminal -Command "echo one", "echo two", "echo three" -TabTitles "A", "B", "C" -WindowId "batch-window"
+
+			# One spawn total - not one per tab with settle sleeps between.
+			Should -Invoke Start-Process -Times 1 -Exactly
+			# Standalone ";" arguments separate the new-tab subcommands (WT processes the
+			# subcommands of one command line strictly in order).
+			@($script:capturedArgs | Where-Object { $_ -eq ';' }).Count | Should -Be 2
+			@($script:capturedArgs | Where-Object { $_ -eq 'new-tab' }).Count | Should -Be 3
+			# The window id is passed once, up front.
+			$script:capturedArgs[0] | Should -Be '-w'
+			$script:capturedArgs[1] | Should -Be 'batch-window'
+		}
+
+		It "Should preserve tab order within the chained invocation" {
+			$script:capturedArgs = $null
+			Mock Start-Process { $script:capturedArgs = @($ArgumentList) }
+
+			Open-Terminal -Command "echo one", "echo two" -TabTitles "First", "Second" -WindowId "batch-window"
+
+			$firstIndex = [Array]::IndexOf($script:capturedArgs, 'First')
+			$secondIndex = [Array]::IndexOf($script:capturedArgs, 'Second')
+			$firstIndex | Should -BeGreaterThan -1
+			$secondIndex | Should -BeGreaterThan $firstIndex
+		}
+
+		It "Should not sleep between tabs of one batch" {
+			Open-Terminal -Command "echo one", "echo two", "echo three" -WindowId "batch-window"
+
+			Should -Invoke Start-Sleep -Times 0
+		}
+	}
+
 	Context "When InSameShell is specified without WindowId" {
 		It "Should use window ID 0 when WT_WINDOW_ID is not set" {
 			Open-Terminal -Command "echo test" -InSameShell
