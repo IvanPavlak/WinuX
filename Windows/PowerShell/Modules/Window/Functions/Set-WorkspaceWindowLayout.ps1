@@ -542,13 +542,16 @@ function Set-WorkspaceWindowLayout {
 		else {
 			$waitResult = Wait-ForWorkspaceWindows -LayoutConfig $config.Layout -TimeoutSeconds $TimeoutSeconds -OnWindowStable $onWindowStableCallback
 
-			if ($waitResult -and $waitResult.Success) {
+			# Use the state snapshot whenever one was captured - even on partial success
+			# (abandoned entries) the stable windows' handles feed the title-drift fallbacks.
+			if ($waitResult -and $waitResult.WindowStates -and $waitResult.WindowStates.Count -gt 0) {
 				$windowStates = $waitResult.WindowStates
-				if ((Test-LogVerbose) -and $windowStates.Count -gt 0) {
+				if (Test-LogVerbose) {
 					Write-LogDebug "Window state snapshot captured for validation: $($windowStates.Count) window(s)" -Style Success
 				}
 			}
-			else {
+
+			if (-not ($waitResult -and $waitResult.Success)) {
 				Write-LogDebug " Wait-ForWorkspaceWindows did not fully succeed (timeout or partial detection)" -Style Warning
 			}
 		}

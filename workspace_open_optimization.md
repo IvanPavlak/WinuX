@@ -122,6 +122,19 @@ decision" section. Line numbers below refer to pre-change state; they shift as p
     process-absent fail-fast - entry abandoned (warning) when no window AND no matching process
     exists after a grace period (~10s, checked ~1×/s), so the loop can finish early. Title-typo
     with a live process still waits (cannot be distinguished safely).
+  - DONE (`Window/Functions/Wait-ForWorkspaceWindows.ps1` + caller):
+    - New `CollectiveStabilitySeconds` param (default 0 - removes the guaranteed +1s; >0
+      restores old double-settle) and `ProcessAbsentGraceSeconds` param (default 10, 0 disables).
+    - Fail-fast: entries that never matched any window and whose `SearchProcessName` matches no
+      live process (regex-aware, single Get-Process snapshot, checked ≤1×/s) are abandoned with
+      a debug-error line; loop exits early when all remaining entries are abandoned.
+    - Return shape gained `Abandoned = @(descriptions)`; `Success` is $false when anything was
+      abandoned; the state snapshot is now returned in that case too, and
+      `Set-WorkspaceWindowLayout` consumes `WindowStates` whenever non-empty (previously only on
+      full success) so title-drift fallbacks still work for the windows that did stabilize.
+    - Success snapshot skips history placeholders without a Handle (defensive; generic-title
+      records are created handle-less).
+    - Behavior note: comment-based help for the new params deferred with the docs pass (T2).
 
 - [ ] **5. Replace SendKeys tab-cycling probes with focus-free UIA tab reading** (analysis Tier 1 #5)
   - Current: three implementations foreground every WT window and Ctrl+Tab through all tabs with

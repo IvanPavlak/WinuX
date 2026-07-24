@@ -77,6 +77,19 @@ function Wait-ForWorkspaceWindows {
 		[Parameter()]
 		[double]$MinimumStableDurationSeconds = 1,
 
+		# Extra collective settle time AFTER every window is individually stable. Individual
+		# tracking already resets on any change, so this phase added almost pure waiting -
+		# default 0 removes a guaranteed +1s from every workspace open. Set >0 to restore the
+		# previous double-settle behavior.
+		[Parameter()]
+		[double]$CollectiveStabilitySeconds = 0,
+
+		# Abandon an entry when no window has EVER matched it and no live process matches its
+		# process pattern after this many seconds - a dead or mistyped app otherwise burns the
+		# whole TimeoutSeconds. 0 disables the fail-fast.
+		[Parameter()]
+		[int]$ProcessAbsentGraceSeconds = 10,
+
 		[Parameter()]
 		[switch]$RequireStableDimensions = $true,
 
@@ -202,6 +215,12 @@ function Wait-ForWorkspaceWindows {
 	# Track which entries have already fired the OnWindowStable callback to ensure once-per-entry invocation
 	$callbackTriggered = New-Object 'System.Collections.Generic.HashSet[string]'
 
+	# Fail-fast bookkeeping: entries abandoned because their process never appeared, and
+	# entries that have matched a window at least once (never abandoned).
+	$abandonedEntries = New-Object 'System.Collections.Generic.HashSet[string]'
+	$entryEverMatched = New-Object 'System.Collections.Generic.HashSet[string]'
+	$lastProcessAbsenceCheck = [datetime]::MinValue
+
 	$startTime = Get-Date
 	$allWindowsFound = $false
 	$iteration = 0
@@ -265,6 +284,11 @@ function Wait-ForWorkspaceWindows {
 			$iterationClaimedHandles = New-Object 'System.Collections.Generic.HashSet[IntPtr]'
 
 			foreach ($expectedWindow in $expectedWindows) {
+				# Entry abandoned by the process-absent fail-fast - stop tracking it.
+				if ($abandonedEntries.Contains($expectedWindow.Description)) {
+					continue
+				}
+
 				$windowFound = $false
 
 				try {
@@ -288,6 +312,9 @@ function Wait-ForWorkspaceWindows {
 					}
 
 					if ($windows -and $windows.Count -gt 0) {
+						# This entry has matched at least once - never a fail-fast candidate.
+						[void]$entryEverMatched.Add($expectedWindow.Description)
+
 						# Use entry index in key so duplicate entries get independent stability tracking
 						$windowKey = if ($expectedWindow.IsDuplicateKey) {
 							"$($expectedWindow.ProcessName)_$($expectedWindow.WindowTitle)_#$($expectedWindow.EntryIndex)"
@@ -482,31 +509,89 @@ function Wait-ForWorkspaceWindows {
 				}
 			}
 
-			# Check if all windows are individually stable
-			if ($foundCount -eq $expectedWindows.Count) {
-				# All windows are individually stable, now check collective stability
-				$currentTime = Get-Date
+			# Fail fast on entries whose app never appeared: when no window has EVER matched the
+			# entry and no live process matches its process pattern after the grace period, stop
+			# waiting for it. Checked at most once per second to keep the poll loop cheap.
+			if ($ProcessAbsentGraceSeconds -gt 0 -and $elapsedSeconds -ge $ProcessAbsentGraceSeconds -and
+				((Get-Date) - $lastProcessAbsenceCheck).TotalSeconds -ge 1) {
+				$lastProcessAbsenceCheck = Get-Date
+				$liveProcessNames = $null
 
-				if ($null -eq $collectiveStabilityStartTime) {
-					# First time all windows are stable together, start collective timer
-					$collectiveStabilityStartTime = $currentTime
-					Write-LogDebug "=> All $foundCount window(s) individually stable!" -Style Success
-					Write-LogDebug " Starting collective stability check..."
+				foreach ($pendingEntry in $expectedWindows) {
+					if ($abandonedEntries.Contains($pendingEntry.Description)) { continue }
+					if ($entryEverMatched.Contains($pendingEntry.Description)) { continue }
+
+					$processPattern = $pendingEntry.SearchProcessName
+					if (-not $processPattern) { continue }
+
+					if ($null -eq $liveProcessNames) {
+						$liveProcessNames = @((Get-Process -ErrorAction SilentlyContinue).ProcessName | Select-Object -Unique)
+					}
+
+					$patternHasSpecialChars = $processPattern -match '[\.\[\]\(\)\{\}\+\^\$\|\\*\?]'
+					$processAlive = if ($patternHasSpecialChars) {
+						[bool]($liveProcessNames | Where-Object { $_ -match $processPattern } | Select-Object -First 1)
+					}
+					else {
+						$liveProcessNames -contains $processPattern
+					}
+
+					if (-not $processAlive) {
+						[void]$abandonedEntries.Add($pendingEntry.Description)
+						Write-LogDebug " ✗ Abandoning wait for [$($pendingEntry.Description)] - no matching process after ${elapsedSeconds}s" -Style Error
+					}
+				}
+			}
+
+			$activeExpectedCount = $expectedWindows.Count - $abandonedEntries.Count
+			if ($activeExpectedCount -le 0) {
+				# Everything left was abandoned - no point polling out the timeout.
+				break
+			}
+
+			# Check if all (non-abandoned) windows are individually stable
+			if ($foundCount -eq $activeExpectedCount) {
+				$currentTime = Get-Date
+				$collectiveSatisfied = $false
+
+				if ($CollectiveStabilitySeconds -gt 0) {
+					if ($null -eq $collectiveStabilityStartTime) {
+						# First time all windows are stable together, start collective timer
+						$collectiveStabilityStartTime = $currentTime
+						Write-LogDebug "=> All $foundCount window(s) individually stable!" -Style Success
+						Write-LogDebug " Starting collective stability check..."
+					}
+
+					$collectiveStableDuration = ($currentTime - $collectiveStabilityStartTime).TotalSeconds
+
+					if ($collectiveStableDuration -ge $CollectiveStabilitySeconds) {
+						$collectiveSatisfied = $true
+					}
+					else {
+						# Still waiting for collective stability
+						$remainingCollectiveTime = [math]::Round($CollectiveStabilitySeconds - $collectiveStableDuration, 1)
+						if (-not $notFoundWindows.Contains("Collective Stability")) {
+							$notFoundWindows.Add("Waiting for collective stability (${remainingCollectiveTime}s remaining)")
+						}
+					}
+				}
+				else {
+					# Individual stability tracking already resets on any window change - an
+					# extra collective settle adds pure waiting, so it is skipped by default.
+					$collectiveSatisfied = $true
 				}
 
-				$collectiveStableDuration = ($currentTime - $collectiveStabilityStartTime).TotalSeconds
-
-				if ($collectiveStableDuration -ge $MinimumStableDurationSeconds) {
-					# All windows have been stable together for the required duration
+				if ($collectiveSatisfied) {
 					$allWindowsFound = $true
 					if (Test-LogVerbose) {
-						Write-Host -ForegroundColor $progressColor "`n=> All $foundCount window(s) collectively stable for ${collectiveStableDuration}s! Total elapsed => [$elapsedSeconds seconds]"
+						Write-Host -ForegroundColor $progressColor "`n=> All $foundCount window(s) stable! Total elapsed => [$elapsedSeconds seconds]"
 					}
 
 					# Build state snapshot to return
 					$windowStates = @{}
 					foreach ($historyEntry in $windowTitleHistory.GetEnumerator()) {
 						$state = $historyEntry.Value
+						if ($null -eq $state.Handle) { continue }
 						$windowStates[$state.Handle] = @{
 							Title  = $state.Title
 							X      = $state.Left
@@ -517,15 +602,9 @@ function Wait-ForWorkspaceWindows {
 					}
 
 					return @{
-						Success      = $true
+						Success      = ($abandonedEntries.Count -eq 0)
 						WindowStates = $windowStates
-					}
-				}
-				else {
-					# Still waiting for collective stability
-					$remainingCollectiveTime = [math]::Round($MinimumStableDurationSeconds - $collectiveStableDuration, 1)
-					if (-not $notFoundWindows.Contains("Collective Stability")) {
-						$notFoundWindows.Add("Waiting for collective stability (${remainingCollectiveTime}s remaining)")
+						Abandoned    = @($abandonedEntries)
 					}
 				}
 			}
@@ -572,7 +651,8 @@ function Wait-ForWorkspaceWindows {
 			# Display progress (every 5 iterations to avoid spam)
 			if ($iteration % 5 -eq 0) {
 				if (Test-LogVerbose) {
-					Write-Host -ForegroundColor $progressColor "`n  [$elapsedSeconds`s] Found => $foundCount/$($expectedWindows.Count)"
+					$abandonedNote = if ($abandonedEntries.Count -gt 0) { " (abandoned: $($abandonedEntries.Count))" } else { "" }
+					Write-Host -ForegroundColor $progressColor "`n  [$elapsedSeconds`s] Found => $foundCount/$activeExpectedCount$abandonedNote"
 					if ($notFoundWindows.Count -gt 0) {
 						Write-Host -ForegroundColor $progressColor "   Waiting for:"
 						foreach ($window in $notFoundWindows) {
