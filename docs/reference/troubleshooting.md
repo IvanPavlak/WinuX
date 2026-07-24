@@ -189,6 +189,26 @@ Test-Path "WinuX\Server\.ssh\config"
 wsl mkdir -p /home/you/.ssh
 ```
 
+## Application Launch Issues
+
+### "WhatsApp is already running!" With No WhatsApp Window
+
+**Problem:** `Open-WhatsApp` (directly, or as a workspace action) reports `WhatsApp is already running!` and opens nothing, even though no WhatsApp window is on screen. It happens intermittently - sometimes the same workspace opens WhatsApp fine.
+
+**Why it happens:** When a WhatsApp notification arrives while the app is closed, Windows COM-activates a background push notification host: `WhatsApp.Root.exe -RegisterForBGTaskServer /nowindow /pushnotification -Embedding`. That host owns no visible window, but it runs under the same `WhatsApp.Root` process name the UI does, so a process-name-only check treats it as a running app. It is intermittent because the host only exists once Windows has activated it, and `Kill-All` only clears it until the next notification.
+
+**Solution:** This is handled - `Open-WhatsApp` passes `-RequireMainWindow` to `Start-Application`, so only a process owning a visible main window counts as running. To inspect the state yourself:
+
+```powershell
+# A background-only host shows MainWindowHandle 0; a real UI shows a non-zero handle
+Get-Process WhatsApp.Root | Select-Object Id, MainWindowHandle, MainWindowTitle
+
+# Confirm it is the push notification host
+Get-CimInstance Win32_Process -Filter "Name = 'WhatsApp.Root.exe'" | Select-Object CommandLine
+```
+
+The same `-RequireMainWindow` switch applies to any app that keeps a windowless helper alive under its own process name.
+
 ## Window Layout Issues
 
 ### Windows Not Positioning

@@ -86,6 +86,45 @@ Describe "Start-Application" {
 
 			Should -Invoke Start-Process -Times 0
 		}
+
+		It "Should ignore a running windowless process when RequireMainWindow is set" {
+			Mock Start-Process { }
+
+			# Background hosts (WhatsApp's push notification host is the reference case) run under
+			# a normal process name but own no visible window, so they must not block a launch.
+			$windowless = Get-Process | Group-Object -Property ProcessName |
+				Where-Object { @($_.Group | Where-Object { $_.MainWindowHandle -ne [IntPtr]::Zero }).Count -eq 0 } |
+				Select-Object -First 1
+
+			if (-not $windowless) {
+				Set-ItResult -Skipped -Because "no windowless process available in this session"
+				return
+			}
+
+			Start-Application -AppName "TestApp" -ProcessName $windowless.Name `
+				-StartMethod DirectPath -ExecutablePath "C:\test.exe" -SkipPathValidation `
+				-RequireMainWindow
+
+			Should -Invoke Start-Process -Times 1
+		}
+
+		It "Should treat a process owning a main window as already running with RequireMainWindow" {
+			Mock Start-Process { }
+
+			$withWindow = Get-Process | Where-Object { $_.MainWindowHandle -ne [IntPtr]::Zero } |
+				Select-Object -First 1
+
+			if (-not $withWindow) {
+				Set-ItResult -Skipped -Because "no window-owning process available in this session"
+				return
+			}
+
+			Start-Application -AppName "TestApp" -ProcessName $withWindow.ProcessName `
+				-StartMethod DirectPath -ExecutablePath "C:\test.exe" -SkipPathValidation `
+				-RequireMainWindow
+
+			Should -Invoke Start-Process -Times 0
+		}
 	}
 
 	Context "ConfigPath Method" {

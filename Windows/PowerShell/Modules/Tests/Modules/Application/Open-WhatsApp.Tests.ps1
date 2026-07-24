@@ -20,4 +20,12 @@ Describe "Open-WhatsApp" {
 			$PackageName -eq 'WhatsApp'
 		}
 	}
+
+	It "requires a visible main window so the windowless push notification host is ignored" {
+		Open-WhatsApp
+
+		Should -Invoke Start-Application -Times 1 -Exactly -ParameterFilter {
+			$RequireMainWindow -eq $true
+		}
+	}
 }
