@@ -37,7 +37,7 @@ function Set-WorkspaceWindowLayout {
 
 	.PARAMETER TimeoutSeconds
 		Maximum number of seconds to wait for windows when using automatic detection.
-		Default is 30 seconds.
+		Default is 60 seconds.
 
 	.PARAMETER SnapDelayMs
 		Milliseconds to wait after positioning before snapping windows.

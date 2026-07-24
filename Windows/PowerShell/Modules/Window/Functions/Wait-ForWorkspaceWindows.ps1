@@ -22,10 +22,10 @@ function Wait-ForWorkspaceWindows {
 		match if EITHER criterion is satisfied, making detection more robust.
 
 	.PARAMETER TimeoutSeconds
-		Maximum number of seconds to wait for all windows. Default is 60 seconds.
+		Maximum number of seconds to wait for all windows. Default is 15 seconds.
 
 	.PARAMETER PollIntervalSeconds
-		Time to wait between polling attempts. Default is 1 second.
+		Time to wait between polling attempts. Default is 0.1 seconds.
 
 	.PARAMETER FocusWindows
 		When enabled, cycles through and focuses found windows to speed up loading.
@@ -33,7 +33,7 @@ function Wait-ForWorkspaceWindows {
 
 	.PARAMETER FocusDelayMs
 		Milliseconds to focus each window before moving to the next.
-		Default is 200ms. Increase if windows need more focus time to load.
+		Default is 5ms. Increase if windows need more focus time to load.
 
 	.PARAMETER MinimumStableDurationSeconds
 		Number of seconds a window must remain stable (consistent title and dimensions)
@@ -54,6 +54,11 @@ function Wait-ForWorkspaceWindows {
 	.PARAMETER RequireStableDimensions
 		When enabled, requires window dimensions to remain stable (not resizing)
 		during the MinimumStableDurationSeconds period. Default is enabled.
+
+	.PARAMETER OnWindowStable
+		Optional scriptblock fired once per layout entry as each window first becomes
+		individually stable, receiving the layout entry and the window so callers can
+		relocate it early.
 
 	.EXAMPLE
 		$config = Import-PowerShellDataFile -Path "layout.psd1"

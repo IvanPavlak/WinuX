@@ -38,7 +38,11 @@ function Snap-AllWindows {
 		window-to-desktop mapping (e.g. the simple-layout loop) pass the per-desktop handle
 		list here instead of paying two COM roundtrips per window on every desktop pass.
 	.PARAMETER SnapDelayMs
-		Delay in milliseconds between each window snap operation. Default is 10ms.
+		Delay in milliseconds between each window snap operation. Default is 25ms.
+	.PARAMETER DesktopOffset
+		Virtual desktop offset, so alongside workspaces target the correct desktop. Default is 0.
+	.PARAMETER DesktopCount
+		Number of desktops to process. Default is 0.
 	.EXAMPLE
 		Snap-AllWindows
 		# Snaps positioned windows to FancyZones (workspace flow)

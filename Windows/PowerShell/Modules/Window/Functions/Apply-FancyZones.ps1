@@ -19,6 +19,17 @@ function Apply-FancyZones {
 		The virtual desktop number to apply layouts for. If specified and monitor has VirtualDesktopLayouts,
 		will use the layout defined for that desktop.
 
+	.PARAMETER MonitorInfo
+		Pre-fetched monitor info array to reuse instead of calling Get-MonitorInfo (caching optimization).
+
+	.PARAMETER DesktopOffset
+		Virtual desktop offset for multi-workspace placement; layouts apply to desktops
+		starting from this index. Default is 0.
+
+	.PARAMETER DesktopCount
+		Caps how many desktops are processed (from the offset), preventing overwrite of
+		adjacent workspaces' layouts. Default is 0.
+
 	.EXAMPLE
 		$config = Import-PowerShellDataFile -Path "WinuX-workspace-layout.psd1"
 		Apply-FancyZones -MonitorConfig $config.Monitors

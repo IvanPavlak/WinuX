@@ -42,7 +42,7 @@ function Resolve-Selection {
 		When true, allows comma-separated numbers or names to select multiple items.
 
 	.PARAMETER DefaultOptionIndex
-		Zero-based index of the default option (returned if user presses Enter with no input). Defaults to 0.
+		1-based index of the default option (returned if user presses Enter with no input); 0 = no default.
 
 	.PARAMETER GroupsConfig
 		For hierarchical mode: hashtable of nested group definitions. Enables parent/child navigation and

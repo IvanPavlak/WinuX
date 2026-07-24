@@ -50,7 +50,7 @@ Only `-MonitorConfig` is mandatory. With no `-DesktopNumber`, it applies layouts
 
 ```powershell
 # Apply layouts from a workspace layout data file
-$config = Import-PowerShellDataFile -Path "dotfiles-workspace-layout.psd1"
+$config = Import-PowerShellDataFile -Path "WinuX-workspace-layout.psd1"
 Apply-FancyZones -MonitorConfig $config.Monitors
 
 # Apply only the layout configured for a specific virtual desktop

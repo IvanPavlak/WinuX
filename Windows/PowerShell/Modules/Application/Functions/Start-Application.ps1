@@ -47,11 +47,14 @@ function Start-Application {
         count as running. Useful when several apps share a process name (e.g. Claude Desktop and
         the Claude Code CLI both run as "claude"), so launching one is not blocked by the other.
 
+    .PARAMETER SkipPathValidation
+        Skips the executable path existence check (DirectPath method).
+
     .PARAMETER Sync
         Wait for the process to exit before returning (uses -Wait on Start-Process).
 
     .PARAMETER SuppressOutput
-        Redirect stdout and stderr to NUL, suppressing all console output from the launched process.
+        Redirect stdout and stderr to temporary files, suppressing all console output from the launched process.
         Useful for applications like Docker Desktop (Electron) that dump verbose output to the parent console.
 
     .PARAMETER CustomStartLogic
