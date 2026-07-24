@@ -156,6 +156,7 @@ function Remove-VirtualDesktops {
 						Select-Object -ExpandProperty MainWindowHandle)
 			}
 
+			$rpcCircuitBroken = $false
 			foreach ($hwnd in $windowHandles) {
 				try {
 					$desktop = & $invokeDesktopOperation { Get-DesktopFromWindow -Hwnd $hwnd }
@@ -167,8 +168,30 @@ function Remove-VirtualDesktops {
 					}
 				}
 				catch {
-					# Window may have been closed or become invalid between enumeration and check
+					# Window may have been closed or become invalid between enumeration and
+					# check - that is fine to skip. But an RPC-unavailable failure that
+					# survived the FULL retry ladder (with per-retry module resets) means
+					# every remaining per-window call will fail the same multi-second way:
+					# trip a circuit breaker instead of grinding through the whole list.
+					$isRpcDead = if (Get-Command Test-RpcUnavailableError -ErrorAction SilentlyContinue) {
+						Test-RpcUnavailableError $_
+					}
+					else {
+						$_.Exception -and $_.Exception.Message -match $rpcUnavailablePattern
+					}
+
+					if ($isRpcDead) {
+						$rpcCircuitBroken = $true
+						break
+					}
 				}
+			}
+
+			if ($rpcCircuitBroken) {
+				# With occupancy unknowable, removing "empty" desktops could remove occupied
+				# ones - abort the cleanup entirely and report failure once.
+				Write-LogDebug "Aborting empty-desktop cleanup - VirtualDesktop RPC stayed unavailable after retry recovery (window occupancy cannot be trusted)" -Style Error
+				return $false
 			}
 
 			Write-LogDebug " Found $($windowHandles.Count) window(s), $($occupiedDesktops.Count) occupied desktop(s) out of $($desktops.Count)" -Style Success

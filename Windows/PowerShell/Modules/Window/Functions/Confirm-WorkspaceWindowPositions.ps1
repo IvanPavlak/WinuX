@@ -353,6 +353,39 @@ function Confirm-WorkspaceWindowPositions {
 			}
 		}
 
+		# Browser title drift: a tab's title can change between positioning and verification
+		# (page finished loading), and the sole-process-window fallback above is deliberately
+		# disabled for browsers (several windows share one process). Before declaring the
+		# entry missing, accept the window the positioning pass ACTUALLY placed for these
+		# expected bounds (and desktop) - it was matched and title-verified seconds earlier -
+		# provided its handle is still alive and unclaimed. Without this, a mid-flow title
+		# change escalated to reruns that can never fix a title mismatch.
+		if ((-not $windows -or $windows.Count -eq 0) -and $script:PositionedWindowHandles) {
+			$expectedDisplayDesktop = if ($null -ne $cfg.DesktopNumber) { [int]$cfg.DesktopNumber + $DesktopOffset } else { $null }
+
+			foreach ($trackedState in $script:PositionedWindowHandles) {
+				if ($null -eq $trackedState) { continue }
+				if ([int]$trackedState.ExpectedX -ne [int]$expectedX -or
+					[int]$trackedState.ExpectedY -ne [int]$expectedY -or
+					[int]$trackedState.ExpectedWidth -ne [int]$expectedW -or
+					[int]$trackedState.ExpectedHeight -ne [int]$expectedH) { continue }
+				# Same zone coordinates can repeat across desktops - require the desktop too.
+				if ($null -ne $expectedDisplayDesktop -and $null -ne $trackedState.DesktopNumber -and
+					[int]$trackedState.DesktopNumber -ne $expectedDisplayDesktop) { continue }
+				if ($claimedHandles.Contains($trackedState.Handle)) { continue }
+
+				$trackedRect = New-Object WindowModule.RECT
+				if ([WindowModule.Native]::GetWindowRect($trackedState.Handle, [ref]$trackedRect)) {
+					$windows = @([PSCustomObject]@{
+							Handle = $trackedState.Handle
+							Title  = $trackedState.WindowTitle
+						})
+					Write-LogDebug "[$label] title pattern did not match current caption - recovered via tracked positioned window [$($trackedState.WindowTitle)]" -Style Warning
+					break
+				}
+			}
+		}
+
 		if (-not $windows -or $windows.Count -eq 0) {
 			$result.Success = $false
 			$result.Failures.Add([PSCustomObject]@{

@@ -285,32 +285,46 @@ decision" section. Line numbers below refer to pre-change state; they shift as p
     branch) checks `$null -eq $desktopOffset` → `Write-LogError` + `continue` to the next
     workspace. Only production caller is Open-Workspace (verified via grep; other hits are
     tests/logs). Tests asserting the old `0` fallback will fail until the deferred test pass.
-- [ ] **17. Apply-FancyZones results-array scope bug** - `Apply-FancyZones.ps1:250` scriptblock
-  does `$resultsArray += ...` (rebinds a local) → all "Shortcut Sent"/"Failed" records lost →
-  `$appliedCount` always 0 → applied-layouts cache never invalidated after changes (stale
-  idempotency for 10s TTL), return value incomplete. Fix: Generic List + `.Add()`.
-- [ ] **18. Browser title drift → guaranteed-futile rerun** - `Confirm-WorkspaceWindowPositions.ps1:256-272,:356-367`:
-  title-drift fallback deliberately disabled for browsers; a tab title change between positioning
-  and verification yields "not found" → respawn rerun ×2 that cannot fix a title mismatch.
-  Fix: before declaring a browser entry missing, consult the tracked positioned handle for that
-  entry (matched via expected bounds) and accept it if alive + process-matched.
-- [ ] **19. RPC-dead retry storm (no circuit breaker)** - `Remove-VirtualDesktops.ps1:159-172`:
-  per-window 5-attempt ladders (3.75s backoff each + full module reset per retry) after the
-  preflight repair already failed → minutes. Fix: after the first exhausted ladder classified as
-  RPC-unavailable, trip a breaker and fail the operation once.
-- [ ] **20. Duplicate-EDID monitors permanently disable FancyZones idempotency** -
-  `Apply-FancyZones.ps1:177-183`: same-model monitors → full choreography every open.
-  Investigate instance-qualified keys (`GetMonitorDeviceInfo` exposes `MonitorInstance`;
-  check the actual applied-layouts.json schema on this machine). Implement if schema supports
-  it; otherwise record findings + defer.
-- [ ] **21. Batched WT tab creation + explicit window id** - `Open-Terminal.ps1:78-128`,
-  `Open-ProjectTerminals.ps1:355`: `wt -w 0` resolves to "most recently used" window right after
-  probes foregrounded every WT window (tabs land in wrong window); one `wt.exe` spawn + 25ms
-  sleep per tab with no ordering guarantee. Fix: single `wt` invocation chaining `new-tab ...;`
-  subcommands (WT processes them in order), explicit window id when known.
-- [ ] **22. Localhost error-page false positive** - `Test-BrowserGroupAlreadyOpen.ps1:551-563`:
-  ANY "Problem loading page" window counts as "already open" for localhost URLs → project's
-  Swagger tab silently never opens. Fix: stop treating generic error titles as a match.
+- [x] **17. Apply-FancyZones results-array scope bug**
+  - DONE: `$results` is a Generic List; all 6 scriptblock `$resultsArray +=` sites and both
+    outer `$results +=` sites converted to `.Add(...)`. `$appliedCount` and the
+    applied-layouts cache invalidation now see real data; return value complete.
+- [x] **18. Browser title drift → guaranteed-futile rerun**
+  - DONE (`Confirm-WorkspaceWindowPositions.ps1`): new last-resort recovery before the
+    "window not found" verdict - accepts the tracked positioned window whose expected bounds
+    (and display desktop - zone coords repeat across desktops) match this entry, provided its
+    handle is still alive (GetWindowRect) and unclaimed. Works for all entry types; browsers
+    are the main beneficiary since their sole-process-window fallback is deliberately off.
+- [x] **19. RPC-dead retry storm (no circuit breaker)**
+  - DONE (`Remove-VirtualDesktops.ps1` -EmptyOnly occupancy loop): an RPC-unavailable error
+    that survived the FULL per-window retry ladder trips a breaker → the cleanup ABORTS with
+    $false (correctness: with occupancy unknowable, "empty" desktops can't be trusted) instead
+    of grinding multi-second ladders through every remaining window. Non-EmptyOnly path was
+    already bounded by its outer catch (first exhausted ladder → $false).
+- [x] **20. Duplicate-EDID monitors permanently disable FancyZones idempotency**
+  - INVESTIGATED + DONE: this machine's applied-layouts.json (PowerToys current) records
+    `monitor-instance` (PnP path, unique per device) alongside the EDID - verified live
+    ("SNYBEF3" / "4&1cfdc60e&0&UID4145"). `Get-AppliedFancyZonesState` now stores an
+    additional instance-qualified key `"{EDID}|{INSTANCE}:{GUID}"` (legacy EDID-only key kept
+    for instance-less callers/schemas); `Apply-FancyZones` builds a display→instance map from
+    `GetMonitorDeviceInfo` (already exposed `MonitorInstance`), prefers qualified keys at both
+    idempotency sites, and the duplicate-EDID guard now disables idempotency ONLY when a
+    duplicated display lacks instance data (old PowerToys schema).
+- [x] **21. Batched WT tab creation + explicit window id**
+  - DONE: `Open-Terminal` chains all tabs of one call into a single `wt` invocation
+    (`new-tab ... ; new-tab ...` - WT processes subcommands in order), with defensive batch
+    splitting near the command-line length limit (follow-up batches reuse the same window ID);
+    dead `$StartWT` flag removed. `Open-ProjectTerminals` queues consecutive pwsh tabs
+    (DEFAULT/custom/regular) per project and flushes them as ONE Open-Terminal call; WSL tabs
+    (different WT profile) flush the queue first to preserve on-screen order; without a shared
+    project window each tab still gets its own window GUID (flush-per-tab). Per-tab 25ms
+    sleeps replaced by one 25ms settle per batch.
+- [x] **22. Localhost error-page false positive**
+  - DONE (`Test-BrowserGroupAlreadyOpen.ps1`): failed-load windows only count for the
+    localhost heuristic when their title carries host/port evidence from THIS group's
+    localhost URLs (Chromium error tabs are titled with the host; Firefox's generic
+    "Problem loading page" no longer suppresses opening the group). Anti-duplicate intent
+    preserved for evidence-bearing titles.
 
 ---
 

@@ -115,13 +115,18 @@ function Apply-FancyZones {
 		}
 	}
 
-	$results = @()
+	# Generic List with reference semantics: the $applyLayouts scriptblock below receives this
+	# as a parameter, and `+=` on an array parameter would rebind a scope-LOCAL copy - every
+	# "Shortcut Sent"/"Failed" record used to be silently lost, which kept $appliedCount at 0
+	# and made the applied-layouts cache invalidation at the end dead code.
+	$results = [System.Collections.Generic.List[object]]::new()
 
 	# Idempotency: read currently applied FancyZones state to skip redundant shortcut sends
 	$appliedState = $null
 	$layoutUuidLookup = $null
 	$desktopGuidLookup = @{}
 	$displayToEdidMap = @{}
+	$displayToInstanceMap = @{}
 
 	try {
 		$appliedState = Get-AppliedFancyZonesState
@@ -159,12 +164,18 @@ function Apply-FancyZones {
 				foreach ($devInfo in $deviceInfoList) {
 					if ($devInfo.DisplayName -and $devInfo.EdidCode) {
 						$displayToEdidMap[$devInfo.DisplayName] = $devInfo.EdidCode.ToUpper()
+						# PnP instance path - unique per physical device, present in newer
+						# FancyZones schemas; enables idempotency for duplicate-EDID monitors.
+						if ($devInfo.MonitorInstance) {
+							$displayToInstanceMap[$devInfo.DisplayName] = $devInfo.MonitorInstance.ToUpper()
+						}
 					}
 				}
 			}
 			catch {
 				# EnumDisplayDevices unavailable (type not loaded yet) - fall back to DeviceName matching
 				$displayToEdidMap = @{}
+				$displayToInstanceMap = @{}
 			}
 
 			# Guard against ambiguous monitor identity: FancyZones' applied-layouts.json keys each
@@ -177,8 +188,24 @@ function Apply-FancyZones {
 			if ($displayToEdidMap.Count -gt 0) {
 				$duplicateEdids = @(Get-DuplicateMonitorEdid -DisplayToEdidMap $displayToEdidMap)
 				if ($duplicateEdids.Count -gt 0) {
-					Write-LogDebug "  ⚠ Duplicate monitor EDID(s) detected ($($duplicateEdids -join ', ')) - disabling idempotency skip to guarantee correct per-monitor layouts" -Style Warning
-					$appliedState = $null
+					# Duplicate EDIDs are only ambiguous when the PnP instance path cannot
+					# disambiguate them: newer FancyZones schemas key applied-layouts.json by
+					# EDID + monitor-instance, and the state lookup stores instance-qualified
+					# keys. Idempotency stays enabled when every duplicated display has an
+					# instance; otherwise fall back to always reapplying (previous behavior).
+					$duplicatesWithoutInstance = @(
+						$displayToEdidMap.Keys | Where-Object {
+							$duplicateEdids -contains $displayToEdidMap[$_] -and -not $displayToInstanceMap.ContainsKey($_)
+						}
+					)
+
+					if ($duplicatesWithoutInstance.Count -gt 0) {
+						Write-LogDebug "  ⚠ Duplicate monitor EDID(s) detected ($($duplicateEdids -join ', ')) without instance paths - disabling idempotency skip to guarantee correct per-monitor layouts" -Style Warning
+						$appliedState = $null
+					}
+					elseif (Test-LogVerbose) {
+						Write-LogDebug "  Duplicate monitor EDID(s) detected ($($duplicateEdids -join ', ')) - idempotency kept via instance-qualified keys" -Style Warning
+					}
 				}
 			}
 
@@ -236,6 +263,11 @@ function Apply-FancyZones {
 			if ($displayToEdidMap.ContainsKey($deviceName)) { $monitorId = $displayToEdidMap[$deviceName] }
 			elseif ($deviceName) { $monitorId = $deviceName.ToUpper() }
 			if (-not $monitorId) { return $false }
+
+			# Prefer the instance-qualified key - unambiguous when identical monitors share an EDID.
+			if ($displayToInstanceMap.ContainsKey($deviceName)) {
+				$monitorId = "$monitorId|$($displayToInstanceMap[$deviceName])"
+			}
 
 			$stateKey = "$($monitorId):$desktopGuid"
 			if (-not $appliedState.ContainsKey($stateKey) -or $appliedState[$stateKey] -ne $targetUuid) {
@@ -352,11 +384,11 @@ function Apply-FancyZones {
 
 			if (-not $matchedMonitor) {
 				Write-Warning "    ✗ Could not find physical monitor matching configuration"
-				$resultsArray += [PSCustomObject]@{
+				$resultsArray.Add([PSCustomObject]@{
 					Monitor = $monitorKey
 					Layout  = $layoutName
 					Status  = "Monitor Not Found"
-				}
+				})
 				continue
 			}
 
@@ -367,11 +399,11 @@ function Apply-FancyZones {
 				else {
 					Write-Warning "    ✗ Layout '$layoutName' not found in configuration"
 					Write-Warning "      Available layouts: $($global:Configuration.LayoutNumbers.Keys -join ', ')"
-					$resultsArray += [PSCustomObject]@{
+					$resultsArray.Add([PSCustomObject]@{
 						Monitor = $monitorKey
 						Layout  = $layoutName
 						Status  = "Layout Number Unknown"
-					}
+					})
 					continue
 				}
 			}
@@ -380,11 +412,11 @@ function Apply-FancyZones {
 				if (Test-LogVerbose) {
 					Write-Warning "    ✗ Layout number must be 0-9, got => [$layoutNumber]"
 				}
-				$resultsArray += [PSCustomObject]@{
+				$resultsArray.Add([PSCustomObject]@{
 					Monitor = $monitorKey
 					Layout  = $layoutName
 					Status  = "Invalid Layout Number"
-				}
+				})
 				continue
 			}
 
@@ -418,6 +450,12 @@ function Apply-FancyZones {
 							$monitorId = $deviceName.ToUpper()
 						}
 
+						# Prefer the instance-qualified key - unambiguous when identical
+						# monitors share an EDID.
+						if ($monitorId -and $displayToInstanceMap.ContainsKey($deviceName)) {
+							$monitorId = "$monitorId|$($displayToInstanceMap[$deviceName])"
+						}
+
 						if ($monitorId) {
 							$stateKey = "$($monitorId):$desktopGuid"
 							if ($appliedState.ContainsKey($stateKey) -and $appliedState[$stateKey] -eq $targetUuid) {
@@ -435,13 +473,13 @@ function Apply-FancyZones {
 				if (Test-LogVerbose) {
 					Write-LogDebug "Layout [$layoutName] already applied - skipping" -Style Warning
 				}
-				$resultsArray += [PSCustomObject]@{
+				$resultsArray.Add([PSCustomObject]@{
 					Monitor       = $monitorKey
 					Layout        = $layoutName
 					LayoutNumber  = $layoutNumber
 					DesktopNumber = $currentDesktopNumber
 					Status        = "Already Applied"
-				}
+				})
 				continue
 			}
 
@@ -474,25 +512,25 @@ function Apply-FancyZones {
 					Write-LogDebug "Layout shortcut sent" -Style Success
 				}
 
-				$resultsArray += [PSCustomObject]@{
+				$resultsArray.Add([PSCustomObject]@{
 					Monitor       = $monitorKey
 					Layout        = $layoutName
 					LayoutNumber  = $layoutNumber
 					DesktopNumber = $currentDesktopNumber
 					Status        = "Shortcut Sent"
-				}
+				})
 			}
 			catch {
 				if (Test-LogVerbose) {
 					Write-Error "    ✗ Failed to send keyboard shortcut: $_"
 				}
-				$resultsArray += [PSCustomObject]@{
+				$resultsArray.Add([PSCustomObject]@{
 					Monitor       = $monitorKey
 					Layout        = $layoutName
 					DesktopNumber = $currentDesktopNumber
 					Status        = "Failed"
 					Error         = $_.Exception.Message
-				}
+				})
 			}
 		}
 	}
@@ -551,12 +589,12 @@ function Apply-FancyZones {
 											$ln = if ($lc -is [string]) { $lc } elseif ($lc -is [hashtable]) { $lc.Layout } else { $null }
 										}
 										if ($ln) {
-											$results += [PSCustomObject]@{
+											$results.Add([PSCustomObject]@{
 												Monitor       = $mk
 												Layout        = $ln
 												DesktopNumber = $layoutLookupKey
 												Status        = "Already Applied"
-											}
+											})
 										}
 									}
 									continue
@@ -618,12 +656,12 @@ function Apply-FancyZones {
 											$ln = if ($lc -is [string]) { $lc } elseif ($lc -is [hashtable]) { $lc.Layout } else { $null }
 										}
 										if ($ln) {
-											$results += [PSCustomObject]@{
+											$results.Add([PSCustomObject]@{
 												Monitor       = $mk
 												Layout        = $ln
 												DesktopNumber = $desktopNumberToApply
 												Status        = "Already Applied"
-											}
+											})
 										}
 									}
 									continue

@@ -330,6 +330,34 @@ function Open-ProjectTerminals {
 				$null
 			}
 
+			# Batch consecutive pwsh tabs into ONE Open-Terminal call, which chains them into a
+			# single ordered wt invocation - the old one-spawn-per-tab pattern paid a process
+			# spawn + 25ms sleep per tab and still had no cross-spawn ordering guarantee.
+			# WSL tabs use a different WT profile and are spawned directly; they flush the
+			# batch first so the on-screen tab order matches the configured order.
+			$pendingTabCommands = [System.Collections.Generic.List[string]]::new()
+			$pendingTabTitles = [System.Collections.Generic.List[string]]::new()
+
+			$flushPendingTabs = {
+				if ($pendingTabCommands.Count -eq 0) { return }
+				$batchWindowId = if ($projectWindowId) { $projectWindowId } else { [guid]::NewGuid().ToString() }
+				Open-Terminal -Command $pendingTabCommands.ToArray() -WindowId $batchWindowId -TabTitles $pendingTabTitles.ToArray()
+				$pendingTabCommands.Clear()
+				$pendingTabTitles.Clear()
+				# Small settle between separate wt invocations targeting the same window
+				# (one per batch, not per tab).
+				Start-Sleep -Milliseconds 25
+			}
+
+			$queueTab = {
+				param([string]$TabCommand, [string]$TabTitle)
+				$pendingTabCommands.Add($TabCommand)
+				$pendingTabTitles.Add($TabTitle)
+				# Without a shared project window every tab gets its OWN window - flush each
+				# immediately so every batch mints its own window GUID.
+				if (-not $projectWindowId) { & $flushPendingTabs }
+			}
+
 			# Iterate through each path entry and open tabs sequentially to preserve order
 			foreach ($pathEntry in $mapping.Paths) {
 				# Determine tab name and path type based on entry format
@@ -363,6 +391,10 @@ function Open-ProjectTerminals {
 					$distro = $Configuration.DefaultWSLDistribution
 
 					try {
+						# Preserve on-screen ordering: everything queued so far must exist
+						# before the WSL tab is spawned.
+						& $flushPendingTabs
+
 						$wslWindowId = if ($projectWindowId) { $projectWindowId } else { [guid]::NewGuid().ToString() }
 						Start-Process wt -ArgumentList @("-w", $wslWindowId, "new-tab", "-p", $distro, "--title", $tabName) -WindowStyle Hidden
 
@@ -381,8 +413,7 @@ function Open-ProjectTerminals {
 				# Handle DEFAULT - opens a plain tab at the terminal's default starting directory
 				elseif ($pathKey -eq "DEFAULT" -or ($isCustomEntry -and -not $customPath)) {
 					try {
-						$defaultWindowId = if ($projectWindowId) { $projectWindowId } else { [guid]::NewGuid().ToString() }
-						Open-Terminal -Command "" -WindowId $defaultWindowId -TabTitles $tabName
+						& $queueTab "" $tabName
 
 						# Track tab names in order
 						$tabNamesList += $tabName
@@ -397,8 +428,7 @@ function Open-ProjectTerminals {
 					$cmd = "Set-Location -Path '$customPath'"
 					if ($InvokeOnefetch) { $cmd += "; onefetch" }
 
-					$tabWindowId = if ($projectWindowId) { $projectWindowId } else { [guid]::NewGuid().ToString() }
-					Open-Terminal -Command $cmd -WindowId $tabWindowId -TabTitles $tabName
+					& $queueTab $cmd $tabName
 
 					# Track tab names in order
 					$tabNamesList += $tabName
@@ -411,15 +441,16 @@ function Open-ProjectTerminals {
 					$cmd = "Set-Location -Path '$path'"
 					if ($InvokeOnefetch) { $cmd += "; onefetch" }
 
-					# Open each tab individually to maintain order
-					$tabWindowId = if ($projectWindowId) { $projectWindowId } else { [guid]::NewGuid().ToString() }
-					Open-Terminal -Command $cmd -WindowId $tabWindowId -TabTitles $tabName
+					& $queueTab $cmd $tabName
 
 					# Track tab names in order
 					$tabNamesList += $tabName
 					$totalTabsCreated++
 				}
 			}
+
+			# Open whatever is still queued for this project in one wt invocation.
+			& $flushPendingTabs
 
 			Write-LogSuccess "Project [$terminal] terminals opened!"
 		}
