@@ -8,6 +8,11 @@ function Get-NextAvailableDesktopIndex {
 		This is useful when you want to open a new workspace on a separate set of virtual desktops
 		without disturbing the current workspace.
 
+		Returns $null when the desktop count cannot be determined (VirtualDesktop module
+		unavailable or enumeration failed) - never 0, because an alongside caller falling
+		back to offset 0 would open the new workspace on top of the existing one. Callers
+		must treat $null as "abort the alongside open".
+
 	.EXAMPLE
 		# If there are 2 desktops (0 and 1), returns 2
 		$nextIndex = Get-NextAvailableDesktopIndex
@@ -17,15 +22,10 @@ function Get-NextAvailableDesktopIndex {
 	param ()
 
 	try {
-		# Import VirtualDesktop module if not loaded
-		$moduleAvailable = Get-Module -ListAvailable -Name VirtualDesktop
-		if (-not $moduleAvailable) {
+		# Use the cached module loader instead of a Get-Module -ListAvailable disk scan per call.
+		if (-not (Import-VirtualDesktopModule)) {
 			Write-Warning "VirtualDesktop module not found"
-			return 0
-		}
-
-		if (-not (Get-Module -Name VirtualDesktop)) {
-			Import-Module VirtualDesktop -ErrorAction Stop -WarningAction SilentlyContinue
+			return $null
 		}
 
 		$desktops = Get-DesktopList
@@ -38,9 +38,9 @@ function Get-NextAvailableDesktopIndex {
 		return $currentCount
 	}
 	catch {
-		if (Test-LogVerbose) {
-			Write-Warning "Failed to get desktop count: $_"
-		}
-		return 0
+		# Never fall back to 0: an alongside caller would lay the new workspace ON TOP of the
+		# current one. $null signals "unknown" so the caller can abort instead of clobbering.
+		Write-Warning "Failed to get desktop count: $_"
+		return $null
 	}
 }

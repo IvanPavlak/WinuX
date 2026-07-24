@@ -342,6 +342,34 @@ function Test-BrowserGroupAlreadyOpen {
 			}
 		}
 
+		# Evidence tokens for the failed-localhost-load heuristic below: the group's localhost
+		# hosts and ports. A failed-load window only counts as OUR group when its title carries
+		# one of these (Chromium browsers title error tabs with the host/port) - a GENERIC
+		# error title like Firefox's bare "Problem loading page" proves nothing about WHICH
+		# page failed, and used to suppress opening the group (e.g. the project's Swagger tab)
+		# whenever any unrelated page on the machine had failed to load.
+		$localhostEvidenceTokens = [System.Collections.Generic.List[string]]::new()
+		foreach ($groupUrl in $Urls) {
+			try {
+				$groupUri = [System.Uri]$groupUrl
+				if ($localhostHosts -contains $groupUri.Host.ToLower()) {
+					$localhostEvidenceTokens.Add([regex]::Escape($groupUri.Host))
+					if (-not $groupUri.IsDefaultPort) {
+						$localhostEvidenceTokens.Add([regex]::Escape(":$($groupUri.Port)"))
+					}
+				}
+			}
+			catch {
+				# Not a parseable URL - no evidence tokens from it.
+			}
+		}
+		$localhostEvidencePattern = if ($localhostEvidenceTokens.Count -gt 0) {
+			"(?i)($(($localhostEvidenceTokens | Select-Object -Unique) -join '|'))"
+		}
+		else {
+			$null
+		}
+
 		# Check if any URLs are localhost URLs (for special handling of failed loads)
 		$hasLocalhostUrls = $Urls | Where-Object {
 			try {
@@ -380,10 +408,17 @@ function Test-BrowserGroupAlreadyOpen {
 				continue
 			}
 
-			# Track if we find any "Problem loading page" windows (for localhost URL handling)
+			# Track failed-load windows for localhost URL handling - but only when the title
+			# carries evidence (host/port) that the failed page belongs to THIS group. A
+			# generic error title matches any failed page on the machine and must not count.
 			if ($title -match $problemLoadingPagePattern) {
-				$foundProblemLoadingPage = $true
-				Write-LogDebug " Found 'Problem loading page' window => [$title]"
+				if ($localhostEvidencePattern -and $title -match $localhostEvidencePattern) {
+					$foundProblemLoadingPage = $true
+					Write-LogDebug " Found failed-load window with matching localhost evidence => [$title]"
+				}
+				else {
+					Write-LogDebug " Ignoring generic failed-load window (no host/port evidence for this group) => [$title]"
+				}
 			}
 
 			# Negative matching: Skip windows that contain service-specific words

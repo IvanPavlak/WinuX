@@ -66,7 +66,12 @@ function Get-AppliedFancyZonesState {
 		}
 
 		# Build lookup: "{monitor}:{VirtualDesktopGUID}" → "{LayoutUUID}"
-		# The monitor field is either an EDID code (e.g., "LEN8ABC") or display path ("\\.\DISPLAY1")
+		# The monitor field is either an EDID code (e.g., "LEN8ABC") or display path ("\\.\DISPLAY1").
+		# Newer FancyZones schemas also record the PnP 'monitor-instance', which is unique per
+		# physical device even when two identical monitors share one EDID - an additional
+		# instance-qualified key "{monitor}|{instance}:{GUID}" is stored so consumers with
+		# instance data can match unambiguously (the EDID-only key collides on duplicates,
+		# last write wins - kept for backward compatibility and instance-less callers).
 		$lookup = @{}
 
 		foreach ($entry in $rawData.'applied-layouts') {
@@ -75,12 +80,18 @@ function Get-AppliedFancyZonesState {
 
 			if ($device -and $layout) {
 				$monitor = $device.monitor
+				$monitorInstance = $device.'monitor-instance'
 				$vdGuid = $device.'virtual-desktop'
 				$layoutUuid = $layout.uuid
 
 				if ($monitor -and $vdGuid -and $layoutUuid) {
 					$key = "$($monitor.ToUpper()):$($vdGuid.ToUpper())"
 					$lookup[$key] = $layoutUuid.ToUpper()
+
+					if ($monitorInstance) {
+						$qualifiedKey = "$($monitor.ToUpper())|$($monitorInstance.ToUpper()):$($vdGuid.ToUpper())"
+						$lookup[$qualifiedKey] = $layoutUuid.ToUpper()
+					}
 				}
 			}
 		}

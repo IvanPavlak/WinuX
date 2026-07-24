@@ -4,10 +4,12 @@ function Terminate-WindowsTerminalTabs {
         Closes Windows Terminal tabs.
 
     .DESCRIPTION
-        Temporarily renames the current tab to a unique ID, then cycles through
-        all other tabs using keyboard shortcuts (Ctrl+Tab). It closes any tab
-        that does not match the unique ID. If -IncludeCurrent is specified,
-        it also closes the current tab at the end.
+        Temporarily renames the current tab to a unique ID, then closes every other tab
+        via UI Automation (each tab's close button is invoked directly - no focus changes,
+        no synthesized keystrokes). When UI Automation cannot read or close the tabs, the
+        legacy pass takes over: cycle with Ctrl+Tab and close with Ctrl+C/Ctrl+W. The
+        SendKeys retry-verification pass only runs when something survived the close
+        passes. If -IncludeCurrent is specified, the current tab is also closed at the end.
 
     .PARAMETER IncludeCurrent
         If specified, the current tab will also be closed after all others are processed.
@@ -36,29 +38,6 @@ function Terminate-WindowsTerminalTabs {
 
 	$originalHostTitle = $Host.UI.RawUI.WindowTitle
 
-	# Identify the WindowsTerminal process actually hosting this shell by walking
-	# up the parent-process chain from $PID. Without this, when multiple WT
-	# processes are running (e.g. elevated + non-elevated, or several user WT
-	# windows), `Get-Process WindowsTerminal | Select-Object -First 1` may pick
-	# the wrong one, causing Ctrl+W to be sent to our own window and killing the
-	# current shell mid-execution (the calling script dies silently).
-	$hostingWtPid = $null
-	try {
-		$walkPid = $PID
-		for ($i = 0; $i -lt 16; $i++) {
-			$p = Get-CimInstance Win32_Process -Filter "ProcessId=$walkPid" -ErrorAction SilentlyContinue
-			if (-not $p -or -not $p.ParentProcessId) { break }
-			$parent = Get-CimInstance Win32_Process -Filter "ProcessId=$($p.ParentProcessId)" -ErrorAction SilentlyContinue
-			if (-not $parent) { break }
-			if ($parent.Name -eq 'WindowsTerminal.exe') { $hostingWtPid = [int]$parent.ProcessId; break }
-			$walkPid = [int]$parent.ProcessId
-		}
-	}
-	catch {
-		Write-LogWarning "Warning: Failed to resolve hosting Windows Terminal process. Falling back to process-name detection."
-		Write-LogDebug "   Details => $($_.Exception.Message)" -Style Warning
-	}
-
 	if ($OnlyCurrent) {
 		Write-LogTitle "Closing current terminal tab" -BlankLineAfter
 		try {
@@ -85,6 +64,31 @@ function Terminate-WindowsTerminalTabs {
 
 	Write-LogTitle "Terminating Windows Terminal Tabs"
 
+	# Identify the WindowsTerminal process actually hosting this shell by walking up the
+	# parent-process chain from $PID (PS7's Process.Parent - no WMI/CIM roundtrips; the old
+	# Get-CimInstance walk cost 0.2-0.8s and ran even for -OnlyCurrent, which never uses it -
+	# hence resolved here, below the -OnlyCurrent early exit). Without this, when multiple WT
+	# processes are running (e.g. elevated + non-elevated, or several user WT windows),
+	# `Get-Process WindowsTerminal | Select-Object -First 1` may pick the wrong one, causing
+	# Ctrl+W to be sent to our own window and killing the current shell mid-execution.
+	$hostingWtPid = $null
+	try {
+		$walkProcess = Get-Process -Id $PID -ErrorAction Stop
+		for ($i = 0; $i -lt 16 -and $walkProcess; $i++) {
+			$parentProcess = $walkProcess.Parent
+			if (-not $parentProcess) { break }
+			if ($parentProcess.ProcessName -eq 'WindowsTerminal') {
+				$hostingWtPid = [int]$parentProcess.Id
+				break
+			}
+			$walkProcess = $parentProcess
+		}
+	}
+	catch {
+		Write-LogWarning "Warning: Failed to resolve hosting Windows Terminal process. Falling back to process-name detection."
+		Write-LogDebug "   Details => $($_.Exception.Message)" -Style Warning
+	}
+
 	try {
 		# Prefer the WT process hosting this shell (resolved above). Fall back to
 		# first WindowsTerminal process only when the parent-chain walk failed.
@@ -102,8 +106,6 @@ function Terminate-WindowsTerminalTabs {
 
 		Add-Type -AssemblyName System.Windows.Forms
 		[void][System.Reflection.Assembly]::LoadWithPartialName("Microsoft.VisualBasic")
-		[Microsoft.VisualBasic.Interaction]::AppActivate($wtProcess.Id)
-		Start-Sleep -Milliseconds 25
 
 		$uniqueId = "ActiveTab_" + [Guid]::NewGuid().ToString()
 		$Host.UI.RawUI.WindowTitle = $uniqueId
@@ -122,77 +124,126 @@ function Terminate-WindowsTerminalTabs {
 			return
 		}
 
-		# Detect if the marker is reflected in the window title.
-		# Tabs opened with --suppressApplicationTitle will not reflect $Host.UI.RawUI.WindowTitle changes,
-		# so the unique marker won't appear in the Win32 window title.
-		# In that case, fall back to using the original tab title as the identifier.
-		$markerVisible = $startingTitle -like "*$uniqueId*"
+		# Detect if the marker is reflected. Prefer the UIA tab titles: they identify OUR tab
+		# precisely even when it is not the active tab (the window title only mirrors the
+		# ACTIVE tab). Tabs opened with --suppressApplicationTitle will not reflect
+		# $Host.UI.RawUI.WindowTitle changes at all - in that case fall back to using the
+		# original (active) tab title as the identifier, as before.
+		$uiaTabTitles = Get-WindowsTerminalTabTitles -WindowHandle $currentWindowHandle
+		$markerVisible = if ($null -ne $uiaTabTitles) {
+			[bool]($uiaTabTitles | Where-Object { $_ -like "*$uniqueId*" } | Select-Object -First 1)
+		}
+		else {
+			$startingTitle -like "*$uniqueId*"
+		}
 
 		if (Test-LogVerbose) {
 			Write-LogDebug "Marked current tab with unique ID => [$uniqueId]" -Style Success
 			if (-not $markerVisible) {
-				Write-LogDebug "Marker not reflected in window title (suppressApplicationTitle active), using original title [$startingTitle] as identifier" -Style Warning
+				Write-LogDebug "Marker not reflected in tab titles (suppressApplicationTitle active), using original title [$startingTitle] as identifier" -Style Warning
 			}
 		}
 
 		$closedTabs = @()
 		$closeFailures = @()
-		$maxIterations = 50
-		$iteration = 0
-		$consecutiveMarkerHits = 0
 
-		while ($iteration -lt $maxIterations) {
-			$iteration++
+		$isOurTabTitle = {
+			param([string]$Title)
+			if ($markerVisible) { $Title -like "*$uniqueId*" } else { $Title -eq $startingTitle }
+		}
 
-			[System.Windows.Forms.SendKeys]::SendWait("^{TAB}")
+		# --- UIA-first pass over the current window: close every non-marked tab via its
+		# close button - no focus change, no synthesized keystrokes (Ctrl+W typed into
+		# whatever window has focus was the biggest input hazard of this function).
+		# Any UIA miss falls back to the legacy Ctrl+Tab cycling pass below.
+		$legacyPassNeeded = $true
+		if ($null -ne $uiaTabTitles) {
+			$legacyPassNeeded = $false
+
+			foreach ($tabTitle in $uiaTabTitles) {
+				if (& $isOurTabTitle $tabTitle) { continue }
+
+				Write-LogDebug "-> Closing tab via UIA: [$tabTitle]" -Style Warning
+
+				if (Close-WindowsTerminalTab -WindowHandle $currentWindowHandle -TabTitle $tabTitle) {
+					$closedTabs += $tabTitle
+				}
+				else {
+					$closeFailures += "Tab [$tabTitle] in the current window could not be closed via UI Automation"
+					$legacyPassNeeded = $true
+				}
+
+				# Let WT remove the tab from the strip before invoking the next close button.
+				Start-Sleep -Milliseconds 25
+			}
+
+			# Verify: any non-marked tab still present means the UIA pass missed something.
+			$remainingTitles = Get-WindowsTerminalTabTitles -WindowHandle $currentWindowHandle
+			if ($null -ne $remainingTitles) {
+				$leftoverTabs = @($remainingTitles | Where-Object { -not (& $isOurTabTitle $_) })
+				if ($leftoverTabs.Count -gt 0) {
+					$legacyPassNeeded = $true
+				}
+			}
+		}
+
+		if ($legacyPassNeeded) {
+			# Legacy fallback: focus the window and cycle with Ctrl+Tab, closing as we go.
+			[Microsoft.VisualBasic.Interaction]::AppActivate($wtProcess.Id)
 			Start-Sleep -Milliseconds 25
 
-			$currentWindow = Get-WindowHandle -ProcessName "WindowsTerminal" -ErrorAction SilentlyContinue | Select-Object -First 1
-			$currentTitle = if ($currentWindow) { $currentWindow.Title } else { $null }
-
-			if (-not $currentTitle) {
-				Write-LogWarning "Warning: lost the Windows Terminal window title at iteration $iteration (window may have closed or focus was lost); stopping the tab-cycling pass early."
-				break
-			}
-
-			Write-LogDebug "  Iteration $iteration => Current tab: [$currentTitle]" -Style Step
-
-			$isCurrentTab = if ($markerVisible) {
-				$currentTitle -like "*$uniqueId*"
-			}
-			else {
-				$currentTitle -eq $startingTitle
-			}
-
-			if ($isCurrentTab) {
-				$consecutiveMarkerHits++
-				Write-LogDebug "-> This is our marked tab (hit #$consecutiveMarkerHits)" -Style Success
-
-				if ($consecutiveMarkerHits -ge 2) {
-					Write-LogDebug "-> Cycled through all tabs - done!" -Style Success
-					break
-				}
-				continue
-			}
-
+			$maxIterations = 50
+			$iteration = 0
 			$consecutiveMarkerHits = 0
 
-			Write-LogDebug "-> Closing this tab" -Style Warning
+			while ($iteration -lt $maxIterations) {
+				$iteration++
 
-			[System.Windows.Forms.SendKeys]::SendWait("^c")
-			Start-Sleep -Milliseconds 25
-			[System.Windows.Forms.SendKeys]::SendWait("^w")
-			Start-Sleep -Milliseconds 25
+				[System.Windows.Forms.SendKeys]::SendWait("^{TAB}")
+				Start-Sleep -Milliseconds 25
 
-			$postCloseWindow = Get-WindowHandle -ProcessName "WindowsTerminal" -ErrorAction SilentlyContinue | Select-Object -First 1
-			$postCloseTitle = if ($postCloseWindow) { $postCloseWindow.Title } else { $null }
+				$currentWindow = Get-WindowHandle -ProcessName "WindowsTerminal" -ErrorAction SilentlyContinue | Select-Object -First 1
+				$currentTitle = if ($currentWindow) { $currentWindow.Title } else { $null }
 
-			if ($postCloseTitle -and $postCloseTitle -eq $currentTitle) {
-				$closeFailures += "Active tab [$currentTitle] in the current window did not close on the initial attempt"
-				Write-LogDebug "Warning: Close attempt did not change the active tab; [$currentTitle] is still active" -Style Warning
-			}
-			else {
-				$closedTabs += $currentTitle
+				if (-not $currentTitle) {
+					Write-LogWarning "Warning: lost the Windows Terminal window title at iteration $iteration (window may have closed or focus was lost); stopping the tab-cycling pass early."
+					break
+				}
+
+				Write-LogDebug "  Iteration $iteration => Current tab: [$currentTitle]" -Style Step
+
+				$isCurrentTab = & $isOurTabTitle $currentTitle
+
+				if ($isCurrentTab) {
+					$consecutiveMarkerHits++
+					Write-LogDebug "-> This is our marked tab (hit #$consecutiveMarkerHits)" -Style Success
+
+					if ($consecutiveMarkerHits -ge 2) {
+						Write-LogDebug "-> Cycled through all tabs - done!" -Style Success
+						break
+					}
+					continue
+				}
+
+				$consecutiveMarkerHits = 0
+
+				Write-LogDebug "-> Closing this tab" -Style Warning
+
+				[System.Windows.Forms.SendKeys]::SendWait("^c")
+				Start-Sleep -Milliseconds 25
+				[System.Windows.Forms.SendKeys]::SendWait("^w")
+				Start-Sleep -Milliseconds 25
+
+				$postCloseWindow = Get-WindowHandle -ProcessName "WindowsTerminal" -ErrorAction SilentlyContinue | Select-Object -First 1
+				$postCloseTitle = if ($postCloseWindow) { $postCloseWindow.Title } else { $null }
+
+				if ($postCloseTitle -and $postCloseTitle -eq $currentTitle) {
+					$closeFailures += "Active tab [$currentTitle] in the current window did not close on the initial attempt"
+					Write-LogDebug "Warning: Close attempt did not change the active tab; [$currentTitle] is still active" -Style Warning
+				}
+				else {
+					$closedTabs += $currentTitle
+				}
 			}
 		}
 
@@ -208,6 +259,48 @@ function Terminate-WindowsTerminalTabs {
 				Write-LogDebug "  Processing other WT window: [$($otherWin.Title)]" -Style Step
 
 				try {
+					# UIA-first: close every tab of this window via its close button (the window
+					# disappears when its last tab closes) - no focus change, no keystrokes.
+					$otherWindowHandled = $false
+					$otherTabTitles = Get-WindowsTerminalTabTitles -WindowHandle $otherWin.Handle
+
+					if ($null -ne $otherTabTitles) {
+						$otherWindowHandled = $true
+
+						foreach ($tabTitle in $otherTabTitles) {
+							Write-LogDebug "-> Closing tab via UIA: [$tabTitle]" -Style Warning
+
+							if (Close-WindowsTerminalTab -WindowHandle $otherWin.Handle -TabTitle $tabTitle) {
+								$closedTabs += $tabTitle
+							}
+							else {
+								$closeFailures += "Tab [$tabTitle] in window [$($otherWin.Title)] could not be closed via UI Automation"
+								$otherWindowHandled = $false
+							}
+
+							Start-Sleep -Milliseconds 25
+						}
+
+						# The window must be gone once its last tab closed - re-check with a
+						# fresh enumeration (the window cache may still hold the dead handle).
+						Start-Sleep -Milliseconds 75
+						Clear-WindowCache
+						$uiaSurvivor = Get-WindowHandle -ProcessName "WindowsTerminal" -ErrorAction SilentlyContinue |
+							Where-Object { $_.Handle -eq $otherWin.Handle } |
+							Select-Object -First 1
+						if ($uiaSurvivor) {
+							$otherWindowHandled = $false
+						}
+						else {
+							Write-LogDebug "-> Window closed" -Style Success
+						}
+					}
+
+					if ($otherWindowHandled) {
+						continue
+					}
+
+					# Legacy fallback: focus the window and close tabs with Ctrl+W.
 					[void][WindowModule.Native]::SetForegroundWindow($otherWin.Handle)
 					Start-Sleep -Milliseconds 25
 
@@ -266,10 +359,32 @@ function Terminate-WindowsTerminalTabs {
 			}
 		}
 
+		# The retry-verification pass below steals focus and types into windows - run it only
+		# when something actually survived the close passes (or a failure was recorded). When
+		# the UIA passes verified everything closed, skip it entirely: it used to add a
+		# guaranteed ~0.3-0.5s of Ctrl+Tab cycling to every clean invocation.
+		Start-Sleep -Milliseconds 50
+		Clear-WindowCache
+		$remainingAfterMainPass = @(Get-WindowHandle -ProcessName "WindowsTerminal" -ErrorAction SilentlyContinue |
+				Where-Object { $_.Handle -ne $currentWindowHandle })
+		$currentTitlesAfterPass = Get-WindowsTerminalTabTitles -WindowHandle $currentWindowHandle
+		$currentWindowLeftovers = @()
+		if ($null -ne $currentTitlesAfterPass) {
+			$currentWindowLeftovers = @($currentTitlesAfterPass | Where-Object { -not (& $isOurTabTitle $_) })
+		}
+		$needsRetryVerification = ($closeFailures.Count -gt 0) -or
+			($remainingAfterMainPass.Count -gt 0) -or
+			($currentWindowLeftovers.Count -gt 0) -or
+			($null -eq $currentTitlesAfterPass -and $legacyPassNeeded)
+
+		if (-not $needsRetryVerification -and (Test-LogVerbose)) {
+			Write-LogDebug "All tabs verified closed - skipping the SendKeys verification pass" -Style Success
+		}
+
 		# Retry verification: re-check and close any tabs that survived the initial pass.
 		# SendKeys-based automation can miss inputs when the UI is busy (e.g., during ReRun-LastCommand).
 		$maxRetries = 3
-		for ($retryAttempt = 1; $retryAttempt -le $maxRetries; $retryAttempt++) {
+		for ($retryAttempt = 1; $needsRetryVerification -and $retryAttempt -le $maxRetries; $retryAttempt++) {
 			$retryDelayMs = 50 * $retryAttempt
 			Start-Sleep -Milliseconds $retryDelayMs
 

@@ -83,6 +83,23 @@ Describe "Resolve-Selection" {
 			# Tools group has NameUrl children, so selecting parent expands to children
 			$result | Should -Not -BeNullOrEmpty
 		}
+
+		It "Should return `$null for an invalid hierarchical selection instead of breaking the caller's loop" {
+			Mock Write-Host { }
+
+			# The old implementation used a bare `break` here, which propagates OUT of the
+			# function into the nearest loop in the CALLER (e.g. Open-Workspace's action
+			# loop) and silently aborted every remaining action. Every iteration completing
+			# below proves resolution failure no longer leaks flow control.
+			$iterationsCompleted = 0
+			foreach ($attempt in 1..3) {
+				$result = Resolve-Selection -InputObject @("NoSuchGroup") -GroupsConfig $testGroupsConfig
+				$result | Should -BeNullOrEmpty
+				$iterationsCompleted++
+			}
+
+			$iterationsCompleted | Should -Be 3
+		}
 	}
 
 	Context "When AllowEmptyPromptResponse is set" {

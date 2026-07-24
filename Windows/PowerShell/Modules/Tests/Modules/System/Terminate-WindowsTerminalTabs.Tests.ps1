@@ -24,74 +24,70 @@ Describe "Terminate-WindowsTerminalTabs" {
 
 	Context "Main mode" {
 		It "attempts hosting PID parent-chain resolution before selecting a terminal process" {
-			$script:cimChain = @(
-				[PSCustomObject]@{ ProcessId = $PID; ParentProcessId = 4321; Name = 'pwsh.exe' },
-				[PSCustomObject]@{ ProcessId = 4321; ParentProcessId = 0; Name = 'WindowsTerminal.exe' }
-			)
-			Mock Get-CimInstance {
-				if ($script:cimChain.Count -gt 0) {
-					$result = $script:cimChain[0]
-					$script:cimChain = @($script:cimChain | Select-Object -Skip 1)
-					return $result
+			# Parent resolution uses PS7's Process.Parent chain (pwsh -> WindowsTerminal) -
+			# the old Get-CimInstance walk (0.2-0.8s of WMI roundtrips) must never run.
+			Mock Get-CimInstance { throw 'CIM must not be used for parent-chain resolution' }
+			Mock Get-Process {
+				[PSCustomObject]@{
+					ProcessName = 'pwsh'
+					Id          = $PID
+					Parent      = [PSCustomObject]@{ ProcessName = 'WindowsTerminal'; Id = 4321; Parent = $null }
 				}
-				$null
-			}
-
-			Mock Get-Process { [PSCustomObject]@{ ProcessName = 'WindowsTerminal'; Id = 4321 } } -ParameterFilter { $PSBoundParameters.ContainsKey('Id') }
+			} -ParameterFilter { $Id -eq $PID }
+			Mock Get-Process { [PSCustomObject]@{ ProcessName = 'WindowsTerminal'; Id = 4321 } } -ParameterFilter { $Id -eq 4321 }
 			Mock Get-Process {
 				@(
 					[PSCustomObject]@{ ProcessName = 'WindowsTerminal'; Id = 1001 },
 					[PSCustomObject]@{ ProcessName = 'WindowsTerminal'; Id = 1002 }
 				)
-			} -ParameterFilter { -not $PSBoundParameters.ContainsKey('Id') }
+			} -ParameterFilter { $null -eq $Id }
 
 			Terminate-WindowsTerminalTabs
 
-			Should -Invoke Get-CimInstance -Times 2
-			Should -Invoke Get-Process -Times 1 -Exactly -ParameterFilter { -not $PSBoundParameters.ContainsKey('Id') }
+			Should -Invoke Get-CimInstance -Times 0
+			# Hosting WT resolved from the parent chain - selected by PID, never from the list.
+			Should -Invoke Get-Process -Times 1 -Exactly -ParameterFilter { $Id -eq 4321 }
+			Should -Invoke Get-Process -Times 0 -ParameterFilter { $null -eq $Id }
 		}
 
 		It "falls back to process-list selection when resolved hosting WT PID is no longer running" {
-			$script:cimChain = @(
-				[PSCustomObject]@{ ProcessId = $PID; ParentProcessId = 9876; Name = 'pwsh.exe' },
-				[PSCustomObject]@{ ProcessId = 9876; ParentProcessId = 0; Name = 'WindowsTerminal.exe' }
-			)
-			Mock Get-CimInstance {
-				if ($script:cimChain.Count -gt 0) {
-					$result = $script:cimChain[0]
-					$script:cimChain = @($script:cimChain | Select-Object -Skip 1)
-					return $result
+			Mock Get-CimInstance { throw 'CIM must not be used for parent-chain resolution' }
+			Mock Get-Process {
+				[PSCustomObject]@{
+					ProcessName = 'pwsh'
+					Id          = $PID
+					Parent      = [PSCustomObject]@{ ProcessName = 'WindowsTerminal'; Id = 9876; Parent = $null }
 				}
-				$null
-			}
-
-			Mock Get-Process { $null } -ParameterFilter { $PSBoundParameters.ContainsKey('Id') }
+			} -ParameterFilter { $Id -eq $PID }
+			Mock Get-Process { $null } -ParameterFilter { $Id -eq 9876 }
 			Mock Get-Process {
 				@(
 					[PSCustomObject]@{ ProcessName = 'WindowsTerminal'; Id = 2222 },
 					[PSCustomObject]@{ ProcessName = 'pwsh'; Id = 3333 }
 				)
-			} -ParameterFilter { -not $PSBoundParameters.ContainsKey('Id') }
+			} -ParameterFilter { $null -eq $Id }
 
 			Terminate-WindowsTerminalTabs
 
-			Should -Invoke Get-CimInstance -Times 2
-			Should -Invoke Get-Process -Times 1 -Exactly -ParameterFilter { -not $PSBoundParameters.ContainsKey('Id') }
+			Should -Invoke Get-CimInstance -Times 0
+			Should -Invoke Get-Process -Times 1 -Exactly -ParameterFilter { $null -eq $Id }
 		}
 
 		It "uses process-list fallback when hosting WT PID is not resolved" {
-			Mock Get-CimInstance { $null }
+			Mock Get-CimInstance { throw 'CIM must not be used for parent-chain resolution' }
+			# No resolvable parent chain at all.
+			Mock Get-Process { $null } -ParameterFilter { $null -ne $Id }
 			Mock Get-Process {
 				@(
 					[PSCustomObject]@{ ProcessName = 'WindowsTerminal'; Id = 7777 },
 					[PSCustomObject]@{ ProcessName = 'pwsh'; Id = 8888 }
 				)
-			} -ParameterFilter { -not $PSBoundParameters.ContainsKey('Id') }
+			} -ParameterFilter { $null -eq $Id }
 
 			Terminate-WindowsTerminalTabs
 
-			Should -Invoke Get-Process -Times 0 -ParameterFilter { $PSBoundParameters.ContainsKey('Id') }
-			Should -Invoke Get-Process -Times 1 -Exactly -ParameterFilter { -not $PSBoundParameters.ContainsKey('Id') }
+			Should -Invoke Get-CimInstance -Times 0
+			Should -Invoke Get-Process -Times 1 -Exactly -ParameterFilter { $null -eq $Id }
 		}
 
 		It "returns cleanly when no WindowsTerminal process is found" {

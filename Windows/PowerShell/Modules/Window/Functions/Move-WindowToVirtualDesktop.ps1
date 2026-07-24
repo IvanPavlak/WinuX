@@ -9,6 +9,13 @@ function Move-WindowToVirtualDesktop {
 		Note: This function uses 0-based indexing internally. Layout files use 1-based
 		indexing which is converted before calling this function.
 
+		A window already on the target desktop returns $true immediately (no COM move, no
+		settle delay) - workspace windows are desktop-moved from more than one code path,
+		so this is the common case. After a real move the result is verified immediately
+		and then polled briefly instead of a fixed sleep. $script:LastMoveWindowToVirtualDesktopResult.Moved
+		reports whether a real move was performed, so callers can skip their own settle
+		delays on the fast path.
+
 	.PARAMETER WindowHandle
 		The window handle (HWND) to move.
 
@@ -31,9 +38,28 @@ function Move-WindowToVirtualDesktop {
 		[int]$DesktopNumber
 	)
 
+	# Tells callers whether a real move was performed (vs. the already-on-target fast path),
+	# so post-move settle delays can be skipped when nothing actually moved.
+	$script:LastMoveWindowToVirtualDesktopResult = @{ Moved = $false }
+
 	# Use cached VirtualDesktop module loader
 	if (Import-VirtualDesktopModule) {
 		try {
+
+			# Fast path: the window is already on the target desktop - no COM move, no settle
+			# delay. Every workspace window is desktop-moved from more than one code path
+			# (early-stable callback + layout pass), so this is the common case.
+			try {
+				$currentDesktopIndex = Get-DesktopIndex (Get-DesktopFromWindow -Hwnd $WindowHandle.ToInt64())
+				if ($currentDesktopIndex -eq $DesktopNumber) {
+					Write-Verbose "Window already on desktop index $DesktopNumber - skipping move"
+					return $true
+				}
+			}
+			catch {
+				# Unresolvable current desktop (pinned/system window, transient COM error) -
+				# fall through to the normal move path.
+			}
 
 			# Get desktop count to validate target
 			$desktopCount = Get-DesktopCount
@@ -66,22 +92,31 @@ function Move-WindowToVirtualDesktop {
 				$moveError = $_
 			}
 
-			# Verify the move
-			Start-Sleep -Milliseconds $script:WindowModuleDelays.VirtualDesktopMs
-
+			# Verify immediately, then poll briefly: the COM move is effectively synchronous
+			# most of the time, so a fixed post-move sleep wastes the common case, while a
+			# single fixed-delay check can race on a loaded system and report a false failure.
 			$verifyIndex = -1
 			$verifyError = $null
-			try {
-				$verifyDesktop = Get-DesktopFromWindow -Hwnd $WindowHandle.ToInt64()
-				$verifyIndex = Get-DesktopIndex $verifyDesktop
-			}
-			catch {
-				# TYPE_E_ELEMENTNOTFOUND often occurs during verification even when move succeeded
-				$verifyError = $_
+			$verifyStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+			while ($true) {
+				try {
+					$verifyDesktop = Get-DesktopFromWindow -Hwnd $WindowHandle.ToInt64()
+					$verifyIndex = Get-DesktopIndex $verifyDesktop
+					$verifyError = $null
+				}
+				catch {
+					# TYPE_E_ELEMENTNOTFOUND often occurs during verification even when move succeeded
+					$verifyError = $_
+				}
+
+				if ($verifyIndex -eq $DesktopNumber) { break }
+				if ($verifyStopwatch.ElapsedMilliseconds -ge 100) { break }
+				Start-Sleep -Milliseconds 10
 			}
 
 			# Check if move succeeded despite potential error (TYPE_E_ELEMENTNOTFOUND often occurs even on success)
 			if ($verifyIndex -eq $DesktopNumber) {
+				$script:LastMoveWindowToVirtualDesktopResult.Moved = $true
 				if (Test-LogVerbose) {
 					Write-Verbose "Window is now on desktop index $verifyIndex"
 					Write-LogDebug "Moved window to virtual desktop [$DesktopNumber]" -Style Success

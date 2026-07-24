@@ -93,6 +93,7 @@ function Open-Workspace {
 	}
 
 	$stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+	$summaryPrinted = $false
 	try {
 		# -Alongside always runs in a completely new shell: replay this exact invocation
 		# in a fresh Windows Terminal window and hand the calling shell its prompt back.
@@ -243,11 +244,49 @@ function Open-Workspace {
 			return
 		}
 
+		# Record this exact invocation (with RESOLVED workspace names - the user may have picked
+		# them from the interactive menu) so a failure-path respawn reruns precisely this command
+		# instead of scraping the shared PSReadLine history, where any other session may have
+		# written a newer line meanwhile. Cleared in the finally block; consumed by
+		# Set-WorkspaceWindowLayout when it escalates to ReRun-LastCommand.
+		$quoteRerunToken = { param($value) "'" + ([string]$value -replace "'", "''") + "'" }
+		$rerunTokens = @('Open-Workspace')
+		$rerunTokens += '-Workspace'
+		$rerunTokens += (@($workspaces) | ForEach-Object { & $quoteRerunToken $_ }) -join ', '
+		if ($Project) {
+			$rerunTokens += '-Project'
+			$rerunTokens += (@($Project) | ForEach-Object { & $quoteRerunToken $_ }) -join ', '
+		}
+		if ($Alongside) {
+			$rerunTokens += '-Alongside'
+		}
+		foreach ($extraArg in $ExtraArgs) {
+			if ($extraArg -is [string] -and $extraArg.StartsWith('-')) {
+				$rerunTokens += $extraArg
+			}
+			elseif ($extraArg -is [bool]) {
+				$rerunTokens += '$' + $extraArg.ToString().ToLower()
+			}
+			elseif ($extraArg -is [array]) {
+				$rerunTokens += (@($extraArg) | ForEach-Object { & $quoteRerunToken $_ }) -join ', '
+			}
+			else {
+				$rerunTokens += & $quoteRerunToken $extraArg
+			}
+		}
+		$env:WORKSPACE_RERUN_COMMAND = $rerunTokens -join ' '
+
 		foreach ($workspaceName in $workspaces) {
 			# Calculate desktop offset if -Alongside flag is used
 			$desktopOffset = 0
 			if ($Alongside) {
 				$desktopOffset = Get-NextAvailableDesktopIndex
+				if ($null -eq $desktopOffset) {
+					# Desktop enumeration failed - proceeding with offset 0 would open this
+					# workspace ON TOP of the existing one, the exact thing -Alongside prevents.
+					Write-LogError "Cannot determine the next available desktop for [$workspaceName] (virtual desktop enumeration failed) - skipping alongside open."
+					continue
+				}
 				Write-LogTitle "Opening $workspaceName Workspace alongside current"
 			}
 			else {
@@ -466,6 +505,24 @@ function Open-Workspace {
 					}
 				}
 
+				# Terminate-WindowsTerminalTabs with -OnlyCurrent/-IncludeCurrent ends THIS
+				# process via [Environment]::Exit, which skips finally blocks - the elapsed
+				# summary and the keyboard-modifier self-heal in the finally below would never
+				# run. Do both now, before handing control to the terminating action.
+				if ($action -eq "Terminate-WindowsTerminalTabs" -and
+					(($actionParams.ContainsKey("OnlyCurrent") -and $actionParams["OnlyCurrent"]) -or
+					($actionParams.ContainsKey("IncludeCurrent") -and $actionParams["IncludeCurrent"]))) {
+					$stopwatch.Stop()
+					$elapsedSeconds = [math]::Round(($carryOverElapsed + $stopwatch.Elapsed).TotalSeconds, 1)
+					Write-LogSuccess "Workspace(s) opened in $elapsedSeconds seconds!"
+					$summaryPrinted = $true
+					[Environment]::SetEnvironmentVariable($workspaceTimerEnvVar, $null, 'Process')
+					[Environment]::SetEnvironmentVariable('WORKSPACE_RERUN_COMMAND', $null, 'Process')
+					if (Get-Command Reset-KeyboardModifiers -ErrorAction SilentlyContinue) {
+						$null = Reset-KeyboardModifiers
+					}
+				}
+
 				try {
 					$filteredParams = Get-FilteredParams -CommandName $action -Params $actionParams
 					if ($filteredParams.Count -gt 0) {
@@ -482,11 +539,14 @@ function Open-Workspace {
 		}
 
 		$stopwatch.Stop()
-		$elapsedSeconds = [math]::Round(($carryOverElapsed + $stopwatch.Elapsed).TotalSeconds, 1)
-		Write-LogSuccess "Workspace(s) opened in $elapsedSeconds seconds!"
+		if (-not $summaryPrinted) {
+			$elapsedSeconds = [math]::Round(($carryOverElapsed + $stopwatch.Elapsed).TotalSeconds, 1)
+			Write-LogSuccess "Workspace(s) opened in $elapsedSeconds seconds!"
+		}
 	}
 	finally {
 		[Environment]::SetEnvironmentVariable($workspaceTimerEnvVar, $null, 'Process')
+		[Environment]::SetEnvironmentVariable('WORKSPACE_RERUN_COMMAND', $null, 'Process')
 
 		# The flow above synthesizes keyboard input (FancyZones shortcuts, Win+Arrow
 		# snaps, shift-drag, terminal tab cycling). Guarantee the session never leaves

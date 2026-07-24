@@ -69,6 +69,7 @@
 		'Visualize-Layouts',
 		'Wait-DesktopSwitch',
 		'Wait-ForWorkspaceWindows',
+		'Wait-WindowRect',
 		'Write-WindowInfoBlock',
 		'Get-InsetWindowBounds'
 	)

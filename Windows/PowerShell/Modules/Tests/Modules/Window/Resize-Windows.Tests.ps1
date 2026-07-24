@@ -74,4 +74,45 @@ Describe "Resize-Windows" {
 		Should -Invoke Get-CachedWindows -Times 0
 		Should -Invoke Set-WindowPosition -Times 1 -ParameterFilter { $WindowHandle -eq [IntPtr]2 }
 	}
+
+	Context "Single-handle mode overhead and output" {
+		BeforeEach {
+			Mock Get-MonitorInfo {
+				@([PSCustomObject]@{
+						Left = 0; Top = 0; Right = 1920; Bottom = 1080
+						WorkAreaLeft = 0; WorkAreaTop = 0; WorkAreaWidth = 1920; WorkAreaHeight = 1080
+						IsPrimary = $true; DeviceName = 'DISPLAY1'
+					})
+			}
+			Mock Get-CachedWindows {
+				@([PSCustomObject]@{
+						Handle = [IntPtr]1; Title = 'Test Window'; ProcessName = 'TestApp'
+						Width = 800; Height = 600; Left = 100; Top = 100
+					})
+			}
+		}
+
+		It "does not force a cache refresh per call (tight-loop callers pay 10-30ms per clear)" {
+			$null = Resize-Windows -WindowHandle ([IntPtr]1)
+
+			Should -Invoke Clear-WindowCache -Times 0
+			Should -Invoke Get-CachedWindows -Times 1 -Exactly
+		}
+
+		It "stays quiet in single-handle percent mode (one line per window spammed workspace opens)" {
+			Mock Write-LogSuccess { }
+
+			$null = Resize-Windows -WindowHandle ([IntPtr]1)
+
+			Should -Invoke Write-LogSuccess -Times 0
+		}
+
+		It "still prints the summary for the user-facing resize-all invocation" {
+			Mock Write-LogSuccess { }
+
+			$null = Resize-Windows
+
+			Should -Invoke Write-LogSuccess -Times 1 -Exactly -ParameterFilter { $Message -like "*window(s) to*" }
+		}
+	}
 }

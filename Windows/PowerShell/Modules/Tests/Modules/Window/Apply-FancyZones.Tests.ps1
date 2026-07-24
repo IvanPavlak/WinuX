@@ -109,4 +109,25 @@ Describe "Apply-FancyZones" {
 
 		Should -Invoke Write-Warning -Times 1 -Exactly -ParameterFilter { $Message -like "*Layout 'MissingLayout' not found in configuration*" }
 	}
+
+	It "returns the per-monitor outcome records produced inside the apply scriptblock (scope regression)" {
+		$monitorConfig = @{
+			Primary = @{
+				X = 0; Y = 0; Width = 1920; Height = 1080
+				VirtualDesktopLayouts = @{
+					1 = 'MissingLayout'
+				}
+			}
+		}
+
+		Mock Get-AppliedFancyZonesState { @{} }
+
+		$results = @(Apply-FancyZones -MonitorConfig $monitorConfig -DesktopNumber 1)
+
+		# Records appended INSIDE the $applyLayouts scriptblock used to be silently lost
+		# (`+=` on a scriptblock parameter rebinds a scope-local copy), which kept the
+		# caller's result set empty and made the applied-layouts cache invalidation dead
+		# code. The record must survive into the function's return value.
+		@($results | Where-Object { $_.Status -eq 'Layout Number Unknown' }).Count | Should -Be 1
+	}
 }

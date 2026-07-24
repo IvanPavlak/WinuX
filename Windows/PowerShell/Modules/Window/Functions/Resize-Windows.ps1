@@ -216,13 +216,16 @@ function Resize-Windows {
 		}
 
 		# Resolve the target window set.
-		# Clear cache first to get fresh window positions.
-		# - WindowHandle: a single window (used by internal callers and Center-Windows).
+		# - WindowHandle: a single window (used by internal callers and Center-Windows) -
+		#   served from the window cache WITHOUT forcing a refresh. This mode is called once
+		#   per window in tight loops (Resize-PositionedWindows, snap retries), and a forced
+		#   Clear-WindowCache + re-enumeration per call cost 10-30ms each for data about one
+		#   already-known handle; the cache's own 50ms TTL keeps the data fresh enough for
+		#   the skip-tolerance check (windows only move when this module moves them).
 		# - ProcessName/WindowTitle: delegate filtering to Get-WindowHandle (exact, wildcard,
-		#   regex, OR logic) - the same matching path used by Move-Windows.
-		# - Neither: all visible windows.
-		Clear-WindowCache
-
+		#   regex, OR logic) - the same matching path used by Move-Windows. Cache cleared
+		#   first for fresh positions.
+		# - Neither: all visible windows (cache cleared first).
 		if ($PSBoundParameters.ContainsKey('WindowHandle')) {
 			$allWindows = @(Get-CachedWindows | Where-Object { $_.Handle -eq $WindowHandle })
 
@@ -232,12 +235,14 @@ function Resize-Windows {
 			}
 		}
 		elseif ($ProcessName -or $WindowTitle) {
+			Clear-WindowCache
 			$filterParams = @{}
 			if ($ProcessName) { $filterParams.ProcessName = $ProcessName }
 			if ($WindowTitle) { $filterParams.WindowTitle = $WindowTitle }
 			$allWindows = Get-WindowHandle @filterParams
 		}
 		else {
+			Clear-WindowCache
 			$allWindows = Get-CachedWindows
 		}
 
@@ -369,10 +374,11 @@ function Resize-Windows {
 		if (Test-LogVerbose) {
 			Write-LogDebug "Resized [$resizedCount] window(s)$(if ($skippedCount -gt 0) { ", skipped [$skippedCount]" })"
 		}
-		elseif (-not $useTargetBoundsMode -and $PSBoundParameters.ContainsKey('WindowHandle')) {
-			Write-LogSuccess "Resized target window to $Percent%!"
-		}
-		elseif (-not $useTargetBoundsMode) {
+		elseif (-not $useTargetBoundsMode -and -not $PSBoundParameters.ContainsKey('WindowHandle')) {
+			# Only the user-facing "resize all/matching windows" invocation prints a summary.
+			# Single-handle percent mode is an internal per-window call (first-open
+			# normalization runs it once per new window) - a success line per window spammed
+			# the workspace-open output; verbose mode still logs each via the branch above.
 			Write-LogSuccess "Resized $resizedCount window(s) to $Percent%!"
 		}
 

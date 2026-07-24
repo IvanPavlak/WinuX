@@ -19,6 +19,17 @@ function Apply-FancyZones {
 		The virtual desktop number to apply layouts for. If specified and monitor has VirtualDesktopLayouts,
 		will use the layout defined for that desktop.
 
+	.PARAMETER MonitorInfo
+		Pre-fetched monitor info array to reuse instead of calling Get-MonitorInfo (caching optimization).
+
+	.PARAMETER DesktopOffset
+		Virtual desktop offset for multi-workspace placement; layouts apply to desktops
+		starting from this index. Default is 0.
+
+	.PARAMETER DesktopCount
+		Caps how many desktops are processed (from the offset), preventing overwrite of
+		adjacent workspaces' layouts. Default is 0.
+
 	.EXAMPLE
 		$config = Import-PowerShellDataFile -Path "WinuX-workspace-layout.psd1"
 		Apply-FancyZones -MonitorConfig $config.Monitors
@@ -115,13 +126,18 @@ function Apply-FancyZones {
 		}
 	}
 
-	$results = @()
+	# Generic List with reference semantics: the $applyLayouts scriptblock below receives this
+	# as a parameter, and `+=` on an array parameter would rebind a scope-LOCAL copy - every
+	# "Shortcut Sent"/"Failed" record used to be silently lost, which kept $appliedCount at 0
+	# and made the applied-layouts cache invalidation at the end dead code.
+	$results = [System.Collections.Generic.List[object]]::new()
 
 	# Idempotency: read currently applied FancyZones state to skip redundant shortcut sends
 	$appliedState = $null
 	$layoutUuidLookup = $null
 	$desktopGuidLookup = @{}
 	$displayToEdidMap = @{}
+	$displayToInstanceMap = @{}
 
 	try {
 		$appliedState = Get-AppliedFancyZonesState
@@ -159,12 +175,18 @@ function Apply-FancyZones {
 				foreach ($devInfo in $deviceInfoList) {
 					if ($devInfo.DisplayName -and $devInfo.EdidCode) {
 						$displayToEdidMap[$devInfo.DisplayName] = $devInfo.EdidCode.ToUpper()
+						# PnP instance path - unique per physical device, present in newer
+						# FancyZones schemas; enables idempotency for duplicate-EDID monitors.
+						if ($devInfo.MonitorInstance) {
+							$displayToInstanceMap[$devInfo.DisplayName] = $devInfo.MonitorInstance.ToUpper()
+						}
 					}
 				}
 			}
 			catch {
 				# EnumDisplayDevices unavailable (type not loaded yet) - fall back to DeviceName matching
 				$displayToEdidMap = @{}
+				$displayToInstanceMap = @{}
 			}
 
 			# Guard against ambiguous monitor identity: FancyZones' applied-layouts.json keys each
@@ -177,8 +199,24 @@ function Apply-FancyZones {
 			if ($displayToEdidMap.Count -gt 0) {
 				$duplicateEdids = @(Get-DuplicateMonitorEdid -DisplayToEdidMap $displayToEdidMap)
 				if ($duplicateEdids.Count -gt 0) {
-					Write-LogDebug "  ⚠ Duplicate monitor EDID(s) detected ($($duplicateEdids -join ', ')) - disabling idempotency skip to guarantee correct per-monitor layouts" -Style Warning
-					$appliedState = $null
+					# Duplicate EDIDs are only ambiguous when the PnP instance path cannot
+					# disambiguate them: newer FancyZones schemas key applied-layouts.json by
+					# EDID + monitor-instance, and the state lookup stores instance-qualified
+					# keys. Idempotency stays enabled when every duplicated display has an
+					# instance; otherwise fall back to always reapplying (previous behavior).
+					$duplicatesWithoutInstance = @(
+						$displayToEdidMap.Keys | Where-Object {
+							$duplicateEdids -contains $displayToEdidMap[$_] -and -not $displayToInstanceMap.ContainsKey($_)
+						}
+					)
+
+					if ($duplicatesWithoutInstance.Count -gt 0) {
+						Write-LogDebug "  ⚠ Duplicate monitor EDID(s) detected ($($duplicateEdids -join ', ')) without instance paths - disabling idempotency skip to guarantee correct per-monitor layouts" -Style Warning
+						$appliedState = $null
+					}
+					elseif (Test-LogVerbose) {
+						Write-LogDebug "  Duplicate monitor EDID(s) detected ($($duplicateEdids -join ', ')) - idempotency kept via instance-qualified keys" -Style Warning
+					}
 				}
 			}
 
@@ -236,6 +274,11 @@ function Apply-FancyZones {
 			if ($displayToEdidMap.ContainsKey($deviceName)) { $monitorId = $displayToEdidMap[$deviceName] }
 			elseif ($deviceName) { $monitorId = $deviceName.ToUpper() }
 			if (-not $monitorId) { return $false }
+
+			# Prefer the instance-qualified key - unambiguous when identical monitors share an EDID.
+			if ($displayToInstanceMap.ContainsKey($deviceName)) {
+				$monitorId = "$monitorId|$($displayToInstanceMap[$deviceName])"
+			}
 
 			$stateKey = "$($monitorId):$desktopGuid"
 			if (-not $appliedState.ContainsKey($stateKey) -or $appliedState[$stateKey] -ne $targetUuid) {
@@ -352,11 +395,11 @@ function Apply-FancyZones {
 
 			if (-not $matchedMonitor) {
 				Write-Warning "    ✗ Could not find physical monitor matching configuration"
-				$resultsArray += [PSCustomObject]@{
+				$resultsArray.Add([PSCustomObject]@{
 					Monitor = $monitorKey
 					Layout  = $layoutName
 					Status  = "Monitor Not Found"
-				}
+				})
 				continue
 			}
 
@@ -367,11 +410,11 @@ function Apply-FancyZones {
 				else {
 					Write-Warning "    ✗ Layout '$layoutName' not found in configuration"
 					Write-Warning "      Available layouts: $($global:Configuration.LayoutNumbers.Keys -join ', ')"
-					$resultsArray += [PSCustomObject]@{
+					$resultsArray.Add([PSCustomObject]@{
 						Monitor = $monitorKey
 						Layout  = $layoutName
 						Status  = "Layout Number Unknown"
-					}
+					})
 					continue
 				}
 			}
@@ -380,11 +423,11 @@ function Apply-FancyZones {
 				if (Test-LogVerbose) {
 					Write-Warning "    ✗ Layout number must be 0-9, got => [$layoutNumber]"
 				}
-				$resultsArray += [PSCustomObject]@{
+				$resultsArray.Add([PSCustomObject]@{
 					Monitor = $monitorKey
 					Layout  = $layoutName
 					Status  = "Invalid Layout Number"
-				}
+				})
 				continue
 			}
 
@@ -418,6 +461,12 @@ function Apply-FancyZones {
 							$monitorId = $deviceName.ToUpper()
 						}
 
+						# Prefer the instance-qualified key - unambiguous when identical
+						# monitors share an EDID.
+						if ($monitorId -and $displayToInstanceMap.ContainsKey($deviceName)) {
+							$monitorId = "$monitorId|$($displayToInstanceMap[$deviceName])"
+						}
+
 						if ($monitorId) {
 							$stateKey = "$($monitorId):$desktopGuid"
 							if ($appliedState.ContainsKey($stateKey) -and $appliedState[$stateKey] -eq $targetUuid) {
@@ -435,13 +484,13 @@ function Apply-FancyZones {
 				if (Test-LogVerbose) {
 					Write-LogDebug "Layout [$layoutName] already applied - skipping" -Style Warning
 				}
-				$resultsArray += [PSCustomObject]@{
+				$resultsArray.Add([PSCustomObject]@{
 					Monitor       = $monitorKey
 					Layout        = $layoutName
 					LayoutNumber  = $layoutNumber
 					DesktopNumber = $currentDesktopNumber
 					Status        = "Already Applied"
-				}
+				})
 				continue
 			}
 
@@ -474,25 +523,25 @@ function Apply-FancyZones {
 					Write-LogDebug "Layout shortcut sent" -Style Success
 				}
 
-				$resultsArray += [PSCustomObject]@{
+				$resultsArray.Add([PSCustomObject]@{
 					Monitor       = $monitorKey
 					Layout        = $layoutName
 					LayoutNumber  = $layoutNumber
 					DesktopNumber = $currentDesktopNumber
 					Status        = "Shortcut Sent"
-				}
+				})
 			}
 			catch {
 				if (Test-LogVerbose) {
 					Write-Error "    ✗ Failed to send keyboard shortcut: $_"
 				}
-				$resultsArray += [PSCustomObject]@{
+				$resultsArray.Add([PSCustomObject]@{
 					Monitor       = $monitorKey
 					Layout        = $layoutName
 					DesktopNumber = $currentDesktopNumber
 					Status        = "Failed"
 					Error         = $_.Exception.Message
-				}
+				})
 			}
 		}
 	}
@@ -551,12 +600,12 @@ function Apply-FancyZones {
 											$ln = if ($lc -is [string]) { $lc } elseif ($lc -is [hashtable]) { $lc.Layout } else { $null }
 										}
 										if ($ln) {
-											$results += [PSCustomObject]@{
+											$results.Add([PSCustomObject]@{
 												Monitor       = $mk
 												Layout        = $ln
 												DesktopNumber = $layoutLookupKey
 												Status        = "Already Applied"
-											}
+											})
 										}
 									}
 									continue
@@ -566,8 +615,15 @@ function Apply-FancyZones {
 								Invoke-WithRetry -ScriptBlock {
 									$null = Switch-Desktop -Desktop $internalDesktopIndex -ErrorAction Stop
 								} -MaxAttempts 3 -InitialDelayMs 100
-								Start-Sleep -Milliseconds 10
 								$switchedDesktop = $true
+
+								# The desktop switch is asynchronous and the layout hotkey applies to
+								# whatever desktop is ACTIVE - confirm the switch landed before injecting,
+								# otherwise the layout is silently recorded under the PREVIOUS desktop's GUID.
+								if (-not (Wait-DesktopSwitch -TargetDesktopIndex $internalDesktopIndex)) {
+									Write-LogDebug " Desktop switch to [$displayDesktopNumber] not confirmed - skipping layout application for this desktop" -Style Warning
+									continue
+								}
 
 								& $applyLayouts -currentDesktopNumber $layoutLookupKey -resultsArray $results
 							}
@@ -611,12 +667,12 @@ function Apply-FancyZones {
 											$ln = if ($lc -is [string]) { $lc } elseif ($lc -is [hashtable]) { $lc.Layout } else { $null }
 										}
 										if ($ln) {
-											$results += [PSCustomObject]@{
+											$results.Add([PSCustomObject]@{
 												Monitor       = $mk
 												Layout        = $ln
 												DesktopNumber = $desktopNumberToApply
 												Status        = "Already Applied"
-											}
+											})
 										}
 									}
 									continue
@@ -626,8 +682,14 @@ function Apply-FancyZones {
 								Invoke-WithRetry -ScriptBlock {
 									$null = Switch-Desktop -Desktop $internalDesktopIndex -ErrorAction Stop
 								} -MaxAttempts 3 -InitialDelayMs 100
-								Start-Sleep -Milliseconds 10
 								$switchedDesktop = $true
+
+								# Confirm the asynchronous switch landed before injecting the layout
+								# hotkey - see the matching guard in the DesktopOffset branch above.
+								if (-not (Wait-DesktopSwitch -TargetDesktopIndex $internalDesktopIndex)) {
+									Write-LogDebug " Desktop switch to [$desktopNumberToApply] not confirmed - skipping layout application for this desktop" -Style Warning
+									continue
+								}
 
 								& $applyLayouts -currentDesktopNumber $desktopNumberToApply -resultsArray $results
 							}
@@ -657,10 +719,18 @@ function Apply-FancyZones {
 							# the last desktop has no following pass to override a bled-in layout, so this
 							# desktop is the only one left unprotected against the commit/switch race above.
 							# Re-applying now guarantees the desktop we land on ends with its correct layout.
-							Start-Sleep -Milliseconds $script:WindowModuleDelays.LayoutCommitMs
-							$returnLayoutKey = if ($DesktopOffset -gt 0) { 1 } else { $returnDesktop + 1 }
-							& $applyLayouts -currentDesktopNumber $returnLayoutKey -resultsArray $results
-							Start-Sleep -Milliseconds $script:WindowModuleDelays.LayoutCommitMs
+							# The re-apply MUST happen on the return desktop - if the asynchronous
+							# switch-back cannot be confirmed, skip it rather than stamping this
+							# desktop's layout onto whichever desktop is still active.
+							if (Wait-DesktopSwitch -TargetDesktopIndex $returnDesktop) {
+								Start-Sleep -Milliseconds $script:WindowModuleDelays.LayoutCommitMs
+								$returnLayoutKey = if ($DesktopOffset -gt 0) { 1 } else { $returnDesktop + 1 }
+								& $applyLayouts -currentDesktopNumber $returnLayoutKey -resultsArray $results
+								Start-Sleep -Milliseconds $script:WindowModuleDelays.LayoutCommitMs
+							}
+							else {
+								Write-LogDebug " Switch back to desktop [$($returnDesktop + 1)] not confirmed - skipping return-desktop layout re-apply" -Style Warning
+							}
 						}
 						elseif (Test-LogVerbose) {
 							Write-LogDebug "No desktop switches needed - staying on current desktop" -Style Warning

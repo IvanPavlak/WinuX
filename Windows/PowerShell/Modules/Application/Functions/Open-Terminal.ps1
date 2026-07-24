@@ -10,6 +10,12 @@ function Open-Terminal {
 		- Administrator privileges when needed
 		- Multiple tabs in the same window or new windows
 
+		All tabs of one call are chained into a single wt invocation
+		("new-tab ... ; new-tab ..."): Windows Terminal processes the subcommands of one
+		command line strictly in order, which guarantees tab ordering without per-tab
+		process spawns and settle sleeps. Batches are split defensively near the Windows
+		command-line length limit; follow-up batches target the same window ID.
+
 	.PARAMETER Command
 		Array of commands to execute in separate tabs. Each command opens in its own tab.
 		Commands are base64-encoded to ensure proper execution.
@@ -84,7 +90,26 @@ function Open-Terminal {
 			else {
 				[guid]::NewGuid().ToString()
 			}
-			$StartWT = $false
+			# Chain every tab into ONE wt invocation ("new-tab ... ; new-tab ..."): Windows
+			# Terminal processes subcommands of a single command line strictly in order, so
+			# this guarantees tab ordering without the old one-spawn-per-tab + 25ms-sleep
+			# pattern (which also raced "wt -w 0" window resolution between spawns).
+			# Batches are split defensively when the command line would approach the Windows
+			# limit; follow-up batches target the same window ID so they join the same window.
+			$maxArgsLength = 24000
+			$batchArgs = [System.Collections.Generic.List[string]]::new()
+			$batchLength = 0
+
+			$spawnBatch = {
+				param([string[]]$ArgsToRun)
+
+				if ($Administrator) {
+					Start-Process wt -ArgumentList $ArgsToRun -Verb RunAs
+				}
+				else {
+					Start-Process wt -ArgumentList $ArgsToRun
+				}
+			}
 
 			for ($i = 0; $i -lt $Command.Count; $i++) {
 				$cmd = $Command[$i]
@@ -101,31 +126,48 @@ function Open-Terminal {
 				$bytes = [System.Text.Encoding]::Unicode.GetBytes($cmd)
 				$encodedCommand = [Convert]::ToBase64String($bytes)
 
-				$wtArgs = @("-w", $resolvedWindowId, "new-tab")
+				$tabArgs = [System.Collections.Generic.List[string]]::new()
+				$tabArgs.Add("new-tab")
 
 				if ($TabTitles -and $i -lt $TabTitles.Count) {
-					$wtArgs += @("--title", $TabTitles[$i], "--suppressApplicationTitle")
+					$tabArgs.Add("--title")
+					$tabArgs.Add($TabTitles[$i])
+					$tabArgs.Add("--suppressApplicationTitle")
 				}
 
 				# -NoProfileLoadTime: never show the "Loading personal and system profiles took
 				# NNNms" banner in spawned tabs (slower machines/VMs routinely exceed the 500ms
 				# threshold that triggers it).
-				$wtArgs += @("`"$PwshPath`"", "-NoExit", "-NoProfileLoadTime", "-EncodedCommand", $encodedCommand)
+				$tabArgs.Add("`"$PwshPath`"")
+				$tabArgs.Add("-NoExit")
+				$tabArgs.Add("-NoProfileLoadTime")
+				$tabArgs.Add("-EncodedCommand")
+				$tabArgs.Add($encodedCommand)
 
-				if (-not $StartWT -and -not $InSameShell) {
-					$StartWT = $true
+				$tabLength = ($tabArgs | Measure-Object -Property Length -Sum).Sum + $tabArgs.Count + 2
+
+				if ($batchArgs.Count -gt 0 -and ($batchLength + $tabLength) -gt $maxArgsLength) {
+					& $spawnBatch $batchArgs.ToArray()
+					$batchArgs = [System.Collections.Generic.List[string]]::new()
+					$batchLength = 0
 				}
 
-				if ($Administrator) {
-					Start-Process wt -ArgumentList $wtArgs -Verb RunAs
+				if ($batchArgs.Count -eq 0) {
+					$batchArgs.Add("-w")
+					$batchArgs.Add([string]$resolvedWindowId)
+					$batchLength = 32
 				}
 				else {
-					Start-Process wt -ArgumentList $wtArgs
+					# Standalone ";" separates subcommands within one wt command line.
+					$batchArgs.Add(";")
 				}
 
-				# Wait briefly for Windows Terminal to process the new-tab command
-				# This prevents race conditions when opening multiple tabs in succession
-				Start-Sleep -Milliseconds 25
+				$batchArgs.AddRange($tabArgs)
+				$batchLength += $tabLength
+			}
+
+			if ($batchArgs.Count -gt 0) {
+				& $spawnBatch $batchArgs.ToArray()
 			}
 		}
 		else {

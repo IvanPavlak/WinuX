@@ -31,8 +31,18 @@ function Snap-AllWindows {
 		virtual desktops, so callers that switch desktops in a loop must set this to avoid
 		re-snapping every window on every pass and to keep focus from being dragged to a
 		window that lives on another desktop.
+
+	.PARAMETER WindowHandles
+		Only valid with -All. Restricts snapping to exactly these window handles and takes
+		precedence over -CurrentDesktopOnly. Callers that already resolved the
+		window-to-desktop mapping (e.g. the simple-layout loop) pass the per-desktop handle
+		list here instead of paying two COM roundtrips per window on every desktop pass.
 	.PARAMETER SnapDelayMs
-		Delay in milliseconds between each window snap operation. Default is 10ms.
+		Delay in milliseconds between each window snap operation. Default is 25ms.
+	.PARAMETER DesktopOffset
+		Virtual desktop offset, so alongside workspaces target the correct desktop. Default is 0.
+	.PARAMETER DesktopCount
+		Number of desktops to process. Default is 0.
 	.EXAMPLE
 		Snap-AllWindows
 		# Snaps positioned windows to FancyZones (workspace flow)
@@ -52,6 +62,13 @@ function Snap-AllWindows {
 
 		[Parameter()]
 		[switch]$CurrentDesktopOnly,
+
+		# Only valid with -All: restrict snapping to exactly these window handles. Callers
+		# that already know the window->desktop mapping (e.g. the simple-layout loop) pass
+		# the per-desktop handle list here instead of paying -CurrentDesktopOnly's two COM
+		# roundtrips per window on every desktop pass.
+		[Parameter()]
+		[IntPtr[]]$WindowHandles,
 
 		[Parameter()]
 		[int]$SnapDelayMs = 25,
@@ -94,11 +111,22 @@ function Snap-AllWindows {
 
 			$allWindows = [WindowModule.Native]::GetAllWindows()
 
+			# Explicit handle list wins: the caller already resolved which windows belong to
+			# the active desktop, so no per-window COM filtering is needed.
+			if ($WindowHandles -and $WindowHandles.Count -gt 0) {
+				$handleFilter = [System.Collections.Generic.HashSet[IntPtr]]::new()
+				foreach ($requestedHandle in $WindowHandles) {
+					[void]$handleFilter.Add($requestedHandle)
+				}
+				$allWindows = @($allWindows | Where-Object { $handleFilter.Contains($_.Handle) })
+
+				Write-LogDebug "  Restricting to [$($allWindows.Count)] caller-specified window(s)"
+			}
 			# GetAllWindows() (EnumWindows) returns windows across ALL virtual desktops.
 			# When -CurrentDesktopOnly is set, keep only windows on the active desktop so a
 			# desktop-switching caller snaps each window exactly once on its own desktop and
 			# never pulls focus to a window that lives elsewhere.
-			if ($CurrentDesktopOnly) {
+			elseif ($CurrentDesktopOnly) {
 				$currentDesktopIndex = $null
 				try {
 					$currentDesktopIndex = Get-DesktopIndex (Get-CurrentDesktop)
@@ -282,6 +310,21 @@ function Snap-AllWindows {
 			Clear-MonitorCache
 			$monitors = Get-CachedMonitors
 
+			# FancyZones liveness is re-checked once per DESKTOP pass (it used to run per
+			# WINDOW - one Get-Process each, ~0.3s across a 10-window workspace).
+			if (-not (& $ensureFancyZonesRunning)) {
+				$failedSnaps.Add([PSCustomObject]@{
+						Handle      = [IntPtr]::Zero
+						WindowTitle = "Desktop $desktopNum"
+						ProcessName = $null
+						Expected    = $null
+						Actual      = $null
+						Error       = "FancyZones became unavailable before snapping desktop [$desktopNum]"
+					})
+				$snapAborted = $true
+				break
+			}
+
 			# Surface a stale/missing FancyZones layout for this desktop so blind snapping
 			# into a wrong or unapplied zone grid is at least diagnosable.
 			if (Test-LogVerbose) {
@@ -301,19 +344,6 @@ function Snap-AllWindows {
 				$expectedHeight = $windowState.ExpectedHeight
 				$expectedTitle = $windowState.WindowTitle
 				$expectedProcessId = [uint32]($windowState.ProcessId)
-
-				if (-not (& $ensureFancyZonesRunning)) {
-					$failedSnaps.Add([PSCustomObject]@{
-							Handle      = $handle
-							WindowTitle = $expectedTitle
-							ProcessName = $windowState.ProcessName
-							Expected    = "($expectedX, $expectedY) ${expectedWidth}x${expectedHeight}"
-							Actual      = $null
-							Error       = "FancyZones became unavailable during snap loop"
-						})
-					$snapAborted = $true
-					break
-				}
 
 				# Calculate the adjusted inset bounds using the shared resize helper.
 				$resizeBounds = Get-InsetWindowBounds -TargetX $expectedX -TargetY $expectedY -TargetWidth $expectedWidth -TargetHeight $expectedHeight -InsetPercent $insetPercent
@@ -384,15 +414,11 @@ function Snap-AllWindows {
 						$windowOnTargetDesktop = $false
 						$maxMoveRetries = 3
 						for ($moveAttempt = 1; $moveAttempt -le $maxMoveRetries; $moveAttempt++) {
-							$moveSucceeded = Move-WindowToVirtualDesktop -WindowHandle $handle -DesktopNumber $internalDesktopIndex
-							if ($moveSucceeded) {
-								Start-Sleep -Milliseconds $script:WindowModuleDelays.VirtualDesktopMs
-								$verifyDesktop = Get-DesktopFromWindow -Hwnd $handle.ToInt64()
-								$verifyDesktopIndex = Get-DesktopIndex $verifyDesktop
-								if ($verifyDesktopIndex -eq $internalDesktopIndex) {
-									$windowOnTargetDesktop = $true
-									break
-								}
+							# Move-WindowToVirtualDesktop verifies internally (immediate check +
+							# short poll) - $true already means the window is on the target desktop.
+							if (Move-WindowToVirtualDesktop -WindowHandle $handle -DesktopNumber $internalDesktopIndex) {
+								$windowOnTargetDesktop = $true
+								break
 							}
 						}
 					}
@@ -540,12 +566,12 @@ function Snap-AllWindows {
 				for ($snapAttempt = 1; $snapAttempt -le $maxSnapRetries; $snapAttempt++) {
 					if ($snapVerified) { break }
 
-					# Increase delays on retries to give FancyZones more time to settle
-					$retryDelayMs = $SnapDelayMs + (($snapAttempt - 1) * 50)
+					# Focus settle grows on retries; snap verification itself polls (Wait-WindowRect)
+					# with a budget that also grows per attempt, replacing the old fixed delays.
 					$focusSettleMs = 10 + (($snapAttempt - 1) * 40)
 
 					if ($snapAttempt -gt 1) {
-						Write-LogDebug "     ↻ Retry $snapAttempt/$maxSnapRetries for [$title] (delay: ${retryDelayMs}ms)..."
+						Write-LogDebug "     ↻ Retry $snapAttempt/$maxSnapRetries for [$title]..."
 
 						# The failed attempt itself may have stranded a modifier (or the
 						# attempt failed BECAUSE one was already stuck and corrupted the
@@ -590,26 +616,15 @@ function Snap-AllWindows {
 						# Send Win + Arrow (UP or DOWN) using batched SendInput
 						[WindowModule.Native]::SendSnapKey($snapUp)
 
-						# Wait for FancyZones to process the snap (longer on retries)
-						Start-Sleep -Milliseconds $retryDelayMs
-
-						# Verify snap worked by checking if window moved to expected zone position
-						$postSnapRect = New-Object WindowModule.RECT
-						$snapTolerance = $script:WindowModuleTolerances.PositionVerificationPx
-						if ([WindowModule.Native]::GetWindowRect($handle, [ref]$postSnapRect)) {
-							$postX = $postSnapRect.Left
-							$postY = $postSnapRect.Top
-							$postWidth = $postSnapRect.Right - $postSnapRect.Left
-							$postHeight = $postSnapRect.Bottom - $postSnapRect.Top
-
-							# Check if window is now at the FULL zone position (not inset)
-							$snapXMatch = [Math]::Abs($postX - $expectedX) -le $snapTolerance
-							$snapYMatch = [Math]::Abs($postY - $expectedY) -le $snapTolerance
-							$snapWidthMatch = [Math]::Abs($postWidth - $expectedWidth) -le $snapTolerance
-							$snapHeightMatch = [Math]::Abs($postHeight - $expectedHeight) -le $snapTolerance
-
-							$snapVerified = $snapXMatch -and $snapYMatch -and $snapWidthMatch -and $snapHeightMatch
-						}
+						# Poll until FancyZones moves the window to the FULL zone position (not inset)
+						# instead of a single fixed-delay check: returns as soon as the snap lands and
+						# only escalates to the expensive shift-drag fallback when the budget is
+						# genuinely exhausted (budget grows on retries).
+						$snapWait = Wait-WindowRect -WindowHandle $handle `
+							-ExpectedX $expectedX -ExpectedY $expectedY `
+							-ExpectedWidth $expectedWidth -ExpectedHeight $expectedHeight `
+							-TimeoutMs (200 + (($snapAttempt - 1) * 150))
+						$snapVerified = $snapWait.Verified
 
 						if ($snapVerified) {
 							if (Test-LogVerbose) {
@@ -665,23 +680,12 @@ function Snap-AllWindows {
 						$shiftDragResult = [WindowModule.Native]::ShiftDragSnap($handle, $expectedX, $expectedY, $expectedWidth, $expectedHeight, $dragStartMode)
 
 						if ($shiftDragResult) {
-							Start-Sleep -Milliseconds $retryDelayMs
-
-							# Verify shift-drag snap
-							$postShiftDragRect = New-Object WindowModule.RECT
-							if ([WindowModule.Native]::GetWindowRect($handle, [ref]$postShiftDragRect)) {
-								$postX = $postShiftDragRect.Left
-								$postY = $postShiftDragRect.Top
-								$postWidth = $postShiftDragRect.Right - $postShiftDragRect.Left
-								$postHeight = $postShiftDragRect.Bottom - $postShiftDragRect.Top
-
-								$snapXMatch = [Math]::Abs($postX - $expectedX) -le $snapTolerance
-								$snapYMatch = [Math]::Abs($postY - $expectedY) -le $snapTolerance
-								$snapWidthMatch = [Math]::Abs($postWidth - $expectedWidth) -le $snapTolerance
-								$snapHeightMatch = [Math]::Abs($postHeight - $expectedHeight) -le $snapTolerance
-
-								$snapVerified = $snapXMatch -and $snapYMatch -and $snapWidthMatch -and $snapHeightMatch
-							}
+							# Same poll-until-verified pattern as the keyboard snap above.
+							$dragWait = Wait-WindowRect -WindowHandle $handle `
+								-ExpectedX $expectedX -ExpectedY $expectedY `
+								-ExpectedWidth $expectedWidth -ExpectedHeight $expectedHeight `
+								-TimeoutMs (250 + (($snapAttempt - 1) * 150))
+							$snapVerified = $dragWait.Verified
 						}
 
 						if ($snapVerified) {

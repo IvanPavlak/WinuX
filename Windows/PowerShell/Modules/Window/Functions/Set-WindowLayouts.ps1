@@ -36,6 +36,29 @@ function Set-WindowLayouts {
 	.PARAMETER ConfigPath
 		Path to a JSON or PSD1 file containing the layout configuration.
 
+	.PARAMETER MonitorInfo
+		Array of monitor specs used to resolve string monitor labels (e.g. "Primary",
+		"Secondary") to coordinates.
+
+	.PARAMETER MonitorConfig
+		Hashtable of the Monitors configuration section; used to auto-resolve layout names
+		per monitor and desktop.
+
+	.PARAMETER ExistingWindowHandles
+		HashSet of handles open before the layout run; used to detect pre-existing windows
+		and skip already-correct positioning.
+
+	.PARAMETER ExpectedWindowState
+		Hashtable of stable window state captured during the wait phase; enables handle-based
+		recovery when titles change transiently.
+
+	.PARAMETER DesktopOffset
+		Integer shift applied to all 1-based desktop numbers. Default is 0.
+
+	.PARAMETER SkipExistingWindows
+		Switch (alongside mode) that skips windows existing before this workspace opened,
+		since they belong to a previous workspace.
+
 	.PARAMETER PinnedHandleMap
 		Optional hashtable from a previous successful run (built by Set-WorkspaceWindowLayout
 		from CurrentLayout.txt), keyed by "<DesktopNumber>|<Monitor>|<Zone>" mapping to the
@@ -1073,7 +1096,11 @@ function Set-WindowLayouts {
 				Layout    = $layoutName
 			}
 
-			if ($null -ne $config.DesktopNumber) {
+			# Settle only when a real desktop move happened this iteration - the fast path
+			# (already on target) and dedup skips need no delay.
+			if ($null -ne $config.DesktopNumber -and
+				$script:LastMoveWindowToVirtualDesktopResult -and
+				$script:LastMoveWindowToVirtualDesktopResult.Moved) {
 				Start-Sleep -Milliseconds $script:WindowModuleDelays.WindowPositionMs
 			}
 

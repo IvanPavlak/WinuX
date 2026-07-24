@@ -68,9 +68,27 @@ Describe "Set-WorkspaceWindowLayout" {
 		}
 
 		$env:WORKSPACE_RERUN_COUNT = $null
-		[Environment]::SetEnvironmentVariable('WORKSPACE_WINDOW_ONLY_RETRY', $null, 'Process')
-		[Environment]::SetEnvironmentVariable('WORKSPACE_WINDOW_ONLY_RETRY_TITLE', $null, 'Process')
-		[Environment]::SetEnvironmentVariable('WORKSPACE_WINDOW_ONLY_RETRY_PROCESS', $null, 'Process')
+		# Rerun state is mirrored at User scope ("value|timestamp", 10-min TTL) to survive
+		# terminal respawns - clear BOTH scopes so tests stay hermetic and never leak real
+		# User-scope environment values onto the machine running the suite.
+		foreach ($rerunVar in 'WORKSPACE_RERUN_COUNT', 'WORKSPACE_WINDOW_ONLY_RETRY', 'WORKSPACE_WINDOW_ONLY_RETRY_TITLE', 'WORKSPACE_WINDOW_ONLY_RETRY_PROCESS') {
+			[Environment]::SetEnvironmentVariable($rerunVar, $null, 'Process')
+			[Environment]::SetEnvironmentVariable($rerunVar, $null, 'User')
+		}
+
+		# The real Snap-AllWindows resets this at its start; the global mock does not, so a
+		# failed result would otherwise leak between tests and drive the in-process retry
+		# loop through all its attempts in unrelated tests.
+		$script:LastSnapAllWindowsResult = [PSCustomObject]@{ SnappedCount = 0; FailedWindows = @() }
+	}
+
+	AfterAll {
+		# Leave the machine clean: tests exercise the escalation path, which persists rerun
+		# state at User scope.
+		foreach ($rerunVar in 'WORKSPACE_RERUN_COUNT', 'WORKSPACE_WINDOW_ONLY_RETRY', 'WORKSPACE_WINDOW_ONLY_RETRY_TITLE', 'WORKSPACE_WINDOW_ONLY_RETRY_PROCESS') {
+			[Environment]::SetEnvironmentVariable($rerunVar, $null, 'Process')
+			[Environment]::SetEnvironmentVariable($rerunVar, $null, 'User')
+		}
 	}
 
 	It "uses Machine machine-specific workspace layout when primary monitor is small" {
@@ -231,12 +249,21 @@ Describe "Set-WorkspaceWindowLayout" {
 
 		Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace'
 
-		Should -Invoke Start-FancyZones -Times 1 -Exactly
+		# One initial pass + two in-process retries verify against the full config before
+		# the terminal respawn is considered.
+		Should -Invoke Confirm-WorkspaceWindowPositions -Times 3 -Exactly
+		# Each in-process retry re-checks FancyZones (2×) and the escalation path
+		# force-restarts it once before the respawn (3 total).
+		Should -Invoke Start-FancyZones -Times 3 -Exactly
 		Should -Invoke Initialize-WorkspaceWindowLayoutRerun -Times 1 -Exactly -ParameterFilter { $WindowOnlyRetry }
 		Should -Invoke ReRun-LastCommand -Times 1 -Exactly
+		# The mocked ReRun-LastCommand RETURNS (a real respawn ends the process via
+		# [Environment]::Exit) - reaching code after it means the respawn did not happen,
+		# so the one-shot retry markers must have been cleared.
+		[Environment]::GetEnvironmentVariable('WORKSPACE_WINDOW_ONLY_RETRY', 'Process') | Should -BeNullOrEmpty
 	}
 
-	It "triggers auto-rerun immediately when snap retries fail" {
+	It "retries snap in-process, then escalates to auto-rerun when snap keeps failing" {
 		Mock Test-Path { $true }
 		Mock Import-PowerShellDataFile {
 			@{
@@ -276,14 +303,19 @@ Describe "Set-WorkspaceWindowLayout" {
 
 		Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace'
 
+		# Snap failures never reach verification, and the pipeline is retried in-process
+		# (1 initial + 2 retries) before escalating.
 		Should -Invoke Confirm-WorkspaceWindowPositions -Times 0
-		Should -Invoke Start-FancyZones -Times 1 -Exactly
+		Should -Invoke Snap-AllWindows -Times 3 -Exactly
+		Should -Invoke Start-FancyZones -Times 3 -Exactly
 		Should -Invoke Initialize-WorkspaceWindowLayoutRerun -Times 1 -Exactly -ParameterFilter { $WindowOnlyRetry }
 		Should -Invoke Resize-Windows -Times 1 -ParameterFilter { $WindowHandle -eq [IntPtr]99 }
 		Should -Invoke ReRun-LastCommand -Times 1 -Exactly
-		[Environment]::GetEnvironmentVariable('WORKSPACE_WINDOW_ONLY_RETRY', 'Process') | Should -Be '1'
-		[Environment]::GetEnvironmentVariable('WORKSPACE_WINDOW_ONLY_RETRY_TITLE', 'Process') | Should -Be 'Code'
-		[Environment]::GetEnvironmentVariable('WORKSPACE_WINDOW_ONLY_RETRY_PROCESS', 'Process') | Should -Be 'Code'
+		# Mocked ReRun-LastCommand returned instead of ending the process, so the one-shot
+		# markers written for the respawn must have been cleared again (stale-mode guard).
+		[Environment]::GetEnvironmentVariable('WORKSPACE_WINDOW_ONLY_RETRY', 'Process') | Should -BeNullOrEmpty
+		[Environment]::GetEnvironmentVariable('WORKSPACE_WINDOW_ONLY_RETRY_TITLE', 'Process') | Should -BeNullOrEmpty
+		[Environment]::GetEnvironmentVariable('WORKSPACE_WINDOW_ONLY_RETRY_PROCESS', 'Process') | Should -BeNullOrEmpty
 	}
 
 	It "does not auto-rerun on error in alongside mode" {

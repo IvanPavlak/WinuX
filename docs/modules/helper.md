@@ -20,6 +20,28 @@ if (BranchExists -Branch "feature/my-feature") {
 - **Description:** Navigates the shell to the user's Desktop directory. Sets the current location to the Desktop folder resolved from environment variables, equivalent to `cd ~/Desktop`.
 - **Usage:** `Cd-Desktop`
 
+## [Close-WindowsTerminalTab](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Close-WindowsTerminalTab.ps1)
+
+- **Description:** Closes one Windows Terminal tab by exact title via its UI Automation close button - no focus changes, no keystrokes. Finds the `TabItem` whose name exactly matches the given title in the given window and invokes its close button through `InvokePattern`, replacing the focus-then-Ctrl+W pattern whose synthesized keystrokes landed in whatever window actually had focus (closing the user's browser tab if they clicked mid-flow). Returns `$false` when the tab or its close button cannot be found or invoked, so callers can fall back to the legacy SendKeys path.
+- **Parameters:** -WindowHandle, -TabTitle
+- **Usage:** `Close-WindowsTerminalTab -WindowHandle $wtWindow.Handle -TabTitle "MyProject.Api"`
+
+Locates the matching `TabItem` among the window's UI Automation descendants, then scans that tab's `Button` descendants for one exposing `InvokePattern` and invokes it, so closing the tab never depends on which window has focus. Returns `$true` when the close button was found and invoked; a zero handle, an unreadable UIA tree, a missing tab, or a close button without `InvokePattern` all return `$false` instead of throwing. Used by `Terminate-WindowsTerminalTabs` to close matching tabs without stealing focus.
+
+| Parameter       | Description                                                                                 |
+| --------------- | ------------------------------------------------------------------------------------------- |
+| `-WindowHandle` | `IntPtr` handle of the Windows Terminal top-level window that owns the tab. Mandatory.      |
+| `-TabTitle`     | Exact title of the tab to close (as reported by `Get-WindowsTerminalTabTitles`). Mandatory. |
+
+```powershell
+# Close a project tab by exact title, falling back to the legacy path on failure
+if (-not (Close-WindowsTerminalTab -WindowHandle $wtWindow.Handle -TabTitle "MyProject.Api")) {
+    Write-Verbose "fall back to focus + Ctrl+W"
+}
+```
+
+**See also:** [Get-WindowsTerminalTabTitles](helper.md#get-windowsterminaltabtitles), [Terminate-WindowsTerminalTabs](system.md#terminate-windowsterminaltabs)
+
 ## [Collect-BrowserUrls](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Collect-BrowserUrls.ps1)
 
 - **Description:** Recursively collects all URLs from nested browser group hashtables, flattening the hierarchical `BrowserGroups` structure (from `Configuration.psd1`) into a flat URL array. Handles nested hashtables with `Name`/`Url` pairs and tracks the opened subgroup names. Helper function for `Open-Browser`.
@@ -545,6 +567,26 @@ Write-Host "Terminal handle: $($termWin.Handle)"
 $termWin = Get-TargetTerminalWindow -TerminalWindowHandle $handle
 ```
 
+## [Get-WindowsTerminalTabTitles](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Get-WindowsTerminalTabTitles.ps1)
+
+- **Description:** Reads a Windows Terminal window's tab titles through UI Automation - no focus changes, no keystrokes. Enumerates the window's `TabItem` elements and returns their names as a `[string[]]` in tab-strip order, or `$null` - never an empty array - when the tabs cannot be read, so callers can fall back to the legacy Ctrl+Tab cycling it replaces.
+- **Parameters:** -WindowHandle
+- **Usage:** `Get-WindowsTerminalTabTitles -WindowHandle $wtWindow.Handle`
+
+Scans the window's UI Automation descendants for `TabItem` elements; Windows Terminal's UIA tree is small, so the scan takes tens of milliseconds per window, versus the SendKeys Ctrl+Tab cycling probes it replaces, which had to foreground each window and type into it (stealing focus, racing user input, and costing ~50-100ms per tab). A `$null` result (zero handle, UIA unavailable, element gone, or no `TabItem` exposed) is distinguishable from a real answer because a live Windows Terminal window always has at least one tab, so `$null` always means "UIA could not see the tabs - use the fallback". Used by `Test-TerminalTabsAlreadyOpen`, `Open-ProjectTerminals`, and `Terminate-WindowsTerminalTabs`.
+
+| Parameter       | Description                                                                     |
+| --------------- | ------------------------------------------------------------------------------- |
+| `-WindowHandle` | `IntPtr` handle of the Windows Terminal top-level window to inspect. Mandatory. |
+
+```powershell
+# Read a terminal window's tab titles without touching focus
+$titles = Get-WindowsTerminalTabTitles -WindowHandle $wtWindow.Handle
+if ($null -eq $titles) { Write-Verbose "fall back to Ctrl+Tab cycling" }
+```
+
+**See also:** [Close-WindowsTerminalTab](helper.md#close-windowsterminaltab), [Test-TerminalTabsAlreadyOpen](workflow.md#test-terminaltabsalreadyopen), [Terminate-WindowsTerminalTabs](system.md#terminate-windowsterminaltabs)
+
 ## [Get-WindowTitleCandidates](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Get-WindowTitleCandidates.ps1)
 
 - **Description:** Generates window title matching candidates from file names and paths. For each input it produces a de-duplicated set of variations (the original value, the file name, and the file name without extension) for robust window matching.
@@ -860,17 +902,18 @@ Set-LogLevel Verbose { Refresh-BrowserTabs }
 
 ## [Rerun-LastCommand](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Rerun-LastCommand.ps1)
 
-- **Description:** Reruns a recent command in a fresh, non-admin PowerShell shell. When an operation fails in a way that requires a clean shell environment (e.g., RPC errors, layout verification failures), it reads the PSReadLine history, offers the recent non-rerun commands for selection (or auto-selects the most recent with `-AutoAccept`), opens Windows Terminal in the current directory running the selected command, and closes the original terminal tab. Caller-specific recovery such as workspace layout, FancyZones, desktop, cache, or RPC preparation is handled before invoking this generic rerun helper. Before driving the terminal it releases stuck keyboard modifiers and a stranded mouse button via `Reset-KeyboardModifiers` (Window module, when available), healing the stuck-modifier input lockup and keeping its own synthesized keystrokes uncorrupted.
-- **Parameters:** -NumberOfLastTriggeringCommands, -ErrorMessage, -AutoAccept
-- **Usage:** `Rerun-LastCommand`, `Rerun-LastCommand -AutoAccept`, `Rerun-LastCommand -NumberOfLastTriggeringCommands 10`, `Rerun-LastCommand -ErrorMessage "An error that needs a fresh shell occurred"`
+- **Description:** Reruns a recent command in a fresh, non-admin PowerShell shell. When an operation fails in a way that requires a clean shell environment (e.g., RPC errors, layout verification failures), it reads the PSReadLine history, offers the recent non-rerun commands for selection (or auto-selects the most recent with `-AutoAccept`; an exact caller-supplied `-Command` bypasses the history entirely), opens Windows Terminal in the current directory running the selected command, and closes the original terminal tab. Caller-specific recovery such as workspace layout, FancyZones, desktop, cache, or RPC preparation is handled before invoking this generic rerun helper. Before driving the terminal it releases stuck keyboard modifiers and a stranded mouse button via `Reset-KeyboardModifiers` (Window module, when available), healing the stuck-modifier input lockup and keeping its own synthesized keystrokes uncorrupted.
+- **Parameters:** -NumberOfLastTriggeringCommands, -ErrorMessage, -AutoAccept, -Command
+- **Usage:** `Rerun-LastCommand`, `Rerun-LastCommand -AutoAccept`, `Rerun-LastCommand -NumberOfLastTriggeringCommands 10`, `Rerun-LastCommand -ErrorMessage "An error that needs a fresh shell occurred"`, `Rerun-LastCommand -AutoAccept -Command "Open-Workspace -Workspace 'MyWorkspace'"`
 
-Recovers from failures that require a pristine shell by reading the PSReadLine history file (`HistorySavePath`) and presenting the last N typed commands, filtered to skip blanks, duplicates, and prior `Rerun-LastCommand` invocations. The chosen command is run via `Open-Terminal` in a new Windows Terminal tab, prefixed with a `Set-Location` back to the original working directory. After launching, the original window is refocused and its tab is closed (`Ctrl+Shift+W`), and the current process exits.
+Recovers from failures that require a pristine shell by reading the PSReadLine history file (`HistorySavePath`) and presenting the last N typed commands, filtered to skip blanks, duplicates, and prior `Rerun-LastCommand` invocations. When `-Command` is supplied, that exact command is rerun and PSReadLine history is not consulted at all - the shared history file is written incrementally by every open pwsh session, so its most recent line can be a command typed in another window; `Open-Workspace` records its resolved invocation in `$env:WORKSPACE_RERUN_COMMAND` and `Set-WorkspaceWindowLayout` passes it through on escalation. The chosen command is run via `Open-Terminal` in a new Windows Terminal tab, prefixed with a `Set-Location` back to the original working directory. The `AppActivate` call that focuses Windows Terminal before the respawn loads the `Microsoft.VisualBasic` assembly first inside a try/catch, so a missing assembly can no longer abort the respawn after the retry markers were persisted. After launching, the original window is refocused and its tab is closed (`Ctrl+Shift+W`), and the current process exits.
 
 | Parameter                         | Description                                                         |
 | --------------------------------- | ------------------------------------------------------------------- |
 | `-NumberOfLastTriggeringCommands` | Number of recent commands to display for selection. Default is `5`. |
 | `-ErrorMessage`                   | Optional custom message shown before the command selection menu.    |
 | `-AutoAccept`                     | Skips the menu and automatically selects the most recent command.   |
+| `-Command`                        | Exact command to rerun; PSReadLine history is not consulted at all. |
 
 ```powershell
 # Interactive selection from the last 5 commands (default error message)
@@ -881,6 +924,9 @@ Rerun-LastCommand -AutoAccept
 
 # Show more history and a custom message before selecting
 Rerun-LastCommand -NumberOfLastTriggeringCommands 10 -ErrorMessage "Layout verification failed; rerunning in a fresh shell"
+
+# Rerun exactly this command; history is never read
+Rerun-LastCommand -AutoAccept -Command "Open-Workspace -Workspace 'MyWorkspace'"
 ```
 
 **See also:** [Resolve-Selection](helper.md#resolve-selection), [Open-Terminal](application.md#open-terminal), [Initialize-WorkspaceWindowLayoutRerun](window.md#initialize-workspacewindowlayoutrerun)
@@ -949,7 +995,7 @@ $repo = Resolve-ProjectPath -ProjectName MyRepo -ForRepository
 - **Parameters:** -OptionList, -InputObject, -MenuTitle, -HideMenuTitle, -HideSelection, -PromptMessage, -HidePromptMessage, -AllowEmptyPromptResponse, -AllowMultipleSelections, -DefaultOptionIndex, -GroupsConfig
 - **Usage:** `Resolve-Selection`, `Resolve-Selection -OptionList @("Alpha", "Beta", "Gamma")`, `Resolve-Selection -OptionList @("English", "Espanol", "Francais") -PromptMessage "Select a language"`, `Resolve-Selection -OptionList @("Alpha", "Beta", "Gamma") -DefaultOptionIndex 1`, `Resolve-Selection -GroupsConfig $Configuration.BrowserGroups -AllowMultipleSelections`
 
-Used by `Open-Browser`, `Open-Project`, `Set-Locale`, `Set-DisplayLanguage`, `Configure-NerdFont`, and others as the shared selection primitive. In flat mode it accepts a number (1-based) or the literal option text. In hierarchical mode (`-GroupsConfig`), parent groups expand to their direct children automatically, and `-AllowMultipleSelections` permits space/comma-separated picks. Pre-selected values can be passed via `-InputObject` (or the pipeline) to skip the interactive prompt entirely.
+Used by `Open-Browser`, `Open-Project`, `Set-Locale`, `Set-DisplayLanguage`, `Configure-NerdFont`, and others as the shared selection primitive. In flat mode it accepts a number (1-based) or the literal option text. In hierarchical mode (`-GroupsConfig`), parent groups expand to their direct children automatically, and `-AllowMultipleSelections` permits space/comma-separated picks. Pre-selected values can be passed via `-InputObject` (or the pipeline) to skip the interactive prompt entirely. An invalid hierarchical pre-selection reports the offending value(s) (naming the caller) and returns `$null` rather than executing a bare `break`, which would propagate out of the function into the nearest loop in the caller (e.g. `Open-Workspace`'s action loop) and silently abort every remaining action - callers already handle `$null`.
 
 | Parameter                   | Type       | Description                                                                                            |
 | --------------------------- | ---------- | ------------------------------------------------------------------------------------------------------ |

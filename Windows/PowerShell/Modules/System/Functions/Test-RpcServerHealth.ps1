@@ -15,8 +15,10 @@ function Test-RpcServerHealth {
 
 		With -Probe, also performs a live VirtualDesktop COM roundtrip against THIS
 		session's COM state (via Test-VirtualDesktopComHealth: a background runspace
-		in the current process, under a hard timeout). This catches both failure modes
-		that a service-status check cannot see:
+		in the current process, under a hard timeout). Successful probe results are
+		cached briefly (8s) so the several preflights of one workspace open pay for a
+		single probe; failures are never cached, so recovery paths always re-verify.
+		The live probe catches both failure modes that a service-status check cannot see:
 
 		- Stale session proxies: after an Explorer restart, this session's cached
 		  VirtualDesktop COM proxies are permanently disconnected and every call fails
@@ -62,6 +64,25 @@ function Test-RpcServerHealth {
 		[Parameter(Mandatory = $false)]
 		[int]$ProbeTimeoutMs = 5000
 	)
+
+	# Cache successful live-probe results briefly: one workspace open runs this preflight
+	# several times seconds apart (layout entry, desktop remove/ensure, alongside cleanup),
+	# and each probe spins up a fresh runspace (~50-200ms) plus service checks. Failures are
+	# NEVER cached, so recovery paths always re-verify against live state.
+	if (-not $script:RpcProbeHealthyCache) {
+		$script:RpcProbeHealthyCache = @{
+			VerifiedAt = [datetime]::MinValue
+			TtlSeconds = 8
+		}
+	}
+
+	if ($Probe) {
+		$probeCacheAge = ([datetime]::Now - $script:RpcProbeHealthyCache.VerifiedAt).TotalSeconds
+		if ($probeCacheAge -ge 0 -and $probeCacheAge -lt $script:RpcProbeHealthyCache.TtlSeconds) {
+			Write-LogDebug "  ✓ RPC live probe verified $([int]$probeCacheAge)s ago - using cached result" -Style Success
+			return $true
+		}
+	}
 
 	foreach ($serviceName in $ServiceNames) {
 		try {
@@ -110,6 +131,7 @@ function Test-RpcServerHealth {
 
 	if ($probeResult.Healthy) {
 		Write-LogDebug "  ✓ RPC live probe succeeded" -Style Success
+		$script:RpcProbeHealthyCache.VerifiedAt = [datetime]::Now
 		return $true
 	}
 
