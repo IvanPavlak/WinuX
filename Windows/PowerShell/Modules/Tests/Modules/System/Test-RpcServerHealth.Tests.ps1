@@ -16,6 +16,10 @@ BeforeAll {
 Describe "Test-RpcServerHealth" {
 	BeforeEach {
 		Mock Write-Host { }
+
+		# Successful -Probe results are cached briefly (module scope; test scope here since
+		# the function is dot-sourced) - reset between tests so each starts uncached.
+		$script:RpcProbeHealthyCache = $null
 	}
 
 	It "returns false when any required service is not running" {
@@ -93,5 +97,45 @@ Describe "Test-RpcServerHealth" {
 
 		$result = Test-RpcServerHealth -ServiceNames @("RpcSs") -Probe
 		$result | Should -BeTrue
+	}
+
+	Context "Probe result caching" {
+		It "serves a recent healthy probe from cache without re-probing" {
+			Mock Get-Service { [PSCustomObject]@{ Status = "Running" } }
+			Mock Test-VirtualDesktopComHealth { [PSCustomObject]@{ Healthy = $true; TimedOut = $false; Error = $null } }
+
+			$null = Test-RpcServerHealth -ServiceNames @("RpcSs") -Probe
+			$result = Test-RpcServerHealth -ServiceNames @("RpcSs") -Probe
+
+			$result | Should -BeTrue
+			# One workspace open probes several times seconds apart - the repeat call must
+			# cost neither a probe runspace nor the service checks.
+			Should -Invoke Test-VirtualDesktopComHealth -Times 1 -Exactly
+			Should -Invoke Get-Service -Times 1 -Exactly
+		}
+
+		It "never caches a failed probe" {
+			Mock Get-Service { [PSCustomObject]@{ Status = "Running" } }
+			Mock Test-VirtualDesktopComHealth {
+				[PSCustomObject]@{ Healthy = $false; TimedOut = $false; Error = "The RPC server is unavailable. (0x800706BA) (HRESULT 0x800706BA)" }
+			}
+
+			$null = Test-RpcServerHealth -ServiceNames @("RpcSs") -Probe
+			$result = Test-RpcServerHealth -ServiceNames @("RpcSs") -Probe
+
+			# Recovery paths must always re-verify against live state after a failure.
+			$result | Should -BeFalse
+			Should -Invoke Test-VirtualDesktopComHealth -Times 2 -Exactly
+		}
+
+		It "does not consult the probe cache for plain service-status checks" {
+			Mock Get-Service { [PSCustomObject]@{ Status = "Running" } }
+			Mock Test-VirtualDesktopComHealth { [PSCustomObject]@{ Healthy = $true; TimedOut = $false; Error = $null } }
+
+			$null = Test-RpcServerHealth -ServiceNames @("RpcSs") -Probe
+			$null = Test-RpcServerHealth -ServiceNames @("RpcSs")
+
+			Should -Invoke Get-Service -Times 2 -Exactly
+		}
 	}
 }

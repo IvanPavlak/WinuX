@@ -97,11 +97,13 @@ Describe "Open-ProjectTerminals" {
 	}
 
 	Context "When InSameShell and InSameGroup are both true (default)" {
-		It "Should call Open-Terminal with WindowId 0" {
+		It "Should batch the project's tabs into one Open-Terminal call targeting window 0" {
 			Open-ProjectTerminals -Project "TestProject" -InSameShell
 
-			Should -Invoke Open-Terminal -Times 2 -ParameterFilter {
-				$WindowId -eq "0"
+			# Consecutive pwsh tabs are chained into ONE call (one ordered wt invocation)
+			# instead of one spawn + settle sleep per tab.
+			Should -Invoke Open-Terminal -Times 1 -Exactly -ParameterFilter {
+				$WindowId -eq "0" -and @($TabTitles).Count -eq 2
 			}
 		}
 
@@ -110,8 +112,8 @@ Describe "Open-ProjectTerminals" {
 
 			Open-ProjectTerminals -Project "TestProject" -InSameShell
 
-			Should -Invoke Open-Terminal -Times 2 -ParameterFilter {
-				$WindowId -eq "caller-window-guid"
+			Should -Invoke Open-Terminal -Times 1 -Exactly -ParameterFilter {
+				$WindowId -eq "caller-window-guid" -and @($TabTitles).Count -eq 2
 			}
 		}
 
@@ -162,26 +164,25 @@ Describe "Open-ProjectTerminals" {
 		It "Should call Open-Terminal with a GUID WindowId (not 0)" {
 			Open-ProjectTerminals -Project "TestProject" -InSameShell -InSameGroup:$false
 
-			Should -Invoke Open-Terminal -Times 2 -ParameterFilter {
-				$WindowId -ne "0" -and $WindowId -ne $null
+			# One batched call per project, carrying both tabs, in the project's own window.
+			Should -Invoke Open-Terminal -Times 1 -Exactly -ParameterFilter {
+				$WindowId -ne "0" -and $null -ne $WindowId -and @($TabTitles).Count -eq 2
 			}
 		}
 
-		It "Should use the same WindowId for all tabs within one project" {
-			$capturedWindowIds = @()
-			Mock Open-Terminal { $capturedWindowIds += $WindowId }.GetNewClosure()
-
-			# We need a variable accessible inside the mock
+		It "Should open all of one project's tabs in one window via a single batched call" {
 			$script:capturedIds = [System.Collections.ArrayList]@()
+			$script:capturedTitles = $null
 			Mock Open-Terminal {
 				[void]$script:capturedIds.Add($WindowId)
+				$script:capturedTitles = $TabTitles
 			}
 
 			Open-ProjectTerminals -Project "TestProject" -InSameShell -InSameGroup:$false
 
-			$script:capturedIds.Count | Should -Be 2
-			$script:capturedIds[0] | Should -Be $script:capturedIds[1]
+			$script:capturedIds.Count | Should -Be 1
 			$script:capturedIds[0] | Should -Not -Be "0"
+			@($script:capturedTitles).Count | Should -Be 2
 		}
 
 		It "Should use different WindowIds for different projects" {
@@ -288,16 +289,16 @@ Describe "Open-ProjectTerminals" {
 
 	Context "Custom path entries (hashtable)" {
 		It "Should call Open-Terminal with Set-Location for custom path entry" {
-			$script:capturedCmds = [System.Collections.ArrayList]@()
-			$script:capturedTitles = [System.Collections.ArrayList]@()
+			$script:capturedCmds = $null
+			$script:capturedTitles = $null
 			Mock Open-Terminal {
-				[void]$script:capturedCmds.Add($Command)
-				[void]$script:capturedTitles.Add($TabTitles)
+				$script:capturedCmds = @($Command)
+				$script:capturedTitles = @($TabTitles)
 			}
 
 			Open-ProjectTerminals -Project "CustomProject" -InSameShell -InvokeOnefetch:$false
 
-			# First tab: custom path, Second tab: regular Api
+			# One batched call: first tab custom path, second tab regular Api - order preserved.
 			$script:capturedCmds.Count | Should -Be 2
 			$script:capturedCmds[0] | Should -BeLike "*Set-Location*CustomLogs*"
 			$script:capturedTitles[0] | Should -Be "CustomProject.Logs"
@@ -322,15 +323,16 @@ Describe "Open-ProjectTerminals" {
 
 	Context "Mixed path types" {
 		It "Should handle DEFAULT, custom path, and regular path entries together" {
-			$script:capturedCmds = [System.Collections.ArrayList]@()
-			$script:capturedTitles = [System.Collections.ArrayList]@()
+			$script:capturedCmds = $null
+			$script:capturedTitles = $null
 			Mock Open-Terminal {
-				[void]$script:capturedCmds.Add($Command)
-				[void]$script:capturedTitles.Add($TabTitles)
+				$script:capturedCmds = @($Command)
+				$script:capturedTitles = @($TabTitles)
 			}
 
 			Open-ProjectTerminals -Project "MixedProject" -InSameShell -InvokeOnefetch:$false
 
+			# All three pwsh tabs arrive in ONE batched call, configured order preserved.
 			$script:capturedCmds.Count | Should -Be 3
 			# DEFAULT tab
 			$script:capturedCmds[0] | Should -Be ""

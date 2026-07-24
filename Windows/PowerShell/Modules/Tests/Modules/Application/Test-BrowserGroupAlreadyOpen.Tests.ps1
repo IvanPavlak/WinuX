@@ -422,7 +422,23 @@ Describe "Test-BrowserGroupAlreadyOpen" {
 			$result | Should -Be $true
 		}
 
-		It "Should detect 'Problem loading page' for failed localhost URLs" {
+		It "Should detect a failed-load window whose title carries this group's host or port" {
+			# Chromium-style error tabs are titled with the host/port - that IS evidence the
+			# failed page belongs to this group.
+			Mock Get-WindowHandle {
+				New-MockBrowserWindows @("localhost:8080 - Problem loading page - Mozilla Firefox")
+			}
+
+			$result = Test-BrowserGroupAlreadyOpen -Urls @("http://localhost:8080/") `
+				-Browser "Firefox" -GroupDisplayName "Dev Server"
+
+			$result | Should -Be $true
+		}
+
+		It "Should NOT count a GENERIC failed-load title as this group's localhost page" {
+			# A bare error title proves nothing about WHICH page failed - it used to suppress
+			# opening the group (e.g. the project's Swagger tab) whenever ANY unrelated page
+			# on the machine had failed to load.
 			Mock Get-WindowHandle {
 				New-MockBrowserWindows @("Problem loading page - Mozilla Firefox")
 			}
@@ -430,7 +446,7 @@ Describe "Test-BrowserGroupAlreadyOpen" {
 			$result = Test-BrowserGroupAlreadyOpen -Urls @("http://localhost:8080/") `
 				-Browser "Firefox" -GroupDisplayName "Dev Server"
 
-			$result | Should -Be $true
+			$result | Should -Be $false
 		}
 
 		It "Should NOT assume 'Problem loading page' is localhost if URLs are not localhost" {
