@@ -8,6 +8,11 @@ function Get-NextAvailableDesktopIndex {
 		This is useful when you want to open a new workspace on a separate set of virtual desktops
 		without disturbing the current workspace.
 
+		Returns $null when the desktop count cannot be determined (VirtualDesktop module
+		unavailable or enumeration failed) - never 0, because an alongside caller falling
+		back to offset 0 would open the new workspace on top of the existing one. Callers
+		must treat $null as "abort the alongside open".
+
 	.EXAMPLE
 		# If there are 2 desktops (0 and 1), returns 2
 		$nextIndex = Get-NextAvailableDesktopIndex

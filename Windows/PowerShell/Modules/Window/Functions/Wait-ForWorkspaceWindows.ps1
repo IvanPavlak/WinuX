@@ -37,8 +37,19 @@ function Wait-ForWorkspaceWindows {
 
 	.PARAMETER MinimumStableDurationSeconds
 		Number of seconds a window must remain stable (consistent title and dimensions)
-		before being considered fully loaded. Default is 2 seconds. Increase for apps
+		before being considered fully loaded. Default is 1 second. Increase for apps
 		that take longer to initialize after the window appears.
+
+	.PARAMETER CollectiveStabilitySeconds
+		Extra settle time AFTER every window is individually stable. Individual tracking
+		already resets on any change, so this phase adds almost pure waiting; the default
+		of 0 skips it. Set above 0 to restore the previous double-settle behavior.
+
+	.PARAMETER ProcessAbsentGraceSeconds
+		Abandons an entry when no window has ever matched it AND no live process matches
+		its process pattern after this many seconds, so a dead or mistyped app does not
+		burn the whole TimeoutSeconds. Abandoned entries are reported in the result's
+		Abandoned list and make Success $false. Default is 10; 0 disables the fail-fast.
 
 	.PARAMETER RequireStableDimensions
 		When enabled, requires window dimensions to remain stable (not resizing)

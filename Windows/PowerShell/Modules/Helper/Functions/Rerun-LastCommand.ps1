@@ -17,6 +17,13 @@ function ReRun-LastCommand {
 	.PARAMETER AutoAccept
 		If specified, automatically selects the most recent command without prompting the user.
 
+	.PARAMETER Command
+		Exact command to rerun in the fresh shell. When provided, PSReadLine history is not
+		consulted at all - the shared history file is written incrementally by every open
+		pwsh session, so its most recent line can be a command typed in another window.
+		Open-Workspace records its resolved invocation in $env:WORKSPACE_RERUN_COMMAND and
+		Set-WorkspaceWindowLayout passes it through here on escalation.
+
 	.EXAMPLE
 		ReRun-LastCommand
 		# Shows last 5 commands with default RPC error message
@@ -24,6 +31,10 @@ function ReRun-LastCommand {
 	.EXAMPLE
 		ReRun-LastCommand -AutoAccept
 		# Automatically runs the last command found in history
+
+	.EXAMPLE
+		ReRun-LastCommand -AutoAccept -Command "Open-Workspace -Workspace 'WinuX'"
+		# Reruns exactly this command; history is never read
 	#>
 	[CmdletBinding()]
 	param(

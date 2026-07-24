@@ -50,7 +50,9 @@ function Confirm-WorkspaceWindowPositions {
 
 	.PARAMETER Tolerance
 		Maximum pixel deviation allowed per dimension before a window is considered
-		mispositioned.  Default is 20 (matches Snap-AllWindows snap verification).
+		mispositioned. Default is 50 - deliberately looser than the snap verification
+		tolerance (20) so DWM border deltas and app-enforced size constraints do not
+		false-fail an otherwise correctly snapped window.
 
 	.OUTPUTS
 		[hashtable] with keys:

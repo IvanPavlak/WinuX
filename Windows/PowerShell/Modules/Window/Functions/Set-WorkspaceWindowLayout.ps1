@@ -13,12 +13,15 @@ function Set-WorkspaceWindowLayout {
 		This is used with Open-Browser's Override parameter which opens the same URL
 		group in a separate browser window, allowing both to be positioned independently.
 
-		On snap failure or final layout verification failure, automatically triggers a
-		workspace rerun in window-only retry mode that:
+		On snap failure or final layout verification failure, the position -> snap -> verify
+		pipeline is retried IN-PROCESS up to two times first (refreshing the existing-window
+		snapshot so already-correct windows are skipped, and verifying against the FULL
+		layout config so windows an aborted snap pass never reached are covered). Only when
+		the in-process retries are exhausted does it escalate to a workspace rerun in a
+		fresh shell (window-only retry mode) that:
 		- Preserves already configured virtual desktops
 		- Re-applies FancyZones monitor layouts
-		- Targets only the failed window entry on the rerun
-		- Re-runs resize + snap for that window in a fresh shell
+		- Re-applies the full layout config (idempotent skips keep it cheap)
 		This avoids disturbing windows/layouts that were already configured correctly.
 
 		The final virtual desktop landing is not handled here. Switching to and focusing the
@@ -38,7 +41,7 @@ function Set-WorkspaceWindowLayout {
 
 	.PARAMETER SnapDelayMs
 		Milliseconds to wait after positioning before snapping windows.
-		Default is SnapDelayMs. Increase if windows are not properly snapped.
+		Default is 10. Increase if windows are not properly snapped.
 
 	.PARAMETER DisableAutoWait
 		Disables automatic window detection and applies layout immediately.

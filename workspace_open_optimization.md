@@ -328,18 +328,49 @@ decision" section. Line numbers below refer to pre-change state; they shift as p
 
 ---
 
-## Deferred by user decision (do NOT do until user says so)
+## Tests and docs (deferral lifted by user on 2026-07-24: "update all touched files's tests
+## for everything in this branch, along with appropriate documentation updates and update
+## changelog under new tag")
 
-> User, verbatim: "do not update tests or docs until I say so, but keep the points in the
-> handoff .md file so that it is not forgotten."
-
-- [ ] **T1. Update Pester tests** under `Windows/PowerShell/Modules/Tests/` for all behavior
-  changes above (new parameters, changed retry semantics, removed sleeps, UIA helper mocks,
-  Resolve-Selection return-instead-of-break, Move result object, etc.). Run-but-don't-edit
-  results will be recorded in "Verification status" below.
-- [ ] **T2. Update docs/comment-based help** (README/docs/, function .SYNOPSIS/.PARAMETER blocks
-  for new params like `CollectiveStabilitySeconds`, changed defaults like Resize tolerance,
-  CHANGELOG.md entry). New parameters land with minimal inline help only.
+- [x] **T1. Update Pester tests** - DONE:
+  - All 19 stale assertions updated to the new behavior (Get-NextAvailableDesktopIndex `$null`
+    contract ×2+1 new; Move fast path split into 3 tests incl. the Moved result; SWWL in-process
+    retry semantics ×2 + snap-result leak reset + hermetic two-scope rerun-env cleanup with
+    AfterAll; Terminate Process.Parent chain ×3 (ParameterFilters rewritten without
+    `$PSBoundParameters`, which is unreliable in Pester 5 filters and let calls fall through to
+    the REAL Get-Process); RPC probe-cache reset + 3 new cache tests; localhost evidence ×2;
+    Open-ProjectTerminals batching ×6).
+  - New test files: `Wait-WindowRect.Tests.ps1` (Window), `Get-WindowsTerminalTabTitles.Tests.ps1`
+    + `Close-WindowsTerminalTab.Tests.ps1` (Helper) - contract/fail-safe tests; live-window tests
+    self-skip via Set-ItResult when the session has no suitable window.
+  - Behavior coverage added to existing suites: Open-Terminal batching (single spawn, `;`
+    separators, order, no sleeps), Wait-ForWorkspaceWindows collective default + explicit
+    collective + fail-fast abandon + never-abandon-live-process, Start-FancyZones single-sample +
+    fresh-process sampling + ready-cache, Resolve-Selection null-instead-of-break (loop-survival
+    proof), Open-Workspace alongside-null-offset skip, Apply-FancyZones results scope regression,
+    Get-AppliedFancyZonesState instance-qualified keys (+ LOCALAPPDATA leak fix in that file),
+    Resize-Windows single-handle no-cache-clear + quiet mode, Set-WindowPosition zero-sleep
+    normal-state path, Test-TerminalTabsAlreadyOpen UIA-first/fallback (function switched from
+    raw SendKeys to the module's mockable `Send-TerminalKeys` wrapper for this).
+  - Full run: **Window 323 / System 157 / Application 185 / Helper 197 (1 env-dependent skip) /
+    Workflow 108 - 970 passed, 0 failed.**
+- [x] **T2. Update docs/comment-based help** - DONE:
+  - Comment-based help updated for: Wait-ForWorkspaceWindows (2 new .PARAMETER blocks +
+    corrected stale default), Snap-AllWindows (WindowHandles), ReRun-LastCommand (Command +
+    example), Set-WorkspaceWindowLayout (in-process retry description + "Default is
+    SnapDelayMs" typo), Move-WindowToVirtualDesktop (fast path + LastMove result),
+    Get-NextAvailableDesktopIndex ($null contract), Terminate-WindowsTerminalTabs (UIA-first),
+    Test-RpcServerHealth (probe cache), Start-FancyZones (sampling + cache),
+    Open-Terminal (batching), Test-TerminalTabsAlreadyOpen (UIA-first),
+    Get-WindowsTerminalTabTitles (nested-block-comment example rewritten),
+    Confirm-WorkspaceWindowPositions (pre-existing doc drift: default is 50, doc said 20).
+  - `docs/modules/{window,helper,system,application,workflow}.md` updated for every changed
+    function + full new entries for Wait-WindowRect, Get-WindowsTerminalTabTitles,
+    Close-WindowsTerminalTab (per-agent summaries verified).
+  - CHANGELOG: new `## [0.1.10] - 2026-07-24` entry (Added/Changed/Fixed, house style).
+    Version per VERSIONING.md pre-1.0 ladder: backward-compatible additions + fixes between
+    milestones ship as PATCH. NOTE: the git tag `v0.1.10` itself should be cut at release time
+    (after the WinuX mirror + PR), not on this branch.
 
 ---
 
@@ -456,7 +487,16 @@ decision" section. Line numbers below refer to pre-change state; they shift as p
   9. Cut fixed overhead across positioning, probing, and desktop management (points 6-14)
   10. Fix FancyZones result tracking, verifier title-drift recovery, RPC circuit breaker,
       batched wt tabs, and localhost match evidence (points 17-22)
-  11. Fix Resize-Windows single-handle testability + verification record (this entry)
+  11. Restore mockable window lookup in Resize-Windows single-handle mode and record
+      verification results
+  12. Silence per-window resize success line in single-handle percent mode (user-reported
+      output spam from the new per-window normalization)
+  13. Update tests to match retry, batching, fallback, and caching behavior changes (T1)
+  14. Add tests for new helpers, caching, batching, fail-fast, and retry behaviors (T1)
+  15. Update function help, module docs, and changelog for 0.1.10 (T2)
 - History note: the branch was rewritten once on 2026-07-24 (user instruction) to strip
   Co-Authored-By trailers and use single-line commit subjects; all trees verified
   byte-identical to the originals during the rewrite.
+- Final suite state after T1+T2: 969 passed, 0 failed, 2 environment-dependent skips (live
+  Windows Terminal UIA tests self-skip when the test session cannot read a WT window; they
+  execute under an interactive Run-Tests).

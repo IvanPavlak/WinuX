@@ -10,6 +10,12 @@ function Open-Terminal {
 		- Administrator privileges when needed
 		- Multiple tabs in the same window or new windows
 
+		All tabs of one call are chained into a single wt invocation
+		("new-tab ... ; new-tab ..."): Windows Terminal processes the subcommands of one
+		command line strictly in order, which guarantees tab ordering without per-tab
+		process spawns and settle sleeps. Batches are split defensively near the Windows
+		command-line length limit; follow-up batches target the same window ID.
+
 	.PARAMETER Command
 		Array of commands to execute in separate tabs. Each command opens in its own tab.
 		Commands are base64-encoded to ensure proper execution.

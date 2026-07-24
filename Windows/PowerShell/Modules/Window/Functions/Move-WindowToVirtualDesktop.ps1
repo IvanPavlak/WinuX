@@ -9,6 +9,13 @@ function Move-WindowToVirtualDesktop {
 		Note: This function uses 0-based indexing internally. Layout files use 1-based
 		indexing which is converted before calling this function.
 
+		A window already on the target desktop returns $true immediately (no COM move, no
+		settle delay) - workspace windows are desktop-moved from more than one code path,
+		so this is the common case. After a real move the result is verified immediately
+		and then polled briefly instead of a fixed sleep. $script:LastMoveWindowToVirtualDesktopResult.Moved
+		reports whether a real move was performed, so callers can skip their own settle
+		delays on the fast path.
+
 	.PARAMETER WindowHandle
 		The window handle (HWND) to move.
 

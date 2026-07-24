@@ -4,10 +4,12 @@ function Terminate-WindowsTerminalTabs {
         Closes Windows Terminal tabs.
 
     .DESCRIPTION
-        Temporarily renames the current tab to a unique ID, then cycles through
-        all other tabs using keyboard shortcuts (Ctrl+Tab). It closes any tab
-        that does not match the unique ID. If -IncludeCurrent is specified,
-        it also closes the current tab at the end.
+        Temporarily renames the current tab to a unique ID, then closes every other tab
+        via UI Automation (each tab's close button is invoked directly - no focus changes,
+        no synthesized keystrokes). When UI Automation cannot read or close the tabs, the
+        legacy pass takes over: cycle with Ctrl+Tab and close with Ctrl+C/Ctrl+W. The
+        SendKeys retry-verification pass only runs when something survived the close
+        passes. If -IncludeCurrent is specified, the current tab is also closed at the end.
 
     .PARAMETER IncludeCurrent
         If specified, the current tab will also be closed after all others are processed.

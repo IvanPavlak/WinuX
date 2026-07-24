@@ -31,6 +31,12 @@ function Snap-AllWindows {
 		virtual desktops, so callers that switch desktops in a loop must set this to avoid
 		re-snapping every window on every pass and to keep focus from being dragged to a
 		window that lives on another desktop.
+
+	.PARAMETER WindowHandles
+		Only valid with -All. Restricts snapping to exactly these window handles and takes
+		precedence over -CurrentDesktopOnly. Callers that already resolved the
+		window-to-desktop mapping (e.g. the simple-layout loop) pass the per-desktop handle
+		list here instead of paying two COM roundtrips per window on every desktop pass.
 	.PARAMETER SnapDelayMs
 		Delay in milliseconds between each window snap operation. Default is 10ms.
 	.EXAMPLE

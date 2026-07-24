@@ -15,8 +15,10 @@ function Test-RpcServerHealth {
 
 		With -Probe, also performs a live VirtualDesktop COM roundtrip against THIS
 		session's COM state (via Test-VirtualDesktopComHealth: a background runspace
-		in the current process, under a hard timeout). This catches both failure modes
-		that a service-status check cannot see:
+		in the current process, under a hard timeout). Successful probe results are
+		cached briefly (8s) so the several preflights of one workspace open pay for a
+		single probe; failures are never cached, so recovery paths always re-verify.
+		The live probe catches both failure modes that a service-status check cannot see:
 
 		- Stale session proxies: after an Explorer restart, this session's cached
 		  VirtualDesktop COM proxies are permanently disconnected and every call fails

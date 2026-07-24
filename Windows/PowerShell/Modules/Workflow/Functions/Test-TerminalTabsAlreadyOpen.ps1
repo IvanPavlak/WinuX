@@ -1,12 +1,14 @@
 function Test-TerminalTabsAlreadyOpen {
 	<#
     .SYNOPSIS
-        Checks if expected terminal tabs are already open by cycling through Windows Terminal tabs.
+        Checks if expected terminal tabs are already open by reading Windows Terminal tab titles.
 
     .DESCRIPTION
-        Cycles through all Windows Terminal tabs using keyboard shortcuts (Ctrl+Tab) and checks
-        which expected tab names exist. Returns an object with AllOpen (bool) and FoundTabs (array)
-        so callers can decide whether to skip entirely or open only missing tabs.
+        Reads every Windows Terminal window's tab titles via UI Automation (no focus changes,
+        no keystrokes) and checks which expected tab names exist. When UI Automation cannot
+        read a window's tabs, falls back to the legacy pass that cycles the window with
+        Ctrl+Tab. Returns an object with AllOpen (bool) and FoundTabs (array) so callers can
+        decide whether to skip entirely or open only missing tabs.
 
     .PARAMETER ExpectedTabNames
         Array of tab names to check for (e.g., @("WinuX.Root", "ExampleProject.Api", "ExampleProject.Ui"))

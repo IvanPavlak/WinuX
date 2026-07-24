@@ -22,7 +22,7 @@ function Get-WindowsTerminalTabTitles {
 
 	.EXAMPLE
 		$titles = Get-WindowsTerminalTabTitles -WindowHandle $wtWindow.Handle
-		if ($null -eq $titles) { <# fall back to Ctrl+Tab cycling #>
+		if ($null -eq $titles) { Write-Verbose "fall back to Ctrl+Tab cycling" }
 	#>
 	[CmdletBinding()]
 	param(

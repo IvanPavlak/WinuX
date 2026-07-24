@@ -14,6 +14,12 @@ function Start-FancyZones {
 		- All JSON state files are parseable (if present)
 		- Required RPC services are running (RpcSs, DcomLaunch, RpcEptMapper)
 
+		The PID-stability sampling (4 samples over 750ms) only runs while the process is
+		young (under ~5s old) - a long-lived process cannot be mid-crash-loop, so a single
+		sample suffices on the happy path. A successful verification is cached for 10s
+		(cleared by -ForceRestart and on any failed check), so the several Start-FancyZones
+		calls of one workspace open pay for a single readiness pass.
+
 	.PARAMETER MaxWaitSeconds
 		Maximum time to wait for FancyZones to start (default: 10 seconds).
 
