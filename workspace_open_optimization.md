@@ -208,45 +208,60 @@ decision" section. Line numbers below refer to pre-change state; they shift as p
 
 ### Tier 2 - guaranteed per-open overhead
 
-- [ ] **6. Set-WindowPosition unconditional sleeps** - `Set-WindowPosition.ps1:60-79`: always
+- [x] **6. Set-WindowPosition unconditional sleeps** - `Set-WindowPosition.ps1:60-79`: always
   `ShowWindow(SW_SHOWNORMAL)`+25ms even when window is normal, +25ms after SetWindowPos; ×~35
-  calls/open ≈ 1-1.8s. Plan: restore (and sleep) only when IsIconic/IsZoomed (add `IsIconic`
-  P/Invoke to WindowNative.cs); drop the post-SetWindowPos sleep (callers verify via rect reads).
-- [ ] **7. First-open normalization resizes every visible window on the machine** -
-  `Set-WorkspaceWindowLayout.ps1:802-804` (non-alongside): shrinks ALL windows to 70% incl.
-  non-workspace apps, then repositions workspace ones again. Plan: normalize only NEW windows
-  (mirror the alongside branch `:793-801`).
-- [ ] **8. `Resize-PositionedWindows -Tolerance 0` never converges** -
-  `Set-WorkspaceWindowLayout.ps1:836`: apps that self-adjust by 1px are re-positioned forever;
-  per-window Clear-WindowCache + re-enumeration inside `Resize-Windows.ps1:224-232`. Plan: use
-  the module's 20px `PositionVerificationPx`; enumerate once per pass.
-- [ ] **9. Browser first-tab normalization: UIA descendant walk + machine-wide Ctrl+1** -
-  `Set-WorkspaceWindowLayout.ps1:605-629` full-tree UIA probe whose only purpose is skipping a
-  harmless Ctrl+1 on single-tab windows; then `:634-686` Ctrl+1's EVERY window of the browser
-  process incl. personal windows not in the workspace (real UX damage), and in alongside mode
-  touches other workspaces' browsers. Plan: delete the UIA probe; normalize new windows always,
-  existing windows ONLY when a browser layout entry's title pattern currently matches no window
-  (i.e. matching would otherwise fail); skip windows whose title already matches an entry.
-- [ ] **10. RPC probe runspace churn** - `Test-VirtualDesktopComHealth.ps1:65-67` fresh
-  [PowerShell] runspace + 3 Get-Service per probe, 2-3×/open seconds apart
-  (`Ensure-VirtualDesktops.ps1:51`, `Remove-VirtualDesktops.ps1:60`, alongside `:846`).
-  Plan: module-scope TTL cache (~8s) for the probe result; reset paths clear it.
-- [ ] **11. Desktop teardown-and-rebuild instead of delta resize** -
-  `Set-WorkspaceWindowLayout.ps1:453-467` Remove-all + Ensure on count mismatch;
-  `Ensure-VirtualDesktops.ps1:137-157` already grows AND shrinks. Plan: single
-  `Ensure-VirtualDesktops -Count` call. (Verify shrink semantics match Remove w.r.t. window
-  relocation before relying - record findings here.)
-- [ ] **12. Focus-VirtualDesktop full scan** - `Focus-VirtualDesktop.ps1:134-151` iterates ALL
-  windows (2 COM calls each) at the end of every open. Plan: WindowsTerminal-first, stop at
-  first hit on target desktop.
-- [ ] **13. Appx launch AUMID resolution** - `Start-Application.ps1:170-181` wildcard
-  Get-AppxPackage + manifest parse per launch (0.5-2s). Plan: script-scope PackageName→AUMID
-  cache.
-- [ ] **14. Simple-layout snap loop O(desktops×windows) COM + per-window FZ liveness probe** -
-  `Set-WorkspaceWindowLayout.ps1:349-366` + `Snap-AllWindows.ps1:101-126` re-enumerate/filter per
-  desktop; `Snap-AllWindows.ps1:305` Get-Process per WINDOW in workspace mode. Plan: build
-  window→desktop map once, pass explicit handle list into `Snap-AllWindows -All`; hoist liveness
-  probe to per-desktop.
+  calls/open ≈ 1-1.8s.
+  - DONE: `ShowWindow(SW_SHOWNORMAL)` still always issued (preserves aero-snap/restore-rect
+    normalization), but the 25ms settle is paid only when `GetWindowPlacement.showCmd` was not
+    already SW_SHOWNORMAL (design decision: placement check instead of the planned IsIconic
+    P/Invoke - no WindowNative.cs change needed; GetWindowPlacement was already imported).
+    Post-SetWindowPos sleep removed (all callers verify or sleep themselves).
+- [x] **7. First-open normalization resizes every visible window on the machine**
+  - DONE: unified both branches to normalize ONLY windows not in the pre-open capture (the
+    workspace's own new windows); the alongside-only branch is now the general behavior.
+    Dead commented-out "skip if already positioned" block left untouched.
+- [x] **8. `Resize-PositionedWindows -Tolerance 0` never converges**
+  - DONE: call site now uses the module default (PositionVerificationPx = 20). Additionally
+    `Resize-Windows` single-handle mode no longer does Clear-WindowCache + full enumeration
+    per call - it reads the target rect/title directly via GetWindowRect/GetWindowText
+    (multi-window modes keep the cache-clear). This removes a per-window enumeration from
+    Resize-PositionedWindows, snap retries, and Set-WindowLayouts positioning.
+    Behavior note: a single-handle target with an EMPTY title is now skipped by the
+    skip-titles list instead of warned as not-found (net effect identical: no resize).
+- [x] **9. Browser first-tab normalization: UIA descendant walk + machine-wide Ctrl+1**
+  - DONE: full-tree UIA tab-count probe deleted. New scoping: windows opened by this flow are
+    always normalized; PRE-EXISTING windows only when at least one browser entry's resolved
+    title pattern currently matches NO window; any window already showing a wanted title is
+    skipped (also fixes a latent self-sabotage where re-runs Ctrl+1'd a correctly-matched
+    window off its matching tab). Entry title patterns resolved via Resolve-LayoutTokens and
+    matched with Test-WindowTitleMatch.
+- [x] **10. RPC probe runspace churn**
+  - DONE: `Test-RpcServerHealth` caches SUCCESSFUL -Probe results for 8s (System module
+    scope); failures are never cached so recovery always re-verifies. Design decision: cache
+    placed in Test-RpcServerHealth (not Get-RpcRetryPolicy) so all probe callers benefit and
+    the recovery path needs no cross-module cache invalidation.
+- [x] **11. Desktop teardown-and-rebuild instead of delta resize**
+  - DONE: the non-alongside count-mismatch branch now calls `Ensure-VirtualDesktops -Count`
+    once (grows AND shrinks - verified `Ensure-VirtualDesktops.ps1:116-157`; shrink removes
+    highest-index desktops via Remove-Desktop, native behavior relocates their windows, and
+    Set-WindowLayouts moves every window to its configured desktop right after, so the end
+    state matches the old Remove-all+recreate path). Also fixes latent quirk: old path never
+    recreated desktops when requiredVirtualDesktops == 1 after collapsing.
+- [x] **12. Focus-VirtualDesktop full scan**
+  - DONE: candidates ordered WindowsTerminal-first, loop breaks at the first window on the
+    target desktop (only one focus target is ever used).
+- [x] **13. Appx launch AUMID resolution**
+  - DONE: session-scoped `$script:AppxAumidCache` (PackageName → AUMID); cache entry evicted
+    and error rethrown when shell activation of a cached AUMID fails (stale after package
+    update).
+- [x] **14. Simple-layout snap loop O(desktops×windows) COM + per-window FZ liveness probe**
+  - DONE: `Snap-AllWindows -All` gained `-WindowHandles IntPtr[]` (explicit filter, takes
+    precedence over -CurrentDesktopOnly); the simple-layout loop resolves each window's
+    desktop ONCE, buckets unresolvable windows into a "-1" bucket offered on every pass
+    (matching old filter behavior), skips desktops with no windows (saves the switch), and
+    passes per-desktop handle lists. In positioned mode the FancyZones liveness Get-Process
+    probe moved from per-window to per-desktop (failure records a desktop-level entry and
+    aborts, feeding the normal retry path).
 
 ### Tier 3 - reliability bugs
 

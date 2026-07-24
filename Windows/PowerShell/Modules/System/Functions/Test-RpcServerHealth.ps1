@@ -63,6 +63,25 @@ function Test-RpcServerHealth {
 		[int]$ProbeTimeoutMs = 5000
 	)
 
+	# Cache successful live-probe results briefly: one workspace open runs this preflight
+	# several times seconds apart (layout entry, desktop remove/ensure, alongside cleanup),
+	# and each probe spins up a fresh runspace (~50-200ms) plus service checks. Failures are
+	# NEVER cached, so recovery paths always re-verify against live state.
+	if (-not $script:RpcProbeHealthyCache) {
+		$script:RpcProbeHealthyCache = @{
+			VerifiedAt = [datetime]::MinValue
+			TtlSeconds = 8
+		}
+	}
+
+	if ($Probe) {
+		$probeCacheAge = ([datetime]::Now - $script:RpcProbeHealthyCache.VerifiedAt).TotalSeconds
+		if ($probeCacheAge -ge 0 -and $probeCacheAge -lt $script:RpcProbeHealthyCache.TtlSeconds) {
+			Write-LogDebug "  ✓ RPC live probe verified $([int]$probeCacheAge)s ago - using cached result" -Style Success
+			return $true
+		}
+	}
+
 	foreach ($serviceName in $ServiceNames) {
 		try {
 			$service = Get-Service -Name $serviceName -ErrorAction Stop
@@ -110,6 +129,7 @@ function Test-RpcServerHealth {
 
 	if ($probeResult.Healthy) {
 		Write-LogDebug "  ✓ RPC live probe succeeded" -Style Success
+		$script:RpcProbeHealthyCache.VerifiedAt = [datetime]::Now
 		return $true
 	}
 

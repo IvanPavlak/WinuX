@@ -132,16 +132,25 @@ function Focus-VirtualDesktop {
 	(Get-Command Get-DesktopIndex -ErrorAction SilentlyContinue)
 
 	if ($desktopLookupAvailable) {
-		$candidateWindows = Get-WindowHandle -ErrorAction SilentlyContinue
-		foreach ($win in $candidateWindows) {
+		$candidateWindows = @(Get-WindowHandle -ErrorAction SilentlyContinue)
+
+		# Only ONE focus target is ever used below, so resolving the desktop of EVERY window
+		# (two COM roundtrips each) wasted 0.2-0.6s at the end of every open. Check terminal
+		# windows first (they are the preferred target), then everything else, and stop at
+		# the first window that lives on the target desktop.
+		$orderedCandidates = @($candidateWindows | Where-Object { $_.ProcessName -eq 'WindowsTerminal' }) +
+		@($candidateWindows | Where-Object { $_.ProcessName -ne 'WindowsTerminal' })
+
+		foreach ($win in $orderedCandidates) {
 			try {
 				$winDesktop = Get-DesktopFromWindow -Hwnd $win.Handle
 				if (-not $winDesktop) { continue }
 				if ((Get-DesktopIndex -Desktop $winDesktop) -eq $targetIndex) {
 					$windowsOnTarget += $win
-					if (-not $terminalOnTarget -and $win.ProcessName -eq 'WindowsTerminal') {
+					if ($win.ProcessName -eq 'WindowsTerminal') {
 						$terminalOnTarget = $win
 					}
+					break
 				}
 			}
 			catch {

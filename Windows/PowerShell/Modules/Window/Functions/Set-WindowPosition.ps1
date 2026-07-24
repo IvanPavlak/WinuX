@@ -56,9 +56,21 @@ function Set-WindowPosition {
 			Start-Sleep -Milliseconds $script:WindowModuleDelays.WindowRestoreMs
 		}
 
-		# Restore to normal state (handles snapped windows)
+		# Restore to normal state (handles snapped/minimized windows). The settle delay is
+		# only paid when the window was NOT already in the normal show state - the previous
+		# unconditional sleep added a fixed 25ms to every call in the positioning pipeline
+		# (~35 calls per workspace open).
+		$placement = New-Object WindowModule.WINDOWPLACEMENT
+		$placement.length = [System.Runtime.InteropServices.Marshal]::SizeOf([type][WindowModule.WINDOWPLACEMENT])
+		$wasAlreadyNormal = $false
+		if ([WindowModule.Native]::GetWindowPlacement($WindowHandle, [ref]$placement)) {
+			$wasAlreadyNormal = ($placement.showCmd -eq [WindowModule.Native]::SW_SHOWNORMAL)
+		}
+
 		[void][WindowModule.Native]::ShowWindow($WindowHandle, [WindowModule.Native]::SW_SHOWNORMAL)
-		Start-Sleep -Milliseconds $script:WindowModuleDelays.WindowRestoreMs
+		if (-not $wasAlreadyNormal) {
+			Start-Sleep -Milliseconds $script:WindowModuleDelays.WindowRestoreMs
+		}
 
 		# Set window position and size
 		# Use FRAMECHANGED to ensure window updates properly
@@ -75,8 +87,8 @@ function Set-WindowPosition {
 		)
 
 		if ($result) {
-			# Small delay to let the window settle
-			Start-Sleep -Milliseconds $script:WindowModuleDelays.WindowPositionMs
+			# No fixed settle delay here: every caller either verifies the rect afterwards
+			# (Wait-WindowRect / explicit re-reads) or sleeps on its own schedule.
 			Write-LogDebug "     ✓ Window positioned at => ($X, $Y) with size [${Width}x${Height}]" -Style Success
 			return $true
 		}

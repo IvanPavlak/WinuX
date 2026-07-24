@@ -53,6 +53,13 @@ function Snap-AllWindows {
 		[Parameter()]
 		[switch]$CurrentDesktopOnly,
 
+		# Only valid with -All: restrict snapping to exactly these window handles. Callers
+		# that already know the window->desktop mapping (e.g. the simple-layout loop) pass
+		# the per-desktop handle list here instead of paying -CurrentDesktopOnly's two COM
+		# roundtrips per window on every desktop pass.
+		[Parameter()]
+		[IntPtr[]]$WindowHandles,
+
 		[Parameter()]
 		[int]$SnapDelayMs = 25,
 
@@ -94,11 +101,22 @@ function Snap-AllWindows {
 
 			$allWindows = [WindowModule.Native]::GetAllWindows()
 
+			# Explicit handle list wins: the caller already resolved which windows belong to
+			# the active desktop, so no per-window COM filtering is needed.
+			if ($WindowHandles -and $WindowHandles.Count -gt 0) {
+				$handleFilter = [System.Collections.Generic.HashSet[IntPtr]]::new()
+				foreach ($requestedHandle in $WindowHandles) {
+					[void]$handleFilter.Add($requestedHandle)
+				}
+				$allWindows = @($allWindows | Where-Object { $handleFilter.Contains($_.Handle) })
+
+				Write-LogDebug "  Restricting to [$($allWindows.Count)] caller-specified window(s)"
+			}
 			# GetAllWindows() (EnumWindows) returns windows across ALL virtual desktops.
 			# When -CurrentDesktopOnly is set, keep only windows on the active desktop so a
 			# desktop-switching caller snaps each window exactly once on its own desktop and
 			# never pulls focus to a window that lives elsewhere.
-			if ($CurrentDesktopOnly) {
+			elseif ($CurrentDesktopOnly) {
 				$currentDesktopIndex = $null
 				try {
 					$currentDesktopIndex = Get-DesktopIndex (Get-CurrentDesktop)
@@ -282,6 +300,21 @@ function Snap-AllWindows {
 			Clear-MonitorCache
 			$monitors = Get-CachedMonitors
 
+			# FancyZones liveness is re-checked once per DESKTOP pass (it used to run per
+			# WINDOW - one Get-Process each, ~0.3s across a 10-window workspace).
+			if (-not (& $ensureFancyZonesRunning)) {
+				$failedSnaps.Add([PSCustomObject]@{
+						Handle      = [IntPtr]::Zero
+						WindowTitle = "Desktop $desktopNum"
+						ProcessName = $null
+						Expected    = $null
+						Actual      = $null
+						Error       = "FancyZones became unavailable before snapping desktop [$desktopNum]"
+					})
+				$snapAborted = $true
+				break
+			}
+
 			# Surface a stale/missing FancyZones layout for this desktop so blind snapping
 			# into a wrong or unapplied zone grid is at least diagnosable.
 			if (Test-LogVerbose) {
@@ -301,19 +334,6 @@ function Snap-AllWindows {
 				$expectedHeight = $windowState.ExpectedHeight
 				$expectedTitle = $windowState.WindowTitle
 				$expectedProcessId = [uint32]($windowState.ProcessId)
-
-				if (-not (& $ensureFancyZonesRunning)) {
-					$failedSnaps.Add([PSCustomObject]@{
-							Handle      = $handle
-							WindowTitle = $expectedTitle
-							ProcessName = $windowState.ProcessName
-							Expected    = "($expectedX, $expectedY) ${expectedWidth}x${expectedHeight}"
-							Actual      = $null
-							Error       = "FancyZones became unavailable during snap loop"
-						})
-					$snapAborted = $true
-					break
-				}
 
 				# Calculate the adjusted inset bounds using the shared resize helper.
 				$resizeBounds = Get-InsetWindowBounds -TargetX $expectedX -TargetY $expectedY -TargetWidth $expectedWidth -TargetHeight $expectedHeight -InsetPercent $insetPercent

@@ -344,13 +344,46 @@ function Set-WorkspaceWindowLayout {
 				$desktopCount = ($allDesktops | Measure-Object).Count
 
 				if ($desktopCount -gt 1) {
+					# Resolve each window's desktop ONCE up front (two COM calls per window).
+					# The previous per-pass -CurrentDesktopOnly filter re-resolved EVERY window
+					# on EVERY desktop pass (O(desktops x windows) COM roundtrips). Windows
+					# whose desktop cannot be resolved (pinned/system) go into the -1 bucket
+					# and are offered on every pass - same behavior as the old filter.
+					$windowsByDesktopIndex = @{}
+					foreach ($win in @(Get-WindowHandle -ErrorAction SilentlyContinue)) {
+						$winDesktopIndex = -1
+						try {
+							$winDesktopIndex = Get-DesktopIndex (Get-DesktopFromWindow -Hwnd $win.Handle.ToInt64())
+						}
+						catch {
+							$winDesktopIndex = -1
+						}
+						if (-not $windowsByDesktopIndex.ContainsKey($winDesktopIndex)) {
+							$windowsByDesktopIndex[$winDesktopIndex] = [System.Collections.Generic.List[IntPtr]]::new()
+						}
+						$windowsByDesktopIndex[$winDesktopIndex].Add($win.Handle)
+					}
+
 					for ($d = 0; $d -lt $desktopCount; $d++) {
+						$desktopHandles = [System.Collections.Generic.List[IntPtr]]::new()
+						if ($windowsByDesktopIndex.ContainsKey($d)) {
+							$desktopHandles.AddRange($windowsByDesktopIndex[$d])
+						}
+						if ($windowsByDesktopIndex.ContainsKey(-1)) {
+							$desktopHandles.AddRange($windowsByDesktopIndex[-1])
+						}
+
+						if ($desktopHandles.Count -eq 0) {
+							Write-LogDebug " Desktop [$($d + 1)] has no windows to snap - skipping switch"
+							continue
+						}
+
 						Write-LogDebug " Switching to Desktop [$($d + 1)] for snapping..."
 						$null = Switch-Desktop -Desktop $d
 						if (-not (Wait-DesktopSwitch -TargetDesktopIndex $d)) {
 							Start-Sleep -Milliseconds 25
 						}
-						$null = Snap-AllWindows -All -CurrentDesktopOnly -SnapDelayMs $SnapDelayMs
+						$null = Snap-AllWindows -All -WindowHandles $desktopHandles.ToArray() -SnapDelayMs $SnapDelayMs
 					}
 					# Return to desktop 1
 					$null = Switch-Desktop -Desktop 0
@@ -445,18 +478,15 @@ function Set-WorkspaceWindowLayout {
 				Write-LogDebug "=> Virtual desktop count already matches required count ($requiredVirtualDesktops) - skipping reset" -Style Success
 			}
 			else {
-				Write-LogDebug "=> Virtual desktop count mismatch (current: $currentDesktopCount, required: $requiredVirtualDesktops) - resetting desktops" -Style Warning
+				Write-LogDebug "=> Virtual desktop count mismatch (current: $currentDesktopCount, required: $requiredVirtualDesktops) - resizing to required count" -Style Warning
 
-				$removeResult = Remove-VirtualDesktops
-				if ($removeResult -eq $false) {
-					throw "Failed to remove virtual desktops (RPC server may be unavailable)"
-				}
-
-				if ($requiredVirtualDesktops -gt 1) {
-					$vdResult = Ensure-VirtualDesktops -Count $requiredVirtualDesktops
-					if (-not $vdResult) {
-						throw "Failed to create required virtual desktops (RPC server may be unavailable)"
-					}
+				# Delta resize: Ensure-VirtualDesktops grows AND shrinks. The previous
+				# Remove-all-then-recreate pair collapsed to one desktop first, so going
+				# 2->3 desktops paid one removal plus two creates (each a COM roundtrip
+				# with settle sleeps) plus gratuitous desktop churn, instead of one create.
+				$vdResult = Ensure-VirtualDesktops -Count $requiredVirtualDesktops
+				if (-not $vdResult) {
+					throw "Failed to resize virtual desktops to required count (RPC server may be unavailable)"
 				}
 			}
 
@@ -554,6 +584,9 @@ function Set-WorkspaceWindowLayout {
 		if ($layoutConfigToApply -and -not $windowOnlyRetryActive) {
 			$browserProcesses = @("chrome", "firefox", "msedge", "brave", "chromium")
 			$browserLayoutProcessPatterns = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+			# Resolved title patterns of the browser entries - used to decide which windows
+			# actually need the tab reset (and which are already showing a wanted title).
+			$browserEntryTitlePatterns = [System.Collections.Generic.List[string]]::new()
 
 			foreach ($windowDef in $layoutConfigToApply) {
 				if (-not $windowDef.ProcessName -or -not $windowDef.WindowTitle -or $windowDef.WindowTitle -eq '$null') {
@@ -581,6 +614,11 @@ function Set-WorkspaceWindowLayout {
 
 				if ($isBrowser) {
 					[void]$browserLayoutProcessPatterns.Add($processName)
+
+					$resolvedEntry = Resolve-LayoutTokens -LayoutEntry $windowDef
+					if ($resolvedEntry.WindowTitle -and $resolvedEntry.WindowTitle -ne '$null') {
+						$browserEntryTitlePatterns.Add([string]$resolvedEntry.WindowTitle)
+					}
 				}
 			}
 
@@ -590,45 +628,30 @@ function Set-WorkspaceWindowLayout {
 			else {
 				# Add SendKeys support for browser tab switching only when needed.
 				Ensure-WindowsFormsLoaded
-				$uiAutomationAvailable = $false
-				try {
-					Add-Type -AssemblyName UIAutomationClient -ErrorAction Stop
-					$uiAutomationAvailable = $true
-				}
-				catch {
-					Write-LogDebug " UI Automation unavailable - browser tab count checks will be skipped" -Style Warning
-				}
-
-				$testBrowserWindowHasMultipleTabs = {
-					param($WindowHandle)
-
-					if (-not $uiAutomationAvailable -or $null -eq $WindowHandle -or $WindowHandle -eq [IntPtr]::Zero) {
-						return $null
-					}
-
-					try {
-						$root = [System.Windows.Automation.AutomationElement]::FromHandle($WindowHandle)
-						if (-not $root) {
-							return $null
-						}
-
-						$tabCondition = New-Object System.Windows.Automation.PropertyCondition(
-							[System.Windows.Automation.AutomationElement]::ControlTypeProperty,
-							[System.Windows.Automation.ControlType]::TabItem
-						)
-
-						$tabItems = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants, $tabCondition)
-						return ($tabItems.Count -gt 1)
-					}
-					catch {
-						return $null
-					}
-				}
 
 				Write-LogDebug "[Focusing Browser Windows on First Tab]"
 
 				# Fetch all windows once and filter per browser process (avoids one Get-WindowHandle call per process)
 				$allWindows = Get-WindowHandle -ErrorAction SilentlyContinue
+
+				# Pre-existing browser windows are only worth touching when some browser entry
+				# currently matches NO window (its title may be hidden behind the active tab).
+				# When every entry already resolves, resetting pre-existing windows to tab 1
+				# would only disturb personal windows that are not part of this workspace.
+				$unresolvedEntryExists = $false
+				foreach ($titlePattern in $browserEntryTitlePatterns) {
+					$patternMatched = $false
+					foreach ($candidateWindow in $allWindows) {
+						if (Test-WindowTitleMatch -WindowTitle $candidateWindow.Title -Patterns @($titlePattern)) {
+							$patternMatched = $true
+							break
+						}
+					}
+					if (-not $patternMatched) {
+						$unresolvedEntryExists = $true
+						break
+					}
+				}
 
 				# Focus each browser window and switch to first tab
 				foreach ($browserProcess in $browserLayoutProcessPatterns) {
@@ -643,15 +666,31 @@ function Set-WorkspaceWindowLayout {
 
 						if ($browserWindows) {
 							foreach ($window in $browserWindows) {
+								# Windows opened by THIS flow are always normalized; pre-existing
+								# ones only when an entry is still unresolved (see above).
+								$isNewWindow = -not ($existingWindowHandles -and $existingWindowHandles.Contains($window.Handle))
+								if (-not $isNewWindow -and -not $unresolvedEntryExists) {
+									Write-LogDebug "  Skipping pre-existing browser window (all browser entries already resolve) => [$($window.Title)]" -Style Warning
+									continue
+								}
+
+								# A window already showing a wanted title is on the right tab -
+								# resetting it to tab 1 could hide that title and break matching.
+								$titleAlreadyWanted = $false
+								foreach ($titlePattern in $browserEntryTitlePatterns) {
+									if (Test-WindowTitleMatch -WindowTitle $window.Title -Patterns @($titlePattern)) {
+										$titleAlreadyWanted = $true
+										break
+									}
+								}
+								if ($titleAlreadyWanted) {
+									Write-LogDebug "  Skipping browser window already showing a wanted title => [$($window.Title)]" -Style Warning
+									continue
+								}
+
 								Write-LogDebug "  Processing browser window => [$($window.Title)]" -Style Step
 
 								try {
-									$hasMultipleTabs = & $testBrowserWindowHasMultipleTabs -WindowHandle $window.Handle
-									if ($hasMultipleTabs -eq $false) {
-										Write-LogDebug "    Skipping first-tab normalization - single-tab window detected" -Style Warning
-										continue
-									}
-
 									# Focus the window
 									[void][WindowModule.Native]::SetForegroundWindow($window.Handle)
 									Start-Sleep -Milliseconds $script:WindowModuleDelays.FocusSettleMs
@@ -787,17 +826,14 @@ function Set-WorkspaceWindowLayout {
 
 				Write-LogDebug "[First Open - Normalizing Windows]"
 
-				if ($Alongside) {
-					# In alongside mode, only normalize NEW windows to avoid
-					# disturbing the already-positioned workspace
-					$newWindows = @($currentAllWindows | Where-Object { -not $existingWindowHandles.Contains($_.Handle) })
-					Write-LogDebug "  Alongside mode - normalizing $($newWindows.Count) new window(s) only" -Style Step
-					foreach ($newWin in $newWindows) {
-						$null = Resize-Windows -WindowHandle $newWin.Handle
-					}
-				}
-				else {
-					$null = Resize-Windows
+				# Normalize only the windows THIS open created (not in the pre-open capture).
+				# The previous non-alongside branch resized EVERY visible window on the machine
+				# to 70% - including unrelated apps - only for Set-WindowLayouts to reposition
+				# the workspace ones again right after.
+				$newWindows = @($currentAllWindows | Where-Object { -not $existingWindowHandles.Contains($_.Handle) })
+				Write-LogDebug "  Normalizing $($newWindows.Count) new window(s) only" -Style Step
+				foreach ($newWin in $newWindows) {
+					$null = Resize-Windows -WindowHandle $newWin.Handle
 				}
 			}
 		}
@@ -873,7 +909,10 @@ function Set-WorkspaceWindowLayout {
 
 			Start-Sleep -Milliseconds $SnapDelayMs
 
-			$resizeResult = Resize-PositionedWindows -Tolerance 0
+			# Default (20px) tolerance: with 0, apps that self-adjust by a pixel (terminal cell
+			# rounding, min-size constraints, DPI rounding) were re-positioned on EVERY open
+			# forever and never converged.
+			$resizeResult = Resize-PositionedWindows
 			if ((Test-LogVerbose) -and $resizeResult.FailedWindows.Count -gt 0) {
 				Write-LogDebug "Pre-snap resize failures => [$($resizeResult.FailedWindows.Count)]" -Style Warning
 			}

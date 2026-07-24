@@ -167,29 +167,50 @@ function Start-Application {
 					throw "PackageName parameter is required for AppxPackage method"
 				}
 
-				$package = Get-AppxPackage "*$PackageName*" -ErrorAction Stop | Select-Object -First 1
-
-				if (-not $package) {
-					throw "$AppName is not installed!"
+				# The wildcard Get-AppxPackage query + manifest parse cost 0.5-2s per launch
+				# and the result never changes between (un)installs - cache the resolved AUMID
+				# per package name for the session.
+				if (-not $script:AppxAumidCache) {
+					$script:AppxAumidCache = @{}
 				}
 
-				# UWP/Store apps must be activated through their AppUserModelID (AUMID).
-				# The packaged executable lives under the ACL-locked WindowsApps folder and
-				# cannot be launched directly with Start-Process ("Access is denied"), so
-				# resolve the AUMID (PackageFamilyName!AppId) from the manifest and let the
-				# shell activate the package.
-				$appId = (Get-AppxPackageManifest $package).Package.Applications.Application.Id | Select-Object -First 1
+				$aumid = $script:AppxAumidCache[$PackageName]
 
-				if ([string]::IsNullOrWhiteSpace($appId)) {
-					throw "Could not resolve the AppUserModelID for $AppName"
+				if (-not $aumid) {
+					$package = Get-AppxPackage "*$PackageName*" -ErrorAction Stop | Select-Object -First 1
+
+					if (-not $package) {
+						throw "$AppName is not installed!"
+					}
+
+					# UWP/Store apps must be activated through their AppUserModelID (AUMID).
+					# The packaged executable lives under the ACL-locked WindowsApps folder and
+					# cannot be launched directly with Start-Process ("Access is denied"), so
+					# resolve the AUMID (PackageFamilyName!AppId) from the manifest and let the
+					# shell activate the package.
+					$appId = (Get-AppxPackageManifest $package).Package.Applications.Application.Id | Select-Object -First 1
+
+					if ([string]::IsNullOrWhiteSpace($appId)) {
+						throw "Could not resolve the AppUserModelID for $AppName"
+					}
+
+					$aumid = "$($package.PackageFamilyName)!$appId"
+					$script:AppxAumidCache[$PackageName] = $aumid
 				}
 
 				$startParams = @{
-					FilePath    = "shell:AppsFolder\$($package.PackageFamilyName)!$appId"
+					FilePath    = "shell:AppsFolder\$aumid"
 					ErrorAction = 'Stop'
 				}
 
-				Start-Process @startParams
+				try {
+					Start-Process @startParams
+				}
+				catch {
+					# The cached AUMID may be stale after a package update - resolve fresh once.
+					$script:AppxAumidCache.Remove($PackageName)
+					throw
+				}
 			}
 
 			'DirectPath' {
