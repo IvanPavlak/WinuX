@@ -217,40 +217,22 @@ function Resize-Windows {
 
 		# Resolve the target window set.
 		# - WindowHandle: a single window (used by internal callers and Center-Windows) -
-		#   read its rect/title DIRECTLY via native calls. This mode is called once per
-		#   window in tight loops (Resize-PositionedWindows, snap retries), and a full
-		#   Clear-WindowCache + enumeration per call cost 10-30ms each for data about
-		#   one already-known handle.
+		#   served from the window cache WITHOUT forcing a refresh. This mode is called once
+		#   per window in tight loops (Resize-PositionedWindows, snap retries), and a forced
+		#   Clear-WindowCache + re-enumeration per call cost 10-30ms each for data about one
+		#   already-known handle; the cache's own 50ms TTL keeps the data fresh enough for
+		#   the skip-tolerance check (windows only move when this module moves them).
 		# - ProcessName/WindowTitle: delegate filtering to Get-WindowHandle (exact, wildcard,
 		#   regex, OR logic) - the same matching path used by Move-Windows. Cache cleared
 		#   first for fresh positions.
 		# - Neither: all visible windows (cache cleared first).
 		if ($PSBoundParameters.ContainsKey('WindowHandle')) {
-			$targetRect = New-Object WindowModule.RECT
-			if (-not [WindowModule.Native]::GetWindowRect($WindowHandle, [ref]$targetRect)) {
+			$allWindows = @(Get-CachedWindows | Where-Object { $_.Handle -eq $WindowHandle })
+
+			if (-not $allWindows -or $allWindows.Count -eq 0) {
 				Write-Warning "`n Window handle [$WindowHandle] was not found. Cannot resize target window!"
 				return
 			}
-
-			$targetTitle = ''
-			$titleLength = [WindowModule.Native]::GetWindowTextLength($WindowHandle)
-			if ($titleLength -gt 0) {
-				$titleBuilder = New-Object System.Text.StringBuilder ($titleLength + 1)
-				[void][WindowModule.Native]::GetWindowText($WindowHandle, $titleBuilder, $titleBuilder.Capacity)
-				$targetTitle = $titleBuilder.ToString()
-			}
-
-			$allWindows = @([PSCustomObject]@{
-					Handle      = $WindowHandle
-					Title       = $targetTitle
-					ProcessName = ''
-					Left        = $targetRect.Left
-					Top         = $targetRect.Top
-					Right       = $targetRect.Right
-					Bottom      = $targetRect.Bottom
-					Width       = $targetRect.Right - $targetRect.Left
-					Height      = $targetRect.Bottom - $targetRect.Top
-				})
 		}
 		elseif ($ProcessName -or $WindowTitle) {
 			Clear-WindowCache

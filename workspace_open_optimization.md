@@ -409,11 +409,54 @@ decision" section. Line numbers below refer to pre-change state; they shift as p
 
 ---
 
-## Verification status
+## Verification status (2026-07-24, post-implementation)
 
-- Build/verify: pending (PSScriptAnalyzer with repo `PSScriptAnalyzerSettings.psd1` + existing
-  Pester suite run AFTER implementation; failures requiring test edits recorded here, not fixed).
+- **Parse**: every touched file passes the PowerShell AST parser.
+- **PSScriptAnalyzer** (repo `PSScriptAnalyzerSettings.psd1`, all 30 changed files): 5 warnings,
+  ALL verified pre-existing on master (same rules/files: PSAvoidDefaultValueSwitchParameter ×4,
+  PSUseProcessBlockForPipelineCommand ×1). Zero new findings.
+- **Pester** (5.7.1; full module context imported from this checkout; suites for the 5 touched
+  modules): **Helper 190/190 · Application 177/178 · System 148/154 · Window 299/305 ·
+  Workflow 98/104 → 912 passed, 19 failed.**
+- **All 19 failures assert pre-change behavior that this branch intentionally changed** - they
+  are the deferred test-update work (T1), not regressions:
+  - Get-NextAvailableDesktopIndex ×2: assert the old `return 0` fallback (now `$null` by
+    design; one also mocks `Get-Module -ListAvailable`, which the function no longer calls).
+  - Move-WindowToVirtualDesktop ×1: asserts `Get-Desktop` is called even when the window is
+    already on the target desktop (fast path now returns early).
+  - Set-WorkspaceWindowLayout ×3: assert single-attempt escalation (Start-FancyZones/
+    Start-Sleep called once) - the in-process retry loop now runs up to 3 attempts.
+  - Terminate-WindowsTerminalTabs ×3: assert the Get-CimInstance parent walk (now
+    PS7 `Process.Parent`) and exact Get-Process call counts.
+  - Test-RpcServerHealth ×3: the new 8s healthy-probe cache persists across test cases in one
+    session - tests must reset `$script:RpcProbeHealthyCache` (InModuleScope) between cases.
+  - Test-BrowserGroupAlreadyOpen ×1: asserts that a BARE "Problem loading page" title counts
+    as a localhost match (now requires host/port evidence by design).
+  - Open-ProjectTerminals ×6: assert one Open-Terminal call PER TAB (now one batched call per
+    project; per-tab only without a shared window).
+- One genuine testability regression was caught by the suite and FIXED during verification:
+  the first version of the Resize-Windows single-handle path read the rect via a raw native
+  call (unmockable); reverted to `Get-CachedWindows` WITHOUT the forced cache clear - same
+  perf win (≤50ms-stale cache instead of forced re-enumeration per call), mockable again.
+- Additional T1 note: the two new Helper functions (`Get-WindowsTerminalTabTitles`,
+  `Close-WindowsTerminalTab`) and `Wait-WindowRect` have NO tests yet - the repo's
+  "tests required" bar applies when the deferred test pass runs.
 
 ## Change log (updated as points land)
 
-- (empty - implementation not started)
+- Branch `feature/workspace-open-optimization` (WinuX), commits in order:
+  1. Add workspace-open optimization handoff tracker
+  2. Fix Resolve-Selection break leak and alongside desktop-offset fallback (points 15, 16)
+  3. Use poll-until-verified for snap, desktop switch, and window move (point 2)
+  4. Cache FancyZones readiness and skip PID sampling for long-lived processes (point 3)
+  5. Drop wait-phase collective-stability floor and fail fast on absent processes (point 4)
+  6. Retry failed window layouts in-process before terminal respawn (point 1)
+  7. (merge) master → feature branch (user's own merge, unrelated layout file)
+  8. Read and close Windows Terminal tabs via UI Automation instead of SendKeys cycling (point 5)
+  9. Cut fixed overhead across positioning, probing, and desktop management (points 6-14)
+  10. Fix FancyZones result tracking, verifier title-drift recovery, RPC circuit breaker,
+      batched wt tabs, and localhost match evidence (points 17-22)
+  11. Fix Resize-Windows single-handle testability + verification record (this entry)
+- History note: the branch was rewritten once on 2026-07-24 (user instruction) to strip
+  Co-Authored-By trailers and use single-line commit subjects; all trees verified
+  byte-identical to the originals during the rewrite.
