@@ -248,6 +248,12 @@ function Open-Workspace {
 			$desktopOffset = 0
 			if ($Alongside) {
 				$desktopOffset = Get-NextAvailableDesktopIndex
+				if ($null -eq $desktopOffset) {
+					# Desktop enumeration failed - proceeding with offset 0 would open this
+					# workspace ON TOP of the existing one, the exact thing -Alongside prevents.
+					Write-LogError "Cannot determine the next available desktop for [$workspaceName] (virtual desktop enumeration failed) - skipping alongside open."
+					continue
+				}
 				Write-LogTitle "Opening $workspaceName Workspace alongside current"
 			}
 			else {

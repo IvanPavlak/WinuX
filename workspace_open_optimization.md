@@ -154,16 +154,26 @@ decision" section. Line numbers below refer to pre-change state; they shift as p
 
 ### Tier 3 - reliability bugs
 
-- [ ] **15. `Resolve-Selection` bare `break` on invalid input** - `Resolve-Selection.ps1:146`
-  (+ same in non-hierarchical branch ~:180): `break` propagates across function boundaries to
-  the caller's loop (Open-Workspace action loop) - a config typo silently kills all remaining
-  workspace actions, uncatchable by try/catch. Fix: return $null after the error message
-  (callers already handle $null).
-- [ ] **16. `Get-NextAvailableDesktopIndex` returns 0 on failure** - `:40-45`: stale-RPC blip
+- [x] **15. `Resolve-Selection` bare `break` on invalid input** - `Resolve-Selection.ps1:146`:
+  `break` propagates across function boundaries to the caller's loop (Open-Workspace action
+  loop) - a config typo silently kills all remaining workspace actions, uncatchable by
+  try/catch. Fix: return $null after the error message (callers already handle $null).
+  - DONE: `break` → `return $null` with explanatory comment
+    (`Helper/Functions/Resolve-Selection.ps1`). Finding correction recorded: the non-hierarchical
+    branch (~:180) does NOT have the bug - it already warns and continues with valid selections;
+    only the hierarchical branch was affected. Behavior choice: abort-this-resolution (return
+    $null) preserved over ignore-invalid-and-continue, matching the original abort intent.
+- [x] **16. `Get-NextAvailableDesktopIndex` returns 0 on failure** - `:40-45`: stale-RPC blip
   makes `-Alongside` open ON TOP of the current workspace (exactly what the flag prevents);
   also does `Get-Module -ListAvailable` disk scan per call instead of the cached loader.
   Fix: use `Import-VirtualDesktopModule`; return $null on failure; Open-Workspace aborts that
   workspace's alongside open with a clear error when offset is $null.
+  - DONE: `Window/Functions/Get-NextAvailableDesktopIndex.ps1` now uses the cached
+    `Import-VirtualDesktopModule` loader and returns `$null` on both failure paths (warning now
+    always emitted, not verbose-gated). `Workflow/Functions/Open-Workspace.ps1` (alongside
+    branch) checks `$null -eq $desktopOffset` → `Write-LogError` + `continue` to the next
+    workspace. Only production caller is Open-Workspace (verified via grep; other hits are
+    tests/logs). Tests asserting the old `0` fallback will fail until the deferred test pass.
 - [ ] **17. Apply-FancyZones results-array scope bug** - `Apply-FancyZones.ps1:250` scriptblock
   does `$resultsArray += ...` (rebinds a local) → all "Shortcut Sent"/"Failed" records lost →
   `$appliedCount` always 0 → applied-layouts cache never invalidated after changes (stale
