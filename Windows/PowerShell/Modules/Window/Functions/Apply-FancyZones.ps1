@@ -566,8 +566,15 @@ function Apply-FancyZones {
 								Invoke-WithRetry -ScriptBlock {
 									$null = Switch-Desktop -Desktop $internalDesktopIndex -ErrorAction Stop
 								} -MaxAttempts 3 -InitialDelayMs 100
-								Start-Sleep -Milliseconds 10
 								$switchedDesktop = $true
+
+								# The desktop switch is asynchronous and the layout hotkey applies to
+								# whatever desktop is ACTIVE - confirm the switch landed before injecting,
+								# otherwise the layout is silently recorded under the PREVIOUS desktop's GUID.
+								if (-not (Wait-DesktopSwitch -TargetDesktopIndex $internalDesktopIndex)) {
+									Write-LogDebug " Desktop switch to [$displayDesktopNumber] not confirmed - skipping layout application for this desktop" -Style Warning
+									continue
+								}
 
 								& $applyLayouts -currentDesktopNumber $layoutLookupKey -resultsArray $results
 							}
@@ -626,8 +633,14 @@ function Apply-FancyZones {
 								Invoke-WithRetry -ScriptBlock {
 									$null = Switch-Desktop -Desktop $internalDesktopIndex -ErrorAction Stop
 								} -MaxAttempts 3 -InitialDelayMs 100
-								Start-Sleep -Milliseconds 10
 								$switchedDesktop = $true
+
+								# Confirm the asynchronous switch landed before injecting the layout
+								# hotkey - see the matching guard in the DesktopOffset branch above.
+								if (-not (Wait-DesktopSwitch -TargetDesktopIndex $internalDesktopIndex)) {
+									Write-LogDebug " Desktop switch to [$desktopNumberToApply] not confirmed - skipping layout application for this desktop" -Style Warning
+									continue
+								}
 
 								& $applyLayouts -currentDesktopNumber $desktopNumberToApply -resultsArray $results
 							}
@@ -657,10 +670,18 @@ function Apply-FancyZones {
 							# the last desktop has no following pass to override a bled-in layout, so this
 							# desktop is the only one left unprotected against the commit/switch race above.
 							# Re-applying now guarantees the desktop we land on ends with its correct layout.
-							Start-Sleep -Milliseconds $script:WindowModuleDelays.LayoutCommitMs
-							$returnLayoutKey = if ($DesktopOffset -gt 0) { 1 } else { $returnDesktop + 1 }
-							& $applyLayouts -currentDesktopNumber $returnLayoutKey -resultsArray $results
-							Start-Sleep -Milliseconds $script:WindowModuleDelays.LayoutCommitMs
+							# The re-apply MUST happen on the return desktop - if the asynchronous
+							# switch-back cannot be confirmed, skip it rather than stamping this
+							# desktop's layout onto whichever desktop is still active.
+							if (Wait-DesktopSwitch -TargetDesktopIndex $returnDesktop) {
+								Start-Sleep -Milliseconds $script:WindowModuleDelays.LayoutCommitMs
+								$returnLayoutKey = if ($DesktopOffset -gt 0) { 1 } else { $returnDesktop + 1 }
+								& $applyLayouts -currentDesktopNumber $returnLayoutKey -resultsArray $results
+								Start-Sleep -Milliseconds $script:WindowModuleDelays.LayoutCommitMs
+							}
+							else {
+								Write-LogDebug " Switch back to desktop [$($returnDesktop + 1)] not confirmed - skipping return-desktop layout re-apply" -Style Warning
+							}
 						}
 						elseif (Test-LogVerbose) {
 							Write-LogDebug "No desktop switches needed - staying on current desktop" -Style Warning

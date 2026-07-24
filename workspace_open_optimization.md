@@ -53,7 +53,29 @@ decision" section. Line numbers below refer to pre-change state; they shift as p
       command typed in another pwsh window meanwhile gets executed instead. Open-Workspace now
       records its exact invocation in a process env var; ReRun prefers it over history.
 
-- [ ] **2. Poll-until-verified instead of fixed-sleep-check-once** (analysis Tier 1 #2)
+- [x] **2. Poll-until-verified instead of fixed-sleep-check-once** (analysis Tier 1 #2)
+  - DONE:
+    - New `Window/Functions/Wait-WindowRect.ps1` (exported in Window.psd1): polls GetWindowRect
+      until bounds match within tolerance (default PositionVerificationPx=20), first check
+      immediate, default budget 300ms / 15ms interval. Returns Verified + last observed bounds
+      + ElapsedMs.
+    - `Snap-AllWindows.ps1`: keyboard-snap and shift-drag verification now use Wait-WindowRect
+      (budgets 200ms/250ms + 150ms per retry attempt); removed fixed `$retryDelayMs` sleeps and
+      its calculation (log line adjusted). Misplaced-window recovery loop simplified - the extra
+      25ms sleep + duplicate Get-DesktopFromWindow verify removed (Move verifies internally now).
+    - `Apply-FancyZones.ps1`: all 3 Switch-Desktop sites now confirm via Wait-DesktopSwitch.
+      Sites 1-2 (per-desktop hotkey passes): unconfirmed switch → warning + `continue` (skip
+      desktop; snapping surfaces it; safer than stamping the previous desktop's GUID). Site 3
+      (return-desktop re-apply): unconfirmed switch-back → skip the re-apply with warning.
+      `$switchedDesktop = $true` is set before the confirmation so the switch-back logic still
+      runs after an attempted-but-unconfirmed switch.
+    - `Move-WindowToVirtualDesktop.ps1`: already-on-target fast path (returns $true, no COM
+      move, no sleep); verify-immediately-then-poll (10ms steps, 100ms budget) replaces the
+      fixed 25ms sleep + single check; new `$script:LastMoveWindowToVirtualDesktopResult.Moved`
+      (follows the existing LastResizeWindowsResult pattern) distinguishes real moves.
+    - `Set-WindowLayouts.ps1`: the unconditional 25ms pre-position sleep now fires only when a
+      real move happened this iteration.
+  - All files parse clean (AST check).
   - a) Snap verification (`Snap-AllWindows.ps1:594-599,:668-685`): fixed 25ms sleep + single
     rect check after Win+Up / shift-drag → any FancyZones latency >25ms escalates to
     `ShiftDragSnap` (~410ms hardcoded sleeps, `WindowNative.cs:707-808`) → retries → rerun.

@@ -1073,7 +1073,11 @@ function Set-WindowLayouts {
 				Layout    = $layoutName
 			}
 
-			if ($null -ne $config.DesktopNumber) {
+			# Settle only when a real desktop move happened this iteration - the fast path
+			# (already on target) and dedup skips need no delay.
+			if ($null -ne $config.DesktopNumber -and
+				$script:LastMoveWindowToVirtualDesktopResult -and
+				$script:LastMoveWindowToVirtualDesktopResult.Moved) {
 				Start-Sleep -Milliseconds $script:WindowModuleDelays.WindowPositionMs
 			}
 

@@ -384,15 +384,11 @@ function Snap-AllWindows {
 						$windowOnTargetDesktop = $false
 						$maxMoveRetries = 3
 						for ($moveAttempt = 1; $moveAttempt -le $maxMoveRetries; $moveAttempt++) {
-							$moveSucceeded = Move-WindowToVirtualDesktop -WindowHandle $handle -DesktopNumber $internalDesktopIndex
-							if ($moveSucceeded) {
-								Start-Sleep -Milliseconds $script:WindowModuleDelays.VirtualDesktopMs
-								$verifyDesktop = Get-DesktopFromWindow -Hwnd $handle.ToInt64()
-								$verifyDesktopIndex = Get-DesktopIndex $verifyDesktop
-								if ($verifyDesktopIndex -eq $internalDesktopIndex) {
-									$windowOnTargetDesktop = $true
-									break
-								}
+							# Move-WindowToVirtualDesktop verifies internally (immediate check +
+							# short poll) - $true already means the window is on the target desktop.
+							if (Move-WindowToVirtualDesktop -WindowHandle $handle -DesktopNumber $internalDesktopIndex) {
+								$windowOnTargetDesktop = $true
+								break
 							}
 						}
 					}
@@ -540,12 +536,12 @@ function Snap-AllWindows {
 				for ($snapAttempt = 1; $snapAttempt -le $maxSnapRetries; $snapAttempt++) {
 					if ($snapVerified) { break }
 
-					# Increase delays on retries to give FancyZones more time to settle
-					$retryDelayMs = $SnapDelayMs + (($snapAttempt - 1) * 50)
+					# Focus settle grows on retries; snap verification itself polls (Wait-WindowRect)
+					# with a budget that also grows per attempt, replacing the old fixed delays.
 					$focusSettleMs = 10 + (($snapAttempt - 1) * 40)
 
 					if ($snapAttempt -gt 1) {
-						Write-LogDebug "     ↻ Retry $snapAttempt/$maxSnapRetries for [$title] (delay: ${retryDelayMs}ms)..."
+						Write-LogDebug "     ↻ Retry $snapAttempt/$maxSnapRetries for [$title]..."
 
 						# The failed attempt itself may have stranded a modifier (or the
 						# attempt failed BECAUSE one was already stuck and corrupted the
@@ -590,26 +586,15 @@ function Snap-AllWindows {
 						# Send Win + Arrow (UP or DOWN) using batched SendInput
 						[WindowModule.Native]::SendSnapKey($snapUp)
 
-						# Wait for FancyZones to process the snap (longer on retries)
-						Start-Sleep -Milliseconds $retryDelayMs
-
-						# Verify snap worked by checking if window moved to expected zone position
-						$postSnapRect = New-Object WindowModule.RECT
-						$snapTolerance = $script:WindowModuleTolerances.PositionVerificationPx
-						if ([WindowModule.Native]::GetWindowRect($handle, [ref]$postSnapRect)) {
-							$postX = $postSnapRect.Left
-							$postY = $postSnapRect.Top
-							$postWidth = $postSnapRect.Right - $postSnapRect.Left
-							$postHeight = $postSnapRect.Bottom - $postSnapRect.Top
-
-							# Check if window is now at the FULL zone position (not inset)
-							$snapXMatch = [Math]::Abs($postX - $expectedX) -le $snapTolerance
-							$snapYMatch = [Math]::Abs($postY - $expectedY) -le $snapTolerance
-							$snapWidthMatch = [Math]::Abs($postWidth - $expectedWidth) -le $snapTolerance
-							$snapHeightMatch = [Math]::Abs($postHeight - $expectedHeight) -le $snapTolerance
-
-							$snapVerified = $snapXMatch -and $snapYMatch -and $snapWidthMatch -and $snapHeightMatch
-						}
+						# Poll until FancyZones moves the window to the FULL zone position (not inset)
+						# instead of a single fixed-delay check: returns as soon as the snap lands and
+						# only escalates to the expensive shift-drag fallback when the budget is
+						# genuinely exhausted (budget grows on retries).
+						$snapWait = Wait-WindowRect -WindowHandle $handle `
+							-ExpectedX $expectedX -ExpectedY $expectedY `
+							-ExpectedWidth $expectedWidth -ExpectedHeight $expectedHeight `
+							-TimeoutMs (200 + (($snapAttempt - 1) * 150))
+						$snapVerified = $snapWait.Verified
 
 						if ($snapVerified) {
 							if (Test-LogVerbose) {
@@ -665,23 +650,12 @@ function Snap-AllWindows {
 						$shiftDragResult = [WindowModule.Native]::ShiftDragSnap($handle, $expectedX, $expectedY, $expectedWidth, $expectedHeight, $dragStartMode)
 
 						if ($shiftDragResult) {
-							Start-Sleep -Milliseconds $retryDelayMs
-
-							# Verify shift-drag snap
-							$postShiftDragRect = New-Object WindowModule.RECT
-							if ([WindowModule.Native]::GetWindowRect($handle, [ref]$postShiftDragRect)) {
-								$postX = $postShiftDragRect.Left
-								$postY = $postShiftDragRect.Top
-								$postWidth = $postShiftDragRect.Right - $postShiftDragRect.Left
-								$postHeight = $postShiftDragRect.Bottom - $postShiftDragRect.Top
-
-								$snapXMatch = [Math]::Abs($postX - $expectedX) -le $snapTolerance
-								$snapYMatch = [Math]::Abs($postY - $expectedY) -le $snapTolerance
-								$snapWidthMatch = [Math]::Abs($postWidth - $expectedWidth) -le $snapTolerance
-								$snapHeightMatch = [Math]::Abs($postHeight - $expectedHeight) -le $snapTolerance
-
-								$snapVerified = $snapXMatch -and $snapYMatch -and $snapWidthMatch -and $snapHeightMatch
-							}
+							# Same poll-until-verified pattern as the keyboard snap above.
+							$dragWait = Wait-WindowRect -WindowHandle $handle `
+								-ExpectedX $expectedX -ExpectedY $expectedY `
+								-ExpectedWidth $expectedWidth -ExpectedHeight $expectedHeight `
+								-TimeoutMs (250 + (($snapAttempt - 1) * 150))
+							$snapVerified = $dragWait.Verified
 						}
 
 						if ($snapVerified) {
