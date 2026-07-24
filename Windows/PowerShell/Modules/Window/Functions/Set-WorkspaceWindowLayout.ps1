@@ -183,11 +183,12 @@ function Set-WorkspaceWindowLayout {
 	try {
 		$snapResult = $null
 
-		# Pre-flight RPC health check using the shared helper. Keep this to service
-		# status only; live probe is reserved for rerun branches where a real
-		# layout failure has already been observed.
+		# Pre-flight RPC health check using the shared helper. The live probe runs
+		# in-process against this session's VirtualDesktop COM state (cheap when
+		# healthy), so a stale session - Explorer restarted since the module loaded -
+		# is detected and repaired here, before any desktop reconfiguration begins.
 		if (Get-Command Get-RpcRetryPolicy -ErrorAction SilentlyContinue) {
-			[void](Get-RpcRetryPolicy -OperationLabel "applying layout")
+			[void](Get-RpcRetryPolicy -OperationLabel "applying layout" -Probe)
 		}
 
 		$cachedMonitorInfo = Get-MonitorInfo

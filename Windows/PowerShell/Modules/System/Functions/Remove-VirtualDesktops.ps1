@@ -77,12 +77,21 @@ function Remove-VirtualDesktops {
 	$rpcInitialDelayMs = [int]$rpcPolicy.InitialDelayMs
 	$useRetry = [bool](Get-Command Invoke-WithRetry -ErrorAction SilentlyContinue)
 	$useOptionalRetryHelper = [bool](Get-Command Invoke-WithOptionalRetry -ErrorAction SilentlyContinue)
-	$rpcUnavailablePattern = '0x800706BA|0x800706BE|RPC server is unavailable|The remote procedure call failed'
+	$rpcUnavailablePattern = '0x800706BA|0x800706BE|0x80010108|RPC server is unavailable|The remote procedure call failed'
 	$recoverVirtualDesktopRpc = {
 		param($ErrorRecord, [int]$Attempt)
 
-		$errorMessage = if ($ErrorRecord.Exception) { $ErrorRecord.Exception.Message } else { [string]$ErrorRecord }
-		if ($errorMessage -notmatch $rpcUnavailablePattern) {
+		# Test-RpcUnavailableError walks the InnerException chain and HRESULTs, so
+		# wrapped RPC failures (e.g. a TypeInitializationException around the COM
+		# error) still trigger recovery; the message match is the fallback.
+		$isRpcFailure = if (Get-Command Test-RpcUnavailableError -ErrorAction SilentlyContinue) {
+			Test-RpcUnavailableError $ErrorRecord
+		}
+		else {
+			$errorMessage = if ($ErrorRecord.Exception) { $ErrorRecord.Exception.Message } else { [string]$ErrorRecord }
+			$errorMessage -match $rpcUnavailablePattern
+		}
+		if (-not $isRpcFailure) {
 			return
 		}
 

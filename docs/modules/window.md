@@ -233,14 +233,11 @@ ConvertTo-InternalDesktopIndex -DesktopNumber 1 -DesktopOffset 2  # 2
 ## [Ensure-VirtualDesktops](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Ensure-VirtualDesktops.ps1)
 
 - **Description:** Ensures the specified number of virtual desktops exist, creating additional desktops when too few exist and removing the excess when too many exist. Optionally switches to a target desktop afterward. Requires the VirtualDesktop PowerShell module.
-- **Recovery:** Wraps the desktop list/create/remove/switch calls in RPC-aware retry helpers, runs the shared RPC retry policy when available, and verifies the final desktop count before returning success.
+- **Recovery:** Runs a live RPC preflight (`Get-RpcRetryPolicy -Probe`, 5 attempts / 250 ms initial delay), wraps every desktop list/create/remove/switch call in RPC-aware retry helpers, and self-heals between attempts: when a call fails with the RPC-unavailable error family (classified via `Test-RpcUnavailableError`), the session's VirtualDesktop COM proxies are reconnected via `Reset-VirtualDesktopState` before the next retry. Verifies the final desktop count before returning success.
 - **Parameters:** -Count, -SwitchToDesktop
 - **Usage:** `Ensure-VirtualDesktops -Count 3`, `Ensure-VirtualDesktops -Count 3 -SwitchToDesktop 2`
 
-Creates virtual desktops if fewer than `-Count` exist, up to the requested count, and removes extras (then switches to the first desktop) if more exist. After reconciling the count it can switch to a specific desktop via `-SwitchToDesktop` (1-based; `0` means don't switch). Returns `$true` on success and `$false` on failure (module missing or desktop create/remove failed). Calls are wrapped in RPC-aware retry helpers to tolerate transient `0x800706BA`/COM-not-ready errors.
-
-> [!NOTE]
-> A known issue causes "The RPC server is unavailable. (0x800706BA)" if this is called too closely after `Set-Wallpaper`.
+Creates virtual desktops if fewer than `-Count` exist, up to the requested count, and removes extras (then switches to the first desktop) if more exist. After reconciling the count it can switch to a specific desktop via `-SwitchToDesktop` (1-based; `0` means don't switch). Returns `$true` on success and `$false` on failure (module missing or desktop create/remove failed). "The RPC server is unavailable. (0x800706BA)" failures - previously a known issue when Explorer had restarted earlier in the session (wallpaper, taskbar, or icon-cache operations) - now recover in place through the retry hook instead of failing the workspace run.
 
 | Parameter          | Type | Default | Description                                                       |
 | ------------------ | ---- | ------- | ----------------------------------------------------------------- |
@@ -927,19 +924,28 @@ Reset-Windows -VirtualDesktop 2 -Monitor Primary
 Reset-Windows -Monitor ""
 ```
 
+## [Reset-VirtualDesktopComProxy](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Reset-VirtualDesktopComProxy.ps1)
+
+- **Description:** Reconnects the `VirtualDesktop` module's cached COM proxies to the current shell via reflection. The module's compiled `DesktopManager` class creates its COM proxies once per process in a static constructor and caches them in static fields; after an Explorer restart those proxies are permanently disconnected and every VirtualDesktop call fails with "The RPC server is unavailable" (`0x800706BA`) - and re-importing the module can never fix it, because the compiled assembly stays loaded and the constructor never runs again. This function replays that constructor: it creates a fresh ImmersiveShell service provider and overwrites the static COM fields with newly connected proxies, recovering the session in place without a new shell.
+- **Usage:** `Reset-VirtualDesktopComProxy`, `if (Test-RpcUnavailableError $_) { [void](Reset-VirtualDesktopComProxy) }`
+
+Returns a Boolean: `$true` when the compiled types are not loaded yet (the first real call creates fresh proxies on its own) or when every field was rebuilt; `$false` when the rebuild failed - typically while a restarted Explorer is still re-registering its COM classes, in which case retrying after a short delay succeeds. Used by `Reset-VirtualDesktopState` as the first (and decisive) recovery layer.
+
+**See also:** [Reset-VirtualDesktopState](window.md#reset-virtualdesktopstate), [Test-VirtualDesktopComHealth](window.md#test-virtualdesktopcomhealth), [Test-RpcUnavailableError](helper.md#test-rpcunavailableerror)
+
 ## [Reset-VirtualDesktopState](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Reset-VirtualDesktopState.ps1)
 
-- **Description:** Forces a fresh reload of the `VirtualDesktop` module to recover stale COM/RPC state. Removes the module, clears the module-scoped lazy-load cache (`$script:VirtualDesktopState`), and re-imports it via `Import-VirtualDesktopModule`. This reproduces the "fresh shell" recovery for cases where the VirtualDesktop COM/RPC session has gone stale mid-session - a known cause of `Switch-Desktop` silently failing in long-running shells while succeeding from a new shell. Returns whether the module is loaded and ready after the reset.
+- **Description:** Restores a working VirtualDesktop session in place after the COM/RPC state has gone stale (the `0x800706BA` failure family an Explorer restart leaves behind). Two recovery layers: first `Reset-VirtualDesktopComProxy` reconnects the compiled type's cached static COM proxies to the current shell (the step that actually repairs a stale session - re-importing the module alone can never refresh them), then the module is removed, the module-scoped lazy-load cache (`$script:VirtualDesktopState`) is cleared, and the module is re-imported via `Import-VirtualDesktopModule`. When `Test-VirtualDesktopComHealth` is available, a live in-process roundtrip verifies the session actually works before success is reported.
 - **Usage:** `Reset-VirtualDesktopState`, `if (Reset-VirtualDesktopState) { Switch-Desktop -Desktop 0 }`
 
-Returns a Boolean: `$true` if the `VirtualDesktop` module is loaded and ready after the reset, otherwise `$false`. The reset invalidates the lazy-load cache (`Checked`, `Available`, `Loaded`) so `Import-VirtualDesktopModule` re-establishes a fresh session, and module removal failures are ignored (the module may not currently be loaded). `Snap-AllWindows` calls it when a desktop switch cannot be verified after its normal retries.
+Returns a Boolean: `$true` only when the VirtualDesktop session is verified ready after the reset, otherwise `$false` (safe to retry after a delay - a restarted Explorer needs a moment to re-register its COM classes). Module removal failures are ignored (the module may not currently be loaded). Callers: `Snap-AllWindows` and `Focus-VirtualDesktop` when a desktop switch cannot be verified, the RPC retry hooks in `Ensure-VirtualDesktops` and `Remove-VirtualDesktops`, `Repair-RpcServer` as its primary recovery step, and `Restart-Explorer` proactively right after restarting the shell.
 
 ```powershell
-# Reload the VirtualDesktop module and only switch when it is ready again
+# Reconnect the session and only switch when it is verified ready again
 if (Reset-VirtualDesktopState) { Switch-Desktop -Desktop 0 }
 ```
 
-**See also:** [Focus-VirtualDesktop](window.md#focus-virtualdesktop)
+**See also:** [Reset-VirtualDesktopComProxy](window.md#reset-virtualdesktopcomproxy), [Focus-VirtualDesktop](window.md#focus-virtualdesktop)
 
 ## [Resize-Windows](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Resize-Windows.ps1)
 
@@ -1240,7 +1246,7 @@ Set-WorkspaceWindowLayout -WorkspaceName MyWorkspace -DisableAutoWait
 Set-LogLevel Verbose { Set-WorkspaceWindowLayout -WorkspaceName MyWorkspace }
 ```
 
-On success Windows Terminal is refocused just before the success banner so output is not buried behind workspace windows. On snap or verification failure the function records the failed window marker, force-starts FancyZones, and reruns via `Initialize-WorkspaceWindowLayoutRerun -WindowOnlyRetry` / `ReRun-LastCommand` in a window-only mode that preserves virtual desktops and caches, always reapplies FancyZones monitor layouts, and retries only the targeted window entry (capped at 2 auto-reruns). Auto-rerun is disabled in `-Alongside` mode. `CurrentLayout.txt` is written only on the success paths, so a failed/rerunning attempt never overwrites the last good snapshot.
+On entry the function runs a live RPC preflight (`Get-RpcRetryPolicy -OperationLabel "applying layout" -Probe`): the probe verifies this session's VirtualDesktop COM state in-process, so a session whose proxies went stale after an Explorer restart is detected and repaired (via `Repair-RpcServer` / `Reset-VirtualDesktopState`) before any desktop reconfiguration begins. On success Windows Terminal is refocused just before the success banner so output is not buried behind workspace windows. On snap or verification failure the function records the failed window marker, force-starts FancyZones, and reruns via `Initialize-WorkspaceWindowLayoutRerun -WindowOnlyRetry` / `ReRun-LastCommand` in a window-only mode that preserves virtual desktops and caches, always reapplies FancyZones monitor layouts, and retries only the targeted window entry (capped at 2 auto-reruns). Auto-rerun is disabled in `-Alongside` mode. `CurrentLayout.txt` is written only on the success paths, so a failed/rerunning attempt never overwrites the last good snapshot.
 
 **See also:** [Save-CurrentLayout](window.md), [Get-CurrentLayout](window.md), [Set-WindowLayouts](window.md), [Window module overview](../modules/window.md)
 
@@ -1310,6 +1316,16 @@ Test-FancyZonesLayoutApplied -VirtualDesktopGuid $guid -MonitorId "LEN8ABC"
 - **Description:** Tests whether a window handle is tracked as positioned. Checks if the handle has been registered as positioned by `Set-WindowLayouts`, returning `$true` if the window was positioned and `$false` otherwise.
 - **Parameters:** -WindowHandle
 - **Usage:** `Test-PositionedWindow -WindowHandle $window.Handle`
+
+## [Test-VirtualDesktopComHealth](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Test-VirtualDesktopComHealth.ps1)
+
+- **Description:** Probes THIS session's VirtualDesktop COM state with a live roundtrip (`[VirtualDesktop.Desktop]::Count`) on a background runspace inside the current process, under a hard timeout. Because the probe shares the session's compiled types and cached COM proxies, it detects the failure modes that matter to this session: stale proxies after an Explorer restart (fails fast with `0x800706BA` / `0x80010108` - a child-process probe creates its own fresh proxies and wrongly reports healthy in that state) and a hung shell endpoint (the call blocks and the timeout flags it). When the VirtualDesktop types are not compiled in this process yet, the runspace imports the module and calls `Get-DesktopCount`, exercising the same COM activation path a first real call would take.
+- **Parameters:** -TimeoutMs (default 5000)
+- **Usage:** `Test-VirtualDesktopComHealth`, `$probe = Test-VirtualDesktopComHealth -TimeoutMs 2500`
+
+Returns a `PSCustomObject` with `Healthy` (bool), `TimedOut` (bool), and `Error` (innermost failure message plus HRESULT, or `$null`). A healthy warm probe completes in milliseconds. Used by `Test-RpcServerHealth -Probe` as the live endpoint check and by `Reset-VirtualDesktopState` to verify a reset actually produced a working session.
+
+**See also:** [Test-RpcServerHealth](system.md#test-rpcserverhealth), [Reset-VirtualDesktopState](window.md#reset-virtualdesktopstate)
 
 ## [Update-LayoutSectionHeaders](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Update-LayoutSectionHeaders.ps1)
 

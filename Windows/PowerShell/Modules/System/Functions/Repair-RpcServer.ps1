@@ -4,19 +4,28 @@ function Repair-RpcServer {
 		Attempts to recover an unresponsive RPC server before resuming workspace operations.
 
 	.DESCRIPTION
-		Used when Test-RpcServerHealth -Probe indicates the RPC endpoint is hung
-		(service is Running but COM roundtrips fail with 0x800706BA / 0x800706BE).
-		Runs a bounded retry loop (default 5 attempts with exponential backoff
-		starting at 500 ms, capped at 8 s) where each attempt:
+		Used when Test-RpcServerHealth -Probe indicates the session's RPC/COM state is
+		broken (stale VirtualDesktop proxies after an Explorer restart) or the endpoint
+		is hung (service Running but COM roundtrips fail with 0x800706BA / 0x800706BE).
+		Runs a bounded retry loop (default 5 attempts with exponential backoff starting
+		at 500 ms, capped at 8 s) where each attempt:
 
-		  1. Attempts Restart-Service RpcSs / DcomLaunch / RpcEptMapper -Force.
-		     RpcSs is normally marked non-stoppable; this call typically fails on a
-		     running system, but is attempted because in some cases (e.g. when the
-		     service has actually entered an inconsistent state) the SCM will honor it.
-		  2. Forcibly terminates known RPC-consumer state that we control - PowerToys
-		     and the VirtualDesktop COM proxies cached in this PowerShell session - so
-		     the next probe re-establishes fresh COM connections.
-		  3. Waits the current backoff window and re-runs Test-RpcServerHealth -Probe.
+		  1. Runs Reset-VirtualDesktopState, which reconnects the session's cached
+		     VirtualDesktop COM proxies to the current shell via reflection
+		     (Reset-VirtualDesktopComProxy) and reloads the module. This is the
+		     recovery that actually repairs the common failure mode and needs no
+		     admin rights. When the Window module is unavailable, falls back to
+		     unloading the VirtualDesktop module (legacy behavior).
+		  2. Attempts Restart-Service RpcSs / DcomLaunch / RpcEptMapper -Force when
+		     elevated. RpcSs is normally marked non-stoppable; this call typically
+		     fails on a running system, but is attempted because in some cases (e.g.
+		     when the service has actually entered an inconsistent state) the SCM
+		     will honor it.
+		  3. From the second attempt on, forcibly terminates PowerToys processes so
+		     their stale COM clients stop wedging the endpoint. This is escalation
+		     only - a session whose own proxies were stale recovers in step 1 without
+		     collateral damage.
+		  4. Waits the current backoff window and re-runs Test-RpcServerHealth -Probe.
 
 		Returns $true as soon as the probe reports healthy. Returns $false only after
 		all attempts are exhausted, in which case callers should continue with their
@@ -41,8 +50,8 @@ function Repair-RpcServer {
 	.NOTES
 		Restarting RpcSs almost always requires a reboot on a live Windows session
 		because critical services depend on it. This function intentionally treats
-		the service restart as best-effort and relies on consumer-side cleanup
-		(PowerToys, COM proxy disposal) as the primary recovery mechanism, which
+		the service restart as best-effort and relies on session-side recovery
+		(COM proxy reconnection, module reload) as the primary mechanism, which
 		does NOT require admin.
 	#>
 	[CmdletBinding()]
@@ -75,9 +84,37 @@ function Repair-RpcServer {
 	for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
 		Write-LogStep "  → Recovery attempt $attempt / $MaxAttempts" -NoLeadingNewline
 
-		# Step 1+2: Attempt service restarts. Requires admin and will usually fail on
-		# RpcSs (non-stoppable on a running system) but is attempted as the user-requested
-		# first-line recovery. -ErrorAction Stop is caught per-service to keep the loop alive.
+		# Step 1: reconnect this session's VirtualDesktop COM state. This is the
+		# recovery that actually works without admin: reflection-based proxy
+		# reconnection plus a module reload, verified by an in-process roundtrip.
+		if (Get-Command Reset-VirtualDesktopState -ErrorAction SilentlyContinue) {
+			Write-LogDebug "    → Reset-VirtualDesktopState (reconnect session COM proxies)" -Style Step
+			if (Reset-VirtualDesktopState) {
+				Write-LogDebug "      ✓ VirtualDesktop session reconnected" -Style Success
+			}
+			else {
+				Write-LogDebug "      ⚠ VirtualDesktop session still unhealthy after reset" -Style Warning
+			}
+		}
+		else {
+			# Legacy fallback: drop the cached module so the next probe at least
+			# re-imports it (cannot refresh compiled COM proxies, but preserves the
+			# old behavior when the Window module is not loaded).
+			try {
+				$vdModule = Get-Module -Name VirtualDesktop -ErrorAction SilentlyContinue
+				if ($vdModule) {
+					Remove-Module -Name VirtualDesktop -Force -ErrorAction SilentlyContinue
+				}
+			}
+			catch {
+				# Best-effort
+			}
+		}
+
+		# Step 2: attempt service restarts. Requires admin and will usually fail on
+		# RpcSs (non-stoppable on a running system) but is attempted as first-line
+		# recovery for genuinely broken services. -ErrorAction Stop is caught
+		# per-service to keep the loop alive.
 		if ($isAdmin) {
 			foreach ($serviceName in $servicesToRestart) {
 				try {
@@ -94,28 +131,21 @@ function Repair-RpcServer {
 			Write-LogDebug "    ⚠ Not elevated - skipping Restart-Service for RPC services" -Style Warning
 		}
 
-		# Step 3: Tear down consumer-side state so the next probe forms fresh COM
-		# connections. This is the recovery mechanism that actually works without admin.
-		try {
-			$powerToysProcs = Get-Process -Name "PowerToys*" -ErrorAction SilentlyContinue
-			if ($powerToysProcs) {
-				Write-LogDebug "    → Stopping PowerToys processes to drop stale COM clients" -Style Step
-				$powerToysProcs | Stop-Process -Force -ErrorAction SilentlyContinue
+		# Step 3: escalation from the second attempt on - terminate PowerToys so its
+		# stale COM clients stop wedging the shell endpoint. Not done on the first
+		# attempt: when only this session's proxies were stale, step 1 already fixed
+		# it and PowerToys should not be collateral damage.
+		if ($attempt -ge 2) {
+			try {
+				$powerToysProcs = Get-Process -Name "PowerToys*" -ErrorAction SilentlyContinue
+				if ($powerToysProcs) {
+					Write-LogDebug "    → Stopping PowerToys processes to drop stale COM clients" -Style Step
+					$powerToysProcs | Stop-Process -Force -ErrorAction SilentlyContinue
+				}
 			}
-		}
-		catch {
-			# Best-effort
-		}
-
-		# Drop cached VirtualDesktop module COM references in this session
-		try {
-			$vdModule = Get-Module -Name VirtualDesktop -ErrorAction SilentlyContinue
-			if ($vdModule) {
-				Remove-Module -Name VirtualDesktop -Force -ErrorAction SilentlyContinue
+			catch {
+				# Best-effort
 			}
-		}
-		catch {
-			# Best-effort
 		}
 
 		# Let DCOM settle (exponential backoff between attempts so we don't hammer

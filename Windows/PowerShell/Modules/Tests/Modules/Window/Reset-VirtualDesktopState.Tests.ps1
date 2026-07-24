@@ -6,8 +6,13 @@ BeforeAll {
 
 	. "$FunctionsPath\Reset-VirtualDesktopState.ps1"
 
-	# Import-VirtualDesktopModule is a sibling helper; stub it so it can be mocked.
+	# Sibling helpers stubbed so they can be mocked.
 	function Import-VirtualDesktopModule { param([switch]$Silent) }
+	function Reset-VirtualDesktopComProxy { }
+	function Test-VirtualDesktopComHealth { param([int]$TimeoutMs) }
+	if (-not (Get-Command Write-LogDebug -ErrorAction SilentlyContinue)) {
+		function Write-LogDebug { param($Message, [string]$Style, [switch]$NoLeadingNewline) }
+	}
 }
 
 Describe "Reset-VirtualDesktopState" {
@@ -18,6 +23,9 @@ Describe "Reset-VirtualDesktopState" {
 			Loaded    = $true
 		}
 		Mock Remove-Module { }
+		Mock Write-LogDebug { }
+		Mock Reset-VirtualDesktopComProxy { $true }
+		Mock Test-VirtualDesktopComHealth { [PSCustomObject]@{ Healthy = $true; TimedOut = $false; Error = $null } }
 	}
 
 	It "removes the VirtualDesktop module and re-imports it" {
@@ -27,6 +35,16 @@ Describe "Reset-VirtualDesktopState" {
 
 		Should -Invoke Remove-Module -Times 1 -ParameterFilter { $Name -eq 'VirtualDesktop' }
 		Should -Invoke Import-VirtualDesktopModule -Times 1
+	}
+
+	It "reconnects the compiled COM proxies as part of the reset" {
+		Mock Import-VirtualDesktopModule { $true }
+
+		$null = Reset-VirtualDesktopState
+
+		# This is the layer that actually repairs a stale session; re-importing the
+		# module alone can never refresh the static COM fields.
+		Should -Invoke Reset-VirtualDesktopComProxy -Times 1
 	}
 
 	It "invalidates the lazy-load cache before re-importing" {
@@ -41,7 +59,7 @@ Describe "Reset-VirtualDesktopState" {
 		$script:VirtualDesktopState.Loaded | Should -BeFalse
 	}
 
-	It "returns true when the module is ready after the reset" {
+	It "returns true when reconnect, re-import, and verification all succeed" {
 		Mock Import-VirtualDesktopModule { $true }
 
 		Reset-VirtualDesktopState | Should -BeTrue
@@ -50,6 +68,23 @@ Describe "Reset-VirtualDesktopState" {
 	It "returns false when the module fails to re-import" {
 		Mock Import-VirtualDesktopModule { $false }
 
+		Reset-VirtualDesktopState | Should -BeFalse
+	}
+
+	It "returns false when the COM proxy reconnect fails" {
+		Mock Import-VirtualDesktopModule { $true }
+		Mock Reset-VirtualDesktopComProxy { $false }
+
+		Reset-VirtualDesktopState | Should -BeFalse
+	}
+
+	It "returns false when the post-reset roundtrip still reports an unhealthy session" {
+		Mock Import-VirtualDesktopModule { $true }
+		Mock Test-VirtualDesktopComHealth {
+			[PSCustomObject]@{ Healthy = $false; TimedOut = $false; Error = 'The RPC server is unavailable. (0x800706BA)' }
+		}
+
+		# A reset that leaves the session broken must not report success.
 		Reset-VirtualDesktopState | Should -BeFalse
 	}
 

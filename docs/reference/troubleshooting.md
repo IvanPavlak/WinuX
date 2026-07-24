@@ -223,6 +223,24 @@ WindowTitle = "*Mozilla Firefox*"    # Contains
 Set-LogLevel Verbose { Set-WorkspaceWindowLayout -WorkspaceName "MyOrg" }
 ```
 
+### "The RPC server is unavailable. (0x800706BA)" During Workspace Setup
+
+**Problem:** Virtual desktop operations (`Ensure-VirtualDesktops`, `Remove-VirtualDesktops`, `Switch-Desktop`) fail with `The RPC server is unavailable. (0x800706BA)` - typically after Explorer restarted earlier in the session (taskbar configuration, icon-cache rebuild, theme changes), and re-importing the `VirtualDesktop` module doesn't help.
+
+**Why it happens:** The `VirtualDesktop` module creates its COM connections to Explorer once per PowerShell process (in a compiled static constructor) and caches them. When Explorer restarts, those cached connections are permanently severed for that session; because the compiled assembly stays loaded, `Remove-Module` + `Import-Module` never re-creates them.
+
+**Solution:** This now self-heals. Workspace commands probe the session's live COM state before desktop work and reconnect it in place (`Reset-VirtualDesktopState` rebuilds the cached COM proxies via `Reset-VirtualDesktopComProxy`); `Restart-Explorer` reconnects proactively after restarting the shell. If a session still reports RPC errors, reconnect manually:
+
+```powershell
+# Reconnect this session's VirtualDesktop COM state in place
+Reset-VirtualDesktopState
+
+# Inspect the live state directly
+Test-VirtualDesktopComHealth
+```
+
+Opening a new shell also works (a fresh process builds fresh COM connections), but is no longer necessary.
+
 ### FancyZones Not Running
 
 **Problem:** Zone snapping doesn't work.

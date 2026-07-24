@@ -501,7 +501,7 @@ $config = Join-Path -Path $paths.PowerShell -ChildPath "Configuration.psd1"
 
 ## [Get-RpcRetryPolicy](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Get-RpcRetryPolicy.ps1)
 
-- **Description:** Centralizes the RPC safety pattern used by VirtualDesktop-heavy workflows. Returns a hashtable of shared retry defaults (`MaxAttempts`, `InitialDelayMs`) and runs an RPC preflight via `Test-RpcServerHealth` (service-status by default, or a live endpoint probe with `-Probe`), triggering `Repair-RpcServer` when unhealthy before callers continue. Used by functions such as Remove-VirtualDesktops, Move-Windows, Set-WorkspaceWindowLayout, and Initialize-WorkspaceWindowLayoutRerun to avoid duplicated preflight/recovery boilerplate.
+- **Description:** Centralizes the RPC safety pattern used by VirtualDesktop-heavy workflows. Returns a hashtable of shared retry defaults (`MaxAttempts`, `InitialDelayMs`) and runs an RPC preflight via `Test-RpcServerHealth` (service-status by default, or a live in-process probe of the session's VirtualDesktop COM state with `-Probe`), triggering `Repair-RpcServer` when unhealthy before callers continue. Used by functions such as Remove-VirtualDesktops, Ensure-VirtualDesktops, Move-Windows, Set-WorkspaceWindowLayout, and Initialize-WorkspaceWindowLayoutRerun to avoid duplicated preflight/recovery boilerplate.
 - **Parameters:** -OperationLabel (default: "operation"), -MaxAttempts (default: 3), -InitialDelayMs (default: 200), -Probe
 - **Usage:** `$rpcPolicy = Get-RpcRetryPolicy -OperationLabel "desktop cleanup"`, `Get-RpcRetryPolicy -Probe`
 
@@ -1124,6 +1124,21 @@ if (Test-RegistryValue -Path 'HKCU:\Control Panel\Desktop' -Name 'Wallpaper' -Ex
     Write-Host "Wallpaper set"
 }
 ```
+
+## [Test-RpcUnavailableError](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Test-RpcUnavailableError.ps1)
+
+- **Description:** Classifies an ErrorRecord, exception, or message string as an RPC availability failure - the error family VirtualDesktop COM calls surface when the shell endpoint is gone or the session's cached COM proxies have disconnected from a restarted `explorer.exe`: `0x800706BA` "The RPC server is unavailable", `0x800706BE` "The remote procedure call failed", `0x80010108` "The object invoked has disconnected from its clients", and `0x800401FD` "Object is not connected to server". Walks the full `InnerException` chain (a stale COM proxy often surfaces wrapped in a `TypeInitializationException` or method-invocation wrapper whose top-level message says nothing about RPC) and compares each exception's HRESULT numerically, so localized Windows error text still classifies correctly.
+- **Parameters:** -InputObject
+- **Usage:** `Test-RpcUnavailableError $_`, `if (Test-RpcUnavailableError $errorRecord) { [void](Reset-VirtualDesktopState) }`
+
+Returns `$true` when the error is an RPC availability failure, otherwise `$false` (including for `$null`). Used by the RPC retry hooks in `Ensure-VirtualDesktops` and `Remove-VirtualDesktops` to decide whether a failed attempt warrants reconnecting the VirtualDesktop session before the next retry, and by `Test-RpcServerHealth` to separate real RPC outages from benign probe failures.
+
+```powershell
+# Only run RPC recovery for RPC failures - let other errors surface normally
+try { New-Desktop } catch { if (Test-RpcUnavailableError $_) { [void](Reset-VirtualDesktopState) } }
+```
+
+**See also:** [Reset-VirtualDesktopState](window.md#reset-virtualdesktopstate), [Test-RpcServerHealth](system.md#test-rpcserverhealth)
 
 ## [Test-WindowTitleCandidates](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Test-WindowTitleCandidates.ps1)
 

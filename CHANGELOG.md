@@ -8,6 +8,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.9] - 2026-07-24
+
+### Added
+
+- `Reset-VirtualDesktopComProxy` (Window module): reconnects the `VirtualDesktop` module's cached COM proxies to the current shell via reflection. The module compiles a `DesktopManager` class whose static constructor creates the COM connections once per process and caches them in static fields; after an Explorer restart those connections are permanently severed and every VirtualDesktop call fails with "The RPC server is unavailable" (`0x800706BA`) - re-importing the module can never fix it because the compiled assembly stays loaded and the constructor never runs again. This function replays that constructor (fresh ImmersiveShell service provider, all static COM fields rebuilt, including the Windows 10-only `VirtualDesktopManagerInternal2`), recovering the session in place without a new shell.
+- `Test-VirtualDesktopComHealth` (Window module): probes THIS session's VirtualDesktop COM state with a live `[VirtualDesktop.Desktop]::Count` roundtrip on a background runspace in the current process, under a hard timeout. Detects stale session proxies (fail fast with `0x800706BA` / `0x80010108`) and hung endpoints (timeout); a healthy warm probe completes in milliseconds. Returns `Healthy` / `TimedOut` / `Error`.
+- `Test-RpcUnavailableError` (Helper module): classifies an ErrorRecord, exception, or message string as an RPC availability failure (`0x800706BA`, `0x800706BE`, `0x80010108`, `0x800401FD` and their message texts). Walks the full `InnerException` chain and compares HRESULTs numerically, so wrapped failures (e.g. a `TypeInitializationException` around the COM error) and localized Windows error text classify correctly.
+
+### Fixed
+
+- Workspace orchestration no longer dies with "The RPC server is unavailable. (0x800706BA)" when Explorer restarted earlier in the session (taskbar configuration, icon-cache rebuild, theme changes) - the failure that aborted `Open-Workspace` at the `Ensure-VirtualDesktops` step and forced a new shell:
+  - `Reset-VirtualDesktopState` (Window module) previously only did `Remove-Module` + `Import-Module`, which is a no-op for the actual stale state (verified: the re-imported module reuses the same cached COM proxies). It now reconnects the compiled type's static COM proxies via `Reset-VirtualDesktopComProxy` first, then reloads the cmdlet layer, and reports success only after a live in-process roundtrip verifies the session works. Every existing caller (`Snap-AllWindows`, `Focus-VirtualDesktop`, `Remove-VirtualDesktops` retry hooks, rerun flows) inherits the working recovery.
+  - `Test-RpcServerHealth -Probe` (System module) probed in a `Start-Job` child process, which builds its own fresh COM connections - after an Explorer restart it reported "healthy" while the current session stayed broken, so recovery never engaged for the state that mattered. The probe now runs in-process via `Test-VirtualDesktopComHealth` with the same timeout semantics, and is ~100x faster when healthy (no child `pwsh` spawn or module import).
+  - `Ensure-VirtualDesktops` (Window module) had no RPC recovery hook at all (unlike `Remove-VirtualDesktops`), so its retries reused the same dead proxies and always failed. It now uses the shared live-probe preflight (5 attempts / 250 ms, matching `Remove-VirtualDesktops`) and reconnects the session between retries when the failure is RPC-classified. The "known issue" comment about failing near `Set-Wallpaper` is gone - that interaction self-heals now.
+  - `Repair-RpcServer` (System module) runs `Reset-VirtualDesktopState` as its primary per-attempt recovery step (its old `Remove-Module` step could not repair anything), keeps the elevated best-effort service restarts, and only terminates PowerToys from the second attempt on - a session whose own proxies were stale recovers without collateral damage.
+  - `Restart-Explorer` (System module) proactively reconnects the session's VirtualDesktop COM state after restarting the shell (bounded retries while the new Explorer instance re-registers its COM classes), so the next workspace command starts healthy instead of tripping over severed proxies. Sessions that never loaded the VirtualDesktop types skip this entirely.
+  - `Set-WorkspaceWindowLayout` (Window module) upgrades its RPC preflight to the live probe (`Get-RpcRetryPolicy -Probe`) - previously reserved for rerun branches because the child-process probe was too slow - so a stale session is repaired before any desktop reconfiguration begins.
+  - `Remove-VirtualDesktops` (System module) classifies retry errors via `Test-RpcUnavailableError`, so RPC failures wrapped in other exception types (or localized) still trigger the reconnect instead of exhausting retries.
+
 ## [0.1.8] - 2026-07-20
 
 ### Added
@@ -130,7 +149,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.8...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.9...HEAD
+[0.1.9]: https://github.com/IvanPavlak/WinuX/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/IvanPavlak/WinuX/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/IvanPavlak/WinuX/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/IvanPavlak/WinuX/compare/v0.1.5...v0.1.6

@@ -60,6 +60,7 @@
 		'Test-WindowTitleCandidates',
 		'Test-PrivacyStatus',
 		'Test-RegistryValue',
+		'Test-RpcUnavailableError',
 		'Test-WSLDistributionInstalled',
 		'Test-WSLEnabled',
 		'Write-ManualInstructionsToDesktop'

@@ -1,4 +1,6 @@
-# KNOWN ISSUE: "The RPC server is unavailable. (0x800706BA)" occurs if this is called closely with Set-Wallpaper
+# VirtualDesktop RPC can go stale after COM-heavy shell operations (Explorer restarts,
+# wallpaper/taskbar changes); operations run under RPC-aware retries and reconnect the
+# session's COM proxies (Reset-VirtualDesktopState) between attempts when that happens.
 function Ensure-VirtualDesktops {
 	<#
 	.SYNOPSIS
@@ -7,6 +9,14 @@ function Ensure-VirtualDesktops {
 	.DESCRIPTION
 		Creates virtual desktops if they don't exist, up to the specified count.
 		Requires the VirtualDesktop PowerShell module.
+
+		Runs a live RPC preflight (Get-RpcRetryPolicy -Probe) before touching
+		desktops, and wraps every VirtualDesktop call in retry helpers with an
+		RPC-aware recovery hook: when an operation fails with the RPC-unavailable
+		family of errors (0x800706BA and friends - the state an Explorer restart
+		leaves behind), the session's VirtualDesktop COM proxies are reconnected via
+		Reset-VirtualDesktopState before the next attempt, so the session heals in
+		place instead of failing until a new shell is opened.
 
 	.PARAMETER Count
 		The total number of virtual desktops that should exist.
@@ -38,25 +48,56 @@ function Ensure-VirtualDesktops {
 	}
 
 	$rpcPolicy = if (Get-Command Get-RpcRetryPolicy -ErrorAction SilentlyContinue) {
-		Get-RpcRetryPolicy -OperationLabel "ensuring virtual desktops"
+		Get-RpcRetryPolicy -OperationLabel "ensuring virtual desktops" -MaxAttempts 5 -InitialDelayMs 250 -Probe
 	}
 	else {
-		@{ MaxAttempts = 3; InitialDelayMs = 200 }
+		@{ MaxAttempts = 5; InitialDelayMs = 250 }
 	}
 	$rpcMaxAttempts = [int]$rpcPolicy.MaxAttempts
 	$rpcInitialDelayMs = [int]$rpcPolicy.InitialDelayMs
 	$useRetry = [bool](Get-Command Invoke-WithRetry -ErrorAction SilentlyContinue)
 	$useOptionalRetryHelper = [bool](Get-Command Invoke-WithOptionalRetry -ErrorAction SilentlyContinue)
 
+	$rpcUnavailablePattern = '0x800706BA|0x800706BE|0x80010108|RPC server is unavailable|The remote procedure call failed'
+	$recoverVirtualDesktopRpc = {
+		param($ErrorRecord, [int]$Attempt)
+
+		$isRpcFailure = if (Get-Command Test-RpcUnavailableError -ErrorAction SilentlyContinue) {
+			Test-RpcUnavailableError $ErrorRecord
+		}
+		else {
+			$errorMessage = if ($ErrorRecord.Exception) { $ErrorRecord.Exception.Message } else { [string]$ErrorRecord }
+			$errorMessage -match $rpcUnavailablePattern
+		}
+		if (-not $isRpcFailure) {
+			return
+		}
+
+		Write-LogDebug "  RPC endpoint unavailable while ensuring desktops; resetting VirtualDesktop state before retry $($Attempt + 1)" -Style Warning -NoLeadingNewline
+
+		if (Get-Command Reset-VirtualDesktopState -ErrorAction SilentlyContinue) {
+			[void](Reset-VirtualDesktopState)
+			return
+		}
+
+		try {
+			Remove-Module -Name VirtualDesktop -Force -ErrorAction SilentlyContinue
+			Import-Module VirtualDesktop -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
+		}
+		catch {
+			# Best-effort recovery before the next retry attempt.
+		}
+	}
+
 	$invokeDesktopOperation = {
 		param([scriptblock]$Operation)
 
 		if ($useOptionalRetryHelper) {
-			return Invoke-WithOptionalRetry -EnableRetry:$useRetry -ScriptBlock $Operation -MaxAttempts $rpcMaxAttempts -InitialDelayMs $rpcInitialDelayMs
+			return Invoke-WithOptionalRetry -EnableRetry:$useRetry -ScriptBlock $Operation -MaxAttempts $rpcMaxAttempts -InitialDelayMs $rpcInitialDelayMs -OnRetry $recoverVirtualDesktopRpc
 		}
 
 		if ($useRetry) {
-			return Invoke-WithRetry -ScriptBlock $Operation -MaxAttempts $rpcMaxAttempts -InitialDelayMs $rpcInitialDelayMs
+			return Invoke-WithRetry -ScriptBlock $Operation -MaxAttempts $rpcMaxAttempts -InitialDelayMs $rpcInitialDelayMs -OnRetry $recoverVirtualDesktopRpc
 		}
 
 		return & $Operation

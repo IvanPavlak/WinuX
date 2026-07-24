@@ -13,27 +13,30 @@ function Test-RpcServerHealth {
 		- DcomLaunch (DCOM Server Process Launcher)
 		- RpcEptMapper (RPC Endpoint Mapper)
 
-		With -Probe, also performs a lightweight live roundtrip against the
-		VirtualDesktop COM interface under a timeout. This catches the
-		"service is Running but the RPC endpoint is hung" failure mode that
-		causes 0x800706BA / 0x800706BE during workspace setup. A service-status
-		check alone cannot detect this.
+		With -Probe, also performs a live VirtualDesktop COM roundtrip against THIS
+		session's COM state (via Test-VirtualDesktopComHealth: a background runspace
+		in the current process, under a hard timeout). This catches both failure modes
+		that a service-status check cannot see:
+
+		- Stale session proxies: after an Explorer restart, this session's cached
+		  VirtualDesktop COM proxies are permanently disconnected and every call fails
+		  with 0x800706BA / 0x80010108 - while a child process would work fine. The
+		  probe runs in-process precisely so it fails when the session would fail.
+		- Hung endpoint: the service reports Running but COM roundtrips block; the
+		  probe times out and reports unhealthy.
 
 	.PARAMETER ServiceNames
 		Array of RPC service names to check. Defaults to @("RpcSs", "DcomLaunch", "RpcEptMapper")
 
 	.PARAMETER Probe
-		When specified, runs a live VirtualDesktop COM roundtrip (Get-DesktopList)
-		in a background job with a hard timeout. Returns $false if the call hangs,
-		throws an RPC error, or exceeds the timeout - even if all services report
-		Running.
+		When specified, runs a live in-process VirtualDesktop COM roundtrip with a
+		hard timeout. Returns $false if the call fails with an RPC availability error
+		or exceeds the timeout - even if all services report Running.
 
 	.PARAMETER ProbeTimeoutMs
 		Hard timeout for the live probe in milliseconds. Default is 5000. The probe
-		spins up a Start-Job (child pwsh.exe) and imports VirtualDesktop, which on a
-		busy machine (e.g. mid-workspace-launch) can take several seconds before the
-		actual COM call runs. Keep this generous to avoid false-positive RPC failure
-		detections; the probe is only meant to flag genuinely hung endpoints.
+		shares this process's already-compiled types, so a healthy roundtrip returns
+		in milliseconds; the timeout only bounds the genuinely-hung-endpoint case.
 
 	.EXAMPLE
 		Test-RpcServerHealth
@@ -41,7 +44,7 @@ function Test-RpcServerHealth {
 
 	.EXAMPLE
 		Test-RpcServerHealth -Probe
-		# Also verifies the RPC endpoint actually responds (catches hung-but-running state)
+		# Also verifies this session's VirtualDesktop COM state actually responds
 
 	.NOTES
 		Returns $true only if all required services are running (and the probe
@@ -87,52 +90,44 @@ function Test-RpcServerHealth {
 		return $true
 	}
 
-	# Live roundtrip: run a cheap VirtualDesktop COM call under a timeout in a
-	# background job. If the RPC endpoint is hung (Running but not responsive),
-	# the job will either throw with an RPC error code or exceed the timeout.
-	try {
-		$probeJob = Start-Job -ScriptBlock {
-			try {
-				Import-Module VirtualDesktop -ErrorAction Stop -WarningAction SilentlyContinue
-				$null = Get-DesktopList -ErrorAction Stop
-				return @{ Success = $true; Error = $null }
-			}
-			catch {
-				return @{ Success = $false; Error = $_.Exception.Message }
-			}
-		}
+	# Live roundtrip against THIS session's VirtualDesktop COM state. The previous
+	# design probed in a Start-Job child process, which creates its own fresh COM
+	# proxies - after an Explorer restart it reported healthy while the current
+	# session stayed broken, so recovery never engaged for the state that mattered.
+	if (-not (Get-Command Test-VirtualDesktopComHealth -ErrorAction SilentlyContinue)) {
+		# Probe helper unavailable (Window module not loaded) - service status is all
+		# that can be verified here.
+		Write-LogDebug "  ⚠ Test-VirtualDesktopComHealth unavailable - skipping live probe" -Style Warning
+		return $true
+	}
 
-		$completed = Wait-Job -Job $probeJob -Timeout ([Math]::Max(1, [int]($ProbeTimeoutMs / 1000)))
+	$probeResult = Test-VirtualDesktopComHealth -TimeoutMs $ProbeTimeoutMs
 
-		if (-not $completed) {
-			Write-LogDebug "  ⚠ RPC probe timed out after ${ProbeTimeoutMs}ms - endpoint appears hung" -Style Warning
-			Stop-Job -Job $probeJob -ErrorAction SilentlyContinue
-			Remove-Job -Job $probeJob -Force -ErrorAction SilentlyContinue
-			return $false
-		}
+	if ($probeResult.TimedOut) {
+		Write-LogDebug "  ⚠ RPC probe timed out after ${ProbeTimeoutMs}ms - endpoint appears hung" -Style Warning
+		return $false
+	}
 
-		$result = Receive-Job -Job $probeJob -ErrorAction SilentlyContinue
-		Remove-Job -Job $probeJob -Force -ErrorAction SilentlyContinue
-
-		if (-not $result -or -not $result.Success) {
-			$errorText = if ($result) { $result.Error } else { "no result" }
-			Write-LogDebug "  ⚠ RPC probe call failed => [$errorText]" -Style Warning
-			# Detect classic RPC unavailability codes
-			if ($errorText -match '0x800706BA|0x800706BE|RPC server is unavailable') {
-				return $false
-			}
-			# Non-RPC failure (e.g. VirtualDesktop module missing) - treat as healthy
-			# for RPC purposes so we don't trigger unnecessary service restarts.
-			Write-LogDebug "    (non-RPC probe failure - treating RPC as healthy)" -Style Warning
-			return $true
-		}
-
+	if ($probeResult.Healthy) {
 		Write-LogDebug "  ✓ RPC live probe succeeded" -Style Success
 		return $true
 	}
-	catch {
-		Write-LogDebug "  ⚠ Could not execute RPC probe => $_" -Style Warning
-		# Probe infrastructure failure - don't punish RPC for it.
-		return $true
+
+	Write-LogDebug "  ⚠ RPC probe call failed => [$($probeResult.Error)]" -Style Warning
+
+	$isRpcFailure = if (Get-Command Test-RpcUnavailableError -ErrorAction SilentlyContinue) {
+		Test-RpcUnavailableError $probeResult.Error
 	}
+	else {
+		$probeResult.Error -match '0x800706BA|0x800706BE|0x80010108|RPC server is unavailable'
+	}
+
+	if ($isRpcFailure) {
+		return $false
+	}
+
+	# Non-RPC failure (e.g. VirtualDesktop module missing) - treat as healthy for RPC
+	# purposes so it does not trigger unnecessary recovery.
+	Write-LogDebug "    (non-RPC probe failure - treating RPC as healthy)" -Style Warning
+	return $true
 }
