@@ -94,7 +94,7 @@ decision" section. Line numbers below refer to pre-change state; they shift as p
     expose `$script:LastMoveWindowToVirtualDesktopResult.Moved` so `Set-WindowLayouts.ps1:1076-1078`
     sleeps only after a REAL move.
 
-- [ ] **3. Start-FancyZones happy-path probe cost** (analysis Tier 1 #3)
+- [x] **3. Start-FancyZones happy-path probe cost** (analysis Tier 1 #3)
   - Current: `Start-FancyZones.ps1:72-135` readiness test = 4 × Get-Process with 3×250ms sleeps
     (750ms fixed) + 3 × Get-Service + fresh JSON parse of both layout files - runs even when
     PowerToys has been up for hours; called from `Apply-FancyZones` begin AND `Snap-AllWindows`
@@ -102,6 +102,15 @@ decision" section. Line numbers below refer to pre-change state; they shift as p
   - Plan: single sample when the FancyZones PID's StartTime is older than ~5s (PID-stability
     sampling only matters during startup); module-scope "verified ready" cache (~10s TTL),
     cleared by ForceRestart, so repeat calls within one open are free.
+  - DONE (`Application/Functions/Start-FancyZones.ps1`):
+    - `$testFancyZonesReady` now takes ONE process sample when the PID's StartTime is ≥5s old
+      (crash-loop sampling can't apply to a long-lived process); full 4-sample/750ms path kept
+      for young processes and when StartTime is unreadable (elevation mismatch throws - caught).
+    - `$script:FancyZonesReadyCache` (module scope, 10s TTL): happy path returns instantly on a
+      recent verification; set on both success paths (already-running + post-start wait loop);
+      invalidated on ForceRestart entry and on a failed readiness check.
+    - Bundled cosmetic fix (agent-flagged minor): startup progress line divided by 50 instead
+      of 1000, printing nonsense like "40s / 10s" - corrected in the touched line.
 
 - [ ] **4. Wait-phase floor and 60s worst case** (analysis Tier 1 #4)
   - Current: `Wait-ForWorkspaceWindows.ps1:486-531` - after every window is individually stable

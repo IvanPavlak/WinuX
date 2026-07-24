@@ -58,6 +58,17 @@ function Start-FancyZones {
 	$customLayoutsPath = Join-Path $fancyZonesDirectory "custom-layouts.json"
 	$appliedLayoutsPath = Join-Path $fancyZonesDirectory "applied-layouts.json"
 
+	# Module-scoped "verified ready" cache: the full readiness pass (process sampling +
+	# service checks + JSON parses) is expensive, and one workspace open calls this function
+	# several times seconds apart (Apply-FancyZones begin, Snap-AllWindows begin, per-desktop
+	# simple-layout passes). A recent successful verification is trusted for a short TTL.
+	if (-not $script:FancyZonesReadyCache) {
+		$script:FancyZonesReadyCache = @{
+			VerifiedAt = [datetime]::MinValue
+			TtlSeconds = 10
+		}
+	}
+
 	try {
 		$closePowerToysSettings = {
 			$settingsProcess = Get-Process -Name "PowerToys.Settings" -ErrorAction SilentlyContinue
@@ -70,25 +81,42 @@ function Start-FancyZones {
 		}
 
 		$testFancyZonesReady = {
-			$processSamples = @()
-			for ($sample = 0; $sample -lt 4; $sample++) {
-				$runningProcess = Get-Process -Name "PowerToys.FancyZones" -ErrorAction SilentlyContinue | Select-Object -First 1
-				if (-not $runningProcess) {
-					return $false
-				}
-
-				$processSamples += $runningProcess.Id
-				if ($sample -lt 3) {
-					Start-Sleep -Milliseconds 250
-				}
+			$runningProcess = Get-Process -Name "PowerToys.FancyZones" -ErrorAction SilentlyContinue | Select-Object -First 1
+			if (-not $runningProcess) {
+				return $false
 			}
 
-			$stablePidCount = ($processSamples | Select-Object -Unique | Measure-Object).Count
-			if ($stablePidCount -ne 1) {
-				if (Test-LogVerbose) {
-					Write-LogDebug "FancyZones PID changed during startup validation, waiting for stabilization..." -Style Warning
+			# PID-stability sampling exists to catch a FancyZones that is still crash-looping
+			# during startup. A process that has been alive for a few seconds cannot be
+			# mid-crash-loop, so a single sample suffices - that is the happy path on every
+			# workspace open and skips 750ms of fixed sampling sleeps. StartTime can throw
+			# (access denied on elevation mismatch); fall back to sampling in that case.
+			$processAgeSeconds = $null
+			try {
+				$processAgeSeconds = ([datetime]::Now - $runningProcess.StartTime).TotalSeconds
+			}
+			catch {
+				$processAgeSeconds = $null
+			}
+
+			if ($null -eq $processAgeSeconds -or $processAgeSeconds -lt 5) {
+				$processSamples = @($runningProcess.Id)
+				for ($sample = 1; $sample -lt 4; $sample++) {
+					Start-Sleep -Milliseconds 250
+					$runningProcess = Get-Process -Name "PowerToys.FancyZones" -ErrorAction SilentlyContinue | Select-Object -First 1
+					if (-not $runningProcess) {
+						return $false
+					}
+					$processSamples += $runningProcess.Id
 				}
-				return $false
+
+				$stablePidCount = ($processSamples | Select-Object -Unique | Measure-Object).Count
+				if ($stablePidCount -ne 1) {
+					if (Test-LogVerbose) {
+						Write-LogDebug "FancyZones PID changed during startup validation, waiting for stabilization..." -Style Warning
+					}
+					return $false
+				}
 			}
 
 			# Verify RPC services are running (required for FancyZones and virtual desktop operations)
@@ -140,6 +168,9 @@ function Start-FancyZones {
 		if ($ForceRestart) {
 			Write-LogDebug "  ⚠ -ForceRestart specified, performing full PowerToys shutdown..." -Style Warning
 
+			# The restart invalidates any previous readiness verification.
+			$script:FancyZonesReadyCache.VerifiedAt = [datetime]::MinValue
+
 			$fullShutdownSucceeded = Stop-PowerToysCompletely -PreferGracefulExit
 			if (-not $fullShutdownSucceeded -and (Test-LogVerbose)) {
 				Write-Warning "    WARNING: Could not fully stop all PowerToys processes before restart."
@@ -149,12 +180,20 @@ function Start-FancyZones {
 			$fancyZonesProcess = $null
 		}
 		elseif ($fancyZonesProcess) {
+			$readyCacheAge = ([datetime]::Now - $script:FancyZonesReadyCache.VerifiedAt).TotalSeconds
+			if ($readyCacheAge -ge 0 -and $readyCacheAge -lt $script:FancyZonesReadyCache.TtlSeconds) {
+				Write-LogDebug "  ✓ FancyZones readiness verified $([int]$readyCacheAge)s ago - using cached result" -Style Success
+				return $true
+			}
+
 			if (& $testFancyZonesReady) {
 				Write-LogDebug "  ✓ FancyZones is already running and ready (PID => $($fancyZonesProcess.Id))" -Style Success
+				$script:FancyZonesReadyCache.VerifiedAt = [datetime]::Now
 				& $closePowerToysSettings
 				return $true
 			}
 
+			$script:FancyZonesReadyCache.VerifiedAt = [datetime]::MinValue
 			Write-LogDebug "  ⚠ FancyZones process exists but readiness checks failed - forcing restart..." -Style Warning
 			$ForceRestart = $true
 		}
@@ -223,6 +262,7 @@ function Start-FancyZones {
 					Write-LogDebug "  ✓ FancyZones started and passed readiness checks (PID: $($fancyZonesProcess.Id))" -Style Success
 				}
 
+				$script:FancyZonesReadyCache.VerifiedAt = [datetime]::Now
 				& $closePowerToysSettings
 
 				# Give it a moment to fully initialize
@@ -231,7 +271,7 @@ function Start-FancyZones {
 			}
 
 			if ($attempt % 4 -eq 0) {
-				Write-LogDebug "    Waiting for FancyZones... ($([int]($attempt * $waitInterval / 50))s / $MaxWaitSeconds`s)" -Style Step
+				Write-LogDebug "    Waiting for FancyZones... ($([int]($attempt * $waitInterval / 1000))s / $MaxWaitSeconds`s)" -Style Step
 			}
 		}
 
