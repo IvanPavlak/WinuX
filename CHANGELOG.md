@@ -8,6 +8,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.11] - 2026-07-24
+
+### Added
+
+- `Start-Application -RequireMainWindow` (Application module): scopes the "already running" check to processes that own a visible main window, for apps that keep a windowless helper alive under their own process name. Sibling to `-ProcessPathFilter`, which solves the same class of false positive for apps that share a process name with something else.
+
+### Fixed
+
+- `Open-WhatsApp` (Application module) no longer reports "WhatsApp is already running!" and opens nothing when no WhatsApp window exists. When a notification arrives while WhatsApp is closed, Windows COM-activates a background push notification host (`WhatsApp.Root.exe -RegisterForBGTaskServer /nowindow /pushnotification -Embedding`) that owns no window but runs under the same `WhatsApp.Root` process name as the UI, so the process-name check matched it. That made the failure intermittent (it depended on whether Windows had activated the host) and unfixable via `Kill-All`, which only clears the host until the next notification. `Open-WhatsApp` now passes `-RequireMainWindow`.
+
 ## [0.1.10] - 2026-07-24
 
 ### Added
@@ -190,7 +200,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.10...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.11...HEAD
+[0.1.11]: https://github.com/IvanPavlak/WinuX/compare/v0.1.10...v0.1.11
 [0.1.10]: https://github.com/IvanPavlak/WinuX/compare/v0.1.9...v0.1.10
 [0.1.9]: https://github.com/IvanPavlak/WinuX/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/IvanPavlak/WinuX/compare/v0.1.7...v0.1.8

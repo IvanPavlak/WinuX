@@ -47,6 +47,14 @@ function Start-Application {
         count as running. Useful when several apps share a process name (e.g. Claude Desktop and
         the Claude Code CLI both run as "claude"), so launching one is not blocked by the other.
 
+    .PARAMETER RequireMainWindow
+        Only counts a process as "already running" when it owns a visible main window. Some apps
+        keep a windowless helper alive under the same process name, so the plain name check reports
+        "already running" while nothing is on screen. WhatsApp is the reference case: Windows
+        COM-activates "WhatsApp.Root.exe -RegisterForBGTaskServer /nowindow /pushnotification" as a
+        push notification host, and that host reuses the very same process name (and later the very
+        same process) as the UI.
+
     .PARAMETER SkipPathValidation
         Skips the executable path existence check (DirectPath method).
 
@@ -65,8 +73,9 @@ function Start-Application {
         # Starts VirtualBox (non-blocking by default)
 
     .EXAMPLE
-        Start-Application -AppName "WhatsApp" -ProcessName "WhatsApp.Root" -StartMethod AppxPackage -PackageName "WhatsApp"
-        # Activates the WhatsApp UWP app via its AppUserModelID (non-blocking by default)
+        Start-Application -AppName "WhatsApp" -ProcessName "WhatsApp.Root" -StartMethod AppxPackage -PackageName "WhatsApp" -RequireMainWindow
+        # Activates the WhatsApp UWP app via its AppUserModelID (non-blocking by default), ignoring
+        # the windowless push notification host that runs under the same process name
 
     .EXAMPLE
         Start-Application -AppName "Docker" -ProcessName "Docker Desktop" -StartMethod DirectPath -ExecutablePath $dockerExe -Sync
@@ -106,6 +115,9 @@ function Start-Application {
 		[string]$ProcessPathFilter,
 
 		[Parameter()]
+		[switch]$RequireMainWindow,
+
+		[Parameter()]
 		[switch]$SkipPathValidation,
 
 		[Parameter()]
@@ -126,6 +138,15 @@ function Start-Application {
 		if ($ProcessPathFilter) {
 			$runningProcesses = $runningProcesses | Where-Object {
 				try { $_.Path -like $ProcessPathFilter } catch { $false }
+			}
+		}
+
+		# MainWindowHandle is the first visible, unowned top-level window of the process, so a
+		# windowless background host resolves to zero while the same process reports a real handle
+		# once its UI is up. GetProcessesByName hands back fresh objects, so this is never stale.
+		if ($RequireMainWindow) {
+			$runningProcesses = $runningProcesses | Where-Object {
+				try { $_.MainWindowHandle -ne [IntPtr]::Zero } catch { $false }
 			}
 		}
 

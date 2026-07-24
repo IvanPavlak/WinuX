@@ -495,8 +495,10 @@ Open-VSCodeWorkspace Consolidation
 
 ## [Open-WhatsApp](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Open-WhatsApp.ps1)
 
-- **Description:** Opens the WhatsApp Microsoft Store app by activating its UWP package via its AppUserModelID using `Start-Application`. Does nothing if WhatsApp is already running.
+- **Description:** Opens the WhatsApp Microsoft Store app by activating its UWP package via its AppUserModelID using `Start-Application`. Does nothing if a WhatsApp window is already open. The "already running" check requires a visible main window, so the windowless push notification host Windows keeps alive under the same process name does not suppress the launch.
 - **Usage:** `Open-WhatsApp`
+
+When a WhatsApp notification arrives while the app is closed, Windows COM-activates `WhatsApp.Root.exe -RegisterForBGTaskServer /nowindow /pushnotification` as a background push notification host. It owns no visible window but runs under the same `WhatsApp.Root` process name the UI does, so a plain process-name check reports "already running" with nothing on screen - and it survives `Kill-All`, since Windows respawns it on the next notification. `-RequireMainWindow` scopes the check to processes that actually own a visible main window.
 
 ## [Open-WSLTab](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Open-WSLTab.ps1)
 
@@ -506,10 +508,10 @@ Open-VSCodeWorkspace Consolidation
 ## [Start-Application](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Start-Application.ps1)
 
 - **Description:** Common (DRY) helper to start applications with standardized error handling, process checking, and user feedback. Supports four start methods: ConfigPath (resolves `$Configuration.Universal.[ConfigKey]`), AppxPackage (activates UWP/Store apps via their AppUserModelID, resolved from `Get-AppxPackage`), DirectPath (a direct executable path), and Custom (a scriptblock for complex scenarios). Applications are non-blocking by default since `Start-Process` is inherently async; use `-Sync` to wait for the process to exit before continuing.
-- **Parameters:** -AppName, -ProcessName, -StartMethod, -ConfigKey, -PackageName, -ExecutablePath, -Arguments, -NoNewWindow, -SkipProcessCheck, -ProcessPathFilter, -SkipPathValidation, -Sync, -SuppressOutput, -CustomStartLogic
-- **Usage:** `Start-Application -AppName "VirtualBox" -ProcessName "VirtualBox" -StartMethod ConfigPath -ConfigKey "VirtualBoxExe" -NoNewWindow`, `Start-Application -AppName "WhatsApp" -ProcessName "WhatsApp.Root" -StartMethod AppxPackage -PackageName "WhatsApp"`, `Start-Application -AppName "Docker" -ProcessName "Docker Desktop" -StartMethod DirectPath -ExecutablePath $dockerExe -Sync`, `Start-Application -AppName "Docker Desktop" -ProcessName "Docker Desktop" -StartMethod ConfigPath -ConfigKey "DockerExe" -Arguments "--minimized" -SuppressOutput`
+- **Parameters:** -AppName, -ProcessName, -StartMethod, -ConfigKey, -PackageName, -ExecutablePath, -Arguments, -NoNewWindow, -SkipProcessCheck, -ProcessPathFilter, -RequireMainWindow, -SkipPathValidation, -Sync, -SuppressOutput, -CustomStartLogic
+- **Usage:** `Start-Application -AppName "VirtualBox" -ProcessName "VirtualBox" -StartMethod ConfigPath -ConfigKey "VirtualBoxExe" -NoNewWindow`, `Start-Application -AppName "WhatsApp" -ProcessName "WhatsApp.Root" -StartMethod AppxPackage -PackageName "WhatsApp" -RequireMainWindow`, `Start-Application -AppName "Docker" -ProcessName "Docker Desktop" -StartMethod DirectPath -ExecutablePath $dockerExe -Sync`, `Start-Application -AppName "Docker Desktop" -ProcessName "Docker Desktop" -StartMethod ConfigPath -ConfigKey "DockerExe" -Arguments "--minimized" -SuppressOutput`
 
-A generic application launcher that consolidates the common patterns of checking whether a process is already running, starting it via one of four methods, and reporting success or failure. Before launching it checks for an existing process (unless `-SkipProcessCheck`) and short-circuits with a notice if the app is already running. When two apps share a process name (e.g. Claude Desktop and the Claude Code CLI both run as `claude`), pass `-ProcessPathFilter` to scope that check to a specific install location so one app is not mistaken for the other. The `ConfigPath` and `DirectPath` methods share consistent handling of `-Arguments`, `-Sync` (maps to `-Wait`), `-NoNewWindow`, and `-SuppressOutput` (redirects stdout/stderr to temp files, silencing console noise from chatty apps such as Electron-based Docker Desktop). The `AppxPackage` method activates the package through the shell and ignores those launch options. It caches the resolved AUMID (`PackageFamilyName!AppId`) per package name for the session - the wildcard `Get-AppxPackage` query plus manifest parse costs 0.5-2 s per launch - and a stale cached AUMID (after a package update) is evicted and the error rethrown.
+A generic application launcher that consolidates the common patterns of checking whether a process is already running, starting it via one of four methods, and reporting success or failure. Before launching it checks for an existing process (unless `-SkipProcessCheck`) and short-circuits with a notice if the app is already running. When two apps share a process name (e.g. Claude Desktop and the Claude Code CLI both run as `claude`), pass `-ProcessPathFilter` to scope that check to a specific install location so one app is not mistaken for the other. When an app keeps a windowless helper alive under its own process name (WhatsApp's push notification host is the reference case), pass `-RequireMainWindow` so only processes owning a visible main window count as running. The `ConfigPath` and `DirectPath` methods share consistent handling of `-Arguments`, `-Sync` (maps to `-Wait`), `-NoNewWindow`, and `-SuppressOutput` (redirects stdout/stderr to temp files, silencing console noise from chatty apps such as Electron-based Docker Desktop). The `AppxPackage` method activates the package through the shell and ignores those launch options. It caches the resolved AUMID (`PackageFamilyName!AppId`) per package name for the session - the wildcard `Get-AppxPackage` query plus manifest parse costs 0.5-2 s per launch - and a stale cached AUMID (after a package update) is evicted and the error rethrown.
 
 | Method        | Description                                                                                                                                        |
 | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -530,6 +532,7 @@ A generic application launcher that consolidates the common patterns of checking
 | `-NoNewWindow`        | Passes `-NoNewWindow` to `Start-Process`.                                                                                                 |
 | `-SkipProcessCheck`   | Skips the "already running" process check.                                                                                                |
 | `-ProcessPathFilter`  | Wildcard pattern scoping the "already running" check to processes launched from a specific location (for apps that share a process name). |
+| `-RequireMainWindow`  | Only counts a process as running when it owns a visible main window (for apps with a windowless background host under the same name).      |
 | `-SkipPathValidation` | Skips the executable path existence check (DirectPath method).                                                                            |
 | `-Sync`               | Waits for the process to exit before returning (uses `-Wait`).                                                                            |
 | `-SuppressOutput`     | Redirects stdout/stderr to temp files, silencing console output from the launched process.                                                |
@@ -562,6 +565,11 @@ Start-Application -AppName "Docker Desktop" -ProcessName "Docker Desktop" `
 Start-Application -AppName "Claude" -ProcessName "claude" `
     -ProcessPathFilter "$env:LOCALAPPDATA\AnthropicClaude\*" `
     -StartMethod DirectPath -ExecutablePath "$env:LOCALAPPDATA\AnthropicClaude\claude.exe"
+
+# Require a visible window so a windowless background host under the same
+# process name (e.g. WhatsApp's push notification host) does not block the launch
+Start-Application -AppName "WhatsApp" -ProcessName "WhatsApp.Root" `
+    -StartMethod AppxPackage -PackageName "WhatsApp" -RequireMainWindow
 ```
 
 ## [Start-FancyZones](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Start-FancyZones.ps1)
