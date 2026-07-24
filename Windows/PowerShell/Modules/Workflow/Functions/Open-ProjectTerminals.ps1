@@ -170,52 +170,68 @@ function Open-ProjectTerminals {
 			if ($projectNames.Count -gt 0) {
 				$escapedNames = $projectNames | ForEach-Object { [regex]::Escape($_) }
 				$projectTabPattern = "^($($escapedNames -join '|'))\."
-
-				Add-Type -AssemblyName System.Windows.Forms
 				$wtHandle = $allWtWindows[0].Handle
-				[void][WindowModule.Native]::SetForegroundWindow($wtHandle)
-				Start-Sleep -Milliseconds 50
 
-				$startWindow = Get-WindowHandle -ProcessName "WindowsTerminal" -ErrorAction SilentlyContinue |
-					Where-Object { $_.Handle -eq $wtHandle }
-				$startingTitle = if ($startWindow) { $startWindow.Title } else { $null }
+				# Preferred path: read all tab titles through UI Automation - no focus
+				# stealing, no Ctrl+Tab cycling, no navigate-back pass.
+				$tabTitles = Get-WindowsTerminalTabTitles -WindowHandle $wtHandle
 
-				if ($startingTitle) {
-					$checkedTitles = @($startingTitle)
-
-					if ($startingTitle -match $projectTabPattern) {
-						$hasProjectTabs = $true
-					}
-
-					if (-not $hasProjectTabs) {
-						$maxTabs = 20
-						for ($i = 0; $i -lt $maxTabs; $i++) {
-							Send-TerminalKeys "^{TAB}"
-							Start-Sleep -Milliseconds 10
-
-							$currentWindow = Get-WindowHandle -ProcessName "WindowsTerminal" -ErrorAction SilentlyContinue |
-								Where-Object { $_.Handle -eq $wtHandle }
-							$currentTitle = if ($currentWindow) { $currentWindow.Title } else { $null }
-
-							if (-not $currentTitle -or $checkedTitles -contains $currentTitle) { break }
-							$checkedTitles += $currentTitle
-
-							if ($currentTitle -match $projectTabPattern) {
-								$hasProjectTabs = $true
-								break
-							}
+				if ($null -ne $tabTitles) {
+					foreach ($tabTitle in $tabTitles) {
+						if ($tabTitle -match $projectTabPattern) {
+							$hasProjectTabs = $true
+							break
 						}
 					}
+				}
+				else {
+					# Legacy fallback (UIA unavailable): cycle tabs with Ctrl+Tab and
+					# navigate back to the starting tab afterwards.
+					Add-Type -AssemblyName System.Windows.Forms
+					[void][WindowModule.Native]::SetForegroundWindow($wtHandle)
+					Start-Sleep -Milliseconds 50
 
-					# Navigate back to the starting tab if we moved away
-					if ($checkedTitles.Count -gt 1) {
-						for ($i = 0; $i -lt 20; $i++) {
-							$currentWindow = Get-WindowHandle -ProcessName "WindowsTerminal" -ErrorAction SilentlyContinue |
-								Where-Object { $_.Handle -eq $wtHandle }
-							$currentTitle = if ($currentWindow) { $currentWindow.Title } else { $null }
-							if ($currentTitle -eq $startingTitle) { break }
-							Send-TerminalKeys "^{TAB}"
-							Start-Sleep -Milliseconds 10
+					$startWindow = Get-WindowHandle -ProcessName "WindowsTerminal" -ErrorAction SilentlyContinue |
+						Where-Object { $_.Handle -eq $wtHandle }
+					$startingTitle = if ($startWindow) { $startWindow.Title } else { $null }
+
+					if ($startingTitle) {
+						$checkedTitles = @($startingTitle)
+
+						if ($startingTitle -match $projectTabPattern) {
+							$hasProjectTabs = $true
+						}
+
+						if (-not $hasProjectTabs) {
+							$maxTabs = 20
+							for ($i = 0; $i -lt $maxTabs; $i++) {
+								Send-TerminalKeys "^{TAB}"
+								Start-Sleep -Milliseconds 10
+
+								$currentWindow = Get-WindowHandle -ProcessName "WindowsTerminal" -ErrorAction SilentlyContinue |
+									Where-Object { $_.Handle -eq $wtHandle }
+								$currentTitle = if ($currentWindow) { $currentWindow.Title } else { $null }
+
+								if (-not $currentTitle -or $checkedTitles -contains $currentTitle) { break }
+								$checkedTitles += $currentTitle
+
+								if ($currentTitle -match $projectTabPattern) {
+									$hasProjectTabs = $true
+									break
+								}
+							}
+						}
+
+						# Navigate back to the starting tab if we moved away
+						if ($checkedTitles.Count -gt 1) {
+							for ($i = 0; $i -lt 20; $i++) {
+								$currentWindow = Get-WindowHandle -ProcessName "WindowsTerminal" -ErrorAction SilentlyContinue |
+									Where-Object { $_.Handle -eq $wtHandle }
+								$currentTitle = if ($currentWindow) { $currentWindow.Title } else { $null }
+								if ($currentTitle -eq $startingTitle) { break }
+								Send-TerminalKeys "^{TAB}"
+								Start-Sleep -Milliseconds 10
+							}
 						}
 					}
 				}

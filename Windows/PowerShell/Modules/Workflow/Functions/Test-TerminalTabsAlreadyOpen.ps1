@@ -53,11 +53,30 @@ function Test-TerminalTabsAlreadyOpen {
 		}
 
 		$foundTabs = @()
-		$maxTabs = 20  # Safety limit per window
+		$maxTabs = 20  # Safety limit per window (legacy fallback only)
 
 		foreach ($wtWindow in $allWtWindows) {
-			# Activate this specific WT window (SetForegroundWindow targets a handle,
-			# unlike AppActivate which targets any window of the process)
+			# Preferred path: read every tab title through UI Automation - no focus change,
+			# no keystrokes, one pass per window.
+			$tabTitles = Get-WindowsTerminalTabTitles -WindowHandle $wtWindow.Handle
+
+			if ($null -ne $tabTitles) {
+				foreach ($tabTitle in $tabTitles) {
+					foreach ($expectedTab in $ExpectedTabNames) {
+						if ($tabTitle -match [regex]::Escape($expectedTab)) {
+							if ($foundTabs -notcontains $expectedTab) {
+								$foundTabs += $expectedTab
+							}
+						}
+					}
+				}
+
+				if ($foundTabs.Count -eq $ExpectedTabNames.Count) { break }
+				continue
+			}
+
+			# Legacy fallback (UIA unavailable): activate the window and cycle tabs with
+			# Ctrl+Tab, matching titles as they become active.
 			[void][WindowModule.Native]::SetForegroundWindow($wtWindow.Handle)
 			Start-Sleep -Milliseconds 50
 

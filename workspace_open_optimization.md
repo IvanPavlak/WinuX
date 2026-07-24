@@ -166,7 +166,7 @@ decision" section. Line numbers below refer to pre-change state; they shift as p
       records are created handle-less).
     - Behavior note: comment-based help for the new params deferred with the docs pass (T2).
 
-- [ ] **5. Replace SendKeys tab-cycling probes with focus-free UIA tab reading** (analysis Tier 1 #5)
+- [x] **5. Replace SendKeys tab-cycling probes with focus-free UIA tab reading** (analysis Tier 1 #5)
   - Current: three implementations foreground every WT window and Ctrl+Tab through all tabs with
     per-keystroke sleeps: `Test-TerminalTabsAlreadyOpen.ps1:58-108`,
     `Open-ProjectTerminals.ps1:163-228` (both run back-to-back per open),
@@ -183,6 +183,28 @@ decision" section. Line numbers below refer to pre-change state; they shift as p
     when the last action closes its own tab). Plan: Open-Workspace prints the elapsed summary and
     runs Reset-KeyboardModifiers BEFORE executing a process-terminating tab action; the exit seam
     itself also calls Reset-KeyboardModifiers defensively.
+  - DONE:
+    - New Helper functions (exported in Helper.psd1): `Get-WindowsTerminalTabTitles`
+      (UIA TabItem scan per WT window - returns $null, never empty, when UIA can't read, so
+      callers can distinguish "fall back" from a real answer) and `Close-WindowsTerminalTab`
+      (invokes the tab's close-button InvokePattern by exact title, returns $false to trigger
+      fallback).
+    - `Test-TerminalTabsAlreadyOpen`: UIA-first per window; the full SendKeys cycling pass is
+      preserved verbatim as automatic fallback when UIA returns $null.
+    - `Open-ProjectTerminals` InSameShell auto-detect: UIA-first; legacy cycling + the
+      navigate-back pass preserved as fallback.
+    - `Terminate-WindowsTerminalTabs`: (1) CIM parent-walk moved below the -OnlyCurrent early
+      exit (which never used it) and replaced with the PS7 `Process.Parent` chain; (2) marker
+      detection prefers UIA tab titles - identifies OUR tab even when it is not the active tab
+      (the window title only mirrors the active tab; old behavior kept as fallback);
+      (3) UIA-first close pass for the current window and for other WT windows (close-button
+      invoke, no focus/keystrokes), legacy Ctrl+Tab/^c/^w passes preserved as fallback, shared
+      `$isOurTabTitle` predicate; (4) the SendKeys retry-verification pass now only runs when a
+      failure was recorded or something survived (gated via fresh enumeration + UIA re-read).
+    - Exit seam: `Invoke-TerminateWindowsTerminalTabsExit` runs Reset-KeyboardModifiers before
+      `[Environment]::Exit(0)`; `Open-Workspace` prints the elapsed summary, clears its env
+      vars, and resets modifiers BEFORE executing a Terminate action with -OnlyCurrent or
+      -IncludeCurrent (guarded by `$summaryPrinted` so the normal path doesn't double-print).
 
 ### Tier 2 - guaranteed per-open overhead
 

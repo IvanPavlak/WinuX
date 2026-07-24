@@ -19,6 +19,13 @@ function Invoke-TerminateWindowsTerminalTabsExit {
 		& $script:TerminateWindowsTerminalTabsExitAction
 	}
 	else {
+		# [Environment]::Exit skips every finally block in the process, so callers' cleanup
+		# (notably the keyboard-modifier self-heal in Open-Workspace's finally) never runs.
+		# Stuck-modifier state is OS-global and survives the process - release it here as the
+		# last act before exiting.
+		if (Get-Command Reset-KeyboardModifiers -ErrorAction SilentlyContinue) {
+			$null = Reset-KeyboardModifiers
+		}
 		[Environment]::Exit(0)
 	}
 }

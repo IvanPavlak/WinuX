@@ -93,6 +93,7 @@ function Open-Workspace {
 	}
 
 	$stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+	$summaryPrinted = $false
 	try {
 		# -Alongside always runs in a completely new shell: replay this exact invocation
 		# in a fresh Windows Terminal window and hand the calling shell its prompt back.
@@ -504,6 +505,24 @@ function Open-Workspace {
 					}
 				}
 
+				# Terminate-WindowsTerminalTabs with -OnlyCurrent/-IncludeCurrent ends THIS
+				# process via [Environment]::Exit, which skips finally blocks - the elapsed
+				# summary and the keyboard-modifier self-heal in the finally below would never
+				# run. Do both now, before handing control to the terminating action.
+				if ($action -eq "Terminate-WindowsTerminalTabs" -and
+					(($actionParams.ContainsKey("OnlyCurrent") -and $actionParams["OnlyCurrent"]) -or
+					($actionParams.ContainsKey("IncludeCurrent") -and $actionParams["IncludeCurrent"]))) {
+					$stopwatch.Stop()
+					$elapsedSeconds = [math]::Round(($carryOverElapsed + $stopwatch.Elapsed).TotalSeconds, 1)
+					Write-LogSuccess "Workspace(s) opened in $elapsedSeconds seconds!"
+					$summaryPrinted = $true
+					[Environment]::SetEnvironmentVariable($workspaceTimerEnvVar, $null, 'Process')
+					[Environment]::SetEnvironmentVariable('WORKSPACE_RERUN_COMMAND', $null, 'Process')
+					if (Get-Command Reset-KeyboardModifiers -ErrorAction SilentlyContinue) {
+						$null = Reset-KeyboardModifiers
+					}
+				}
+
 				try {
 					$filteredParams = Get-FilteredParams -CommandName $action -Params $actionParams
 					if ($filteredParams.Count -gt 0) {
@@ -520,8 +539,10 @@ function Open-Workspace {
 		}
 
 		$stopwatch.Stop()
-		$elapsedSeconds = [math]::Round(($carryOverElapsed + $stopwatch.Elapsed).TotalSeconds, 1)
-		Write-LogSuccess "Workspace(s) opened in $elapsedSeconds seconds!"
+		if (-not $summaryPrinted) {
+			$elapsedSeconds = [math]::Round(($carryOverElapsed + $stopwatch.Elapsed).TotalSeconds, 1)
+			Write-LogSuccess "Workspace(s) opened in $elapsedSeconds seconds!"
+		}
 	}
 	finally {
 		[Environment]::SetEnvironmentVariable($workspaceTimerEnvVar, $null, 'Process')

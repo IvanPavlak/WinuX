@@ -6,6 +6,7 @@
 	FunctionsToExport = @(
 		'BranchExists',
 		'Cd-Desktop',
+		'Close-WindowsTerminalTab',
 		'Collect-BrowserUrls',
 		'Convert-GlobalVariablesToParameters',
 		'Countdown',
@@ -31,6 +32,7 @@
 		'Get-RepositoryName',
 		'Get-RepositoryPath',
 		'Get-WindowTitleCandidates',
+		'Get-WindowsTerminalTabTitles',
 		'Get-RpcRetryPolicy',
 		'Initialize-Directory',
 		'Invoke-GoogleTranslate',
