@@ -209,6 +209,8 @@ After configuration:
 
 ```powershell
 # Interactive workspace selection
+# ([Enter] with no input opens Configuration.DefaultWorkspace - point it at
+#  your new workspace to make it the one-keystroke default)
 w
 
 # Open specific workspace

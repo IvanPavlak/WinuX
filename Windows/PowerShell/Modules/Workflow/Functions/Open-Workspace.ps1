@@ -9,6 +9,9 @@ function Open-Workspace {
 
 	.PARAMETER Workspace
 		The name of the workspace(s) to open. Can be specified by name or selected from a menu.
+		Omit it for the interactive menu; pressing [Enter] there with no input opens the workspace
+		named by $Configuration.DefaultWorkspace. When no usable default is configured the prompt
+		offers to cancel instead, and [Enter] exits without opening anything.
 
 	.PARAMETER Project
 		Optional project name(s) to pass to Open-Project action within the workspace.
@@ -202,11 +205,38 @@ function Open-Workspace {
 			}
 		}
 
+		# [Enter] at the workspace menu opens $Configuration.DefaultWorkspace - the same shape
+		# Send-WakeOnLan uses for DefaultWakeOnLanMachine (config key + prompt naming the actual
+		# default + post-selection fallback). The default is only honoured, and only advertised
+		# in the prompt, when it actually has a WorkspaceActions entry: offering a workspace whose
+		# open could merely log "No actions configured" would be the same broken promise this
+		# replaces. With no usable default the prompt says "cancel" and [Enter] does exactly that.
+		$defaultWorkspace = $Configuration.DefaultWorkspace
+		if ($defaultWorkspace -is [array]) { $defaultWorkspace = @($defaultWorkspace)[0] }
+		$defaultWorkspace = if ([string]::IsNullOrWhiteSpace($defaultWorkspace)) { $null } else { ([string]$defaultWorkspace).Trim() }
+
+		if ($defaultWorkspace -and -not ($Configuration.WorkspaceActions -and $Configuration.WorkspaceActions[$defaultWorkspace])) {
+			Write-LogDebug " [Open-Workspace] Configured DefaultWorkspace [$defaultWorkspace] has no WorkspaceActions entry - [Enter] will cancel instead" -Style Warning
+			$defaultWorkspace = $null
+		}
+
+		# A -Workspace argument that resolves to nothing is a bad argument, not a request for the
+		# default, so only the genuinely interactive [Enter] falls back below. This mirrors exactly
+		# when Resolve-Selection takes its InputObject path instead of showing the menu.
+		$hasWorkspaceArgument = @($Workspace | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }).Count -gt 0
+
+		$workspacePrompt = if ($defaultWorkspace) {
+			"Enter workspace(s) or press [Enter] to open default workspace => $defaultWorkspace"
+		}
+		else {
+			"Enter workspace(s), or press [Enter] to cancel"
+		}
+
 		$resolveParams = @{
 			InputObject              = $Workspace
 			OptionList               = $Configuration.Workspaces
 			MenuTitle                = "[Available workspaces]"
-			PromptMessage            = "Enter workspace(s) or press [Enter] to open default workspace"
+			PromptMessage            = $workspacePrompt
 			AllowEmptyPromptResponse = $true
 			AllowMultipleSelections  = $true
 		}
@@ -234,10 +264,12 @@ function Open-Workspace {
 
 		$workspaces = Resolve-Selection @resolveParams
 
-		# Uncomment this if you want some "Workspace" to open as default on wrong input
-		# if ($null -eq $workspaces) {
-		#     $workspaces = @("Default")
-		# }
+		# Resolve-Selection re-prompts on invalid menu input, so on the interactive path an empty
+		# result means one thing only: the user pressed [Enter] on the prompt above.
+		if (-not $workspaces -and -not $hasWorkspaceArgument -and $defaultWorkspace) {
+			Write-LogDebug " [Open-Workspace] Empty selection - opening default workspace => [$defaultWorkspace]" -Style Success
+			$workspaces = @($defaultWorkspace)
+		}
 
 		if (-not $workspaces) {
 			Write-LogWarning "No valid workspaces selected! Exiting..."

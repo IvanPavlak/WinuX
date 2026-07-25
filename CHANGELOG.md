@@ -8,6 +8,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.12] - 2026-07-25
+
+### Added
+
+- `DefaultWorkspace` (configuration): names the workspace `Open-Workspace` opens when `[Enter]` is pressed with no input at the selection menu. Mirrors `DefaultWakeOnLanMachine` - the prompt names the configured default (`press [Enter] to open default workspace => Default`) instead of an anonymous "default workspace", so the offer cannot drift from the behaviour again. It is only honoured, and only advertised, when the named workspace actually has a `WorkspaceActions` entry; set it to `""` (or point it at a workspace with no actions) and the prompt becomes `press [Enter] to cancel`.
+
+### Fixed
+
+- `Open-Workspace` (Workflow module) now opens the default workspace when `[Enter]` is pressed at the selection menu, as its prompt and the docs have always claimed. The `Resolve-Selection` splat set `AllowEmptyPromptResponse` but no `DefaultOptionIndex`, so an empty response returned `$null`, and the only fallback - a hardcoded `@("Default")` - had shipped commented out since the initial release. Pressing Enter therefore fell straight into "No valid workspaces selected! Exiting..." and opened nothing. The fallback is now driven by the new `DefaultWorkspace` config key rather than a hardcoded name, so forks that rename their workspaces are not silently broken, and it applies to the genuinely interactive Enter only: a mistyped `-Workspace` argument still exits instead of silently opening the default.
+
 ## [0.1.11] - 2026-07-24
 
 ### Added
@@ -200,7 +210,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.11...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.12...HEAD
+[0.1.12]: https://github.com/IvanPavlak/WinuX/compare/v0.1.11...v0.1.12
 [0.1.11]: https://github.com/IvanPavlak/WinuX/compare/v0.1.10...v0.1.11
 [0.1.10]: https://github.com/IvanPavlak/WinuX/compare/v0.1.9...v0.1.10
 [0.1.9]: https://github.com/IvanPavlak/WinuX/compare/v0.1.8...v0.1.9

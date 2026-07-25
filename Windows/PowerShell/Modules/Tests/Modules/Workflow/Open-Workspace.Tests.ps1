@@ -71,8 +71,23 @@ Describe "Open-Workspace" {
 		$script:setLayoutCalls = @()
 		$script:openTerminalCalls = @()
 
+		$script:resolveSelectionCalls = @()
+
 		Mock Write-Host { }
-		Mock Resolve-Selection { param($InputObject) $InputObject }
+		# Capture PromptMessage too: the prompt advertises what [Enter] does, so the tests
+		# below assert the string and the behaviour agree instead of only the behaviour.
+		Mock Resolve-Selection {
+			param(
+				$InputObject,
+				$OptionList,
+				$MenuTitle,
+				$PromptMessage,
+				[switch]$AllowEmptyPromptResponse,
+				[switch]$AllowMultipleSelections
+			)
+			$script:resolveSelectionCalls += [PSCustomObject]@{ InputObject = $InputObject; PromptMessage = $PromptMessage }
+			$InputObject
+		}
 		Mock Get-WindowHandle { @() }
 		# Mirror the real Get-FilteredParams contract: only parameters the target command
 		# declares survive. Open-Workspace force-injects InSameShell in the relaunched
@@ -118,6 +133,7 @@ Describe "Open-Workspace" {
 
 		$script:Configuration = @{
 			Workspaces       = @('TestWorkspace')
+			DefaultWorkspace = ''
 			WorkspaceActions = @{}
 			ProjectTerminals = @()
 			BrowserGroups    = @()
@@ -160,6 +176,92 @@ Describe "Open-Workspace" {
 		$script:invokedActions[0].Alpha | Should -Be 1
 		$script:invokedActions[1].Name | Should -Be 'Test-ActionTwo'
 		$script:invokedActions[1].Beta | Should -Be 2
+	}
+
+	Context "default workspace on empty selection" {
+		It "opens the configured DefaultWorkspace when the menu response is empty" {
+			$script:Configuration.Workspaces = @('TestWorkspace', 'FallbackWorkspace')
+			$script:Configuration.DefaultWorkspace = 'FallbackWorkspace'
+			$script:Configuration.WorkspaceActions['FallbackWorkspace'] = @(
+				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 11 } }
+			)
+
+			# No -Workspace argument: the mocked Resolve-Selection returns its (empty)
+			# InputObject, which is exactly what the real one returns for a bare [Enter].
+			Open-Workspace
+
+			$script:invokedActions.Count | Should -Be 1
+			$script:invokedActions[0].Name | Should -Be 'Test-ActionOne'
+			$script:invokedActions[0].Alpha | Should -Be 11
+		}
+
+		It "advertises the configured DefaultWorkspace by name in the prompt" {
+			$script:Configuration.Workspaces = @('TestWorkspace', 'FallbackWorkspace')
+			$script:Configuration.DefaultWorkspace = 'FallbackWorkspace'
+			$script:Configuration.WorkspaceActions['FallbackWorkspace'] = @(
+				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 11 } }
+			)
+
+			Open-Workspace
+
+			$script:resolveSelectionCalls.Count | Should -Be 1
+			$script:resolveSelectionCalls[0].PromptMessage | Should -Match 'press \[Enter\] to open default workspace => FallbackWorkspace$'
+		}
+
+		It "offers to cancel and opens nothing when no DefaultWorkspace is configured" {
+			$script:Configuration.DefaultWorkspace = ''
+			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } }
+			)
+
+			Open-Workspace
+
+			$script:invokedActions.Count | Should -Be 0
+			$script:resolveSelectionCalls[0].PromptMessage | Should -Match 'press \[Enter\] to cancel$'
+			$script:resolveSelectionCalls[0].PromptMessage | Should -Not -BeLike '*default workspace*'
+		}
+
+		It "falls back to the cancel prompt when DefaultWorkspace has no WorkspaceActions entry" {
+			# Advertising a default whose open could only log "No actions configured" would be
+			# the same broken promise the config key exists to fix.
+			$script:Configuration.DefaultWorkspace = 'GhostWorkspace'
+
+			Open-Workspace
+
+			$script:invokedActions.Count | Should -Be 0
+			$script:resolveSelectionCalls[0].PromptMessage | Should -Match 'press \[Enter\] to cancel$'
+		}
+
+		It "does not fall back to the default when an explicit -Workspace argument resolves to nothing" {
+			$script:Configuration.Workspaces = @('TestWorkspace', 'FallbackWorkspace')
+			$script:Configuration.DefaultWorkspace = 'FallbackWorkspace'
+			$script:Configuration.WorkspaceActions['FallbackWorkspace'] = @(
+				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 11 } }
+			)
+			# A mistyped name is dropped by Resolve-Selection's InputObject path. That is a bad
+			# argument, not a request for the default - only the interactive [Enter] falls back.
+			Mock Resolve-Selection { @() }
+
+			Open-Workspace -Workspace 'Mistyped'
+
+			$script:invokedActions.Count | Should -Be 0
+		}
+
+		It "opens the explicitly named workspace rather than the default" {
+			$script:Configuration.Workspaces = @('TestWorkspace', 'FallbackWorkspace')
+			$script:Configuration.DefaultWorkspace = 'FallbackWorkspace'
+			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } }
+			)
+			$script:Configuration.WorkspaceActions['FallbackWorkspace'] = @(
+				@{ Action = 'Test-ActionTwo'; Parameters = @{ Beta = 2 } }
+			)
+
+			Open-Workspace -Workspace 'TestWorkspace'
+
+			$script:invokedActions.Count | Should -Be 1
+			$script:invokedActions[0].Name | Should -Be 'Test-ActionOne'
+		}
 	}
 
 	It "forwards ExtraArgs to actions only when parameter is not already configured" {

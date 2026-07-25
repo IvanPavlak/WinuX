@@ -71,7 +71,7 @@ The authoritative, always-current function reference is the set of per-module pa
 | `RepositoryGroups`                                 | `Update-Repositories`, `Initialize-Repository`     |
 | `BrowserGroups`                                    | `Open-Browser`, `Collect-BrowserUrls`              |
 | `Projects`, `ProjectActions`                       | `Open-Project`                                     |
-| `Workspaces`, `WorkspaceActions`                   | `Open-Workspace`                                   |
+| `Workspaces`, `DefaultWorkspace`, `WorkspaceActions` | `Open-Workspace`                                 |
 | `Themes`                                           | `Set-SystemTheme`                                  |
 | `WallpaperDarkSettings`, `WallpaperLightSettings`  | `Set-Wallpaper`                                    |
 | `TaskbarConfiguration`                             | `Configure-Taskbar`                                |
