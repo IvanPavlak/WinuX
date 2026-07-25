@@ -18,7 +18,13 @@ function Move-Windows {
 
 		When monitor targeting is enabled, window position is preserved relative
 		to the source monitor work area and then clamped to the destination
-		monitor work area for safe placement.
+		monitor work area for safe placement. Each placement is verified with
+		Wait-WindowRect and re-applied once when the window did not land on the
+		target monitor, because SetWindowPos reports success for the call even
+		when an external window manager moves the window straight back.
+
+		Windows that could not be moved, or that would not stay on the target
+		monitor, are reported in normal mode as well as under verbose logging.
 
 		Use -Current to move windows to the same virtual desktop as the
 		calling terminal, without needing to know which desktop number it is.
@@ -32,6 +38,8 @@ function Move-Windows {
 		- Get-WindowHandle for pattern-based window filtering (wildcard, regex, exact)
 		- Get-CachedWindows for fast window enumeration (when no filters)
 		- Move-WindowToVirtualDesktop for reliable virtual desktop placement
+		- Resolve-TargetMonitor for -Monitor resolution (index, label, device name)
+		- Wait-WindowRect for post-placement verification of the monitor move
 		- Import-VirtualDesktopModule for VirtualDesktop module availability
 
 	.PARAMETER VirtualDesktop
@@ -199,62 +207,19 @@ function Move-Windows {
 		$allMonitors = $null
 
 		if ($Monitor) {
+			# Monitor matching (index / label / device name) lives in Resolve-TargetMonitor so
+			# Move-Windows and Center-Windows share one set of rules.
 			$allMonitors = Get-MonitorInfo -Quiet
-			if (-not $allMonitors -or $allMonitors.Count -eq 0) {
-				Write-LogError "Error: Could not detect any monitors for -Monitor targeting!"
+			$resolvedMonitor = Resolve-TargetMonitor -Monitor $Monitor -MonitorInfo $allMonitors
+
+			if (-not $resolvedMonitor.Monitor) {
+				Write-LogError $resolvedMonitor.ErrorMessage
 				$abortProcessing = $true
 				return
 			}
 
-			$monitorInput = $Monitor.Trim()
-			$monitorIndex = 0
-			$isNumericMonitor = [int]::TryParse($monitorInput, [ref]$monitorIndex)
-
-			if ($isNumericMonitor) {
-				if ($monitorIndex -lt 1 -or $monitorIndex -gt $allMonitors.Count) {
-					Write-LogError "Error: Monitor index [$monitorIndex] is out of range. Available monitor indices: 1..$($allMonitors.Count)."
-					$abortProcessing = $true
-					return
-				}
-				$targetMonitor = $allMonitors[$monitorIndex - 1]
-				$monitorTargetLabel = "Monitor$monitorIndex"
-			}
-
-			if (-not $targetMonitor -and $monitorInput -ieq 'Primary') {
-				$targetMonitor = $allMonitors | Where-Object { $_.IsPrimary } | Select-Object -First 1
-				$monitorTargetLabel = 'Primary'
-			}
-
-			if (-not $targetMonitor) {
-				$monitorSpecs = Get-MonitorSpecs -MonitorInfo $allMonitors
-				if ($monitorSpecs -and ($monitorSpecs.PSObject.Properties.Name -contains $monitorInput)) {
-					$targetSpec = $monitorSpecs.$monitorInput
-					$targetMonitor = $allMonitors | Where-Object {
-						$_.Left -eq $targetSpec.X -and $_.Top -eq $targetSpec.Y -and
-						$_.Width -eq $targetSpec.Width -and $_.Height -eq $targetSpec.Height
-					} | Select-Object -First 1
-					if ($targetMonitor) {
-						$monitorTargetLabel = $monitorInput
-					}
-				}
-			}
-
-			if (-not $targetMonitor) {
-				$targetMonitor = $allMonitors | Where-Object { $_.DeviceName -ieq $monitorInput } | Select-Object -First 1
-				if ($targetMonitor) {
-					$monitorTargetLabel = $targetMonitor.DeviceName
-				}
-			}
-
-			if (-not $targetMonitor) {
-				$availableLabels = @('Primary')
-				for ($i = 2; $i -le $allMonitors.Count; $i++) {
-					$availableLabels += if ($i -eq 2) { 'Secondary' } else { "Monitor$i" }
-				}
-				Write-LogError "Error: Could not resolve monitor [$Monitor]. Available labels: $($availableLabels -join ', ')."
-				$abortProcessing = $true
-				return
-			}
+			$targetMonitor = $resolvedMonitor.Monitor
+			$monitorTargetLabel = $resolvedMonitor.Label
 
 			Write-LogDebug "Target monitor resolved => $monitorTargetLabel ($($targetMonitor.DeviceName))"
 		}
@@ -312,12 +277,21 @@ function Move-Windows {
 		$movedLabels = @()
 		$alreadyCount = 0
 		$skippedCount = 0
+		$skippedLabels = @()
 		$monitorMovedCount = 0
 		$monitorSkippedCount = 0
+		$monitorSkippedLabels = @()
 		$excludedTitleCount = 0
 		$excludedInvalidSizeCount = 0
 		$totalEnumeratedWindows = @($allWindows).Count
 		$totalEligibleWindows = 0
+
+		# Monitor placement is verified and re-applied rather than trusted: an external window
+		# manager can pull a window back to another monitor immediately after the move while
+		# SetWindowPos still reports success. Two attempts with a short verification budget keep
+		# the worst case bounded for a full-desktop pass.
+		$monitorPlacementAttempts = 2
+		$monitorVerifyTimeoutMs = 150
 
 		foreach ($window in $allWindows) {
 			$handle = $window.Handle
@@ -389,6 +363,7 @@ function Move-Windows {
 				}
 				else {
 					$skippedCount++
+					$skippedLabels += Get-WindowDisplayName -ProcessName $procName -Title $title
 					$reason = if ($moveFailureMessage) { ": $moveFailureMessage" } elseif ($moveErr) { ": $($moveErr[0].Exception.Message)" } else { '' }
 					Write-LogDebug "     ✗ Failed to move [$title] ($procName)$reason" -Style Warning
 					continue
@@ -420,10 +395,14 @@ function Move-Windows {
 				$maxSourceXSpan = [math]::Max(1, $sourceMonitor.WorkAreaWidth - $window.Width)
 				$maxSourceYSpan = [math]::Max(1, $sourceMonitor.WorkAreaHeight - $window.Height)
 
-				$relativeX = ($window.Left - $sourceMonitor.WorkAreaLeft) / $maxSourceXSpan
-				$relativeY = ($window.Top - $sourceMonitor.WorkAreaTop) / $maxSourceYSpan
-				$relativeX = [math]::Max(0, [math]::Min(1, $relativeX))
-				$relativeY = [math]::Max(0, [math]::Min(1, $relativeY))
+				# The clamp literals MUST be doubles. With int literals PowerShell binds the
+				# [math]::Min(int, int) / [math]::Max(int, int) overloads and rounds the relative
+				# fraction to 0 or 1, which slams every window into a corner of the destination
+				# work area instead of preserving its relative placement.
+				$relativeX = [double](($window.Left - $sourceMonitor.WorkAreaLeft) / $maxSourceXSpan)
+				$relativeY = [double](($window.Top - $sourceMonitor.WorkAreaTop) / $maxSourceYSpan)
+				$relativeX = [math]::Max(0.0, [math]::Min(1.0, $relativeX))
+				$relativeY = [math]::Max(0.0, [math]::Min(1.0, $relativeY))
 
 				$newWidth = [math]::Min($window.Width, $targetMonitor.WorkAreaWidth)
 				$newHeight = [math]::Min($window.Height, $targetMonitor.WorkAreaHeight)
@@ -438,14 +417,43 @@ function Move-Windows {
 				$newX = [math]::Max($targetMonitor.WorkAreaLeft, [math]::Min($maxX, $newX))
 				$newY = [math]::Max($targetMonitor.WorkAreaTop, [math]::Min($maxY, $newY))
 
-				$monitorMoveResult = Set-WindowPosition -WindowHandle $handle -X $newX -Y $newY -Width $newWidth -Height $newHeight
+				# Verify the window actually landed on the target monitor instead of trusting
+				# SetWindowPos' return value, and re-apply when it did not. SetWindowPos reports
+				# success for the CALL; an external window manager (for example FancyZones with
+				# "keep windows in their zones" enabled) can move the window back to a remembered
+				# zone on another monitor right afterwards. Wait-WindowRect is the same
+				# verification the snap pipeline uses.
+				$monitorMoveResult = $false
+				$lastObserved = $null
+
+				for ($placementAttempt = 1; $placementAttempt -le $monitorPlacementAttempts; $placementAttempt++) {
+					if (-not (Set-WindowPosition -WindowHandle $handle -X $newX -Y $newY -Width $newWidth -Height $newHeight)) {
+						continue
+					}
+
+					$placementCheck = Wait-WindowRect -WindowHandle $handle `
+						-ExpectedX $newX -ExpectedY $newY `
+						-ExpectedWidth $newWidth -ExpectedHeight $newHeight `
+						-TimeoutMs $monitorVerifyTimeoutMs
+
+					if ($placementCheck.Verified) {
+						$monitorMoveResult = $true
+						break
+					}
+
+					$lastObserved = $placementCheck
+					Write-LogDebug "     ! [$title] ($procName) did not hold monitor $monitorTargetLabel on attempt $placementAttempt (observed $($placementCheck.X), $($placementCheck.Y))" -Style Warning
+				}
+
 				if ($monitorMoveResult) {
 					$monitorMovedCount++
 					Write-LogDebug "     ✓ Repositioned [$title] ($procName) => monitor $monitorTargetLabel" -Style Success
 				}
 				else {
 					$monitorSkippedCount++
-					Write-LogDebug "     ✗ Failed to reposition [$title] ($procName) on monitor $monitorTargetLabel" -Style Warning
+					$monitorSkippedLabels += Get-WindowDisplayName -ProcessName $procName -Title $title
+					$observedText = if ($lastObserved) { " (last observed $($lastObserved.X), $($lastObserved.Y))" } else { '' }
+					Write-LogDebug "     ✗ Failed to reposition [$title] ($procName) on monitor $monitorTargetLabel$observedText" -Style Warning
 				}
 			}
 		}
@@ -483,8 +491,18 @@ function Move-Windows {
 			if ($alreadyCount -gt 0) {
 				Write-LogWarning "$alreadyCount window(s) already on Virtual Desktop $VirtualDesktop."
 			}
+			# Failures are reported in normal mode too: silently dropping them made a partial
+			# pass look identical to a complete one.
+			if ($skippedCount -gt 0) {
+				Write-LogWarning "$skippedCount window(s) could not be moved to Virtual Desktop $VirtualDesktop."
+				Write-LogList -Items $skippedLabels
+			}
 			if ($targetMonitor -and $monitorMovedCount -gt 0) {
 				Write-LogSuccess "$monitorMovedCount window(s) moved to monitor $monitorTargetLabel."
+			}
+			if ($targetMonitor -and $monitorSkippedCount -gt 0) {
+				Write-LogWarning "$monitorSkippedCount window(s) did not stay on monitor $monitorTargetLabel."
+				Write-LogList -Items $monitorSkippedLabels
 			}
 		}
 	}

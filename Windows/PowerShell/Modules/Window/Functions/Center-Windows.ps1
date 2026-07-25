@@ -8,6 +8,13 @@ function Center-Windows {
 		window is currently on (based on its center point), then moves and resizes
 		every window to a centered position within that monitor's work area.
 
+		Pass -Monitor to center every matched window on ONE explicit monitor instead
+		of deriving a monitor per window. This matters when centering follows a
+		monitor consolidation pass (Reset-Windows): deriving the monitor from each
+		window's current rectangle re-homes any window that something else moved in
+		the meantime, cementing the stray placement, whereas an explicit target
+		re-asserts the intended monitor and makes the pass self-correcting.
+
 		By default, windows are resized to 40% of the monitor work area width and
 		50% of the height. Use -WidthPercent and -HeightPercent to customize.
 
@@ -24,6 +31,7 @@ function Center-Windows {
 		- Get-WindowHandle for pattern-based window filtering (wildcard, regex, exact)
 		- Get-CachedWindows for fast window enumeration (when no filters)
 		- Get-MonitorInfo for monitor bounds and work areas
+		- Resolve-TargetMonitor for -Monitor resolution (index, label, device name)
 		- Resize-Windows for reliable, centralized window placement
 		- Ensure-WindowsFormsLoaded for System.Windows.Forms dependency
 
@@ -51,7 +59,14 @@ function Center-Windows {
 		If specified, every matched window is centered on the primary monitor
 		(whichever monitor is currently primary), regardless of which monitor it
 		is currently on. Without this switch, each window is centered on the
-		monitor it already lives on.
+		monitor it already lives on. Cannot be combined with -Monitor.
+
+	.PARAMETER Monitor
+		Centers every matched window on this monitor, regardless of which monitor
+		it is currently on. Accepts a 1-based index ("2"), a label ("Primary",
+		"Secondary", "Monitor3"), or a device name ("\\.\DISPLAY1") - resolved by
+		Resolve-TargetMonitor, the same path Move-Windows uses. Cannot be combined
+		with -OnPrimary.
 
 	.EXAMPLE
 		Center-Windows
@@ -85,8 +100,13 @@ function Center-Windows {
 		Center-Windows -ProcessName "WindowsTerminal" -OnPrimary
 		Centers Windows Terminal on the primary monitor, pulling it back from a
 		secondary monitor if it currently lives there.
+
+	.EXAMPLE
+		Center-Windows -Monitor 2
+		Centers every window on monitor 2, pulling back any window that currently
+		sits on another monitor.
 	#>
-	[CmdletBinding()]
+	[CmdletBinding(DefaultParameterSetName = 'CurrentMonitor')]
 	param (
 		[Parameter()]
 		[ValidateRange(10, 100)]
@@ -102,8 +122,12 @@ function Center-Windows {
 		[Parameter()]
 		[string]$WindowTitle,
 
-		[Parameter()]
-		[switch]$OnPrimary
+		[Parameter(ParameterSetName = 'OnPrimary')]
+		[switch]$OnPrimary,
+
+		[Parameter(ParameterSetName = 'TargetMonitor')]
+		[AllowEmptyString()]
+		[string]$Monitor
 	)
 
 	begin {
@@ -124,14 +148,30 @@ function Center-Windows {
 			return
 		}
 
-		# When -OnPrimary is set, resolve the primary monitor once and force every
-		# matched window onto it, regardless of which monitor it currently lives on.
+		# Resolve the forced target monitor once, if any: -OnPrimary is the shorthand for
+		# "whichever monitor is currently primary", -Monitor takes an index, label, or device
+		# name. With neither, each window is centered on the monitor it currently occupies.
 		$forcedMonitor = $null
+		$forcedMonitorLabel = $null
 		if ($OnPrimary) {
 			$forcedMonitor = $monitors | Where-Object { $_.IsPrimary } | Select-Object -First 1
 			if (-not $forcedMonitor) {
 				$forcedMonitor = $monitors[0]
 			}
+			$forcedMonitorLabel = 'Primary'
+		}
+		elseif (-not [string]::IsNullOrWhiteSpace($Monitor)) {
+			$resolvedMonitor = Resolve-TargetMonitor -Monitor $Monitor -MonitorInfo $monitors
+			if (-not $resolvedMonitor.Monitor) {
+				Write-LogError $resolvedMonitor.ErrorMessage
+				return
+			}
+			$forcedMonitor = $resolvedMonitor.Monitor
+			$forcedMonitorLabel = $resolvedMonitor.Label
+		}
+
+		if ($forcedMonitorLabel) {
+			Write-LogDebug "Centering on monitor $forcedMonitorLabel ($($forcedMonitor.DeviceName))"
 		}
 
 		if (Test-LogVerbose) {
@@ -202,8 +242,8 @@ function Center-Windows {
 
 			$totalEligibleWindows++
 
-			# Determine the target monitor. With -OnPrimary every window is forced
-			# onto the primary monitor; otherwise pick the monitor the window is
+			# Determine the target monitor. With -OnPrimary or -Monitor every window is
+			# forced onto the resolved monitor; otherwise pick the monitor the window is
 			# currently on based on its center point.
 			if ($forcedMonitor) {
 				$targetMonitor = $forcedMonitor
