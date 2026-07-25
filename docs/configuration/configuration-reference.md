@@ -423,6 +423,16 @@ All available workspaces for the `Open-Workspace` menu.
 
 **Consumer function:** `Open-Workspace`
 
+### Default Workspace
+
+Workspace opened when Enter is pressed with no input at the `Open-Workspace` menu.
+
+**Key:** `DefaultWorkspace` → Workspace name (`"Default"` out of the box)
+
+**Consumer function:** `Open-Workspace`
+
+The name must have a `WorkspaceActions` entry - `Open-Workspace` only advertises the default in its prompt (`press [Enter] to open default workspace => Default`) when that entry exists. Set it to `""` to drop the offer: the prompt becomes `press [Enter] to cancel` and Enter exits without opening anything. Only the interactive Enter uses this; a mistyped `Open-Workspace Wrkspce` still exits rather than silently opening the default.
+
 ### Workspace Actions
 
 Defines what happens when a workspace opens.

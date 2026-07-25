@@ -66,7 +66,7 @@
 # → VSCodeProjects                : Open-VSCode
 #
 # Workspace Management:
-# → Workspaces, WorkspaceActions : Open-Workspace
+# → Workspaces, DefaultWorkspace, WorkspaceActions : Open-Workspace
 #
 # Application Configuration:
 # → BrowserGroups                   : Open-Browser, Collect-BrowserUrls
@@ -150,6 +150,7 @@
 # 7. Add workspace:
 #    - Add name to Workspaces list
 #    - Configure actions in WorkspaceActions with array of action configs
+#    - Optionally point DefaultWorkspace at it to make it the [Enter] default in the menu
 #    - Each action: @{ Action = "FunctionName"; Parameters = @{ Param1 = "Value" } }
 #    - Create layout file in Layouts/{MachineType}/{WorkspaceName}_{MachineType}.psd1
 #    - Run Visualize-Layouts -Layout "{WorkspaceName}_{MachineType}" -Update to add visualization
@@ -457,7 +458,7 @@
 		#       Target = "{RepoRoot}\Git\.gitconfig"  # Points to this (real file)
 		#   }
 		SymbolicLinks           = @{
-			Git                  = @{
+			Git             = @{
 				Path   = "{User}\.gitconfig"
 				Target = "{RepoRoot}\Git\.gitconfig"
 			}
@@ -476,7 +477,7 @@
 			#       Path   = "{Dev}\Obsidian\.obsidian"
 			#       Target = "{RepoRoot}\Obsidian\.obsidian"
 			#   }
-			PowerToys            = @{
+			PowerToys       = @{
 				Settings      = @{
 					Path   = "{User}\AppData\Local\Microsoft\PowerToys\FancyZones\settings.json"
 					Target = "{RepoRoot}\Windows\FancyZones\settings.json"
@@ -490,7 +491,7 @@
 					Target = "{RepoRoot}\Windows\FancyZones\layout-hotkeys.json"
 				}
 			}
-			FastFetch            = @{
+			FastFetch       = @{
 				Configuration = @{
 					Path   = "{User}\.config\fastfetch\config.jsonc"
 					Target = "{RepoRoot}\FastFetch\Windows\config_{MachineType}.jsonc"
@@ -500,7 +501,7 @@
 					Target = "{RepoRoot}\FastFetch\Windows\FastFetchLogo_{MachineType}.txt"
 				}
 			}
-			CondaFastFetch       = @{
+			CondaFastFetch  = @{
 				Configuration = @{
 					Path   = "{User}\.config\fastfetch\config_Conda.jsonc"
 					Target = "{RepoRoot}\FastFetch\Windows\Conda\config_Conda_{MachineType}.jsonc"
@@ -510,11 +511,11 @@
 					Target = "{RepoRoot}\FastFetch\Windows\Conda\FastFetchLogo_Conda.txt"
 				}
 			}
-			OhMyPosh             = @{
+			OhMyPosh        = @{
 				Path   = "{User}\AppData\Local\Programs\oh-my-posh\themes\WinuX.omp.json"
 				Target = "{RepoRoot}\Windows\Oh-My-Posh\WinuX_{MachineType}.omp.json"
 			}
-			PowerShell           = @{
+			PowerShell      = @{
 				Profile       = @{
 					Path   = "{User}\Documents\PowerShell\Microsoft.PowerShell_profile.ps1"
 					Target = "{RepoRoot}\Windows\PowerShell\Microsoft.PowerShell_profile.ps1"
@@ -524,7 +525,7 @@
 					Target = "{RepoRoot}\Windows\PowerShell\Configuration.psd1"
 				}
 			}
-			WindowsTerminal      = @{
+			WindowsTerminal = @{
 				Settings  = @{
 					Path   = "{User}\AppData\Local\Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\settings.json"
 					Target = "{RepoRoot}\Windows\WindowsTerminal\settings_{MachineType}.json"
@@ -541,11 +542,11 @@
 			#           Target = "{RepoRoot}\Windows\TranslucentTB\settings.json"
 			#       }
 			#   }
-			LazyGit              = @{
+			LazyGit         = @{
 				Path   = "{User}\AppData\Local\lazygit\config.yml"
 				Target = "{RepoRoot}\LazyGit\config.yml"
 			}
-			LazyDocker           = @{
+			LazyDocker      = @{
 				Path   = "{AppData}\lazydocker\config.yml"
 				Target = "{RepoRoot}\LazyDocker\config.yml"
 			}
@@ -1332,12 +1333,20 @@
 	# Workspace Configuration
 	# ==========================================================================
 	Workspaces                    = @(
+		"Default",
 		"Example",
 		"Fullscreen",
 		"Empty",
-		"Default",
 		"WinuX"
 	)
+
+	# Workspace opened when [Enter] is pressed with no input at the Open-Workspace menu.
+	# Must name an entry in WorkspaceActions below - Open-Workspace only advertises the
+	# default in its prompt when that entry exists. Set to "" to drop the offer entirely:
+	# the prompt then reads "press [Enter] to cancel" and [Enter] exits without opening
+	# anything. Only the interactive [Enter] uses this; a mistyped "Open-Workspace Wrkspce"
+	# still exits rather than silently opening the default.
+	DefaultWorkspace              = "Default"
 
 	# ==========================================================================
 	# Default VS Code Workspace Per Workspace

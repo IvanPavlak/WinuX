@@ -85,10 +85,11 @@ The configuration uses a hierarchical structure designed to eliminate duplicatio
 
 ### Workspace Management
 
-| Section            | Purpose               | Consumer Function |
-| ------------------ | --------------------- | ----------------- |
-| `Workspaces`       | Workspace names list  | `Open-Workspace`  |
-| `WorkspaceActions` | Actions per workspace | `Open-Workspace`  |
+| Section            | Purpose                      | Consumer Function |
+| ------------------ | ---------------------------- | ----------------- |
+| `Workspaces`       | Workspace names list         | `Open-Workspace`  |
+| `DefaultWorkspace` | Workspace opened by `[Enter]` | `Open-Workspace`  |
+| `WorkspaceActions` | Actions per workspace        | `Open-Workspace`  |
 
 ### Application Configuration
 
