@@ -9,7 +9,19 @@ function Reset-Windows {
 		  1. Remove-VirtualDesktops  - collapse down to a single virtual desktop
 		  2. Move-Windows            - move every window to the target virtual
 		                               desktop (and, optionally, a target monitor)
-		  3. Center-Windows          - center every window on its monitor
+		  3. Center-Windows          - center every window on the target monitor
+		                               (or on its current monitor when no monitor
+		                               is configured)
+
+		The configured monitor is passed on to Center-Windows rather than letting it
+		re-derive a monitor per window. Because Center-Windows runs last, that makes
+		the reset self-correcting: a window that something else moved to another
+		monitor during the run - notably FancyZones restoring a remembered zone after
+		the virtual desktops collapse - is pulled back to the configured monitor
+		instead of being centered wherever it drifted to.
+
+		A failed Remove-VirtualDesktops is surfaced as a warning instead of being
+		ignored, since it changes how much work the move pass has to do.
 
 		This reproduces the manual sequence:
 		  PC      => Remove-VirtualDesktops; Move-Windows -Monitor 2 -VirtualDesktop 1; Center-Windows
@@ -83,7 +95,12 @@ function Reset-Windows {
 		Write-LogDebug "MachineType => $machineType, VirtualDesktop => $VirtualDesktop, Monitor => $monitorText"
 	}
 
-	Remove-VirtualDesktops
+	# A failed collapse is reported instead of ignored: when it fails the move pass has to
+	# relocate every window itself, so the run behaves very differently from a clean reset.
+	$desktopCleanupResult = Remove-VirtualDesktops
+	if (@($desktopCleanupResult) -contains $false) {
+		Write-LogWarning "Virtual desktop cleanup did not complete - windows may still be spread across desktops."
+	}
 
 	$moveParams = @{
 		VirtualDesktop = $VirtualDesktop
@@ -94,7 +111,17 @@ function Reset-Windows {
 
 	Move-Windows @moveParams
 
-	Center-Windows
+	# Center on the CONFIGURED monitor rather than letting Center-Windows re-derive one per
+	# window. Center-Windows runs last, so passing the target makes the reset self-correcting:
+	# any window that something else (for example FancyZones restoring a remembered zone after
+	# the desktop collapse) pulled onto another monitor is brought back here instead of being
+	# centered where it drifted to.
+	$centerParams = @{}
+	if ($Monitor) {
+		$centerParams.Monitor = $Monitor
+	}
+
+	Center-Windows @centerParams
 
 	Focus-TerminalTab
 }

@@ -90,9 +90,9 @@ Center-Terminal
 
 ## [Center-Windows](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Center-Windows.ps1)
 
-- **Description:** Centers all open windows on their respective monitors. Enumerates all visible application windows, determines which monitor each window is currently on based on its center point, then moves and resizes every window to a centered position within that monitor's work area. By default windows are resized to 40% of the monitor work area width and 50% of the height (override with `-WidthPercent` / `-HeightPercent`). Off-screen windows are automatically moved to the primary monitor. Pass `-OnPrimary` to force every matched window onto the primary monitor (whichever is currently primary), regardless of where it currently lives. Optionally restrict centering to matching windows with `-ProcessName` and/or `-WindowTitle` (exact, wildcard, or regex; OR logic when both are given), delegated to `Get-WindowHandle` - the same filtering path as `Move-Windows`. The actual move/resize is delegated to `Resize-Windows` in target-bounds mode (with `-InsetPercent 0` for exact placement), so all window placement flows through a single shared path (DRY).
-- **Parameters:** -WidthPercent, -HeightPercent, -ProcessName, -WindowTitle, -OnPrimary
-- **Usage:** `Center-Windows`, `Center-Windows -WidthPercent 60 -HeightPercent 70`, `Center-Windows -ProcessName "chrome"`, `Center-Windows -ProcessName "*chrome*"`, `Center-Windows -ProcessName "(chrome|firefox|msedge)"`, `Center-Windows -WindowTitle "*YouTube*"`, `Center-Windows -ProcessName "WindowsTerminal" -OnPrimary`
+- **Description:** Centers all open windows on their respective monitors. Enumerates all visible application windows, determines which monitor each window is currently on based on its center point, then moves and resizes every window to a centered position within that monitor's work area. By default windows are resized to 40% of the monitor work area width and 50% of the height (override with `-WidthPercent` / `-HeightPercent`). Off-screen windows are automatically moved to the primary monitor. Pass `-OnPrimary` to force every matched window onto the primary monitor (whichever is currently primary), or `-Monitor` to force them onto a specific monitor by index, label, or device name (resolved by `Resolve-TargetMonitor`, the same path `Move-Windows` uses); the two are mutually exclusive. Forcing a target instead of deriving one per window is what makes a consolidation pass self-correcting - see the note below. Optionally restrict centering to matching windows with `-ProcessName` and/or `-WindowTitle` (exact, wildcard, or regex; OR logic when both are given), delegated to `Get-WindowHandle` - the same filtering path as `Move-Windows`. The actual move/resize is delegated to `Resize-Windows` in target-bounds mode (with `-InsetPercent 0` for exact placement), so all window placement flows through a single shared path (DRY).
+- **Parameters:** -WidthPercent, -HeightPercent, -ProcessName, -WindowTitle, -OnPrimary, -Monitor
+- **Usage:** `Center-Windows`, `Center-Windows -WidthPercent 60 -HeightPercent 70`, `Center-Windows -ProcessName "chrome"`, `Center-Windows -ProcessName "*chrome*"`, `Center-Windows -ProcessName "(chrome|firefox|msedge)"`, `Center-Windows -WindowTitle "*YouTube*"`, `Center-Windows -ProcessName "WindowsTerminal" -OnPrimary`, `Center-Windows -Monitor 2`
 
 Builds on existing module helpers: `Get-WindowHandle` for pattern filtering when `-ProcessName`/`-WindowTitle` is supplied (otherwise `Get-CachedWindows` enumerates all windows; the cache is cleared first to read fresh positions), `Get-MonitorInfo` for monitor bounds and work areas, `Resize-Windows` (target-bounds mode, `-InsetPercent 0`) for reliable, centralized placement, and `Ensure-WindowsFormsLoaded` for the `System.Windows.Forms` dependency. System and shell windows (Program Manager, Windows Input Experience, search/start surfaces, overlays, etc.) and windows with no meaningful size are skipped. Under `Set-LogLevel Verbose` it prints a per-window trace plus a diagnostics summary with enumerated, eligible, centered, and skipped counts and exclusion counts (skip-title and invalid-size) to explain why some windows were not centered.
 
@@ -103,10 +103,16 @@ Builds on existing module helpers: `Get-WindowHandle` for pattern filtering when
 | `-ProcessName`   | Only center windows whose process matches this pattern (without `.exe`). Supports exact names, wildcards (`*`, `?`), and regex. Omit to center all visible windows.                                 |
 | `-WindowTitle`   | Only center windows whose title matches this pattern. Supports wildcards (`*`, `?`) and regex. Combine with `-ProcessName` (OR logic). Omit (with no `-ProcessName`) to center all visible windows. |
 | `-OnPrimary`     | Force every matched window onto the primary monitor (whichever is currently primary), pulling it back from a secondary monitor if needed. Omit to center each window on its current monitor.        |
+| `-Monitor`       | Force every matched window onto this monitor: 1-based index (`2`), label (`Primary`, `Secondary`, `Monitor3`), or device name (`\\.\DISPLAY1`). An empty string means no targeting. Excludes `-OnPrimary`. |
+
+Deriving the monitor per window (the default) reads each window's CURRENT position, so it re-homes a window wherever it happens to sit. After a consolidation pass that is the wrong behavior: any window that something else moved in the meantime - notably FancyZones restoring a remembered zone - gets centered on the monitor it drifted to, cementing the stray placement. `-Monitor` re-asserts the intended target instead, which is why `Reset-Windows` passes its configured monitor through.
 
 ```powershell
 # Center every window at the default 40% x 50% on its current monitor
 Center-Windows
+
+# Pull every window onto monitor 2 and center it there
+Center-Windows -Monitor 2
 
 # Use larger centered tiles
 Center-Windows -WidthPercent 60 -HeightPercent 70
@@ -124,7 +130,7 @@ Center-Windows -ProcessName "(chrome|firefox|msedge)"
 Center-Windows -ProcessName "WindowsTerminal" -OnPrimary
 ```
 
-**See also:** [Reset-Windows](window.md#reset-windows)
+**See also:** [Reset-Windows](window.md#reset-windows), [Resolve-TargetMonitor](window.md#resolve-targetmonitor)
 
 ## [Center-Text](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Center-Text.ps1)
 
@@ -805,11 +811,13 @@ Initialize-WorkspaceWindowLayoutRerun
 
 ## [Move-Windows](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Move-Windows.ps1)
 
-- **Description:** Enumerates all visible application windows and moves each one to a specified virtual desktop (1-based; desktop 1 is the first). If the target desktop does not exist it is created automatically, and after the move pass focus is switched to the destination desktop. Use `-Current` to target the calling terminal's own desktop without knowing its number. Optional `-Monitor` repositions windows onto a target physical monitor in the same pass, preserving each window's relative placement from its source monitor work area and clamping to the destination work area for safe multi-resolution placement. Filtering by `-ProcessName` and/or `-WindowTitle` supports exact, wildcard, and regex matching (delegated to `Get-WindowHandle`); when both are given, windows matching either criterion are moved (OR logic). Windows already on the target desktop are skipped unless monitor repositioning is requested.
+- **Description:** Enumerates all visible application windows and moves each one to a specified virtual desktop (1-based; desktop 1 is the first). If the target desktop does not exist it is created automatically, and after the move pass focus is switched to the destination desktop. Use `-Current` to target the calling terminal's own desktop without knowing its number. Optional `-Monitor` repositions windows onto a target physical monitor in the same pass (resolved by `Resolve-TargetMonitor`), preserving each window's relative placement from its source monitor work area and clamping to the destination work area for safe multi-resolution placement. Each monitor placement is verified with `Wait-WindowRect` and re-applied once if the window did not hold its position, because `SetWindowPos` reports success for the call even when an external window manager moves the window straight back. Filtering by `-ProcessName` and/or `-WindowTitle` supports exact, wildcard, and regex matching (delegated to `Get-WindowHandle`); when both are given, windows matching either criterion are moved (OR logic). Windows already on the target desktop are skipped unless monitor repositioning is requested. Windows that could not be moved, or that would not stay on the target monitor, are reported in normal mode as well as under verbose logging.
 - **Parameters:** -VirtualDesktop, -Current, -ProcessName, -WindowTitle, -Monitor
 - **Usage:** `Move-Windows`, `Move-Windows -VirtualDesktop 2`, `Move-Windows -Current`, `Move-Windows -Current -ProcessName "chrome"`, `Move-Windows -WindowTitle "*YouTube*"`, `Move-Windows -ProcessName "chrome" -WindowTitle "*GitHub*"`, `Move-Windows -Current -Monitor Secondary`, `Move-Windows -VirtualDesktop 2 -Monitor 1`
 
 Moves every visible window to a target virtual desktop and, optionally, a target physical monitor. The `-VirtualDesktop` and `-Current` parameters are mutually exclusive (separate parameter sets). Missing desktops are created on demand via `Ensure-VirtualDesktops`. Monitor targeting accepts a 1-based index (`1`, `2`), standardized labels (`Primary`, `Secondary`, `Monitor3`, ...), or an exact device name (for example `\\.\DISPLAY1`). System and shell windows (Program Manager, Start, Search, overlays, zero-size windows, etc.) are excluded. Under `Set-LogLevel Verbose`, a per-window trace plus a summary of moved, already-there, skipped, enumerated, eligible, and exclusion (skip-title / invalid-size) counts is printed. VirtualDesktop calls are wrapped with optional exponential-backoff retries (`Invoke-WithRetry`) to absorb transient RPC failures such as `0x800706BA`.
+
+Note that a numeric `-Monitor` index is POSITIONAL: it follows `Get-MonitorInfo` / `Screen.AllScreens` enumeration order, which is not guaranteed to match the numbering in Windows display settings and can change when displays are re-enumerated. Prefer a label or device name when the target must survive a display reconfiguration.
 
 | Parameter         | Type   | Default | Description                                                                                                       |
 | ----------------- | ------ | ------- | ----------------------------------------------------------------------------------------------------------------- |
@@ -839,7 +847,7 @@ Move-Windows -ProcessName "chrome" -WindowTitle "*GitHub*"
 Move-Windows -VirtualDesktop 2 -Monitor 1
 ```
 
-**See also:** [Reset-Windows](window.md), [Move-WindowToVirtualDesktop](window.md)
+**See also:** [Reset-Windows](window.md#reset-windows), [Move-WindowToVirtualDesktop](window.md#move-windowtovirtualdesktop), [Resolve-TargetMonitor](window.md#resolve-targetmonitor), [Wait-WindowRect](window.md#wait-windowrect)
 
 ## [Move-WindowToVirtualDesktop](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Move-WindowToVirtualDesktop.ps1)
 
@@ -889,7 +897,7 @@ Reset-KeyboardModifiers -IncludeMouseButton
 
 ## [Reset-Windows](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Reset-Windows.ps1)
 
-- **Description:** Convenience wrapper that resets the window layout to a clean slate for layout testing. Runs four steps in order: `Remove-VirtualDesktops` (collapse down to a single virtual desktop), `Move-Windows` (move every window to the target virtual desktop and, optionally, a target monitor), `Center-Windows` (center every window on its monitor), and finally `Focus-TerminalTab` (focuses Windows Terminal to continue working). Defaults for `-VirtualDesktop` and `-Monitor` are read per machine from configuration.
+- **Description:** Convenience wrapper that resets the window layout to a clean slate for layout testing. Runs four steps in order: `Remove-VirtualDesktops` (collapse down to a single virtual desktop), `Move-Windows` (move every window to the target virtual desktop and, optionally, a target monitor), `Center-Windows` (center every window on the configured monitor, or on its current monitor when none is configured), and finally `Focus-TerminalTab` (focuses Windows Terminal to continue working). The configured monitor is passed on to `Center-Windows` so the last pass re-asserts the intended target rather than re-deriving one per window, which makes the reset self-correcting when something moves a window mid-run. A `Remove-VirtualDesktops` failure is surfaced as a warning instead of being ignored. Defaults for `-VirtualDesktop` and `-Monitor` are read per machine from configuration.
 - **Parameters:** -VirtualDesktop (default: per-machine config), -Monitor (default: per-machine config)
 - **Usage:** `Reset-Windows`, `Reset-Windows -VirtualDesktop 2 -Monitor Primary`, `Reset-Windows -Monitor ""`
 
@@ -899,11 +907,13 @@ This replaces the manual sequences:
 
 ```powershell
 # PC
-Remove-VirtualDesktops; Move-Windows -Monitor 2 -VirtualDesktop 1; Center-Windows
+Remove-VirtualDesktops; Move-Windows -Monitor 2 -VirtualDesktop 1; Center-Windows -Monitor 2
 
 # Laptop / Work
 Remove-VirtualDesktops; Move-Windows -VirtualDesktop 1; Center-Windows
 ```
+
+Collapsing the virtual desktops makes Windows migrate the windows off the removed desktops, and FancyZones reacts to those arrivals by restoring each window to its remembered zone - which can be on a different monitor. Passing the configured monitor to `Center-Windows` (the last pass) is what corrects that: without it, `Center-Windows` derives each window's monitor from its current position and centers strays where they landed. See [Windows Land On The Wrong Monitor After Reset-Windows](../reference/troubleshooting.md) in troubleshooting.
 
 | Parameter         | Type   | Default            | Description                                                                                                                                                                                                      |
 | ----------------- | ------ | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1087,6 +1097,43 @@ Enumerates the window list once via `Get-CachedWindows` (instead of issuing mult
 $fresh = Resolve-PositionedWindowHandle -WindowState $tracked
 if ($fresh) { $handle = $fresh.Handle }
 ```
+
+## [Resolve-TargetMonitor](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Resolve-TargetMonitor.ps1)
+
+- **Description:** Resolves a monitor specifier to a monitor object for the placement functions. Accepts a 1-based index following `Get-MonitorInfo` order (`1`, `2`), a standardized label from `Get-MonitorSpecs` (`Primary`, `Secondary`, `Monitor3`, ...), or an exact device name (`\\.\DISPLAY1`). Shared by `Move-Windows` and `Center-Windows` so both resolve `-Monitor` through one set of rules. Writes no console output: it returns the resolved monitor together with a ready-to-log `ErrorMessage`, leaving logging and control flow (abort, return, or fall back) to the caller. An empty or whitespace-only specifier resolves to "no targeting requested" rather than an error.
+- **Parameters:** -Monitor, -MonitorInfo
+- **Usage:** `Resolve-TargetMonitor -Monitor "2" -MonitorInfo $monitors`, `Resolve-TargetMonitor -Monitor "Primary"`
+
+| Parameter       | Type     | Default | Description                                                                                                     |
+| --------------- | -------- | ------- | --------------------------------------------------------------------------------------------------------------- |
+| `-Monitor`      | string   | -       | Monitor specifier: 1-based index, label, or device name. Empty/whitespace means no targeting requested.          |
+| `-MonitorInfo`  | object[] | -       | Monitor objects from `Get-MonitorInfo`. Omit to enumerate on demand; pass a set to avoid a second enumeration.   |
+
+Returns a `PSCustomObject` with:
+
+| Member         | Description                                                                       |
+| -------------- | --------------------------------------------------------------------------------- |
+| `Monitor`      | The resolved monitor object, or `$null` when unresolved or not requested.          |
+| `Label`        | Display label for the resolved monitor (for example `Monitor2`).                   |
+| `ErrorMessage` | Why resolution failed, or `$null` on success / no request.                         |
+| `Requested`    | `$true` when a non-empty specifier was supplied.                                   |
+
+A numeric index is POSITIONAL - it follows `Get-MonitorInfo` / `Screen.AllScreens` enumeration order, which is not guaranteed to match the numbering shown in Windows display settings and can change when displays are re-enumerated. Labels and device names are stable identifiers; prefer them when the target must survive a display reconfiguration.
+
+```powershell
+# Resolve and act on the caller's own terms
+$resolved = Resolve-TargetMonitor -Monitor "2" -MonitorInfo $monitors
+if (-not $resolved.Monitor) {
+    Write-LogError $resolved.ErrorMessage
+    return
+}
+"Targeting $($resolved.Label) ($($resolved.Monitor.DeviceName))"
+
+# Empty specifier means "no monitor targeting", not a failure
+(Resolve-TargetMonitor -Monitor "").Requested   # => False
+```
+
+**See also:** [Move-Windows](window.md#move-windows), [Center-Windows](window.md#center-windows), [Get-MonitorSpecs](window.md#get-monitorspecs)
 
 ## [Save-CurrentLayout](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Save-CurrentLayout.ps1)
 

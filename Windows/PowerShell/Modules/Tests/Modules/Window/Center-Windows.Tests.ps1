@@ -8,6 +8,8 @@ BeforeAll {
 	# Center-Windows filters via Get-WindowHandle (same path as Move-Windows); load the real
 	# helper so filtering is exercised against the mocked Get-CachedWindows.
 	. "$FunctionsPath\Get-WindowHandle.ps1"
+	# -Monitor resolution is delegated to Resolve-TargetMonitor (shared with Move-Windows).
+	. "$FunctionsPath\Resolve-TargetMonitor.ps1"
 }
 
 Describe "Center-Windows" {
@@ -94,6 +96,91 @@ Describe "Center-Windows" {
 			# work area starts at X=1920, so X = 1920 + (1920-768)/2 = 2496.
 			Center-Windows -ProcessName "WindowsTerminal"
 
+			Should -Invoke Resize-Windows -Times 1 -ParameterFilter {
+				$TargetX -eq 2496
+			}
+		}
+	}
+
+	Context "-Monitor" {
+		BeforeEach {
+			$primary = [PSCustomObject]@{
+				DeviceName = '\\.\DISPLAY1'
+				Left = 0; Top = 0; Right = 1920; Bottom = 1080
+				Width = 1920; Height = 1080
+				WorkAreaLeft = 0; WorkAreaTop = 0; WorkAreaRight = 1920; WorkAreaBottom = 1040
+				WorkAreaWidth = 1920; WorkAreaHeight = 1040
+				IsPrimary  = $true
+			}
+			$secondary = [PSCustomObject]@{
+				DeviceName = '\\.\DISPLAY2'
+				Left = 1920; Top = 0; Right = 3840; Bottom = 1080
+				Width = 1920; Height = 1080
+				WorkAreaLeft = 1920; WorkAreaTop = 0; WorkAreaRight = 3840; WorkAreaBottom = 1040
+				WorkAreaWidth = 1920; WorkAreaHeight = 1040
+				IsPrimary  = $false
+			}
+
+			Mock Get-MonitorInfo { @($primary, $secondary) }
+			Mock Get-MonitorSpecs {
+				[PSCustomObject]@{
+					Primary   = [PSCustomObject]@{ X = 0; Y = 0; Width = 1920; Height = 1080 }
+					Secondary = [PSCustomObject]@{ X = 1920; Y = 0; Width = 1920; Height = 1080 }
+				}
+			}
+			Mock Get-WindowDisplayName { 'Chrome' }
+			Mock Write-LogError { }
+
+			# A window currently living on the secondary monitor.
+			Mock Get-CachedWindows {
+				@([PSCustomObject]@{
+						Handle      = [IntPtr]2
+						Title       = 'New Tab - Google Chrome'
+						ProcessName = 'chrome'
+						Left = 2200; Top = 200; Width = 800; Height = 600
+					})
+			}
+		}
+
+		It "pulls a secondary-monitor window onto the monitor named by index" {
+			# Monitor 1 is the primary work area: X = (1920-768)/2 = 576, Y = (1040-520)/2 = 260.
+			Center-Windows -ProcessName "chrome" -Monitor 1
+
+			Should -Invoke Resize-Windows -Times 1 -ParameterFilter {
+				$TargetX -eq 576 -and $TargetY -eq 260
+			}
+		}
+
+		It "accepts a monitor label as well as an index" {
+			Center-Windows -ProcessName "chrome" -Monitor "Primary"
+
+			Should -Invoke Resize-Windows -Times 1 -ParameterFilter {
+				$TargetX -eq 576
+			}
+		}
+
+		It "keeps a window on the target monitor it already occupies" {
+			# Secondary work area starts at X=1920 => X = 1920 + (1920-768)/2 = 2496.
+			Center-Windows -ProcessName "chrome" -Monitor 2
+
+			Should -Invoke Resize-Windows -Times 1 -ParameterFilter {
+				$TargetX -eq 2496
+			}
+		}
+
+		It "reports an error and centers nothing when the monitor cannot be resolved" {
+			Center-Windows -ProcessName "chrome" -Monitor "Monitor9"
+
+			Should -Invoke Write-LogError -Times 1
+			Should -Invoke Resize-Windows -Times 0
+		}
+
+		It "treats an empty monitor specifier as no targeting" {
+			# Reset-Windows passes no -Monitor when none is configured, but an empty string
+			# must not abort the pass either: the window stays on its current monitor.
+			Center-Windows -ProcessName "chrome" -Monitor ""
+
+			Should -Invoke Write-LogError -Times 0
 			Should -Invoke Resize-Windows -Times 1 -ParameterFilter {
 				$TargetX -eq 2496
 			}

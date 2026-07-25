@@ -8,6 +8,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.13] - 2026-07-25
+
+### Added
+
+- `Resolve-TargetMonitor` (Window module): shared resolver that turns a monitor specifier into a monitor object. Accepts a 1-based index following `Get-MonitorInfo` order, a standardized label from `Get-MonitorSpecs` (`Primary`, `Secondary`, `Monitor3`, ...), or an exact device name. Extracted from `Move-Windows` so it and `Center-Windows` resolve `-Monitor` through one set of rules. It writes no console output, returning the resolved monitor alongside a ready-to-log `ErrorMessage` so each caller keeps its own logging and control flow; an empty specifier resolves to "no targeting requested" rather than an error.
+- `Center-Windows -Monitor` (Window module): centers every matched window on one explicit monitor instead of deriving a monitor per window from its current position. `-OnPrimary` remains the shorthand for the primary monitor; the two are mutually exclusive parameter sets.
+
+### Fixed
+
+- `Reset-Windows` (Window module) no longer leaves a subset of windows centered on the wrong monitor. Collapsing the virtual desktops makes Windows migrate windows off the removed desktops, and FancyZones reacts to those arrivals by restoring each window to its remembered zone from `app-zone-history.json` - which records a monitor. `Center-Windows` then ran last and re-derived each window's monitor from its CURRENT position, so it centered the strays where they had drifted to, cementing the placement. Verified with an A/B on the same 35 windows: the move pass alone misplaced 0, and prefixing it with `Remove-VirtualDesktops` misplaced 8. `Reset-Windows` now passes its configured monitor through to `Center-Windows`, so the last pass re-asserts the intended target and the reset self-corrects regardless of what moved a window mid-run. Monitor identity is unreliable to begin with when two displays are the same model: identical panels can report the same EDID code and serial number, which is why `applied-layouts.json` accumulates several device identities for one physical monitor (`Get-DuplicateMonitorEdid` already detects the EDID collision for `Apply-FancyZones`, but the zone history has no such guard).
+- `Move-Windows -Monitor` (Window module) now preserves each window's relative placement instead of slamming every window into a corner of the destination work area. The clamp read `[math]::Max(0, [math]::Min(1, $relativeX))`, and because the literals were integers PowerShell bound the `(int, int)` overloads and rounded the relative fraction to 0 or 1. Every coordinate the pass produced was therefore `0` or the work-area maximum, on every window, which the "preserve relative placement" logic was written specifically to avoid. The clamp now uses double literals.
+- `Move-Windows` (Window module) verifies each monitor placement with `Wait-WindowRect` and re-applies it once when the window did not hold its position. `SetWindowPos` reports success for the CALL, so a window moved straight back by another window manager was still counted as repositioned.
+- `Move-Windows` and `Reset-Windows` (Window module) no longer hide failures in normal mode. `Move-Windows` reported only moved / already-there / monitor-moved counts outside `Set-LogLevel Verbose`, so windows that failed to move or would not stay on the target monitor were silently dropped from the summary and a partial pass looked identical to a complete one; both are now reported with the affected windows listed. `Reset-Windows` also ignored `Remove-VirtualDesktops`' return value, so a failed desktop collapse - which changes how much work the move pass has to do - passed unnoticed; it now warns and continues.
+
 ## [0.1.12] - 2026-07-25
 
 ### Added
@@ -210,7 +224,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.12...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.13...HEAD
+[0.1.13]: https://github.com/IvanPavlak/WinuX/compare/v0.1.12...v0.1.13
 [0.1.12]: https://github.com/IvanPavlak/WinuX/compare/v0.1.11...v0.1.12
 [0.1.11]: https://github.com/IvanPavlak/WinuX/compare/v0.1.10...v0.1.11
 [0.1.10]: https://github.com/IvanPavlak/WinuX/compare/v0.1.9...v0.1.10

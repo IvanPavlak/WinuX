@@ -52,6 +52,7 @@
 		'Resolve-CenteredWindowPercent',
 		'Resolve-LayoutTokens',
 		'Resolve-PositionedWindowHandle',
+		'Resolve-TargetMonitor',
 		'Reset-VirtualDesktopComProxy',
 		'Reset-VirtualDesktopState',
 		'Save-CurrentLayout',

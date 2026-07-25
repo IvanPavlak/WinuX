@@ -261,6 +261,28 @@ Test-VirtualDesktopComHealth
 
 Opening a new shell also works (a fresh process builds fresh COM connections), but is no longer necessary.
 
+### Windows Land On The Wrong Monitor After Reset-Windows
+
+**Problem:** `Reset-Windows` consolidates onto the configured monitor, but a handful of windows end up centered on a different monitor. The verbose log shows every window moved successfully (`monitor moved [35]`), yet `Center-Windows` then reports target zones on the other monitor.
+
+**Why it happens:** Collapsing the virtual desktops makes Windows migrate the windows off the removed desktops onto the surviving one. FancyZones reacts to those arrivals by restoring each window to its remembered zone from `app-zone-history.json` - and that record includes a monitor. Running the move pass WITHOUT the desktop collapse does not reproduce it; adding the collapse does.
+
+Which monitor FancyZones picks is unreliable when two displays are the same model: identical panels report the same EDID code and can report the same serial number, so `applied-layouts.json` accumulates several device identities for the same physical monitor. `Get-DuplicateMonitorEdid` detects the EDID collision (`Apply-FancyZones` uses it to stop false "already applied" skips), but the zone history has no such guard.
+
+**Solution:** This now self-corrects. `Reset-Windows` passes its configured monitor to `Center-Windows`, which runs last, so any window pulled onto another monitor mid-run is brought back to the intended one. `Move-Windows` also verifies each placement with `Wait-WindowRect` and re-applies it once, and reports windows that would not stay put instead of counting them as moved.
+
+To confirm what happened on a specific run:
+
+```powershell
+# Per-window trace plus moved / skipped / monitor-failed counts
+Set-LogLevel Verbose { Reset-Windows }
+
+# Re-assert the target monitor on its own
+Center-Windows -Monitor 2
+```
+
+If windows still drift, the FancyZones re-apply behaviors are the trigger - `fancyzones_displayOrWorkAreaChange_moveWindows` and `fancyzones_zoneSetChange_moveWindows` in `FancyZones/settings.json`. Turning them off stops the drift at the source, but they are load-bearing for workspace layouts, so prefer the self-correcting path above.
+
 ### FancyZones Not Running
 
 **Problem:** Zone snapping doesn't work.
