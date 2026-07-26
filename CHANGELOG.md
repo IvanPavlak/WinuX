@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.15] - 2026-07-26
+
+### Fixed
+
+- `Open-Terminal` (Application module) named every tab it opened without a `-TabTitles` entry `C:\Program Files\PowerShell\7\pwsh.exe`, most visibly the first tab of the window `Open-Workspace -Alongside` relaunches itself into. Given no `--title`, Windows Terminal falls back to the command line it was handed as the tab's starting title AND passes that same string to the spawned shell as its console title, so the path was both displayed and readable back as `$Host.UI.RawUI.WindowTitle` - which is why `Open-Workspace`'s alongside window probe, having flashed a marker into the title to identify its own hosting window, restored the path rather than a name. Untitled tabs are now titled `PowerShell`, exactly like a tab opened by hand from the default profile. The fallback is a STARTING title only, deliberately without the `--suppressApplicationTitle` that explicitly titled tabs still get: pinning the title would break both that alongside probe and `Terminate-WindowsTerminalTabs`' tab marker, which identify their own window by writing `$Host.UI.RawUI.WindowTitle` and reading it back. Cosmetic only; no other behaviour changes.
+
 ## [0.1.14] - 2026-07-26
 
 ### Added
@@ -236,7 +242,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.14...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.15...HEAD
+[0.1.15]: https://github.com/IvanPavlak/WinuX/compare/v0.1.14...v0.1.15
 [0.1.14]: https://github.com/IvanPavlak/WinuX/compare/v0.1.13...v0.1.14
 [0.1.13]: https://github.com/IvanPavlak/WinuX/compare/v0.1.12...v0.1.13
 [0.1.12]: https://github.com/IvanPavlak/WinuX/compare/v0.1.11...v0.1.12
