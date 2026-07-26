@@ -300,7 +300,17 @@ Stop-Process -Name "PowerToys" -Force
 Start-Process "C:\Program Files\PowerToys\PowerToys.exe"
 ```
 
-`Set-WorkspaceWindowLayout` rerun recovery now performs this forced restart path automatically and avoids duplicate back-to-back restarts across reruns.
+`Set-WorkspaceWindowLayout` performs this forced restart path automatically before every retry, and follows it with `Apply-FancyZones -Force`.
+
+**Why both steps:** a restart alone does not fix a wrong layout. FancyZones reloads `applied-layouts.json` on startup but does not re-assert the live zone grid, and that same file is what the idempotency check reads - so an ordinary re-apply reports "Already Applied" for every monitor and sends nothing. If the live grid is stale or was never applied (FancyZones was down, crash-looping, or missed the hotkey), every retry snaps into the same wrong grid and cannot converge. `-Force` skips the check and re-sends the shortcuts.
+
+To reset the zone grid by hand after FancyZones has been misbehaving:
+
+```powershell
+Start-FancyZones -ForceRestart -MaxWaitSeconds 20
+$config = Import-PowerShellDataFile -Path "<layout>.psd1"
+Apply-FancyZones -MonitorConfig $config.Monitors -Force
+```
 
 ### FancyZones Snap Fails With Custom Spacing
 

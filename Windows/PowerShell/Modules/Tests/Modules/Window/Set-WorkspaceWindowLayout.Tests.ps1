@@ -252,9 +252,9 @@ Describe "Set-WorkspaceWindowLayout" {
 		# One initial pass + two in-process retries verify against the full config before
 		# the terminal respawn is considered.
 		Should -Invoke Confirm-WorkspaceWindowPositions -Times 3 -Exactly
-		# Each in-process retry re-checks FancyZones (2×) and the escalation path
-		# force-restarts it once before the respawn (3 total).
-		Should -Invoke Start-FancyZones -Times 3 -Exactly
+		# Each in-process retry force-restarts FancyZones (2) and the escalation path
+		# force-restarts it once more before the respawn (3 total).
+		Should -Invoke Start-FancyZones -Times 3 -Exactly -ParameterFilter { $ForceRestart }
 		Should -Invoke Initialize-WorkspaceWindowLayoutRerun -Times 1 -Exactly -ParameterFilter { $WindowOnlyRetry }
 		Should -Invoke ReRun-LastCommand -Times 1 -Exactly
 		# The mocked ReRun-LastCommand RETURNS (a real respawn ends the process via
@@ -307,7 +307,7 @@ Describe "Set-WorkspaceWindowLayout" {
 		# (1 initial + 2 retries) before escalating.
 		Should -Invoke Confirm-WorkspaceWindowPositions -Times 0
 		Should -Invoke Snap-AllWindows -Times 3 -Exactly
-		Should -Invoke Start-FancyZones -Times 3 -Exactly
+		Should -Invoke Start-FancyZones -Times 3 -Exactly -ParameterFilter { $ForceRestart }
 		Should -Invoke Initialize-WorkspaceWindowLayoutRerun -Times 1 -Exactly -ParameterFilter { $WindowOnlyRetry }
 		Should -Invoke Resize-Windows -Times 1 -ParameterFilter { $WindowHandle -eq [IntPtr]99 }
 		Should -Invoke ReRun-LastCommand -Times 1 -Exactly
@@ -548,6 +548,176 @@ Describe "Set-WorkspaceWindowLayout" {
 		Should -Invoke Set-WindowLayouts -Times 1 -Exactly -ParameterFilter {
 			(@($LayoutConfig | Where-Object { $_.WindowTitle -eq 'Dotfiles' }).Count -eq 1) -and
 			(@($LayoutConfig | Where-Object { $_.WindowTitle -eq 'OtherProj' }).Count -eq 1)
+		}
+	}
+
+	Context "FancyZones reset between retries" {
+		# Reproduction harness for the retry loop that could never recover.
+		#
+		# A snap/verification failure almost never means "the window refused to move" - it
+		# means the zone grid the snap targeted was wrong. The retry used to re-run
+		# position -> snap -> verify against that SAME broken grid, so all attempts failed
+		# identically and the run escalated to a terminal respawn that reapplied FancyZones
+		# idempotently (i.e. skipped it) and failed identically too.
+		#
+		# $script:FancyZonesSim models the state that actually decides whether a snap lands:
+		#   Running          - the PowerToys.FancyZones process is alive
+		#   ZonesApplied     - the LIVE zone grid matches the workspace layout
+		#   StaleAppliedJson - applied-layouts.json claims the layout is already applied, so
+		#                      Apply-FancyZones' idempotency check skips every shortcut send
+		#                      while the live grid stays wrong (a "jumbled" FancyZones)
+		BeforeEach {
+			$script:FancyZonesSim = @{
+				Running          = $true
+				ZonesApplied     = $true
+				StaleAppliedJson = $false
+				CrashOnNextSnap  = $false
+				ForcedApplies    = 0
+			}
+
+			Mock Start-FancyZones {
+				if ($ForceRestart) {
+					# A restarted FancyZones reloads applied-layouts.json but does NOT
+					# re-assert the live grid - the layout shortcuts must be re-sent.
+					$script:FancyZonesSim.Running = $true
+					$script:FancyZonesSim.ZonesApplied = $false
+				}
+				elseif (-not $script:FancyZonesSim.Running) {
+					$script:FancyZonesSim.Running = $true
+					$script:FancyZonesSim.ZonesApplied = $false
+				}
+				$true
+			}
+
+			Mock Apply-FancyZones {
+				# The real function starts FancyZones itself before applying anything.
+				$script:FancyZonesSim.Running = $true
+
+				if ($Force) {
+					$script:FancyZonesSim.ForcedApplies++
+					$script:FancyZonesSim.ZonesApplied = $true
+				}
+				elseif (-not $script:FancyZonesSim.StaleAppliedJson) {
+					$script:FancyZonesSim.ZonesApplied = $true
+				}
+				# else: every monitor reports "Already Applied" and nothing is sent.
+			}
+
+			Mock Snap-AllWindows {
+				if ($script:FancyZonesSim.CrashOnNextSnap) {
+					$script:FancyZonesSim.CrashOnNextSnap = $false
+					$script:FancyZonesSim.Running = $false
+					$script:FancyZonesSim.ZonesApplied = $false
+				}
+
+				$script:LastSnapAllWindowsResult = if ($script:FancyZonesSim.Running -and $script:FancyZonesSim.ZonesApplied) {
+					[PSCustomObject]@{ SnappedCount = 1; FailedWindows = @() }
+				}
+				else {
+					[PSCustomObject]@{
+						SnappedCount  = 0
+						FailedWindows = @(
+							[PSCustomObject]@{
+								Handle      = [IntPtr]99
+								WindowTitle = 'Code'
+								ProcessName = 'Code'
+								Expected    = '(0,0) 100x100'
+								Actual      = '(10,10) 90x90'
+								Error       = 'Snap FAILED for [Code] - not at expected zone'
+							}
+						)
+					}
+				}
+			}
+
+			Mock Confirm-WorkspaceWindowPositions {
+				if ($script:FancyZonesSim.Running -and $script:FancyZonesSim.ZonesApplied) {
+					@{ Success = $true }
+				}
+				else {
+					@{
+						Success  = $false
+						Total    = 1
+						Failures = @(
+							[PSCustomObject]@{
+								Handle      = [IntPtr]99
+								WindowTitle = 'Code'
+								ProcessName = 'Code'
+								Expected    = '(0,0) 100x100'
+								Actual      = '(10,10) 90x90'
+							}
+						)
+					}
+				}
+			}
+
+			Mock Set-WindowLayouts { @([PSCustomObject]@{ Status = 'Configured' }) }
+			Mock Test-Path { $true }
+			Mock Import-PowerShellDataFile {
+				@{
+					Layout   = @(
+						@{ ProcessName = 'Code'; WindowTitle = '*Code*'; DesktopNumber = 1 }
+					)
+					Monitors = @{
+						MonitorA = @{
+							VirtualDesktopLayouts = @{
+								1 = 'One'
+							}
+						}
+					}
+				}
+			}
+			Mock Get-DesktopList { @(0) }
+		}
+
+		It "recovers in-process when FancyZones holds a stale zone grid that idempotency would skip" {
+			$script:FancyZonesSim.ZonesApplied = $false
+			$script:FancyZonesSim.StaleAppliedJson = $true
+
+			Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace'
+
+			# The retry has to re-send the layout shortcuts even though applied-layouts.json
+			# claims they are already applied - that file is exactly what lies here.
+			$script:FancyZonesSim.ForcedApplies | Should -BeGreaterThan 0
+			$script:FancyZonesSim.ZonesApplied | Should -BeTrue
+			Should -Invoke ReRun-LastCommand -Times 0
+			Should -Invoke Save-CurrentLayout -Times 1 -Exactly
+		}
+
+		It "recovers in-process when FancyZones dies during the first snap pass" {
+			$script:FancyZonesSim.CrashOnNextSnap = $true
+
+			Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace'
+
+			$script:FancyZonesSim.Running | Should -BeTrue
+			$script:FancyZonesSim.ZonesApplied | Should -BeTrue
+			Should -Invoke ReRun-LastCommand -Times 0
+			Should -Invoke Save-CurrentLayout -Times 1 -Exactly
+		}
+
+		It "force-restarts FancyZones and re-applies the zone layout on every in-process retry" {
+			# Unrecoverable: the re-apply never takes effect, so all retries are spent and the
+			# run still escalates - but each retry must have attempted the full reset.
+			$script:FancyZonesSim.ZonesApplied = $false
+			Mock Apply-FancyZones { }
+
+			Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace'
+
+			# One reset per in-process retry (2) + the pre-respawn force-start (1).
+			Should -Invoke Start-FancyZones -Times 3 -Exactly -ParameterFilter { $ForceRestart }
+			# The initial pass stays idempotent; only the retries force the re-send.
+			Should -Invoke Apply-FancyZones -Times 2 -Exactly -ParameterFilter { $Force }
+			Should -Invoke ReRun-LastCommand -Times 1 -Exactly
+		}
+
+		It "forces the zone re-apply when running in window-only retry mode" {
+			# The respawned run must not trust applied-layouts.json either: the run that
+			# escalated to it did so precisely because the live grid was wrong.
+			[Environment]::SetEnvironmentVariable('WORKSPACE_WINDOW_ONLY_RETRY', '1', 'Process')
+
+			Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace'
+
+			Should -Invoke Apply-FancyZones -Times 1 -Exactly -ParameterFilter { $Force }
 		}
 	}
 }

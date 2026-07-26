@@ -112,4 +112,44 @@ Describe "Confirm-WorkspaceWindowPositions" {
 			$result.Failures[0].Actual | Should -Be "Handle invalid"
 		}
 	}
+
+	Context "Failure labelling" {
+		# A token-expanded entry ("Browser") carries a process REGEX, not a process name, and
+		# such entries often have no WindowTitle at all - so the layout-derived label reads
+		# "(firefox|chrome|msedge|brave)", which names no window and repeats identically for
+		# every browser entry in the layout. The failure must name the window instead.
+		BeforeAll {
+			$script:browserLayoutEntry = @(
+				@{
+					ProcessName = '(firefox|chrome|msedge|brave)'
+					X = 2; Y = 2; Width = 1717; Height = 1437
+				}
+			)
+		}
+
+		It "reports the matched window's caption rather than the layout's process pattern" {
+			Mock Get-WindowHandle -ParameterFilter { $ProcessName -and -not $WindowTitle } {
+				@([PSCustomObject]@{ Handle = [IntPtr]0x9E001; Title = 'YouTube - Mozilla Firefox' })
+			}
+
+			$result = Confirm-WorkspaceWindowPositions -LayoutConfig $browserLayoutEntry
+
+			$result.Failures.Count | Should -Be 1
+			$result.Failures[0].WindowTitle | Should -Be 'YouTube - Mozilla Firefox'
+			# The layout-entry identity is preserved separately, not lost.
+			$result.Failures[0].LayoutEntry | Should -Be '(firefox|chrome|msedge|brave)'
+			$result.Failures[0].ProcessName | Should -Be '(firefox|chrome|msedge|brave)'
+		}
+
+		It "falls back to the layout entry label when no window matched at all" {
+			Mock Get-WindowHandle { @() }
+
+			$result = Confirm-WorkspaceWindowPositions -LayoutConfig $browserLayoutEntry
+
+			$result.Failures.Count | Should -Be 1
+			$result.Failures[0].Actual | Should -Be 'Window not found'
+			# Nothing better exists here - the pattern is genuinely all that is known.
+			$result.Failures[0].WindowTitle | Should -Be '(firefox|chrome|msedge|brave)'
+		}
+	}
 }

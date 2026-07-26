@@ -134,5 +134,25 @@ Describe "Start-FancyZones" {
 			# the first call pays the readiness probe (service checks + JSON parses).
 			Should -Invoke Test-RpcServerHealth -Times 1 -Exactly
 		}
+
+		It "shows no spinner for a call served from the ready-cache" {
+			Mock Get-Process {
+				param($Name)
+				if ($Name -eq 'PowerToys.FancyZones') {
+					return [PSCustomObject]@{ Id = 4321; ProcessName = 'PowerToys.FancyZones'; HasExited = $false; StartTime = (Get-Date).AddMinutes(-30) }
+				}
+				return $null
+			}
+
+			$null = Start-FancyZones
+			$null = Start-FancyZones
+			$null = Start-FancyZones
+
+			# A cached call does no work, so it must not announce any. The spinner used to be
+			# started before the cache was consulted, so three back-to-back calls (which one
+			# retry reset produces) printed three "Starting FancyZones" lines for one restart.
+			Should -Invoke Loading-Spinner -Times 1 -Exactly -ParameterFilter { $Start }
+			Should -Invoke Loading-Spinner -Times 1 -Exactly -ParameterFilter { $Stop }
+		}
 	}
 }
