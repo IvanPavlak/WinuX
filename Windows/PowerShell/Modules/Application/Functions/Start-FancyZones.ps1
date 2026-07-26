@@ -55,11 +55,6 @@ function Start-FancyZones {
 
 	Write-LogDebug "[Starting FancyZones]"
 
-	$spinner = $null
-	if (-not (Test-LogVerbose)) {
-		$spinner = Loading-Spinner -Start -Label "Starting FancyZones"
-	}
-
 	$fancyZonesDirectory = Join-Path $env:LOCALAPPDATA "Microsoft\PowerToys\FancyZones"
 	$customLayoutsPath = Join-Path $fancyZonesDirectory "custom-layouts.json"
 	$appliedLayoutsPath = Join-Path $fancyZonesDirectory "applied-layouts.json"
@@ -73,6 +68,26 @@ function Start-FancyZones {
 			VerifiedAt = [datetime]::MinValue
 			TtlSeconds = 10
 		}
+	}
+
+	$fancyZonesProcess = Get-Process -Name "PowerToys.FancyZones" -ErrorAction SilentlyContinue
+
+	# Cache hit fast path, resolved BEFORE the spinner is created. One workspace open calls
+	# this several times seconds apart (Apply-FancyZones begin, Snap-AllWindows begin, each
+	# retry reset), and every cached no-op used to still start and stop a spinner - printing
+	# a "Starting FancyZones" line for work that was not done, three in a row after a single
+	# retry reset. A call that does nothing now says nothing.
+	if (-not $ForceRestart -and $fancyZonesProcess) {
+		$readyCacheAge = ([datetime]::Now - $script:FancyZonesReadyCache.VerifiedAt).TotalSeconds
+		if ($readyCacheAge -ge 0 -and $readyCacheAge -lt $script:FancyZonesReadyCache.TtlSeconds) {
+			Write-LogDebug "  ✓ FancyZones readiness verified $([int]$readyCacheAge)s ago - using cached result" -Style Success
+			return $true
+		}
+	}
+
+	$spinner = $null
+	if (-not (Test-LogVerbose)) {
+		$spinner = Loading-Spinner -Start -Label "Starting FancyZones"
 	}
 
 	try {
@@ -168,9 +183,6 @@ function Start-FancyZones {
 			return $true
 		}
 
-		# Check if FancyZones is already running
-		$fancyZonesProcess = Get-Process -Name "PowerToys.FancyZones" -ErrorAction SilentlyContinue
-
 		if ($ForceRestart) {
 			Write-LogDebug "  ⚠ -ForceRestart specified, performing full PowerToys shutdown..." -Style Warning
 
@@ -186,12 +198,8 @@ function Start-FancyZones {
 			$fancyZonesProcess = $null
 		}
 		elseif ($fancyZonesProcess) {
-			$readyCacheAge = ([datetime]::Now - $script:FancyZonesReadyCache.VerifiedAt).TotalSeconds
-			if ($readyCacheAge -ge 0 -and $readyCacheAge -lt $script:FancyZonesReadyCache.TtlSeconds) {
-				Write-LogDebug "  ✓ FancyZones readiness verified $([int]$readyCacheAge)s ago - using cached result" -Style Success
-				return $true
-			}
-
+			# The ready-cache was already consulted above (before the spinner) - reaching
+			# here means it was cold or stale, so run the full readiness pass.
 			if (& $testFancyZonesReady) {
 				Write-LogDebug "  ✓ FancyZones is already running and ready (PID => $($fancyZonesProcess.Id))" -Style Success
 				$script:FancyZonesReadyCache.VerifiedAt = [datetime]::Now

@@ -8,6 +8,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.14] - 2026-07-26
+
+### Added
+
+- `Apply-FancyZones -Force` (Window module): skips the applied-layouts idempotency read and re-sends every layout shortcut. That state records what FancyZones was last TOLD to apply, not what its live zone grid actually is, so recovery paths cannot trust it - and without a way to bypass it, a re-apply aimed at repairing a stale grid reports "Already Applied" for every monitor and sends nothing.
+
+### Fixed
+
+- `Set-WorkspaceWindowLayout` (Window module) retries could not recover from a broken FancyZones, which is the failure they exist for. A window that will not land in its zone almost never means the window is stubborn - it means the zone grid the snap targeted was wrong: FancyZones down, crash-looping, or holding a stale in-memory grid. The retry only re-ran position -> snap -> verify against that same grid, so all three passes failed identically and the run escalated to a terminal respawn that could not fix it either. Two defects compounded: the retry's FancyZones check was a bare `Start-FancyZones`, which caches a successful readiness pass for 10 s - so back-to-back retries got a cached `$true` and did literally nothing, and even a real pass only proves the PROCESS is healthy, never that the workspace's zone grid is applied; and the window-only rerun's `Apply-FancyZones` was idempotent, so the applied-layouts state (still claiming the correct layout) skipped every monitor and the fresh shell snapped into the very same broken grid. Every retry now force-restarts PowerToys/FancyZones and re-sends the zone layouts with `Apply-FancyZones -Force`, and the window-only rerun forces its re-apply too. Covered by a reproduction harness in the Pester suite that models FancyZones liveness and live-grid state separately: both a stale grid hidden behind idempotency and a FancyZones that dies mid-pass now converge on the first in-process retry instead of escalating.
+- `Confirm-WorkspaceWindowPositions` (Window module) named the wrong thing in its failure report. The label came from the LAYOUT ENTRY, whose `ProcessName` is a token-expanded regex for browser entries - so a mispositioned window was reported as `[(firefox|chrome|msedge|brave)]`, which names no window and reads identically for every browser entry in the layout. Failures now carry the matched window's real caption in `WindowTitle` (matching how snap failures already report), with the layout entry's own label preserved under the new `LayoutEntry` field. Failure objects also carry `ProcessName` now, which the workspace escalation path already read and always found empty.
+- `Start-FancyZones` (Application module) announced work it did not do. The loading spinner was created before the readiness cache was consulted, so every cached no-op still printed a "Starting FancyZones" line - three in a row after a single retry reset (the reset's restart, then `Apply-FancyZones` and `Snap-AllWindows` each re-checking readiness). The cache is now resolved first and a cached call is silent.
+
 ## [0.1.13] - 2026-07-25
 
 ### Added
@@ -224,7 +236,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.13...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.14...HEAD
+[0.1.14]: https://github.com/IvanPavlak/WinuX/compare/v0.1.13...v0.1.14
 [0.1.13]: https://github.com/IvanPavlak/WinuX/compare/v0.1.12...v0.1.13
 [0.1.12]: https://github.com/IvanPavlak/WinuX/compare/v0.1.11...v0.1.12
 [0.1.11]: https://github.com/IvanPavlak/WinuX/compare/v0.1.10...v0.1.11

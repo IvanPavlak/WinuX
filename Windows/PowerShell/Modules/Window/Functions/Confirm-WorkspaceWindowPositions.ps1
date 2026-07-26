@@ -61,6 +61,13 @@ function Confirm-WorkspaceWindowPositions {
 			Passed   [int]    - Number of entries that passed
 			Failures [array]  - List of PSCustomObjects describing each failure
 
+		Each failure carries WindowTitle, LayoutEntry, ProcessName, Handle, Expected, Actual
+		and the per-dimension deltas. WindowTitle is the matched window's real caption, so
+		callers can name the window a user would recognize; it falls back to the layout entry
+		label only when no window matched at all. LayoutEntry always holds that label
+		("ProcessName - WindowTitle" as configured), which for token-expanded entries is a
+		regex such as "(firefox|chrome|msedge|brave)" and identifies no single window.
+
 	.EXAMPLE
 		$result = Confirm-WorkspaceWindowPositions -LayoutConfig $config.Layout `
 			-MonitorInfo $monitorInfo -MonitorConfig $config.Monitors
@@ -392,6 +399,8 @@ function Confirm-WorkspaceWindowPositions {
 			$result.Success = $false
 			$result.Failures.Add([PSCustomObject]@{
 					WindowTitle = $label
+					LayoutEntry = $label
+					ProcessName = $processName
 					Handle      = $null
 					Expected    = "($expectedX, $expectedY) ${expectedW}x${expectedH}"
 					Actual      = "Window not found"
@@ -405,6 +414,14 @@ function Confirm-WorkspaceWindowPositions {
 		$window = $windows[0]
 		if ($isDuplicate) { [void]$claimedHandles.Add($window.Handle) }
 
+		# Report the window the caller can actually recognize. $label is built from the LAYOUT
+		# ENTRY, whose ProcessName is often a token-expanded regex - a failure once surfaced as
+		# "[(firefox|chrome|msedge|brave)]", which names no window and repeats across every
+		# browser entry. Once a live window is matched, its caption identifies it exactly (and
+		# matches how snap failures are already reported). $label remains the fallback for the
+		# not-found case, where the pattern is genuinely all that is known.
+		$failureLabel = if (-not [string]::IsNullOrWhiteSpace($window.Title)) { $window.Title } else { $label }
+
 		# ------------------------------------------------------------------
 		# 3. Read actual position via native API
 		# ------------------------------------------------------------------
@@ -412,13 +429,15 @@ function Confirm-WorkspaceWindowPositions {
 		if (-not [WindowModule.Native]::GetWindowRect($window.Handle, [ref]$rect)) {
 			$result.Success = $false
 			$result.Failures.Add([PSCustomObject]@{
-					WindowTitle = $label
+					WindowTitle = $failureLabel
+					LayoutEntry = $label
+					ProcessName = $processName
 					Handle      = $window.Handle
 					Expected    = "($expectedX, $expectedY) ${expectedW}x${expectedH}"
 					Actual      = "Handle invalid"
 					DeltaX = $null; DeltaY = $null; DeltaW = $null; DeltaH = $null
 				})
-			Write-LogDebug "  ✗ [$label] - window handle no longer valid" -Style Error
+			Write-LogDebug "  ✗ [$failureLabel] - window handle no longer valid" -Style Error
 			continue
 		}
 
@@ -447,7 +466,9 @@ function Confirm-WorkspaceWindowPositions {
 		else {
 			$result.Success = $false
 			$result.Failures.Add([PSCustomObject]@{
-					WindowTitle = $label
+					WindowTitle = $failureLabel
+					LayoutEntry = $label
+					ProcessName = $processName
 					Handle      = $window.Handle
 					Expected    = "($expectedX, $expectedY) ${expectedW}x${expectedH}"
 					Actual      = "($actualX, $actualY) ${actualW}x${actualH}"
@@ -455,7 +476,7 @@ function Confirm-WorkspaceWindowPositions {
 				})
 
 			if (Test-LogVerbose) {
-				Write-LogDebug "[$label]" -Style Error
+				Write-LogDebug "[$failureLabel]" -Style Error
 				Write-LogDebug "Expected => ($expectedX, $expectedY) ${expectedW}x${expectedH}" -Style Success
 				Write-LogDebug "Actual   => ($actualX, $actualY) ${actualW}x${actualH}" -Style Error
 				$dims = @()

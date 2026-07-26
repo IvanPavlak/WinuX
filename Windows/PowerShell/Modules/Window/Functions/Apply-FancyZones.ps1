@@ -30,12 +30,24 @@ function Apply-FancyZones {
 		Caps how many desktops are processed (from the offset), preventing overwrite of
 		adjacent workspaces' layouts. Default is 0.
 
+	.PARAMETER Force
+		Bypasses the applied-layouts idempotency check and re-sends the layout shortcut for
+		every monitor/desktop. Use it whenever the on-disk applied-layouts state cannot be
+		trusted to describe the LIVE zone grid: FancyZones was just restarted, or it is
+		holding a stale grid while applied-layouts.json still claims the correct layout.
+		That is exactly the case where a plain (idempotent) call reports "Already Applied"
+		for every monitor and changes nothing.
+
 	.EXAMPLE
 		$config = Import-PowerShellDataFile -Path "WinuX-workspace-layout.psd1"
 		Apply-FancyZones -MonitorConfig $config.Monitors
 
 	.EXAMPLE
 		Apply-FancyZones -MonitorConfig $config.Monitors -DesktopNumber 2
+
+	.EXAMPLE
+		Apply-FancyZones -MonitorConfig $config.Monitors -Force
+		# Re-sends every layout shortcut, ignoring the applied-layouts state
 
 	.NOTES
 		Prerequisites:
@@ -58,7 +70,10 @@ function Apply-FancyZones {
 		[int]$DesktopOffset = 0,
 
 		[Parameter(Mandatory = $false)]
-		[int]$DesktopCount = 0
+		[int]$DesktopCount = 0,
+
+		[Parameter(Mandatory = $false)]
+		[switch]$Force
 	)
 
 	# Use cached VirtualDesktop module loader
@@ -140,7 +155,16 @@ function Apply-FancyZones {
 	$displayToInstanceMap = @{}
 
 	try {
-		$appliedState = Get-AppliedFancyZonesState
+		# -Force skips the applied-layouts read entirely. Idempotency is driven by
+		# applied-layouts.json, which is precisely the thing that lies when FancyZones'
+		# LIVE zone grid is stale - reading it would mark every monitor "Already Applied"
+		# and turn this whole call into a no-op. A null $appliedState makes both the
+		# per-desktop pre-check and the per-monitor check fall through to a re-send.
+		$appliedState = if ($Force) { $null } else { Get-AppliedFancyZonesState }
+
+		if ($Force -and (Test-LogVerbose)) {
+			Write-LogDebug "Force specified - bypassing applied-layouts idempotency (re-sending every layout shortcut)" -Style Warning
+		}
 
 		if ($appliedState) {
 			# Build layout name → UUID lookup from custom-layouts.json

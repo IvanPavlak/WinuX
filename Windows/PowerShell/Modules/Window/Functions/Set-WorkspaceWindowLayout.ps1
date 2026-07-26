@@ -16,11 +16,19 @@ function Set-WorkspaceWindowLayout {
 		On snap failure or final layout verification failure, the position -> snap -> verify
 		pipeline is retried IN-PROCESS up to two times first (refreshing the existing-window
 		snapshot so already-correct windows are skipped, and verifying against the FULL
-		layout config so windows an aborted snap pass never reached are covered). Only when
-		the in-process retries are exhausted does it escalate to a workspace rerun in a
-		fresh shell (window-only retry mode) that:
+		layout config so windows an aborted snap pass never reached are covered).
+
+		Every retry begins by resetting FancyZones, because a window that will not land in
+		its zone usually means the zone grid itself is wrong rather than the window being
+		stubborn: PowerToys/FancyZones is force-restarted, and the workspace's zone layouts
+		are re-applied with Apply-FancyZones -Force so the re-send is not skipped by the
+		applied-layouts idempotency check (that state claims the layout is applied even when
+		the live grid is stale, which is the condition being recovered from).
+
+		Only when the in-process retries are exhausted does it escalate to a workspace rerun
+		in a fresh shell (window-only retry mode) that:
 		- Preserves already configured virtual desktops
-		- Re-applies FancyZones monitor layouts
+		- Force-re-applies FancyZones monitor layouts (same reason as above)
 		- Re-applies the full layout config (idempotent skips keep it cheap)
 		This avoids disturbing windows/layouts that were already configured correctly.
 
@@ -158,6 +166,11 @@ function Set-WorkspaceWindowLayout {
 	$windowOnlyRetryActive = (& $readRerunState $windowOnlyRetryEnvVar) -eq '1'
 	$windowOnlyRetryTitle = & $readRerunState $windowOnlyRetryTitleEnvVar
 	$windowOnlyRetryProcess = & $readRerunState $windowOnlyRetryProcessEnvVar
+	# Restart-only on purpose: this runs microseconds before the process is replaced by the
+	# respawned shell, and that shell force-re-applies the zone layouts as its first FancyZones
+	# action (see the -Force:$windowOnlyRetryActive apply below). Re-applying here as well would
+	# pay for a second desktop-switching layout pass that the respawn immediately redoes. The
+	# in-process retries do both halves themselves - see $resetFancyZonesState.
 	$ensureFancyZonesBeforeRerun = {
 		try {
 			$null = Start-FancyZones -ForceRestart -ErrorAction Stop
@@ -500,12 +513,19 @@ function Set-WorkspaceWindowLayout {
 
 		if ($config.Monitors) {
 			if ($windowOnlyRetryActive -and (Test-LogVerbose)) {
-				Write-LogDebug "Window-only retry active - reapplying FancyZones monitor layout"
+				Write-LogDebug "Window-only retry active - force-reapplying FancyZones monitor layout"
 			}
 
 			# Always reapply per-desktop FancyZones (including reruns) so snapped zones are refreshed
 			# while still preserving any already-created virtual desktops.
-			$null = Apply-FancyZones -MonitorConfig $config.Monitors -MonitorInfo $cachedMonitorInfo -DesktopOffset $DesktopOffset -DesktopCount $requiredVirtualDesktops
+			#
+			# A window-only rerun exists only because the previous run could not get windows into
+			# their zones, and the usual cause is a wrong LIVE zone grid. Reapplying idempotently
+			# there is worse than useless: the check reads applied-layouts.json, which still claims
+			# the correct layout, so every monitor is skipped and the rerun snaps into the very same
+			# broken grid. -Force re-sends the shortcuts unconditionally on that path.
+			$null = Apply-FancyZones -MonitorConfig $config.Monitors -MonitorInfo $cachedMonitorInfo `
+				-DesktopOffset $DesktopOffset -DesktopCount $requiredVirtualDesktops -Force:$windowOnlyRetryActive
 		}
 		elseif ($windowOnlyRetryActive -and (Test-LogVerbose)) {
 			Write-LogDebug "Window-only retry active - no monitor config found to reapply FancyZones" -Style Warning
@@ -869,17 +889,60 @@ function Set-WorkspaceWindowLayout {
 		$verificationResult = $null
 		$snapFailures = @()
 		$results = $null
+		$retryTrigger = $null
+
+		# Recovery action run before EVERY retry. A snap/verification failure almost never
+		# means "the window refused to move" - it means the zone grid the snap targeted was
+		# wrong: FancyZones dead, crash-looping, or holding a stale in-memory grid. Re-running
+		# position -> snap -> verify against that same grid can never succeed, which is why
+		# the liveness-only check this replaces recovered nothing:
+		#   - a bare Start-FancyZones caches a successful readiness pass for 10s, so
+		#     back-to-back retries got a cached $true and did literally nothing, and
+		#   - even a real pass only proves the PROCESS is healthy, never that the workspace's
+		#     zone grid is applied.
+		# -ForceRestart invalidates that cache and rebuilds the process; the re-apply then has
+		# to be forced too, because a restarted FancyZones reloads applied-layouts.json without
+		# re-asserting the live grid, and that same JSON is what the idempotency check reads -
+		# so an unforced re-apply reports "Already Applied" everywhere and sends nothing.
+		#
+		# This costs a PowerToys restart plus a desktop-switching layout pass per retry. That is
+		# deliberate: the alternative it exists to prevent is a 15-45s terminal respawn.
+		$resetFancyZonesState = {
+			param([string]$Reason)
+
+			Write-LogWarning "   Resetting FancyZones ($Reason)..." -NoLeadingNewline
+
+			try {
+				$null = Start-FancyZones -ForceRestart -MaxWaitSeconds 20 -ErrorAction Stop
+			}
+			catch {
+				Write-LogWarning "   Failed to force-restart FancyZones: $($_.Exception.Message)" -NoLeadingNewline
+			}
+
+			if (-not $config.Monitors) {
+				Write-LogWarning "   No monitor configuration - zone grids could not be re-applied" -NoLeadingNewline
+				return
+			}
+
+			try {
+				$null = Apply-FancyZones -MonitorConfig $config.Monitors -MonitorInfo $cachedMonitorInfo `
+					-DesktopOffset $DesktopOffset -DesktopCount $requiredVirtualDesktops -Force
+			}
+			catch {
+				Write-LogWarning "   Failed to re-apply FancyZones zone layouts: $($_.Exception.Message)" -NoLeadingNewline
+			}
+		}
 
 		for ($layoutAttempt = 1; $layoutAttempt -le $maxInProcessAttempts; $layoutAttempt++) {
 			if ($layoutAttempt -gt 1) {
 				Write-LogWarning "In-process window retry (attempt $($layoutAttempt - 1)/$($maxInProcessAttempts - 1))..."
 
-				# Synthesized input from the failed pass may have stranded a modifier, and
-				# FancyZones may have died mid-pass (cheap check - readiness is cached).
+				# Synthesized input from the failed pass may have stranded a modifier.
 				if (Get-Command Reset-KeyboardModifiers -ErrorAction SilentlyContinue) {
 					$null = Reset-KeyboardModifiers -IncludeMouseButton
 				}
-				$null = Start-FancyZones
+
+				[void](& $resetFancyZonesState $(if ($retryTrigger) { $retryTrigger } else { 'layout not applied' }))
 
 				# Refresh the existing-handles snapshot so windows that are ALREADY correct are
 				# skipped by Set-WindowLayouts' position check and only wrong windows get redone.
@@ -937,6 +1000,7 @@ function Set-WorkspaceWindowLayout {
 			}
 
 			if ($snapFailures.Count -gt 0) {
+				$retryTrigger = "snap failed for $($snapFailures.Count) window(s)"
 				Write-LogWarning "Snap-AllWindows failed after retry logic - $($snapFailures.Count) window(s) did not snap:"
 
 				foreach ($failure in $snapFailures) {
@@ -979,6 +1043,7 @@ function Set-WorkspaceWindowLayout {
 
 			$failCount = $verificationResult.Failures.Count
 			$totalCount = $verificationResult.Total
+			$retryTrigger = "verification failed for $failCount/$totalCount window(s)"
 			Write-LogWarning "Layout verification failed - $failCount/$totalCount window(s) mispositioned:"
 
 			foreach ($failure in $verificationResult.Failures) {

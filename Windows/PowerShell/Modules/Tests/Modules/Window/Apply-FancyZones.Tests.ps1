@@ -110,6 +110,53 @@ Describe "Apply-FancyZones" {
 		Should -Invoke Write-Warning -Times 1 -Exactly -ParameterFilter { $Message -like "*Layout 'MissingLayout' not found in configuration*" }
 	}
 
+	It "skips the applied-layouts idempotency read entirely when -Force is specified" {
+		# The applied-layouts state is read once up front and drives both the per-desktop
+		# pre-check and the per-monitor skip. -Force must not read it at all: that file
+		# records what FancyZones was LAST told to apply, not what its live zone grid
+		# actually is, so a stale record would suppress the very re-send -Force exists for.
+		#
+		# The monitor deliberately matches no physical monitor, so the loop bails at
+		# "Monitor Not Found" before the layout hotkey would be injected - this test must
+		# never fire a real Win+Ctrl+Alt+N at the machine running the suite.
+		$monitorConfig = @{
+			Primary = @{
+				X                     = 0; Y = 0; Width = 3440; Height = 1440
+				VirtualDesktopLayouts = @{
+					1 = 'One'
+				}
+			}
+		}
+
+		$appliedKey = 'TESTMON1:{11111111-1111-1111-1111-111111111111}'
+		Mock Get-AppliedFancyZonesState {
+			@{ $appliedKey = '{11111111-1111-1111-1111-111111111111}' }
+		}
+
+		$results = @(Apply-FancyZones -MonitorConfig $monitorConfig -DesktopNumber 1 -Force)
+
+		Should -Invoke Get-AppliedFancyZonesState -Times 0 -Exactly
+		Should -Invoke Get-CachedFancyZonesLayouts -Times 0 -Exactly
+		@($results | Where-Object { $_.Status -eq 'Already Applied' }).Count | Should -Be 0
+	}
+
+	It "reads the applied-layouts state without -Force (idempotency remains the default)" {
+		$monitorConfig = @{
+			Primary = @{
+				X                     = 0; Y = 0; Width = 3440; Height = 1440
+				VirtualDesktopLayouts = @{
+					1 = 'One'
+				}
+			}
+		}
+
+		Mock Get-AppliedFancyZonesState { @{} }
+
+		$null = Apply-FancyZones -MonitorConfig $monitorConfig -DesktopNumber 1
+
+		Should -Invoke Get-AppliedFancyZonesState -Times 1 -Exactly
+	}
+
 	It "returns the per-monitor outcome records produced inside the apply scriptblock (scope regression)" {
 		$monitorConfig = @{
 			Primary = @{
