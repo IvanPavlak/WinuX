@@ -39,6 +39,9 @@ function Open-Terminal {
 	.PARAMETER TabTitles
 		Array of custom titles for each tab. Should match the number of commands.
 		Tab titles help identify and organize multiple project tabs.
+		Tabs left without a title are named after the shell ("PowerShell"), exactly like a tab
+		opened by hand from the default profile, instead of the pwsh.exe command line Windows
+		Terminal would otherwise fall back to.
 
 	.EXAMPLE
 		Open-Terminal
@@ -75,6 +78,13 @@ function Open-Terminal {
 
 	try {
 		$PwshPath = Join-Path -Path $PSHOME -ChildPath "pwsh.exe"
+
+		# Handed to every tab that has no entry in -TabTitles. Windows Terminal names such a
+		# tab after the command line it was given ("C:\Program Files\PowerShell\7\pwsh.exe")
+		# and passes that same string to the shell as its console title. Since every tab below
+		# runs $PwshPath, name it after the shell instead - what a tab opened by hand from the
+		# default profile shows.
+		$defaultTabTitle = "PowerShell"
 
 		if ($Command.Count -gt 0) {
 			# InSameShell prefers the exact window ID when the calling shell knows it
@@ -133,6 +143,14 @@ function Open-Terminal {
 					$tabArgs.Add("--title")
 					$tabArgs.Add($TabTitles[$i])
 					$tabArgs.Add("--suppressApplicationTitle")
+				}
+				else {
+					# Only a STARTING title - deliberately without --suppressApplicationTitle, so
+					# the shell can still retitle its own tab. Open-Workspace's -Alongside window
+					# probe and Terminate-WindowsTerminalTabs' tab marker both identify their own
+					# window by writing $Host.UI.RawUI.WindowTitle and reading it back.
+					$tabArgs.Add("--title")
+					$tabArgs.Add($defaultTabTitle)
 				}
 
 				# -NoProfileLoadTime: never show the "Loading personal and system profiles took
