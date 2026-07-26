@@ -37,6 +37,7 @@
 		'Initialize-Directory',
 		'Invoke-GoogleTranslate',
 		'Invoke-PrivacyRequest',
+		'Invoke-RerunLastCommandExit',
 		'Invoke-TorRequest',
 		'Invoke-WithRetry',
 		'Invoke-WithOptionalRetry',

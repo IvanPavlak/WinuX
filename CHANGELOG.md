@@ -8,6 +8,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.16] - 2026-07-26
+
+### Added
+
+- `Invoke-RerunLastCommandExit` (Helper module): the scriptable process-exit seam for `Rerun-LastCommand`, mirroring `Invoke-TerminateWindowsTerminalTabsExit`. It runs `$script:RerunLastCommandExitAction` when a test seam is configured and otherwise calls `[Environment]::Exit(0)`. This is what makes the close-and-respawn tail of the rerun testable at all: without a seam, exercising that path terminates the Pester session.
+
+### Fixed
+
+- `Rerun-LastCommand` (Helper module) stranded Ctrl and Shift for the rest of the desktop session, deterministically, every time it ran. It closed the original window with a synthesized `Ctrl+Shift+W` - and that window hosts the very process doing the injecting, so Windows Terminal tore the process down INSIDE `SendWait`, before the Ctrl and Shift key-ups were injected. Both modifiers then stayed logically held: the fresh shell typed uppercase and PSReadLine read Enter as `Shift+Enter` so commands stopped submitting, and only locking and unlocking the session recovered it. This is the concrete cause behind the "terminal input locks up during workspace orchestration" known issue - not an orchestration race, and the one shape the existing self-heal architecture could never cover, because nothing runs after a process closes its own host window: the `Reset-KeyboardModifiers` call in this function sits BEFORE the injection, and no `finally` executes. The window is now closed by posting `WM_CLOSE` straight to its handle, which needs no focus and synthesizes no input - the pattern `Close-Project` and `Close-BrowserWindows` already use - so the `SetForegroundWindow` + 250 ms sleep dance is gone too, along with the risk of the hotkey landing on the wrong window if focus were stolen mid-flow. Independently of that root cause, the modifier heal now also runs as the last act before the process exits, so anything stranded by `Terminate-WindowsTerminalTabs`' legacy `Ctrl+Tab` / `Ctrl+C` / `Ctrl+W` fallback is released as well; nothing healed after those passes before. Reproduced 2 times out of 2 with a harness whose injecting shell was hosted by the window being closed (a variant where it was not did NOT reproduce, which is what pins the mechanism), and verified clean under the same harness with `WM_CLOSE`. One behavioral difference remains: when a tab survived `Terminate-WindowsTerminalTabs`, closing the window may now raise Windows Terminal's own close-all-tabs confirmation, which its `confirmCloseAllTabs` setting governs.
+
 ## [0.1.15] - 2026-07-26
 
 ### Fixed
@@ -242,7 +252,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.15...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.16...HEAD
+[0.1.16]: https://github.com/IvanPavlak/WinuX/compare/v0.1.15...v0.1.16
 [0.1.15]: https://github.com/IvanPavlak/WinuX/compare/v0.1.14...v0.1.15
 [0.1.14]: https://github.com/IvanPavlak/WinuX/compare/v0.1.13...v0.1.14
 [0.1.13]: https://github.com/IvanPavlak/WinuX/compare/v0.1.12...v0.1.13
