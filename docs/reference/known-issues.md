@@ -12,11 +12,22 @@ can leave a modifier key logically stuck for the session. A logically held **Shi
 produces both symptoms: letters arrive uppercase, and Enter stops submitting because PSReadLine
 reads it as `Shift+Enter` (insert line).
 
-The engine now self-heals this state:
-[`Reset-KeyboardModifiers`](../modules/window.md#reset-keyboardmodifiers) releases the stuck
-keys, and orchestration calls it automatically at the snapping, retry, rerun, and
-flow-completion checkpoints. The shift-drag snap also guarantees its Shift/mouse release on
-every managed exit path, so the stuck state should no longer occur in the first place.
+**The reproducible form of this had one concrete cause, now fixed.**
+[`Rerun-LastCommand`](../modules/helper.md#rerun-lastcommand) - the recovery path the workspace
+engine escalates to, and the one that opens the fresh shell you type into afterwards - closed the
+original terminal window with a synthesized `Ctrl+Shift+W`. That shortcut closes the very window
+hosting the shell doing the injecting, so Windows Terminal tore the process down mid-injection,
+before the Ctrl and Shift key-ups were ever sent. Both modifiers stayed logically held for the
+rest of the desktop session, and no self-heal could catch it: nothing runs after a process closes
+its own host window. It is now closed by posting `WM_CLOSE` to the window handle, which needs no
+focus and synthesizes no input, so a rerun can no longer strand a modifier.
+
+A stuck modifier from a genuinely interrupted sequence (a shell closed mid-snap, a killed process,
+a blocked injection) remains possible, and the engine self-heals it:
+[`Reset-KeyboardModifiers`](../modules/window.md#reset-keyboardmodifiers) releases the stuck keys,
+and orchestration calls it automatically at the snapping, retry, rerun, and flow-completion
+checkpoints, plus as the last act before a rerun exits the process. The shift-drag snap also
+guarantees its Shift/mouse release on every managed exit path.
 
 **Workaround (if it still happens):**
 

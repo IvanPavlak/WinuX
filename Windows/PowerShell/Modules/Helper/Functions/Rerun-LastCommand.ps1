@@ -8,6 +8,12 @@ function ReRun-LastCommand {
 		allows you to select from recent command history and rerun it in a fresh non-admin shell.
 		This resolves issues that require a clean shell environment.
 
+		Once the fresh shell is up, the original window is closed by posting `WM_CLOSE` to its
+		handle: that needs no focus and synthesizes no input. The previous Ctrl+Shift+W hotkey
+		closed the window hosting this very process, so the process was torn down mid-injection,
+		before the Ctrl/Shift key-ups were sent - both modifiers then stayed logically held for
+		the rest of the desktop session (uppercase typing, Enter read as Shift+Enter).
+
 	.PARAMETER NumberOfLastTriggeringCommands
 		Number of recent commands to display for selection. Default is 5.
 
@@ -127,14 +133,17 @@ function ReRun-LastCommand {
 	Write-LogSuccess "Opening new shell with command..."
 
 	# Heal any modifier left logically stuck by the failed run BEFORE driving the
-	# terminal with more synthesized input below (tab cycling via Ctrl+Tab/Ctrl+W,
-	# window close via Ctrl+Shift+W) - a held Shift/Win would corrupt those combos -
-	# and so the fresh shell takes over a session with clean keyboard state.
+	# terminal with more synthesized input below (Terminate-WindowsTerminalTabs' legacy
+	# pass cycles tabs with Ctrl+Tab and closes them with Ctrl+C/Ctrl+W) - a held
+	# Shift/Win would corrupt those combos - and so the fresh shell takes over a session
+	# with clean keyboard state.
 	if (Get-Command Reset-KeyboardModifiers -ErrorAction SilentlyContinue) {
 		$null = Reset-KeyboardModifiers -IncludeMouseButton
 	}
 
-	# Add Win32 API for window focusing
+	# Add Win32 API for closing the original window. Deliberately exposes no focus API:
+	# WM_CLOSE is posted straight to the window handle, so nothing here needs the window
+	# to be foreground and nothing synthesizes input (see the close call below).
 	if (-not ([System.Management.Automation.PSTypeName]'RerunWindowHelper').Type) {
 		Add-Type @"
 			using System;
@@ -142,12 +151,12 @@ function ReRun-LastCommand {
 
 			public class RerunWindowHelper {
 				[DllImport("user32.dll")]
-				public static extern bool SetForegroundWindow(IntPtr hWnd);
+				public static extern bool PostMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
+
+				public const uint WM_CLOSE = 0x0010;
 			}
 "@
 	}
-
-	Add-Type -AssemblyName System.Windows.Forms
 
 	$wtProcess = Get-Process -Name "WindowsTerminal" -ErrorAction SilentlyContinue
 	if ($wtProcess) {
@@ -176,12 +185,24 @@ function ReRun-LastCommand {
 	# This timing is important
 	Start-Sleep -Milliseconds 500
 
-	# Focus back on the original window and close it
+	# Close the original window deterministically: WM_CLOSE needs no focus and synthesizes no
+	# input. The old path focused this window and injected Ctrl+Shift+W - which closes the very
+	# window hosting THIS process, so Windows Terminal tore the process down inside SendWait,
+	# before the Ctrl/Shift key-ups were injected. Both modifiers then stayed logically held for
+	# the rest of the desktop session: the fresh shell typed uppercase and PSReadLine read Enter
+	# as Shift+Enter, so commands stopped submitting. Nothing could self-heal it either, because
+	# there is no "after" - the process was already gone.
 	if ($originalWindowHandle) {
-		[RerunWindowHelper]::SetForegroundWindow($originalWindowHandle) | Out-Null
-		Start-Sleep -Milliseconds 250
-		[System.Windows.Forms.SendKeys]::SendWait("^+w")
+		Write-LogDebug " Closing the original terminal window via WM_CLOSE => [$originalWindowHandle]" -Style Step
+		[RerunWindowHelper]::PostMessage($originalWindowHandle, [RerunWindowHelper]::WM_CLOSE, [IntPtr]::Zero, [IntPtr]::Zero) | Out-Null
 	}
 
-	[Environment]::Exit(0)
+	# [Environment]::Exit skips every finally block, so this is the last chance to release
+	# anything the tab-close passes above may have stranded (the legacy pass sends Ctrl+Tab /
+	# Ctrl+C / Ctrl+W). Same seam as Invoke-TerminateWindowsTerminalTabsExit.
+	if (Get-Command Reset-KeyboardModifiers -ErrorAction SilentlyContinue) {
+		$null = Reset-KeyboardModifiers
+	}
+
+	Invoke-RerunLastCommandExit
 }
