@@ -846,41 +846,67 @@ Set-LogLevel Verbose { Set-SystemTheme -Auto }
 
 **See also:** [Set-Wallpaper](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Set-Wallpaper.ps1)
 
-## [Set-TaskbarAutoHide](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Set-TaskbarAutoHide.ps1)
+## [Set-TaskbarSettings](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Set-TaskbarSettings.ps1)
 
-- **Description:** Enables or disables taskbar auto-hide for the current user via `SHAppBarMessage` (`ABM_SETSTATE`) - the same mechanism the Taskbar settings page uses. The change applies to the live Explorer session immediately and Explorer persists it on exit, so it survives reboots. With `-Auto` it reads the `TaskbarAutoHide` boolean from the configuration; when the key is absent or `$false` the function changes nothing, keeping the vanilla default untouched. Idempotent - returns early when the taskbar is already in the desired state.
-- **Parameters:** -Auto, -Enabled [$true | $false]
-- **Usage:** `Set-TaskbarAutoHide -Auto`, `Set-TaskbarAutoHide -Enabled $true`, `Set-TaskbarAutoHide -Enabled $false`
+- **Description:** Applies the Settings > Personalisation > Taskbar page from the `TaskbarSettings` section in the configuration - the programmatic equivalent of walking that page top to bottom. Every key mirrors one control one-to-one: checkbox and toggle controls take `$true` (on) or `$false` (off), dropdown controls take one of the named tokens listed for them (case insensitive, PascalCase of the dropdown label). Keys left out of the configuration are not touched, and when the section is absent or empty the function changes nothing - the vanilla default. Every control is a per-user `HKCU` registry value - mostly DWords, whose keys are created when missing, plus "Automatically hide the taskbar", which is one bit inside Explorer's `StuckRects3` binary blob and is rewritten in place - and `Restart-Explorer` runs once when at least one value was actually written. Idempotent - returns early when every configured control already matches; when changes are applied, each managed control is reported on its own row (green = toggle on, red = toggle off, white = the selected dropdown token, yellow `[skipped]` = already at the configured value). Unknown keys, non-boolean values on a toggle, and unrecognised dropdown tokens are each skipped with a warning naming the key. Takes no parameters - all settings come from the configuration.
+- **Usage:** `Set-TaskbarSettings`
 
-Called during Bootstrap (after `Configure-Taskbar`) with `-Auto`, making taskbar auto-hide an opt-in provisioning step: the base configuration ships `TaskbarAutoHide = $false` (taskbar untouched) and a fork opts in via `Configuration.local.psd1`. This is purely cosmetic/UX parity - FancyZones zone geometry is computed from the monitor work area, so window snapping is correct whether the taskbar is visible or auto-hidden.
+Called during Bootstrap (after `Configure-Taskbar`), making the taskbar page an opt-in provisioning step: the base configuration ships the `TaskbarSettings` section fully commented, so a vanilla bootstrap leaves the page alone. `Configure-Taskbar` owns a different surface entirely - which apps are *pinned* to the taskbar - and the two do not overlap.
 
-| Parameter  | Type     | Description                                                                                                |
-| ---------- | -------- | ----------------------------------------------------------------------------------------------------------- |
-| `-Auto`    | `switch` | Resolves the desired state from the `TaskbarAutoHide` configuration key. Absent or `$false` means "leave the taskbar alone". |
-| `-Enabled` | `bool`   | Explicitly enable (`$true`) or disable (`$false`) taskbar auto-hide.                                       |
+The commented lines are not placeholders. They are the taskbar WinuX recommends and its author runs on every machine - search hidden, task view off, buttons combined, the bar auto-hidden - so the window layouts do the work instead of the shell chrome. Uncomment the lot to get exactly that, cherry-pick individual controls, or override the section in `Configuration.local.psd1`.
+
+Because most of these controls have no registry value until you change them in the Settings app, a missing value counts as a mismatch and is written explicitly. The first run on a machine therefore writes the implicit defaults too, making the state deterministic rather than "whatever this Windows build ships"; every run after that is a no-op. `AutomaticallyHideTheTaskbar` is the exception: Explorer owns the surrounding bytes of `StuckRects3`, which cannot be synthesized, so an unreadable value skips that control with a warning instead of fabricating a blob.
+
+### Controls
+
+`Advanced` below is `HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced`. Note that the same token maps to a different number per control (`WhenTaskbarIsFull` is `1` for the combine dropdowns but `2` for the button-size dropdown), which is why each control carries its own map.
+
+| Config key | Control on the page | Accepted values | Mechanism |
+| --- | --- | --- | --- |
+| `Search` | Search | `Hide`, `SearchIconOnly`, `SearchBox`, `SearchIconAndLabel` | `...CurrentVersion\Search\SearchboxTaskbarMode` |
+| `TaskView` | Task view | `$true` / `$false` | `Advanced\ShowTaskViewButton` |
+| `Resume` | Resume | `$true` / `$false` | `...CurrentVersion\CrossDeviceResume\Configuration\IsResumeAllowed` |
+| `EmojiAndMore` | Emoji and more | `Never`, `WhileTyping`, `Always` | `HKCU:\Software\Microsoft\TabletTip\1.7\EmojiAndMoreIconVisibilityState` |
+| `PenMenu` | Pen Menu | `$true` / `$false` | `...CurrentVersion\PenWorkspace\PenWorkspaceButtonDesiredVisibility` |
+| `TouchKeyboard` | Touch keyboard | `Never`, `Always`, `WhenNoKeyboardAttached` | `HKCU:\Software\Microsoft\TabletTip\1.7\TipbandDesiredVisibility` |
+| `TaskbarAlignment` | Taskbar alignment | `Left`, `Centre` (`Center` also accepted) | `Advanced\TaskbarAl` |
+| `AutomaticallyHideTheTaskbar` | Automatically hide the taskbar | `$true` / `$false` | `...Explorer\StuckRects3\Settings` byte 8, bit `0x01` |
+| `ShowBadgesOnTaskbarApps` | Show badges on taskbar apps | `$true` / `$false` | `Advanced\TaskbarBadges` |
+| `ShowFlashingOnTaskbarApps` | Show flashing on taskbar apps | `$true` / `$false` | `Advanced\TaskbarFlashing` |
+| `ShowTaskbarOnAllDisplays` | Show my taskbar on all displays | `$true` / `$false` | `Advanced\MMTaskbarEnabled` |
+| `TaskbarAppsOnMultipleDisplays` | When using multiple displays, show my taskbar apps on | `AllTaskbars`, `MainTaskbarAndTaskbarWhereWindowIsOpen`, `TaskbarWhereWindowIsOpen` | `Advanced\MMTaskbarMode` |
+| `ShareAnyWindowFromTaskbar` | Share any window from my taskbar | `$true` / `$false` | `Advanced\TaskbarSn` |
+| `SelectFarCornerToShowDesktop` | Select the far corner of the taskbar to show the desktop | `$true` / `$false` | `Advanced\TaskbarSd` |
+| `CombineTaskbarButtonsAndHideLabels` | Combine taskbar buttons and hide labels | `Always`, `WhenTaskbarIsFull`, `Never` | `Advanced\TaskbarGlomLevel` |
+| `CombineTaskbarButtonsAndHideLabelsOnOtherTaskbars` | Combine taskbar buttons and hide labels on other taskbars | `Always`, `WhenTaskbarIsFull`, `Never` | `Advanced\MMTaskbarGlomLevel` |
+| `ShowSmallerTaskbarButtons` | Show smaller taskbar buttons | `Always`, `Never`, `WhenTaskbarIsFull` | `Advanced\IconSizePreference` |
+
+`TaskbarAlignment` accepts both spellings because the dropdown label follows the Windows display language (`Centre` on en-GB, `Center` on en-US); both write `1`.
+
+`AutomaticallyHideTheTaskbar` is deliberately NOT applied through `SHAppBarMessage`, which is what the settings page uses. That call sets the state inside the running Explorer process, and Explorer only writes it back to `StuckRects3` on a graceful exit - so the `Restart-Explorer` this function performs for the other controls (a `Stop-Process`, not a graceful exit) would throw the change away, and the setting would need a second run to stick. Writing the bit and letting the restart pick it up is both durable and a genuine one-shot. The setting itself is purely cosmetic: FancyZones zone geometry is computed from the monitor work area, so window snapping is correct whether the taskbar is visible or auto-hidden.
+
+The `Resume`, `EmojiAndMore`, and `ShowSmallerTaskbarButtons` controls only exist on recent Windows 11 builds. Writing their values on an older build is harmless: the value is simply ignored until the build that reads it.
 
 ```powershell
-# Apply the configured preference (no-op unless TaskbarAutoHide = $true in config)
-Set-TaskbarAutoHide -Auto
-
-# Enable or disable auto-hide explicitly
-Set-TaskbarAutoHide -Enabled $true
-Set-TaskbarAutoHide -Enabled $false
+# Apply every control configured in the TaskbarSettings section
+Set-TaskbarSettings
 ```
+
+**See also:** [Set-VisualEffects](system.md#set-visualeffects), [Configure-Taskbar](system.md#configure-taskbar), [Restart-Explorer](system.md#restart-explorer)
 
 ## [Set-VisualEffects](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Set-VisualEffects.ps1)
 
 - **Description:** Applies the Performance Options "Visual Effects" settings (System Properties > Performance Options > Visual Effects tab) from the `VisualEffects` section in the configuration. Every key mirrors one dialog checkbox one-to-one (`$true` = effect on / appearance, `$false` = effect off / performance); keys left out of the configuration are not touched, and when the section is absent or empty the function changes nothing - the vanilla default. Explorer/DWM-backed effects are written to the registry; the remaining effects go through `SystemParametersInfo` (the dialog's own mechanism), which persists them to the user profile and applies them live. Sets the dialog's radio button to "Custom" (`VisualFXSetting = 3`) whenever at least one effect is managed, and runs `Restart-Explorer` only when a registry-backed effect actually changed. Idempotent - returns early when every configured effect already matches; when changes are applied, every managed effect is reported on its own colored row (green = enabled, red = disabled, yellow `[skipped]` = already at the configured value). Unknown keys are skipped with a warning. Takes no parameters - all settings come from the configuration.
 - **Usage:** `Set-VisualEffects`
 
-Called during Bootstrap (after `Set-TaskbarAutoHide`), making visual effects an opt-in provisioning step: the base configuration ships the `VisualEffects` section fully commented (no effects touched) and a fork defines its preferences in `Configuration.local.psd1`. Valid keys: `AnimateControlsAndElementsInsideWindows`, `AnimateWindowsWhenMinimisingAndMaximising`, `AnimationsInTheTaskbar`, `EnablePeek`, `FadeOrSlideMenusIntoView`, `FadeOrSlideToolTipsIntoView`, `FadeOutMenuItemsAfterClicking`, `SaveTaskbarThumbnailPreviews`, `ShowShadowsUnderMousePointer`, `ShowShadowsUnderWindows`, `ShowThumbnailsInsteadOfIcons`, `ShowTranslucentSelectionRectangle`, `ShowWindowContentsWhileDragging`, `SlideOpenComboBoxes`, `SmoothEdgesOfScreenFonts`, `SmoothScrollListBoxes`, `UseDropShadowsForIconLabelsOnTheDesktop`.
+Called during Bootstrap (after `Set-TaskbarSettings`), making visual effects an opt-in provisioning step: the base configuration ships the `VisualEffects` section fully commented (no effects touched) and a fork defines its preferences in `Configuration.local.psd1`. Valid keys: `AnimateControlsAndElementsInsideWindows`, `AnimateWindowsWhenMinimisingAndMaximising`, `AnimationsInTheTaskbar`, `EnablePeek`, `FadeOrSlideMenusIntoView`, `FadeOrSlideToolTipsIntoView`, `FadeOutMenuItemsAfterClicking`, `SaveTaskbarThumbnailPreviews`, `ShowShadowsUnderMousePointer`, `ShowShadowsUnderWindows`, `ShowThumbnailsInsteadOfIcons`, `ShowTranslucentSelectionRectangle`, `ShowWindowContentsWhileDragging`, `SlideOpenComboBoxes`, `SmoothEdgesOfScreenFonts`, `SmoothScrollListBoxes`, `UseDropShadowsForIconLabelsOnTheDesktop`.
 
 ```powershell
 # Apply all effects configured in the VisualEffects section
 Set-VisualEffects
 ```
 
-**See also:** [Set-ExplorerOptions](system.md#set-exploreroptions), [Set-TaskbarAutoHide](system.md#set-taskbarautohide)
+**See also:** [Set-ExplorerOptions](system.md#set-exploreroptions), [Set-TaskbarSettings](system.md#set-taskbarsettings)
 
 ## [Set-Wallpaper](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Set-Wallpaper.ps1)
 

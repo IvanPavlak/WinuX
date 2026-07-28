@@ -60,7 +60,7 @@ After `Install-Bootstrap` completes, the main `Bootstrap` function runs with `-W
 │  PHASE 7: TASKBAR & VISUAL CONFIGURATION                                    │
 │  ├─→ Configure-Taskbar -FromBootstrap                                       │
 │  │   └─ Pins configured apps in order                                       │
-│  ├─→ Set-TaskbarAutoHide -Auto (config-gated: TaskbarAutoHide)              │
+│  ├─→ Set-TaskbarSettings (config-gated: TaskbarSettings)                    │
 │  └─→ Set-VisualEffects (config-gated: VisualEffects)                        │
 │                                                                             │
 │  PHASE 8: WSL & SYMBOLIC LINKS                                              │

@@ -42,6 +42,7 @@
 # → NerdFonts, DefaultNerdFont          : Configure-NerdFont
 # → ExplorerOptions                     : Set-ExplorerOptions
 # → VisualEffects                       : Set-VisualEffects
+# → TaskbarSettings                     : Set-TaskbarSettings
 # → AutoEnvironmentVariables            : Set-EnvironmentVariables
 # → DotnetProjectsSearchPath            : Determine-DotnetDependencies
 # → PostgreSqlPasswords                 : Configure-PostgreSqlPasswords
@@ -743,11 +744,6 @@
 	# Machine type whose layout set a small (laptop-class) display uses; "" disables the override.
 	SmallDisplayMachineType       = ""
 
-	# Enable taskbar auto-hide during Bootstrap (Set-TaskbarAutoHide -Auto). Purely cosmetic:
-	# zone geometry is work-area based and correct with a visible taskbar too. $false leaves
-	# every machine's taskbar untouched; a fork can opt in via Configuration.local.psd1.
-	TaskbarAutoHide               = $false
-
 	# Maps machine type keys used in bootstrap/configuration
 	MachinePathMappings           = @{
 		"Test"    = "Test"
@@ -917,6 +913,52 @@
 		# SmoothEdgesOfScreenFonts                  = $true
 		# SmoothScrollListBoxes                     = $false
 		# UseDropShadowsForIconLabelsOnTheDesktop   = $false
+	}
+
+	# ==========================================================================
+	# Taskbar Settings
+	# ==========================================================================
+	# The Settings → Personalisation → Taskbar page, applied by Set-TaskbarSettings
+	# during Bootstrap. One key per control on that page, in page order: $true/$false
+	# for the toggles and checkboxes, a named token for the dropdowns (every accepted
+	# token is listed next to its key below).
+	#
+	# Keys left commented out are not touched; with everything commented (the shipped
+	# default) Bootstrap changes NOTHING - uncomment what you want, or override the
+	# section wholesale in Configuration.local.psd1.
+	#
+	# The values below are not placeholders. They are the taskbar the author runs on
+	# every machine and the one recommended for WinuX as a whole: a quiet taskbar that
+	# stays out of the way, so the window layouts and workspaces do the work instead of
+	# the shell chrome. Uncomment the lot to get exactly that, or cherry-pick and change
+	# to taste - none of it is load-bearing.
+	#
+	# Every control is an HKCU registry value that Explorer reads on startup, so one
+	# Explorer restart follows when any of them changed.
+	# ==========================================================================
+	TaskbarSettings               = @{
+		# --- Taskbar items ---
+		# Search                                            = "Hide"                    # Hide | SearchIconOnly | SearchBox | SearchIconAndLabel
+		# TaskView                                          = $false
+		# Resume                                            = $true
+
+		# --- System tray icons ---
+		# EmojiAndMore                                      = "Never"                   # Never | WhileTyping | Always
+		# PenMenu                                           = $false
+		# TouchKeyboard                                     = "WhenNoKeyboardAttached"  # Never | Always | WhenNoKeyboardAttached
+
+		# --- Taskbar behaviours ---
+		# TaskbarAlignment                                  = "Centre"                  # Left | Centre (Center also accepted)
+		# AutomaticallyHideTheTaskbar                       = $true
+		# ShowBadgesOnTaskbarApps                           = $true
+		# ShowFlashingOnTaskbarApps                         = $false
+		# ShowTaskbarOnAllDisplays                          = $false
+		# TaskbarAppsOnMultipleDisplays                     = "AllTaskbars"             # AllTaskbars | MainTaskbarAndTaskbarWhereWindowIsOpen | TaskbarWhereWindowIsOpen
+		# ShareAnyWindowFromTaskbar                         = $true
+		# SelectFarCornerToShowDesktop                      = $true
+		# CombineTaskbarButtonsAndHideLabels                = "Always"                  # Always | WhenTaskbarIsFull | Never
+		# CombineTaskbarButtonsAndHideLabelsOnOtherTaskbars = "Always"                  # Always | WhenTaskbarIsFull | Never
+		# ShowSmallerTaskbarButtons                         = "WhenTaskbarIsFull"       # Always | Never | WhenTaskbarIsFull
 	}
 
 	# ==========================================================================

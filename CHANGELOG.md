@@ -8,6 +8,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.17] - 2026-07-28
+
+### Added
+
+- `Set-TaskbarSettings` (System module): applies the whole Settings > Personalisation > Taskbar page from the new `TaskbarSettings` configuration section - one human-readable key per control on that page, in page order, with `$true`/`$false` for the checkboxes and toggles and a named PascalCase token for each dropdown (`Search = "Hide"`, `TaskbarAlignment = "Centre"`, `CombineTaskbarButtonsAndHideLabels = "WhenTaskbarIsFull"`, ...). Every control is a per-user `HKCU` registry value applied in one pass followed by a single `Restart-Explorer`, the same shape the vendored Win11Debloat uses for its own taskbar tweaks. Config-gated: the base configuration ships the section fully commented so a vanilla bootstrap changes nothing; forks opt in via `Configuration.local.psd1`. Runs during Bootstrap right after `Configure-Taskbar`, which owns a different surface entirely (which apps are *pinned*). Every managed control is reported on its own row: green = toggle on, red = toggle off, white = the selected dropdown token, yellow `[skipped]` = already at the configured value. Because most of these controls have no registry value at all until you change them in the Settings app, a missing value counts as a mismatch and is written explicitly, so the first run makes the state deterministic instead of "whatever this Windows build ships"; unknown keys, non-booleans on a toggle, and unrecognised dropdown tokens are each skipped with a warning naming the key rather than silently doing nothing.
+- `TaskbarSettings` (configuration): the per-control section consumed by `Set-TaskbarSettings`, with every accepted dropdown token listed inline next to its key. Ships fully commented, so a vanilla bootstrap still leaves the taskbar page alone - but the commented lines are not placeholders. They are the taskbar WinuX recommends and its author runs on every machine (search hidden, task view off, buttons combined, bar auto-hidden), so the window layouts do the work instead of the shell chrome. Uncomment the lot to get exactly that, or cherry-pick individual controls.
+
+### Changed
+
+- Bootstrap phase 7 runs `Set-TaskbarSettings` where it previously ran `Set-TaskbarAutoHide -Auto`. Auto-hide is now one control among the rest of the page rather than its own provisioning step.
+
+### Breaking
+
+- `Set-TaskbarAutoHide` (System module) and the top-level `TaskbarAutoHide` configuration key are **removed**, folded into `Set-TaskbarSettings` and its `TaskbarSettings` section. Auto-hide was never a separate concern - it is the "Automatically hide the taskbar" checkbox on the very page `Set-TaskbarSettings` already drove, and keeping it apart meant two functions, two config keys, and a docs note in each explaining why the other one owned that checkbox. **Migration:** replace `TaskbarAutoHide = $true` with `AutomaticallyHideTheTaskbar = $true` inside the `TaskbarSettings` hashtable, and replace any `Set-TaskbarAutoHide -Auto` / `-Enabled` call with `Set-TaskbarSettings`. The base configuration shipped `TaskbarAutoHide = $false`, so a setup that never opted in is unaffected.
+
+  The mechanism changed with it, which is what makes the setting durable. `Set-TaskbarAutoHide` used `SHAppBarMessage` (`ABM_SETSTATE`), the call the settings page makes, and its docs claimed Explorer persists the result to `StuckRects3` on exit. It does - but only on a GRACEFUL exit, and `Restart-Explorer` is a `Stop-Process`. So the moment auto-hide was applied in the same pass as any registry-backed taskbar control, the restart that pass performs discarded it: the fresh Explorer read the old bit back and the setting silently reverted, needing a second run to stick. Auto-hide is now written as what it actually is - bit `0x01` of byte 8 in `HKCU:\...\Explorer\StuckRects3\Settings`, read-modify-written so Explorer's surrounding bytes are preserved - and picked up by the same single Explorer restart as every other control. One run now applies the whole page. The trade is that a run changing ONLY auto-hide restarts Explorer where the old function did not; every other control on the page already required that restart. An unreadable `StuckRects3` skips the control with a warning rather than fabricating a blob Explorer owns.
+
 ## [0.1.16] - 2026-07-26
 
 ### Added
@@ -252,7 +269,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.16...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.17...HEAD
+[0.1.17]: https://github.com/IvanPavlak/WinuX/compare/v0.1.16...v0.1.17
 [0.1.16]: https://github.com/IvanPavlak/WinuX/compare/v0.1.15...v0.1.16
 [0.1.15]: https://github.com/IvanPavlak/WinuX/compare/v0.1.14...v0.1.15
 [0.1.14]: https://github.com/IvanPavlak/WinuX/compare/v0.1.13...v0.1.14

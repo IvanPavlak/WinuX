@@ -678,15 +678,65 @@ Settings used during the Bootstrap process.
 
 **Consumer functions:** `Bootstrap`, `Install-Bootstrap`
 
-### Taskbar Auto-Hide
+### Taskbar Settings
 
-**Key:** `TaskbarAutoHide` → Boolean; when `$true`, Bootstrap enables taskbar auto-hide for
-the current user (`Set-TaskbarAutoHide -Auto`, applied after `Configure-Taskbar`). When
-absent or `$false` the taskbar is left untouched - the vanilla default. Purely cosmetic:
-FancyZones zone geometry is computed from the monitor work area, so window snapping is
-correct with a visible taskbar too. A fork opts in via `Configuration.local.psd1`.
+**Key:** `TaskbarSettings` → Hashtable of per-control values; the programmatic equivalent of the
+Settings > Personalisation > Taskbar page. Every key mirrors one control on that page one-to-one:
+the checkboxes and toggles take `$true` / `$false`, the dropdowns take one of the named tokens
+listed below (case insensitive, PascalCase of the dropdown label). Keys left out of the
+configuration are not touched; when the section is absent or empty (the shipped default - it is
+fully commented), Bootstrap changes nothing. A fork opts in via `Configuration.local.psd1`.
 
-**Consumer function:** `Set-TaskbarAutoHide`
+The commented lines are not placeholders. They are the taskbar WinuX recommends and its author
+runs on every machine - search hidden, task view off, buttons combined, bar auto-hidden - so the
+window layouts do the work instead of the shell chrome. Uncomment the lot to get exactly that, or
+cherry-pick individual controls.
+
+Every control is a per-user `HKCU` registry value that Explorer only reads on startup, so one
+Explorer restart follows when any of them changed. Most are DWords; `AutomaticallyHideTheTaskbar`
+is one bit inside Explorer's `StuckRects3` binary blob, rewritten in place so the surrounding
+bytes are preserved.
+
+**Valid keys** (the page's controls in PascalCase, in page order):
+
+| Key | Accepted values |
+| --- | --- |
+| `Search` | `Hide`, `SearchIconOnly`, `SearchBox`, `SearchIconAndLabel` |
+| `TaskView` | `$true` / `$false` |
+| `Resume` | `$true` / `$false` |
+| `EmojiAndMore` | `Never`, `WhileTyping`, `Always` |
+| `PenMenu` | `$true` / `$false` |
+| `TouchKeyboard` | `Never`, `Always`, `WhenNoKeyboardAttached` |
+| `TaskbarAlignment` | `Left`, `Centre` (`Center` also accepted) |
+| `AutomaticallyHideTheTaskbar` | `$true` / `$false` |
+| `ShowBadgesOnTaskbarApps` | `$true` / `$false` |
+| `ShowFlashingOnTaskbarApps` | `$true` / `$false` |
+| `ShowTaskbarOnAllDisplays` | `$true` / `$false` |
+| `TaskbarAppsOnMultipleDisplays` | `AllTaskbars`, `MainTaskbarAndTaskbarWhereWindowIsOpen`, `TaskbarWhereWindowIsOpen` |
+| `ShareAnyWindowFromTaskbar` | `$true` / `$false` |
+| `SelectFarCornerToShowDesktop` | `$true` / `$false` |
+| `CombineTaskbarButtonsAndHideLabels` | `Always`, `WhenTaskbarIsFull`, `Never` |
+| `CombineTaskbarButtonsAndHideLabelsOnOtherTaskbars` | `Always`, `WhenTaskbarIsFull`, `Never` |
+| `ShowSmallerTaskbarButtons` | `Always`, `Never`, `WhenTaskbarIsFull` |
+
+**Example:**
+
+```powershell
+TaskbarSettings = @{
+    Search                             = "Hide"
+    TaskView                           = $false
+    TaskbarAlignment                   = "Centre"
+    AutomaticallyHideTheTaskbar        = $true
+    ShowBadgesOnTaskbarApps            = $true
+    CombineTaskbarButtonsAndHideLabels = "Always"
+}
+```
+
+**Consumer function:** `Set-TaskbarSettings`
+
+> [!NOTE]
+> This is the taskbar *settings page*. Which apps are **pinned** to the taskbar is a separate
+> key, `TaskbarConfiguration`, consumed by `Configure-Taskbar`.
 
 ### Visual Effects
 
