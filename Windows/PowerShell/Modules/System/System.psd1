@@ -48,7 +48,7 @@
 		'Set-PowerPlan',
 		'Set-SpecialFolders',
 		'Set-SystemTheme',
-		'Set-TaskbarAutoHide',
+		'Set-TaskbarSettings',
 		'Set-VisualEffects',
 		'Set-Wallpaper',
 		'Show-PinnedAppsWarning',

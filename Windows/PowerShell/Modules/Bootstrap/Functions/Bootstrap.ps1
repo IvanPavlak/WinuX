@@ -203,9 +203,9 @@ function Bootstrap {
 
 		Configure-Taskbar -FromBootstrap
 
-		# Config-driven (TaskbarAutoHide); no-op unless the fork opts in. FancyZones zone
-		# geometry is work-area based and correct either way - this is UX parity only.
-		Set-TaskbarAutoHide -Auto
+		# Config-driven (TaskbarSettings); no-op unless the fork opts in. Applies the
+		# Settings > Personalisation > Taskbar page, auto-hide included.
+		Set-TaskbarSettings
 
 		# Config-driven (VisualEffects); no-op unless the fork opts in. Applies the
 		# Performance Options visual-effects profile (registry + SystemParametersInfo).
