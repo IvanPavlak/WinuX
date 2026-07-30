@@ -12,6 +12,16 @@ A comprehensive PowerShell-based dotfiles system that turns a fresh Windows 11 i
 
 ---
 
+<p align="center">
+  <video src="https://github.com/user-attachments/assets/a6f6c767-dd9f-4e1f-a8a6-8803cb1fd367" width="720" controls></video>
+</p>
+
+<p align="center">
+  <em>An example workspace layout opened across two stacked ultrawide monitors</em>
+</p>
+
+___
+
 > **Today** WinuX is a terminal/keyboard-driven system built for power users. **The goal** is to make
 > it accessible to _everyone_ - a guided installer and a GUI are on the [roadmap](docs/roadmap.md) -
 > without ever taking away the deep configurability that defines it.
