@@ -8,6 +8,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.18] - 2026-07-30
+
+### Fixed
+
+- `Remove-VirtualDesktops -EmptyOnly` (System module) spent about four seconds doing roughly a hundred milliseconds of work, and the cost was a fixed tax rather than anything to do with how many desktops or windows were in play. The occupancy scan wrapped EVERY per-window `Get-DesktopFromWindow` / `Get-DesktopIndex` pair in the RPC retry ladder, so any window the desktop manager refuses to place burned all five attempts and their 250/500/1000/2000 ms backoff sleeps before being skipped - and Windows 11 always has at least one: `TextInputHost` ("Windows Input Experience") answers `TYPE_E_ELEMENTNOTFOUND` (`0x8002802B`) for its own window, forever. Retrying that is pointless by construction; the error is a property of the window, not of the RPC endpoint. The ladder now wraps the scan as a whole - window-level failures are skipped on the spot, and only a genuine RPC-unavailable error restarts the scan after `Reset-VirtualDesktopState` has reconnected the session's COM proxies. The abort-rather-than-guess behaviour is unchanged: an RPC failure that survives the ladder still returns `$false` instead of treating unknowable occupancy as "empty". Measured end to end against three empty desktops: 4098 ms before, 115 ms after; a run with nothing to clean up is now 15 ms.
+
+### Changed
+
+- `Remove-VirtualDesktops` (System module) reads desktop counts with `Get-DesktopCount` instead of `Get-DesktopList`. Only the count was ever used, but the list builds a row per desktop - a registry name lookup, a wallpaper-path query, and a current-desktop index walk, each re-enumerating every desktop over COM - which measured 8.1 ms per call at six desktops against 0.13 ms for the count. Default mode calls it once per removal, so the saving scales with the number of desktops being cleaned up. Two further reductions in `-EmptyOnly` mode: each distinct desktop's index is resolved once and reused for every other window sitting on it (`Get-DesktopIndex` re-enumerates the desktop list on each call, so this was previously paid per window), and the scan stops early once every desktop is known to hold a window. Behaviour is unchanged - same desktops removed, same messages, same summary.
+
 ## [0.1.17] - 2026-07-28
 
 ### Added
@@ -269,7 +279,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.17...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.18...HEAD
+[0.1.18]: https://github.com/IvanPavlak/WinuX/compare/v0.1.17...v0.1.18
 [0.1.17]: https://github.com/IvanPavlak/WinuX/compare/v0.1.16...v0.1.17
 [0.1.16]: https://github.com/IvanPavlak/WinuX/compare/v0.1.15...v0.1.16
 [0.1.15]: https://github.com/IvanPavlak/WinuX/compare/v0.1.14...v0.1.15
