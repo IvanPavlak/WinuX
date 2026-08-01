@@ -402,6 +402,19 @@
       "MaxVersion": null
     },
     {
+      "FeatureId": "DisableNotifications",
+      "Label": "Disable Windows Notifications (From apps and other senders)",
+      "ToolTip": "Disables native Windows notifications from apps and other senders, this includes notifications from apps like Discord, WhatsApp, Teams, and Slack.",
+      "Category": "Privacy & Suggested Content",
+      "RegistryKey": "Disable_Notifications.reg",
+      "ApplyText": "Disabling Windows notifications and reminders",
+      "UndoLabel": "Enable Windows notifications and reminders",
+      "ApplyUndoText": "Enabling Windows notifications and reminders",
+      "RegistryUndoKey": "Enable_Notifications.reg",
+      "MinVersion": null,
+      "MaxVersion": null
+    },
+    {
       "FeatureId": "DisableLocationServices",
       "Label": "Disable Windows location services & app location access",
       "ToolTip": "This will turn off Windows Location Services and deny apps access to your location. This feature uses policies, which will lock down certain settings.",
@@ -667,7 +680,7 @@
       "UndoLabel": "Show Microsoft 365 Copilot ads in Settings Home",
       "ApplyUndoText": "Enabling Microsoft 365 Copilot ads in Settings Home",
       "RegistryUndoKey": "Enable_Settings_365_Ads.reg",
-      "MinVersion": null,
+      "MinVersion": 22000,
       "MaxVersion": null
     },
     {
@@ -680,7 +693,7 @@
       "UndoLabel": "Show Settings 'Home' page",
       "ApplyUndoText": "Enabling the Settings Home page",
       "RegistryUndoKey": "Enable_Settings_Home.reg",
-      "MinVersion": null,
+      "MinVersion": 22000,
       "MaxVersion": null
     },
     {
@@ -800,6 +813,7 @@
       "UndoLabel": "Enable window snapping",
       "ApplyUndoText": "Enabling window snapping",
       "RegistryUndoKey": "Enable_Window_Snapping.reg",
+      "RequiresReboot": true,
       "MinVersion": null,
       "MaxVersion": null
     },
@@ -1353,6 +1367,19 @@
       "UndoLabel": "Enable sharing downloaded updates with other PCs",
       "ApplyUndoText": "Enabling sharing of downloaded updates with other PCs",
       "RegistryUndoKey": "Enable_Delivery_Optimization.reg",
+      "MinVersion": null,
+      "MaxVersion": null
+    },
+    {
+      "FeatureId": "DisableDeviceAutoAppDownload",
+      "Label": "Prevent Windows from auto-installing device companion apps",
+      "ToolTip": "Stops Windows from silently installing device companion apps via Windows Update when you connect certain devices, like monitors from LG and Alienware. These devices will still work as expected, this only stops Windows Update from automatically installing additional apps without consent.",
+      "Category": "Windows Update",
+      "RegistryKey": "Disable_Device_Auto_App_Download.reg",
+      "ApplyText": "Preventing automatic installation of device companion apps",
+      "UndoLabel": "Allow automatic installation of device companion apps",
+      "ApplyUndoText": "Allowing automatic installation of device companion apps",
+      "RegistryUndoKey": "Enable_Device_Auto_App_Download.reg",
       "MinVersion": null,
       "MaxVersion": null
     },
