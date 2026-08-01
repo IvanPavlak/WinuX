@@ -29,11 +29,14 @@ function Reset-Windows {
 		  Work
 
 		Defaults for -VirtualDesktop and -Monitor are read per machine from
-		$global:Configuration.ResetAllWindowsDefaults, keyed by the current
-		machine type (PC, Laptop, Work, Test) as resolved by DetermineMachineType.
-		On the PC, windows are consolidated onto monitor 2; on the laptop and work
-		machines no monitor targeting is applied. Explicitly passing -VirtualDesktop
-		or -Monitor overrides the configured default for that run.
+		$global:Configuration.ResetAllWindowsDefaults, keyed by the machine type
+		Get-LayoutMachineType resolves - the same one the window layouts themselves
+		are read under, so a LayoutMachineTypeOverrides entry (or a small primary
+		display) selects the matching reset profile as well. That keeps a machine
+		running on a borrowed monitor setup from consolidating windows onto a monitor
+		it no longer has. On the PC, windows are consolidated onto monitor 2; on the
+		laptop and work machines no monitor targeting is applied. Explicitly passing
+		-VirtualDesktop or -Monitor overrides the configured default for that run.
 
 	.PARAMETER VirtualDesktop
 		The 1-based virtual desktop to consolidate all windows onto.
@@ -70,7 +73,12 @@ function Reset-Windows {
 
 	Write-LogTitle "Resetting All Windows"
 
-	$machineType = DetermineMachineType
+	# The defaults are display-shaped - "consolidate onto monitor 2" is a statement about a monitor
+	# setup, not about a machine's identity - so they follow the SAME switch as the window layouts
+	# (Get-LayoutMachineType): a LayoutMachineTypeOverrides entry, else SmallDisplayMachineType on a
+	# laptop-class display, else the detected machine type. A machine temporarily on another setup
+	# therefore resets FOR that setup instead of aiming windows at a monitor that is not attached.
+	$machineType = Get-LayoutMachineType
 
 	$defaults = $null
 	if ($global:Configuration -and $global:Configuration.ResetAllWindowsDefaults) {
@@ -92,7 +100,7 @@ function Reset-Windows {
 
 	if (Test-LogVerbose) {
 		$monitorText = if ($Monitor) { $Monitor } else { "(current)" }
-		Write-LogDebug "MachineType => $machineType, VirtualDesktop => $VirtualDesktop, Monitor => $monitorText"
+		Write-LogDebug "Layout machine type => $machineType, VirtualDesktop => $VirtualDesktop, Monitor => $monitorText"
 	}
 
 	# A failed collapse is reported instead of ignored: when it fails the move pass has to

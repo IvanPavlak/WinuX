@@ -32,6 +32,7 @@
 		'Get-FancyZone',
 		'Get-FancyZoneCoordinates',
 		'Get-LayoutDefinition',
+		'Get-LayoutMachineType',
 		'Get-MonitorInfo',
 		'Get-MonitorSpecs',
 		'Get-NextAvailableDesktopIndex',

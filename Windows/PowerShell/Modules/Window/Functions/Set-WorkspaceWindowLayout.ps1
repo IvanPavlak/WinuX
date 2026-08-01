@@ -8,6 +8,15 @@ function Set-WorkspaceWindowLayout {
 		Layout files are stored in machine-specific subfolders within the Window module's
 		Layouts directory (e.g., Layouts/PC/, Layouts/Laptop/, Layouts/Work/).
 
+		Which subfolder is used is resolved by Get-LayoutMachineType: a non-empty
+		$Configuration.LayoutMachineTypeOverrides entry for the detected machine type replaces that
+		machine type for layout resolution only (both the Layouts/<Type>/ folder and the
+		<Workspace>_<Type>.psd1 file suffix), otherwise SmallDisplayMachineType applies on a
+		laptop-class display, otherwise the detected type is used. This is how a machine runs a
+		different monitor setup than usual without editing or losing its real layout set - clearing
+		the entry restores it. The override takes precedence over the small-display detection, and
+		Reset-Windows resolves its own per-machine defaults through the same helper.
+
 		Supports layouts with duplicate window entries where the same ProcessName and
 		WindowTitle appear multiple times to place identical windows in different zones.
 		This is used with Open-Browser's Override parameter which opens the same URL
@@ -214,28 +223,17 @@ function Set-WorkspaceWindowLayout {
 		if ($PSCmdlet.ParameterSetName -eq 'ByWorkspace') {
 			$layoutsDir = $MachineSpecificPaths.Projects.Self.Layouts
 
-			$machineType = DetermineMachineType
-
 			$layoutNameToUse = $WorkspaceName
 			if (-not $WorkspaceName -or $WorkspaceName -eq 'Fullscreen') {
 				$layoutNameToUse = 'Fullscreen'
 			}
 
-			if ($cachedMonitorInfo) {
-				# Detect if using a small display (laptop-sized)
-				$primaryMonitor = $cachedMonitorInfo | Where-Object { $_.IsPrimary } | Select-Object -First 1
-				if (-not $primaryMonitor) {
-					$primaryMonitor = $cachedMonitorInfo | Select-Object -First 1
-				}
-
-				# A small (laptop-class) display uses a dedicated single-monitor layout set whose
-				# machine-type name is configured (e.g. "Laptop"); empty/unset = no override.
-				$smallDisplayType = $Configuration.SmallDisplayMachineType
-				if ($primaryMonitor -and $primaryMonitor.Width -le 3000 -and -not [string]::IsNullOrWhiteSpace($smallDisplayType)) {
-					$machineType = $smallDisplayType
-					Write-LogDebug " Detected small display ($($primaryMonitor.Width)x$($primaryMonitor.Height)) => using $machineType layout" -Style Warning
-				}
-			}
+			# Which layout SET to read from: a configured LayoutMachineTypeOverrides entry, else the
+			# SmallDisplayMachineType set, else this machine's own. Resolved (and logged) by
+			# Get-LayoutMachineType, which Reset-Windows shares so both display-shaped settings
+			# follow one switch instead of drifting apart. The monitor snapshot is handed over so the
+			# small-display rule does not re-query it.
+			$machineType = Get-LayoutMachineType -MonitorInfo $cachedMonitorInfo
 
 			$machineSpecificLayoutFileName = "${layoutNameToUse}_${machineType}.psd1"
 
@@ -248,6 +246,10 @@ function Set-WorkspaceWindowLayout {
 			else {
 				if ($spinner) { [void](Loading-Spinner -Stop -Spinner $spinner -Discard); $spinner = $null }
 				Write-LogWarning "No layout configuration found for workspace => [$WorkspaceName]"
+				# The set searched is not always this machine's own - LayoutMachineTypeOverrides and
+				# SmallDisplayMachineType redirect it - which makes a missing file baffling unless the
+				# set and path actually looked for are named.
+				Write-LogWarning " Layout set [$machineType] - expected => [$machineSpecificLayoutPath]" -NoLeadingNewline
 				return
 			}
 		}

@@ -8,6 +8,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.20] - 2026-08-01
+
+### Added
+
+- `LayoutMachineTypeOverrides` (configuration): maps a detected machine type to the machine type whose window-arrangement settings should be read instead - the layout folder (`Layouts/<value>/<Workspace>_<value>.psd1`) and the `ResetAllWindowsDefaults` profile. An absent or `""` entry means no override, which is what the base configuration ships, so a vanilla setup is unaffected. Window arrangement is the one machine-typed area that describes hardware rather than identity, and hardware moves: a machine on a different monitor setup - a desktop taken somewhere without its usual monitors, one screen instead of two - has layouts encoding zone geometry, desktop counts, and a `Secondary` monitor that is no longer attached, plus a reset profile that consolidates windows onto a monitor which no longer exists. The only ways out were editing that set in place, losing the arrangement you want back later, or lying about the machine type, which also relocates base paths, symbolic links, wallpapers, and themes. This moves window arrangement alone: author the new geometry in its own folder, point the entry at it, clear the entry to switch back, with the machine's real layout set untouched throughout. The name is not a machine type - it needs no `ValidMachineTypes` entry, no base paths, and no per-machine payload files, only its own layout `.psd1` files (and optionally its own `ResetAllWindowsDefaults` entry, falling back to `Default`). It is resolved BEFORE, and wins over, `SmallDisplayMachineType`, so an explicit choice is not overruled by the primary display happening to measure 3000px or less - the exact case a temporary single screen tends to hit. There is no silent fallback to the machine's own layouts when a workspace has no file in the redirected set, because that set describes monitors which are not attached; instead the "No layout configuration found" warning now also names the layout set searched and the path it expected, so a missing file reads as a missing file rather than a mystery.
+- `Get-LayoutMachineType` (Window module): the single resolver for "which monitor setup am I on?" - override, else `SmallDisplayMachineType` on a primary display at most 3000px wide, else the detected machine type. Both `Set-WorkspaceWindowLayout` (which layout folder and file suffix to load) and `Reset-Windows` (which `ResetAllWindowsDefaults` profile to apply) read it, so the two cannot drift into disagreeing about the attached hardware - the failure mode being that the layouts follow the override while the reset keeps aiming windows at a monitor that is not there. Monitors are queried only when the small-display rule is actually reachable (no override matched and a small-display type is configured), and callers holding a snapshot pass it in via `-MonitorInfo`, so the common path costs nothing beyond the machine-type lookup.
+
+### Changed
+
+- `Reset-Windows` (Window module) selects its `ResetAllWindowsDefaults` profile by the machine type `Get-LayoutMachineType` resolves rather than the raw `DetermineMachineType` result. "Consolidate onto monitor 2" is a statement about a monitor setup, not about a machine's identity, so it now follows the same switch the layouts do: a machine running on a borrowed setup resets *for that setup*. Behaviour is unchanged when no override is configured and the primary display is wide - the resolved type is then the detected one. Add an entry named after the override (e.g. `Temp`) when the borrowed setup needs different targeting; without one it falls back to `Default`, which is the safe "no monitor targeting" profile rather than the machine's own.
+
 ## [0.1.19] - 2026-08-01
 
 ### Fixed
@@ -200,16 +211,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
-- `Configure-Taskbar` (System module) now machine-scopes the taskbar pin list: each `TaskbarConfiguration` row may carry a `Machine` field (`All`, `Test`, `PC/Laptop`, ...) matched against the current machine type through `Test-MachineTypeScope` — the same gate the app CSVs use — so one list drives every machine. A row that omits `Machine` (or leaves it blank) defaults to `All`, preserving the previous "pin everywhere" behavior for untagged rows. The shipped `Configuration.psd1` list is a tagged example; keep your real, machine-specific list in `Configuration.local.psd1` (it replaces the base array wholesale on merge).
+- `Configure-Taskbar` (System module) now machine-scopes the taskbar pin list: each `TaskbarConfiguration` row may carry a `Machine` field (`All`, `Test`, `PC/Laptop`, ...) matched against the current machine type through `Test-MachineTypeScope` - the same gate the app CSVs use - so one list drives every machine. A row that omits `Machine` (or leaves it blank) defaults to `All`, preserving the previous "pin everywhere" behavior for untagged rows. The shipped `Configuration.psd1` list is a tagged example; keep your real, machine-specific list in `Configuration.local.psd1` (it replaces the base array wholesale on merge).
 - `Configure-Taskbar` and `Unpin-TaskbarApps` (System module) now write the generated `taskbar_layout.xml` directly to a machine-local path (`PathTemplates.TaskbarLayoutFile`, default `C:\ProgramData\provisioning\taskbar_layout.xml`) that the `StartLayoutFile` policy points at, instead of writing it into the repository and symlinking the provisioning path to it. The layout is produced entirely from configuration, so nothing needs to be versioned and no symlink is created; each machine keeps its own copy. On a machine provisioned by the old design, a pre-existing symlink at that path (live or dangling) is removed before writing, so the first run migrates cleanly to a real file instead of writing back through the link into the repo.
 
 ### Removed
 
-- The versioned `Windows/TaskbarConfiguration/taskbar_layout.xml` file and the `SymbolicLinks.TaskbarConfiguration` / `PathTemplates.TaskbarConfigurationDir` configuration keys. The taskbar layout is now generated straight to its machine-local path (see Changed), so the committed copy — which had drifted out of sync with `TaskbarConfiguration` — and its symlink are no longer needed.
+- The versioned `Windows/TaskbarConfiguration/taskbar_layout.xml` file and the `SymbolicLinks.TaskbarConfiguration` / `PathTemplates.TaskbarConfigurationDir` configuration keys. The taskbar layout is now generated straight to its machine-local path (see Changed), so the committed copy - which had drifted out of sync with `TaskbarConfiguration` - and its symlink are no longer needed.
 
 ### Fixed
 
-- `Rebuild-IconCache` (System module) no longer surfaces a `Remove-Item: … cannot find the file specified` error while clearing the icon cache. With Explorer stopped, a file enumerated in the cache folder can vanish before it is deleted; the cleanup now checks the folder exists, re-checks each file immediately before removing it, and ignores per-file failures — so nothing is removed when there is nothing to remove.
+- `Rebuild-IconCache` (System module) no longer surfaces a `Remove-Item: … cannot find the file specified` error while clearing the icon cache. With Explorer stopped, a file enumerated in the cache folder can vanish before it is deleted; the cleanup now checks the folder exists, re-checks each file immediately before removing it, and ignores per-file failures - so nothing is removed when there is nothing to remove.
 
 ## [0.1.5] - 2026-07-15
 
@@ -289,7 +300,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.19...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.20...HEAD
+[0.1.20]: https://github.com/IvanPavlak/WinuX/compare/v0.1.19...v0.1.20
 [0.1.19]: https://github.com/IvanPavlak/WinuX/compare/v0.1.18...v0.1.19
 [0.1.18]: https://github.com/IvanPavlak/WinuX/compare/v0.1.17...v0.1.18
 [0.1.17]: https://github.com/IvanPavlak/WinuX/compare/v0.1.16...v0.1.17

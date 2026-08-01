@@ -138,6 +138,35 @@ Fallback machine type if detection fails.
 
 **Key:** `DefaultMachineType`
 
+### Layout Set Overrides
+
+Which machine type a machine's **window-arrangement** settings are read under: the `Layouts/` subfolder its layouts come from, and the `ResetAllWindowsDefaults` profile `Reset-Windows` applies. These two keys affect those settings only - base paths, symbolic links, wallpapers, themes, and the taskbar always keep using the detected machine type.
+
+**Keys:**
+
+- `LayoutMachineTypeOverrides` - Hashtable mapping a detected machine type → the layout machine type to use instead. A non-empty value redirects layout resolution to `Layouts/<value>/<WorkspaceName>_<value>.psd1`; `""` or an absent entry means no override.
+- `SmallDisplayMachineType` - Layout machine type used when the primary display is at most 3000px wide (a laptop-class screen), regardless of the detected type. `""` disables it.
+
+**Example:**
+
+```powershell
+# The desktop is temporarily on a different monitor setup: read its layouts from Layouts/Temp/
+LayoutMachineTypeOverrides = @{
+    PC     = "Temp"
+    Laptop = ""
+    Work   = ""
+    Test   = ""
+}
+
+SmallDisplayMachineType = "Laptop"
+```
+
+**Consumer function:** `Get-LayoutMachineType`, used by `Set-WorkspaceWindowLayout` and `Reset-Windows`
+
+**Behavior:** `LayoutMachineTypeOverrides` is checked first and wins over `SmallDisplayMachineType`, so an explicit choice is never overruled by display-size detection. The override folder needs its own `<WorkspaceName>_<value>.psd1` file per workspace you open; when one is missing, the "No layout configuration found" warning names the active layout set and the path it expected instead of silently falling back to the machine's own layouts. `ResetAllWindowsDefaults` follows the same resolution, so the profile `Reset-Windows` applies matches the monitor setup actually attached - add an entry for the override name (e.g. `Temp`) or it falls back to `Default`.
+
+**Typical use:** a machine that has to run on a monitor setup its layouts were not authored for. Author the new geometry in its own folder, point the override at it, and clear the entry to switch back - the machine's real layout set is never edited.
+
 ---
 
 ## Base Paths Per Machine Type
@@ -480,6 +509,8 @@ Each layout file specifies:
 - **Monitors:** Virtual desktop layout mapping
 - **Layout:** Array of window placement rules with ProcessName, WindowTitle, DesktopNumber, Zone, Monitor
 
+Which subfolder is read can be redirected per machine - see [Layout Set Overrides](#layout-set-overrides).
+
 **Consumer function:** `Set-WorkspaceWindowLayout`
 
 ---
@@ -576,7 +607,7 @@ each row is machine-scoped through its `Machine` field.
 
 **Key:** `TaskbarConfiguration` → Array of `@{ Name; Type; Value; Machine }` rows, where `Type`
 is `AUMID` or `Path` and `Machine` is a scope string (`All`, `Test`, `PC/Laptop`, ...) matched
-against the current machine type by `Test-MachineTypeScope` — the same gate the app CSVs use. A
+against the current machine type by `Test-MachineTypeScope` - the same gate the app CSVs use. A
 row without `Machine` (or a blank one) defaults to `All`, so one list can drive every machine.
 Keep your real, machine-tagged list in `Configuration.local.psd1` (it replaces the base array
 wholesale on merge).
@@ -883,6 +914,8 @@ Animation styles for long-running operations.
 
 Per-machine defaults for `Reset-Windows`, keyed by machine type (`PC`, `Laptop`, `Work`, `Test`, plus a `Default` fallback). Explicit `-VirtualDesktop` / `-Monitor` parameters override these.
 
+The key used is the one `Get-LayoutMachineType` resolves, not the raw detected type: a [layout set override](#layout-set-overrides) (or a small primary display) selects the matching reset profile, so a machine on a borrowed monitor setup does not consolidate windows onto a monitor it no longer has. Give the override name its own entry when its setup needs different targeting.
+
 **Key:** `ResetAllWindowsDefaults`
 
 Each entry holds:
@@ -896,6 +929,7 @@ ResetAllWindowsDefaults = @{
     Laptop  = @{ VirtualDesktop = 1; Monitor = "" }   # single-monitor, no targeting
     Work    = @{ VirtualDesktop = 1; Monitor = "" }
     Test    = @{ VirtualDesktop = 1; Monitor = "" }
+    Temp    = @{ VirtualDesktop = 1; Monitor = "" }   # matches a LayoutMachineTypeOverrides value
     Default = @{ VirtualDesktop = 1; Monitor = "" }
 }
 ```

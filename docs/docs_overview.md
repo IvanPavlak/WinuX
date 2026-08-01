@@ -78,6 +78,8 @@ The authoritative, always-current function reference is the set of per-module pa
 | `TaskbarSettings`                                  | `Set-TaskbarSettings`                              |
 | `VisualEffects`                                    | `Set-VisualEffects`                                |
 | `LayoutNumbers`, `ZoneNameMappings`                | `Apply-FancyZones`, `Get-FancyZone`                |
+| `LayoutMachineTypeOverrides`, `SmallDisplayMachineType` | `Get-LayoutMachineType` (for `Set-WorkspaceWindowLayout`, `Reset-Windows`) |
+| `ResetAllWindowsDefaults`                          | `Reset-Windows`                                    |
 | `AutoEnvironmentVariables`                         | `Set-EnvironmentVariables`                         |
 | `Locales`, `DefaultLocale`                         | `Set-Locale`                                       |
 | `DisplayLanguages`                                 | `Set-DisplayLanguage`                              |

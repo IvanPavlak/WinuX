@@ -93,9 +93,12 @@
 # → DefaultTranslateLanguages       : Invoke-GoogleTranslate
 #
 # Window Management & FancyZones:
-# → LayoutNumbers              : Apply-FancyZones (keyboard shortcut mapping)
-# → ZoneNameMappings           : Get-FancyZone (human-readable zone names to indices)
-# → Layout files in Layouts/*/ : Set-WorkspaceWindowLayout, Visualize-Layouts
+# → LayoutNumbers                : Apply-FancyZones (keyboard shortcut mapping)
+# → ZoneNameMappings             : Get-FancyZone (human-readable zone names to indices)
+# → Layout files in Layouts/*/   : Set-WorkspaceWindowLayout, Visualize-Layouts
+# → SmallDisplayMachineType      : Get-LayoutMachineType (layout set for a small display)
+# → LayoutMachineTypeOverrides   : Get-LayoutMachineType (manual per-machine layout set)
+# → ResetAllWindowsDefaults      : Reset-Windows (per-machine consolidation target)
 #
 # CUSTOMIZATION GUIDE:
 # Common customizations and where to make them:
@@ -743,6 +746,25 @@
 
 	# Machine type whose layout set a small (laptop-class) display uses; "" disables the override.
 	SmallDisplayMachineType       = ""
+
+	# Manual per-machine layout-set override, resolved by Get-LayoutMachineType for both
+	# Set-WorkspaceWindowLayout (which Layouts/ folder to read) and Reset-Windows (which
+	# ResetAllWindowsDefaults profile to apply). Maps a detected machine type to the layout machine
+	# type to use INSTEAD - i.e. read layouts from Layouts/<value>/<Workspace>_<value>.psd1. Nothing
+	# else keyed by machine type changes (base paths, symlinks, wallpapers, themes all keep using
+	# the real type), and an absent or "" entry means "no override".
+	#
+	# Use it when a machine has to run on a monitor setup its layouts were not authored for (a
+	# desktop moved away from its multi-monitor rig, a temporary single screen): author the new
+	# geometry in its own folder, point the override at it, and clear the entry to switch back -
+	# the machine's real layout set is never edited. Takes precedence over
+	# SmallDisplayMachineType, so a manual choice is not second-guessed by display-size detection.
+	#
+	# Example (a "Temp" folder holding Example_Temp.psd1, MyWorkspace_Temp.psd1, ...):
+	#   LayoutMachineTypeOverrides = @{ Test = "Temp" }
+	LayoutMachineTypeOverrides    = @{
+		Test = ""
+	}
 
 	# Maps machine type keys used in bootstrap/configuration
 	MachinePathMappings           = @{
@@ -2181,8 +2203,11 @@
 	# collapses virtual desktops, consolidates all windows onto a single desktop
 	# (and optional monitor), then centers them.
 	#
-	# Keyed by machine type. "Default" is used when the current machine type has
-	# no entry. Explicit -VirtualDesktop / -Monitor parameters override these.
+	# Keyed by machine type - the one Get-LayoutMachineType resolves, so a
+	# LayoutMachineTypeOverrides entry (or a small primary display) picks the profile
+	# that matches the monitor setup actually attached, exactly as it does for the
+	# layout files. "Default" is used when that machine type has no entry. Explicit
+	# -VirtualDesktop / -Monitor parameters override these.
 	#
 	# Keys:
 	# - VirtualDesktop : 1-based desktop to consolidate all windows onto.

@@ -206,6 +206,21 @@ Layouts/
     └── ...
 ```
 
+Window arrangement is the one machine-typed area that can be pointed somewhere else without changing the machine type, because it encodes monitors rather than identity - and a machine's monitors can change temporarily:
+
+```powershell
+# This machine reads Layouts/Temp/<Workspace>_Temp.psd1, and ResetAllWindowsDefaults.Temp, instead.
+# Base paths, symlinks, wallpapers, themes, and the taskbar keep using the real machine type.
+LayoutMachineTypeOverrides = @{
+    PC = "Temp"   # "" = no override
+}
+
+# Fallback when no override applies: the set used on a small (laptop-class) primary display.
+SmallDisplayMachineType = "Laptop"
+```
+
+Both keys are resolved by `Get-LayoutMachineType`, which `Set-WorkspaceWindowLayout` and `Reset-Windows` share - so the layouts and the reset target can never disagree about which monitor setup is attached. The override name is not a machine type: it needs no `ValidMachineTypes` entry, no base paths, and no payload files, only `<Workspace>_<Name>.psd1` layouts (and optionally its own `ResetAllWindowsDefaults` entry). See [Configure Window Layout](guides/configure-window-layout.md#running-a-machine-on-a-different-monitor-setup).
+
 ## Checking Current Machine Type
 
 ```powershell
@@ -320,7 +335,7 @@ TaskbarConfiguration = @(
 Keep your real, machine-tagged list in `Configuration.local.psd1` (it replaces the base array
 wholesale on merge). `Configure-Taskbar` states which machine type it is configuring for, then
 writes the generated layout per-machine to `TaskbarLayoutFile`
-(`C:\ProgramData\provisioning\taskbar_layout.xml`) — not versioned in the repo, no symlink.
+(`C:\ProgramData\provisioning\taskbar_layout.xml`) - not versioned in the repo, no symlink.
 
 ### Window Layouts
 
