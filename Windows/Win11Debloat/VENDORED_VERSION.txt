@@ -1,5 +1,5 @@
 SourceRepo: Raphire/Win11Debloat
-ReleaseTag: 2026.06.24
-PublishedAt: 06/24/2026 20:41:04
-DownloadedAt: 2026-07-06T10:46:13
-ZipballUrl: https://api.github.com/repos/Raphire/Win11Debloat/zipball/2026.06.24
+ReleaseTag: 2026.07.11
+PublishedAt: 07/11/2026 18:07:54
+DownloadedAt: 2026-08-01T22:34:02
+ZipballUrl: https://api.github.com/repos/Raphire/Win11Debloat/zipball/2026.07.11

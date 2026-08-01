@@ -16,6 +16,11 @@ function Start-Win11Debloat {
 		When a non-empty saved-settings file is present, offers to apply it via `-RunSavedSettings`;
 		otherwise shows the interactive Win11Debloat menu.
 
+		The vendored release refuses to start under PowerShell 7 (pwsh / Core edition) because its app
+		removal and restore points depend on Windows PowerShell 5.1-only modules. Bootstrap runs under
+		pwsh, so the script is launched through `powershell.exe`, the same interpreter the vendored
+		`Run.bat` uses, and a non-zero exit code is reported as an error instead of success.
+
 		Only called automatically during `Bootstrap -WithInitialSetup` (first-time provisioning).
 
 	.PARAMETER Selection
@@ -50,6 +55,18 @@ function Start-Win11Debloat {
 		if (-not (Test-Path -Path $win11DebloatScriptPath)) {
 			Write-LogError "Win11Debloat script not found at: $win11DebloatScriptPath"
 			Write-LogWarning "Download a release into Windows\Win11Debloat\vendor before running this step."
+			return
+		}
+
+		# The vendored release exits early under PowerShell 7 (pwsh / Core edition): its app removal and
+		# system restore points rely on Windows PowerShell 5.1-only modules (Appx,
+		# Get-ComputerRestorePoint) that fail to load there. Bootstrap runs under pwsh, so the script is
+		# launched through powershell.exe rather than being called in the current session.
+		$windowsPowerShellPath = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
+
+		if (-not (Test-Path -LiteralPath $windowsPowerShellPath)) {
+			Write-LogError "Windows PowerShell 5.1 not found at: $windowsPowerShellPath"
+			Write-LogWarning "Win11Debloat cannot run under PowerShell 7, so this step was skipped."
 			return
 		}
 
@@ -115,12 +132,24 @@ function Start-Win11Debloat {
 		}
 		elseif ($resolvedSelection -eq "Use saved settings") {
 			Write-LogStep "=> Running Win11Debloat with saved settings..."
-			& $win11DebloatScriptPath -RunSavedSettings -Silent
+			& $windowsPowerShellPath -NoProfile -ExecutionPolicy Bypass -File $win11DebloatScriptPath -RunSavedSettings -Silent
+
+			if ($LASTEXITCODE -ne 0) {
+				Write-LogError "Win11Debloat exited with code $LASTEXITCODE" -BlankLineAfter
+				return
+			}
+
 			Write-LogSuccess "Debloating with saved settings completed!"
 		}
 		elseif ($resolvedSelection -eq "Debloat") {
 			Write-LogStep "=> Running Win11Debloat ..."
-			& $win11DebloatScriptPath
+			& $windowsPowerShellPath -NoProfile -ExecutionPolicy Bypass -File $win11DebloatScriptPath
+
+			if ($LASTEXITCODE -ne 0) {
+				Write-LogError "Win11Debloat exited with code $LASTEXITCODE" -BlankLineAfter
+				return
+			}
+
 			Write-LogSuccess "Debloating completed!"
 		}
 	}

@@ -8,6 +8,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.19] - 2026-08-01
+
+### Fixed
+
+- `Start-Win11Debloat` (Application module) ran the vendored `Win11Debloat.ps1` in the current session, which is PowerShell 7 - the one interpreter Win11Debloat cannot work under. Its app removal and system restore points depend on Windows PowerShell 5.1-only modules: the `Appx` module's `Get-AppxPackage` / `Remove-AppxPackage`, which upstream documents as failing there with "Operation is not supported on this platform" (`0x80131539`), and `Get-ComputerRestorePoint`, which PowerShell 7 does not ship at all. Upstream's note behind that guard (issue #675) is that a run under pwsh continues and silently fails to remove any apps while still reporting success, which is what every release before 2026.07.11 does. That release turns it into an explicit refusal instead: it detects `Core` edition, prints the interpreter to re-run under, and exits 1. Neither shape was visible from WinuX, because the exit code was never inspected and `Debloating with saved settings completed!` was printed unconditionally - under the red error, in the newer release's case. The script is now launched through `powershell.exe` with `-NoProfile -ExecutionPolicy Bypass -File`, the same interpreter and flags its own `Run.bat` uses, and a non-zero exit code is reported as an error instead of success. The child process inherits the console, so the interactive menu is unchanged, and inherits the elevated token from the session `Test-AdminPrivileges` has already verified, so no second UAC prompt appears; a `powershell.exe` that cannot be found skips the step with an error rather than attempting the run.
+
+### Changed
+
+- The vendored Win11Debloat moved from release `2026.06.24` to `2026.07.11`, pulled with `Update-Win11DebloatVendor`. It ships together with the launcher fix above because it is the release that added the Windows PowerShell 5.1 guard: the launcher change is what makes app removal work at all on either release, while the exit-code check only has something to report from `2026.07.11` on, where a run started under pwsh announces itself and exits 1 instead of quietly removing nothing. Upstream additions riding along: `Disable_Notifications` and `Disable_Device_Auto_App_Download` tweaks (each with a Sysprep and an Undo variant), reboot-requirement labels for the features a run has selected, and the removal of `Scripts/Get-Dev.ps1` - see [Win11Debloat's release notes](https://github.com/Raphire/Win11Debloat/releases/tag/2026.07.11) for the full list.
+
 ## [0.1.18] - 2026-07-30
 
 ### Fixed
@@ -279,7 +289,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.18...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.19...HEAD
+[0.1.19]: https://github.com/IvanPavlak/WinuX/compare/v0.1.18...v0.1.19
 [0.1.18]: https://github.com/IvanPavlak/WinuX/compare/v0.1.17...v0.1.18
 [0.1.17]: https://github.com/IvanPavlak/WinuX/compare/v0.1.16...v0.1.17
 [0.1.16]: https://github.com/IvanPavlak/WinuX/compare/v0.1.15...v0.1.16

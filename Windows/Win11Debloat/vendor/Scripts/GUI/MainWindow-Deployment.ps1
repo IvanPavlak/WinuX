@@ -13,6 +13,13 @@ function Get-UndoFeatureLabel {
     return [string]$script:FeatureLabelLookup[$FeatureId]
 }
 
+<#
+    .SYNOPSIS
+    Returns the tweak actions that are pending based on the current UI state.
+
+    .OUTPUTS
+    [PSCustomObject[]] Objects with Action, FeatureId, and Label properties.
+#>
 function Get-PendingTweakActions {
     param(
         [System.Windows.Window]$Window,
@@ -54,7 +61,7 @@ function Get-PendingTweakActions {
                 $actions.Add([PSCustomObject]@{
                         Action    = 'Undo'
                         FeatureId = [string]$mapping.FeatureId
-                        Label     = [string]$script:FeatureLabelLookup[$mapping.FeatureId]
+                        Label     = [string](Get-UndoFeatureLabel -FeatureId $mapping.FeatureId)
                     })
             }
         }
@@ -435,6 +442,9 @@ function Update-UserSelectionDescription {
             $UserSelectionDescription.Text = "The default user template, affecting all new users created after this point. Useful for Sysprep deployment."
         }
     }
+
+    # Mirror the description text on the combo's tooltip so the same context is shown on hover.
+    $UserSelectionCombo.ToolTip = $UserSelectionDescription.Text
 }
 
 function Test-OtherUsername {

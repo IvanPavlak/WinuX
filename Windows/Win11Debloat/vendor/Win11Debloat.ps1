@@ -30,7 +30,9 @@ param (
     [switch]$DisableUpdateASAP,
     [switch]$PreventUpdateAutoReboot,
     [switch]$DisableDeliveryOptimization,
+    [switch]$DisableDeviceAutoAppDownload,
     [switch]$DisableBing,
+    [switch]$DisableNotifications,
     [switch]$DisableStoreSearchSuggestions,
     [switch]$DisableSearchHighlights,
     [switch]$DisableDesktopSpotlight,
@@ -99,6 +101,17 @@ param (
     [switch]$HideDriveLetters
 )
 
+# Win11Debloat depends on Windows PowerShell 5.1 cmdlets (the Appx module's Get-AppxPackage /
+# Remove-AppxPackage, and Get-ComputerRestorePoint) that do not load in PowerShell 7 (pwsh), where the
+# Appx module fails with "Operation is not supported on this platform" (0x80131539). Without this guard
+# the run continues and silently fails to remove any apps while still reporting success. See issue #675.
+if ($PSVersionTable.PSEdition -eq 'Core') {
+    Write-Host "Win11Debloat requires Windows PowerShell 5.1, but it is running under PowerShell $($PSVersionTable.PSVersion) (pwsh / Core edition)." -ForegroundColor Red
+    Write-Host "App removal and system restore points rely on modules that are not available in PowerShell 7, so the run cannot complete correctly here." -ForegroundColor Red
+    Write-Host "Please re-run this script with Windows PowerShell instead (powershell.exe)." -ForegroundColor Yellow
+    exit 1
+}
+
 # Check if script is running as administrator
 $isAdmin = ([Security.Principal.WindowsPrincipal] `
     [Security.Principal.WindowsIdentity]::GetCurrent()
@@ -111,7 +124,14 @@ if (-not $isAdmin) {
     $choice = Read-Host "Restart as Administrator? (y/n)"
 
     if ($choice -match '^[Yy]$') {
-        $elevatedArgs = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $PSCommandPath)
+        # Win32-safe escaping for arguments to pass to elevated process
+        function Format-ElevatedArg([string]$Value) {
+            $escaped = $Value -replace '(\\*)"', '$1$1\"'
+            $escaped = $escaped -replace '(\\+)$', '$1$1'
+            return '"' + $escaped + '"'
+        }
+
+        $elevatedArgs = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", (Format-ElevatedArg $PSCommandPath))
 
         foreach ($paramName in $PSBoundParameters.Keys) {
             $paramValue = $PSBoundParameters[$paramName]
@@ -123,12 +143,14 @@ if (-not $isAdmin) {
             }
             else {
                 $elevatedArgs += "-$paramName"
-                $elevatedArgs += "$paramValue"
+                $elevatedArgs += (Format-ElevatedArg $paramValue)
             }
         }
 
         if ($MyInvocation.UnboundArguments.Count -gt 0) {
-            $elevatedArgs += $MyInvocation.UnboundArguments
+            foreach ($unboundArg in $MyInvocation.UnboundArguments) {
+                $elevatedArgs += (Format-ElevatedArg "$unboundArg")
+            }
         }
 
         Start-Process powershell -ArgumentList $elevatedArgs -Verb RunAs
@@ -137,7 +159,7 @@ if (-not $isAdmin) {
 }
 
 # Define script-level variables & paths
-$script:Version = "2026.06.24"
+$script:Version = "2026.07.11"
 $configPath = Join-Path $PSScriptRoot 'Config'
 $logsPath = Join-Path $PSScriptRoot 'Logs'
 $schemasPath = Join-Path $PSScriptRoot 'Schemas'
@@ -360,6 +382,7 @@ if (-not $script:WingetInstalled -and -not $Silent) {
 . "$PSScriptRoot/Scripts/Helpers/GenerateAppsList.ps1"
 . "$PSScriptRoot/Scripts/Helpers/GetFriendlyRegistryBackupTarget.ps1"
 . "$PSScriptRoot/Scripts/Helpers/GetFriendlyTargetUserName.ps1"
+. "$PSScriptRoot/Scripts/Helpers/Get-RebootFeatureLabels.ps1"
 . "$PSScriptRoot/Scripts/Helpers/ImportConfigToParams.ps1"
 . "$PSScriptRoot/Scripts/Helpers/GetTargetUserForAppRemoval.ps1"
 . "$PSScriptRoot/Scripts/Helpers/Get-RegFileOperations.ps1"
@@ -540,7 +563,11 @@ if (($controlParamsCount -eq $script:Params.Keys.Count) -or ($script:Params.Keys
 # (This also handles restore point creation if requested)
 Invoke-AllChanges
 
-RestartExplorer
+
+# Restart Explorer process unless running in Sysprep or User context
+if (-not ($script:Params.ContainsKey("Sysprep") -or $script:Params.ContainsKey("User"))) {
+    RestartExplorer
+}
 
 Write-Output ""
 Write-Output ""
