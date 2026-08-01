@@ -96,8 +96,9 @@
 # → LayoutNumbers                : Apply-FancyZones (keyboard shortcut mapping)
 # → ZoneNameMappings             : Get-FancyZone (human-readable zone names to indices)
 # → Layout files in Layouts/*/   : Set-WorkspaceWindowLayout, Visualize-Layouts
-# → SmallDisplayMachineType      : Set-WorkspaceWindowLayout (layout set for a small display)
-# → LayoutMachineTypeOverrides   : Set-WorkspaceWindowLayout (manual per-machine layout set)
+# → SmallDisplayMachineType      : Get-LayoutMachineType (layout set for a small display)
+# → LayoutMachineTypeOverrides   : Get-LayoutMachineType (manual per-machine layout set)
+# → ResetAllWindowsDefaults      : Reset-Windows (per-machine consolidation target)
 #
 # CUSTOMIZATION GUIDE:
 # Common customizations and where to make them:
@@ -746,11 +747,12 @@
 	# Machine type whose layout set a small (laptop-class) display uses; "" disables the override.
 	SmallDisplayMachineType       = ""
 
-	# Manual per-machine layout-set override, consumed by Set-WorkspaceWindowLayout. Maps a
-	# detected machine type to the layout machine type to use INSTEAD - i.e. read layouts from
-	# Layouts/<value>/<Workspace>_<value>.psd1. Nothing else keyed by machine type changes (base
-	# paths, symlinks, wallpapers, themes all keep using the real type), and an absent or ""
-	# entry means "no override".
+	# Manual per-machine layout-set override, resolved by Get-LayoutMachineType for both
+	# Set-WorkspaceWindowLayout (which Layouts/ folder to read) and Reset-Windows (which
+	# ResetAllWindowsDefaults profile to apply). Maps a detected machine type to the layout machine
+	# type to use INSTEAD - i.e. read layouts from Layouts/<value>/<Workspace>_<value>.psd1. Nothing
+	# else keyed by machine type changes (base paths, symlinks, wallpapers, themes all keep using
+	# the real type), and an absent or "" entry means "no override".
 	#
 	# Use it when a machine has to run on a monitor setup its layouts were not authored for (a
 	# desktop moved away from its multi-monitor rig, a temporary single screen): author the new
@@ -2201,8 +2203,11 @@
 	# collapses virtual desktops, consolidates all windows onto a single desktop
 	# (and optional monitor), then centers them.
 	#
-	# Keyed by machine type. "Default" is used when the current machine type has
-	# no entry. Explicit -VirtualDesktop / -Monitor parameters override these.
+	# Keyed by machine type - the one Get-LayoutMachineType resolves, so a
+	# LayoutMachineTypeOverrides entry (or a small primary display) picks the profile
+	# that matches the monitor setup actually attached, exactly as it does for the
+	# layout files. "Default" is used when that machine type has no entry. Explicit
+	# -VirtualDesktop / -Monitor parameters override these.
 	#
 	# Keys:
 	# - VirtualDesktop : 1-based desktop to consolidate all windows onto.

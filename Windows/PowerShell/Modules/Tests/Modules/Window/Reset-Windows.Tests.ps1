@@ -4,6 +4,9 @@ BeforeAll {
 	$ModuleRoot = (Get-RepositoryPath).Modules
 	$FunctionsPath = Join-Path $ModuleRoot "Window\Functions"
 
+	# Dot-sourced rather than mocked: the point of these cases is that the reset profile follows the
+	# machine type Get-LayoutMachineType resolves, redirects included.
+	. "$FunctionsPath\Get-LayoutMachineType.ps1"
 	. "$FunctionsPath\Reset-Windows.ps1"
 }
 
@@ -21,8 +24,49 @@ Describe "Reset-Windows" {
 			ResetAllWindowsDefaults = @{
 				PC      = @{ VirtualDesktop = 1; Monitor = "2" }
 				Laptop  = @{ VirtualDesktop = 1; Monitor = "" }
+				Temp    = @{ VirtualDesktop = 2; Monitor = "Primary" }
 				Default = @{ VirtualDesktop = 1; Monitor = "" }
 			}
+		}
+	}
+
+	Context "layout machine type redirects" {
+		It "uses the override layout set's reset profile instead of the machine's own" {
+			# The PC profile aims windows at monitor 2. On a borrowed single-monitor setup that
+			# monitor does not exist, so the override has to select the profile too - otherwise the
+			# layouts follow the override while the reset still targets absent hardware.
+			$global:Configuration.LayoutMachineTypeOverrides = @{ PC = 'Temp' }
+
+			Reset-Windows
+
+			Should -Invoke Move-Windows -Times 1 -ParameterFilter { $VirtualDesktop -eq 2 -and $Monitor -eq "Primary" }
+			Should -Invoke Center-Windows -Times 1 -ParameterFilter { $Monitor -eq "Primary" }
+		}
+
+		It "keeps the machine's own reset profile when the override entry is empty" {
+			$global:Configuration.LayoutMachineTypeOverrides = @{ PC = '' }
+
+			Reset-Windows
+
+			Should -Invoke Move-Windows -Times 1 -ParameterFilter { $Monitor -eq "2" }
+		}
+
+		It "uses the small-display reset profile on a laptop-class primary display" {
+			$global:Configuration.SmallDisplayMachineType = 'Laptop'
+			Mock Get-MonitorInfo { @([PSCustomObject]@{ IsPrimary = $true; Width = 1920; Height = 1080 }) }
+
+			Reset-Windows
+
+			Should -Invoke Move-Windows -Times 1 -ParameterFilter { -not $Monitor }
+		}
+
+		It "still honours an explicit -Monitor over the redirected profile" {
+			$global:Configuration.LayoutMachineTypeOverrides = @{ PC = 'Temp' }
+
+			Reset-Windows -Monitor "Secondary"
+
+			Should -Invoke Move-Windows -Times 1 -ParameterFilter { $Monitor -eq "Secondary" }
+			Should -Invoke Center-Windows -Times 1 -ParameterFilter { $Monitor -eq "Secondary" }
 		}
 	}
 

@@ -5,6 +5,9 @@ BeforeAll {
 	$FunctionsPath = Join-Path $ModuleRoot "Window\Functions"
 
 	. "$FunctionsPath\Initialize-WorkspaceWindowLayoutRerun.ps1"
+	# The real layout-set resolver, not a mock: which folder and file suffix a workspace resolves
+	# to is part of the behavior under test here.
+	. "$FunctionsPath\Get-LayoutMachineType.ps1"
 	. "$FunctionsPath\Get-CurrentLayout.ps1"
 	. "$FunctionsPath\Save-CurrentLayout.ps1"
 	. "$FunctionsPath\Set-WorkspaceWindowLayout.ps1"

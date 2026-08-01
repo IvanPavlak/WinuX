@@ -380,7 +380,7 @@ During application, windows are first positioned inside their target zones using
 
 A machine's layouts encode its monitors: zone geometry, how many virtual desktops, which windows land on `Secondary`. Move that machine to a different setup - a desktop taken somewhere without its usual monitors, one screen instead of two - and its layouts describe hardware that is not there. Rewriting them means losing the set you want back later.
 
-`LayoutMachineTypeOverrides` (in `Configuration.psd1`, or `Configuration.local.psd1` in a fork) redirects **only** layout resolution to a different folder, leaving the machine's own layout set untouched:
+`LayoutMachineTypeOverrides` (in `Configuration.psd1`, or `Configuration.local.psd1` in a fork) redirects a machine's **window-arrangement** settings - its layout folder and its `Reset-Windows` profile - to a different machine type, leaving the machine's own layout set untouched:
 
 ```powershell
 LayoutMachineTypeOverrides = @{
@@ -394,12 +394,13 @@ LayoutMachineTypeOverrides = @{
 Workflow:
 
 1. Author a layout for each workspace you open in `Modules/Window/Layouts/Temp/`, named `<WorkspaceName>_Temp.psd1` - same structure as any other layout file, with geometry matching the new setup. `Add-WindowLayout -WorkspaceName MyWorkspace -MachineType Temp` scaffolds one and creates the folder on first use; copying an `Example_<MachineType>.psd1` in as `Example_Temp.psd1` gives a zone reference you can inspect with `Visualize-Layouts -Layout "Example_Temp"`.
-2. Set the override for the machine (e.g. `PC = "Temp"`) and open workspaces as usual - nothing about the commands changes.
-3. Back on the original setup, set the entry to `""`. The machine's real layouts return exactly as they were.
+2. Add a `ResetAllWindowsDefaults` entry under the same name if the new setup needs different reset targeting - e.g. `Temp = @{ VirtualDesktop = 1; Monitor = "" }` for a single screen, where the machine's usual "consolidate onto monitor 2" no longer means anything. Without an entry it falls back to `Default`.
+3. Set the override for the machine (e.g. `PC = "Temp"`) and open workspaces as usual - nothing about the commands changes.
+4. Back on the original setup, set the entry to `""`. The machine's real layouts return exactly as they were.
 
 Notes:
 
-- Everything else keyed by machine type (base paths, symbolic links, wallpapers, themes, taskbar) keeps using the real machine type. This is a layout-only switch.
+- Layouts and `ResetAllWindowsDefaults` both follow the override, because both describe monitors. Everything else keyed by machine type (base paths, symbolic links, wallpapers, themes, taskbar) keeps using the real machine type.
 - The override wins over `SmallDisplayMachineType`, so a deliberate choice is not overruled when the temporary screen happens to be small.
 - There is no silent fallback: a workspace with no layout file in the redirected set is reported, not quietly laid out with the machine's own (wrong-monitor) geometry.
 
@@ -420,7 +421,7 @@ Notes:
 
 ### "No layout configuration found for workspace"
 
-The workspace has no layout file for the layout set currently in effect. That set is not always the machine type: check `LayoutMachineTypeOverrides` for the machine (a non-empty value redirects to `Layouts/<value>/`) and `SmallDisplayMachineType` (a primary display up to 3000px wide switches sets). When an override is active the warning also prints the exact file path it expected - create that file, or clear the override entry to go back to the machine's own layout set.
+The workspace has no layout file for the layout set currently in effect. That set is not always the machine type: check `LayoutMachineTypeOverrides` for the machine (a non-empty value redirects to `Layouts/<value>/`) and `SmallDisplayMachineType` (a primary display up to 3000px wide switches sets). The warning names the set it searched and the exact file path it expected - create that file, or clear the override entry to go back to the machine's own layout set. `Get-LayoutMachineType` reports the same answer on its own if you want to check which set is active before running anything.
 
 ### Validate Layout
 
