@@ -8,6 +8,14 @@ function Set-WorkspaceWindowLayout {
 		Layout files are stored in machine-specific subfolders within the Window module's
 		Layouts directory (e.g., Layouts/PC/, Layouts/Laptop/, Layouts/Work/).
 
+		Which subfolder is used can be redirected per machine via
+		$Configuration.LayoutMachineTypeOverrides: a non-empty value for the detected machine
+		type replaces that machine type for layout resolution only (both the Layouts/<Type>/
+		folder and the <Workspace>_<Type>.psd1 file suffix), leaving every other machine-typed
+		setting alone. This is how a machine runs a different monitor setup than usual without
+		editing or losing its real layout set - clearing the entry restores it. The override
+		takes precedence over the SmallDisplayMachineType auto-detection.
+
 		Supports layouts with duplicate window entries where the same ProcessName and
 		WindowTitle appear multiple times to place identical windows in different zones.
 		This is used with Open-Browser's Override parameter which opens the same URL
@@ -221,7 +229,32 @@ function Set-WorkspaceWindowLayout {
 				$layoutNameToUse = 'Fullscreen'
 			}
 
-			if ($cachedMonitorInfo) {
+			# Manual per-machine layout-set override ($Configuration.LayoutMachineTypeOverrides).
+			# A non-empty value for the detected machine type replaces that machine type for layout
+			# resolution ONLY - the Layouts/<Type>/ folder plus the <Workspace>_<Type>.psd1 suffix -
+			# while everything else keyed by machine type (base paths, symlinks, wallpapers, themes)
+			# keeps using the real one. It exists so a machine can be driven on a different monitor
+			# setup than the one its layouts were authored for (e.g. the desktop away from its
+			# multi-monitor rig) without rewriting or losing that layout set: point the override at
+			# a separate folder, and clear the entry to get the machine's own layouts back.
+			#
+			# Checked BEFORE, and winning over, the small-display detection below: an explicitly
+			# configured override is a decision, and having it silently replaced by a monitor-width
+			# guess is exactly the surprise this key exists to remove.
+			$layoutMachineTypeOverride = $null
+			if ($Configuration.LayoutMachineTypeOverrides) {
+				$configuredLayoutOverride = $Configuration.LayoutMachineTypeOverrides[$machineType]
+				if ($configuredLayoutOverride -is [array]) { $configuredLayoutOverride = @($configuredLayoutOverride)[0] }
+				if (-not [string]::IsNullOrWhiteSpace($configuredLayoutOverride)) {
+					$layoutMachineTypeOverride = ([string]$configuredLayoutOverride).Trim()
+				}
+			}
+
+			if ($layoutMachineTypeOverride) {
+				Write-LogDebug " Layout override configured for [$machineType] => using [$layoutMachineTypeOverride] layout set" -Style Warning
+				$machineType = $layoutMachineTypeOverride
+			}
+			elseif ($cachedMonitorInfo) {
 				# Detect if using a small display (laptop-sized)
 				$primaryMonitor = $cachedMonitorInfo | Where-Object { $_.IsPrimary } | Select-Object -First 1
 				if (-not $primaryMonitor) {
@@ -248,6 +281,11 @@ function Set-WorkspaceWindowLayout {
 			else {
 				if ($spinner) { [void](Loading-Spinner -Stop -Spinner $spinner -Discard); $spinner = $null }
 				Write-LogWarning "No layout configuration found for workspace => [$WorkspaceName]"
+				# Without naming the override, a missing file here is baffling: the workspace DOES
+				# have a layout for this machine, just not in the redirected set.
+				if ($layoutMachineTypeOverride) {
+					Write-LogWarning " Layout set [$layoutMachineTypeOverride] is active via LayoutMachineTypeOverrides - expected => [$machineSpecificLayoutPath]. Clear that entry to use this machine's own layouts." -NoLeadingNewline
+				}
 				return
 			}
 		}

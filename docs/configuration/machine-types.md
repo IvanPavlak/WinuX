@@ -206,6 +206,21 @@ Layouts/
     └── ...
 ```
 
+Layouts are the one machine-typed setting that can be pointed somewhere else without changing the machine type, because they encode monitors rather than identity - and a machine's monitors can change temporarily:
+
+```powershell
+# Layout resolution only: this machine reads Layouts/Temp/<Workspace>_Temp.psd1 instead.
+# Base paths, symlinks, wallpapers, and themes keep using the real machine type.
+LayoutMachineTypeOverrides = @{
+    PC = "Temp"   # "" = no override
+}
+
+# Fallback when no override applies: layout set for a small (laptop-class) primary display.
+SmallDisplayMachineType = "Laptop"
+```
+
+The override folder is not a machine type - it needs no `ValidMachineTypes` entry, no base paths, and no payload files, only `<Workspace>_<Name>.psd1` layouts. See [Configure Window Layout](guides/configure-window-layout.md#running-a-machine-on-a-different-monitor-setup).
+
 ## Checking Current Machine Type
 
 ```powershell

@@ -67,6 +67,14 @@ Describe "Set-WorkspaceWindowLayout" {
 			SimpleLayoutWorkspaces = @()
 		}
 
+		# The function reads the layout-resolution keys through the unqualified $Configuration,
+		# which resolves to the SCRIPT scope here - and an It block that sets it leaks the value
+		# into every later test in this file. Reset it per test so layout-set overrides and
+		# small-display settings stay hermetic.
+		$script:Configuration = @{
+			SimpleLayoutWorkspaces = @()
+		}
+
 		$env:WORKSPACE_RERUN_COUNT = $null
 		# Rerun state is mirrored at User scope ("value|timestamp", 10-min TTL) to survive
 		# terminal respawns - clear BOTH scopes so tests stay hermetic and never leak real
@@ -104,6 +112,44 @@ Describe "Set-WorkspaceWindowLayout" {
 
 		Should -Invoke DetermineMachineType -Times 1 -Exactly
 		Should -Invoke Import-PowerShellDataFile -Times 1 -Exactly -ParameterFilter { $Path -eq 'C:\Layouts\Machine\MyWorkspace_Machine.psd1' }
+	}
+
+	It "reads layouts from the configured override layout set instead of the machine's own folder" {
+		$script:Configuration = @{ LayoutMachineTypeOverrides = @{ PC = 'Temp' } }
+		Mock Test-Path {
+			$Path -eq 'C:\Layouts\Temp\MyWorkspace_Temp.psd1'
+		}
+
+		Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace'
+
+		# The override replaces the machine type in BOTH halves of the path - folder and suffix.
+		Should -Invoke Import-PowerShellDataFile -Times 1 -Exactly -ParameterFilter { $Path -eq 'C:\Layouts\Temp\MyWorkspace_Temp.psd1' }
+	}
+
+	It "prefers the override layout set over the small-display layout set" {
+		# Both candidate files "exist", so the assertion proves which one was chosen rather than
+		# which one happened to be present.
+		$script:Configuration = @{
+			LayoutMachineTypeOverrides = @{ PC = 'Temp' }
+			SmallDisplayMachineType    = 'Machine'
+		}
+		Mock Get-MonitorInfo {
+			@([PSCustomObject]@{ IsPrimary = $true; Width = 1920; Height = 1080 })
+		}
+		Mock Test-Path { $true }
+
+		Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace'
+
+		Should -Invoke Import-PowerShellDataFile -Times 1 -Exactly -ParameterFilter { $Path -eq 'C:\Layouts\Temp\MyWorkspace_Temp.psd1' }
+	}
+
+	It "ignores an empty override entry and uses the machine's own layout set" {
+		$script:Configuration = @{ LayoutMachineTypeOverrides = @{ PC = '' } }
+		Mock Test-Path { $true }
+
+		Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace'
+
+		Should -Invoke Import-PowerShellDataFile -Times 1 -Exactly -ParameterFilter { $Path -eq 'C:\Layouts\PC\MyWorkspace_PC.psd1' }
 	}
 
 	It "returns before importing when explicit layout path does not exist" {

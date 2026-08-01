@@ -138,6 +138,35 @@ Fallback machine type if detection fails.
 
 **Key:** `DefaultMachineType`
 
+### Layout Set Overrides
+
+Which `Layouts/` subfolder a machine reads its window layouts from. These two keys affect **layout resolution only** - base paths, symbolic links, wallpapers, and themes always keep using the detected machine type.
+
+**Keys:**
+
+- `LayoutMachineTypeOverrides` - Hashtable mapping a detected machine type → the layout machine type to use instead. A non-empty value redirects layout resolution to `Layouts/<value>/<WorkspaceName>_<value>.psd1`; `""` or an absent entry means no override.
+- `SmallDisplayMachineType` - Layout machine type used when the primary display is at most 3000px wide (a laptop-class screen), regardless of the detected type. `""` disables it.
+
+**Example:**
+
+```powershell
+# The desktop is temporarily on a different monitor setup: read its layouts from Layouts/Temp/
+LayoutMachineTypeOverrides = @{
+    PC     = "Temp"
+    Laptop = ""
+    Work   = ""
+    Test   = ""
+}
+
+SmallDisplayMachineType = "Laptop"
+```
+
+**Consumer function:** `Set-WorkspaceWindowLayout`
+
+**Behavior:** `LayoutMachineTypeOverrides` is checked first and wins over `SmallDisplayMachineType`, so an explicit choice is never overruled by display-size detection. The override folder needs its own `<WorkspaceName>_<value>.psd1` file per workspace you open; when one is missing, the "No layout configuration found" warning names the active layout set and the path it expected instead of silently falling back to the machine's own layouts.
+
+**Typical use:** a machine that has to run on a monitor setup its layouts were not authored for. Author the new geometry in its own folder, point the override at it, and clear the entry to switch back - the machine's real layout set is never edited.
+
 ---
 
 ## Base Paths Per Machine Type
@@ -479,6 +508,8 @@ Each layout file specifies:
 
 - **Monitors:** Virtual desktop layout mapping
 - **Layout:** Array of window placement rules with ProcessName, WindowTitle, DesktopNumber, Zone, Monitor
+
+Which subfolder is read can be redirected per machine - see [Layout Set Overrides](#layout-set-overrides).
 
 **Consumer function:** `Set-WorkspaceWindowLayout`
 

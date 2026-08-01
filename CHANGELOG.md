@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.20] - 2026-08-01
+
+### Added
+
+- `LayoutMachineTypeOverrides` (configuration): maps a detected machine type to the layout machine type `Set-WorkspaceWindowLayout` should use instead, redirecting layout resolution to `Layouts/<value>/<Workspace>_<value>.psd1`. An absent or `""` entry means no override, which is what the base configuration ships, so a vanilla setup is unaffected. Layouts are the one machine-typed setting that describes hardware rather than identity, and hardware moves: a machine on a different monitor setup - a desktop taken somewhere without its usual monitors, one screen instead of two - has layouts encoding zone geometry, desktop counts, and a `Secondary` monitor that is no longer attached. The only ways out were editing that set in place, losing the arrangement you want back later, or lying about the machine type, which also relocates base paths, symbolic links, wallpapers, and themes. This moves layouts alone: author the new geometry in its own folder, point the entry at it, clear the entry to switch back, with the machine's real layout set untouched throughout. The folder is not a machine type - it needs no `ValidMachineTypes` entry, no base paths, and no per-machine payload files, only its own layout `.psd1` files. It is resolved BEFORE, and wins over, `SmallDisplayMachineType`, so an explicit choice is not overruled by the primary display happening to measure 3000px or less - the exact case a temporary single screen tends to hit. There is no silent fallback to the machine's own layouts when a workspace has no file in the redirected set, because that set describes monitors which are not attached; instead the "No layout configuration found" warning now also names the active layout set and the path it expected, so a missing file reads as a missing file rather than a mystery.
+
 ## [0.1.19] - 2026-08-01
 
 ### Fixed
@@ -289,7 +295,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.19...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.20...HEAD
+[0.1.20]: https://github.com/IvanPavlak/WinuX/compare/v0.1.19...v0.1.20
 [0.1.19]: https://github.com/IvanPavlak/WinuX/compare/v0.1.18...v0.1.19
 [0.1.18]: https://github.com/IvanPavlak/WinuX/compare/v0.1.17...v0.1.18
 [0.1.17]: https://github.com/IvanPavlak/WinuX/compare/v0.1.16...v0.1.17
