@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.19] - 2026-08-01
+
+### Fixed
+
+- `Start-Win11Debloat` (Application module) ran the vendored `Win11Debloat.ps1` in the current session, which is PowerShell 7 - the one interpreter Win11Debloat cannot work under. Its app removal and system restore points depend on Windows PowerShell 5.1-only modules: the `Appx` module's `Get-AppxPackage` / `Remove-AppxPackage`, which upstream documents as failing there with "Operation is not supported on this platform" (`0x80131539`), and `Get-ComputerRestorePoint`, which PowerShell 7 does not ship at all. Upstream's note behind that guard (issue #675) is that a run under pwsh continues and silently fails to remove any apps while still reporting success - the behaviour of the currently vendored 2026.06.24 release. Release 2026.07.11 turns it into an explicit refusal instead: it detects `Core` edition, prints the interpreter to re-run under, and exits 1. Neither shape was visible from WinuX, because the exit code was never inspected and `Debloating with saved settings completed!` was printed unconditionally - under the red error, in the newer release's case. The script is now launched through `powershell.exe` with `-NoProfile -ExecutionPolicy Bypass -File`, the same interpreter and flags its own `Run.bat` uses, and a non-zero exit code is reported as an error instead of success. The child process inherits the console, so the interactive menu is unchanged, and inherits the elevated token from the session `Test-AdminPrivileges` has already verified, so no second UAC prompt appears; a `powershell.exe` that cannot be found skips the step with an error rather than attempting the run.
+
 ## [0.1.18] - 2026-07-30
 
 ### Fixed
@@ -279,7 +285,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.18...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.19...HEAD
+[0.1.19]: https://github.com/IvanPavlak/WinuX/compare/v0.1.18...v0.1.19
 [0.1.18]: https://github.com/IvanPavlak/WinuX/compare/v0.1.17...v0.1.18
 [0.1.17]: https://github.com/IvanPavlak/WinuX/compare/v0.1.16...v0.1.17
 [0.1.16]: https://github.com/IvanPavlak/WinuX/compare/v0.1.15...v0.1.16
