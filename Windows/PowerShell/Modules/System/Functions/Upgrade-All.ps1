@@ -5,7 +5,8 @@ function Upgrade-All {
 
 	.DESCRIPTION
 		Upgrades packages in the specified package managers. Reads pinned (version-locked) apps
-		from the configured CSV files and prevents them from being upgraded.
+		from the configured app lists - via `Get-PinnedApps`, so a version pinned in a machine-local
+		`<name>.local.csv` overlay counts too - and prevents them from being upgraded.
 
 		Without `-PackageManager`, upgrades across all managers configured in `PackageManagers` in Configuration.psd1.
 		With `-PackageManager`, upgrades only the specified manager.
@@ -40,7 +41,7 @@ function Upgrade-All {
 		try {
 			switch ($PackageManager) {
 				"WinGet" {
-					$pinnedApps = Get-PinnedApps -CsvFileName $global:Configuration.BootstrapConfig.DataFiles.WinGetApps
+					$pinnedApps = Get-PinnedApps -DataFileKey WinGetApps
 
 					if ($pinnedApps.Count -gt 0) {
 						Show-PinnedAppsWarning -PinnedApps $pinnedApps -Message "Pinning version-specific packages to prevent upgrades"
@@ -55,7 +56,7 @@ function Upgrade-All {
 					$exitCode = $LASTEXITCODE
 				}
 				"Scoop" {
-					$pinnedApps = Get-PinnedApps -CsvFileName $global:Configuration.BootstrapConfig.DataFiles.ScoopApps -VersionExcludeValue "latest"
+					$pinnedApps = Get-PinnedApps -DataFileKey ScoopApps -VersionExcludeValue "latest"
 
 					if ($pinnedApps.Count -gt 0) {
 						Show-PinnedAppsWarning -PinnedApps $pinnedApps -Message "Pinning version-specific packages to prevent upgrades"
@@ -84,7 +85,7 @@ function Upgrade-All {
 					$exitCode = $LASTEXITCODE
 				}
 				"Chocolatey" {
-					$pinnedApps = Get-PinnedApps -CsvFileName $global:Configuration.BootstrapConfig.DataFiles.ChocolateyApps -VersionExcludeValue $null
+					$pinnedApps = Get-PinnedApps -DataFileKey ChocolateyApps -VersionExcludeValue $null
 
 					if ($pinnedApps.Count -gt 0) {
 						Show-PinnedAppsWarning -PinnedApps $pinnedApps -Message "Pinning version-specific packages to prevent upgrades"

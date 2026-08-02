@@ -126,6 +126,11 @@ Applications are defined in CSV files and **filtered by machine type**:
 | `ScoopApps.csv`      | Scoop      | `App,Version,Global,Machine`                   |
 | `ChocolateyApps.csv` | Chocolatey | `App,Version,Params,Force,Machine`             |
 
+The committed CSVs hold only the software WinuX itself needs. **Your own apps go in a sibling
+`<name>.local.csv`**, which is layered over the committed list at read time and is gitignored - so
+you never edit a tracked file and upstream pulls never conflict on an app choice. See
+[Software List: Machine-Local Overlay](../reference/software-list.md#machine-local-overlay).
+
 **Machine column values:**
 
 The values are not a fixed set - each row is matched against the machine types you define in

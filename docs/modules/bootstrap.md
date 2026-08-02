@@ -118,6 +118,47 @@ Recurses into nested hashtables and `IList` collections, expanding every string 
 $expanded = Expand-Hashtable -Source $config -DevPath "<DevRoot>" -UserPath "C:\Users\<User>" -MachineTypeName "MyMachine"
 ```
 
+## [Import-AppCsv](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Bootstrap/Functions/Import-AppCsv.ps1)
+
+- **Description:** The single read path for the three app lists. Parses the committed CSV named by `BootstrapConfig.DataFiles`, layers the sibling machine-local `<name>.local.csv` over it when one exists, and returns the combined active rows. It is for app lists exactly what `Configuration.local.psd1` is for settings: the committed CSV stays the shipped baseline upstream can keep improving, everything a person chose for this machine lives in the overlay beside it, so a fork never has to edit a tracked CSV and pulling upstream never conflicts on one.
+- **Parameters:** -DataFileKey, -RepoRoot
+- **Usage:** `Import-AppCsv -DataFileKey WinGetApps`, `Import-AppCsv -DataFileKey ScoopApps | Where-Object { $_.Global -eq 'true' }`
+
+Called by `Install-WinGetApps`, `Install-ScoopApps`, `Install-ChocolateyApps` and `Get-PinnedApps` in place of a plain `Import-Csv`, so every reader sees the same effective list and the comment-and-blank-row filtering each of them used to do individually now lives in one place.
+
+Layering rules:
+
+| Overlay row                        | Effect                                                                                                                                                        |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `App` matches a base row           | **Replaces** that row in place, which is what lets the overlay pin a version, change the install scope, or re-target a machine without touching the base.      |
+| `App` is new                       | **Added**, after the committed rows.                                                                                                                          |
+| `App` is `-<id>`                   | **Removes** the matching base row. Without this there would be no way to opt out of a shipped app, since a layer that can only add or replace cannot subtract. |
+| `App` starts with `#`, or is blank | Dropped, in the committed file and the overlay alike.                                                                                                          |
+
+Matching is **case-insensitive**, because package ids are. Row order is base-first, then overlay-only additions, so the shipped install order is preserved and this machine's own apps follow it. A row whose `App` still carries the `-` marker is never returned - the marker is an instruction, not a package id. When an overlay both removes and replaces the same `App`, the **removal wins**, whichever order the two rows appear in.
+
+A missing overlay is the normal case and is **not** an error; most machines never write one. A missing **base** file is an error, since it is a tracked file the repository is supposed to ship.
+
+| Parameter      | Type   | Required | Description                                                                                                                                                                                                       |
+| -------------- | ------ | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `-DataFileKey` | String | Yes      | Which list to read: `WinGetApps`, `ScoopApps` or `ChocolateyApps`. Resolved through `BootstrapConfig.DataFiles`, so the location stays configuration-driven. Anything outside that set is rejected by `ValidateSet`. |
+| `-RepoRoot`    | String | No       | Repository root the relative data-file path is resolved against. Defaults to `$global:MachineSpecificPaths.Projects.Self.Root`.                                                                                     |
+
+```powershell
+# The active WinGet rows, with any machine-local overlay applied
+Import-AppCsv -DataFileKey WinGetApps
+
+# Filter the combined list exactly as a plain Import-Csv result would be filtered
+Import-AppCsv -DataFileKey ScoopApps | Where-Object { $_.Global -eq 'true' }
+```
+
+> [!IMPORTANT]
+> The column header must be **line 1** of the committed file and of the overlay, with any commentary after it. `Import-Csv` takes line 1 as the header unconditionally, so a leading comment line becomes the header and every real row then parses under a bogus column name with an empty `App` - which this function's own blank-`App` filter would then silently discard.
+
+This function only reads. [Save-AppCsvOverlay](configuration.md#save-appcsvoverlay) writes the overlay, and the committed CSV is never modified by either.
+
+**See also:** [Save-AppCsvOverlay](configuration.md#save-appcsvoverlay), [Software List: Machine-Local Overlay](../reference/software-list.md#machine-local-overlay), [Test-MachineTypeScope](#test-machinetypescope), [Fork Model](../contributing/fork-model.md)
+
 ## [Initialize-Configuration](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Bootstrap/Functions/Initialize-Configuration.ps1)
 
 - **Description:** First-run writer that captures your personal identity and paths into a sibling `Configuration.local.psd1` override - never into the committed `Configuration.psd1`. WinuX ships a generic base config (blank Git identity, placeholder paths) and commits no personal data; this function writes only the keys that differ - `GitConfig.UserName`/`UserEmail`, the `BasePaths.<MachineType>` `{Dev}`/`{User}` roots, and this machine's `HostnameToMachineType` entry - which `Load-PathConfiguration` deep-merges over the base at load time. Because the base file is never edited, pulling upstream updates into a fork never conflicts on configuration. Validates that the generated override parses before writing, and does nothing if the override already has a Git identity unless `-Force` is given.
@@ -410,6 +451,8 @@ Bootstrap uses CSV files for package definitions:
 | `WinGetApps.csv`     | `Modules/Bootstrap/Data/` | WinGet packages     |
 | `ScoopApps.csv`      | `Modules/Bootstrap/Data/` | Scoop packages      |
 | `ChocolateyApps.csv` | `Modules/Bootstrap/Data/` | Chocolatey packages |
+
+Each of the three may have a machine-local `<name>.local.csv` beside it, which [Import-AppCsv](#import-appcsv) layers over the committed list and [Save-AppCsvOverlay](configuration.md#save-appcsvoverlay) writes. Nothing ever edits the committed CSV, so a fork's own app choices never touch a tracked file and upstream can keep improving the baseline. WinuX gitignores the overlays, exactly as it gitignores `Configuration.local.psd1`. See [Software List: Machine-Local Overlay](../reference/software-list.md#machine-local-overlay).
 
 ### WinGetApps.csv Format
 

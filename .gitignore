@@ -9,6 +9,18 @@ Obsidian/workspace.json
 # identity and paths, and must never be published even if a stray/older copy sits in another dir.
 Configuration.local.psd1
 
+# Personal app-list overlays - exactly the same idea as Configuration.local.psd1, for the three
+# app CSVs. Import-AppCsv layers <name>.local.csv over the committed <name>.csv at read time and
+# Save-AppCsvOverlay writes it, so a fork's own app choices never touch a tracked file. WinuX
+# ships only the base lists, so the overlays are ignored here. A fork that runs several machines
+# can commit its own overlays (see docs/contributing/fork-model.md) - upstream never tracks them,
+# so committing them downstream never conflicts on a pull.
+Windows/PowerShell/Modules/Bootstrap/Data/*.local.csv
+
+# The one-click undo copies the writers leave behind. Noise everywhere, upstream and forks alike.
+Configuration.local.psd1.bak
+Windows/PowerShell/Modules/Bootstrap/Data/*.local.csv.bak
+
 # Logging module - generated logs (kept locally for inspection, never committed)
 Windows/PowerShell/Modules/Logging/Logs/*
 !Windows/PowerShell/Modules/Logging/Logs/.gitkeep

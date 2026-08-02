@@ -206,7 +206,7 @@ docs/
 │   └── agent-system.md                     # Custom agents, prompts, instructions
 │
 ├── contributing/
-│   └── fork-model.md                       # Fork model, merge=ours, config override
+│   └── fork-model.md                       # Fork model, config + app-list overrides, merge=ours
 │
 └── reference/
     ├── software-list.md                    # Packages installed from the CSV files

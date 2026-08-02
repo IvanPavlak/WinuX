@@ -9,6 +9,8 @@ BeforeAll {
 	# Dot-source the machine-scope gate so the Machine-column filtering resolves even in
 	# sessions whose imported Bootstrap module predates the Test-MachineTypeScope export.
 	. (Join-Path (Get-RepositoryPath).Modules "Bootstrap\Functions\Test-MachineTypeScope.ps1")
+	# Same reason for the layered CSV reader the installer now reads through.
+	. (Join-Path (Get-RepositoryPath).Modules "Bootstrap\Functions\Import-AppCsv.ps1")
 }
 
 AfterAll {

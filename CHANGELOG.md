@@ -8,6 +8,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.21] - 2026-08-02
+
+### Added
+
+- `Import-AppCsv` (Bootstrap module): the single read path for the three app lists. It parses the committed CSV named by `BootstrapConfig.DataFiles`, layers a sibling machine-local `<name>.local.csv` over it when one exists, and returns the combined active rows. This is for app lists exactly what `Configuration.local.psd1` is for settings, and it exists for the same reason: until now a fork's own apps could only live in the tracked CSVs, so every fork edited a file upstream also owns. The `merge=ours` attribute those three files carried made that survivable but not good - it pinned the fork's copy permanently, which meant the fork never received an upstream base-list change either. With the overlay the two concerns separate cleanly: the committed CSV stays the shipped baseline upstream can keep improving, and everything chosen for this machine sits beside it. An overlay row whose `App` matches a base row **replaces** it (pin a version, change the scope, re-target the `Machine` column), a new `App` is **added** after the shipped rows so the committed install order is preserved, and an `App` written as `-<id>` **removes** a shipped row - without which there would be no way to opt out of an app the base ships, since a layer that can only add or replace cannot subtract. Matching is case-insensitive because package ids are; a removal beats a replacement of the same `App` whichever order the rows are written in; comment and blank rows are dropped from both files, which is the filtering all three installers previously each did for themselves. A missing overlay is the normal case and not an error; a missing base file is, since it is tracked.
+- `Save-AppCsvOverlay` (Configuration module): the only writer of an overlay. It replaces `<name>.local.csv` wholesale from the rows it is given, having first proved - against a candidate held in memory, so a refusal leaves the live file byte-identical - that every row carries an `App`, that every `Machine` cell is `All` or known machine types joined with `/` (each token checked, since one good token would otherwise hide a typo in the rest of the cell, and a cell that matches nothing would sit in the overlay looking installed and never install), and that the result round-trips through `Import-Csv` with the same row count. Only then is the previous overlay copied to `<name>.local.csv.bak` and the candidate moved over it, staged in the destination folder so the replace is a same-volume rename no reader can observe half-written. The column header is written as line 1 with the comment banner after it, because `Import-Csv` takes line 1 as the header unconditionally - a leading comment would become the column names and the whole overlay would then parse as empty rows and be silently discarded. Columns come from the committed file's header, so an overlay can never drift into a shape the installer does not read.
+
+### Changed
+
+- `Install-WinGetApps`, `Install-ScoopApps` and `Install-ChocolateyApps` (Application module) read their list through `Import-AppCsv` instead of a plain `Import-Csv`, so the machine-local overlay applies and the comment/blank-row filtering lives in one place instead of being repeated three times. No behaviour changes for a setup without an overlay.
+- `Get-PinnedApps` (System module) reads through `Import-AppCsv` as well, and takes `-DataFileKey` (`WinGetApps` / `ScoopApps` / `ChocolateyApps`) in place of `-CsvFileName`. This is what keeps `Upgrade-All`'s pinning honest once overlays exist, and it matters in both directions: a version pinned only in the overlay is invisible in the committed file, so a direct reader would let `Upgrade-All` upgrade straight past the pin - the exact outcome pinning exists to prevent - and an app the overlay removed would still be reported as pinned and handed to `winget pin add`.
+- The three committed app lists now hold only the software WinuX itself needs, with their commented example rows replaced by a pointer to the overlay. The examples were an invitation to edit a tracked file, which is precisely what the overlay removes the need for; the catalogue of suggested package ids moved to `docs/reference/software-list.md`.
+- `.gitignore` ignores `Windows/PowerShell/Modules/Bootstrap/Data/*.local.csv` and the writers' `.bak` files, exactly as it ignores `Configuration.local.psd1`. A fork that runs several machines can commit its own overlays; upstream never tracks those paths, so committing them downstream never conflicts on a pull.
+
+### Breaking
+
+- The `merge=ours` attribute is removed from `WinGetApps.csv`, `ScoopApps.csv` and `ChocolateyApps.csv`. They are now ordinary upstream-tracked files, like `Configuration.psd1`, which is what lets a fork keep receiving base-list improvements instead of pinning its own copy forever. **A fork that still keeps its apps in the committed CSVs will have them overwritten by its next `git merge upstream/master`.** Migrating is a one-time copy: move your added rows into a new `<name>.local.csv` (same header on line 1), write `-<id>` rows for any shipped app you had deleted, then restore the committed files with `git checkout upstream/master -- Windows/PowerShell/Modules/Bootstrap/Data/`. The step-by-step note is in [the fork model](docs/contributing/fork-model.md#keeping-your-own-app-lists-the-localcsv-overlay). The payload configs (`Git/.gitconfig`, `NuGet/nuget.config`, `Firefox/user.js`, `docs/custom/README.md`) keep `merge=ours`; they have no base-plus-override split and are wholly the fork's.
+
 ## [0.1.20] - 2026-08-01
 
 ### Added
@@ -300,7 +318,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.20...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.21...HEAD
+[0.1.21]: https://github.com/IvanPavlak/WinuX/compare/v0.1.20...v0.1.21
 [0.1.20]: https://github.com/IvanPavlak/WinuX/compare/v0.1.19...v0.1.20
 [0.1.19]: https://github.com/IvanPavlak/WinuX/compare/v0.1.18...v0.1.19
 [0.1.18]: https://github.com/IvanPavlak/WinuX/compare/v0.1.17...v0.1.18

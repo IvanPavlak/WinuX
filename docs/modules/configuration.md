@@ -2,6 +2,8 @@
 
 The Configuration module provides **reliable programmatic modification** of `Configuration.psd1` - adding browser groups, workspaces, projects, symbolic links, and window layouts without manual text editing.
 
+`Save-AppCsvOverlay` extends the same base-plus-override discipline that `Configuration.local.psd1` gives settings to the three app list CSVs: it writes only `<name>.local.csv`, never the committed list, and [`Import-AppCsv`](bootstrap.md#import-appcsv) layers the two at read time.
+
 ## [Add-BrowserGroup](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Configuration/Functions/Add-BrowserGroup.ps1)
 
 - **Description:** Adds a new browser URL group to the `BrowserGroups` array in `Configuration.psd1`. Supports named URLs with labels (recommended, via `-Urls`) and simple URL lists (via `-SimpleUrls`).
@@ -193,6 +195,60 @@ $section = Find-ConfigurationSection -Lines $lines -SectionName "BrowserGroups"
 
 **See also:** [Add Browser Group](../configuration/guides/add-browser-group.md)
 
+## [Save-AppCsvOverlay](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Configuration/Functions/Save-AppCsvOverlay.ps1)
+
+- **Description:** Writes the machine-local app list overlay, validating before it replaces anything. The only function that writes an overlay: it replaces `<name>.local.csv` wholesale from the rows it is given, having first proved the result parses and that every row is something the installers can actually act on.
+- **Parameters:** -DataFileKey, -Row, -RepoRoot, -NoBackup
+- **Usage:** `Save-AppCsvOverlay -DataFileKey WinGetApps -Row @(@{ App = "Obsidian.Obsidian"; Machine = "All" })`, `Save-AppCsvOverlay -DataFileKey WinGetApps -Row @(@{ App = "-Microsoft.PowerToys"; Machine = "All" })`, `Save-AppCsvOverlay -DataFileKey ScoopApps -Row @() -WhatIf`
+
+**Only the overlay is ever written.** The committed CSV is read to take its column header and to validate against, and is never modified - which is what keeps a fork's app choices out of a tracked file and stops an upstream pull from conflicting on one. [`Import-AppCsv`](bootstrap.md#import-appcsv) then layers what is written here over the shipped list, exactly as the shell layers `Configuration.local.psd1` over `Configuration.psd1`.
+
+Validation runs in order against a candidate held in memory, so a refusal leaves the live overlay byte-identical:
+
+1. **Every row needs a non-empty `App`** - there would otherwise be nothing to install.
+2. **Every `Machine` cell must be `All`, or known machine types joined with `/`.** A blank or unknown token silently matches nothing, so the row would sit in the overlay looking installed and never install, which is the most confusing possible outcome. Tokens are checked against `ValidMachineTypes`, and **every** token of a `/` list is checked rather than only the first, since one good token would otherwise hide a typo in the rest of the cell.
+3. **The candidate must round-trip through `Import-Csv`** and come back with the same row count. Values containing a comma or a double quote are quoted (and embedded quotes doubled), and this is the gate that proves it worked rather than assuming it.
+
+Only then is the existing overlay copied to `<name>.local.csv.bak` and the candidate moved over it. The candidate is staged in the destination folder so the replace is a same-volume rename a reader can never observe half-written, and restoring the `.bak` is a complete undo. `-WhatIf` runs the whole validation and reports what would be written without writing it, without backing anything up and without leaving a staged file behind.
+
+The **column header is line 1** of what it writes, and the comment banner goes after it. That order is not cosmetic: `Import-Csv` takes line 1 as the header unconditionally, so a leading comment would be read as the header, every real row would parse under a bogus column name with an empty `App`, and the reader's blank-`App` filter would then discard the whole overlay in silence. The columns themselves are taken from the committed file's header, so a row carrying an unknown extra key adds no column and the overlay's shape can never drift from what the installer reads.
+
+A **removal** is expressed as a row whose `App` is `-<id>`, which is how the overlay opts out of an app the committed list ships. `Import-AppCsv` applies that; nothing here needs to know the base file's contents beyond validating machine tokens. Passing **no rows** writes an empty overlay (header and banner only), which is the correct way to say "this machine adds nothing" and is different from having no overlay file at all.
+
+| Parameter      | Description                                                                                                                                                                                                                                                                                    |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `-DataFileKey` | Which list to write: `WinGetApps`, `ScoopApps` or `ChocolateyApps`. Mandatory, positional; resolved through `BootstrapConfig.DataFiles`.                                                                                                                                                        |
+| `-Row`         | The overlay rows, as hashtables. Each must have an `App` and a `Machine`; the remaining columns are taken from the committed file's header, so a key it does not name is ignored and a column it does name but the row omits is written empty. An empty collection writes a header-only overlay. |
+| `-RepoRoot`    | Repository root the data-file path is resolved against. Defaults to the running repository. Passing it **blank** is refused rather than silently falling back, since that would write beside the tracked lists when the caller meant a sandbox.                                                  |
+| `-NoBackup`    | Do not write a `.bak` copy. Not recommended; it removes the one-click undo.                                                                                                                                                                                                                     |
+
+The returned object reports `OverlayPath`, `BackupPath`, `RowCount` and `Written`.
+
+```powershell
+# Add one app for every machine, leaving the committed list untouched
+Save-AppCsvOverlay -DataFileKey WinGetApps -Row @(
+    @{ App = "Obsidian.Obsidian"; Version = "Latest"; Scope = "d"; Interactive = "n"; Source = "w"; Machine = "All" }
+)
+
+# Pin a version for an app the committed list already ships (the matching row is replaced)
+Save-AppCsvOverlay -DataFileKey WinGetApps -Row @(
+    @{ App = "Microsoft.PowerShell"; Version = "7.4.6"; Scope = "d"; Interactive = "n"; Source = "w"; Machine = "PC/Work" }
+)
+
+# Opt this machine out of a shipped app
+Save-AppCsvOverlay -DataFileKey WinGetApps -Row @(@{ App = "-Microsoft.PowerToys"; Machine = "All" })
+
+# Validate and report what would be written, without writing it
+Save-AppCsvOverlay -DataFileKey ScoopApps -Row @() -WhatIf
+```
+
+> [!IMPORTANT]
+> The overlay is replaced **wholesale**, not edited row by row. A caller that wants to add one app has to pass the rows it wants to keep as well - read the current set with `Import-AppCsv` first. This is the one place the app overlay differs from `Configuration.local.psd1`, which is edited by hand or by the `Add-*` builders.
+
+Errors are raised as exceptions and progress goes to `Write-Verbose` rather than the logging module, so this writer is usable from an interactive shell and from the compiled installer alike. Callers render their own messages.
+
+**See also:** [Import-AppCsv](bootstrap.md#import-appcsv), [Software List: Machine-Local Overlay](../reference/software-list.md#machine-local-overlay), [Fork Model](../contributing/fork-model.md)
+
 ## [Test-ConfigurationKeyPath](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Configuration/Functions/Test-ConfigurationKeyPath.ps1)
 
 - **Description:** Tests whether an ordered configuration key path resolves to a non-empty value. Walks a hashtable using the provided key path and returns `$true` only when every segment exists and the final resolved value is not `$null` or an empty string. Used internally by `Test-ConfigurationSchema` to validate required top-level and nested settings.
@@ -264,6 +320,10 @@ All functions are covered by Pester tests in `Modules/Tests/Modules/Configuratio
 | `Add-Project.Tests.ps1`               | 8     | Basic, defaults, custom actions, TerminalTabs, ProjectTerminals, RunnableProjects, PathMappings, full |
 | `Add-SymbolicLink.Tests.ps1`          | 4     | Simple link, preserve existing, nested links, valid format                                            |
 | `Add-WindowLayout.Tests.ps1`          | 8     | File creation, multiple machines, no overwrite, valid data, SimpleLayoutWorkspaces                    |
+| `Save-AppCsvOverlay.Tests.ps1`        | 20    | Overlay written and reported, the committed CSV byte-identical, header on line 1, comment banner, backups, `-WhatIf`, every machine-token refusal, blank `-RepoRoot`, comma and quote round-trips, header-only overlay, columns from the base header, temp-file hygiene |
+
+> [!IMPORTANT]
+> `Save-AppCsvOverlay` writes files, and the overlay it writes lands beside the committed CSV in `Modules/Bootstrap/Data/`. Its tests therefore build a synthetic app list in a sandbox repository under `$TestDrive` and pass it as `-RepoRoot`; a test pointed at the working tree would drop overlays into the tracked data folder, where they would shadow the real committed app lists. The folder is rebuilt for every test, so no stale overlay or `.bak` can make an assertion pass for the wrong reason, and "the committed list is never modified" is asserted as an exact byte comparison rather than a text one.
 
 Run tests with:
 

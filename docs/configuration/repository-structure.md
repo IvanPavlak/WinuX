@@ -39,9 +39,10 @@ WinuX/
     │       ├── Application/                        # App launchers & installers
     │       ├── Bootstrap/                          # System initialization
     │       │   └── Data/
-    │       │       ├── WinGetApps.csv              # WinGet applications
-    │       │       ├── ScoopApps.csv               # Scoop applications
-    │       │       └── ChocolateyApps.csv          # Chocolatey applications
+    │       │       ├── WinGetApps.csv              # WinGet applications (upstream baseline)
+    │       │       ├── WinGetApps.local.csv        # your own apps, layered over it (gitignored)
+    │       │       ├── ScoopApps.csv               # Scoop applications (+ ScoopApps.local.csv)
+    │       │       └── ChocolateyApps.csv          # Chocolatey applications (+ .local.csv)
     │       ├── Configuration/                      # Programmatic config modifications
     │       ├── Custom/                             # Fork-owned functions & modules (see Fork Model)
     │       ├── Git/                                # Repository management

@@ -4,10 +4,11 @@ function Install-ScoopApps {
 		Installs Scoop-managed apps from the WinuX CSV, filtered by machine type.
 
 	.DESCRIPTION
-		Reads the app list from the CSV file at `BootstrapConfig.DataFiles.ScoopApps` in
-		Configuration.psd1. Each row specifies an app name, optional bucket, and the machine
-		types it applies to. Apps for the current machine type and All-type apps are installed;
-		others are skipped.
+		Reads the app list through `Import-AppCsv`, which parses the committed CSV named by
+		`BootstrapConfig.DataFiles.ScoopApps` in Configuration.psd1 and layers the machine-local
+		`ScoopApps.local.csv` over it. Each row specifies an app name, optional bucket, and the
+		machine types it applies to. Apps for the current machine type and All-type apps are
+		installed; others are skipped.
 
 		Requires administrator privileges. Called automatically by Bootstrap.
 
@@ -21,8 +22,9 @@ function Install-ScoopApps {
 
 	$MachineType = DetermineMachineType
 
-	$csvPath = Join-Path -Path $MachineSpecificPaths.Projects.Self.Root -ChildPath $global:Configuration.BootstrapConfig.DataFiles.ScoopApps
-	$scoopApps = Import-Csv $csvPath | Where-Object { -not [string]::IsNullOrWhiteSpace($_.App) -and -not $_.App.TrimStart().StartsWith('#') }
+	# Import-AppCsv layers the machine-local ScoopApps.local.csv over the committed list, so a fork's
+	# own app choices apply without the tracked CSV ever being edited.
+	$scoopApps = @(Import-AppCsv -DataFileKey ScoopApps)
 
 	$installedApps = @()
 	try {
