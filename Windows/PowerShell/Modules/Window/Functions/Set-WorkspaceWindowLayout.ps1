@@ -139,37 +139,23 @@ function Set-WorkspaceWindowLayout {
 	# process-scoped env vars survive only when Windows Terminal spawns a fresh host per
 	# `wt` call (windowingBehavior "useNew"); under "useAnyExisting" the new tab inherits
 	# the WT host's stale environment, resetting every marker/counter and uncapping the
-	# rerun loop. Each value is therefore mirrored at User scope as "value|unix-timestamp".
-	# Reads prefer the process copy (identical behavior to the plain env vars when it
-	# propagates) and fall back to the mirror; the mirror is one-shot - consumed on first
-	# read and aged out after the TTL - so a stale value can never leak into a later run.
+	# rerun loop. Each value is therefore mirrored outside the process, by
+	# Set-WorkspaceRerunMirror / Get-WorkspaceRerunMirror, which own the stamping, the
+	# one-shot consume, the TTL and the read-before-clear guard - see those two for why the
+	# mirror is shaped the way it is. Reads here prefer the process copy (identical behavior
+	# to the plain env vars when it propagates) and fall back to the mirror.
 	$rerunStateTtlMinutes = 10
 	$readRerunState = {
 		param([string]$Name)
 		$processValue = [Environment]::GetEnvironmentVariable($Name, 'Process')
-		$persisted = [Environment]::GetEnvironmentVariable($Name, 'User')
-		if (-not [string]::IsNullOrEmpty($persisted)) {
-			[Environment]::SetEnvironmentVariable($Name, $null, 'User')
-		}
+		$persisted = Get-WorkspaceRerunMirror -Name $Name -TtlMinutes $rerunStateTtlMinutes
 		if (-not [string]::IsNullOrEmpty($processValue)) { return $processValue }
-		if ([string]::IsNullOrEmpty($persisted)) { return $null }
-		$parts = $persisted -split '\|', 2
-		if ($parts.Count -lt 2) { return $null }
-		$timestamp = 0L
-		if (-not [long]::TryParse($parts[1], [ref]$timestamp)) { return $null }
-		$ageMinutes = ([DateTimeOffset]::UtcNow.ToUnixTimeSeconds() - $timestamp) / 60.0
-		if ($ageMinutes -gt $rerunStateTtlMinutes -or $ageMinutes -lt 0) { return $null }
-		return $parts[0]
+		return $persisted
 	}
 	$writeRerunState = {
 		param([string]$Name, [string]$Value)
 		[Environment]::SetEnvironmentVariable($Name, $Value, 'Process')
-		if ([string]::IsNullOrEmpty($Value)) {
-			[Environment]::SetEnvironmentVariable($Name, $null, 'User')
-		}
-		else {
-			[Environment]::SetEnvironmentVariable($Name, "$Value|$([DateTimeOffset]::UtcNow.ToUnixTimeSeconds())", 'User')
-		}
+		Set-WorkspaceRerunMirror -Name $Name -Value $Value
 	}
 
 	$windowOnlyRetryActive = (& $readRerunState $windowOnlyRetryEnvVar) -eq '1'

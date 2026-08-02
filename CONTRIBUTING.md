@@ -100,6 +100,12 @@ Run-Tests -TestName "Resize-Windows"       # scoped (matches *<pattern>*.Tests.p
 Run-Tests -TestName "Resize-Windows" -Detailed   # per-test diagnostics
 ```
 
+The suite runs in parallel worker processes, so the terminal only shows a spinner, a live
+test counter and the verdict. The full per-test output of every worker lands in
+`Windows/PowerShell/Modules/Tests/Results/TestRun_<timestamp>.log` (gitignored) - read that
+when something fails, or pass `-Detailed` to have it echoed. See
+[Tests module](docs/modules/tests.md) for the run artifacts and exit codes.
+
 **All tests must pass before you open a PR.** If you changed several areas, run `Run-Tests`
 once per changed area and confirm each is green.
 

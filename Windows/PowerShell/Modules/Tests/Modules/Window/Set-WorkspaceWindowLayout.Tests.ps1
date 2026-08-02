@@ -5,6 +5,15 @@ BeforeAll {
 	$FunctionsPath = Join-Path $ModuleRoot "Window\Functions"
 
 	. "$FunctionsPath\Initialize-WorkspaceWindowLayoutRerun.ps1"
+	# The rerun-state mirror, dot-sourced so the BeforeEach below can mock it. These two are the
+	# only calls in the whole function that reach outside the process, and each User-scope write
+	# they make broadcasts WM_SETTINGCHANGE to every top-level window and blocks on the slowest
+	# to answer - which cost this file ~95 of its ~98 seconds. Nothing here asserts on the
+	# mirror (every rerun-marker assertion below reads Process scope, which stays real), and the
+	# mirror's own behavior is covered by Get-WorkspaceRerunMirror.Tests.ps1 and
+	# Set-WorkspaceRerunMirror.Tests.ps1.
+	. "$FunctionsPath\Get-WorkspaceRerunMirror.ps1"
+	. "$FunctionsPath\Set-WorkspaceRerunMirror.ps1"
 	# The real layout-set resolver, not a mock: which folder and file suffix a workspace resolves
 	# to is part of the behavior under test here.
 	. "$FunctionsPath\Get-LayoutMachineType.ps1"
@@ -44,6 +53,10 @@ Describe "Set-WorkspaceWindowLayout" {
 		Mock Initialize-WorkspaceWindowLayoutRerun { $true }
 		Mock Start-FancyZones { $true }
 		Mock ReRun-LastCommand { }
+		# See the dot-source note above: the out-of-process mirror only, never the Process-scope
+		# markers the assertions below read.
+		Mock Get-WorkspaceRerunMirror { $null }
+		Mock Set-WorkspaceRerunMirror { }
 		Mock Resize-Windows { }
 		Mock Move-WindowToVirtualDesktop { $true }
 		Mock Remove-VirtualDesktops { $true }
@@ -82,9 +95,18 @@ Describe "Set-WorkspaceWindowLayout" {
 		# Rerun state is mirrored at User scope ("value|timestamp", 10-min TTL) to survive
 		# terminal respawns - clear BOTH scopes so tests stay hermetic and never leak real
 		# User-scope environment values onto the machine running the suite.
+		#
+		# The User-scope clear is read-guarded. Writing a User-scope variable broadcasts
+		# WM_SETTINGCHANGE to every top-level window and blocks on the slowest one (~700ms a
+		# call here), while the matching read is a plain registry lookup (~2ms). Clearing a
+		# variable that is already absent is a no-op, so the guard leaves the end state
+		# identical and takes ~54s off the suite. Same read-before-clear shape the function
+		# under test uses for its own mirror (Set-WorkspaceWindowLayout.ps1:151-153).
 		foreach ($rerunVar in 'WORKSPACE_RERUN_COUNT', 'WORKSPACE_WINDOW_ONLY_RETRY', 'WORKSPACE_WINDOW_ONLY_RETRY_TITLE', 'WORKSPACE_WINDOW_ONLY_RETRY_PROCESS') {
 			[Environment]::SetEnvironmentVariable($rerunVar, $null, 'Process')
-			[Environment]::SetEnvironmentVariable($rerunVar, $null, 'User')
+			if (-not [string]::IsNullOrEmpty([Environment]::GetEnvironmentVariable($rerunVar, 'User'))) {
+				[Environment]::SetEnvironmentVariable($rerunVar, $null, 'User')
+			}
 		}
 
 		# The real Snap-AllWindows resets this at its start; the global mock does not, so a
@@ -95,10 +117,12 @@ Describe "Set-WorkspaceWindowLayout" {
 
 	AfterAll {
 		# Leave the machine clean: tests exercise the escalation path, which persists rerun
-		# state at User scope.
+		# state at User scope. Read-guarded for the same reason as the BeforeEach clear above.
 		foreach ($rerunVar in 'WORKSPACE_RERUN_COUNT', 'WORKSPACE_WINDOW_ONLY_RETRY', 'WORKSPACE_WINDOW_ONLY_RETRY_TITLE', 'WORKSPACE_WINDOW_ONLY_RETRY_PROCESS') {
 			[Environment]::SetEnvironmentVariable($rerunVar, $null, 'Process')
-			[Environment]::SetEnvironmentVariable($rerunVar, $null, 'User')
+			if (-not [string]::IsNullOrEmpty([Environment]::GetEnvironmentVariable($rerunVar, 'User'))) {
+				[Environment]::SetEnvironmentVariable($rerunVar, $null, 'User')
+			}
 		}
 	}
 

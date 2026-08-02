@@ -8,17 +8,29 @@ function Run-Tests {
         Default discovery also sweeps the fork-owned Custom area (Modules/Custom/<Module>/Tests)
         when present. Supports filtering by test name pattern and various output options.
 
+        The run itself is performed by Invoke-TestSuite.ps1, which spreads the test files over
+        parallel child pwsh processes. Each worker bootstraps its own session, so the tests can
+        no longer pollute this one and no profile reload is needed afterwards.
+
+        The terminal shows only a spinner with a live test counter and the final verdict.
+        Everything a detailed serial run would have printed goes to
+        Modules/Tests/Results/TestRun_<timestamp>.log (gitignored, like the Logging module's
+        Logs folder), next to the per-worker NUnit XMLs.
+
     .PARAMETER TestName
         Optional filter to run only tests matching a specific pattern (e.g., "Open-Terminal")
 
     .PARAMETER Path
         Optional path to test files. Defaults to the Tests directory.
 
+    .PARAMETER Workers
+        Number of parallel worker processes. Defaults to min(CPU count, 8, test file count).
+
     .PARAMETER Detailed
-        Show detailed test results instead of summary
+        Echo the whole run log, including every worker transcript, after the run
 
     .PARAMETER PassThru
-        Return the Pester result object
+        Return the aggregate result object
 
     .EXAMPLE
         Run-Tests
@@ -30,7 +42,11 @@ function Run-Tests {
 
     .EXAMPLE
         Run-Tests -Detailed
-        Runs all tests with detailed output
+        Runs all tests and prints the full run log afterwards
+
+    .EXAMPLE
+        Run-Tests -Workers 1
+        Runs everything in a single worker (useful when diagnosing cross-test interference)
     #>
 	[CmdletBinding()]
 	param(
@@ -41,120 +57,38 @@ function Run-Tests {
 		[string]$Path,
 
 		[Parameter()]
+		[int]$Workers = 0,
+
+		[Parameter()]
 		[switch]$Detailed,
 
 		[Parameter()]
 		[switch]$PassThru
 	)
 
-	# Determine the tests root directory
-	if (-not $Path) {
-		$TestsRoot = Join-Path -Path $PSScriptRoot -ChildPath ".."
-		$TestsRoot = Resolve-Path $TestsRoot
-	}
-	else {
-		$TestsRoot = Resolve-Path $Path
-	}
-
-	# Default discovery also sweeps the fork-owned Custom area (Modules\Custom\<Module>\Tests),
-	# so fork-local functions meet the same "tests required" bar before graduating upstream.
-	$SearchRoots = @($TestsRoot)
-	if (-not $Path) {
-		$CustomRoot = Join-Path -Path (Split-Path -Path $TestsRoot -Parent) -ChildPath "Custom"
-		if (Test-Path -Path $CustomRoot) {
-			$SearchRoots += (Resolve-Path $CustomRoot)
-		}
+	$Harness = Join-Path -Path (Split-Path -Path $PSScriptRoot -Parent) -ChildPath "Invoke-TestSuite.ps1"
+	if (-not (Test-Path -LiteralPath $Harness)) {
+		Write-LogError "Test harness not found: $Harness"
+		return
 	}
 
 	Write-LogTitle "Running Pester Tests"
 
-	# Find test files
-	if ($TestName) {
-		$TestFiles = Get-ChildItem -Path $SearchRoots -Recurse -Filter "*$TestName*.Tests.ps1"
-		if ($TestFiles.Count -eq 0) {
-			Write-LogWarning "No test files found matching pattern: $TestName"
-			return
-		}
-		Write-LogStep "Running tests matching: $TestName"
-	}
-	else {
-		$TestFiles = Get-ChildItem -Path $SearchRoots -Recurse -Filter "*.Tests.ps1"
-		if ($TestFiles.Count -eq 0) {
-			Write-LogWarning "No test files found in: $TestsRoot"
-			return
-		}
-		Write-LogStep "Running all $($TestFiles.Count) test file(s)"
-	}
+	# Splatted rather than passed positionally so an unset filter stays unset - the harness
+	# treats an empty -TestName as "no filter", but being explicit keeps the two in step.
+	$HarnessArguments = @{}
+	if ($TestName) { $HarnessArguments.TestName = $TestName }
+	if ($Path) { $HarnessArguments.Path = $Path }
+	if ($Workers -gt 0) { $HarnessArguments.Workers = $Workers }
+	if ($Detailed) { $HarnessArguments.Detailed = $true }
+	if ($PassThru) { $HarnessArguments.PassThru = $true }
 
-	# Display test files to be run
-	Write-LogStep "Test files:"
-	$TestFiles | ForEach-Object {
-		Write-LogStep "  - $($_.Name)" -NoLeadingNewline
-	}
-	Write-Host ""
+	# The harness owns all run output (spinner, failures, verdict, log path) so that a local run
+	# and a CI run report identically. It exits 0 pass / 1 test failures / 2 infrastructure
+	# failure; invoked with & the exit code lands in $LASTEXITCODE and this session lives on.
+	$Result = & $Harness @HarnessArguments
 
-	# Configure Pester
-	$PesterConfig = @{
-		Run    = @{
-			Path = $TestFiles.FullName
-		}
-		Output = @{
-			Verbosity = if ($Detailed) { 'Detailed' } else { 'Normal' }
-		}
-	}
-
-	# Add PassThru if requested
 	if ($PassThru) {
-		$PesterConfig.Run.PassThru = $true
-	}
-
-	try {
-		# Check Pester version
-		$PesterModule = Get-Module -ListAvailable -Name Pester | Sort-Object Version -Descending | Select-Object -First 1
-
-		if (-not $PesterModule) {
-			Write-LogError "Pester is not installed. Please run Install-PowerShellModules first."
-			return
-		}
-
-		# Run tests based on Pester version
-		if ($PesterModule.Version -ge [Version]"5.0.0") {
-			# Pester 5.x - Use configuration object
-			# NOTE: Variable MUST NOT be named $Configuration - it shadows the $global:Configuration
-			# used by module functions under test (e.g., Send-WakeOnLan), causing test failures.
-			$PesterConfiguration = New-PesterConfiguration -Hashtable $PesterConfig
-			$Result = Invoke-Pester -Configuration $PesterConfiguration
-		}
-		else {
-			# Pester 3.x/4.x - Use legacy parameters
-			$InvokePesterParams = @{
-				Path = $TestFiles.FullName
-			}
-			if ($PassThru) {
-				$InvokePesterParams.PassThru = $true
-			}
-			$Result = Invoke-Pester @InvokePesterParams
-		}
-
-		Reload-PowerShellProfile
-
-		# Display summary
-		Write-Host ""
-		if ($Result) {
-			if ($Result.FailedCount -eq 0) {
-				Write-LogSuccess "All tests passed! ($($Result.PassedCount) passed)"
-			}
-			else {
-				Write-LogError "Tests failed: $($Result.FailedCount) failed, $($Result.PassedCount) passed"
-			}
-		}
-
-		if ($PassThru) {
-			return $Result
-		}
-	}
-	catch {
-		Write-LogError "Error running tests: $($_.Exception.Message)" -Exception $_
-		throw
+		return $Result
 	}
 }

@@ -88,11 +88,11 @@ Skipping required documentation updates is treated the same as leaving the chang
 
 ## Running Tests (Delegate to the Developer)
 
-Do NOT run the test suite yourself - no `Import-Module` + `Invoke-Pester`, and no ad-hoc bootstrap/harness scripts. Running tests needs the full profile session loaded and is slow to reconstruct from scratch. Instead, after you add or change functions or tests, give the developer the exact `Run-Tests` command in a single line and ask them to run it and report any failures back to you.
+Do NOT run the test suite yourself - no `Import-Module` + `Invoke-Pester`, and no ad-hoc bootstrap/harness scripts. `Modules/Tests/Invoke-TestSuite.ps1` already is the harness: it bootstraps its own hermetic worker sessions, so a hand-rolled one only reproduces it worse. Instead, after you add or change functions or tests, give the developer the exact `Run-Tests` command in a single line and ask them to run it and report any failures back to you.
 
 - **Scoped to what you changed (preferred):** `Run-Tests -TestName "<ChangedFunctionOrPattern>"` - matches `*<pattern>*.Tests.ps1`. Run it once per changed area, e.g. `Run-Tests -TestName "Resize-Windows"`. List every command when several areas changed.
 - **Whole suite (only for broad/cross-cutting changes):** `Run-Tests`.
-- **Diagnosing a failure:** add `-Detailed` for per-test output, e.g. `Run-Tests -TestName "Resize-Windows" -Detailed`.
+- **Diagnosing a failure:** the developer can paste the run log the verdict points at (`Modules/Tests/Results/TestRun_<timestamp>.log`) - it already holds the full per-test output. `-Detailed` echoes the same thing to the console.
 
 State which tests each command covers, then wait for the developer's pass/fail report before treating the change as verified. Only run tests yourself if the developer explicitly asks you to.
 

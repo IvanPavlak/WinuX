@@ -43,8 +43,6 @@ function Get-ActiveWindowInfo {
 
 	Write-LogTitle "Active Window Information"
 
-	$outputPath = Join-Path ([Environment]::GetFolderPath('Desktop')) 'ActiveWindowInfo.txt'
-
 	# Use Test-WindowTitleMatch for filtering when a Window pattern is provided
 	$hasWindowFilter = -not [string]::IsNullOrEmpty($Window)
 
@@ -117,6 +115,23 @@ function Get-ActiveWindowInfo {
 		}
 
 		if ($windowInfos) {
+			# Resolved here rather than up front, because this is the only branch that writes a
+			# file - neither -Continuous nor the no-windows path below needs a destination.
+			# GetFolderPath VERIFIES the folder by default and returns an EMPTY STRING when that
+			# check does not succeed, which Join-Path rejects outright ("Cannot bind argument to
+			# parameter 'Path' because it is an empty string"). Resolving eagerly therefore let a
+			# transient shell-folder hiccup throw out of a call that had nothing to write, so
+			# "No windows found" surfaced as a crash. DoNotVerify answers from the known-folder
+			# registration without touching the disk; the profile path is the last resort.
+			$desktopPath = [Environment]::GetFolderPath('Desktop')
+			if ([string]::IsNullOrWhiteSpace($desktopPath)) {
+				$desktopPath = [Environment]::GetFolderPath('Desktop', 'DoNotVerify')
+			}
+			if ([string]::IsNullOrWhiteSpace($desktopPath)) {
+				$desktopPath = Join-Path $env:USERPROFILE 'Desktop'
+			}
+			$outputPath = Join-Path $desktopPath 'ActiveWindowInfo.txt'
+
 			$sb = [System.Text.StringBuilder]::new()
 
 			$filterLabel = if ($Window) { " (filter: $Window)" } else { "" }
