@@ -28,6 +28,11 @@ Windows/PowerShell/Modules/Logging/Logs/*
 Windows/PowerShell/Modules/Logging/Logs/Pinned/*
 !Windows/PowerShell/Modules/Logging/Logs/Pinned/.gitkeep
 
+# Tests module - generated run artifacts (merged run logs, per-worker NUnit XMLs, the measured
+# per-file timings the harness buckets the next run with). Regenerated on every Run-Tests.
+Windows/PowerShell/Modules/Tests/Results/*
+!Windows/PowerShell/Modules/Tests/Results/.gitkeep
+
 # Window module - per-machine runtime snapshot of the most recently applied workspace
 # (written by Save-CurrentLayout, overwritten on every open). Machine-specific, never committed.
 Windows/PowerShell/Modules/Window/Layouts/CurrentLayout.txt

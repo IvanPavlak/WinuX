@@ -14,6 +14,13 @@ BeforeAll {
 	function Terminate-AllProcessesByName { param([string[]]$Exclude) }
 	function Terminate-WindowsTerminalTabs { param([switch]$IncludeCurrent) }
 	function Reload-PowerShellProfile { param() }
+	# Kill-All finishes by putting the terminal back where it belongs, which is wanted in real use
+	# and emphatically not while the suite runs. Unstubbed, both of these resolved to the real
+	# Window/Workflow functions: Center-Terminal hands Center-Windows the live WindowsTerminal
+	# process (physically moving and resizing the developer's own terminal), and Focus-TerminalTab
+	# calls AppActivate on it (stealing focus). Every default Kill-All call below reached both.
+	function Center-Terminal { param() }
+	function Focus-TerminalTab { param([string]$TargetTitle, [switch]$Quiet) }
 }
 
 Describe "Kill-All" {
@@ -26,6 +33,8 @@ Describe "Kill-All" {
 		Mock Terminate-AllProcessesByName { }
 		Mock Terminate-WindowsTerminalTabs { }
 		Mock Reload-PowerShellProfile { }
+		Mock Center-Terminal { }
+		Mock Focus-TerminalTab { }
 	}
 
 	Context "When called with no parameters" {
@@ -38,6 +47,10 @@ Describe "Kill-All" {
 			Should -Invoke Terminate-AllProcessesWithVisibleWindows -Times 1 -Exactly
 			Should -Invoke Terminate-AllProcessesByName -Times 1 -Exactly
 			Should -Invoke Terminate-WindowsTerminalTabs -Times 1 -Exactly
+			# Asserted rather than merely mocked away: restoring the terminal is the visible end
+			# of a real Kill-All, and neither call had any coverage at all until now.
+			Should -Invoke Center-Terminal -Times 1 -Exactly
+			Should -Invoke Focus-TerminalTab -Times 1 -Exactly
 		}
 
 		It "Should not reload profile by default" {
@@ -70,6 +83,13 @@ Describe "Kill-All" {
 			Kill-All -IncludeCurrent
 
 			Should -Invoke Terminate-WindowsTerminalTabs -ParameterFilter { $IncludeCurrent -eq $true }
+		}
+
+		It "Should not restore a terminal it just closed" {
+			Kill-All -IncludeCurrent
+
+			Should -Invoke Center-Terminal -Times 0
+			Should -Invoke Focus-TerminalTab -Times 0
 		}
 	}
 

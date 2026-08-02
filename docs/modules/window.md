@@ -768,6 +768,20 @@ Set-WindowPosition -WindowHandle $handle -X 0 -Y 0 -Width 960 -Height 1080
 - **Description:** Gets the current Window module timing configuration. Returns a clone of the module-scoped timing configuration hashtable, allowing external tuning of the delay values (in milliseconds) used throughout the module.
 - **Usage:** `Get-WindowModuleDelays`
 
+## [Get-WorkspaceRerunMirror](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Get-WorkspaceRerunMirror.ps1)
+
+- **Description:** Reads and consumes the persisted mirror of a workspace rerun marker written by [Set-WorkspaceRerunMirror](#set-workspacererunmirror). One-shot: a value found is cleared as it is read, so a marker can influence exactly the run it was written for. Values older than the TTL, timestamped in the future, or not in `value|unix-timestamp` form are discarded.
+- **Parameters:** -Name, -TtlMinutes, -Scope
+- **Usage:** `Get-WorkspaceRerunMirror -Name 'WORKSPACE_RERUN_COUNT'`, `Get-WorkspaceRerunMirror -Name 'WORKSPACE_RERUN_COUNT' -TtlMinutes 1`
+
+`Set-WorkspaceWindowLayout` keeps its auto-rerun state in process-scoped environment variables, which survive the terminal respawn only when Windows Terminal spawns a fresh host per `wt` call (`windowingBehavior "useNew"`). Under `"useAnyExisting"` the new tab inherits the WT host's stale environment instead, resetting every marker and uncapping the rerun loop - hence the out-of-process mirror. Reads prefer the process copy and fall back to this. Returns `$null` when there is nothing valid to report, which is the normal case.
+
+| Parameter      | Description                                                                                              |
+| -------------- | -------------------------------------------------------------------------------------------------------- |
+| `-Name`        | Environment variable to read, e.g. `WORKSPACE_WINDOW_ONLY_RETRY`.                                        |
+| `-TtlMinutes`  | Maximum age at which a mirrored value is still honored. Defaults to 10.                                  |
+| `-Scope`       | `User` (default) or `Process`. `Process` exists for tests - see the note under Set-WorkspaceRerunMirror.  |
+
 ## [Import-VirtualDesktopModule](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Import-VirtualDesktopModule.ps1)
 
 - **Description:** Lazily imports the VirtualDesktop module with caching. Checks whether the module is available and imports it only once, using module-scoped state to avoid repeated `Get-Module` calls. Returns `$true` if the module is loaded and ready, `$false` otherwise.
@@ -1279,6 +1293,22 @@ Set-LogLevel Verbose { Set-WindowPosition -WindowHandle $handle -X 0 -Y 0 -Width
 ```
 
 **See also:** [Get-WindowHandle](window.md), [Set-WorkspaceWindowLayout](window.md)
+
+## [Set-WorkspaceRerunMirror](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Set-WorkspaceRerunMirror.ps1)
+
+- **Description:** Writes or clears the persisted mirror of a workspace rerun marker, stamped as `value|unix-timestamp` for [Get-WorkspaceRerunMirror](#get-workspacererunmirror) to age out. An empty or `$null` value clears the mirror instead of writing one.
+- **Parameters:** -Name, -Value, -Scope
+- **Usage:** `Set-WorkspaceRerunMirror -Name 'WORKSPACE_RERUN_COUNT' -Value '1'`, `Set-WorkspaceRerunMirror -Name 'WORKSPACE_RERUN_COUNT' -Value $null`
+
+Clearing is read-guarded, and that guard matters more than it looks. A User-scope environment write does not just touch the registry - it broadcasts `WM_SETTINGCHANGE` to every top-level window and blocks on the slowest one to answer, measured at ~700ms on an idle desktop and several seconds on a busy one, while the matching read is a plain registry lookup at ~2ms. `Set-WorkspaceWindowLayout` clears these markers on the success path of every single workspace open, where the mirror is almost always already absent, so writing unconditionally spent most of a second to achieve nothing.
+
+Clearing empties the value rather than removing the variable: passing `$null` from PowerShell to `[Environment]::SetEnvironmentVariable` binds it as an empty string, so the entry survives with no content. Every reader treats empty and absent alike, and removing it outright would cost an extra broadcast.
+
+| Parameter | Description                                                                                                                                                               |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `-Name`   | Environment variable to mirror, e.g. `WORKSPACE_WINDOW_ONLY_RETRY`.                                                                                                       |
+| `-Value`  | Value to persist. Empty or `$null` clears the mirror.                                                                                                                     |
+| `-Scope`  | `User` (default) or `Process`. `Process` is for tests: identical logic without the broadcast, and per-process, so a parallel test worker cannot disturb the real machine.   |
 
 ## [Set-WorkspaceWindowLayout](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Set-WorkspaceWindowLayout.ps1)
 
