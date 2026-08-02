@@ -1,41 +1,52 @@
 function Get-PinnedApps {
 	<#
 	.SYNOPSIS
-		Reads version-pinned apps from a CSV file and returns the app names.
+		Returns the version-pinned apps of one app list, machine-local overlay included.
 
 	.DESCRIPTION
-		Imports a CSV file (e.g. WinGetApps.csv, ScoopApps.csv) and filters for entries
-		that have a Version field matching the criteria. Used to identify apps that
-		should NOT be upgraded because they are locked to a specific version.
+		Reads an app list through `Import-AppCsv` - so the machine-local `<name>.local.csv` is layered
+		over the committed one - and returns the `App` of every row whose `Version` is a real version
+		rather than the "track the latest" value. Used to identify apps that must NOT be upgraded
+		because they are locked to a specific version.
 
-	.PARAMETER CsvFileName
-		Relative path to the CSV file (e.g. "Windows/bootstrap/WinGetApps.csv").
-		Resolved relative to `MachineSpecificPaths.Projects.Self.Root`.
+		Reading through `Import-AppCsv` rather than the committed CSV directly is what makes the pin
+		honour the overlay, and it matters in both directions: a version pinned only in the overlay is
+		invisible in the base file, so a direct reader would let `Upgrade-All` upgrade straight past
+		the pin - exactly the outcome pinning exists to prevent - and an app the overlay removed would
+		still be reported as pinned and handed to `winget pin add`.
+
+	.PARAMETER DataFileKey
+		Which list to read: `WinGetApps`, `ScoopApps` or `ChocolateyApps`. Resolved through
+		`BootstrapConfig.DataFiles`, the same way the installers resolve it.
 
 	.PARAMETER VersionExcludeValue
-		Version value to exclude from the pinned results. Defaults to "Latest".
-		Apps with this version value are not considered pinned.
+		The `Version` value that means "not pinned". Defaults to "Latest" (WinGet); Scoop writes
+		"latest", and Chocolatey leaves the cell empty, so its caller passes `$null` and every row
+		carrying any version counts as pinned.
 
 	.EXAMPLE
-		Get-PinnedApps -CsvFileName "Windows/bootstrap/WinGetApps.csv"
-		Returns all apps in the CSV with a Version other than "Latest".
+		Get-PinnedApps -DataFileKey WinGetApps
+		Returns every app in the effective WinGet list with a Version other than "Latest".
 
 	.EXAMPLE
-		Get-PinnedApps -CsvFileName "Windows/bootstrap/ScoopApps.csv" -VersionExcludeValue "latest"
-		Returns all Scoop apps with a version other than "latest".
+		Get-PinnedApps -DataFileKey ScoopApps -VersionExcludeValue "latest"
+		The same for Scoop, whose lists spell the value in lower case.
 	#>
 	param (
-		[string]$CsvFileName,
+		[Parameter(Mandatory = $true, Position = 0)]
+		[ValidateSet('WinGetApps', 'ScoopApps', 'ChocolateyApps')]
+		[string]$DataFileKey,
+
 		[string]$VersionExcludeValue = "Latest"
 	)
 
-	$csvPath = Join-Path -Path $MachineSpecificPaths.Projects.Self.Root -ChildPath $CsvFileName
-
-	# Skip the CSV's documentation-header comments (rows whose App starts with '#') and blank rows.
-	# Import-Csv otherwise parses a comment line that happens to contain commas into a bogus row with a
-	# non-"Latest" Version field, which would be reported as "pinned" and fed to `winget pin add` -
-	# hanging the unattended upgrade on winget's first-run prompt. Same filter the install functions use.
-	$apps = Import-Csv $csvPath | Where-Object { -not [string]::IsNullOrWhiteSpace($_.App) -and -not $_.App.TrimStart().StartsWith('#') }
+	# Import-AppCsv already drops comment and blank rows, but the filter is kept here as well: a
+	# '#'-comment line that contains commas parses into a bogus row with a non-"Latest" Version, and
+	# that garbage is what was once fed to `winget pin add` and hung the unattended upgrade on a fresh
+	# machine. It costs nothing and the incident it guards against was silent.
+	$apps = @(Import-AppCsv -DataFileKey $DataFileKey | Where-Object {
+			-not [string]::IsNullOrWhiteSpace($_.App) -and -not $_.App.TrimStart().StartsWith('#')
+		})
 
 	if ($VersionExcludeValue) {
 		return $apps | Where-Object { $_.Version -and $_.Version -ne $VersionExcludeValue } | Select-Object -ExpandProperty App

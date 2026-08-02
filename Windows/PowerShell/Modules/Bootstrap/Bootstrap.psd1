@@ -8,6 +8,7 @@
 		'DetermineMachineType',
 		'Expand-ConfigPaths',
 		'Expand-Hashtable',
+		'Import-AppCsv',
 		'Initialize-Configuration',
 		'Install-WinGetPackageManager',
 		'Invoke-PersonalSteps',

@@ -1,7 +1,20 @@
 App,Version,Scope,Interactive,Source,Machine
 
-# Minimal essential set so a fresh WinuX install works end-to-end. (Git is installed
-# separately by Install-Git; the Nerd Font by Configure-NerdFont.) Add your own apps below.
+# The minimal set a WinuX install needs to work end-to-end. (Git is installed separately by
+# Install-Git; the Nerd Font by Configure-NerdFont.)
+#
+# DO NOT add your own apps here. This file is upstream's baseline and tracks WinuX, so an edit
+# here is a conflict waiting for the next `git merge upstream/master`. Your own apps belong in
+# the sibling WinGetApps.local.csv, which Import-AppCsv layers over this list at read time and
+# upstream never tracks:
+#
+#   App,Version,Scope,Interactive,Source,Machine
+#
+#   Obsidian.Obsidian,Latest,d,n,w,All      # a new App is added after the rows below
+#   Microsoft.PowerShell,7.4.6,d,n,w,All    # an App below is replaced (here to pin a version)
+#   -Microsoft.PowerToys,Latest,d,n,w,All   # a leading - opts this machine out of a row below
+#
+# See docs/reference/software-list.md for the full overlay reference.
 #
 # Columns:
 #   App         winget package id (or msstore product id with Source=s)
@@ -10,7 +23,6 @@ App,Version,Scope,Interactive,Source,Machine
 #   Interactive y / n
 #   Source      w (winget), s (msstore)
 #   Machine     where to install: "All", "Test", or your own types, combinable like "PC/Laptop"
-# --- Dependecies Required for full WinuX utilization 
 Microsoft.WindowsTerminal,Latest,d,n,w,All
 Microsoft.PowerShell,Latest,d,n,w,All
 JanDeDobbeleer.OhMyPosh,Latest,d,n,w,All
@@ -18,31 +30,3 @@ fastfetch,Latest,d,n,w,All
 Microsoft.VisualStudioCode,Latest,d,n,w,All
 Mozilla.Firefox,Latest,d,n,w,All
 Microsoft.PowerToys,Latest,d,n,w,All
-
-# --- Add your own applications below. Examples (uncomment what you want): ---
-# Editors / dev toolchains:
-#Neovim.Neovim,Latest,d,n,w,All
-#Microsoft.VisualStudio.Community,Latest,d,n,w,All
-#Microsoft.DotNet.SDK.9,Latest,d,n,w,All
-#OpenJS.NodeJS.LTS,Latest,d,n,w,All
-#Python.Python.3.13,Latest,d,n,w,All
-#Docker.DockerDesktop,Latest,d,n,w,All
-#Oracle.VirtualBox,Latest,d,n,w,All
-# CLI utilities:
-#7zip.7zip,Latest,d,n,w,All
-#BurntSushi.ripgrep.MSVC,Latest,d,n,w,All
-#junegunn.fzf,Latest,d,n,w,All
-#ajeetdsouza.zoxide,Latest,d,n,w,All
-#sharkdp.fd,Latest,d,n,w,All
-#jqlang.jq,Latest,d,n,w,All
-#JesseDuffield.lazygit,Latest,d,n,w,All
-# Apps:
-#Obsidian.Obsidian,Latest,d,n,w,All
-#Notepad++.Notepad++,Latest,d,n,w,All
-#Microsoft.PowerToys,Latest,d,n,w,All
-#Mozilla.Firefox,Latest,d,n,w,All
-#VideoLAN.VLC,Latest,d,n,w,All
-# Tor Browser (used by Open-SecureBrowser) always installs as a portable build onto the
-# Desktop; move the "Tor Browser" folder to "{User}\Tor Browser" - the path the default
-# Universal.Browsers.Tor entry expects - so Open-Browser can launch it.
-#TorProject.TorBrowser,Latest,d,n,w,All

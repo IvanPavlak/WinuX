@@ -30,17 +30,17 @@ Get-VSCodeWorkspaceNames
 
 ## [Install-ChocolateyApps](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Install-ChocolateyApps.ps1)
 
-- **Description:** Installs Chocolatey-managed apps from the WinuX CSV, filtered by machine type. Reads the app list from `ChocolateyApps.csv`, installs entries matching the current machine type (plus any "All" entries), and skips the rest. `Machine`-column tokens are validated via `Test-MachineTypeScope` - unknown machine types are reported and never match. Requires administrator privileges and is called automatically by Bootstrap.
+- **Description:** Installs Chocolatey-managed apps from the WinuX CSV, filtered by machine type. Reads the app list through `Import-AppCsv`, which layers the machine-local `ChocolateyApps.local.csv` over the committed `ChocolateyApps.csv`, then installs entries matching the current machine type (plus any "All" entries) and skips the rest. `Machine`-column tokens are validated via `Test-MachineTypeScope` - unknown machine types are reported and never match. Requires administrator privileges and is called automatically by Bootstrap.
 - **Usage:** `Install-ChocolateyApps`
 
-Reads the app list from the CSV at `BootstrapConfig.DataFiles.ChocolateyApps` in `Configuration.psd1`. Each row specifies an app ID and the machine types it applies to ("All", "PC", "Laptop", etc.), and may also carry optional `Version`, `Params`, and `Force` columns that are passed through to `choco install`. Apps for the current machine type and All-type apps are installed; others are skipped. Administrator privileges are verified up front via `Test-AdminPrivileges`.
+Reads the app list with `Import-AppCsv -DataFileKey ChocolateyApps`, which resolves the committed CSV through `BootstrapConfig.DataFiles.ChocolateyApps` in `Configuration.psd1` and layers the sibling `ChocolateyApps.local.csv` over it when one exists, so this machine's own choices apply without the tracked CSV ever being edited. Each row specifies an app ID and the machine types it applies to ("All", "PC", "Laptop", etc.), and may also carry optional `Version`, `Params`, and `Force` columns that are passed through to `choco install`. Apps for the current machine type and All-type apps are installed; others are skipped. Administrator privileges are verified up front via `Test-AdminPrivileges`.
 
 ```powershell
 # Install all Chocolatey apps applicable to the current machine type
 Install-ChocolateyApps
 ```
 
-**See also:** [Modules: Workflow](workflow.md)
+**See also:** [Import-AppCsv](bootstrap.md#import-appcsv), [Modules: Workflow](workflow.md)
 
 ## [Install-ChocolateyPackageManager](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Install-ChocolateyPackageManager.ps1)
 
@@ -123,17 +123,17 @@ Install-PowerShellModules
 
 ## [Install-ScoopApps](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Install-ScoopApps.ps1)
 
-- **Description:** Installs Scoop-managed apps from the WinuX CSV, filtered by the current machine type. Apps matching the current machine type (or marked `All`) are installed; others are skipped. `Machine`-column tokens are validated via `Test-MachineTypeScope` - unknown machine types are reported and never match. Requires administrator privileges and is called automatically by Bootstrap.
+- **Description:** Installs Scoop-managed apps from the WinuX CSV, filtered by the current machine type. Reads the app list through `Import-AppCsv`, which layers the machine-local `ScoopApps.local.csv` over the committed `ScoopApps.csv`. Apps matching the current machine type (or marked `All`) are installed; others are skipped. `Machine`-column tokens are validated via `Test-MachineTypeScope` - unknown machine types are reported and never match. Requires administrator privileges and is called automatically by Bootstrap.
 - **Usage:** `Install-ScoopApps`
 
-Reads the app list from the CSV at `BootstrapConfig.DataFiles.ScoopApps` in `Configuration.psd1`. Each row specifies an app name, optional bucket, version, global flag, and the machine types it applies to. The function determines the current machine type, queries `scoop export` for already-installed apps, and for each applicable row either installs the app, updates it (when already installed and not version-pinned), or skips it (when already installed with a pinned version).
+Reads the app list with `Import-AppCsv -DataFileKey ScoopApps`, which resolves the committed CSV through `BootstrapConfig.DataFiles.ScoopApps` in `Configuration.psd1` and layers the sibling `ScoopApps.local.csv` over it when one exists, so this machine's own choices apply without the tracked CSV ever being edited. Each row specifies an app name, optional bucket, version, global flag, and the machine types it applies to. The function determines the current machine type, queries `scoop export` for already-installed apps, and for each applicable row either installs the app, updates it (when already installed and not version-pinned), or skips it (when already installed with a pinned version).
 
 ```powershell
 # Install all Scoop apps applicable to the current machine type
 Install-ScoopApps
 ```
 
-**See also:** [Modules: Workflow](workflow.md)
+**See also:** [Import-AppCsv](bootstrap.md#import-appcsv), [Modules: Workflow](workflow.md)
 
 ## [Install-ScoopPackageManager](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Install-ScoopPackageManager.ps1)
 
@@ -147,8 +147,10 @@ Install-ScoopPackageManager
 
 ## [Install-WingetApps](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Install-WingetApps.ps1)
 
-- **Description:** Installs WinGet-managed apps from the WinuX CSV, filtered by machine type. Reads the app list from `BootstrapConfig.DataFiles.WinGetApps` in `Configuration.psd1`; apps matching the current machine type (or marked `All`) are installed, others are skipped. `Machine`-column tokens are validated via `Test-MachineTypeScope` - unknown machine types are reported and never match. Requires administrator privileges and is called automatically by Bootstrap.
+- **Description:** Installs WinGet-managed apps from the WinuX CSV, filtered by machine type. Reads the app list through `Import-AppCsv`, which layers the machine-local `WinGetApps.local.csv` over the committed CSV named by `BootstrapConfig.DataFiles.WinGetApps` in `Configuration.psd1`; apps matching the current machine type (or marked `All`) are installed, others are skipped. `Machine`-column tokens are validated via `Test-MachineTypeScope` - unknown machine types are reported and never match. Requires administrator privileges and is called automatically by Bootstrap.
 - **Usage:** `Install-WingetApps`
+
+The list is read with `Import-AppCsv -DataFileKey WinGetApps`, so the sibling `WinGetApps.local.csv` is layered over the committed list and this machine's own choices apply without the tracked CSV ever being edited.
 
 Each CSV row specifies an app ID, version, installation scope (`d` default / `m` machine / `u` user), interactive flag, source (`w` winget / `s` msstore), and the machine types it applies to. The machine type is resolved at runtime and rows whose `Machine` column does not include the current type or `All` are skipped. For apps pinned at `Latest`, an existing WinGet pin is removed first so the latest version can install cleanly.
 
@@ -156,7 +158,7 @@ The function is fully unattended. Before touching any app it queries each source
 
 Every install is verified: a nonzero winget exit code triggers a `winget list --id` ground-truth check (nonzero codes are not uniformly failures - "already installed" variants are benign), and genuinely failed installs are collected and printed as an explicit summary at the end (app id, exit code, and how to retry) instead of scrolling by invisibly in the bootstrap output.
 
-**Data Source:** `WinGetApps.csv`
+**Data Source:** `WinGetApps.csv`, plus the machine-local `WinGetApps.local.csv` overlay when present
 
 ```csv
 App,Version,Scope,Interactive,Source,Machine
@@ -170,7 +172,7 @@ Valve.Steam,Latest,d,n,w,PC
 Install-WingetApps
 ```
 
-**See also:** [Modules: Bootstrap](bootstrap.md)
+**See also:** [Import-AppCsv](bootstrap.md#import-appcsv), [Modules: Bootstrap](bootstrap.md)
 
 ## [Invoke-Browser](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Invoke-Browser.ps1)
 
@@ -357,10 +359,11 @@ Runs a multi-step privacy workflow:
 
 Requires the Window module to be loaded (for Win32 `ShowWindow` access).
 
-> **Requires Tor Browser** - the base bootstrap does not install it. Enable the commented
-> `TorProject.TorBrowser` row in `WinGetApps.csv` (WinGet installs the portable build onto the
-> Desktop; move the "Tor Browser" folder to `{User}\Tor Browser`, where the default
-> `Universal.Browsers.Tor` entry points), install it manually, or provision it in a fork via
+> **Requires Tor Browser** - the base bootstrap does not install it. Add a
+> `TorProject.TorBrowser,Latest,d,n,w,All` row to your machine-local
+> [`WinGetApps.local.csv`](../reference/software-list.md#machine-local-overlay) (WinGet installs the
+> portable build onto the Desktop; move the "Tor Browser" folder to `{User}\Tor Browser`, where the
+> default `Universal.Browsers.Tor` entry points), install it manually, or provision it in a fork via
 > `BootstrapConfig.PersonalSteps`.
 
 ```powershell

@@ -14,13 +14,14 @@
 # deep-merged over the base at load. Upstream never tracks that file, so it never conflicts. (Commit it
 # in your fork if you want it to sync across your machines.)
 #
+# The three app-list CSVs used to be merge=ours and deliberately no longer are. They now work exactly
+# like Configuration.psd1: WinGetApps.csv / ScoopApps.csv / ChocolateyApps.csv stay the generic base and
+# SHOULD track upstream, and your own apps go in the sibling <name>.local.csv overlay, which Import-AppCsv
+# layers over the base at read time. Upstream never tracks the overlays, so they never conflict - and
+# because the base is no longer pinned, your fork keeps receiving upstream's base-list changes.
+#
 # NOTE for WinuX maintainers: these rules apply to this repo too, so a LOCAL merge of a PR that edits
 # one of these files would keep the repo's version. Merge such PRs on GitHub, or reconcile by hand.
-
-# Application install lists - each fork curates its own; WinuX ships a minimal example set.
-Windows/PowerShell/Modules/Bootstrap/Data/WinGetApps.csv       merge=ours
-Windows/PowerShell/Modules/Bootstrap/Data/ScoopApps.csv        merge=ours
-Windows/PowerShell/Modules/Bootstrap/Data/ChocolateyApps.csv   merge=ours
 
 # Personal payload configs - your real values; WinuX ships generic/blank templates.
 Git/.gitconfig                                                 merge=ours

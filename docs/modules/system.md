@@ -234,24 +234,28 @@ Get-InstalledApps
 
 ## [Get-PinnedApps](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Get-PinnedApps.ps1)
 
-- **Description:** Reads version-pinned apps from a package-manager CSV file (e.g. WinGetApps.csv, ScoopApps.csv) and returns their app names. Used to identify apps that should NOT be upgraded because they are locked to a specific version. Helper function for `Upgrade-All`.
-- **Parameters:** -CsvFileName, -VersionExcludeValue
-- **Usage:** `Get-PinnedApps -CsvFileName "Windows/bootstrap/WinGetApps.csv"`, `Get-PinnedApps -CsvFileName "Windows/bootstrap/ScoopApps.csv" -VersionExcludeValue "latest"`
+- **Description:** Returns the version-pinned apps of one app list, machine-local overlay included. Reads the list through [`Import-AppCsv`](bootstrap.md#import-appcsv) and returns the `App` of every row whose `Version` is a real version rather than the "track the latest" value. Used to identify apps that should NOT be upgraded because they are locked to a specific version. Helper function for `Upgrade-All`.
+- **Parameters:** -DataFileKey, -VersionExcludeValue
+- **Usage:** `Get-PinnedApps -DataFileKey WinGetApps`, `Get-PinnedApps -DataFileKey ScoopApps -VersionExcludeValue "latest"`
 
-Imports the given CSV and returns the `App` values of every row whose `Version` field is set and does not match the exclude value. The CSV path is resolved relative to `MachineSpecificPaths.Projects.Self.Root`. Apps whose version equals the exclude value (default `"Latest"`) are treated as unpinned and are omitted from the results.
+Apps whose version equals the exclude value (default `"Latest"`) are treated as unpinned and are omitted from the results. Comment and blank rows are dropped: a `#` line containing commas parses into a bogus row with a non-`"Latest"` Version, and feeding that to `winget pin add` once hung an unattended upgrade.
 
-| Parameter              | Description                                                                                                                            |
-| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `-CsvFileName`         | Relative path to the CSV file (e.g. `"Windows/bootstrap/WinGetApps.csv"`). Resolved against `MachineSpecificPaths.Projects.Self.Root`. |
-| `-VersionExcludeValue` | Version value treated as "not pinned" and excluded from results. Defaults to `"Latest"`.                                               |
+Reading through `Import-AppCsv` rather than the committed CSV directly is what makes the pin honour the [machine-local overlay](../reference/software-list.md#machine-local-overlay), and it matters in both directions: a version pinned only in the overlay is invisible in the base file, so a direct reader would let `Upgrade-All` upgrade straight past the pin - the exact outcome pinning exists to prevent - and an app the overlay removed would still be reported as pinned.
+
+| Parameter              | Description                                                                                                                                                             |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `-DataFileKey`         | Which list to read: `WinGetApps`, `ScoopApps` or `ChocolateyApps`. Mandatory, positional; resolved through `BootstrapConfig.DataFiles`, the same way the installers resolve it. |
+| `-VersionExcludeValue` | The `Version` value that means "not pinned". Defaults to `"Latest"` (WinGet); Scoop writes `"latest"`, and Chocolatey leaves the cell empty, so its caller passes `$null`.  |
 
 ```powershell
 # Return WinGet apps locked to a specific version (Version other than "Latest")
-Get-PinnedApps -CsvFileName "Windows/bootstrap/WinGetApps.csv"
+Get-PinnedApps -DataFileKey WinGetApps
 
 # Same for Scoop, excluding the lowercase "latest" sentinel
-Get-PinnedApps -CsvFileName "Windows/bootstrap/ScoopApps.csv" -VersionExcludeValue "latest"
+Get-PinnedApps -DataFileKey ScoopApps -VersionExcludeValue "latest"
 ```
+
+**See also:** [Import-AppCsv](bootstrap.md#import-appcsv), [Upgrade-All](#upgrade-all)
 
 ## [Initialize-OhMyPosh](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Initialize-OhMyPosh.ps1)
 
@@ -1225,11 +1229,11 @@ Update-DirectoryNames -Path "C:\My Folders" -WhatIf
 
 ## [Upgrade-All](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Upgrade-All.ps1)
 
-- **Description:** Upgrades all packages across WinGet, Scoop, and/or Chocolatey. Reads pinned (version-locked) apps from the configured CSV files and prevents them from being upgraded. Without `-PackageManager` it upgrades across all managers listed in `PackageManagers` in `Configuration.psd1`; with `-PackageManager` it upgrades only the specified manager. Requires administrator privileges.
+- **Description:** Upgrades all packages across WinGet, Scoop, and/or Chocolatey. Reads pinned (version-locked) apps from the configured app lists - via `Get-PinnedApps`, so a version pinned in a machine-local `<name>.local.csv` overlay counts too - and prevents them from being upgraded. Without `-PackageManager` it upgrades across all managers listed in `PackageManagers` in `Configuration.psd1`; with `-PackageManager` it upgrades only the specified manager. Requires administrator privileges.
 - **Parameters:** -PackageManager
 - **Usage:** `Upgrade-All`, `Upgrade-All -PackageManager "WinGet"`
 
-For each targeted manager the function first loads its version-pinned apps from the manager's CSV data file, warns about them, and pins them so they are excluded from the upgrade, then runs the manager's bulk upgrade (`winget upgrade --all`, `scoop update *`, or `choco upgrade all -y`) and reports success or the failing exit code per manager.
+For each targeted manager the function first loads its version-pinned apps through [`Get-PinnedApps`](#get-pinnedapps) (which reads the effective list, overlay included), warns about them, and pins them so they are excluded from the upgrade, then runs the manager's bulk upgrade (`winget upgrade --all`, `scoop update *`, or `choco upgrade all -y`) and reports success or the failing exit code per manager.
 
 | Parameter         | Description                                                                                                                   |
 | ----------------- | ----------------------------------------------------------------------------------------------------------------------------- |

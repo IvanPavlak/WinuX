@@ -4,10 +4,11 @@ function Install-WinGetApps {
 		Installs WinGet-managed apps from the WinuX CSV, filtered by machine type.
 
 	.DESCRIPTION
-		Reads the app list from the CSV file at `BootstrapConfig.DataFiles.WinGetApps` in
-		Configuration.psd1. Each row specifies an app ID, installation scope (machine/user/default),
-		and the machine types it applies to. Apps for the current machine type and All-type apps
-		are installed; others are skipped.
+		Reads the app list through `Import-AppCsv`, which parses the committed CSV named by
+		`BootstrapConfig.DataFiles.WinGetApps` in Configuration.psd1 and layers the machine-local
+		`WinGetApps.local.csv` over it. Each row specifies an app ID, installation scope
+		(machine/user/default), and the machine types it applies to. Apps for the current machine
+		type and All-type apps are installed; others are skipped.
 
 		Requires administrator privileges. Called automatically by Bootstrap.
 
@@ -21,8 +22,9 @@ function Install-WinGetApps {
 
 	$MachineType = DetermineMachineType
 
-	$csvPath = Join-Path -Path $MachineSpecificPaths.Projects.Self.Root -ChildPath $global:Configuration.BootstrapConfig.DataFiles.WinGetApps
-	$wingetApps = Import-Csv $csvPath | Where-Object { -not [string]::IsNullOrWhiteSpace($_.App) -and -not $_.App.TrimStart().StartsWith('#') }
+	# Import-AppCsv layers the machine-local WinGetApps.local.csv over the committed list, so a fork's
+	# own app choices apply without the tracked CSV ever being edited.
+	$wingetApps = @(Import-AppCsv -DataFileKey WinGetApps)
 
 	# Accept every WinGet source agreement up front, non-interactively, so no per-app call can block
 	# on WinGet's first-run prompt. The `msstore` source shows a hard, one-time agreement (including a
