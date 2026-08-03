@@ -1452,6 +1452,9 @@
 	#   - Open-Acrobat                : Opens Acrobat with PDF group parameter (-Pdf)
 	#   - Open-Browser                : Opens Browser with optional group parameter (-Groups)
 	#   - Open-Project                : Opens project (uses -Project, -RunApp from caller)
+	#   - Open-ProjectSwagger         : Opens the active project's Swagger UI tab, if it has one
+	#                                   (opt-in; declare AFTER Open-Project and Open-Browser with
+	#                                   Parameters = @{ Project = "{SelectedProjects}" })
 	#   - Open-DBeaver                : Opens DBeaver database tool
 	#   - Open-WhatsApp               : Opens WhatsApp Desktop
 	#   - Open-Outlook                : Opens Outlook email client
@@ -1482,6 +1485,12 @@
 	#
 	#   This allows passing action-specific parameters without modifying every function.
 	#
+	# PROJECT CONTEXT ({SelectedProjects} token):
+	#   A parameter whose FULL value is the literal "{SelectedProjects}" resolves at runtime
+	#   to the explicit -Project argument, else to the projects picked by this workspace's
+	#   Open-Project action. When neither exists the parameter is dropped, so the consuming
+	#   action (e.g. Open-ProjectSwagger) simply no-ops.
+	#
 	# Special Cases:
 	#   - Fullscreen: Applies full-screen FancyZone layout to all windows
 	#   - Default: Actions when no workspace is selected (null/Enter selection)
@@ -1492,6 +1501,7 @@
 	#       @{ Action = "Open-Obsidian" }
 	#       @{ Action = "Open-Project"; Parameters = @{ Project = "MyProject" } }
 	#       @{ Action = "Open-Browser"; Parameters = @{ Groups = @("AI", "GitHub") } }
+	#       @{ Action = "Open-ProjectSwagger"; Parameters = @{ Project = "{SelectedProjects}" } }
 	#       @{ Action = "Set-WorkspaceWindowLayout"; Parameters = @{ WorkspaceName = "MyWorkspace" } }
 	#   )
 	# ==========================================================================
@@ -1875,6 +1885,9 @@
 		}
 
 		# Example local dev API docs - adjust the port(s) to match your projects.
+		# Consumed by the opt-in Open-ProjectSwagger workspace action: each entry's Name must
+		# match the project name it belongs to. No Swagger group (or no entry for a project)
+		# simply means no swagger behavior.
 		@{ Swagger = @(
 				@{ Name = "ExampleProject"; Url = "http://localhost:5000/swagger/index.html" }
 			)

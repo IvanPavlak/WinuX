@@ -6,7 +6,6 @@ BeforeAll {
 	$SystemFunctionsPath = Join-Path $ModuleRoot "System\Functions"
 
 	. "$FunctionsPath\Open-Workspace.ps1"
-	. "$FunctionsPath\Resolve-SwaggerBrowserGroup.ps1"
 	. "$SystemFunctionsPath\Terminate-WindowsTerminalTabs.ps1"
 
 	function Resolve-Selection {
@@ -42,6 +41,8 @@ BeforeAll {
 		$Project
 	}
 
+	function Open-ProjectSwagger { param($Project, $Browser) }
+
 	function Test-ActionOne {
 		param($Alpha)
 		$script:invokedActions += [PSCustomObject]@{ Name = 'Test-ActionOne'; Alpha = $Alpha }
@@ -68,6 +69,7 @@ Describe "Open-Workspace" {
 		$script:invokedActions = @()
 		$script:terminateCalls = @()
 		$script:browserCalls = @()
+		$script:swaggerCalls = @()
 		$script:setLayoutCalls = @()
 		$script:openTerminalCalls = @()
 
@@ -110,6 +112,10 @@ Describe "Open-Workspace" {
 		Mock Open-Browser {
 			param($Groups, $Browser)
 			$script:browserCalls += [PSCustomObject]@{ Groups = @($Groups); Browser = $Browser }
+		}
+		Mock Open-ProjectSwagger {
+			param($Project, $Browser)
+			$script:swaggerCalls += [PSCustomObject]@{ Project = @($Project); Browser = $Browser }
 		}
 		Mock Set-WorkspaceWindowLayout {
 			param($WorkspaceName, $PreCapturedExistingWindows, $DesktopOffset, [switch]$Alongside)
@@ -554,49 +560,88 @@ Describe "Open-Workspace" {
 		$script:setLayoutCalls[0].PreCapturedExistingWindows.Contains([IntPtr]777) | Should -BeTrue
 	}
 
-	It "adds swagger group to Open-Browser when project swagger is not already open" {
-		$script:Configuration.BrowserGroups = @(
-			@{
-				Swagger = @(
-					@{ Name = 'ProjectA'; Url = 'https://localhost:5001/swagger' }
-				)
-			}
-		)
-		$script:Configuration.Universal.DefaultBrowser = 'Firefox'
-		$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
-			@{ Action = 'Open-Project'; Parameters = @{ Project = 'ProjectA' } },
-			@{ Action = 'Open-Browser'; Parameters = @{ Groups = @('General'); Browser = 'Firefox' } }
-		)
+	Context "project context handoff" {
+		It "no longer injects swagger groups into Open-Browser" {
+			$script:Configuration.BrowserGroups = @(
+				@{
+					Swagger = @(
+						@{ Name = 'ProjectA'; Url = 'https://localhost:5001/swagger' }
+					)
+				}
+			)
+			$script:Configuration.Universal.DefaultBrowser = 'Firefox'
+			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+				@{ Action = 'Open-Project'; Parameters = @{ Project = 'ProjectA' } },
+				@{ Action = 'Open-Browser'; Parameters = @{ Groups = @('General'); Browser = 'Firefox' } }
+			)
 
-		Open-Workspace -Workspace 'TestWorkspace'
+			Open-Workspace -Workspace 'TestWorkspace'
 
-		$script:browserCalls.Count | Should -Be 1
-		$script:browserCalls[0].Groups | Should -Contain 'General'
-		$script:browserCalls[0].Groups | Should -Contain 'ProjectA'
-		Should -Invoke Test-BrowserGroupAlreadyOpen -Times 1
-	}
+			$script:browserCalls.Count | Should -Be 1
+			$script:browserCalls[0].Groups | Should -Contain 'General'
+			$script:browserCalls[0].Groups | Should -Not -Contain 'ProjectA'
+			Should -Invoke Test-BrowserGroupAlreadyOpen -Times 0
+		}
 
-	It "does not append swagger group when it is already open" {
-		Mock Test-BrowserGroupAlreadyOpen { $true }
+		It "substitutes {SelectedProjects} with the projects returned by Open-Project" {
+			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+				@{ Action = 'Open-Project'; Parameters = @{ Project = 'ProjectA' } },
+				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = '{SelectedProjects}' } }
+			)
 
-		$script:Configuration.BrowserGroups = @(
-			@{
-				Swagger = @(
-					@{ Name = 'ProjectA'; Url = 'https://localhost:5001/swagger' }
-				)
-			}
-		)
-		$script:Configuration.Universal.DefaultBrowser = 'Firefox'
-		$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
-			@{ Action = 'Open-Project'; Parameters = @{ Project = 'ProjectA' } },
-			@{ Action = 'Open-Browser'; Parameters = @{ Groups = @('General'); Browser = 'Firefox' } }
-		)
+			Open-Workspace -Workspace 'TestWorkspace'
 
-		Open-Workspace -Workspace 'TestWorkspace'
+			$script:invokedActions.Count | Should -Be 1
+			@($script:invokedActions[0].Alpha) | Should -Contain 'ProjectA'
+		}
 
-		$script:browserCalls.Count | Should -Be 1
-		$script:browserCalls[0].Groups | Should -Contain 'General'
-		$script:browserCalls[0].Groups | Should -Not -Contain 'ProjectA'
-		Should -Invoke Test-BrowserGroupAlreadyOpen -Times 1
+		It "prefers the explicit -Project argument over Open-Project's selection" {
+			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+				@{ Action = 'Open-Project' },
+				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = '{SelectedProjects}' } }
+			)
+
+			Open-Workspace -Workspace 'TestWorkspace' -Project 'CliProject'
+
+			$script:invokedActions.Count | Should -Be 1
+			@($script:invokedActions[0].Alpha) | Should -Be @('CliProject')
+		}
+
+		It "drops a {SelectedProjects} parameter when no projects resolve" {
+			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = '{SelectedProjects}' } }
+			)
+
+			Open-Workspace -Workspace 'TestWorkspace'
+
+			$script:invokedActions.Count | Should -Be 1
+			$script:invokedActions[0].Alpha | Should -BeNullOrEmpty
+		}
+
+		It "runs a configured Open-ProjectSwagger action with the selected projects" {
+			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+				@{ Action = 'Open-Project'; Parameters = @{ Project = 'ProjectA' } },
+				@{ Action = 'Open-Browser'; Parameters = @{ Groups = @('General') } },
+				@{ Action = 'Open-ProjectSwagger'; Parameters = @{ Project = '{SelectedProjects}' } }
+			)
+
+			Open-Workspace -Workspace 'TestWorkspace'
+
+			$script:browserCalls.Count | Should -Be 1
+			$script:swaggerCalls.Count | Should -Be 1
+			$script:swaggerCalls[0].Project | Should -Contain 'ProjectA'
+		}
+
+		It "invokes Open-ProjectSwagger without a Project when the token drops it" {
+			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+				@{ Action = 'Open-ProjectSwagger'; Parameters = @{ Project = '{SelectedProjects}' } }
+			)
+
+			Open-Workspace -Workspace 'TestWorkspace'
+
+			# The parameter is dropped, so the (real) action would no-op on its own
+			$script:swaggerCalls.Count | Should -Be 1
+			$script:swaggerCalls[0].Project | Should -BeNullOrEmpty
+		}
 	}
 }

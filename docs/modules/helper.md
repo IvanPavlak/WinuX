@@ -1197,6 +1197,31 @@ try { New-Desktop } catch { if (Test-RpcUnavailableError $_) { [void](Reset-Virt
 
 **See also:** [Reset-VirtualDesktopState](window.md#reset-virtualdesktopstate), [Test-RpcServerHealth](system.md#test-rpcserverhealth)
 
+## [Test-TcpPortReachable](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Test-TcpPortReachable.ps1)
+
+- **Description:** Reports whether a TCP port accepts a connection within a timeout. A deliberately plain socket connect, never an HTTP(S) request: no TLS negotiation happens, so a service behind a self-signed certificate (every `https://localhost` dev API) cannot fail the probe for certificate reasons. Every failure mode - refused connection, unreachable host, unresolvable name, timeout - returns `$false` instead of throwing, so callers can treat it as a plain yes/no. Used by `Resolve-SwaggerBrowserGroup` to decide whether a project's API is running before it judges whether the Swagger tab is already open.
+- **Parameters:** -TargetHost, -Port, -TimeoutMs
+- **Usage:** `Test-TcpPortReachable -TargetHost "localhost" -Port 5000`, `Test-TcpPortReachable localhost 44300 -TimeoutMs 250`
+
+A host name is resolved first and **every address it maps to is probed concurrently**, the first successful connection winning. Handing the name straight to `TcpClient.ConnectAsync` does not work: `localhost` resolves to `::1` before `127.0.0.1`, the default `TcpClient` constructor creates an IPv6 socket, and a service listening only on IPv4 - the shape of most dev servers - is then reported unreachable. Racing the addresses also keeps the whole probe inside a single `-TimeoutMs` budget; trying them in sequence would spend that budget per address, because an unreachable port does not necessarily refuse quickly (a dropped SYN can take seconds to give up). `-TargetHost` accepts a host name or an IP literal; pass a URI's `DnsSafeHost` rather than its `Host` so an IPv6 literal arrives without its brackets.
+
+| Parameter     | Default | Description                                                                                       |
+| ------------- | ------- | ------------------------------------------------------------------------------------------------- |
+| `-TargetHost` | -       | Host name or IP address to connect to. Mandatory (position 0).                                    |
+| `-Port`       | -       | TCP port to connect to. Mandatory (position 1).                                                   |
+| `-TimeoutMs`  | `500`   | Maximum wait in milliseconds, shared across every address the host resolves to.                   |
+
+```powershell
+# Is the local API up?
+if (Test-TcpPortReachable -TargetHost "localhost" -Port 5000) { "API is listening" }
+
+# Probe an https endpoint without TLS ever entering the picture
+$uri = [System.Uri]"https://localhost:44300/swagger/index.html"
+Test-TcpPortReachable -TargetHost $uri.DnsSafeHost -Port $uri.Port -TimeoutMs 250
+```
+
+**See also:** [Resolve-SwaggerBrowserGroup](workflow.md#resolve-swaggerbrowsergroup), [Open-ProjectSwagger](workflow.md#open-projectswagger)
+
 ## [Test-WindowTitleCandidates](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Test-WindowTitleCandidates.ps1)
 
 - **Description:** Tests a window title against a list of candidate strings using case-insensitive, regex-escaped matching, returning `$true` on the first match. Used for robust window detection in automation tasks (e.g. by `Close-Project`).

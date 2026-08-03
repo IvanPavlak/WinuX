@@ -8,6 +8,7 @@ BeforeAll {
 	. "$HelperFunctionsPath\Resolve-ConfigPathValue.ps1"
 	. "$HelperFunctionsPath\Get-WindowTitleCandidates.ps1"
 	. "$HelperFunctionsPath\Test-WindowTitleCandidates.ps1"
+	. "$WorkflowFunctionsPath\Get-SwaggerCloseTitlePatterns.ps1"
 	. "$WorkflowFunctionsPath\Close-Project.ps1"
 
 	function Resolve-Selection { param($InputObject) $InputObject }
@@ -89,5 +90,41 @@ Describe "Close-Project" {
 		Close-Project -Project "ExampleProject"
 
 		Should -Invoke Write-LogSuccess -Times 5
+	}
+
+	Context "swagger close patterns" {
+		BeforeEach {
+			Mock Get-WindowHandle { @() }
+			$script:patternCalls = @()
+			Mock Close-BrowserTabsByPattern {
+				param($ProcessName, $TitlePatterns)
+				$script:patternCalls += , @($TitlePatterns)
+				0
+			}
+		}
+
+		It "includes the swagger patterns when the project has a localhost swagger entry" {
+			$script:Configuration.BrowserGroups = @(
+				@{
+					Swagger = @(
+						@{ Name = 'ExampleProject'; Url = 'http://localhost:5000/swagger/index.html' }
+					)
+				}
+			)
+
+			Close-Project -Project "ExampleProject"
+
+			$script:patternCalls.Count | Should -Be 1
+			$script:patternCalls[0] | Should -Contain "(?i)ExampleProject"
+			$script:patternCalls[0] | Should -Contain "(?i)swagger ui"
+			$script:patternCalls[0] | Should -Contain "(?i)problem loading page"
+		}
+
+		It "passes only the project-name pattern when the project has no swagger entry" {
+			Close-Project -Project "ExampleProject"
+
+			$script:patternCalls.Count | Should -Be 1
+			$script:patternCalls[0] | Should -Be @("(?i)ExampleProject")
+		}
 	}
 }

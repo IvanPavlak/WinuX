@@ -8,6 +8,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.23] - 2026-08-03
+
+### Added
+
+- `Open-ProjectSwagger` (Workflow module): the opt-in workspace action for a project's Swagger UI tab. It resolves the project's entry in the `BrowserGroups` `Swagger` group through `Resolve-SwaggerBrowserGroup` and opens it with `Open-Browser`, and no-ops silently when no project is supplied, the project has no `Swagger` entry, or the tab is already open. Swagger was previously welded into `Open-Workspace`, which auto-added the group to every `Open-Browser` action it ran - so a setup that never touches Swagger still executed the lookup, the window enumeration, and the already-open check on every workspace open, and the only way out was to have no `Swagger` group at all. Now the behavior is entirely declarative: a workspace that does not name the action runs no Swagger code, and one that does gets exactly what it had before. `-Project` is deliberately optional rather than mandatory, because the `{SelectedProjects}` token that feeds it is dropped when nothing resolves, and this action must then do nothing rather than fail the action. The end state is unchanged - a single-URL group launches with the browser's new-window argument exactly as it did when appended to the workspace's own `Open-Browser` call; the visible difference is one extra "Opening <browser> group(s)" log pair from the separate invocation.
+- The `{SelectedProjects}` token for `WorkspaceActions`: a parameter whose FULL value is the literal string `"{SelectedProjects}"` resolves at runtime to the explicit `-Project` argument, else to the projects returned by this workspace's `Open-Project` action, and is dropped when neither exists. This is what replaced the swagger-shaped hook in `Open-Workspace` with something generic - the function now knows only "some later action wants to know which projects this workspace opened", which is the same shape as the existing `{ProjectName}` substitution in `ProjectActions` and is matched the same way (full value only, no in-string interpolation). Declare consumers after the `Open-Project` action; `Open-ProjectSwagger` is the one that ships.
+- `Get-SwaggerCloseTitlePatterns` (Workflow module): the browser tab title patterns `Close-Project` closes for a project - `(?i)swagger ui` for any matched `Swagger` entry, plus `(?i)problem loading page` when one of its URLs is localhost - lifted out of a 45-line inline block in `Close-Project` and into a function of its own, which is what the repository asks for in the first place. Behavior is identical, including the literal patterns (deliberately not switched to the configured `ProblemLoadingPagePattern`) and the presence-based trigger: a project with no `Swagger` entry returns nothing, so the closing side needs no opt-in of its own and is already inert without Swagger configuration.
+- `Test-TcpPortReachable` (Helper module): reports whether a TCP port accepts a connection within a timeout, as a plain socket connect rather than an HTTP(S) request - no TLS negotiation happens, so a service behind a self-signed certificate (every `https://localhost` dev API) cannot fail the probe for certificate reasons. Every failure mode returns `$false` instead of throwing. A host name is resolved first and **every address it maps to is probed concurrently**, first success winning: handing the name straight to `TcpClient.ConnectAsync` does not work, because `localhost` resolves to `::1` before `127.0.0.1`, the default `TcpClient` constructor creates an IPv6 socket, and a service listening only on IPv4 - the shape of most dev servers - is then reported unreachable. Racing the addresses also keeps the probe inside a single timeout budget; trying them in sequence would spend that budget per address, since an unreachable port does not necessarily refuse quickly (a dropped SYN can take seconds to give up).
+
+### Changed
+
+- `Resolve-SwaggerBrowserGroup` (Workflow module) decides how to check "is this tab already open?" from a backend probe. Backend **up** is the previous strict path, unchanged: `Test-BrowserGroupAlreadyOpen` requires a failed-load window to carry host/port evidence before it counts as this group. Backend **down** runs that strict check first (it still catches a stale but loaded "Swagger UI" tab whose backend has since died) and then treats **any** window matching `BrowserGroupMatching.Matching.ProblemLoadingPagePattern` as the tab already being open. With no failed-load window present the group is still returned, so a first open - including a deliberate problem-page placeholder that reserves a window-layout zone - behaves exactly as before. `-SkipDuplicateCheck` skips the probe as well as the check, and `-CachedBrowserWindows` is reused for the failed-load scan so it does not re-enumerate windows.
+- `Open-Workspace` (Workflow module) no longer contains anything Swagger-specific. The `Open-Browser` branch of its action loop is gone, replaced by the generic `{SelectedProjects}` substitution described above. `Close-Project` (Workflow module) is correspondingly thinner, delegating to `Get-SwaggerCloseTitlePatterns`. `Test-BrowserGroupAlreadyOpen` (Application module) is untouched.
+
+### Breaking
+
+- **A workspace that relied on Swagger tabs opening by themselves must now declare the action.** Add `@{ Action = "Open-ProjectSwagger"; Parameters = @{ Project = "{SelectedProjects}" } }` to its `WorkspaceActions` entry, after the `Open-Project` and `Open-Browser` actions. Nothing else changes - the `BrowserGroups` `Swagger` group keeps its shape and location, entries stay reachable from the `Open-Browser` menu, and a setup with no `Swagger` group is unaffected either way. Without the action, the workspace opens exactly as before minus the Swagger tab.
+
+### Fixed
+
+- Re-running a workspace whose Swagger backend was not running opened a second failed-load tab every time, and a third, and a fourth. The already-open check only recognizes a failed-load window when its title carries the group's host or port, which is correct and deliberate - a generic error title proves nothing about *which* page failed, and treating any of them as a match let one project's stale error tab suppress another project's live Swagger tab. But Firefox's failed-load title is exactly that generic ("Problem loading page", no host, no port), so for a down backend the check could never claim the tab it had just opened. The backend probe resolves the conflict by telling the two situations apart instead of trading one off against the other: with the backend up nothing about the strict matching changes, and only with the backend down does a generic failed-load window count. Both the duplicate stacking and the cross-project suppression are gone.
+
 ## [0.1.22] - 2026-08-02
 
 ### Added
@@ -338,7 +360,9 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.21...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.23...HEAD
+[0.1.23]: https://github.com/IvanPavlak/WinuX/compare/v0.1.22...v0.1.23
+[0.1.22]: https://github.com/IvanPavlak/WinuX/compare/v0.1.21...v0.1.22
 [0.1.21]: https://github.com/IvanPavlak/WinuX/compare/v0.1.20...v0.1.21
 [0.1.20]: https://github.com/IvanPavlak/WinuX/compare/v0.1.19...v0.1.20
 [0.1.19]: https://github.com/IvanPavlak/WinuX/compare/v0.1.18...v0.1.19

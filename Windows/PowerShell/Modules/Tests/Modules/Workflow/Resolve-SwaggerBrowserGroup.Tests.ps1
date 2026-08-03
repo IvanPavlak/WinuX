@@ -9,6 +9,7 @@ BeforeAll {
 	# Stub dependent functions / logging so the test is self-contained
 	function Get-WindowHandle { param($ProcessName) @() }
 	function Test-BrowserGroupAlreadyOpen { $false }
+	function Test-TcpPortReachable { param($TargetHost, $Port, $TimeoutMs) $true }
 	function Write-LogDebug { param($Message, $Style) }
 	function Write-LogWarning { param($Message) }
 }
@@ -17,9 +18,11 @@ Describe "Resolve-SwaggerBrowserGroup" {
 	BeforeEach {
 		Mock Get-WindowHandle { @() }
 		Mock Test-BrowserGroupAlreadyOpen { $false }
+		# Backend-up default: the probe keeps the strict duplicate-check path active
+		Mock Test-TcpPortReachable { $true }
 
 		$script:Configuration = @{
-			BrowserGroups = @(
+			BrowserGroups        = @(
 				@{ Google = @("https://google.com") }
 				@{
 					Swagger = @(
@@ -28,7 +31,10 @@ Describe "Resolve-SwaggerBrowserGroup" {
 					)
 				}
 			)
-			Universal     = @{ DefaultBrowser = 'Firefox' }
+			Universal            = @{ DefaultBrowser = 'Firefox' }
+			BrowserGroupMatching = @{
+				Matching = @{ ProblemLoadingPagePattern = "(?i)problem.{0,10}loading.{0,10}page" }
+			}
 		}
 	}
 
@@ -67,10 +73,11 @@ Describe "Resolve-SwaggerBrowserGroup" {
 		Should -Invoke Test-BrowserGroupAlreadyOpen -Times 1
 	}
 
-	It "skips the duplicate check with -SkipDuplicateCheck" {
+	It "skips the duplicate check and the backend probe with -SkipDuplicateCheck" {
 		Resolve-SwaggerBrowserGroup -Project 'ExampleProject' -SkipDuplicateCheck | Should -Be 'ExampleProject'
 		Should -Invoke Test-BrowserGroupAlreadyOpen -Times 0
 		Should -Invoke Get-WindowHandle -Times 0
+		Should -Invoke Test-TcpPortReachable -Times 0
 	}
 
 	It "forwards cached browser windows to the duplicate check without re-enumerating" {
@@ -78,6 +85,47 @@ Describe "Resolve-SwaggerBrowserGroup" {
 		Resolve-SwaggerBrowserGroup -Project 'ExampleProject' -CachedBrowserWindows $cached | Out-Null
 		Should -Invoke Get-WindowHandle -Times 0
 		Should -Invoke Test-BrowserGroupAlreadyOpen -Times 1
+	}
+
+	It "probes the swagger URL's host and port" {
+		Resolve-SwaggerBrowserGroup -Project 'ExampleProject' | Out-Null
+		Should -Invoke Test-TcpPortReachable -Times 1 -ParameterFilter {
+			$TargetHost -eq 'localhost' -and $Port -eq 5287
+		}
+	}
+
+	It "keeps the strict duplicate check when the backend is up" {
+		Resolve-SwaggerBrowserGroup -Project 'ExampleProject' | Should -Be 'ExampleProject'
+		Should -Invoke Test-BrowserGroupAlreadyOpen -Times 1
+	}
+
+	It "returns null when the backend is down and any failed-load window exists" {
+		Mock Test-TcpPortReachable { $false }
+		Mock Get-WindowHandle { @([PSCustomObject]@{ Handle = [IntPtr]1; Title = 'Problem loading page - Mozilla Firefox' }) }
+
+		Resolve-SwaggerBrowserGroup -Project 'ExampleProject' | Should -BeNullOrEmpty
+	}
+
+	It "returns the group when the backend is down but no failed-load window exists" {
+		Mock Test-TcpPortReachable { $false }
+		Mock Get-WindowHandle { @([PSCustomObject]@{ Handle = [IntPtr]1; Title = 'Some other tab' }) }
+
+		Resolve-SwaggerBrowserGroup -Project 'ExampleProject' | Should -Be 'ExampleProject'
+	}
+
+	It "scans cached browser windows for failed-load pages without re-enumerating" {
+		Mock Test-TcpPortReachable { $false }
+		$cached = @([PSCustomObject]@{ Handle = [IntPtr]1; Title = 'Problem loading page - Mozilla Firefox' })
+
+		Resolve-SwaggerBrowserGroup -Project 'ExampleProject' -CachedBrowserWindows $cached | Should -BeNullOrEmpty
+		Should -Invoke Get-WindowHandle -Times 0
+	}
+
+	It "returns null when the backend is down and a stale loaded swagger tab matches the strict check" {
+		Mock Test-TcpPortReachable { $false }
+		Mock Test-BrowserGroupAlreadyOpen { $true }
+
+		Resolve-SwaggerBrowserGroup -Project 'ExampleProject' | Should -BeNullOrEmpty
 	}
 
 	It "requires the Project parameter" {

@@ -205,52 +205,9 @@ function Close-Project {
 			# Build patterns to match - always include project name
 			$patterns = @("(?i)$([regex]::Escape($projectName))")
 
-			# Check if there's a swagger group matching this project (case-insensitive)
-			$urlGroups = $Configuration.BrowserGroups
-			$swaggerParentGroup = $urlGroups | Where-Object { $_.Keys -contains "Swagger" }
-			$swaggerGroup = if ($swaggerParentGroup) {
-				($swaggerParentGroup["Swagger"] | Where-Object { $_.Name -ieq $projectName }).Name
-			}
-			if ($swaggerGroup) {
-				Write-LogDebug "  Found swagger group => [$swaggerGroup]"
-
-				# Get the swagger URLs
-				$swaggerUrls = $null
-				if ($swaggerParentGroup) {
-					$swaggerItems = $swaggerParentGroup["Swagger"]
-					$swaggerItem = $swaggerItems | Where-Object { $_.Name -eq $swaggerGroup }
-
-					if ($swaggerItem) {
-						$swaggerUrls = @($swaggerItem.Url)
-					}
-				}
-
-				if ($swaggerUrls) {
-					Write-LogDebug "  Swagger URLs => $($swaggerUrls -join ', ')" -Style Step
-
-					# Check if any URLs are localhost (for swagger detection)
-					$hasLocalhostUrls = $swaggerUrls | Where-Object {
-						try {
-							$uri = [System.Uri]$_
-							$uri.Host -eq "localhost" -or $uri.Host -eq "127.0.0.1"
-						}
-						catch {
-							$false
-						}
-					}
-
-					if (Test-LogVerbose) {
-						$localhostStatus = if ($hasLocalhostUrls) { "YES" } else { "NO" }
-						Write-LogDebug "Has localhost URLs => [$localhostStatus]" -Style Step
-					}
-
-					# Add swagger-specific patterns
-					$patterns += "(?i)swagger ui"
-					if ($hasLocalhostUrls) {
-						$patterns += "(?i)problem loading page"
-					}
-				}
-			}
+			# Swagger-specific close patterns (extracted to Get-SwaggerCloseTitlePatterns; empty
+			# when the project has no Swagger entry - trigger stays presence-based)
+			$patterns += @(Get-SwaggerCloseTitlePatterns -Project $projectName)
 
 			Write-LogDebug "  Patterns to match => $($patterns -join ' | ')" -Style Step
 

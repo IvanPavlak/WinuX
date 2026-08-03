@@ -470,7 +470,15 @@ Defines what happens when a workspace opens.
 
 **Format:** Same as `ProjectActions` - array of `@{ Action = "...", Parameters = @{ ... } }` objects
 
-**Special actions:** Same as `ProjectActions` (`Open-ProjectTerminals-Or-RunProject`, `Return`). When a workspace runs an `Open-Browser` action, the active project's `Swagger` group is automatically added via `Resolve-SwaggerBrowserGroup` (unless it is already open).
+**Special actions:** Same as `ProjectActions` (`Open-ProjectTerminals-Or-RunProject`, `Return`).
+
+**Project context (`{SelectedProjects}`):** A parameter whose FULL value is the literal string `"{SelectedProjects}"` resolves at runtime to the explicit `-Project` argument, otherwise to the projects selected by this workspace's `Open-Project` action; when neither exists the parameter is dropped so the action can no-op or apply its own default. Declare consumers after the `Open-Project` action. The one action that ships using it is `Open-ProjectSwagger`, the opt-in way to open a project's `Swagger` group:
+
+```powershell
+@{ Action = "Open-ProjectSwagger"; Parameters = @{ Project = "{SelectedProjects}" } }
+```
+
+Swagger is never added on its own - a workspace that does not declare that action runs no Swagger logic at all.
 
 **Example:**
 
