@@ -11,7 +11,7 @@ This guide shows how to add a new development project to WinuX for use with `Ope
 5. Add to `ProjectTerminals` (for terminal tabs)
 6. Add a repository entry in `RepositoryGroups` (if Git repo)
 7. Add to `Projects` list
-8. Add Swagger URL to `BrowserGroups` (if using Swagger)
+8. Add Swagger URL to `BrowserGroups` and declare the `Open-ProjectSwagger` action (if using Swagger)
 9. Define project actions in `ProjectActions`
 10. Add to `RunnableProjects` + `RunnableProjectMappings` (if runnable)
 
@@ -145,7 +145,19 @@ BrowserGroups = @(
 )
 ```
 
-No separate mapping is needed - when a workspace runs an `Open-Browser` action, [Resolve-SwaggerBrowserGroup](../../modules/workflow.md#resolve-swaggerbrowsergroup) looks up the `Swagger` group by the active project's name and adds it (unless it is already open).
+No separate per-project mapping is needed - the lookup is by name. Opening the tab is opt-in per workspace: declare the [Open-ProjectSwagger](../../modules/workflow.md#open-projectswagger) action after the workspace's `Open-Project` and `Open-Browser` actions, and it resolves the active project's `Swagger` group via [Resolve-SwaggerBrowserGroup](../../modules/workflow.md#resolve-swaggerbrowsergroup) and opens it unless it is already open:
+
+```powershell
+WorkspaceActions = @{
+    MyWorkspace = @(
+        @{ Action = "Open-Project"; Parameters = @{ Project = "MyNewProject" } }
+        @{ Action = "Open-Browser"; Parameters = @{ Groups = @("AI", "GitHub") } }
+        @{ Action = "Open-ProjectSwagger"; Parameters = @{ Project = "{SelectedProjects}" } }
+    )
+}
+```
+
+A workspace that omits the action never opens a Swagger tab, so skip this step entirely if you do not use Swagger.
 
 The matching window-layout entry recognizes the Swagger window across browsers and backend states: the rendered `Swagger UI` page title (any browser, backend up), Firefox's `Problem loading page` title, and the `localhost` host title that Chromium browsers (Chrome/Edge/Brave) show on a failed load (backend down). Because of this, a project with **no real API** can still reserve its window-layout zone by pointing at an unused `localhost` port, which always renders as a "problem page":
 
@@ -154,6 +166,8 @@ The matching window-layout entry recognizes the Swagger window across browsers a
 # "problem page" so the project's window-layout zone is still filled.
 @{ Name = "MyScriptsProject"; Url = "http://localhost:5999/swagger/index.html" }
 ```
+
+Re-running the workspace does not stack a second error tab on top of such a placeholder: `Resolve-SwaggerBrowserGroup` probes the host and port first, and with the backend unreachable it treats any existing failed-load window as the tab already being open. The first open still happens, so the zone is filled either way.
 
 ## Step 9: Define Project Actions
 

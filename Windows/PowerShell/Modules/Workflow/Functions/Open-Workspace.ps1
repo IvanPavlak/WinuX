@@ -7,6 +7,13 @@ function Open-Workspace {
 		Opens a workspace by executing a sequence of configured actions such as opening projects,
 		browsers, applications, and applying window layouts across virtual desktops.
 
+		Actions can receive the workspace's project context via the {SelectedProjects} token: a
+		configured parameter whose FULL value is the literal string "{SelectedProjects}" resolves
+		at runtime to the explicit -Project argument, else to the projects returned by this
+		workspace's Open-Project action. When neither exists the parameter is dropped, so the
+		consuming action (e.g. Open-ProjectSwagger) can no-op or apply its own default. Declare
+		consumers AFTER the Open-Project action.
+
 	.PARAMETER Workspace
 		The name of the workspace(s) to open. Can be specified by name or selected from a menu.
 		Omit it for the interactive menu; pressing [Enter] there with no input opens the workspace
@@ -448,12 +455,41 @@ function Open-Workspace {
 					$actionParams["InSameShell"] = $true
 				}
 
+				# Generic project-context handoff: a parameter whose FULL value is the literal
+				# "{SelectedProjects}" resolves at runtime to (1) the explicit -Project argument,
+				# else (2) the projects returned by this workspace's Open-Project action. With
+				# neither available the parameter is dropped so the action can no-op or apply
+				# its own default. Declare consumers (e.g. Open-ProjectSwagger) AFTER Open-Project.
+				$resolvedSelectedProjects = if ($Project) {
+					@($Project)
+				}
+				elseif ($selectedProjects) {
+					@($selectedProjects | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+				}
+				else {
+					@()
+				}
+
+				foreach ($tokenKey in @($actionParams.Keys)) {
+					$tokenValue = $actionParams[$tokenKey]
+					if ($tokenValue -is [string] -and $tokenValue -eq "{SelectedProjects}") {
+						if ($resolvedSelectedProjects.Count -gt 0) {
+							$actionParams[$tokenKey] = $resolvedSelectedProjects
+							Write-LogDebug " [Open-Workspace] {SelectedProjects} => [$($resolvedSelectedProjects -join ', ')] for [$action].$tokenKey" -Style Success
+						}
+						else {
+							$actionParams.Remove($tokenKey)
+							Write-LogDebug " [Open-Workspace] Dropped [$tokenKey] for [$action] - no projects resolved for {SelectedProjects}" -Style Warning
+						}
+					}
+				}
+
 				if ($action -eq "Open-Project") {
 					if (-not $actionParams.ContainsKey("Project") -and $Project) {
 						$actionParams["Project"] = $Project
 					}
 
-					# Capture the selected projects for swagger mapping
+					# Capture the selected projects for {SelectedProjects} substitution in later actions
 					try {
 						$filteredParams = Get-FilteredParams -CommandName $action -Params $actionParams
 						if ($filteredParams.Count -gt 0) {
@@ -469,35 +505,6 @@ function Open-Workspace {
 
 					# Skip the general execution block for Open-Project since we already executed it
 					continue
-				}
-				elseif ($action -eq "Open-Browser") {
-					# Inject the current project's Swagger UI tab into the browser groups (when it has one
-					# and it isn't already open). The swagger-group resolution + duplicate check now lives in
-					# Resolve-SwaggerBrowserGroup so it can be reused outside of Open-Workspace.
-					# Priority: 1) explicit -Project, 2) projects selected by a preceding Open-Project action.
-					$projectForSwagger = if ($Project) {
-						$Project
-					}
-					elseif ($selectedProjects -and $selectedProjects.Count -gt 0) {
-						$selectedProjects
-					}
-					else {
-						$null
-					}
-
-					if ($projectForSwagger) {
-						$swaggerBrowser = if ($actionParams.ContainsKey("Browser")) { $actionParams["Browser"] } else { $null }
-						$swaggerGroup = Resolve-SwaggerBrowserGroup -Project $projectForSwagger -Browser $swaggerBrowser
-
-						if ($swaggerGroup) {
-							if ($actionParams.ContainsKey("Groups")) {
-								$actionParams["Groups"] += $swaggerGroup
-							}
-							else {
-								$actionParams["Groups"] = @($swaggerGroup)
-							}
-						}
-					}
 				}
 
 				# Pass pre-captured existing windows and desktop offset to Set-WorkspaceWindowLayout

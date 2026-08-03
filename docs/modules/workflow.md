@@ -30,14 +30,14 @@ Set-LogLevel Verbose { Close-BrowserTabsByPattern -ProcessName "msedge" -TitlePa
 - **Description:** Closes all project-specific resources opened by `Open-Project` (Visual Studio windows, VSCode windows, Windows Terminal tabs, and browser tabs/windows), enabling fast switching between projects by closing only project-specific resources while keeping workspace-level applications running. If no project is given, an interactive selection menu is shown.
 - **Parameters:** -Project
 - **Usage:** `Close-Project`, `Close-Project MyProject`, `Close-Project -Project MyProject, OtherProject`
-- **Implementation Note:** Uses Helper-module support functions to resolve configured solution/folder paths into real window-title candidates before matching Visual Studio and VS Code windows.
+- **Implementation Note:** Uses Helper-module support functions to resolve configured solution/folder paths into real window-title candidates before matching Visual Studio and VS Code windows; Swagger tab patterns are delegated to `Get-SwaggerCloseTitlePatterns`.
 
 Projects must be defined in `$Configuration.Projects`; their resources are described by `$Configuration.ProjectActions`. For each selected project the function closes:
 
 - **Visual Studio** windows matched by solution name (resolved via `VisualStudioSolutions`).
 - **VSCode** windows matched by folder name (resolved via `VSCodeProjects`).
 - **Terminal tabs** named after the project (e.g. `MyProject.Api`, `MyProject.Ui`), delegated to `Close-ProjectTerminals` which sends Ctrl+W to matching tabs.
-- **Browser tabs** in the configured `Universal.DefaultBrowser` whose titles contain the project name. If a `Swagger` entry under `BrowserGroups` matches the project, it also closes tabs titled "Swagger UI" (backend running) or, for localhost URLs, "Problem loading page" (backend not running). Closing is delegated to `Close-BrowserTabsByPattern`, which cycles through all tabs so it works even when a different tab is focused.
+- **Browser tabs** in the configured `Universal.DefaultBrowser` whose titles contain the project name. If a `Swagger` entry under `BrowserGroups` matches the project, it also closes tabs titled "Swagger UI" (backend running) or, for localhost URLs, "Problem loading page" (backend not running) - those extra patterns come from [Get-SwaggerCloseTitlePatterns](#get-swaggerclosetitlepatterns) and are empty for a project with no `Swagger` entry. Closing is delegated to `Close-BrowserTabsByPattern`, which cycles through all tabs so it works even when a different tab is focused.
 
 After closing, `Focus-TerminalTab` refocuses Windows Terminal. Resolving configured paths to window-title candidates makes matching reliable when the project key differs from the actual solution/folder name shown in the title (e.g. `MyProjectKey` vs `My.Project.Solution` / `Project`).
 
@@ -164,6 +164,26 @@ Focus-TerminalTab
 Focus-TerminalTab -TargetTitle "PowerShell"
 ```
 
+## [Get-SwaggerCloseTitlePatterns](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Workflow/Functions/Get-SwaggerCloseTitlePatterns.ps1)
+
+- **Description:** Returns the Swagger-specific browser tab title patterns to close for a project. Maps the project name to its entry in the `BrowserGroups` `Swagger` group (case-insensitive match on the entry's `Name`) and returns the regex patterns `Close-Project` hands to `Close-BrowserTabsByPattern`. A project with no `Swagger` entry (or a setup with no `Swagger` group at all) returns nothing, so Swagger closing is inert without Swagger configuration.
+- **Parameters:** -Project
+- **Usage:** `Get-SwaggerCloseTitlePatterns -Project "MyProject"`, `$patterns += @(Get-SwaggerCloseTitlePatterns -Project "MyProject")`
+
+The returned set depends on the entry's URLs: a matched entry always contributes `(?i)swagger ui` (the title the rendered Swagger page carries when the backend is up), and any `localhost`/`127.0.0.1` URL additionally contributes `(?i)problem loading page` (what a failed load renders when the backend is down). This is the Swagger-closing logic that previously lived inline inside `Close-Project`, extracted so that function stays thin and the patterns can be reused. Wrap the call in `@(...)` when appending - an empty result is `AutomationNull`, which would otherwise vanish rather than append nothing.
+
+| Parameter  | Description                                            |
+| ---------- | ------------------------------------------------------ |
+| `-Project` | Project name to map to a `Swagger` entry. Mandatory.   |
+
+```powershell
+# Append a project's Swagger close patterns to an existing pattern list
+$patterns = @("(?i)$([regex]::Escape($projectName))")
+$patterns += @(Get-SwaggerCloseTitlePatterns -Project $projectName)
+```
+
+**See also:** [Close-Project](#close-project), [Close-BrowserTabsByPattern](#close-browsertabsbypattern), [Open-ProjectSwagger](#open-projectswagger)
+
 ## [Open-DnD](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Workflow/Functions/Open-DnD.ps1)
 
 - **Description:** Opens the full D&D campaign workspace for a tabletop RPG session: the Obsidian vault with campaign notes, the rulebook PDF in Acrobat, and the spell/resource URLs in the browser. The campaign is chosen from the `Campaigns` array in `Configuration.psd1` via an interactive menu when not specified, and `-FoundryVTT` additionally launches the FoundryVTT game server.
@@ -232,6 +252,41 @@ ProjectActions = @{
 ```
 
 **See also:** [Open-ProjectTerminals](#open-projectterminals), [Open-Workspace](#open-workspace)
+
+## [Open-ProjectSwagger](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Workflow/Functions/Open-ProjectSwagger.ps1)
+
+- **Description:** Opens a project's Swagger UI tab, if it has one and it is not already open. This is the **opt-in workspace action** for per-project Swagger tabs: it resolves the project's entry in the `BrowserGroups` `Swagger` group via [Resolve-SwaggerBrowserGroup](#resolve-swaggerbrowsergroup) (which also runs the probe-driven already-open check) and hands the resolved group to `Open-Browser`. It no-ops silently when no project is supplied, when the project has no `Swagger` entry, or when the tab is already open - so a workspace can declare it unconditionally and a setup with no Swagger configuration never does anything.
+- **Parameters:** -Project, -Browser
+- **Usage:** `Open-ProjectSwagger -Project "MyProject"`, `Open-ProjectSwagger -Project $selectedProjects -Browser "Firefox"`
+
+Declare it in `WorkspaceActions` **after** the workspace's `Open-Project` and `Open-Browser` actions, using the [`{SelectedProjects}`](#open-workspace) token to supply the project context:
+
+```powershell
+WorkspaceActions = @{
+    MyWorkspace = @(
+        @{ Action = "Open-Project"; Parameters = @{ Project = "MyProject" } }
+        @{ Action = "Open-Browser"; Parameters = @{ Groups = @("AI", "GitHub") } }
+        @{ Action = "Open-ProjectSwagger"; Parameters = @{ Project = "{SelectedProjects}" } }
+    )
+}
+```
+
+Swagger used to be wired into `Open-Workspace` itself, which auto-added the group to every `Open-Browser` action for every user. It is now entirely declarative: no action in a workspace means no Swagger code runs for that workspace. `-Project` is deliberately optional rather than mandatory - when `{SelectedProjects}` resolves to nothing, `Open-Workspace` drops the parameter, and this function must then no-op rather than fail the action. The end state is unchanged from the old inline behaviour: a single-URL group launches with the browser's new-window argument exactly as it did when appended to the workspace's own `Open-Browser` call.
+
+| Parameter   | Default                    | Description                                                                                       |
+| ----------- | -------------------------- | ------------------------------------------------------------------------------------------------- |
+| `-Project`  | -                          | Project name(s) to open the Swagger tab for; the first non-empty element is used. Optional by design (see above). |
+| `-Browser`  | `Universal.DefaultBrowser` | Browser to open the tab in.                                                                       |
+
+```powershell
+# Open one project's Swagger tab by hand (respects the already-open check)
+Open-ProjectSwagger -Project "MyProject"
+
+# Verbose diagnostic output, including the backend probe result
+Set-LogLevel Verbose { Open-ProjectSwagger -Project "MyProject" }
+```
+
+**See also:** [Resolve-SwaggerBrowserGroup](#resolve-swaggerbrowsergroup), [Open-Workspace](#open-workspace), [Open-Browser](application.md#open-browser), [Test-TcpPortReachable](helper.md#test-tcpportreachable)
 
 ## [Open-ProjectTerminals](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Workflow/Functions/Open-ProjectTerminals.ps1)
 
@@ -305,7 +360,7 @@ Open-ProjectTerminals -Project "MyProject" -Force
 - **Usage:** `Open-Workspace`, `Open-Workspace MyWorkspace`, `Open-Workspace MyWorkspace MyProject`, `Open-Workspace MyWorkspace -Alongside`, `w dotfiles -VSCodeWorkspace Consolidation`, `w MyWorkspace`
 - **Alias:** w
 
-Reads the workspace list from `Configuration.Workspaces` and the per-workspace action sequence from `Configuration.WorkspaceActions`. With no argument it shows an interactive menu (multiple selections allowed); pressing Enter there opens the workspace named by `Configuration.DefaultWorkspace` (`Default` out of the box), which the prompt names explicitly. The default is only offered when it has a `WorkspaceActions` entry - set `DefaultWorkspace = ""` (or point it at a workspace with no actions) and the prompt reads `press [Enter] to cancel` instead, with Enter exiting without opening anything. The fallback covers the interactive Enter only: a mistyped `-Workspace` argument resolves to nothing and exits rather than silently opening the default. A typical workspace opens browser tab groups, the Obsidian vault, the project (Visual Studio, VS Code, terminals), DBeaver, communication apps, and finally applies the window layout. When an `Open-Browser` action runs for a project that has a matching `Swagger` entry under `BrowserGroups`, the relevant Swagger group is auto-added (unless already open) via [Resolve-SwaggerBrowserGroup](#resolve-swaggerbrowsergroup). Any extra `-Name Value` / `-Switch` arguments are forwarded to the underlying actions, with the workspace configuration taking precedence. Passing `-VSCodeWorkspace <name>` (or a bare `-VSCodeWorkspace` for a selection menu, or a `DefaultVSCodeWorkspaces` config entry for the workspace) opens `<name>.code-workspace` in place of the project folder - the resolved name (precedence: command-line value, then the bare-switch menu, then the config default) is passed to the `Open-Project` action, which reroutes `Open-VSCode` to `Open-VSCodeWorkspace`. The window layout needs no coupling to this: VS Code layout entries match by process, so the workspace window lands in the VS Code slot like any other VS Code window.
+Reads the workspace list from `Configuration.Workspaces` and the per-workspace action sequence from `Configuration.WorkspaceActions`. With no argument it shows an interactive menu (multiple selections allowed); pressing Enter there opens the workspace named by `Configuration.DefaultWorkspace` (`Default` out of the box), which the prompt names explicitly. The default is only offered when it has a `WorkspaceActions` entry - set `DefaultWorkspace = ""` (or point it at a workspace with no actions) and the prompt reads `press [Enter] to cancel` instead, with Enter exiting without opening anything. The fallback covers the interactive Enter only: a mistyped `-Workspace` argument resolves to nothing and exits rather than silently opening the default. A typical workspace opens browser tab groups, the Obsidian vault, the project (Visual Studio, VS Code, terminals), DBeaver, communication apps, and finally applies the window layout. Actions can receive the workspace's project context through the **`{SelectedProjects}` token**: a configured parameter whose FULL value is the literal string `"{SelectedProjects}"` resolves at runtime to the explicit `-Project` argument, otherwise to the projects returned by this workspace's `Open-Project` action; when neither exists the parameter is dropped so the consuming action can no-op or apply its own default. Declare token consumers - [Open-ProjectSwagger](#open-projectswagger) being the one that ships - AFTER the `Open-Project` action. Any extra `-Name Value` / `-Switch` arguments are forwarded to the underlying actions, with the workspace configuration taking precedence. Passing `-VSCodeWorkspace <name>` (or a bare `-VSCodeWorkspace` for a selection menu, or a `DefaultVSCodeWorkspaces` config entry for the workspace) opens `<name>.code-workspace` in place of the project folder - the resolved name (precedence: command-line value, then the bare-switch menu, then the config default) is passed to the `Open-Project` action, which reroutes `Open-VSCode` to `Open-VSCodeWorkspace`. The window layout needs no coupling to this: VS Code layout entries match by process, so the workspace window lands in the VS Code slot like any other VS Code window.
 
 Everything the flow spawns inherits the invoking shell's token, so running from an **elevated** shell produces elevated app windows (and, if PowerToys is not yet running, an elevated PowerToys) that a non-elevated FancyZones cannot snap. The function logs a warning when it detects an elevated shell and proceeds unchanged - prefer running workspaces from a normal shell.
 
@@ -339,22 +394,27 @@ w dotfiles -VSCodeWorkspace Consolidation
 Set-LogLevel Verbose { w MyWorkspace }
 ```
 
-**See also:** [Open-Project](workflow.md#open-project), [Close-Project](workflow.md#close-project), [Open-Browser](../modules/application.md), [Resolve-SwaggerBrowserGroup](#resolve-swaggerbrowsergroup)
+**See also:** [Open-Project](workflow.md#open-project), [Close-Project](workflow.md#close-project), [Open-Browser](../modules/application.md), [Open-ProjectSwagger](#open-projectswagger)
 
 ## [Resolve-SwaggerBrowserGroup](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Workflow/Functions/Resolve-SwaggerBrowserGroup.ps1)
 
-- **Description:** Resolves the `Swagger` browser group for a project so it can be handed to `Open-Browser`. Maps a project name to its entry in the `BrowserGroups` `Swagger` group (case-insensitive match on the entry's `Name`) and returns that group name. By default it also checks whether the project's Swagger tab is already open (via `Test-BrowserGroupAlreadyOpen`) and returns `$null` when it is, so callers never open a duplicate. Returns `$null` when the project has no `Swagger` entry, no project name is supplied, or the tab is already open. This is the Swagger-tab logic that previously lived inline inside `Open-Workspace`, extracted into a standalone function so it can be reused wherever a project's Swagger UI tab needs opening.
+- **Description:** Resolves the `Swagger` browser group for a project so it can be handed to `Open-Browser`. Maps a project name to its entry in the `BrowserGroups` `Swagger` group (case-insensitive match on the entry's `Name`) and returns that group name. By default it also checks whether the project's Swagger tab is already open and returns `$null` when it is, so callers never open a duplicate. That check is **probe-driven**: a short TCP connect to the Swagger URL's host and port ([Test-TcpPortReachable](helper.md#test-tcpportreachable)) decides its mode. Returns `$null` when the project has no `Swagger` entry, no project name is supplied, or the tab is already open. Called by [Open-ProjectSwagger](#open-projectswagger), the opt-in workspace action.
 - **Parameters:** -Project, -Browser, -CachedBrowserWindows, -SkipDuplicateCheck
 - **Usage:** `Resolve-SwaggerBrowserGroup -Project "MyProject"`, `Resolve-SwaggerBrowserGroup -Project $selectedProjects -Browser "Firefox"`, `Resolve-SwaggerBrowserGroup -Project "MyProject" -SkipDuplicateCheck`
 
-`Open-Workspace` calls this for each `Open-Browser` action: it resolves the active project (the explicit `-Project`, otherwise the projects selected by a preceding `Open-Project` action), passes it here, and appends the returned group name to that action's `Groups`. `-Project` accepts an array and uses the first non-empty element. `-Browser` defaults to `Universal.DefaultBrowser`. `-CachedBrowserWindows` forwards a pre-fetched window list to the duplicate check to avoid re-enumerating windows. `-SkipDuplicateCheck` returns the resolved group name without the already-open check (the pure config lookup). A Swagger lookup failure is logged and treated as "no group", so it never aborts the workspace.
+The two probe outcomes:
+
+- **Backend up** - strict title matching via `Test-BrowserGroupAlreadyOpen`, which requires a failed-load window to carry host/port evidence before it counts as this group. A stale error tab from another project therefore cannot suppress a live Swagger tab.
+- **Backend down** - the strict check still runs first (it catches a stale but still-loaded "Swagger UI" tab whose backend has since died), and then **any** window matching `BrowserGroupMatching.Matching.ProblemLoadingPagePattern` counts as the tab being open. A failed load renders a generic title - Firefox's bare "Problem loading page" names no host or port - so the strict check can never claim it, and without this every re-run of the workspace stacked another error tab. With no failed-load window present the group is still returned, so a first open (including a deliberate problem-page placeholder that reserves a window-layout zone) behaves exactly as before.
+
+`-Project` accepts an array and uses the first non-empty element. `-Browser` defaults to `Universal.DefaultBrowser`. `-CachedBrowserWindows` forwards a pre-fetched window list to both the duplicate check and the failed-load scan, so neither re-enumerates windows. `-SkipDuplicateCheck` returns the resolved group name without the already-open check **or the probe** (the pure config lookup). A Swagger lookup failure is logged and treated as "no group", so it never aborts the workspace.
 
 | Parameter               | Default                    | Description                                                                                        |
 | ----------------------- | -------------------------- | -------------------------------------------------------------------------------------------------- |
 | `-Project`              | -                          | Project name to map; an array is accepted and the first non-empty element is used. Mandatory.      |
 | `-Browser`              | `Universal.DefaultBrowser` | Browser used for the already-open check.                                                           |
-| `-CachedBrowserWindows` | -                          | Pre-fetched window handle list forwarded to `Test-BrowserGroupAlreadyOpen` to skip re-enumeration. |
-| `-SkipDuplicateCheck`   | `$false`                   | Returns the resolved group name without the already-open check (pure config lookup).               |
+| `-CachedBrowserWindows` | -                          | Pre-fetched window handle list reused by `Test-BrowserGroupAlreadyOpen` and the failed-load scan.  |
+| `-SkipDuplicateCheck`   | `$false`                   | Returns the resolved group name without the already-open check or the backend probe (pure config lookup). |
 
 ```powershell
 # Resolve a project's Swagger group (or $null if it has none / is already open)
@@ -365,7 +425,7 @@ if ($group) { Open-Browser $group }
 Resolve-SwaggerBrowserGroup -Project "MyProject" -SkipDuplicateCheck
 ```
 
-**See also:** [Open-Workspace](#open-workspace), [Open-Browser](application.md#open-browser), [Test-BrowserGroupAlreadyOpen](application.md#test-browsergroupalreadyopen)
+**See also:** [Open-ProjectSwagger](#open-projectswagger), [Open-Workspace](#open-workspace), [Open-Browser](application.md#open-browser), [Test-BrowserGroupAlreadyOpen](application.md#test-browsergroupalreadyopen), [Test-TcpPortReachable](helper.md#test-tcpportreachable)
 
 ## [Test-TerminalTabsAlreadyOpen](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Workflow/Functions/Test-TerminalTabsAlreadyOpen.ps1)
 
@@ -502,6 +562,7 @@ RunnableProjectMappings = @(
 | `Open-Browser`                        | Opens browser with URL groups (supports `Instances` for multi-window) |
 | `Open-Obsidian`                       | Opens Obsidian vault                                                  |
 | `Open-Project`                        | Opens a project (can nest)                                            |
+| `Open-ProjectSwagger`                 | Opens the active project's Swagger tab (opt-in; see the note below)   |
 | `Open-VSCode`                         | Opens VS Code                                                         |
 | `Open-VisualStudio`                   | Opens Visual Studio                                                   |
 | `Open-DBeaver`                        | Opens DBeaver                                                         |
@@ -513,7 +574,7 @@ RunnableProjectMappings = @(
 | `Terminate-WindowsTerminalTabs`       | Closes terminal tabs (e.g., `-OnlyCurrent` to close calling tab)      |
 | `Return`                              | Stops action processing                                               |
 
-> Swagger is not a standalone action. When an `Open-Browser` action runs in a workspace, the active project's `Swagger` group is auto-added via [Resolve-SwaggerBrowserGroup](#resolve-swaggerbrowsergroup) (unless it is already open).
+> Swagger is opt-in and entirely declarative: nothing happens unless a workspace declares the [Open-ProjectSwagger](#open-projectswagger) action (place it after `Open-Project` and `Open-Browser`, with `Parameters = @{ Project = "{SelectedProjects}" }`). It used to be wired into `Open-Workspace`, which auto-added the group to every `Open-Browser` action whether or not the setup used Swagger at all.
 
 ## Parameter Substitution
 
@@ -526,6 +587,18 @@ ProjectActions = @{
     )
 }
 # {ProjectName} replaced with "MyProject" at runtime
+```
+
+In `WorkspaceActions`, use `{SelectedProjects}` to hand an action the workspace's project context - the explicit `-Project` argument, else whatever the workspace's `Open-Project` action selected. The token must be the parameter's FULL value, and the parameter is dropped when no project resolves, so the consuming action simply no-ops:
+
+```powershell
+WorkspaceActions = @{
+    MyWorkspace = @(
+        @{ Action = "Open-Project"; Parameters = @{ Project = "MyProject" } }
+        @{ Action = "Open-ProjectSwagger"; Parameters = @{ Project = "{SelectedProjects}" } }
+    )
+}
+# {SelectedProjects} replaced with the project(s) Open-Project returned
 ```
 
 ## Typical Workflows

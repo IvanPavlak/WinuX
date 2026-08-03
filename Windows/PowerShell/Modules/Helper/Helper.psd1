@@ -64,6 +64,7 @@
 		'Test-PrivacyStatus',
 		'Test-RegistryValue',
 		'Test-RpcUnavailableError',
+		'Test-TcpPortReachable',
 		'Test-WSLDistributionInstalled',
 		'Test-WSLEnabled',
 		'Write-ManualInstructionsToDesktop'
