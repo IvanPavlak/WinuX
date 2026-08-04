@@ -7,14 +7,21 @@ function Bootstrap {
 		Runs all provisioning steps in a fixed order. Requires administrator privileges and an active internet connection.
 		Safe to re-run - all installation and configuration steps are idempotent.
 
+		Every step is individually toggleable via BootstrapConfig.Steps (resolved once per run
+		by Resolve-BootstrapSteps; -Skip/-Include override per invocation). Most steps also
+		no-op on their own when their configuration section is empty, so an enabled step on
+		the empty base config applies nothing. Opt-in steps that act the moment they run
+		default off: MicrosoftActivationScripts, Win11Debloat, DeveloperMode, NuGetConfig,
+		LockedStartLayout.
+
 		Execution sequence:
 		1. (WithInitialSetup only) Rename-Machine, Start-MicrosoftActivationScripts, Start-Win11Debloat
 		2. Git identity guarantee (restored from GitConfig when unset), then Update-Repositories -
-		   pulls latest WinuX and all configured repositories
+		   scope governed by BootstrapConfig.RepositoryUpdateScope ("None" skips)
 		3. Execution policy, Developer Mode, power plan, power button actions
 		4. System theme, locale, display language, keyboard layouts
 		5. Nerd Font, PowerShell modules, special folder redirections
-		6. WSL configuration (config-gated per machine type via BootstrapConfig.WSLSetup)
+		6. WSL configuration (Steps.WSL; deprecated BootstrapConfig.WSLSetup still honored)
 		7. WinGet, Scoop, and Chocolatey - install package managers then apps from CSVs
 		8. Upgrade all packages, fork-defined personal steps (BootstrapConfig.PersonalSteps, optionally machine-gated), .NET EF CLI
 		9. Environment variables, Conda environments, NuGet config, taskbar pins
@@ -31,6 +38,13 @@ function Bootstrap {
 		Includes first-time-only steps: machine rename, Windows activation, and Win11Debloat.
 		Omit this switch on subsequent runs.
 
+	.PARAMETER Skip
+		Step names forced off for this run, overriding BootstrapConfig.Steps. See
+		Resolve-BootstrapSteps for the step list.
+
+	.PARAMETER Include
+		Step names forced on for this run, overriding BootstrapConfig.Steps.
+
 	.EXAMPLE
 		Bootstrap
 		Re-provisions the machine - safe for repeated use after initial setup.
@@ -38,13 +52,23 @@ function Bootstrap {
 	.EXAMPLE
 		Bootstrap -WithInitialSetup
 		First-time provisioning on a new machine.
+
+	.EXAMPLE
+		Bootstrap -Skip UpgradeAll, WSL
+		Re-provisions without upgrading packages or touching WSL.
 	#>
 	[CmdletBinding()]
 	param(
 		[Parameter(Mandatory = $false)]
 		[string]$RepoRoot,
 
-		[switch]$WithInitialSetup = $false
+		[switch]$WithInitialSetup = $false,
+
+		[Parameter()]
+		[string[]]$Skip,
+
+		[Parameter()]
+		[string[]]$Include
 	)
 
 	try {
@@ -65,6 +89,7 @@ function Bootstrap {
 		}
 
 		Load-PathConfiguration -RepoRoot $RepoRoot | Out-Null
+		$steps = Resolve-BootstrapSteps -Skip $Skip -Include $Include
 
 		if ($WithInitialSetup) {
 			Write-LogTitle "Initial Boostrap Started"
@@ -84,9 +109,12 @@ function Bootstrap {
 			$detectedMachineType = if ($global:MachineType) { $global:MachineType } else { $global:Configuration.DefaultMachineType }
 			Initialize-Configuration -GitName $env:WINUX_GIT_NAME -GitEmail $env:WINUX_GIT_EMAIL -DevPath $DevRoot -MachineType $detectedMachineType
 			Load-PathConfiguration -RepoRoot $RepoRoot | Out-Null
-			Rename-Machine
-			Start-MicrosoftActivationScripts
-			Start-Win11Debloat
+			# Re-resolve: Initialize-Configuration may have just written the local override
+			# whose BootstrapConfig.Steps should govern the rest of this run.
+			$steps = Resolve-BootstrapSteps -Skip $Skip -Include $Include
+			if ($steps.RenameMachine) { Rename-Machine } else { Write-LogWarning "Machine rename skipped (BootstrapConfig.Steps.RenameMachine)" }
+			if ($steps.MicrosoftActivationScripts) { Start-MicrosoftActivationScripts } else { Write-LogWarning "Microsoft Activation Scripts skipped - opt in via BootstrapConfig.Steps.MicrosoftActivationScripts" }
+			if ($steps.Win11Debloat) { Start-Win11Debloat } else { Write-LogWarning "Win11Debloat skipped - opt in via BootstrapConfig.Steps.Win11Debloat" }
 		}
 		else {
 			Write-LogTitle "Bootstrap Started"
@@ -132,76 +160,78 @@ function Bootstrap {
 			default { Update-Repositories -All }
 		}
 
-		Set-CustomExecutionPolicy
-		Enable-DeveloperMode
+		if ($steps.ExecutionPolicy) { Set-CustomExecutionPolicy } else { Write-LogWarning "Execution policy skipped (BootstrapConfig.Steps.ExecutionPolicy)" }
+		if ($steps.DeveloperMode) { Enable-DeveloperMode } else { Write-LogWarning "Developer Mode skipped - opt in via BootstrapConfig.Steps.DeveloperMode" }
 
-		Set-PowerPlan -Auto
-		Set-PowerButtonActions -Auto
+		if ($steps.PowerPlan) { Set-PowerPlan -Auto } else { Write-LogWarning "Power plan skipped (BootstrapConfig.Steps.PowerPlan)" }
+		if ($steps.PowerButtonActions) { Set-PowerButtonActions -Auto } else { Write-LogWarning "Power button actions skipped (BootstrapConfig.Steps.PowerButtonActions)" }
 
-		Set-SystemTheme -Auto -KeepTerminalOpen
+		if ($steps.SystemTheme) { Set-SystemTheme -Auto -KeepTerminalOpen } else { Write-LogWarning "System theme skipped (BootstrapConfig.Steps.SystemTheme)" }
 
-		Set-Locale -Locale $global:Configuration.DefaultLocale
-		Set-DisplayLanguage -Language $global:Configuration.DefaultDisplayLanguage
-		Set-KeyboardLayouts -Layout $global:Configuration.DefaultKeyboardLayoutSet
+		if ($steps.Locale) { Set-Locale -Locale $global:Configuration.DefaultLocale } else { Write-LogWarning "Locale skipped (BootstrapConfig.Steps.Locale)" }
+		if ($steps.DisplayLanguage) { Set-DisplayLanguage -Language $global:Configuration.DefaultDisplayLanguage } else { Write-LogWarning "Display language skipped (BootstrapConfig.Steps.DisplayLanguage)" }
+		if ($steps.KeyboardLayouts) { Set-KeyboardLayouts -Layout $global:Configuration.DefaultKeyboardLayoutSet } else { Write-LogWarning "Keyboard layouts skipped (BootstrapConfig.Steps.KeyboardLayouts)" }
 		Display-SystemLanguageSettings
 
-		Configure-NerdFont -FontName $global:Configuration.DefaultNerdFont
-		Install-PowerShellModules
+		if ($steps.NerdFont) { Configure-NerdFont -FontName $global:Configuration.DefaultNerdFont } else { Write-LogWarning "Nerd Font skipped (BootstrapConfig.Steps.NerdFont)" }
+		if ($steps.PowerShellModules) { Install-PowerShellModules } else { Write-LogWarning "PowerShell modules skipped (BootstrapConfig.Steps.PowerShellModules)" }
 
-		Set-SpecialFolders
+		if ($steps.SpecialFolders) { Set-SpecialFolders } else { Write-LogWarning "Special folders skipped (BootstrapConfig.Steps.SpecialFolders)" }
 
 		Restart-Explorer
 
-		# WSL provisioning is config-driven via BootstrapConfig.WSLSetup (machine type ->
-		# $true/$false, "Default" fallback; absent => $true). Nothing else in Bootstrap depends
-		# on WSL, so minimal profiles (fresh test VMs) skip the Ubuntu download, the interactive
-		# first-launch account setup, and the reboot it needs. $false is a real value here, so
-		# resolve with explicit $null checks - truthiness (the RepositoryUpdateScope pattern)
-		# would misread it, and indexing with a $null machine type key errors.
-		$wslMap = $global:Configuration.BootstrapConfig.WSLSetup
-		$wslSetupEnabled = if ($wslMap -and $global:MachineType -and $null -ne $wslMap[$global:MachineType]) {
-			[bool]$wslMap[$global:MachineType]
-		}
-		elseif ($wslMap -and $null -ne $wslMap.Default) {
-			[bool]$wslMap.Default
-		}
-		else {
-			$true
-		}
-
-		if ($wslSetupEnabled) {
+		# WSL provisioning is config-driven via Steps.WSL (deprecated BootstrapConfig.WSLSetup
+		# is honored when Steps carries no WSL entry - see Resolve-BootstrapSteps). Nothing else
+		# in Bootstrap depends on WSL, so minimal profiles (fresh test VMs) skip the Ubuntu
+		# download, the interactive first-launch account setup, and the reboot it needs.
+		if ($steps.WSL) {
 			Configure-WSL
 		}
 		else {
-			Write-LogWarning "WSL setup disabled for machine type [$global:MachineType] (BootstrapConfig.WSLSetup) - skipping Configure-WSL, Initialize-WSLEnvironment, Configure-WSLSSH"
+			Write-LogWarning "WSL setup disabled for machine type [$global:MachineType] (BootstrapConfig.Steps.WSL) - skipping Configure-WSL, Initialize-WSLEnvironment, Configure-WSLSSH"
 		}
 
-		Install-WinGetPackageManager
-		Install-WinGetApps
+		if ($steps.WinGetApps) {
+			Install-WinGetPackageManager
+			Install-WinGetApps
+		}
+		else {
+			Write-LogWarning "WinGet apps skipped (BootstrapConfig.Steps.WinGetApps)"
+		}
 
-		Install-ScoopPackageManager
-		Install-ScoopApps
+		if ($steps.ScoopApps) {
+			Install-ScoopPackageManager
+			Install-ScoopApps
+		}
+		else {
+			Write-LogWarning "Scoop apps skipped (BootstrapConfig.Steps.ScoopApps)"
+		}
 
-		Install-ChocolateyPackageManager
-		Install-ChocolateyApps
+		if ($steps.ChocolateyApps) {
+			Install-ChocolateyPackageManager
+			Install-ChocolateyApps
+		}
+		else {
+			Write-LogWarning "Chocolatey apps skipped (BootstrapConfig.Steps.ChocolateyApps)"
+		}
 
-		Upgrade-All
+		if ($steps.UpgradeAll) { Upgrade-All } else { Write-LogWarning "Package upgrade skipped (BootstrapConfig.Steps.UpgradeAll)" }
 
 		# Fork-defined optional install steps (BootstrapConfig.PersonalSteps) - the base config
 		# ships an empty list, so a vanilla WinuX bootstrap runs nothing here. Entries are plain
 		# function names or machine-gated hashtables; see Invoke-PersonalSteps.
 		Invoke-PersonalSteps
 
-		Install-DotnetEf
+		if ($steps.DotnetEf) { Install-DotnetEf } else { Write-LogWarning "dotnet-ef skipped (BootstrapConfig.Steps.DotnetEf)" }
 
-		Set-EnvironmentVariables -Auto
+		if ($steps.EnvironmentVariables) { Set-EnvironmentVariables -Auto } else { Write-LogWarning "Environment variables skipped (BootstrapConfig.Steps.EnvironmentVariables)" }
 
-		Create-CondaEnvironments
+		if ($steps.CondaEnvironments) { Create-CondaEnvironments } else { Write-LogWarning "Conda environments skipped (BootstrapConfig.Steps.CondaEnvironments)" }
 		# PostgreSQL is provisioned via the Docker compose library, so password setup is redundant.
 		#Configure-PostgreSqlPasswords
-		Configure-NuGetConfig
+		if ($steps.NuGetConfig) { Configure-NuGetConfig } else { Write-LogWarning "NuGet config skipped - opt in via BootstrapConfig.Steps.NuGetConfig" }
 
-		Configure-Taskbar -FromBootstrap
+		if ($steps.Taskbar) { Configure-Taskbar -FromBootstrap } else { Write-LogWarning "Taskbar pins skipped (BootstrapConfig.Steps.Taskbar)" }
 
 		# Config-driven (TaskbarSettings); no-op unless the fork opts in. Applies the
 		# Settings > Personalisation > Taskbar page, auto-hide included.
@@ -211,23 +241,28 @@ function Bootstrap {
 		# Performance Options visual-effects profile (registry + SystemParametersInfo).
 		Set-VisualEffects
 
-		if ($wslSetupEnabled) {
+		if ($steps.WSL) {
 			Initialize-WSLEnvironment
 		}
 
-		SymbolicLinkMaker
+		if ($steps.SymbolicLinks) { SymbolicLinkMaker } else { Write-LogWarning "Symbolic links skipped (BootstrapConfig.Steps.SymbolicLinks)" }
 
-		if ($wslSetupEnabled) {
+		if ($steps.WSL) {
 			Configure-WSLSSH
 		}
 
-		try {
-			$explorerPolicyRegistryPath = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Explorer"
-			Set-ItemProperty -Path $explorerPolicyRegistryPath -Name "LockedStartLayout" -Value 1 -Type DWord -Force
-			Write-LogSuccess "Taskbar layout locked to prevent future modifications!"
+		if ($steps.LockedStartLayout) {
+			try {
+				$explorerPolicyRegistryPath = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Explorer"
+				Set-ItemProperty -Path $explorerPolicyRegistryPath -Name "LockedStartLayout" -Value 1 -Type DWord -Force
+				Write-LogSuccess "Taskbar layout locked to prevent future modifications!"
+			}
+			catch {
+				Write-LogWarning "Could not lock taskbar layout => $($_.Exception.Message)"
+			}
 		}
-		catch {
-			Write-LogWarning "Could not lock taskbar layout => $($_.Exception.Message)"
+		else {
+			Write-LogWarning "Taskbar layout lock skipped - opt in via BootstrapConfig.Steps.LockedStartLayout"
 		}
 
 		Restart-Explorer

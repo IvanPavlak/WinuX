@@ -4,11 +4,16 @@ BeforeAll {
 	$script:OriginalMachineSpecificPaths = $global:MachineSpecificPaths
 	$script:OriginalConfiguration = $global:Configuration
 
-	$BootstrapFunctionsPath = Join-Path (Get-RepositoryPath).Modules "Bootstrap\Functions"
+	$ModuleRoot = (Get-RepositoryPath).Modules
+	$BootstrapFunctionsPath = Join-Path $ModuleRoot "Bootstrap\Functions"
 	. "$BootstrapFunctionsPath\Bootstrap.ps1"
 	# Dot-source the personal-steps runner so it exists to Mock even in sessions whose imported
 	# Bootstrap module predates the Invoke-PersonalSteps export.
 	. "$BootstrapFunctionsPath\Invoke-PersonalSteps.ps1"
+	# Bootstrap gates its steps through Resolve-BootstrapSteps (which delegates to the
+	# shared Resolve-Steps).
+	. "$ModuleRoot\Helper\Functions\Resolve-Steps.ps1"
+	. "$BootstrapFunctionsPath\Resolve-BootstrapSteps.ps1"
 }
 
 AfterAll {
@@ -82,10 +87,67 @@ Describe "Bootstrap" {
 		Bootstrap -WithInitialSetup
 
 		Should -Invoke Rename-Machine -Times 1 -Exactly
-		Should -Invoke Start-MicrosoftActivationScripts -Times 1 -Exactly
-		Should -Invoke Start-Win11Debloat -Times 1 -Exactly
 		Should -Invoke Update-Repositories -Times 1 -Exactly -ParameterFilter { $All }
 		Should -Invoke Set-SystemTheme -Times 1 -Exactly -ParameterFilter { $Auto -and $KeepTerminalOpen }
+	}
+
+	It "keeps MAS and Win11Debloat off by default even with -WithInitialSetup (opt-in steps)" {
+		$global:MachineType = 'Laptop'
+
+		Bootstrap -WithInitialSetup
+
+		Should -Invoke Start-MicrosoftActivationScripts -Times 0
+		Should -Invoke Start-Win11Debloat -Times 0
+	}
+
+	It "runs MAS and Win11Debloat when BootstrapConfig.Steps enables them" {
+		$global:MachineType = 'Laptop'
+		$global:Configuration.BootstrapConfig = @{ Steps = @{ MicrosoftActivationScripts = $true; Win11Debloat = $true } }
+
+		Bootstrap -WithInitialSetup
+
+		Should -Invoke Start-MicrosoftActivationScripts -Times 1 -Exactly
+		Should -Invoke Start-Win11Debloat -Times 1 -Exactly
+	}
+
+	It "keeps the other opt-in steps off by default (DeveloperMode, NuGetConfig, LockedStartLayout)" {
+		$global:MachineType = 'Laptop'
+
+		Bootstrap
+
+		Should -Invoke Enable-DeveloperMode -Times 0
+		Should -Invoke Configure-NuGetConfig -Times 0
+		Should -Invoke Set-ItemProperty -Times 0 -ParameterFilter { $Name -eq 'LockedStartLayout' }
+	}
+
+	It "runs the opt-in steps when BootstrapConfig.Steps enables them" {
+		$global:MachineType = 'Laptop'
+		$global:Configuration.BootstrapConfig = @{ Steps = @{ DeveloperMode = $true; NuGetConfig = $true; LockedStartLayout = $true } }
+
+		Bootstrap
+
+		Should -Invoke Enable-DeveloperMode -Times 1 -Exactly
+		Should -Invoke Configure-NuGetConfig -Times 1 -Exactly
+		Should -Invoke Set-ItemProperty -Times 1 -Exactly -ParameterFilter { $Name -eq 'LockedStartLayout' }
+	}
+
+	It "skips a default-on step when -Skip forces it off" {
+		$global:MachineType = 'Laptop'
+
+		Bootstrap -Skip PowerPlan
+
+		Should -Invoke Set-PowerPlan -Times 0
+		Should -Invoke Set-PowerButtonActions -Times 1 -Exactly
+	}
+
+	It "skips a config-disabled step (plain boolean in Steps)" {
+		$global:MachineType = 'Laptop'
+		$global:Configuration.BootstrapConfig = @{ Steps = @{ UpgradeAll = $false } }
+
+		Bootstrap
+
+		Should -Invoke Upgrade-All -Times 0
+		Should -Invoke Install-WinGetApps -Times 1 -Exactly
 	}
 
 	It "uses Update-Repositories -Private when RepositoryUpdateScope maps the machine type to Private" {
