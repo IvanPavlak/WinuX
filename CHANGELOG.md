@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.26] - 2026-08-04
+
 ### Added
 
 - `BootstrapConfig.Steps` (configuration): per-step toggles for the entire Bootstrap sequence, the `KillAll.Steps` idea applied to provisioning. Every step - `RenameMachine`, `MicrosoftActivationScripts`, `Win11Debloat` (the three `-WithInitialSetup` steps), `ExecutionPolicy`, `DeveloperMode`, `PowerPlan`, `PowerButtonActions`, `SystemTheme`, `Locale`, `DisplayLanguage`, `KeyboardLayouts`, `NerdFont`, `PowerShellModules`, `SpecialFolders`, `WSL`, `WinGetApps`, `ScoopApps`, `ChocolateyApps`, `UpgradeAll`, `DotnetEf`, `EnvironmentVariables`, `CondaEnvironments`, `NuGetConfig`, `Taskbar`, `SymbolicLinks`, `LockedStartLayout` - is a plain boolean or a per-machine-type hashtable with a `Default` fallback. Most steps default on because their functions now no-op on an empty configuration section; the steps that act the moment they run default OFF and are opted in here: `MicrosoftActivationScripts`, `Win11Debloat`, `DeveloperMode`, `NuGetConfig` (prompts for a GitHub PAT), `LockedStartLayout`. Repository updates stay governed by `RepositoryUpdateScope` (`"None"` is its off switch), not by a step.
@@ -404,7 +406,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.25...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.26...HEAD
+[0.1.26]: https://github.com/IvanPavlak/WinuX/compare/v0.1.25...v0.1.26
 [0.1.25]: https://github.com/IvanPavlak/WinuX/compare/v0.1.24...v0.1.25
 [0.1.24]: https://github.com/IvanPavlak/WinuX/compare/v0.1.23...v0.1.24
 [0.1.23]: https://github.com/IvanPavlak/WinuX/compare/v0.1.22...v0.1.23
