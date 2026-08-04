@@ -11,6 +11,10 @@ BeforeAll {
 	. "$ModuleRoot\Helper\Functions\Test-ConfigValue.ps1"
 	. "$ModuleRoot\Helper\Functions\Confirm-ConfigValue.ps1"
 
+	# Instance counting and the cold-start gate lean on these two.
+	. "$ModuleRoot\System\Functions\Get-BrowserTitlePattern.ps1"
+	. "$AppFunctionsPath\Wait-BrowserWindowReady.ps1"
+
 	. "$AppFunctionsPath\Open-Browser.ps1"
 }
 
@@ -52,6 +56,7 @@ Describe "Open-Browser" {
 		Mock Get-WindowHandle { @() }
 		Mock Test-BrowserGroupAlreadyOpen { $false }
 		Mock Start-Process { }
+		Mock Wait-BrowserWindowReady { $true }
 	}
 
 	It "resolves configured group and opens URL with browser new-window argument" {
@@ -96,6 +101,64 @@ Describe "Open-Browser" {
 
 		Should -Invoke Test-BrowserGroupAlreadyOpen -Times 0
 		Should -Invoke Start-Process -Times 1 -Exactly
+	}
+
+	Context "NoMenu Instances mode" {
+		It "opens each missing instance with the browser new-window argument" {
+			# A bare launch only opens a window on some browsers (Brave routes it
+			# into the existing session as a tab), so every instance launch must
+			# carry NewWindowArg.
+			Mock Get-WindowHandle {
+				@([PSCustomObject]@{ Handle = [IntPtr]11; Title = 'New Tab - Google Chrome' })
+			}
+
+			Open-Browser -NoMenu -Browser Chrome -Instances 3
+
+			Should -Invoke Start-Process -Times 2 -Exactly -ParameterFilter {
+				$ArgumentList -contains '--new-window'
+			}
+		}
+
+		It "waits for the first window before bursting the rest on a cold start" {
+			Mock Get-WindowHandle { @() }
+
+			Open-Browser -NoMenu -Browser Chrome -Instances 3
+
+			Should -Invoke Start-Process -Times 3 -Exactly
+			Should -Invoke Wait-BrowserWindowReady -Times 1 -Exactly
+		}
+
+		It "does not count another browser's windows that share the process name" {
+			$global:Configuration.Universal.Browsers['Firefox'] = @{
+				Exe          = 'C:\\Tools\\firefox.exe'
+				PrivateArg   = '-private-window'
+				NewWindowArg = '-new-window'
+			}
+
+			# Tor Browser runs as firefox.exe - its windows must not count as
+			# existing Firefox instances.
+			Mock Get-WindowHandle {
+				@([PSCustomObject]@{ Handle = [IntPtr]11; Title = 'Connect to Tor - Tor Browser' })
+			}
+
+			Open-Browser -NoMenu -Browser Firefox -Instances 2
+
+			Should -Invoke Start-Process -Times 2 -Exactly
+		}
+
+		It "opens nothing when the instance target is already met" {
+			Mock Get-WindowHandle {
+				@(
+					[PSCustomObject]@{ Handle = [IntPtr]11; Title = 'New Tab - Google Chrome' },
+					[PSCustomObject]@{ Handle = [IntPtr]22; Title = 'Docs - Google Chrome' }
+				)
+			}
+			Mock Write-LogWarning { }
+
+			Open-Browser -NoMenu -Browser Chrome -Instances 2
+
+			Should -Invoke Start-Process -Times 0
+		}
 	}
 
 	It "warns and launches nothing when no browser is given and DefaultBrowser is blank (empty base)" {

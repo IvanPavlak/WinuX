@@ -44,6 +44,7 @@
 		'Start-MicrosoftActivationScripts',
 		'Start-Win11Debloat',
 		'Update-Win11DebloatVendor',
+		'Wait-BrowserWindowReady',
 		'Test-BrowserGroupAlreadyOpen',
 		'Test-ProjectAlreadyOpen'
 	)

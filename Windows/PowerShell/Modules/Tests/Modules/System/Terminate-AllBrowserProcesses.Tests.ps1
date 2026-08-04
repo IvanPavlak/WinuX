@@ -5,6 +5,7 @@ BeforeAll {
 	$FunctionsPath = Join-Path $ModuleRoot "System\Functions"
 
 	. "$FunctionsPath\Initialize-Win32BrowserHelperType.ps1"
+	. "$FunctionsPath\Get-BrowserTitlePattern.ps1"
 	. "$FunctionsPath\Get-BrowserWindowsByTarget.ps1"
 	. "$FunctionsPath\Close-BrowserWindows.ps1"
 	. "$FunctionsPath\Terminate-AllBrowserProcesses.ps1"

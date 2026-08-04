@@ -1782,7 +1782,9 @@
 			BrowserTitleSuffixPatterns  = @(
 				'\s*[-—]\s*(Mozilla\s+)?Firefox\s*$',
 				'\s*[-—]\s*Google\s+Chrome\s*$',
-				'\s*[-—]\s*Microsoft\s+Edge\s*$',
+				# Edge embeds a zero-width space (U+200B) before the regular space in
+				# "Microsoft Edge" - U+200B is not \s, so \W{1,2} covers both variants.
+				'\s*[-—]\s*Microsoft\W{1,2}Edge\s*$',
 				'\s*[-—]\s*Opera.*$',
 				'\s*[-—]\s*Brave\s*$'
 			)
