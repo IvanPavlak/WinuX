@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- `Open-ClaudeDesktop` (Application module): dropped the `--processStart claude.exe` argument. The install-root `claude.exe` is a Squirrel stub that resolves the newest `app-*` directory on its own and forwards any arguments it receives straight through to the Electron binary, which parsed the trailing `claude.exe` as a file path and prompted to attach it to the session on every launch.
+
 ## [0.1.26] - 2026-08-04
 
 ### Added

@@ -266,7 +266,9 @@ Open-Browser GroupName -Override
 - **Description:** Opens Claude Desktop via `Start-Application` using its local electron launcher under `%LOCALAPPDATA%\AnthropicClaude`. Does nothing if Claude Desktop is already running. The running check is scoped to the Claude Desktop install directory so it is not tripped by the Claude Code CLI, which also runs as a process named `claude`.
 - **Usage:** `Open-ClaudeDesktop`
 
-Launches `claude.exe` from `%LOCALAPPDATA%\AnthropicClaude` via `Start-Application -StartMethod DirectPath`, passing `--processStart claude.exe`. The `-ProcessPathFilter` restricts the "already running" detection to processes under the Claude Desktop install path, so the desktop app is distinguished from the `claude` CLI.
+Launches `claude.exe` from `%LOCALAPPDATA%\AnthropicClaude` via `Start-Application -StartMethod DirectPath`, with no arguments. The `-ProcessPathFilter` restricts the "already running" detection to processes under the Claude Desktop install path, so the desktop app is distinguished from the `claude` CLI.
+
+That launcher is a Squirrel stub executable: it resolves the newest `app-*` install directory on its own, then re-executes the real Electron binary with whatever arguments it was given. Arguments must therefore be omitted — an earlier version passed `--processStart claude.exe` (an `Update.exe` flag the stub does not consume), which was forwarded through to Electron and parsed as a file path, so every launch opened an "Attach `claude.exe` to this session?" prompt.
 
 ```powershell
 # Open Claude Desktop (no-op if already running)
