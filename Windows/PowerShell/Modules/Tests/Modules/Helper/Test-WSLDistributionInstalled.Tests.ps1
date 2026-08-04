@@ -12,6 +12,7 @@ Describe "Test-WSLDistributionInstalled" {
 		$script:Configuration = @{ DefaultWSLDistribution = "Ubuntu" }
 		Mock Write-Host { }
 		Mock Write-LogError { }
+		Mock Write-LogDebug { }
 		Mock wsl { @("Windows Subsystem for Linux Distributions:", "Ubuntu (Default)") }
 	}
 
@@ -21,12 +22,14 @@ Describe "Test-WSLDistributionInstalled" {
 		$result | Should -BeTrue
 	}
 
-	It "returns false when no default distribution is configured" {
+	It "returns false quietly when no default distribution is configured" {
 		$script:Configuration = @{ }
 
 		$result = Test-WSLDistributionInstalled
 
+		# An unconfigured distribution is the empty-base default, not an error -
+		# probes like SymbolicLinkMaker hit this on every vanilla run.
 		$result | Should -BeFalse
-		Should -Invoke Write-LogError -Times 1
+		Should -Invoke Write-LogError -Times 0
 	}
 }

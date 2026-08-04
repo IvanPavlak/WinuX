@@ -30,6 +30,10 @@ function Configure-NerdFont {
 
 	Test-AdminPrivileges
 
+	if (-not (Confirm-ConfigValue $Configuration.NerdFonts "NerdFonts not configured - no font to install!")) {
+		return
+	}
+
 	$nerdFonts = $Configuration.NerdFonts
 	$defaultFontName = $Configuration.DefaultNerdFont
 	$targetFontName = ""

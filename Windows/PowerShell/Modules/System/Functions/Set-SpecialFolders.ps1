@@ -17,8 +17,7 @@ function Set-SpecialFolders {
 	Write-LogTitle "Redirecting Special Folders"
 
 	$desiredSettings = $Configuration.SpecialFolders
-	if (-not $desiredSettings) {
-		Write-LogError "Error: SpecialFolders not found in configuration!"
+	if (-not (Confirm-ConfigValue $desiredSettings "SpecialFolders not configured - leaving folder redirections as-is!")) {
 		return
 	}
 

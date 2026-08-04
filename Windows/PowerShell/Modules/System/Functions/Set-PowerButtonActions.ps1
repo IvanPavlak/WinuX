@@ -128,11 +128,19 @@ function Set-PowerButtonActions {
 		$MachineType = DetermineMachineType
 		Write-LogStep " Machine type => [$MachineType]" -NoLeadingNewline
 
-		$machineConfig = $Configuration.PowerButtonActions[$MachineType]
+		$machineConfig = if (Test-ConfigValue $Configuration.PowerButtonActions) { $Configuration.PowerButtonActions[$MachineType] } else { $null }
 		$nullableToggleKeys = @('DisableFastStartup', 'DisableSleep', 'DisableHibernate')
 
-		if (-not $machineConfig) {
-			Write-LogWarning "No configuration found for machine type [$MachineType], using defaults!"
+		if (-not (Test-ConfigValue $machineConfig)) {
+			# Empty-by-default contract: with no machine entry and no explicit parameters,
+			# -Auto changes nothing - the old behavior applied invasive hardcoded defaults
+			# (disabling sleep and hibernate) on unconfigured machines.
+			$explicitParams = @($defaults.Keys | Where-Object { $null -ne $PSBoundParameters[$_] })
+			if ($explicitParams.Count -eq 0) {
+				Write-LogWarning "PowerButtonActions not configured for [$MachineType] - leaving power settings as-is!"
+				return
+			}
+			Write-LogWarning "PowerButtonActions not configured for [$MachineType] - using built-in defaults as base for the explicitly passed parameters!"
 			$machineConfig = @{}
 		}
 

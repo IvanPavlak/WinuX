@@ -30,13 +30,12 @@ function SymbolicLinkMaker {
 
 	Write-LogTitle "Creating symbolic links for $MachineType"
 
-	if (-not $MachineSpecificPaths.ContainsKey('SymbolicLinks')) {
-		Write-LogError "No SymbolicLinks configuration found for $MachineType"
+	if (-not (Confirm-ConfigValue $MachineSpecificPaths.SymbolicLinks "SymbolicLinks not configured - nothing to link!")) {
 		return
 	}
 
 	# WSL symlinks (forward-slash paths) need a working distribution. Probe once up front: when
-	# it is missing (WSL setup disabled for this machine type via BootstrapConfig.WSLSetup, or
+	# it is missing (WSL setup disabled for this machine type via BootstrapConfig.Steps.WSL, or
 	# the post-install reboot has not happened yet), skip WSL entries with a warning instead of
 	# erroring on every wsl.exe call.
 	$wslAvailable = Test-WSLDistributionInstalled

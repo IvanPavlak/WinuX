@@ -29,6 +29,10 @@ function Set-DisplayLanguage {
 
 	Test-AdminPrivileges
 
+	if (-not (Confirm-ConfigValue $Configuration.DisplayLanguages "DisplayLanguages not configured - leaving display language as-is!")) {
+		return
+	}
+
 	$languageOptions = $Configuration.DisplayLanguages.Keys
 	$defaultLanguageName = $Configuration.DefaultDisplayLanguage
 	$targetLanguageName = ""

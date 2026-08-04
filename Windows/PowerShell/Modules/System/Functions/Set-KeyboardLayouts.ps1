@@ -32,6 +32,13 @@ function Set-KeyboardLayouts {
 		[switch]$Override
 	)
 
+	if (-not (Confirm-ConfigValue $Configuration.KeyboardLayoutSets "KeyboardLayoutSets not configured - leaving input layouts as-is!")) {
+		return
+	}
+	if (-not (Confirm-ConfigValue $Configuration.KeyboardLayouts "KeyboardLayouts not configured - leaving input layouts as-is!")) {
+		return
+	}
+
 	$layoutSets = $Configuration.KeyboardLayoutSets
 	$allLayouts = $Configuration.KeyboardLayouts
 	$defaultSetName = $Configuration.DefaultKeyboardLayoutSet

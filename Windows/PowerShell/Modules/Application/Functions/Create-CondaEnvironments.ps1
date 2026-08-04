@@ -20,9 +20,7 @@ function Create-CondaEnvironments {
 	Write-LogTitle "Creating Conda Environments"
 
 	$condaPath = $env:Conda
-	if (-not $condaPath) {
-		Write-LogError " Conda environment variable not set!"
-		Write-LogWarning "Ensure the [Conda] environment variable is configured!"
+	if (-not (Confirm-ConfigValue $condaPath "Conda environment variable not set (opt in via AutoEnvironmentVariables.Conda) - skipping Conda environments!")) {
 		return
 	}
 

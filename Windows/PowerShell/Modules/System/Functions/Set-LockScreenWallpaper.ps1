@@ -52,6 +52,13 @@ function Set-LockScreenWallpaper {
 		}
 
 		$WallpaperSettings = if ($targetTheme -eq 'Light') { $WallpaperLightSettings } else { $WallpaperDarkSettings }
+
+		# Empty-by-default contract: an unconfigured wallpaper section means the user
+		# never opted into wallpaper management, so the lock screen stays untouched.
+		if (-not (Confirm-ConfigValue $WallpaperSettings "Wallpaper settings not configured (Wallpaper$($targetTheme)Settings) - leaving lock screen as-is!")) {
+			return
+		}
+
 		Write-LogStep " Using [$targetTheme] theme lock screen wallpaper settings!"
 
 		$MachineType = DetermineMachineType
@@ -62,6 +69,9 @@ function Set-LockScreenWallpaper {
 			Write-LogWarning " No specific wallpaper found for [$MachineType]"
 			Write-LogWarning "Using default"
 			$wallpaperSetting = $WallpaperSettings["Default"]
+		}
+		if (-not (Confirm-ConfigValue $wallpaperSetting "No wallpaper configured for [$MachineType] and no Default entry - leaving lock screen as-is!")) {
+			return
 		}
 
 		# For multi-monitor configs use the first monitor's wallpaper; for single configs use the File key directly

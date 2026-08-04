@@ -37,8 +37,7 @@ function Configure-PostgreSqlPasswords {
 	Write-LogTitle "Configuring PostgreSQL password"
 
 	if ($Auto -or (-not $DefaultOrCurrentPassword -and -not $NewPassword)) {
-		if (-not $Configuration.PostgreSqlPasswords) {
-			Write-LogError "PostgreSQL password configuration not found!"
+		if (-not (Confirm-ConfigValue $Configuration.PostgreSqlPasswords "PostgreSqlPasswords not configured - nothing to change!")) {
 			return
 		}
 

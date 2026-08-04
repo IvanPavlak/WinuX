@@ -85,6 +85,10 @@ function Open-Browser {
 		$Browser = $Configuration.Universal.DefaultBrowser
 	}
 
+	if (-not (Confirm-ConfigValue $Browser "No browser specified and Universal.DefaultBrowser is not configured - pass -Browser or set it in Configuration.local.psd1!")) {
+		return
+	}
+
 	$browserConfig = $Configuration.Universal.Browsers[$Browser]
 
 	if (-not $browserConfig) {

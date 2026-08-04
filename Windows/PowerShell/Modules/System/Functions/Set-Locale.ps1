@@ -29,6 +29,10 @@ function Set-Locale {
 
 	Test-AdminPrivileges
 
+	if (-not (Confirm-ConfigValue $Configuration.Locales "Locales not configured - leaving system locale as-is!")) {
+		return
+	}
+
 	$localeOptions = $Configuration.Locales.Keys
 	$defaultLocaleName = $Configuration.DefaultLocale
 	$targetLocaleName = ""

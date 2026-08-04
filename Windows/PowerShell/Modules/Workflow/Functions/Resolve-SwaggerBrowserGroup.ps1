@@ -89,9 +89,15 @@ function Resolve-SwaggerBrowserGroup {
 			return $swaggerGroup
 		}
 
-		# Resolve the browser (explicit wins, else configured default)
+		# Resolve the browser (explicit wins, else configured default). With neither
+		# configured, the duplicate check has no browser process to inspect - return
+		# the group as-is and let Open-Browser handle the missing browser downstream.
 		if ([string]::IsNullOrWhiteSpace($Browser)) {
 			$Browser = $Configuration.Universal.DefaultBrowser
+		}
+		if (-not (Test-ConfigValue $Browser)) {
+			Write-LogDebug " [Resolve-SwaggerBrowserGroup] Universal.DefaultBrowser not configured - skipping duplicate check"
+			return $swaggerGroup
 		}
 
 		# Skip if the project's Swagger tab is already open (avoid duplicates on re-run)

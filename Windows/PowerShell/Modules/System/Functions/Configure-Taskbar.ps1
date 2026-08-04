@@ -5,7 +5,9 @@ function Configure-Taskbar {
 
 	.DESCRIPTION
 		Clears all existing taskbar pins and applies the pins from `TaskbarConfiguration` in
-		Configuration.psd1. The layout XML is generated entirely from configuration and written
+		Configuration.psd1. When `TaskbarConfiguration` is not configured (the empty base
+		config), the function returns before touching anything - existing pins survive.
+		The layout XML is generated entirely from configuration and written
 		directly to the machine-local `TaskbarLayoutFile` path that the StartLayoutFile Group
 		Policy points at - it is not versioned in the repository and needs no symlink.
 
@@ -34,6 +36,14 @@ function Configure-Taskbar {
 
 	Test-AdminPrivileges
 
+	# Empty-by-default contract: check the configuration BEFORE touching anything.
+	# The unpin/clear calls below are destructive, and users may have their taskbar
+	# arranged long before adopting WinuX - unconfigured means leave it alone.
+	$taskbarConfig = $Configuration.TaskbarConfiguration
+	if (-not (Confirm-ConfigValue $taskbarConfig "TaskbarConfiguration not configured - leaving taskbar pins as-is!")) {
+		return
+	}
+
 	if ($FromBootstrap) {
 		Unpin-TaskbarApps -FromBootstrap
 	}
@@ -57,12 +67,6 @@ function Configure-Taskbar {
 		catch {
 			Write-LogWarning "Could not clear all shortcuts => [$($_.Exception.Message)]" -NoLeadingNewline
 		}
-	}
-
-	$taskbarConfig = $Configuration.TaskbarConfiguration
-	if (-not $taskbarConfig) {
-		Write-LogError "TaskbarConfiguration not found in configuration!"
-		return
 	}
 
 	# Resolve the machine type and state it up front, so the output makes clear which machine's

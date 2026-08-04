@@ -164,8 +164,8 @@ function Start-Application {
 				}
 
 				$exePath = $Configuration.Universal.$ConfigKey
-				if ([string]::IsNullOrWhiteSpace($exePath)) {
-					throw "$ConfigKey not found in configuration!"
+				if (-not (Confirm-ConfigValue $exePath "[$ConfigKey] is not configured (Universal section) - set its path in Configuration.local.psd1 to launch $AppName!")) {
+					return
 				}
 
 				$startParams = @{

@@ -14,8 +14,10 @@ function Test-WSLDistributionInstalled {
 
 	try {
 		$distroName = $Configuration.DefaultWSLDistribution
-		if (-not $distroName) {
-			Write-LogError "DefaultWSLDistribution not found in Configuration"
+		if (-not (Test-ConfigValue $distroName)) {
+			# Not an error: the empty base config ships no distribution, and probes like
+			# SymbolicLinkMaker call this on every run - stay quiet below Warning level.
+			Write-LogDebug " DefaultWSLDistribution not configured - treating WSL as unavailable" -Style Warning
 			return $false
 		}
 

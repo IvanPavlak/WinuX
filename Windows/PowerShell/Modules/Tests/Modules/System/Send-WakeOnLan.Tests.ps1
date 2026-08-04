@@ -4,6 +4,12 @@ BeforeAll {
 	$ModuleRoot = (Get-RepositoryPath).Modules
 	$FunctionsPath = Join-Path $ModuleRoot "System\Functions"
 
+	# The unconfigured-section guards warn through Confirm-ConfigValue (Helper);
+	# dot-source it (and its Test-ConfigValue dependency) so the Write-LogWarning
+	# mocks in these tests apply to the guard's warning.
+	. "$ModuleRoot\Helper\Functions\Test-ConfigValue.ps1"
+	. "$ModuleRoot\Helper\Functions\Confirm-ConfigValue.ps1"
+
 	. "$FunctionsPath\Send-WakeOnLan.ps1"
 
 	# Stub Resolve-Selection matching real signature (switch params for splatting compatibility)
@@ -111,6 +117,24 @@ Describe "Send-WakeOnLan" {
 			Send-WakeOnLan
 
 			Should -Invoke Write-LogWarning -ParameterFilter { $Message -match "cancelled" }
+		}
+	}
+
+	Context "When Wake-on-LAN is not configured (empty base)" {
+		It "Should warn and send nothing when WakeOnLanConfig is an empty hashtable" {
+			# @{} is truthy in PowerShell - this is exactly the case a bare -not guard misses.
+			$global:Configuration = @{
+				WakeOnLanConfig         = @{}
+				WakeOnLanMachines       = @()
+				DefaultWakeOnLanMachine = ""
+			}
+			Mock Resolve-Selection { }
+
+			Send-WakeOnLan
+
+			Should -Invoke Write-LogWarning -ParameterFilter { $Message -match "Wake-on-LAN not configured" }
+			Should -Invoke Resolve-Selection -Times 0
+			Should -Invoke Write-LogStep -Times 0 -ParameterFilter { $Message -match "Sending Wake-on-LAN" }
 		}
 	}
 
