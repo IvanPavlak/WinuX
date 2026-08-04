@@ -34,7 +34,7 @@
 		'Remove-VirtualDesktops',
 		'Rename-Machine',
 		'Repair-RpcServer',
-		'Resolve-KillAllStep',
+		'Resolve-KillAllSteps',
 		'Restart-Explorer',
 		'Restart-Machine',
 		'Send-WakeOnLan',

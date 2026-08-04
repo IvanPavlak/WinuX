@@ -385,7 +385,7 @@ Kill-All -Include Docker
 Kill-All -ReloadPowerShellProfile
 ```
 
-**See also:** [Resolve-KillAllStep](system.md#resolve-killallstep), [Remove-VirtualDesktops](system.md#remove-virtualdesktops), [Terminate-AllProcessesWithVisibleWindows](system.md#terminate-allprocesseswithvisiblewindows)
+**See also:** [Resolve-KillAllSteps](system.md#resolve-killallsteps), [Remove-VirtualDesktops](system.md#remove-virtualdesktops), [Terminate-AllProcessesWithVisibleWindows](system.md#terminate-allprocesseswithvisiblewindows)
 
 ## [List-Drives](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/List-Drives.ps1)
 
@@ -521,25 +521,23 @@ Set-LogLevel Verbose { Repair-RpcServer }
 
 Even when `Repair-RpcServer` returns `$false`, callers continue their normal flow (the workspace rerun still spawns) rather than aborting; there is no reboot prompt. Running from an elevated shell gives the service-restart step better odds.
 
-## [Resolve-KillAllStep](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Resolve-KillAllStep.ps1)
+## [Resolve-KillAllSteps](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Resolve-KillAllSteps.ps1)
 
-- **Description:** Resolves whether a single `Kill-All` cleanup step should run. Tri-state resolution: `-Skip` beats `-Include` beats config (`KillAll.Steps.<Name>` in `$global:Configuration` - a plain boolean, or a per-machine-type hashtable with a `Default` fallback, the `BootstrapConfig.WSLSetup` shape) beats the built-in default. `$false` is a real config value, so booleans resolve with explicit `$null` checks rather than truthiness. Warns and returns `$false` when the same step appears in both `-Skip` and `-Include`. `Kill-All` calls this once per step; it has no side effects beyond the conflict warning, so it is safe to call ad hoc to inspect what a `Kill-All` invocation would do.
-- **Parameters:** -Name (step name), -Default (built-in default), -Skip (step names forced off), -Include (step names forced on)
-- **Usage:** `Resolve-KillAllStep -Name "Docker" -Default $true -Skip $Skip -Include $Include`
+- **Description:** Resolves which `Kill-All` cleanup steps should run, in a single pass. Returns an ordered hashtable of step name → boolean, in `Kill-All` execution order. Per step, tri-state resolution: `-Skip` beats `-Include` beats config (`KillAll.Steps.<Name>` in `$global:Configuration` - a plain boolean, or a per-machine-type hashtable with a `Default` fallback, the `BootstrapConfig.WSLSetup` shape) beats the built-in defaults (everything on except `ReloadProfile`). `$false` is a real config value, so booleans resolve with explicit `$null` checks rather than truthiness. `Kill-All` calls this exactly once per invocation; the only side effect is a warning per step that appears in both `-Skip` and `-Include` (the step is skipped), so it is also safe to call ad hoc to inspect what a `Kill-All` invocation would do with the current config.
+- **Parameters:** -Skip (step names forced off), -Include (step names forced on)
+- **Usage:** `Resolve-KillAllSteps`, `Resolve-KillAllSteps -Skip Docker, Browsers`
 
-| Parameter  | Type       | Default | Description                                                              |
-| ---------- | ---------- | ------- | ------------------------------------------------------------------------ |
-| `-Name`    | `string`   | -       | The step name to resolve; must match the `KillAll.Steps` key.            |
-| `-Default` | `bool`     | -       | Built-in default when neither parameters nor config decide the step.     |
-| `-Skip`    | `string[]` | -       | Step names forced off for this invocation; wins over `-Include`.         |
-| `-Include` | `string[]` | -       | Step names forced on for this invocation, overriding config.             |
+| Parameter  | Type       | Default | Description                                                      |
+| ---------- | ---------- | ------- | ----------------------------------------------------------------- |
+| `-Skip`    | `string[]` | -       | Step names forced off for this invocation; wins over `-Include`. |
+| `-Include` | `string[]` | -       | Step names forced on for this invocation, overriding config.     |
 
 ```powershell
-# What would the Docker step do with the current config?
-Resolve-KillAllStep -Name "Docker" -Default $true
+# What would a parameterless Kill-All do with the current config?
+Resolve-KillAllSteps
 
 # Parameter override beats a config-disabled step
-Resolve-KillAllStep -Name "Docker" -Default $true -Include @("Docker")
+Resolve-KillAllSteps -Include Docker
 ```
 
 **See also:** [Kill-All](system.md#kill-all), [Configuration Reference: Kill-All Step Toggles](../configuration/configuration-reference.md#kill-all-step-toggles)

@@ -106,17 +106,7 @@ function Kill-All {
 		$includeSteps += "ReloadProfile"
 	}
 
-	$stepStates = [ordered]@{
-		VirtualDesktops = Resolve-KillAllStep -Name "VirtualDesktops" -Default $true -Skip $Skip -Include $includeSteps
-		Docker          = Resolve-KillAllStep -Name "Docker" -Default $true -Skip $Skip -Include $includeSteps
-		Browsers        = Resolve-KillAllStep -Name "Browsers" -Default $true -Skip $Skip -Include $includeSteps
-		VisibleWindows  = Resolve-KillAllStep -Name "VisibleWindows" -Default $true -Skip $Skip -Include $includeSteps
-		NamedProcesses  = Resolve-KillAllStep -Name "NamedProcesses" -Default $true -Skip $Skip -Include $includeSteps
-		TerminalTabs    = Resolve-KillAllStep -Name "TerminalTabs" -Default $true -Skip $Skip -Include $includeSteps
-		CenterTerminal  = Resolve-KillAllStep -Name "CenterTerminal" -Default $true -Skip $Skip -Include $includeSteps
-		FocusTerminal   = Resolve-KillAllStep -Name "FocusTerminal" -Default $true -Skip $Skip -Include $includeSteps
-		ReloadProfile   = Resolve-KillAllStep -Name "ReloadProfile" -Default $false -Skip $Skip -Include $includeSteps
-	}
+	$stepStates = Resolve-KillAllSteps -Skip $Skip -Include $includeSteps
 
 	if (Test-LogVerbose) {
 		if ($Exclude) {

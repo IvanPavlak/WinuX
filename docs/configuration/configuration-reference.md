@@ -640,7 +640,7 @@ Enables/disables individual `Kill-All` cleanup steps. `KillAll` is a top-level s
 
 Per invocation, `Kill-All -Skip <steps>` forces steps off and `Kill-All -Include <steps>` forces them on, both overriding this config (`-Skip` wins when a step appears in both).
 
-**Consumer functions:** `Kill-All`, `Resolve-KillAllStep`
+**Consumer functions:** `Kill-All`, `Resolve-KillAllSteps`
 
 **Example:**
 
