@@ -8,7 +8,11 @@ BeforeAll {
 	# personal default leaked back into the tracked base.
 	# (Get-RepositoryPath).Modules is <RepoRoot>\Windows\PowerShell\Modules; the base
 	# config sits in its parent folder.
-	$script:BaseConfig = Import-PowerShellDataFile (Join-Path (Split-Path (Get-RepositoryPath).Modules -Parent) "Configuration.psd1")
+	$ModuleRoot = (Get-RepositoryPath).Modules
+	$script:BaseConfig = Import-PowerShellDataFile (Join-Path (Split-Path $ModuleRoot -Parent) "Configuration.psd1")
+
+	. "$ModuleRoot\Configuration\Functions\Test-ConfigurationKeyPath.ps1"
+	. "$ModuleRoot\Configuration\Functions\Test-ConfigurationSchema.ps1"
 }
 
 Describe "Vanilla Configuration (empty-by-default contract)" {
@@ -104,6 +108,26 @@ Describe "Vanilla Configuration (empty-by-default contract)" {
 		It "Should keep the Kill-All defaults" {
 			$script:BaseConfig.Universal.TerminateProcessNames | Should -Not -BeNullOrEmpty
 			$script:BaseConfig.Universal.VisibleWindowExclusions | Should -Contain "PowerToys.FancyZones"
+		}
+	}
+
+	Context "Schema validation of the untouched base" {
+		# The vanilla base must be a VALID configuration, not a broken one: the schema
+		# validator may only require framework keys. The two GitConfig entries are the
+		# documented exception - the base ships them blank and Initialize-Configuration
+		# writes them into Configuration.local.psd1 on the first run.
+		It "Should report only the first-run Git identity keys" {
+			$warnings = @()
+			Test-ConfigurationSchema -Configuration $script:BaseConfig -WarningVariable warnings -WarningAction SilentlyContinue
+
+			$text = $warnings -join "`n"
+			$text | Should -Match "GitConfig\.UserName"
+			$text | Should -Match "GitConfig\.UserEmail"
+
+			# No user-specific section may be treated as required - they all ship empty.
+			foreach ($optIn in @("DefaultLocale", "Locales", "KeyboardLayouts", "Themes", "NerdFonts", "WakeOnLan", "SpecialFolders", "TaskbarConfiguration", "DefaultBrowser")) {
+				$text | Should -Not -Match $optIn -Because "$optIn ships empty by design and must not be a required key"
+			}
 		}
 	}
 

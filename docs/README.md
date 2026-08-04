@@ -17,7 +17,8 @@
 
 |                              |                                                                                                                  |
 | ---------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| **One-Command Bootstrap**    | Go from a fresh Windows installation to a fully configured personalized dev environment in one command           |
+| **One-Command Bootstrap**    | Go from a fresh Windows installation to your fully configured personalized dev environment in one command        |
+| **Empty by Default**         | WinuX imposes nothing - no theme, wallpaper, locale or taskbar change until you opt in                           |
 | **Configurable**             | Everything can be configured to work based on personal preference                                                |
 | **Multi-Machine Support**    | Manage multiple machines from one config                                                                         |
 | **Package Management**       | Install predefined software with WinGet, Scoop and/or Chocolatey                                                 |

@@ -9,6 +9,13 @@ function Test-ConfigurationSchema {
 		keys as warnings. Does not throw - missing keys produce warnings so the shell can
 		still start with a degraded configuration rather than failing entirely.
 
+		Only FRAMEWORK keys are required. User-specific sections (themes, wallpapers,
+		locale, keyboard layouts, Wake-on-LAN, taskbar pins, ...) ship empty by design
+		and their consumers no-op with a warning, so an untouched vanilla configuration
+		is valid. The exception is GitConfig.UserName/UserEmail, which the base ships
+		blank and Initialize-Configuration fills into Configuration.local.psd1 on the
+		first run - they warn until then.
+
 		Call this function immediately after Load-PathConfiguration during the bootstrap
 		or profile initialization sequence to surface typos and missing entries early.
 
@@ -48,6 +55,11 @@ function Test-ConfigurationSchema {
 	}
 
 	# Required top-level keys and nested paths: [description, key-path-array]
+	#
+	# Only FRAMEWORK keys belong here - the ones the engine cannot resolve paths or
+	# detect a machine without. Everything user-specific ships empty by design (see the
+	# empty-by-default philosophy in Configuration.psd1) and its consumer no-ops with a
+	# warning, so requiring it here would flag a correct vanilla install as broken.
 	$requiredKeys = @(
 		# Machine detection
 		@{ Desc = "ValidMachineTypes"; Path = @('ValidMachineTypes') }
@@ -65,10 +77,9 @@ function Test-ConfigurationSchema {
 		@{ Desc = "GitConfig.UserEmail"; Path = @('GitConfig', 'UserEmail') }
 		@{ Desc = "GitConfig.WingetPackageId"; Path = @('GitConfig', 'WingetPackageId') }
 
-		# Locale
-		@{ Desc = "Locales"; Path = @('Locales') }
-		@{ Desc = "DefaultLocale"; Path = @('DefaultLocale') }
-		@{ Desc = "KeyboardLayouts"; Path = @('KeyboardLayouts') }
+		# Locale, keyboard layouts and display language are NOT required: they ship
+		# empty and Set-Locale / Set-KeyboardLayouts / Set-DisplayLanguage leave the
+		# system as-is until a fork opts in via Configuration.local.psd1.
 
 		# Application paths
 		@{ Desc = "BrowserGroups"; Path = @('BrowserGroups') }
