@@ -12,7 +12,7 @@ App,Version,Scope,Interactive,Source,Machine
 #
 #   Obsidian.Obsidian,Latest,d,n,w,All      # a new App is added after the rows below
 #   Microsoft.PowerShell,7.4.6,d,n,w,All    # an App below is replaced (here to pin a version)
-#   -Microsoft.PowerToys,Latest,d,n,w,All   # a leading - opts this machine out of a row below
+#   -Microsoft.PowerToys,0.100.2,d,n,w,All  # a leading - opts this machine out of a row below
 #
 # See docs/reference/software-list.md for the full overlay reference.
 #
@@ -23,10 +23,28 @@ App,Version,Scope,Interactive,Source,Machine
 #   Interactive y / n
 #   Source      w (winget), s (msstore)
 #   Machine     where to install: "All", "Test", or your own types, combinable like "PC/Laptop"
-Microsoft.WindowsTerminal,Latest,d,n,w,All
+#
+# ========================== TESTED VERSIONS (single source of truth) ==========================
+# The known-working, tested combination for the Window module (FancyZones layouts, virtual
+# desktops). PowerToys and the VirtualDesktop module wrap undocumented Windows internals that
+# shift between releases, so they are pinned; update this block and the enforcement points
+# together only after re-validating the combination.
+#
+#   Microsoft.PowerToys  0.100.2  -> pinned by the row below (installed with --version;
+#                                    version-specific rows are re-pinned in winget by Upgrade-All)
+#   VirtualDesktop       1.5.11   -> $pinnedModules in Modules\Application\Functions\Install-PowerShellModules.ps1
+#   Pester               5.7.1    -> CI only: .github\workflows\tests.yml (PESTER_VERSION);
+#                                    local installs float >= 5.0.0 via Install-PowerShellModules
+#   PowerShell           7.5.4    -> NOT enforced (row below installs Latest; last tested 7.5.4)
+#   Windows 11           25H2     -> NOT enforced (build 26200; environment, not a package)
+# ===============================================================================================
 Microsoft.PowerShell,Latest,d,n,w,All
-JanDeDobbeleer.OhMyPosh,Latest,d,n,w,All
-fastfetch,Latest,d,n,w,All
-Microsoft.VisualStudioCode,Latest,d,n,w,All
-Mozilla.Firefox,Latest,d,n,w,All
-Microsoft.PowerToys,Latest,d,n,w,All
+Microsoft.WindowsTerminal,Latest,d,n,w,All
+Microsoft.PowerToys,0.100.2,d,n,w,All
+
+# Recommended companions - not required by the framework, so they no longer install by
+# default. Opt in by copying a row into WinGetApps.local.csv (uncommented):
+#   JanDeDobbeleer.OhMyPosh,Latest,d,n,w,All
+#   fastfetch,Latest,d,n,w,All
+#   Microsoft.VisualStudioCode,Latest,d,n,w,All
+#   Mozilla.Firefox,Latest,d,n,w,All
