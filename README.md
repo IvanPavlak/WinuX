@@ -13,7 +13,7 @@ A comprehensive PowerShell-based dotfiles system that turns a fresh Windows 11 i
 ---
 
 <p align="center">
-  <video src="https://github.com/user-attachments/assets/a6f6c767-dd9f-4e1f-a8a6-8803cb1fd367" width="720" controls></video>
+  <img src="https://github.com/IvanPavlak/WinuX/releases/download/assets/demo.webp" width="720" alt="WinuX demo" />
 </p>
 
 <p align="center">
