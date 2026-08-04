@@ -15,8 +15,7 @@ function Set-ExplorerOptions {
 	Write-LogTitle "Setting File Explorer Options"
 
 	$desiredSettings = $Configuration.ExplorerOptions
-	if (-not $desiredSettings) {
-		Write-LogError "Error: ExplorerOptions not found in configuration!"
+	if (-not (Confirm-ConfigValue $desiredSettings "ExplorerOptions not configured - leaving Explorer options as-is!")) {
 		return
 	}
 

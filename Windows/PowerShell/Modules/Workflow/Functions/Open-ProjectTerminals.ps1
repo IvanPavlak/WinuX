@@ -389,6 +389,10 @@ function Open-ProjectTerminals {
 				# Handle WSL as a special case
 				if ($pathKey -eq "WSL") {
 					$distro = $Configuration.DefaultWSLDistribution
+					if (-not (Test-ConfigValue $distro)) {
+						Write-LogWarning "  Skipping [$tabName] (DefaultWSLDistribution not configured)" -NoLeadingNewline
+						continue
+					}
 
 					try {
 						# Preserve on-screen ordering: everything queued so far must exist

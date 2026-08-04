@@ -235,6 +235,13 @@ function Set-Wallpaper {
 			}
 
 			$WallpaperSettings = if ($targetTheme -eq 'Light') { $WallpaperLightSettings } else { $WallpaperDarkSettings }
+
+			# Empty-by-default contract: an unconfigured wallpaper section means the user
+			# never opted into wallpaper management, so -Auto leaves the desktop untouched.
+			if (-not (Confirm-ConfigValue $WallpaperSettings "Wallpaper settings not configured (Wallpaper$($targetTheme)Settings) - leaving wallpaper as-is!")) {
+				return
+			}
+
 			Write-LogStep " Using [$targetTheme] theme wallpaper settings!"
 
 			$MachineType = DetermineMachineType
@@ -245,6 +252,9 @@ function Set-Wallpaper {
 				Write-LogWarning " No specific wallpaper found for [$MachineType]"
 				Write-LogWarning "Using default"
 				$wallpaperSetting = $WallpaperSettings["Default"]
+			}
+			if (-not (Confirm-ConfigValue $wallpaperSetting "No wallpaper configured for [$MachineType] and no Default entry - leaving wallpaper as-is!")) {
+				return
 			}
 
 			Write-LogDebug " Wallpaper setting keys: $($wallpaperSetting.Keys -join ', ')" -Style Step

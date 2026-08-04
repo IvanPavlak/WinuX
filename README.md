@@ -32,7 +32,7 @@ ___
 
 From one bootstrap command or a simple executable, all driven by a single configuration file, across as many machines as you own:
 
-- **One-command bootstrap** - fresh Windows to a fully configured environment in a single line.
+- **One-command bootstrap** - fresh Windows to your fully configured environment in a single line.
 - **Multi-machine** - manage every machine from one configuration; machines can share an identical setup or each define their own.
 - **Package management** - install software via WinGet, Scoop, and/or Chocolatey.
 - **Dotfiles management** - symlink every config so the system behaves exactly as you want.
@@ -42,6 +42,7 @@ From one bootstrap command or a simple executable, all driven by a single config
 - **Machine-type profiles** - hostname-detected machine types give each machine the right subset of apps, layouts, and settings.
 - **WSL provisioning** - optional, config-gated WSL/Ubuntu setup with a themed shell.
 - **Idempotent by design** - every step is safe to re-run, so the bootstrap doubles as repair.
+- **Empty by default** - WinuX imposes nothing. A vanilla install changes no theme, wallpaper, locale, keyboard layout, or taskbar; every feature above is opted into in your own `Configuration.local.psd1`.
 - **Tested and documented** - the full Pester suite runs in CI, and every function has a man-style reference in the docs.
 
 ## Documentation

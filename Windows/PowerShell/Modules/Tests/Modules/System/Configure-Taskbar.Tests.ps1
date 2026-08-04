@@ -4,6 +4,12 @@ BeforeAll {
 	$ModuleRoot = (Get-RepositoryPath).Modules
 	$FunctionsPath = Join-Path $ModuleRoot "System\Functions"
 
+	# The unconfigured-section guards warn through Confirm-ConfigValue (Helper);
+	# dot-source it (and its Test-ConfigValue dependency) so the Write-LogWarning
+	# mocks in these tests apply to the guard's warning.
+	. "$ModuleRoot\Helper\Functions\Test-ConfigValue.ps1"
+	. "$ModuleRoot\Helper\Functions\Confirm-ConfigValue.ps1"
+
 	. "$FunctionsPath\Configure-Taskbar.ps1"
 	# Dot-source the machine-scope gate and machine-type resolver so both are mockable here,
 	# regardless of whether the imported Bootstrap module in this session already exports them.
@@ -34,13 +40,21 @@ Describe "Configure-Taskbar" {
 		Mock DetermineMachineType { "Test" }
 	}
 
-	It "returns when TaskbarConfiguration is missing" {
+	It "returns without touching anything when TaskbarConfiguration is missing" {
 		{ Configure-Taskbar } | Should -Not -Throw
 
-		Should -Invoke Unpin-TaskbarApps -Times 1
-		Should -Invoke Write-LogTitle -Times 1
-		Should -Invoke Write-LogStep -Times 1
-		Should -Invoke Write-LogError -Times 1
+		# The guard sits BEFORE the destructive unpin/clear calls: an unconfigured
+		# taskbar must survive a vanilla run exactly as the user arranged it.
+		Should -Invoke Unpin-TaskbarApps -Times 0
+		Should -Invoke Write-LogWarning -Times 1 -ParameterFilter { $Message -match "TaskbarConfiguration not configured" }
+	}
+
+	It "returns without touching anything when TaskbarConfiguration is an empty array" {
+		$script:Configuration.TaskbarConfiguration = @()
+
+		{ Configure-Taskbar } | Should -Not -Throw
+
+		Should -Invoke Unpin-TaskbarApps -Times 0
 	}
 
 	Context "machine-type filtering" {

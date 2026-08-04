@@ -14,6 +14,7 @@
 		'Invoke-PersonalSteps',
 		'Load-PathConfiguration',
 		'Merge-Hashtable',
+		'Resolve-BootstrapSteps',
 		'Test-MachineTypeScope'
 	)
 }

@@ -120,14 +120,15 @@ The profile (`Microsoft.PowerShell_profile.ps1`) executes this exact sequence:
 `Bootstrap -WithInitialSetup` runs these phases in order:
 
 ```
-Phase 1 (Initial Setup only):    Rename-Machine → Start-MicrosoftActivationScripts → Start-Win11Debloat (local vendor)
+Phase 1 (Initial Setup only):    Rename-Machine → Start-MicrosoftActivationScripts → Start-Win11Debloat
+                                 (MAS and Win11Debloat are opt-in via BootstrapConfig.Steps)
 Phase 2 (Repos):                 Update-Repositories -All
 Phase 3 (System Config):         Set-CustomExecutionPolicy → Enable-DeveloperMode
                                  → Set-PowerPlan → Set-PowerButtonActions → Set-SystemTheme
                                  → Set-Locale → Set-DisplayLanguage → Set-KeyboardLayouts
                                  → Display-SystemLanguageSettings → Configure-NerdFont
                                  → Install-PowerShellModules → Set-SpecialFolders
-                                 → Restart-Explorer → Configure-WSL (config-gated: WSLSetup)
+                                 → Restart-Explorer → Configure-WSL (config-gated: Steps.WSL)
 Phase 4 (Packages):              Install-WinGetPackageManager → Install-WinGetApps
                                  → Install-ScoopPackageManager → Install-ScoopApps
                                  → Install-ChocolateyPackageManager → Install-ChocolateyApps → Upgrade-All

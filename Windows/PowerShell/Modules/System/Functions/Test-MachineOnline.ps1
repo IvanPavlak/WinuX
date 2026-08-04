@@ -88,9 +88,10 @@ function Test-MachineOnline {
 	$label = if ($DisplayName) { $DisplayName } elseif ($Address) { $Address } else { $Machine }
 
 	if (-not $targetAddress) {
+		# Confirm-ConfigValue, not truthiness: the empty base ships WakeOnLanConfig = @{},
+		# and an empty hashtable is truthy, so a bare -not guard would pass it through.
 		$wolConfig = $Configuration.WakeOnLanConfig
-		if (-not $wolConfig) {
-			if (-not $Quiet) { Write-LogError "Error => WakeOnLanConfig not found in configuration!" }
+		if (-not (Confirm-ConfigValue $wolConfig "Wake-on-LAN not configured (WakeOnLanConfig) - cannot test reachability!" -Quiet:$Quiet)) {
 			return $false
 		}
 

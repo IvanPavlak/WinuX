@@ -21,6 +21,12 @@ function Configure-WSL {
 	try {
 		Write-LogTitle "Configuring WSL"
 
+		# Guard before enabling the WSL Windows feature: an unconfigured distribution
+		# means the user never opted into WSL, so nothing gets installed or enabled.
+		if (-not (Confirm-ConfigValue $Configuration.DefaultWSLDistribution "DefaultWSLDistribution not configured - skipping WSL setup!")) {
+			return
+		}
+
 		if (-not (Test-WSLEnabled)) {
 			Write-LogTitle "Enabling WSL"
 			Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Windows-Subsystem-Linux -NoRestart

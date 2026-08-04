@@ -2,6 +2,10 @@
 
 The `Configuration.psd1` file is the **central hub** for the entire WinuX system. This single file controls all aspects of bootstrap, system configuration, application management, and workflow automation.
 
+## Empty by Default
+
+The base `Configuration.psd1` ships every user-specific section **empty**: themes, wallpapers, locales, keyboard layouts, display languages, power settings, taskbar pins, Wake-on-LAN targets, personal executable paths, personal symlinks, and so on. Every consumer function no-ops with a "not configured" warning when its section is empty, so a vanilla bootstrap applies nothing personal. You opt in per feature by setting values in `Configuration.local.psd1`, a gitignored sibling file that is deep-merged over the base at load time - the base file is never edited, so pulling upstream never conflicts on your configuration. The examples throughout these docs show the shapes to copy into that override.
+
 ## File Location
 
 ```
@@ -321,6 +325,8 @@ Universal = @{
 ```
 
 ### Machine-Specific Settings
+
+These sections ship empty in the base - set them in `Configuration.local.psd1`:
 
 ```powershell
 # Theme per machine

@@ -260,7 +260,7 @@ Open-Browser AI -Browser Brave
 Open-Browser AI -Browser Tor       # Tor Browser
 ```
 
-Default browser is configured in:
+The default browser ships empty in the base configuration - set it in `Configuration.local.psd1`:
 
 ```powershell
 Universal = @{

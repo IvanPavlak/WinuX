@@ -4,6 +4,12 @@ BeforeAll {
 	$ModuleRoot = (Get-RepositoryPath).Modules
 	$FunctionsPath = Join-Path $ModuleRoot "System\Functions"
 
+	# The unconfigured-section guards warn through Confirm-ConfigValue (Helper);
+	# dot-source it (and its Test-ConfigValue dependency) so the Write-LogWarning
+	# mocks in these tests apply to the guard's warning.
+	. "$ModuleRoot\Helper\Functions\Test-ConfigValue.ps1"
+	. "$ModuleRoot\Helper\Functions\Confirm-ConfigValue.ps1"
+
 	. "$FunctionsPath\Test-MachineOnline.ps1"
 }
 
@@ -15,11 +21,20 @@ Describe "Test-MachineOnline" {
 	}
 
 	Context "When WakeOnLanConfig is missing" {
-		It "Returns false and reports an error" {
+		It "Returns false and warns that Wake-on-LAN is not configured" {
 			$global:Configuration = @{}
 
 			Test-MachineOnline -Machine "Server" | Should -BeFalse
-			Should -Invoke Write-LogError -ParameterFilter { $Message -match "WakeOnLanConfig not found" }
+			Should -Invoke Write-LogWarning -ParameterFilter { $Message -match "Wake-on-LAN not configured" }
+
+			Remove-Variable -Name Configuration -Scope Global -ErrorAction SilentlyContinue
+		}
+
+		It "Returns false when WakeOnLanConfig is an empty hashtable (truthy in PowerShell)" {
+			$global:Configuration = @{ WakeOnLanConfig = @{} }
+
+			Test-MachineOnline -Machine "Server" | Should -BeFalse
+			Should -Invoke Write-LogWarning -ParameterFilter { $Message -match "Wake-on-LAN not configured" }
 
 			Remove-Variable -Name Configuration -Scope Global -ErrorAction SilentlyContinue
 		}

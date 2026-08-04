@@ -46,16 +46,16 @@ function Set-PowerPlan {
 		Write-LogStep " Machine type => [$MachineType]"
 
 		if (-not $PSBoundParameters.ContainsKey('Mode')) {
-			$configMode = $Configuration.PowerPlans[$MachineType]
+			$configMode = if (Test-ConfigValue $Configuration.PowerPlans) { $Configuration.PowerPlans[$MachineType] } else { $null }
 
-			if ($configMode) {
-				$Mode = $configMode
-				Write-LogStep " Power plan from configuration => [$Mode]"
+			# Empty-by-default contract: unconfigured means the user never opted
+			# into power plan management, so -Auto changes nothing.
+			if (-not (Confirm-ConfigValue $configMode "No power plan configured for [$MachineType] (PowerPlans) - leaving power plan as-is!")) {
+				return
 			}
-			else {
-				Write-LogWarning "No configuration found for machine type [$MachineType], defaulting to Balanced!"
-				$Mode = "Balanced"
-			}
+
+			$Mode = $configMode
+			Write-LogStep " Power plan from configuration => [$Mode]"
 		}
 	}
 	elseif (-not $Mode) {

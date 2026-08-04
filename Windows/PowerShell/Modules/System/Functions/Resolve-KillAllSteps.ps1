@@ -4,10 +4,11 @@ function Resolve-KillAllSteps {
 		Resolves which Kill-All cleanup steps should run.
 
 	.DESCRIPTION
-		Single-pass tri-state resolution for every Kill-All step. Per step,
+		Single-pass tri-state resolution (via Resolve-Steps) for every
+		Kill-All step. Per step,
 		-Skip beats -Include beats config (KillAll.Steps.<Name> in
 		$global:Configuration - a plain boolean, or a per-machine-type hashtable
-		with a Default fallback, the BootstrapConfig.WSLSetup shape) beats the
+		with a Default fallback, the BootstrapConfig.Steps.WSL shape) beats the
 		built-in defaults (everything on except ReloadProfile).
 
 		$false is a real config value, so booleans resolve with explicit $null
@@ -63,40 +64,5 @@ function Resolve-KillAllSteps {
 		$configSteps = $global:Configuration.KillAll.Steps
 	}
 
-	$states = [ordered]@{}
-	foreach ($name in $defaults.Keys) {
-		if ($Skip -contains $name) {
-			if ($Include -contains $name) {
-				Write-LogWarning "Step [$name] is in both -Skip and -Include - skipping it!"
-			}
-			$states[$name] = $false
-			continue
-		}
-
-		if ($Include -contains $name) {
-			$states[$name] = $true
-			continue
-		}
-
-		$resolved = $defaults[$name]
-		if ($configSteps -is [hashtable] -and $configSteps.ContainsKey($name)) {
-			$value = $configSteps[$name]
-
-			if ($value -is [bool]) {
-				$resolved = $value
-			}
-			elseif ($value -is [hashtable]) {
-				if ($global:MachineType -and $null -ne $value[$global:MachineType]) {
-					$resolved = [bool]$value[$global:MachineType]
-				}
-				elseif ($null -ne $value.Default) {
-					$resolved = [bool]$value.Default
-				}
-			}
-		}
-
-		$states[$name] = $resolved
-	}
-
-	return $states
+	return Resolve-Steps -Defaults $defaults -ConfigSteps $configSteps -Skip $Skip -Include $Include
 }

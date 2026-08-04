@@ -13,8 +13,9 @@ function Install-PowerShellModules {
 		- ps2exe            - PowerShell-to-EXE compiler
 		- Pester            - PowerShell testing framework (pinned, skipped if present)
 
-		VirtualDesktop is pinned to 1.5.11 because the module wraps undocumented COM interfaces
-		that break between Windows builds. Only tested/verified versions are used.
+		VirtualDesktop is pinned because the module wraps undocumented COM interfaces that
+		break between Windows builds. Only tested/verified versions are used - the tested
+		combination is tracked in Modules\Bootstrap\Data\WinGetApps.csv (TESTED VERSIONS block).
 
 		Called automatically by Bootstrap.
 
@@ -37,7 +38,7 @@ function Install-PowerShellModules {
 		}
 
 		# Pin VirtualDesktop to known-working version for Window module reliability
-		# See: docs/modules/window.md - Tested Dependency Versions
+		# See: Modules\Bootstrap\Data\WinGetApps.csv - TESTED VERSIONS block
 		$pinnedModules = @{
 			"VirtualDesktop" = "1.5.11"
 		}

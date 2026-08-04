@@ -77,16 +77,4 @@
 		'Write-WindowInfoBlock',
 		'Get-InsetWindowBounds'
 	)
-	PrivateData       = @{
-		PSData = @{
-			# Tested dependency versions - update only after full validation
-			# See: docs/modules/window.md - Tested Dependency Versions
-			TestedDependencies = @{
-				'Microsoft.PowerToys' = '0.100.2' # FancyZones: zone layouts, keyboard shortcuts, snap
-				'VirtualDesktop'      = '1.5.11'  # PS module: virtual desktop management (MScholtes/PSGallery)
-				'PowerShell'          = '7.5.4'   # Runtime environment
-				'Windows'             = '25H2'    # OS version (build 26200)
-			}
-		}
-	}
 }

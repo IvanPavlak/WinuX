@@ -187,7 +187,11 @@ function Close-Project {
 
 		# Get the default browser
 		$browser = $Configuration.Universal.DefaultBrowser
-		$browserConfig = $Configuration.Universal.Browsers[$browser]
+		$browserConfig = if (Test-ConfigValue $browser) { $Configuration.Universal.Browsers[$browser] } else { $null }
+
+		if (-not (Test-ConfigValue $browser)) {
+			Write-LogDebug "  Universal.DefaultBrowser not configured - skipping browser tab cleanup" -Style Step
+		}
 
 		Write-LogDebug "  Default browser => [$browser]" -Style Step
 

@@ -2,7 +2,15 @@
 
 BeforeAll {
 	$script:OriginalConfiguration = $global:Configuration
-	$AppFunctionsPath = Join-Path (Get-RepositoryPath).Modules "Application\Functions"
+	$ModuleRoot = (Get-RepositoryPath).Modules
+	$AppFunctionsPath = Join-Path $ModuleRoot "Application\Functions"
+
+	# The unconfigured-section guards warn through Confirm-ConfigValue (Helper);
+	# dot-source it (and its Test-ConfigValue dependency) so the Write-LogWarning
+	# mocks in these tests apply to the guard's warning.
+	. "$ModuleRoot\Helper\Functions\Test-ConfigValue.ps1"
+	. "$ModuleRoot\Helper\Functions\Confirm-ConfigValue.ps1"
+
 	. "$AppFunctionsPath\Open-Browser.ps1"
 }
 
@@ -88,5 +96,15 @@ Describe "Open-Browser" {
 
 		Should -Invoke Test-BrowserGroupAlreadyOpen -Times 0
 		Should -Invoke Start-Process -Times 1 -Exactly
+	}
+
+	It "warns and launches nothing when no browser is given and DefaultBrowser is blank (empty base)" {
+		$global:Configuration.Universal.DefaultBrowser = ''
+		Mock Write-LogWarning { }
+
+		Open-Browser -Groups Work
+
+		Should -Invoke Write-LogWarning -Times 1 -ParameterFilter { $Message -match "DefaultBrowser is not configured" }
+		Should -Invoke Start-Process -Times 0
 	}
 }

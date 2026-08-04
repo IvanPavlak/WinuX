@@ -7,6 +7,8 @@ BeforeAll {
 	$ModuleRoot = (Get-RepositoryPath).Modules
 	$FunctionsPath = Join-Path $ModuleRoot "System\Functions"
 
+	# Resolve-KillAllSteps delegates the resolution loop to the shared Resolve-Steps.
+	. "$ModuleRoot\Helper\Functions\Resolve-Steps.ps1"
 	. "$FunctionsPath\Resolve-KillAllSteps.ps1"
 }
 

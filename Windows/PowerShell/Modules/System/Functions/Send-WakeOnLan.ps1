@@ -53,9 +53,13 @@ function Send-WakeOnLan {
 		[switch]$NoWait
 	)
 
+	# Confirm-ConfigValue, not truthiness: the empty base ships WakeOnLanConfig = @{},
+	# and an empty hashtable is truthy, so a bare -not guard would pass it through.
 	$wolConfig = $Configuration.WakeOnLanConfig
-	if (-not $wolConfig) {
-		Write-LogError "Error: WakeOnLanConfig not found in configuration!"
+	if (-not (Confirm-ConfigValue $wolConfig "Wake-on-LAN not configured (WakeOnLanConfig) - nothing to wake!")) {
+		return
+	}
+	if (-not (Confirm-ConfigValue $Configuration.WakeOnLanMachines "Wake-on-LAN not configured (WakeOnLanMachines) - nothing to wake!")) {
 		return
 	}
 

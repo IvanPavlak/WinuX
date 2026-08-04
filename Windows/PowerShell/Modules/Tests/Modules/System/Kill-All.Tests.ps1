@@ -10,6 +10,9 @@ BeforeAll {
 	. "$FunctionsPath\Kill-All.ps1"
 	# Kill-All resolves its step map through the real Resolve-KillAllSteps, so
 	# the config/override behavior asserted below exercises the actual resolver.
+	# Resolve-KillAllSteps delegates the resolution loop to the shared Resolve-Steps;
+	# dot-source it too so the loop runs in this scope where the log mocks apply.
+	. "$ModuleRoot\Helper\Functions\Resolve-Steps.ps1"
 	. "$FunctionsPath\Resolve-KillAllSteps.ps1"
 
 	# Stub all dependent functions with matching parameter signatures

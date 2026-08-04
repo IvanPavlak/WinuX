@@ -5,6 +5,28 @@
 # It controls all aspects of the bootstrap process, system configuration,
 # application management, and workflow automation.
 #
+# EMPTY-BY-DEFAULT PHILOSOPHY:
+# The base WinuX configuration is intentionally EMPTY for everything user-specific.
+# A vanilla install (WinuX.exe or the irm one-liner) changes NOTHING personal: no
+# theme, wallpaper, locale, keyboard layout, display language, Wake-on-LAN targets,
+# power settings, taskbar pins, personal symlinks, or personal registry tweaks.
+# Every consumer function no-ops with a "not configured" warning when its section
+# is empty, so an enabled bootstrap step on the empty base applies nothing.
+#
+# You opt in per feature by setting values in Configuration.local.psd1, which is
+# deep-merged over this file at load (hashtables merge per key; arrays and scalars
+# replace wholesale - see Merge-Hashtable). This file stays the generic tracked
+# base; never edit it in a fork.
+#
+# What DOES run on a vanilla bootstrap: repository update, execution policy
+# (Process scope), the framework apps in WinGetApps.csv (PowerShell, Windows
+# Terminal, PowerToys), PowerShell modules, and the framework symlinks (the
+# PowerShell profile that persists WinuX into new shells, plus the FancyZones
+# files backing the window machinery). Individual bootstrap steps are toggleable
+# via BootstrapConfig.Steps (see that section); invasive steps such as
+# MicrosoftActivationScripts, Win11Debloat, DeveloperMode, NuGetConfig and
+# LockedStartLayout are OFF until you opt in.
+#
 # The configuration uses a hierarchical structure with path templates and machine-specific overrides
 # to eliminate duplication while supporting any number of machines
 # from a single configuration file.
@@ -103,12 +125,12 @@
 # CUSTOMIZATION GUIDE:
 # Common customizations and where to make them:
 #
-# 1. Add a new machine:
+# 1. Add a new machine (all in Configuration.local.psd1):
 #    - Add hostname → machine type mapping in HostnameToMachineType
 #    - Add base paths in BasePaths section
-#    - Add machine-specific theme in Themes
-#    - Add wallpaper settings in WallpaperDarkSettings/WallpaperLightSettings
-#    - Add taskbar apps (optional) in TaskbarConfiguration*
+#    - Opt in to a machine-specific theme in Themes (empty by default)
+#    - Opt in to wallpaper settings in WallpaperDarkSettings/WallpaperLightSettings (empty by default)
+#    - Add taskbar apps (optional) in TaskbarConfiguration* (empty by default)
 #    - Create layout files in Layouts/{MachineType}/ folder
 #
 # 2. Change development directory:
@@ -202,21 +224,35 @@
 		IconCacheDb              = "{User}\AppData\Local\IconCache.db"
 		IconCacheFolder          = "{User}\AppData\Local\Microsoft\Windows\Explorer"
 		OhMyPoshThemeFile        = "{User}\AppData\Local\Programs\oh-my-posh\themes\WinuX.omp.json"
-		TrainingFile             = "TrainingPlan.docx"
+		TrainingFile             = ""
 		WhatsAppLocalStoragePath = "{User}\AppData\Local\Packages\5319275A.WhatsAppDesktop_cv1g1gvanyjgm\LocalState\shared\transfers"
 		FirefoxExe               = "C:\Program Files\Mozilla Firefox\firefox.exe"
-		LeagueOfLegendsExe       = "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Riot Games\League of Legends"
-		SteamExe                 = "C:\Program Files (x86)\Steam\steam.exe"
-		RiseupVpnExe             = "C:\Program Files (x86)\RiseupVPN\riseup-vpn.exe"
-		DbeaverExe               = "{User}\AppData\Local\DBeaver\dbeaver.exe"
 		OutlookLauncherExe       = "C:\Windows\explorer.exe"
-		TeamViewerExe            = "C:\Program Files\TeamViewer\TeamViewer.exe"
-		FoundryVTTExe            = "C:\Program Files\Foundry Virtual Tabletop\Foundry Virtual Tabletop.exe"
-		NotepadPlusPlusExe       = "C:\Program Files\Notepad++\notepad++.exe"
-		VisualStudio2026Exe      = "C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE\devenv.exe"
-		VirtualBoxExe            = "C:\Program Files\Oracle\VirtualBox\VirtualBox.exe"
 		DockerExe                = "C:\Program Files\Docker\Docker\frontend\Docker Desktop.exe"
 		WindowsTerminalHome      = "{User}"
+
+		# Application executable paths consumed by Start-Application (Open-* functions).
+		# These ship empty - an unconfigured path makes its Open-* function warn and
+		# return instead of launching anything. Set the ones you use in
+		# Configuration.local.psd1, e.g.:
+		#   LeagueOfLegendsExe  = "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Riot Games\League of Legends"
+		#   SteamExe            = "C:\Program Files (x86)\Steam\steam.exe"
+		#   RiseupVpnExe        = "C:\Program Files (x86)\RiseupVPN\riseup-vpn.exe"
+		#   DbeaverExe          = "{User}\AppData\Local\DBeaver\dbeaver.exe"
+		#   TeamViewerExe       = "C:\Program Files\TeamViewer\TeamViewer.exe"
+		#   FoundryVTTExe       = "C:\Program Files\Foundry Virtual Tabletop\Foundry Virtual Tabletop.exe"
+		#   NotepadPlusPlusExe  = "C:\Program Files\Notepad++\notepad++.exe"
+		#   VisualStudio2026Exe = "C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE\devenv.exe"
+		#   VirtualBoxExe       = "C:\Program Files\Oracle\VirtualBox\VirtualBox.exe"
+		LeagueOfLegendsExe       = ""
+		SteamExe                 = ""
+		RiseupVpnExe             = ""
+		DbeaverExe               = ""
+		TeamViewerExe            = ""
+		FoundryVTTExe            = ""
+		NotepadPlusPlusExe       = ""
+		VisualStudio2026Exe      = ""
+		VirtualBoxExe            = ""
 
 		# Process Cleanup
 		# → Consumer: Terminate-AllProcessesByName (via Kill-All)
@@ -275,7 +311,10 @@
 			}
 		}
 
-		DefaultBrowser           = "Firefox"
+		# Ships empty - Open-Browser and the workspace/project browser actions warn and
+		# return until you pick one. Set it in Configuration.local.psd1, e.g.
+		# DefaultBrowser = "Firefox" (any key from Browsers above).
+		DefaultBrowser           = ""
 
 		# GitHub repository URLs. Base is combined with each path below to form a clone
 		# URL, e.g. "https://github.com" + "/YourUsername/WinuX.git". List YOUR repositories
@@ -296,7 +335,11 @@
 	# ==========================================================================
 	# WSL Configuration
 	# ==========================================================================
-	DefaultWSLDistribution        = "Ubuntu"
+	# Ships empty - WSL provisioning (Configure-WSL, Initialize-WSLEnvironment,
+	# Configure-WSLSSH), Open-WSLTab, and WSL symlinks all no-op until a
+	# distribution is configured. Opt in via Configuration.local.psd1, e.g.
+	# DefaultWSLDistribution = "Ubuntu".
+	DefaultWSLDistribution        = ""
 
 	# ==========================================================================
 	# Wake-on-LAN Configuration
@@ -322,23 +365,13 @@
 	#   }
 	#   DefaultWakeOnLanMachine = "Server"
 	# ==========================================================================
-	WakeOnLanMachines             = @(
-		"Server",
-		"All",
-		"None"
-	)
+	# All three ship empty - Send-WakeOnLan and Test-MachineOnline no-op until you
+	# configure your machines (see the example block above) in Configuration.local.psd1.
+	WakeOnLanMachines             = @()
 
-	# Example entry only - replace the MAC address and IP with your own machine's values.
-	WakeOnLanConfig               = @{
-		Server = @{
-			MacAddress                     = "AA-BB-CC-DD-EE-FF"
-			SubNetSpecificBroadcastAddress = "192.168.1.255"
-			Address                        = "192.168.1.10"
-			Port                           = 9
-		}
-	}
+	WakeOnLanConfig               = @{}
 
-	DefaultWakeOnLanMachine       = "Server"
+	DefaultWakeOnLanMachine       = ""
 
 	# ==========================================================================
 	# Base Paths Per Machine Type
@@ -378,20 +411,25 @@
 	# machine-specific paths.
 	# ==========================================================================
 	PathTemplates                 = @{
-		ObsidianDirectory       = "{Dev}\Obsidian"
-		ObsidianStartupScript   = "{RepoRoot}\Obsidian\ObsidianStartupScript.pyw"
-		TrainingBackupDirectory = "{Dev}\ExampleBackup"
+		# Personal path templates ship empty - the functions that consume them warn and
+		# return until you set them in Configuration.local.psd1, e.g.:
+		#   ObsidianDirectory       = "{Dev}\Obsidian"
+		#   ObsidianStartupScript   = "{RepoRoot}\Obsidian\ObsidianStartupScript.pyw"
+		#   TrainingBackupDirectory = "{Dev}\ExampleBackup"
+		#   LearningBook            = "{User}\Learning\ExampleBook.pdf"
+		#   TrainingDirectory       = "{User}\Training\2026"
+		#   Dnd                     = @{ ExampleCharacter = "{Dev}\Obsidian\Campaigns\ExampleCampaign\ExampleCharacter.pdf" }
+		ObsidianDirectory       = ""
+		ObsidianStartupScript   = ""
+		TrainingBackupDirectory = ""
+		LearningBook            = ""
+		TrainingDirectory       = ""
+		Dnd                     = @{}
 		# Machine-local destination for the generated taskbar layout XML (the StartLayoutFile the
 		# Explorer Group Policy points at). Written directly by Configure-Taskbar / Unpin-TaskbarApps;
 		# never versioned in the repo. Each machine keeps its own copy under C:\ProgramData.
 		TaskbarLayoutFile       = "C:\ProgramData\provisioning\taskbar_layout.xml"
 		DockerDirectory         = "{RepoRoot}\Docker"
-		LearningBook            = "{User}\Learning\ExampleBook.pdf"
-		TrainingDirectory       = "{User}\Training\2026"
-		Dnd                     = @{
-			# Example campaign character sheet (consumed by Open-DnD / Open-Acrobat). Replace with your own.
-			ExampleCharacter = "{Dev}\Obsidian\Campaigns\ExampleCampaign\ExampleCharacter.pdf"
-		}
 
 		NuGetConfig             = @{
 			SourcePath      = "{RepoRoot}\NuGet\nuget.config"
@@ -461,27 +499,26 @@
 		#       Path   = "{User}\.gitconfig"              # Created here (symlink)
 		#       Target = "{RepoRoot}\Git\.gitconfig"  # Points to this (real file)
 		#   }
+		# The base ships FRAMEWORK links only:
+		# - PowerShell.Profile is what persists WinuX into new shells (without it the
+		#   install is session-only - nothing else wires the profile).
+		# - PowerShell.Configuration exposes this file next to the profile.
+		# - The PowerToys FancyZones trio backs the window/workspace layout machinery.
+		# Everything else is opt-in: copy an example below into Configuration.local.psd1
+		# once its target exists in your fork (SymbolicLinkMaker skips missing targets
+		# with a warning, so a dangling entry is harmless but noisy).
 		SymbolicLinks           = @{
-			Git             = @{
-				Path   = "{User}\.gitconfig"
-				Target = "{RepoRoot}\Git\.gitconfig"
+			PowerShell = @{
+				Profile       = @{
+					Path   = "{User}\Documents\PowerShell\Microsoft.PowerShell_profile.ps1"
+					Target = "{RepoRoot}\Windows\PowerShell\Microsoft.PowerShell_profile.ps1"
+				}
+				Configuration = @{
+					Path   = "{User}\Documents\PowerShell\Configuration.psd1"
+					Target = "{RepoRoot}\Windows\PowerShell\Configuration.psd1"
+				}
 			}
-			# SSH config symlinking is a natural fit for WinuX, but no example ssh/config
-			# ships in the public repo (it would expose private hosts). To manage your own,
-			# add an entry here pointing at a config file you keep in your fork, e.g.:
-			#   SSH = @{ Path = "{User}\.ssh\config"; Target = "{RepoRoot}\.ssh\config" }
-			# No taskbar symlink: the layout is generated per-machine and written straight to its
-			# machine-local path (PathTemplates.TaskbarLayoutFile) by Configure-Taskbar /
-			# Unpin-TaskbarApps, so there is nothing in the repo to link to.
-			# App-specific symlinks whose payloads the template does not ship. Define them in
-			# your Configuration.local.psd1 when you use the app - a symlink entry only makes
-			# sense once the target exists in your fork (SymbolicLinkMaker skips missing
-			# targets with a warning). Example - Obsidian vault settings:
-			#   Obsidian = @{
-			#       Path   = "{Dev}\Obsidian\.obsidian"
-			#       Target = "{RepoRoot}\Obsidian\.obsidian"
-			#   }
-			PowerToys       = @{
+			PowerToys  = @{
 				Settings      = @{
 					Path   = "{User}\AppData\Local\Microsoft\PowerToys\FancyZones\settings.json"
 					Target = "{RepoRoot}\Windows\FancyZones\settings.json"
@@ -495,50 +532,66 @@
 					Target = "{RepoRoot}\Windows\FancyZones\layout-hotkeys.json"
 				}
 			}
-			FastFetch       = @{
-				Configuration = @{
-					Path   = "{User}\.config\fastfetch\config.jsonc"
-					Target = "{RepoRoot}\FastFetch\Windows\config_{MachineType}.jsonc"
-				}
-				Logo          = @{
-					Path   = "{User}\.config\fastfetch\FastFetchLogo_{MachineType}.txt"
-					Target = "{RepoRoot}\FastFetch\Windows\FastFetchLogo_{MachineType}.txt"
-				}
-			}
-			CondaFastFetch  = @{
-				Configuration = @{
-					Path   = "{User}\.config\fastfetch\config_Conda.jsonc"
-					Target = "{RepoRoot}\FastFetch\Windows\Conda\config_Conda_{MachineType}.jsonc"
-				}
-				Logo          = @{
-					Path   = "{User}\.config\fastfetch\FastFetchLogo_Conda.txt"
-					Target = "{RepoRoot}\FastFetch\Windows\Conda\FastFetchLogo_Conda.txt"
-				}
-			}
-			OhMyPosh        = @{
-				Path   = "{User}\AppData\Local\Programs\oh-my-posh\themes\WinuX.omp.json"
-				Target = "{RepoRoot}\Windows\Oh-My-Posh\WinuX_{MachineType}.omp.json"
-			}
-			PowerShell      = @{
-				Profile       = @{
-					Path   = "{User}\Documents\PowerShell\Microsoft.PowerShell_profile.ps1"
-					Target = "{RepoRoot}\Windows\PowerShell\Microsoft.PowerShell_profile.ps1"
-				}
-				Configuration = @{
-					Path   = "{User}\Documents\PowerShell\Configuration.psd1"
-					Target = "{RepoRoot}\Windows\PowerShell\Configuration.psd1"
-				}
-			}
-			WindowsTerminal = @{
-				Settings  = @{
-					Path   = "{User}\AppData\Local\Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\settings.json"
-					Target = "{RepoRoot}\Windows\WindowsTerminal\settings_{MachineType}.json"
-				}
-				CondaLogo = @{
-					Path   = "{User}\AppData\Local\Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\CondaLogo.png"
-					Target = "{RepoRoot}\Windows\WindowsTerminal\CondaLogo.png"
-				}
-			}
+			# Opt-in examples for the payloads WinuX ships - add the ones you use to
+			# Configuration.local.psd1:
+			#   Git = @{
+			#       Path   = "{User}\.gitconfig"
+			#       Target = "{RepoRoot}\Git\.gitconfig"
+			#   }
+			#   FastFetch = @{
+			#       Configuration = @{
+			#           Path   = "{User}\.config\fastfetch\config.jsonc"
+			#           Target = "{RepoRoot}\FastFetch\Windows\config_{MachineType}.jsonc"
+			#       }
+			#       Logo          = @{
+			#           Path   = "{User}\.config\fastfetch\FastFetchLogo_{MachineType}.txt"
+			#           Target = "{RepoRoot}\FastFetch\Windows\FastFetchLogo_{MachineType}.txt"
+			#       }
+			#   }
+			#   CondaFastFetch = @{
+			#       Configuration = @{
+			#           Path   = "{User}\.config\fastfetch\config_Conda.jsonc"
+			#           Target = "{RepoRoot}\FastFetch\Windows\Conda\config_Conda_{MachineType}.jsonc"
+			#       }
+			#       Logo          = @{
+			#           Path   = "{User}\.config\fastfetch\FastFetchLogo_Conda.txt"
+			#           Target = "{RepoRoot}\FastFetch\Windows\Conda\FastFetchLogo_Conda.txt"
+			#       }
+			#   }
+			#   OhMyPosh = @{
+			#       Path   = "{User}\AppData\Local\Programs\oh-my-posh\themes\WinuX.omp.json"
+			#       Target = "{RepoRoot}\Windows\Oh-My-Posh\WinuX_{MachineType}.omp.json"
+			#   }
+			#   WindowsTerminal = @{
+			#       Settings  = @{
+			#           Path   = "{User}\AppData\Local\Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\settings.json"
+			#           Target = "{RepoRoot}\Windows\WindowsTerminal\settings_{MachineType}.json"
+			#       }
+			#       CondaLogo = @{
+			#           Path   = "{User}\AppData\Local\Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\CondaLogo.png"
+			#           Target = "{RepoRoot}\Windows\WindowsTerminal\CondaLogo.png"
+			#       }
+			#   }
+			#   LazyGit = @{
+			#       Path   = "{User}\AppData\Local\lazygit\config.yml"
+			#       Target = "{RepoRoot}\LazyGit\config.yml"
+			#   }
+			#   LazyDocker = @{
+			#       Path   = "{AppData}\lazydocker\config.yml"
+			#       Target = "{RepoRoot}\LazyDocker\config.yml"
+			#   }
+			# SSH config symlinking is a natural fit for WinuX, but no example ssh/config
+			# ships in the public repo (it would expose private hosts). To manage your own,
+			# add an entry pointing at a config file you keep in your fork, e.g.:
+			#   SSH = @{ Path = "{User}\.ssh\config"; Target = "{RepoRoot}\.ssh\config" }
+			# No taskbar symlink: the layout is generated per-machine and written straight to its
+			# machine-local path (PathTemplates.TaskbarLayoutFile) by Configure-Taskbar /
+			# Unpin-TaskbarApps, so there is nothing in the repo to link to.
+			# Example - Obsidian vault settings (payload not shipped by the template):
+			#   Obsidian = @{
+			#       Path   = "{Dev}\Obsidian\.obsidian"
+			#       Target = "{RepoRoot}\Obsidian\.obsidian"
+			#   }
 			# Example - TranslucentTB settings (payload not shipped by the template):
 			#   TranslucentTB = @{
 			#       Settings = @{
@@ -546,14 +599,6 @@
 			#           Target = "{RepoRoot}\Windows\TranslucentTB\settings.json"
 			#       }
 			#   }
-			LazyGit         = @{
-				Path   = "{User}\AppData\Local\lazygit\config.yml"
-				Target = "{RepoRoot}\LazyGit\config.yml"
-			}
-			LazyDocker      = @{
-				Path   = "{AppData}\lazydocker\config.yml"
-				Target = "{RepoRoot}\LazyDocker\config.yml"
-			}
 		}
 	}
 
@@ -650,16 +695,69 @@
 			Default = "All"
 		}
 
-		# Whether Bootstrap provisions WSL, by machine type (consumed by Bootstrap ->
-		# Configure-WSL, Initialize-WSLEnvironment, Configure-WSLSSH). $true/$false per machine
-		# type; "Default" covers any machine type not listed; absent => $true. WSL is an optional
-		# comfort layer (Ubuntu shell, fastfetch/oh-my-posh in WSL, WSL SSH) - no other Bootstrap
-		# step depends on it, and `wsl --install` adds a large download, an interactive
-		# first-launch account prompt, and a reboot, so the minimal Test profile skips it.
-		# SymbolicLinkMaker independently skips WSL symlinks when no distribution is present.
-		WSLSetup              = @{
-			Default = $true
-			Test    = $false
+		# ----------------------------------------------------------------------
+		# Bootstrap Step Toggles
+		# ----------------------------------------------------------------------
+		# Enables/disables individual Bootstrap steps (consumed by Bootstrap ->
+		# Resolve-BootstrapSteps). Each step is either a plain boolean or a
+		# per-machine-type hashtable with a Default fallback, e.g.:
+		#   WSL = @{ Default = $true; Test = $false }
+		#
+		# The whole section and individual keys are optional - missing entries use
+		# the built-in defaults. Most steps default on because their functions
+		# no-op when their configuration section is empty, so on the empty base
+		# config an enabled step applies nothing. Steps that act the moment they
+		# run have no empty state to detect and default OFF - opt in here:
+		# MicrosoftActivationScripts, Win11Debloat, DeveloperMode, NuGetConfig
+		# (prompts for a GitHub PAT), LockedStartLayout.
+		#
+		# Per invocation, Bootstrap -Skip <steps> forces steps off and
+		# Bootstrap -Include <steps> forces them on, both overriding this config.
+		#
+		# Steps (in execution order; the first three run only with -WithInitialSetup):
+		# - RenameMachine              : Rename-Machine (prompts; default on)
+		# - MicrosoftActivationScripts : Start-MicrosoftActivationScripts (OFF by default)
+		# - Win11Debloat               : Start-Win11Debloat (OFF by default)
+		# - ExecutionPolicy            : Set-CustomExecutionPolicy
+		# - DeveloperMode              : Enable-DeveloperMode (OFF by default)
+		# - PowerPlan                  : Set-PowerPlan -Auto
+		# - PowerButtonActions         : Set-PowerButtonActions -Auto
+		# - SystemTheme                : Set-SystemTheme -Auto (theme + wallpapers)
+		# - Locale                     : Set-Locale
+		# - DisplayLanguage            : Set-DisplayLanguage
+		# - KeyboardLayouts            : Set-KeyboardLayouts
+		# - NerdFont                   : Configure-NerdFont
+		# - PowerShellModules          : Install-PowerShellModules
+		# - SpecialFolders             : Set-SpecialFolders
+		# - WSL                        : Configure-WSL + Initialize-WSLEnvironment + Configure-WSLSSH
+		# - WinGetApps                 : Install-WinGetPackageManager + Install-WinGetApps
+		# - ScoopApps                  : Install-ScoopPackageManager + Install-ScoopApps
+		# - ChocolateyApps             : Install-ChocolateyPackageManager + Install-ChocolateyApps
+		# - UpgradeAll                 : Upgrade-All
+		# - DotnetEf                   : Install-DotnetEf
+		# - EnvironmentVariables       : Set-EnvironmentVariables -Auto
+		# - CondaEnvironments          : Create-CondaEnvironments
+		# - NuGetConfig                : Configure-NuGetConfig (OFF by default)
+		# - Taskbar                    : Configure-Taskbar -FromBootstrap
+		# - SymbolicLinks              : SymbolicLinkMaker
+		# - LockedStartLayout          : lock the taskbar layout via registry policy (OFF by default)
+		#
+		# Repository updates are NOT a step here - they are governed by
+		# RepositoryUpdateScope above ("None" is the off switch).
+		#
+		# The deprecated BootstrapConfig.WSLSetup key (same shape as Steps.WSL) is
+		# still honored when Steps carries no WSL entry, so older forks keep working.
+		#
+		# WSL is an optional comfort layer (Ubuntu shell, fastfetch/oh-my-posh in
+		# WSL, WSL SSH) - no other Bootstrap step depends on it, and `wsl --install`
+		# adds a large download, an interactive first-launch account prompt, and a
+		# reboot, so the minimal Test profile skips it. SymbolicLinkMaker
+		# independently skips WSL symlinks when no distribution is present.
+		Steps                 = @{
+			WSL = @{
+				Default = $true
+				Test    = $false
+			}
 		}
 
 		# Fork-defined optional bootstrap steps, run right after Upgrade-All (consumed by
@@ -684,10 +782,6 @@
 		LocalScripts          = @{
 			Win11Debloat = "{RepoRoot}\Windows\Win11Debloat\vendor\Win11Debloat.ps1"
 		}
-
-		# Prompts configuration (whether to ask user about optional steps)
-		PromptForActivation   = $true
-		PromptForDebloat      = $true
 
 		# Package manager data files (relative to WinuX root)
 		DataFiles             = @{
@@ -785,33 +879,33 @@
 	#   }
 	#   DefaultLocale = "Croatian"
 	#   KeyboardLayouts = @{ "Croatian" = "0000041A"; "US" = "00000409" }
+	#   KeyboardLayoutSets = @{
+	#       "Croatian-US" = @("Croatian", "US")
+	#       "US-Croatian" = @("US", "Croatian")
+	#   }
 	#   DefaultKeyboardLayoutSet = "Croatian-US"
+	#   DisplayLanguages = @{
+	#       "English (US)" = "en-US"
+	#       "Croatian"     = "hr-HR"
+	#   }
+	#   DefaultDisplayLanguage = "English (US)"
 	# ==========================================================================
-	Locales                       = @{
-		"Croatian"     = @{ Code = "hr-HR"; GeoId = 191 }
-		"English (US)" = @{ Code = "en-US"; GeoId = 244 }
-	}
+	# All of these ship empty - Set-Locale, Set-KeyboardLayouts and Set-DisplayLanguage
+	# leave the system untouched until you configure them (see the example block above)
+	# in Configuration.local.psd1.
+	Locales                       = @{}
 
-	DefaultLocale                 = "Croatian"
+	DefaultLocale                 = ""
 
-	KeyboardLayouts               = @{
-		"Croatian" = "0000041A"
-		"US"       = "00000409"
-	}
+	KeyboardLayouts               = @{}
 
-	KeyboardLayoutSets            = @{
-		"Croatian-US" = @("Croatian", "US")
-		"US-Croatian" = @("US", "Croatian")
-	}
+	KeyboardLayoutSets            = @{}
 
-	DefaultKeyboardLayoutSet      = "Croatian-US"
+	DefaultKeyboardLayoutSet      = ""
 
-	DisplayLanguages              = @{
-		"English (US)" = "en-US"
-		"Croatian"     = "hr-HR"
-	}
+	DisplayLanguages              = @{}
 
-	DefaultDisplayLanguage        = "English (US)"
+	DefaultDisplayLanguage        = ""
 
 	# ==========================================================================
 	# Font Configuration
@@ -827,14 +921,12 @@
 	#   }
 	#   DefaultNerdFont = "JetBrainsMono"
 	# ==========================================================================
-	NerdFonts                     = @{
-		"JetBrainsMono" = @{
-			FolderName    = "JetBrainsMonoNerdFont"
-			SearchPattern = "*JetBrainsMono*Nerd*Font*"
-		}
-	}
+	# Ships empty - Configure-NerdFont installs nothing until you opt in (the
+	# JetBrainsMonoNerdFont payload folder stays in the repo; enable it with the
+	# example block above in Configuration.local.psd1).
+	NerdFonts                     = @{}
 
-	DefaultNerdFont               = "JetBrainsMono"
+	DefaultNerdFont               = ""
 
 	# ==========================================================================
 	# Special Folders
@@ -842,20 +934,23 @@
 	# Redirects system folders (Downloads, Screenshots) to the Desktop.
 	# Applied by Set-SpecialFolders.
 	# ==========================================================================
-	SpecialFolders                = @(
-		@{
-			Path        = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders";
-			Name        = "{374DE290-123F-4565-9164-39C4925E467B}"; # Downloads
-			Value       = "{User}\Desktop";
-			Description = "Redirect Downloads to Desktop"
-		}
-		@{
-			Path        = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders";
-			Name        = "{B7BEDE81-DF94-4682-A7D8-57A52620B86F}"; # Screenshots
-			Value       = "{User}\Desktop";
-			Description = "Redirect Screenshots to Desktop"
-		}
-	)
+	# Ships empty - Set-SpecialFolders redirects nothing until you opt in via
+	# Configuration.local.psd1, e.g.:
+	#   SpecialFolders = @(
+	#       @{
+	#           Path        = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders";
+	#           Name        = "{374DE290-123F-4565-9164-39C4925E467B}"; # Downloads
+	#           Value       = "{User}\Desktop";
+	#           Description = "Redirect Downloads to Desktop"
+	#       }
+	#       @{
+	#           Path        = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders";
+	#           Name        = "{B7BEDE81-DF94-4682-A7D8-57A52620B86F}"; # Screenshots
+	#           Value       = "{User}\Desktop";
+	#           Description = "Redirect Screenshots to Desktop"
+	#       }
+	#   )
+	SpecialFolders                = @()
 
 	# ==========================================================================
 	# Explorer Options
@@ -870,41 +965,30 @@
 	#       Description = "Show hidden files and folders"
 	#   }
 	# ==========================================================================
-	ExplorerOptions               = @(
-		# Win11Debloat LastUsedSettings is the source of truth for these two:
-		# - ShowHiddenFolders
-		# - ShowKnownFileExt
-		#@{
-		#	Path        = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced";
-		#	Name        = "Hidden";
-		#	Value       = 1;
-		#	Description = "Show hidden files, folders, and drives"
-		#}
-		#@{
-		#	Path        = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced";
-		#	Name        = "HideFileExt";
-		#	Value       = 0;
-		#	Description = "Show file name extensions"
-		#}
-		@{
-			Path        = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced";
-			Name        = "DontPrettyPath";
-			Value       = 1;
-			Description = "Show full path in the title bar"
-		}
-		@{
-			Path        = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer";
-			Name        = "ShowRecent";
-			Value       = 0;
-			Description = "Do not show recently used files in Quick access"
-		}
-		@{
-			Path        = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer";
-			Name        = "ShowFrequent";
-			Value       = 0;
-			Description = "Do not show frequently used folders in Quick access"
-		}
-	)
+	# Ships empty - Set-ExplorerOptions changes nothing until you opt in via
+	# Configuration.local.psd1. Win11Debloat LastUsedSettings is the source of truth
+	# for ShowHiddenFolders / ShowKnownFileExt; examples for the rest:
+	#   ExplorerOptions = @(
+	#       @{
+	#           Path        = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced";
+	#           Name        = "DontPrettyPath";
+	#           Value       = 1;
+	#           Description = "Show full path in the title bar"
+	#       }
+	#       @{
+	#           Path        = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer";
+	#           Name        = "ShowRecent";
+	#           Value       = 0;
+	#           Description = "Do not show recently used files in Quick access"
+	#       }
+	#       @{
+	#           Path        = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer";
+	#           Name        = "ShowFrequent";
+	#           Value       = 0;
+	#           Description = "Do not show frequently used folders in Quick access"
+	#       }
+	#   )
+	ExplorerOptions               = @()
 
 	# ==========================================================================
 	# Visual Effects
@@ -995,11 +1079,15 @@
 	#       "MY_DEV_PATH" = "{Dev}\Tools"  # Uses placeholder
 	#   }
 	# ==========================================================================
-	AutoEnvironmentVariables      = @{
-		"Conda"  = "{User}\miniconda3"
-		"Claude" = "{User}\.local\bin"
-		"Cargo"  = "{User}\.cargo\bin\cargo.exe"
-	}
+	# Ships empty - Set-EnvironmentVariables -Auto writes nothing until you opt in
+	# via Configuration.local.psd1, e.g.:
+	#   AutoEnvironmentVariables = @{
+	#       "Conda"  = "{User}\miniconda3"
+	#       "Claude" = "{User}\.local\bin"
+	#       "Cargo"  = "{User}\.cargo\bin\cargo.exe"
+	#   }
+	# The "Conda" variable also gates Create-CondaEnvironments during Bootstrap.
+	AutoEnvironmentVariables      = @{}
 
 	# ==========================================================================
 	# PATH Additions
@@ -1014,15 +1102,19 @@
 	#       "{Dev}\Tools\bin"
 	#   )
 	# ==========================================================================
-	AutoPathAdditions             = @(
-		"C:\msys64\ucrt64\bin"
-		# Oh My Posh install locations. The winget EXE installer registers its own PATH entry,
-		# but on fresh machines that can fail to reach new shells (or use a different scope);
-		# persisting the known locations here makes the profile's oh-my-posh init behave like
-		# the classic one-liner everywhere. Directories that do not exist are harmless on PATH.
-		"%LOCALAPPDATA%\Programs\oh-my-posh\bin"
-		"C:\Program Files\oh-my-posh\bin"
-	)
+	# Ships empty - Set-EnvironmentVariables -Auto appends nothing to PATH until you
+	# opt in via Configuration.local.psd1, e.g.:
+	#   AutoPathAdditions = @(
+	#       "C:\msys64\ucrt64\bin"
+	#       # Oh My Posh install locations. The winget EXE installer registers its own PATH
+	#       # entry, but on fresh machines that can fail to reach new shells (or use a
+	#       # different scope); persisting the known locations makes the profile's
+	#       # oh-my-posh init behave like the classic one-liner everywhere. Directories
+	#       # that do not exist are harmless on PATH.
+	#       "%LOCALAPPDATA%\Programs\oh-my-posh\bin"
+	#       "C:\Program Files\oh-my-posh\bin"
+	#   )
+	AutoPathAdditions             = @()
 
 	# ==========================================================================
 	# .NET Configuration
@@ -1038,7 +1130,8 @@
 	#   DotnetEFVersion          = ""        # Install latest
 	# ==========================================================================
 	DotnetProjectsSearchPath      = "{Dev}"
-	DotnetEFVersion               = "8.*"
+	# Ships empty = install latest; pin a version in Configuration.local.psd1 (e.g. "8.*").
+	DotnetEFVersion               = ""
 
 	# ==========================================================================
 	# PostgreSQL Configuration
@@ -1051,12 +1144,10 @@
 	#       New              = "SecurePass123!"  # New password to set
 	#   }
 	# ==========================================================================
-	# Conventional local-dev defaults only. Change "New" before using PostgreSQL for anything
-	# you care about; never put a real/production password in this file.
-	PostgreSqlPasswords           = @{
-		DefaultOrCurrent = "postgres"
-		New              = "ChangeMe"
-	}
+	# Ships empty - Configure-PostgreSqlPasswords does nothing until you opt in via
+	# Configuration.local.psd1 (see the example above). Never put a real/production
+	# password in the tracked base file.
+	PostgreSqlPasswords           = @{}
 
 	# ==========================================================================
 	# Theme Settings
@@ -1070,9 +1161,10 @@
 	#       "Work"   = "Light"
 	#   }
 	# ==========================================================================
-	Themes                        = @{
-		"Test" = "Dark"
-	}
+	# Ships empty - Set-SystemTheme -Auto (and the wallpapers it applies) leaves the
+	# system untouched until you opt in via Configuration.local.psd1 (see the example
+	# above).
+	Themes                        = @{}
 
 	# ==========================================================================
 	# Power Button & Lid Actions
@@ -1097,19 +1189,10 @@
 	#       }
 	#   }
 	# ==========================================================================
-	PowerButtonActions            = @{
-		"Test" = @{
-			PowerButtonOnBattery = "ShutDown"
-			PowerButtonPluggedIn = "ShutDown"
-			SleepButtonOnBattery = "DoNothing"
-			SleepButtonPluggedIn = "DoNothing"
-			LidCloseOnBattery    = "ShutDown"
-			LidClosePluggedIn    = "DoNothing"
-			# Win11Debloat LastUsedSettings is the source of truth for DisableFastStartup.
-			DisableSleep         = $true
-			DisableHibernate     = $true
-		}
-	}
+	# Ships empty - Set-PowerButtonActions -Auto leaves power settings as-is until you
+	# opt in via Configuration.local.psd1 (see the example above). Win11Debloat
+	# LastUsedSettings is the source of truth for DisableFastStartup.
+	PowerButtonActions            = @{}
 
 	# ==========================================================================
 	# Power Plan
@@ -1124,9 +1207,9 @@
 	#       "Work"   = "Balanced"
 	#   }
 	# ==========================================================================
-	PowerPlans                    = @{
-		"Test" = "UltimatePerformance"
-	}
+	# Ships empty - Set-PowerPlan -Auto leaves the active plan as-is until you opt in
+	# via Configuration.local.psd1 (see the example above).
+	PowerPlans                    = @{}
 
 	# ==========================================================================
 	# Wallpaper Configuration
@@ -1159,15 +1242,18 @@
 		"Span"    = "22"
 	}
 
-	WallpaperDarkSettings         = @{
-		"Test"    = @{ File = "Black.jpg"; Style = "Fill" }
-		"Default" = @{ File = "Black.jpg"; Style = "Fill" }
-	}
+	# Both ship empty - Set-Wallpaper -Auto and Set-LockScreenWallpaper leave the
+	# desktop and lock screen untouched until you opt in via Configuration.local.psd1
+	# (see the example above; Black.jpg / White.png stay in Wallpapers\ to start from):
+	#   WallpaperDarkSettings = @{
+	#       "Default" = @{ File = "Black.jpg"; Style = "Fill" }
+	#   }
+	#   WallpaperLightSettings = @{
+	#       "Default" = @{ File = "White.png"; Style = "Fill" }
+	#   }
+	WallpaperDarkSettings         = @{}
 
-	WallpaperLightSettings        = @{
-		"Test"    = @{ File = "White.png"; Style = "Fill" }
-		"Default" = @{ File = "White.png"; Style = "Fill" }
-	}
+	WallpaperLightSettings        = @{}
 
 	# ==========================================================================
 	# Visual Studio Configuration
@@ -1579,28 +1665,22 @@
 	# in ValidMachineTypes or it is reported as an unknown token. A row without a Machine key
 	# (or a blank one) defaults to "All", so one list can drive every machine.
 	#
-	# This is the shipped example (every row tagged "All"); keep your real, machine-tagged list
-	# in Configuration.local.psd1 - it replaces this array wholesale on merge. See
-	# docs/configuration/guides/add-new-machine.md.
+	# Ships empty - Configure-Taskbar leaves the taskbar pins exactly as they are
+	# (no clearing, no pinning) until you opt in. Keep your real, machine-tagged
+	# list in Configuration.local.psd1 - it replaces this array wholesale on merge.
+	# See docs/configuration/guides/add-new-machine.md.
 	#
 	# Example:
 	#   TaskbarConfiguration = @(
-	#       @{ Name = "Terminal"; Type = "AUMID"; Value = "Microsoft.WindowsTerminal_8wekyb3d8bbwe!App"; Machine = "All" }
-	#       @{ Name = "Browser";  Type = "Path";  Value = "C:\Program Files\Mozilla Firefox\firefox.exe"; Machine = "All" }
-	#       @{ Name = "WorkTool";  Type = "AUMID"; Value = "Contoso.Tool";                                Machine = "PC/Work" }
+	#       @{ Name = "WindowsTerminal"; Type = "AUMID"; Value = "Microsoft.WindowsTerminal_8wekyb3d8bbwe!App"; Machine = "All" }
+	#       @{ Name = "Firefox";      Type = "AUMID"; Value = "308046B0AF4A39CB";                              Machine = "All" }
+	#       @{ Name = "VSCode";       Type = "AUMID"; Value = "Microsoft.VisualStudioCode";                    Machine = "All" }
+	#       @{ Name = "DBeaver";      Type = "Path";  Value = "{User}\AppData\Local\DBeaver\dbeaver.exe";      Machine = "All" }
+	#       @{ Name = "FileExplorer"; Type = "AUMID"; Value = "Microsoft.Windows.Explorer";                    Machine = "All" }
+	#       @{ Name = "WorkTool";     Type = "AUMID"; Value = "Contoso.Tool";                                  Machine = "PC/Work" }
 	#   )
 	# ==========================================================================
-	TaskbarConfiguration          = @(
-		@{ Name = "WindowsTerminal"; Type = "AUMID"; Value = "Microsoft.WindowsTerminal_8wekyb3d8bbwe!App"; Machine = "All" }
-		@{ Name = "Obsidian"; Type = "AUMID"; Value = "md.obsidian"; Machine = "All" }
-		@{ Name = "Firefox"; Type = "AUMID"; Value = "308046B0AF4A39CB"; Machine = "All" }
-		@{ Name = "VSCode"; Type = "AUMID"; Value = "Microsoft.VisualStudioCode"; Machine = "All" }
-		#@{ Name = "VisualStudio2026Community"; Type = "Path"; Value = "C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE\devenv.exe"; Machine = "All" }
-		@{ Name = "DBeaver"; Type = "Path"; Value = "{User}\AppData\Local\DBeaver\dbeaver.exe"; Machine = "All" }
-		#@{ Name = "WhatsappDesktop"; Type = "AUMID"; Value = "5319275A.WhatsAppDesktop_cv1g1gvanyjgm!App"; Machine = "All" }
-		#@{ Name = "BitWarden"; Type = "AUMID"; Value = "com.bitwarden.desktop"; Machine = "All" }
-		@{ Name = "FileExplorer"; Type = "AUMID"; Value = "Microsoft.Windows.Explorer"; Machine = "All" }
-	)
+	TaskbarConfiguration          = @()
 
 	# ==========================================================================
 	# Browser Group Matching
@@ -2293,7 +2373,7 @@
 	#
 	# Enables/disables individual Kill-All cleanup steps. Each step is either a
 	# plain boolean or a per-machine-type hashtable with a Default fallback
-	# (the BootstrapConfig.WSLSetup shape), e.g.:
+	# (the BootstrapConfig.Steps.WSL shape), e.g.:
 	#   Docker = @{ Default = $true; Laptop = $false }
 	#
 	# The whole section and individual keys are optional - missing entries use

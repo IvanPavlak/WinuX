@@ -14,7 +14,9 @@ function Set-SystemTheme {
 		to match the selected theme.
 
 		With `-Auto`, reads the theme for the current machine type from Configuration.psd1
-		`Themes[MachineType]` and applies it automatically.
+		`Themes[MachineType]` and applies it automatically. When `Themes` is not configured
+		(the empty base config) or carries no entry for the machine type, `-Auto` leaves the
+		system theme as-is - opting in happens via Configuration.local.psd1.
 
 		Requires administrator privileges.
 
@@ -66,15 +68,23 @@ function Set-SystemTheme {
 		if ($Auto) {
 			Write-LogTitle "Setting Theme for $($MachineType)"
 
-			$Theme = $Configuration.Themes[$MachineType]
-
-			Write-LogDebug " Theme from configuration: $Theme" -Style Step
-
-			if (-not $Theme) {
-				Write-LogWarning "Unknown Machine Type"
-				Write-LogSuccess "Defaulting to [Dark] theme!"
-				$Theme = "Dark"
+			# Empty-by-default contract: an unconfigured Themes section means the user
+			# never opted into theme management, so -Auto leaves the system untouched.
+			if (-not (Confirm-ConfigValue $Configuration.Themes "Themes not configured - leaving system theme as-is!")) {
+				return
 			}
+
+			# Check a local first: $Theme carries ValidateSet, so assigning a null
+			# config lookup to it would throw before any guard could run.
+			$configuredTheme = $Configuration.Themes[$MachineType]
+
+			Write-LogDebug " Theme from configuration: $configuredTheme" -Style Step
+
+			if (-not (Confirm-ConfigValue $configuredTheme "No theme configured for [$MachineType] (Themes) - leaving system theme as-is!")) {
+				return
+			}
+
+			$Theme = $configuredTheme
 		}
 		elseif (-not $Theme) {
 			$Theme = "Dark"

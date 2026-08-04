@@ -9,7 +9,7 @@ software its own features need; everything you add for yourself goes in a machin
 
 | File                 | Manager    | Format                                         | Shipped active rows |
 | -------------------- | ---------- | ---------------------------------------------- | ------------------- |
-| `WinGetApps.csv`     | WinGet     | `App,Version,Scope,Interactive,Source,Machine` | 7                   |
+| `WinGetApps.csv`     | WinGet     | `App,Version,Scope,Interactive,Source,Machine` | 3                   |
 | `ScoopApps.csv`      | Scoop      | `App,Version,Global,Machine`                   | 0                   |
 | `ChocolateyApps.csv` | Chocolatey | `App,Version,Params,Force,Machine`             | 0                   |
 
@@ -87,24 +87,40 @@ conflicts on a pull. Ignore the writers' `.bak` files either way; they are noise
 
 ## Shipped WinGet apps
 
-The minimal set a WinuX install needs to work end-to-end. All rows are `Machine = All`:
+The minimal set a WinuX install needs to work end-to-end - the framework apps only. All rows are
+`Machine = All`:
 
-| Software           | WinGet ID                    |
-| ------------------ | ---------------------------- |
-| Windows Terminal   | `Microsoft.WindowsTerminal`  |
-| PowerShell 7       | `Microsoft.PowerShell`       |
-| Oh My Posh         | `JanDeDobbeleer.OhMyPosh`    |
-| fastfetch          | `fastfetch`                  |
-| Visual Studio Code | `Microsoft.VisualStudioCode` |
-| Mozilla Firefox    | `Mozilla.Firefox`            |
-| PowerToys          | `Microsoft.PowerToys`        |
+| Software         | WinGet ID                   | Version                |
+| ---------------- | --------------------------- | ---------------------- |
+| PowerShell 7     | `Microsoft.PowerShell`      | Latest                 |
+| Windows Terminal | `Microsoft.WindowsTerminal` | Latest                 |
+| PowerToys        | `Microsoft.PowerToys`       | **Pinned to 0.100.2**  |
+
+PowerToys is pinned because FancyZones is the backbone of the window layout system and updates can
+silently break it; the pin - along with every other tested dependency version - is tracked in the
+`TESTED VERSIONS` comment block at the top of `WinGetApps.csv` (the single source of truth).
+
+### Recommended companions
+
+These used to ship active but are not required by the framework, so they are now commented rows in
+`WinGetApps.csv`. Opt in by copying a row (uncommented) into `WinGetApps.local.csv`:
+
+```csv
+JanDeDobbeleer.OhMyPosh,Latest,d,n,w,All
+fastfetch,Latest,d,n,w,All
+Microsoft.VisualStudioCode,Latest,d,n,w,All
+Mozilla.Firefox,Latest,d,n,w,All
+```
+
+The profile uses Oh My Posh and fastfetch when they are present; fastfetch is skipped silently
+when absent and Oh My Posh prints a single install hint.
 
 ## Installed outside the CSVs
 
 | What                     | Installed by                                          |
 | ------------------------ | ----------------------------------------------------- |
 | Git                      | `Install-Git` (runs during `Install-Bootstrap`)       |
-| JetBrainsMono Nerd Font  | `Configure-NerdFont` (bundled in the repository)      |
+| JetBrainsMono Nerd Font  | `Configure-NerdFont` (bundled in the repository; opt-in - the base ships `NerdFonts` empty) |
 | PowerShell modules below | `Install-PowerShellModules`                           |
 | dotnet-ef                | `Install-DotnetEf` (skipped unless a .NET SDK exists) |
 
@@ -117,7 +133,7 @@ Installed via `Install-PowerShellModules`:
 | `Terminal-Icons` | File/folder icons in terminal      |
 | `PSReadLine`     | Advanced command-line editing      |
 | `z`              | Smart directory jumping (frecency) |
-| `VirtualDesktop` | Virtual desktop management (pinned 1.5.11) |
+| `VirtualDesktop` | Virtual desktop management (pinned 1.5.11; tracked in the `TESTED VERSIONS` block in `WinGetApps.csv`) |
 | `ps2exe`         | Convert scripts to .exe            |
 | `Pester`         | Testing framework                  |
 

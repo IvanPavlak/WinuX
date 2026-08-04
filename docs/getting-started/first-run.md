@@ -2,6 +2,23 @@
 
 After `Install-Bootstrap` completes, the main `Bootstrap` function runs with `-WithInitialSetup`. Here's everything that happens.
 
+## What a Vanilla First Run Actually Does
+
+The base configuration ships **empty by default**: a vanilla install applies nothing personal - no
+theme or wallpaper, no locale, keyboard layout, or display language, no power settings, no taskbar
+pins, no personal symlinks. Every consumer function no-ops with a "not configured" warning when its
+section is empty, and Microsoft Activation Scripts and Win11Debloat no longer prompt - they are
+opt-in via `BootstrapConfig.Steps`. Personalization is opted into per feature via
+`Configuration.local.psd1` (see the [Configuration Overview](../configuration/overview.md)).
+
+What a vanilla run DOES do: update the repository, install the framework apps (PowerShell 7,
+Windows Terminal, PowerToys), install the PowerShell modules, and create the framework symlinks
+(the PowerShell profile + configuration and the FancyZones files).
+
+Every step is individually toggleable via `BootstrapConfig.Steps` (or per invocation with
+`Bootstrap -Skip <steps>` / `-Include <steps>`) - see the
+[Bootstrap module](../modules/bootstrap.md#resolve-bootstrapsteps).
+
 ## Complete Bootstrap Flow
 
 ```
@@ -13,9 +30,9 @@ After `Install-Bootstrap` completes, the main `Bootstrap` function runs with `-W
 │  ├─→ Rename-Machine                                                         │
 │  │   └─ Prompts to set hostname for machine type detection                  │
 │  ├─→ Start-MicrosoftActivationScripts                                       │
-│  │   └─ Optional Windows/Office activation (user prompted)                  │
+│  │   └─ Optional Windows/Office activation (opt-in via Steps)               │
 │  └─→ Start-Win11Debloat                                                     │
-│      └─ Runs local vendored Win11Debloat (user prompted)                    │
+│      └─ Runs local vendored Win11Debloat (opt-in via Steps)                 │
 │                                                                             │
 │  PHASE 2: REPOSITORY SYNCHRONIZATION                                        │
 │  └─→ Update-Repositories                                                    │
@@ -24,19 +41,19 @@ After `Install-Bootstrap` completes, the main `Bootstrap` function runs with `-W
 │                                                                             │
 │  PHASE 3: SYSTEM CONFIGURATION                                              │
 │  ├─→ Set-CustomExecutionPolicy                                              │
-│  ├─→ Enable-DeveloperMode (required for symlinks without admin)             │
+│  ├─→ Enable-DeveloperMode (opt-in via Steps; for symlinks w/o admin)        │
 │  ├─→ Set-PowerPlan -Auto                                                    │
 │  ├─→ Set-PowerButtonActions -Auto                                           │
 │  ├─→ Set-SystemTheme -Auto (Dark/Light based on Themes config)              │
-│  ├─→ Set-Locale (hr-HR regional format)                                     │
-│  ├─→ Set-DisplayLanguage (en-US UI language)                                │
-│  ├─→ Set-KeyboardLayouts (Croatian + US)                                    │
+│  ├─→ Set-Locale (from Locales config)                                       │
+│  ├─→ Set-DisplayLanguage (from DisplayLanguages config)                     │
+│  ├─→ Set-KeyboardLayouts (from KeyboardLayouts config)                      │
 │  ├─→ Display-SystemLanguageSettings                                         │
-│  ├─→ Configure-NerdFont (JetBrainsMono Nerd Font)                           │
+│  ├─→ Configure-NerdFont (from NerdFonts config)                             │
 │  ├─→ Install-PowerShellModules                                              │
-│  ├─→ Set-SpecialFolders (redirect Downloads to Desktop)                     │
+│  ├─→ Set-SpecialFolders (from SpecialFolders config)                        │
 │  ├─→ Restart-Explorer                                                       │
-│  └─→ Configure-WSL (WSL; config-gated: WSLSetup)                            │
+│  └─→ Configure-WSL (config-gated: Steps.WSL)                                │
 │                                                                             │
 │  PHASE 4: PACKAGE MANAGEMENT                                                │
 │  ├─→ Install-WinGetPackageManager                                           │
@@ -53,9 +70,9 @@ After `Install-Bootstrap` completes, the main `Bootstrap` function runs with `-W
 │                                                                             │
 │  PHASE 6: ENVIRONMENT CONFIGURATION                                         │
 │  ├─→ Set-EnvironmentVariables -Auto                                         │
-│  │   └─ Sets Conda, Claude, Cargo paths                                     │
+│  │   └─ From AutoEnvironmentVariables config                                │
 │  ├─→ Create-CondaEnvironments                                               │
-│  └─→ Configure-NuGetConfig                                                  │
+│  └─→ Configure-NuGetConfig (opt-in via Steps)                               │
 │                                                                             │
 │  PHASE 7: TASKBAR & VISUAL CONFIGURATION                                    │
 │  ├─→ Configure-Taskbar -FromBootstrap                                       │
@@ -72,7 +89,7 @@ After `Install-Bootstrap` completes, the main `Bootstrap` function runs with `-W
 │      └─ Sets up SSH keys in WSL                                             │
 │                                                                             │
 │  PHASE 9: FINALIZATION                                                      │
-│  ├─→ Lock taskbar layout (prevent modifications)                            │
+│  ├─→ Lock taskbar layout (opt-in via Steps)                                 │
 │  ├─→ Restart-Explorer                                                       │
 │  └─→ Restart-Machine (prompt user)                                          │
 │                                                                             │
@@ -87,13 +104,13 @@ First-time installation automatically uses:
 Bootstrap -WithInitialSetup
 ```
 
-This adds three initial prompts:
+This adds the first-time-only steps:
 
-| Step                               | Description                             | Optional?      |
-| ---------------------------------- | --------------------------------------- | -------------- |
-| `Rename-Machine`                   | Set hostname for machine type detection | Yes            |
-| `Start-MicrosoftActivationScripts` | Windows/Office activation               | Yes (prompted) |
-| `Start-Win11Debloat`               | Runs local vendored Win11Debloat        | Yes (prompted) |
+| Step                               | Description                             | Default                                                    |
+| ---------------------------------- | --------------------------------------- | ---------------------------------------------------------- |
+| `Rename-Machine`                   | Set hostname for machine type detection | On (interactive prompt)                                    |
+| `Start-MicrosoftActivationScripts` | Windows/Office activation               | Off - opt in via `BootstrapConfig.Steps` (no prompt)       |
+| `Start-Win11Debloat`               | Runs local vendored Win11Debloat        | Off - opt in via `BootstrapConfig.Steps` (no prompt)       |
 
 ## What Gets Installed
 
@@ -145,17 +162,18 @@ See [Software List](../reference/software-list.md) for all installed application
 
 ## Symbolic Links Created
 
-All configuration files are symlinked from the WinuX repository:
+The base configuration ships only the framework links - what persists WinuX into every new shell
+and what the window layouts need:
 
 | Application        | Source (WinuX)                                        | Target (System)                     |
 | ------------------ | ----------------------------------------------------- | ----------------------------------- |
-| Git                | `Git\.gitconfig`                                      | `~\.gitconfig`                      |
-| Windows Terminal   | `Windows\WindowsTerminal\settings_{MachineType}.json` | LocalState settings                 |
-| Oh-My-Posh         | `Windows\Oh-My-Posh\WinuX_{MachineType}.omp.json`     | Themes folder                       |
-| FastFetch          | `FastFetch\Windows\config_{MachineType}.jsonc`        | `~\.config\fastfetch\`              |
 | PowerShell Profile | `Windows\PowerShell\Microsoft.PowerShell_profile.ps1` | Documents\PowerShell                |
-| FancyZones         | `Windows\FancyZones\*.json`                           | PowerToys settings                  |
-| And more...        | See Configuration.psd1                                | SymbolicLinks section               |
+| PowerShell Config  | `Windows\PowerShell\Configuration.psd1`               | Documents\PowerShell                |
+| FancyZones         | `Windows\FancyZones\*.json` (three files)             | PowerToys FancyZones settings       |
+
+Everything else (Git, FastFetch, Oh-My-Posh, Windows Terminal, LazyGit, LazyDocker, ...) ships as
+commented examples in the `SymbolicLinks` section - copy the ones you want into
+`Configuration.local.psd1`.
 
 ## Logging
 
@@ -194,11 +212,13 @@ SymbolicLinkMaker
 
 ### WSL Issues
 
-WSL provisioning is optional and config-gated: `BootstrapConfig.WSLSetup` in `Configuration.psd1`
-maps machine type => `$true`/`$false` ("Default" fallback; absent => `$true`). The minimal `Test`
-profile disables it - test VMs skip `Configure-WSL`, `Initialize-WSLEnvironment`, and
-`Configure-WSLSSH` (no Ubuntu download, no first-launch prompt, no extra reboot), and
-`SymbolicLinkMaker` skips WSL symlinks whenever no distribution is present.
+WSL provisioning is optional and config-gated: `BootstrapConfig.Steps.WSL` in `Configuration.psd1`
+is a plain boolean or a per-machine-type hashtable with a `Default` fallback (absent => `$true`;
+the deprecated `BootstrapConfig.WSLSetup` key is still honored when `Steps` carries no `WSL`
+entry). Even with the step on, `Configure-WSL`, `Initialize-WSLEnvironment`, and `Configure-WSLSSH`
+no-op until `DefaultWSLDistribution` is set (the base ships it empty - opt in via
+`Configuration.local.psd1`, e.g. `"Ubuntu"`), and `SymbolicLinkMaker` skips WSL symlinks whenever
+no distribution is present.
 
 ```powershell
 # Check WSL status

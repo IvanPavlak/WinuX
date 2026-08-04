@@ -8,6 +8,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.26] - 2026-08-04
+
+### Added
+
+- `BootstrapConfig.Steps` (configuration): per-step toggles for the entire Bootstrap sequence, the `KillAll.Steps` idea applied to provisioning. Every step - `RenameMachine`, `MicrosoftActivationScripts`, `Win11Debloat` (the three `-WithInitialSetup` steps), `ExecutionPolicy`, `DeveloperMode`, `PowerPlan`, `PowerButtonActions`, `SystemTheme`, `Locale`, `DisplayLanguage`, `KeyboardLayouts`, `NerdFont`, `PowerShellModules`, `SpecialFolders`, `WSL`, `WinGetApps`, `ScoopApps`, `ChocolateyApps`, `UpgradeAll`, `DotnetEf`, `EnvironmentVariables`, `CondaEnvironments`, `NuGetConfig`, `Taskbar`, `SymbolicLinks`, `LockedStartLayout` - is a plain boolean or a per-machine-type hashtable with a `Default` fallback. Most steps default on because their functions now no-op on an empty configuration section; the steps that act the moment they run default OFF and are opted in here: `MicrosoftActivationScripts`, `Win11Debloat`, `DeveloperMode`, `NuGetConfig` (prompts for a GitHub PAT), `LockedStartLayout`. Repository updates stay governed by `RepositoryUpdateScope` (`"None"` is its off switch), not by a step.
+- `Bootstrap -Skip` and `Bootstrap -Include`: per-invocation overrides for the same step names, mirroring `Kill-All`'s. `-Skip` forces steps off for that run, `-Include` forces them on even when config disables them, and `-Skip` wins with a warning when a step appears in both - parameter over config over built-in default.
+- `Resolve-BootstrapSteps` (Bootstrap module): the resolver behind the above, called exactly once per `Bootstrap` run and safe to call ad hoc to inspect what an invocation would do with the current config. It also carries the deprecated-alias fallback: `BootstrapConfig.WSLSetup` is honored when `Steps` has no `WSL` entry, so forks that predate `Steps` keep working unmodified.
+- `Resolve-Steps` (Helper module): the generic single-pass tri-state resolver (`-Skip` beats `-Include` beats config beats `-Defaults`) both `Resolve-KillAllSteps` and `Resolve-BootstrapSteps` are now thin wrappers over, so the resolution semantics - including the explicit `$null` checks that keep `$false` a real config value - live in one place.
+- `Test-ConfigValue` (Helper module): the canonical "is this configured?" check for the empty-by-default configuration. Returns `$false` for `$null`, whitespace-only strings, empty arrays, and empty hashtables - the last being the one bare truthiness gets wrong in PowerShell (`-not @{}` is `$false`), which is exactly the shape the empty base config ships everywhere. Every unconfigured-section guard goes through it.
+- `Confirm-ConfigValue` (Helper module): `Test-ConfigValue` plus the "not configured" warning in one call - the standard guard shape (`if (-not (Confirm-ConfigValue $value "message")) { return }`) used by every consumer that warns and no-ops on an unconfigured section. A `-Quiet` switch suppresses the warning for callers that pass through their own quiet mode.
+
+### Changed
+
+- **The base configuration now ships empty.** Everything user-specific in `Configuration.psd1` - `Themes`, the wallpaper settings, `PowerPlans`, `PowerButtonActions`, locales/keyboard layouts/display languages, `NerdFonts`, `SpecialFolders`, `ExplorerOptions`, `AutoEnvironmentVariables`/`AutoPathAdditions`, `TaskbarConfiguration`, `PostgreSqlPasswords`, the Wake-on-LAN section, `DefaultWSLDistribution`, `Universal.DefaultBrowser`, `DotnetEFVersion` (empty = latest), the personal executable paths, and the personal `PathTemplates` entries - is now empty or blank, and every consumer no-ops with a "not configured" warning instead of acting. A vanilla install (WinuX.exe or the one-liner) changes nothing personal; each feature is opted into via `Configuration.local.psd1`, which deep-merges over the base at load time. `SymbolicLinks` ships only the framework entries - `PowerShell.Profile` + `PowerShell.Configuration` (what persists WinuX into new shells) and the PowerToys FancyZones trio - with Git/FastFetch/Oh My Posh/Windows Terminal/LazyGit/LazyDocker left as commented examples.
+- Silent fallbacks that used to fire on an unconfigured machine are gone, deliberately: `Set-SystemTheme -Auto` no longer defaults to Dark (it leaves the theme as-is), `Set-PowerPlan -Auto` no longer defaults to Balanced, `Set-PowerButtonActions -Auto` no longer applies its hardcoded defaults (which disabled sleep and hibernate), `Configure-Taskbar` no longer clears the existing pins when `TaskbarConfiguration` is empty (the guard now sits above the destructive block), and `Send-WakeOnLan`/`Test-MachineOnline` properly no-op on an empty `WakeOnLanConfig` instead of hazarding a placeholder packet.
+- `WinGetApps.csv` is slimmed to the framework apps: `Microsoft.PowerShell` (Latest), `Microsoft.WindowsTerminal` (Latest), and `Microsoft.PowerToys` pinned to `0.100.2`. Oh My Posh, fastfetch, VS Code, and Firefox moved to commented "recommended companions" rows - opt in by copying a row into `WinGetApps.local.csv`. The CSV now carries a `TESTED VERSIONS` comment block as the single source of truth for the tested dependency combination (PowerToys 0.100.2, VirtualDesktop 1.5.11, Pester 5.7.1 in CI, PowerShell 7.6.4, Windows 11 25H2), naming the enforcement point for each.
+- `Test-ConfigurationSchema` only requires framework keys now. `Locales`, `DefaultLocale`, and `KeyboardLayouts` were still on its required list, so an untouched vanilla configuration - correct by the new contract - was reported as missing required keys. User-specific sections ship empty by design and their consumers no-op, so requiring them flagged a healthy install as broken. `GitConfig.UserName`/`UserEmail` remain the documented exception: the base ships them blank and `Initialize-Configuration` writes them into `Configuration.local.psd1` on the first run.
+
+### Deprecated
+
+- `BootstrapConfig.WSLSetup`: superseded by `BootstrapConfig.Steps.WSL` (same shape). Still honored as a fallback when `Steps` carries no `WSL` entry, so existing forks keep working unmodified.
+
+### Removed
+
+- `BootstrapConfig.PromptForActivation` and `PromptForDebloat`: Microsoft Activation Scripts and Win11Debloat no longer prompt on a vanilla install - they are fully opt-in via `BootstrapConfig.Steps` (or `Bootstrap -Include`).
+- The `PrivateData/PSData/TestedDependencies` block in `Modules/Window/Window.psd1`: replaced by the `TESTED VERSIONS` block in `WinGetApps.csv`, so the tested combination is tracked in one place instead of two that could drift.
+
 ## [0.1.25] - 2026-08-04
 
 ### Added
@@ -380,7 +407,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.25...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.26...HEAD
+[0.1.26]: https://github.com/IvanPavlak/WinuX/compare/v0.1.25...v0.1.26
 [0.1.25]: https://github.com/IvanPavlak/WinuX/compare/v0.1.24...v0.1.25
 [0.1.24]: https://github.com/IvanPavlak/WinuX/compare/v0.1.23...v0.1.24
 [0.1.23]: https://github.com/IvanPavlak/WinuX/compare/v0.1.22...v0.1.23

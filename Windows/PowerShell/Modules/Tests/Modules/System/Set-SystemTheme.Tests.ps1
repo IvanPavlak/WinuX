@@ -4,6 +4,12 @@ BeforeAll {
 	$ModuleRoot = (Get-RepositoryPath).Modules
 	$FunctionsPath = Join-Path $ModuleRoot "System\Functions"
 
+	# The unconfigured-section guards warn through Confirm-ConfigValue (Helper);
+	# dot-source it (and its Test-ConfigValue dependency) so the Write-LogWarning
+	# mocks in these tests apply to the guard's warning.
+	. "$ModuleRoot\Helper\Functions\Test-ConfigValue.ps1"
+	. "$ModuleRoot\Helper\Functions\Confirm-ConfigValue.ps1"
+
 	. "$FunctionsPath\Set-SystemTheme.ps1"
 }
 
@@ -50,5 +56,40 @@ Describe "Set-SystemTheme" {
 		{ Set-SystemTheme -Theme "Dark" -KeepTerminalOpen } | Should -Not -Throw
 
 		Should -Invoke Terminate-WindowsTerminalTabs -Times 0
+	}
+
+	Context "-Auto on the empty base configuration" {
+		BeforeEach {
+			Mock Write-LogWarning { }
+		}
+
+		It "leaves the system untouched when Themes is empty" {
+			$script:Configuration = [PSCustomObject]@{ Themes = @{} }
+
+			{ Set-SystemTheme -Auto } | Should -Not -Throw
+
+			Should -Invoke Set-ItemProperty -Times 0
+			Should -Invoke Set-Wallpaper -Times 0
+			Should -Invoke Set-LockScreenWallpaper -Times 0
+			Should -Invoke Restart-Explorer -Times 0
+			Should -Invoke Write-LogWarning -ParameterFilter { $Message -match "Themes not configured" }
+		}
+
+		It "leaves the system untouched when the machine type has no Themes entry" {
+			$script:Configuration = [PSCustomObject]@{ Themes = @{ Laptop = "Dark" } }
+
+			{ Set-SystemTheme -Auto } | Should -Not -Throw
+
+			Should -Invoke Set-ItemProperty -Times 0
+			Should -Invoke Set-Wallpaper -Times 0
+			Should -Invoke Write-LogWarning -ParameterFilter { $Message -match "No theme configured" }
+		}
+
+		It "still applies the configured theme for the machine type" {
+			{ Set-SystemTheme -Auto -KeepTerminalOpen } | Should -Not -Throw
+
+			Should -Invoke Set-Wallpaper -Times 1
+			Should -Invoke Set-LockScreenWallpaper -Times 1
+		}
 	}
 }
