@@ -8,8 +8,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.27] - 2026-08-05
+
+### Added
+
+- `Get-BrowserTitlePattern` (System module): the browser-name → window-title-regex map that used to live inline in `Terminate-AllBrowserProcesses`, promoted to an exported function so `Open-Browser`'s `-Instances` counting can use the same identification. It is the single source of truth for "which windows belong to this browser": Firefox and Tor Browser share the `firefox.exe` process name, so any process-level count or close must be narrowed by title to act on the right browser.
+- `Wait-BrowserWindowReady` (Application module): polls until a process (optionally narrowed by a title regex) has at least one visible window, or a timeout expires. Used by `Open-Browser`'s `-Instances` mode as a cold-start gate - launches fired while the first browser instance is still bootstrapping are silently dropped because Chromium's process singleton is not accepting hand-offs yet, which is how a cold `-Instances 33` burst used to yield one or two windows.
+
 ### Fixed
 
+- `Terminate-AllBrowserProcesses` (System module) now actually closes Microsoft Edge windows. Edge's real window title embeds a zero-width space (U+200B) before the regular space in "Microsoft Edge", so two characters sit between the words and the old `Microsoft.?Edge` pattern (at most one) never matched - `Kill-All` reported success while every Edge window stayed open. The pattern is now `Microsoft.{0,2}Edge` (via `Get-BrowserTitlePattern`). The same U+200B also defeats `\s`-based matching (it is a format character, not whitespace), so the `BrowserTitleSuffixPatterns` Edge entry in `Configuration.psd1` moved from `Microsoft\s+Edge` to `Microsoft\W{1,2}Edge`.
+- `Initialize-Win32BrowserHelperType` (System module): `GetWindowText`/`GetWindowTextLength` now marshal as Unicode (`CharSet.Unicode`). The ANSI default mangled every non-ANSI title character to `?` - Edge's U+200B included - so title-pattern matching ran against corrupted strings.
+- `Open-Browser -NoMenu -Instances` (Application module) now opens the requested number of windows on every configured browser, not just Chrome and Firefox. Each instance launch passes the browser's configured `NewWindowArg`: a bare launch only opens a window on some browsers, while Brave routes it into the existing session as a tab ("Opening in existing browser session."), which is why `-Instances 33` produced two Brave windows. Cold starts are gated through `Wait-BrowserWindowReady` before the remaining launches are burst (both in `-NoMenu` mode and in group `-Instances` mode), and the existing-window count is filtered by the browser's title pattern so Firefox and Tor Browser no longer count each other's windows as their own.
 - `Open-ClaudeDesktop` (Application module): dropped the `--processStart claude.exe` argument. The install-root `claude.exe` is a Squirrel stub that resolves the newest `app-*` directory on its own and forwards any arguments it receives straight through to the Electron binary, which parsed the trailing `claude.exe` as a file path and prompted to attach it to the session on every launch.
 
 ## [0.1.26] - 2026-08-04
@@ -411,7 +421,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.26...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.27...HEAD
+[0.1.27]: https://github.com/IvanPavlak/WinuX/compare/v0.1.26...v0.1.27
 [0.1.26]: https://github.com/IvanPavlak/WinuX/compare/v0.1.25...v0.1.26
 [0.1.25]: https://github.com/IvanPavlak/WinuX/compare/v0.1.24...v0.1.25
 [0.1.24]: https://github.com/IvanPavlak/WinuX/compare/v0.1.23...v0.1.24

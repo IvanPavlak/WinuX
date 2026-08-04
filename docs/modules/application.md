@@ -229,7 +229,7 @@ Open-Acrobat -Pdf "MyDocs","OtherDocs"
 - **Parameters:** -Groups, -Private, -NoMenu, -Search, -Browser, -Override, -Instances
 - **Usage:** `Open-Browser`, `Open-Browser GroupName`, `Open-Browser Parent.ChildGroup`, `Open-Browser GroupA,GroupB`, `Open-Browser -Search "search terms"`, `Open-Browser -Private GroupName`, `Open-Browser GroupName -Override`, `Open-Browser -NoMenu -Browser PreferredBrowser -Instances 2`
 
-The default browser is read from `Configuration.Universal.DefaultBrowser`; the base ships it empty, so the function warns and returns until one is set in `Configuration.local.psd1`. Browser definitions (executable path, private/incognito argument, new-window argument) come from `Configuration.Universal.Browsers`, so any browser key defined there (e.g. Firefox, Chrome, Edge, Brave, Tor) can be passed to `-Browser`. Groups support unlimited hierarchical nesting and are addressed with dot-notation. Private mode cannot be combined with group opening (it falls back to normal mode for groups) but does support `-Search`. `-Instances N` is rerun-safe: it counts how many matching windows already exist and opens only the deficit.
+The default browser is read from `Configuration.Universal.DefaultBrowser`; the base ships it empty, so the function warns and returns until one is set in `Configuration.local.psd1`. Browser definitions (executable path, private/incognito argument, new-window argument) come from `Configuration.Universal.Browsers`, so any browser key defined there (e.g. Firefox, Chrome, Edge, Brave, Tor) can be passed to `-Browser`. Groups support unlimited hierarchical nesting and are addressed with dot-notation. Private mode cannot be combined with group opening (it falls back to normal mode for groups) but does support `-Search`. `-Instances N` is rerun-safe: it counts how many matching windows already exist and opens only the deficit. The count filters windows by the browser's title pattern ([`Get-BrowserTitlePattern`](system.md#get-browsertitlepattern)), so Firefox and Tor Browser - which share the `firefox.exe` process name - never count each other's windows. Every instance launch passes the browser's configured `NewWindowArg`: a bare launch only opens a window on some browsers (Chrome does; Brave routes it into the existing session as a tab). When the browser is not running yet, the first launch is gated through [`Wait-BrowserWindowReady`](#wait-browserwindowready) before the rest are fired, because launches that arrive while the first instance is still bootstrapping are silently dropped by Chromium's process singleton.
 
 | Parameter    | Description                                                                                                                        |
 | ------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
@@ -754,6 +754,28 @@ Update-Win11DebloatVendor
 # Pin and vendor a specific release tag
 Update-Win11DebloatVendor -ReleaseTag "2026.05.11"
 ```
+
+## [Wait-BrowserWindowReady](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Wait-BrowserWindowReady.ps1)
+
+- **Description:** Polls the window list until at least one window of the given process (optionally narrowed by a title regex) is present, or the timeout expires. Returns `$true` when a window appeared, `$false` on timeout. `Open-Browser`'s `-Instances` mode uses it as a cold-start gate: launches fired while the first browser instance is still bootstrapping are silently dropped (Chromium's process singleton is not accepting hand-offs yet), so waiting for the first window before bursting the remaining launches makes the requested instance count reliable.
+- **Parameters:** -ProcessName, -TitlePattern, -TimeoutSeconds
+- **Usage:** `Wait-BrowserWindowReady -ProcessName "brave"`, `Wait-BrowserWindowReady -ProcessName "msedge" -TitlePattern "Microsoft.{0,2}Edge" -TimeoutSeconds 10`
+
+| Parameter         | Description                                                                                                                    |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `-ProcessName`    | Process name (without `.exe`) whose windows to wait for, e.g. `"msedge"`.                                                       |
+| `-TitlePattern`   | Optional title regex a window must also match - used to tell apart browsers that share a process name (Firefox vs. Tor Browser). |
+| `-TimeoutSeconds` | Maximum time to wait; defaults to 30 seconds. Fast browsers exit the poll in well under a second (250ms ticks).                  |
+
+```powershell
+# Wait until a Brave window exists (or 30s pass)
+Wait-BrowserWindowReady -ProcessName "brave"
+
+# Wait up to 10s for an Edge window
+Wait-BrowserWindowReady -ProcessName "msedge" -TitlePattern "Microsoft.{0,2}Edge" -TimeoutSeconds 10
+```
+
+**See also:** [Open-Browser](#open-browser), [Get-BrowserTitlePattern](system.md#get-browsertitlepattern)
 
 ## Configuration Reference
 

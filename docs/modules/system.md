@@ -200,6 +200,28 @@ The function first calls `Test-AdminPrivileges`, then checks whether `AllowDevel
 Enable-DeveloperMode
 ```
 
+## [Get-BrowserTitlePattern](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Get-BrowserTitlePattern.ps1)
+
+- **Description:** Returns the window title regex that identifies a browser's main windows, keyed by browser name from `Configuration.Universal.Browsers` (Firefox, Tor, Chrome, Edge, Brave); unknown names return `$null`. The single source of truth for browser window identification, shared by `Terminate-AllBrowserProcesses` (to find the windows to close) and `Open-Browser`'s `-Instances` mode (to count only the target browser's existing windows - Firefox and Tor Browser share the `firefox.exe` process name, so a process-level count cannot tell them apart).
+- **Parameters:** -BrowserName
+- **Usage:** `Get-BrowserTitlePattern -BrowserName "Edge"`
+
+The Edge pattern (`Microsoft.{0,2}Edge`) deliberately allows up to two arbitrary characters between "Microsoft" and "Edge": real Edge window titles embed a zero-width space (U+200B) before the regular space, and U+200B is a format character rather than whitespace, so neither a literal space nor `\s` matches it.
+
+| Parameter      | Type     | Description                                                                                 |
+| -------------- | -------- | -------------------------------------------------------------------------------------------- |
+| `-BrowserName` | `string` | Browser name as configured in `Configuration.Universal.Browsers` (e.g. `"Firefox"`, `"Edge"`). |
+
+```powershell
+# Regex matching Microsoft Edge window titles (zero-width-space tolerant)
+Get-BrowserTitlePattern -BrowserName "Edge"
+
+# Regex distinguishing Tor Browser windows from regular Firefox ones
+Get-BrowserTitlePattern -BrowserName "Tor"
+```
+
+**See also:** [Get-BrowserWindowsByTarget](#get-browserwindowsbytarget), [Terminate-AllBrowserProcesses](#terminate-allbrowserprocesses)
+
 ## [Get-BrowserWindowsByTarget](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Get-BrowserWindowsByTarget.ps1)
 
 - **Description:** Enumerates visible top-level windows (via the native `Win32BrowserHelper` type) for the supplied browser process IDs and returns only the ones whose titles match the provided regex. Used to distinguish browser main windows from child/helper processes (GPU / renderer / utility) that do not own a top-level window.
@@ -274,7 +296,7 @@ Called by the PowerShell profile on every shell start. **Must be dot-invoked** (
 - **Description:** Ensures the `Win32BrowserHelper` C# interop type is available. Adds the type used by browser window discovery and graceful window closure, enumerating visible browser windows and posting WM_CLOSE messages. The type is added only once per PowerShell session.
 - **Usage:** `Initialize-Win32BrowserHelperType`
 
-Adds the Win32 interop type only once per session, exposing the native `user32.dll` calls (`EnumWindows`, `GetWindowThreadProcessId`, `GetWindowText`, `GetWindowTextLength`, `IsWindowVisible`, and `PostMessage`) used by `Get-BrowserWindowsByTarget` and `Close-BrowserWindows`.
+Adds the Win32 interop type only once per session, exposing the native `user32.dll` calls (`EnumWindows`, `GetWindowThreadProcessId`, `GetWindowText`, `GetWindowTextLength`, `IsWindowVisible`, and `PostMessage`) used by `Get-BrowserWindowsByTarget` and `Close-BrowserWindows`. The text APIs marshal as Unicode (`CharSet.Unicode`): the ANSI default mangles non-ANSI title characters to `?` - including the zero-width space (U+200B) Edge embeds in "Microsoft Edge" window titles - which would break title-pattern matching against those windows.
 
 ```powershell
 # Load the Win32 browser helper type if it has not already been added
@@ -1012,7 +1034,7 @@ SymbolicLinkMaker
 - **Parameters:** -Exclude
 - **Usage:** `Terminate-AllBrowserProcesses`, `Terminate-AllBrowserProcesses -Exclude "*YouTube*"`, `Terminate-AllBrowserProcesses -Exclude "*YouTube*", "*Gmail*"`
 
-Browser identification is two-staged: the process name is resolved from each browser's configured executable (`firefox.exe` -> `firefox`, `chrome.exe` -> `chrome`), and a brand-specific title regex selects only the real top-level windows. `WM_CLOSE` is posted directly to each non-excluded window handle (per handle, not via `SendKeys`), so it does not touch the foreground and excluded windows are never accidentally closed by a misfired keystroke.
+Browser identification is two-staged: the process name is resolved from each browser's configured executable (`firefox.exe` -> `firefox`, `chrome.exe` -> `chrome`), and a brand-specific title regex from [`Get-BrowserTitlePattern`](#get-browsertitlepattern) selects only the real top-level windows. `WM_CLOSE` is posted directly to each non-excluded window handle (per handle, not via `SendKeys`), so it does not touch the foreground and excluded windows are never accidentally closed by a misfired keystroke.
 
 | Parameter  | Description                                                                                                                                                                                                                                                                 |
 | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

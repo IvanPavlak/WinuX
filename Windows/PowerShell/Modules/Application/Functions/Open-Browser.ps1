@@ -133,10 +133,17 @@ function Open-Browser {
 				default { $Browser.ToLower() }
 			}
 
+			$browserTitlePattern = Get-BrowserTitlePattern -BrowserName $Browser
+
 			$existingWindows = @()
 			if ($Instances -gt 0) {
 				$existingWindows = @(Get-WindowHandle -ProcessName $browserProcessName -ErrorAction SilentlyContinue)
-				Write-LogDebug " [Open-Browser] Found $($existingWindows.Count) existing [$browserProcessName] window(s) before Instances launch"
+				# Firefox and Tor Browser share the firefox.exe process name - keep only
+				# THIS browser's windows or each would count the other's as its own.
+				if ($browserTitlePattern) {
+					$existingWindows = @($existingWindows | Where-Object { $_.Title -match $browserTitlePattern })
+				}
+				Write-LogDebug " [Open-Browser] Found $($existingWindows.Count) existing [$Browser] window(s) before Instances launch"
 			}
 
 			$targetInstances = if ($Instances -gt 0) { $Instances } else { 1 }
@@ -154,8 +161,21 @@ function Open-Browser {
 				elseif ($Private) {
 					Start-Process $browserPath -ArgumentList $privateArg -NoNewWindow -ErrorAction Stop
 				}
+				elseif ($newWindowArg) {
+					# A bare launch only opens a window on some browsers: Chrome does,
+					# but Brave routes it into the existing session as a TAB ("Opening
+					# in existing browser session."), so N launches yielded one window.
+					Start-Process $browserPath -ArgumentList $newWindowArg -NoNewWindow -ErrorAction Stop
+				}
 				else {
 					Start-Process $browserPath -NoNewWindow -ErrorAction Stop
+				}
+
+				# Cold-start gate: launches fired while the FIRST instance is still
+				# bootstrapping are dropped (Chromium's process singleton is not
+				# accepting hand-offs yet) or pile up on the profile lock (Tor).
+				if ($inst -eq 0 -and $toOpen -gt 1 -and $existingWindows.Count -eq 0) {
+					[void](Wait-BrowserWindowReady -ProcessName $browserProcessName -TitlePattern $browserTitlePattern)
 				}
 			}
 
@@ -201,6 +221,8 @@ function Open-Browser {
 
 			# Cache browser windows once for all duplicate checks (avoids re-enumerating per group)
 			$cachedWindows = $null
+			$browserWarm = $true
+			$groupTitlePattern = $null
 			if (-not $Override -or $Instances -gt 0) {
 				$browserProcessName = switch ($Browser) {
 					"Chrome" { "chrome" }
@@ -211,6 +233,13 @@ function Open-Browser {
 				}
 				$cachedWindows = @(Get-WindowHandle -ProcessName $browserProcessName -ErrorAction SilentlyContinue)
 				Write-LogDebug " [Open-Browser] Cached $($cachedWindows.Count) [$browserProcessName] window(s) for $($resolvedGroups.Count) group check(s)"
+
+				# Cold-start detection for the Instances burst below. Filtered by title
+				# because Firefox and Tor Browser share the firefox.exe process name.
+				$groupTitlePattern = Get-BrowserTitlePattern -BrowserName $Browser
+				$browserWarm = @($cachedWindows | Where-Object {
+						-not $groupTitlePattern -or $_.Title -match $groupTitlePattern
+					}).Count -gt 0
 			}
 
 			foreach ($selection in $resolvedGroups) {
@@ -324,6 +353,14 @@ function Open-Browser {
 							else {
 								Start-Process $browserPath -ArgumentList $newWindowArg, $urlString -NoNewWindow -ErrorAction Stop
 							}
+						}
+
+						# Cold-start gate: launches fired while the FIRST instance is still
+						# bootstrapping are dropped (Chromium's process singleton is not
+						# accepting hand-offs yet) or pile up on the profile lock (Tor).
+						if (-not $browserWarm) {
+							[void](Wait-BrowserWindowReady -ProcessName $browserProcessName -TitlePattern $groupTitlePattern)
+							$browserWarm = $true
 						}
 					}
 

@@ -60,17 +60,9 @@ function Terminate-AllBrowserProcesses {
 		return
 	}
 
-	# Title regex used to identify each browser's main top-level windows.
-	# Keys must match browser names in Configuration.Universal.Browsers.
-	$browserTitlePatterns = @{
-		Firefox = "Mozilla Firefox|Firefox Developer Edition|Firefox Nightly"
-		Tor     = "Tor Browser"
-		Chrome  = "Google Chrome"
-		Edge    = "Microsoft.?Edge"
-		Brave   = "Brave"
-	}
-
-	# Build the list of running browsers to act on.
+	# Build the list of running browsers to act on. Title regexes come from
+	# Get-BrowserTitlePattern - the shared map also used by Open-Browser's
+	# -Instances counting.
 	$browserTargets = @()
 	foreach ($browserName in $browsersConfig.Keys) {
 		$browserDef = $browsersConfig[$browserName]
@@ -78,7 +70,7 @@ function Terminate-AllBrowserProcesses {
 			continue
 		}
 
-		$titlePattern = $browserTitlePatterns[$browserName]
+		$titlePattern = Get-BrowserTitlePattern -BrowserName $browserName
 		if (-not $titlePattern) {
 			Write-LogDebug " No window title pattern known for browser [$browserName] - skipping" -Style Warning
 			continue

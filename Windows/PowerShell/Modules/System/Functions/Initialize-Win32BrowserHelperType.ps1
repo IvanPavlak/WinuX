@@ -7,6 +7,10 @@ function Initialize-Win32BrowserHelperType {
 		Adds the `Win32BrowserHelper` C# type used by browser window discovery and
 		graceful window closure. The type is added only once per session.
 
+		The text APIs marshal as Unicode: without an explicit CharSet the default
+		is ANSI, which mangles non-ANSI title characters to `?` - including the
+		zero-width space (U+200B) Edge embeds in "Microsoft Edge" window titles.
+
 	.EXAMPLE
 		Initialize-Win32BrowserHelperType
 		Loads the Win32 browser helper type if it has not already been added.
@@ -29,10 +33,10 @@ function Initialize-Win32BrowserHelperType {
 				[DllImport("user32.dll")]
 				public static extern bool PostMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
 
-				[DllImport("user32.dll")]
+				[DllImport("user32.dll", CharSet = CharSet.Unicode)]
 				public static extern int GetWindowText(IntPtr hWnd, StringBuilder text, int count);
 
-				[DllImport("user32.dll")]
+				[DllImport("user32.dll", CharSet = CharSet.Unicode)]
 				public static extern int GetWindowTextLength(IntPtr hWnd);
 
 				[DllImport("user32.dll")]

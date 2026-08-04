@@ -17,6 +17,7 @@
 		'Determine-DotnetDependencies',
 		'Display-SystemLanguageSettings',
 		'Enable-DeveloperMode',
+		'Get-BrowserTitlePattern',
 		'Get-BrowserWindowsByTarget',
 		'Get-InstalledApps',
 		'Get-PinnedApps',
