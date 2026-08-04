@@ -7,6 +7,7 @@
 		'Clear-OldLogs',
 		'Get-LogPath',
 		'Initialize-LoggingState',
+		'Invoke-LogMaintenance',
 		'Protect-Log',
 		'Set-LogLevel',
 		'Start-Logging',

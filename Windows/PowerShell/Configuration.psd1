@@ -2092,14 +2092,17 @@
 	# Set-LogLevel, Start-Logging / Stop-Logging). Console colors default to the documented
 	# house style; structured logs are written to the module's own Logs/ folder and pruned by
 	# the retention limits below so they stay detailed but small. Pinned logs (Logs/Pinned,
-	# created via Protect-Log) are never pruned.
-	# → Consumer: Initialize-LoggingState, Write-Log, Clear-OldLogs
+	# created via Protect-Log) are never pruned. Maintenance controls the automatic background
+	# sweep (Invoke-LogMaintenance, fired from the profile once the shell is idle) that enforces
+	# retention and clears stale test-run artifacts without adding startup time.
+	# → Consumer: Initialize-LoggingState, Write-Log, Clear-OldLogs, Invoke-LogMaintenance
 	#
 	# Example:
 	#   Logging = @{
 	#       DefaultLevel = "Normal"   # Quiet | Normal | Verbose
 	#       Colors       = @{ Success = "Green"; Error = "Red" }
 	#       FileLogging  = @{ Enabled = $true; Retention = @{ MaxSessionFiles = 20 } }
+	#       Maintenance  = @{ Enabled = $true; IntervalHours = 24 }
 	#   }
 	# ==========================================================================
 	Logging                       = @{
@@ -2129,6 +2132,15 @@
 				MaxTotalSizeMB     = 50  # Cap combined session-log size (oldest removed first)
 				MaxErrorFileSizeMB = 5   # Trim the error log to its most recent content past this size
 			}
+		}
+
+		# Automatic background housekeeping (Invoke-LogMaintenance). Enforces the retention above
+		# and prunes stale Tests\Results artifacts, at most once per interval, fired from the
+		# profile only after the shell is idle - never during startup. No setup required; set
+		# Enabled = $false to opt out and prune manually instead.
+		Maintenance  = @{
+			Enabled       = $true # Set $false to disable the automatic idle-time sweep
+			IntervalHours = 24    # Minimum hours between sweeps (stamp file: Logs\.last-maintenance)
 		}
 	}
 
