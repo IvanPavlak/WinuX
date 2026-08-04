@@ -80,6 +80,7 @@ The authoritative, always-current function reference is the set of per-module pa
 | `LayoutNumbers`, `ZoneNameMappings`                | `Apply-FancyZones`, `Get-FancyZone`                |
 | `LayoutMachineTypeOverrides`, `SmallDisplayMachineType` | `Get-LayoutMachineType` (for `Set-WorkspaceWindowLayout`, `Reset-Windows`) |
 | `ResetAllWindowsDefaults`                          | `Reset-Windows`                                    |
+| `KillAll.Steps`                                    | `Kill-All`, `Resolve-KillAllStep`                  |
 | `AutoEnvironmentVariables`                         | `Set-EnvironmentVariables`                         |
 | `Locales`, `DefaultLocale`                         | `Set-Locale`                                       |
 | `DisplayLanguages`                                 | `Set-DisplayLanguage`                              |

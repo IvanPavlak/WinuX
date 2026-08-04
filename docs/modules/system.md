@@ -352,17 +352,21 @@ Invoke-TerminateWindowsTerminalTabsIncludeCurrentCleanup -ClosedTabs @("TabA") -
 
 ## [Kill-All](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Kill-All.ps1)
 
-- **Description:** Orchestrates a full desktop cleanup. Removes all virtual desktops except the first, stops Docker Desktop cleanly via `DockerWizard -Stop` before generic process termination, gracefully closes all configured browser processes (WM_CLOSE), terminates remaining processes with visible windows (except browsers and the `Universal.VisibleWindowExclusions` list) and the configured `Universal.TerminateProcessNames` processes, then waits a short RPC/DCOM quiescence window (500 ms) before closing extra Windows Terminal tabs so subsequent commands (e.g. `Open-Workspace`) do not hit `0x800706BA` from DCOM churn. Unless `-IncludeCurrent` is given, the surviving Windows Terminal is then centered on the primary monitor via `Center-Windows -OnPrimary` (pulled back from a secondary monitor if needed) and refocused via `Focus-TerminalTab`, so the run always ends on the terminal. Can optionally reload the PowerShell profile.
-- **Parameters:** -Exclude (wildcard/regex patterns), -IncludeCurrent, -ReloadPowerShellProfile
-- **Usage:** `Kill-All`, `Kill-All -Exclude "*YouTube*"`, `Kill-All -Exclude "*YouTube*", "*Gmail*", "(.*Obsidian.*|.*Notion.*)"`, `Kill-All -IncludeCurrent`, `Kill-All -ReloadPowerShellProfile`
+- **Description:** Orchestrates a full desktop cleanup as a sequence of configurable steps. Removes all virtual desktops except the first (`VirtualDesktops`), stops Docker Desktop cleanly via `DockerWizard -Stop` before generic process termination (`Docker`), gracefully closes all configured browser processes via WM_CLOSE (`Browsers`), terminates remaining processes with visible windows except browsers and the `Universal.VisibleWindowExclusions` list (`VisibleWindows`) and the configured `Universal.TerminateProcessNames` processes (`NamedProcesses`), then waits a short RPC/DCOM quiescence window (500 ms) before closing extra Windows Terminal tabs (`TerminalTabs`) so subsequent commands (e.g. `Open-Workspace`) do not hit `0x800706BA` from DCOM churn. Unless `-IncludeCurrent` is given, the surviving Windows Terminal is then centered on the primary monitor via `Center-Windows -OnPrimary` (`CenterTerminal`) and refocused via `Focus-TerminalTab` (`FocusTerminal`), so the run always ends on the terminal. Can optionally reload the PowerShell profile (`ReloadProfile`, off by default). Every step can be toggled persistently via `KillAll.Steps` in `Configuration.psd1` / `Configuration.local.psd1` (plain booleans or per-machine-type hashtables with a `Default` fallback) and per invocation via `-Skip` / `-Include`.
+- **Parameters:** -Exclude (wildcard/regex patterns), -Skip (step names), -Include (step names), -IncludeCurrent, -ReloadPowerShellProfile
+- **Usage:** `Kill-All`, `Kill-All -Exclude "*YouTube*"`, `Kill-All -Skip Docker`, `Kill-All -Skip Docker, Browsers`, `Kill-All -Include ReloadProfile`, `Kill-All -IncludeCurrent`, `Kill-All -ReloadPowerShellProfile`
 
 Coordinates desktop cleanup as a sequence of terminators. If virtual desktop cleanup cannot recover from a VirtualDesktop/RPC failure, `Remove-VirtualDesktops` owns the failure reporting while `Kill-All` suppresses its nested `$false` return value so process cleanup continues. PowerToys (`PowerToys`, `PowerToys.FancyZones`, `PowerToys.Settings`) is excluded from the visible-window terminator by the default `Universal.VisibleWindowExclusions` configuration, since partially killing it leaves the FancyZones supervisor in a "running but FancyZones absent" half-state that breaks the next workspace layout application.
+
+Step resolution is tri-state: `-Skip` beats `-Include` beats the `KillAll.Steps` config (see [Configuration Reference: Kill-All Step Toggles](../configuration/configuration-reference.md#kill-all-step-toggles)) beats the built-in defaults (everything on except `ReloadProfile`). With no `KillAll` section configured, behavior is identical to the classic full run. `-IncludeCurrent` suppresses `CenterTerminal` and `FocusTerminal` regardless of config, since there is no surviving tab to restore.
 
 | Parameter                  | Description                                                                                                                                              |
 | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
 | `-Exclude`                 | One or more window title patterns to spare from termination. Supports both wildcard (`"*YouTube*"`, `"Chrome - *"`) and regex (`"^Chrome"`, `"(._Gmail._ | ._Inbox._)"`) patterns, same format as layout `.psd1` files. |
+| `-Skip`                    | Step names to skip for this invocation, overriding config. Valid: `VirtualDesktops`, `Docker`, `Browsers`, `VisibleWindows`, `NamedProcesses`, `TerminalTabs`, `CenterTerminal`, `FocusTerminal`, `ReloadProfile`. Wins over `-Include`. |
+| `-Include`                 | Step names to run for this invocation even if config disables them. Same valid names as `-Skip`.                                                        |
 | `-IncludeCurrent`          | Also closes the current Windows Terminal tab.                                                                                                            |
-| `-ReloadPowerShellProfile` | Reloads the PowerShell profile after terminating processes.                                                                                              |
+| `-ReloadPowerShellProfile` | Reloads the PowerShell profile after terminating processes. Equivalent to `-Include ReloadProfile`.                                                      |
 
 ```powershell
 # Full cleanup: closes most GUI apps and extra terminal tabs
@@ -371,11 +375,17 @@ Kill-All
 # Keep windows whose titles match the given patterns (wildcard and regex)
 Kill-All -Exclude "*YouTube*", "*Obsidian*", "(.*Notion.*|.*Inbox.*)"
 
+# Leave Docker running for this cleanup only
+Kill-All -Skip Docker
+
+# Run a step this once even though config disables it
+Kill-All -Include Docker
+
 # Clean up and reload the shell afterward
 Kill-All -ReloadPowerShellProfile
 ```
 
-**See also:** [Remove-VirtualDesktops](system.md#remove-virtualdesktops), [Terminate-AllProcessesWithVisibleWindows](system.md#terminate-allprocesseswithvisiblewindows)
+**See also:** [Resolve-KillAllStep](system.md#resolve-killallstep), [Remove-VirtualDesktops](system.md#remove-virtualdesktops), [Terminate-AllProcessesWithVisibleWindows](system.md#terminate-allprocesseswithvisiblewindows)
 
 ## [List-Drives](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/List-Drives.ps1)
 
@@ -510,6 +520,29 @@ Set-LogLevel Verbose { Repair-RpcServer }
 ```
 
 Even when `Repair-RpcServer` returns `$false`, callers continue their normal flow (the workspace rerun still spawns) rather than aborting; there is no reboot prompt. Running from an elevated shell gives the service-restart step better odds.
+
+## [Resolve-KillAllStep](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Resolve-KillAllStep.ps1)
+
+- **Description:** Resolves whether a single `Kill-All` cleanup step should run. Tri-state resolution: `-Skip` beats `-Include` beats config (`KillAll.Steps.<Name>` in `$global:Configuration` - a plain boolean, or a per-machine-type hashtable with a `Default` fallback, the `BootstrapConfig.WSLSetup` shape) beats the built-in default. `$false` is a real config value, so booleans resolve with explicit `$null` checks rather than truthiness. Warns and returns `$false` when the same step appears in both `-Skip` and `-Include`. `Kill-All` calls this once per step; it has no side effects beyond the conflict warning, so it is safe to call ad hoc to inspect what a `Kill-All` invocation would do.
+- **Parameters:** -Name (step name), -Default (built-in default), -Skip (step names forced off), -Include (step names forced on)
+- **Usage:** `Resolve-KillAllStep -Name "Docker" -Default $true -Skip $Skip -Include $Include`
+
+| Parameter  | Type       | Default | Description                                                              |
+| ---------- | ---------- | ------- | ------------------------------------------------------------------------ |
+| `-Name`    | `string`   | -       | The step name to resolve; must match the `KillAll.Steps` key.            |
+| `-Default` | `bool`     | -       | Built-in default when neither parameters nor config decide the step.     |
+| `-Skip`    | `string[]` | -       | Step names forced off for this invocation; wins over `-Include`.         |
+| `-Include` | `string[]` | -       | Step names forced on for this invocation, overriding config.             |
+
+```powershell
+# What would the Docker step do with the current config?
+Resolve-KillAllStep -Name "Docker" -Default $true
+
+# Parameter override beats a config-disabled step
+Resolve-KillAllStep -Name "Docker" -Default $true -Include @("Docker")
+```
+
+**See also:** [Kill-All](system.md#kill-all), [Configuration Reference: Kill-All Step Toggles](../configuration/configuration-reference.md#kill-all-step-toggles)
 
 ## [Restart-Explorer](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Restart-Explorer.ps1)
 
