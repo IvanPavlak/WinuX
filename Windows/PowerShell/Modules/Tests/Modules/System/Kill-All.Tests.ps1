@@ -1,10 +1,16 @@
 #Requires -Modules Pester
 
 BeforeAll {
+	$script:OriginalConfiguration = $global:Configuration
+	$script:OriginalMachineType = $global:MachineType
+
 	$ModuleRoot = (Get-RepositoryPath).Modules
 	$FunctionsPath = Join-Path $ModuleRoot "System\Functions"
 
 	. "$FunctionsPath\Kill-All.ps1"
+	# Kill-All resolves its step map through the real Resolve-KillAllSteps, so
+	# the config/override behavior asserted below exercises the actual resolver.
+	. "$FunctionsPath\Resolve-KillAllSteps.ps1"
 
 	# Stub all dependent functions with matching parameter signatures
 	function Remove-VirtualDesktops { param() }
@@ -23,9 +29,20 @@ BeforeAll {
 	function Focus-TerminalTab { param([string]$TargetTitle, [switch]$Quiet) }
 }
 
+AfterAll {
+	$global:Configuration = $script:OriginalConfiguration
+	$global:MachineType = $script:OriginalMachineType
+}
+
 Describe "Kill-All" {
 	BeforeEach {
+		# Fresh baseline with no KillAll section - built-in defaults apply unless a
+		# test opts a step out/in. Originals are restored in AfterAll.
+		$global:Configuration = @{}
+		$global:MachineType = "Test"
+
 		Mock Write-Host { }
+		Mock Write-LogWarning { }
 		Mock Remove-VirtualDesktops { }
 		Mock DockerWizard { }
 		Mock Terminate-AllBrowserProcesses { }
@@ -66,6 +83,14 @@ Describe "Kill-All" {
 
 			Should -Invoke Reload-PowerShellProfile -Times 1 -Exactly
 		}
+
+		It "Should reload the profile even when config disables the step" {
+			$global:Configuration.KillAll = @{ Steps = @{ ReloadProfile = $false } }
+
+			Kill-All -ReloadPowerShellProfile
+
+			Should -Invoke Reload-PowerShellProfile -Times 1 -Exactly
+		}
 	}
 
 	Context "When Exclude patterns are provided" {
@@ -90,6 +115,125 @@ Describe "Kill-All" {
 
 			Should -Invoke Center-Terminal -Times 0
 			Should -Invoke Focus-TerminalTab -Times 0
+		}
+
+		It "Should not restore a terminal it just closed even when Include forces the steps" {
+			Kill-All -IncludeCurrent -Include CenterTerminal, FocusTerminal
+
+			Should -Invoke Center-Terminal -Times 0
+			Should -Invoke Focus-TerminalTab -Times 0
+		}
+	}
+
+	Context "When KillAll config disables steps" {
+		It "Should skip only the Docker step when Steps.Docker is false" {
+			$global:Configuration.KillAll = @{ Steps = @{ Docker = $false } }
+
+			Kill-All
+
+			Should -Invoke DockerWizard -Times 0
+			Should -Invoke Remove-VirtualDesktops -Times 1 -Exactly
+			Should -Invoke Terminate-AllBrowserProcesses -Times 1 -Exactly
+			Should -Invoke Terminate-AllProcessesWithVisibleWindows -Times 1 -Exactly
+			Should -Invoke Terminate-AllProcessesByName -Times 1 -Exactly
+			Should -Invoke Terminate-WindowsTerminalTabs -Times 1 -Exactly
+			Should -Invoke Center-Terminal -Times 1 -Exactly
+			Should -Invoke Focus-TerminalTab -Times 1 -Exactly
+		}
+
+		It "Should skip terminal tab termination when Steps.TerminalTabs is false" {
+			$global:Configuration.KillAll = @{ Steps = @{ TerminalTabs = $false } }
+
+			Kill-All
+
+			Should -Invoke Terminate-WindowsTerminalTabs -Times 0
+		}
+
+		It "Should skip centering but still focus when only Steps.CenterTerminal is false" {
+			$global:Configuration.KillAll = @{ Steps = @{ CenterTerminal = $false } }
+
+			Kill-All
+
+			Should -Invoke Center-Terminal -Times 0
+			Should -Invoke Focus-TerminalTab -Times 1 -Exactly
+		}
+
+		It "Should skip focusing but still center when only Steps.FocusTerminal is false" {
+			$global:Configuration.KillAll = @{ Steps = @{ FocusTerminal = $false } }
+
+			Kill-All
+
+			Should -Invoke Center-Terminal -Times 1 -Exactly
+			Should -Invoke Focus-TerminalTab -Times 0
+		}
+
+		It "Should reload the profile without the switch when Steps.ReloadProfile is true" {
+			$global:Configuration.KillAll = @{ Steps = @{ ReloadProfile = $true } }
+
+			Kill-All
+
+			Should -Invoke Reload-PowerShellProfile -Times 1 -Exactly
+		}
+	}
+
+	Context "When steps use machine-type hashtables" {
+		It "Should skip the step when the machine type maps to false" {
+			$global:MachineType = "Test"
+			$global:Configuration.KillAll = @{ Steps = @{ Docker = @{ Default = $true; Test = $false } } }
+
+			Kill-All
+
+			Should -Invoke DockerWizard -Times 0
+		}
+
+		It "Should fall back to Default when the machine type is not mapped" {
+			$global:MachineType = "Laptop"
+			$global:Configuration.KillAll = @{ Steps = @{ Docker = @{ Default = $true; Test = $false } } }
+
+			Kill-All
+
+			Should -Invoke DockerWizard -Times 1 -Exactly
+		}
+
+		It "Should use the built-in default when neither the machine type nor Default is mapped" {
+			$global:MachineType = "Laptop"
+			$global:Configuration.KillAll = @{ Steps = @{ Docker = @{ Test = $false } } }
+
+			Kill-All
+
+			Should -Invoke DockerWizard -Times 1 -Exactly
+		}
+	}
+
+	Context "When Skip and Include override config" {
+		It "Should skip a config-enabled step with -Skip" {
+			Kill-All -Skip Docker
+
+			Should -Invoke DockerWizard -Times 0
+			Should -Invoke Terminate-AllBrowserProcesses -Times 1 -Exactly
+		}
+
+		It "Should skip multiple steps with -Skip" {
+			Kill-All -Skip Docker, Browsers
+
+			Should -Invoke DockerWizard -Times 0
+			Should -Invoke Terminate-AllBrowserProcesses -Times 0
+			Should -Invoke Terminate-AllProcessesWithVisibleWindows -Times 1 -Exactly
+		}
+
+		It "Should run a config-disabled step with -Include" {
+			$global:Configuration.KillAll = @{ Steps = @{ Docker = $false } }
+
+			Kill-All -Include Docker
+
+			Should -Invoke DockerWizard -Times 1 -Exactly -ParameterFilter { $Stop }
+		}
+
+		It "Should let -Skip win and warn when a step is in both -Skip and -Include" {
+			Kill-All -Skip Docker -Include Docker
+
+			Should -Invoke DockerWizard -Times 0
+			Should -Invoke Write-LogWarning -Times 1 -Exactly -ParameterFilter { $Message -match "Docker" }
 		}
 	}
 

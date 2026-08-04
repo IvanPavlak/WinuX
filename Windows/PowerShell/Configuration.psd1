@@ -2286,6 +2286,50 @@
 		MaxHeightPercent = 75
 	}
 
+	# ==========================================================================
+	# Kill-All Step Toggles
+	# ==========================================================================
+	# → Consumer: Kill-All
+	#
+	# Enables/disables individual Kill-All cleanup steps. Each step is either a
+	# plain boolean or a per-machine-type hashtable with a Default fallback
+	# (the BootstrapConfig.WSLSetup shape), e.g.:
+	#   Docker = @{ Default = $true; Laptop = $false }
+	#
+	# The whole section and individual keys are optional - missing entries use
+	# the built-in defaults (everything on except ReloadProfile), so an absent
+	# section reproduces the classic full run. Override single steps in
+	# Configuration.local.psd1 - hashtables deep-merge per key, so only the
+	# steps you change need restating.
+	#
+	# Per invocation, Kill-All -Skip <steps> forces steps off and
+	# Kill-All -Include <steps> forces them on, both overriding this config.
+	#
+	# Steps (in execution order):
+	# - VirtualDesktops : Remove-VirtualDesktops
+	# - Docker          : DockerWizard -Stop
+	# - Browsers        : Terminate-AllBrowserProcesses
+	# - VisibleWindows  : Terminate-AllProcessesWithVisibleWindows
+	# - NamedProcesses  : Terminate-AllProcessesByName
+	# - TerminalTabs    : Terminate-WindowsTerminalTabs
+	# - CenterTerminal  : Center-Terminal (only without -IncludeCurrent)
+	# - FocusTerminal   : Focus-TerminalTab (only without -IncludeCurrent)
+	# - ReloadProfile   : Reload-PowerShellProfile (off by default)
+	# ==========================================================================
+	KillAll                       = @{
+		Steps = @{
+			VirtualDesktops = $true
+			Docker          = $true
+			Browsers        = $true
+			VisibleWindows  = $true
+			NamedProcesses  = $true
+			TerminalTabs    = $true
+			CenterTerminal  = $true
+			FocusTerminal   = $true
+			ReloadProfile   = $false
+		}
+	}
+
 	# Layout Name to Number Mappings
 	# Used by Apply-FancyZones to trigger keyboard shortcuts (Ctrl+Alt+Win+0-9)
 	# The number corresponds to the FancyZones layout hotkey

@@ -85,7 +85,7 @@ Process lists consumed by the `Kill-All` desktop cleanup flow.
 - `TerminateProcessNames` - Process names force-terminated by `Terminate-AllProcessesByName`. The base configuration ships a minimal example list (`Code`); keep your real cleanup targets in `Configuration.local.psd1` (the override replaces the array wholesale on merge).
 - `VisibleWindowExclusions` - Process names `Terminate-AllProcessesWithVisibleWindows` never force-kills. Browser processes from `Browsers` are excluded automatically. The PowerToys entries are load-bearing (see the warning in the [System module](../modules/system.md#terminate-allprocesseswithvisiblewindows)); never remove them.
 
-Both functions warn and terminate nothing when their list is absent or empty.
+Both functions warn and terminate nothing when their list is absent or empty. To toggle whole `Kill-All` steps on/off (not just their process lists), see [Kill-All Step Toggles](#kill-all-step-toggles).
 
 **Consumer functions:** `Terminate-AllProcessesByName`, `Terminate-AllProcessesWithVisibleWindows`
 
@@ -621,6 +621,45 @@ Keep your real, machine-tagged list in `Configuration.local.psd1` (it replaces t
 wholesale on merge).
 
 **Consumer functions:** `Configure-Taskbar`, `Clear-TaskbarPins`, `Unpin-TaskbarApps`
+
+### Kill-All Step Toggles
+
+Enables/disables individual `Kill-All` cleanup steps. `KillAll` is a top-level section (not under `Universal`). Each step value is either a plain boolean or a per-machine-type hashtable with a `Default` fallback (the `BootstrapConfig.WSLSetup` shape). The whole section and individual keys are optional — missing entries use the built-in defaults (everything on except `ReloadProfile`), so an absent section reproduces the classic full run.
+
+**Keys:**
+
+- `KillAll.Steps.VirtualDesktops` - `Remove-VirtualDesktops` (default: on)
+- `KillAll.Steps.Docker` - `DockerWizard -Stop` (default: on)
+- `KillAll.Steps.Browsers` - `Terminate-AllBrowserProcesses` (default: on)
+- `KillAll.Steps.VisibleWindows` - `Terminate-AllProcessesWithVisibleWindows` (default: on)
+- `KillAll.Steps.NamedProcesses` - `Terminate-AllProcessesByName` (default: on)
+- `KillAll.Steps.TerminalTabs` - `Terminate-WindowsTerminalTabs` (default: on)
+- `KillAll.Steps.CenterTerminal` - `Center-Terminal`, only without `-IncludeCurrent` (default: on)
+- `KillAll.Steps.FocusTerminal` - `Focus-TerminalTab`, only without `-IncludeCurrent` (default: on)
+- `KillAll.Steps.ReloadProfile` - `Reload-PowerShellProfile` (default: **off**)
+
+Per invocation, `Kill-All -Skip <steps>` forces steps off and `Kill-All -Include <steps>` forces them on, both overriding this config (`-Skip` wins when a step appears in both).
+
+**Consumer functions:** `Kill-All`, `Resolve-KillAllSteps`
+
+**Example:**
+
+```powershell
+# Configuration.local.psd1 - hashtables deep-merge per key, so only the steps
+# you change need restating:
+KillAll = @{
+    Steps = @{
+        Docker = $false
+    }
+}
+
+# Per-machine-type value with Default fallback:
+KillAll = @{
+    Steps = @{
+        Docker = @{ Default = $true; Laptop = $false }
+    }
+}
+```
 
 ---
 

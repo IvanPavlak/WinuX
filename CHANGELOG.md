@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.25] - 2026-08-04
+
+### Added
+
+- `KillAll.Steps` (configuration): per-step toggles for the `Kill-All` cleanup sequence. Every step it runs - `VirtualDesktops`, `Docker`, `Browsers`, `VisibleWindows`, `NamedProcesses`, `TerminalTabs`, `CenterTerminal`, `FocusTerminal`, `ReloadProfile` - can now be enabled or disabled from `Configuration.psd1` / `Configuration.local.psd1`, so a user who never wants `DockerWizard -Stop` in their cleanup turns it off once instead of living with the full fixed sequence. Each entry is either a plain boolean or a per-machine-type hashtable with a `Default` fallback (the `BootstrapConfig.WSLSetup` shape, resolved with the same explicit `$null` checks because `$false` is a real value), so one shared config can, say, stop Docker on the PC but leave it alone on the laptop. The section and every key in it are optional, and the built-in defaults (everything on except `ReloadProfile`) reproduce the exact pre-existing behavior, so an absent section changes nothing; because hashtables deep-merge per key, a local override restates only the steps it changes.
+- `Kill-All -Skip` and `Kill-All -Include` (System module): per-invocation overrides for the same step names, both tab-completing via `ValidateSet`. `-Skip` forces steps off for that run, `-Include` forces them on even when config disables them, and `-Skip` wins with a warning when a step appears in both - so the resolution order is always parameter over config over built-in default. `-ReloadPowerShellProfile` is unchanged and now equivalent to `-Include ReloadProfile`; `-IncludeCurrent` still suppresses `CenterTerminal` and `FocusTerminal` regardless of config, since there is no surviving tab to restore. Disabled steps are listed in the verbose output so a trimmed run shows its shape.
+- `Resolve-KillAllSteps` (System module): the resolver behind the above, as an exported function of its own rather than a private helper - which is what the repository asks for in the first place. It takes the `-Skip`/`-Include` arrays and resolves every step in a single pass, returning an ordered step → boolean map in execution order; `Kill-All` calls it exactly once per invocation, and the built-in defaults table lives inside it rather than being restated at each call site. Its only side effect is the both-`-Skip`-and-`-Include` warning, so it is also safe to call ad hoc to inspect what a `Kill-All` invocation would do with the current config.
+
 ## [0.1.24] - 2026-08-04
 
 ### Added
@@ -372,7 +380,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.24...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.25...HEAD
+[0.1.25]: https://github.com/IvanPavlak/WinuX/compare/v0.1.24...v0.1.25
 [0.1.24]: https://github.com/IvanPavlak/WinuX/compare/v0.1.23...v0.1.24
 [0.1.23]: https://github.com/IvanPavlak/WinuX/compare/v0.1.22...v0.1.23
 [0.1.22]: https://github.com/IvanPavlak/WinuX/compare/v0.1.21...v0.1.22
