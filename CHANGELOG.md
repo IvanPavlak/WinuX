@@ -8,6 +8,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.24] - 2026-08-04
+
+### Added
+
+- `Invoke-LogMaintenance` (Logging module): the periodic, silent housekeeping sweep over every log the repository generates, and the piece that makes retention actually happen on machines that only ever open shells. `Clear-OldLogs` has always enforced the session-log limits, but nothing called it in an ordinary session - it runs from `Stop-Logging`, which only bootstrap flows reach - so a machine that never bootstraps accumulated session logs without bound (nearly 400 of them on the machine that prompted this, against a configured cap of 20). The sweep calls `Clear-OldLogs` with the configured limits, then prunes `Tests\Results` with the same rules `Invoke-TestSuite` applies at run start - run logs beyond the newest ten, worker XMLs whose owning run log is gone, abandoned `Work\` directories - so `Results/` stays bounded even on a machine that stopped running the suite. Everything on the Results side is age-gated to one day, because a live test run's artifacts exist before its run log does (the log is merged at the end of the run): without the gate a sweep landing mid-run could delete the XMLs of a run still in flight, and with it nothing younger than a day is eligible while runs last minutes. `timings.json`, `.gitkeep` files and `Logs/Pinned` are never touched. Throttled through a stamp file (`Logs\.last-maintenance`, gitignored), written before the sweep so concurrent shells and a sweep that fails midway cannot re-run it back to back; when the stamp is younger than the configured interval the call returns in about a millisecond. No console output, per-file errors swallowed - the same contract as `Clear-OldLogs`.
+- `Logging.Maintenance` (configuration): `Enabled` (default `$true`) and `IntervalHours` (default `24`), consumed by `Invoke-LogMaintenance` with the same hardcoded fallbacks as the rest of the module. Ships enabled so nobody has to configure anything to get bounded logs; set `Enabled = $false` to opt out and prune manually.
+
+### Changed
+
+- The profile registers a one-shot `PowerShell.OnIdle` engine event that calls `Invoke-LogMaintenance`, which is how the sweep is triggered without shell launch paying anything: registering the subscription costs well under a millisecond, and the action fires only after the prompt has rendered and the shell has been idle ~300ms. The action is silent by construction - an engine-event action's output goes to the eventing system, never the console - and unregisters itself on first fire, so it runs at most once per session. It is registered with `-SupportEvent`, which keeps the subscription and its event job out of `Get-Job` and `Get-EventSubscriber` (a plain registration leaves a completed `PSEventJob` visible in `Get-Job` for the rest of the session; measured and rejected), and is why the self-unregister passes `-Force`. The alternatives were rejected on their own terms: a synchronous profile call is exactly the 50-150ms startup regression this must not cause, and a Windows scheduled task is zero-cost at startup but silently mutates machine state outside the repository and needs per-machine registration and cleanup. On days the sweep already ran, the fired action hits the stamp check and returns in ~1ms.
+- `Stop-Logging` is unchanged and still enforces retention on every bootstrap stop; `Clear-OldLogs`'s help and docs now name both callers.
+
 ## [0.1.23] - 2026-08-03
 
 ### Added
@@ -360,7 +372,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.23...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.24...HEAD
+[0.1.24]: https://github.com/IvanPavlak/WinuX/compare/v0.1.23...v0.1.24
 [0.1.23]: https://github.com/IvanPavlak/WinuX/compare/v0.1.22...v0.1.23
 [0.1.22]: https://github.com/IvanPavlak/WinuX/compare/v0.1.21...v0.1.22
 [0.1.21]: https://github.com/IvanPavlak/WinuX/compare/v0.1.20...v0.1.21

@@ -169,6 +169,19 @@ New-Alias -Name translate -Value Invoke-GoogleTranslate -Force
 . (Join-Path $ModulesPath "System\Functions\Test-PowerPlan.ps1")
 Test-PowerPlan
 
+# Background log maintenance - prunes session logs and stale test-run artifacts at most once per
+# Configuration.Logging.Maintenance.IntervalHours. Registering the engine event costs well under a
+# millisecond, and the action fires only AFTER the prompt is rendered and the shell has been idle
+# ~300ms - so shell launch pays nothing. The action is silent by construction (its output goes to
+# the event system, never the console) and unregisters itself so it fires at most once per session;
+# -SupportEvent keeps the subscription and its event job out of Get-Job / Get-EventSubscriber
+# (which is also why unregistering needs -Force). On already-swept days the fired action hits the
+# stamp-file check inside Invoke-LogMaintenance and returns in ~1ms.
+Register-EngineEvent -SourceIdentifier PowerShell.OnIdle -SupportEvent -Action {
+	try { Invoke-LogMaintenance } catch { }
+	Unregister-Event -SourceIdentifier PowerShell.OnIdle -Force -ErrorAction SilentlyContinue
+}
+
 # Integrity checks are intentionally NOT run at startup (they add ~200ms+ and shell launch
 # must stay fast). Run them on-demand instead:
 #   List-Functions -ListDiscrepancies   - functions loaded vs documented in docs/modules

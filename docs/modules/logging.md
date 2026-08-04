@@ -22,9 +22,14 @@ Verbosity is controlled globally with `Set-LogLevel` (cross-module reliable; a g
 `$VerbosePreference = 'Continue'` is also honored). File logging records every level regardless of
 console verbosity, so the on-disk record is always complete.
 
+Housekeeping is automatic: the profile registers a one-shot idle-time hook that calls
+`Invoke-LogMaintenance` after the prompt is rendered - never during startup, so shell launch pays
+nothing - and the sweep itself runs at most once per `Configuration.Logging.Maintenance.IntervalHours`
+(default 24). No setup is required; set `Maintenance.Enabled = $false` to opt out.
+
 ## [Clear-OldLogs](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Logging/Functions/Clear-OldLogs.ps1)
 
-- **Description:** Enforces log retention so the `Logs/` folder stays small but complete. Prunes session logs (`Session_*.log`) by age, then count, then total size (oldest removed first), and trims the error log past its size cap. Logs in `Logs/Pinned` are never touched. Called automatically by `Stop-Logging`; limits default from `Configuration.Logging.FileLogging.Retention`.
+- **Description:** Enforces log retention so the `Logs/` folder stays small but complete. Prunes session logs (`Session_*.log`) by age, then count, then total size (oldest removed first), and trims the error log past its size cap. Logs in `Logs/Pinned` are never touched. Called automatically by `Stop-Logging` and by the idle-time `Invoke-LogMaintenance` sweep; limits default from `Configuration.Logging.FileLogging.Retention`.
 - **Parameters:** `[-MaxAgeDays]` `[-MaxSessionFiles]` `[-MaxTotalSizeMB]` `[-MaxErrorFileSizeMB]`
 - **Usage:** `Clear-OldLogs`, `Clear-OldLogs -MaxSessionFiles 5`
 
@@ -39,6 +44,12 @@ console verbosity, so the on-disk record is always complete.
 - **Description:** Initializes (or, with `-Force`, resets) the shared `$global:LoggingState` that the engine reads on every call: active verbosity level, color palette, file-logging toggle, and resolved session/error log paths. Reads `Configuration.Logging` when present, falling back to documented defaults. Called lazily by `Write-Log` on first use.
 - **Parameters:** `[-Force]`
 - **Usage:** `Initialize-LoggingState`, `Initialize-LoggingState -Force`
+
+## [Invoke-LogMaintenance](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Logging/Functions/Invoke-LogMaintenance.ps1)
+
+- **Description:** Periodic, silent housekeeping sweep over every log the repository generates. Enforces session-log retention via `Clear-OldLogs`, then prunes stale `Tests\Results` artifacts with the same rules `Invoke-TestSuite` applies at run start: run logs beyond the newest ten, orphaned worker XMLs, and abandoned `Work\` directories - each only when older than a day, so a test run in flight is never touched (`timings.json` and pinned logs are always exempt). Throttled by a stamp file (`Logs\.last-maintenance`) to one sweep per `Configuration.Logging.Maintenance.IntervalHours`; fired automatically from the profile's `PowerShell.OnIdle` hook after the prompt is rendered, so it adds zero startup time. Safe to run manually at any time.
+- **Parameters:** `[-Force]` `[-ResultsDirectory]`
+- **Usage:** `Invoke-LogMaintenance`, `Invoke-LogMaintenance -Force`
 
 ## [Protect-Log](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Logging/Functions/Protect-Log.ps1)
 

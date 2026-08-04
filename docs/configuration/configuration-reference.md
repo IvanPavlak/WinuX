@@ -823,7 +823,7 @@ Sections not detailed above, with their real shapes and consumers:
 | `ExplorerOptions` | array of registry entries (ships fully commented - Win11Debloat covers the defaults) | File Explorer tweaks applied via the registry | `Set-ExplorerOptions` |
 | `AutoEnvironmentVariables` | name → path (placeholders allowed) | User environment variables written by `Set-EnvironmentVariables -Auto` | `Set-EnvironmentVariables` |
 | `AutoPathAdditions` | array of directories | Directories persisted onto the User `PATH` (e.g. Oh My Posh install locations) | `Set-EnvironmentVariables` |
-| `Logging` | `@{ DefaultLevel; Colors; ... }` | Console verbosity at session start (`Quiet`/`Normal`/`Verbose`), per-level console colors, and file-logging settings | Logging module (`Write-Log*`, `Set-LogLevel`) |
+| `Logging` | `@{ DefaultLevel; Colors; ... }` | Console verbosity at session start (`Quiet`/`Normal`/`Verbose`), per-level console colors, file-logging settings, and automatic idle-time log maintenance | Logging module (`Write-Log*`, `Set-LogLevel`, `Invoke-LogMaintenance`) |
 | `BrowserGroupMatching` | `@{ BrowserProcessNames; KeywordExtraction; ... }` | Maps browser labels to process names and tunes URL-keyword extraction for detecting already-open browser groups | `Test-BrowserGroupAlreadyOpen`, `Collect-BrowserUrls` |
 
 ---

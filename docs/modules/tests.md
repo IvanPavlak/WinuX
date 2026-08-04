@@ -66,7 +66,7 @@ Everything a detailed serial run would have printed - every per-test line, and e
 
 `<run>` is `<timestamp>_<PID>`, the same shape the Logging module uses for its session logs. Naming every artifact after its run is what makes concurrent runs safe - a scoped `Run-Tests` in one terminal while a full sweep finishes in another used to have the second run wipe the first's in-flight files and then report results it never produced.
 
-The ten most recent run logs are kept, the same way `Clear-OldLogs` keeps session logs; each run's XMLs are pruned with its log.
+The ten most recent run logs are kept, the same way `Clear-OldLogs` keeps session logs; each run's XMLs are pruned with its log. Retention is enforced twice: at the start of every run by the harness itself, and once a day by the Logging module's idle-time `Invoke-LogMaintenance` sweep - so `Results/` stays bounded even on machines that stopped running the suite.
 
 ### Exit codes
 

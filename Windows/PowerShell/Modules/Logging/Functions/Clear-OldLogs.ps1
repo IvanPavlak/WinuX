@@ -10,8 +10,9 @@ function Clear-OldLogs {
 		its own size cap (the most recent lines are kept).
 
 		Logs in the Logs/Pinned subfolder are NEVER touched - use Protect-Log to move a log there
-		when you want to keep it through ongoing development. Called automatically by Stop-Logging;
-		safe to run manually at any time. Limits default from $Configuration.Logging.FileLogging.Retention.
+		when you want to keep it through ongoing development. Called automatically by Stop-Logging
+		and by the idle-time Invoke-LogMaintenance sweep; safe to run manually at any time. Limits
+		default from $Configuration.Logging.FileLogging.Retention.
 
 	.PARAMETER MaxAgeDays
 		Delete session logs older than this many days. Default from config (fallback 7).
