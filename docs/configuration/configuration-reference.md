@@ -21,11 +21,13 @@ Defines executable paths and command-line arguments for each browser.
 
 - `Browsers` - Hashtable mapping browser names to configurations
     - Each browser: `Exe` (path), `PrivateArg` (privacy mode flag), `NewWindowArg` (new window flag)
-- `DefaultBrowser` - Browser used by `Open-Browser` when no browser specified (default: "Firefox")
+- `DefaultBrowser` - Browser used by `Open-Browser` when no browser specified. The base ships it
+  empty; `Open-Browser` warns and returns until you set one (any `Browsers` key) in
+  `Configuration.local.psd1`.
 
 **Consumer functions:** `Open-Browser`, `Invoke-Browser`, `Open-SecureBrowser`
 
-**Example:**
+**Example (opt-in via `Configuration.local.psd1`):**
 
 ```powershell
 Browsers = @{
@@ -62,6 +64,9 @@ Paths to installed applications used by `Open-*` functions.
 - `FirefoxExe`, `LeagueOfLegendsExe`, `SteamExe`, `RiseupVpnExe`, `DbeaverExe`, `TeamViewerExe`, `FoundryVTTExe`, `NotepadPlusPlusExe`, `VisualStudio2026Exe`, `VirtualBoxExe`, `DockerExe`
 
 **Consumer functions:** `Open-DBeaver`, `Open-Discord`, `Open-Obsidian`, `Open-Acrobat`, `Open-LeagueOfLegends`, etc.
+
+The base ships the personal executable paths (everything except the framework's own tools) empty;
+each `Open-*` consumer warns and no-ops until you set its path in `Configuration.local.psd1`.
 
 ### Universal Paths
 
@@ -533,6 +538,9 @@ Per-machine theme configuration (light/dark).
 
 **Consumer function:** `Set-SystemTheme`
 
+The base ships `Themes` empty; `Set-SystemTheme -Auto` warns and leaves the theme as-is until you
+set it in `Configuration.local.psd1` (there is no Dark fallback).
+
 ### Wallpaper Settings
 
 Machine and theme-specific wallpaper configurations.
@@ -546,7 +554,10 @@ Machine and theme-specific wallpaper configurations.
 
 **Consumer function:** `Set-Wallpaper`, `Set-SystemTheme`
 
-**Example:**
+The base ships both sections empty; `Set-Wallpaper` warns and leaves the wallpaper as-is until you
+set them in `Configuration.local.psd1`.
+
+**Example (opt-in via `Configuration.local.psd1`):**
 
 ```powershell
 WallpaperDarkSettings = @{
@@ -576,12 +587,19 @@ File names resolve against the repository's `Wallpapers/` folder.
 
 **Consumer functions:** `Set-Locale`, `Set-DisplayLanguage`
 
+The base ships all four empty; both consumers warn and leave the system language settings as-is
+until you set them in `Configuration.local.psd1`.
+
 ### Keyboard Layouts
 
 **Key:** `KeyboardLayouts` → Hashtable mapping layout name → hex layout code
-(e.g. `@{ "Croatian" = "0000041A"; "US" = "00000409" }`); `DefaultKeyboardLayoutSet` selects the set to apply
+(e.g. `@{ "Croatian" = "0000041A"; "US" = "00000409" }`); `KeyboardLayoutSets` names layout
+combinations and `DefaultKeyboardLayoutSet` selects the set to apply
 
 **Consumer function:** `Set-KeyboardLayouts`
+
+The base ships these empty; `Set-KeyboardLayouts` warns and leaves the layouts as-is until you set
+them in `Configuration.local.psd1`.
 
 ### Power Plans
 
@@ -591,7 +609,10 @@ Per-machine power plan configuration.
 
 **Consumer function:** `Set-PowerPlan`
 
-**Example:**
+The base ships `PowerPlans` empty; `Set-PowerPlan -Auto` warns and leaves the active plan as-is
+until you set it in `Configuration.local.psd1` (there is no Balanced fallback).
+
+**Example (opt-in via `Configuration.local.psd1`):**
 
 ```powershell
 PowerPlans = @{
@@ -608,6 +629,10 @@ Power button and lid close behavior per machine type.
 
 **Consumer function:** `Set-PowerButtonActions`
 
+The base ships `PowerButtonActions` empty; `Set-PowerButtonActions -Auto` warns and leaves the
+power settings as-is until you set it in `Configuration.local.psd1` (it no longer applies
+hardcoded defaults).
+
 ### Taskbar Configuration
 
 Pinned apps, applied by `Configure-Taskbar`. A flat, ordered array (entry order sets pin order);
@@ -618,13 +643,14 @@ is `AUMID` or `Path` and `Machine` is a scope string (`All`, `Test`, `PC/Laptop`
 against the current machine type by `Test-MachineTypeScope` - the same gate the app CSVs use. A
 row without `Machine` (or a blank one) defaults to `All`, so one list can drive every machine.
 Keep your real, machine-tagged list in `Configuration.local.psd1` (it replaces the base array
-wholesale on merge).
+wholesale on merge). The base ships the section empty; `Configure-Taskbar` warns and leaves the
+existing pins as-is until it is set (an empty list never clears your pins).
 
 **Consumer functions:** `Configure-Taskbar`, `Clear-TaskbarPins`, `Unpin-TaskbarApps`
 
 ### Kill-All Step Toggles
 
-Enables/disables individual `Kill-All` cleanup steps. `KillAll` is a top-level section (not under `Universal`). Each step value is either a plain boolean or a per-machine-type hashtable with a `Default` fallback (the `BootstrapConfig.WSLSetup` shape). The whole section and individual keys are optional — missing entries use the built-in defaults (everything on except `ReloadProfile`), so an absent section reproduces the classic full run.
+Enables/disables individual `Kill-All` cleanup steps. `KillAll` is a top-level section (not under `Universal`). Each step value is either a plain boolean or a per-machine-type hashtable with a `Default` fallback (the `BootstrapConfig.Steps.WSL` shape). The whole section and individual keys are optional - missing entries use the built-in defaults (everything on except `ReloadProfile`), so an absent section reproduces the classic full run.
 
 **Keys:**
 
@@ -668,6 +694,11 @@ KillAll = @{
 Defines symbolic links created by `SymbolicLinkMaker`.
 
 **Key:** `PathTemplates.SymbolicLinks` → Nested hashtable of symlink definitions
+
+The base ships only the framework entries: `PowerShell.Profile` and `PowerShell.Configuration`
+(what persists WinuX into every new shell) plus the three PowerToys FancyZones files the window
+layouts need. Everything else (Git, FastFetch, Oh My Posh, Windows Terminal, LazyGit, ...) is a
+commented example - copy the ones you want into `Configuration.local.psd1`.
 
 **Format:**
 
@@ -739,8 +770,17 @@ Settings used during the Bootstrap process.
 - `DefaultBranch` - Branch that clone/update operations target (default `master`).
 - `RepositoryUpdateScope` - Which repositories Bootstrap clones/updates, per machine type
   (`"All"` / `"Private"` / `"Work"` / `"None"`; `Default` covers unlisted types; absent → `"All"`).
-- `WSLSetup` - Whether Bootstrap provisions WSL, per machine type (`$true`/`$false`; `Default`
-  covers unlisted types; absent → `$true`). The shipped `Test` profile skips WSL.
+- `Steps` - Per-step toggles for the Bootstrap sequence, resolved by `Resolve-BootstrapSteps`.
+  Each step is either a plain boolean or a per-machine-type hashtable with a `Default` fallback
+  (e.g. `WSL = @{ Default = $true; Test = $false }`). The whole section and individual keys are
+  optional - missing entries use the built-in defaults. Most steps default on because their
+  functions no-op when their configuration section is empty; the steps that act the moment they
+  run default OFF and are opted into here: `MicrosoftActivationScripts`, `Win11Debloat`,
+  `DeveloperMode`, `NuGetConfig` (prompts for a GitHub PAT), `LockedStartLayout`. Per invocation,
+  `Bootstrap -Skip <steps>` / `-Include <steps>` override this config. Repository updates are
+  governed by `RepositoryUpdateScope` above, not by a step. The full step list in execution
+  order is documented next to the section in `Configuration.psd1`. The deprecated `WSLSetup`
+  key (same shape as `Steps.WSL`) is still honored when `Steps` carries no `WSL` entry.
 - `PersonalSteps` - Fork-defined optional bootstrap steps run right after `Upgrade-All`. Each
   entry is either a function name string (runs on every machine type) or a hashtable
   `@{ Function = "Install-MyTool"; Machine = "PC/Laptop" }` gated per machine type exactly like
@@ -750,8 +790,8 @@ Settings used during the Bootstrap process.
   personal tools in `Configuration.local.psd1`. Steps that do not resolve are skipped with a
   warning.
 - `ExternalScripts` / `LocalScripts` - URLs and vendored script paths used by optional steps
-  (Microsoft Activation Scripts, Win11Debloat).
-- `PromptForActivation` / `PromptForDebloat` - Whether the optional first-run steps prompt.
+  (Microsoft Activation Scripts, Win11Debloat). The steps themselves are enabled via
+  `Steps.MicrosoftActivationScripts` / `Steps.Win11Debloat` (both off by default).
 - `DataFiles` - Repo-relative paths to the three package CSVs and the Conda environments folder.
 
 **Consumer functions:** `Bootstrap`, `Install-Bootstrap`
@@ -857,11 +897,11 @@ Sections not detailed above, with their real shapes and consumers:
 | Key | Shape | Purpose | Consumer |
 | --- | --- | --- | --- |
 | `MachineOverrides` | `@{ <Type> = @{ ... } }` | Machine-specific values merged over the expanded paths after placeholder expansion - only for what cannot be templated (ships empty) | `Expand-ConfigPaths` |
-| `NerdFonts` + `DefaultNerdFont` | font name → `@{ FolderName; SearchPattern }` | Repo-bundled fonts installable by name; `DefaultNerdFont` selects the one Bootstrap installs | `Configure-NerdFont` |
-| `SpecialFolders` | array of `@{ Path; Name; Value; Description }` registry entries | Special-folder redirections (Downloads/Screenshots → Desktop) | `Set-SpecialFolders` |
-| `ExplorerOptions` | array of registry entries (ships fully commented - Win11Debloat covers the defaults) | File Explorer tweaks applied via the registry | `Set-ExplorerOptions` |
-| `AutoEnvironmentVariables` | name → path (placeholders allowed) | User environment variables written by `Set-EnvironmentVariables -Auto` | `Set-EnvironmentVariables` |
-| `AutoPathAdditions` | array of directories | Directories persisted onto the User `PATH` (e.g. Oh My Posh install locations) | `Set-EnvironmentVariables` |
+| `NerdFonts` + `DefaultNerdFont` | font name → `@{ FolderName; SearchPattern }` | Repo-bundled fonts installable by name; `DefaultNerdFont` selects the one Bootstrap installs (ships empty - `Configure-NerdFont` no-ops until set in `Configuration.local.psd1`) | `Configure-NerdFont` |
+| `SpecialFolders` | array of `@{ Path; Name; Value; Description }` registry entries | Special-folder redirections, e.g. Downloads/Screenshots → Desktop (ships empty - `Set-SpecialFolders` no-ops until set in `Configuration.local.psd1`) | `Set-SpecialFolders` |
+| `ExplorerOptions` | array of registry entries (ships empty - Win11Debloat covers the defaults) | File Explorer tweaks applied via the registry | `Set-ExplorerOptions` |
+| `AutoEnvironmentVariables` | name → path (placeholders allowed) | User environment variables written by `Set-EnvironmentVariables -Auto` (ships empty - no-ops until set in `Configuration.local.psd1`) | `Set-EnvironmentVariables` |
+| `AutoPathAdditions` | array of directories | Directories persisted onto the User `PATH`, e.g. Oh My Posh install locations (ships empty - no-ops until set in `Configuration.local.psd1`) | `Set-EnvironmentVariables` |
 | `Logging` | `@{ DefaultLevel; Colors; ... }` | Console verbosity at session start (`Quiet`/`Normal`/`Verbose`), per-level console colors, file-logging settings, and automatic idle-time log maintenance | Logging module (`Write-Log*`, `Set-LogLevel`, `Invoke-LogMaintenance`) |
 | `BrowserGroupMatching` | `@{ BrowserProcessNames; KeywordExtraction; ... }` | Maps browser labels to process names and tunes URL-keyword extraction for detecting already-open browser groups | `Test-BrowserGroupAlreadyOpen`, `Collect-BrowserUrls` |
 
@@ -879,9 +919,11 @@ Allows waking machines over LAN via `Send-WakeOnLan`, and checking reachability 
 
 The optional `Address` (IP or hostname) makes Wake-on-LAN reliable: `Send-WakeOnLan` pings it to skip machines that are already on, and polls it after sending to confirm the machine actually woke up. Omit it (or set `""`) for fire-and-forget behaviour with no ping checks.
 
+The base ships all three keys empty; `Send-WakeOnLan` and `Test-MachineOnline` warn and no-op until you set them in `Configuration.local.psd1` (no placeholder packet is ever sent).
+
 **Consumer functions:** `Send-WakeOnLan`, `Test-MachineOnline`
 
-**Example:**
+**Example (opt-in via `Configuration.local.psd1`):**
 
 ```powershell
 WakeOnLanConfig = @{
@@ -987,9 +1029,13 @@ ResetAllWindowsDefaults = @{
 
 ## WSL Configuration
 
-**Key:** `DefaultWSLDistribution` → WSL distro name (default: "Ubuntu")
+**Key:** `DefaultWSLDistribution` → WSL distro name
 
 **Consumer functions:** `Configure-WSL`, `Initialize-WSLEnvironment`, `Test-WSLEnabled`
+
+The base ships it empty; WSL provisioning (`Configure-WSL`, `Initialize-WSLEnvironment`,
+`Configure-WSLSSH`), `Open-WSLTab`, and WSL symlinks all no-op until you set a distribution
+(e.g. `"Ubuntu"`) in `Configuration.local.psd1`.
 
 ---
 

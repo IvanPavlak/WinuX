@@ -8,10 +8,14 @@ Open any PowerShell terminal and run:
 
 ```powershell
 Bootstrap
+
+# Skip or force individual steps for one run (overrides BootstrapConfig.Steps)
+Bootstrap -Skip UpgradeAll, WSL
+Bootstrap -Include Win11Debloat
 ```
 
 > [!NOTE]
-> Without `-WithInitialSetup`, Bootstrap skips the initial prompts (Rename-Machine, activation, Start-Win11Debloat).
+> Without `-WithInitialSetup`, Bootstrap skips the first-time-only steps (Rename-Machine, Microsoft Activation Scripts, Win11Debloat - the latter two are opt-in via `BootstrapConfig.Steps` even then). Every step is individually toggleable via `BootstrapConfig.Steps`, with `-Skip`/`-Include` as per-invocation overrides - see [Resolve-BootstrapSteps](../modules/bootstrap.md#resolve-bootstrapsteps).
 
 ## What Happens on Subsequent Runs
 
@@ -26,6 +30,10 @@ Bootstrap is **idempotent** - safe to run multiple times:
 | **Symbolic Links**        | Re-creates (safe if already exist)             |
 | **Environment Variables** | Re-applies (no-op if already set)              |
 | **Taskbar**               | Reconfigures pinned apps                       |
+
+Steps whose configuration section is empty (the base default) no-op with a "not configured"
+warning - a run on the empty base changes nothing personal. Opt in per feature via
+`Configuration.local.psd1`.
 
 ## Common Commands
 

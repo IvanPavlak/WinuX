@@ -103,7 +103,7 @@ Install-FromExecutable -Name "MyApp" -Path "D:\installers\myapp-setup.exe" -Argu
 - **Description:** Installs the required PowerShell modules from PSGallery (Terminal-Icons, PSReadLine, z, VirtualDesktop, ps2exe, Pester). Ensures the NuGet provider and the PSGallery trusted repository are configured first, then installs each module only if it is not already present. Called automatically by Bootstrap.
 - **Usage:** `Install-PowerShellModules`
 
-Ensures the NuGet package provider (minimum 2.8.5.201) is available and that PSGallery is set as a `Trusted` installation policy, then iterates a fixed module list and installs anything missing into the `CurrentUser` scope. VirtualDesktop is pinned to `1.5.11` because it wraps undocumented COM interfaces that break between Windows builds, so only tested/verified versions are used; if a different VirtualDesktop version is present it is reinstalled at the pinned version. Pester is handled separately: Windows ships an unupdatable 3.4.0, so it is installed with `-SkipPublisherCheck` and is left alone only when v5.0.0 or newer is already present. Errors during installation are written in red and rethrown.
+Ensures the NuGet package provider (minimum 2.8.5.201) is available and that PSGallery is set as a `Trusted` installation policy, then iterates a fixed module list and installs anything missing into the `CurrentUser` scope. VirtualDesktop is pinned to `1.5.11` (via the `$pinnedModules` hashtable) because it wraps undocumented COM interfaces that break between Windows builds, so only tested/verified versions are used; if a different VirtualDesktop version is present it is reinstalled at the pinned version. The tested combination this pin belongs to is tracked in the `TESTED VERSIONS` block in `Modules/Bootstrap/Data/WinGetApps.csv` - update both together. Pester is handled separately: Windows ships an unupdatable 3.4.0, so it is installed with `-SkipPublisherCheck` and is left alone only when v5.0.0 or newer is already present. Errors during installation are written in red and rethrown.
 
 | Module           | Purpose                                                             |
 | ---------------- | ------------------------------------------------------------------- |
@@ -229,7 +229,7 @@ Open-Acrobat -Pdf "MyDocs","OtherDocs"
 - **Parameters:** -Groups, -Private, -NoMenu, -Search, -Browser, -Override, -Instances
 - **Usage:** `Open-Browser`, `Open-Browser GroupName`, `Open-Browser Parent.ChildGroup`, `Open-Browser GroupA,GroupB`, `Open-Browser -Search "search terms"`, `Open-Browser -Private GroupName`, `Open-Browser GroupName -Override`, `Open-Browser -NoMenu -Browser PreferredBrowser -Instances 2`
 
-The default browser is read from `Configuration.Universal.DefaultBrowser`; browser definitions (executable path, private/incognito argument, new-window argument) come from `Configuration.Universal.Browsers`, so any browser key defined there (e.g. Firefox, Chrome, Edge, Brave, Tor) can be passed to `-Browser`. Groups support unlimited hierarchical nesting and are addressed with dot-notation. Private mode cannot be combined with group opening (it falls back to normal mode for groups) but does support `-Search`. `-Instances N` is rerun-safe: it counts how many matching windows already exist and opens only the deficit.
+The default browser is read from `Configuration.Universal.DefaultBrowser`; the base ships it empty, so the function warns and returns until one is set in `Configuration.local.psd1`. Browser definitions (executable path, private/incognito argument, new-window argument) come from `Configuration.Universal.Browsers`, so any browser key defined there (e.g. Firefox, Chrome, Edge, Brave, Tor) can be passed to `-Browser`. Groups support unlimited hierarchical nesting and are addressed with dot-notation. Private mode cannot be combined with group opening (it falls back to normal mode for groups) but does support `-Search`. `-Instances N` is rerun-safe: it counts how many matching windows already exist and opens only the deficit.
 
 | Parameter    | Description                                                                                                                        |
 | ------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
@@ -505,7 +505,7 @@ When a WhatsApp notification arrives while the app is closed, Windows COM-activa
 
 ## [Open-WSLTab](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Open-WSLTab.ps1)
 
-- **Description:** Opens a new WSL tab in the currently focused Windows Terminal window using `wt.exe -w 0 new-tab`. The WSL distribution is read from the `DefaultWSLDistribution` key in `Configuration.psd1`.
+- **Description:** Opens a new WSL tab in the currently focused Windows Terminal window using `wt.exe -w 0 new-tab`. The WSL distribution is read from the `DefaultWSLDistribution` key in `Configuration.psd1`; the base ships it empty, so the function warns and no-ops until one is set in `Configuration.local.psd1`.
 - **Usage:** `Open-WSLTab`
 
 ## [Start-Application](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Start-Application.ps1)
@@ -611,7 +611,7 @@ Set-LogLevel Verbose { Start-FancyZones }
 - **Parameters:** -Selection, -Override
 - **Usage:** `Start-MicrosoftActivationScripts`, `Start-MicrosoftActivationScripts -Override`, `Start-MicrosoftActivationScripts -Selection Yes`
 
-This function is only called automatically during `Bootstrap -WithInitialSetup` (first-time provisioning). It detects current Windows activation state via `slmgr.vbs /xpr` and detects installed Office by inspecting the registered applications under `HKLM:\Software\RegisteredApplications`. When both Windows is already activated and Office is installed, it returns early unless `-Override` is supplied. Otherwise it presents an interactive Yes/No prompt (defaulting to No) before downloading and running MAS. The underlying activation tooling is the [Microsoft-Activation-Scripts](https://github.com/massgravel/Microsoft-Activation-Scripts) project by massgravel.
+This function is only called automatically during `Bootstrap -WithInitialSetup`, and only when opted in via `BootstrapConfig.Steps.MicrosoftActivationScripts` (off by default - a vanilla bootstrap never runs or prompts for it). It detects current Windows activation state via `slmgr.vbs /xpr` and detects installed Office by inspecting the registered applications under `HKLM:\Software\RegisteredApplications`. When both Windows is already activated and Office is installed, it returns early unless `-Override` is supplied. Otherwise it presents an interactive Yes/No prompt (defaulting to No) before downloading and running MAS. The underlying activation tooling is the [Microsoft-Activation-Scripts](https://github.com/massgravel/Microsoft-Activation-Scripts) project by massgravel.
 
 | Parameter    | Description                                                                                  |
 | ------------ | -------------------------------------------------------------------------------------------- |
@@ -631,7 +631,7 @@ Start-MicrosoftActivationScripts -Selection Yes
 
 ## [Start-Win11Debloat](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Start-Win11Debloat.ps1)
 
-- **Description:** Runs the vendored Win11Debloat script from the local repository to remove bloatware, disable telemetry, and apply system tweaks. Validates administrator privileges first, then runs with saved settings if available or shows the interactive Win11Debloat menu, launching the vendored script through Windows PowerShell because it cannot run under PowerShell 7. Called automatically during `Bootstrap -WithInitialSetup` (first-time provisioning).
+- **Description:** Runs the vendored Win11Debloat script from the local repository to remove bloatware, disable telemetry, and apply system tweaks. Validates administrator privileges first, then runs with saved settings if available or shows the interactive Win11Debloat menu, launching the vendored script through Windows PowerShell because it cannot run under PowerShell 7. Called automatically during `Bootstrap -WithInitialSetup`, but only when opted in via `BootstrapConfig.Steps.Win11Debloat` (off by default - a vanilla bootstrap never runs or prompts for it).
 - **Notes:** Saved settings are symlinked into the vendored script's `Config` folder before the menu is shown, but only when `Windows\Win11Debloat\LastUsedSettings.json` already exists and is non-empty - the link points `Config\LastUsedSettings.json` at the WinuX file, so both a `-RunSavedSettings -Silent` run and a plain interactive `Debloat` run read and write it natively. Missing settings files are not created: without that file no link is made, `Use saved settings` is not offered, and Win11Debloat writes its own `vendor\Config\LastUsedSettings.json`, which the vendored `.gitignore` excludes and WinuX never picks up. To start tracking a new machine's choices, copy that file to `Windows\Win11Debloat\LastUsedSettings.json` so the next run links it.
 - **Parameters:** -Selection (pre-selects a menu option: "Use saved settings", "Debloat", or "Don't debloat")
 - **Usage:** `Start-Win11Debloat`, `Start-Win11Debloat -Selection "Debloat"`
@@ -756,7 +756,8 @@ Update-Win11DebloatVendor -ReleaseTag "2026.05.11"
 ## Configuration Reference
 
 Application launchers read their executable paths and browser definitions from the `Universal`
-section of `Configuration.psd1`:
+section of `Configuration.psd1`. The base ships the personal executable paths and `DefaultBrowser`
+empty - each launcher warns and no-ops until you set its key in `Configuration.local.psd1`:
 
 ```powershell
 Universal = @{

@@ -66,6 +66,12 @@ $result.Subgroups
 
 **See also:** [Open-Browser](../modules/application.md), [Add Browser Group](../configuration/guides/add-browser-group.md)
 
+## [Confirm-ConfigValue](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Confirm-ConfigValue.ps1)
+
+- **Description:** The standard unconfigured-section guard for the empty-by-default configuration: `Test-ConfigValue` plus the "not configured" warning in one call. Returns `$true` when the value is configured; otherwise writes the given warning via `Write-LogWarning` (unless `-Quiet`) and returns `$false`. PowerShell cannot return across scopes, so the early `return` stays at the call site. Use plain `Test-ConfigValue` when no warning should be emitted (pure checks, Debug-level paths, or custom log formatting).
+- **Parameters:** -Value (accepts `$null`), -WarningMessage, -Quiet
+- **Usage:** `if (-not (Confirm-ConfigValue $Configuration.Themes "Themes not configured - leaving system theme as-is!")) { return }`, `if (-not (Confirm-ConfigValue $wolConfig "Wake-on-LAN not configured!" -Quiet:$Quiet)) { return $false }`
+
 ## [Convert-GlobalVariablesToParameters](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Convert-GlobalVariablesToParameters.ps1)
 
 - **Description:** Analyzes a PowerShell function definition and converts every `$global:Variable` reference into a regular parameter with an inferred default value. This makes the function self-contained and suitable for creating standalone executables.
@@ -1037,6 +1043,14 @@ Resolve-Selection -OptionList @("English", "Espanol", "Francais") -PromptMessage
 Resolve-Selection -GroupsConfig $Configuration.BrowserGroups -AllowMultipleSelections
 ```
 
+## [Resolve-Steps](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Resolve-Steps.ps1)
+
+- **Description:** The generic step-map resolver shared by every configurable step set (`Resolve-KillAllSteps` in the System module, `Resolve-BootstrapSteps` in the Bootstrap module are thin wrappers over it). Per step, single-pass tri-state resolution: `-Skip` beats `-Include` beats config (a plain boolean, or a per-machine-type hashtable with a `Default` fallback - the `BootstrapConfig.Steps.WSL` shape) beats the built-in `-Defaults`. `$false` is a real config value, so booleans resolve with explicit `$null` checks rather than truthiness. Returns an ordered hashtable of step name → boolean in the order `-Defaults` defines; the only side effect is a warning for each step that appears in both `-Skip` and `-Include` (the step is skipped).
+- **Parameters:** -Defaults (ordered step → default map, defines the step set and order), -ConfigSteps (the configuration `Steps` hashtable, or `$null`), -Skip, -Include
+- **Usage:** `Resolve-Steps -Defaults ([ordered]@{ Docker = $true }) -ConfigSteps $global:Configuration.KillAll.Steps`, `Resolve-Steps -Defaults $defaults -ConfigSteps $configSteps -Skip Docker, Browsers`
+
+**See also:** [Resolve-KillAllSteps](system.md#resolve-killallsteps), [Resolve-BootstrapSteps](bootstrap.md#resolve-bootstrapsteps)
+
 ## [Run-Project](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Run-Project.ps1)
 
 - **Description:** Opens Windows Terminal tabs for one or more configured runnable projects. Selects from `Configuration.RunnableProjects` (with optional multi-select via `Resolve-Selection`) and runs each project's configured commands in its own tab. Existing terminal tabs for a project are detected and closed first to prevent duplicates, then fresh tabs are opened; a database provider is resolved (prompting when several are configured) and Docker is started when required. Both the project selection and database provider menus default to the first option when Enter is pressed.
@@ -1118,6 +1132,19 @@ if (Test-AdminPrivileges -CheckOnly) { Write-Host "Running as admin" }
 - **Description:** Checks if a Windows Store (AppX) package is not installed. Queries installed AppX packages and returns `$true` if the specified app is not found, or `$false` if it is installed.
 - **Parameters:** -appName
 - **Usage:** `Test-AppNotInstalled -appName "WindowsTerminal"`
+
+## [Test-ConfigValue](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Test-ConfigValue.ps1)
+
+- **Description:** The single "is this configured?" check for the empty-by-default configuration. Returns `$false` for every shape an intentionally empty base value takes: `$null`, an empty or whitespace-only string, an empty array/collection, and an empty hashtable/dictionary. Exists because bare truthiness gets this wrong in PowerShell - an empty hashtable is truthy (`-not @{}` is `$false`), so a guard like `if (-not $Configuration.WakeOnLanConfig)` silently passes an empty section through. Every unconfigured-section guard should use this instead of ad hoc `-not` / `.Count` checks.
+- **Parameters:** -Value (accepts `$null`)
+- **Usage:** `Test-ConfigValue $global:Configuration.Themes`, `if (-not (Test-ConfigValue $Configuration.WakeOnLanConfig)) { Write-LogWarning "..."; return }`
+
+```powershell
+Test-ConfigValue ""        # $false
+Test-ConfigValue @{}       # $false
+Test-ConfigValue @()       # $false
+Test-ConfigValue @("x")    # $true
+```
 
 ## [Test-HasEfCoreDesign](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Test-HasEfCoreDesign.ps1)
 

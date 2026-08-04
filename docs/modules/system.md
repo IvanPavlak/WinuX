@@ -125,7 +125,7 @@ Configure-PostgreSqlPasswords -DefaultOrCurrentPassword foo -NewPassword bar
 
 ## [Configure-Taskbar](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Configure-Taskbar.ps1)
 
-- **Description:** Configures the Windows taskbar pins from configuration. Clears all existing pins (via `Unpin-TaskbarApps`), builds an XML layout from `TaskbarConfiguration` in `Configuration.psd1`, then applies it with an unlock -> apply -> restart Explorer -> lock sequence optimized for Windows 11. Requires administrator privileges.
+- **Description:** Configures the Windows taskbar pins from configuration. When `TaskbarConfiguration` is not configured (the empty base default), it warns and leaves the existing pins as-is - the destructive clearing never runs on an empty section. When it is configured, it clears all existing pins (via `Unpin-TaskbarApps`), builds an XML layout from `TaskbarConfiguration` in `Configuration.psd1`, then applies it with an unlock -> apply -> restart Explorer -> lock sequence optimized for Windows 11. Requires administrator privileges.
 - **Parameters:** -FromBootstrap
 - **Usage:** `Configure-Taskbar`, `Configure-Taskbar -FromBootstrap`
 
@@ -147,7 +147,7 @@ Configure-Taskbar -FromBootstrap
 
 ## [Configure-WSL](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Configure-WSL.ps1)
 
-- **Description:** Enables the Windows Subsystem for Linux optional feature (if not already enabled) and installs the default WSL distribution read from `DefaultWSLDistribution` in `Configuration.psd1` (if not already installed). On first installation it launches WSL so you can set up the user account. Requires administrator privileges.
+- **Description:** Enables the Windows Subsystem for Linux optional feature (if not already enabled) and installs the default WSL distribution read from `DefaultWSLDistribution` in `Configuration.psd1` (if not already installed). The base ships that key empty, so the function warns and skips WSL setup until a distribution is set in `Configuration.local.psd1`. On first installation it launches WSL so you can set up the user account. Requires administrator privileges.
 - **Usage:** `Configure-WSL`
 
 Checks `Test-WSLEnabled` and enables the `Microsoft-Windows-Subsystem-Linux` optional feature with `-NoRestart` when needed. It then checks `Test-WSLDistributionInstalled` and, if the distribution is missing, runs `wsl --install -d <distro> --no-launch` followed by a bare `wsl` launch for the initial setup. On that first launch you are prompted to create the WSL user account (username and a sudo password); use `exit` to let setup continue. Both stages are idempotent and report when WSL or the distribution is already present.
@@ -193,7 +193,7 @@ Determine-DotnetDependencies -SearchPath C:\repos -ListProjects
 - **Description:** Enables Windows Developer Mode by setting the registry value `AllowDevelopmentWithoutDevLicense` to `1` under `HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock`. Developer Mode allows running unsigned scripts and unpacked UWP apps, and is required for creating symlinks without admin (used by SymbolicLinkMaker for Windows symlinks outside Bootstrap; WSL symlinks do not require it). Requires administrator privileges.
 - **Usage:** `Enable-DeveloperMode`
 
-The function first calls `Test-AdminPrivileges`, then checks whether `AllowDevelopmentWithoutDevLicense` under `HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock` is already set to `1`. If not, it creates the key as needed and sets the value. The optional `Tools.DeveloperMode` capability (Device Portal / SSH for remote UWP debugging) is deliberately not installed — it needs online Windows Update servicing and can stall bootstrap for minutes on fresh machines; install it manually with `Get-WindowsCapability -Online -Name "Tools.DeveloperMode*" | Add-WindowsCapability -Online` if ever needed. The operation is idempotent: if Developer Mode is already enabled it reports so and makes no changes.
+The function first calls `Test-AdminPrivileges`, then checks whether `AllowDevelopmentWithoutDevLicense` under `HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock` is already set to `1`. If not, it creates the key as needed and sets the value. The optional `Tools.DeveloperMode` capability (Device Portal / SSH for remote UWP debugging) is deliberately not installed - it needs online Windows Update servicing and can stall bootstrap for minutes on fresh machines; install it manually with `Get-WindowsCapability -Online -Name "Tools.DeveloperMode*" | Add-WindowsCapability -Online` if ever needed. The operation is idempotent: if Developer Mode is already enabled it reports so and makes no changes. As a Bootstrap step (`BootstrapConfig.Steps.DeveloperMode`) it is off by default - it changes a machine-wide security posture the moment it runs, so a vanilla bootstrap leaves Developer Mode alone; opt in via `Steps` or `Bootstrap -Include DeveloperMode`.
 
 ```powershell
 # Enable Windows Developer Mode (run from an elevated session)
@@ -523,7 +523,7 @@ Even when `Repair-RpcServer` returns `$false`, callers continue their normal flo
 
 ## [Resolve-KillAllSteps](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Resolve-KillAllSteps.ps1)
 
-- **Description:** Resolves which `Kill-All` cleanup steps should run, in a single pass. Returns an ordered hashtable of step name → boolean, in `Kill-All` execution order. Per step, tri-state resolution: `-Skip` beats `-Include` beats config (`KillAll.Steps.<Name>` in `$global:Configuration` - a plain boolean, or a per-machine-type hashtable with a `Default` fallback, the `BootstrapConfig.WSLSetup` shape) beats the built-in defaults (everything on except `ReloadProfile`). `$false` is a real config value, so booleans resolve with explicit `$null` checks rather than truthiness. `Kill-All` calls this exactly once per invocation; the only side effect is a warning per step that appears in both `-Skip` and `-Include` (the step is skipped), so it is also safe to call ad hoc to inspect what a `Kill-All` invocation would do with the current config.
+- **Description:** Resolves which `Kill-All` cleanup steps should run, in a single pass. A thin wrapper over the Helper module's generic [Resolve-Steps](helper.md#resolve-steps). Returns an ordered hashtable of step name → boolean, in `Kill-All` execution order. Per step, tri-state resolution: `-Skip` beats `-Include` beats config (`KillAll.Steps.<Name>` in `$global:Configuration` - a plain boolean, or a per-machine-type hashtable with a `Default` fallback, the `BootstrapConfig.Steps.WSL` shape) beats the built-in defaults (everything on except `ReloadProfile`). `$false` is a real config value, so booleans resolve with explicit `$null` checks rather than truthiness. `Kill-All` calls this exactly once per invocation; the only side effect is a warning per step that appears in both `-Skip` and `-Include` (the step is skipped), so it is also safe to call ad hoc to inspect what a `Kill-All` invocation would do with the current config.
 - **Parameters:** -Skip (step names forced off), -Include (step names forced on)
 - **Usage:** `Resolve-KillAllSteps`, `Resolve-KillAllSteps -Skip Docker, Browsers`
 
@@ -587,7 +587,7 @@ Restart-Machine -Selection "Yes"
 - **Parameters:** -Machine, -TimeoutSeconds, -NoWait
 - **Usage:** `Send-WakeOnLan`, `Send-WakeOnLan -Machine "MyMachine"`, `Send-WakeOnLan -Machine "MyMachine" -NoWait`
 
-Each machine entry specifies a MAC address, subnet-specific broadcast address and port, and optionally an `Address` for verification. With `-NoWait` the function sends the packet only, with no online pre-check or post-send verification (the original fire-and-forget behaviour). Verification is delegated to `Test-MachineOnline`.
+Each machine entry specifies a MAC address, subnet-specific broadcast address and port, and optionally an `Address` for verification. With `-NoWait` the function sends the packet only, with no online pre-check or post-send verification (the original fire-and-forget behaviour). Verification is delegated to `Test-MachineOnline`. The base ships `WakeOnLanConfig` / `WakeOnLanMachines` empty; both functions warn and no-op until they are set in `Configuration.local.psd1` - no packet is ever sent from an empty config.
 
 | Parameter         | Description                                                                                                      |
 | ----------------- | ---------------------------------------------------------------------------------------------------------------- |
@@ -774,7 +774,7 @@ Set-LogLevel Verbose { Set-LockScreenWallpaper }
 - **Parameters:** -Auto, -PowerButtonOnBattery, -PowerButtonPluggedIn, -SleepButtonOnBattery, -SleepButtonPluggedIn, -LidCloseOnBattery, -LidClosePluggedIn, -DisableFastStartup, -DisableSleep, -DisableHibernate
 - **Usage:** `Set-PowerButtonActions -Auto`, `Set-PowerButtonActions`, `Set-PowerButtonActions -PowerButtonPluggedIn "ShutDown" -PowerButtonOnBattery "Sleep"`, `Set-PowerButtonActions -Auto -LidCloseOnBattery Hibernate`
 
-With `-Auto`, the function determines the machine type and reads its block from `PowerButtonActions` in `Configuration.psd1`; explicit parameters override the configured values, and missing nullable toggles are left unmanaged. Without `-Auto`, omitted action parameters fall back to hardcoded defaults. The six button/lid actions are written through `powercfg` and reinforced directly in the registry across every power scheme, then the active scheme is re-activated to force the changes to take effect.
+With `-Auto`, the function determines the machine type and reads its block from `PowerButtonActions` in `Configuration.psd1`; explicit parameters override the configured values, and missing nullable toggles are left unmanaged. When `PowerButtonActions` is not configured (the empty base default) or has no entry for the machine type, a bare `-Auto` warns and leaves the power settings as-is - it no longer applies hardcoded defaults; only explicitly passed parameters are applied (over the built-in defaults as base). Without `-Auto`, omitted action parameters fall back to hardcoded defaults. The six button/lid actions are written through `powercfg` and reinforced directly in the registry across every power scheme, then the active scheme is re-activated to force the changes to take effect.
 
 | Parameter               | Description                                                                                               |
 | ----------------------- | --------------------------------------------------------------------------------------------------------- |
@@ -807,7 +807,7 @@ Set-PowerButtonActions -PowerButtonPluggedIn "ShutDown" -PowerButtonOnBattery "S
 
 ## [Set-PowerPlan](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Set-PowerPlan.ps1)
 
-- **Description:** Sets the Windows power plan to Balanced, HighPerformance, or UltimatePerformance. With `-Auto`, reads the plan for the current machine type from `PowerPlans[MachineType]` in `Configuration.psd1` and applies it. Without `-Auto` and without an explicit `-Mode`, prompts for interactive selection (defaults to Balanced). Idempotent - skips if the plan is already active. Requires administrator privileges.
+- **Description:** Sets the Windows power plan to Balanced, HighPerformance, or UltimatePerformance. With `-Auto`, reads the plan for the current machine type from `PowerPlans[MachineType]` in `Configuration.psd1` and applies it; when `PowerPlans` is not configured (the empty base default) or has no entry for the machine type, `-Auto` warns and leaves the active plan as-is (there is no Balanced fallback). Without `-Auto` and without an explicit `-Mode`, prompts for interactive selection (defaults to Balanced). Idempotent - skips if the plan is already active. Requires administrator privileges.
 - **Parameters:** -Auto, -Mode [Balanced | HighPerformance | UltimatePerformance]
 - **Usage:** `Set-PowerPlan -Auto`, `Set-PowerPlan`, `Set-PowerPlan -Mode UltimatePerformance`
 
@@ -845,7 +845,7 @@ PowerPlans = @{
 - **Description:** Redirects Windows special folders (such as Downloads and Screenshots) to custom paths defined in the `SpecialFolders` key of `Configuration.psd1`. Placeholder paths (e.g. `{Dev}`, `{User}`) are expanded before the redirections are written via registry entries. Requires administrator privileges.
 - **Usage:** `Set-SpecialFolders`
 
-Reads the redirection list from `SpecialFolders` in `Configuration.psd1`, expands any placeholders against the current machine's base paths, and applies each one through the `User Shell Folders` registry key. It first compares the current registry values to the desired ones and skips writing if everything is already correctly mapped (idempotent). By default the shipped configuration redirects Downloads and Screenshots to the Desktop.
+Reads the redirection list from `SpecialFolders` in `Configuration.psd1`, expands any placeholders against the current machine's base paths, and applies each one through the `User Shell Folders` registry key. It first compares the current registry values to the desired ones and skips writing if everything is already correctly mapped (idempotent). The base ships the section empty; the function warns and leaves the folder redirections as-is until it is set in `Configuration.local.psd1` (the commented examples redirect Downloads and Screenshots to the Desktop).
 
 ```powershell
 # Redirect all configured special folders (run as administrator)
@@ -854,7 +854,7 @@ Set-SpecialFolders
 
 ## [Set-SystemTheme](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Set-SystemTheme.ps1)
 
-- **Description:** Sets the Windows system theme (Dark or Light) by modifying the relevant registry entries, then keeps the desktop wallpaper and lock screen image in sync. With `-Auto` it reads the theme for the current machine type from `Configuration.Themes[MachineType]`; with `-Theme` it applies an explicit theme; with no argument it defaults to Dark. Idempotent: if the theme is already configured it still re-applies the wallpapers. Requires administrator privileges.
+- **Description:** Sets the Windows system theme (Dark or Light) by modifying the relevant registry entries, then keeps the desktop wallpaper and lock screen image in sync. With `-Auto` it reads the theme for the current machine type from `Configuration.Themes[MachineType]`; when `Themes` is not configured (the empty base default) or has no entry for the machine type, `-Auto` warns and leaves the system theme as-is (there is no Dark fallback). With `-Theme` it applies an explicit theme; with no argument at all it defaults to Dark. Idempotent: if the theme is already configured it still re-applies the wallpapers. Requires administrator privileges.
 - **Parameters:** -Theme [Dark | Light], -Auto, -KeepTerminalOpen
 - **Usage:** `Set-SystemTheme -Auto`, `Set-SystemTheme -Auto -KeepTerminalOpen`, `Set-SystemTheme -Theme Dark`, `Set-SystemTheme -Theme Light`
 
@@ -863,7 +863,7 @@ Writes `AppsUseLightTheme`, `SystemUsesLightTheme`, and `ColorPrevalence` under 
 | Parameter           | Type     | Description                                                                                                                               |
 | ------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | `-Theme`            | `string` | Explicit theme to apply: `Dark` or `Light`. Omit when using `-Auto`.                                                                      |
-| `-Auto`             | `switch` | Reads the theme for the detected machine type from `Configuration.Themes[MachineType]` (defaults to Dark if the machine type is unknown). |
+| `-Auto`             | `switch` | Reads the theme for the detected machine type from `Configuration.Themes[MachineType]`; warns and leaves the theme as-is when unconfigured. |
 | `-KeepTerminalOpen` | `switch` | Skips the default delayed close of the current Windows Terminal tab after a successful run.                                               |
 
 ```powershell
@@ -1112,7 +1112,7 @@ Set-LogLevel Verbose { Terminate-WindowsTerminalTabs }
 - **Parameters:** -Machine, -Address, -DisplayName, -WaitForOnline, -TimeoutSeconds (default 120), -IntervalSeconds (default 3), -PingTimeoutMilliseconds (default 1000), -Quiet
 - **Usage:** `Test-MachineOnline -Machine "MyMachine"`, `Test-MachineOnline -Address 192.0.2.10 -WaitForOnline -TimeoutSeconds 90`, `if (Test-MachineOnline -Machine "MyMachine" -Quiet) { "MyMachine is up" }`
 
-Pings a target to determine whether it is currently powered on and reachable. With `-Machine`, the target is looked up by name in `WakeOnLanConfig` and its `Address` field is used; with `-Address`, the given IP/hostname is pinged directly (this is the path `Send-WakeOnLan` uses). In single-check mode it pings once and reports the result. In wait-for-online mode it polls at `-IntervalSeconds` intervals, printing a live countdown, until the host responds or the timeout elapses.
+Pings a target to determine whether it is currently powered on and reachable. With `-Machine`, the target is looked up by name in `WakeOnLanConfig` and its `Address` field is used; when `WakeOnLanConfig` is not configured (the empty base default), the lookup warns and returns `$false`. With `-Address`, the given IP/hostname is pinged directly (this is the path `Send-WakeOnLan` uses). In single-check mode it pings once and reports the result. In wait-for-online mode it polls at `-IntervalSeconds` intervals, printing a live countdown, until the host responds or the timeout elapses.
 
 | Parameter                  | Description                                                                                           |
 | -------------------------- | ----------------------------------------------------------------------------------------------------- |

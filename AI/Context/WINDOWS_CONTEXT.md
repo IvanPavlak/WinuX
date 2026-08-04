@@ -152,8 +152,9 @@ TerminalTabs = @{
 - **Verifying a change (agents)**: do NOT run the suite yourself - ask the developer to run the scoped command and report failures:
     - Just what changed (preferred): `Run-Tests -TestName "<ChangedFunctionOrPattern>"`
     - Everything (broad changes): `Run-Tests`
-- **Tested Dependencies** (Window module pinned versions):
-    - Microsoft.PowerToys `0.97.1`
-    - VirtualDesktop PS module `1.5.11`
-    - PowerShell `7.5.4`
-    - Windows `25H2` (build 26200)
+- **Tested Dependencies** (source of truth: the `TESTED VERSIONS` block in `Modules/Bootstrap/Data/WinGetApps.csv`):
+    - Microsoft.PowerToys `0.100.2` (pinned by its WinGetApps.csv row)
+    - VirtualDesktop PS module `1.5.11` (pinned via `$pinnedModules` in `Install-PowerShellModules.ps1`)
+    - Pester `5.7.1` (CI pin only: `PESTER_VERSION` in `.github/workflows/tests.yml`; local floats >= 5.0.0)
+    - PowerShell `7.5.4` (not enforced; last tested)
+    - Windows `25H2` (build 26200; not enforced)

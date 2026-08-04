@@ -5,15 +5,17 @@ The Bootstrap module is the **heart of WinuX** - it orchestrates the entire syst
 ## [Bootstrap](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Bootstrap/Functions/Bootstrap.ps1)
 
 - **Description:** The main orchestration function and heart of WinuX. Provisions a complete machine - installs software, configures Windows, and creates symlinks - by running all setup steps in a fixed order. Requires administrator privileges and an active internet connection, and is safe to re-run since every installation and configuration step is idempotent.
-- **Parameters:** -RepoRoot, -WithInitialSetup
-- **Usage:** `Bootstrap`, `Bootstrap -WithInitialSetup`, `Bootstrap -RepoRoot "<DevRoot>\WinuX"`
+- **Parameters:** -RepoRoot, -WithInitialSetup, -Skip, -Include
+- **Usage:** `Bootstrap`, `Bootstrap -WithInitialSetup`, `Bootstrap -RepoRoot "<DevRoot>\WinuX"`, `Bootstrap -Skip UpgradeAll, WSL`
 
 Transforms a fresh Windows installation into a fully configured development environment. The `-WithInitialSetup` switch adds first-time-only steps (machine rename, Windows activation, Win11Debloat) and should be omitted on subsequent runs. If `-RepoRoot` is not supplied it defaults to `$global:MachineSpecificPaths.Projects.Self.Root`. Logging runs via `Start-Logging` / `Stop-Logging` for the duration of the run.
 
+Every step is individually toggleable via `BootstrapConfig.Steps`, resolved once per run by [Resolve-BootstrapSteps](#resolve-bootstrapsteps); `-Skip`/`-Include` override the config per invocation. Most steps also no-op on their own when their configuration section is empty, so an enabled step on the empty base config applies nothing. The opt-in steps that act the moment they run default off: `MicrosoftActivationScripts`, `Win11Debloat`, `DeveloperMode`, `NuGetConfig`, `LockedStartLayout`.
+
 Execution sequence:
 
-1. (`-WithInitialSetup` only) `Rename-Machine`, `Start-MicrosoftActivationScripts`, `Start-Win11Debloat`
-2. `Update-Repositories` - pulls latest dotfiles and all configured repositories
+1. (`-WithInitialSetup` only) `Rename-Machine`, `Start-MicrosoftActivationScripts`, `Start-Win11Debloat` (the latter two opt-in via `Steps`)
+2. `Update-Repositories` - pulls latest dotfiles and all configured repositories; scope governed by `BootstrapConfig.RepositoryUpdateScope` (`"None"` skips), not by a step
 3. Execution policy, Developer Mode, power plan, power button actions
 4. System theme, locale, display language, keyboard layouts
 5. Nerd Font, PowerShell modules, special folder redirections
@@ -24,10 +26,12 @@ Execution sequence:
 10. WSL environment initialization, symbolic links, WSL SSH setup
 11. Lock taskbar layout, restart Explorer, restart machine
 
-| Parameter           | Type   | Required | Description                                                                                                                  |
-| ------------------- | ------ | -------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `-RepoRoot`         | String | No       | Absolute path to the WinuX repository root. Auto-detected from `$global:MachineSpecificPaths.Projects.Self.Root` if omitted. |
-| `-WithInitialSetup` | Switch | No       | Includes first-time-only steps: machine rename, Windows activation, and Win11Debloat. Omit on subsequent runs.               |
+| Parameter           | Type     | Required | Description                                                                                                                  |
+| ------------------- | -------- | -------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `-RepoRoot`         | String   | No       | Absolute path to the WinuX repository root. Auto-detected from `$global:MachineSpecificPaths.Projects.Self.Root` if omitted. |
+| `-WithInitialSetup` | Switch   | No       | Includes first-time-only steps: machine rename, Windows activation, and Win11Debloat. Omit on subsequent runs.               |
+| `-Skip`             | String[] | No       | Step names forced off for this run, overriding `BootstrapConfig.Steps`. See `Resolve-BootstrapSteps` for the step list.      |
+| `-Include`          | String[] | No       | Step names forced on for this run, overriding `BootstrapConfig.Steps`.                                                       |
 
 ```powershell
 # Re-provision the machine (safe for repeated use after initial setup)
@@ -38,6 +42,12 @@ Bootstrap -WithInitialSetup
 
 # Provision using an explicit dotfiles repository path
 Bootstrap -RepoRoot "<DevRoot>\WinuX"
+
+# Re-provision without upgrading packages or touching WSL
+Bootstrap -Skip UpgradeAll, WSL
+
+# Force a config-disabled or default-off step on for one run
+Bootstrap -Include Win11Debloat
 ```
 
 ## [DetermineMachineType](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Bootstrap/Functions/DetermineMachineType.ps1)
@@ -292,6 +302,33 @@ Merge-Hashtable -Target $config -Overrides $overrides
 
 **See also:** [Expand-ConfigPaths](#expand-configpaths)
 
+## [Resolve-BootstrapSteps](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Bootstrap/Functions/Resolve-BootstrapSteps.ps1)
+
+- **Description:** Resolves which Bootstrap provisioning steps should run, in a single pass. A thin wrapper over the Helper module's generic [Resolve-Steps](helper.md#resolve-steps): per step, `-Skip` beats `-Include` beats config (`BootstrapConfig.Steps.<Name>` in `$global:Configuration` - a plain boolean, or a per-machine-type hashtable with a `Default` fallback) beats the built-in defaults. Returns an ordered hashtable of step name → boolean, in Bootstrap execution order. `Bootstrap` calls this exactly once per invocation; the only side effect is a warning per step that appears in both `-Skip` and `-Include` (the step is skipped), so it is also safe to call ad hoc to inspect what a Bootstrap invocation would do with the current config.
+- **Parameters:** -Skip (step names forced off), -Include (step names forced on)
+- **Usage:** `Resolve-BootstrapSteps`, `Resolve-BootstrapSteps -Skip UpgradeAll, WSL`
+
+Step names, in execution order: `RenameMachine`, `MicrosoftActivationScripts`, `Win11Debloat` (these three only run with `-WithInitialSetup`), `ExecutionPolicy`, `DeveloperMode`, `PowerPlan`, `PowerButtonActions`, `SystemTheme`, `Locale`, `DisplayLanguage`, `KeyboardLayouts`, `NerdFont`, `PowerShellModules`, `SpecialFolders`, `WSL`, `WinGetApps`, `ScoopApps`, `ChocolateyApps`, `UpgradeAll`, `DotnetEf`, `EnvironmentVariables`, `CondaEnvironments`, `NuGetConfig`, `Taskbar`, `SymbolicLinks`, `LockedStartLayout`.
+
+Most steps default **on**, because their functions no-op when their configuration section is empty - an enabled step on the empty base config applies nothing. The opt-in exceptions default **off**, because they have no configuration to be empty and act the moment they run: `MicrosoftActivationScripts`, `Win11Debloat`, `DeveloperMode`, `NuGetConfig` (prompts for a GitHub PAT), and `LockedStartLayout`. Repository updates are deliberately not a step - they are governed by `BootstrapConfig.RepositoryUpdateScope` (`"None"` is its off switch).
+
+**Deprecated:** the old `BootstrapConfig.WSLSetup` key (same shape as a `Steps` value) is still honored as a fallback when `Steps` carries no `WSL` entry, so forks that predate `Steps` keep working unmodified. The `PromptForActivation` / `PromptForDebloat` keys are gone entirely - MAS and Win11Debloat no longer prompt on a vanilla install and are opted into via `Steps`.
+
+| Parameter  | Type       | Default | Description                                                      |
+| ---------- | ---------- | ------- | ----------------------------------------------------------------- |
+| `-Skip`    | `string[]` | -       | Step names forced off for this invocation; wins over `-Include`. |
+| `-Include` | `string[]` | -       | Step names forced on for this invocation, overriding config.     |
+
+```powershell
+# What would a parameterless Bootstrap do with the current config?
+Resolve-BootstrapSteps
+
+# Parameter override beats a config-disabled step
+Resolve-BootstrapSteps -Include Win11Debloat
+```
+
+**See also:** [Bootstrap](#bootstrap), [Resolve-Steps](helper.md#resolve-steps), [Configuration Reference: BootstrapConfig](../configuration/configuration-reference.md#bootstrapconfig)
+
 ## [Test-MachineTypeScope](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Bootstrap/Functions/Test-MachineTypeScope.ps1)
 
 - **Description:** Tests whether a machine-scope string (`All`, `PC`, `PC/Laptop`, ...) applies to a machine type, validating every token against `ValidMachineTypes` plus the `All` wildcard. Unknown tokens - e.g. a `Labtop` typo - are reported via `Write-LogError` together with the valid values and contribute nothing to the match, so a misspelled scope can never silently install or skip anything. Matching is case-insensitive. The single gate behind the app CSVs' `Machine` column (`Install-WingetApps`, `Install-ScoopApps`, `Install-ChocolateyApps`) and `BootstrapConfig.PersonalSteps` entries (via `Invoke-PersonalSteps`).
@@ -458,10 +495,9 @@ Each of the three may have a machine-local `<name>.local.csv` beside it, which [
 
 ```csv
 App,Version,Scope,Interactive,Source,Machine
+Microsoft.PowerShell,Latest,d,n,w,All
 Microsoft.WindowsTerminal,Latest,d,n,w,All
-Mozilla.Firefox,Latest,d,n,w,All
-Git.Git,Latest,m,n,w,All
-DBeaver.DBeaver,Latest,d,y,w,PC/Laptop
+Microsoft.PowerToys,0.100.2,d,n,w,All
 ```
 
 | Column      | Values                       | Description               |

@@ -1631,12 +1631,12 @@ Write-WindowInfoBlock -Info $windowInfo
 
 ## Tested Dependency Versions
 
-The Window module relies on specific external software. The versions below are the **known-working, tested combination** as of **2026-07-07** on **Windows 11 25H2** (build 26200). Pinning these versions ensures reliable operation and makes it immediately obvious when a breaking update occurs.
+The Window module relies on specific external software. The **single source of truth** for the known-working, tested combination is the `TESTED VERSIONS` comment block in `Windows/PowerShell/Modules/Bootstrap/Data/WinGetApps.csv` - the table below mirrors it. Tested on **Windows 11 25H2** (build 26200). Pinning these versions ensures reliable operation and makes it immediately obvious when a breaking update occurs.
 
-| Dependency                           | Version      | Install Method                                          | Pinned?                             | Notes                                                                                             |
-| ------------------------------------ | ------------ | ------------------------------------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------- |
-| **Microsoft PowerToys** (FancyZones) | **0.100.2**  | `winget install Microsoft.PowerToys`                    | No (Latest via WinGetApps.csv)      | Core dependency - provides zone layouts, keyboard shortcuts (`Win+Ctrl+Alt+N`), and snap behavior |
-| **VirtualDesktop** PS module         | **1.5.11**   | `Install-Module VirtualDesktop -RequiredVersion 1.5.11` | Yes (Install-PowerShellModules.ps1) | Virtual desktop creation, window moving, desktop switching. Author: Markus Scholtes (PSGallery)   |
+| Dependency                           | Version      | Install Method                                          | Pinned?                                              | Notes                                                                                             |
+| ------------------------------------ | ------------ | ------------------------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| **Microsoft PowerToys** (FancyZones) | **0.100.2**  | `winget install Microsoft.PowerToys --version 0.100.2`  | Yes (0.100.2 via WinGetApps.csv)                     | Core dependency - provides zone layouts, keyboard shortcuts (`Win+Ctrl+Alt+N`), and snap behavior |
+| **VirtualDesktop** PS module         | **1.5.11**   | `Install-Module VirtualDesktop -RequiredVersion 1.5.11` | Yes (`$pinnedModules`, Install-PowerShellModules.ps1) | Virtual desktop creation, window moving, desktop switching. Author: Markus Scholtes (PSGallery)   |
 | **PowerShell**                       | 7.5.4        | `winget install Microsoft.PowerShell`                   | No (Latest)                         | Required for module loading and `Add-Type` compilation                                            |
 | **Windows Terminal**                 | 1.23.x       | `winget install Microsoft.WindowsTerminal`              | No (Latest)                         | Not a direct dependency but the expected execution environment                                    |
 | **.NET System.Windows.Forms**        | 9.0.0        | Built-in (.NET 9 runtime)                               | N/A                                 | Monitor enumeration via `[System.Windows.Forms.Screen]::AllScreens`                               |
@@ -1658,10 +1658,14 @@ When you want to upgrade a pinned dependency:
     - `Snap-AllWindows -All` - keyboard snap and shift-drag fallback
     - `Ensure-VirtualDesktops -Count 3` - create/remove desktops
     - `Visualize-Layouts -Layout "MyWorkspace_PC"` - zone coordinate calculations
-4. If all tests pass, update the pinned version in:
-    - `Modules/Bootstrap/Data/WinGetApps.csv` - for PowerToys
-    - `Modules/Application/Functions/Install-PowerShellModules.ps1` - for VirtualDesktop (`$pinnedModules` hashtable)
-    - This documentation section
+4. If all tests pass, update every enforcement point in lockstep:
+    - `Modules/Bootstrap/Data/WinGetApps.csv` - the `TESTED VERSIONS` comment block (the single
+      source of truth) **and** the pinned `Microsoft.PowerToys` row below it
+    - `Modules/Application/Functions/Install-PowerShellModules.ps1` - the `$pinnedModules`
+      hashtable, for VirtualDesktop
+    - `.github/workflows/tests.yml` - `PESTER_VERSION`, for the CI Pester pin (local installs
+      float >= 5.0.0)
+    - This documentation section (it mirrors the CSV block)
 
 ### Zone Geometry Contract
 
@@ -1862,16 +1866,18 @@ Layout = @(
 
 ### Dependency Version Mismatch
 
-If the Window module stops working after a system update, check versions first:
+If the Window module stops working after a system update, check versions first. The tested
+combination is tracked in the `TESTED VERSIONS` block in
+`Windows/PowerShell/Modules/Bootstrap/Data/WinGetApps.csv`:
 
 ```powershell
-# Check PowerToys version (tested: 0.100.2)
+# Check PowerToys version (pinned: 0.100.2 via WinGetApps.csv)
 winget list --id Microsoft.PowerToys
 
 # Check VirtualDesktop module version (should be 1.5.11)
 Get-InstalledModule -Name VirtualDesktop | Select-Object Name, Version
 
-# Roll PowerToys back to the last tested version if a newer release misbehaves
+# Roll PowerToys back to the pinned version if a manually installed newer release misbehaves
 winget install Microsoft.PowerToys --version 0.100.2 --force
 
 # Downgrade VirtualDesktop if needed
