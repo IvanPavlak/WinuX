@@ -35,7 +35,7 @@ App,Version,Scope,Interactive,Source,Machine
 #   VirtualDesktop       1.5.11   -> $pinnedModules in Modules\Application\Functions\Install-PowerShellModules.ps1
 #   Pester               5.7.1    -> CI only: .github\workflows\tests.yml (PESTER_VERSION);
 #                                    local installs float >= 5.0.0 via Install-PowerShellModules
-#   PowerShell           7.5.4    -> NOT enforced (row below installs Latest; last tested 7.5.4)
+#   PowerShell           7.6.4    -> NOT enforced (row below installs Latest; last tested 7.6.4)
 #   Windows 11           25H2     -> NOT enforced (build 26200; environment, not a package)
 # ===============================================================================================
 Microsoft.PowerShell,Latest,d,n,w,All
