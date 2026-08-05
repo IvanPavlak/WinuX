@@ -573,6 +573,34 @@ Write-Host "Terminal handle: $($termWin.Handle)"
 $termWin = Get-TargetTerminalWindow -TerminalWindowHandle $handle
 ```
 
+## [Get-TerminalTabSnapshot](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Get-TerminalTabSnapshot.ps1)
+
+- **Description:** Captures the tab titles of every open Windows Terminal window as a hashtable keyed by window handle, so two calls can be differenced to learn which tabs a flow actually created. Terminal tabs are not top-level windows, so a before/after diff of window handles cannot see them at all - opening three project tabs in an existing window changes no handle.
+- **Parameters:** -EnsureVisible
+- **Usage:** `Get-TerminalTabSnapshot`, `Get-TerminalTabSnapshot -EnsureVisible`
+
+Keys are **`Int64`** (`IntPtr.ToInt64`), and that matters when reading one back: a hashtable lookup is type-exact, so indexing with a bare `407` literal is an `Int32` lookup that matches nothing and quietly answers `$null` rather than failing. Index with `[int64]` (or with a key taken from the snapshot itself). [Get-WorkspaceOpenDelta](workflow.md#get-workspaceopendelta) normalises whatever key type its `-ExistingTerminalTabs` map arrives with for exactly this reason - unnormalised, a mismatch would make every tab on screen look newly created.
+
+Walks every `WindowsTerminal` window and reads its tab strip through [Get-WindowsTerminalTabTitles](#get-windowsterminaltabtitles) (UI Automation - no focus change, no synthesized keystrokes). Windows whose tabs cannot be read are **omitted entirely** rather than recorded with no tabs: `Get-WindowsTerminalTabTitles` returns `$null` (never an empty array) for exactly that case, and an empty entry would make every one of that window's tabs look newly created the next time the snapshot is differenced.
+
+A terminal is unreadable whenever its virtual desktop is not the visible one, because Windows Terminal composes its tab strip only while the desktop is on screen. That is the normal state at the end of a workspace open - the layout pass has just moved the terminal onto one of the workspace's own desktops - so a snapshot taken then sees nothing and the workspace's tabs become untrackable. `-EnsureVisible` closes that hole via [Ensure-DesktopVisible](window.md#ensure-desktopvisible), briefly bringing an unreadable terminal's desktop up and restoring the view afterwards (even if a read throws). It costs a desktop switch, so callers that only need whatever is readable right now should leave it off; a terminal already on screen never triggers one. Used by `Open-Workspace` (before its actions) and [Get-WorkspaceOpenDelta](workflow.md#get-workspaceopendelta) (after them, with `-EnsureVisible`).
+
+| Parameter         | Description                                                                                                                                       |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `-EnsureVisible`  | Bring an unreadable terminal's virtual desktop on screen long enough to read its tabs, then restore whichever desktop was showing to begin with.   |
+
+```powershell
+# Which tabs did this flow create?
+$before = Get-TerminalTabSnapshot
+Open-Project MyProject
+$after = Get-TerminalTabSnapshot
+
+# Read terminals the workspace layout has already parked on other virtual desktops
+$after = Get-TerminalTabSnapshot -EnsureVisible
+```
+
+**See also:** [Get-WindowsTerminalTabTitles](#get-windowsterminaltabtitles), [Ensure-DesktopVisible](window.md#ensure-desktopvisible), [Get-WorkspaceOpenDelta](workflow.md#get-workspaceopendelta)
+
 ## [Get-WindowsTerminalTabTitles](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Get-WindowsTerminalTabTitles.ps1)
 
 - **Description:** Reads a Windows Terminal window's tab titles through UI Automation - no focus changes, no keystrokes. Enumerates the window's `TabItem` elements and returns their names as a `[string[]]` in tab-strip order, or `$null` - never an empty array - when the tabs cannot be read, so callers can fall back to the legacy Ctrl+Tab cycling it replaces.
@@ -979,6 +1007,26 @@ $ctx = Resolve-EfMigrationDbContext -MigrationProject $proj -StartupProjectDirec
 # $ctx.ContextName        -> e.g. "MyContext" (or $null if none resolved)
 # $ctx.UseExplicitContext -> $true when --context must be passed explicitly
 ```
+
+## [Resolve-HostingTerminalTab](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Resolve-HostingTerminalTab.ps1)
+
+- **Description:** Identifies the Windows Terminal window and tab the current shell is running in, by walking up the parent-process chain until a `WindowsTerminal` parent appears. A flow that closes terminal tabs has to know which one it is standing on, because closing that tab mid-run kills the flow.
+- **Usage:** `$own = Resolve-HostingTerminalTab`
+
+Answering the question by taking the *first* `WindowsTerminal` process picks the wrong window whenever more than one is running - the normal state after an `-Alongside` workspace open - which is why the parent chain is walked instead (capped at 16 hops, so a cycle cannot spin forever). The tab within that window is named by `WT_PROJECT_TAB` when it is set: `Open-Terminal` writes it into every tab it creates and it survives `--suppressApplicationTitle`, which stops the window title from reflecting anything the shell sets. Otherwise the window title is used, which mirrors whichever tab is *active* - this one, whenever the command was typed rather than run from a background tab.
+
+Returns a `PSCustomObject` with `Handle`, `ProcessId` and `TabTitle`, or `$null` when the shell is not hosted by Windows Terminal at all (a bare console, an IDE terminal, a scheduled task) - which callers should read as "no tab of mine is at risk". Used by [Close-Workspace](workflow.md#close-workspace) to defer its own tab to the process-exit seam.
+
+```powershell
+# Close every tab except the one this command is running in
+$own = Resolve-HostingTerminalTab
+foreach ($tab in $tabs) {
+	if ($own -and $own.Handle -eq $windowHandle -and $own.TabTitle -eq $tab) { continue }
+	Close-WindowsTerminalTab -WindowHandle $windowHandle -TabTitle $tab
+}
+```
+
+**See also:** [Get-TargetTerminalWindow](#get-targetterminalwindow), [Close-WindowsTerminalTab](#close-windowsterminaltab), [Close-Workspace](workflow.md#close-workspace)
 
 ## [Resolve-ProjectPath](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Resolve-ProjectPath.ps1)
 

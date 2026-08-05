@@ -382,6 +382,8 @@ Coordinates desktop cleanup as a sequence of terminators. If virtual desktop cle
 
 Step resolution is tri-state: `-Skip` beats `-Include` beats the `KillAll.Steps` config (see [Configuration Reference: Kill-All Step Toggles](../configuration/configuration-reference.md#kill-all-step-toggles)) beats the built-in defaults (everything on except `ReloadProfile`). With no `KillAll` section configured, behavior is identical to the classic full run. `-IncludeCurrent` suppresses `CenterTerminal` and `FocusTerminal` regardless of config, since there is no surviving tab to restore.
 
+**The open-workspace tracker is cleared too**, but only when `Browsers`, `VisibleWindows` and `NamedProcesses` all ran. A full run leaves nothing a workspace opened, so a populated tracker would have [Close-Workspace](workflow.md#close-workspace) go on offering workspaces that are long gone and then report every one of their windows as already closed. Skip any of those three steps and the tracker is **kept**: staleness is merely noisy (an item it cannot find is reported as already closed), whereas clearing too eagerly is a real capability loss, because the windows that *did* survive a partial run become unclosable. The clear happens before the tab termination, since `-IncludeCurrent` ends the process outright, and is guarded with `Get-Command` because `Workflow` is a separate module that need not be loaded.
+
 | Parameter                  | Description                                                                                                                                              |
 | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
 | `-Exclude`                 | One or more window title patterns to spare from termination. Supports both wildcard (`"*YouTube*"`, `"Chrome - *"`) and regex (`"^Chrome"`, `"(._Gmail._ | ._Inbox._)"`) patterns, same format as layout `.psd1` files. |
@@ -407,7 +409,7 @@ Kill-All -Include Docker
 Kill-All -ReloadPowerShellProfile
 ```
 
-**See also:** [Resolve-KillAllSteps](system.md#resolve-killallsteps), [Remove-VirtualDesktops](system.md#remove-virtualdesktops), [Terminate-AllProcessesWithVisibleWindows](system.md#terminate-allprocesseswithvisiblewindows)
+**See also:** [Resolve-KillAllSteps](system.md#resolve-killallsteps), [Remove-VirtualDesktops](system.md#remove-virtualdesktops), [Terminate-AllProcessesWithVisibleWindows](system.md#terminate-allprocesseswithvisiblewindows), [Close-Workspace](workflow.md#close-workspace), [Save-WorkspaceState](workflow.md#save-workspacestate)
 
 ## [List-Drives](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/List-Drives.ps1)
 
@@ -459,9 +461,9 @@ Reload-WinuXModules
 
 ## [Remove-VirtualDesktops](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Remove-VirtualDesktops.ps1)
 
-- **Description:** Removes virtual desktops - by default all except desktop 0, resetting to a single-desktop state. With `-EmptyOnly`, removes only desktops that have no visible windows, which keeps workspace setups (e.g. alongside mode) idempotent on retry. At least one desktop is always preserved.
-- **Parameters:** -EmptyOnly
-- **Usage:** `Remove-VirtualDesktops`, `Remove-VirtualDesktops -EmptyOnly`
+- **Description:** Removes virtual desktops - by default all except desktop 0, resetting to a single-desktop state. With `-EmptyOnly`, removes only desktops that have no visible windows, which keeps workspace setups (e.g. alongside mode) idempotent on retry. With `-Index`, removes exactly the named desktops whether or not anything is still on them. At least one desktop is always preserved. All three modes return nothing on success and `$false` on failure.
+- **Parameters:** -EmptyOnly, -Index
+- **Usage:** `Remove-VirtualDesktops`, `Remove-VirtualDesktops -EmptyOnly`, `Remove-VirtualDesktops -Index 3, 4, 5`
 
 In default mode it removes every desktop except desktop `0`. In `-EmptyOnly` mode it builds the set of desktops that have at least one visible window and removes only the empty ones, iterating right-to-left so remaining indices stay stable; if desktop 0 is empty but others have windows, desktop 0 is removed last and Windows shifts the rest left. Window detection prefers `Get-WindowHandle` (EnumWindows-based, from the Window module) so it captures every visible window - including multiple browser or VSCode windows - and falls back to `Get-Process` `MainWindowHandle` when that module isn't loaded, though the fallback sees only one window per process and may treat desktops with secondary windows as empty.
 
@@ -469,9 +471,12 @@ Before cleanup it runs `Test-RpcServerHealth -Probe` so the preflight verifies t
 
 In `-EmptyOnly` mode the occupancy scan is retried as a whole rather than per window. A lookup that fails on its own merits - a window closed mid-scan, or a shell window such as *Windows Input Experience* that always answers `TYPE_E_ELEMENTNOTFOUND` - can never succeed on a retry, so it is skipped immediately; putting each one through the backoff ladder cost roughly 3.7 s per unplaceable window on every run, which is why one such window dominated the whole operation. Only a genuine RPC failure restarts the scan, after the ladder has reset the session's COM state, and if RPC is still unavailable once the ladder is exhausted the cleanup aborts and returns `$false` rather than treating unknowable occupancy as "empty". The scan also resolves each distinct desktop's index once instead of once per window (`Get-DesktopIndex` re-enumerates every desktop over COM on each call) and stops as soon as every desktop is known to hold a window.
 
+`-Index` is the third mode, and the one [Close-Workspace](workflow.md#close-workspace) uses: it removes exactly the 0-based indexes named, highest first so the remaining targets do not shift. It takes precedence over `-EmptyOnly`, skips an index that no longer exists, and still refuses to remove the last desktop. Supplying `-Index` with nothing usable in it (an empty array, or only negative values) removes **nothing** - the mode is chosen by whether `-Index` was passed, not by whether it resolved to anything, so asking for nothing can never fall through to the default mode and mean "remove every desktop". Unlike `-EmptyOnly` it does not care whether the desktop is occupied - Windows relocates whatever is still there to an adjacent desktop rather than closing it. That is deliberate: the one window a workspace teardown cannot close before removing its desktops is the shell it is running in, and when the workspace opened that shell its desktop is never empty at sweep time, so an `-EmptyOnly` pass would leave it stranded on a desktop nothing ever tidies.
+
 | Parameter    | Type     | Default | Description                                                                                                                             |
 | ------------ | -------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | `-EmptyOnly` | `switch` | -       | Removes only desktops that have no visible windows, iterating from the rightmost toward desktop 0; at least one desktop is always kept. |
+| `-Index`     | `int[]`  | -       | 0-based desktop indexes to remove outright, occupied or not, highest first. Wins over `-EmptyOnly`. |
 
 ```powershell
 # Reset to a single desktop (removes all except desktop 0)
@@ -479,6 +484,9 @@ Remove-VirtualDesktops
 
 # Remove only empty desktops, keeping any with visible windows
 Remove-VirtualDesktops -EmptyOnly
+
+# Remove a workspace's own desktops, occupied or not
+Remove-VirtualDesktops -Index 3, 4, 5
 
 # Verbose diagnostic output
 Set-LogLevel Verbose { Remove-VirtualDesktops -EmptyOnly }

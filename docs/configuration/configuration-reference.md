@@ -88,7 +88,7 @@ Process lists consumed by the `Kill-All` desktop cleanup flow.
 **Keys:**
 
 - `TerminateProcessNames` - Process names force-terminated by `Terminate-AllProcessesByName`. The base configuration ships a minimal example list (`Code`); keep your real cleanup targets in `Configuration.local.psd1` (the override replaces the array wholesale on merge).
-- `VisibleWindowExclusions` - Process names `Terminate-AllProcessesWithVisibleWindows` never force-kills. Browser processes from `Browsers` are excluded automatically. The PowerToys entries are load-bearing (see the warning in the [System module](../modules/system.md#terminate-allprocesseswithvisiblewindows)); never remove them.
+- `VisibleWindowExclusions` - Process names `Terminate-AllProcessesWithVisibleWindows` never force-kills. Browser processes from `Browsers` are excluded automatically. The PowerToys entries are load-bearing (see the warning in the [System module](../modules/system.md#terminate-allprocesseswithvisiblewindows)); never remove them. The list is also what a plain `Open-Workspace` will not take *ownership* of when it claims the screen for [Close-Workspace](../modules/workflow.md#close-workspace) - so the terminal window you typed the open in, Rainmeter, and the rest are never a workspace's to close simply because they happened to be running. A window an open genuinely created is still recorded, whatever its process is called.
 
 Both functions warn and terminate nothing when their list is absent or empty. To toggle whole `Kill-All` steps on/off (not just their process lists), see [Kill-All Step Toggles](#kill-all-step-toggles).
 

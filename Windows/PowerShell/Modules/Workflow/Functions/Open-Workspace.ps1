@@ -323,6 +323,10 @@ function Open-Workspace {
 		}
 		$env:WORKSPACE_RERUN_COMMAND = $rerunTokens -join ' '
 
+		# How many workspaces of THIS invocation have been recorded so far. Only the first one of a
+		# plain run defines the session (and so adopts what is on screen); the rest append to it.
+		$workspacesRecorded = 0
+
 		foreach ($workspaceName in $workspaces) {
 			# Calculate desktop offset if -Alongside flag is used
 			$desktopOffset = 0
@@ -406,6 +410,40 @@ function Open-Workspace {
 			# treat it as NEW so the alongside layout places it on the workspace desktops.
 			if ($ownTerminalWindowHandle) {
 				$existingHandlesBeforeOpen.Remove($ownTerminalWindowHandle) | Out-Null
+			}
+
+			# Teardown tracking. Close-Workspace closes what an open ACTUALLY produced, never what
+			# configuration says it would produce, and the before/after delta recorded here is the
+			# only evidence of that. Capturing it is what keeps a single-instance application out of
+			# the wrong workspace: Obsidian already running because an earlier workspace opened it
+			# is in the "before" set, so it never becomes this workspace's to close. Terminal tabs
+			# need their own snapshot because they are not top-level windows - opening three project
+			# tabs in an existing window changes no window handle at all.
+			$existingTerminalTabsBeforeOpen = Get-TerminalTabSnapshot
+			$workspaceStateRecorded = $false
+			$recordWorkspaceState = {
+				# The FIRST workspace of a plain run also claims what was already on screen, not
+				# only what it created. A plain open resets the desktops, so when it finishes the
+				# screen IS this workspace - including any app that was already running and
+				# therefore produced no new window to diff (Open-ClaudeDesktop reporting "already
+				# running"). Without that, such an app escapes one teardown, is already running at
+				# every later open, is never recorded again, and can never be closed.
+				# Get-WorkspaceOpenDelta keeps Universal.VisibleWindowExclusions out of that claim,
+				# so the terminal window this was typed in stays nobody's to close.
+				#
+				# -Alongside must not adopt: it adds to a screen other workspaces are using, and
+				# claiming their windows would let closing this one take theirs. Later workspaces of
+				# a multi-workspace plain run likewise only claim what they created, and append so
+				# they do not replace the entry of the workspace that defined the session.
+				$isFirstOfPlainRun = (-not $Alongside) -and ($workspacesRecorded -eq 0)
+
+				Save-WorkspaceState -Workspace $workspaceName `
+					-ExistingWindowHandles $existingHandlesBeforeOpen `
+					-ExistingTerminalTabs $existingTerminalTabsBeforeOpen `
+					-DesktopOffset $desktopOffset `
+					-Alongside:$Alongside `
+					-AdoptUnclaimed:$isFirstOfPlainRun `
+					-Append:($workspacesRecorded -gt 0)
 			}
 
 			$selectedProjects = @()
@@ -567,6 +605,15 @@ function Open-Workspace {
 				if ($action -eq "Terminate-WindowsTerminalTabs" -and
 					(($actionParams.ContainsKey("OnlyCurrent") -and $actionParams["OnlyCurrent"]) -or
 					($actionParams.ContainsKey("IncludeCurrent") -and $actionParams["IncludeCurrent"]))) {
+					# Same reason the summary is printed early: the teardown record must exist before
+					# the process exits, or the workspace this run just opened would be untracked and
+					# Close-Workspace could not close it.
+					if (-not $workspaceStateRecorded) {
+						$workspaceStateRecorded = $true
+						& $recordWorkspaceState
+						$workspacesRecorded++
+					}
+
 					$stopwatch.Stop()
 					$elapsedSeconds = [math]::Round(($carryOverElapsed + $stopwatch.Elapsed).TotalSeconds, 1)
 					Write-LogSuccess "Workspace(s) opened in $elapsedSeconds seconds!"
@@ -590,6 +637,15 @@ function Open-Workspace {
 				catch {
 					Write-LogError "Error executing action [$action] for workspace [$workspaceName]: $_" -NoLeadingNewline
 				}
+			}
+
+			# Every action has run, so whatever is on screen beyond the pre-open capture is this
+			# workspace's. A terminating action already recorded it and exited; this covers the
+			# ordinary path where the flow simply reaches the end.
+			if (-not $workspaceStateRecorded) {
+				$workspaceStateRecorded = $true
+				& $recordWorkspaceState
+				$workspacesRecorded++
 			}
 		}
 

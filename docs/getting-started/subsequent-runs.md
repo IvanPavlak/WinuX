@@ -175,6 +175,9 @@ Open-Workspace
 
 # Run the current project
 Run-Project
+
+# Close a workspace again - everything that open produced
+Close-Workspace
 ```
 
 ### Maintenance

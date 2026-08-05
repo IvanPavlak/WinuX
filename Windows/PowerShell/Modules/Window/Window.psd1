@@ -16,6 +16,7 @@
 		'Confirm-WindowForeground',
 		'Confirm-WorkspaceWindowPositions',
 		'ConvertTo-InternalDesktopIndex',
+		'Ensure-DesktopVisible',
 		'Ensure-VirtualDesktops',
 		'Ensure-WindowsFormsLoaded',
 		'Focus-VirtualDesktop',
@@ -38,6 +39,7 @@
 		'Get-NextAvailableDesktopIndex',
 		'Get-PositionedWindowCount',
 		'Get-VirtualDesktopGuid',
+		'Get-WindowDesktopIndex',
 		'Get-WindowDisplayName',
 		'Get-WindowHandle',
 		'Get-WindowModuleDelays',
@@ -74,6 +76,7 @@
 		'Wait-DesktopSwitch',
 		'Wait-ForWorkspaceWindows',
 		'Wait-WindowRect',
+		'Wait-WindowsClosed',
 		'Write-WindowInfoBlock',
 		'Get-InsetWindowBounds'
 	)

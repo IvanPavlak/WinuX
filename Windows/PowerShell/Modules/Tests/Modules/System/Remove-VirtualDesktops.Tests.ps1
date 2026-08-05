@@ -42,6 +42,117 @@ Describe "Remove-VirtualDesktops" {
 		Mock Reset-VirtualDesktopState { $true }
 	}
 
+	Context "Index mode (remove named desktops outright)" {
+		BeforeEach {
+			# Five desktops, and the count follows the removals so the guards below are exercised
+			# against a shrinking set rather than a frozen number.
+			$script:currentDesktopCount = 5
+			Mock Get-DesktopCount { $script:currentDesktopCount }
+			Mock Remove-Desktop { $script:currentDesktopCount-- }
+		}
+
+		It "removes exactly the desktops named" {
+			Remove-VirtualDesktops -Index 3, 4
+
+			Should -Invoke Remove-Desktop -Times 2 -Exactly
+			Should -Invoke Remove-Desktop -Times 1 -Exactly -ParameterFilter { $Desktop -eq 3 }
+			Should -Invoke Remove-Desktop -Times 1 -Exactly -ParameterFilter { $Desktop -eq 4 }
+		}
+
+		It "removes the highest index first so the remaining targets do not shift" {
+			$script:removalOrder = @()
+			Mock Remove-Desktop { $script:removalOrder += $Desktop; $script:currentDesktopCount-- }
+
+			Remove-VirtualDesktops -Index 1, 3, 2
+
+			$script:removalOrder | Should -Be @(3, 2, 1)
+		}
+
+		It "removes desktop 0, which is a falsy index" {
+			# A truthiness check anywhere on this path would silently spare the desktop a plain
+			# workspace lands on.
+			Remove-VirtualDesktops -Index 0
+
+			Should -Invoke Remove-Desktop -Times 1 -Exactly -ParameterFilter { $Desktop -eq 0 }
+		}
+
+		It "de-duplicates repeated indexes" {
+			Remove-VirtualDesktops -Index 3, 3, 3
+
+			Should -Invoke Remove-Desktop -Times 1 -Exactly
+		}
+
+		It "skips an index that no longer exists" {
+			$script:currentDesktopCount = 2
+
+			Remove-VirtualDesktops -Index 7
+
+			Should -Invoke Remove-Desktop -Times 0
+		}
+
+		It "always keeps the last desktop" {
+			$script:currentDesktopCount = 1
+
+			Remove-VirtualDesktops -Index 0
+
+			Should -Invoke Remove-Desktop -Times 0
+		}
+
+		It "stops once only one desktop is left, even with more indexes to go" {
+			$script:currentDesktopCount = 2
+
+			Remove-VirtualDesktops -Index 0, 1
+
+			Should -Invoke Remove-Desktop -Times 1 -Exactly
+		}
+
+		It "ignores negative indexes" {
+			Remove-VirtualDesktops -Index -1, 3
+
+			Should -Invoke Remove-Desktop -Times 1 -Exactly -ParameterFilter { $Desktop -eq 3 }
+		}
+
+		It "returns nothing on success, exactly as the other two modes do" {
+			# The mode used to hand back the indexes it removed, for a caller that re-mapped stored
+			# desktop indexes. No such caller exists - Close-Workspace resolves desktops live - so the
+			# return value went, and with it a second output type on this function.
+			$result = Remove-VirtualDesktops -Index 3
+
+			$result | Should -BeNullOrEmpty
+		}
+
+		It "takes precedence over -EmptyOnly" {
+			Mock Get-WindowHandle { @() }
+
+			Remove-VirtualDesktops -EmptyOnly -Index 3
+
+			Should -Invoke Remove-Desktop -Times 1 -Exactly -ParameterFilter { $Desktop -eq 3 }
+		}
+
+		It "removes nothing when -Index is supplied but empty" {
+			# Load-bearing: keying the mode on the RESOLVED count instead of on -Index being supplied
+			# would fall through to the default mode here, silently turning "remove these desktops"
+			# into "remove every desktop".
+			Remove-VirtualDesktops -Index @()
+
+			Should -Invoke Remove-Desktop -Times 0
+		}
+
+		It "removes nothing when every index given is unusable" {
+			Remove-VirtualDesktops -Index -1, -2
+
+			Should -Invoke Remove-Desktop -Times 0
+		}
+
+		It "reports a failure as false rather than throwing" {
+			Mock Remove-Desktop { throw 'The RPC server is unavailable. (0x800706BA)' }
+
+			$result = Remove-VirtualDesktops -Index 3
+
+			$result | Should -Be $false
+		}
+	}
+
 	Context "Default mode (remove all except desktop 0)" {
 		It "returns false when virtual desktop cmdlets are unavailable" {
 			Mock Get-DesktopCount { throw "The term 'Get-DesktopCount' is not recognized as a name of a cmdlet" }

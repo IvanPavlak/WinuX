@@ -21,7 +21,7 @@ Windows/
 │       ├── Logging/
 │       ├── System/
 │       ├── Window/                            # WindowNative.cs + Layouts/
-│       ├── Workflow/
+│       ├── Workflow/                          # + State/ (what each workspace open produced)
 │       └── Tests/                             # Pester test files
 └── docs/                                      # Docsify documentation site
 ```

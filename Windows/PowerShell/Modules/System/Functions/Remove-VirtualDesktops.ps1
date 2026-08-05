@@ -40,9 +40,25 @@ function Remove-VirtualDesktops {
 		is still unavailable once the ladder is exhausted, the cleanup aborts and returns $false rather
 		than treating unknowable occupancy as "empty".
 
+		With -Index, removes exactly the named 0-based desktop indexes regardless of whether anything is
+		still on them, highest first so the remaining targets do not shift. Windows relocates windows
+		off a removed desktop rather than closing them. This is the mode Close-Workspace uses: a
+		workspace's own desktops go with it, and the one window a teardown cannot close first - the
+		shell it is running in - is moved rather than stranded on a desktop nothing will ever sweep.
+		-Index wins over -EmptyOnly. At least one desktop is always kept, and an index that no longer
+		exists is skipped. Supplying -Index with nothing usable in it (an empty array, or only
+		negative values) removes NOTHING - it is never treated as "no index was given", which would
+		turn asking for nothing into removing every desktop.
+
+		All three modes return nothing on success and $false on failure.
+
 	.PARAMETER EmptyOnly
 		When specified, only removes virtual desktops that have no visible windows on them.
 		Iterates from the rightmost desktop toward desktop 0. At least one desktop is always kept.
+
+	.PARAMETER Index
+		0-based desktop indexes to remove outright, whether or not they still hold windows. Removed
+		highest first. Takes precedence over -EmptyOnly.
 
 	.EXAMPLE
 		Remove-VirtualDesktops
@@ -51,14 +67,36 @@ function Remove-VirtualDesktops {
 	.EXAMPLE
 		Remove-VirtualDesktops -EmptyOnly
 		# Removes only desktops that have no windows on them
+
+	.EXAMPLE
+		Remove-VirtualDesktops -Index 3, 4, 5
+		# Removes a workspace's own three desktops, occupied or not
 	#>
 	[CmdletBinding()]
+	[OutputType([bool])]
 	param (
 		[Parameter()]
-		[switch]$EmptyOnly
+		[switch]$EmptyOnly,
+
+		[Parameter()]
+		[int[]]$Index
 	)
 
-	Write-LogTitle "Removing Virtual Desktops$(if ($EmptyOnly) { ' (empty only)' })"
+	$explicitIndexes = @($Index | Where-Object { $null -ne $_ -and $_ -ge 0 } | Sort-Object -Unique -Descending)
+
+	# Keyed on whether -Index was SUPPLIED, not on whether it yielded anything usable. Deciding it by
+	# the resolved count would make "-Index @()" - or an index list that filtered down to nothing -
+	# fall through to the default mode, i.e. silently turn "remove these desktops" into "remove EVERY
+	# desktop". Asking for nothing must do nothing.
+	$byIndex = $PSBoundParameters.ContainsKey('Index')
+
+	$modeLabel = if ($byIndex) {
+		if ($explicitIndexes.Count -gt 0) { " (index $((@($explicitIndexes | Sort-Object)) -join ', '))" } else { ' (no usable index)' }
+	}
+	elseif ($EmptyOnly) { ' (empty only)' }
+	else { '' }
+
+	Write-LogTitle "Removing Virtual Desktops$modeLabel"
 
 	if (Get-Command Import-VirtualDesktopModule -ErrorAction SilentlyContinue) {
 		if (-not (Import-VirtualDesktopModule -Silent)) {
@@ -144,6 +182,48 @@ function Remove-VirtualDesktops {
 		# Track removed desktops so the normal-mode summary can list them.
 		$removedDesktops = @()
 		$desktopCount = [int](& $invokeDesktopOperation { Get-DesktopCount })
+
+		if ($byIndex) {
+			if ($explicitIndexes.Count -eq 0) {
+				Write-LogDebug "No usable desktop index requested - nothing to remove" -Style Warning
+				return
+			}
+
+			# Named desktops, removed highest index first so the lower ones this call still has to
+			# remove do not shift out from under it. Windows relocates whatever is still on a removed
+			# desktop to an adjacent one rather than closing it, which is the wanted behaviour for the
+			# one window a workspace teardown cannot close before it removes its desktops: the shell
+			# it is running in. Anything else still standing there refused a WM_CLOSE and is reported
+			# by the caller.
+			foreach ($desktopToRemove in $explicitIndexes) {
+				if ($desktopCount -le 1) {
+					Write-LogDebug " Only one desktop left - keeping desktop [0]" -Style Warning -NoLeadingNewline
+					break
+				}
+
+				if ($desktopToRemove -ge $desktopCount) {
+					Write-LogDebug " Desktop [$desktopToRemove] no longer exists - skipping" -Style Warning -NoLeadingNewline
+					continue
+				}
+
+				Write-LogDebug " Removing desktop [$desktopToRemove]!" -Style Error -NoLeadingNewline
+
+				& $invokeDesktopOperation { Remove-Desktop -Desktop $desktopToRemove -Verbose:$false -ErrorAction Stop } | Out-Null
+				$removedDesktops += "Desktop [$desktopToRemove]"
+				$desktopCount = [int](& $invokeDesktopOperation { Get-DesktopCount })
+			}
+
+			if (-not (Test-LogVerbose) -and $removedDesktops.Count -gt 0) {
+				Write-LogSuccess "Removed $($removedDesktops.Count) virtual desktop(s)!"
+				Write-LogList -Items $removedDesktops
+			}
+
+			# Nothing is returned, exactly as the other two modes behave. Reporting which indexes went
+			# would only be worth it for a caller re-mapping stored desktop indexes, and there is no
+			# such caller: Close-Workspace resolves a workspace's desktops live from window handles
+			# precisely so that no index is ever stored to go stale.
+			return
+		}
 
 		if ($EmptyOnly) {
 			if ($desktopCount -le 1) {

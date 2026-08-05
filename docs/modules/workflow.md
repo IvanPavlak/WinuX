@@ -86,6 +86,96 @@ Set-LogLevel Verbose { Close-ProjectTerminals -ProjectName MyProject }
 
 **See also:** [Close-Project](#close-project), [Run-Project](helper.md#run-project), [Focus-TerminalTab](#focus-terminaltab)
 
+## [Close-Workspace](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Workflow/Functions/Close-Workspace.ps1)
+
+- **Description:** The counterpart to `Open-Workspace`, one level above `Close-Project`: closes every window and every Windows Terminal tab that a workspace open produced. Where `Close-Project` closes one project's resources and deliberately leaves workspace-level applications running, this tears the whole workspace down. Ownership comes from the tracker `Open-Workspace` writes, never from `WorkspaceActions` - configuration cannot express which *instance* of a shared application belongs to which workspace, and guessing is what this exists to avoid. If no workspace is given, an interactive menu lists the workspaces currently tracked as open.
+- **Parameters:** -Workspace, -StatePath, -WhatIf
+- **Alias:** cw
+- **Usage:** `Close-Workspace`, `Close-Workspace Server`, `Close-Workspace -Workspace Server, WinuX`, `Close-Workspace Server -WhatIf`
+- **Implementation Note:** Reads [Get-WorkspaceState](#get-workspacestate); closes windows with `WM_CLOSE` and terminal tabs through their UI Automation close button; verifies with [Wait-WindowsClosed](window.md#wait-windowsclosed); rewrites the tracker with [Save-WorkspaceState](#save-workspacestate).
+
+### Where ownership comes from
+
+Every `Open-Workspace` invocation records what it actually opened - a before/after diff of the windows on screen and of the Windows Terminal tab strip - as one tracker entry (see [Get-WorkspaceOpenDelta](#get-workspaceopendelta)). `Close-Workspace` closes exactly what that entry lists, and nothing else.
+
+That single fact delivers the single-instance guarantee for free. Obsidian launched by workspace A is already running when B is opened alongside, so B's `Open-Obsidian` action creates no window, so Obsidian never enters B's record, so closing B leaves it running.
+
+A **plain** open additionally claims what was already on screen when it finishes, because it reset the virtual desktops first - the screen *is* that workspace. That is what stops an application which was already running from surviving every teardown forever: it produced no new window to diff, so a strict diff would never record it, it would still be running at the next open, and it would never become closable. An **`-Alongside`** open never claims, because it adds to a screen other workspaces are already using and taking their windows would let closing this one close theirs. Processes named in `Universal.VisibleWindowExclusions` - the same list `Kill-All` uses to decide what a blunt teardown leaves alone - are never claimed that way, so a plain open does not take ownership of the terminal window it was typed in, of Rainmeter, or of anything else that merely happened to be running. A window the open genuinely *created* is always recorded, whatever its process is called.
+
+With no tracker at all - a workspace opened before this feature existed, from another session, or left over from before a reboot - the command says so and stops, rather than falling back to `WorkspaceActions`, which would reintroduce exactly the ownership ambiguity the tracker removes.
+
+### The second claim: the workspace's own virtual desktops
+
+A workspace owns the virtual desktops it opened on, so **a window sitting on one of them belongs to it** even when the diff never recorded it - a browser window that was already open and got reused, a dialog an action spawned indirectly, anything that had no top-level window yet when the snapshot was taken. This is what makes "everything on that workspace's desktops goes" true rather than approximately true, and it is also what tells the teardown which desktops to remove.
+
+Which desktops those are is resolved from **where the workspace's own windows are standing at teardown time**, never from a stored index. Desktop indexes shift whenever a desktop to their left is removed, so a stored one goes stale, and acting on a stale index would reach onto another workspace's desktop. Handles are stable, so resolving them live ([Get-WindowDesktopIndex](window.md#get-windowdesktopindex)) is the one answer that cannot be wrong. Desktops belonging to a workspace that stays open are excluded from both halves of this - the claim and the removal.
+
+### What a teardown does
+
+- **Windows** are matched by recorded handle, then re-resolved by process id + process name (Electron applications recreate their window without restarting), then by process name + **exact** title (the application restarted outright). A record that named no process is never matched on title alone - a title is not evidence of ownership.
+- **A window matched by its own live handle is unambiguously this workspace's.** The survivor guard - the handles and process/title identities of every workspace that stays open, claimed up front - applies in full to a *re-resolved* window, but only its handles apply to an exact handle match. Process name plus title is **not** unique across workspaces: open WinuX and FuturamaSoft and each has a `YouTube - Mozilla Firefox` and a `New chat - Claude - Mozilla Firefox`. Guarding an exact match on identity therefore left the closing workspace's own YouTube and AI windows on screen, protected by the other workspace's identically titled ones.
+- **Anything else standing on this workspace's desktops** is closed too, unless a workspace that stays open recorded it or owns the desktop it is on. Identity is deliberately not consulted here either, for the same reason - the desktop already discriminates.
+- **Closing** is `WM_CLOSE`, exactly as `Close-Project` does it, so unsaved work still prompts. A window that refuses is reported and left alone - never force-killed.
+- **Terminal tabs** are closed through their UI Automation close button (no focus stealing, no synthesized keystrokes), and the window is left to disappear with its last tab, because a `WM_CLOSE` on a multi-tab window raises a "close all tabs?" confirmation. A terminal window the workspace *opened* (the `-Alongside` flow creates one) belongs to it whole, so every tab in it goes; a window it merely put tabs into keeps everything else. Either way an owned window still standing after the tab pass is closed directly, so it can never be orphaned.
+- **Terminals on other desktops** are handled by [Ensure-DesktopVisible](window.md#ensure-desktopvisible): Windows Terminal composes its tab strip only while its desktop is visible and reports no tabs at all otherwise, and a workspace's terminal is by definition parked on one of the workspace's own desktops once the layout pass has moved it. The desktop is brought up only when the first read comes back empty, at most once per window, and the view is put back before the desktop sweep.
+- **The calling tab**, when it belongs to the workspace being closed, is closed last through `Invoke-TerminateWindowsTerminalTabsExit` - it cannot close itself mid-run. The tracker is written *before* that, because the exit skips everything after it.
+- **Afterwards the workspace's desktops go with it** - named explicitly via `Remove-VirtualDesktops -Index`, then `-EmptyOnly` as a net for any desktop this teardown emptied without ever having had a window on it - and focus returns to the calling terminal. Both run last, once everything has actually gone, rather than opening the teardown with a report about desktops the *previous* run emptied.
+
+  Naming them explicitly matters: the one window a teardown cannot close before that point is **the shell it is running in**. When the workspace opened that shell (the `-Alongside` flow does), its desktop is never empty at sweep time, so an `-EmptyOnly` sweep can never remove it and no later run ever would either - the session ends up one desktop wider per open/close cycle. Removing the desktop relocates that window instead of stranding it, which Windows does automatically. Nothing has to be re-mapped afterwards, because no desktop index is ever stored.
+
+Closed entries are dropped from the tracker, so a second call is a clean no-op. There is no confirmation prompt - closing is not destructive and it is the caller's job to know when to run it - but `-WhatIf` gates every close, the tracker write, the desktop removal and the process exit.
+
+### One row per instance
+
+The menu lists one row per tracked **instance**, not per name. Opening the same workspace twice - `w Example -Browser Chrome` then `w Example -Browser Edge -Alongside` - produces two entries describing two separate sets of windows sitting side by side, so either can be closed on its own:
+
+```text
+[Open workspaces to close]
+
+ [1] Example (plain, desktop 1)
+ [2] Example (alongside, desktop 6)
+ [3] WinuX
+
+Enter workspace(s) to close or press [Enter] to cancel (space/comma-separated): 2
+```
+
+A name with a single instance keeps its bare name, so the everyday menu gains nothing to read. Several instances of one name are labelled by **where they are**, because that is what the choice is actually between when two of them are on screen at once; the desktop number is 1-based, matching the layout-file convention, and names the desktop the workspace starts on. The teardown title uses the same number, so the two never disagree about which instance is going.
+
+Naming a whole workspace still closes every instance of it, so `Close-Workspace Example` ends that workspace entirely and stays usable from a script - it does not stop to ask. To target one exactly, pick its row or pass the full label as an argument (`Close-Workspace 'Example (alongside, desktop 6)'`). The menu is multi-select, so `1,2` closes both.
+
+One mechanical detail worth knowing: `Resolve-Selection` splits *typed* input on whitespace and commas, so a label containing spaces can only be chosen by its number at the prompt. Passed as an argument it is matched whole, which is why both forms are supported.
+
+| Parameter    | Description                                                                                                                                                        |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `-Workspace` | One or more workspace names to close, or the full label of a single instance. A bare name closes every tracked instance of it. Omit for an interactive menu. Only *tracked* names and labels are offered or accepted - a workspace that is configured but not open is not something this command can close. |
+| `-StatePath` | Full path to the tracker file. Defaults to [Get-WorkspaceStatePath](#get-workspacestatepath). Mainly a test seam.                                                    |
+| `-WhatIf`    | Report every window, tab and desktop that would be closed, and change nothing.                                                                                      |
+
+```powershell
+# Interactive menu listing the workspaces currently open
+Close-Workspace
+
+# Close every tracked instance of a workspace, however it was opened
+Close-Workspace Server
+
+# Or via the alias
+cw Server
+
+# Close ONE instance of a workspace that is open twice, leaving the other running
+cw 'Example (alongside, desktop 6)'
+
+# Close two workspaces in one pass
+Close-Workspace -Workspace Server, WinuX
+
+# See the whole plan without touching anything
+Close-Workspace Server -WhatIf
+
+# Verbose diagnostic output (per-window and per-tab decisions)
+Set-LogLevel Verbose { Close-Workspace Server }
+```
+
+**See also:** [Open-Workspace](#open-workspace), [Close-Project](#close-project), [Get-WorkspaceState](#get-workspacestate), [Get-WorkspaceOpenDelta](#get-workspaceopendelta), [Wait-WindowsClosed](window.md#wait-windowsclosed), [Ensure-DesktopVisible](window.md#ensure-desktopvisible), [Get-WindowDesktopIndex](window.md#get-windowdesktopindex), [Remove-VirtualDesktops](system.md#remove-virtualdesktops)
+
 ## [DockerWizard](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Workflow/Functions/DockerWizard.ps1)
 
 - **Description:** Starts or stops Docker Desktop with loading-spinner feedback, daemon readiness detection, graceful Docker Desktop CLI integration, and Docker-owned WSL cleanup. When starting, it can clean up a partial Docker state, launch Docker Desktop in detached mode (falling back to `Open-Docker`), wait up to 180 seconds for `docker info` to succeed, and optionally start Docker Compose services from an explicit compose file path or a project directory. When stopping, it first requests a graceful shutdown and then force-cleans Docker-owned helper processes and `docker-desktop` WSL distros only if Docker gets stuck. Used by `Run-Project` to transparently spin up database containers before launching project servers.
@@ -164,6 +254,25 @@ Focus-TerminalTab
 Focus-TerminalTab -TargetTitle "PowerShell"
 ```
 
+## [Format-WorkspaceStateContent](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Workflow/Functions/Format-WorkspaceStateContent.ps1)
+
+- **Description:** Renders open-workspace tracker entries as the PowerShell data file [Get-WorkspaceState](#get-workspacestate) reads back, so the tracker is parsed in restricted language mode (data only, never executed) exactly like the repository's layout and configuration `.psd1` files.
+- **Parameters:** -Entry
+- **Usage:** `Set-Content -Path $path -Value (Format-WorkspaceStateContent -Entry $entries) -NoNewline`
+
+Deliberately *not* a general-purpose serializer. The tracker schema is fixed and entirely scalar - strings, integers and booleans in a known shape - so each field is written by name with the right conversion. That makes the output predictable, keeps a rogue value from silently changing the file's structure, and avoids a second copy of the recursive serializer `Save-CurrentLayout` carries for its own, differently shaped snapshot. Every string is single-quoted with embedded quotes doubled (the only escaping a PowerShell single-quoted literal needs) because window titles routinely contain apostrophes. An empty array produces a valid file with no entries, which is how a teardown clears the tracker.
+
+| Parameter | Description                                                                              |
+| --------- | ---------------------------------------------------------------------------------------- |
+| `-Entry`  | The tracker entries to render. Mandatory; may be an empty collection. |
+
+```powershell
+# Write the tracker
+Set-Content -LiteralPath (Get-WorkspaceStatePath) -Value (Format-WorkspaceStateContent -Entry $entries) -NoNewline -Encoding UTF8
+```
+
+**See also:** [Save-WorkspaceState](#save-workspacestate), [Get-WorkspaceState](#get-workspacestate)
+
 ## [Get-SwaggerCloseTitlePatterns](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Workflow/Functions/Get-SwaggerCloseTitlePatterns.ps1)
 
 - **Description:** Returns the Swagger-specific browser tab title patterns to close for a project. Maps the project name to its entry in the `BrowserGroups` `Swagger` group (case-insensitive match on the entry's `Name`) and returns the regex patterns `Close-Project` hands to `Close-BrowserTabsByPattern`. A project with no `Swagger` entry (or a setup with no `Swagger` group at all) returns nothing, so Swagger closing is inert without Swagger configuration.
@@ -183,6 +292,85 @@ $patterns += @(Get-SwaggerCloseTitlePatterns -Project $projectName)
 ```
 
 **See also:** [Close-Project](#close-project), [Close-BrowserTabsByPattern](#close-browsertabsbypattern), [Open-ProjectSwagger](#open-projectswagger)
+
+## [Get-WorkspaceOpenDelta](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Workflow/Functions/Get-WorkspaceOpenDelta.ps1)
+
+- **Description:** The ownership rule for [Close-Workspace](#close-workspace), in one place. Given the window handles and the Windows Terminal tab snapshot taken *before* an `Open-Workspace` invocation ran its actions, this enumerates what exists now and returns the difference as a single tracker entry.
+- **Parameters:** -Workspace, -ExistingWindowHandles, -ExistingTerminalTabs, -DesktopOffset, -Alongside, -AdoptUnclaimed
+- **Usage:** `Get-WorkspaceOpenDelta -Workspace 'Server' -ExistingWindowHandles $before -ExistingTerminalTabs $tabsBefore`
+
+**Windows** are differenced by handle. Anything on screen whose handle was not there before belongs to this open; anything that was already there does not - which is exactly what keeps a single-instance application out of a later workspace's entry. Both process id and window title are recorded alongside the handle, because handles are the only unambiguous key while a window lives but Electron applications recreate their window (new handle, same process) and a restarted application keeps neither; the extra fields let `Close-Workspace` re-resolve a record whose handle has gone stale.
+
+Which virtual desktops the workspace occupies is deliberately **not** recorded. Desktop indexes shift whenever a desktop to their left is removed, so a stored index goes stale and acting on a stale one would reach onto another workspace's desktop; `Close-Workspace` derives the set live from where the entry's windows actually are instead.
+
+**Terminal tabs** cannot be differenced by handle - they are not top-level windows - so they are differenced per Windows Terminal window by title, and **by count rather than by set membership**. A second tab titled `MyProject.Api` opened next to an existing one is a new tab even though the title was already present; set subtraction would miss it and leave it running. The current tab strip is read through [Get-TerminalTabSnapshot](helper.md#get-terminaltabsnapshot) `-EnsureVisible`, because this runs at the *end* of an open, by which point the layout pass has moved the workspace's terminal onto one of the workspace's own desktops - and Windows Terminal exposes no tab strip while its desktop is off screen.
+
+`-AdoptUnclaimed` also claims what was already on screen, which is what makes an already-running application closable at all (see [Close-Workspace](#close-workspace) for why that matters). Adoption reaches only for what `Universal.VisibleWindowExclusions` does not name, and it never overrides the diff: a window this open genuinely created is always recorded. Use it for the **first** workspace of a plain run only - never for `-Alongside`, which would steal another workspace's windows, and never twice in one run, because both entries would then claim the same windows and each would protect them from the other's teardown.
+
+Returns one ordered entry: `Workspace`, `Alongside`, `DesktopOffset`, `OpenedUtc` (round-trippable `o` format), `ShellPid`, `Windows`, `TerminalTabs`.
+
+| Parameter                | Type      | Default | Description                                                                                                          |
+| ------------------------ | --------- | ------- | -------------------------------------------------------------------------------------------------------------------- |
+| `-Workspace`             | string    | -       | Name of the workspace this entry belongs to. Mandatory.                                                               |
+| `-ExistingWindowHandles` | object    | -       | Handles that existed before the open. Accepts a `HashSet[IntPtr]`, raw handle values, or window objects exposing `.Handle`. |
+| `-ExistingTerminalTabs`  | hashtable | -       | The pre-open `Get-TerminalTabSnapshot` (window handle -> tab titles). Omit and every tab on screen counts as new.       |
+| `-DesktopOffset`         | int       | `0`     | Desktop offset the open used (`0` normally, `+N` for `-Alongside`). Recorded for context.                              |
+| `-Alongside`             | switch    | off     | Records that the workspace was opened alongside existing desktops.                                                     |
+| `-AdoptUnclaimed`        | switch    | off     | Also claim what was already on screen, minus `Universal.VisibleWindowExclusions`. First workspace of a plain run only.  |
+
+```powershell
+# What did this open actually produce?
+$entry = Get-WorkspaceOpenDelta -Workspace 'Server' -ExistingWindowHandles $before -ExistingTerminalTabs $tabsBefore
+"$(@($entry.Windows).Count) window(s), $(@($entry.TerminalTabs).Count) tab(s)"
+```
+
+**See also:** [Save-WorkspaceState](#save-workspacestate), [Close-Workspace](#close-workspace), [Get-TerminalTabSnapshot](helper.md#get-terminaltabsnapshot)
+
+## [Get-WorkspaceState](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Workflow/Functions/Get-WorkspaceState.ps1)
+
+- **Description:** Reads the open-workspace tracker written by [Save-WorkspaceState](#save-workspacestate), parsing it with the same `Import-PowerShellDataFile` used for layout and configuration `.psd1` files. This tracker is the **only** input to a [Close-Workspace](#close-workspace) teardown.
+- **Parameters:** -Workspace, -StatePath
+- **Usage:** `Get-WorkspaceState`, `Get-WorkspaceState -Workspace Server`
+
+Each entry describes one `Open-Workspace` invocation. A plain open replaces the file (it resets the virtual desktops, so nothing earlier survives it); every `-Alongside` open appends, so the same workspace name can legitimately appear more than once - those are separate instances with separate windows, and entries keep their recorded order so the oldest open for a name comes first.
+
+Reading never throws. A missing file returns `$null`, and so does an unparseable one, so callers can treat "no tracker" as a single case. A file that parses but holds no entries returns an object with an **empty** `Entries` array instead: "the tracker exists and nothing is open" is a different answer from "there is no tracker", and `Close-Workspace` reports them differently. Returns a `PSCustomObject` with `Path` and `Entries`.
+
+| Parameter    | Description                                                                                                        |
+| ------------ | ------------------------------------------------------------------------------------------------------------------ |
+| `-Workspace` | Optional. Return only the entries for these workspace names (case-insensitive).                                     |
+| `-StatePath` | Full path to the state file. Defaults to [Get-WorkspaceStatePath](#get-workspacestatepath).                          |
+
+```powershell
+# Is anything tracked as open?
+$state = Get-WorkspaceState
+if (-not $state) { "nothing has been opened since the tracker was last cleared" }
+elseif (@($state.Entries).Count -eq 0) { "the tracker exists, but nothing is open" }
+
+# Every tracked instance of one workspace, oldest first
+(Get-WorkspaceState -Workspace Server).Entries | Format-Table Workspace, Alongside, DesktopOffset, OpenedUtc
+```
+
+**See also:** [Save-WorkspaceState](#save-workspacestate), [Get-WorkspaceStatePath](#get-workspacestatepath), [Close-Workspace](#close-workspace)
+
+## [Get-WorkspaceStatePath](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Workflow/Functions/Get-WorkspaceStatePath.ps1)
+
+- **Description:** Resolves the path of the open-workspace tracker file - `Workflow\State\OpenWorkspaces.txt` inside the repository this function was loaded from - so neither the writer nor the reader has to know the folder depth and the two can never disagree. Resolved through `Get-RepositoryPath` rather than by counting parent folders.
+- **Parameters:** -StartPath
+- **Usage:** `Get-WorkspaceStatePath`, `Get-Content (Get-WorkspaceStatePath)`
+
+The `State` folder is git-ignored with a `.gitkeep`, following `Logging\Logs` and `Window\Layouts\CurrentLayout.txt`: it is per-machine runtime state describing which windows are open *right now*, which is meaningless on any other machine and in any later session. Deleting the file is safe - `Close-Workspace` then reports that nothing is tracked rather than guessing. Like `Save-CurrentLayout`'s snapshot the file is named `.txt`, not `.psd1`, even though its contents are a PowerShell data file: nothing should mistake per-machine runtime state for a module manifest or a configuration file that belongs under version control. The file itself may not exist yet.
+
+| Parameter     | Description                                                                                                    |
+| ------------- | -------------------------------------------------------------------------------------------------------------- |
+| `-StartPath`  | Directory to anchor the repository search on. Defaults to this function's own location.                         |
+
+```powershell
+# Show the raw tracker contents
+Get-Content (Get-WorkspaceStatePath)
+```
+
+**See also:** [Get-WorkspaceState](#get-workspacestate), [Save-WorkspaceState](#save-workspacestate), [Get-RepositoryPath](helper.md#get-repositorypath)
 
 ## [Open-DnD](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Workflow/Functions/Open-DnD.ps1)
 
@@ -364,6 +552,8 @@ Reads the workspace list from `Configuration.Workspaces` and the per-workspace a
 
 Everything the flow spawns inherits the invoking shell's token, so running from an **elevated** shell produces elevated app windows (and, if PowerToys is not yet running, an elevated PowerToys) that a non-elevated FancyZones cannot snap. The function logs a warning when it detects an elevated shell and proceeds unchanged - prefer running workspaces from a normal shell.
 
+**Every open records what it produced, so it can be closed again.** Before the actions run, the flow captures the window handles on screen (it already did, for the layout pass) plus the Windows Terminal tab strip via [Get-TerminalTabSnapshot](helper.md#get-terminaltabsnapshot) - tabs are not top-level windows, so a handle diff cannot see them. When the actions finish it hands both to [Save-WorkspaceState](#save-workspacestate), which stores the difference as one tracker entry per workspace and is what makes [Close-Workspace](#close-workspace) possible. The record is written *before* a terminating `Terminate-WindowsTerminalTabs -OnlyCurrent`/`-IncludeCurrent` action, for the same reason the elapsed summary is: that action ends the process outright. Only the first workspace of a plain run claims what was already on screen (`-AdoptUnclaimed`); later ones append to the session it defined, and an `-Alongside` open never claims, so it cannot take another workspace's windows. Writing the tracker is best-effort - a failure warns and the open continues.
+
 Once the workspace names are resolved (including interactive menu picks), the exact invocation - resolved workspace names, `-Project`, `-Alongside`, and any extra arguments - is recorded in the process-scoped `$env:WORKSPACE_RERUN_COMMAND` (cleared in the `finally` block), so a failure-path respawn via `Set-WorkspaceWindowLayout`'s escalation to `ReRun-LastCommand` reruns precisely this command instead of scraping the shared PSReadLine history. In alongside mode, when `Get-NextAvailableDesktopIndex` cannot determine the next free desktop (virtual desktop enumeration failed), that workspace is skipped with a clear error instead of opening on top of the current one. And because a configured `Terminate-WindowsTerminalTabs` action with `-OnlyCurrent` or `-IncludeCurrent` ends the process via `[Environment]::Exit` - which skips `finally` blocks - the elapsed summary is printed and stuck keyboard modifiers are released before control passes to that action.
 
 | Parameter          | Description                                                                                                                                                                                                                                                                         |
@@ -396,7 +586,7 @@ w dotfiles -VSCodeWorkspace Consolidation
 Set-LogLevel Verbose { w MyWorkspace }
 ```
 
-**See also:** [Open-Project](workflow.md#open-project), [Close-Project](workflow.md#close-project), [Open-Browser](../modules/application.md), [Open-ProjectSwagger](#open-projectswagger)
+**See also:** [Open-Project](workflow.md#open-project), [Close-Project](workflow.md#close-project), [Close-Workspace](#close-workspace), [Open-Browser](../modules/application.md), [Open-ProjectSwagger](#open-projectswagger), [Save-WorkspaceState](#save-workspacestate)
 
 ## [Resolve-SwaggerBrowserGroup](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Workflow/Functions/Resolve-SwaggerBrowserGroup.ps1)
 
@@ -428,6 +618,45 @@ Resolve-SwaggerBrowserGroup -Project "MyProject" -SkipDuplicateCheck
 ```
 
 **See also:** [Open-ProjectSwagger](#open-projectswagger), [Open-Workspace](#open-workspace), [Open-Browser](application.md#open-browser), [Test-BrowserGroupAlreadyOpen](application.md#test-browsergroupalreadyopen), [Test-TcpPortReachable](helper.md#test-tcpportreachable)
+
+## [Save-WorkspaceState](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Workflow/Functions/Save-WorkspaceState.ps1)
+
+- **Description:** Records what an `Open-Workspace` invocation actually opened, so [Close-Workspace](#close-workspace) can close it. Called once per workspace after its actions have run; delegates the before/after diff to [Get-WorkspaceOpenDelta](#get-workspaceopendelta) and the file format to [Format-WorkspaceStateContent](#format-workspacestatecontent).
+- **Parameters:** -Workspace, -ExistingWindowHandles, -ExistingTerminalTabs, -DesktopOffset, -Alongside, -AdoptUnclaimed, -Append, -Entry, -StatePath
+- **Usage:** `Save-WorkspaceState -Workspace 'Server' -ExistingWindowHandles $before -ExistingTerminalTabs $tabsBefore`, `Save-WorkspaceState -Entry $survivingEntries`
+
+Deriving ownership from the delta rather than from `WorkspaceActions` is the whole point: a single-instance application is only ever recorded against the open that actually launched it, whereas a config-derived record would list it under every workspace that names it.
+
+A plain open **replaces** the file - it reset the virtual desktops, so no earlier open survives it. Every `-Alongside` open **appends**, including for a name that is already tracked, because that is a genuinely separate instance with its own windows. `-Append` covers the remaining case: the second and later workspaces of a single plain `Open-Workspace a, b` run, which must add to the session the first one defined instead of replacing its entry and leaving it untracked.
+
+Writing is **best-effort**. Any failure is logged as a warning and swallowed, because a snapshot write must never fail an otherwise successful workspace open; the cost is that `Close-Workspace` reports that workspace as untracked. The state directory is created on demand.
+
+Two parameter sets: `Record` builds an entry from a pre-open capture, `Entries` writes an explicit set - used by `Close-Workspace` to persist what remains open after a teardown, and by `Kill-All` to clear the tracker (`-Entry @()`).
+
+| Parameter                | Type      | Description                                                                                                       |
+| ------------------------ | --------- | ----------------------------------------------------------------------------------------------------------------- |
+| `-Workspace`             | string    | Name of the workspace this entry belongs to. Mandatory in the `Record` set.                                         |
+| `-ExistingWindowHandles` | object    | Handles that existed before the open (`HashSet[IntPtr]`, raw values, or objects exposing `.Handle`).                 |
+| `-ExistingTerminalTabs`  | hashtable | The pre-open `Get-TerminalTabSnapshot` (window handle -> tab titles).                                               |
+| `-DesktopOffset`         | int       | Desktop offset the open used (`0` normally, `+N` for `-Alongside`). Recorded for context.                            |
+| `-Alongside`             | switch    | The open was alongside existing desktops; also switches the write from replace to append.                            |
+| `-AdoptUnclaimed`        | switch    | Forwarded to `Get-WorkspaceOpenDelta`. First workspace of a plain run only.                                          |
+| `-Append`                | switch    | Add to the tracker instead of replacing it, without implying `-Alongside`.                                           |
+| `-Entry`                 | object[]  | Write exactly these entries, replacing the file. Mandatory in the `Entries` set; pass `@()` to clear the tracker.     |
+| `-StatePath`             | string    | Full path to the state file. Defaults to [Get-WorkspaceStatePath](#get-workspacestatepath).                          |
+
+```powershell
+# Record what an open produced (what Open-Workspace does internally)
+Save-WorkspaceState -Workspace 'Server' -ExistingWindowHandles $before -ExistingTerminalTabs $tabsBefore -AdoptUnclaimed
+
+# Keep only the workspaces that are still open (what a teardown does)
+Save-WorkspaceState -Entry $survivingEntries
+
+# Clear the tracker outright (what Kill-All does)
+Save-WorkspaceState -Entry @()
+```
+
+**See also:** [Get-WorkspaceOpenDelta](#get-workspaceopendelta), [Get-WorkspaceState](#get-workspacestate), [Format-WorkspaceStateContent](#format-workspacestatecontent), [Close-Workspace](#close-workspace), [Kill-All](system.md#kill-all)
 
 ## [Test-TerminalTabsAlreadyOpen](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Workflow/Functions/Test-TerminalTabsAlreadyOpen.ps1)
 
@@ -644,5 +873,11 @@ Open-Project MyProject
 
 ```powershell
 Close-Project MyProject
-# Closes all MyProject-related windows and tabs
+# Closes all MyProject-related windows and tabs, keeping the workspace itself open
+
+Close-Workspace
+# Or one level up: pick from the workspaces currently open and close everything
+# that open produced - windows, terminal tabs, and the emptied virtual desktops
 ```
+
+The two are not alternatives. `Close-Project` is how you swap projects **inside** a workspace that stays open; `Close-Workspace` ends the workspace. Use `Close-Workspace -WhatIf` first if you want to see the plan.
