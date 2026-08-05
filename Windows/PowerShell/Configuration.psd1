@@ -22,7 +22,10 @@
 # (Process scope), the framework apps in WinGetApps.csv (PowerShell, Windows
 # Terminal, PowerToys), PowerShell modules, and the framework symlinks (the
 # PowerShell profile that persists WinuX into new shells, plus the FancyZones
-# files backing the window machinery). Individual bootstrap steps are toggleable
+# files backing the window machinery). WinGet is the only package manager
+# installed, because it is the only one the base has apps for - Scoop and
+# Chocolatey ship empty lists and are skipped entirely (see PackageManagers).
+# Individual bootstrap steps are toggleable
 # via BootstrapConfig.Steps (see that section); invasive steps such as
 # MicrosoftActivationScripts, Win11Debloat, DeveloperMode, NuGetConfig and
 # LockedStartLayout are OFF until you opt in.
@@ -98,7 +101,7 @@
 # → Universal executable paths      : Open-* functions (DBeaver, VirtualBox, etc.)
 #
 # Bootstrap Process:
-# → PackageManagers              : Bootstrap
+# → PackageManagers              : Resolve-PackageManagers → Bootstrap, Upgrade-All
 # → BootstrapConfig              : Bootstrap, Install-Bootstrap
 #
 # Machine Type Detection:
@@ -645,10 +648,25 @@
 	# ==========================================================================
 	# Package Managers Configuration
 	# ==========================================================================
+	# → Consumers: Resolve-PackageManagers (and through it Bootstrap and Upgrade-All)
+	#
+	# The opt-in list of package managers WinuX uses. A manager absent from this list is
+	# never installed by Bootstrap and never touched by Upgrade-All.
+	#
+	# Being listed is necessary but not sufficient: Resolve-PackageManagers also drops a
+	# listed manager whose effective app list has no entries for the current machine type
+	# (overlay included), because installing a package manager that then manages nothing is
+	# a download, a PATH entry and a shim directory bought for no apps. So the list and the
+	# CSVs cannot drift into that state - emptying an overlay is enough to stop installing
+	# its manager.
+	#
+	# The base ships WinGet alone: it carries the framework apps (PowerShell, Windows
+	# Terminal, PowerToys), while ScoopApps.csv and ChocolateyApps.csv ship empty. Add a
+	# manager here in Configuration.local.psd1 when your overlay gives it apps, e.g.
+	#   PackageManagers = @("WinGet", "Scoop")
+	# Valid values: "WinGet", "Scoop", "Chocolatey" (anything else is reported as unknown).
 	PackageManagers               = @(
-		"WinGet",
-		"Scoop",
-		"Chocolatey"
+		"WinGet"
 	)
 
 	# ==========================================================================
@@ -734,6 +752,11 @@
 		# - ScoopApps                  : Install-ScoopPackageManager + Install-ScoopApps
 		# - ChocolateyApps             : Install-ChocolateyPackageManager + Install-ChocolateyApps
 		# - UpgradeAll                 : Upgrade-All
+		#
+		# The three *Apps steps and UpgradeAll are additionally gated by which managers are
+		# in play (PackageManagers plus a non-empty app list - see Resolve-PackageManagers).
+		# The step toggle can only turn a manager OFF: enabling ScoopApps does not install
+		# Scoop if PackageManagers omits it or its app list is empty for this machine.
 		# - DotnetEf                   : Install-DotnetEf
 		# - EnvironmentVariables       : Set-EnvironmentVariables -Auto
 		# - CondaEnvironments          : Create-CondaEnvironments

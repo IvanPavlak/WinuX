@@ -191,31 +191,45 @@ function Bootstrap {
 			Write-LogWarning "WSL setup disabled for machine type [$global:MachineType] (BootstrapConfig.Steps.WSL) - skipping Configure-WSL, Initialize-WSLEnvironment, Configure-WSLSSH"
 		}
 
-		if ($steps.WinGetApps) {
+		# Which package managers this machine actually uses: listed in PackageManagers AND holding at
+		# least one app for this machine type (see Resolve-PackageManagers, which reports the ones it
+		# drops). A manager with nothing to install is never installed just to sit there managing
+		# nothing - the base Scoop and Chocolatey lists ship empty, so a vanilla bootstrap installs
+		# WinGet alone. The step toggles remain the per-invocation override on top of that.
+		$managers = @(Resolve-PackageManagers)
+
+		if ($steps.WinGetApps -and $managers -contains "WinGet") {
 			Install-WinGetPackageManager
 			Install-WinGetApps
 		}
-		else {
+		elseif (-not $steps.WinGetApps) {
 			Write-LogWarning "WinGet apps skipped (BootstrapConfig.Steps.WinGetApps)"
 		}
 
-		if ($steps.ScoopApps) {
+		if ($steps.ScoopApps -and $managers -contains "Scoop") {
 			Install-ScoopPackageManager
 			Install-ScoopApps
 		}
-		else {
+		elseif (-not $steps.ScoopApps) {
 			Write-LogWarning "Scoop apps skipped (BootstrapConfig.Steps.ScoopApps)"
 		}
 
-		if ($steps.ChocolateyApps) {
+		if ($steps.ChocolateyApps -and $managers -contains "Chocolatey") {
 			Install-ChocolateyPackageManager
 			Install-ChocolateyApps
 		}
-		else {
+		elseif (-not $steps.ChocolateyApps) {
 			Write-LogWarning "Chocolatey apps skipped (BootstrapConfig.Steps.ChocolateyApps)"
 		}
 
-		if ($steps.UpgradeAll) { Upgrade-All } else { Write-LogWarning "Package upgrade skipped (BootstrapConfig.Steps.UpgradeAll)" }
+		# The managers resolved above are handed over rather than resolved a second time: same answer,
+		# one set of skip warnings per run, and the upgrade provably covers exactly what was installed.
+		if ($steps.UpgradeAll -and $managers.Count -gt 0) {
+			Upgrade-All -PackageManager $managers
+		}
+		elseif (-not $steps.UpgradeAll) {
+			Write-LogWarning "Package upgrade skipped (BootstrapConfig.Steps.UpgradeAll)"
+		}
 
 		# Fork-defined optional install steps (BootstrapConfig.PersonalSteps) - the base config
 		# ships an empty list, so a vanilla WinuX bootstrap runs nothing here. Entries are plain

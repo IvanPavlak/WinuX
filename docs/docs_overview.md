@@ -129,9 +129,11 @@ Phase 3 (System Config):         Set-CustomExecutionPolicy → Enable-DeveloperM
                                  → Display-SystemLanguageSettings → Configure-NerdFont
                                  → Install-PowerShellModules → Set-SpecialFolders
                                  → Restart-Explorer → Configure-WSL (config-gated: Steps.WSL)
-Phase 4 (Packages):              Install-WinGetPackageManager → Install-WinGetApps
+Phase 4 (Packages):              Resolve-PackageManagers (base => WinGet alone)
+                                 → Install-WinGetPackageManager → Install-WinGetApps
                                  → Install-ScoopPackageManager → Install-ScoopApps
                                  → Install-ChocolateyPackageManager → Install-ChocolateyApps → Upgrade-All
+                                 (each manager runs only if in play: PackageManagers + non-empty app list)
 Phase 5 (Dev Tools):             PersonalSteps (fork-defined; base runs none) → Install-DotnetEF
 Phase 6 (Environment):           Set-EnvironmentVariables -Auto → Create-CondaEnvironments
                                  → Configure-NuGetConfig

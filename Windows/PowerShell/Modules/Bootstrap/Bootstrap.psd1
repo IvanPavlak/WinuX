@@ -15,6 +15,7 @@
 		'Load-PathConfiguration',
 		'Merge-Hashtable',
 		'Resolve-BootstrapSteps',
+		'Resolve-PackageManagers',
 		'Test-MachineTypeScope'
 	)
 }

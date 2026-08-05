@@ -14,6 +14,9 @@ BeforeAll {
 	# shared Resolve-Steps).
 	. "$ModuleRoot\Helper\Functions\Resolve-Steps.ps1"
 	. "$BootstrapFunctionsPath\Resolve-BootstrapSteps.ps1"
+	# Bootstrap gates the package-manager steps through Resolve-PackageManagers; dot-source it so it
+	# exists to Mock even in sessions whose imported Bootstrap module predates the export.
+	. "$BootstrapFunctionsPath\Resolve-PackageManagers.ps1"
 }
 
 AfterAll {
@@ -62,6 +65,8 @@ Describe "Bootstrap" {
 		Mock Set-SpecialFolders { }
 		Mock Restart-Explorer { }
 		Mock Configure-WSL { }
+		# All three in play by default, so the step-toggle tests below exercise the toggles alone.
+		Mock Resolve-PackageManagers { @('WinGet', 'Scoop', 'Chocolatey') }
 		Mock Install-WinGetPackageManager { }
 		Mock Install-WinGetApps { }
 		Mock Install-ScoopPackageManager { }
@@ -148,6 +153,55 @@ Describe "Bootstrap" {
 
 		Should -Invoke Upgrade-All -Times 0
 		Should -Invoke Install-WinGetApps -Times 1 -Exactly
+	}
+
+	It "installs only the package managers that are in play" {
+		$global:MachineType = 'Laptop'
+		Mock Resolve-PackageManagers { @('WinGet') }
+
+		Bootstrap
+
+		Should -Invoke Install-WinGetPackageManager -Times 1 -Exactly
+		Should -Invoke Install-WinGetApps -Times 1 -Exactly
+		Should -Invoke Install-ScoopPackageManager -Times 0
+		Should -Invoke Install-ScoopApps -Times 0
+		Should -Invoke Install-ChocolateyPackageManager -Times 0
+		Should -Invoke Install-ChocolateyApps -Times 0
+	}
+
+	It "does not install a package manager an enabled step asks for when it is not in play" {
+		$global:MachineType = 'Laptop'
+		$global:Configuration.BootstrapConfig = @{ Steps = @{ ScoopApps = $true } }
+		Mock Resolve-PackageManagers { @('WinGet') }
+
+		Bootstrap
+
+		Should -Invoke Install-ScoopPackageManager -Times 0
+		Should -Invoke Install-ScoopApps -Times 0
+	}
+
+	It "installs no package manager when none is in play" {
+		$global:MachineType = 'Laptop'
+		Mock Resolve-PackageManagers { @() }
+
+		Bootstrap
+
+		Should -Invoke Install-WinGetPackageManager -Times 0
+		Should -Invoke Install-ScoopPackageManager -Times 0
+		Should -Invoke Install-ChocolateyPackageManager -Times 0
+		# Nothing installed means nothing to upgrade either.
+		Should -Invoke Upgrade-All -Times 0
+	}
+
+	It "hands the resolved managers to Upgrade-All instead of letting it resolve again" {
+		$global:MachineType = 'Laptop'
+		Mock Resolve-PackageManagers { @('WinGet', 'Scoop') }
+
+		Bootstrap
+
+		Should -Invoke Upgrade-All -Times 1 -Exactly -ParameterFilter {
+			$PackageManager.Count -eq 2 -and $PackageManager -contains 'WinGet' -and $PackageManager -contains 'Scoop'
+		}
 	}
 
 	It "uses Update-Repositories -Private when RepositoryUpdateScope maps the machine type to Private" {

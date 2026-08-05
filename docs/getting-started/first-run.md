@@ -56,13 +56,15 @@ Every step is individually toggleable via `BootstrapConfig.Steps` (or per invoca
 │  └─→ Configure-WSL (config-gated: Steps.WSL)                                │
 │                                                                             │
 │  PHASE 4: PACKAGE MANAGEMENT                                                │
+│  │   Only managers in play run: listed in PackageManagers AND holding at    │
+│  │   least one app for this machine. Base config => WinGet alone.           │
 │  ├─→ Install-WinGetPackageManager                                           │
 │  ├─→ Install-WinGetApps (from WinGetApps.csv)                               │
-│  ├─→ Install-ScoopPackageManager                                            │
+│  ├─→ Install-ScoopPackageManager (skipped: empty ScoopApps.csv)             │
 │  ├─→ Install-ScoopApps (from ScoopApps.csv)                                 │
-│  ├─→ Install-ChocolateyPackageManager                                       │
+│  ├─→ Install-ChocolateyPackageManager (skipped: empty ChocolateyApps.csv)   │
 │  ├─→ Install-ChocolateyApps (from ChocolateyApps.csv)                       │
-│  └─→ Upgrade-All (update all packages)                                      │
+│  └─→ Upgrade-All (update packages of every manager in play)                 │
 │                                                                             │
 │  PHASE 5: DEVELOPMENT TOOLS                                                 │
 │  ├─→ PersonalSteps (fork-defined; base config runs none)                    │

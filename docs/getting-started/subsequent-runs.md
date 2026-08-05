@@ -26,7 +26,7 @@ Bootstrap is **idempotent** - safe to run multiple times:
 | **Update-Repositories**   | Pulls latest, stashes local changes if needed  |
 | **System Configuration**  | Re-applies settings (no-op if already correct) |
 | **Package Installation**  | Installs new apps from CSV, skips existing     |
-| **Upgrade-All**           | Updates all installed packages                 |
+| **Upgrade-All**           | Updates packages of every manager in play      |
 | **Symbolic Links**        | Re-creates (safe if already exist)             |
 | **Environment Variables** | Re-applies (no-op if already set)              |
 | **Taskbar**               | Reconfigures pinned apps                       |
@@ -56,13 +56,16 @@ Update-Repositories WinuX
 ### Package Management
 
 ```powershell
-# Upgrade everything
+# Upgrade every package manager in play (PackageManagers + non-empty app list)
 Upgrade-All
 
-# Upgrade specific manager
+# Upgrade specific manager - honoured as given, even if not in PackageManagers
 Upgrade-All WinGet
 Upgrade-All Scoop
 Upgrade-All Chocolatey
+
+# Upgrade more than one
+Upgrade-All WinGet, Scoop
 
 # Install new WinGet apps (after editing CSV)
 Install-WinGetApps

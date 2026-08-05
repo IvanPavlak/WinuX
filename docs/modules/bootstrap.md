@@ -12,6 +12,8 @@ Transforms a fresh Windows installation into a fully configured development envi
 
 Every step is individually toggleable via `BootstrapConfig.Steps`, resolved once per run by [Resolve-BootstrapSteps](#resolve-bootstrapsteps); `-Skip`/`-Include` override the config per invocation. Most steps also no-op on their own when their configuration section is empty, so an enabled step on the empty base config applies nothing. The opt-in steps that act the moment they run default off: `MicrosoftActivationScripts`, `Win11Debloat`, `DeveloperMode`, `NuGetConfig`, `LockedStartLayout`.
 
+The three package-manager steps are additionally gated by [Resolve-PackageManagers](#resolve-packagemanagers), called once per run: a manager is installed only when it is listed in `PackageManagers` **and** has at least one app for this machine type. The step toggle can therefore only turn a manager off - enabling `ScoopApps` does not install Scoop if `PackageManagers` omits it or its app list is empty. On the base configuration that means WinGet alone, because `ScoopApps.csv` and `ChocolateyApps.csv` ship empty.
+
 Execution sequence:
 
 1. (`-WithInitialSetup` only) `Rename-Machine`, `Start-MicrosoftActivationScripts`, `Start-Win11Debloat` (the latter two opt-in via `Steps`)
@@ -20,7 +22,7 @@ Execution sequence:
 4. System theme, locale, display language, keyboard layouts
 5. Nerd Font, PowerShell modules, special folder redirections
 6. WSL configuration
-7. WinGet, Scoop, and Chocolatey - install package managers then apps from CSVs
+7. WinGet, Scoop, and Chocolatey - install each manager in play then its apps from CSVs
 8. Upgrade all packages, fork-defined personal steps (BootstrapConfig.PersonalSteps, each entry optionally machine-gated like the app CSVs' `Machine` column), .NET EF CLI
 9. Environment variables, Conda environments, NuGet config, taskbar pins
 10. WSL environment initialization, symbolic links, WSL SSH setup
@@ -328,6 +330,35 @@ Resolve-BootstrapSteps -Include Win11Debloat
 ```
 
 **See also:** [Bootstrap](#bootstrap), [Resolve-Steps](helper.md#resolve-steps), [Configuration Reference: BootstrapConfig](../configuration/configuration-reference.md#bootstrapconfig)
+
+## [Resolve-PackageManagers](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Bootstrap/Functions/Resolve-PackageManagers.ps1)
+
+- **Description:** The single gate deciding which of WinGet, Scoop and Chocolatey WinuX installs and upgrades. Returns the managers in play, in canonical spelling and canonical order (WinGet, Scoop, Chocolatey - the order Bootstrap installs them in), so callers can switch on the returned strings directly. Consumed by [`Bootstrap`](#bootstrap) and [`Upgrade-All`](system.md#upgrade-all).
+- **Parameters:** -PackageManager (explicit override), -MachineType
+- **Usage:** `Resolve-PackageManagers`, `Resolve-PackageManagers -PackageManager "Chocolatey"`
+
+A manager is in play when **both** conditions hold:
+
+- It is listed in `PackageManagers` in `Configuration.psd1`. That list is the opt-in: a manager absent from it is never installed and never upgraded.
+- Its effective app list holds at least one row applicable to this machine type. The list is read through [`Import-AppCsv`](#import-appcsv), so the machine-local `<name>.local.csv` overlay counts, and each row's `Machine` column is checked with [`Test-MachineTypeScope`](#test-machinetypescope), so a manager whose only apps target other machines counts as empty.
+
+The second condition is what keeps a package manager off a machine that has no use for it. Installing one is not free - it is a download, a PATH entry and a shim directory that then sit there managing nothing - and the base Scoop and Chocolatey lists ship empty, so a vanilla bootstrap used to install two managers for zero apps. Deriving it from the data rather than from the list alone also means the two cannot drift: a fork that empties its Scoop overlay stops installing Scoop without having to remember to also edit `PackageManagers`.
+
+Unknown entries are reported through `Write-LogError` with the valid values, the same way `Test-MachineTypeScope` reports a misspelled machine scope, so a typo like `"Chocolatley"` is surfaced instead of silently dropping a manager. An empty `PackageManagers` returns nothing with a warning.
+
+| Parameter          | Type       | Default               | Description                                                                                                                                    |
+| ------------------ | ---------- | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `-PackageManager`  | `string[]` | -                     | Explicit manager(s) to use instead of resolving from configuration. Honoured as given - neither the opt-in list nor the empty-list check applies. Backs `Upgrade-All -PackageManager`. |
+| `-MachineType`     | `string`   | `$global:MachineType` | Machine type the app lists are filtered against.                                                                                               |
+
+```powershell
+# What would Bootstrap install on this machine?
+Resolve-PackageManagers
+
+# Base configuration => WinGet alone (Scoop and Chocolatey ship empty lists)
+```
+
+**See also:** [Bootstrap](#bootstrap), [Import-AppCsv](#import-appcsv), [Test-MachineTypeScope](#test-machinetypescope), [Upgrade-All](system.md#upgrade-all), [Configuration Reference: PackageManagers](../configuration/configuration-reference.md#packagemanagers)
 
 ## [Test-MachineTypeScope](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Bootstrap/Functions/Test-MachineTypeScope.ps1)
 

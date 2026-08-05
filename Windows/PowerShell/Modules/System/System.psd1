@@ -55,6 +55,7 @@
 		'Set-Wallpaper',
 		'Show-PinnedAppsWarning',
 		'SymbolicLinkMaker',
+		'Sync-AppPins',
 		'Terminate-AllBrowserProcesses',
 		'Terminate-AllProcessesByName',
 		'Terminate-AllProcessesWithVisibleWindows',

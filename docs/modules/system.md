@@ -256,7 +256,7 @@ Get-InstalledApps
 
 ## [Get-PinnedApps](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Get-PinnedApps.ps1)
 
-- **Description:** Returns the version-pinned apps of one app list, machine-local overlay included. Reads the list through [`Import-AppCsv`](bootstrap.md#import-appcsv) and returns the `App` of every row whose `Version` is a real version rather than the "track the latest" value. Used to identify apps that should NOT be upgraded because they are locked to a specific version. Helper function for `Upgrade-All`.
+- **Description:** Returns the version-pinned apps of one app list, machine-local overlay included. Reads the list through [`Import-AppCsv`](bootstrap.md#import-appcsv) and returns the `App` of every row whose `Version` is a real version rather than the "track the latest" value. The single definition of "what counts as pinned", used by [`Sync-AppPins`](#sync-apppins) to decide which apps to lock in each package manager.
 - **Parameters:** -DataFileKey, -VersionExcludeValue
 - **Usage:** `Get-PinnedApps -DataFileKey WinGetApps`, `Get-PinnedApps -DataFileKey ScoopApps -VersionExcludeValue "latest"`
 
@@ -277,7 +277,7 @@ Get-PinnedApps -DataFileKey WinGetApps
 Get-PinnedApps -DataFileKey ScoopApps -VersionExcludeValue "latest"
 ```
 
-**See also:** [Import-AppCsv](bootstrap.md#import-appcsv), [Upgrade-All](#upgrade-all)
+**See also:** [Import-AppCsv](bootstrap.md#import-appcsv), [Sync-AppPins](#sync-apppins), [Upgrade-All](#upgrade-all)
 
 ## [Initialize-OhMyPosh](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Initialize-OhMyPosh.ps1)
 
@@ -1028,6 +1028,46 @@ The machine type is resolved via `DetermineMachineType`, then the `SymbolicLinks
 SymbolicLinkMaker
 ```
 
+## [Sync-AppPins](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Sync-AppPins.ps1)
+
+- **Description:** Reconciles a package manager's own version pins with the effective app list, in both directions, so a bulk upgrade cannot move a version-locked app. All three managers are handled through their native pin mechanism. Called by [`Upgrade-All`](#upgrade-all) before the upgrade runs.
+- **Parameters:** -PackageManager (`WinGet`, `Scoop` or `Chocolatey`)
+- **Usage:** `Sync-AppPins -PackageManager WinGet`, `Sync-AppPins -PackageManager Scoop`
+
+| Manager      | Pin                         | Unpin               | Current state read     |
+| ------------ | --------------------------- | ------------------- | ---------------------- |
+| `WinGet`     | `winget pin add --blocking` | `winget pin remove` | `winget pin list --id` |
+| `Scoop`      | `scoop hold`                | `scoop unhold`      | `scoop export` (Info)  |
+| `Chocolatey` | `choco pin add`             | `choco pin remove`  | `choco pin list -r`    |
+
+Both halves of the pin lifecycle matter:
+
+- Every row carrying a real version is **pinned**. This is what stops `winget upgrade --all`, `scoop update *` and `choco upgrade all` from walking straight past a deliberate version lock.
+- Every row back to tracking the latest that is still pinned from an earlier run has its pin **removed**. Without this half a pin outlives the decision behind it: unpinning an app in the CSV would leave the manager's own pin in place and the app frozen forever, with nothing in WinuX left to explain why it stopped updating. [`Install-WinGetApps`](application.md#install-wingetapps) already reconciles this way per app at install time; this is the same reconciliation for the upgrade path.
+
+Recording the pin **in the manager itself** - rather than merely excluding the app from the list WinuX passes to the upgrade - is what makes the lock hold outside WinuX too: a hand-run `winget upgrade --all`, `scoop update *` or `choco upgrade all` respects it as well.
+
+Only apps WinuX manages are touched - the removal side considers exactly the apps in the effective list that are not pinned, so a pin somebody added by hand for an app outside the list is left alone. Pinned apps come from [`Get-PinnedApps`](#get-pinnedapps) and the managed set from [`Import-AppCsv`](bootstrap.md#import-appcsv), so the machine-local `<name>.local.csv` overlay counts on both sides.
+
+Two Scoop specifics, both consequences of how scoop stores a hold (in the installed app's `install.json`):
+
+- A hold only exists on an **installed** app, so a version-locked row that is not installed yet is reported and left to [`Install-ScoopApps`](application.md#install-scoopapps), which installs it at the pinned version. WinGet and Chocolatey accept a pin ahead of installation.
+- `scoop hold`/`unhold` need `-g` for a globally installed app, and the flag follows the **installed scope** read from `scoop export`, not the CSV's `Global` column - an app may have been installed the other way by hand, and the hold has to land where the app actually is. The single `scoop export` call reports installed, held and global state together, since its `Info` column is the comma-joined marker set `scoop list` builds.
+
+| Parameter         | Description                                                                                                                                                                          |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `-PackageManager` | Which manager's pins to reconcile: `WinGet` (unpinned value is `Latest`), `Scoop` (lower-case `latest`), or `Chocolatey` (an empty `Version` cell means latest, so any version counts as a pin). |
+
+```powershell
+# Pin every version-locked WinGet app and clear pins for apps back to "Latest"
+Sync-AppPins -PackageManager WinGet
+
+# The same through scoop hold / unhold, so a later `scoop update *` skips the held apps
+Sync-AppPins -PackageManager Scoop
+```
+
+**See also:** [Upgrade-All](#upgrade-all), [Get-PinnedApps](#get-pinnedapps), [Show-PinnedAppsWarning](#show-pinnedappswarning)
+
 ## [Terminate-AllBrowserProcesses](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Terminate-AllBrowserProcesses.ps1)
 
 - **Description:** Gracefully terminates every browser declared in `Configuration.Universal.Browsers` (Firefox, Tor, Chrome, Edge, Brave) by posting `WM_CLOSE` to each browser's visible top-level windows. Browsers are disambiguated by both process name (derived from the configured `Exe` filename) and a brand-specific window title regex, so browsers that share a process name (Firefox vs. Tor, both `firefox.exe`) and chromium child processes (GPU/renderer/utility) are handled correctly. With `-Exclude`, `WM_CLOSE` is posted only to non-matching windows - kept windows are never touched, so there is no foreground-focus race.
@@ -1282,23 +1322,33 @@ Update-DirectoryNames -Path "C:\My Folders" -WhatIf
 
 ## [Upgrade-All](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Upgrade-All.ps1)
 
-- **Description:** Upgrades all packages across WinGet, Scoop, and/or Chocolatey. Reads pinned (version-locked) apps from the configured app lists - via `Get-PinnedApps`, so a version pinned in a machine-local `<name>.local.csv` overlay counts too - and prevents them from being upgraded. Without `-PackageManager` it upgrades across all managers listed in `PackageManagers` in `Configuration.psd1`; with `-PackageManager` it upgrades only the specified manager. Requires administrator privileges.
+- **Description:** Upgrades all packages across the package managers WinuX actually uses on this machine, resolved by [`Resolve-PackageManagers`](bootstrap.md#resolve-packagemanagers): listed in `PackageManagers` in `Configuration.psd1` **and** holding at least one app for this machine type. Version-pinned apps are never upgraded. Without `-PackageManager` it upgrades every manager in play; with `-PackageManager` it upgrades exactly the manager(s) named. Requires administrator privileges.
 - **Parameters:** -PackageManager
-- **Usage:** `Upgrade-All`, `Upgrade-All -PackageManager "WinGet"`
+- **Usage:** `Upgrade-All`, `Upgrade-All -PackageManager "WinGet"`, `Upgrade-All -PackageManager "WinGet", "Scoop"`
 
-For each targeted manager the function first loads its version-pinned apps through [`Get-PinnedApps`](#get-pinnedapps) (which reads the effective list, overlay included), warns about them, and pins them so they are excluded from the upgrade, then runs the manager's bulk upgrade (`winget upgrade --all`, `scoop update *`, or `choco upgrade all -y`) and reports success or the failing exit code per manager.
+For each manager in play the function first confirms the manager's CLI is actually present - a manager this machine never installed is skipped with a warning rather than driven into a guaranteed failure - then follows the same two steps for every manager alike:
 
-| Parameter         | Description                                                                                                                   |
-| ----------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `-PackageManager` | Single manager to upgrade: `WinGet`, `Scoop`, or `Chocolatey`. Omit to upgrade every manager configured in `PackageManagers`. |
+1. [`Sync-AppPins`](#sync-apppins) reconciles that manager's own pin mechanism (`winget pin`, `scoop hold`, `choco pin`) with the app list, pinning version-locked apps and clearing pins for apps back to tracking the latest.
+2. The manager's bulk upgrade runs unconditionally - `winget upgrade --all`, `scoop update *`, or `choco upgrade all -y` - and the manager itself skips what it has pinned.
+
+Success or the failing exit code is reported per manager. The pinned set comes from [`Get-PinnedApps`](#get-pinnedapps), which reads the effective list, so a version pinned in a machine-local `<name>.local.csv` overlay counts too.
+
+| Parameter         | Description                                                                                                                      |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `-PackageManager` | Manager(s) to upgrade: `WinGet`, `Scoop`, or `Chocolatey`. Accepts more than one. Omit to upgrade every manager in play. |
 
 ```powershell
-# Upgrade all packages across every configured manager (run as admin)
+# Upgrade every package manager in play on this machine (run as admin)
 Upgrade-All
 
 # Upgrade only WinGet packages
 Upgrade-All -PackageManager "WinGet"
+
+# Upgrade WinGet and Scoop, leaving Chocolatey alone
+Upgrade-All -PackageManager "WinGet", "Scoop"
 ```
+
+**See also:** [Sync-AppPins](#sync-apppins), [Get-PinnedApps](#get-pinnedapps), [Resolve-PackageManagers](bootstrap.md#resolve-packagemanagers)
 
 ## Testing
 
