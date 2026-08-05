@@ -8,6 +8,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.30] - 2026-08-05
+
+### Changed
+
+- `Open-Workspace` forwards `-Alongside` to every action that declares the parameter (the same shape it already used for `-InSameShell`), instead of only handing it to `Set-WorkspaceWindowLayout`. Alongside decides *what* an action may work with, not just where its windows land, so a count-based opener has to know about it.
+- **An alongside layout pass is verified instead of assumed successful.** It used to return unconditional success, which disabled the retry loop and let `Save-CurrentLayout` persist whatever landed. Verification is now scoped twice over - only the entries this pass placed a window for, matched only against windows this open created (the pre-open snapshot is passed to `Confirm-WorkspaceWindowPositions` as the new `-ExcludeWindowHandles`) - so the retry loop catches real drift while another workspace's windows can neither be checked nor mistaken for this workspace's. When nothing at all was placed, verification is skipped: no retry can conjure windows.
+- A starved layout is reported once, up front, with both counts (`Layout short by N window(s) - placed X of Y entries!`). It was previously a verbose-only per-entry line, so a run that filled 12 of 33 zones printed the same success banner as a clean one.
+
+### Fixed
+
+- **`w <workspace> -Browser <name> -Alongside` no longer opens jumbled or half-empty.** `Open-Browser -Instances N` means "ensure N windows exist", but an alongside layout may only position windows that open created - every handle captured beforehand is refused by `Set-WindowLayouts -SkipExistingWindows`. Topping up to N total therefore handed the layout `N - already-open` usable windows and left that many zones unfillable, worsening on every rerun as each run added to the pre-existing count. `Open-Browser` gained an `-Alongside` switch that counts nothing and launches the full N as new windows; the shortfall no longer compounds because the pass is verified and the partial arrangement is no longer recorded as the truth for the next open to pin against. `Example` (33 identical `Browser` entries) is the workspace this was visible on, being the only count-based one.
+- `Set-WindowLayouts` drops ineligible windows from an entry's candidate list *before* any claiming happens in alongside mode. Filtering only at the point of use was doubly lossy: the entry that picked a pre-existing window produced no result at all (so the empty zone never surfaced as `Not Found`), and the handle was never marked claimed, so the next duplicate entry could pick the same ineligible window and lose itself the same way. A duplicate entry left with no unclaimed window now also reports `Not Found` instead of falling through silently.
+- `Set-WorkspaceWindowLayout` passes `-DesktopOffset 0` to `Snap-AllWindows` in every mode. The tracked desktop numbers already have the offset folded in (`Set-WindowLayouts` stores `DesktopNumber + DesktopOffset` via `Add-PositionedWindow`) and `Snap-AllWindows` adds it again through `ConvertTo-InternalDesktopIndex`, so a normal open with `-DesktopOffset 2` sent the snap pass to internal index `(3-1)+2 = 4` for a window sitting on `(1-1)+2 = 2` and could not snap anything. Latent until now only because `Open-Workspace` never sets `DesktopOffset` without `Alongside`; the documented `Set-WorkspaceWindowLayout -WorkspaceName "Server" -DesktopOffset 2` example hit it directly.
+- `Remove-VirtualDesktops -EmptyOnly` runs once at the end of an alongside open, after `CurrentLayout.txt` is written, rather than inside the retry loop after every snap. Removing a desktop to the *left* of the workspace shifts every later desktop down by one, which silently invalidated `DesktopOffset` for the remaining retry attempts and broke the snapshot's `actual = record Desktop + section DesktopOffset` contract.
+- An alongside retry clears the window cache before re-matching, so a retry can no longer run against the enumeration the failed pass left behind.
+
 ## [0.1.29] - 2026-08-05
 
 ### Added
@@ -461,7 +477,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.29...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.30...HEAD
+[0.1.30]: https://github.com/IvanPavlak/WinuX/compare/v0.1.29...v0.1.30
 [0.1.29]: https://github.com/IvanPavlak/WinuX/compare/v0.1.28...v0.1.29
 [0.1.28]: https://github.com/IvanPavlak/WinuX/compare/v0.1.27...v0.1.28
 [0.1.27]: https://github.com/IvanPavlak/WinuX/compare/v0.1.26...v0.1.27

@@ -48,6 +48,14 @@ function Confirm-WorkspaceWindowPositions {
 	.PARAMETER DesktopOffset
 		Desktop offset applied to all desktop numbers (for alongside mode).
 
+	.PARAMETER ExcludeWindowHandles
+		Handles that must never be matched to a layout entry. Set-WorkspaceWindowLayout passes
+		the pre-open window snapshot here in alongside mode: those windows belong to another
+		workspace and were deliberately skipped by the positioning pass, so scoring one into a
+		zone would either pass an entry no window was ever placed for, or fail an entry whose
+		real window lost the scoring to a stranger. Omit it for a normal open, where every
+		matching window is fair game.
+
 	.PARAMETER Tolerance
 		Maximum pixel deviation allowed per dimension before a window is considered
 		mispositioned. Default is 50 - deliberately looser than the snap verification
@@ -86,6 +94,9 @@ function Confirm-WorkspaceWindowPositions {
 
 		[Parameter()]
 		[int]$DesktopOffset = 0,
+
+		[Parameter()]
+		[System.Collections.Generic.HashSet[IntPtr]]$ExcludeWindowHandles,
 
 		[Parameter()]
 		[int]$Tolerance = 50
@@ -278,6 +289,14 @@ function Confirm-WorkspaceWindowPositions {
 					Write-LogDebug "[$label] title pattern did not match caption - recovered via sole process window $($unclaimed[0].Title)" -Style Warning
 				}
 			}
+		}
+
+		# Drop windows this run was never allowed to touch (alongside mode - see the
+		# ExcludeWindowHandles help). Applied after the per-pattern caches are filled so the
+		# caches stay reusable; the filter is deterministic, so filtering the local copy per
+		# entry gives the same answer as filtering the cache would.
+		if ($ExcludeWindowHandles -and $ExcludeWindowHandles.Count -gt 0 -and $windows) {
+			$windows = @($windows | Where-Object { -not $ExcludeWindowHandles.Contains($_.Handle) })
 		}
 
 		# Prefer candidates on the expected virtual desktop. If none exist there,

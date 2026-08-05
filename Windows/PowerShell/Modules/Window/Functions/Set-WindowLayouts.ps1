@@ -57,7 +57,9 @@ function Set-WindowLayouts {
 
 	.PARAMETER SkipExistingWindows
 		Switch (alongside mode) that skips windows existing before this workspace opened,
-		since they belong to a previous workspace.
+		since they belong to a previous workspace. Ineligible windows are removed from an
+		entry's candidate list before any claiming happens, so an entry left with none reports
+		"Not Found" (a visible, countable shortfall) instead of silently placing nothing.
 
 	.PARAMETER PinnedHandleMap
 		Optional hashtable from a previous successful run (built by Set-WorkspaceWindowLayout
@@ -654,6 +656,11 @@ function Set-WindowLayouts {
 				WindowProcessName = $recordedWindow.ProcessName
 				ProcessId         = [uint32]$recordedWindow.ProcessId
 				MonitorLabel      = $monitorLabel
+				# The token-resolved layout entry this result came from. Lets a caller rebuild
+				# the exact subset of the layout this pass actually placed - Set-WorkspaceWindowLayout
+				# verifies only that subset in alongside mode, where the rest of the layout was
+				# deliberately left to whichever workspace already owns those windows.
+				LayoutEntry       = $config
 				ZoneName          = if ($config.Zone) { [string]$config.Zone } else { '' }
 				LayoutName        = if ($Item.Layout) { [string]$Item.Layout } else { '' }
 				DesktopDisplay    = $config.DesktopNumber + $DesktopOffset
@@ -794,6 +801,28 @@ function Set-WindowLayouts {
 			# On non-final attempts, show brief status
 			if ($searchAttempt -lt $maxSearchRetries -and (Test-LogVerbose)) {
 				Write-LogDebug "⚠ Window not found (attempt $searchAttempt/$maxSearchRetries), will retry..." -Style Warning
+			}
+		}
+
+		# Alongside mode: a window that existed before this workspace opened belongs to another
+		# workspace and is refused by the positioning loop further down. Drop those candidates
+		# HERE, before any entry can claim one. Filtering only at the point of use was doubly
+		# lossy: the entry that picked a pre-existing window produced no result at all (so the
+		# empty zone never showed up as "Not Found"), and the handle was never marked claimed,
+		# so the NEXT duplicate entry could pick the very same ineligible window and lose itself
+		# the same way. Filtering here leaves the eligible windows for the entries that can use
+		# them and turns a genuine shortfall into a visible Not Found.
+		#
+		# After the search ladder, not inside it: that ladder exists to ride out transient TITLE
+		# drift on windows that already exist, and no amount of re-querying makes an ineligible
+		# window eligible. Running it per starved entry would add seconds each to a run that has
+		# already gone wrong. A window that appears late is picked up by the caller's own
+		# position -> snap -> verify retry instead.
+		if ($SkipExistingWindows -and $ExistingWindowHandles -and $windows) {
+			$candidateCount = @($windows).Count
+			$windows = @($windows | Where-Object { -not $ExistingWindowHandles.Contains($_.Handle) })
+			if ((Test-LogVerbose) -and $windows.Count -ne $candidateCount) {
+				Write-LogDebug "⊘ Excluded $($candidateCount - $windows.Count) pre-existing window(s) - not eligible for an alongside layout" -Style Warning
 			}
 		}
 
@@ -962,6 +991,24 @@ function Set-WindowLayouts {
 		if ($isDuplicateKey) {
 			$windows = @($windows | Where-Object { -not $claimedHandles.Contains($_.Handle) })
 
+			# Every candidate was already taken by an earlier entry with the same key - there
+			# are fewer windows than entries. Report it like any other unmatched entry: falling
+			# through with an empty set positions nothing AND records nothing, so the caller's
+			# Configured/Not Found tallies added up to less than the layout and the shortfall
+			# went unnoticed.
+			if ($windows.Count -eq 0) {
+				if (Test-LogVerbose) {
+					Write-LogDebug "✗ No unclaimed window left for duplicate entry [$layoutKey]" -Style Warning
+				}
+
+				$results.Add([PSCustomObject]@{
+						ProcessName   = $config.ProcessName
+						Status        = "Not Found"
+						DesktopNumber = $config.DesktopNumber
+					})
+				continue
+			}
+
 			if ($windows.Count -gt 1) {
 				# The old behaviour took $windows[0] - i.e. whatever EnumWindows returned
 				# first (Z-order), which shifts whenever a window is raised/focused between
@@ -1037,8 +1084,9 @@ function Set-WindowLayouts {
 				Write-LogDebug "Processing window => [$($window.Title)]" -Style Step
 			}
 
-			# When using alongside mode (SkipExistingWindows), skip windows that existed before
-			# opening this workspace - they belong to a previous workspace
+			# Backstop for alongside mode: ineligible candidates are already filtered out before
+			# claiming (see the exclusion in the window-search loop above), so reaching this
+			# guard means the window arrived by a path that bypassed that filter.
 			if ($SkipExistingWindows -and $ExistingWindowHandles -and $ExistingWindowHandles.Contains($window.Handle)) {
 				if (Test-LogVerbose) {
 					Write-LogDebug "⊘ Skipping - window existed before this workspace (belongs to another workspace)" -Style Warning

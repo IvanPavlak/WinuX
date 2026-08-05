@@ -36,6 +36,14 @@ function Open-Workspace {
 		-InSameShell so the workspace's terminal tabs join the new window instead of
 		spawning further windows.
 
+		The mode is forwarded as -Alongside to every action that declares the parameter
+		(Get-FilteredParams drops it from the ones that do not), because alongside changes what
+		an action may work with, not only where its windows land: the layout pass positions
+		solely the windows this open created, so a count-based opener such as
+		Open-Browser -Instances must open that many NEW windows instead of counting
+		already-open ones toward the target - otherwise the layout is starved by exactly the
+		number of windows that happened to be open, and worsens on every rerun.
+
 	.EXAMPLE
 		Open-Workspace WinuX
 		# Opens WinuX workspace on the first virtual desktop(s)
@@ -455,6 +463,17 @@ function Open-Workspace {
 					$actionParams["InSameShell"] = $true
 				}
 
+				# Alongside changes WHAT an action may work with, not only where the layout
+				# lands: the layout pass positions solely the windows this open created, so a
+				# count-based action (Open-Browser -Instances) has to open that many NEW windows
+				# rather than count pre-existing ones toward the target - otherwise the layout is
+				# starved by exactly the number of windows that were already open. Forward the
+				# mode to every action that declares it; Get-FilteredParams drops it from the
+				# ones that do not.
+				if ($Alongside) {
+					$actionParams["Alongside"] = $true
+				}
+
 				# Generic project-context handoff: a parameter whose FULL value is the literal
 				# "{SelectedProjects}" resolves at runtime to (1) the explicit -Project argument,
 				# else (2) the projects returned by this workspace's Open-Project action. With
@@ -512,9 +531,6 @@ function Open-Workspace {
 					$actionParams["PreCapturedExistingWindows"] = $existingHandlesBeforeOpen
 					if ($desktopOffset -gt 0) {
 						$actionParams["DesktopOffset"] = $desktopOffset
-					}
-					if ($Alongside) {
-						$actionParams["Alongside"] = $true
 					}
 				}
 

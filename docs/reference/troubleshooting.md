@@ -328,6 +328,22 @@ Apply-FancyZones -MonitorConfig $config.Monitors -Force
 
 If a workspace layout reruns after a snap failure, the recovery path now resizes only the failed window handle before retrying. Other open windows are left untouched.
 
+### Alongside Workspace Opens With Windows Missing Or In The Wrong Zones
+
+**Problem:** `w <workspace> -Alongside` fills only some of the layout's zones, and the arrangement looks progressively more scrambled each time it is rerun. A normal (non-alongside) open of the same workspace is fine.
+
+**Solution:** Update to a build where `Open-Workspace` forwards `-Alongside` to the workspace's actions. Then confirm the shortfall is gone - a starved pass now says so explicitly:
+
+```powershell
+Set-LogLevel Verbose { w <workspace> -Alongside }
+```
+
+Look for `Layout short by N window(s) - placed X of Y entries!`. If it still appears, the workspace genuinely does not open enough windows for its layout: compare the layout's entry count against what its `Open-*` actions launch.
+
+**Why:** An alongside open may only position the windows it created - every window captured before it belongs to whichever workspace is already running and is deliberately refused. A count-based opener such as `Open-Browser -Instances 33` used to read that as "ensure 33 exist", so with Chrome already open it launched fewer than 33 (or none) and the layout was handed too few usable windows. The pass then reported success anyway (alongside skipped verification entirely), `CurrentLayout.txt` recorded the partial arrangement as the truth, and the next open pinned windows to those wrong zones - which is why it compounded rather than merely repeating.
+
+Three changes fix it: `-Alongside` is forwarded to every action that declares it (so `-Instances N` opens N **new** windows), alongside verification is scoped rather than skipped (only the entries this pass placed, matched only against this open's windows), and a genuine shortfall is reported once with both counts instead of a verbose-only per-entry line.
+
 ### Layout File Not Found
 
 **Problem:** "Cannot find layout file" error.

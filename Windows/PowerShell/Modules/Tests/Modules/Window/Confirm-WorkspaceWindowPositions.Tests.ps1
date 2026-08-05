@@ -152,4 +152,49 @@ Describe "Confirm-WorkspaceWindowPositions" {
 			$result.Failures[0].WindowTitle | Should -Be '(firefox|chrome|msedge|brave)'
 		}
 	}
+
+	Context "ExcludeWindowHandles (alongside scoping)" {
+		# Alongside verification must judge only the windows THIS open created. A window that
+		# was already on screen belongs to another workspace and was deliberately never
+		# positioned, so matching one would either pass an entry nothing was placed for, or
+		# steal the match from the entry's real window.
+		BeforeAll {
+			$script:excludeLayout = @(
+				@{
+					ProcessName = 'chrome'
+					X = 2; Y = 2; Width = 1717; Height = 1437
+				}
+			)
+		}
+
+		It "never matches an excluded window" {
+			Mock Get-WindowHandle -ParameterFilter { $ProcessName -and -not $WindowTitle } {
+				@([PSCustomObject]@{ Handle = [IntPtr]0x9F001; Title = 'New Tab - Google Chrome' })
+			}
+
+			$excluded = New-Object 'System.Collections.Generic.HashSet[IntPtr]'
+			[void]$excluded.Add([IntPtr]0x9F001)
+
+			$result = Confirm-WorkspaceWindowPositions -LayoutConfig $excludeLayout -ExcludeWindowHandles $excluded
+
+			$result.Success | Should -BeFalse
+			# "Window not found" (not "Handle invalid") => no window was selected at all.
+			$result.Failures[0].Actual | Should -Be 'Window not found'
+		}
+
+		It "still matches windows that are not excluded" {
+			Mock Get-WindowHandle -ParameterFilter { $ProcessName -and -not $WindowTitle } {
+				@([PSCustomObject]@{ Handle = [IntPtr]0x9F002; Title = 'New Tab - Google Chrome' })
+			}
+
+			$excluded = New-Object 'System.Collections.Generic.HashSet[IntPtr]'
+			[void]$excluded.Add([IntPtr]0x9F001)
+
+			$result = Confirm-WorkspaceWindowPositions -LayoutConfig $excludeLayout -ExcludeWindowHandles $excluded
+
+			$result.Failures.Count | Should -Be 1
+			# A window WAS selected - the bogus handle only fails the rect read.
+			$result.Failures[0].Actual | Should -Be 'Handle invalid'
+		}
+	}
 }
