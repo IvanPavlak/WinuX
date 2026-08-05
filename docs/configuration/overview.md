@@ -108,7 +108,7 @@ The configuration uses a hierarchical structure designed to eliminate duplicatio
 
 | Section           | Purpose                     | Consumer Function                |
 | ----------------- | --------------------------- | -------------------------------- |
-| `PackageManagers` | WinGet, Scoop, Chocolatey   | `Bootstrap`                      |
+| `PackageManagers` | Opted-in package managers   | `Resolve-PackageManagers`        |
 | `BootstrapConfig` | Log files, external scripts | `Bootstrap`, `Install-Bootstrap` |
 
 ### Machine Type Detection

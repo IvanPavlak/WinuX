@@ -11,9 +11,12 @@ function Get-PinnedApps {
 
 		Reading through `Import-AppCsv` rather than the committed CSV directly is what makes the pin
 		honour the overlay, and it matters in both directions: a version pinned only in the overlay is
-		invisible in the base file, so a direct reader would let `Upgrade-All` upgrade straight past
-		the pin - exactly the outcome pinning exists to prevent - and an app the overlay removed would
-		still be reported as pinned and handed to `winget pin add`.
+		invisible in the base file, so a direct reader would let the upgrade run straight past the pin -
+		exactly the outcome pinning exists to prevent - and an app the overlay removed would still be
+		reported as pinned and handed to the manager's pin command.
+
+		This is the single definition of "what counts as pinned"; `Sync-AppPins` consumes it to decide
+		which apps to lock in each package manager.
 
 	.PARAMETER DataFileKey
 		Which list to read: `WinGetApps`, `ScoopApps` or `ChocolateyApps`. Resolved through

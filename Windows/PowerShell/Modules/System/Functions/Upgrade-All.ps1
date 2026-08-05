@@ -1,110 +1,104 @@
 function Upgrade-All {
 	<#
 	.SYNOPSIS
-		Upgrades all packages across WinGet, Scoop, and/or Chocolatey.
+		Upgrades all packages across the package managers WinuX actually uses.
 
 	.DESCRIPTION
-		Upgrades packages in the specified package managers. Reads pinned (version-locked) apps
-		from the configured app lists - via `Get-PinnedApps`, so a version pinned in a machine-local
-		`<name>.local.csv` overlay counts too - and prevents them from being upgraded.
+		Upgrades packages in the package managers that are in play on this machine, resolved by
+		`Resolve-PackageManagers`: listed in `PackageManagers` in Configuration.psd1 AND holding at
+		least one app for this machine type. A manager WinuX has no apps for is not upgraded, the
+		same way it is not installed - running its CLI anyway would only produce a failure for a
+		manager the machine deliberately does not have.
 
-		Without `-PackageManager`, upgrades across all managers configured in `PackageManagers` in Configuration.psd1.
-		With `-PackageManager`, upgrades only the specified manager.
+		Version-pinned apps are never upgraded. Every manager is handled identically: `Sync-AppPins`
+		reconciles that manager's own pin mechanism with the app list first - `winget pin`, `scoop hold`
+		or `choco pin`, pinning version-locked apps and clearing pins for apps back to tracking the
+		latest - and the manager then skips what it has pinned during its bulk upgrade. Pins honour the
+		machine-local `<name>.local.csv` overlay, since the lists are read through `Import-AppCsv`.
+
+		With `-PackageManager`, upgrades exactly the named manager(s) and skips resolution from
+		configuration - an explicit request is honoured as given.
 
 		Requires administrator privileges.
 
 	.PARAMETER PackageManager
-		Package manager(s) to upgrade: "WinGet", "Scoop", or "Chocolatey".
-		Omit to upgrade all configured managers.
+		Package manager(s) to upgrade: "WinGet", "Scoop", or "Chocolatey". Omit to upgrade every
+		manager in play for this machine.
 
 	.EXAMPLE
 		Upgrade-All
-		Upgrades all packages across all configured managers.
+		Upgrades every package manager in play on this machine.
 
 	.EXAMPLE
 		Upgrade-All -PackageManager "WinGet"
 		Upgrades only WinGet packages.
+
+	.EXAMPLE
+		Upgrade-All -PackageManager "WinGet", "Scoop"
+		Upgrades WinGet and Scoop, leaving Chocolatey alone.
 	#>
 	param (
-		[Parameter(Mandatory = $false)]
+		[Parameter(Mandatory = $false, Position = 0)]
 		[ValidateSet("WinGet", "Scoop", "Chocolatey")]
-		[string]$PackageManager
+		[string[]]$PackageManager
 	)
 
 	Test-AdminPrivileges
 
-	$PackageManagers = if ($PackageManager) { @($PackageManager) } else { $global:Configuration.PackageManagers }
+	# Splatted rather than passed straight through: -PackageManager carries a ValidateSet, which
+	# rejects the null this parameter holds when the caller omitted it.
+	$resolveParams = @{}
+	if ($PackageManager) { $resolveParams.PackageManager = $PackageManager }
 
-	foreach ($PackageManager in $PackageManagers) {
-		Write-LogTitle "Upgrading all $PackageManager Software"
+	$managers = @(Resolve-PackageManagers @resolveParams)
+
+	if ($managers.Count -eq 0) {
+		Write-LogWarning "No package managers to upgrade"
+		return
+	}
+
+	# The CLI each manager is driven through, used to confirm it is actually present before its
+	# branch runs.
+	$commands = @{ WinGet = "winget"; Scoop = "scoop"; Chocolatey = "choco" }
+
+	foreach ($manager in $managers) {
+		if (-not (Get-Command $commands[$manager] -ErrorAction SilentlyContinue)) {
+			Write-LogWarning "[$manager] is not installed on this machine - skipping its upgrade"
+			continue
+		}
+
+		Write-LogTitle "Upgrading all $manager Software"
+
+		# Reset per manager so a branch whose CLI never sets one cannot inherit the previous manager's
+		# exit code and report a failure that never happened.
+		$exitCode = 0
 
 		try {
-			switch ($PackageManager) {
+			# Every manager follows the same two steps: reconcile its own pins with the app list, then
+			# run its bulk upgrade. The manager itself skips what it has pinned, so the pin holds for a
+			# hand-run upgrade too - not just for this function.
+			Sync-AppPins -PackageManager $manager
+
+			switch ($manager) {
 				"WinGet" {
-					$pinnedApps = Get-PinnedApps -DataFileKey WinGetApps
-
-					if ($pinnedApps.Count -gt 0) {
-						Show-PinnedAppsWarning -PinnedApps $pinnedApps -Message "Pinning version-specific packages to prevent upgrades"
-
-						foreach ($app in $pinnedApps) {
-							winget pin add --id $app --blocking --accept-source-agreements --disable-interactivity | Out-Null
-						}
-						Write-Host ""
-					}
-
 					winget upgrade --all --silent --include-unknown --accept-source-agreements --accept-package-agreements --disable-interactivity
 					$exitCode = $LASTEXITCODE
 				}
 				"Scoop" {
-					$pinnedApps = Get-PinnedApps -DataFileKey ScoopApps -VersionExcludeValue "latest"
-
-					if ($pinnedApps.Count -gt 0) {
-						Show-PinnedAppsWarning -PinnedApps $pinnedApps -Message "Pinning version-specific packages to prevent upgrades"
-
-						try {
-							$scoopExport = scoop export | ConvertFrom-Json
-							$installedApps = $scoopExport.apps | ForEach-Object { $_.Name }
-						}
-						catch {
-							Write-LogWarning "Could not get list of installed apps!"
-							$installedApps = @()
-						}
-
-						$appsToUpdate = $installedApps | Where-Object { $_ -notin $pinnedApps }
-
-						if ($appsToUpdate.Count -gt 0) {
-							scoop update $appsToUpdate
-						}
-						else {
-							Write-LogStep "All apps are version-pinned! Nothing to update!"
-						}
-					}
-					else {
-						scoop update *
-					}
+					scoop update *
 					$exitCode = $LASTEXITCODE
 				}
 				"Chocolatey" {
-					$pinnedApps = Get-PinnedApps -DataFileKey ChocolateyApps -VersionExcludeValue $null
-
-					if ($pinnedApps.Count -gt 0) {
-						Show-PinnedAppsWarning -PinnedApps $pinnedApps -Message "Pinning version-specific packages to prevent upgrades"
-
-						foreach ($app in $pinnedApps) {
-							choco pin add --name=$app | Out-Null
-						}
-					}
-
 					choco upgrade all -y
 					$exitCode = $LASTEXITCODE
 				}
 			}
 
 			if ($exitCode -eq 0) {
-				Write-LogSuccess "Upgrading all $PackageManager Software completed"
+				Write-LogSuccess "Upgrading all $manager Software completed"
 			}
 			else {
-				Write-LogError "Upgrading all $PackageManager Software failed with exit code [$exitCode]"
+				Write-LogError "Upgrading all $manager Software failed with exit code [$exitCode]"
 			}
 		}
 		catch {

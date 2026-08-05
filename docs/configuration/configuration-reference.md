@@ -754,11 +754,23 @@ SymbolicLinks = @{
 
 Settings used during the Bootstrap process.
 
-### Package Managers
+### PackageManagers
 
-**Key:** `PackageManagers` → Array of enabled package managers (`"WinGet"`, `"Scoop"`, `"Chocolatey"`)
+**Key:** `PackageManagers` → Array of opted-in package managers (`"WinGet"`, `"Scoop"`, `"Chocolatey"`)
 
-**Consumer function:** `Bootstrap`
+**Consumer function:** [`Resolve-PackageManagers`](../modules/bootstrap.md#resolve-packagemanagers), and through it [`Bootstrap`](../modules/bootstrap.md#bootstrap) and [`Upgrade-All`](../modules/system.md#upgrade-all)
+
+The opt-in list of package managers WinuX uses. A manager absent from this list is never installed by Bootstrap and never touched by `Upgrade-All`.
+
+Being listed is necessary but not sufficient: `Resolve-PackageManagers` also drops a listed manager whose effective app list has no entries for the current machine type (overlay included), because installing a package manager that then manages nothing is a download, a PATH entry and a shim directory bought for no apps. The list and the CSVs therefore cannot drift into that state - emptying an overlay is enough to stop installing its manager.
+
+The base ships **WinGet alone**: it carries the framework apps (PowerShell, Windows Terminal, PowerToys), while `ScoopApps.csv` and `ChocolateyApps.csv` ship empty. Add a manager in `Configuration.local.psd1` when your overlay gives it apps - arrays replace wholesale on merge, so name every manager you want, not just the additions:
+
+```powershell
+PackageManagers = @("WinGet", "Scoop")
+```
+
+Anything other than the three valid values is reported as unknown rather than silently ignored.
 
 ### BootstrapConfig
 

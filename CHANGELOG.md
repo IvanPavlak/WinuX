@@ -8,6 +8,39 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.28] - 2026-08-05
+
+### Added
+
+- `Resolve-PackageManagers` (Bootstrap module): the single gate deciding which of WinGet, Scoop and Chocolatey WinuX installs and upgrades, consumed by both `Bootstrap` and `Upgrade-All`. A manager is in play only when it is listed in `PackageManagers` **and** its effective app list holds at least one row for this machine type (read through `Import-AppCsv`, so the `<name>.local.csv` overlay counts, with each row's `Machine` column checked via `Test-MachineTypeScope`). Returns canonical spelling in Bootstrap's install order, and reports an unknown entry like `"Chocolatley"` through `Write-LogError` instead of silently dropping a manager.
+- `Sync-AppPins` (System module): reconciles a package manager's own version pins with the effective app list in both directions before an upgrade - pinning every version-locked row, and clearing pins left behind by rows that are back to tracking the latest. All three managers go through their native mechanism (`winget pin`, `scoop hold`, `choco pin`), so the treatment is uniform and the lock is recorded in the manager rather than only in WinuX.
+
+### Changed
+
+- **A package manager is no longer installed when WinuX has no apps for it.** `Bootstrap`'s three `*Apps` steps now run only for managers in play, so the step toggles can only turn a manager off - enabling `ScoopApps` does not install Scoop if `PackageManagers` omits it or its app list is empty. A vanilla bootstrap used to download and PATH-register two package managers that then managed nothing, because `ScoopApps.csv` and `ChocolateyApps.csv` ship empty.
+- `PackageManagers` went from a near-dead key that only `Upgrade-All` read to the opt-in list gating installation as well.
+- `Bootstrap` resolves the managers once and hands the set to `Upgrade-All` rather than letting it resolve again - one set of skip warnings per run, and the upgrade provably covers exactly what was just installed.
+- `Upgrade-All` now upgrades only the managers in play rather than every manager the configuration listed, `-PackageManager` accepts more than one manager (`Upgrade-All WinGet, Scoop`), and an explicit request is honoured as given without consulting the config. It also skips a manager whose CLI is absent instead of running it anyway: with Chocolatey listed but never installed, `choco upgrade all` used to fail and log an error for a manager the machine deliberately did not have.
+- All three `Upgrade-All` branches are now the same two steps - reconcile pins, then run the manager's bulk upgrade. Scoop's special case is gone: it no longer enumerates installed apps via `scoop export` to build a filtered `scoop update <list>`, because a held app is skipped by `scoop update *` on its own.
+
+### Breaking
+
+- **`PackageManagers` in the base configuration is now `@("WinGet")` instead of all three managers**, and it gates installation rather than only upgrades. A fork that relied on the base list to get Scoop or Chocolatey installed will stop getting them.
+
+  **Migration.** If your `<name>.local.csv` overlay gives Scoop or Chocolatey any apps, name those managers in `Configuration.local.psd1`:
+
+  ```powershell
+  PackageManagers = @("WinGet", "Scoop")
+  ```
+
+  Arrays replace wholesale on merge, so list every manager you want, not just the additions. No action is needed if your Scoop and Chocolatey lists are empty - that is the case this release exists to fix, and those managers were installing for zero apps. `Resolve-PackageManagers` reports every manager it drops and why, so a bootstrap log tells you immediately whether a manager you expected is missing.
+
+### Fixed
+
+- A version pin no longer outlives the decision behind it. Unpinning an app in the CSV left `winget pin` / `choco pin` in place, so the app stayed frozen forever with nothing in WinuX left to explain why it had stopped updating - and nothing anywhere ever removed a stale Chocolatey pin. `Upgrade-All` now reconciles every manager's pins through `Sync-AppPins`, which only ever touches apps WinuX manages, leaving hand-made pins for other apps alone.
+- **A version-pinned Scoop app is now actually held in Scoop.** Scoop supports `hold`/`unhold`, but WinuX never used it: the Scoop branch merely left pinned apps out of the app list it passed to `scoop update`, so the lock existed only inside `Upgrade-All`. A hand-run `scoop update *` upgraded straight past the pin. Pinned rows are now held through `scoop hold` (with `-g` when the app is installed globally, following the installed scope read from `scoop export` rather than the CSV's `Global` column), which makes Scoop behave exactly like WinGet and Chocolatey and makes the pin hold outside WinuX too. A version-locked row that is not installed yet is reported and left to `Install-ScoopApps`, since a hold only exists on an installed app.
+- `Upgrade-All` no longer reports a failure for a manager whose CLI sets no exit code. The per-manager exit code is reset each iteration, so it cannot inherit the previous manager's `$LASTEXITCODE`.
+
 ## [0.1.27] - 2026-08-05
 
 ### Added
@@ -421,7 +454,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.27...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.28...HEAD
+[0.1.28]: https://github.com/IvanPavlak/WinuX/compare/v0.1.27...v0.1.28
 [0.1.27]: https://github.com/IvanPavlak/WinuX/compare/v0.1.26...v0.1.27
 [0.1.26]: https://github.com/IvanPavlak/WinuX/compare/v0.1.25...v0.1.26
 [0.1.25]: https://github.com/IvanPavlak/WinuX/compare/v0.1.24...v0.1.25
