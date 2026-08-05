@@ -94,6 +94,18 @@ Describe "Open-Browser" {
 		}
 	}
 
+	It "opens the full group instance count in alongside mode, ignoring already-open windows" {
+		# An alongside layout refuses every window that existed before the workspace opened,
+		# so counting those toward the target leaves that many zones unfillable.
+		Mock Test-BrowserGroupAlreadyOpen { 1 }
+
+		Open-Browser -Groups Work -Browser Chrome -Instances 3 -Alongside
+
+		Should -Invoke Start-Process -Times 3 -Exactly -ParameterFilter {
+			$ArgumentList[0] -eq '--new-window' -and $ArgumentList[1] -eq 'https://github.com'
+		}
+	}
+
 	It "bypasses already-open checks when Override is set" {
 		Mock Test-BrowserGroupAlreadyOpen { $true }
 
@@ -158,6 +170,37 @@ Describe "Open-Browser" {
 			Open-Browser -NoMenu -Browser Chrome -Instances 2
 
 			Should -Invoke Start-Process -Times 0
+		}
+
+		It "opens the full instance count in alongside mode even when the target is already met" {
+			# The pre-existing windows belong to whichever workspace is already running - an
+			# alongside layout is only allowed to place windows THIS open created, so all N
+			# must be launched fresh or the layout is starved by exactly N-existing entries.
+			Mock Get-WindowHandle {
+				@(
+					[PSCustomObject]@{ Handle = [IntPtr]11; Title = 'New Tab - Google Chrome' },
+					[PSCustomObject]@{ Handle = [IntPtr]22; Title = 'Docs - Google Chrome' }
+				)
+			}
+
+			Open-Browser -NoMenu -Browser Chrome -Instances 2 -Alongside
+
+			Should -Invoke Start-Process -Times 2 -Exactly -ParameterFilter {
+				$ArgumentList -contains '--new-window'
+			}
+		}
+
+		It "skips the cold-start gate in alongside mode when the browser is already warm" {
+			# Pre-existing windows do not count toward the target, but they still prove the
+			# browser is running - no need to wait for the first window before bursting.
+			Mock Get-WindowHandle {
+				@([PSCustomObject]@{ Handle = [IntPtr]11; Title = 'New Tab - Google Chrome' })
+			}
+
+			Open-Browser -NoMenu -Browser Chrome -Instances 3 -Alongside
+
+			Should -Invoke Start-Process -Times 3 -Exactly
+			Should -Invoke Wait-BrowserWindowReady -Times 0
 		}
 	}
 

@@ -244,6 +244,70 @@ Describe "Set-WorkspaceWindowLayout" {
 		Should -Invoke Snap-AllWindows -Times 1 -Exactly -ParameterFilter { $DesktopOffset -eq 0 -and $DesktopCount -eq 2 }
 	}
 
+	It "in alongside mode verifies only the entries this pass placed, excluding pre-existing windows" {
+		# Alongside used to report unconditional success, which disabled the retry loop and let
+		# Save-CurrentLayout persist a starved run as the truth - the next open then pinned
+		# windows to those wrong zones. It verifies now, scoped to what this pass claimed.
+		Mock Test-Path { $true }
+		Mock Import-PowerShellDataFile {
+			@{
+				Layout   = @(
+					@{ ProcessName = 'Browser'; DesktopNumber = 1; Zone = 'Left'; Monitor = 'MonitorA' }
+					@{ ProcessName = 'Browser'; DesktopNumber = 1; Zone = 'Right'; Monitor = 'MonitorA' }
+				)
+				Monitors = @{
+					MonitorA = @{ VirtualDesktopLayouts = @{ 1 = 'One' } }
+				}
+			}
+		}
+		Mock Get-DesktopList { @(0) }
+		# Only the first entry found a window this open created - the second was starved.
+		Mock Set-WindowLayouts {
+			@(
+				[PSCustomObject]@{
+					Status      = 'Configured'
+					Handle      = [IntPtr]0xB1001
+					ExpectedX   = 0
+					LayoutEntry = @{ ProcessName = 'chrome'; DesktopNumber = 1; Zone = 'Left'; Monitor = 'MonitorA' }
+				}
+				[PSCustomObject]@{ Status = 'Not Found' }
+			)
+		}
+		Mock Write-LogWarning { }
+
+		$existingHandles = New-Object 'System.Collections.Generic.HashSet[IntPtr]'
+		[void]$existingHandles.Add([IntPtr]0xB1999)
+
+		Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace' -Alongside -PreCapturedExistingWindows $existingHandles
+
+		Should -Invoke Confirm-WorkspaceWindowPositions -Times 1 -Exactly -ParameterFilter {
+			$LayoutConfig.Count -eq 1 -and
+			$LayoutConfig[0].Zone -eq 'Left' -and
+			$ExcludeWindowHandles.Contains([IntPtr]0xB1999)
+		}
+		# The shortfall is reported instead of passing silently.
+		Should -Invoke Write-LogWarning -ParameterFilter { $Message -match 'Layout short by 1 window' }
+	}
+
+	It "in alongside mode skips verification entirely when nothing was placed" {
+		# Nothing to re-place, so a retry could only pay for FancyZones restarts that cannot
+		# conjure windows - the shortfall warning is the report.
+		Mock Test-Path { $true }
+		Mock Import-PowerShellDataFile {
+			@{
+				Layout   = @(@{ ProcessName = 'Browser'; DesktopNumber = 1; Zone = 'Left'; Monitor = 'MonitorA' })
+				Monitors = @{ MonitorA = @{ VirtualDesktopLayouts = @{ 1 = 'One' } } }
+			}
+		}
+		Mock Get-DesktopList { @(0) }
+		Mock Set-WindowLayouts { @([PSCustomObject]@{ Status = 'Not Found' }) }
+		Mock Write-LogWarning { }
+
+		Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace' -Alongside
+
+		Should -Invoke Confirm-WorkspaceWindowPositions -Times 0
+	}
+
 	It "in alongside mode skips existing windows during the early move callback" {
 		$existingHandles = New-Object 'System.Collections.Generic.HashSet[IntPtr]'
 		[void]$existingHandles.Add([IntPtr]101)
@@ -440,7 +504,11 @@ Describe "Set-WorkspaceWindowLayout" {
 		Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace' -DesktopOffset 5 -SnapDelayMs 25
 
 		Should -Invoke Start-Sleep -Times 1 -Exactly -ParameterFilter { $Milliseconds -eq 25 }
-		Should -Invoke Snap-AllWindows -Times 1 -Exactly -ParameterFilter { $DesktopOffset -eq 5 -and $DesktopCount -eq 3 }
+		# Offset 0 even with -DesktopOffset 5: the tracked desktop numbers Snap-AllWindows
+		# reads already have the offset folded in (Set-WindowLayouts adds it before calling
+		# Add-PositionedWindow), and Snap-AllWindows adds it again. Forwarding the real offset
+		# double-applied it and sent the snap pass to a desktop no window was on.
+		Should -Invoke Snap-AllWindows -Times 1 -Exactly -ParameterFilter { $DesktopOffset -eq 0 -and $DesktopCount -eq 3 }
 	}
 
 	It "reads CurrentLayout.txt and forwards a pinned handle map to Set-WindowLayouts, then records the layout on success" {

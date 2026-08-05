@@ -81,6 +81,15 @@ function Set-WorkspaceWindowLayout {
 		New workspace desktops are added to the right of existing ones (uses DesktopOffset).
 		When not specified, the workspace replaces existing desktops (normal mode).
 
+		Alongside also narrows what the layout pass may touch: only windows created by this
+		open are eligible (Set-WindowLayouts -SkipExistingWindows), everything that was
+		already on screen belongs to whichever workspace is already running. Two consequences
+		follow. Count-based openers must be told, or they top up to a total that includes
+		windows the layout cannot use and leave the layout short - hence Open-Workspace
+		forwarding -Alongside to Open-Browser. And verification is scoped rather than skipped:
+		the entries this pass placed a window for, checked only against this open's windows,
+		so the retry loop still catches real drift without ever judging a stranger's window.
+
 	.EXAMPLE
 		Set-WorkspaceWindowLayout -WorkspaceName "WinuX"
 		# Uses automatic window detection
@@ -932,12 +941,15 @@ function Set-WorkspaceWindowLayout {
 
 				[void](& $resetFancyZonesState $(if ($retryTrigger) { $retryTrigger } else { 'layout not applied' }))
 
+				# Windows moved during the failed pass - never let a retry match against a stale
+				# enumeration. Both modes need this; only the snapshot handling below differs.
+				Clear-WindowCache
+
 				# Refresh the existing-handles snapshot so windows that are ALREADY correct are
 				# skipped by Set-WindowLayouts' position check and only wrong windows get redone.
 				# Not in alongside mode: there ExistingWindowHandles means "another workspace's
 				# windows - do not touch" and must stay the original pre-open capture.
 				if (-not $Alongside) {
-					Clear-WindowCache
 					$retrySnapshotWindows = Get-WindowHandle -ErrorAction SilentlyContinue
 					$retryExistingHandles = New-Object 'System.Collections.Generic.HashSet[IntPtr]'
 					if ($retrySnapshotWindows) {
@@ -956,6 +968,11 @@ function Set-WorkspaceWindowLayout {
 
 			if ($notFound -gt 0) {
 				Write-LogDebug " Not Found => [$notFound]" -Style Warning
+				# Verbose-only used to be the ONLY report of a starved layout, so a run that
+				# filled 12 of 33 zones read exactly like a clean one. Name the shortfall with
+				# both counts: the usual cause is too few eligible windows to go round (an
+				# alongside open cannot use windows that were already open).
+				Write-LogWarning "Layout short by $notFound window(s) - placed $successful of $($successful + $notFound) entries!"
 			}
 
 			Write-LogDebug "=> [$successful] layout(s) applied successfully!" -Style Success
@@ -971,13 +988,16 @@ function Set-WorkspaceWindowLayout {
 				Write-LogDebug "Pre-snap resize failures => [$($resizeResult.FailedWindows.Count)]" -Style Warning
 			}
 
-			$snapDesktopOffset = if ($Alongside) { 0 } else { $DesktopOffset }
-			$null = Snap-AllWindows -DesktopOffset $snapDesktopOffset -DesktopCount $requiredVirtualDesktops
+			# Always 0, never $DesktopOffset. Add-PositionedWindow records each window's desktop
+			# with the offset ALREADY folded in (Set-WindowLayouts: $config.DesktopNumber +
+			# $DesktopOffset), and Snap-AllWindows runs those numbers back through
+			# ConvertTo-InternalDesktopIndex, which adds DesktopOffset a second time. Passing
+			# the real offset therefore sent the snap pass to a desktop the windows were never
+			# on: with -DesktopOffset 2, a window tracked as desktop 3 resolved to internal
+			# index 4 while it actually sat on index 2, and nothing on that desktop could snap.
+			# Only alongside was passing 0 - and only alongside was correct.
+			$null = Snap-AllWindows -DesktopOffset 0 -DesktopCount $requiredVirtualDesktops
 			$snapResult = $script:LastSnapAllWindowsResult
-
-			if ($Alongside) {
-				Remove-VirtualDesktops -EmptyOnly
-			}
 
 			$snapFailures = @()
 			if ($snapResult) {
@@ -1009,10 +1029,17 @@ function Set-WorkspaceWindowLayout {
 			}
 
 			# Final fast verification - confirm every layout entry has a live, correctly-positioned
-			# window. Runs against the FULL layout config so entries a previous aborted snap pass
-			# never reached are covered too. Skipped in alongside mode - shared windows between
-			# workspaces make position checks unreliable (windows may legitimately belong to the
-			# other workspace's layout).
+			# window. A normal open runs against the FULL layout config so entries a previous
+			# aborted snap pass never reached are covered too.
+			#
+			# Alongside used to return an unconditional success here, which disabled the retry
+			# loop below AND let Save-CurrentLayout persist a starved/mispositioned pass as the
+			# truth - the next open then pinned windows to those wrong zones, which is what made
+			# the scrambling compound run after run. It is verified now, but scoped twice over:
+			# only the entries this pass actually placed a window for, matched only against
+			# windows this open created. Another workspace's windows can therefore neither be
+			# checked nor mistaken for ours, so the false failures the blanket skip existed to
+			# avoid still cannot happen.
 			$verificationResult = if (-not $Alongside) {
 				Confirm-WorkspaceWindowPositions `
 					-LayoutConfig $config.Layout `
@@ -1021,7 +1048,25 @@ function Set-WorkspaceWindowLayout {
 					-DesktopOffset $DesktopOffset
 			}
 			else {
-				@{ Success = $true }
+				$claimedEntries = @(
+					$results | Where-Object { $_.Status -eq 'Configured' -and $_.LayoutEntry } |
+						ForEach-Object { $_.LayoutEntry }
+				)
+
+				if ($claimedEntries.Count -eq 0) {
+					# Nothing was placed, so there is nothing a retry could re-place - the
+					# shortfall warning above is the report. Retrying would only pay for
+					# FancyZones restarts that cannot conjure windows.
+					@{ Success = $true }
+				}
+				else {
+					Confirm-WorkspaceWindowPositions `
+						-LayoutConfig $claimedEntries `
+						-MonitorInfo $cachedMonitorInfo `
+						-MonitorConfig $config.Monitors `
+						-DesktopOffset $DesktopOffset `
+						-ExcludeWindowHandles $existingWindowHandles
+				}
 			}
 
 			if ($verificationResult.Success) {
@@ -1044,6 +1089,12 @@ function Set-WorkspaceWindowLayout {
 		if (-not $layoutApplied) {
 			if (-not (Test-LogVerbose)) {
 				Loading-Spinner -Stop -Spinner $spinner
+			}
+
+			# Same cleanup the success path runs after saving - giving up should not leave the
+			# empty desktops these attempts created behind either.
+			if ($Alongside) {
+				Remove-VirtualDesktops -EmptyOnly
 			}
 
 			# Escalation: in-process retries exhausted. Track the terminal-respawn count across
@@ -1160,6 +1211,16 @@ function Set-WorkspaceWindowLayout {
 			Save-CurrentLayout -Workspace $layoutNameToUse -LayoutsDir $layoutsDir -MachineType $machineType `
 				-DesktopOffset $DesktopOffset -Alongside:$Alongside -DesktopCount $requiredVirtualDesktops `
 				-LayoutConfig $config.Layout -MonitorConfig $config.Monitors -WindowStates $recordedWindows
+		}
+
+		# Empty-desktop cleanup runs LAST, once, after the snapshot is written. It used to run
+		# inside the retry loop right after each snap, where removing a desktop to the LEFT of
+		# the workspace (the original desktop, now empty because its windows moved) shifts every
+		# later desktop down by one - silently invalidating $DesktopOffset for the remaining
+		# attempts and for the record just saved, whose contract is
+		# "actual desktop = record Desktop + section DesktopOffset".
+		if ($Alongside) {
+			Remove-VirtualDesktops -EmptyOnly
 		}
 
 		Write-LogSuccess "Workspace layout applied successfully!"

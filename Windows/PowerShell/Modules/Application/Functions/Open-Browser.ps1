@@ -43,6 +43,14 @@ function Open-Browser {
 		Target number of browser windows to have open when used with `-NoMenu`.
 		Counts existing windows and opens only the deficit. 0 means open exactly one.
 
+	.PARAMETER Alongside
+		Set by `Open-Workspace` when the workspace is opening alongside existing desktops.
+		Changes `-Instances` from "ensure N windows exist" to "open N NEW windows": an
+		alongside layout pass positions only the windows that open created (every handle
+		captured before it is refused by `Set-WindowLayouts -SkipExistingWindows`), so
+		counting pre-existing windows toward the target starves the layout by exactly the
+		number of browser windows that happened to be open already.
+
 	.EXAMPLE
 		Open-Browser
 		Shows the browser group selection menu.
@@ -58,6 +66,10 @@ function Open-Browser {
 	.EXAMPLE
 		Open-Browser -NoMenu -Browser "Firefox" -Instances 2
 		Ensures 2 Firefox windows are open.
+
+	.EXAMPLE
+		Open-Browser -NoMenu -Browser "Chrome" -Instances 33 -Alongside
+		Opens 33 NEW Chrome windows regardless of how many are already open.
 	#>
 	[CmdletBinding()]
 	param(
@@ -78,7 +90,10 @@ function Open-Browser {
 		[switch]$Override,
 
 		[Parameter()]
-		[int]$Instances = 0
+		[int]$Instances = 0,
+
+		[Parameter()]
+		[switch]$Alongside
 	)
 
 	if (-not $PSBoundParameters.ContainsKey('Browser') -or [string]::IsNullOrWhiteSpace($Browser)) {
@@ -143,11 +158,20 @@ function Open-Browser {
 				if ($browserTitlePattern) {
 					$existingWindows = @($existingWindows | Where-Object { $_.Title -match $browserTitlePattern })
 				}
-				Write-LogDebug " [Open-Browser] Found $($existingWindows.Count) existing [$Browser] window(s) before Instances launch"
+				Write-LogDebug " [Open-Browser] Found $($existingWindows.Count) existing [$Browser] window(s) before Instances launch$(if ($Alongside) { ' (not counted - alongside opens new windows)' })"
 			}
 
+			# -Instances means "have N windows available to the caller", and in alongside mode
+			# a pre-existing window is not available: Set-WindowLayouts is run with
+			# -SkipExistingWindows there, so every handle captured before the workspace opened
+			# is refused by the layout pass. Topping up to N TOTAL then handed the layout only
+			# N - existing usable windows and left that many zones permanently unfillable -
+			# worse on every rerun, since each run adds to the pre-existing count. Count nothing
+			# in that mode and open the full N as new windows.
+			$countableWindows = if ($Alongside) { 0 } else { $existingWindows.Count }
+
 			$targetInstances = if ($Instances -gt 0) { $Instances } else { 1 }
-			$toOpen = [Math]::Max(0, $targetInstances - $existingWindows.Count)
+			$toOpen = [Math]::Max(0, $targetInstances - $countableWindows)
 
 			if ($toOpen -eq 0) {
 				Write-LogWarning "[$Browser] already has $($existingWindows.Count)/$targetInstances instance(s) open!"
@@ -327,14 +351,18 @@ function Open-Browser {
 					if ($cachedWindows) { $countParams['CachedBrowserWindows'] = $cachedWindows }
 
 					$existingCount = Test-BrowserGroupAlreadyOpen @countParams
-					$windowsToOpen = [Math]::Max(0, $Instances - $existingCount)
+					# Same alongside rule as the -NoMenu branch above: windows that existed
+					# before the workspace opened are excluded from an alongside layout, so
+					# they must not count toward the target.
+					$countableExisting = if ($Alongside) { 0 } else { $existingCount }
+					$windowsToOpen = [Math]::Max(0, $Instances - $countableExisting)
 
 					if ($windowsToOpen -eq 0) {
 						Write-LogWarning "[$displayName] already has $existingCount/$Instances instance(s) open!"
 						continue
 					}
 
-					Write-LogDebug " [Open-Browser] Opening $windowsToOpen of $Instances instance(s) for [$displayName] ($existingCount already open)"
+					Write-LogDebug " [Open-Browser] Opening $windowsToOpen of $Instances instance(s) for [$displayName] ($existingCount already open$(if ($Alongside) { ', not counted - alongside' }))"
 
 					for ($inst = 0; $inst -lt $windowsToOpen; $inst++) {
 						if ($urlsToOpen.Count -eq 1) {
@@ -364,7 +392,7 @@ function Open-Browser {
 						}
 					}
 
-					Write-LogStep " Opened $windowsToOpen instance(s) of [$displayName]!$(if ($existingCount -gt 0) { " ($existingCount already existed)" })"
+					Write-LogStep " Opened $windowsToOpen instance(s) of [$displayName]!$(if ($countableExisting -gt 0) { " ($countableExisting already existed)" })"
 					continue
 				}
 
