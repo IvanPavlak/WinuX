@@ -8,6 +8,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.31] - 2026-08-05
+
+### Added
+
+- `Resolve-SystemThemeSteps` (System module): resolves which `Set-SystemTheme` follow-up steps run, the same tri-state shape `Resolve-KillAllSteps` and `Resolve-BootstrapSteps` use (`-Skip` beats `-Include` beats config beats built-in defaults, all through the shared `Resolve-Steps`).
+- `SystemTheme.Steps` configuration section, gating the four actions `Set-SystemTheme` takes after writing the theme registry values: `RefreshBrowserTabs` (`Refresh-BrowserTabs`), `RestartExplorer` (`Restart-Explorer`), `SetWallpaper` (`Set-Wallpaper -Auto`) and `SetLockScreenWallpaper` (`Set-LockScreenWallpaper`). Each entry is a plain boolean or a per-machine-type hashtable with a `Default` fallback, so a step can be on for one machine type and off for another. Everything defaults on except `RefreshBrowserTabs`, keeping a theme switch identical to before unless you opt out of a step.
+- `Set-SystemTheme -Skip <steps>` / `-Include <steps>`, overriding that config for a single invocation (`-Skip` wins when a step appears in both).
+
+### Changed
+
+- The follow-up steps now run once for both branches of `Set-SystemTheme` instead of being duplicated across the already-configured and theme-changed paths. `RefreshBrowserTabs` remains reachable only from the theme-changed path - tabs that already render the requested theme have nothing to pick up from a reload.
+- A verbose run lists the steps it is skipping, the same line `Kill-All` prints.
+
+### Breaking
+
+- **`Set-SystemTheme` no longer reloads open browser tabs by default.** `RefreshBrowserTabs` is the one step that ships off. It is the only follow-up action with real collateral - it takes focus window by window and hard-reloads every tab, discarding unsaved page state - and it was previously unconditional on any theme change. Restarting Explorer and both wallpaper steps stay on, so an unconfigured theme switch is otherwise identical to before.
+
+  **Migration.** If you relied on the tab reload, name it in `Configuration.local.psd1`:
+
+  ```powershell
+  SystemTheme = @{
+      Steps = @{
+          RefreshBrowserTabs = $true
+      }
+  }
+  ```
+
+Hashtables deep-merge per key, so only the steps you change need restating. For a one-off run use `Set-SystemTheme -Auto -Include RefreshBrowserTabs` instead.
+
 ## [0.1.30] - 2026-08-05
 
 ### Changed
@@ -477,7 +506,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.30...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.31...HEAD
+[0.1.31]: https://github.com/IvanPavlak/WinuX/compare/v0.1.30...v0.1.31
 [0.1.30]: https://github.com/IvanPavlak/WinuX/compare/v0.1.29...v0.1.30
 [0.1.29]: https://github.com/IvanPavlak/WinuX/compare/v0.1.28...v0.1.29
 [0.1.28]: https://github.com/IvanPavlak/WinuX/compare/v0.1.27...v0.1.28

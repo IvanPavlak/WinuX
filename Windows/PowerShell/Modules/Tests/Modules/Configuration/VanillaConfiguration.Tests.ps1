@@ -145,4 +145,25 @@ Describe "Vanilla Configuration (empty-by-default contract)" {
 			$script:BaseConfig.BootstrapConfig.ContainsKey("WSLSetup") | Should -BeFalse
 		}
 	}
+
+	Context "Set-SystemTheme step toggles" {
+		# The base spells every step out, and an explicit config value beats the
+		# resolver's built-in default - so the two must agree or the documented
+		# defaults become a lie for anyone reading Resolve-SystemThemeSteps.
+		It "Should ship <Key> as <Expected>, matching the Resolve-SystemThemeSteps default" -ForEach @(
+			@{ Key = "RefreshBrowserTabs"; Expected = $false }
+			@{ Key = "RestartExplorer"; Expected = $true }
+			@{ Key = "SetWallpaper"; Expected = $true }
+			@{ Key = "SetLockScreenWallpaper"; Expected = $true }
+		) {
+			$steps = $script:BaseConfig.SystemTheme.Steps
+			$steps | Should -BeOfType [hashtable]
+			$steps[$Key] | Should -Be $Expected -Because "the base value and the built-in default must not drift"
+		}
+
+		It "Should carry no step the resolver does not know about" {
+			@($script:BaseConfig.SystemTheme.Steps.Keys) | Sort-Object |
+				Should -Be @("RefreshBrowserTabs", "RestartExplorer", "SetLockScreenWallpaper", "SetWallpaper")
+		}
+	}
 }

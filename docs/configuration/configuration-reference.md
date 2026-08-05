@@ -50,7 +50,7 @@ Repository URLs and authentication base.
 **Keys:**
 
 - `GitHub.Base` - Authentication base URL (e.g., `https://MyUser@github.com`)
-- `GitHub.Private.*` - Private repositories (dot-notation, e.g., `Private.WinuX`)
+- `GitHub.Private.*` - Private repositories (dot-notation, e.g., `Private.Dotfiles`)
 - `GitHub.MyOrg.*` - Work organization repositories
 
 **Consumer functions:** `Initialize-Repository`, `Update-Repositories`, `Git-Obsidian`
@@ -210,7 +210,7 @@ Common paths and templates using placeholder tokens for machine independence.
 - `{Dev}` - Machine's development root (from `BasePaths.Dev`)
 - `{User}` - Machine's user root (from `BasePaths.User`)
 - `{MachineType}` - Current machine type (PC, Laptop, Work, Test)
-- `{RepoRoot}` - WinuX repository root path (auto-resolved)
+- `{RepoRoot}` - Dotfiles repository root path (auto-resolved)
 - `{AppData}` - User's `AppData\Roaming` folder
 
 **Key:** `PathTemplates` - Nested hashtable of template paths
@@ -220,7 +220,7 @@ Common paths and templates using placeholder tokens for machine independence.
 ```powershell
 PathTemplates = @{
     ObsidianDirectory                = "{Dev}\Obsidian"
-    TrainingBackupDirectory          = "{Dev}\ExampleBackup"
+    TrainingBackupDirectory          = "{Dev}\Training_Backup"
 
     Projects = @{
         OtherProject = @{
@@ -379,7 +379,7 @@ Defines hierarchical URL groups for the `Open-Browser` function. Supports three 
 
     ```powershell
     Resources = @(
-        "https://github.com/MyUser/WinuX",
+        "https://github.com/MyUser/Dotfiles",
         "https://github.com/MyUser/Obsidian"
     )
     ```
@@ -572,6 +572,56 @@ WallpaperDarkSettings = @{
 ```
 
 File names resolve against the repository's `Wallpapers/` folder.
+
+### Set-SystemTheme Step Toggles
+
+Enables/disables the follow-up steps `Set-SystemTheme` runs after writing the theme registry
+values. `SystemTheme` is a top-level section (not under `Universal`, and separate from the `Themes`
+map above). Each step value is either a plain boolean or a per-machine-type hashtable with a
+`Default` fallback (the `BootstrapConfig.Steps.WSL` shape). The whole section and individual keys
+are optional - missing entries use the built-in defaults.
+
+**Keys:**
+
+- `SystemTheme.Steps.RefreshBrowserTabs` - `Refresh-BrowserTabs` (default: **off**; only runs when the theme actually changed)
+- `SystemTheme.Steps.RestartExplorer` - `Restart-Explorer` (default: on)
+- `SystemTheme.Steps.SetWallpaper` - `Set-Wallpaper -Auto -Theme <theme>` (default: on)
+- `SystemTheme.Steps.SetLockScreenWallpaper` - `Set-LockScreenWallpaper -Theme <theme>` (default: on)
+
+Everything defaults on except `RefreshBrowserTabs`. Restarting Explorer is what makes the new theme
+visible on shell chrome, so it belongs to applying a theme rather than being collateral of it - skip
+it and the taskbar and open Explorer windows keep the old theme until Explorer restarts on its own or
+you sign out. The wallpaper steps are on because both functions no-op when their configuration
+section is empty, so on the empty base config they apply nothing. Reloading every browser tab is the
+one action with real collateral - it takes focus per window and hard-reloads pages, discarding
+unsaved page state - so it is the only opt-in step.
+
+`RestartExplorer` runs *before* the wallpaper steps and must stay there: restarting Explorer
+afterwards can make Windows reload stale wallpaper cache data and revert the desktop image.
+
+Per invocation, `Set-SystemTheme -Skip <steps>` forces steps off and `Set-SystemTheme -Include <steps>`
+forces them on, both overriding this config (`-Skip` wins when a step appears in both).
+
+**Consumer functions:** `Set-SystemTheme`, `Resolve-SystemThemeSteps`
+
+**Example:**
+
+```powershell
+# Configuration.local.psd1 - hashtables deep-merge per key, so only the steps
+# you change need restating:
+SystemTheme = @{
+    Steps = @{
+        RefreshBrowserTabs = $true
+    }
+}
+
+# Per-machine-type value with Default fallback:
+SystemTheme = @{
+    Steps = @{
+        SetLockScreenWallpaper = @{ Default = $true; Work = $false }
+    }
+}
+```
 
 ---
 
@@ -995,9 +1045,9 @@ Maps Git repository URLs to local paths for `Update-Repositories`, grouped by ca
 RepositoryGroups = @(
     @{ Private = @(
             @{
-                Name      = "WinuX"                          # Repository name (selection + by-name updates)
-                UrlPath   = "Universal.GitHub.Private.WinuX" # Dot-notation path to URL in config
-                LocalPath = "Projects.Self.Root"             # Dot-notation path to local directory
+                Name      = "Dotfiles"                          # Repository name (selection + by-name updates)
+                UrlPath   = "Universal.GitHub.Private.Dotfiles" # Dot-notation path to URL in config
+                LocalPath = "Projects.Self.Root"                # Dot-notation path to local directory
             }
         )
     }

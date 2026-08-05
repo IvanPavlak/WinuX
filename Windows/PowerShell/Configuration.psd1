@@ -73,9 +73,10 @@
 # → PostgreSqlPasswords                 : Configure-PostgreSqlPasswords
 # → NuGetConfig                         : Configure-NuGetConfig
 # → Themes                              : Set-SystemTheme
+# → SystemTheme.Steps                    : Resolve-SystemThemeSteps → Set-SystemTheme
 # → PowerButtonActions                  : Set-PowerButtonActions
 # → PowerPlans                          : Set-PowerPlan
-# → WallpaperStyles, Wallpaper*Settings : Set-Wallpaper
+# → WallpaperStyles, SetWallpaper*Settings : Set-Wallpaper
 # → TaskbarConfiguration*               : Configure-Taskbar, Unpin-TaskbarApps, Clear-TaskbarPins
 #
 # Path & Repository Management:
@@ -1190,6 +1191,54 @@
 	Themes                        = @{}
 
 	# ==========================================================================
+	# Set-SystemTheme Step Toggles
+	# ==========================================================================
+	# → Consumer: Set-SystemTheme
+	#
+	# Enables/disables the follow-up steps Set-SystemTheme runs after writing the
+	# theme registry values. Each step is either a plain boolean or a
+	# per-machine-type hashtable with a Default fallback (the
+	# BootstrapConfig.Steps.WSL shape), e.g.:
+	#   RestartExplorer = @{ Default = $true; Work = $false }
+	#
+	# The whole section and individual keys are optional - missing entries use the
+	# built-in defaults. Override single steps in Configuration.local.psd1 -
+	# hashtables deep-merge per key, so only the steps you change need restating.
+	#
+	# Per invocation, Set-SystemTheme -Skip <steps> forces steps off and
+	# Set-SystemTheme -Include <steps> forces them on, both overriding this config.
+	#
+	# Steps (in execution order):
+	# - RefreshBrowserTabs     : Refresh-BrowserTabs (OFF by default; only runs when
+	#                            the theme actually changed)
+	# - RestartExplorer        : Restart-Explorer
+	# - SetWallpaper           : Set-Wallpaper -Auto -Theme <theme>
+	# - SetLockScreenWallpaper : Set-LockScreenWallpaper -Theme <theme>
+	#
+	# Everything defaults on except RefreshBrowserTabs. Restarting Explorer is what
+	# makes the new theme visible on shell chrome (taskbar, open Explorer windows),
+	# so it belongs to applying a theme rather than being collateral of it - skip it
+	# and those surfaces keep the old theme until Explorer restarts on its own or
+	# you sign out. The wallpaper steps are on because both functions no-op when
+	# their configuration section is empty, so on the empty base config they apply
+	# nothing. Reloading every browser tab is the one action with real collateral -
+	# it takes focus per window and hard-reloads pages, discarding unsaved page
+	# state - so it is the only opt-in step.
+	#
+	# RestartExplorer runs BEFORE the wallpaper steps and must stay there: restarting
+	# Explorer afterwards can make Windows reload stale wallpaper cache data and
+	# revert the desktop image.
+	# ==========================================================================
+	SystemTheme                   = @{
+		Steps = @{
+			RefreshBrowserTabs     = $false
+			RestartExplorer        = $true
+			SetWallpaper           = $true
+			SetLockScreenWallpaper = $true
+		}
+	}
+
+	# ==========================================================================
 	# Power Button & Lid Actions
 	# ==========================================================================
 	# Per-machine power button, sleep button, lid close actions, and shutdown
@@ -1235,9 +1284,9 @@
 	PowerPlans                    = @{}
 
 	# ==========================================================================
-	# Wallpaper Configuration
+	# SetWallpaper Configuration
 	# ==========================================================================
-	# Wallpaper settings per machine and theme. Used by Set-Wallpaper -Auto.
+	# SetWallpaper settings per machine and theme. Used by Set-Wallpaper -Auto.
 	# Supports multi-monitor setups with per-monitor wallpapers.
 	#
 	# Example:

@@ -6,7 +6,8 @@ function Refresh-BrowserTabs {
 
 	.DESCRIPTION
 		Enumerates Firefox, Chrome, Edge, and Brave windows and hard-refreshes (Ctrl+Shift+R)
-		every tab in each window. Used after Set-SystemTheme to apply theme changes instantly
+		every tab in each window. Run by Set-SystemTheme as its opt-in `RefreshBrowserTabs` step
+		(SystemTheme.Steps.RefreshBrowserTabs, off by default) to apply theme changes instantly
 		without manual refresh.
 
 		There is no cross-browser shortcut that reloads all tabs simultaneously, so tabs are
