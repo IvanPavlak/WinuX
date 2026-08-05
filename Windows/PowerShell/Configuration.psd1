@@ -1226,7 +1226,7 @@
 	SystemTheme                   = @{
 		Steps = @{
 			RefreshBrowserTabs     = $false
-			RestartExplorer        = $false
+			RestartExplorer        = $true
 			SetWallpaper           = $true
 			SetLockScreenWallpaper = $true
 		}
