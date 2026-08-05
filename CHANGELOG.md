@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.29] - 2026-08-05
+
+### Added
+
+- `Set-ShortcutAumid` (System module): creates or updates a `.lnk` shortcut and stamps an explicit AppUserModelID (`System.AppUserModel.ID`) on it through the shell's property store - the same property the manual "Pin to taskbar" flow records, persisted into the `.lnk` itself so it travels with any copy Explorer makes when applying a taskbar layout.
+- `TaskbarConfiguration` `Path` rows accept an optional `Aumid` key, consumed by `Configure-Taskbar`. The taskbar groups a pinned icon with a running window only when both carry the same application identity; an app that registers its own AppUserModelID at runtime via `SetCurrentProcessExplicitAppUserModelID` (Eclipse/SWT apps such as DBeaver, some Java and Electron apps) never matches a pin created from its exe path, so it launches as a second, separate taskbar icon next to its own pin. With `Aumid`, the row is pinned through a shortcut stamped with that identity (a `.lnk` Value is stamped in place, an `.exe` Value gets a machine-local shortcut generated under `TaskbarPins\<Name>.lnk` next to the layout file), and the running window docks onto the pin. If stamping fails, the row falls back to the raw path with a warning. The configuration reference documents how to discover an app's runtime AUMID when `Get-StartApps` does not show it.
+
 ## [0.1.28] - 2026-08-05
 
 ### Added
@@ -454,7 +461,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.28...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.29...HEAD
+[0.1.29]: https://github.com/IvanPavlak/WinuX/compare/v0.1.28...v0.1.29
 [0.1.28]: https://github.com/IvanPavlak/WinuX/compare/v0.1.27...v0.1.28
 [0.1.27]: https://github.com/IvanPavlak/WinuX/compare/v0.1.26...v0.1.27
 [0.1.26]: https://github.com/IvanPavlak/WinuX/compare/v0.1.25...v0.1.26

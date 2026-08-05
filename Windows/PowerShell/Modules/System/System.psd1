@@ -48,6 +48,7 @@
 		'Set-LockScreenWallpaper',
 		'Set-PowerButtonActions',
 		'Set-PowerPlan',
+		'Set-ShortcutAumid',
 		'Set-SpecialFolders',
 		'Set-SystemTheme',
 		'Set-TaskbarSettings',
