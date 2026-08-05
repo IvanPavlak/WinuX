@@ -73,6 +73,7 @@ The authoritative, always-current function reference is the set of per-module pa
 | `Projects`, `ProjectActions`                       | `Open-Project`                                     |
 | `Workspaces`, `DefaultWorkspace`, `WorkspaceActions` | `Open-Workspace`                                 |
 | `Themes`                                           | `Set-SystemTheme`                                  |
+| `SystemTheme.Steps`                                | `Set-SystemTheme`, `Resolve-SystemThemeSteps`      |
 | `WallpaperDarkSettings`, `WallpaperLightSettings`  | `Set-Wallpaper`                                    |
 | `TaskbarConfiguration`                             | `Configure-Taskbar`                                |
 | `TaskbarSettings`                                  | `Set-TaskbarSettings`                              |

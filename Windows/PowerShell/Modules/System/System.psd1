@@ -36,6 +36,7 @@
 		'Rename-Machine',
 		'Repair-RpcServer',
 		'Resolve-KillAllSteps',
+		'Resolve-SystemThemeSteps',
 		'Restart-Explorer',
 		'Restart-Machine',
 		'Send-WakeOnLan',
