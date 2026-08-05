@@ -11,6 +11,8 @@ BeforeAll {
 	. "$ModuleRoot\Helper\Functions\Confirm-ConfigValue.ps1"
 
 	. "$FunctionsPath\Configure-Taskbar.ps1"
+	# Dot-source the AUMID stamper so the Aumid-row tests can mock it instead of hitting COM.
+	. "$FunctionsPath\Set-ShortcutAumid.ps1"
 	# Dot-source the machine-scope gate and machine-type resolver so both are mockable here,
 	# regardless of whether the imported Bootstrap module in this session already exports them.
 	. (Join-Path $ModuleRoot "Bootstrap\Functions\Test-MachineTypeScope.ps1")
@@ -123,6 +125,73 @@ Describe "Configure-Taskbar" {
 			Configure-Taskbar -FromBootstrap
 
 			Should -Invoke Remove-Item -Times 1 -Exactly -ParameterFilter { "$LiteralPath" -like "*taskbar_layout.xml" }
+		}
+	}
+
+	Context "AUMID-stamped Path rows" {
+		BeforeEach {
+			$global:MachineSpecificPaths = [PSCustomObject]@{ TaskbarLayoutFile = (Join-Path "$TestDrive" "taskbar_layout.xml") }
+			Mock New-Item { }
+			Mock Set-ItemProperty { }
+			Mock Test-MachineTypeScope { $true }
+			Mock Set-ShortcutAumid { }
+		}
+
+		It "pins an exe row with an Aumid through a generated, stamped TaskbarPins shortcut" {
+			$script:Configuration.TaskbarConfiguration = @(
+				@{ Name = "DBeaver"; Type = "Path"; Value = "{User}\AppData\Local\DBeaver\dbeaver.exe"; Aumid = "DBeaver" }
+			)
+
+			Configure-Taskbar -FromBootstrap
+
+			$expectedShortcut = Join-Path (Join-Path "$TestDrive" "TaskbarPins") "DBeaver.lnk"
+			# The shortcut is generated from the resolved exe path and stamped with the identity.
+			Should -Invoke Set-ShortcutAumid -Times 1 -Exactly -ParameterFilter {
+				$LinkPath -eq $expectedShortcut -and $TargetPath -like "*\AppData\Local\DBeaver\dbeaver.exe" -and $Aumid -eq "DBeaver"
+			}
+			# The layout pins the stamped shortcut, not the raw exe.
+			$layout = Get-Content -Path (Join-Path "$TestDrive" "taskbar_layout.xml") -Raw
+			$layout | Should -Match ([regex]::Escape("DesktopApplicationLinkPath=`"$expectedShortcut`""))
+			$layout | Should -Not -Match ([regex]::Escape("dbeaver.exe"))
+		}
+
+		It "stamps a .lnk row with an Aumid in place instead of generating a shortcut" {
+			$script:Configuration.TaskbarConfiguration = @(
+				@{ Name = "SomeApp"; Type = "Path"; Value = "C:\Apps\SomeApp.lnk"; Aumid = "Some.App" }
+			)
+
+			Configure-Taskbar -FromBootstrap
+
+			Should -Invoke Set-ShortcutAumid -Times 1 -Exactly -ParameterFilter {
+				$LinkPath -eq "C:\Apps\SomeApp.lnk" -and -not $TargetPath -and $Aumid -eq "Some.App"
+			}
+			$layout = Get-Content -Path (Join-Path "$TestDrive" "taskbar_layout.xml") -Raw
+			$layout | Should -Match ([regex]::Escape("DesktopApplicationLinkPath=`"C:\Apps\SomeApp.lnk`""))
+		}
+
+		It "falls back to pinning the raw path with a warning when stamping fails" {
+			$script:Configuration.TaskbarConfiguration = @(
+				@{ Name = "DBeaver"; Type = "Path"; Value = "{User}\AppData\Local\DBeaver\dbeaver.exe"; Aumid = "DBeaver" }
+			)
+			Mock Set-ShortcutAumid { throw "COM says no" }
+
+			Configure-Taskbar -FromBootstrap
+
+			Should -Invoke Write-LogWarning -Times 1 -ParameterFilter { $Message -match "Could not stamp AUMID \[DBeaver\]" }
+			$layout = Get-Content -Path (Join-Path "$TestDrive" "taskbar_layout.xml") -Raw
+			$layout | Should -Match ([regex]::Escape("\AppData\Local\DBeaver\dbeaver.exe"))
+		}
+
+		It "leaves a plain Path row without an Aumid untouched" {
+			$script:Configuration.TaskbarConfiguration = @(
+				@{ Name = "PlainApp"; Type = "Path"; Value = "C:\Apps\plain.exe" }
+			)
+
+			Configure-Taskbar -FromBootstrap
+
+			Should -Invoke Set-ShortcutAumid -Times 0
+			$layout = Get-Content -Path (Join-Path "$TestDrive" "taskbar_layout.xml") -Raw
+			$layout | Should -Match ([regex]::Escape("DesktopApplicationLinkPath=`"C:\Apps\plain.exe`""))
 		}
 	}
 }

@@ -646,6 +646,39 @@ Keep your real, machine-tagged list in `Configuration.local.psd1` (it replaces t
 wholesale on merge). The base ships the section empty; `Configure-Taskbar` warns and leaves the
 existing pins as-is until it is set (an empty list never clears your pins).
 
+A `Path` row may additionally carry an `Aumid` key for apps that register their own
+AppUserModelID at runtime via `SetCurrentProcessExplicitAppUserModelID` - Eclipse/SWT apps such
+as DBeaver, and some Java and Electron apps. The taskbar groups a pin with a running window only
+when both carry the same identity: without `Aumid`, such an app's pin is identified by the exe
+path while its window is identified by the runtime AUMID, so launching it opens a second,
+separate taskbar icon next to the pin. With `Aumid`, `Configure-Taskbar` pins the row through a
+shortcut stamped with that identity (via `Set-ShortcutAumid`), and the running window docks onto
+the pin:
+
+```powershell
+@{ Name = "DBeaver"; Type = "Path"; Value = "{User}\AppData\Local\DBeaver\dbeaver.exe"; Aumid = "DBeaver"; Machine = "All" }
+```
+
+**Discovering a runtime AUMID.** `Get-StartApps` only shows the identity a shortcut declares -
+for exactly the apps that need this key, that differs from the identity the running process
+registers. To read the runtime identity, launch the app, use it once (open a file/connection so
+Windows records a jump list), then match its jump-list file name against a candidate identity -
+the file name is a CRC64 hash of the uppercased AUMID:
+
+```powershell
+# Hash a candidate AUMID (e.g. "DBeaver") and look for a matching jump-list file:
+#   $env:APPDATA\Microsoft\Windows\Recent\AutomaticDestinations\<hash>.automaticDestinations-ms
+# For SWT/Eclipse apps the AUMID is usually the plain product name ("DBeaver").
+```
+
+Alternatively, right-click the running app's taskbar icon → Pin to taskbar, then read the
+identity the shell recorded on the created pin:
+
+```powershell
+$pin = "$env:APPDATA\Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar\<App>.lnk"
+(New-Object -ComObject Shell.Application).Namespace((Split-Path $pin)).ParseName((Split-Path $pin -Leaf)).ExtendedProperty("System.AppUserModel.ID")
+```
+
 **Consumer functions:** `Configure-Taskbar`, `Clear-TaskbarPins`, `Unpin-TaskbarApps`
 
 ### Kill-All Step Toggles

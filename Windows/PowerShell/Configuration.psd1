@@ -1688,6 +1688,13 @@
 	# in ValidMachineTypes or it is reported as an unknown token. A row without a Machine key
 	# (or a blank one) defaults to "All", so one list can drive every machine.
 	#
+	# A Path row may also carry an Aumid key for apps that register their own AppUserModelID
+	# at runtime (Eclipse/SWT apps like DBeaver, some Java/Electron apps) and therefore open
+	# as a second, separate taskbar icon instead of docking onto their pin. The row is then
+	# pinned through a shortcut stamped with that identity (Set-ShortcutAumid), so the pin
+	# and the running window group as one. See docs/configuration/configuration-reference.md
+	# (Taskbar Configuration) for how to discover an app's runtime AUMID.
+	#
 	# Ships empty - Configure-Taskbar leaves the taskbar pins exactly as they are
 	# (no clearing, no pinning) until you opt in. Keep your real, machine-tagged
 	# list in Configuration.local.psd1 - it replaces this array wholesale on merge.
@@ -1698,7 +1705,7 @@
 	#       @{ Name = "WindowsTerminal"; Type = "AUMID"; Value = "Microsoft.WindowsTerminal_8wekyb3d8bbwe!App"; Machine = "All" }
 	#       @{ Name = "Firefox";      Type = "AUMID"; Value = "308046B0AF4A39CB";                              Machine = "All" }
 	#       @{ Name = "VSCode";       Type = "AUMID"; Value = "Microsoft.VisualStudioCode";                    Machine = "All" }
-	#       @{ Name = "DBeaver";      Type = "Path";  Value = "{User}\AppData\Local\DBeaver\dbeaver.exe";      Machine = "All" }
+	#       @{ Name = "DBeaver";      Type = "Path";  Value = "{User}\AppData\Local\DBeaver\dbeaver.exe";      Aumid = "DBeaver"; Machine = "All" }
 	#       @{ Name = "FileExplorer"; Type = "AUMID"; Value = "Microsoft.Windows.Explorer";                    Machine = "All" }
 	#       @{ Name = "WorkTool";     Type = "AUMID"; Value = "Contoso.Tool";                                  Machine = "PC/Work" }
 	#   )

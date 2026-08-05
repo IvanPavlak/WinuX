@@ -129,7 +129,7 @@ Configure-PostgreSqlPasswords -DefaultOrCurrentPassword foo -NewPassword bar
 - **Parameters:** -FromBootstrap
 - **Usage:** `Configure-Taskbar`, `Configure-Taskbar -FromBootstrap`
 
-Resolves the current machine type (via `DetermineMachineType`) and states in the output which machine the pins are being configured for (or that the hostname is unmapped and the default set is used). Reads the pin list from `TaskbarConfiguration` (each entry is either an `AUMID` or a `Path`, with `{User}` tokens expanded to the current profile), keeping only rows whose `Machine` scope matches the machine type - the same `Test-MachineTypeScope` gate the app CSVs use; a row without `Machine` defaults to `All`. It writes the generated layout directly to the machine-local `TaskbarLayoutFile` (`C:\ProgramData\provisioning\taskbar_layout.xml`) - not versioned in the repo and needing no symlink - sets the `StartLayoutFile` and `LockedStartLayout` registry policies under `HKLM:\SOFTWARE\Policies\Microsoft\Windows\Explorer`, restarts Explorer (`Restart-Explorer`), and rebuilds the icon cache (`Rebuild-IconCache`). With `-FromBootstrap`, it skips the 5-second Explorer-initialization wait and leaves the layout unlocked so the Bootstrap script can lock it after its own Explorer restart.
+Resolves the current machine type (via `DetermineMachineType`) and states in the output which machine the pins are being configured for (or that the hostname is unmapped and the default set is used). Reads the pin list from `TaskbarConfiguration` (each entry is either an `AUMID` or a `Path`, with `{User}` tokens expanded to the current profile), keeping only rows whose `Machine` scope matches the machine type - the same `Test-MachineTypeScope` gate the app CSVs use; a row without `Machine` defaults to `All`. A `Path` row may carry an `Aumid` key for apps that register their own AppUserModelID at runtime and would otherwise open as a second, separate icon next to their pin (Eclipse/SWT apps such as DBeaver): the row is then pinned through a shortcut stamped with that identity via `Set-ShortcutAumid` - a `.lnk` Value is stamped in place, an `.exe` Value gets a machine-local shortcut generated under `TaskbarPins\<Name>.lnk` next to the layout file (falling back to the raw path with a warning if stamping fails). It writes the generated layout directly to the machine-local `TaskbarLayoutFile` (`C:\ProgramData\provisioning\taskbar_layout.xml`) - not versioned in the repo and needing no symlink - sets the `StartLayoutFile` and `LockedStartLayout` registry policies under `HKLM:\SOFTWARE\Policies\Microsoft\Windows\Explorer`, restarts Explorer (`Restart-Explorer`), and rebuilds the icon cache (`Rebuild-IconCache`). With `-FromBootstrap`, it skips the 5-second Explorer-initialization wait and leaves the layout unlocked so the Bootstrap script can lock it after its own Explorer restart.
 
 | Parameter        | Description                                                                                                                                                |
 | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -143,7 +143,7 @@ Configure-Taskbar
 Configure-Taskbar -FromBootstrap
 ```
 
-**See also:** [Clear-TaskbarPins](system.md#clear-taskbarpins), [Get-PinnedApps](system.md#get-pinnedapps)
+**See also:** [Clear-TaskbarPins](system.md#clear-taskbarpins), [Get-PinnedApps](system.md#get-pinnedapps), [Set-ShortcutAumid](system.md#set-shortcutaumid)
 
 ## [Configure-WSL](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Configure-WSL.ps1)
 
@@ -861,6 +861,32 @@ PowerPlans = @{
     "Test"   = "Balanced"
 }
 ```
+
+## [Set-ShortcutAumid](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Set-ShortcutAumid.ps1)
+
+- **Description:** Creates or updates a `.lnk` shortcut and stamps an explicit AppUserModelID (the `System.AppUserModel.ID` shell property) on it. The taskbar groups a pinned icon with a running window only when the two share an application identity: an app that registers its own AUMID at runtime via `SetCurrentProcessExplicitAppUserModelID` (Eclipse/SWT apps such as DBeaver, some Java and Electron apps) never docks onto a pin created from its exe path, and instead opens as a second, separate taskbar icon. Stamping the pin's shortcut with the app's runtime AUMID gives both sides one identity - the same property the manual "Pin to taskbar" flow records. Throws on any COM failure.
+- **Parameters:** -LinkPath, -TargetPath, -Aumid
+- **Usage:** `Set-ShortcutAumid -LinkPath <path.lnk> -TargetPath <path.exe> -Aumid <id>`, `Set-ShortcutAumid -LinkPath <existing.lnk> -Aumid <id>`
+
+With `-TargetPath`, the shortcut is created first when missing (parent folder included) and its target and working directory are set; without it, `-LinkPath` must already exist. The property is written through the shell's `IPropertyStore` on the shortcut file and persisted into the `.lnk` itself, so it travels with any copy Explorer makes when applying a taskbar layout. Consumed by `Configure-Taskbar` for `TaskbarConfiguration` rows carrying an `Aumid` key.
+
+| Parameter     | Description                                                                                                              |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `-LinkPath`   | Full path of the `.lnk` file to stamp (and create, when `-TargetPath` is given).                                          |
+| `-TargetPath` | Executable the shortcut should launch. When given, the shortcut is created if missing; when omitted, `-LinkPath` must exist. |
+| `-Aumid`      | The explicit AppUserModelID to stamp - the identity the running app registers.                                            |
+
+```powershell
+# Generate a shortcut for DBeaver and stamp its runtime identity on it
+Set-ShortcutAumid -LinkPath "C:\ProgramData\provisioning\TaskbarPins\DBeaver.lnk" -TargetPath "$env:LOCALAPPDATA\DBeaver\dbeaver.exe" -Aumid "DBeaver"
+
+# Stamp an existing Start Menu shortcut in place
+Set-ShortcutAumid -LinkPath "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\DBeaver Community\DBeaver.lnk" -Aumid "DBeaver"
+```
+
+To discover an app's runtime AUMID, check `Get-StartApps` first; when the app is not listed there (typical for the apps that need this), see the jump-list hash technique in [Taskbar Configuration](../configuration/configuration-reference.md#taskbar-configuration).
+
+**See also:** [Configure-Taskbar](system.md#configure-taskbar)
 
 ## [Set-SpecialFolders](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Set-SpecialFolders.ps1)
 
