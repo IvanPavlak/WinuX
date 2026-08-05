@@ -584,19 +584,20 @@ are optional - missing entries use the built-in defaults.
 **Keys:**
 
 - `SystemTheme.Steps.RefreshBrowserTabs` - `Refresh-BrowserTabs` (default: **off**; only runs when the theme actually changed)
-- `SystemTheme.Steps.RestartExplorer` - `Restart-Explorer` (default: **off**)
+- `SystemTheme.Steps.RestartExplorer` - `Restart-Explorer` (default: on)
 - `SystemTheme.Steps.SetWallpaper` - `Set-Wallpaper -Auto -Theme <theme>` (default: on)
 - `SystemTheme.Steps.SetLockScreenWallpaper` - `Set-LockScreenWallpaper -Theme <theme>` (default: on)
 
-The wallpaper steps default on because both functions no-op when their configuration section is
-empty, so on the empty base config they apply nothing. `RefreshBrowserTabs` and `RestartExplorer`
-have no configuration to be empty and act the moment they run - closing and reopening browser tabs,
-tearing down every Explorer window - so they are opt-in. Without `RestartExplorer`, shell chrome (taskbar,
-Explorer windows) may keep the old theme until Explorer restarts on its own or you sign out.
+Everything defaults on except `RefreshBrowserTabs`. Restarting Explorer is what makes the new theme
+visible on shell chrome, so it belongs to applying a theme rather than being collateral of it - skip
+it and the taskbar and open Explorer windows keep the old theme until Explorer restarts on its own or
+you sign out. The wallpaper steps are on because both functions no-op when their configuration
+section is empty, so on the empty base config they apply nothing. Reloading every browser tab is the
+one action with real collateral - it takes focus per window and hard-reloads pages, discarding
+unsaved page state - so it is the only opt-in step.
 
-When `RestartExplorer` is enabled it runs *before* the wallpaper steps. That order is required:
-restarting Explorer after a wallpaper change can make Windows reload stale wallpaper cache data and
-revert the desktop image.
+`RestartExplorer` runs *before* the wallpaper steps and must stay there: restarting Explorer
+afterwards can make Windows reload stale wallpaper cache data and revert the desktop image.
 
 Per invocation, `Set-SystemTheme -Skip <steps>` forces steps off and `Set-SystemTheme -Include <steps>`
 forces them on, both overriding this config (`-Skip` wins when a step appears in both).
@@ -610,7 +611,7 @@ forces them on, both overriding this config (`-Skip` wins when a step appears in
 # you change need restating:
 SystemTheme = @{
     Steps = @{
-        RestartExplorer = $true
+        RefreshBrowserTabs = $true
     }
 }
 

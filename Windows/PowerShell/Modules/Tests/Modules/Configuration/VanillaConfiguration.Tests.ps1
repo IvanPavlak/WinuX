@@ -152,7 +152,7 @@ Describe "Vanilla Configuration (empty-by-default contract)" {
 		# defaults become a lie for anyone reading Resolve-SystemThemeSteps.
 		It "Should ship <Key> as <Expected>, matching the Resolve-SystemThemeSteps default" -ForEach @(
 			@{ Key = "RefreshBrowserTabs"; Expected = $false }
-			@{ Key = "RestartExplorer"; Expected = $false }
+			@{ Key = "RestartExplorer"; Expected = $true }
 			@{ Key = "SetWallpaper"; Expected = $true }
 			@{ Key = "SetLockScreenWallpaper"; Expected = $true }
 		) {

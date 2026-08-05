@@ -1199,7 +1199,7 @@
 	# theme registry values. Each step is either a plain boolean or a
 	# per-machine-type hashtable with a Default fallback (the
 	# BootstrapConfig.Steps.WSL shape), e.g.:
-	#   RestartExplorer = @{ Default = $false; PC = $true }
+	#   RestartExplorer = @{ Default = $true; Work = $false }
 	#
 	# The whole section and individual keys are optional - missing entries use the
 	# built-in defaults. Override single steps in Configuration.local.psd1 -
@@ -1211,17 +1211,23 @@
 	# Steps (in execution order):
 	# - RefreshBrowserTabs     : Refresh-BrowserTabs (OFF by default; only runs when
 	#                            the theme actually changed)
-	# - RestartExplorer        : Restart-Explorer (OFF by default)
+	# - RestartExplorer        : Restart-Explorer
 	# - SetWallpaper           : Set-Wallpaper -Auto -Theme <theme>
 	# - SetLockScreenWallpaper : Set-LockScreenWallpaper -Theme <theme>
 	#
-	# The wallpaper steps default on because both functions no-op when their
-	# configuration section is empty, so on the empty base config they apply
-	# nothing. RefreshBrowserTabs and RestartExplorer have no configuration to be
-	# empty and act the moment they run - closing and reopening browser tabs,
-	# tearing down every Explorer window - so they are opt-in. Note that without
-	# RestartExplorer, shell chrome (taskbar, Explorer windows) may keep the old
-	# theme until Explorer restarts on its own or you sign out.
+	# Everything defaults on except RefreshBrowserTabs. Restarting Explorer is what
+	# makes the new theme visible on shell chrome (taskbar, open Explorer windows),
+	# so it belongs to applying a theme rather than being collateral of it - skip it
+	# and those surfaces keep the old theme until Explorer restarts on its own or
+	# you sign out. The wallpaper steps are on because both functions no-op when
+	# their configuration section is empty, so on the empty base config they apply
+	# nothing. Reloading every browser tab is the one action with real collateral -
+	# it takes focus per window and hard-reloads pages, discarding unsaved page
+	# state - so it is the only opt-in step.
+	#
+	# RestartExplorer runs BEFORE the wallpaper steps and must stay there: restarting
+	# Explorer afterwards can make Windows reload stale wallpaper cache data and
+	# revert the desktop image.
 	# ==========================================================================
 	SystemTheme                   = @{
 		Steps = @{

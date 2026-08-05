@@ -26,13 +26,13 @@ Describe "Resolve-SystemThemeSteps" {
 	}
 
 	Context "Built-in defaults" {
-		It "Should return both wallpaper steps on and the invasive steps off when nothing decides otherwise" {
+		It "Should return every step on except RefreshBrowserTabs when nothing decides otherwise" {
 			$states = Resolve-SystemThemeSteps
 
 			$states["RefreshBrowserTabs"] | Should -BeFalse
-			$states["RestartExplorer"] | Should -BeFalse
-			$states["SetWallpaper"] | Should -BeTrue
-			$states["SetLockScreenWallpaper"] | Should -BeTrue
+			foreach ($name in @("RestartExplorer", "SetWallpaper", "SetLockScreenWallpaper")) {
+				$states[$name] | Should -BeTrue -Because "step [$name] defaults to on"
+			}
 		}
 
 		It "Should list the steps in Set-SystemTheme execution order" {
@@ -47,7 +47,7 @@ Describe "Resolve-SystemThemeSteps" {
 			$states = Resolve-SystemThemeSteps
 
 			$states["SetWallpaper"] | Should -BeTrue
-			$states["RestartExplorer"] | Should -BeFalse
+			$states["RefreshBrowserTabs"] | Should -BeFalse
 		}
 
 		It "Should return the default for steps absent from a partial Steps section" {
@@ -68,10 +68,10 @@ Describe "Resolve-SystemThemeSteps" {
 			$states["SetLockScreenWallpaper"] | Should -BeTrue
 		}
 
-		It "Should force an off-by-default step on with Include" {
-			$states = Resolve-SystemThemeSteps -Include @("RestartExplorer")
+		It "Should force the off-by-default step on with Include" {
+			$states = Resolve-SystemThemeSteps -Include @("RefreshBrowserTabs")
 
-			$states["RestartExplorer"] | Should -BeTrue
+			$states["RefreshBrowserTabs"] | Should -BeTrue
 		}
 
 		It "Should let Skip win over Include and warn once per conflicting step" {
@@ -97,23 +97,25 @@ Describe "Resolve-SystemThemeSteps" {
 			(Resolve-SystemThemeSteps)["SetLockScreenWallpaper"] | Should -BeFalse
 		}
 
-		It "Should treat an explicit config true as real for an off-by-default step" {
-			$global:Configuration.SystemTheme = @{ Steps = @{ RestartExplorer = $true } }
+		It "Should treat an explicit config true as real for the off-by-default step" {
+			$global:Configuration.SystemTheme = @{ Steps = @{ RefreshBrowserTabs = $true } }
 
-			(Resolve-SystemThemeSteps)["RestartExplorer"] | Should -BeTrue
+			(Resolve-SystemThemeSteps)["RefreshBrowserTabs"] | Should -BeTrue
 		}
 
+		# Both hashtable cases resolve AGAINST the built-in default (RestartExplorer is
+		# on), so a passing assertion can only come from the config being read.
 		It "Should use the machine type key of a hashtable value" {
-			$global:Configuration.SystemTheme = @{ Steps = @{ RestartExplorer = @{ Default = $false; Test = $true } } }
+			$global:Configuration.SystemTheme = @{ Steps = @{ RestartExplorer = @{ Default = $true; Test = $false } } }
 
-			(Resolve-SystemThemeSteps)["RestartExplorer"] | Should -BeTrue
+			(Resolve-SystemThemeSteps)["RestartExplorer"] | Should -BeFalse
 		}
 
 		It "Should fall back to Default when the machine type is not mapped" {
 			$global:MachineType = "Laptop"
-			$global:Configuration.SystemTheme = @{ Steps = @{ RestartExplorer = @{ Default = $true; Test = $false } } }
+			$global:Configuration.SystemTheme = @{ Steps = @{ RestartExplorer = @{ Default = $false; Test = $true } } }
 
-			(Resolve-SystemThemeSteps)["RestartExplorer"] | Should -BeTrue
+			(Resolve-SystemThemeSteps)["RestartExplorer"] | Should -BeFalse
 		}
 
 		It "Should fall back to the built-in default when neither the machine type nor Default is mapped" {

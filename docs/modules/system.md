@@ -566,9 +566,9 @@ Resolve-KillAllSteps -Include Docker
 
 ## [Resolve-SystemThemeSteps](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Resolve-SystemThemeSteps.ps1)
 
-- **Description:** Resolves which `Set-SystemTheme` follow-up steps should run - the actions taken after the theme registry values are written. A thin wrapper over the Helper module's generic [Resolve-Steps](helper.md#resolve-steps). Returns an ordered hashtable of step name → boolean, in `Set-SystemTheme` execution order (`RefreshBrowserTabs`, `RestartExplorer`, `SetWallpaper`, `SetLockScreenWallpaper`). Per step, tri-state resolution: `-Skip` beats `-Include` beats config (`SystemTheme.Steps.<Name>` in `$global:Configuration` - a plain boolean, or a per-machine-type hashtable with a `Default` fallback, the `BootstrapConfig.Steps.WSL` shape) beats the built-in defaults (both wallpaper steps on, `RefreshBrowserTabs` and `RestartExplorer` off). `$false` is a real config value, so booleans resolve with explicit `$null` checks rather than truthiness. `Set-SystemTheme` calls this exactly once per invocation; the only side effect is a warning per step that appears in both `-Skip` and `-Include` (the step is skipped), so it is also safe to call ad hoc to inspect what a `Set-SystemTheme` invocation would do with the current config.
+- **Description:** Resolves which `Set-SystemTheme` follow-up steps should run - the actions taken after the theme registry values are written. A thin wrapper over the Helper module's generic [Resolve-Steps](helper.md#resolve-steps). Returns an ordered hashtable of step name → boolean, in `Set-SystemTheme` execution order (`RefreshBrowserTabs`, `RestartExplorer`, `SetWallpaper`, `SetLockScreenWallpaper`). Per step, tri-state resolution: `-Skip` beats `-Include` beats config (`SystemTheme.Steps.<Name>` in `$global:Configuration` - a plain boolean, or a per-machine-type hashtable with a `Default` fallback, the `BootstrapConfig.Steps.WSL` shape) beats the built-in defaults (everything on except `RefreshBrowserTabs`). `$false` is a real config value, so booleans resolve with explicit `$null` checks rather than truthiness. `Set-SystemTheme` calls this exactly once per invocation; the only side effect is a warning per step that appears in both `-Skip` and `-Include` (the step is skipped), so it is also safe to call ad hoc to inspect what a `Set-SystemTheme` invocation would do with the current config.
 - **Parameters:** -Skip (step names forced off), -Include (step names forced on)
-- **Usage:** `Resolve-SystemThemeSteps`, `Resolve-SystemThemeSteps -Skip SetWallpaper, SetLockScreenWallpaper`
+- **Usage:** `Resolve-SystemThemeSteps`, `Resolve-SystemThemeSteps -Skip SetWallpaper, SetLockScreenWallpaper`, `Resolve-SystemThemeSteps -Include RefreshBrowserTabs`
 
 | Parameter  | Type       | Default | Description                                                      |
 | ---------- | ---------- | ------- | ----------------------------------------------------------------- |
@@ -579,8 +579,8 @@ Resolve-KillAllSteps -Include Docker
 # What would a parameterless Set-SystemTheme do with the current config?
 Resolve-SystemThemeSteps
 
-# Parameter override beats an off-by-default step
-Resolve-SystemThemeSteps -Include RestartExplorer
+# Parameter override beats the off-by-default step
+Resolve-SystemThemeSteps -Include RefreshBrowserTabs
 ```
 
 **See also:** [Set-SystemTheme](system.md#set-systemtheme), [Configuration Reference: Set-SystemTheme Step Toggles](../configuration/configuration-reference.md#set-systemtheme-step-toggles)
@@ -923,13 +923,13 @@ Set-SpecialFolders
 
 ## [Set-SystemTheme](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Set-SystemTheme.ps1)
 
-- **Description:** Sets the Windows system theme (Dark or Light) by modifying the relevant registry entries, then runs a configurable sequence of follow-up steps: reload open browser tabs (`RefreshBrowserTabs`, off by default), restart Explorer (`RestartExplorer`, off by default), apply the matching desktop wallpaper (`SetWallpaper`) and the matching lock screen image (`SetLockScreenWallpaper`). With `-Auto` it reads the theme for the current machine type from `Configuration.Themes[MachineType]`; when `Themes` is not configured (the empty base default) or has no entry for the machine type, `-Auto` warns and leaves the system theme as-is (there is no Dark fallback). With `-Theme` it applies an explicit theme; with no argument at all it defaults to Dark. Idempotent: if the theme is already configured it still runs the enabled follow-up steps. Every step can be toggled persistently via `SystemTheme.Steps` in `Configuration.psd1` / `Configuration.local.psd1` (plain booleans or per-machine-type hashtables with a `Default` fallback) and per invocation via `-Skip` / `-Include`. Requires administrator privileges.
+- **Description:** Sets the Windows system theme (Dark or Light) by modifying the relevant registry entries, then runs a configurable sequence of follow-up steps: reload open browser tabs (`RefreshBrowserTabs`, off by default), restart Explorer (`RestartExplorer`), apply the matching desktop wallpaper (`SetWallpaper`) and the matching lock screen image (`SetLockScreenWallpaper`). With `-Auto` it reads the theme for the current machine type from `Configuration.Themes[MachineType]`; when `Themes` is not configured (the empty base default) or has no entry for the machine type, `-Auto` warns and leaves the system theme as-is (there is no Dark fallback). With `-Theme` it applies an explicit theme; with no argument at all it defaults to Dark. Idempotent: if the theme is already configured it still runs the enabled follow-up steps. Every step can be toggled persistently via `SystemTheme.Steps` in `Configuration.psd1` / `Configuration.local.psd1` (plain booleans or per-machine-type hashtables with a `Default` fallback) and per invocation via `-Skip` / `-Include`. Requires administrator privileges.
 - **Parameters:** -Theme [Dark | Light], -Auto, -Skip (step names), -Include (step names), -KeepTerminalOpen
-- **Usage:** `Set-SystemTheme -Auto`, `Set-SystemTheme -Auto -KeepTerminalOpen`, `Set-SystemTheme -Theme Dark`, `Set-SystemTheme -Theme Light`, `Set-SystemTheme -Auto -Include RestartExplorer`, `Set-SystemTheme -Theme Dark -Skip SetLockScreenWallpaper`
+- **Usage:** `Set-SystemTheme -Auto`, `Set-SystemTheme -Auto -KeepTerminalOpen`, `Set-SystemTheme -Theme Dark`, `Set-SystemTheme -Theme Light`, `Set-SystemTheme -Auto -Include RefreshBrowserTabs`, `Set-SystemTheme -Theme Dark -Skip RestartExplorer, SetLockScreenWallpaper`
 
 Writes `AppsUseLightTheme`, `SystemUsesLightTheme`, and `ColorPrevalence` under `HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize` (value `0` for Dark, `1` for Light). It then calls `Set-Wallpaper` (via the `IDesktopWallpaper` COM interface) and `Set-LockScreenWallpaper` so both backgrounds match the selected theme. When run inside Windows Terminal, the current tab is closed 5 seconds after a successful run unless `-KeepTerminalOpen` is set (useful for longer-running admin workflows such as `Bootstrap`).
 
-Step resolution is tri-state: `-Skip` beats `-Include` beats the `SystemTheme.Steps` config (see [Configuration Reference: Set-SystemTheme Step Toggles](../configuration/configuration-reference.md#set-systemtheme-step-toggles)) beats the built-in defaults - both wallpaper steps on (their functions no-op on the empty base config), `RefreshBrowserTabs` and `RestartExplorer` off (they have no configuration to be empty and act the moment they run). Without `RestartExplorer`, shell chrome such as the taskbar and open Explorer windows may keep the old theme until Explorer restarts on its own or you sign out. When `RestartExplorer` is enabled it runs _before_ the wallpaper updates - this order is required, because restarting Explorer after a wallpaper change can cause Windows to reload stale wallpaper cache data and revert the desktop image. `RefreshBrowserTabs` only runs when the theme actually changed: tabs that already render the requested theme have nothing to pick up from a reload.
+Step resolution is tri-state: `-Skip` beats `-Include` beats the `SystemTheme.Steps` config (see [Configuration Reference: Set-SystemTheme Step Toggles](../configuration/configuration-reference.md#set-systemtheme-step-toggles)) beats the built-in defaults - everything on except `RefreshBrowserTabs`. Restarting Explorer is what makes the new theme visible on shell chrome, so it belongs to applying a theme rather than being collateral of it; skip it and the taskbar and open Explorer windows keep the old theme until Explorer restarts on its own or you sign out. The wallpaper steps are on because both functions no-op on the empty base config. Reloading every browser tab is the one action with real collateral - it takes focus per window and hard-reloads pages, discarding unsaved page state - so it is the only opt-in step. `RestartExplorer` runs _before_ the wallpaper updates and must stay there, because restarting Explorer after a wallpaper change can cause Windows to reload stale wallpaper cache data and revert the desktop image. `RefreshBrowserTabs` only runs when the theme actually changed: tabs that already render the requested theme have nothing to pick up from a reload.
 
 | Parameter           | Type       | Description                                                                                                                               |
 | ------------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
@@ -950,11 +950,11 @@ Set-SystemTheme -Auto -KeepTerminalOpen
 Set-SystemTheme -Theme Dark
 Set-SystemTheme -Theme Light
 
-# Restart Explorer this once even though config leaves the step off
-Set-SystemTheme -Auto -Include RestartExplorer
+# Reload every open browser tab this once, even though config leaves the step off
+Set-SystemTheme -Auto -Include RefreshBrowserTabs
 
-# Theme and desktop wallpaper only, leaving the lock screen alone
-Set-SystemTheme -Theme Dark -Skip SetLockScreenWallpaper
+# Theme and desktop wallpaper only, leaving Explorer and the lock screen alone
+Set-SystemTheme -Theme Dark -Skip RestartExplorer, SetLockScreenWallpaper
 
 # Verbose diagnostic output (lists the steps being skipped)
 Set-LogLevel Verbose { Set-SystemTheme -Auto }

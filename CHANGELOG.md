@@ -13,7 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 
 - `Resolve-SystemThemeSteps` (System module): resolves which `Set-SystemTheme` follow-up steps run, the same tri-state shape `Resolve-KillAllSteps` and `Resolve-BootstrapSteps` use (`-Skip` beats `-Include` beats config beats built-in defaults, all through the shared `Resolve-Steps`).
-- `SystemTheme.Steps` configuration section, gating the four actions `Set-SystemTheme` takes after writing the theme registry values: `RefreshBrowserTabs` (`Refresh-BrowserTabs`), `RestartExplorer` (`Restart-Explorer`), `SetWallpaper` (`Set-Wallpaper -Auto`) and `SetLockScreenWallpaper` (`Set-LockScreenWallpaper`). Each entry is a plain boolean or a per-machine-type hashtable with a `Default` fallback, so a step can be on for one machine type and off for another.
+- `SystemTheme.Steps` configuration section, gating the four actions `Set-SystemTheme` takes after writing the theme registry values: `RefreshBrowserTabs` (`Refresh-BrowserTabs`), `RestartExplorer` (`Restart-Explorer`), `SetWallpaper` (`Set-Wallpaper -Auto`) and `SetLockScreenWallpaper` (`Set-LockScreenWallpaper`). Each entry is a plain boolean or a per-machine-type hashtable with a `Default` fallback, so a step can be on for one machine type and off for another. Everything defaults on except `RefreshBrowserTabs`, keeping a theme switch identical to before unless you opt out of a step.
 - `Set-SystemTheme -Skip <steps>` / `-Include <steps>`, overriding that config for a single invocation (`-Skip` wins when a step appears in both).
 
 ### Changed
@@ -23,20 +23,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Breaking
 
-- **`Set-SystemTheme` no longer reloads browser tabs or restarts Explorer by default.** Both steps ship off: they have no configuration to be empty and act the moment they run - closing and reopening every browser tab, tearing down every Explorer window - which is a lot of collateral for a theme switch, and neither was ever opt-out before. The two wallpaper steps stay on, since `Set-Wallpaper` and `Set-LockScreenWallpaper` both no-op when their configuration section is empty, so on the empty base config an enabled step still applies nothing.
+- **`Set-SystemTheme` no longer reloads open browser tabs by default.** `RefreshBrowserTabs` is the one step that ships off. It is the only follow-up action with real collateral - it takes focus window by window and hard-reloads every tab, discarding unsaved page state - and it was previously unconditional on any theme change. Restarting Explorer and both wallpaper steps stay on, so an unconfigured theme switch is otherwise identical to before.
 
-  **Migration.** If you relied on either action, name it in `Configuration.local.psd1`:
+  **Migration.** If you relied on the tab reload, name it in `Configuration.local.psd1`:
 
   ```powershell
   SystemTheme = @{
       Steps = @{
           RefreshBrowserTabs = $true
-          RestartExplorer    = $true
       }
   }
   ```
 
-  Hashtables deep-merge per key, so only the steps you change need restating. For a one-off run use `Set-SystemTheme -Auto -Include RestartExplorer` instead. Without the Explorer restart, shell chrome (taskbar, open Explorer windows) may keep the old theme until Explorer restarts on its own or you sign out; the registry values and both wallpapers still apply.
+Hashtables deep-merge per key, so only the steps you change need restating. For a one-off run use `Set-SystemTheme -Auto -Include RefreshBrowserTabs` instead.
 
 ## [0.1.30] - 2026-08-05
 

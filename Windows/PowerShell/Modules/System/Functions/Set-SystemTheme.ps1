@@ -8,7 +8,7 @@ function Set-SystemTheme {
 		then runs a configurable sequence of follow-up steps:
 		- RefreshBrowserTabs     : reloads open browser tabs (Refresh-BrowserTabs, off
 		                           by default; only runs when the theme actually changed)
-		- RestartExplorer        : restarts Windows Explorer (off by default)
+		- RestartExplorer        : restarts Windows Explorer
 		- SetWallpaper           : applies the matching desktop wallpaper (Set-Wallpaper -Auto)
 		- SetLockScreenWallpaper : applies the matching lock screen image
 
@@ -20,9 +20,10 @@ function Set-SystemTheme {
 		Every step can be enabled or disabled persistently via the SystemTheme.Steps
 		section of Configuration.psd1 / Configuration.local.psd1. Each entry is either a
 		plain boolean or a per-machine-type hashtable with a Default fallback, e.g.:
-		  SystemTheme = @{ Steps = @{ RestartExplorer = @{ Default = $false; PC = $true } } }
-		Steps missing from config use their built-in defaults (both wallpaper steps on,
-		RefreshBrowserTabs and RestartExplorer off).
+		  SystemTheme = @{ Steps = @{ RestartExplorer = @{ Default = $true; Work = $false } } }
+		Steps missing from config use their built-in defaults - everything on except
+		RefreshBrowserTabs, which takes focus per browser window and hard-reloads
+		pages, so it is opt-in.
 
 		Per invocation, -Skip forces steps off and -Include forces them on, overriding
 		config in both directions. -Skip wins when a step appears in both.
@@ -63,12 +64,13 @@ function Set-SystemTheme {
 		Forces dark theme regardless of configuration.
 
 	.EXAMPLE
-		Set-SystemTheme -Auto -Include RestartExplorer
-		Applies the configured theme and restarts Explorer even though config disables it.
+		Set-SystemTheme -Auto -Include RefreshBrowserTabs
+		Applies the configured theme and also reloads every open browser tab.
 
 	.EXAMPLE
-		Set-SystemTheme -Theme "Dark" -Skip SetLockScreenWallpaper
-		Applies dark theme and the desktop wallpaper, leaving the lock screen alone.
+		Set-SystemTheme -Theme "Dark" -Skip RestartExplorer, SetLockScreenWallpaper
+		Applies dark theme and the desktop wallpaper only, leaving Explorer and the
+		lock screen alone.
 	#>
 	param(
 		[Parameter(Mandatory = $false, Position = 0)]

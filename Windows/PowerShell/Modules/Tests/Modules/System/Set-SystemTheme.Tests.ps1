@@ -34,9 +34,9 @@ Describe "Set-SystemTheme" {
 			Themes = @{ PC = "Dark" }
 		}
 		# The step resolver reads $global:Configuration / $global:MachineType. Fresh
-		# baseline with no SystemTheme section - built-in defaults apply (both
-		# wallpaper steps on, RefreshBrowserTabs and RestartExplorer off) unless a test opts
-		# a step out/in. Originals are restored in AfterAll.
+		# baseline with no SystemTheme section - built-in defaults apply (everything
+		# on except RefreshBrowserTabs) unless a test opts a step out/in. Originals
+		# are restored in AfterAll.
 		$global:Configuration = @{}
 		$global:MachineType = "PC"
 
@@ -71,6 +71,7 @@ Describe "Set-SystemTheme" {
 		Should -Invoke Set-ItemProperty -Times 0
 		Should -Invoke Set-Wallpaper -Times 1
 		Should -Invoke Set-LockScreenWallpaper -Times 1
+		Should -Invoke Restart-Explorer -Times 1
 		Should -Invoke Terminate-WindowsTerminalTabs -Times 1 -Exactly -ParameterFilter { $OnlyCurrent -and $CloseWaitSeconds -eq 5 }
 	}
 
@@ -123,14 +124,14 @@ Describe "Set-SystemTheme" {
 			Mock Get-ItemProperty { [PSCustomObject]@{ AppsUseLightTheme = 0 } }
 		}
 
-		It "applies both wallpapers without restarting Explorer or reloading browser tabs" {
+		It "restarts Explorer and applies both wallpapers without reloading browser tabs" {
 			{ Set-SystemTheme -Theme "Light" -KeepTerminalOpen } | Should -Not -Throw
 
 			Should -Invoke Set-ItemProperty -Times 3 -Exactly
+			Should -Invoke Restart-Explorer -Times 1 -Exactly
 			Should -Invoke Set-Wallpaper -Times 1 -Exactly -ParameterFilter { $Auto -and $Theme -eq "Light" }
 			Should -Invoke Set-LockScreenWallpaper -Times 1 -Exactly -ParameterFilter { $Theme -eq "Light" }
 			Should -Invoke Refresh-BrowserTabs -Times 0
-			Should -Invoke Restart-Explorer -Times 0
 		}
 
 		It "never reloads browser tabs when the theme was already configured" {
@@ -163,12 +164,13 @@ Describe "Set-SystemTheme" {
 			Should -Invoke Set-LockScreenWallpaper -Times 0
 		}
 
-		It "restarts Explorer when Steps.RestartExplorer is true" {
-			$global:Configuration.SystemTheme = @{ Steps = @{ RestartExplorer = $true } }
+		It "skips the Explorer restart when Steps.RestartExplorer is false" {
+			$global:Configuration.SystemTheme = @{ Steps = @{ RestartExplorer = $false } }
 
 			{ Set-SystemTheme -Theme "Dark" -KeepTerminalOpen } | Should -Not -Throw
 
-			Should -Invoke Restart-Explorer -Times 1 -Exactly
+			Should -Invoke Restart-Explorer -Times 0
+			Should -Invoke Set-Wallpaper -Times 1 -Exactly
 		}
 
 		It "reloads browser tabs on a real theme change when Steps.RefreshBrowserTabs is true" {
@@ -179,12 +181,14 @@ Describe "Set-SystemTheme" {
 			Should -Invoke Refresh-BrowserTabs -Times 1 -Exactly
 		}
 
+		# Resolved against the built-in default (RestartExplorer is on), so this can
+		# only pass if the machine-type entry was actually read.
 		It "honours a per-machine-type step value" {
-			$global:Configuration.SystemTheme = @{ Steps = @{ RestartExplorer = @{ Default = $false; PC = $true } } }
+			$global:Configuration.SystemTheme = @{ Steps = @{ RestartExplorer = @{ Default = $true; PC = $false } } }
 
 			{ Set-SystemTheme -Theme "Dark" -KeepTerminalOpen } | Should -Not -Throw
 
-			Should -Invoke Restart-Explorer -Times 1 -Exactly
+			Should -Invoke Restart-Explorer -Times 0
 		}
 	}
 
@@ -201,9 +205,10 @@ Describe "Set-SystemTheme" {
 			Should -Invoke Restart-Explorer -Times 1 -Exactly
 		}
 
-		It "forces a config-enabled step off with -Skip" {
-			{ Set-SystemTheme -Theme "Dark" -KeepTerminalOpen -Skip SetWallpaper, SetLockScreenWallpaper } | Should -Not -Throw
+		It "forces config-enabled steps off with -Skip" {
+			{ Set-SystemTheme -Theme "Dark" -KeepTerminalOpen -Skip RestartExplorer, SetWallpaper, SetLockScreenWallpaper } | Should -Not -Throw
 
+			Should -Invoke Restart-Explorer -Times 0
 			Should -Invoke Set-Wallpaper -Times 0
 			Should -Invoke Set-LockScreenWallpaper -Times 0
 		}

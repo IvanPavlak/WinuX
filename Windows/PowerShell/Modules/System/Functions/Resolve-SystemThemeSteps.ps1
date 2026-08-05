@@ -11,12 +11,14 @@ function Resolve-SystemThemeSteps {
 		a per-machine-type hashtable with a Default fallback, the
 		BootstrapConfig.Steps.WSL shape) beats the built-in defaults.
 
-		The two wallpaper steps default on because their functions no-op when
-		their configuration section is empty - on the empty base config an
-		enabled step applies nothing. RefreshBrowserTabs and RestartExplorer default
-		off: they have no configuration to be empty and act the moment they run,
-		closing and reopening browser tabs and tearing down every Explorer
-		window in the session.
+		Everything defaults on except RefreshBrowserTabs. Restarting Explorer is
+		what makes the new theme visible on shell chrome, so it belongs to
+		applying a theme rather than being collateral of it, and the two
+		wallpaper steps no-op when their configuration section is empty - on the
+		empty base config an enabled step applies nothing. Reloading every
+		browser tab is the one action with real collateral: it takes focus per
+		window and hard-reloads pages, discarding unsaved page state. So it is
+		the only opt-in step.
 
 		Returns an ordered hashtable of step name -> boolean, in Set-SystemTheme
 		execution order. Set-SystemTheme calls this exactly once per invocation.
@@ -39,6 +41,10 @@ function Resolve-SystemThemeSteps {
 	.EXAMPLE
 		Resolve-SystemThemeSteps -Skip SetWallpaper, SetLockScreenWallpaper
 		Returns the map with both wallpaper steps forced off.
+
+	.EXAMPLE
+		Resolve-SystemThemeSteps -Include RefreshBrowserTabs
+		Returns the map with the one off-by-default step forced on.
 	#>
 	[CmdletBinding()]
 	[OutputType([System.Collections.Specialized.OrderedDictionary])]
@@ -55,7 +61,7 @@ function Resolve-SystemThemeSteps {
 	# the requested theme buys nothing.
 	$defaults = [ordered]@{
 		RefreshBrowserTabs     = $false
-		RestartExplorer        = $false
+		RestartExplorer        = $true
 		SetWallpaper           = $true
 		SetLockScreenWallpaper = $true
 	}
