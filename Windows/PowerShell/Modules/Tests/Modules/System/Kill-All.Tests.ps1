@@ -30,6 +30,9 @@ BeforeAll {
 	# calls AppActivate on it (stealing focus). Every default Kill-All call below reached both.
 	function Center-Terminal { param() }
 	function Focus-TerminalTab { param([string]$TargetTitle, [switch]$Quiet) }
+	function Save-WorkspaceState {
+		param($Workspace, $ExistingWindowHandles, $ExistingTerminalTabs, $DesktopOffset, [switch]$Alongside, [switch]$AdoptUnclaimed, [switch]$Append, $Entry, $StatePath)
+	}
 }
 
 AfterAll {
@@ -55,6 +58,62 @@ Describe "Kill-All" {
 		Mock Reload-PowerShellProfile { }
 		Mock Center-Terminal { }
 		Mock Focus-TerminalTab { }
+		Mock Save-WorkspaceState { }
+	}
+
+	Context "Open-workspace tracker" {
+		It "Should clear it, since nothing a workspace opened survives a full run" {
+			# Left populated, Close-Workspace would keep offering workspaces that are long gone and
+			# then report every one of their windows as already closed.
+			Kill-All
+
+			Should -Invoke Save-WorkspaceState -Times 1 -Exactly -ParameterFilter { @($Entry).Count -eq 0 }
+		}
+
+		It "Should clear it before the terminal tabs are terminated" {
+			# -IncludeCurrent ends the process, so anything left until after that never runs.
+			$script:order = @()
+			Mock Save-WorkspaceState { $script:order += 'tracker' }
+			Mock Terminate-WindowsTerminalTabs { $script:order += 'tabs' }
+
+			Kill-All -IncludeCurrent
+
+			$script:order | Should -Be @('tracker', 'tabs')
+		}
+
+		It "Should keep it when the visible-window sweep is skipped" {
+			# Those windows are still on screen and still closable, so discarding the only record of
+			# who owns them would be a capability loss, not a tidy-up.
+			Kill-All -Skip VisibleWindows
+
+			Should -Invoke Save-WorkspaceState -Times 0
+		}
+
+		It "Should keep it when the browser sweep is skipped" {
+			Kill-All -Skip Browsers
+
+			Should -Invoke Save-WorkspaceState -Times 0
+		}
+
+		It "Should keep it when the named-process sweep is skipped" {
+			Kill-All -Skip NamedProcesses
+
+			Should -Invoke Save-WorkspaceState -Times 0
+		}
+
+		It "Should keep it when config disables one of those steps" {
+			$global:Configuration.KillAll = @{ Steps = @{ VisibleWindows = $false } }
+
+			Kill-All
+
+			Should -Invoke Save-WorkspaceState -Times 0
+		}
+
+		It "Should still clear it when an unrelated step is skipped" {
+			Kill-All -Skip Docker
+
+			Should -Invoke Save-WorkspaceState -Times 1 -Exactly
+		}
 	}
 
 	Context "When called with no parameters" {

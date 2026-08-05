@@ -240,6 +240,30 @@ ConvertTo-InternalDesktopIndex -DesktopNumber 1            # 0
 ConvertTo-InternalDesktopIndex -DesktopNumber 1 -DesktopOffset 2  # 2
 ```
 
+## [Ensure-DesktopVisible](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Ensure-DesktopVisible.ps1)
+
+- **Description:** Brings a virtual desktop on screen - either a given index, or whichever desktop a given window lives on - and returns the index of the desktop that *was* visible so the caller can put the view back. Exists because some window content only exists while its desktop is the visible one: Windows Terminal hosts its tab strip in a XAML island that is not composed off screen, so UI Automation reports such a window as having no descendants at all - no tabs to read, no close buttons to invoke.
+- **Parameters:** -WindowHandle, -DesktopIndex
+- **Usage:** `Ensure-DesktopVisible -WindowHandle $terminalHandle`, `Ensure-DesktopVisible -DesktopIndex 1`
+
+Unlike [Focus-VirtualDesktop](#focus-virtualdesktop) this does exactly one thing - it makes a desktop visible. No window enumeration, no focus locking, no section title, so a caller can bring a desktop up, do its work, and restore the view without narrating a "focus" step it never intended. `$null` means nothing needs restoring: either the target was already showing, or the switch could not be made. The switch itself is confirmed with `Wait-DesktopSwitch` and retried through a `Reset-VirtualDesktopState` recovery pass (mirroring `Focus-VirtualDesktop`), because a long-running shell can hold a stale VirtualDesktop COM proxy whose `Switch-Desktop` silently no-ops. `Clear-WindowCache` runs after a successful switch, since handles enumerated beforehand describe the previous desktop's composition.
+
+Note that `SetForegroundWindow` and the module's own `ForceForegroundWindow` are both refused by the Windows foreground lock when called from a background process, so activation is not a usable route to the same end - `Switch-Desktop` is not subject to that lock, which is what makes this work. Used by [Get-TerminalTabSnapshot](helper.md#get-terminaltabsnapshot) and [Close-Workspace](workflow.md#close-workspace), both of which read or close terminal tabs on desktops the workspace layout has parked them on.
+
+| Parameter        | Type   | Description                                                                                     |
+| ---------------- | ------ | ----------------------------------------------------------------------------------------------- |
+| `-WindowHandle`  | IntPtr | Bring up whichever desktop this window lives on. Mandatory in the `Window` parameter set.        |
+| `-DesktopIndex`  | int    | Bring up this 0-based desktop index; used to restore a previously returned index. Mandatory in the `Index` parameter set. |
+
+```powershell
+# Read a terminal's tabs even though it sits on another desktop, then restore the view
+$previous = Ensure-DesktopVisible -WindowHandle $terminalHandle
+$tabs = Get-WindowsTerminalTabTitles -WindowHandle $terminalHandle
+if ($null -ne $previous) { [void](Ensure-DesktopVisible -DesktopIndex $previous) }
+```
+
+**See also:** [Focus-VirtualDesktop](#focus-virtualdesktop), [Wait-DesktopSwitch](#wait-desktopswitch), [Get-TerminalTabSnapshot](helper.md#get-terminaltabsnapshot), [Close-Workspace](workflow.md#close-workspace)
+
 ## [Ensure-VirtualDesktops](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Ensure-VirtualDesktops.ps1)
 
 - **Description:** Ensures the specified number of virtual desktops exist, creating additional desktops when too few exist and removing the excess when too many exist. Optionally switches to a target desktop afterward. Requires the VirtualDesktop PowerShell module.
@@ -724,6 +748,31 @@ Test-FancyZonesLayoutApplied -VirtualDesktopGuid $guid
 ```
 
 **See also:** [Test-FancyZonesLayoutApplied](../modules/window.md)
+
+## [Get-WindowDesktopIndex](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Get-WindowDesktopIndex.ps1)
+
+- **Description:** Resolves which virtual desktop a window lives on, as a 0-based index, returning `-1` for every "cannot tell" case rather than `$null` or an exception. Wraps the `Get-DesktopIndex (Get-DesktopFromWindow -Hwnd ...)` pair with the guards each caller of it needs: the VirtualDesktop module may not be loaded, and the lookup throws for windows that cannot be resolved at all.
+- **Parameters:** -WindowHandle
+- **Usage:** `Get-WindowDesktopIndex -WindowHandle $window.Handle`
+
+Shell windows are why the `-1` contract matters in practice: "Windows Input Experience" (`TextInputHost`) always answers `TYPE_E_ELEMENTNOTFOUND`, and a window that closed mid-scan answers nothing at all. Neither is an error worth propagating - the window simply has no known desktop - so callers can compare the result without null checks and never wrap the call in a `try`. Note that `0` is a real answer and a falsy one: the first desktop is where a plain workspace lands, so callers must test the value, not its truthiness.
+
+Failures are **not** retried. A window that cannot be resolved on its own merits cannot succeed on a second attempt, and burning an RPC backoff ladder per window is exactly the cost [Remove-VirtualDesktops](system.md#remove-virtualdesktops) was fixed to stop paying; a caller doing a whole-set scan that must tolerate genuine RPC failure should retry the scan, not the window. Used by [Close-Workspace](workflow.md#close-workspace) to decide which windows sit on a workspace's own desktops and which desktops to remove with it.
+
+| Parameter       | Description                                              |
+| --------------- | -------------------------------------------------------- |
+| `-WindowHandle` | `IntPtr` handle of the window to locate. Mandatory.      |
+
+```powershell
+# Where is this window?
+$index = Get-WindowDesktopIndex -WindowHandle $window.Handle
+if ($index -ge 0) { "window is on desktop $index" }
+
+# Group every visible window by the desktop it sits on
+Get-WindowHandle | Group-Object { Get-WindowDesktopIndex -WindowHandle $_.Handle }
+```
+
+**See also:** [Ensure-DesktopVisible](#ensure-desktopvisible), [Remove-VirtualDesktops](system.md#remove-virtualdesktops), [Close-Workspace](workflow.md#close-workspace)
 
 ## [Get-WindowDisplayName](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Get-WindowDisplayName.ps1)
 
@@ -1626,6 +1675,29 @@ Wait-WindowRect -WindowHandle $handle -ExpectedX 0 -ExpectedY 0 -ExpectedWidth 1
 ```
 
 **See also:** [Snap-AllWindows](window.md#snap-allwindows), [Set-WindowPosition](window.md#set-windowposition)
+
+## [Wait-WindowsClosed](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Wait-WindowsClosed.ps1)
+
+- **Description:** Polls the live window list until every window handed to it has gone, or a timeout expires, and returns the ones still open. `WM_CLOSE` is *posted*, not sent: it asks a window to close and returns immediately, so the window may go away in a few milliseconds or put up a save prompt and stay. A caller that checks straight away reports windows as refused when they were merely still closing; one that never checks cannot report a refusal at all.
+- **Parameters:** -Window, -TimeoutMilliseconds (default: 1500), -PollIntervalMilliseconds (default: 250)
+- **Usage:** `Wait-WindowsClosed -Window $postedWindows`, `Wait-WindowsClosed -Window $postedWindows -TimeoutMilliseconds 3000`
+
+An empty result means they all closed. `Clear-WindowCache` runs before each poll - without it the check keeps reading the same pre-close snapshot and every window looks like it refused. Matching is by handle only: a window that closed and was replaced by a new window of the same application is a different window, and this deliberately does not wait for that one. An empty input collection returns immediately without enumerating anything. Used by [Close-Workspace](workflow.md#close-workspace) to tell "closed" from "refused" before it sweeps empty virtual desktops.
+
+| Parameter                   | Type     | Default | Description                                                                                    |
+| --------------------------- | -------- | ------- | ---------------------------------------------------------------------------------------------- |
+| `-Window`                   | object[] | -       | Windows to wait on; any object exposing `.Handle` works, including `Get-WindowHandle` records. Mandatory (may be empty). |
+| `-TimeoutMilliseconds`      | int      | `1500`  | How long to keep polling before giving up and reporting what is left.                          |
+| `-PollIntervalMilliseconds` | int      | `250`   | Delay between polls.                                                                           |
+
+```powershell
+# Ask windows to close, then find out which ones actually did
+foreach ($w in $targets) { [void][CloseWorkspaceWin32]::PostMessage($w.Handle, 0x0010, 0, 0) }
+$refused = Wait-WindowsClosed -Window $targets
+if ($refused) { "still open: $($refused.Title -join ', ')" }
+```
+
+**See also:** [Get-WindowHandle](#get-windowhandle), [Clear-WindowCache](#clear-windowcache), [Close-Workspace](workflow.md#close-workspace)
 
 ## [Write-WindowInfoBlock](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Write-WindowInfoBlock.ps1)
 

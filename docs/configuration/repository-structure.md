@@ -55,6 +55,8 @@ WinuX/
     │       │       └── Test/                       # Layouts for the shipped Test profile
     │       │           └── {Workspace}_Test.psd1   # e.g., Example_Test.psd1 (add a folder per machine type you define)
     │       └── Workflow/                           # Development workflows
+    │           └── State/                          # What each workspace open produced (gitignored)
+    │               └── OpenWorkspaces.txt          # Read by Close-Workspace; safe to delete
     ├── Win11Debloat/                               # Vendored Win11Debloat + saved settings
     │   ├── CustomAppsList                          # Apps to remove
     │   └── LastUsedSettings.json                   # Last used settings
@@ -76,6 +78,7 @@ WinuX/
 - **FancyZones `custom-layouts.json`** - the zone spacing value must be `3`; other values break the saved layouts.
 - **Window layout naming** - layout files under `Window/Layouts/{MachineType}/` follow the convention `{Workspace}_{MachineType}.psd1` (the base ships `Test/`; add a folder per machine type you define).
 - **Machine-specific files** - components such as FastFetch, Oh-My-Posh, and Windows Terminal use a `{MachineType}` suffix so a single repository can drive multiple machines.
+- **Runtime state is never committed** - `Logging/Logs/`, `Tests/Results/`, `Window/Layouts/CurrentLayout.txt` and `Workflow/State/` all hold per-machine, per-session data (each kept in git with a `.gitkeep`). Deleting any of them is safe; `Close-Workspace` in particular then reports that nothing is tracked rather than guessing what a workspace opened.
 - **Fork payloads** - a personal fork typically grows additional top-level folders (an Obsidian vault, SSH config, keyboard firmware, ...). They are additive and never conflict with upstream pulls; see the [Fork Model](../contributing/fork-model.md).
 
 ## Non-PowerShell Configuration Files

@@ -8,10 +8,15 @@
 		'Close-BrowserTabsByPattern',
 		'Close-Project',
 		'Close-ProjectTerminals',
+		'Close-Workspace',
 		'DockerWizard',
 		'EfCoreMigrationWizard',
 		'Focus-TerminalTab',
+		'Format-WorkspaceStateContent',
 		'Get-SwaggerCloseTitlePatterns',
+		'Get-WorkspaceOpenDelta',
+		'Get-WorkspaceState',
+		'Get-WorkspaceStatePath',
 		'Open-DnD',
 		'Open-Project',
 		'Open-ProjectSwagger',
@@ -19,6 +24,7 @@
 		'Open-Training',
 		'Open-Workspace',
 		'Resolve-SwaggerBrowserGroup',
+		'Save-WorkspaceState',
 		'Test-TerminalTabsAlreadyOpen',
 		'Training-Backup'
 	)

@@ -29,6 +29,10 @@ BeforeAll {
 	}
 
 	function Get-WindowHandle { param($ProcessName) @() }
+	function Get-TerminalTabSnapshot { param([switch]$EnsureVisible) @{} }
+	function Save-WorkspaceState {
+		param($Workspace, $ExistingWindowHandles, $ExistingTerminalTabs, $DesktopOffset, [switch]$Alongside, [switch]$AdoptUnclaimed, [switch]$Append, $Entry, $StatePath)
+	}
 	function Get-NextAvailableDesktopIndex { 0 }
 	function Reset-KeyboardModifiers { param([switch]$IncludeMouseButton) @() }
 	function Test-BrowserGroupAlreadyOpen { $false }
@@ -74,8 +78,20 @@ Describe "Open-Workspace" {
 		$script:openTerminalCalls = @()
 
 		$script:resolveSelectionCalls = @()
+		$script:workspaceStateCalls = @()
 
 		Mock Write-Host { }
+		Mock Get-TerminalTabSnapshot { param([switch]$EnsureVisible) @{} }
+		Mock Save-WorkspaceState {
+			param($Workspace, $ExistingWindowHandles, $ExistingTerminalTabs, $DesktopOffset, [switch]$Alongside, [switch]$AdoptUnclaimed, [switch]$Append, $Entry, $StatePath)
+			$script:workspaceStateCalls += [PSCustomObject]@{
+				Workspace      = $Workspace
+				DesktopOffset  = $DesktopOffset
+				Alongside      = [bool]$Alongside
+				AdoptUnclaimed = [bool]$AdoptUnclaimed
+				Append         = [bool]$Append
+			}
+		}
 		# Capture PromptMessage too: the prompt advertises what [Enter] does, so the tests
 		# below assert the string and the behaviour agree instead of only the behaviour.
 		Mock Resolve-Selection {
@@ -438,6 +454,145 @@ Describe "Open-Workspace" {
 		Open-Workspace -Workspace 'TestWorkspace'
 
 		$script:invokedActions.Count | Should -Be 0
+	}
+
+	Context "teardown tracking" {
+		It "records what the open produced so Close-Workspace can close it" {
+			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } }
+			)
+
+			Open-Workspace -Workspace 'TestWorkspace'
+
+			$script:workspaceStateCalls.Count | Should -Be 1
+			$script:workspaceStateCalls[0].Workspace | Should -Be 'TestWorkspace'
+			$script:workspaceStateCalls[0].Alongside | Should -BeFalse
+		}
+
+		It "captures the terminal tab strip before the actions run" {
+			# Tabs are not top-level windows, so the window capture cannot see them; without this
+			# snapshot every tab in every terminal would look newly created.
+			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } }
+			)
+
+			Open-Workspace -Workspace 'TestWorkspace'
+
+			Should -Invoke Get-TerminalTabSnapshot -Times 1
+		}
+
+		It "records one entry per selected workspace" {
+			$script:Configuration.Workspaces = @('WorkspaceA', 'WorkspaceB')
+			$script:Configuration.WorkspaceActions['WorkspaceA'] = @(@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } })
+			$script:Configuration.WorkspaceActions['WorkspaceB'] = @(@{ Action = 'Test-ActionTwo'; Parameters = @{ Beta = 2 } })
+
+			Open-Workspace -Workspace @('WorkspaceA', 'WorkspaceB')
+
+			@($script:workspaceStateCalls.Workspace) | Should -Be @('WorkspaceA', 'WorkspaceB')
+		}
+
+		It "lets a plain open claim what is already on screen" {
+			# Otherwise an app that was already running produced no new window, is never recorded,
+			# and survives every teardown from then on.
+			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } }
+			)
+
+			Open-Workspace -Workspace 'TestWorkspace'
+
+			$script:workspaceStateCalls[0].AdoptUnclaimed | Should -BeTrue
+			$script:workspaceStateCalls[0].Append | Should -BeFalse
+		}
+
+		It "only lets the first workspace of a plain run claim, and appends the rest" {
+			# Adopting twice would have both entries claim the same windows, and each would then
+			# protect them from the other's teardown.
+			$script:Configuration.Workspaces = @('WorkspaceA', 'WorkspaceB')
+			$script:Configuration.WorkspaceActions['WorkspaceA'] = @(@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } })
+			$script:Configuration.WorkspaceActions['WorkspaceB'] = @(@{ Action = 'Test-ActionTwo'; Parameters = @{ Beta = 2 } })
+
+			Open-Workspace -Workspace @('WorkspaceA', 'WorkspaceB')
+
+			@($script:workspaceStateCalls.AdoptUnclaimed) | Should -Be @($true, $false)
+			@($script:workspaceStateCalls.Append) | Should -Be @($false, $true)
+		}
+
+		It "never claims on an alongside open, which would steal another workspace's windows" {
+			$env:OPEN_WORKSPACE_ALONGSIDE_SHELL = '1'
+			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } }
+			)
+
+			Open-Workspace -Workspace 'TestWorkspace' -Alongside
+
+			$script:workspaceStateCalls[0].AdoptUnclaimed | Should -BeFalse
+		}
+
+		It "records the alongside mode and desktop offset the open ran with" {
+			$env:OPEN_WORKSPACE_ALONGSIDE_SHELL = '1'
+			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } }
+			)
+
+			Open-Workspace -Workspace 'TestWorkspace' -Alongside
+
+			$script:workspaceStateCalls.Count | Should -Be 1
+			$script:workspaceStateCalls[0].Alongside | Should -BeTrue
+			$script:workspaceStateCalls[0].DesktopOffset | Should -Be 3
+		}
+
+		It "records before a terminating action exits the process" {
+			# Terminate-WindowsTerminalTabs -OnlyCurrent ends the process, so a record written after
+			# the action loop would never happen and the workspace would be untrackable.
+			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } },
+				@{ Action = 'Terminate-WindowsTerminalTabs'; Parameters = @{ OnlyCurrent = $true } }
+			)
+
+			Open-Workspace -Workspace 'TestWorkspace'
+
+			$script:workspaceStateCalls.Count | Should -Be 1
+			$script:workspaceStateCalls[0].Workspace | Should -Be 'TestWorkspace'
+		}
+
+		It "records exactly once when a terminating action is present" {
+			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+				@{ Action = 'Terminate-WindowsTerminalTabs'; Parameters = @{ IncludeCurrent = $true } }
+			)
+
+			Open-Workspace -Workspace 'TestWorkspace'
+
+			$script:workspaceStateCalls.Count | Should -Be 1
+		}
+
+		It "records nothing when a Return action aborts the open" {
+			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+				@{ Action = 'Return'; Parameters = @{} },
+				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } }
+			)
+
+			Open-Workspace -Workspace 'TestWorkspace'
+
+			$script:workspaceStateCalls.Count | Should -Be 0
+		}
+
+		It "records nothing when the workspace has no configured actions" {
+			$script:Configuration.WorkspaceActions = @{}
+
+			Open-Workspace -Workspace 'TestWorkspace'
+
+			$script:workspaceStateCalls.Count | Should -Be 0
+		}
+
+		It "records nothing for an -Alongside invocation that only relaunches" {
+			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } }
+			)
+
+			Open-Workspace -Workspace 'TestWorkspace' -Alongside
+
+			$script:workspaceStateCalls.Count | Should -Be 0
+		}
 	}
 
 	It "stops processing later selected workspaces when an earlier workspace contains Return" {

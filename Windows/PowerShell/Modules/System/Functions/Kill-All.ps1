@@ -16,6 +16,12 @@ function Kill-All {
 		- FocusTerminal   : refocuses the surviving terminal tab
 		- ReloadProfile   : reloads the PowerShell profile (off by default)
 
+		The open-workspace tracker (Save-WorkspaceState / Close-Workspace) is cleared too, but only
+		when Browsers, VisibleWindows and NamedProcesses all ran - a full run leaves nothing a
+		workspace opened, so a populated tracker would have Close-Workspace offer workspaces that are
+		no longer open. Skip any of those steps and the tracker is kept, because the windows that
+		survived are still closable.
+
 		Every step can be enabled or disabled persistently via the KillAll.Steps section
 		of Configuration.psd1 / Configuration.local.psd1. Each entry is either a plain
 		boolean or a per-machine-type hashtable with a Default fallback, e.g.:
@@ -141,6 +147,21 @@ function Kill-All {
 
 	# Allow everything else to close
 	Start-Sleep -Milliseconds 500
+
+	# The open-workspace tracker must not go on claiming windows this run took down: left populated,
+	# Close-Workspace would keep offering workspaces that are long gone and then report every one of
+	# their windows as already closed. It is only cleared when the run was actually thorough, though.
+	# Staleness is merely noisy - Close-Workspace reports an item it cannot find as already closed -
+	# whereas clearing too eagerly is a real capability loss, because the windows that DID survive a
+	# partial run become unclosable. So all three window-taking steps have to have run; skip any one
+	# of them and the tracker stays, still describing what is left. Guarded with Get-Command because
+	# Workflow is a separate module and need not be loaded, and done BEFORE the tab termination,
+	# which with -IncludeCurrent ends this process outright.
+	if ($stepStates.Browsers -and $stepStates.VisibleWindows -and $stepStates.NamedProcesses) {
+		if (Get-Command Save-WorkspaceState -ErrorAction SilentlyContinue) {
+			Save-WorkspaceState -Entry @()
+		}
+	}
 
 	if ($stepStates.TerminalTabs) {
 		Terminate-WindowsTerminalTabs -IncludeCurrent:$IncludeCurrent

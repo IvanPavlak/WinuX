@@ -140,6 +140,8 @@ New-Alias -Name gs -Value GitStatus -Force -Option AllScope
 
 New-Alias -Name w -Value Open-Workspace -Force
 
+New-Alias -Name cw -Value Close-Workspace -Force
+
 New-Alias -Name c -Value Invoke-ClearAndFastfetch -Force
 
 New-Alias -Name l -Value ls -Force
