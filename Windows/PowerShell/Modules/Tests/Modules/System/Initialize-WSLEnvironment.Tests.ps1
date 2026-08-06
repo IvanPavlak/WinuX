@@ -9,6 +9,13 @@ BeforeAll {
 
 Describe "Initialize-WSLEnvironment" {
 	BeforeEach {
+		$script:Configuration = [PSCustomObject]@{
+			DefaultWSLDistribution = "Ubuntu"
+			Universal              = [PSCustomObject]@{
+				OhMyPoshThemeFile = "C:\themes\WinuX.omp.json"
+			}
+		}
+
 		Mock wsl {
 			if ($args -join ' ' -match "command -v fastfetch") {
 				"true"
@@ -24,5 +31,22 @@ Describe "Initialize-WSLEnvironment" {
 		{ Initialize-WSLEnvironment } | Should -Not -Throw
 
 		Should -Invoke wsl -Times 6
+	}
+
+	It "targets the configured distribution on every wsl call" {
+		{ Initialize-WSLEnvironment } | Should -Not -Throw
+
+		Should -Invoke wsl -ParameterFilter { ($args -join ' ') -notmatch '-d Ubuntu' } -Times 0
+	}
+
+	It "skips when no WSL distribution is configured" {
+		$script:Configuration = [PSCustomObject]@{
+			DefaultWSLDistribution = ""
+			Universal              = [PSCustomObject]@{ OhMyPoshThemeFile = "" }
+		}
+
+		{ Initialize-WSLEnvironment } | Should -Not -Throw
+
+		Should -Invoke wsl -Times 0
 	}
 }

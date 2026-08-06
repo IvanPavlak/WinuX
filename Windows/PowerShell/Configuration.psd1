@@ -345,6 +345,14 @@
 	# DefaultWSLDistribution = "Ubuntu".
 	DefaultWSLDistribution        = ""
 
+	# Optional WSL account username (lowercase). When set, Configure-WSL creates the
+	# account non-interactively on first installation and makes it the distribution's
+	# default user via /etc/wsl.conf; only the sudo password is still prompted -
+	# passwords never live in configuration. Ships empty - the distribution's
+	# interactive first-launch account setup runs instead. Opt in via
+	# Configuration.local.psd1, e.g. DefaultWSLUsername = "ivan".
+	DefaultWSLUsername            = ""
+
 	# ==========================================================================
 	# Wake-on-LAN Configuration
 	# ==========================================================================

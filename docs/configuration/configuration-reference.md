@@ -1130,7 +1130,22 @@ ResetAllWindowsDefaults = @{
 
 The base ships it empty; WSL provisioning (`Configure-WSL`, `Initialize-WSLEnvironment`,
 `Configure-WSLSSH`), `Open-WSLTab`, and WSL symlinks all no-op until you set a distribution
-(e.g. `"Ubuntu"`) in `Configuration.local.psd1`.
+(e.g. `"Ubuntu"`) in `Configuration.local.psd1`. All provisioning targets this distribution
+explicitly (`wsl -d <distro>`) and `Configure-WSL` pins it as the WSL default on every run -
+Docker Desktop and podman machines routinely steal the default distribution, which would
+otherwise silently redirect bare `wsl` commands into the wrong distro.
+
+**Key:** `DefaultWSLUsername` → WSL account username (lowercase)
+
+**Consumer function:** `Configure-WSL`
+
+Optional. When set (e.g. `"ivan"` in `Configuration.local.psd1`), `Configure-WSL` creates the
+account non-interactively on first installation and makes it the distribution's default user
+via `/etc/wsl.conf`; only the sudo password is still prompted - passwords never live in
+configuration. The base ships it empty, which falls back to the distribution's interactive
+first-launch account wizard. Mixed-case values are lowercased automatically (Linux usernames
+are lowercase - note the WSL user routinely differs from the Windows username, e.g. Windows
+`Ivan` vs WSL `ivan`).
 
 ---
 

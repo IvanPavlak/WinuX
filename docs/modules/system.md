@@ -147,19 +147,33 @@ Configure-Taskbar -FromBootstrap
 
 ## [Configure-WSL](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Configure-WSL.ps1)
 
-- **Description:** Enables the Windows Subsystem for Linux optional feature (if not already enabled) and installs the default WSL distribution read from `DefaultWSLDistribution` in `Configuration.psd1` (if not already installed). The base ships that key empty, so the function warns and skips WSL setup until a distribution is set in `Configuration.local.psd1`. On first installation it launches WSL so you can set up the user account. Requires administrator privileges.
-- **Usage:** `Configure-WSL`
+- **Description:** Enables the Windows Subsystem for Linux optional feature (if not already enabled) and installs the default WSL distribution read from `DefaultWSLDistribution` in `Configuration.psd1` (if not already installed). The base ships that key empty, so the function warns and skips WSL setup until a distribution is set in `Configuration.local.psd1`. On first installation it sets up the WSL user account - non-interactively when `DefaultWSLUsername` is configured, otherwise via the distribution's interactive first-launch wizard. Requires administrator privileges.
+- **Parameters:** -Force (alias -Override)
+- **Usage:** `Configure-WSL`, `Configure-WSL -Force`
 
-Checks `Test-WSLEnabled` and enables the `Microsoft-Windows-Subsystem-Linux` optional feature with `-NoRestart` when needed. It then checks `Test-WSLDistributionInstalled` and, if the distribution is missing, runs `wsl --install -d <distro> --no-launch` followed by a bare `wsl` launch for the initial setup. On that first launch you are prompted to create the WSL user account (username and a sudo password); use `exit` to let setup continue. Both stages are idempotent and report when WSL or the distribution is already present.
+Checks `Test-WSLEnabled` and enables the `Microsoft-Windows-Subsystem-Linux` optional feature with `-NoRestart` when needed. It then checks `Test-WSLDistributionInstalled` and, if the distribution is missing, runs `wsl --install -d <distro> --no-launch` followed by the user account setup:
 
-**See also:** [Configure-WSLSSH](#configure-wslssh)
+- With `DefaultWSLUsername` configured (lowercased automatically - Linux usernames are lowercase), the account is created non-interactively with `useradd` (home directory, bash shell, `adm`/`sudo` groups), you are prompted once for its sudo password (passwords never live in configuration), and the account is written as `default` under `[user]` in `/etc/wsl.conf` followed by a distro restart so it takes effect.
+- Without it, a bare `wsl` launch runs the interactive first-launch wizard (username and sudo password); use `exit` to let setup continue.
+
+Both stages are idempotent and report when WSL or the distribution is already present. Whenever the distribution is installed, it is also pinned as the WSL *default* (`wsl --set-default`) on every run - Docker Desktop and podman machines routinely steal the default, which silently redirects bare `wsl` invocations (and Windows Terminal's default WSL profile) into the wrong distro.
+
+The shipped Windows Terminal payloads (`Windows/WindowsTerminal/settings_*.json`) define the Ubuntu profile **statically** (`commandline: wsl.exe -d Ubuntu --cd ~`, fixed GUID) and disable the dynamic WSL profile generators via `disabledProfileSources` (`Microsoft.WSL`, `Windows.Terminal.Wsl`). Dynamically generated profiles get a new GUID on every distro registration, so each `-Force` reinstall would append a fresh Ubuntu entry to the settings file and orphan the previous one; the static profile makes reinstalls invisible to Windows Terminal. The trade-off: newly installed distros no longer auto-appear in the new-tab menu - add a static profile for them the same way.
+
+| Parameter | Description                                                                                                                                                                                                                                                                                                            |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `-Force`  | Redoes the whole WSL setup even when the distribution is already installed: unregisters it (**deleting everything inside the distribution**), reinstalls, recreates the user, then re-runs `Initialize-WSLEnvironment`, `SymbolicLinkMaker -Scope WSL` (restoring only the WSL symlinks the reinstall wiped), and `Configure-WSLSSH`. Alias: `-Override`. |
+
+**See also:** [Configure-WSLSSH](#configure-wslssh), [Initialize-WSLEnvironment](#initialize-wslenvironment)
 
 ## [Configure-WSLSSH](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Configure-WSLSSH.ps1)
 
-- **Description:** Configures SSH inside WSL for proper security. Copies the Windows `.ssh` directory into WSL's home directory, sets ownership, and applies appropriate Unix permissions: directory `700` (rwx------), config file and private keys `600` (rw-------), and public keys `644` (rw-r--r--).
+- **Description:** Configures SSH inside WSL for proper security. Copies the Windows `.ssh` directory into the WSL user's home directory, sets ownership, and applies appropriate Unix permissions: directory `700` (rwx------), config file and private keys `600` (rw-------), and public keys `644` (rw-r--r--). No-ops until `DefaultWSLDistribution` is configured.
 - **Usage:** `Configure-WSLSSH`
 
-Removes any existing `.ssh` in the WSL home directory, recreates it, then copies the SSH files over from the Windows profile. Ownership is reset to the WSL user, after which permissions are tightened: `700` on the directory, `600` on the `config` file and all private keys (everything that is not `*.pub`, `known_hosts*`, `authorized_keys*`, or `config`), and `644` on public keys. This avoids the strict-permission errors SSH raises when keys carried over from Windows are world-readable.
+Every `wsl` call targets the configured `DefaultWSLDistribution` explicitly (`wsl -d <distro>`) - Docker Desktop and podman machines routinely steal the WSL default, which would otherwise send the keys into the wrong distro. The WSL username and home directory are derived from inside that distribution (`id -un` / `$HOME`), never from `$env:USERNAME` - Linux is case-sensitive and WSL accounts are lowercase by convention (Windows `Ivan` vs WSL `ivan`), so assuming the Windows name would silently build a root-owned `/home/<WrongCase>` tree that SSH never reads. If the user cannot be determined (uninitialized distribution), the function reports it and skips.
+
+Removes any existing `.ssh` in the WSL home directory, recreates it, then copies the SSH files over from the Windows profile. Ownership is reset to the WSL user, after which permissions are tightened (all as root): `700` on the directory, `600` on the `config` file and all private keys (everything that is not `*.pub`, `known_hosts*`, `authorized_keys*`, or `config`), and `644` on public keys. This avoids the strict-permission errors SSH raises when keys carried over from Windows are world-readable. Exit codes are checked along the way - the closing message reports failure instead of claiming success when any command failed.
 
 ## [Determine-DotnetDependencies](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Determine-DotnetDependencies.ps1)
 
@@ -279,6 +293,22 @@ Get-PinnedApps -DataFileKey ScoopApps -VersionExcludeValue "latest"
 
 **See also:** [Import-AppCsv](bootstrap.md#import-appcsv), [Sync-AppPins](#sync-apppins), [Upgrade-All](#upgrade-all)
 
+## [Get-SymbolicLinkEntries](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Get-SymbolicLinkEntries.ps1)
+
+- **Description:** Flattens a (possibly nested) `SymbolicLinks` configuration hashtable into a flat list of link entry objects, optionally filtered by `-Scope` and `-Name`. Pure discovery and selection - nothing is created or touched; [`SymbolicLinkMaker`](#symboliclinkmaker) consumes the result and does the linking.
+- **Parameters:** -SymbolicLinks, -Scope (`All`, `Windows`, `WSL`), -Name
+- **Usage:** `Get-SymbolicLinkEntries -SymbolicLinks $MachineSpecificPaths.SymbolicLinks -Scope WSL`
+
+Each returned object carries `Key` (the entry's own key), `FullKey` (the dotted path from the root, e.g. `PowerToys.Settings`), `Path`, `Target`, and `IsWSL` (`$true` when `Path` or `Target` contains a forward slash). `-Name` patterns are matched with wildcards against the bare keys and dotted paths at every level, so a group match carries down to everything beneath it.
+
+| Parameter        | Description                                                                                                                                              |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `-SymbolicLinks` | The `SymbolicLinks` hashtable to flatten (normally `MachineSpecificPaths.SymbolicLinks`).                                                                  |
+| `-Scope`         | Which link flavor to return: `All` (default), `Windows` (backslash paths only), or `WSL` (forward-slash paths only).                                       |
+| `-Name`          | Wildcard patterns (e.g. `PowerToys`, `PowerToys.Settings`, `WSL*`) selecting specific entries; matching a group selects everything beneath it. Omit for all. |
+
+**See also:** [SymbolicLinkMaker](#symboliclinkmaker), [New-WindowsSymbolicLink](#new-windowssymboliclink), [New-WSLSymbolicLink](#new-wslsymboliclink)
+
 ## [Initialize-OhMyPosh](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Initialize-OhMyPosh.ps1)
 
 - **Description:** Resolves the `oh-my-posh` binary and initializes the prompt theme for the current session - the robust form of the classic profile one-liner `oh-my-posh init pwsh --config <theme> | Invoke-Expression`. Resolution order: PATH (`Get-Command`), then the known install locations (winget EXE per-user and machine scope, WinGet portable links, Store alias). When a fallback location hits, its directory is prepended to the session PATH so `oh-my-posh` also resolves as a plain command afterwards. When the binary is genuinely absent, prints a single install hint instead of erroring on every prompt. The theme file is read from `Universal.OhMyPoshThemeFile` in `Configuration.psd1`.
@@ -305,13 +335,13 @@ Initialize-Win32BrowserHelperType
 
 ## [Initialize-WSLEnvironment](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Initialize-WSLEnvironment.ps1)
 
-- **Description:** Initializes the active WSL distribution with shell tooling. Installs the `fastfetch` system info tool via apt and adds it to `.bashrc` so it runs on shell startup, then installs `unzip` and `oh-my-posh` and wires `oh-my-posh` into `.profile` with the configured theme. Each step is idempotent, detecting existing installs and configuration before acting.
+- **Description:** Initializes the configured WSL distribution with shell tooling. Installs the `fastfetch` system info tool via apt and adds it to `.bashrc` so it runs on shell startup, then installs `unzip` and `oh-my-posh` and wires `oh-my-posh` into `.profile` with the configured theme. Each step is idempotent, detecting existing installs and configuration before acting. No-ops until `DefaultWSLDistribution` is configured.
 - **Usage:** `Initialize-WSLEnvironment`
 
-Runs against the currently active WSL distribution. First it checks whether `fastfetch` is present (`command -v fastfetch`); if missing it adds the fastfetch PPA, runs `apt update`, and installs the package as root, then appends `fastfetch` to `~/.bashrc` unless already present. It then provisions a temporary setup script in `/tmp` that installs `unzip` (if not already installed) and `oh-my-posh` (via the official install script), appends the `oh-my-posh init bash` line to `~/.profile` referencing the configured theme, reloads the profile, and is removed afterward.
+Every `wsl` call targets the configured `DefaultWSLDistribution` explicitly (`wsl -d <distro>`) rather than the WSL default - Docker Desktop and podman machines routinely steal the default distribution, which would otherwise silently provision the wrong distro. First it checks whether `fastfetch` is present (`command -v fastfetch`); if missing it adds the fastfetch PPA, runs `apt update`, and installs the package as root, then appends `fastfetch` to `~/.bashrc` unless already present. It then provisions a temporary setup script in `/tmp` that installs `unzip` (if not already installed) and `oh-my-posh` (via the official install script), appends the `oh-my-posh init bash` line to `~/.profile` referencing the configured theme, reloads the profile, and is removed afterward.
 
 ```powershell
-# Install and configure fastfetch and oh-my-posh inside the active WSL distribution
+# Install and configure fastfetch and oh-my-posh inside the configured WSL distribution
 Initialize-WSLEnvironment
 ```
 
@@ -415,6 +445,26 @@ Kill-All -ReloadPowerShellProfile
 
 - **Description:** Lists all FileSystem PSDrives (mounted drives). A thin alias for `Get-PSDrive -PSProvider FileSystem`, showing all mounted drives including local disks, network drives, and removable media along with their Name, Used (GB), Free (GB), Provider, and Root.
 - **Usage:** `List-Drives`
+
+## [New-WindowsSymbolicLink](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/New-WindowsSymbolicLink.ps1)
+
+- **Description:** Creates a single native Windows symbolic link at `Path` pointing to `Target`. The parent directory is created via `Initialize-Directory` if missing and any pre-existing item at the path is removed first. A missing target is skipped with a warning instead of linked - that would delete the real file at `Path` and leave a dangling link; the call self-heals on the next run once the target exists. The creation branch of [`SymbolicLinkMaker`](#symboliclinkmaker). Requires administrator privileges (or Developer Mode).
+- **Parameters:** -Path, -Target, -DisplayName
+- **Usage:** `New-WindowsSymbolicLink -Path "$env:USERPROFILE\.gitconfig" -Target "C:\Repo\Git\.gitconfig"`
+
+`-DisplayName` is the label used in log messages (`SymbolicLinkMaker` passes the entry's dotted key, e.g. `PowerToys.Settings`); it defaults to `Path`. Creation failures are logged, never thrown.
+
+**See also:** [SymbolicLinkMaker](#symboliclinkmaker), [New-WSLSymbolicLink](#new-wslsymboliclink), [Get-SymbolicLinkEntries](#get-symboliclinkentries)
+
+## [New-WSLSymbolicLink](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/New-WSLSymbolicLink.ps1)
+
+- **Description:** Creates a single symlink inside a WSL distribution (`ln -s`) at `Path` pointing to `Target`. The parent directory is created with `mkdir -p` if missing and any pre-existing file or symlink at the path is removed first. A missing target is skipped with a warning instead of linked (self-heals once the target exists). Every `wsl.exe` call targets the given distribution explicitly (`wsl -d`) - Docker Desktop and podman machines routinely steal the WSL default, and a bare `wsl` would create the link inside the wrong distro. The WSL creation branch of [`SymbolicLinkMaker`](#symboliclinkmaker).
+- **Parameters:** -Path, -Target, -Distribution, -DisplayName
+- **Usage:** `New-WSLSymbolicLink -Path "/home/user/.ssh/config" -Target "/mnt/c/Users/User/.ssh/config" -Distribution "Ubuntu"`
+
+`-DisplayName` is the label used in log messages (`SymbolicLinkMaker` passes the entry's dotted key); it defaults to `Path`. Creation failures are logged, never thrown.
+
+**See also:** [SymbolicLinkMaker](#symboliclinkmaker), [New-WindowsSymbolicLink](#new-windowssymboliclink), [Get-SymbolicLinkEntries](#get-symboliclinkentries)
 
 ## [Rebuild-IconCache](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Rebuild-IconCache.ps1)
 
@@ -1083,14 +1133,29 @@ Show-PinnedAppsWarning -PinnedApps @("git", "nodejs") -Message "Version-locked p
 
 ## [SymbolicLinkMaker](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/SymbolicLinkMaker.ps1)
 
-- **Description:** Creates symbolic links defined in `SymbolicLinks` under `MachineSpecificPaths` in `Configuration.psd1` for the current machine type. Creates native Windows symbolic links for paths containing backslashes and WSL symlinks for paths containing forward slashes, choosing the right command automatically (`wsl ln -s` for WSL, `New-Item -ItemType SymbolicLink` for Windows). Idempotent: an existing link pointing at the correct target is left in place, and supports nested (hierarchical) configurations via recursive processing. Requires administrator privileges.
-- **Usage:** `SymbolicLinkMaker`
+- **Description:** Creates symbolic links defined in `SymbolicLinks` under `MachineSpecificPaths` in `Configuration.psd1` for the current machine type. The orchestrator of a three-part pipeline: [`Get-SymbolicLinkEntries`](#get-symboliclinkentries) flattens the nested configuration and applies the `-Scope`/`-Name` filters, then each entry is created via [`New-WindowsSymbolicLink`](#new-windowssymboliclink) (backslash paths) or [`New-WSLSymbolicLink`](#new-wslsymboliclink) (forward-slash paths). Modular: `-Scope` limits a run to the Windows or WSL flavor and `-Name` to specific entries, so one relink never has to redo every link. Requires administrator privileges.
+- **Parameters:** -Scope (`All`, `Windows`, `WSL`), -Name
+- **Usage:** `SymbolicLinkMaker`, `SymbolicLinkMaker -Scope WSL`, `SymbolicLinkMaker -Name PowerToys`
 
-The machine type is resolved via `DetermineMachineType`, then the `SymbolicLinks` hashtable for that machine is walked recursively. Each leaf entry is a hashtable with `Path` and `Target` keys; entries with empty or null values are skipped. Entries whose **target does not exist** are skipped with a warning - linking to a missing target would delete the real file at `Path`, leave a dangling link, and create stray parent folders; such entries self-heal on the next run once the target exists. WSL entries are likewise skipped when no WSL distribution is available. For WSL targets, the parent directory is created with `mkdir -p` if missing and any pre-existing file or symlink at the path is removed first. For Windows targets, the parent directory is created via `Initialize-Directory` if missing and any existing item is removed before the new link is made.
+The machine type is resolved via `DetermineMachineType`, then `Get-SymbolicLinkEntries` flattens the `SymbolicLinks` hashtable and applies the `-Scope`/`-Name` filters up front. The maker itself only iterates the selected entries: it prints the group headers (each ancestor once, derived from the entries' dotted keys), skips entries with empty or null `Path`/`Target` with an error, and dispatches each entry to `New-WSLSymbolicLink` (passing the configured `DefaultWSLDistribution`) or `New-WindowsSymbolicLink`, which own the target-missing guard, parent-directory creation, and remove-then-link sequence. WSL entries are skipped with a warning when no WSL distribution is available; the availability probe only runs when the selection actually contains WSL entries.
+
+Entries filtered out by `-Scope`/`-Name` are skipped silently (no warnings, no empty group headers): a filtered run was simply asked not to touch them. A `-Scope Windows` run never invokes `wsl.exe` at all, and a filter matching nothing warns and returns.
+
+| Parameter | Description                                                                                                                                                                                                                                        |
+| --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `-Scope`  | Which link flavor to process: `All` (default), `Windows` (backslash paths only), or `WSL` (forward-slash paths only). `Configure-WSL -Force` uses `-Scope WSL` to restore the links a distro reinstall wiped.                                          |
+| `-Name`   | One or more entry keys, matched with wildcards against both the bare key and the full dotted path (e.g. `PowerToys`, `PowerToys.Settings`, `WSL*`). Matching a group processes everything beneath it. Combines with `-Scope`. Omit for all entries. |
 
 ```powershell
 # Create all configured symbolic links for the current machine type (run elevated)
 SymbolicLinkMaker
+
+# Only the WSL symlinks (e.g. after a distro reinstall)
+SymbolicLinkMaker -Scope WSL
+
+# Only specific entries - a top-level group, a nested entry, or a wildcard
+SymbolicLinkMaker -Name PowerToys
+SymbolicLinkMaker -Name "WindowsTerminal.Settings", "FastFetch*"
 ```
 
 ## [Sync-AppPins](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Sync-AppPins.ps1)
