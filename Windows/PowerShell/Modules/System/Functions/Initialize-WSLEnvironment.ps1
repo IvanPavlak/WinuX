@@ -13,13 +13,22 @@ function Initialize-WSLEnvironment {
 	#>
 	Write-LogTitle "Configuring WSL Environment"
 
+	if (-not (Confirm-ConfigValue $Configuration.DefaultWSLDistribution "DefaultWSLDistribution not configured - skipping WSL environment setup!")) {
+		return
+	}
+
+	# Always target the configured distribution explicitly: Docker Desktop and podman
+	# machines routinely steal the WSL *default*, and a bare `wsl` would then provision
+	# the wrong distro.
+	$distro = $Configuration.DefaultWSLDistribution
+
 	# Check if fastfetch is installed
-	$fastfetchInstalled = wsl bash -c "command -v fastfetch &> /dev/null && echo 'true' || echo 'false'"
+	$fastfetchInstalled = wsl -d $distro bash -c "command -v fastfetch &> /dev/null && echo 'true' || echo 'false'"
 	if ($fastfetchInstalled -ne 'true') {
 		Write-LogTitle "Installing fastfetch" -BlankLineAfter
-		wsl -u root add-apt-repository ppa:zhangsongcui3371/fastfetch -y
-		wsl -u root apt update
-		wsl -u root apt install fastfetch -y
+		wsl -d $distro -u root add-apt-repository ppa:zhangsongcui3371/fastfetch -y
+		wsl -d $distro -u root apt update
+		wsl -d $distro -u root apt install fastfetch -y
 		Write-LogSuccess "fastfetch installed!"
 	}
 	else {
@@ -27,10 +36,10 @@ function Initialize-WSLEnvironment {
 	}
 
 	# Check if fastfetch is in .bashrc
-	$bashrcCheck = wsl bash -c "grep -q 'fastfetch' ~/.bashrc && echo 'exists' || echo 'missing'"
+	$bashrcCheck = wsl -d $distro bash -c "grep -q 'fastfetch' ~/.bashrc && echo 'exists' || echo 'missing'"
 	if ($bashrcCheck -eq 'missing') {
 		Write-LogTitle "Adding fastfetch to .bashrc"
-		wsl bash -c "echo '' >> ~/.bashrc && echo 'fastfetch' >> ~/.bashrc"
+		wsl -d $distro bash -c "echo '' >> ~/.bashrc && echo 'fastfetch' >> ~/.bashrc"
 		Write-LogSuccess "fastfetch added to .bashrc!"
 	}
 	else {
@@ -79,10 +88,10 @@ source ~/.profile 2>/dev/null || true
 	$ompTheme = if ($Configuration.Universal.OhMyPoshThemeFile) { Split-Path -Leaf $Configuration.Universal.OhMyPoshThemeFile } else { "WinuX.omp.json" }
 	$ohmyposhScript = $ohmyposhScript.Replace('__WINUSER__', $env:USERNAME).Replace('__OMPTHEME__', $ompTheme)
 
-	$ohmyposhScript | wsl bash -c "tr -d '\r' | tee $tempScript > /dev/null"
-	wsl chmod +x $tempScript
-	wsl bash $tempScript
-	wsl rm -f $tempScript
+	$ohmyposhScript | wsl -d $distro bash -c "tr -d '\r' | tee $tempScript > /dev/null"
+	wsl -d $distro chmod +x $tempScript
+	wsl -d $distro bash $tempScript
+	wsl -d $distro rm -f $tempScript
 
 	Write-LogSuccess "WSL environment initialization complete!"
 }

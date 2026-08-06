@@ -50,6 +50,7 @@ Describe "Vanilla Configuration (empty-by-default contract)" {
 
 		It "Should ship <Key> blank" -ForEach @(
 			@{ Key = "DefaultWSLDistribution" }
+			@{ Key = "DefaultWSLUsername" }
 			@{ Key = "DefaultWakeOnLanMachine" }
 			@{ Key = "DefaultLocale" }
 			@{ Key = "DefaultKeyboardLayoutSet" }

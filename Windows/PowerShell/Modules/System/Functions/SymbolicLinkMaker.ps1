@@ -4,25 +4,55 @@ function SymbolicLinkMaker {
 		Creates symbolic links from Configuration.psd1 for the current machine type.
 
 	.DESCRIPTION
-		Reads symbolic link configurations from `SymbolicLinks` in `MachineSpecificPaths`.
-		Creates Windows symbolic links for paths containing backslashes, and WSL symlinks
-		for paths containing forward slashes.
+		Reads symbolic link configurations from `SymbolicLinks` in `MachineSpecificPaths`,
+		flattened and filtered by Get-SymbolicLinkEntries, then creates each link:
+		Windows symbolic links (backslash paths) via New-WindowsSymbolicLink and WSL
+		symlinks (forward-slash paths) via New-WSLSymbolicLink.
 
-		Idempotent: if a link already exists pointing to the correct target, it is skipped.
+		Modular: -Scope limits the run to Windows-only or WSL-only entries, and -Name
+		limits it to specific entries by key (wildcards supported), so one relink never
+		has to redo every link.
+
 		WSL symlinks are skipped with a warning when no WSL distribution is available
 		(WSL setup disabled for the machine type, or WSL not initialized yet).
-		Entries whose TARGET does not exist are skipped with a warning: linking to a missing
-		target would delete whatever real file lives at Path, leave a dangling link, and
-		pointlessly create parent folders. The entry self-heals on the next run once the
-		target exists.
+		Entries whose TARGET does not exist are skipped with a warning: linking to a
+		missing target would delete whatever real file lives at Path, leave a dangling
+		link, and pointlessly create parent folders. The entry self-heals on the next
+		run once the target exists.
 
-		Supports nested configurations (hierarchical hashtables) via recursive processing.
 		Requires administrator privileges.
+
+	.PARAMETER Scope
+		Which link flavor to process: All (default), Windows (backslash paths only),
+		or WSL (forward-slash paths only).
+
+	.PARAMETER Name
+		One or more entry keys to process, matched with wildcards against both the bare
+		key and the full dotted path (e.g. "PowerToys", "PowerToys.Settings", "WSL*").
+		Matching a group processes everything beneath it. Omit to process all entries.
 
 	.EXAMPLE
 		SymbolicLinkMaker
 		Creates all configured symbolic links for the machine type.
+
+	.EXAMPLE
+		SymbolicLinkMaker -Scope WSL
+		Recreates only the WSL symlinks (e.g. after a distro reinstall).
+
+	.EXAMPLE
+		SymbolicLinkMaker -Name PowerToys
+		Recreates only the PowerToys link group.
+
+	.EXAMPLE
+		SymbolicLinkMaker -Name "WindowsTerminal.Settings", "FastFetch*"
+		Recreates one nested entry and every group matching a wildcard.
 	#>
+	param(
+		[ValidateSet("All", "Windows", "WSL")]
+		[string]$Scope = "All",
+
+		[string[]]$Name
+	)
 
 	Test-AdminPrivileges
 
@@ -34,121 +64,57 @@ function SymbolicLinkMaker {
 		return
 	}
 
-	# WSL symlinks (forward-slash paths) need a working distribution. Probe once up front: when
-	# it is missing (WSL setup disabled for this machine type via BootstrapConfig.Steps.WSL, or
-	# the post-install reboot has not happened yet), skip WSL entries with a warning instead of
-	# erroring on every wsl.exe call.
-	$wslAvailable = Test-WSLDistributionInstalled
+	$entries = @(Get-SymbolicLinkEntries -SymbolicLinks $MachineSpecificPaths.SymbolicLinks -Scope $Scope -Name $Name)
+	if ($entries.Count -eq 0) {
+		Write-LogWarning "No symbolic link entries match the requested filters - nothing to link!"
+		return
+	}
 
-	$processLinks = {
-		param (
-			[hashtable]$Configuration,
-			[string]$Parent = "",
-			[int]$Depth = 0
-		)
+	# WSL symlinks need a working distribution. Probe once up front - and only when the
+	# selection actually contains WSL entries - so a missing distribution (WSL setup
+	# disabled for this machine type via BootstrapConfig.Steps.WSL, or the post-install
+	# reboot has not happened yet) skips them with a warning instead of erroring on
+	# every wsl.exe call, and a Windows-only run never touches wsl.exe at all.
+	$wslAvailable = (@($entries | Where-Object IsWSL).Count -gt 0) -and (Test-WSLDistributionInstalled)
+	$wslDistro = $Configuration.DefaultWSLDistribution
 
-		foreach ($key in $Configuration.Keys) {
-			$item = $Configuration[$key]
+	# Entries arrive depth-first, so a group's entries are contiguous: print each
+	# ancestor header exactly once, when it differs from the previous entry's chain.
+	$previousGroups = @()
+	foreach ($entry in $entries) {
+		if ([string]::IsNullOrWhiteSpace($entry.Path) -or [string]::IsNullOrWhiteSpace($entry.Target)) {
+			Write-LogError "Skipping symbolic link with null/empty path or target!"
+			continue
+		}
 
-			if ($item -is [hashtable] -and $item.ContainsKey("Path") -and $item.ContainsKey("Target")) {
-				$path = $item.Path
-				$target = $item.Target
-				$isWSL = ($path -match '/') -or ($target -match '/')
-
-				if ([string]::IsNullOrWhiteSpace($path) -or [string]::IsNullOrWhiteSpace($target)) {
-					Write-LogError "Skipping symbolic link with null/empty path or target!"
-					continue
-				}
-
-				$indent = "  " * $Depth
-				Write-LogStep "$indent[$key]"
-
-				if ($isWSL) {
-					if (-not $wslAvailable) {
-						Write-LogWarning "Skipped WSL symlink (no WSL distribution available) => $($Parent)$key"
-						continue
-					}
-
-					# Never link to a missing target - it would remove the real file at Path and
-					# leave a dangling link. Skips self-heal on the next run.
-					wsl test -e $target
-					if ($LASTEXITCODE -ne 0) {
-						Write-LogWarning "Skipped symlink (target does not exist) => [$($Parent)$key] => [$target]"
-						continue
-					}
-
-					$lastSlashIndex = $path.LastIndexOf('/')
-					if ($lastSlashIndex -gt 0) {
-						$parentDir = $path.Substring(0, $lastSlashIndex)
-						wsl test -d $parentDir
-						if ($LASTEXITCODE -ne 0) {
-							wsl mkdir -p $parentDir
-							Write-LogSuccess "Created WSL directory => [$parentDir]"
-						}
-					}
-
-					wsl test -L $path -o -f $path
-					if ($LASTEXITCODE -eq 0) {
-						wsl rm -f $path
-						if ($LASTEXITCODE -eq 0) {
-							Write-LogWarning "Removed existing item => [$path]"
-						}
-						else {
-							Write-LogError "Failed to remove existing item => [$path]"
-						}
-					}
-
-					try {
-						wsl ln -s $target $path
-						if ($LASTEXITCODE -eq 0) {
-							Write-LogSuccess "Created WSL symlink => [$path] => [$target]"
-						}
-						else {
-							Write-LogError "Failed to create WSL symlink for => $($Parent)$key"
-						}
-					}
-					catch {
-						Write-LogError "Failed to create WSL symlink for => $($Parent)$key => $($_.Exception.Message)"
-					}
-				}
-				else {
-					# Never link to a missing target - it would remove the real file at Path,
-					# leave a dangling link, and pointlessly create parent folders (e.g. a
-					# {Dev}\Obsidian folder on machines that never use Obsidian). Skips
-					# self-heal on the next run once the target exists.
-					if (-not (Test-Path $target)) {
-						Write-LogWarning "Skipped symlink (target does not exist) => [$($Parent)$key] => [$target]"
-						continue
-					}
-
-					$parentDir = Split-Path -Parent $path
-					if ($parentDir -and -not (Test-Path $parentDir)) {
-						Initialize-Directory $parentDir
-					}
-
-					if (Test-Path $path) {
-						Remove-Item -Path $path -Force | Out-Null
-						Write-LogWarning "Removed existing item => [$path]"
-					}
-
-					try {
-						New-Item -ItemType SymbolicLink -Path $path -Target $target | Out-Null
-						Write-LogSuccess "Created symlink => [$path] => [$target]"
-					}
-					catch {
-						Write-LogError "Failed to create symlink for => $($Parent)$key` => $($_.Exception.Message)"
-					}
-				}
+		$segments = $entry.FullKey -split '\.'
+		# Plain assignment, NOT `$groups = if (...) {...}`: assigning statement output
+		# enumerates it, collapsing a one-element array to a bare string whose [0] is
+		# then a single character ("[W]" instead of "[WSLFastFetch]").
+		$groups = @()
+		if ($segments.Count -gt 1) {
+			$groups = @($segments[0..($segments.Count - 2)])
+		}
+		for ($i = 0; $i -lt $groups.Count; $i++) {
+			if ($i -ge $previousGroups.Count -or $previousGroups[$i] -ne $groups[$i]) {
+				Write-LogStep ("  " * $i + "[$($groups[$i])]")
 			}
-			elseif ($item -is [hashtable]) {
-				$indent = "  " * $Depth
-				Write-LogStep "$indent[$key]"
+		}
+		$previousGroups = $groups
+		Write-LogStep ("  " * $groups.Count + "[$($entry.Key)]")
 
-				& $processLinks -Configuration $item -Parent "$($Parent)$key." -Depth ($Depth + 1)
+		if ($entry.IsWSL) {
+			if (-not $wslAvailable) {
+				Write-LogWarning "Skipped WSL symlink (no WSL distribution available) => $($entry.FullKey)"
+				continue
 			}
+
+			New-WSLSymbolicLink -Path $entry.Path -Target $entry.Target -Distribution $wslDistro -DisplayName $entry.FullKey
+		}
+		else {
+			New-WindowsSymbolicLink -Path $entry.Path -Target $entry.Target -DisplayName $entry.FullKey
 		}
 	}
 
-	& $processLinks -Configuration $MachineSpecificPaths.SymbolicLinks
 	Write-LogSuccess "Symbolic links created!"
 }

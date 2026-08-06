@@ -220,14 +220,16 @@ the deprecated `BootstrapConfig.WSLSetup` key is still honored when `Steps` carr
 entry). Even with the step on, `Configure-WSL`, `Initialize-WSLEnvironment`, and `Configure-WSLSSH`
 no-op until `DefaultWSLDistribution` is set (the base ships it empty - opt in via
 `Configuration.local.psd1`, e.g. `"Ubuntu"`), and `SymbolicLinkMaker` skips WSL symlinks whenever
-no distribution is present.
+no distribution is present. Setting `DefaultWSLUsername` alongside it makes the first-install
+account setup non-interactive (only the sudo password is prompted).
 
 ```powershell
 # Check WSL status
 wsl --status
 
-# Reinstall if needed
-wsl --install
+# Redo the whole WSL setup from scratch (unregisters the distribution - deletes its data! -
+# reinstalls, recreates the user, and re-runs the environment and SSH steps)
+Configure-WSL -Force
 ```
 
 ## Next Steps

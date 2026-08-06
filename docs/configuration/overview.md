@@ -62,6 +62,7 @@ The configuration uses a hierarchical structure designed to eliminate duplicatio
 | `PowerPlans`               | Power plan per machine           | `Set-PowerPlan`                 |
 | `SpecialFolders`           | Special folder redirections      | `Set-SpecialFolders`            |
 | `DefaultWSLDistribution`   | Default WSL distribution         | `Configure-WSL`                 |
+| `DefaultWSLUsername`       | Non-interactive WSL account      | `Configure-WSL`                 |
 
 ### Path & Repository Management
 

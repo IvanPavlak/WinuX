@@ -8,6 +8,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.33] - 2026-08-07
+
+### Added
+
+- **`DefaultWSLUsername` (Configuration.psd1): non-interactive WSL user creation in `Configure-WSL`.** When set (username only - the sudo password is still prompted, because secrets never live in configuration), the first installation creates the account with `useradd` (home directory, bash shell, `adm`/`sudo` groups), lowercases a mixed-case value (Ubuntu's default `useradd` NAME_REGEX rejects uppercase), and writes it as `default` under `[user]` in `/etc/wsl.conf` followed by a distro restart so it takes effect. Ships empty, which falls back to the distribution's interactive first-launch wizard, so a vanilla bootstrap is unchanged.
+
+- **`Configure-WSL -Force` (alias `-Override`): redo the whole WSL setup in one command.** Unregisters the installed distribution (deleting everything inside it), reinstalls, recreates the user, then re-runs the pieces Bootstrap normally runs as separate steps: `Initialize-WSLEnvironment`, `SymbolicLinkMaker -Scope WSL` (only the WSL links - a distro reinstall never touches the Windows ones), and `Configure-WSLSSH`. `Test-AdminPrivileges` runs up front, because failing on elevation *after* the distro is wiped would leave the redo half-done.
+
+- **`Get-SymbolicLinkEntries`, `New-WindowsSymbolicLink`, `New-WSLSymbolicLink` (System module): `SymbolicLinkMaker` decomposed into discovery and creation.** `Get-SymbolicLinkEntries` flattens the nested `SymbolicLinks` configuration into entry objects (`Key`, dotted `FullKey`, `Path`, `Target`, `IsWSL`) and applies the filters below - pure data, trivially testable, and filtering a flat list cannot produce the empty group headers the old recursive walk had to probe for. The two `New-*` functions each own one link's full sequence (target-missing guard, parent directory, remove-then-link, logging), leaving the maker as pure orchestration.
+
+- **`SymbolicLinkMaker -Scope` and `-Name`: modular relinks.** `-Scope All|Windows|WSL` limits a run to one link flavor (`-Scope Windows` never invokes `wsl.exe` at all); `-Name` limits it to specific entries, matched with wildcards against both bare keys and dotted paths at every level, so `PowerToys` takes the whole group and `PowerToys.Settings` one nested entry. Filtered-out entries are skipped silently - a filtered run was simply asked not to touch them.
+
+### Changed
+
+- **Every WSL-touching function targets the configured distribution explicitly (`wsl -d <DefaultWSLDistribution>`) instead of relying on the WSL default.** Docker Desktop and podman machines routinely steal the default distribution, which silently redirected every bare `wsl` invocation into the wrong distro - `SymbolicLinkMaker` built WSL symlinks inside podman's machine (`mkdir /home/<user>: Permission denied`), and `Configure-WSLSSH`/`Initialize-WSLEnvironment` provisioned whatever happened to be default. `Configure-WSL` additionally pins the configured distribution as the WSL default (`wsl --set-default`) on every run, so hand-typed bare `wsl` commands land in the right place too.
+
+- `Initialize-WSLEnvironment` and `Configure-WSLSSH` now actually no-op when `DefaultWSLDistribution` is unconfigured. The docs claimed this for the whole WSL provisioning trio; only `Configure-WSL` checked.
+
+- **Windows Terminal payloads define the Ubuntu profile statically and disable the dynamic WSL profile generators** (`disabledProfileSources`: `Microsoft.WSL`, `Windows.Terminal.Wsl`). Dynamically generated WSL profiles get a new GUID on every distro registration, so each reinstall appended a fresh Ubuntu entry to the settings file and orphaned the previous one, and the Ubuntu color scheme lived only in the distro's Terminal fragment - gone after a tar-based reinstall, leaving `colorScheme` references dangling. The static profile (`wsl.exe -d Ubuntu --cd ~`, fixed GUID) and an inlined Ubuntu scheme make reinstalls invisible to Windows Terminal. Trade-off: newly installed distros no longer auto-appear in the new-tab menu - add a static profile for them the same way.
+
+### Fixed
+
+- **`Configure-WSLSSH` derived the WSL account from `$env:USERNAME`, which is not the WSL username.** Linux is case-sensitive and WSL accounts are lowercase by convention (Windows `Ivan` vs WSL `ivan`), so the function built a root-owned `/home/<WrongCase>/.ssh` that ssh never reads: `chown` failed with `invalid user`, every `chmod` failed with `Operation not permitted` (the permission calls did not run as root), and the function printed "SSH configured successfully!" over all of it. The username and home directory are now derived from inside the distribution (`id -un` / `$HOME`), every permission command runs as root, and exit codes are tracked so the closing message reports failure instead of claiming success.
+
 ## [0.1.32] - 2026-08-05
 
 ### Added
@@ -553,7 +577,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.32...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.33...HEAD
+[0.1.33]: https://github.com/IvanPavlak/WinuX/compare/v0.1.32...v0.1.33
 [0.1.32]: https://github.com/IvanPavlak/WinuX/compare/v0.1.31...v0.1.32
 [0.1.31]: https://github.com/IvanPavlak/WinuX/compare/v0.1.30...v0.1.31
 [0.1.30]: https://github.com/IvanPavlak/WinuX/compare/v0.1.29...v0.1.30
