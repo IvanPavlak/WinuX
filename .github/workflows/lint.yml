@@ -5,6 +5,9 @@ on:
     branches: [master]
   pull_request:
     branches: [master]
+  # Manual escape hatch, mirroring tests.yml. GitHub restricts workflow_dispatch to
+  # collaborators with write access, so only maintainers can fire it.
+  workflow_dispatch:
 
 permissions:
   contents: read

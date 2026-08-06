@@ -5,6 +5,11 @@ on:
     branches: [master]
   pull_request:
     branches: [master]
+  # Manual escape hatch for when GitHub drops the push/pull_request event and the run
+  # is never created, leaving a required check stuck on "Expected - waiting for status
+  # to be reported". GitHub restricts workflow_dispatch to collaborators with write
+  # access, so only maintainers can fire it.
+  workflow_dispatch:
 
 # Cancel superseded runs on the same ref (saves Windows minutes).
 concurrency:
