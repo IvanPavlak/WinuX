@@ -15,7 +15,10 @@ permissions:
 jobs:
   psscriptanalyzer:
     name: PSScriptAnalyzer
-    runs-on: windows-latest
+    # PSScriptAnalyzer is parse-based static analysis - it never runs the code under
+    # review - so Windows-targeted scripts lint identically on Linux, and the ubuntu
+    # runners spin up and execute noticeably faster than windows-latest.
+    runs-on: ubuntu-latest
     # Starts non-blocking so style findings don't block merges while the tree is
     # brought into compliance. Flip `continue-on-error` off (and add it to the
     # ruleset's required checks) once it is clean.
@@ -23,9 +26,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install PSScriptAnalyzer
+      # The runner images ship PSScriptAnalyzer in-box, so installing it from PSGallery
+      # every run wasted ~26s. This only installs if the image ever stops bundling it.
+      - name: Ensure PSScriptAnalyzer
         shell: pwsh
-        run: Install-Module PSScriptAnalyzer -Force -Scope CurrentUser
+        run: |
+          if (-not (Get-Module -ListAvailable -Name PSScriptAnalyzer)) {
+            Install-PSResource -Name PSScriptAnalyzer -TrustRepository -Scope CurrentUser -Quiet
+          }
 
       - name: Analyze PowerShell
         shell: pwsh
