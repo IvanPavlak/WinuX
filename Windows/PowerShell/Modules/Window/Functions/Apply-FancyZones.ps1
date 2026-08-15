@@ -101,9 +101,9 @@ function Apply-FancyZones {
 		return $false
 	}
 
-	$fancyZonesReady = Start-FancyZones
+	$fancyZonesReady = Start-FancyZones -PassThru
 	if (-not $fancyZonesReady) {
-		$fancyZonesReady = Start-FancyZones -ForceRestart -MaxWaitSeconds 20
+		$fancyZonesReady = Start-FancyZones -ForceRestart -MaxWaitSeconds 20 -PassThru
 	}
 
 	if (-not $fancyZonesReady) {

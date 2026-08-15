@@ -257,6 +257,40 @@ function Set-WorkspaceWindowLayout {
 		$config = Import-PowerShellDataFile -Path $LayoutPath
 		$layoutConfigToApply = $config.Layout
 
+		# Validate the FancyZones configuration quartet (custom-layouts.json,
+		# ZoneNameMappings, LayoutNumbers, layout-hotkeys.json) before any desktop or
+		# window work. Arbitrary layouts/zones/spacing are supported, so drift between
+		# those files is now the main way an open can misplace windows or apply the
+		# wrong layout. Errors touching a layout THIS workspace references - or global
+		# errors such as a hotkey/uuid mismatch, which make Apply-FancyZones apply the
+		# wrong layout everywhere - abort the open; everything else already logged as
+		# a warning by the validator and the open proceeds.
+		$fancyZonesValidation = Test-FancyZonesConfiguration
+		if (-not $fancyZonesValidation.Valid) {
+			$workspaceLayoutNames = @()
+			if ($config.Monitors) {
+				foreach ($monitorConfig in $config.Monitors.Values) {
+					if ($monitorConfig.VirtualDesktopLayouts) {
+						$workspaceLayoutNames += @($monitorConfig.VirtualDesktopLayouts.Values)
+					}
+				}
+			}
+			if ($config.Layout) {
+				$workspaceLayoutNames += @($config.Layout | ForEach-Object { $_.Layout } | Where-Object { $_ })
+			}
+			$workspaceLayoutNames = @($workspaceLayoutNames | Select-Object -Unique)
+
+			$blockingErrors = @($fancyZonesValidation.Errors | Where-Object {
+					(-not $_.Layout) -or ($workspaceLayoutNames -contains $_.Layout)
+				})
+
+			if ($blockingErrors.Count -gt 0) {
+				if ($spinner) { [void](Loading-Spinner -Stop -Spinner $spinner -Discard); $spinner = $null }
+				Write-LogError "FancyZones configuration has $($blockingErrors.Count) error(s) affecting this workspace (see above) - aborting layout. Run Test-FancyZonesConfiguration after fixing."
+				return
+			}
+		}
+
 		# Read the persisted snapshot (CurrentLayout.txt) for this workspace, if any, and turn
 		# its window records into a desktop|monitor|zone => recorded-window map. Set-WindowLayouts
 		# uses it only as a tiebreaker so identically-named windows (e.g. several "Browser"
@@ -770,79 +804,6 @@ function Set-WorkspaceWindowLayout {
 			if ($hasNewWindows) {
 				# Always normalize on first open - some apps (e.g. Outlook) remember their
 				# last size/position which can interfere with FancyZones snapping.
-
-				# $anyWindowNeedsPositioning = $false
-				# $normMonitorSpecs = if ($cachedMonitorInfo) { Get-MonitorSpecs -MonitorInfo $cachedMonitorInfo } else { $null }
-				# Clear-WindowCache
-
-				# foreach ($layoutEntry in $config.Layout) {
-				# 	$targetX = $null; $targetY = $null; $targetW = $null; $targetH = $null
-
-				# 	if ($layoutEntry.Zone) {
-				# 		$normLayoutName = $layoutEntry.Layout
-				# 		if (-not $normLayoutName -and $layoutEntry.Monitor -and $null -ne $layoutEntry.DesktopNumber -and $config.Monitors) {
-				# 			if ($config.Monitors.ContainsKey($layoutEntry.Monitor) -and
-				# 				$config.Monitors[$layoutEntry.Monitor].VirtualDesktopLayouts -and
-				# 				$config.Monitors[$layoutEntry.Monitor].VirtualDesktopLayouts.ContainsKey($layoutEntry.DesktopNumber)) {
-				# 				$normLayoutName = $config.Monitors[$layoutEntry.Monitor].VirtualDesktopLayouts[$layoutEntry.DesktopNumber]
-				# 			}
-				# 		}
-				# 		if (-not $normLayoutName) { continue }
-
-				# 		$normMonX = 0; $normMonY = 0; $normMonW = 3440; $normMonH = 1440
-				# 		if ($layoutEntry.Monitor) {
-				# 			if ($layoutEntry.Monitor -is [string] -and $normMonitorSpecs) {
-				# 				$spec = $normMonitorSpecs.($layoutEntry.Monitor)
-				# 				# Zone geometry uses the work area (Work* fields) - see Set-WindowLayouts
-				# 				if ($spec) { $normMonX = $spec.WorkX; $normMonY = $spec.WorkY; $normMonW = $spec.WorkWidth; $normMonH = $spec.WorkHeight }
-				# 			}
-				# 			elseif ($layoutEntry.Monitor -isnot [string]) {
-				# 				$normMonX = if ($null -ne $layoutEntry.Monitor.X) { $layoutEntry.Monitor.X } else { 0 }
-				# 				$normMonY = if ($null -ne $layoutEntry.Monitor.Y) { $layoutEntry.Monitor.Y } else { 0 }
-				# 				$normMonW = if ($layoutEntry.Monitor.Width) { $layoutEntry.Monitor.Width } else { 3440 }
-				# 				$normMonH = if ($layoutEntry.Monitor.Height) { $layoutEntry.Monitor.Height } else { 1440 }
-				# 			}
-				# 		}
-
-				# 		$normZone = Get-FancyZone -LayoutName $normLayoutName -ZoneName $layoutEntry.Zone `
-				# 			-MonitorX $normMonX -MonitorY $normMonY -MonitorWidth $normMonW -MonitorHeight $normMonH
-				# 		if ($normZone) {
-				# 			$targetX = $normZone.X; $targetY = $normZone.Y
-				# 			$targetW = $normZone.Width; $targetH = $normZone.Height
-				# 		}
-				# 	}
-				# 	elseif ($null -ne $layoutEntry.X -and $null -ne $layoutEntry.Y -and $layoutEntry.Width -and $layoutEntry.Height) {
-				# 		$targetX = $layoutEntry.X; $targetY = $layoutEntry.Y
-				# 		$targetW = $layoutEntry.Width; $targetH = $layoutEntry.Height
-				# 	}
-
-				# 	if ($null -eq $targetX) { continue }
-
-				# 	$matchWindow = $null
-				# 	if ($layoutEntry.WindowTitle) {
-				# 		$matchWindow = Get-WindowHandle -WindowTitle $layoutEntry.WindowTitle | Select-Object -First 1
-				# 	}
-				# 	else {
-				# 		$matchWindow = Get-WindowHandle -ProcessName $layoutEntry.ProcessName | Select-Object -First 1
-				# 	}
-
-				# 	if (-not $matchWindow) {
-				# 		$anyWindowNeedsPositioning = $true
-				# 		break
-				# 	}
-
-				# 	$normTolerance = 20
-				# 	$xOk = [Math]::Abs($matchWindow.Left - $targetX) -le $normTolerance
-				# 	$yOk = [Math]::Abs($matchWindow.Top - $targetY) -le $normTolerance
-				# 	$wOk = [Math]::Abs($matchWindow.Width - $targetW) -le $normTolerance
-				# 	$hOk = [Math]::Abs($matchWindow.Height - $targetH) -le $normTolerance
-
-				# 	if (-not ($xOk -and $yOk -and $wOk -and $hOk)) {
-				# 		$anyWindowNeedsPositioning = $true
-				# 		break
-				# 	}
-				# }
-				#if ($anyWindowNeedsPositioning) {
 
 				Write-LogDebug "[First Open - Normalizing Windows]"
 

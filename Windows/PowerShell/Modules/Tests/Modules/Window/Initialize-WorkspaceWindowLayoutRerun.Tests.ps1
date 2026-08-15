@@ -15,7 +15,8 @@ BeforeAll {
 	function Start-FancyZones {
 		param(
 			[int]$MaxWaitSeconds,
-			[switch]$ForceRestart
+			[switch]$ForceRestart,
+			[switch]$PassThru
 		)
 	}
 	function Remove-VirtualDesktops {

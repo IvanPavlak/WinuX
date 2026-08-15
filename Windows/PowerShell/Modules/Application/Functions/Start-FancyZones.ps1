@@ -29,6 +29,12 @@ function Start-FancyZones {
 		issues where FancyZones may not respond correctly. Restart uses a full
 		PowerToys shutdown sequence before relaunch.
 
+	.PARAMETER PassThru
+		Emits the readiness result ($true / $false) to the pipeline. Without it the
+		function outputs nothing, so an interactive call leaves only the spinner and
+		its completion mark on screen. Programmatic callers that branch on readiness
+		pass -PassThru and capture the value.
+
 	.EXAMPLE
 		Start-FancyZones
 		Ensures FancyZones is running with default wait time.
@@ -41,8 +47,13 @@ function Start-FancyZones {
 		Start-FancyZones -ForceRestart
 		Restarts FancyZones to ensure reliability, useful for rapid successive calls.
 
+	.EXAMPLE
+		$ready = Start-FancyZones -PassThru
+		Captures the readiness result for branching (e.g. escalate to -ForceRestart).
+
 	.NOTES
-		Returns $true if FancyZones is running, $false if it could not be started.
+		With -PassThru, outputs $true if FancyZones is running, $false if it could not
+		be started. Without -PassThru nothing is emitted.
 	#>
 	[CmdletBinding()]
 	param (
@@ -50,7 +61,10 @@ function Start-FancyZones {
 		[int]$MaxWaitSeconds = 10,
 
 		[Parameter(Mandatory = $false)]
-		[switch]$ForceRestart
+		[switch]$ForceRestart,
+
+		[Parameter(Mandatory = $false)]
+		[switch]$PassThru
 	)
 
 	Write-LogDebug "[Starting FancyZones]"
@@ -81,7 +95,8 @@ function Start-FancyZones {
 		$readyCacheAge = ([datetime]::Now - $script:FancyZonesReadyCache.VerifiedAt).TotalSeconds
 		if ($readyCacheAge -ge 0 -and $readyCacheAge -lt $script:FancyZonesReadyCache.TtlSeconds) {
 			Write-LogDebug "  ✓ FancyZones readiness verified $([int]$readyCacheAge)s ago - using cached result" -Style Success
-			return $true
+			if ($PassThru) { return $true }
+			return
 		}
 	}
 
@@ -90,6 +105,12 @@ function Start-FancyZones {
 		$spinner = Loading-Spinner -Start -Label "Starting FancyZones"
 	}
 
+	# The boolean result is EMITTED FROM THE FINALLY BLOCK, after the spinner line is
+	# finalized. A "return $true" inside the try emits its value BEFORE finally runs,
+	# so an interactive call printed "True" onto the live spinner line and mangled it
+	# ("Truearting FancyZones"). Inside the try, set $startResult and use a bare
+	# "return"; never return a value directly.
+	$startResult = $false
 	try {
 		$closePowerToysSettings = {
 			$settingsProcess = Get-Process -Name "PowerToys.Settings" -ErrorAction SilentlyContinue
@@ -204,7 +225,8 @@ function Start-FancyZones {
 				Write-LogDebug "  ✓ FancyZones is already running and ready (PID => $($fancyZonesProcess.Id))" -Style Success
 				$script:FancyZonesReadyCache.VerifiedAt = [datetime]::Now
 				& $closePowerToysSettings
-				return $true
+				$startResult = $true
+				return
 			}
 
 			$script:FancyZonesReadyCache.VerifiedAt = [datetime]::MinValue
@@ -244,7 +266,7 @@ function Start-FancyZones {
 				Write-LogDebug "Searched locations:" -Style Warning
 				$powerToysLocations | ForEach-Object { Write-LogDebug "$_" -Style Warning }
 			}
-			return $false
+			return
 		}
 
 		Write-LogDebug "  Found PowerToys at => [$powerToysPath]" -Style Success
@@ -258,7 +280,7 @@ function Start-FancyZones {
 			if (Test-LogVerbose) {
 				Write-Error "  ✗ Failed to start PowerToys: $_"
 			}
-			return $false
+			return
 		}
 
 		# Wait for FancyZones process to become ready
@@ -281,7 +303,8 @@ function Start-FancyZones {
 
 				# Give it a moment to fully initialize
 				Start-Sleep -Milliseconds 50
-				return $true
+				$startResult = $true
+				return
 			}
 
 			if ($attempt % 4 -eq 0) {
@@ -296,11 +319,25 @@ function Start-FancyZones {
 		# Kill PowerToys.Settings if it opened (cleanup even on failure)
 		& $closePowerToysSettings
 
-		return $false
+		return
 	}
 	finally {
 		if ($spinner) {
-			[void](Loading-Spinner -Stop -Spinner $spinner)
+			if ($startResult) {
+				# The label already told the story while the spinner ran - finish with
+				# a bare "✓" instead of repeating it.
+				[void](Loading-Spinner -Stop -Spinner $spinner -CheckmarkOnly)
+			}
+			else {
+				# Never leave a success checkmark on a failure path.
+				[void](Loading-Spinner -Stop -Spinner $spinner -Discard)
+			}
+		}
+
+		# Function output (only with -PassThru): emitted here, AFTER the spinner line
+		# is finalized, so the value can never interleave with the spinner rendering.
+		if ($PassThru) {
+			$startResult
 		}
 	}
 }

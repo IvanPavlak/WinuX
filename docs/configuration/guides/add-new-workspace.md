@@ -157,7 +157,7 @@ Example layout file (`MyNewWorkspace_PC.psd1`):
 
 ### Available Zone Names
 
-Zone names depend on the layout. Run `Visualize-Layouts -DisplayAvailableLayouts` to see all:
+Zone names come from `ZoneNameMappings` in `Configuration.psd1`, which maps each name to a zone index per layout - layouts and zone definitions in `custom-layouts.json` are freely editable (grid and canvas, any spacing), and `Test-FancyZonesConfiguration` verifies the mappings at every workspace open. Run `Visualize-Layouts -DisplayAvailableLayouts` to see all. The layouts shipped in this repo:
 
 | Layout  | Zones                                                                     |
 | ------- | ------------------------------------------------------------------------- |

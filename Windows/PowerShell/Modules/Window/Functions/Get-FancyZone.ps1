@@ -11,17 +11,13 @@ function Get-FancyZone {
 		The name of the FancyZones layout (e.g., "Zero", "One", "Seven").
 
 	.PARAMETER ZoneName
-		Human-readable zone name. Available names depend on the layout:
-		- Zero (Fullscreen): "Full"
-		- One (50/50 Split): "Left", "Right"
-		- Two (3 Columns): "Left", "Middle", "Right"
-		- Three (4 Columns): "Far-Left", "Middle-Left", "Middle-Right", "Far-Right"
-		- Four (2x2 Grid): "Top-Left", "Bottom-Left", "Top-Right", "Bottom-Right"
-		- Five (67/33 Split): "Large", "Small"
-		- Six (Left Full, Right Split): "Left", "Top-Right", "Bottom-Right"
-		- Seven (3 Columns, Right Split): "Left", "Middle", "Top-Right", "Bottom-Right"
-		- Eight (Left+Right Split, Middle Full): "Top-Left", "Bottom-Left", "Middle", "Top-Right", "Bottom-Right"
-		- Nine (All Split): "Top-Left", "Bottom-Left", "Top-Middle", "Bottom-Middle", "Top-Right", "Bottom-Right"
+		Human-readable zone name. Available names are defined per layout in
+		$Configuration.ZoneNameMappings (Configuration.psd1), which maps each name to a
+		zone index in that layout's custom-layouts.json definition. Multiple names may
+		map to the same index (e.g. "Left" and "Far-Left"). Run
+		Visualize-Layouts -DisplayAvailableLayouts to see every layout with its zone
+		names in position, and Test-FancyZonesConfiguration to verify the mappings
+		agree with custom-layouts.json.
 
 	.PARAMETER MonitorX
 		The X position of the monitor (default: 0).
@@ -119,7 +115,8 @@ function Get-FancyZone {
 	$zone = $zones | Where-Object { $_.ZoneIndex -eq $zoneIndex } | Select-Object -First 1
 
 	if (-not $zone) {
-		Write-Error "Zone index $zoneIndex not found in layout '$LayoutName'"
+		$availableIndices = @($zones | ForEach-Object { $_.ZoneIndex }) -join ', '
+		Write-Error "Zone name '$ZoneName' maps to index $zoneIndex, but layout '$LayoutName' defines $(@($zones).Count) zones (indices: $availableIndices) - check the ZoneNameMappings entry for '$LayoutName' in Configuration.psd1 against custom-layouts.json (run Test-FancyZonesConfiguration)"
 		return $null
 	}
 

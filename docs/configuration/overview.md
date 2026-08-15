@@ -136,8 +136,8 @@ The configuration uses a hierarchical structure designed to eliminate duplicatio
 | Section                  | Purpose                    | Consumer Function           |
 | ------------------------ | -------------------------- | --------------------------- |
 | `SimpleLayoutWorkspaces` | Fullscreen-only workspaces | `Set-WorkspaceWindowLayout` |
-| `LayoutNumbers`          | Layout to hotkey mapping   | `Apply-FancyZones`          |
-| `ZoneNameMappings`       | Zone names to indices      | `Get-FancyZone`             |
+| `LayoutNumbers`          | Layout to hotkey mapping   | `Apply-FancyZones`, `Test-FancyZonesConfiguration` |
+| `ZoneNameMappings`       | Zone names to indices      | `Get-FancyZone`, `Test-FancyZonesConfiguration`    |
 
 ### Network & Wake-on-LAN
 

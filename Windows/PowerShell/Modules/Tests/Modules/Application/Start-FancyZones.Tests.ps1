@@ -54,7 +54,7 @@ Describe "Start-FancyZones" {
 			return $false
 		}
 
-		$result = Start-FancyZones
+		$result = Start-FancyZones -PassThru
 
 		$result | Should -BeTrue
 		Should -Invoke Start-Process -Times 0
@@ -66,7 +66,7 @@ Describe "Start-FancyZones" {
 		Mock Get-Process { $null }
 		Mock Test-Path { $false }
 
-		$result = Start-FancyZones
+		$result = Start-FancyZones -PassThru
 
 		$result | Should -BeFalse
 		Should -Invoke Start-Process -Times 0
@@ -92,7 +92,7 @@ Describe "Start-FancyZones" {
 				return $null
 			}
 
-			$result = Start-FancyZones
+			$result = Start-FancyZones -PassThru
 
 			$result | Should -BeTrue
 			# A long-lived process cannot be mid-crash-loop: no PID-stability sampling
@@ -111,7 +111,7 @@ Describe "Start-FancyZones" {
 				return $null
 			}
 
-			$result = Start-FancyZones
+			$result = Start-FancyZones -PassThru
 
 			$result | Should -BeTrue
 			Should -Invoke Start-Sleep -Times 3 -Exactly -ParameterFilter { $Milliseconds -eq 250 }
@@ -127,7 +127,7 @@ Describe "Start-FancyZones" {
 			}
 
 			$null = Start-FancyZones
-			$result = Start-FancyZones
+			$result = Start-FancyZones -PassThru
 
 			$result | Should -BeTrue
 			# One workspace open calls Start-FancyZones several times seconds apart - only
@@ -153,6 +153,20 @@ Describe "Start-FancyZones" {
 			# retry reset produces) printed three "Starting FancyZones" lines for one restart.
 			Should -Invoke Loading-Spinner -Times 1 -Exactly -ParameterFilter { $Start }
 			Should -Invoke Loading-Spinner -Times 1 -Exactly -ParameterFilter { $Stop }
+		}
+
+		It "emits nothing without -PassThru so an interactive call prints no True" {
+			Mock Get-Process {
+				param($Name)
+				if ($Name -eq 'PowerToys.FancyZones') {
+					return [PSCustomObject]@{ Id = 4321; ProcessName = 'PowerToys.FancyZones'; HasExited = $false; StartTime = (Get-Date).AddMinutes(-30) }
+				}
+				return $null
+			}
+
+			$output = Start-FancyZones
+
+			$output | Should -BeNullOrEmpty
 		}
 	}
 }

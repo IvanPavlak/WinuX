@@ -49,7 +49,14 @@ function Loading-Spinner {
     .PARAMETER Discard
         Used with -Stop. Erases the spinner line without leaving any checkmark, regardless
         of the label. Use this on error/abort paths so a success "✓" is never shown before
-        a failure message. Takes precedence over -Completed and the label checkmark.
+        a failure message. Takes precedence over -Completed, -CheckmarkOnly, and the label
+        checkmark.
+
+    .PARAMETER CheckmarkOnly
+        Used with -Stop. Finalizes a labeled spinner with a bare green "✓" instead of
+        "✓ label" - for callers whose label already told the story while the spinner ran
+        and who want a minimal completion mark. No effect on a nested stop (the label
+        just reverts to the parent's) and superseded by -Discard.
 
     .PARAMETER Pause
         Temporarily erase the active spinner line so other output can be written cleanly,
@@ -100,6 +107,9 @@ function Loading-Spinner {
 
 		[Parameter(ParameterSetName = 'Stop', Mandatory = $false)]
 		[switch]$Discard,
+
+		[Parameter(ParameterSetName = 'Stop', Mandatory = $false)]
+		[switch]$CheckmarkOnly,
 
 		[Parameter(ParameterSetName = 'Pause', Mandatory = $true)]
 		[switch]$Pause,
@@ -197,7 +207,7 @@ function Loading-Spinner {
 				# Caller is aborting (error/cancel): erase the line, never a checkmark.
 				if (-not $c.Suspended) { & $eraseLine $c }
 			}
-			elseif (-not [string]::IsNullOrEmpty($finalizeLabel)) {
+			elseif (-not [string]::IsNullOrEmpty($finalizeLabel) -and -not $CheckmarkOnly) {
 				# Replace the spinner line with a green "✓ label".
 				$doneText = " ✓ $finalizeLabel"
 				if ($c.Suspended) {
@@ -208,8 +218,9 @@ function Loading-Spinner {
 					Write-Host ("`r" + $doneText + $pad) -ForegroundColor Green
 				}
 			}
-			elseif ($Completed) {
-				# Empty label but success signalled: leave a bare green checkmark.
+			elseif ($Completed -or $CheckmarkOnly) {
+				# Bare green checkmark: either an empty-label spinner signalling success,
+				# or a labeled one that asked for the minimal mark via -CheckmarkOnly.
 				if ($c.Suspended) {
 					Write-Host " ✓" -ForegroundColor Green
 				}

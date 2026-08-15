@@ -836,7 +836,7 @@ List-Functions -ListDiscrepancies
 ## [Loading-Spinner](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Loading-Spinner.ps1)
 
 - **Description:** Displays an animated loading spinner, or runs code while showing spinner feedback. Four modes: run a scriptblock with a spinner (`-Function`), start a continuous spinner (`-Start`), stop it (`-Stop`), and pause/resume an active spinner (`-Pause`/`-Resume`). Supports configurable spinner styles with optional labels.
-- **Parameters:** -Function, -Label, -Style, -Start, -Stop, -Spinner, -Completed, -Discard, -Pause, -Resume
+- **Parameters:** -Function, -Label, -Style, -Start, -Stop, -Spinner, -Completed, -Discard, -CheckmarkOnly, -Pause, -Resume
 - **Styles:** BrailleBlocks, Dots, Line, Arrows, Box, Circle, Moon, Clock, Star, Dot, GrowingDots, BlockFill, Pulse, Binary, Triangle, BarBlocks, SquareCorners, Hamburger, Arc
 - **Usage:** `Loading-Spinner -Function { Start-Sleep 3 } -Label "Processing" -Style Dots`, `$spinner = Loading-Spinner -Start -Label "Working"`, `Loading-Spinner -Stop -Spinner $spinner`, `Loading-Spinner -Pause`, `Loading-Spinner -Resume`
 
@@ -853,7 +853,8 @@ The continuous `-Start` spinner is globally coordinated: there is only ever a SI
 | `-Stop`      | Stops an active spinner.                                                                                                                |
 | `-Spinner`   | The handle hashtable returned by `-Start`, passed to `-Stop`.                                                                           |
 | `-Completed` | With `-Stop`: forces a green checkmark even when the spinner had no label. Ignored when the spinner has a label or with `-Discard`.     |
-| `-Discard`   | With `-Stop`: erases the line with no checkmark (use on error/abort paths). Takes precedence over `-Completed` and the label checkmark. |
+| `-Discard`   | With `-Stop`: erases the line with no checkmark (use on error/abort paths). Takes precedence over `-Completed`, `-CheckmarkOnly`, and the label checkmark. |
+| `-CheckmarkOnly` | With `-Stop`: finalizes a labeled spinner with a bare green `✓` instead of `✓ label` - for callers whose label already told the story while the spinner ran. No effect on a nested stop; superseded by `-Discard`. |
 | `-Pause`     | Temporarily erases the active spinner line so other output can be written cleanly.                                                      |
 | `-Resume`    | Re-draws the spinner after a `-Pause`.                                                                                                  |
 
@@ -875,6 +876,9 @@ Loading-Spinner -Stop -Spinner $spinner
 
 # Abort path: stop without showing a success checkmark
 Loading-Spinner -Stop -Spinner $spinner -Discard
+
+# Minimal completion mark: leave a bare "✓" instead of "✓ label"
+Loading-Spinner -Stop -Spinner $spinner -CheckmarkOnly
 ```
 
 **See also:** [Preview-LoadingSpinners](helper.md)

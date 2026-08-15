@@ -78,7 +78,7 @@ The authoritative, always-current function reference is the set of per-module pa
 | `TaskbarConfiguration`                             | `Configure-Taskbar`                                |
 | `TaskbarSettings`                                  | `Set-TaskbarSettings`                              |
 | `VisualEffects`                                    | `Set-VisualEffects`                                |
-| `LayoutNumbers`, `ZoneNameMappings`                | `Apply-FancyZones`, `Get-FancyZone`                |
+| `LayoutNumbers`, `ZoneNameMappings`                | `Apply-FancyZones`, `Get-FancyZone`, `Test-FancyZonesConfiguration` |
 | `LayoutMachineTypeOverrides`, `SmallDisplayMachineType` | `Get-LayoutMachineType` (for `Set-WorkspaceWindowLayout`, `Reset-Windows`) |
 | `ResetAllWindowsDefaults`                          | `Reset-Windows`                                    |
 | `KillAll.Steps`                                    | `Kill-All`, `Resolve-KillAllSteps`                 |

@@ -16,9 +16,9 @@ function Visualize-Layouts {
 		Process all layout files in the Layouts directory and its machine-specific subfolders.
 
 	.PARAMETER DisplayAvailableLayouts
-		When specified, displays all available layout types (Zero, One, Two, etc.) with their zone
-		names shown in their respective positions. This helps understand the zone structure of each
-		layout type defined in configuration.psd1.
+		When specified, displays all layout types defined in custom-layouts.json with their zone
+		names shown in their respective positions, ordered by their LayoutNumbers hotkey slot.
+		This helps understand the zone structure of each layout type.
 
 	.PARAMETER Update
 		When specified, updates the layout files with the generated visualizations.
@@ -78,37 +78,30 @@ function Visualize-Layouts {
 		}
 
 		# Determine path to custom-layouts.json
-		$repoRoot = $null
-		if ($global:RepoRoot -and (Test-Path $global:RepoRoot)) {
-			$repoRoot = $global:RepoRoot
-		}
-		else {
-			# Navigate from module path
-			$currentPath = $PSScriptRoot
-			for ($i = 0; $i -lt 5; $i++) {
-				$currentPath = Split-Path $currentPath -Parent
-			}
-			$testPath = Join-Path $currentPath "Windows\FancyZones"
-			if (Test-Path $testPath) {
-				$repoRoot = $currentPath
-			}
-		}
-
-		if (-not $repoRoot) {
-			Write-LogError "Could not determine WinuX root path." -NoLeadingNewline
-			return
-		}
-
-		$layoutsJsonPath = Join-Path $repoRoot "Windows\FancyZones\custom-layouts.json"
+		$layoutsJsonPath = Get-FancyZonesLayoutsPath
 
 		if (-not (Test-Path $layoutsJsonPath)) {
 			Write-LogError "Layouts file not found: $layoutsJsonPath" -NoLeadingNewline
 			return
 		}
 
-		# Display each layout with its zone names (sorted numerically, not alphabetically)
-		$layoutOrder = @("Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine")
-		$sortedLayouts = $layoutOrder | Where-Object { $zoneNameMappings.ContainsKey($_) }
+		# Display layouts in hotkey order (LayoutNumbers), then any layouts present in
+		# custom-layouts.json but absent from LayoutNumbers in file order - arbitrary
+		# layout names must never be silently hidden.
+		$layoutNumbers = $global:Configuration.LayoutNumbers
+		$sortedLayouts = @()
+		if ($layoutNumbers -and $layoutNumbers.Count -gt 0) {
+			$sortedLayouts = @($layoutNumbers.Keys | Sort-Object { [int]$layoutNumbers[$_] })
+		}
+
+		$layoutsData = Get-CachedFancyZonesLayouts -LayoutsJsonPath $layoutsJsonPath
+		if ($layoutsData) {
+			foreach ($jsonLayout in @($layoutsData.'custom-layouts')) {
+				if ($sortedLayouts -notcontains $jsonLayout.name) {
+					$sortedLayouts += $jsonLayout.name
+				}
+			}
+		}
 
 		foreach ($layoutName in $sortedLayouts) {
 			Write-Host -ForegroundColor DarkCyan " [$layoutName]`n"
@@ -122,8 +115,8 @@ function Visualize-Layouts {
 				continue
 			}
 
-			if ($layoutDef.type -ne "grid") {
-				Write-Host -ForegroundColor Yellow "  => Layout type [$($layoutDef.type)] is not supported (only grid layouts are supported)"
+			if ($layoutDef.type -ne "grid" -and $layoutDef.type -ne "canvas") {
+				Write-Host -ForegroundColor Yellow "  => Layout type [$($layoutDef.type)] is not supported (only grid and canvas layouts are supported)"
 				Write-Host ""
 				continue
 			}
@@ -131,20 +124,29 @@ function Visualize-Layouts {
 			# Build reverse mapping: zone index -> zone name
 			# When multiple names map to same index, prefer the most descriptive (longest) name
 			# e.g., "Bottom-Right" over "Right", "Far-Left" over "Left"
+			# A layout without a ZoneNameMappings entry is still displayed (unnamed zones).
 			$zoneIndexToName = @{}
-			foreach ($name in $zoneNameMappings[$layoutName].Keys) {
-				$index = $zoneNameMappings[$layoutName][$name]
-				# Prefer longer/more descriptive names for clarity in visualization
-				if (-not $zoneIndexToName.ContainsKey($index) -or $name.Length -gt $zoneIndexToName[$index].Length) {
-					$zoneIndexToName[$index] = $name
+			if ($zoneNameMappings.ContainsKey($layoutName)) {
+				foreach ($name in $zoneNameMappings[$layoutName].Keys) {
+					$index = $zoneNameMappings[$layoutName][$name]
+					# Prefer longer/more descriptive names for clarity in visualization
+					if (-not $zoneIndexToName.ContainsKey($index) -or $name.Length -gt $zoneIndexToName[$index].Length) {
+						$zoneIndexToName[$index] = $name
+					}
 				}
 			}
 
-			# Generate visualization with zone names (no actual content)
-			$visualization = Generate-DynamicVisualization `
-				-LayoutInfo $layoutDef.info `
-				-ZoneContent @{} `
-				-ZoneNames $zoneIndexToName
+			# Generate visualization with zone names (no actual content). Canvas zones are
+			# free-form rectangles, so they render as a textual listing instead of a grid.
+			$visualization = if ($layoutDef.type -eq "canvas") {
+				Format-CanvasZoneListing -LayoutInfo $layoutDef.info -ZoneContent @{} -ZoneNames $zoneIndexToName
+			}
+			else {
+				Generate-DynamicVisualization `
+					-LayoutInfo $layoutDef.info `
+					-ZoneContent @{} `
+					-ZoneNames $zoneIndexToName
+			}
 
 			if ($visualization) {
 				Write-Host -ForegroundColor White $visualization

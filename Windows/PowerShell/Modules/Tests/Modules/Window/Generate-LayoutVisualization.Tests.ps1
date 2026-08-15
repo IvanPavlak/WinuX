@@ -101,11 +101,13 @@ Describe "Generate-LayoutVisualization" {
 		}
 	}
 
-	Context "When layout is non-grid type" {
-		It "Should return unsupported message for canvas layout" {
+	Context "When layout is canvas type" {
+		It "Should render canvas layout as a textual zone listing" {
 			$result = Generate-LayoutVisualization -LayoutType "CanvasLayout" -Windows @() -DesktopNumber 1 -MonitorName "Primary" -LayoutsJsonPath $script:TestLayoutsPath
 
-			$result | Should -Match "not supported"
+			$result | Should -Match "Zone 0"
+			$result | Should -Match "x=0% y=0%"
+			$result | Should -Match "w=50% h=100%"
 		}
 	}
 

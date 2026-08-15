@@ -312,19 +312,19 @@ $config = Import-PowerShellDataFile -Path "<layout>.psd1"
 Apply-FancyZones -MonitorConfig $config.Monitors -Force
 ```
 
-### FancyZones Snap Fails With Custom Spacing
+### FancyZones Snap Fails After Editing custom-layouts.json
 
-**Problem:** `Snap-AllWindows` fails to verify snap positions or snaps windows to wrong zones after changing the `spacing` value in `custom-layouts.json`.
+**Problem:** `Snap-AllWindows` fails to verify snap positions or snaps windows to wrong zones after editing layouts in `custom-layouts.json`.
 
-**Solution:** Set `spacing` to `3` in all layouts within `FancyZones/custom-layouts.json`:
+**Solution:** Run the configuration validator to find drift between the FancyZones files and `Configuration.psd1`:
 
-```json
-"show-spacing": true,
-"spacing": 3,
-"sensitivity-radius": 20
+```powershell
+Test-FancyZonesConfiguration
 ```
 
-**Why:** FancyZones internally applies spacing asymmetrically - full spacing on outer grid edges (first/last row and column), half spacing on inner edges. The zone coordinate calculation uses a uniform approximation (`spacing / 2` on all edges). With `spacing: 3`, the maximum error is ~2px (within the 20px snap tolerance). Larger values (e.g. 10, 20) cause up to 10-20px mismatches per dimension, exceeding tolerance and causing snap verification failures.
+It reports unknown layouts, `ZoneNameMappings` indices out of range, `LayoutNumbers` names that no longer exist, `layout-hotkeys.json` uuid mismatches (which make `Apply-FancyZones` apply the WRONG layout), and grid percentage axes that do not sum to exactly 10000. `Set-WorkspaceWindowLayout` runs the same validation automatically at the start of every workspace open.
+
+**Why spacing is not the culprit anymore:** any `spacing` value and any zone definition (grid or canvas) is supported. FancyZones insets edges that touch the work-area border by the full spacing value, and interior edges by `Floor(spacing/2)` per zone; a zone spanning multiple cells absorbs the spacing between them. `Get-FancyZoneCoordinates` replicates this exactly, so the computed rectangles match what FancyZones snaps to regardless of spacing. If verification still fails, the mismatch is configuration drift - which is what `Test-FancyZonesConfiguration` pinpoints.
 
 If a workspace layout reruns after a snap failure, the recovery path now resizes only the failed window handle before retrying. Other open windows are left untouched.
 

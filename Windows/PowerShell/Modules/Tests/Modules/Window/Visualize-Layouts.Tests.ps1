@@ -3,11 +3,21 @@
 BeforeAll {
 	$ModulePath = Join-Path (Get-RepositoryPath).Modules "Window\Window.psm1"
 	Import-Module $ModulePath -Force
+
+	function script:Get-FirstMatchingLineIndex {
+		param ([object[]]$Lines, [string]$Pattern)
+		for ($i = 0; $i -lt $Lines.Count; $i++) {
+			if ($Lines[$i] -match $Pattern) { return $i }
+		}
+		return -1
+	}
 }
 
 Describe "Visualize-Layouts" {
 	BeforeAll {
-		# Create test layouts JSON
+		# Create test layouts JSON. File order: One, Beta, Free - LayoutNumbers puts
+		# Beta on hotkey 0 and One on hotkey 1, and Free has no LayoutNumbers entry,
+		# so the display order must be Beta, One, Free.
 		$script:TestLayoutsJsonPath = Join-Path $TestDrive "Windows\FancyZones\custom-layouts.json"
 		$fancyZonesDir = Split-Path $script:TestLayoutsJsonPath -Parent
 		New-Item -ItemType Directory -Path $fancyZonesDir -Force | Out-Null
@@ -25,6 +35,30 @@ Describe "Visualize-Layouts" {
 						'cell-child-map'     = @(, @(0, 1))
 						'show-spacing'       = $false
 						spacing              = 0
+					}
+				}
+				@{
+					name = "Beta"
+					type = "grid"
+					info = @{
+						rows                 = 1
+						columns              = 1
+						'rows-percentage'    = @(10000)
+						'columns-percentage' = @(10000)
+						'cell-child-map'     = @(, @(, 0))
+						'show-spacing'       = $false
+						spacing              = 0
+					}
+				}
+				@{
+					name = "Free"
+					type = "canvas"
+					info = @{
+						'ref-width'  = 1000
+						'ref-height' = 1000
+						zones        = @(
+							@{ X = 0; Y = 0; width = 500; height = 1000 }
+						)
 					}
 				}
 			)
@@ -55,28 +89,49 @@ Describe "Visualize-Layouts" {
 		# Set up global Configuration
 		$global:Configuration = @{
 			ZoneNameMappings = @{
-				"One" = @{
+				"One"  = @{
 					"Left"  = 0
 					"Right" = 1
 				}
+				"Beta" = @{
+					"Full" = 0
+				}
+			}
+			LayoutNumbers    = @{
+				"Beta" = 0
+				"One"  = 1
 			}
 		}
 	}
 
 	BeforeEach {
-		Mock Write-Host { } -ModuleName Window
+		$script:HostLines = @()
+		Mock Write-Host { $script:HostLines += , [string]$Object } -ModuleName Window
 		Mock Write-Error { } -ModuleName Window
 		Mock Write-LogError { } -ModuleName Window
 		Mock Write-LogWarning { } -ModuleName Window
+		Mock Get-FancyZonesLayoutsPath { $script:TestLayoutsJsonPath } -ModuleName Window
 	}
 
 	Context "When displaying available layout types" {
-		It "Should display sorted layout types" {
-			$global:RepoRoot = $TestDrive
-
+		It "Should display layouts ordered by LayoutNumbers hotkey, then unlisted layouts in file order" {
 			Visualize-Layouts -DisplayAvailableLayouts
 
 			Should -Invoke Write-Host -ModuleName Window
+
+			$betaIndex = Get-FirstMatchingLineIndex -Lines $script:HostLines -Pattern "\[Beta\]"
+			$oneIndex = Get-FirstMatchingLineIndex -Lines $script:HostLines -Pattern "\[One\]"
+			$freeIndex = Get-FirstMatchingLineIndex -Lines $script:HostLines -Pattern "\[Free\]"
+
+			$betaIndex | Should -BeGreaterOrEqual 0
+			$oneIndex | Should -BeGreaterThan $betaIndex
+			$freeIndex | Should -BeGreaterThan $oneIndex
+		}
+
+		It "Should render canvas layouts as a textual zone listing" {
+			Visualize-Layouts -DisplayAvailableLayouts
+
+			@($script:HostLines | Where-Object { $_ -match "Zone 0.*x=0% y=0% w=50% h=100%" }).Count | Should -BeGreaterThan 0
 		}
 	}
 
@@ -105,6 +160,5 @@ Describe "Visualize-Layouts" {
 
 	AfterAll {
 		Remove-Variable -Name Configuration -Scope Global -ErrorAction SilentlyContinue
-		Remove-Variable -Name RepoRoot -Scope Global -ErrorAction SilentlyContinue
 	}
 }
