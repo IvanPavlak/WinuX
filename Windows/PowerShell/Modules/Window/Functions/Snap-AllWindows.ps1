@@ -84,9 +84,9 @@ function Snap-AllWindows {
 		# Ensure Windows Forms is loaded (cached) for monitor info
 		Ensure-WindowsFormsLoaded
 
-		$fancyZonesReady = Start-FancyZones
+		$fancyZonesReady = Start-FancyZones -PassThru
 		if (-not $fancyZonesReady) {
-			$fancyZonesReady = Start-FancyZones -ForceRestart -MaxWaitSeconds 20
+			$fancyZonesReady = Start-FancyZones -ForceRestart -MaxWaitSeconds 20 -PassThru
 		}
 
 		if (-not $fancyZonesReady) {
@@ -250,7 +250,7 @@ function Snap-AllWindows {
 
 			Write-LogDebug "  ⚠ FancyZones process is not running, attempting restart..." -Style Warning
 
-			$restartReady = Start-FancyZones -ForceRestart -MaxWaitSeconds 20
+			$restartReady = Start-FancyZones -ForceRestart -MaxWaitSeconds 20 -PassThru
 			return [bool]$restartReady
 		}
 
@@ -509,11 +509,8 @@ function Snap-AllWindows {
 				$title = $sb.ToString()
 
 				# Calculate window dimensions
-				$windowTop = $rect.Top
-				$windowBottom = $rect.Bottom
-				$windowHeight = $windowBottom - $windowTop
 				$windowCenterX = ($rect.Left + $rect.Right) / 2
-				$windowCenterY = ($windowTop + $windowBottom) / 2
+				$windowCenterY = ($rect.Top + $rect.Bottom) / 2
 
 				# Find which monitor this window is on
 				$windowMonitor = $null
@@ -531,31 +528,16 @@ function Snap-AllWindows {
 					continue
 				}
 
-				# Default direction is UP (true = up, false = down for SendSnapKey)
+				# Win+Up for every window (true = up, false = down for SendSnapKey).
+				# The window arrives here already inset INSIDE its target zone, and the two
+				# arrow directions are NOT symmetric for that state: Win+Up snaps the window
+				# into the zone it is sitting in, while Win+Down hands it to the zone BELOW.
+				# A "top half of a vertically split monitor" special case used to send
+				# Win+Down for exactly those windows, so every top-half zone (Seven's
+				# Top-Right, Four's top row, ...) landed one zone too low, failed
+				# verification, and had to be recovered by the slow shift-drag fallback.
 				$direction = "Up"
 				$snapUp = $true
-
-				# Check if window is in top position and vertically split
-				$monitorBounds = $windowMonitor.Bounds
-				$monitorTop = $monitorBounds.Top
-				$monitorHeight = $monitorBounds.Height
-				$monitorMiddleY = $monitorTop + ($monitorHeight / 2)
-
-				# Calculate height ratio relative to monitor
-				$heightRatio = $windowHeight / $monitorHeight
-
-				# Window is considered "top and vertically split" if:
-				# 1. Window top is at or near the monitor top (within 100px tolerance)
-				# 2. Window height is roughly 40-60% of monitor height (vertically split)
-				# 3. Window center is in the top half of the monitor
-				$isAtTop = ($windowTop -le ($monitorTop + 100))
-				$isVerticallySplit = ($heightRatio -ge 0.35 -and $heightRatio -le 0.65)
-				$isInTopHalf = ($windowCenterY -lt $monitorMiddleY)
-
-				if ($isAtTop -and $isVerticallySplit -and $isInTopHalf) {
-					$direction = "Down"
-					$snapUp = $false
-				}
 
 				# Snap the window with retry logic
 				# FancyZones can miss keyboard/shift-drag snaps due to focus timing, event processing lag,

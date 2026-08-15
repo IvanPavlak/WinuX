@@ -7,7 +7,9 @@ function Generate-LayoutVisualization {
 		Creates an ASCII art representation of a FancyZones layout showing which
 		processes and windows are assigned to each zone. The visualization is
 		dynamically generated based on the layout definition in custom-layouts.json,
-		supporting any grid-based layout configuration.
+		supporting any grid-based layout configuration. Canvas layouts are rendered
+		as a textual per-zone listing (free-form rectangles cannot be drawn as a
+		proportional ASCII grid).
 
 	.PARAMETER LayoutType
 		The FancyZones layout type (Zero, One, Two, etc.).
@@ -40,38 +42,7 @@ function Generate-LayoutVisualization {
 
 	# Determine layouts JSON path dynamically if not provided
 	if (-not $LayoutsJsonPath) {
-		# Determine WinuX root
-		$repoRoot = $null
-
-		# Try to get from global variable
-		if ($global:RepoRoot -and (Test-Path $global:RepoRoot)) {
-			$repoRoot = $global:RepoRoot
-		}
-
-		# If not found, navigate from module path
-		if (-not $repoRoot) {
-			# Path: .../WinuX/Windows/PowerShell/Modules/Window/Functions -> .../WinuX
-			$modulePath = $PSScriptRoot
-			$currentPath = $modulePath
-			for ($i = 0; $i -lt 5; $i++) {
-				$currentPath = Split-Path $currentPath -Parent
-			}
-
-			# Verify this looks like WinuX root (has Windows\FancyZones)
-			$testPath = Join-Path $currentPath "Windows\FancyZones"
-			if (Test-Path $testPath) {
-				$repoRoot = $currentPath
-			}
-		}
-
-		# Build the layouts JSON path
-		if ($repoRoot) {
-			$LayoutsJsonPath = Join-Path $repoRoot "Windows\FancyZones\custom-layouts.json"
-		}
-		else {
-			Write-Error "Could not determine WinuX root path. Please provide -LayoutsJsonPath parameter."
-			return
-		}
+		$LayoutsJsonPath = Get-FancyZonesLayoutsPath
 	}
 
 	$zoneMapping = $global:Configuration.ZoneNameMappings
@@ -125,8 +96,13 @@ function Generate-LayoutVisualization {
 	if ($null -eq $layoutDef) {
 		$visual = "`nLayout type [$LayoutType] not found in $LayoutsJsonPath"
 	}
+	elseif ($layoutDef.type -eq "canvas") {
+		# Canvas zones are free-form rectangles - a proportional ASCII grid cannot
+		# represent them, so render a textual per-zone listing instead.
+		$visual = "`n" + (Format-CanvasZoneListing -LayoutInfo $layoutDef.info -ZoneContent $zoneContent -ZoneNames $zoneIndexToName)
+	}
 	elseif ($layoutDef.type -ne "grid") {
-		$visual = "`nLayout type [$($layoutDef.type)] is not supported (only grid layouts are supported)"
+		$visual = "`nLayout type [$($layoutDef.type)] is not supported (only grid and canvas layouts are supported)"
 	}
 	else {
 		# Generate dynamic visualization

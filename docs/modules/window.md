@@ -40,6 +40,8 @@ Add-PositionedWindow -WindowHandle $window.Handle `
 
 Only `-MonitorConfig` is mandatory. With no `-DesktopNumber`, it applies layouts across all virtual desktops (using the VirtualDesktop module, when available) and returns to the starting desktop. Every desktop switch is confirmed via `Wait-DesktopSwitch` before the layout hotkey is injected - an unconfirmed switch skips that desktop (and the return-desktop re-apply), closing the race where a layout was silently recorded under the previous desktop's GUID. Layout names resolve to shortcut numbers (0-9) via `LayoutNumbers` in `Configuration.psd1`. Returns a result array (one row per monitor/desktop) with a `Status` such as `Shortcut Sent`, `Already Applied`, `Monitor Not Found`, or `Failed`.
 
+Every shortcut send is **verified against FancyZones' own state file**: FancyZones rewrites `applied-layouts.json` for every layout application it actually processes, so after injecting the hotkey the function polls the file's write stamp (up to ~600 ms) and re-anchors the cursor and re-sends once if no write appears. This closes the most damaging failure mode found in practice: a freshly restarted PowerToys passes the process/RPC readiness checks *before* its hotkey hooks are live, shortcuts sent in that window vanish without a trace, and the live zone grid then disagrees with the recorded state - which file-based idempotency can never detect, so every later snap on the affected monitor fails against zones that are not there.
+
 | Parameter        | Description                                                                                                                                                                                                                                                                                       |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `-MonitorConfig` | Hashtable of monitor configs keyed by monitor (e.g. `Primary`, `Secondary`). Each has a simple `Layout` (e.g. `@{ Layout = "One" }`), an optional legacy `LayoutNumber`, or per-desktop `VirtualDesktopLayouts` (1-based desktop index → layout name or `@{ Layout = ...; LayoutNumber = ... }`). |
@@ -317,6 +319,30 @@ Focus-VirtualDesktop
 Focus-VirtualDesktop -DesktopNumber 1 -DesktopOffset 2
 ```
 
+## [Format-CanvasZoneListing](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Format-CanvasZoneListing.ps1)
+
+- **Description:** Renders a FancyZones canvas layout as a textual per-zone listing. Canvas zones are free-form rectangles (possibly overlapping), so they cannot be drawn as a proportional ASCII grid the way grid layouts are; this renders one line per zone instead, with the zone's position and size expressed as percentages of the layout's `ref-width`/`ref-height` coordinate space, e.g. `Zone 0 [Left]: x=0% y=0% w=50% h=100%`. Used by `Visualize-Layouts` and `Generate-LayoutVisualization` to render canvas layouts.
+- **Parameters:** -LayoutInfo, -ZoneContent, -ZoneNames
+- **Usage:** `Format-CanvasZoneListing -LayoutInfo $layoutDef.info -ZoneContent @{} -ZoneNames @{ 0 = "Left" }`
+
+Zone names come from the optional `-ZoneNames` map (zone index to name, shown in brackets after the index); zone content (e.g. process names and window titles) from the optional `-ZoneContent` map, appended after the geometry. A layout with non-positive ref dimensions or no zones returns a descriptive message instead of a listing. Returns the assembled listing as a string with one line per zone.
+
+| Parameter      | Description                                                                                            |
+| -------------- | -------------------------------------------------------------------------------------------------------- |
+| `-LayoutInfo`  | The canvas layout's `info` object from `custom-layouts.json` (`ref-width`, `ref-height`, `zones`). Mandatory. |
+| `-ZoneContent` | Optional hashtable mapping zone index to an array of content labels (e.g. process names). Defaults to `@{}`. |
+| `-ZoneNames`   | Optional hashtable mapping zone index to a human-readable zone name. Defaults to `@{}`.                  |
+
+```powershell
+# Render a canvas layout with a named first zone
+Format-CanvasZoneListing -LayoutInfo $layoutDef.info -ZoneNames @{ 0 = "Left" }
+
+# Include per-zone window content in the listing
+Format-CanvasZoneListing -LayoutInfo $layoutDef.info -ZoneContent @{ 0 = @("firefox", "YouTube") }
+```
+
+**See also:** [Visualize-Layouts](window.md#visualize-layouts), [Generate-LayoutVisualization](window.md#generate-layoutvisualization)
+
 ## [Format-ZoneContent](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Format-ZoneContent.ps1)
 
 - **Description:** Formats an array of content items (process names, window titles) to fit within a specified character width. Handles multi-line content and truncates long lines with an ellipsis character. Returns an array of formatted strings suitable for ASCII art visualization.
@@ -339,7 +365,7 @@ Format-ZoneContent -Content @("ProcessName", "WindowTitle") -Width 16
 
 ## [Generate-DynamicVisualization](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Generate-DynamicVisualization.ps1)
 
-- **Description:** Dynamically generates an ASCII visualization for any grid-based layout. Analyzes a FancyZones grid layout definition and renders ASCII art showing zone boundaries and content, dynamically calculating column widths, row heights, and box-drawing characters from the zone boundaries. Used internally by `Generate-LayoutVisualization` and `Visualize-Layouts`.
+- **Description:** Dynamically generates an ASCII visualization for any grid-based layout. Analyzes a FancyZones grid layout definition and renders ASCII art showing zone boundaries and content, dynamically calculating column widths, row heights, and box-drawing characters from the zone boundaries. Used internally by `Generate-LayoutVisualization` and `Visualize-Layouts`. Grid layouts only - canvas layouts are rendered by `Format-CanvasZoneListing` instead, since free-form rectangles cannot be drawn as a proportional ASCII grid.
 - **Parameters:** -LayoutInfo, -ZoneContent, -ZoneNames, -TotalWidth
 - **Usage:** `$visual = Generate-DynamicVisualization -LayoutInfo $layoutDef.info -ZoneContent $zoneContent -ZoneNames $zoneIndexToName`, `Generate-DynamicVisualization -LayoutInfo $layout.info -ZoneContent @{0 = @("Firefox", "YouTube")} -ZoneNames @{0 = "Top-Left"; 1 = "Top-Right"} -TotalWidth 80`
 
@@ -364,11 +390,11 @@ Generate-DynamicVisualization -LayoutInfo $layout.info -ZoneContent @{0 = @("Fir
 
 ## [Generate-LayoutVisualization](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Generate-LayoutVisualization.ps1)
 
-- **Description:** Generates an ASCII art visualization of a FancyZones layout, showing which processes and windows are assigned to each zone. The visualization is built dynamically from the layout definition in `custom-layouts.json`, so it supports any grid-based layout configuration. Returns the rendered visualization as a string.
+- **Description:** Generates an ASCII art visualization of a FancyZones layout, showing which processes and windows are assigned to each zone. The visualization is built dynamically from the layout definition in `custom-layouts.json`, so it supports any layout configuration: grid layouts render as a proportional ASCII grid, canvas layouts as a textual per-zone listing. Returns the rendered visualization as a string.
 - **Parameters:** -LayoutType, -Windows, -DesktopNumber, -MonitorName, -LayoutsJsonPath
 - **Usage:** `Generate-LayoutVisualization -LayoutType "One" -Windows $windows -DesktopNumber 1 -MonitorName "Primary"`
 
-A helper used by `Visualize-Layouts` to render one monitor's layout. It maps each window's `Zone` to a zone index via `ZoneNameMappings` from `Configuration.psd1`, loads the matching grid definition through `Get-LayoutDefinition`, and hands the assembled zone content to `Generate-DynamicVisualization` for rendering. Only `grid`-type layouts are supported; unknown or non-grid layouts produce a descriptive message instead. When `-LayoutsJsonPath` is omitted, the path is resolved automatically from `$global:RepoRoot` or by walking up from the module location to `Windows\FancyZones\custom-layouts.json`.
+A helper used by `Visualize-Layouts` to render one monitor's layout. It maps each window's `Zone` to a zone index via `ZoneNameMappings` from `Configuration.psd1`, loads the matching layout definition through `Get-LayoutDefinition`, and hands the assembled zone content to `Generate-DynamicVisualization` (grid) or `Format-CanvasZoneListing` (canvas) for rendering; unknown layout types produce a descriptive message instead. When `-LayoutsJsonPath` is omitted, the path is resolved via `Get-FancyZonesLayoutsPath` (anchored on `Configuration.psd1`, no hardcoded parent-folder walking).
 
 | Parameter          | Description                                                                                                   |
 | ------------------ | ------------------------------------------------------------------------------------------------------------- |
@@ -513,24 +539,11 @@ Get-DuplicateMonitorEdid -DisplayToEdidMap @{
 
 ## [Get-FancyZone](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Get-FancyZone.ps1)
 
-- **Description:** Gets FancyZone coordinates using human-readable zone names. Provides a user-friendly interface to get zone coordinates by using descriptive zone names instead of numeric indices, with the available names depending on the layout type.
+- **Description:** Gets FancyZone coordinates using human-readable zone names. Provides a user-friendly interface to get zone coordinates by using descriptive zone names instead of numeric indices. The available names per layout are defined in `$Configuration.ZoneNameMappings` (`Configuration.psd1`), which maps each name to a zone index in that layout's `custom-layouts.json` definition.
 - **Parameters:** -LayoutName, -ZoneName, -MonitorX, -MonitorY, -MonitorWidth, -MonitorHeight, -CustomLayoutsPath
 - **Usage:** `Get-FancyZone -LayoutName "Seven" -ZoneName "Top-Right"`, `Get-FancyZone -LayoutName "Seven" -ZoneName "Left" -MonitorY -1440`, `Get-FancyZone -LayoutName "One" -ZoneName "Right" -MonitorX 1920`
 
-Resolves a human-readable zone name to its numeric index via `ZoneNameMappings` in `Configuration.psd1`, then delegates to `Get-FancyZoneCoordinates` to compute the actual pixel bounds for that zone. Requires the global configuration to be loaded (`Load-PathConfiguration`); if the layout or zone name is unknown it lists the available layouts or zone names and returns `$null`. Returns a `PSCustomObject` with `ZoneIndex`, `X`, `Y`, `Width`, `Height`, `MonitorX`, `MonitorY`, `LayoutName`, and `ZoneName`.
-
-Available zone names depend on the layout:
-
-- **Zero** (Fullscreen): `Full`
-- **One** (50/50 Split): `Left`, `Right`
-- **Two** (3 Columns): `Left`, `Middle`, `Right`
-- **Three** (4 Columns): `Far-Left`, `Middle-Left`, `Middle-Right`, `Far-Right`
-- **Four** (2x2 Grid): `Top-Left`, `Bottom-Left`, `Top-Right`, `Bottom-Right`
-- **Five** (67/33 Split): `Large`, `Small`
-- **Six** (Left Full, Right Split): `Left`, `Top-Right`, `Bottom-Right`
-- **Seven** (3 Columns, Right Split): `Left`, `Middle`, `Top-Right`, `Bottom-Right`
-- **Eight** (Left+Right Split, Middle Full): `Top-Left`, `Bottom-Left`, `Middle`, `Top-Right`, `Bottom-Right`
-- **Nine** (All Split): `Top-Left`, `Bottom-Left`, `Top-Middle`, `Bottom-Middle`, `Top-Right`, `Bottom-Right`
+Resolves a human-readable zone name to its numeric index via `ZoneNameMappings` in `Configuration.psd1`, then delegates to `Get-FancyZoneCoordinates` to compute the actual pixel bounds for that zone. Requires the global configuration to be loaded (`Load-PathConfiguration`); if the layout or zone name is unknown it lists the available layouts or zone names and returns `$null`. When a mapped index does not exist in the layout, the error names the layout's zone count and indices and points at `ZoneNameMappings` and `Test-FancyZonesConfiguration` to find the drift. Multiple names may map to the same index (e.g. `Left` and `Far-Left`). Run `Visualize-Layouts -DisplayAvailableLayouts` to see every layout with its zone names in position. Returns a `PSCustomObject` with `ZoneIndex`, `X`, `Y`, `Width`, `Height`, `MonitorX`, `MonitorY`, `LayoutName`, and `ZoneName`.
 
 | Parameter            | Type   | Default | Description                                                  |
 | -------------------- | ------ | ------- | ------------------------------------------------------------ |
@@ -558,21 +571,20 @@ Set-WindowPosition -WindowHandle $handle -X $zone.X -Y $zone.Y -Width $zone.Widt
 
 ## [Get-FancyZoneCoordinates](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Get-FancyZoneCoordinates.ps1)
 
-- **Description:** Calculates zone coordinates from FancyZones custom layouts. Parses the FancyZones `custom-layouts.json` file and computes the actual pixel coordinates (X, Y, width, height) for each zone based on monitor dimensions and the layout's grid configuration. Only grid-type layouts are supported.
+- **Description:** Calculates zone coordinates from FancyZones custom layouts. Parses the FancyZones `custom-layouts.json` file and computes the actual pixel coordinates (X, Y, width, height) for each zone, replicating the zone math PowerToys FancyZones itself uses so the computed rectangles match what FancyZones snaps windows to. Both `grid` and `canvas` layout types are supported, with arbitrary zone definitions and any `spacing` value.
 - **Parameters:** -LayoutName, -MonitorX, -MonitorY, -MonitorWidth, -MonitorHeight, -CustomLayoutsPath
 - **Usage:** `Get-FancyZoneCoordinates -LayoutName "Seven" -MonitorX 0 -MonitorY -1440 -MonitorWidth 3440 -MonitorHeight 1440`, `$zones = Get-FancyZoneCoordinates -LayoutName "One"`
-- **⚠️ Important:** The `spacing` value in `custom-layouts.json` **must be set to `3`**. FancyZones internally applies spacing asymmetrically (full spacing on outer edges, half on inner), while the zone coordinate calculation uses a uniform approximation. With `spacing: 3` the error is ~2px (well within snap tolerance). Larger values (e.g. 10, 20) cause coordinate mismatches that break `Snap-AllWindows` verification.
 
-Reads the layout grid (rows, columns, row/column percentages, and `cell-child-map`) for the named layout and walks every cell to determine each zone's bounding range. It then converts those ranges into absolute pixel coordinates offset by the monitor position. When the JSON path is omitted it falls back to the machine-specific PowerToys CustomLayouts symlink target. Each zone is returned as a `PSCustomObject` with `ZoneIndex`, `X`, `Y`, `Width`, `Height`, `MonitorX`, `MonitorY`, and `LayoutName`.
+For **grid** layouts, row and column edges are computed with cumulative prefix sums and floor division so the cells always add up to exactly the monitor work area, regardless of how the percentages divide (e.g. `3333/3333/3334` loses no pixels). Spacing follows the real FancyZones model: FancyZones insets edges that touch the work-area border by the full spacing value, and interior edges by `Floor(spacing/2)` per zone (two adjacent zones leave `2 * Floor(spacing/2)` px between them); a zone spanning multiple cells absorbs the spacing between them, because only the zone's own outer edges are inset. Any spacing value works. For **canvas** layouts, each zone's explicit X/Y/width/height rectangle (drawn in the layout's `ref-width`/`ref-height` coordinate space) is scaled to the monitor work area; canvas layouts ignore spacing entirely, and the zone index is the zone's position in the layout's `zones` array. Malformed definitions (percentage count mismatches, cell-child-map dimension mismatches, invalid canvas ref dimensions) produce clear errors. When the JSON path is omitted it falls back to the machine-specific PowerToys CustomLayouts symlink target, or the repository file via `Get-FancyZonesLayoutsPath`. Each zone is returned as a `PSCustomObject` with `ZoneIndex`, `X`, `Y`, `Width`, `Height`, `MonitorX`, `MonitorY`, and `LayoutName`.
 
-| Parameter            | Description                                                                                     |
-| -------------------- | ----------------------------------------------------------------------------------------------- |
-| `-LayoutName`        | Required. The name of the FancyZones layout (e.g., `"Zero"`, `"One"`, `"Seven"`).               |
-| `-MonitorX`          | The X position of the monitor (default: `0`).                                                   |
-| `-MonitorY`          | The Y position of the monitor (default: `0`).                                                   |
-| `-MonitorWidth`      | The width of the monitor in pixels (default: `3440`).                                           |
-| `-MonitorHeight`     | The height of the monitor in pixels (default: `1440`).                                          |
-| `-CustomLayoutsPath` | Optional path to `custom-layouts.json`. If not specified, uses the default FancyZones location. |
+| Parameter            | Description                                                                                                          |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `-LayoutName`        | Required. The name of the FancyZones layout (e.g., `"Zero"`, `"One"`, `"Seven"`).                                     |
+| `-MonitorX`          | The X position of the monitor work area (default: `0`).                                                               |
+| `-MonitorY`          | The Y position of the monitor work area (default: `0`).                                                               |
+| `-MonitorWidth`      | The width of the monitor **work area** in pixels, excluding the taskbar (default: `3440`).                            |
+| `-MonitorHeight`     | The height of the monitor **work area** in pixels, excluding the taskbar (default: `1440`).                           |
+| `-CustomLayoutsPath` | Optional path to `custom-layouts.json`. If not specified, uses the PowerToys symlink target or the repository file. |
 
 ```powershell
 # Calculate zones for a layout on a monitor stacked above the primary (negative Y)
@@ -583,9 +595,33 @@ $zones = Get-FancyZoneCoordinates -LayoutName "One"
 $leftZone = $zones[0]  # Get coordinates for zone 0 (left)
 ```
 
+**See also:** [Get-FancyZonesLayoutsPath](window.md#get-fancyzoneslayoutspath), [Test-FancyZonesConfiguration](window.md#test-fancyzonesconfiguration)
+
+## [Get-FancyZonesLayoutsPath](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Get-FancyZonesLayoutsPath.ps1)
+
+- **Description:** Resolves the repository path of a FancyZones configuration file. The repository root is resolved through `Get-RepositoryPath`, which anchors on `Configuration.psd1` instead of counting parent folders, so callers are immune to being relocated to a different depth. This is the single place that knows where the FancyZones files live in the repo. Returns the path string; the file is not required to exist - callers decide how to handle a missing file.
+- **Parameters:** -File
+- **Usage:** `Get-FancyZonesLayoutsPath`, `Get-FancyZonesLayoutsPath -File LayoutHotkeys`
+
+Consumers that need the file FancyZones actually loaded should keep reading the `%LOCALAPPDATA%` copy instead - the repo file is the symlink TARGET, and zone math should always be computed from the repository's source of truth. `Apply-FancyZones` deliberately keeps reading the `%LOCALAPPDATA%` copy for its uuid idempotency check, while `Get-FancyZoneCoordinates`, `Test-FancyZonesConfiguration`, `Visualize-Layouts`, and `Generate-LayoutVisualization` resolve the repository files through this helper.
+
+| Parameter | Type   | Default         | Description                                                                                                                             |
+| --------- | ------ | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `-File`   | string | `CustomLayouts` | Which file to resolve: `CustomLayouts` => `Windows\FancyZones\custom-layouts.json`; `LayoutHotkeys` => `Windows\FancyZones\layout-hotkeys.json`. |
+
+```powershell
+# Resolve the repository custom-layouts.json
+$layoutsPath = Get-FancyZonesLayoutsPath
+
+# Resolve the repository layout-hotkeys.json
+$hotkeysPath = Get-FancyZonesLayoutsPath -File LayoutHotkeys
+```
+
+**See also:** [Test-FancyZonesConfiguration](window.md#test-fancyzonesconfiguration), [Get-FancyZoneCoordinates](window.md#get-fancyzonecoordinates)
+
 ## [Get-InsetWindowBounds](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Get-InsetWindowBounds.ps1)
 
-- **Description:** Calculates inset window bounds centered within a target zone. Returns the adjusted bounds used before FancyZones snapping so the inset window stays centered inside the target zone, keeping the snap target unambiguous.
+- **Description:** Calculates inset window bounds inside a target zone. Returns the adjusted bounds used before FancyZones snapping, deliberately offset from the zone's exact center by `InsetCenterBiasPx` (2px, defined at the top of the function's own file) so the snap target stays unambiguous. The bias is load-bearing: FancyZones' `Win+Arrow` is a *relative* move that only snaps a window into the zone it is sitting in while it does not already recognise the window as zoned, and a window centered exactly on its zone is recognised - every arrow key then throws it into the neighbouring zone and the slow shift-drag fallback has to recover it. Historically the zone rectangles fed in here were a couple of pixels off the real FancyZones geometry, so "centered on the computed zone" happened to land the window off-center in the *actual* zone; now that the zone math reproduces FancyZones exactly, that accident is gone and the offset has to be deliberate.
 - **Parameters:** -TargetX, -TargetY, -TargetWidth, -TargetHeight, -InsetPercent
 - **Usage:** `Get-InsetWindowBounds -TargetX 0 -TargetY 0 -TargetWidth 1920 -TargetHeight 1080`, `Get-InsetWindowBounds -TargetX 0 -TargetY 0 -TargetWidth 960 -TargetHeight 1080 -InsetPercent 0.05`
 
@@ -609,7 +645,7 @@ $bounds = Get-InsetWindowBounds -TargetX 0 -TargetY 0 -TargetWidth 960 -TargetHe
 
 ## [Get-LayoutDefinition](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Get-LayoutDefinition.ps1)
 
-- **Description:** Retrieves a specific FancyZones layout definition from the `custom-layouts.json` configuration file by name. Used internally by the layout visualization system to access grid-based layout configurations (including cell-child-map data). Returns the matching layout definition object, or `$null` if the file is missing or no layout matches.
+- **Description:** Retrieves a specific FancyZones layout definition from the `custom-layouts.json` configuration file by name. Used internally by the layout visualization system to access layout configurations (grid definitions including cell-child-map data, and canvas zone rectangles). Returns the matching layout definition object, or `$null` if the file is missing or no layout matches.
 - **Parameters:** -LayoutsJsonPath, -LayoutName
 - **Usage:** `$layout = Get-LayoutDefinition -LayoutsJsonPath "C:\Users\<User>\custom-layouts.json" -LayoutName "Eight"`
 
@@ -1366,7 +1402,7 @@ Clearing empties the value rather than removing the variable: passing `$null` fr
 
 ## [Set-WorkspaceWindowLayout](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Set-WorkspaceWindowLayout.ps1)
 
-- **Description:** Loads and applies a predefined, machine-specific window layout for a workspace. Layout files live in machine-type subfolders of the module's `Layouts` directory (e.g. `Layouts/PC/`, `Layouts/Laptop/`, `Layouts/Work/`) and define both FancyZones monitor layouts and per-window placement rules. Which subfolder is read can be redirected per machine with `LayoutMachineTypeOverrides` (see below), and that manual choice takes precedence over the `SmallDisplayMachineType` display-size detection. The function ensures the required virtual desktops exist, waits for workspace windows to appear and stabilize, applies FancyZones, positions and snaps each window into its zone, then verifies every entry. On snap or verification failure it first retries the position → snap → verify pipeline in-process up to 2 times (refreshing the existing-window snapshot so already-correct windows are skipped). Each retry starts by resetting FancyZones, since a window that will not land in its zone usually means the zone grid is wrong rather than the window being stubborn: PowerToys/FancyZones is force-restarted and the workspace's zone layouts are re-sent with `Apply-FancyZones -Force`, which is what keeps the retry from snapping into the same broken grid. Only when those retries are exhausted does it escalate by force-starting FancyZones and rerunning in a fresh shell in a window-only retry mode that preserves already-configured desktops, force-reapplies the FancyZones layouts, and reapplies the full layout config; before every rerun it also releases stuck keyboard modifiers and a stranded mouse button via `Reset-KeyboardModifiers` so the respawned shell takes over a clean input session.
+- **Description:** Loads and applies a predefined, machine-specific window layout for a workspace. Layout files live in machine-type subfolders of the module's `Layouts` directory (e.g. `Layouts/PC/`, `Layouts/Laptop/`, `Layouts/Work/`) and define both FancyZones monitor layouts and per-window placement rules. Which subfolder is read can be redirected per machine with `LayoutMachineTypeOverrides` (see below), and that manual choice takes precedence over the `SmallDisplayMachineType` display-size detection. After loading the workspace layout file, the function validates the FancyZones configuration with `Test-FancyZonesConfiguration` before any desktop or window work: errors touching a layout the workspace references (or global errors) abort the open, while all other findings warn and the open proceeds. It then ensures the required virtual desktops exist, waits for workspace windows to appear and stabilize, applies FancyZones, positions and snaps each window into its zone, then verifies every entry. On snap or verification failure it first retries the position → snap → verify pipeline in-process up to 2 times (refreshing the existing-window snapshot so already-correct windows are skipped). Each retry starts by resetting FancyZones, since a window that will not land in its zone usually means the zone grid is wrong rather than the window being stubborn: PowerToys/FancyZones is force-restarted and the workspace's zone layouts are re-sent with `Apply-FancyZones -Force`, which is what keeps the retry from snapping into the same broken grid. Only when those retries are exhausted does it escalate by force-starting FancyZones and rerunning in a fresh shell in a window-only retry mode that preserves already-configured desktops, force-reapplies the FancyZones layouts, and reapplies the full layout config; before every rerun it also releases stuck keyboard modifiers and a stranded mouse button via `Reset-KeyboardModifiers` so the respawned shell takes over a clean input session.
 - **Parameters:** -WorkspaceName, -LayoutPath, -TimeoutSeconds, -SnapDelayMs, -DisableAutoWait, -PreCapturedExistingWindows, -DesktopOffset, -Alongside
 - **Usage:** `Set-WorkspaceWindowLayout -WorkspaceName MyWorkspace`, `Set-WorkspaceWindowLayout -WorkspaceName OtherProject -DesktopOffset 2 -Alongside`, `Set-WorkspaceWindowLayout -LayoutPath C:\Users\<User>\MyLayouts\custom.psd1 -TimeoutSeconds 30`, `Set-WorkspaceWindowLayout -WorkspaceName MyWorkspace -DisableAutoWait`
 
@@ -1422,11 +1458,11 @@ A few passes between waiting and positioning are kept deliberately narrow. First
 
 ## [Snap-AllWindows](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Snap-AllWindows.ps1)
 
-- **Description:** Intelligently snaps windows to FancyZones by sending `Win+Up` (or `Win+Down` for top-position, vertically split windows) with reliable focus acquisition. Groups windows by virtual desktop and switches desktops as needed, validates positions pre-snap, re-positions when drifted, and falls back to shift-drag snapping if keyboard snap fails. Default mode snaps only windows previously positioned by `Set-WindowLayouts` (the workspace flow); `-All` snaps all visible windows standalone. Stuck keyboard modifiers are cleared via `Reset-KeyboardModifiers` at pass start, before each snap retry, and (mouse button included) when a pass fails, so an interrupted earlier sequence can neither corrupt the injected combos (a held Shift turns `Win+Up` into `Win+Shift+Up`) nor leave terminal input locked up.
+- **Description:** Intelligently snaps windows to FancyZones by sending `Win+Up` with reliable focus acquisition. Groups windows by virtual desktop and switches desktops as needed, validates positions pre-snap, re-positions when drifted, and falls back to shift-drag snapping if keyboard snap fails. Default mode snaps only windows previously positioned by `Set-WindowLayouts` (the workspace flow); `-All` snaps all visible windows standalone. Stuck keyboard modifiers are cleared via `Reset-KeyboardModifiers` before each window's first snap attempt (the `Win+Ctrl+Alt+N` injection from `Apply-FancyZones` moments earlier can strand a modifier whose key-up was eaten by a focus change), before each snap retry, and (mouse button included) when a pass fails, so an interrupted earlier sequence can neither corrupt the injected combos (a held Shift turns `Win+Up` into `Win+Shift+Up`) nor leave terminal input locked up.
 - **Parameters:** -All, -CurrentDesktopOnly, -WindowHandles, -SnapDelayMs, -DesktopOffset, -DesktopCount
 - **Usage:** `Snap-AllWindows`, `Snap-AllWindows -All`, `Snap-AllWindows -All -CurrentDesktopOnly`, `Snap-AllWindows -All -SnapDelayMs 100`, `Snap-AllWindows -DesktopOffset 2 -DesktopCount 3`
 
-A window is treated as "top and vertically split" (and snapped with `Win+Down` instead of `Win+Up`) when its top is at or near the monitor top, its center is in the top half, and its height is roughly 40-60% of the monitor height.
+Every window is snapped with `Win+Up`. The window arrives already inset *inside* its target zone, and the two arrow directions are not symmetric for that state: `Win+Up` snaps the window into the zone it is sitting in, while `Win+Down` hands it to the zone **below**. A "top half of a vertically split monitor" special case used to send `Win+Down` for exactly those windows, which made every top-half zone (Seven's Top-Right, Four's top row, ...) land one zone too low, fail verification, and get recovered by the slow shift-drag fallback.
 
 `GetAllWindows` (`EnumWindows`) enumerates windows across **every** virtual desktop, not just the active one, so `-All` alone snaps system-wide. When a caller switches desktops in a loop and snaps each in turn, it must pass `-CurrentDesktopOnly` so each window is snapped exactly once on its own desktop and forcing a window foreground never drags the active desktop to a window that lives elsewhere. The current and per-window desktops are resolved with `Get-CurrentDesktop` / `Get-DesktopFromWindow` / `Get-DesktopIndex`; an unresolvable window is kept (snapped) rather than dropped, and if the current desktop itself cannot be determined the filter is skipped. Callers that already resolved the window-to-desktop mapping can instead pass `-WindowHandles` with the per-desktop handle list - it takes precedence over `-CurrentDesktopOnly` and avoids the two COM roundtrips per window on every desktop pass.
 
@@ -1459,9 +1495,41 @@ Snap-AllWindows -All -CurrentDesktopOnly
 Set-LogLevel Verbose { Snap-AllWindows -All -SnapDelayMs 100 }
 ```
 
-> **Note:** Disable PowerToys' "Move newly created windows to their last known zone" so windows aren't moved to the wrong position. The `spacing` value in `FancyZones/custom-layouts.json` must be `3`, or coordinate mismatches break snap zone verification and shift-drag snapping.
+> **Note:** Disable PowerToys' "Move newly created windows to their last known zone" so windows aren't moved to the wrong position. Any `spacing` value in `FancyZones/custom-layouts.json` works: `Get-FancyZoneCoordinates` replicates the exact FancyZones spacing model (full inset on work-area border edges, `Floor(spacing/2)` per zone on interior edges), so snap verification and shift-drag snapping agree with the live zone grid.
 
 **See also:** [Set-WorkspaceWindowLayout](window.md#set-workspacewindowlayout), [Resize-Windows](window.md#resize-windows), [Get-InsetWindowBounds](window.md#get-insetwindowbounds)
+
+## [Test-FancyZonesConfiguration](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Test-FancyZonesConfiguration.ps1)
+
+- **Description:** Validates the FancyZones configuration quartet against each other: `custom-layouts.json` internal consistency, `$Configuration.ZoneNameMappings`, `$Configuration.LayoutNumbers`, and `layout-hotkeys.json`. Arbitrary layouts, zones, and spacing are supported in `custom-layouts.json`, which makes drift between the four places that must agree the main way a workspace open can misplace windows or apply the wrong layout. Runs automatically near the start of `Set-WorkspaceWindowLayout`: errors touching a layout the workspace references (or global errors) abort the open; everything else warns and the open proceeds.
+- **Parameters:** -CustomLayoutsPath, -LayoutHotkeysPath, -Silent
+- **Usage:** `Test-FancyZonesConfiguration`, `$result = Test-FancyZonesConfiguration -Silent`
+
+**Checks performed:**
+
+- Every layout in `custom-layouts.json` is internally consistent. Grid: rows/columns match their percentage arrays, each percentage axis sums to exactly 10000, `cell-child-map` is rows x columns and its zone indices form a contiguous `0..N-1` set, spacing is not negative. Canvas: `ref-width`/`ref-height` are positive and every zone has positive width/height (zones extending beyond the ref rect only warn).
+- `ZoneNameMappings` agrees with `custom-layouts.json`: every mapped layout exists, and every mapped zone index is within the layout's derived zone count. Layouts without a mappings entry (and zone indices without a name) are warnings, not errors - they only matter once a layout `.psd1` references them.
+- `LayoutNumbers` is applyable: values 0-9, unique, and every name exists in `custom-layouts.json`.
+- `layout-hotkeys.json` agrees with both: every hotkey uuid exists in `custom-layouts.json`, and for each `LayoutNumbers` entry the hotkey with that number points at that layout's uuid - otherwise `Apply-FancyZones` would apply the WRONG layout via its `Win+Ctrl+Alt+[Number]` shortcut.
+
+| Parameter            | Type   | Default | Description                                                                                          |
+| -------------------- | ------ | ------- | ------------------------------------------------------------------------------------------------------ |
+| `-CustomLayoutsPath` | string | -       | Optional path to `custom-layouts.json`. Defaults to the repository file (`Get-FancyZonesLayoutsPath`).  |
+| `-LayoutHotkeysPath` | string | -       | Optional path to `layout-hotkeys.json`. Defaults to the repository file (`Get-FancyZonesLayoutsPath -File LayoutHotkeys`). |
+| `-Silent`            | switch | -       | Suppresses per-finding logging; the result object is returned either way.                              |
+
+Returns an object with `Valid` (`$true` when no errors were found - warnings do not affect validity), `Errors`, and `Warnings`, where each finding is an object with `Layout` and `Message` (`Layout` is `$null` for global/cross-file problems such as hotkey mismatches), so callers can scope their reaction per layout.
+
+```powershell
+# Validate the repository FancyZones configuration and log every finding
+Test-FancyZonesConfiguration
+
+# Validate silently and inspect the findings programmatically
+$result = Test-FancyZonesConfiguration -Silent
+if (-not $result.Valid) { $result.Errors | ForEach-Object { $_.Message } }
+```
+
+**See also:** [Get-FancyZonesLayoutsPath](window.md#get-fancyzoneslayoutspath), [Set-WorkspaceWindowLayout](window.md#set-workspacewindowlayout), [Apply-FancyZones](window.md#apply-fancyzones)
 
 ## [Test-FancyZonesLayoutApplied](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Test-FancyZonesLayoutApplied.ps1)
 
@@ -1557,17 +1625,17 @@ if (-not $result.IsValid) {
 
 ## [Visualize-Layouts](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Visualize-Layouts.ps1)
 
-- **Description:** Generates ASCII art visualizations of FancyZones layouts and adds them as commented sections at the top of layout files. Each visualization shows which processes are assigned to each zone, organized by Virtual Desktop and then Monitor (Primary, Secondary, etc.). Layout files live in machine-specific subfolders (Laptop, PC, Work) under the Layouts directory and are searched recursively. Configurations are validated before rendering, and with `-DisplayAvailableLayouts` it can instead list all available layout types (Zero, One, Two, etc.) with their zone-name mappings from configuration.
+- **Description:** Generates ASCII art visualizations of FancyZones layouts and adds them as commented sections at the top of layout files. Each visualization shows which processes are assigned to each zone, organized by Virtual Desktop and then Monitor (Primary, Secondary, etc.). Layout files live in machine-specific subfolders (Laptop, PC, Work) under the Layouts directory and are searched recursively. Configurations are validated before rendering, and with `-DisplayAvailableLayouts` it can instead list all available layout types with their zone-name mappings from configuration.
 - **Parameters:** -Layout, -All, -DisplayAvailableLayouts, -Update
 - **Usage:** `Visualize-Layouts`, `Visualize-Layouts -Layout "MyWorkspace_PC"`, `Visualize-Layouts -All`, `Visualize-Layouts -All -Update`, `Visualize-Layouts -DisplayAvailableLayouts`
 
-Without parameters the function presents an interactive menu (via `Resolve-Selection`) to pick one or more layouts. For each selected file it imports the `.psd1`, validates it with `Validate-Layout`, groups windows by `DesktopNumber` then `Monitor`, resolves each monitor's layout type from the `Monitors` section, and renders the arrangement with `Generate-LayoutVisualization`. By default it only displays the visualizations; with `-Update` it rewrites each layout file, replacing any existing `LAYOUT VISUALIZATION` comment block with a freshly generated one and refreshing the section headers. `-DisplayAvailableLayouts` reads `ZoneNameMappings` and `custom-layouts.json` to show the zone structure of each grid layout type without touching any files.
+Without parameters the function presents an interactive menu (via `Resolve-Selection`) to pick one or more layouts. For each selected file it imports the `.psd1`, validates it with `Validate-Layout`, groups windows by `DesktopNumber` then `Monitor`, resolves each monitor's layout type from the `Monitors` section, and renders the arrangement with `Generate-LayoutVisualization`. By default it only displays the visualizations; with `-Update` it rewrites each layout file, replacing any existing `LAYOUT VISUALIZATION` comment block with a freshly generated one and refreshing the section headers. `-DisplayAvailableLayouts` reads `ZoneNameMappings` and `custom-layouts.json` (resolved via `Get-FancyZonesLayoutsPath`) to show the zone structure of every layout without touching any files: layouts are ordered by their `LayoutNumbers` hotkey slot, followed by any `custom-layouts.json` layouts absent from `LayoutNumbers` in file order; layouts without a `ZoneNameMappings` entry are still displayed (with unnamed zones); grid layouts render as ASCII grids and canvas layouts as textual per-zone listings via `Format-CanvasZoneListing`.
 
 | Parameter                  | Description                                                                                                                           |
 | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | `-Layout`                  | Name of a specific layout to visualize (e.g. `MyWorkspace_PC`); matched against the layout file's base name.                          |
 | `-All`                     | Process every layout file found recursively in the Layouts directory and its machine-specific subfolders.                             |
-| `-DisplayAvailableLayouts` | List all available layout types (Zero, One, Two, etc.) with their zone names shown in position; does not read or modify layout files. |
+| `-DisplayAvailableLayouts` | List all available layout types with their zone names shown in position, in `LayoutNumbers` hotkey order; does not read or modify layout files. |
 | `-Update`                  | Write the generated visualizations back into the layout files as a comment block. Without it, visualizations are only displayed.      |
 
 ```powershell
@@ -1772,7 +1840,7 @@ The Window module creates a **"tiling window manager"** experience on Windows us
 2. **Layout files** (.psd1) - Define window-to-zone mappings
 3. **Set-WorkspaceWindowLayout** - Applies the configuration
 
-> **⚠️ Important:** The `spacing` value in `FancyZones/custom-layouts.json` **must be set to `3`**. FancyZones internally uses an asymmetric spacing algorithm (full spacing on outer grid edges, half spacing on inner edges), while the zone coordinate calculation uses a uniform approximation. With `spacing: 3` the approximation error is only ~2px, well within snap tolerance. Larger values cause coordinate mismatches that break `Snap-AllWindows` zone verification and shift-drag snapping.
+> **Note:** Arbitrary spacing and arbitrary zone definitions (grid and canvas) are supported in `FancyZones/custom-layouts.json`. FancyZones insets edges that touch the work-area border by the full spacing value, and interior edges by `Floor(spacing/2)` per zone; a zone spanning multiple cells absorbs the spacing between them. `Get-FancyZoneCoordinates` replicates this exactly, so any spacing value works. `Test-FancyZonesConfiguration` validates the configuration (layouts, `ZoneNameMappings`, `LayoutNumbers`, `layout-hotkeys.json`) automatically at the start of every workspace open.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -1854,7 +1922,7 @@ Layout files are in `Modules/Window/Layouts/{MachineType}/`:
 
 ## Zone Names Reference
 
-Zone names depend on the FancyZones layout:
+Zone names come from `ZoneNameMappings` in `Configuration.psd1`, which maps each human-readable name to a zone index per layout - layouts and their zone names are freely definable, and `Test-FancyZonesConfiguration` verifies the mappings agree with `custom-layouts.json`. The layouts shipped in this repo:
 
 | Layout  | Zones                                                                     |
 | ------- | ------------------------------------------------------------------------- |
@@ -1983,7 +2051,8 @@ Install-Module -Name VirtualDesktop -RequiredVersion 1.5.11 -Force -Scope Curren
 1. Verify FancyZones is running: `Start-FancyZones`
 2. Check layout file exists for your machine type
 3. Verify zone names match available zones
-4. Run `Validate-Layout` to check configuration
+4. Run `Validate-Layout` to check the layout file
+5. Run `Test-FancyZonesConfiguration` to check the FancyZones configuration (layouts, `ZoneNameMappings`, `LayoutNumbers`, `layout-hotkeys.json`)
 
 ### Virtual Desktop Issues
 

@@ -30,7 +30,8 @@ Add-WindowLayout -WorkspaceName "MyWorkspace" -MachineType @("PC", "Laptop") -Si
 3. After creation, remind user to:
     - Edit the generated `.psd1` file to define actual window positions
     - Use `Visualize-Layouts -Layout "MyWorkspace_PC" -Update` to generate ASCII visualization
-    - Reference `ZoneNameMappings` in Configuration.psd1 for available zone names
+    - Reference `ZoneNameMappings` in Configuration.psd1 for available zone names (FancyZones layouts and zones in `custom-layouts.json` are arbitrary - grid and canvas, any spacing)
+    - Run `Test-FancyZonesConfiguration` to verify the zone-name mappings, `LayoutNumbers`, and `layout-hotkeys.json` all agree with `custom-layouts.json`
 
 ## Layout File Location
 

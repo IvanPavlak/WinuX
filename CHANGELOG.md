@@ -8,6 +8,42 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.34] - 2026-08-16
+
+### Added
+
+- **Arbitrary spacing and zone definitions in `FancyZones/custom-layouts.json`.** `Get-FancyZoneCoordinates` now reproduces the zone rectangles FancyZones itself computes, so any `spacing` value works instead of the single value the old math happened to tolerate. Row and column edges are cumulative prefix sums with floor division, which makes the cells add up to exactly the monitor work area no matter how the percentages divide (3333/3333/3334 no longer loses pixels), and spacing follows the real model: the full value on edges that touch the work-area border, `Floor(spacing / 2)` per zone on interior edges, with a zone that spans several cells absorbing the spacing between them. Layout names, grid shapes, percentages, and `cell-child-map` spans are free-form; the only remaining limit is the 10-layout cap imposed by FancyZones' `Win+Ctrl+Alt+0-9` hotkeys.
+
+- **Canvas layout support.** `Get-FancyZoneCoordinates` accepts `"type": "canvas"` layouts, scaling each zone rectangle from the layout's `ref-width`/`ref-height` space to the monitor work area (canvas ignores spacing; a zone's index is its position in the `zones` array). Previously any non-grid layout was rejected outright.
+
+- **`Test-FancyZonesConfiguration` (Window module): validates the four files that must agree before a workspace opens.** Checks `custom-layouts.json` internal consistency (percentage arrays matching `rows`/`columns` and summing to exactly 10000, `cell-child-map` dimensions, a contiguous `0..N-1` zone index set, positive canvas ref dimensions), that every `ZoneNameMappings` entry names a real layout and an in-range zone index, that `LayoutNumbers` values are unique and within 0-9, and that `layout-hotkeys.json` binds each number to the same layout's uuid - a mismatch there silently makes `Apply-FancyZones` apply the *wrong* layout. `Set-WorkspaceWindowLayout` runs it before any desktop or window work and aborts only for errors touching a layout that workspace references (or global ones); everything else is a warning and the open proceeds.
+
+- **`Get-FancyZonesLayoutsPath` (Window module): one place that knows where the FancyZones files live.** Resolves `custom-layouts.json` / `layout-hotkeys.json` through `Get-RepositoryPath`, replacing two hand-rolled "walk five parents from `$PSScriptRoot`" blocks that silently resolved to the wrong place if a file ever moved depth.
+
+- **`Format-CanvasZoneListing` (Window module): renders canvas layouts as a per-zone textual listing** (`Zone 0 [Left]: x=0% y=0% w=50% h=100%`), since free-form rectangles cannot be drawn as a proportional ASCII grid. Used by `Visualize-Layouts` and `Generate-LayoutVisualization`.
+
+- **`Start-FancyZones -PassThru`.** The readiness result is now opt-in, so an interactive `Start-FancyZones` leaves only its spinner and completion mark on screen.
+
+- **`Loading-Spinner -CheckmarkOnly`.** Finalizes a labeled spinner with a bare green `✓` instead of `✓ label`, for callers whose label already told the story while it ran.
+
+### Changed
+
+- **`Snap-AllWindows` sends `Win+Up` for every window.** The window arrives already inset inside its target zone, and the two arrow directions are not symmetric in that state: `Win+Up` snaps the window into the zone it occupies, while `Win+Down` hands it to the zone below. The old "top half of a vertically split monitor" special case sent `Win+Down` for exactly those windows, so with correct zone geometry every top-half zone landed one zone too low and had to be recovered by the slow shift-drag fallback.
+
+- **`Get-InsetWindowBounds` offsets the pre-snap window from the zone's exact center** by `InsetCenterBiasPx` (2px) instead of centering it. FancyZones' `Win+Arrow` is a *relative* move that only snaps a window into the zone it is sitting in while it does not already recognise the window as zoned, and a window centered precisely on its zone is recognised - every arrow key then throws it into the neighbouring zone. The old zone rectangles were a couple of pixels off the real geometry, so "centered on the computed zone" happened to land the window off-center in the *actual* zone; with exact zone math that accident is gone and the offset has to be deliberate.
+
+- **`Visualize-Layouts -DisplayAvailableLayouts` orders layouts by their `LayoutNumbers` hotkey** and appends any layout present in `custom-layouts.json` but missing from `LayoutNumbers`, instead of walking a hardcoded `Zero`..`Nine` list that silently hid arbitrarily named layouts. Layouts without a `ZoneNameMappings` entry are displayed too (unnamed zones).
+
+- **Documentation no longer mandates `spacing: 3`.** The troubleshooting entry, repository structure notes, layout guides, and configuration reference describe the real spacing model and point at `Test-FancyZonesConfiguration` for diagnosing drift between the FancyZones files.
+
+### Fixed
+
+- **`Start-FancyZones` printed `True` over its own spinner** (`Truearting FancyZones`). A `return $true` inside the `try` emitted the value before the `finally` block finalized the spinner line; the result is now emitted from `finally`, after the spinner is torn down, and only with `-PassThru`. The failure path erases the spinner instead of leaving a success checkmark ahead of an error.
+
+- **`Get-FancyZone` now reports what is actually wrong** when a zone name maps to an index the layout does not define, naming the zone count, the valid indices, and the `ZoneNameMappings` entry to check, instead of a bare "zone index not found".
+
+- **Percentage-to-pixel conversion used `[int]` casts** (banker's rounding, so `.5` rounds to even) where FancyZones uses integer division, and summed per-cell sizes instead of prefix sums - the two together left gaps or overhangs at the last row/column.
+
 ## [0.1.33] - 2026-08-07
 
 ### Added
@@ -581,7 +617,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.33...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.34...HEAD
+[0.1.34]: https://github.com/IvanPavlak/WinuX/compare/v0.1.33...v0.1.34
 [0.1.33]: https://github.com/IvanPavlak/WinuX/compare/v0.1.32...v0.1.33
 [0.1.32]: https://github.com/IvanPavlak/WinuX/compare/v0.1.31...v0.1.32
 [0.1.31]: https://github.com/IvanPavlak/WinuX/compare/v0.1.30...v0.1.31

@@ -153,6 +153,18 @@ Describe "Loading-Spinner coordination (-Start / -Stop / -Pause / -Resume)" {
 		($captured -join "`n") | Should -Match '✓ Working'
 	}
 
+	It "leaves a bare '✓' (no label) when a labelled spinner is stopped with -CheckmarkOnly" {
+		$captured = New-Object System.Collections.Generic.List[string]
+		Mock Write-Host { if ($null -ne $Object) { $captured.Add([string]$Object) } else { $captured.Add("") } }
+
+		$h = Loading-Spinner -Start -Label "Starting FancyZones"
+		Loading-Spinner -Stop -Spinner $h -CheckmarkOnly
+
+		$joined = $captured -join "`n"
+		$joined | Should -Match '✓'
+		$joined | Should -Not -Match '✓ Starting FancyZones'
+	}
+
 	It "erases (no checkmark) when stopped with -Discard, even if the spinner had a label" {
 		$captured = New-Object System.Collections.Generic.List[string]
 		Mock Write-Host { if ($null -ne $Object) { $captured.Add([string]$Object) } else { $captured.Add("") } }

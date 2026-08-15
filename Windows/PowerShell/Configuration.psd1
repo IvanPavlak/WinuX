@@ -2340,9 +2340,12 @@
 	# functionality using FancyZones and virtual desktops.
 	#
 	# HOW WINDOW LAYOUTS WORK:
-	# 1. FancyZones defines zone layouts (Zero through Nine) in custom-layouts.json
+	# 1. FancyZones defines up to 10 zone layouts (arbitrary names, grid or canvas,
+	#    any spacing) in custom-layouts.json; each is bound to a hotkey slot 0-9
+	#    via LayoutNumbers + layout-hotkeys.json
 	# 2. Layout files (.psd1) in Layouts/{MachineType}/ define window placement
 	# 3. Set-WorkspaceWindowLayout applies the layout when opening a workspace
+	#    (after Test-FancyZonesConfiguration verifies all the pieces agree)
 	# 4. Windows are positioned to zones and snapped using FancyZones hotkeys
 	#
 	# LAYOUT FILE STRUCTURE (Layouts/{MachineType}/{Workspace}_{MachineType}.psd1):
@@ -2501,7 +2504,16 @@
 
 	# Layout Name to Number Mappings
 	# Used by Apply-FancyZones to trigger keyboard shortcuts (Ctrl+Alt+Win+0-9)
-	# The number corresponds to the FancyZones layout hotkey
+	# The number corresponds to the FancyZones layout hotkey.
+	#
+	# Layout names are arbitrary - they only have to match the "name" fields in
+	# custom-layouts.json. Constraints (verified by Test-FancyZonesConfiguration,
+	# which runs at every workspace open):
+	# - values must be 0-9 and unique (the hotkey mechanism caps layouts at 10)
+	# - every name here must exist in custom-layouts.json
+	# - layout-hotkeys.json must bind each number to the SAME layout's uuid,
+	#   otherwise Apply-FancyZones applies the wrong layout
+	# Visualize-Layouts -DisplayAvailableLayouts lists layouts in this hotkey order.
 	LayoutNumbers                 = @{
 		"Zero"  = 0
 		"One"   = 1
@@ -2521,14 +2533,21 @@
 	# Used by Get-FancyZone to map human-readable zone names to zone indices.
 	# These names are used in layout .psd1 files for the "Zone" property.
 	#
-	# The zone indices come from FancyZones custom-layouts.json "cell-child-map".
-	# Multiple names can map to the same index (e.g., "Left" and "Far-Left" → 0).
+	# The zone indices come from FancyZones custom-layouts.json. Multiple names can
+	# map to the same index (e.g., "Left" and "Far-Left" → 0). Layouts, zones, and
+	# spacing are fully arbitrary - the mappings below just have to agree with
+	# custom-layouts.json, and Test-FancyZonesConfiguration (run automatically at
+	# every workspace open) reports any drift: unknown layouts, out-of-range
+	# indices, unnamed zones.
 	#
-	# HOW TO FIND ZONE INDICES:
+	# HOW TO FIND ZONE INDICES (grid layouts):
 	# 1. Open custom-layouts.json in Windows/FancyZones/
 	# 2. Find your layout by name
 	# 3. Look at the "cell-child-map" array - each number is a zone index
 	# 4. Top row is first array, bottom row is second array
+	#
+	# CANVAS LAYOUTS: the zone index is simply the zone's position in the layout's
+	# "zones" array (first zone = 0, second = 1, ...).
 	#
 	# Example from custom-layouts.json:
 	#   cell-child-map: [

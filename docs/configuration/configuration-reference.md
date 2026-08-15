@@ -1089,10 +1089,12 @@ Animation styles for long-running operations.
 
 **Keys:**
 
-- `LayoutNumbers` - Keyboard shortcut mapping to layout indices
-- `ZoneNameMappings` → Human-readable zone names to indices
+- `LayoutNumbers` - Maps layout names (from `custom-layouts.json`) to `Win+Ctrl+Alt+[Number]` hotkey slots. Layout names are arbitrary; up to 10 layouts, values 0-9, each value unique, and every name must exist in `custom-layouts.json`. Each entry must also stay in sync with `layout-hotkeys.json`: the same-numbered hotkey there must point at that layout's uuid, or `Apply-FancyZones` applies the wrong layout.
+- `ZoneNameMappings` → Human-readable zone names to zone indices, per layout. Indices must exist in the layout's `custom-layouts.json` definition (for canvas layouts, a zone's index is its position in the `zones` array); update the mappings in lockstep when adding or reshaping layouts.
 
-**Consumer functions:** `Apply-FancyZones`, `Get-FancyZone`, `Set-WorkspaceWindowLayout`
+`Test-FancyZonesConfiguration` validates all of these constraints (plus `custom-layouts.json` internal consistency) automatically at the start of every workspace open.
+
+**Consumer functions:** `Apply-FancyZones`, `Get-FancyZone`, `Set-WorkspaceWindowLayout`, `Test-FancyZonesConfiguration`
 
 ### Reset-Windows Defaults
 

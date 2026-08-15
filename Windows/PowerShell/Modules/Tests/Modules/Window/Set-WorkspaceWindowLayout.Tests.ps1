@@ -23,6 +23,9 @@ BeforeAll {
 
 	function Remove-PositionedWindowHandles { }
 	function Verify-WindowPlacement { $true }
+	# Stub so Mock can attach without loading the whole Window module; the real
+	# validator has its own suite (Test-FancyZonesConfiguration.Tests.ps1).
+	function Test-FancyZonesConfiguration { [PSCustomObject]@{ Valid = $true; Errors = @(); Warnings = @() } }
 
 	# VirtualDesktop cmdlets come from an optional external module absent on CI runners.
 	# Stub the ones these tests mock so Mock can attach (no-op where the real module exists).
@@ -70,6 +73,7 @@ Describe "Set-WorkspaceWindowLayout" {
 		Mock Set-Location { }
 		Mock Get-Command { $null }
 		Mock Start-Sleep { }
+		Mock Test-FancyZonesConfiguration { [PSCustomObject]@{ Valid = $true; Errors = @(); Warnings = @() } }
 
 		$script:MachineSpecificPaths = @{
 			Projects = @{
@@ -124,6 +128,51 @@ Describe "Set-WorkspaceWindowLayout" {
 				[Environment]::SetEnvironmentVariable($rerunVar, $null, 'User')
 			}
 		}
+	}
+
+	It "aborts the open when FancyZones configuration errors affect this workspace's layouts" {
+		Mock Test-Path { $true }
+		Mock Import-PowerShellDataFile {
+			@{
+				Monitors = @{ Primary = @{ VirtualDesktopLayouts = @{ 1 = "One" } } }
+				Layout   = @(@{ ProcessName = "Code"; Zone = "Left"; Monitor = "Primary"; DesktopNumber = 1 })
+			}
+		}
+		Mock Test-FancyZonesConfiguration {
+			[PSCustomObject]@{
+				Valid    = $false
+				Errors   = @([PSCustomObject]@{ Layout = "One"; Message = "Layout 'One': broken for test" })
+				Warnings = @()
+			}
+		}
+		Mock Write-LogError { }
+
+		Set-WorkspaceWindowLayout -WorkspaceName "TestWorkspace"
+
+		Should -Invoke Apply-FancyZones -Times 0
+		Should -Invoke Write-LogError -ParameterFilter { $Message -match "aborting layout" }
+	}
+
+	It "continues the open when FancyZones configuration errors only touch unrelated layouts" {
+		Mock Test-Path { $true }
+		Mock Import-PowerShellDataFile {
+			@{
+				Monitors = @{ Primary = @{ VirtualDesktopLayouts = @{ 1 = "One" } } }
+				Layout   = @(@{ ProcessName = "Code"; Zone = "Left"; Monitor = "Primary"; DesktopNumber = 1 })
+			}
+		}
+		Mock Test-FancyZonesConfiguration {
+			[PSCustomObject]@{
+				Valid    = $false
+				Errors   = @([PSCustomObject]@{ Layout = "SomeOtherLayout"; Message = "Layout 'SomeOtherLayout': broken for test" })
+				Warnings = @()
+			}
+		}
+		Mock Write-LogError { }
+
+		Set-WorkspaceWindowLayout -WorkspaceName "TestWorkspace"
+
+		Should -Invoke Write-LogError -Times 0 -ParameterFilter { $Message -match "aborting layout" }
 	}
 
 	It "uses Machine machine-specific workspace layout when primary monitor is small" {

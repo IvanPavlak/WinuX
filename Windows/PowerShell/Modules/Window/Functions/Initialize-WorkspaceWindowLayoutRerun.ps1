@@ -44,12 +44,12 @@ function Initialize-WorkspaceWindowLayoutRerun {
 	if (Get-Command Start-FancyZones -ErrorAction SilentlyContinue) {
 		try {
 			Write-LogWarning "Restarting FancyZones before workspace layout rerun..."
-			$fancyZonesReady = Start-FancyZones -ForceRestart -MaxWaitSeconds 20
+			$fancyZonesReady = Start-FancyZones -ForceRestart -MaxWaitSeconds 20 -PassThru
 
 			# Perform one non-force verification pass to ensure startup has settled.
 			if ($fancyZonesReady) {
 				Start-Sleep -Milliseconds 350
-				$fancyZonesReady = Start-FancyZones -MaxWaitSeconds 8
+				$fancyZonesReady = Start-FancyZones -MaxWaitSeconds 8 -PassThru
 			}
 
 			if ($fancyZonesReady) {

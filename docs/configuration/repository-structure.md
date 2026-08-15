@@ -27,7 +27,7 @@ WinuX/
 ├── docs/                                           # Docsify documentation site (this site)
 └── Windows/
     ├── FancyZones/                                 # PowerToys FancyZones settings
-    │   ├── custom-layouts.json                     # Custom zone layouts (spacing must be 3)
+    │   ├── custom-layouts.json                     # Custom zone layouts (grid & canvas, arbitrary spacing)
     │   ├── layout-hotkeys.json                     # Layout hotkey bindings
     │   └── settings.json                           # FancyZones settings
     ├── Oh-My-Posh/                                 # Terminal prompt theme
@@ -75,7 +75,7 @@ WinuX/
 
 ### Notes on the Tree
 
-- **FancyZones `custom-layouts.json`** - the zone spacing value must be `3`; other values break the saved layouts.
+- **FancyZones `custom-layouts.json`** - arbitrary spacing values and zone definitions (grid and canvas layouts) are supported; the zone math in `Get-FancyZoneCoordinates` replicates FancyZones exactly. `Test-FancyZonesConfiguration` validates the file (and its agreement with `ZoneNameMappings`, `LayoutNumbers`, and `layout-hotkeys.json`) automatically at every workspace open.
 - **Window layout naming** - layout files under `Window/Layouts/{MachineType}/` follow the convention `{Workspace}_{MachineType}.psd1` (the base ships `Test/`; add a folder per machine type you define).
 - **Machine-specific files** - components such as FastFetch, Oh-My-Posh, and Windows Terminal use a `{MachineType}` suffix so a single repository can drive multiple machines.
 - **Runtime state is never committed** - `Logging/Logs/`, `Tests/Results/`, `Window/Layouts/CurrentLayout.txt` and `Workflow/State/` all hold per-machine, per-session data (each kept in git with a `.gitkeep`). Deleting any of them is safe; `Close-Workspace` in particular then reports that nothing is tracked rather than guessing what a workspace opened.

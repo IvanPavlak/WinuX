@@ -11,7 +11,7 @@ This guide explains how to create and configure window layouts for the WinuX "ti
 │                                                                             │
 │  1. FancyZones (PowerToys)                                                  │
 │     └─→ Defines zone layouts (saved in custom-layouts.json)                 │
-│     └─→ Layouts named: Zero, One, Two, ... Nine                             │
+│     └─→ Up to 10 layouts, arbitrary names (hotkeys 0-9 via LayoutNumbers)   │
 │                                                                             │
 │  2. Layout Files (.psd1)                                                    │
 │     └─→ Define which windows go to which zones                              │
@@ -65,11 +65,15 @@ Layout files are PowerShell data files (`.psd1`) with two main sections:
 
 ## Available FancyZones Layouts
 
+FancyZones layouts live in `Windows/FancyZones/custom-layouts.json` and are entirely editable: up to 10 layouts (arbitrary names, bound to hotkeys 0-9 via `LayoutNumbers` in `Configuration.psd1`), with freely chosen zones, row/column percentages, and any `spacing` value - both `grid` and `canvas` layout types work. Zone names for use in layout files come from `ZoneNameMappings`, which must be updated in lockstep when you add or reshape a layout; `Test-FancyZonesConfiguration` verifies all of it (layouts, `ZoneNameMappings`, `LayoutNumbers`, and `layout-hotkeys.json` sync) automatically at every workspace open.
+
 View all layouts and their zones:
 
 ```powershell
 Visualize-Layouts -DisplayAvailableLayouts
 ```
+
+The layouts shipped in this repo are named `Zero` through `Nine`:
 
 | Layout  | Zones                                                                     |
 | ------- | ------------------------------------------------------------------------- |
@@ -83,6 +87,10 @@ Visualize-Layouts -DisplayAvailableLayouts
 | `Seven` | Left, Middle, Top-Right, Bottom-Right                                     |
 | `Eight` | Left, Top-Middle, Bottom-Middle, Top-Right, Bottom-Right                  |
 | `Nine`  | Top-Left, Bottom-Left, Top-Middle, Bottom-Middle, Top-Right, Bottom-Right |
+
+### Canvas Layouts
+
+Besides `grid` layouts, FancyZones `canvas` layouts are fully supported: free-form rectangles drawn in the PowerToys FancyZones editor, saved with explicit X/Y/width/height in the layout's ref-width/ref-height space. A canvas zone's index is its position in the layout's `zones` array - map names to those indices in `ZoneNameMappings` exactly as for grid layouts. Canvas layouts ignore the `spacing` value. `Visualize-Layouts` renders them as a textual per-zone listing (e.g. `Zone 0 [Left]: x=0% y=0% w=50% h=100%`) rather than an ASCII grid.
 
 ## Creating a Layout File
 
@@ -418,6 +426,7 @@ Notes:
 1. Ensure FancyZones is running: `Start-FancyZones`
 2. Verify layout name exists in `ZoneNameMappings`
 3. Check monitor name matches (`Primary`, `Secondary`)
+4. Run `Test-FancyZonesConfiguration` to catch drift between `custom-layouts.json`, `ZoneNameMappings`, `LayoutNumbers`, and `layout-hotkeys.json` (it also runs automatically at every workspace open)
 
 ### "No layout configuration found for workspace"
 

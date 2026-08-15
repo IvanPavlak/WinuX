@@ -583,9 +583,9 @@ Start-Application -AppName "WhatsApp" -ProcessName "WhatsApp.Root" `
 ## [Start-FancyZones](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Start-FancyZones.ps1)
 
 - **Description:** Ensures PowerToys FancyZones is running and actually ready before returning success, with RPC health verification. Checks for the `PowerToys.FancyZones` process and, if it is missing or unhealthy, launches PowerToys and waits for FancyZones to initialize. Readiness requires a stable PID (sampled multiple times only while the process is young), healthy RPC services (RpcSs, DcomLaunch, RpcEptMapper), an existing FancyZones configuration directory, and parseable JSON state files when present. It also fixes the problematic state where PowerToys is running without FancyZones by performing a full shutdown through `Stop-PowerToysCompletely` before relaunch, and closes unwanted `PowerToys.Settings` windows to keep startup headless.
-- **Parameters:** -MaxWaitSeconds, -ForceRestart
-- **Usage:** `Start-FancyZones`, `Start-FancyZones -MaxWaitSeconds 15`, `Start-FancyZones -ForceRestart`, `Start-FancyZones -ForceRestart -MaxWaitSeconds 20`
-- **Notes:** Returns `$true` if FancyZones is running and ready, `$false` if it could not be started. A loading spinner stays visible until FancyZones is ready or startup fails, then stops before the function returns; under `Set-LogLevel Verbose` the spinner is suppressed and detailed diagnostics are shown instead. A call served from the readiness cache prints nothing at all - it does no work, so it does not announce any.
+- **Parameters:** -MaxWaitSeconds, -ForceRestart, -PassThru
+- **Usage:** `Start-FancyZones`, `Start-FancyZones -MaxWaitSeconds 15`, `Start-FancyZones -ForceRestart`, `$ready = Start-FancyZones -ForceRestart -MaxWaitSeconds 20 -PassThru`
+- **Notes:** Emits nothing by default - an interactive call leaves only the spinner and its completion mark on screen. With `-PassThru` it outputs `$true` if FancyZones is running and ready, `$false` if it could not be started; programmatic callers that branch on readiness use `-PassThru` and capture the value. A loading spinner stays visible until FancyZones is ready or startup fails; on success it finishes as a bare green `✓` (the label already told the story), on failure the line is erased so no success mark ever precedes the error output. Under `Set-LogLevel Verbose` the spinner is suppressed and detailed diagnostics are shown instead. A call served from the readiness cache prints nothing at all - it does no work, so it does not announce any.
 
 When `-ForceRestart` is given (or readiness checks fail for an existing process), the function calls `Stop-PowerToysCompletely -PreferGracefulExit` to fully shut down PowerToys, then relaunches from a common install location and re-verifies readiness. This guarantees reliability when applying zones rapidly or in close succession, where FancyZones may otherwise not respond correctly.
 
@@ -595,6 +595,7 @@ The PID-stability sampling (4 samples over 750 ms) only runs while the FancyZone
 | ----------------- | ------------------------------------------------------------------------------------ |
 | `-MaxWaitSeconds` | Maximum time to wait for FancyZones to start (default: 10 seconds).                  |
 | `-ForceRestart`   | Forces a full PowerToys shutdown and relaunch even if FancyZones is already running. |
+| `-PassThru`       | Emits the readiness result (`$true`/`$false`) to the pipeline; without it the function outputs nothing. |
 
 ```powershell
 # Ensure FancyZones is running with the default wait time
@@ -603,8 +604,8 @@ Start-FancyZones
 # Wait up to 15 seconds for FancyZones to become ready
 Start-FancyZones -MaxWaitSeconds 15
 
-# Force a full restart and wait longer for a cold start
-Start-FancyZones -ForceRestart -MaxWaitSeconds 20
+# Force a full restart, wait longer for a cold start, and capture the result
+$ready = Start-FancyZones -ForceRestart -MaxWaitSeconds 20 -PassThru
 
 # Verbose diagnostic output
 Set-LogLevel Verbose { Start-FancyZones }
