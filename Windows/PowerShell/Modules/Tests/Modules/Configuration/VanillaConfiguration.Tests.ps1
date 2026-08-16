@@ -112,6 +112,48 @@ Describe "Vanilla Configuration (empty-by-default contract)" {
 		}
 	}
 
+	Context "Display-aware window sizing" {
+		# All three sections resolve through engine fallbacks, and an explicit config value beats
+		# the fallback - so the base values and the built-in defaults must agree or the documented
+		# defaults become a lie for anyone reading the resolvers.
+		It "Should ship CenterTerminalSizing in the keyed shape" {
+			# Keyed, not flat: Resolve-CenterTerminalSizing treats a section carrying TargetWidthPx
+			# as the legacy flat shape and returns it whole, which would bypass the rows entirely.
+			$sizing = $script:BaseConfig.CenterTerminalSizing
+			$sizing | Should -BeOfType [hashtable]
+			$sizing.ContainsKey('TargetWidthPx') | Should -BeFalse -Because "a TargetWidthPx at section level is the legacy flat shape"
+			$sizing.ContainsKey('Default') | Should -BeTrue
+		}
+
+		It "Should ship CenterTerminalSizing.Default.<Key> as <Expected>" -ForEach @(
+			@{ Key = "TargetWidthPx"; Expected = 1376 }
+			@{ Key = "TargetHeightPx"; Expected = 700 }
+			@{ Key = "MinWidthPercent"; Expected = 25 }
+			@{ Key = "MaxWidthPercent"; Expected = 72 }
+			@{ Key = "MinHeightPercent"; Expected = 35 }
+			@{ Key = "MaxHeightPercent"; Expected = 75 }
+		) {
+			# 1376x700 is what 40% x 50% yields on a 3440x1440 ultrawide - the anchor that keeps
+			# the vanilla terminal size unchanged from before the section existed.
+			$script:BaseConfig.CenterTerminalSizing.Default[$Key] | Should -Be $Expected
+		}
+
+		It "Should ship ResizeWindowsPercent.Default matching Resolve-ResizeWindowsPercent's built-in" {
+			$script:BaseConfig.ResizeWindowsPercent.Default | Should -Be 70
+		}
+
+		It "Should ship no personal SmallDisplay row" {
+			# A gentler shrink on a laptop panel is a personal tuning choice; the tracked base
+			# must behave the same on every display.
+			$script:BaseConfig.ResizeWindowsPercent.ContainsKey('SmallDisplay') | Should -BeFalse
+			$script:BaseConfig.CenterTerminalSizing.ContainsKey('SmallDisplay') | Should -BeFalse
+		}
+
+		It "Should ship SnapInsetPercent matching Get-WindowInsetPercent's built-in" {
+			$script:BaseConfig.SnapInsetPercent | Should -Be 0.05
+		}
+	}
+
 	Context "Schema validation of the untouched base" {
 		# The vanilla base must be a VALID configuration, not a broken one: the schema
 		# validator may only require framework keys. The two GitConfig entries are the

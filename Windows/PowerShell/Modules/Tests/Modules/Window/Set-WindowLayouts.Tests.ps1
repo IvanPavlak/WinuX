@@ -5,10 +5,15 @@ BeforeAll {
 	$FunctionsPath = Join-Path $ModuleRoot "Window\Functions"
 
 	. "$FunctionsPath\Set-WindowLayouts.ps1"
+
+	# The pre-snap inset source, stubbed so Mock can attach in a dot-sourced unit and so these
+	# cases never read the live session configuration. It has its own suite.
+	function Get-WindowInsetPercent { }
 }
 
 Describe "Set-WindowLayouts" {
 	BeforeEach {
+		Mock Get-WindowInsetPercent { 0.05 }
 		Mock Initialize-PositionedWindowTracking { }
 		Mock Test-Path { $false }
 		Mock Write-Error { }

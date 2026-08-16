@@ -79,17 +79,19 @@ Iterates over the cell-child-map (a row/column array where each cell holds the i
 
 ## [Center-Terminal](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Center-Terminal.ps1)
 
-- **Description:** Centers the Windows Terminal on the primary monitor at a physically-constant size. Rather than a fixed percentage, it targets a fixed on-screen pixel size (`CenterTerminalSizing` in `Configuration.psd1`) and derives the width/height percentages from the LIVE primary monitor's work area at run time, then delegates the move/resize to `Center-Windows -OnPrimary`. Because the size is computed from the live monitor (not the hostname-derived `$global:MachineType`), an undocked laptop on its small panel gets a proportionally larger window while a docked laptop or the ultrawide stays at its usual size - with no per-machine configuration. Falls back to `Center-Windows`' default 40% x 50% when the config section or monitor information is unavailable. Used by `Kill-All` to re-center the surviving terminal after cleanup.
+- **Description:** Centers the Windows Terminal on the primary monitor at a physically-constant size. Rather than a fixed percentage, it targets a fixed on-screen pixel size (`CenterTerminalSizing` in `Configuration.psd1`) and derives the width/height percentages from the LIVE primary monitor's work area at run time, then delegates the move/resize to `Center-Windows -OnPrimary`. Because the size is computed from the live monitor (not the hostname-derived `$global:MachineType`), an undocked laptop on its small panel gets a proportionally larger window while a docked laptop or the ultrawide stays at its usual size - so a single target already produces a uniform terminal everywhere, with no per-machine configuration required. The target itself can still be tuned per machine: `CenterTerminalSizing` also accepts a keyed shape resolved by `Resolve-CenterTerminalSizing`. Falls back to `Center-Windows`' default 40% x 50% when the config section resolves to nothing or monitor information is unavailable. Used by `Kill-All` to re-center the surviving terminal after cleanup.
 - **Usage:** `Center-Terminal`
 
-Resolves the target size via `Get-MonitorInfo` (live primary monitor work area) and `Resolve-CenteredWindowPercent` (target-px to clamped percentages), then calls `Center-Windows -ProcessName "WindowsTerminal" -OnPrimary` with the resolved percentages. The defaults shipped in `CenterTerminalSizing` anchor the target to 1376x700 px - exactly what 40% x 50% yields on a 3440x1440 ultrawide - so the ultrawide is unchanged while smaller panels scale up (e.g. ~72% x 67% on a 1920x1080 laptop).
+Resolves the target size via `Get-MonitorInfo` (live primary monitor work area), `Resolve-CenterTerminalSizing` (which sizing block applies to this display), and `Resolve-CenteredWindowPercent` (target-px to clamped percentages), then calls `Center-Windows -ProcessName "WindowsTerminal" -OnPrimary` with the resolved percentages. The defaults shipped in `CenterTerminalSizing` anchor the target to 1376x700 px - exactly what 40% x 50% yields on a 3440x1440 ultrawide - so the ultrawide is unchanged while smaller panels scale up (e.g. ~72% x 67% on a 1920x1080 laptop).
+
+`CenterTerminalSizing` accepts two shapes. The **keyed** shape holds rows (`SmallDisplay`, machine type, `Default`) and exists to *tune* the pixel target per machine - a physically small panel may want a smaller terminal than the percentages alone would give it. The **legacy flat** shape puts `TargetWidthPx` and friends directly in the section and applies to every machine; it is detected first and wins outright, which keeps a flat local override correct even when it deep-merges on top of a keyed base. The monitor snapshot this function already captured is handed to the resolver, so the rows cost no extra query.
 
 ```powershell
 # Re-center Windows Terminal on the primary monitor at the adaptive size
 Center-Terminal
 ```
 
-**See also:** [Center-Windows](window.md#center-windows), [Resolve-CenteredWindowPercent](window.md#resolve-centeredwindowpercent)
+**See also:** [Center-Windows](window.md#center-windows), [Resolve-CenterTerminalSizing](window.md#resolve-centerterminalsizing), [Resolve-CenteredWindowPercent](window.md#resolve-centeredwindowpercent), [Display-Aware Window Sizing](../configuration/configuration-reference.md#display-aware-window-sizing)
 
 ## [Center-Windows](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Center-Windows.ps1)
 
@@ -627,13 +629,15 @@ $hotkeysPath = Get-FancyZonesLayoutsPath -File LayoutHotkeys
 
 Computes shared inset bounds for pre-snap resizing. The target zone is shrunk by `InsetPercent` on each side and re-centered on the zone center, returning a `[PSCustomObject]` carrying both the original target values and the adjusted geometry: `AdjustedX`, `AdjustedY`, `AdjustedWidth`, `AdjustedHeight`, `AdjustedRight`, `AdjustedBottom`, plus `ZoneCenterX`/`ZoneCenterY`. Adjusted width and height are floored at 1px.
 
+The default inset comes from `Get-WindowInsetPercent` (the `SnapInsetPercent` configuration value, `0.05` when unset) - one value shared by every placement path. Passing `-InsetPercent` explicitly bypasses it entirely, since a bound parameter never evaluates its default expression.
+
 | Parameter       | Type   | Mandatory | Description                                                                     |
 | --------------- | ------ | --------- | ------------------------------------------------------------------------------- |
 | `-TargetX`      | int    | Yes       | Target zone X coordinate.                                                       |
 | `-TargetY`      | int    | Yes       | Target zone Y coordinate.                                                       |
 | `-TargetWidth`  | int    | Yes       | Target zone width.                                                              |
 | `-TargetHeight` | int    | Yes       | Target zone height.                                                             |
-| `-InsetPercent` | double | No        | Inset percentage applied on each side. Range `0.0`-`0.49`. Default `0.05` (5%). |
+| `-InsetPercent` | double | No        | Inset percentage applied on each side. Range `0.0`-`0.49`. Defaults to `Get-WindowInsetPercent` (`SnapInsetPercent`, `0.05` when unset). |
 
 ```powershell
 # Inset bounds for a full 1920x1080 zone using the default 5% inset
@@ -663,13 +667,13 @@ $layout = Get-LayoutDefinition -LayoutsJsonPath "C:\Users\<User>\custom-layouts.
 
 ## [Get-LayoutMachineType](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Get-LayoutMachineType.ps1)
 
-- **Description:** Resolves the machine type whose window-arrangement settings apply to the current display setup, in order: a non-empty `LayoutMachineTypeOverrides` entry for the detected machine type, else `SmallDisplayMachineType` when the primary display is at most 3000px wide, else the detected type from `DetermineMachineType`. Shared by `Set-WorkspaceWindowLayout` (which `Layouts/<Type>/` folder and `<Workspace>_<Type>.psd1` file to load) and `Reset-Windows` (which `ResetAllWindowsDefaults` profile to apply), so both answers to "which monitor setup am I on?" come from one resolution instead of drifting apart. Only display-shaped settings resolve through it - base paths, symbolic links, wallpapers, themes, and the taskbar keep using `DetermineMachineType`, so a redirect never relocates a path or repaints a desktop.
+- **Description:** Resolves the machine type whose window-arrangement settings apply to the current display setup, in order: a non-empty `LayoutMachineTypeOverrides` entry for the detected machine type, else `SmallDisplayMachineType` when `Test-SmallPrimaryDisplay` reports a laptop-class primary display, else the detected type from `DetermineMachineType`. Shared by `Set-WorkspaceWindowLayout` (which `Layouts/<Type>/` folder and `<Workspace>_<Type>.psd1` file to load), `Reset-Windows` (which `ResetAllWindowsDefaults` profile to apply), and `Resolve-DisplayAwareProfile` (which row of `CenterTerminalSizing` / `ResizeWindowsPercent` applies), so every answer to "which monitor setup am I on?" comes from one resolution instead of drifting apart. Only display-shaped settings resolve through it - base paths, symbolic links, wallpapers, themes, and the taskbar keep using `DetermineMachineType`, so a redirect never relocates a path or repaints a desktop.
 - **Parameters:** -MonitorInfo
 - **Usage:** `Get-LayoutMachineType`, `Get-LayoutMachineType -MonitorInfo $cachedMonitorInfo`
 
 Window layouts and the reset defaults describe a machine's **monitors**, not its identity, and monitors change: a desktop moved away from its multi-monitor rig, a temporary single screen, a laptop-class display. The manual override is checked before the display-size rule on purpose - an explicit choice must not be overruled by a monitor-width guess, which is exactly what a temporary single screen would trigger.
 
-Monitors are queried only when the small-display rule is actually reachable (no override matched **and** `SmallDisplayMachineType` is configured), so the common path costs nothing beyond the machine-type lookup. Callers that already hold a snapshot pass it via `-MonitorInfo` to avoid a second query; an empty or unavailable snapshot simply leaves the detected machine type in place. The redirect it picks is logged at verbose level by whichever rule fired.
+Monitors are measured only when the small-display rule is actually reachable (no override matched **and** `SmallDisplayMachineType` is configured), so the common path costs nothing beyond the machine-type lookup. The measurement itself lives in `Test-SmallPrimaryDisplay`, shared with `Resolve-DisplayAwareProfile` so the two can never disagree about what counts as a small display. Callers that already hold a snapshot pass it via `-MonitorInfo` to avoid a second query; an empty or unavailable snapshot simply leaves the detected machine type in place. The redirect it picks is logged at verbose level by whichever rule fired.
 
 | Parameter      | Type     | Default | Description                                                                                                                                          |
 | -------------- | -------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -683,7 +687,7 @@ Get-LayoutMachineType
 Get-LayoutMachineType -MonitorInfo $cachedMonitorInfo
 ```
 
-**See also:** [Set-WorkspaceWindowLayout](window.md#set-workspacewindowlayout), [Reset-Windows](window.md#reset-windows), [Layout Set Overrides](../configuration/configuration-reference.md#layout-set-overrides)
+**See also:** [Set-WorkspaceWindowLayout](window.md#set-workspacewindowlayout), [Reset-Windows](window.md#reset-windows), [Test-SmallPrimaryDisplay](window.md#test-smallprimarydisplay), [Resolve-DisplayAwareProfile](window.md#resolve-displayawareprofile), [Layout Set Overrides](../configuration/configuration-reference.md#layout-set-overrides)
 
 ## [Get-MonitorInfo](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Get-MonitorInfo.ps1)
 
@@ -850,6 +854,22 @@ Get-WindowHandle -ProcessName "WhatsApp" -WindowTitle ".*WhatsApp.*"
 $handle = (Get-WindowHandle -ProcessName "firefox").Handle
 Set-WindowPosition -WindowHandle $handle -X 0 -Y 0 -Width 960 -Height 1080
 ```
+
+## [Get-WindowInsetPercent](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Get-WindowInsetPercent.ps1)
+
+- **Description:** Returns the pre-snap inset fraction every FancyZones placement path trims off each side of a target zone. The single source of truth for `SnapInsetPercent` in `Configuration.psd1`, falling back to the built-in `0.05` when it is unset or invalid. Read by `Resize-Windows`, `Get-InsetWindowBounds`, and `Resize-PositionedWindows` as a parameter default, and by `Set-WindowLayouts` and `Snap-AllWindows` directly - five places that each used to hardcode the same `0.05`.
+- **Usage:** `Get-WindowInsetPercent`
+
+A getter rather than a module variable, because parameter defaults are evaluated at call time and the configuration is not loaded when the module is imported. Reading `$global:Configuration` on every call also means a reloaded profile takes effect immediately.
+
+Anything non-numeric, or outside the `0.0`-`0.49` range that every consuming parameter's `ValidateRange` accepts, falls back to `0.05` - a config typo must not abort a workspace open mid-loop. `0.49` is the ceiling because two insets of `0.5` would leave a zero-width window. Explicitly passing `-InsetPercent` still wins everywhere, which is how `Center-Windows` keeps its deliberate `-InsetPercent 0` (exact placement, no inset).
+
+```powershell
+# 0.05 by default; whatever SnapInsetPercent is set to otherwise
+Get-WindowInsetPercent
+```
+
+**See also:** [Get-InsetWindowBounds](window.md#get-insetwindowbounds), [Resize-Windows](window.md#resize-windows), [Display-Aware Window Sizing](../configuration/configuration-reference.md#display-aware-window-sizing)
 
 ## [Get-WindowModuleDelays](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Get-WindowModuleDelays.ps1)
 
@@ -1087,25 +1107,27 @@ if (Reset-VirtualDesktopState) { Switch-Desktop -Desktop 0 }
 ## [Resize-Windows](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Resize-Windows.ps1)
 
 - **Description:** Resizes open windows either by a percentage (scaling each window's width and height while keeping its center point fixed) or to inset bounds within a target zone. In percentage mode a value of 100 leaves windows unchanged, below 100 shrinks them, and above 100 enlarges them, with results clamped to the monitor work area. When `TargetX`/`TargetY`/`TargetWidth`/`TargetHeight` are supplied it switches to target-bounds mode, using the shared FancyZones pre-snap inset sizing logic (an `-InsetPercent` of 0 places the window at the exact bounds, which is how `Center-Windows` reuses this path). Like `Move-Windows`, it can target all visible windows, a filtered set matching a `-ProcessName` and/or `-WindowTitle` pattern (delegated to `Get-WindowHandle`), or a single window by handle.
-- **Parameters:** -Percent (default: 70), -ProcessName, -WindowTitle, -WindowHandle, -TargetX, -TargetY, -TargetWidth, -TargetHeight, -InsetPercent (default: 0.05), -Tolerance, -SkipIfAlreadyPositioned
+- **Parameters:** -Percent (default: ResizeWindowsPercent, else 70), -ProcessName, -WindowTitle, -WindowHandle, -TargetX, -TargetY, -TargetWidth, -TargetHeight, -InsetPercent (default: SnapInsetPercent, else 0.05), -Tolerance, -SkipIfAlreadyPositioned
 - **Usage:** `Resize-Windows`, `Resize-Windows -Percent 120`, `Resize-Windows -Percent 50 -ProcessName "chrome"`, `Resize-Windows -WindowTitle "*YouTube*" -Percent 120`, `Resize-Windows -WindowHandle $handle`, `Resize-Windows -WindowHandle $handle -TargetX 0 -TargetY 0 -TargetWidth 1720 -TargetHeight 1440 -SkipIfAlreadyPositioned`
 
 Operates in two modes. **Percentage mode** is the general utility path: it selects windows (all via `Get-CachedWindows`, a filtered set via `Get-WindowHandle`, or a single `-WindowHandle`), scales each window's current dimensions by `Percent`, and re-centers them on their original center point, clamping size and position to the owning monitor's work area (minimum 100px) so nothing extends off-screen. **Target-bounds mode** activates when all four `Target*` parameters are provided; it delegates to `Get-InsetWindowBounds` to compute the shared inset geometry and is the single source of truth for the pre-snap resize used by `Set-WindowLayouts`, `Resize-PositionedWindows`, `Snap-AllWindows` retries, and `Center-Windows`. System/shell windows (Program Manager, Start, Search, etc.) and zero-size windows are skipped. `-ProcessName`/`-WindowTitle` matching is delegated to `Get-WindowHandle` (exact names, wildcard patterns, and regex, with OR logic when both are supplied). Single-handle mode is served from the window cache without forcing a refresh per call (the cache's own 50ms TTL keeps the data fresh enough for the skip-tolerance check) - it runs once per window in tight loops like `Resize-PositionedWindows` and snap retries. Only the user-facing resize-all/matching invocation prints a title and summary in percent mode; single-handle calls no longer print a success line per window (verbose mode still logs each).
 
 | Parameter                        | Description                                                                                                                                             |
 | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `-Percent`                       | Percentage to scale each window's current size by. Default `70`. Range 10-500. 100 is a no-op.                                                          |
+| `-Percent`                       | Percentage to scale each window's current size by. Defaults to `Resolve-ResizeWindowsPercent` (`ResizeWindowsPercent`, `70` when unset). Range 10-500. 100 is a no-op. |
 | `-ProcessName`                   | Only resize windows whose process matches this pattern (without `.exe`). Exact name, wildcard (`*`, `?`), or regex. Omit to resize all visible windows. |
 | `-WindowTitle`                   | Only resize windows whose title matches this pattern. Wildcard (`*`, `?`) or regex. Combine with `-ProcessName` (OR logic).                             |
 | `-WindowHandle`                  | Only resize the window with this exact handle.                                                                                                          |
 | `-TargetX` / `-TargetY`          | Target zone top-left coordinates for target-bounds mode.                                                                                                |
 | `-TargetWidth` / `-TargetHeight` | Target zone size for target-bounds mode.                                                                                                                |
-| `-InsetPercent`                  | Inset applied per side in target-bounds mode. Default `0.05`. Range 0.0-0.49.                                                                           |
+| `-InsetPercent`                  | Inset applied per side in target-bounds mode. Defaults to `Get-WindowInsetPercent` (`SnapInsetPercent`, `0.05` when unset). Range 0.0-0.49.             |
 | `-Tolerance`                     | Pixel tolerance used with `-SkipIfAlreadyPositioned`. Defaults to the module's shared position verification tolerance.                                  |
 | `-SkipIfAlreadyPositioned`       | In target-bounds mode, skips windows already at the adjusted target bounds within `Tolerance`.                                                          |
 
+Neither default is a constant. **The percentage** is resolved in the `begin` block by `Resolve-ResizeWindowsPercent`, but only in percentage mode and only when the caller passed no `-Percent` - so target-bounds callers never pay for the monitor query, and the `"to <n>%"` log reports the value actually applied. This is what makes the workspace flow behave the same everywhere: `Set-WorkspaceWindowLayout`'s first-open normalization and its retry passes all call `Resize-Windows` with no percentage, and a single hardcoded `70` had to be a compromise between a mild shrink on a wide monitor and an aggressive one on a laptop panel. **The inset** is a parameter default reading `Get-WindowInsetPercent`, so `Center-Windows`' deliberate `-InsetPercent 0` still overrides it (a bound parameter never evaluates its default expression). Both fall back to their historical values (`70`, `0.05`) when nothing is configured, and an invalid configured value falls back rather than throwing mid-loop.
+
 ```powershell
-# Shrink all windows to the default 70% of their current size
+# Shrink all windows to the configured default (70% unless ResizeWindowsPercent says otherwise)
 Resize-Windows
 
 # Enlarge all windows to 120% of current size
@@ -1121,7 +1143,7 @@ Set-LogLevel Verbose { Resize-Windows -Percent 150 -ProcessName "(chrome|firefox
 Resize-Windows -WindowHandle $handle -TargetX 0 -TargetY 0 -TargetWidth 1720 -TargetHeight 1440 -SkipIfAlreadyPositioned
 ```
 
-**See also:** [Window Layout System](../modules/window.md)
+**See also:** [Window Layout System](../modules/window.md), [Resolve-ResizeWindowsPercent](window.md#resolve-resizewindowspercent), [Get-WindowInsetPercent](window.md#get-windowinsetpercent), [Display-Aware Window Sizing](../configuration/configuration-reference.md#display-aware-window-sizing)
 
 ## [Resize-PositionedWindows](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Resize-PositionedWindows.ps1)
 
@@ -1133,7 +1155,7 @@ Called by `Set-WorkspaceWindowLayout` after the initial positioning pass and imm
 
 | Parameter       | Description                                                                                                                                                                                                            |
 | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `-InsetPercent` | Inset percentage applied on each side. Default `0.05` (5 percent), constrained to the range `0.0`-`0.49`.                                                                                                              |
+| `-InsetPercent` | Inset percentage applied on each side. Defaults to `Get-WindowInsetPercent` (`SnapInsetPercent`, `0.05` when unset), constrained to the range `0.0`-`0.49`.                                                            |
 | `-Tolerance`    | Pixel tolerance for deciding whether a window is already at the adjusted pre-snap position. Defaults to the module's shared position verification tolerance (`$script:WindowModuleTolerances.PositionVerificationPx`). |
 
 ```powershell
@@ -1183,6 +1205,55 @@ Resolve-CenteredWindowPercent -WorkAreaWidth 1920 -WorkAreaHeight 1040 `
 
 **See also:** [Center-Terminal](window.md#center-terminal), [Center-Windows](window.md#center-windows)
 
+## [Resolve-CenterTerminalSizing](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Resolve-CenterTerminalSizing.ps1)
+
+- **Description:** Resolves the `CenterTerminalSizing` block that applies to the current display. The section accepts two shapes: the **legacy flat** shape holds `TargetWidthPx` and friends directly and is returned as-is, while the **keyed** shape holds `SmallDisplay` / machine type / `Default` rows resolved through `Resolve-DisplayAwareProfile`. Only a hashtable row carrying `TargetWidthPx` is accepted; anything else resolves to `$null` so `Center-Terminal` falls back to its own 40% x 50% defaults rather than handing junk to `Resolve-CenteredWindowPercent`, whose parameters are all mandatory ints.
+- **Parameters:** -Section, -MonitorInfo
+- **Usage:** `Resolve-CenterTerminalSizing -Section $global:Configuration.CenterTerminalSizing -MonitorInfo $monitors`
+
+The flat check runs first and wins outright. That is what makes the hybrid case correct: `Configuration.local.psd1` deep-merges over the base, so a user who keeps the old flat override on top of a keyed base ends up with `TargetWidthPx` and rows in the same hashtable - and the flat keys are the ones they actually edited.
+
+The keyed shape exists to *tune* the target per machine, not to make the terminal size uniform. Uniformity already comes from `Center-Terminal` converting one pixel target into per-monitor percentages at run time; the rows are for when a particular display wants a different physical size.
+
+| Parameter      | Type      | Default | Description                                                                                                          |
+| -------------- | --------- | ------- | -------------------------------------------------------------------------------------------------------------------- |
+| `-Section`     | hashtable | -       | The `CenterTerminalSizing` section, in either shape. Null or empty resolves to `$null`.                              |
+| `-MonitorInfo` | object[]  | -       | Monitor records from `Get-MonitorInfo`, forwarded to the row resolver so the caller's snapshot is reused.            |
+
+```powershell
+# The Default row's block on the ultrawide, the SmallDisplay row's block on a laptop panel
+Resolve-CenterTerminalSizing -Section $global:Configuration.CenterTerminalSizing -MonitorInfo $monitors
+
+# Legacy flat section, returned unchanged
+Resolve-CenterTerminalSizing -Section @{ TargetWidthPx = 1376; TargetHeightPx = 700 }
+```
+
+**See also:** [Center-Terminal](window.md#center-terminal), [Resolve-DisplayAwareProfile](window.md#resolve-displayawareprofile), [Display-Aware Window Sizing](../configuration/configuration-reference.md#display-aware-window-sizing)
+
+## [Resolve-DisplayAwareProfile](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Resolve-DisplayAwareProfile.ps1)
+
+- **Description:** The shared row resolver for configuration sections whose value depends on the display the windows will land on (`CenterTerminalSizing`, `ResizeWindowsPercent`). Returns the value of the row that applies, in order: `SmallDisplay` when present **and** `Test-SmallPrimaryDisplay` reports a laptop-class primary display, else the row named after the machine type `Get-LayoutMachineType` resolves, else `Default`, else `$null` for the caller's own built-in fallback.
+- **Parameters:** -Section, -MonitorInfo
+- **Usage:** `Resolve-DisplayAwareProfile -Section $global:Configuration.ResizeWindowsPercent`, `Resolve-DisplayAwareProfile -Section $sizing -MonitorInfo $monitors`
+
+`SmallDisplay` is checked **first** because the machine type cannot express it. A laptop reports the machine type `Laptop` both on its own panel and docked to a large external monitor, so a `Laptop` row alone can only be right in one of those two states. The `SmallDisplay` row is the state-dependent one: it wins while the small panel is primary and disappears the moment a big display takes over, at which point the ordinary type row (or `Default`) applies. A machine that never uses a laptop-class display simply omits the row and pays nothing - monitors are only measured when the row exists.
+
+Note the asymmetry with `Get-LayoutMachineType`, which deliberately checks its manual override **before** its display-size rule. There the override is an explicit human choice that a display-width guess must not overrule. Here there is no competing explicit choice: both candidate rows are configuration, and the more specific one - the one naming the actual display class - wins.
+
+Because the machine type comes from `Get-LayoutMachineType`, `LayoutMachineTypeOverrides` and `SmallDisplayMachineType` steer these sections exactly as they steer the layout files and the `Reset-Windows` defaults.
+
+| Parameter      | Type      | Default | Description                                                                                                                                          |
+| -------------- | --------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `-Section`     | hashtable | -       | Section to resolve: rows keyed by machine type, plus the optional `SmallDisplay` and `Default` rows. Null or empty resolves to `$null`.              |
+| `-MonitorInfo` | object[]  | -       | Monitor records from `Get-MonitorInfo`, forwarded to both helpers. Passed on only when bound, so an unbound call leaves each free to skip the query. |
+
+```powershell
+# 80 from the SmallDisplay row on the laptop panel; 70 from Default once docked
+Resolve-DisplayAwareProfile -Section $global:Configuration.ResizeWindowsPercent
+```
+
+**See also:** [Test-SmallPrimaryDisplay](window.md#test-smallprimarydisplay), [Get-LayoutMachineType](window.md#get-layoutmachinetype), [Display-Aware Window Sizing](../configuration/configuration-reference.md#display-aware-window-sizing)
+
 ## [Resolve-LayoutTokens](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Resolve-LayoutTokens.ps1)
 
 - **Description:** Expands layout-file tokens to regex patterns at the matching boundary. Layout entries may use the literal token `"Browser"` as a value for `ProcessName` and/or `WindowTitle`; this helper returns a shallow clone of the entry with those tokens expanded to a regex covering every browser declared in `$global:Configuration.Browsers` (Tor excluded - SecureBrowser layouts opt into `tor` explicitly). Other values, including literal alternation regex like `(firefox|chrome|msedge|brave)`, are returned unchanged. Tokens are matched case-sensitively and expanded patterns are cached at module scope so it stays cheap inside the per-entry Set-WindowLayouts / Confirm-WorkspaceWindowPositions loops. The original entry is never mutated, so Visualize-Layouts still renders the raw `Browser` cell.
@@ -1224,6 +1295,27 @@ Enumerates the window list once via `Get-CachedWindows` (instead of issuing mult
 $fresh = Resolve-PositionedWindowHandle -WindowState $tracked
 if ($fresh) { $handle = $fresh.Handle }
 ```
+
+## [Resolve-ResizeWindowsPercent](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Resolve-ResizeWindowsPercent.ps1)
+
+- **Description:** Resolves the percentage `Resize-Windows` shrinks windows by when no `-Percent` is given. Reads `ResizeWindowsPercent` from `Configuration.psd1` through `Resolve-DisplayAwareProfile`, so the default follows the display in use: the `SmallDisplay` row while a laptop-class panel is primary, otherwise the machine type's row, otherwise `Default`. Anything non-numeric or outside the 10-500 range `Resize-Windows`' own `ValidateRange` accepts falls back to the built-in `70`.
+- **Parameters:** -MonitorInfo
+- **Usage:** `Resolve-ResizeWindowsPercent`, `Resolve-ResizeWindowsPercent -MonitorInfo $monitors`
+
+This is what makes the workspace flow behave the same everywhere. `Resize-Windows`' percent mode is the first-open normalization and retry step of `Set-WorkspaceWindowLayout`, and those call sites pass no `-Percent` at all. A single hardcoded `70` has to be a compromise: a mild shrink on a wide monitor, an aggressive one on a laptop panel where the window has far less room to give up.
+
+Invalid configuration never throws - a typo in a config file must not abort a workspace open mid-loop.
+
+| Parameter      | Type     | Default | Description                                                                                                    |
+| -------------- | -------- | ------- | ---------------------------------------------------------------------------------------------------------------- |
+| `-MonitorInfo` | object[] | -       | Monitor records from `Get-MonitorInfo`, forwarded to the row resolver so a caller with a snapshot reuses it.   |
+
+```powershell
+# 80 on the laptop panel (SmallDisplay row), 70 docked or on the PC (Default row)
+Resolve-ResizeWindowsPercent
+```
+
+**See also:** [Resize-Windows](window.md#resize-windows), [Resolve-DisplayAwareProfile](window.md#resolve-displayawareprofile), [Display-Aware Window Sizing](../configuration/configuration-reference.md#display-aware-window-sizing)
 
 ## [Resolve-TargetMonitor](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Resolve-TargetMonitor.ps1)
 
@@ -1557,6 +1649,29 @@ Test-FancyZonesLayoutApplied -VirtualDesktopGuid $guid -MonitorId "LEN8ABC"
 - **Description:** Tests whether a window handle is tracked as positioned. Checks if the handle has been registered as positioned by `Set-WindowLayouts`, returning `$true` if the window was positioned and `$false` otherwise.
 - **Parameters:** -WindowHandle
 - **Usage:** `Test-PositionedWindow -WindowHandle $window.Handle`
+
+## [Test-SmallPrimaryDisplay](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Test-SmallPrimaryDisplay.ps1)
+
+- **Description:** Tests whether the display that is currently primary is laptop-class - at most `MaxWidthPx` wide (3000px by default), which puts 1920x1080 and 2560x1440 panels in and a 3440x1440 ultrawide or a 4K desktop monitor out. The primary display is the one measured, because that is where the window actually lands; when no display reports itself primary the first enumerated one is used, and with no displays at all the answer is `$false` (never assume small). Shared by `Get-LayoutMachineType` (the `SmallDisplayMachineType` rule) and `Resolve-DisplayAwareProfile` (the `SmallDisplay` row).
+- **Parameters:** -MonitorInfo, -MaxWidthPx
+- **Usage:** `Test-SmallPrimaryDisplay`, `Test-SmallPrimaryDisplay -MonitorInfo $cachedMonitorInfo`, `Test-SmallPrimaryDisplay -MaxWidthPx 2000`
+
+One shared answer to "am I on the small screen right now?" - the question every display-shaped setting has to ask before it can pick a sensible size. The machine type cannot answer it: a laptop reports the same machine type whether it is sitting on its own panel or docked to a large external monitor, so a per-machine value that is right undocked is wrong docked. Measuring the live primary display is what separates the two. Both consumers used to inline this check; sharing it keeps the threshold in one place, so the laptop cannot start behaving as small for one of them and large for the other.
+
+| Parameter      | Type     | Default | Description                                                                                                            |
+| -------------- | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `-MonitorInfo` | object[] | -       | Monitor records from `Get-MonitorInfo`. Pass a snapshot the caller already holds to avoid re-querying.                 |
+| `-MaxWidthPx`  | int      | `3000`  | Inclusive upper bound, in pixels, for a display to count as laptop-class.                                              |
+
+```powershell
+# True on a 1920x1080 laptop panel, False on a 3440x1440 ultrawide
+Test-SmallPrimaryDisplay
+
+# Reuse a monitor snapshot the caller already captured
+Test-SmallPrimaryDisplay -MonitorInfo $cachedMonitorInfo
+```
+
+**See also:** [Get-LayoutMachineType](window.md#get-layoutmachinetype), [Resolve-DisplayAwareProfile](window.md#resolve-displayawareprofile), [Get-MonitorInfo](window.md#get-monitorinfo)
 
 ## [Test-VirtualDesktopComHealth](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Test-VirtualDesktopComHealth.ps1)
 

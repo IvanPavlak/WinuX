@@ -12,17 +12,24 @@ function Center-Terminal {
 		Configuration.psd1), then handed to Center-Windows. Because the size is computed
 		from the live primary monitor (not the hostname-derived $global:MachineType), an
 		undocked laptop on its small panel gets a proportionally larger window, while a
-		docked laptop or the ultrawide stays at its usual size - without any per-machine
-		configuration.
+		docked laptop or the ultrawide stays at its usual size - so a single target already
+		produces a uniform terminal everywhere, with no per-machine configuration required.
 
-		Falls back to Center-Windows' default 40% x 50% when the config section or monitor
-		information is unavailable.
+		The target itself can still be TUNED per machine: CenterTerminalSizing also accepts
+		a keyed shape (SmallDisplay / machine type / Default rows) resolved by
+		Resolve-CenterTerminalSizing, for when a particular display wants a different
+		physical size rather than a different percentage of the same one. The legacy flat
+		shape keeps working unchanged.
+
+		Falls back to Center-Windows' default 40% x 50% when the config section resolves to
+		nothing or monitor information is unavailable.
 
 		Placement is delegated to Center-Windows -OnPrimary, so window movement flows
 		through the same single source of truth as the rest of the centering pipeline.
 
 		Uses existing module functions:
 		- Get-MonitorInfo for the live primary monitor work area
+		- Resolve-CenterTerminalSizing for the sizing block that applies to this display
 		- Resolve-CenteredWindowPercent for the target-px => percentage math (with clamps)
 		- Center-Windows for the actual move/resize
 
@@ -38,13 +45,16 @@ function Center-Terminal {
 	$widthPercent = 40
 	$heightPercent = 50
 
-	$sizing = $global:Configuration.CenterTerminalSizing
-	if ($sizing) {
+	$section = $global:Configuration.CenterTerminalSizing
+	if ($section) {
 		$monitors = Get-MonitorInfo -Quiet
 		$primary = $monitors | Where-Object { $_.IsPrimary } | Select-Object -First 1
 		if (-not $primary -and $monitors) { $primary = $monitors[0] }
 
-		if ($primary) {
+		# Hand the snapshot over so the row resolution does not re-query the monitors.
+		$sizing = Resolve-CenterTerminalSizing -Section $section -MonitorInfo $monitors
+
+		if ($primary -and $sizing) {
 			$resolved = Resolve-CenteredWindowPercent `
 				-WorkAreaWidth $primary.WorkAreaWidth -WorkAreaHeight $primary.WorkAreaHeight `
 				-TargetWidthPx $sizing.TargetWidthPx -TargetHeightPx $sizing.TargetHeightPx `

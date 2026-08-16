@@ -8,7 +8,8 @@ function Resize-PositionedWindows {
 		Snap-AllWindows so every pre-snap resize comes from one source of truth.
 
 	.PARAMETER InsetPercent
-		The inset percentage applied on each side. Default is 0.05 (5 percent).
+		The inset percentage applied on each side. Defaults to Get-WindowInsetPercent
+		(the SnapInsetPercent configuration value, 0.05 when unset).
 
 	.PARAMETER Tolerance
 		Pixel tolerance for deciding whether a window is already at the adjusted
@@ -18,7 +19,7 @@ function Resize-PositionedWindows {
 	param(
 		[Parameter()]
 		[ValidateRange(0.0, 0.49)]
-		[double]$InsetPercent = 0.05,
+		[double]$InsetPercent = (Get-WindowInsetPercent),
 
 		[Parameter()]
 		[int]$Tolerance = $script:WindowModuleTolerances.PositionVerificationPx

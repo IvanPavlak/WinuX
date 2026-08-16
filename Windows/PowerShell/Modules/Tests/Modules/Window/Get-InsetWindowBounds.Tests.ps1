@@ -5,9 +5,17 @@ BeforeAll {
 	$FunctionsPath = Join-Path $ModuleRoot "Window\Functions"
 
 	. "$FunctionsPath\Get-InsetWindowBounds.ps1"
+
+	# The -InsetPercent default, stubbed so Mock can attach in a dot-sourced unit and so these
+	# cases never read the live session configuration. It has its own suite.
+	function Get-WindowInsetPercent { }
 }
 
 Describe "Get-InsetWindowBounds" {
+	BeforeEach {
+		Mock Get-WindowInsetPercent { 0.05 }
+	}
+
 	It "returns inset bounds biased off the zone center for default inset" {
 		$result = Get-InsetWindowBounds -TargetX 0 -TargetY 0 -TargetWidth 1000 -TargetHeight 800
 
@@ -48,5 +56,23 @@ Describe "Get-InsetWindowBounds" {
 
 		$result.AdjustedWidth | Should -BeGreaterOrEqual 1
 		$result.AdjustedHeight | Should -BeGreaterOrEqual 1
+	}
+
+	It "takes the default inset from configuration" {
+		# The inset is one configured value shared by five placement paths; this is the one
+		# that reads it through a parameter default.
+		Mock Get-WindowInsetPercent { 0.1 }
+
+		$result = Get-InsetWindowBounds -TargetX 0 -TargetY 0 -TargetWidth 1000 -TargetHeight 800
+
+		$result.InsetPercent | Should -Be 0.1
+		$result.AdjustedWidth | Should -Be 800
+		$result.AdjustedHeight | Should -Be 640
+	}
+
+	It "does not consult configuration when an inset is passed explicitly" {
+		$null = Get-InsetWindowBounds -TargetX 0 -TargetY 0 -TargetWidth 1000 -TargetHeight 800 -InsetPercent 0
+
+		Should -Invoke Get-WindowInsetPercent -Times 0 -Exactly
 	}
 }

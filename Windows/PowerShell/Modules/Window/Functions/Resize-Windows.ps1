@@ -31,13 +31,19 @@ function Resize-Windows {
 		- Get-WindowHandle for pattern-based window filtering (wildcard, regex, exact)
 		- Get-CachedWindows for fast window enumeration (when no filters)
 		- Get-MonitorInfo for monitor bounds and work areas
+		- Resolve-ResizeWindowsPercent for the per-display default percentage
+		- Get-WindowInsetPercent for the configurable pre-snap inset
 		- Get-InsetWindowBounds for the shared target-bounds geometry
 		- Set-WindowPosition for reliable window placement
 		- Ensure-WindowsFormsLoaded for System.Windows.Forms dependency
 
 	.PARAMETER Percent
-		The percentage to scale each window's current size by.
-		Default is 70 (shrink to 70% of current size). Range: 10-500.
+		The percentage to scale each window's current size by. Range: 10-500.
+		When omitted, the default comes from Resolve-ResizeWindowsPercent - the
+		ResizeWindowsPercent configuration section resolved for the display currently in
+		use - falling back to 70 when nothing is configured. This is what lets a laptop
+		panel shrink windows less than a wide monitor does, since Set-WorkspaceWindowLayout's
+		normalization and retry passes call this without a percentage.
 
 	.PARAMETER ProcessName
 		Optional. Only resize windows belonging to processes matching this pattern (without .exe).
@@ -67,7 +73,8 @@ function Resize-Windows {
 		Optional. Target zone height for target-bounds mode.
 
 	.PARAMETER InsetPercent
-		Inset percentage applied on each side in target-bounds mode. Default is 0.05.
+		Inset percentage applied on each side in target-bounds mode. Defaults to
+		Get-WindowInsetPercent (the SnapInsetPercent configuration value, 0.05 when unset).
 		Use 0 to place windows at the exact target bounds (no inset).
 
 	.PARAMETER Tolerance
@@ -80,7 +87,7 @@ function Resize-Windows {
 
 	.EXAMPLE
 		Resize-Windows
-		Shrinks all windows to 70% of their current size.
+		Shrinks all windows to the configured percentage of their current size (70% by default).
 
 	.EXAMPLE
 		Resize-Windows -Percent 120
@@ -104,7 +111,7 @@ function Resize-Windows {
 
 	.EXAMPLE
 		Resize-Windows -WindowHandle $handle
-		Shrinks only the specified window to 70% of its current size.
+		Shrinks only the specified window to the configured percentage of its current size.
 
 	.EXAMPLE
 		Resize-Windows -WindowHandle $handle -TargetX 0 -TargetY 0 -TargetWidth 1720 -TargetHeight 1440 -SkipIfAlreadyPositioned
@@ -140,7 +147,7 @@ function Resize-Windows {
 
 		[Parameter()]
 		[ValidateRange(0.0, 0.49)]
-		[double]$InsetPercent = 0.05,
+		[double]$InsetPercent = (Get-WindowInsetPercent),
 
 		[Parameter()]
 		[int]$Tolerance = $script:WindowModuleTolerances.PositionVerificationPx,
@@ -159,6 +166,14 @@ function Resize-Windows {
 
 		if ($useTargetBoundsMode -and $providedTargetBoundParams.Count -ne $targetBoundParams.Count) {
 			throw 'Target-bounds mode requires TargetX, TargetY, TargetWidth, and TargetHeight.'
+		}
+
+		# Percent mode only, and only when the caller did not state a percentage. Resolved here
+		# rather than as a parameter default so target-bounds callers - which never scale by
+		# percent - do not pay for a monitor query, and so the "to $Percent%" log below reports
+		# the value actually applied.
+		if (-not $useTargetBoundsMode -and -not $PSBoundParameters.ContainsKey('Percent')) {
+			$Percent = Resolve-ResizeWindowsPercent
 		}
 	}
 

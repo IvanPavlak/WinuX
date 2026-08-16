@@ -8,6 +8,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.35] - 2026-08-16
+
+### Added
+
+- **`ResizeWindowsPercent`: the default `Resize-Windows` shrink is now configurable per display.** `Resize-Windows` used to hardcode 70%, and the three call sites that matter most - `Set-WorkspaceWindowLayout`'s first-open normalization and its two retry passes - all invoke it with no `-Percent`. A single number had to be a compromise: a mild shrink on a wide monitor, an aggressive one on a laptop panel where a window has far less room to give up. The section is a hashtable of rows resolved for the display actually in use, so each machine keeps windows at a comfortable size. An explicit `-Percent` still wins, the value is resolved in the `begin` block (so target-bounds callers never pay for the monitor query and the `"to <n>%"` log stays truthful), and anything invalid or outside 10-500 falls back to 70 rather than throwing mid-loop.
+
+- **A `SmallDisplay` row, checked before the machine type.** The row every display-aware section accepts, matched whenever the live primary display is laptop-class (at most 3000px wide). It exists because the machine type cannot express the distinction: a laptop reports the machine type `Laptop` both on its own panel and docked to a large external monitor, so a `Laptop` row alone can only ever be right in one of those two states. `SmallDisplay` wins while the small panel is primary and disappears the moment a big display takes over, at which point the ordinary type row (or `Default`) applies. A machine that never uses a laptop-class display omits the row and pays nothing - the display is only measured when the row exists.
+
+- **`CenterTerminalSizing` accepts per-machine rows.** The terminal was already the same physical size on every display, because `Center-Terminal` converts one pixel target into per-monitor percentages at run time. The rows are for *tuning* that target where a particular display wants a different physical size. The legacy flat shape (`TargetWidthPx` and friends directly in the section) still works and is detected first, which keeps a flat local override correct even when it deep-merges on top of a keyed base.
+
+- **`SnapInsetPercent`: the pre-snap inset is now one configured value.** The fraction of a target zone trimmed off each side before FancyZones snapping was hardcoded as `0.05` in five separate places - three parameter defaults (`Resize-Windows`, `Get-InsetWindowBounds`, `Resize-PositionedWindows`) and two local variables (`Set-WindowLayouts`, `Snap-AllWindows`) - which could silently drift apart. All five now read it through `Get-WindowInsetPercent`.
+
+- **Five new Window module functions.** `Test-SmallPrimaryDisplay` (is the primary display laptop-class - extracted from the check `Get-LayoutMachineType` used to inline, so both consumers share one threshold), `Resolve-DisplayAwareProfile` (the shared row resolver: `SmallDisplay`, then the machine type `Get-LayoutMachineType` resolves, then `Default`), `Resolve-CenterTerminalSizing` (keyed-or-flat sizing block), `Resolve-ResizeWindowsPercent` (validated percentage), and `Get-WindowInsetPercent` (validated inset). The two config-backed getters validate rather than throw, so a typo in a config file cannot abort a workspace open.
+
+### Changed
+
+- **`Resize-Windows` percent default and all five inset sites now read configuration.** Behaviour is unchanged out of the box: the base config ships `ResizeWindowsPercent.Default = 70`, `SnapInsetPercent = 0.05`, and `CenterTerminalSizing` keyed with the same 1376x700 target under `Default`, so a vanilla install sizes windows exactly as before. `Center-Windows`' deliberate `-InsetPercent 0` is unaffected - a bound parameter never evaluates its default expression.
+
+- **`LayoutMachineTypeOverrides` and `SmallDisplayMachineType` now steer window sizing too**, not just window placement, since the new sections resolve their machine-type row through `Get-LayoutMachineType`.
+
 ## [0.1.34] - 2026-08-16
 
 ### Added
@@ -617,7 +637,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.34...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.35...HEAD
+[0.1.35]: https://github.com/IvanPavlak/WinuX/compare/v0.1.34...v0.1.35
 [0.1.34]: https://github.com/IvanPavlak/WinuX/compare/v0.1.33...v0.1.34
 [0.1.33]: https://github.com/IvanPavlak/WinuX/compare/v0.1.32...v0.1.33
 [0.1.32]: https://github.com/IvanPavlak/WinuX/compare/v0.1.31...v0.1.32

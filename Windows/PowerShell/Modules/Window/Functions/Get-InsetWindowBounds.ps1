@@ -43,7 +43,8 @@ function Get-InsetWindowBounds {
 		The target zone height.
 
 	.PARAMETER InsetPercent
-		The inset percentage applied on each side. Default is 0.05 (5 percent).
+		The inset percentage applied on each side. Defaults to Get-WindowInsetPercent
+		(the SnapInsetPercent configuration value, 0.05 when unset).
 	#>
 	[CmdletBinding()]
 	param(
@@ -61,7 +62,7 @@ function Get-InsetWindowBounds {
 
 		[Parameter()]
 		[ValidateRange(0.0, 0.49)]
-		[double]$InsetPercent = 0.05
+		[double]$InsetPercent = (Get-WindowInsetPercent)
 	)
 
 	$zoneCenterX = $TargetX + ($TargetWidth / 2)

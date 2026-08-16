@@ -282,7 +282,9 @@ function Center-Windows {
 
 			# Delegate the actual move/resize to Resize-Windows in target-bounds mode.
 			# InsetPercent 0 places the window at the exact centered bounds (no FancyZones inset),
-			# keeping all placement on the shared Resize-Windows path (DRY).
+			# keeping all placement on the shared Resize-Windows path (DRY). Bound explicitly, so
+			# it deliberately overrides the configurable Get-WindowInsetPercent default rather
+			# than tracking it - centering is exact placement, never an inset pre-snap position.
 			$null = Resize-Windows -WindowHandle $handle -TargetX $newX -TargetY $newY -TargetWidth $newWidth -TargetHeight $newHeight -InsetPercent 0
 			$resizeResult = $script:LastResizeWindowsResult
 

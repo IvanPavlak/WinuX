@@ -221,6 +221,23 @@ SmallDisplayMachineType = "Laptop"
 
 Both keys are resolved by `Get-LayoutMachineType`, which `Set-WorkspaceWindowLayout` and `Reset-Windows` share - so the layouts and the reset target can never disagree about which monitor setup is attached. The override name is not a machine type: it needs no `ValidMachineTypes` entry, no base paths, and no payload files, only `<Workspace>_<Name>.psd1` layouts (and optionally its own `ResetAllWindowsDefaults` entry). See [Configure Window Layout](guides/configure-window-layout.md#running-a-machine-on-a-different-monitor-setup).
 
+### 6. Window Sizing (`CenterTerminalSizing`, `ResizeWindowsPercent`)
+
+Two more sections read the machine type `Get-LayoutMachineType` resolves, through the shared row resolver `Resolve-DisplayAwareProfile`: `CenterTerminalSizing` (how large `Center-Terminal` makes the terminal) and `ResizeWindowsPercent` (how much `Resize-Windows` shrinks windows when no `-Percent` is passed). An override or `SmallDisplayMachineType` therefore steers window *sizing* as well as window *placement*.
+
+Both accept one extra row that is **not** a machine type:
+
+```powershell
+ResizeWindowsPercent = @{
+    Default      = 70
+    SmallDisplay = 80   # a laptop-class primary display (at most 3000px wide)
+}
+```
+
+`SmallDisplay` is checked **before** the machine type row, because the machine type cannot express it. A laptop reports the machine type `Laptop` both on its own panel and docked to a large external monitor, so a `Laptop` row alone can only be right in one of those two states. `SmallDisplay` is the state-dependent one: it wins while the small panel is primary and disappears the moment a big display takes over, at which point the ordinary type row (or `Default`) applies. `SmallDisplayMachineType` is the older, coarser answer to the same question - it swaps the whole *layout set*; `SmallDisplay` tunes a single value.
+
+Note the ordering is the mirror image of `Get-LayoutMachineType`'s, which deliberately checks its manual override *before* its display-size rule. There the override is an explicit human choice that a display-width guess must not overrule. Here both candidate rows are configuration, so the more specific one - the one naming the actual display class - wins. See [Display-Aware Window Sizing](configuration-reference.md#display-aware-window-sizing).
+
 ## Checking Current Machine Type
 
 ```powershell
