@@ -15,7 +15,9 @@ BeforeAll {
 	. "$FunctionsPath\Get-WorkspaceRerunMirror.ps1"
 	. "$FunctionsPath\Set-WorkspaceRerunMirror.ps1"
 	# The real layout-set resolver, not a mock: which folder and file suffix a workspace resolves
-	# to is part of the behavior under test here.
+	# to is part of the behavior under test here. Its display measurement comes along so the
+	# small-display path stays driven by the Get-MonitorInfo mock.
+	. "$FunctionsPath\Test-SmallPrimaryDisplay.ps1"
 	. "$FunctionsPath\Get-LayoutMachineType.ps1"
 	. "$FunctionsPath\Get-CurrentLayout.ps1"
 	. "$FunctionsPath\Save-CurrentLayout.ps1"

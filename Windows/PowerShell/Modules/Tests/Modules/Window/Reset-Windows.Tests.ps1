@@ -5,7 +5,9 @@ BeforeAll {
 	$FunctionsPath = Join-Path $ModuleRoot "Window\Functions"
 
 	# Dot-sourced rather than mocked: the point of these cases is that the reset profile follows the
-	# machine type Get-LayoutMachineType resolves, redirects included.
+	# machine type Get-LayoutMachineType resolves, redirects included. Its display measurement comes
+	# along so the small-display case is still driven by the Get-MonitorInfo mock.
+	. "$FunctionsPath\Test-SmallPrimaryDisplay.ps1"
 	. "$FunctionsPath\Get-LayoutMachineType.ps1"
 	. "$FunctionsPath\Reset-Windows.ps1"
 }

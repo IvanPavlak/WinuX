@@ -5,11 +5,16 @@ BeforeAll {
 	$FunctionsPath = Join-Path $ModuleRoot "Window\Functions"
 
 	. "$FunctionsPath\Resize-PositionedWindows.ps1"
+
+	# The -InsetPercent default, stubbed so Mock can attach in a dot-sourced unit and so these
+	# cases never read the live session configuration. It has its own suite.
+	function Get-WindowInsetPercent { }
 }
 
 Describe "Resize-PositionedWindows" {
 	BeforeEach {
 		$script:WindowModuleTolerances = @{ PositionVerificationPx = 15 }
+		Mock Get-WindowInsetPercent { 0.05 }
 		$script:LastResizeWindowsResult = [PSCustomObject]@{
 			ResizedCount  = 0
 			SkippedCount  = 0

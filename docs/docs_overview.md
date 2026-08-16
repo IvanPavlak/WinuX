@@ -79,8 +79,11 @@ The authoritative, always-current function reference is the set of per-module pa
 | `TaskbarSettings`                                  | `Set-TaskbarSettings`                              |
 | `VisualEffects`                                    | `Set-VisualEffects`                                |
 | `LayoutNumbers`, `ZoneNameMappings`                | `Apply-FancyZones`, `Get-FancyZone`, `Test-FancyZonesConfiguration` |
-| `LayoutMachineTypeOverrides`, `SmallDisplayMachineType` | `Get-LayoutMachineType` (for `Set-WorkspaceWindowLayout`, `Reset-Windows`) |
+| `LayoutMachineTypeOverrides`, `SmallDisplayMachineType` | `Get-LayoutMachineType` (for `Set-WorkspaceWindowLayout`, `Reset-Windows`, `Resolve-DisplayAwareProfile`) |
 | `ResetAllWindowsDefaults`                          | `Reset-Windows`                                    |
+| `CenterTerminalSizing`                             | `Center-Terminal` (via `Resolve-CenterTerminalSizing`) |
+| `ResizeWindowsPercent`                             | `Resize-Windows` (via `Resolve-ResizeWindowsPercent`) |
+| `SnapInsetPercent`                                 | `Get-WindowInsetPercent` (for the five pre-snap placement paths) |
 | `KillAll.Steps`                                    | `Kill-All`, `Resolve-KillAllSteps`                 |
 | `AutoEnvironmentVariables`                         | `Set-EnvironmentVariables`                         |
 | `Locales`, `DefaultLocale`                         | `Set-Locale`                                       |

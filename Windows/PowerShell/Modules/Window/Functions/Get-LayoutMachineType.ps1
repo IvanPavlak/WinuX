@@ -24,8 +24,10 @@ function Get-LayoutMachineType {
 		so a redirect never relocates a path or repaints a desktop.
 
 		Consumers: Set-WorkspaceWindowLayout (which Layouts/<Type>/ folder and <Workspace>_<Type>.psd1
-		file to load) and Reset-Windows (which ResetAllWindowsDefaults profile to apply). Both are
-		answers to the same question - "which monitor setup am I on?" - so they share one resolution.
+		file to load), Reset-Windows (which ResetAllWindowsDefaults profile to apply), and
+		Resolve-DisplayAwareProfile (which row of CenterTerminalSizing / ResizeWindowsPercent
+		applies). All are answers to the same question - "which monitor setup am I on?" - so they
+		share one resolution.
 
 	.PARAMETER MonitorInfo
 		Monitor records as returned by Get-MonitorInfo. Pass a snapshot the caller already holds to
@@ -69,20 +71,17 @@ function Get-LayoutMachineType {
 		return $machineType
 	}
 
-	# Monitors are queried only once an override has been ruled out AND a small-display type is
-	# configured, so the common path costs nothing beyond the machine-type lookup.
-	$monitors = if ($PSBoundParameters.ContainsKey('MonitorInfo')) { $MonitorInfo } else { Get-MonitorInfo -Quiet }
-	if (-not $monitors) {
-		return $machineType
+	# Monitors are only measured once an override has been ruled out AND a small-display type is
+	# configured, so the common path costs nothing beyond the machine-type lookup. The measuring
+	# itself lives in Test-SmallPrimaryDisplay, shared with Resolve-DisplayAwareProfile so both
+	# agree on what counts as a small display.
+	$smallDisplaySplat = @{}
+	if ($PSBoundParameters.ContainsKey('MonitorInfo')) {
+		$smallDisplaySplat['MonitorInfo'] = $MonitorInfo
 	}
 
-	$primaryMonitor = $monitors | Where-Object { $_.IsPrimary } | Select-Object -First 1
-	if (-not $primaryMonitor) {
-		$primaryMonitor = $monitors | Select-Object -First 1
-	}
-
-	if ($primaryMonitor -and $primaryMonitor.Width -le 3000) {
-		Write-LogDebug " Detected small display ($($primaryMonitor.Width)x$($primaryMonitor.Height)) => using $smallDisplayType layout" -Style Warning
+	if (Test-SmallPrimaryDisplay @smallDisplaySplat) {
+		Write-LogDebug " Small display => using $smallDisplayType layout" -Style Warning
 		return $smallDisplayType
 	}
 

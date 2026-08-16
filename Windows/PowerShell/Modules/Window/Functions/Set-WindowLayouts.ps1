@@ -197,7 +197,8 @@ function Set-WindowLayouts {
 
 	$results = [System.Collections.Generic.List[PSObject]]::new()
 	$movedWindows = @{} # Track windows by handle to prevent duplicate moves
-	$insetPercent = 0.05
+	# Single source of truth for the pre-snap inset (SnapInsetPercent in configuration)
+	$insetPercent = Get-WindowInsetPercent
 	$positioningHeaderShown = $false
 
 	# Pre-fetch monitor specs once (if needed) to avoid repeated calls

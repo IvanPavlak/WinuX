@@ -238,8 +238,9 @@ function Snap-AllWindows {
 		# Sort desktop numbers for consistent processing
 		$sortedDesktops = $windowsByDesktop.Keys | Sort-Object
 
-		# Calculate inset values with the same helper used by Set-WindowLayouts
-		$insetPercent = 0.05
+		# Calculate inset values with the same helper used by Set-WindowLayouts, from the same
+		# single source of truth (SnapInsetPercent in configuration)
+		$insetPercent = Get-WindowInsetPercent
 
 		# Re-check FancyZones liveness during long-running multi-desktop loops.
 		$ensureFancyZonesRunning = {

@@ -4,6 +4,9 @@ BeforeAll {
 	$ModuleRoot = (Get-RepositoryPath).Modules
 	$FunctionsPath = Join-Path $ModuleRoot "Window\Functions"
 
+	# The real display measurement, not a mock: the small-display cases below drive it through
+	# their Get-MonitorInfo mocks, exactly as the live code path does.
+	. "$FunctionsPath\Test-SmallPrimaryDisplay.ps1"
 	. "$FunctionsPath\Get-LayoutMachineType.ps1"
 }
 

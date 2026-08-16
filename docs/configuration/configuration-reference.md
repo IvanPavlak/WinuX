@@ -166,7 +166,7 @@ LayoutMachineTypeOverrides = @{
 SmallDisplayMachineType = "Laptop"
 ```
 
-**Consumer function:** `Get-LayoutMachineType`, used by `Set-WorkspaceWindowLayout` and `Reset-Windows`
+**Consumer function:** `Get-LayoutMachineType`, used by `Set-WorkspaceWindowLayout`, `Reset-Windows`, and `Resolve-DisplayAwareProfile` (which picks the [display-aware window sizing](#display-aware-window-sizing) row)
 
 **Behavior:** `LayoutMachineTypeOverrides` is checked first and wins over `SmallDisplayMachineType`, so an explicit choice is never overruled by display-size detection. The override folder needs its own `<WorkspaceName>_<value>.psd1` file per workspace you open; when one is missing, the "No layout configuration found" warning names the active layout set and the path it expected instead of silently falling back to the machine's own layouts. `ResetAllWindowsDefaults` follows the same resolution, so the profile `Reset-Windows` applies matches the monitor setup actually attached - add an entry for the override name (e.g. `Temp`) or it falls back to `Default`.
 
@@ -1121,6 +1121,63 @@ ResetAllWindowsDefaults = @{
 ```
 
 **Consumer function:** `Reset-Windows`
+
+### Display-Aware Window Sizing
+
+Three sections decide how large windows end up. Two of them are **display-aware**: they are hashtables of rows, and the row that applies is resolved in this order.
+
+1. `SmallDisplay` - present **and** the live primary display is at most 3000px wide (laptop-class)
+2. The row named after the machine type `Get-LayoutMachineType` resolves, so a [layout set override](#layout-set-overrides) or `SmallDisplayMachineType` steers these sections too
+3. `Default`
+4. Nothing matched → the function's own built-in value
+
+`SmallDisplay` is checked first because the machine type cannot express it. A laptop reports the machine type `Laptop` both on its own panel and docked to a large external monitor, so a `Laptop` row alone can only be right in one of those two states. `SmallDisplay` is the state-dependent one: it wins while the small panel is primary and disappears the moment a big display takes over. A machine that never uses a laptop-class display simply omits the row - the display is only measured when the row exists.
+
+An invalid value never throws; it falls back to the built-in default, so a typo cannot abort a workspace open mid-loop.
+
+#### `CenterTerminalSizing`
+
+The on-screen pixel size `Center-Terminal` aims the Windows Terminal at. `Center-Terminal` converts it to per-monitor percentages at run time, so **one target already produces the same physical terminal size on every display** - the rows exist to *tune* that target per machine, not to make it uniform.
+
+Each row holds `TargetWidthPx` / `TargetHeightPx` (desired on-screen size) plus `Min*Percent` / `Max*Percent` clamps. The shipped `Default` targets 1376x700 px, which is exactly what the legacy 40% x 50% yields on a 3440x1440 ultrawide.
+
+The **legacy flat shape** - `TargetWidthPx` and friends directly in the section, with no rows - is still accepted and applies to every machine. It is detected first and wins outright, which is what keeps the hybrid case correct: `Configuration.local.psd1` deep-merges over the base, so a flat local override on top of a keyed base leaves both in one hashtable, and the flat keys are the ones the user actually edited.
+
+```powershell
+CenterTerminalSizing = @{
+    Default      = @{ TargetWidthPx = 1376; TargetHeightPx = 700; MinWidthPercent = 25; MaxWidthPercent = 72; MinHeightPercent = 35; MaxHeightPercent = 75 }
+    SmallDisplay = @{ TargetWidthPx = 1152; TargetHeightPx = 624; MinWidthPercent = 25; MaxWidthPercent = 90; MinHeightPercent = 35; MaxHeightPercent = 90 }
+}
+```
+
+**Consumer functions:** `Center-Terminal` (via `Resolve-CenterTerminalSizing`), `Kill-All`
+
+#### `ResizeWindowsPercent`
+
+The percentage `Resize-Windows` shrinks windows by when it is called **without** an explicit `-Percent` - which is how `Set-WorkspaceWindowLayout`'s first-open normalization and its retry passes call it. An explicit `-Percent` always wins.
+
+Valid range is 10-500; a missing section, an unmatched row, or an invalid value all fall back to the built-in `70`. A laptop panel typically wants a gentler shrink than a wide monitor, since it has far less room to give up - that is the `SmallDisplay` row's job.
+
+```powershell
+ResizeWindowsPercent = @{
+    Default      = 70
+    SmallDisplay = 80   # shrink less on a laptop-class panel
+}
+```
+
+**Consumer function:** `Resize-Windows` (via `Resolve-ResizeWindowsPercent`)
+
+#### `SnapInsetPercent`
+
+A plain number, not a keyed section. The fraction of a target zone trimmed off **each side** before a window is handed to FancyZones for snapping, so the snap target stays unambiguous.
+
+Valid range is `0.0`-`0.49` (two insets of `0.5` would leave a zero-width window); an invalid or missing value falls back to the built-in `0.05`. This is the single source of truth for all five placement paths - previously the same `0.05` was hardcoded in each of them.
+
+```powershell
+SnapInsetPercent = 0.05
+```
+
+**Consumer functions:** `Get-WindowInsetPercent`, read by `Resize-Windows`, `Get-InsetWindowBounds`, `Resize-PositionedWindows`, `Set-WindowLayouts`, `Snap-AllWindows`
 
 ---
 

@@ -2448,15 +2448,67 @@
 	# Percentages are clamped to [Min, Max] and additionally to Center-Windows'
 	# [10,100] ValidateRange. If this section is absent, Center-Terminal falls
 	# back to the legacy 40% x 50%.
+	#
+	# Shape: rows keyed by the machine type Get-LayoutMachineType resolves, plus
+	# two special rows. "SmallDisplay" is checked FIRST and applies whenever the
+	# live primary display is laptop-class (at most 3000 px wide) - the one state
+	# a machine type cannot express, since a laptop reports the same type docked
+	# and undocked. "Default" is used when nothing else matched. The per-machine
+	# rows exist to TUNE the target size; they are not needed for the uniform
+	# look, which the live-monitor math already provides on its own.
+	#
+	# The legacy FLAT shape (TargetWidthPx and friends directly in this section,
+	# no rows) is still accepted and applies to every machine.
 	# ==========================================================================
 	CenterTerminalSizing          = @{
-		TargetWidthPx    = 1376
-		TargetHeightPx   = 700
-		MinWidthPercent  = 25
-		MaxWidthPercent  = 72
-		MinHeightPercent = 35
-		MaxHeightPercent = 75
+		Default = @{
+			TargetWidthPx    = 1376
+			TargetHeightPx   = 700
+			MinWidthPercent  = 25
+			MaxWidthPercent  = 72
+			MinHeightPercent = 35
+			MaxHeightPercent = 75
+		}
 	}
+
+	# ==========================================================================
+	# Resize-Windows Percent (Per Display)
+	# ==========================================================================
+	# → Consumer: Resize-Windows (via Resolve-ResizeWindowsPercent)
+	#
+	# The percentage Resize-Windows shrinks windows by when it is called WITHOUT
+	# an explicit -Percent, which is how Set-WorkspaceWindowLayout's first-open
+	# normalization and its retry passes call it. An explicit -Percent always wins.
+	#
+	# Rows resolve exactly like CenterTerminalSizing above: "SmallDisplay" first
+	# (primary display at most 3000 px wide), then the machine type
+	# Get-LayoutMachineType resolves, then "Default". A laptop panel typically
+	# wants a gentler shrink than a wide monitor, and SmallDisplay is what
+	# expresses that - the machine type stays "Laptop" whether the machine is on
+	# its own panel or docked to a large external display.
+	#
+	# Valid range is 10-500. A missing section, an unmatched row, or an invalid
+	# value all fall back to the built-in 70.
+	# ==========================================================================
+	ResizeWindowsPercent          = @{
+		Default = 70
+	}
+
+	# ==========================================================================
+	# Pre-Snap Inset
+	# ==========================================================================
+	# → Consumer: Get-WindowInsetPercent (read by Resize-Windows,
+	#   Get-InsetWindowBounds, Resize-PositionedWindows, Set-WindowLayouts,
+	#   Snap-AllWindows)
+	#
+	# Fraction of a target zone trimmed off EACH side before a window is handed
+	# to FancyZones for snapping, so the snap target stays unambiguous. A single
+	# source of truth for all five placement paths.
+	#
+	# Valid range is 0.0-0.49 (two insets of 0.5 would leave a zero-width
+	# window). An invalid or missing value falls back to the built-in 0.05.
+	# ==========================================================================
+	SnapInsetPercent              = 0.05
 
 	# ==========================================================================
 	# Kill-All Step Toggles
