@@ -40,10 +40,12 @@ function Get-FancyZoneCoordinates {
 		The Y position of the monitor work area (default: 0).
 
 	.PARAMETER MonitorWidth
-		The width of the monitor work area in pixels (default: 3440).
+		The width of the monitor work area in pixels. Required - a non-positive value is an
+		error rather than a cue to assume a display size.
 
 	.PARAMETER MonitorHeight
-		The height of the monitor work area in pixels (default: 1440).
+		The height of the monitor work area in pixels. Required - a non-positive value is an
+		error rather than a cue to assume a display size.
 
 	.PARAMETER CustomLayoutsPath
 		Optional path to custom-layouts.json file. If not specified, uses the repository's
@@ -53,7 +55,10 @@ function Get-FancyZoneCoordinates {
 		Get-FancyZoneCoordinates -LayoutName "Seven" -MonitorX 0 -MonitorY -1440 -MonitorWidth 3440 -MonitorHeight 1440
 
 	.EXAMPLE
-		$zones = Get-FancyZoneCoordinates -LayoutName "One"
+		$primary = (Get-MonitorSpecs).Primary
+		$zones = Get-FancyZoneCoordinates -LayoutName "One" `
+			-MonitorX $primary.WorkX -MonitorY $primary.WorkY `
+			-MonitorWidth $primary.WorkWidth -MonitorHeight $primary.WorkHeight
 		$leftZone = $zones[0]  # Get coordinates for zone 0 (left)
 	#>
 	[CmdletBinding()]
@@ -68,14 +73,22 @@ function Get-FancyZoneCoordinates {
 		[int]$MonitorY = 0,
 
 		[Parameter()]
-		[int]$MonitorWidth = 3440,
+		[int]$MonitorWidth = 0,
 
 		[Parameter()]
-		[int]$MonitorHeight = 1440,
+		[int]$MonitorHeight = 0,
 
 		[Parameter()]
 		[string]$CustomLayoutsPath
 	)
+
+	# These used to default to a 3440x1440 ultrawide. On a mixed-resolution setup that silently
+	# computed zones for a display that may not be attached, so an omitted or zero dimension is
+	# now an error: callers resolve real monitor geometry (Get-MonitorSpecs) or skip the entry.
+	if ($MonitorWidth -le 0 -or $MonitorHeight -le 0) {
+		Write-Error "Monitor geometry is required: MonitorWidth and MonitorHeight must both be greater than 0 (got ${MonitorWidth}x${MonitorHeight}). Resolve the monitor with Get-MonitorSpecs and pass its work area."
+		return $null
+	}
 
 	if (-not $CustomLayoutsPath) {
 		if ($global:MachineSpecificPaths.SymbolicLinks.PowerToys.CustomLayouts.Target) {

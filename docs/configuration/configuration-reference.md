@@ -557,13 +557,19 @@ Machine and theme-specific wallpaper configurations.
 The base ships both sections empty; `Set-Wallpaper` warns and leaves the wallpaper as-is until you
 set them in `Configuration.local.psd1`.
 
+The array does not have to match the display count. Monitors are paired with entries by index, and a
+monitor past the end of the array **cycles** back to the start - a 2-entry array on 3 displays gives
+the third display the first entry - with one warning when the counts differ. Only an empty array
+leaves a display on the Windows default.
+
 **Example (opt-in via `Configuration.local.psd1`):**
 
 ```powershell
 WallpaperDarkSettings = @{
     # Single-monitor machine: one file + style
     Test = @{ File = "Black.jpg"; Style = "Fill" }
-    # Multi-monitor machine: one entry per monitor, in monitor order
+    # Multi-monitor machine: one entry per monitor, in monitor order.
+    # Fewer entries than monitors is allowed - they cycle.
     PC   = @{ Monitors = @(
         @{ File = "DarkPrimary.jpg"; Style = "Fill" }
         @{ File = "DarkSecondary.jpg"; Style = "Fill" }

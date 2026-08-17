@@ -1090,6 +1090,8 @@ Set-VisualEffects
 
 Requires administrator privileges. In `-Auto` mode the theme defaults to `Auto`, which detects the current system theme from the registry (`HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize\AppsUseLightTheme`), defaulting to `Dark` if detection fails. It then resolves the wallpaper entry for the current machine type, applying per-monitor images for multi-monitor configs or a single image otherwise, and propagates the result to every virtual desktop when the `VirtualDesktop` module is loaded. Without `-Auto`, it lists wallpapers from the WinuX Wallpapers folder and prompts for a wallpaper and a style (defaulting to `Fill`).
 
+**The `Monitors` array does not have to match the display count.** Active displays are enumerated through `IDesktopWallpaper` and paired with the array by index; a display past the end of the array **cycles** back to the start, so a 2-entry array on 3 displays gives the third display the first entry, and a single warning reports the mismatch. Displays past the end were previously skipped in silence and kept whatever wallpaper they already had - no warning, no fallback. Cycling applies to all three per-monitor passes (the idempotency check, the initial apply, and the per-virtual-desktop reapply). Only an empty `Monitors` array leaves a display on the Windows default.
+
 | Parameter | Description                                                                                               |
 | --------- | --------------------------------------------------------------------------------------------------------- |
 | `-Auto`   | Auto-detect the system theme and apply the matching configured wallpaper. Omit for an interactive picker. |

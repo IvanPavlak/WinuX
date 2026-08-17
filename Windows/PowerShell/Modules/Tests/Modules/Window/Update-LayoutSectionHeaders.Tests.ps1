@@ -265,6 +265,56 @@ Describe "Update-LayoutSectionHeaders" {
 		}
 	}
 
+	Context "Monitor Ordering Beyond Secondary" {
+		It "Should order Monitor3, Monitor4 and Monitor5 after Secondary and among themselves" {
+			# The three-way Primary=0 / Secondary=1 / everything-else=2 sort this replaced left
+			# Monitor3, Monitor4 and Monitor5 tied at 2, so they kept their (arbitrary) input
+			# order and generated headers looked randomly ordered past Secondary. Entries are
+			# supplied here in deliberately reversed monitor order.
+			$monitorSection = @'
+        Primary = @{ VirtualDesktopLayouts = @{ 1 = "One" } }
+        Secondary = @{ VirtualDesktopLayouts = @{ 1 = "One" } }
+        Monitor3 = @{ VirtualDesktopLayouts = @{ 1 = "One" } }
+        Monitor4 = @{ VirtualDesktopLayouts = @{ 1 = "One" } }
+        Monitor5 = @{ VirtualDesktopLayouts = @{ 1 = "One" } }
+'@
+			$entries = @('Monitor5', 'Monitor4', 'Monitor3', 'Secondary', 'Primary') | ForEach-Object {
+				@"
+        @{
+            ProcessName = "App-$_"
+            DesktopNumber = 1
+            Monitor = "$_"
+            Zone = "Left"
+        }
+"@
+			}
+			$content = "@{`n    Monitors = @{`n$monitorSection    }`n    Layout = @(`n$($entries -join "`n")`n    )`n}"
+
+			$config = @{
+				Monitors = @{
+					Primary   = @{ VirtualDesktopLayouts = @{ 1 = "One" } }
+					Secondary = @{ VirtualDesktopLayouts = @{ 1 = "One" } }
+					Monitor3  = @{ VirtualDesktopLayouts = @{ 1 = "One" } }
+					Monitor4  = @{ VirtualDesktopLayouts = @{ 1 = "One" } }
+					Monitor5  = @{ VirtualDesktopLayouts = @{ 1 = "One" } }
+				}
+				Layout   = @(
+					@{ ProcessName = "App-Monitor5"; DesktopNumber = 1; Monitor = "Monitor5"; Zone = "Left" }
+					@{ ProcessName = "App-Monitor4"; DesktopNumber = 1; Monitor = "Monitor4"; Zone = "Left" }
+					@{ ProcessName = "App-Monitor3"; DesktopNumber = 1; Monitor = "Monitor3"; Zone = "Left" }
+					@{ ProcessName = "App-Secondary"; DesktopNumber = 1; Monitor = "Secondary"; Zone = "Left" }
+					@{ ProcessName = "App-Primary"; DesktopNumber = 1; Monitor = "Primary"; Zone = "Left" }
+				)
+			}
+
+			$result = Update-LayoutSectionHeaders -Content $content -Config $config
+
+			$headerOrder = @([regex]::Matches($result, 'Monitor:\s*(?<Name>\S+)') | ForEach-Object { $_.Groups['Name'].Value })
+
+			$headerOrder | Should -Be @('Primary', 'Secondary', 'Monitor3', 'Monitor4', 'Monitor5')
+		}
+	}
+
 	AfterAll {
 		if ($null -ne $script:OriginalConfiguration) {
 			$global:Configuration = $script:OriginalConfiguration

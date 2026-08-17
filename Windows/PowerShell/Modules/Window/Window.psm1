@@ -74,11 +74,17 @@ $script:VirtualDesktopState = @{
 	Loaded    = $false
 }
 
-# Monitor info cache - avoids repeated [System.Windows.Forms.Screen]::AllScreens calls
+# Monitor info cache - avoids repeated [System.Windows.Forms.Screen]::AllScreens calls.
+# Fingerprint holds a cheap display-topology signature (see Get-CachedMonitors) so an attach,
+# detach or resolution change invalidates the cache immediately instead of waiting out the TTL.
+# The TTL is deliberately short: monitor LABELS are derived from physical position
+# (Get-MonitorSpecs), so a stale entry hands out labels for an arrangement that no longer
+# exists, and a workspace open reads the monitors once and reuses them throughout.
 $script:MonitorCache = @{
-	Monitors  = $null
-	Timestamp = [datetime]::MinValue
-	MaxAgeSec = 30  # Cache valid for 30 seconds (monitors rarely change)
+	Monitors    = $null
+	Timestamp   = [datetime]::MinValue
+	Fingerprint = $null
+	MaxAgeSec   = 5  # Backstop for topology changes the fingerprint cannot see
 }
 
 # Applied FancyZones layouts cache - for idempotency checks in Apply-FancyZones

@@ -13,6 +13,13 @@ function Set-Wallpaper {
 		With `-Auto`, detects the current system theme and sets the matching wallpaper.
 		Wallpaper style (fill, fit, stretch, tile, center) is read from `WallpaperStyles` config.
 
+		A machine whose settings carry a `Monitors` array takes the multi-monitor path: active
+		displays are enumerated through `IDesktopWallpaper` and paired with the array by index.
+		The array does not have to match the display count - entries CYCLE, so a 2-entry array on
+		3 displays gives the third display the first entry, and a single warning reports the
+		mismatch. Displays past the end used to be skipped silently and kept whatever wallpaper
+		they already had.
+
 		Requires administrator privileges. Uses COM retry logic to handle transient failures.
 
 	.PARAMETER Auto
@@ -294,11 +301,32 @@ function Set-Wallpaper {
 					$monitorSettings = $wallpaperSetting.Monitors
 					Write-LogDebug " Monitor settings count: $($monitorSettings.Count)" -Style Step
 
+					# Monitors past the end of the configured list CYCLE back to the start instead
+					# of being skipped. Every per-monitor loop below used to guard with
+					# "$idx -lt $monitorSettings.Count", so with a 2-entry list a third display was
+					# left holding whatever wallpaper it already had - no warning, no fallback.
+					# Cycling gives monitor 3 the first entry again, which is at least deliberate
+					# and predictable, and it degrades sensibly for any monitor count.
+					$resolveMonitorSetting = {
+						param (
+							[int]$MonitorIndex
+						)
+
+						if ($monitorSettings.Count -eq 0) { return $null }
+
+						return $monitorSettings[$MonitorIndex % $monitorSettings.Count]
+					}
+
+					# Warn once here rather than per monitor inside the loops below.
+					if ($monitorSettings.Count -gt 0 -and $monitorCount -ne $monitorSettings.Count) {
+						Write-LogWarning "Wallpaper config lists [$($monitorSettings.Count)] monitor(s) but [$monitorCount] are active - entries cycle to cover the rest"
+					}
+
 					$allWallpapersMatch = $true
 					for ($idx = 0; $idx -lt $monitorCount; $idx++) {
 						$i = $activeMonitorIndices[$idx]
-						if ($idx -lt $monitorSettings.Count) {
-							$monitorConfig = $monitorSettings[$idx]
+						$monitorConfig = & $resolveMonitorSetting $idx
+						if ($monitorConfig) {
 							$wallpaperFile = $monitorConfig.File
 							$expectedWallpaperPath = Join-Path -Path $MachineSpecificPaths.Projects.Self.Wallpapers -ChildPath $wallpaperFile
 
@@ -325,8 +353,8 @@ function Set-Wallpaper {
 
 					for ($idx = 0; $idx -lt $monitorCount; $idx++) {
 						$i = $activeMonitorIndices[$idx]
-						if ($idx -lt $monitorSettings.Count) {
-							$monitorConfig = $monitorSettings[$idx]
+						$monitorConfig = & $resolveMonitorSetting $idx
+						if ($monitorConfig) {
 							$wallpaperFile = $monitorConfig.File
 							$monitorStyle = $monitorConfig.Style
 
@@ -353,6 +381,8 @@ function Set-Wallpaper {
 							}
 						}
 						else {
+							# Only reachable with an empty Monitors array - a non-empty one always
+							# resolves an entry now, cycling if there are fewer entries than monitors.
 							Write-LogWarning "Monitor $($idx + 1): No wallpaper configured (using Windows default)"
 						}
 					}
@@ -423,8 +453,8 @@ function Set-Wallpaper {
 
 										for ($idx = 0; $idx -lt $vdActiveIndices.Count; $idx++) {
 											$i = $vdActiveIndices[$idx]
-											if ($idx -lt $monitorSettings.Count) {
-												$monitorConfig = $monitorSettings[$idx]
+											$monitorConfig = & $resolveMonitorSetting $idx
+											if ($monitorConfig) {
 												$wallpaperFile = $monitorConfig.File
 												$wallpaperPath = Join-Path -Path $MachineSpecificPaths.Projects.Self.Wallpapers -ChildPath $wallpaperFile
 

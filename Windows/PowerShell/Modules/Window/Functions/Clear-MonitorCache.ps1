@@ -14,4 +14,7 @@ function Clear-MonitorCache {
 	#>
 	$script:MonitorCache.Monitors = $null
 	$script:MonitorCache.Timestamp = [datetime]::MinValue
+	# Clearing the fingerprint too keeps the next call from comparing fresh monitor data
+	# against a signature captured before the change.
+	$script:MonitorCache.Fingerprint = $null
 }

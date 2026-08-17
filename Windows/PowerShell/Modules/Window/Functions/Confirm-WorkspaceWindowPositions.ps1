@@ -172,26 +172,35 @@ function Confirm-WorkspaceWindowPositions {
 			}
 
 			# Resolve monitor coordinates. Zone geometry uses the WORK AREA (Work* spec
-			# fields) to match FancyZones - must stay in lockstep with Set-WindowLayouts.
-			$monX = 0; $monY = 0; $monW = 3440; $monH = 1440
-			if ($cfg.Monitor) {
-				if ($cfg.Monitor -is [string]) {
-					if (-not $monitorSpecs) { $monitorSpecs = Get-MonitorSpecs -MonitorInfo $MonitorInfo }
-					$spec = $monitorSpecs.($cfg.Monitor)
-					if (-not $spec -and $monitorSpecs) { $spec = $monitorSpecs.Primary }
-					if ($spec) {
-						$monX = if ($null -ne $spec.WorkX) { $spec.WorkX } else { $spec.X }
-						$monY = if ($null -ne $spec.WorkY) { $spec.WorkY } else { $spec.Y }
-						$monW = if ($spec.WorkWidth) { $spec.WorkWidth } else { $spec.Width }
-						$monH = if ($spec.WorkHeight) { $spec.WorkHeight } else { $spec.Height }
-					}
+			# fields) to match FancyZones - must stay in lockstep with Set-WindowLayouts,
+			# including its refusal to substitute default dimensions or fall back to Primary
+			# for an unresolvable monitor. Verifying against invented geometry would report a
+			# window as misplaced when the real fault is the layout naming a monitor that is
+			# not attached - the entry Set-WindowLayouts skipped for exactly that reason.
+			$monX = $null; $monY = $null; $monW = $null; $monH = $null
+			if ($cfg.Monitor -is [string]) {
+				if (-not $monitorSpecs) { $monitorSpecs = Get-MonitorSpecs -MonitorInfo $MonitorInfo }
+				$spec = $monitorSpecs.($cfg.Monitor)
+				if ($spec) {
+					$monX = if ($null -ne $spec.WorkX) { $spec.WorkX } else { $spec.X }
+					$monY = if ($null -ne $spec.WorkY) { $spec.WorkY } else { $spec.Y }
+					$monW = if ($spec.WorkWidth) { $spec.WorkWidth } else { $spec.Width }
+					$monH = if ($spec.WorkHeight) { $spec.WorkHeight } else { $spec.Height }
 				}
-				else {
-					$monX = if ($null -ne $cfg.Monitor.X) { $cfg.Monitor.X } else { 0 }
-					$monY = if ($null -ne $cfg.Monitor.Y) { $cfg.Monitor.Y } else { 0 }
-					$monW = if ($cfg.Monitor.Width) { $cfg.Monitor.Width } else { 3440 }
-					$monH = if ($cfg.Monitor.Height) { $cfg.Monitor.Height } else { 1440 }
-				}
+			}
+			elseif ($cfg.Monitor) {
+				$monX = if ($null -ne $cfg.Monitor.X) { $cfg.Monitor.X } else { 0 }
+				$monY = if ($null -ne $cfg.Monitor.Y) { $cfg.Monitor.Y } else { 0 }
+				$monW = $cfg.Monitor.Width
+				$monH = $cfg.Monitor.Height
+			}
+
+			if (-not $monW -or -not $monH) {
+				# Same entry Set-WindowLayouts skipped - exclude it from the tally instead of
+				# counting it as a failure.
+				Write-LogDebug "  ? [$label] - monitor [$($cfg.Monitor)] has no resolvable geometry, skipping" -Style Warning
+				$result.Total--
+				continue
 			}
 
 			$zone = Get-FancyZone -LayoutName $layoutName -ZoneName $cfg.Zone `

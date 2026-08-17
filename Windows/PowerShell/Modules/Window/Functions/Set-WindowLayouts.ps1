@@ -903,55 +903,63 @@ function Set-WindowLayouts {
 			# Zone geometry uses the monitor WORK AREA (Work* spec fields): FancyZones lays
 			# zones over the work area, not the full bounds, so a visible taskbar shrinks
 			# every zone. The two are identical when the taskbar is auto-hidden.
-			$monitorX = 0
-			$monitorY = 0
-			$monitorWidth = 3440
-			$monitorHeight = 1440
+			#
+			# Geometry starts as $null and every path has to fill it in - there are no default
+			# dimensions. A hardcoded 3440x1440 ultrawide placed windows using geometry that can
+			# belong to no attached display, and quietly retargeting an unresolvable label at
+			# Primary stacked a third monitor's windows on top of the primary monitor's. Both
+			# were unreachable in practice with two known monitors and became reachable as soon
+			# as a layout named a monitor that is not attached.
+			$monitorX = $null
+			$monitorY = $null
+			$monitorWidth = $null
+			$monitorHeight = $null
 
-			if ($config.Monitor) {
-				# Check if Monitor is a string label (e.g., "Primary", "Secondary")
-				if ($config.Monitor -is [string]) {
+			# Check if Monitor is a string label (e.g., "Primary", "Secondary")
+			if ($config.Monitor -is [string]) {
+				if (Test-LogVerbose) {
+					Write-LogDebug "Resolving monitor => $($config.Monitor)" -Style Step
+				}
+				# Use pre-fetched monitor specs to avoid redundant calls
+				if (-not $monitorSpecs) {
+					$monitorSpecs = Get-MonitorSpecs -MonitorInfo $MonitorInfo
+				}
+				$monitorSpec = $monitorSpecs.($config.Monitor)
+
+				if ($monitorSpec) {
+					$monitorX = if ($null -ne $monitorSpec.WorkX) { $monitorSpec.WorkX } else { $monitorSpec.X }
+					$monitorY = if ($null -ne $monitorSpec.WorkY) { $monitorSpec.WorkY } else { $monitorSpec.Y }
+					$monitorWidth = if ($monitorSpec.WorkWidth) { $monitorSpec.WorkWidth } else { $monitorSpec.Width }
+					$monitorHeight = if ($monitorSpec.WorkHeight) { $monitorSpec.WorkHeight } else { $monitorSpec.Height }
 					if (Test-LogVerbose) {
-						Write-LogDebug "Resolving monitor => $($config.Monitor)" -Style Step
-					}
-					# Use pre-fetched monitor specs to avoid redundant calls
-					if (-not $monitorSpecs) {
-						$monitorSpecs = Get-MonitorSpecs -MonitorInfo $MonitorInfo
-					}
-					$monitorSpec = $monitorSpecs.($config.Monitor)
-
-					if (-not $monitorSpec -and $monitorSpecs) {
-						# Unknown label (layout written for more monitors than attached):
-						# the primary monitor's real geometry beats blind constants.
-						$monitorSpec = $monitorSpecs.Primary
-						if ($monitorSpec -and (Test-LogVerbose)) {
-							Write-Warning "  Monitor '$($config.Monitor)' not found, falling back to Primary"
-						}
-					}
-
-					if ($monitorSpec) {
-						$monitorX = if ($null -ne $monitorSpec.WorkX) { $monitorSpec.WorkX } else { $monitorSpec.X }
-						$monitorY = if ($null -ne $monitorSpec.WorkY) { $monitorSpec.WorkY } else { $monitorSpec.Y }
-						$monitorWidth = if ($monitorSpec.WorkWidth) { $monitorSpec.WorkWidth } else { $monitorSpec.Width }
-						$monitorHeight = if ($monitorSpec.WorkHeight) { $monitorSpec.WorkHeight } else { $monitorSpec.Height }
-						if (Test-LogVerbose) {
-							Write-LogDebug "✓ Monitor resolved => work area ${monitorWidth}x${monitorHeight} at ($monitorX, $monitorY)" -Style Success
-						}
-					}
-					else {
-						if (Test-LogVerbose) {
-							Write-Warning "  Monitor '$($config.Monitor)' not found, using defaults"
-						}
+						Write-LogDebug "✓ Monitor resolved => work area ${monitorWidth}x${monitorHeight} at ($monitorX, $monitorY)" -Style Success
 					}
 				}
-				# Otherwise treat as hashtable with X, Y, Width, Height properties
-				# (explicit dimensions in a layout file are used verbatim)
-				else {
-					$monitorX = if ($null -ne $config.Monitor.X) { $config.Monitor.X } else { 0 }
-					$monitorY = if ($null -ne $config.Monitor.Y) { $config.Monitor.Y } else { 0 }
-					$monitorWidth = if ($config.Monitor.Width) { $config.Monitor.Width } else { 3440 }
-					$monitorHeight = if ($config.Monitor.Height) { $config.Monitor.Height } else { 1440 }
+			}
+			# Otherwise treat as hashtable with X, Y, Width, Height properties
+			# (explicit dimensions in a layout file are used verbatim)
+			elseif ($config.Monitor) {
+				$monitorX = if ($null -ne $config.Monitor.X) { $config.Monitor.X } else { 0 }
+				$monitorY = if ($null -ne $config.Monitor.Y) { $config.Monitor.Y } else { 0 }
+				$monitorWidth = $config.Monitor.Width
+				$monitorHeight = $config.Monitor.Height
+			}
+
+			if (-not $monitorWidth -or -not $monitorHeight) {
+				# Skipping loses one window; substituting geometry misplaces it silently, which
+				# is harder to notice and harder to diagnose. Warn unconditionally - this is a
+				# layout/display mismatch the user has to fix, not verbose diagnostics.
+				$requestedMonitor = if ($config.Monitor -is [string]) { $config.Monitor }
+				elseif ($config.Monitor) { "explicit geometry" }
+				else { "<none specified>" }
+
+				$attachedLabels = if ($monitorSpecs) {
+					@($monitorSpecs.PSObject.Properties.Name | Sort-Object { Resolve-MonitorLabel -Label $_ }) -join ', '
 				}
+				else { "unknown" }
+
+				Write-Warning "  Skipping $($config.ProcessName): monitor [$requestedMonitor] has no resolvable geometry. Attached monitors: $attachedLabels"
+				continue
 			}
 
 			# Get zone coordinates
