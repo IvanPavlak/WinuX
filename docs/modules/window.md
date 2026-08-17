@@ -42,9 +42,13 @@ Only `-MonitorConfig` is mandatory. With no `-DesktopNumber`, it applies layouts
 
 Every shortcut send is **verified against FancyZones' own state file**: FancyZones rewrites `applied-layouts.json` for every layout application it actually processes, so after injecting the hotkey the function polls the file's write stamp (up to ~600 ms) and re-anchors the cursor and re-sends once if no write appears. This closes the most damaging failure mode found in practice: a freshly restarted PowerToys passes the process/RPC readiness checks *before* its hotkey hooks are live, shortcuts sent in that window vanish without a trace, and the live zone grid then disagrees with the recorded state - which file-based idempotency can never detect, so every later snap on the affected monitor fails against zones that are not there.
 
+Monitor handling is **count-agnostic**: the `Monitors` keys are iterated as given, so any number of displays is supported. A key that names a monitor which is not attached (`Monitor6` on a two-monitor machine) is not fatal - the attached monitors are still laid out - but it produces a single warning naming the unresolvable keys and the labels that *are* attached, so a layout/display mismatch is visible instead of passing without a trace.
+
+Cost scales as **monitors x desktops**: one shortcut send per pair, each carrying the cursor-settle, focus-settle and keyboard-shortcut delays from `Get-WindowModuleDelays` (25 ms each by default) plus one `Switch-Desktop` per desktop. The applied-layouts idempotency skip is what keeps repeat opens cheap; `-Force` and a duplicate-EDID collision without instance data both disable it and pay the full cost.
+
 | Parameter        | Description                                                                                                                                                                                                                                                                                       |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `-MonitorConfig` | Hashtable of monitor configs keyed by monitor (e.g. `Primary`, `Secondary`). Each has a simple `Layout` (e.g. `@{ Layout = "One" }`), an optional legacy `LayoutNumber`, or per-desktop `VirtualDesktopLayouts` (1-based desktop index → layout name or `@{ Layout = ...; LayoutNumber = ... }`). |
+| `-MonitorConfig` | Hashtable of monitor configs keyed by monitor label (`Primary`, `Secondary`, `Monitor3`, ...). Each has a simple `Layout` (e.g. `@{ Layout = "One" }`), an optional legacy `LayoutNumber`, or per-desktop `VirtualDesktopLayouts` (1-based desktop index → layout name or `@{ Layout = ...; LayoutNumber = ... }`). |
 | `-DesktopNumber` | Virtual desktop number to apply layouts for; if set and the monitor has `VirtualDesktopLayouts`, uses that desktop's layout.                                                                                                                                                                      |
 | `-MonitorInfo`   | Pre-fetched monitor info array to reuse instead of calling `Get-MonitorInfo` (caching optimization).                                                                                                                                                                                              |
 | `-DesktopOffset` | Virtual desktop offset for multi-workspace placement; layouts apply to desktops starting from this index.                                                                                                                                                                                         |
@@ -152,7 +156,7 @@ Center-Windows -ProcessName "WindowsTerminal" -OnPrimary
 
 ## [Clear-MonitorCache](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Clear-MonitorCache.ps1)
 
-- **Description:** Clears the monitor information cache. Invalidates the cached monitor data, forcing the next `Get-CachedMonitors` call to refresh from the Windows Forms API. Useful when the monitor configuration changes.
+- **Description:** Clears the monitor information cache. Invalidates the cached monitor data - including the display-topology fingerprint - forcing the next `Get-CachedMonitors` call to refresh from the Windows Forms API. Useful when the monitor configuration changes. The fingerprint is cleared alongside the data so the next call cannot compare fresh monitors against a signature captured before the change that prompted the clear.
 - **Usage:** `Clear-MonitorCache`
 
 ## [Clear-WindowCache](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Clear-WindowCache.ps1)
@@ -206,6 +210,8 @@ When multiple live windows match the same `ProcessName`/`WindowTitle`, candidate
 | `-Tolerance`     | int       | `50`    | Maximum pixel deviation allowed per dimension before a window is considered mispositioned.                                                                        |
 
 Returns a `[hashtable]` with `Success` (bool - `$true` if all windows passed), `Total` (int - entries checked), `Passed` (int), and `Failures` (array of objects with `WindowTitle`, `Handle`, `Expected`, `Actual`, and per-dimension `DeltaX`/`DeltaY`/`DeltaW`/`DeltaH`).
+
+Monitor resolution stays in lockstep with `Set-WindowLayouts`, including its refusal to substitute default geometry or fall back to `Primary`: an entry whose monitor has no resolvable geometry is dropped from `Total` rather than counted as a failure. It is the same entry `Set-WindowLayouts` skipped, so verifying it against invented geometry would report a window as misplaced when the real fault is a layout naming a monitor that is not attached.
 
 > The non-zero default tolerance absorbs invisible DWM drop-shadow borders (~7-14px) that `GetWindowRect` includes in its measurements. A tolerance of `0` would cause infinite retry loops because reported positions always differ slightly from the requested zone coordinates.
 
@@ -299,6 +305,23 @@ Set-LogLevel Verbose { Ensure-VirtualDesktops -Count 4 }
 
 - **Description:** Ensures the `System.Windows.Forms` assembly is loaded, calling `Add-Type` only if it is not already loaded. Uses a module-scoped flag to avoid repeated `Add-Type` calls.
 - **Usage:** `Ensure-WindowsFormsLoaded`
+
+## [Expand-LayoutMonitorCoverage](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Expand-LayoutMonitorCoverage.ps1)
+
+- **Description:** Extends a layout configuration's `Monitors` section to cover every attached monitor, cloning the per-desktop layouts of the first defined monitor as a template. `Apply-FancyZones` iterates the `Monitors` section, so a monitor a layout file does not define is never visited and keeps whatever zone layout it already had. Modifies the passed configuration in place and returns the labels it added. Set `AutoExtendMonitors = $false` at the top level of a layout file to opt that layout out.
+- **Parameters:** -Config, -MonitorInfo
+- **Usage:** `$added = Expand-LayoutMonitorCoverage -Config $config -MonitorInfo $monitors`
+
+| Parameter      | Description                                                                                                                    |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `-Config`      | The parsed layout configuration (from `Import-PowerShellDataFile`). Its `Monitors` hashtable is modified **in place**.          |
+| `-MonitorInfo` | Monitor objects from `Get-MonitorInfo`. When omitted, `Get-MonitorInfo -Quiet` is called. Pass a retrieved set to avoid a second enumeration. |
+
+Called by `Set-WorkspaceWindowLayout` immediately after a layout file is loaded, for **every** workspace. It only extends the `Monitors` section, never the `Layout` array: an auto-added monitor receives a zone layout but no window assignments, so nothing is moved onto it and nothing already targeted elsewhere changes. Monitors the file defines are never modified, and the pass is idempotent.
+
+The template is the first monitor the file defines in label order (`Primary`, `Secondary`, `Monitor3`, ...) rather than hashtable order, so which monitor gets cloned does not depend on the order `Import-PowerShellDataFile` happens to enumerate the keys in. Returns an empty array when the layout already covers every attached monitor, when it opted out, or when the template monitor carries no `VirtualDesktopLayouts` to clone.
+
+**See also:** [Get-MonitorSpecs](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Get-MonitorSpecs.ps1), [Configuration: Window Layout](../configuration/guides/configure-window-layout.md)
 
 ## [Focus-VirtualDesktop](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Focus-VirtualDesktop.ps1)
 
@@ -474,10 +497,14 @@ $freshState = Get-AppliedFancyZonesState -Force
 
 ## [Get-CachedMonitors](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Get-CachedMonitors.ps1)
 
-- **Description:** Returns cached monitor information from `System.Windows.Forms.Screen`. Returns the monitor/screen information from cache if still valid, otherwise refreshes it from `System.Windows.Forms.Screen.AllScreens`. This reduces repeated calls to the Windows Forms API.
+- **Description:** Returns cached monitor information from `System.Windows.Forms.Screen`. Returns the monitor/screen information from cache if still valid, otherwise refreshes it from `System.Windows.Forms.Screen.AllScreens`. This reduces repeated calls to the Windows Forms API. Two signals invalidate the cache: a change in the display topology, or the TTL expiring.
 - **Usage:** `$monitors = Get-CachedMonitors`
 
-Returns an array of `System.Windows.Forms.Screen` objects representing all monitors. The cache is considered stale when no monitors are cached yet or when its age exceeds the configured maximum (`$script:MonitorCache.MaxAgeSec`); on a stale read it ensures Windows Forms is loaded, refreshes `AllScreens`, and stamps the cache timestamp before returning.
+Returns an array of `System.Windows.Forms.Screen` objects representing all monitors. The cache is considered stale when no monitors are cached yet, when its age exceeds the configured maximum (`$script:MonitorCache.MaxAgeSec`, 5 s), or when the display-topology fingerprint no longer matches; on a stale read it ensures Windows Forms is loaded, refreshes `AllScreens`, and stamps the cache timestamp and fingerprint before returning.
+
+The fingerprint is the monitor count plus the virtual-screen rectangle - two `GetSystemMetrics` calls, no allocation. It exists because monitor **labels are derived from physical position** (see `Get-MonitorSpecs`): serving a stale cache after the displays change hands out labels for an arrangement that no longer exists, and a TTL alone only bounds how long that wrong answer survives. It catches an attach, a detach, a resolution change and most rearrangements; a swap that leaves both the count and the overall bounds identical still relies on the TTL, which is why the TTL is kept short rather than removed. The fingerprint is skipped until Windows Forms is loaded - which any cached entry already implies - so validating the cache never drags the assembly in on its own.
+
+**See also:** [Clear-MonitorCache](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Clear-MonitorCache.ps1)
 
 ## [Get-CachedWindows](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Get-CachedWindows.ps1)
 
@@ -543,29 +570,34 @@ Get-DuplicateMonitorEdid -DisplayToEdidMap @{
 
 - **Description:** Gets FancyZone coordinates using human-readable zone names. Provides a user-friendly interface to get zone coordinates by using descriptive zone names instead of numeric indices. The available names per layout are defined in `$Configuration.ZoneNameMappings` (`Configuration.psd1`), which maps each name to a zone index in that layout's `custom-layouts.json` definition.
 - **Parameters:** -LayoutName, -ZoneName, -MonitorX, -MonitorY, -MonitorWidth, -MonitorHeight, -CustomLayoutsPath
-- **Usage:** `Get-FancyZone -LayoutName "Seven" -ZoneName "Top-Right"`, `Get-FancyZone -LayoutName "Seven" -ZoneName "Left" -MonitorY -1440`, `Get-FancyZone -LayoutName "One" -ZoneName "Right" -MonitorX 1920`
+- **Usage:** `Get-FancyZone -LayoutName "Seven" -ZoneName "Top-Right" -MonitorWidth 3440 -MonitorHeight 1440`, `Get-FancyZone -LayoutName "One" -ZoneName "Right" -MonitorX 1920 -MonitorWidth 1920 -MonitorHeight 1080`
 
 Resolves a human-readable zone name to its numeric index via `ZoneNameMappings` in `Configuration.psd1`, then delegates to `Get-FancyZoneCoordinates` to compute the actual pixel bounds for that zone. Requires the global configuration to be loaded (`Load-PathConfiguration`); if the layout or zone name is unknown it lists the available layouts or zone names and returns `$null`. When a mapped index does not exist in the layout, the error names the layout's zone count and indices and points at `ZoneNameMappings` and `Test-FancyZonesConfiguration` to find the drift. Multiple names may map to the same index (e.g. `Left` and `Far-Left`). Run `Visualize-Layouts -DisplayAvailableLayouts` to see every layout with its zone names in position. Returns a `PSCustomObject` with `ZoneIndex`, `X`, `Y`, `Width`, `Height`, `MonitorX`, `MonitorY`, `LayoutName`, and `ZoneName`.
 
-| Parameter            | Type   | Default | Description                                                  |
-| -------------------- | ------ | ------- | ------------------------------------------------------------ |
-| `-LayoutName`        | string | -       | FancyZones layout name (e.g., "Zero", "One", "Seven").       |
-| `-ZoneName`          | string | -       | Human-readable zone name; valid values depend on the layout. |
-| `-MonitorX`          | int    | `0`     | Monitor X offset.                                            |
-| `-MonitorY`          | int    | `0`     | Monitor Y offset.                                            |
-| `-MonitorWidth`      | int    | `3440`  | Monitor width in pixels.                                     |
-| `-MonitorHeight`     | int    | `1440`  | Monitor height in pixels.                                    |
-| `-CustomLayoutsPath` | string | -       | Optional path to a `custom-layouts.json` file.               |
+**Monitor geometry is required.** `-MonitorWidth` and `-MonitorHeight` must both be greater than 0; omitting them is an error that returns `$null`, not a cue to assume a display size. They previously defaulted to a `3440x1440` ultrawide, which on a mixed-resolution setup silently computed zones for a display that need not be attached at all. Resolve the real geometry with `Get-MonitorSpecs` and pass the monitor's work area.
+
+| Parameter            | Type   | Default | Description                                                                    |
+| -------------------- | ------ | ------- | ------------------------------------------------------------------------------ |
+| `-LayoutName`        | string | -       | FancyZones layout name (e.g., "Zero", "One", "Seven").                         |
+| `-ZoneName`          | string | -       | Human-readable zone name; valid values depend on the layout.                   |
+| `-MonitorX`          | int    | `0`     | Monitor X offset.                                                              |
+| `-MonitorY`          | int    | `0`     | Monitor Y offset.                                                              |
+| `-MonitorWidth`      | int    | -       | Required. Monitor width in pixels; a non-positive value is an error.           |
+| `-MonitorHeight`     | int    | -       | Required. Monitor height in pixels; a non-positive value is an error.          |
+| `-CustomLayoutsPath` | string | -       | Optional path to a `custom-layouts.json` file.                                 |
 
 ```powershell
 # Get coordinates for a named zone on the primary monitor
-Get-FancyZone -LayoutName "Seven" -ZoneName "Top-Right"
+$primary = (Get-MonitorSpecs).Primary
+Get-FancyZone -LayoutName "Seven" -ZoneName "Top-Right" `
+    -MonitorX $primary.WorkX -MonitorY $primary.WorkY `
+    -MonitorWidth $primary.WorkWidth -MonitorHeight $primary.WorkHeight
 
 # Account for a monitor stacked above (negative Y offset)
-Get-FancyZone -LayoutName "Seven" -ZoneName "Left" -MonitorY -1440
+Get-FancyZone -LayoutName "Seven" -ZoneName "Left" -MonitorY -1440 -MonitorWidth 3440 -MonitorHeight 1440
 
 # Use the returned object to position a window
-$zone = Get-FancyZone -LayoutName "One" -ZoneName "Right"
+$zone = Get-FancyZone -LayoutName "One" -ZoneName "Right" -MonitorWidth 1920 -MonitorHeight 1080
 Set-WindowPosition -WindowHandle $handle -X $zone.X -Y $zone.Y -Width $zone.Width -Height $zone.Height
 ```
 
@@ -575,7 +607,7 @@ Set-WindowPosition -WindowHandle $handle -X $zone.X -Y $zone.Y -Width $zone.Widt
 
 - **Description:** Calculates zone coordinates from FancyZones custom layouts. Parses the FancyZones `custom-layouts.json` file and computes the actual pixel coordinates (X, Y, width, height) for each zone, replicating the zone math PowerToys FancyZones itself uses so the computed rectangles match what FancyZones snaps windows to. Both `grid` and `canvas` layout types are supported, with arbitrary zone definitions and any `spacing` value.
 - **Parameters:** -LayoutName, -MonitorX, -MonitorY, -MonitorWidth, -MonitorHeight, -CustomLayoutsPath
-- **Usage:** `Get-FancyZoneCoordinates -LayoutName "Seven" -MonitorX 0 -MonitorY -1440 -MonitorWidth 3440 -MonitorHeight 1440`, `$zones = Get-FancyZoneCoordinates -LayoutName "One"`
+- **Usage:** `Get-FancyZoneCoordinates -LayoutName "Seven" -MonitorX 0 -MonitorY -1440 -MonitorWidth 3440 -MonitorHeight 1440`
 
 For **grid** layouts, row and column edges are computed with cumulative prefix sums and floor division so the cells always add up to exactly the monitor work area, regardless of how the percentages divide (e.g. `3333/3333/3334` loses no pixels). Spacing follows the real FancyZones model: FancyZones insets edges that touch the work-area border by the full spacing value, and interior edges by `Floor(spacing/2)` per zone (two adjacent zones leave `2 * Floor(spacing/2)` px between them); a zone spanning multiple cells absorbs the spacing between them, because only the zone's own outer edges are inset. Any spacing value works. For **canvas** layouts, each zone's explicit X/Y/width/height rectangle (drawn in the layout's `ref-width`/`ref-height` coordinate space) is scaled to the monitor work area; canvas layouts ignore spacing entirely, and the zone index is the zone's position in the layout's `zones` array. Malformed definitions (percentage count mismatches, cell-child-map dimension mismatches, invalid canvas ref dimensions) produce clear errors. When the JSON path is omitted it falls back to the machine-specific PowerToys CustomLayouts symlink target, or the repository file via `Get-FancyZonesLayoutsPath`. Each zone is returned as a `PSCustomObject` with `ZoneIndex`, `X`, `Y`, `Width`, `Height`, `MonitorX`, `MonitorY`, and `LayoutName`.
 
@@ -584,16 +616,21 @@ For **grid** layouts, row and column edges are computed with cumulative prefix s
 | `-LayoutName`        | Required. The name of the FancyZones layout (e.g., `"Zero"`, `"One"`, `"Seven"`).                                     |
 | `-MonitorX`          | The X position of the monitor work area (default: `0`).                                                               |
 | `-MonitorY`          | The Y position of the monitor work area (default: `0`).                                                               |
-| `-MonitorWidth`      | The width of the monitor **work area** in pixels, excluding the taskbar (default: `3440`).                            |
-| `-MonitorHeight`     | The height of the monitor **work area** in pixels, excluding the taskbar (default: `1440`).                           |
+| `-MonitorWidth`      | Required. The width of the monitor **work area** in pixels, excluding the taskbar; a non-positive value is an error.  |
+| `-MonitorHeight`     | Required. The height of the monitor **work area** in pixels, excluding the taskbar; a non-positive value is an error. |
 | `-CustomLayoutsPath` | Optional path to `custom-layouts.json`. If not specified, uses the PowerToys symlink target or the repository file. |
+
+**Monitor geometry is required.** `-MonitorWidth` and `-MonitorHeight` must both be greater than 0; omitting them writes an error and returns `$null`. They previously defaulted to a `3440x1440` ultrawide, so a caller that resolved no monitor silently got zones for a display that need not be attached.
 
 ```powershell
 # Calculate zones for a layout on a monitor stacked above the primary (negative Y)
 Get-FancyZoneCoordinates -LayoutName "Seven" -MonitorX 0 -MonitorY -1440 -MonitorWidth 3440 -MonitorHeight 1440
 
-# Capture zones and index into a specific one
-$zones = Get-FancyZoneCoordinates -LayoutName "One"
+# Capture zones from a resolved monitor and index into a specific one
+$primary = (Get-MonitorSpecs).Primary
+$zones = Get-FancyZoneCoordinates -LayoutName "One" `
+    -MonitorX $primary.WorkX -MonitorY $primary.WorkY `
+    -MonitorWidth $primary.WorkWidth -MonitorHeight $primary.WorkHeight
 $leftZone = $zones[0]  # Get coordinates for zone 0 (left)
 ```
 
@@ -720,7 +757,17 @@ Set-LogLevel Verbose { Get-MonitorInfo }
 - **Parameters:** -AsHashtable, -MonitorInfo
 - **Usage:** `Get-MonitorSpecs`, `Get-MonitorSpecs -AsHashtable`, `Get-MonitorSpecs -MonitorInfo $monitorInfo`
 
-Calls `Get-MonitorInfo` (or reuses pre-fetched info via `-MonitorInfo`) and remaps each display to a stable label: the primary monitor becomes `Primary`, the first non-primary becomes `Secondary`, and any further monitors become `Monitor3`, `Monitor4`, etc. Each entry exposes `X`, `Y`, `Width`, `Height`, `DeviceName`, and the work-area fields `WorkX`, `WorkY`, `WorkWidth`, `WorkHeight` (the screen minus the taskbar - what FancyZones lays zones over). By default the result is a `PSCustomObject` for easy property access; with `-AsHashtable` it returns a hashtable suited to layout configuration files. Returns `$null` (with an error) when no monitors are detected.
+Calls `Get-MonitorInfo` (or reuses pre-fetched info via `-MonitorInfo`) and remaps each display to a label: the primary monitor becomes `Primary`, and the remaining displays become `Secondary`, `Monitor3`, `Monitor4`, ... Each entry exposes `X`, `Y`, `Width`, `Height`, `DeviceName`, and the work-area fields `WorkX`, `WorkY`, `WorkWidth`, `WorkHeight` (the screen minus the taskbar - what FancyZones lays zones over). By default the result is a `PSCustomObject` for easy property access; with `-AsHashtable` it returns a hashtable suited to layout configuration files. Returns `$null` (with an error) when no monitors are detected.
+
+### Label ordering
+
+The non-primary displays are ordered by **physical position** - sorted by `Left`, then `Top`, then `DeviceName` - never by `Get-MonitorInfo` / `Screen.AllScreens` enumeration order. That enumeration order is neither spatial nor stable: the non-primary display can sort first, and the order can change on monitor sleep/wake, a DisplayPort link drop, a GPU driver reload or a dock/undock.
+
+With two displays there is exactly one non-primary monitor, so `Secondary` was correct whatever the order and the instability was invisible. With three or more, which physical panel became `Secondary` versus `Monitor3` was arbitrary and could swap between runs, silently retargeting every layout entry that named them.
+
+The consequence to keep in mind: **a label identifies a position in the current arrangement, not a specific panel.** It survives a display re-enumeration but not an actual rearrangement - move your displays around in Windows display settings and the labels follow the new arrangement, as do the layout files naming them. Use a device name (`\\.\DISPLAY1`) where a target must be pinned to one physical panel; `Move-Windows`, `Center-Windows` and `Reset-Windows` all accept one. `DeviceName` breaks the remaining sort tie so mirrored displays, which report identical bounds, still get a fixed order.
+
+Use [Resolve-MonitorLabel](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Resolve-MonitorLabel.ps1) to convert between a label and its 0-based ordinal. Any monitor count is supported - the labels continue `Monitor4`, `Monitor5`, ... for as many displays as are attached.
 
 | Parameter      | Description                                                                                                                            |
 | -------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1278,6 +1325,34 @@ $expanded = Resolve-LayoutTokens -LayoutEntry @{ ProcessName = "firefox" }
 
 **See also:** [Window module](window.md)
 
+## [Resolve-MonitorLabel](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Resolve-MonitorLabel.ps1)
+
+- **Description:** Converts between a monitor's 0-based ordinal and its standardized label, in either direction. Single source of truth for the `Primary` / `Secondary` / `Monitor3` / `Monitor4` / ... scheme that `Get-MonitorSpecs` emits and that layout files, `Apply-FancyZones` and `Resolve-TargetMonitor` all key on. With `-Index` it returns the label; with `-Label` it returns the ordinal, which doubles as the sort key that orders monitors `Primary`, `Secondary`, `Monitor3`, ... Unrecognized labels return `[int]::MaxValue` so they sort last instead of tying with each other.
+- **Parameters:** -Index, -Label
+- **Usage:** `Resolve-MonitorLabel -Index 2`, `Resolve-MonitorLabel -Label "Monitor3"`, `$entries | Sort-Object { Resolve-MonitorLabel -Label $_.Monitor }`
+
+| Parameter | Description                                                                                                                                    |
+| --------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `-Index`  | 0-based monitor ordinal to convert into a label. Must be 0 or greater; a negative ordinal is an error rather than an invented label.            |
+| `-Label`  | Monitor label to convert into its ordinal. Matched case-insensitively and trimmed. Empty, whitespace-only and unrecognized labels give `[int]::MaxValue`. |
+
+Ordinal 0 is `Primary`, ordinal 1 is `Secondary`, and every ordinal past that is `Monitor<Index + 1>` - so ordinal 2 is `Monitor3`. `Monitor1` and `Monitor2` resolve back to ordinals 0 and 1, the same slots as `Primary` and `Secondary`, so a hand-written layout file using them still sorts sensibly; `Get-MonitorSpecs` never emits those two forms itself.
+
+Both directions live in one place because the ordering used to be duplicated as a three-way `Primary`=0 / `Secondary`=1 / everything-else=2 mapping in `Update-LayoutSectionHeaders` and `Visualize-Layouts`. Under that mapping `Monitor3`, `Monitor4` and `Monitor5` all tied at 2 and fell back to input order, which made generated section headers and ASCII visualizations look randomly ordered past `Secondary`.
+
+The scheme is **positional, not a hardware identity** - see `Get-MonitorSpecs` for how the ordinals are assigned.
+
+```powershell
+Resolve-MonitorLabel -Index 0        # -> Primary
+Resolve-MonitorLabel -Index 1        # -> Secondary
+Resolve-MonitorLabel -Index 2        # -> Monitor3
+
+Resolve-MonitorLabel -Label "Monitor3"   # -> 2
+Resolve-MonitorLabel -Label "Bogus"      # -> [int]::MaxValue (sorts last)
+```
+
+**See also:** [Get-MonitorSpecs](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Get-MonitorSpecs.ps1), [Resolve-TargetMonitor](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Resolve-TargetMonitor.ps1)
+
 ## [Resolve-PositionedWindowHandle](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Resolve-PositionedWindowHandle.ps1)
 
 - **Description:** Re-resolves a possibly stale tracked window handle to a live window. Given a tracked window state (with `WindowTitle` and an optional process fingerprint), it searches the current windows to find the matching live window, returning the first match or `$null`.
@@ -1333,11 +1408,19 @@ Returns a `PSCustomObject` with:
 | Member         | Description                                                                       |
 | -------------- | --------------------------------------------------------------------------------- |
 | `Monitor`      | The resolved monitor object, or `$null` when unresolved or not requested.          |
-| `Label`        | Display label for the resolved monitor (for example `Monitor2`).                   |
+| `Label`        | Standardized label of the resolved monitor (`Primary`, `Secondary`, `Monitor3`, ...), or its device name when no label matches. |
 | `ErrorMessage` | Why resolution failed, or `$null` on success / no request.                         |
 | `Requested`    | `$true` when a non-empty specifier was supplied.                                   |
 
-A numeric index is POSITIONAL - it follows `Get-MonitorInfo` / `Screen.AllScreens` enumeration order, which is not guaranteed to match the numbering shown in Windows display settings and can change when displays are re-enumerated. Labels and device names are stable identifiers; prefer them when the target must survive a display reconfiguration.
+Whichever form resolves, `Label` is always the standardized label of the monitor that was **resolved** - not a restatement of the input - so a log line naming it agrees with what a layout file would call that panel. Reporting the input instead meant `-Monitor 3` logged `Monitor3` even when the third *enumerated* display is not the panel the label `Monitor3` refers to; the two orderings are unrelated.
+
+The three forms are not equally stable, and the difference matters most with three or more displays:
+
+| Form                              | Follows                                     | Survives                                                                 |
+| --------------------------------- | ------------------------------------------- | ------------------------------------------------------------------------ |
+| Index (`1`, `2`)                  | `Screen.AllScreens` **enumeration** order    | Least stable - can change on sleep/wake, DisplayPort drop, driver reload, dock/undock. Avoid in configuration. |
+| Label (`Primary`, `Monitor3`)     | **Physical** arrangement (`Get-MonitorSpecs`) | A re-enumeration, but *not* an actual rearrangement of the displays.      |
+| Device name (`\\.\DISPLAY1`)      | The device itself                            | Closest to a fixed identity. Prefer it when the target must survive a display reconfiguration. |
 
 ```powershell
 # Resolve and act on the caller's own terms
@@ -1390,11 +1473,13 @@ Applies the per-window portion of a layout after FancyZones layouts are already 
 
 Every layout entry produces exactly one result row, `Configured` or `Not Found`, so the caller's tallies always add up to the layout. An entry that finds no window it may use - no match at all, everything filtered out by `-SkipExistingWindows`, or (for a duplicate key) every candidate already claimed by an earlier entry - reports `Not Found` rather than falling through silently. Each `Configured` row also carries the token-resolved `LayoutEntry` it came from, which lets a caller rebuild the exact subset of the layout this pass actually placed; `Set-WorkspaceWindowLayout` uses it to scope alongside verification.
 
+**Unresolvable monitor geometry skips the entry.** A zone-based entry whose `Monitor` cannot be resolved to real geometry is skipped with a warning naming the requested monitor and the attached labels. There is no default geometry and no fall back to `Primary`: substituting a hardcoded `3440x1440` placed the window using geometry that can belong to no attached display, and retargeting `Primary` silently stacked a third monitor's windows on top of the primary monitor's. Both were effectively unreachable with two known monitors and became reachable as soon as a layout named a monitor that is not attached. Losing one window to a warning is easier to notice, and to diagnose, than finding it in the wrong place.
+
 | Parameter                | Description                                                                                                                                                                                                                                                                                                                                                                                          |
 | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `-LayoutConfig`          | Array of window configuration hashtables (ProcessName, optional WindowTitle, DesktopNumber, and either X/Y/Width/Height or Layout/Zone/Monitor). Mutually exclusive with `-ConfigPath`.                                                                                                                                                                                                              |
 | `-ConfigPath`            | Path to a `.json` or `.psd1` file containing the layout configuration. Mutually exclusive with `-LayoutConfig`.                                                                                                                                                                                                                                                                                      |
-| `-MonitorInfo`           | Array of monitor specs used to resolve string monitor labels (e.g. "Primary", "Secondary") to coordinates.                                                                                                                                                                                                                                                                                           |
+| `-MonitorInfo`           | Array of monitor specs used to resolve string monitor labels (`Primary`, `Secondary`, `Monitor3`, ...) to coordinates. An entry naming a monitor with no resolvable geometry is skipped with a warning.                                                                                                                                                                                                |
 | `-MonitorConfig`         | Hashtable of the `Monitors` configuration section; used to auto-resolve layout names per monitor and desktop.                                                                                                                                                                                                                                                                                        |
 | `-ExistingWindowHandles` | HashSet of handles open before the layout run; used to detect pre-existing windows and skip already-correct positioning.                                                                                                                                                                                                                                                                             |
 | `-ExpectedWindowState`   | Hashtable of stable window state captured during the wait phase; enables handle-based recovery when titles change transiently.                                                                                                                                                                                                                                                                       |
@@ -1499,6 +1584,10 @@ Clearing empties the value rather than removing the variable: passing `$null` fr
 - **Usage:** `Set-WorkspaceWindowLayout -WorkspaceName MyWorkspace`, `Set-WorkspaceWindowLayout -WorkspaceName OtherProject -DesktopOffset 2 -Alongside`, `Set-WorkspaceWindowLayout -LayoutPath C:\Users\<User>\MyLayouts\custom.psd1 -TimeoutSeconds 30`, `Set-WorkspaceWindowLayout -WorkspaceName MyWorkspace -DisableAutoWait`
 
 This is the final step of the layout system: FancyZones (PowerToys) defines the zones, `.psd1` layout files map windows to those zones, and `Set-WorkspaceWindowLayout` applies the configuration. With `ByWorkspace` it auto-resolves `Layouts/{MachineType}/{WorkspaceName}_{MachineType}.psd1`; with `ByPath` it applies an explicit layout file. Layouts may contain duplicate window entries (same `ProcessName`/`WindowTitle`) to place identical windows in different zones, used together with `Open-Browser`'s `-Override` to position two copies of the same URL group independently. The function does not perform the final virtual-desktop landing itself; switching to and focusing the workspace's first desktop is delegated to `Focus-VirtualDesktop`, the last action in each workspace's `WorkspaceActions` sequence. VS Code entries are matched by process: a `Code` entry with no `WindowTitle` is a catch-all that captures every VS Code window (folder or `.code-workspace`, any number of them) and places them all in its zone, so opening a workspace file with `-VSCodeWorkspace` needs no layout coupling. Give a `Code` entry a `WindowTitle` (a bare project name such as `Dotfiles`) only to split several VS Code windows across different zones; the process-and-title match then pins each editor to its own slot.
+
+**Every attached monitor is covered, not just the ones the layout file defines.** Immediately after the layout file is loaded - for **every** workspace, not only the `SimpleLayoutWorkspaces` ones - [Expand-LayoutMonitorCoverage](window.md#expand-layoutmonitorcoverage) fills in any attached monitor the file omits, cloning the first defined monitor's per-desktop layouts as a template and logging which labels it added. Without it, `Apply-FancyZones` never visits an undefined monitor, so a newly attached display keeps whatever zone layout it happened to have. This used to run inside the simple-layout branch alone, which made `Fullscreen` and `Empty` the only two workspaces that adapted to a third monitor; attach one and open any normal workspace and it was silently under-served.
+
+Only zone layouts are cloned, never the `Layout` array, so an auto-added monitor receives a FancyZones layout but no window assignments - nothing is moved onto it and nothing already targeted elsewhere changes. Set `AutoExtendMonitors = $false` at the top level of a layout file to opt that layout out and leave undefined monitors alone.
 
 **Which layout set is used** (parameter set `ByWorkspace` only - `-LayoutPath` is always taken as given) comes from [Get-LayoutMachineType](window.md#get-layoutmachinetype): a non-empty `LayoutMachineTypeOverrides` entry for the detected machine type, else `SmallDisplayMachineType` on a laptop-class display, else the detected type. The resolved value fills both halves of the path - the folder becomes `Layouts/<value>/` and the file `<WorkspaceName>_<value>.psd1` - and the captured monitor snapshot is handed over so the display-size rule does not re-query it. `Reset-Windows` resolves its own per-machine defaults through the same helper, so the layouts and the reset target can never disagree about which monitor setup is attached.
 
@@ -1685,11 +1774,13 @@ Returns a `PSCustomObject` with `Healthy` (bool), `TimedOut` (bool), and `Error`
 
 ## [Update-LayoutSectionHeaders](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Update-LayoutSectionHeaders.ps1)
 
-- **Description:** Updates the section headers (e.g., `# VIRTUAL DESKTOP 1 - Monitor: Primary - Layout: One`) within the `Layout` array of a layout file to match the actual configuration. Parses the file content, strips the existing headers, sorts the entries by DesktopNumber, Monitor (Primary, then Secondary, then others), and zone order, then regenerates the headers from the real DesktopNumber, Monitor, and Layout type values. Used by `Visualize-Layouts -Update` to keep both the visualization block and the inline section headers synchronized with the configuration.
+- **Description:** Updates the section headers (e.g., `# VIRTUAL DESKTOP 1 - Monitor: Primary - Layout: One`) within the `Layout` array of a layout file to match the actual configuration. Parses the file content, strips the existing headers, sorts the entries by DesktopNumber, Monitor (`Primary`, `Secondary`, `Monitor3`, `Monitor4`, ...), and zone order, then regenerates the headers from the real DesktopNumber, Monitor, and Layout type values. Used by `Visualize-Layouts -Update` to keep both the visualization block and the inline section headers synchronized with the configuration.
 - **Parameters:** -Content, -Config
 - **Usage:** `Update-LayoutSectionHeaders -Content $content -Config $config`
 
-Layout files use 1-based indexing for `DesktopNumber`, which is displayed directly in the regenerated headers. Entries are reordered deterministically (DesktopNumber, then Primary/Secondary/other monitor, then `ZoneNameMappings` zone order from the global configuration, then original index) so the output stays stable across runs. If the `Layout` array cannot be parsed, the original content is returned unchanged.
+Layout files use 1-based indexing for `DesktopNumber`, which is displayed directly in the regenerated headers. Entries are reordered deterministically (DesktopNumber, then monitor order via `Resolve-MonitorLabel`, then `ZoneNameMappings` zone order from the global configuration, then original index) so the output stays stable across runs. If the `Layout` array cannot be parsed, the original content is returned unchanged.
+
+Monitor order comes from [Resolve-MonitorLabel](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Resolve-MonitorLabel.ps1), so it is correct for any monitor count. The local three-way `Primary`=0 / `Secondary`=1 / everything-else=2 mapping it replaced left `Monitor3`, `Monitor4` and `Monitor5` tied at 2, falling back to input order and making generated headers look randomly ordered past `Secondary`. Unrecognized labels sort last and are then broken alphabetically by name.
 
 | Parameter  | Description                                                                                                                             |
 | ---------- | --------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1740,7 +1831,7 @@ if (-not $result.IsValid) {
 
 ## [Visualize-Layouts](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Visualize-Layouts.ps1)
 
-- **Description:** Generates ASCII art visualizations of FancyZones layouts and adds them as commented sections at the top of layout files. Each visualization shows which processes are assigned to each zone, organized by Virtual Desktop and then Monitor (Primary, Secondary, etc.). Layout files live in machine-specific subfolders (Laptop, PC, Work) under the Layouts directory and are searched recursively. Configurations are validated before rendering, and with `-DisplayAvailableLayouts` it can instead list all available layout types with their zone-name mappings from configuration.
+- **Description:** Generates ASCII art visualizations of FancyZones layouts and adds them as commented sections at the top of layout files. Each visualization shows which processes are assigned to each zone, organized by Virtual Desktop and then Monitor (`Primary`, `Secondary`, `Monitor3`, ... - ordered via `Resolve-MonitorLabel`, so any monitor count renders in a stable order). Layout files live in machine-specific subfolders (Laptop, PC, Work) under the Layouts directory and are searched recursively. Configurations are validated before rendering, and with `-DisplayAvailableLayouts` it can instead list all available layout types with their zone-name mappings from configuration.
 - **Parameters:** -Layout, -All, -DisplayAvailableLayouts, -Update
 - **Usage:** `Visualize-Layouts`, `Visualize-Layouts -Layout "MyWorkspace_PC"`, `Visualize-Layouts -All`, `Visualize-Layouts -All -Update`, `Visualize-Layouts -DisplayAvailableLayouts`
 

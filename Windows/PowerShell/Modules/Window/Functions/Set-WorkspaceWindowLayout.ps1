@@ -257,6 +257,17 @@ function Set-WorkspaceWindowLayout {
 		$config = Import-PowerShellDataFile -Path $LayoutPath
 		$layoutConfigToApply = $config.Layout
 
+		# Cover every attached monitor, not just the ones this layout file defines. Apply-FancyZones
+		# iterates the Monitors section, so a monitor the file omits is never visited and keeps
+		# whatever zone layout it already had. This runs for EVERY workspace: it used to sit inside
+		# the SimpleLayoutWorkspaces branch below, which made Fullscreen and Empty the only
+		# workspaces that adapted to a newly attached display. Only zone layouts are cloned - an
+		# auto-added monitor gets no window assignments, so nothing moves onto it.
+		$autoExtendedMonitors = @(Expand-LayoutMonitorCoverage -Config $config -MonitorInfo $cachedMonitorInfo)
+		if ($autoExtendedMonitors.Count -gt 0) {
+			Write-LogDebug "  Auto-added monitor(s) [$($autoExtendedMonitors -join ', ')] to layout config" -Style Warning
+		}
+
 		# Validate the FancyZones configuration quartet (custom-layouts.json,
 		# ZoneNameMappings, LayoutNumbers, layout-hotkeys.json) before any desktop or
 		# window work. Arbitrary layouts/zones/spacing are supported, so drift between
@@ -330,26 +341,10 @@ function Set-WorkspaceWindowLayout {
 
 		if ($simpleLayoutWorkspaces -contains $layoutNameToUse) {
 			if ($config.Monitors) {
-				# Ensure ALL physical monitors are covered, not just those in the layout file.
-				# Layout files may only define Primary (e.g., Fullscreen_Work.psd1) but the
-				# machine could be docked with multiple monitors. Auto-add missing monitors
-				# using the first defined monitor's layout as a template.
-				if ($cachedMonitorInfo) {
-					$monitorSpecs = Get-MonitorSpecs -MonitorInfo $cachedMonitorInfo
-					$templateMonitor = $config.Monitors.Values | Select-Object -First 1
-					foreach ($specKey in $monitorSpecs.Keys) {
-						if (-not $config.Monitors.ContainsKey($specKey) -and $templateMonitor -and $templateMonitor.VirtualDesktopLayouts) {
-							$config.Monitors[$specKey] = @{
-								VirtualDesktopLayouts = @{}
-							}
-							foreach ($dk in $templateMonitor.VirtualDesktopLayouts.Keys) {
-								$config.Monitors[$specKey].VirtualDesktopLayouts[$dk] = $templateMonitor.VirtualDesktopLayouts[$dk]
-							}
-							Write-LogDebug "  Auto-added monitor [$specKey] to simple layout config" -Style Warning
-						}
-					}
-				}
-
+				# Monitor coverage was already extended for every workspace right after the layout
+				# file was loaded (Expand-LayoutMonitorCoverage), so all attached monitors are
+				# present in $config.Monitors by this point.
+				#
 				# Simple layouts typically only define VirtualDesktopLayouts for desktop 1.
 				# Expand VirtualDesktopLayouts to cover ALL existing virtual desktops so
 				# Apply-FancyZones applies the layout everywhere, not just on desktop 1.

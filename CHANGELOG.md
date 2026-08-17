@@ -8,6 +8,53 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.36] - 2026-08-17
+
+### Added
+
+- **`Resolve-MonitorLabel` (Window module): one shared converter between a monitor's ordinal and its label.** `Primary` is ordinal 0, `Secondary` is 1, and every ordinal past that is `Monitor<N+1>`, in both directions. `Update-LayoutSectionHeaders` and `Visualize-Layouts` each used to carry their own three-way `Primary`=0 / `Secondary`=1 / everything-else=2 mapping, under which `Monitor3`, `Monitor4` and `Monitor5` all tied at 2 and fell back to input order - which made generated section headers and ASCII visualizations look randomly ordered past `Secondary`. Unrecognized labels resolve to `[int]::MaxValue` so they sort last instead of tying with each other.
+
+- **`Expand-LayoutMonitorCoverage` (Window module): extends a layout's `Monitors` section to cover every attached monitor**, cloning the first defined monitor's per-desktop layouts as a template and returning the labels it added. The template is chosen in label order rather than hashtable order, so which monitor gets cloned does not depend on `Import-PowerShellDataFile`'s key ordering. Only zone layouts are cloned, never the `Layout` array, so an auto-added monitor gets a FancyZones layout but no window assignments - nothing is moved onto it.
+
+- **`AutoExtendMonitors` layout-file key.** Set it to `$false` at the top level of a layout file to leave attached monitors that file does not define alone. An absent key means enabled, which is the documented default.
+
+- **A shared 3-monitor test fixture** (`Tests/Modules/Window/MonitorFixtures.ps1`) whose enumeration order deliberately differs from its physical order, plus coverage for `Get-MonitorSpecs` spatial ordering, `Resolve-TargetMonitor` at three monitors, `Resolve-MonitorLabel`, `Expand-LayoutMonitorCoverage`, and the `Get-CachedMonitors` fingerprint. Every monitor fixture in the suite was previously a primary-plus-one-secondary pair, so nothing exercised the case where positional labels stop being unambiguous.
+
+### Changed
+
+- **Monitor labels are now derived from physical position, not enumeration order.** `Get-MonitorSpecs` sorts the non-primary displays by `Left`, then `Top`, then `DeviceName`. `Get-MonitorInfo` / `Screen.AllScreens` order is neither spatial nor stable - the non-primary display can sort first, and the order can change on monitor sleep/wake, a DisplayPort link drop, a GPU driver reload, or a dock/undock. With two displays there is exactly one non-primary monitor, so `Secondary` was correct whatever the order and the instability was invisible; with three or more, which physical panel became `Secondary` versus `Monitor3` was arbitrary and could swap between runs, silently retargeting every layout entry that named them. Two-monitor setups are unaffected. A label identifies a *position*, so rearranging displays in Windows display settings reassigns them - prefer a device name where a target must be pinned to one panel.
+
+- **Monitor auto-extend now runs for every workspace, not just the simple ones.** The block that adds attached monitors a layout file does not define lived inside `Set-WorkspaceWindowLayout`'s `SimpleLayoutWorkspaces` branch, which made `Fullscreen` and `Empty` the only two workspaces that adapted to a newly attached display: attach a third monitor, open any normal workspace, and `Apply-FancyZones` never applied a zone layout to it. It is now a shared function called immediately after the layout file is loaded, for every workspace.
+
+- **`Get-CachedMonitors` invalidates on display changes instead of only on a TTL.** A cheap topology fingerprint (monitor count plus the virtual-screen rectangle - two `GetSystemMetrics` calls) is compared on every read, and the TTL dropped from 30 s to 5 s as the backstop for changes the fingerprint cannot see. This matters because monitor labels are now derived from physical position: serving a stale cache after the displays change hands out labels for an arrangement that no longer exists, and a TTL alone only bounds how long that wrong answer survives. `Clear-MonitorCache` clears the fingerprint alongside the data.
+
+- **`Resolve-TargetMonitor` reports the resolved monitor's standardized label**, whatever form was used to target it. It previously echoed the input, so `-Monitor 3` logged `Monitor3` even though the third *enumerated* display need not be the panel the label `Monitor3` refers to. Spec matching also prefers `DeviceName` over bounds, which disambiguates mirrored displays that report identical bounds.
+
+- **Per-monitor wallpaper entries cycle instead of running out.** `Set-Wallpaper` paired active displays with `WallpaperDarkSettings` / `WallpaperLightSettings` `Monitors` entries by index and skipped any display past the end of the array, leaving it with whatever wallpaper it already had - no warning, no fallback. Entries now cycle across all three per-monitor passes, with one warning when the counts differ. Only an empty array leaves a display on the Windows default.
+
+- **`Apply-FancyZones` warns once when a layout names monitors that are not attached.** The attached monitors are still laid out, as before, but the mismatch is now visible instead of passing without a trace.
+
+### Breaking
+
+- **`Get-FancyZone` and `Get-FancyZoneCoordinates` require monitor geometry.** `-MonitorWidth` and `-MonitorHeight` defaulted to a `3440x1440` ultrawide; a non-positive value is now an error that returns `$null`. On a mixed-resolution setup those constants silently computed zones for a display that need not be attached at all. Shipped as a PATCH because it touches neither the config schema, the install/bootstrap contract, nor an exported function's existence - the three things `VERSIONING.md` counts as breaking - but it is called out here because a call that used to succeed on the implied ultrawide now errors.
+
+  **Migration:** pass the target monitor's work area instead of relying on the defaults. In-repo callers already do; only direct interactive calls are affected.
+
+  ```powershell
+  # Before - silently assumed 3440x1440
+  Get-FancyZone -LayoutName "Seven" -ZoneName "Top-Right"
+
+  # After - resolve the real monitor
+  $primary = (Get-MonitorSpecs).Primary
+  Get-FancyZone -LayoutName "Seven" -ZoneName "Top-Right" `
+      -MonitorX $primary.WorkX -MonitorY $primary.WorkY `
+      -MonitorWidth $primary.WorkWidth -MonitorHeight $primary.WorkHeight
+  ```
+
+### Fixed
+
+- **A layout entry whose monitor cannot be resolved is skipped instead of misplaced.** `Set-WindowLayouts` substituted a hardcoded `3440x1440` when it had no geometry, and quietly retargeted an unresolvable label at `Primary` - which stacked a third monitor's windows on top of the primary monitor's. Both paths were effectively unreachable with two known monitors and became reachable the moment a layout named a monitor that is not attached. Such an entry now warns, naming the requested monitor and the attached labels, and is skipped. `Confirm-WorkspaceWindowPositions` drops the same entry from its tally rather than reporting it as a failure, so verification cannot fail a window that was never placed.
+
 ## [0.1.35] - 2026-08-16
 
 ### Added
@@ -637,7 +684,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.35...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.36...HEAD
+[0.1.36]: https://github.com/IvanPavlak/WinuX/compare/v0.1.35...v0.1.36
 [0.1.35]: https://github.com/IvanPavlak/WinuX/compare/v0.1.34...v0.1.35
 [0.1.34]: https://github.com/IvanPavlak/WinuX/compare/v0.1.33...v0.1.34
 [0.1.33]: https://github.com/IvanPavlak/WinuX/compare/v0.1.32...v0.1.33

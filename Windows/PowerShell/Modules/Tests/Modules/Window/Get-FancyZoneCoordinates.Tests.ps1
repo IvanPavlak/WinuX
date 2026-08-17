@@ -381,34 +381,68 @@ Describe "Get-FancyZoneCoordinates" {
 		}
 
 		It "Should return null for a canvas layout with invalid ref dimensions" {
-			$result = Get-FancyZoneCoordinates -LayoutName "CanvasBadRef" -CustomLayoutsPath $script:TestLayoutsPath -ErrorAction SilentlyContinue
+			$result = Get-FancyZoneCoordinates -LayoutName "CanvasBadRef" -MonitorX 0 -MonitorY 0 -MonitorWidth 1000 -MonitorHeight 500 -CustomLayoutsPath $script:TestLayoutsPath -ErrorAction SilentlyContinue
 
 			$result | Should -BeNullOrEmpty
 		}
 	}
 
 	Context "Error Handling" {
+		# Every case here passes explicit geometry so it fails for the reason it names.
+		# Omitting geometry is itself an error now (see "Required Monitor Geometry"), which
+		# would otherwise short-circuit these cases before they reach the condition under test.
 		It "Should return null for non-existent layout file" {
-			$result = Get-FancyZoneCoordinates -LayoutName "Any" -CustomLayoutsPath "C:\NonExistent\layouts.json" -ErrorAction SilentlyContinue
+			$result = Get-FancyZoneCoordinates -LayoutName "Any" -MonitorWidth 1000 -MonitorHeight 500 -CustomLayoutsPath "C:\NonExistent\layouts.json" -ErrorAction SilentlyContinue
 
 			$result | Should -BeNullOrEmpty
 		}
 
 		It "Should return null for non-existent layout name" {
-			$result = Get-FancyZoneCoordinates -LayoutName "NonExistentLayout" -CustomLayoutsPath $script:TestLayoutsPath -ErrorAction SilentlyContinue
+			$result = Get-FancyZoneCoordinates -LayoutName "NonExistentLayout" -MonitorWidth 1000 -MonitorHeight 500 -CustomLayoutsPath $script:TestLayoutsPath -ErrorAction SilentlyContinue
 
 			$result | Should -BeNullOrEmpty
 		}
 
 		It "Should return null with a clear error for a malformed grid definition" {
-			$result = Get-FancyZoneCoordinates -LayoutName "BadPercentCount" -CustomLayoutsPath $script:TestLayoutsPath -ErrorAction SilentlyContinue -ErrorVariable coordErrors
+			$result = Get-FancyZoneCoordinates -LayoutName "BadPercentCount" -MonitorWidth 1000 -MonitorHeight 500 -CustomLayoutsPath $script:TestLayoutsPath -ErrorAction SilentlyContinue -ErrorVariable coordErrors
 
 			$result | Should -BeNullOrEmpty
 			@($coordErrors | Where-Object { $_.ToString() -match "columns-percentage" }).Count | Should -BeGreaterThan 0
 		}
 
 		It "Should return null for unsupported layout types" {
-			$result = Get-FancyZoneCoordinates -LayoutName "FocusLayout" -CustomLayoutsPath $script:TestLayoutsPath -WarningAction SilentlyContinue
+			$result = Get-FancyZoneCoordinates -LayoutName "FocusLayout" -MonitorWidth 1000 -MonitorHeight 500 -CustomLayoutsPath $script:TestLayoutsPath -WarningAction SilentlyContinue
+
+			$result | Should -BeNullOrEmpty
+		}
+	}
+
+	Context "Required Monitor Geometry" {
+		# Width/Height used to default to a 3440x1440 ultrawide, so a caller that resolved no
+		# monitor silently got zones for a display that need not be attached. Omission is now
+		# a loud error instead.
+		It "Should return null with a clear error when monitor geometry is omitted" {
+			$result = Get-FancyZoneCoordinates -LayoutName "EvenSplit" -CustomLayoutsPath $script:TestLayoutsPath -ErrorAction SilentlyContinue -ErrorVariable geometryErrors
+
+			$result | Should -BeNullOrEmpty
+			@($geometryErrors | Where-Object { $_.ToString() -match "Monitor geometry is required" }).Count | Should -BeGreaterThan 0
+		}
+
+		It "Should return null when only the width is supplied" {
+			$result = Get-FancyZoneCoordinates -LayoutName "EvenSplit" -MonitorWidth 1000 -CustomLayoutsPath $script:TestLayoutsPath -ErrorAction SilentlyContinue
+
+			$result | Should -BeNullOrEmpty
+		}
+
+		It "Should return null for non-positive dimensions" {
+			$result = Get-FancyZoneCoordinates -LayoutName "EvenSplit" -MonitorWidth 1000 -MonitorHeight -500 -CustomLayoutsPath $script:TestLayoutsPath -ErrorAction SilentlyContinue
+
+			$result | Should -BeNullOrEmpty
+		}
+
+		It "Should not assume 3440x1440 when geometry is omitted" {
+			# The old default produced a full-width zone 3440 wide - proof the literal is gone.
+			$result = Get-FancyZoneCoordinates -LayoutName "EvenSplit" -CustomLayoutsPath $script:TestLayoutsPath -ErrorAction SilentlyContinue
 
 			$result | Should -BeNullOrEmpty
 		}

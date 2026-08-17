@@ -31,10 +31,14 @@ This guide explains how to create and configure window layouts for the WinuX "ti
 
 ## Layout File Structure
 
-Layout files are PowerShell data files (`.psd1`) with two main sections:
+Layout files are PowerShell data files (`.psd1`) with two main sections, plus one optional top-level key:
 
 ```powershell
 @{
+    # Optional. $false leaves attached monitors this file does not define alone.
+    # Default is $true - see "Monitors you do not define" below.
+    AutoExtendMonitors = $true
+
     # 1. Which FancyZones layout to use per monitor/desktop (1-based)
     Monitors = @{
         Primary = @{
@@ -140,6 +144,42 @@ Monitors = @{
     }
 }
 ```
+
+#### Monitor labels
+
+Any number of monitors is supported. The labels are `Primary`, `Secondary`, `Monitor3`, `Monitor4`, and so on for as many displays as are attached:
+
+| Label       | Which display                          |
+| ----------- | -------------------------------------- |
+| `Primary`   | Whichever display Windows marks primary |
+| `Secondary` | First non-primary display               |
+| `Monitor3`  | Second non-primary display              |
+| `MonitorN`  | (N-1)th non-primary display             |
+
+The non-primary displays are ordered by **physical position** - left to right, then top to bottom for displays stacked at the same X. They are deliberately *not* ordered by however Windows happens to enumerate them, because that order is not stable: it can change on monitor sleep/wake, a DisplayPort link drop, a GPU driver reload, or a dock/undock. Sorting by position means the same physical arrangement always produces the same labels.
+
+> **A label names a position, not a panel.** Rearranging your displays in Windows display settings reassigns the labels, and every layout file naming them follows the new arrangement. This is fine for the usual case (you rearrange displays rarely, and when you do you probably *want* the layout to follow), but it means a label is not a hardware identity. `Move-Windows`, `Center-Windows` and `Reset-Windows` also accept a device name (`\\.\DISPLAY1`) for the cases where a target must be pinned to one specific panel.
+
+#### Monitors you do not define
+
+You only have to define the monitors you actually care about. When a workspace opens, any attached monitor the file omits is filled in automatically, cloning the first defined monitor's per-desktop layouts as a template - otherwise that display would keep whatever zone layout it happened to have.
+
+Only zone layouts are cloned, never window rules, so an auto-added monitor gets a FancyZones layout but nothing is moved onto it. To opt a layout out and leave undefined monitors untouched:
+
+```powershell
+@{
+    AutoExtendMonitors = $false   # default is $true
+
+    Monitors = @{
+        Primary = @{ VirtualDesktopLayouts = @{ 1 = "One" } }
+    }
+    Layout = @( ... )
+}
+```
+
+Auto-extend is a safe default, not a good layout: a portrait 1080p panel inheriting an ultrawide's three-column grid is *covered*, not *configured*. For a display you use seriously, define its own `Monitors` block.
+
+The reverse case is also handled - a layout naming a monitor that is **not** attached (say `Monitor3` on a two-monitor machine) is not an error. The attached monitors are still laid out, one warning names the mismatch, and window rules targeting the missing monitor are skipped rather than being placed on the wrong display.
 
 ### Step 3: Define Window Rules
 
@@ -427,8 +467,16 @@ Notes:
 
 1. Ensure FancyZones is running: `Start-FancyZones`
 2. Verify layout name exists in `ZoneNameMappings`
-3. Check monitor name matches (`Primary`, `Secondary`)
+3. Check the monitor label matches an attached display (`Primary`, `Secondary`, `Monitor3`, ...). `Get-MonitorSpecs -AsHashtable` lists the labels currently in effect, in order
 4. Run `Test-FancyZonesConfiguration` to catch drift between `custom-layouts.json`, `ZoneNameMappings`, `LayoutNumbers`, and `layout-hotkeys.json` (it also runs automatically at every workspace open)
+
+### Windows land on the wrong monitor
+
+Labels follow **physical position**, so if you rearranged your displays in Windows display settings, `Secondary` and up now refer to different panels than when the layout was written. Run `Get-MonitorSpecs -AsHashtable` and compare the `DeviceName` of each label against what you expect. Either put the displays back, or update the layout file's `Monitor` values to match the new arrangement.
+
+### A window is missing entirely
+
+If a warning names a monitor with "no resolvable geometry", the layout targets a display that is not attached and that entry was skipped rather than placed somewhere arbitrary. Check the label against `Get-MonitorSpecs -AsHashtable`.
 
 ### "No layout configuration found for workspace"
 

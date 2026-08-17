@@ -30,17 +30,6 @@ function Update-LayoutSectionHeaders {
 		$zoneNameMappings = $global:Configuration.ZoneNameMappings
 	}
 
-	$resolveMonitorSortOrder = {
-		param (
-			[string]$MonitorName
-		)
-
-		if ($MonitorName -eq "Primary") { return 0 }
-		if ($MonitorName -eq "Secondary") { return 1 }
-
-		return 2
-	}
-
 	$resolveLayoutType = {
 		param (
 			[hashtable]$LayoutConfig,
@@ -155,7 +144,10 @@ function Update-LayoutSectionHeaders {
 				$entriesWithMetadata += @{
 					DesktopNumber = $desktopNum
 					Monitor       = $monitor
-					MonitorSort   = & $resolveMonitorSortOrder -MonitorName $monitor
+					# Resolve-MonitorLabel replaces a local Primary=0 / Secondary=1 / everything-else=2
+					# mapping under which Monitor3, Monitor4 and Monitor5 all tied at 2 and fell back
+					# to input order, making generated headers look randomly ordered past Secondary.
+					MonitorSort   = Resolve-MonitorLabel -Label $monitor
 					LayoutType    = $layoutType
 					Zone          = $zone
 					ZoneSort      = & $resolveZoneSortOrder -LayoutType $layoutType -ZoneName $zone
@@ -169,7 +161,8 @@ function Update-LayoutSectionHeaders {
 		$rebuiltLayout = ""
 		$lastKey = $null
 
-		# Sort by DesktopNumber first, then by Monitor (Primary first, then Secondary, then others)
+		# Sort by DesktopNumber first, then by Monitor (Primary, Secondary, Monitor3, Monitor4, ...;
+		# unrecognized labels tie at [int]::MaxValue and are broken alphabetically by name)
 		$sortedEntries = $entriesWithMetadata | Sort-Object @(
 			@{ Expression = { $_.DesktopNumber }; Ascending = $true }
 			@{ Expression = { $_.MonitorSort }; Ascending = $true }

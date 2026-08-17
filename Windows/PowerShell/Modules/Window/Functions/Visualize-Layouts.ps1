@@ -261,13 +261,14 @@ function Visualize-Layouts {
 				$desktopNumber = [int]$desktopGroup.Name
 				$desktopWindows = $desktopGroup.Group
 
-				# Group by Monitor within this desktop
-				$monitorGroups = $desktopWindows | Group-Object -Property Monitor | Sort-Object {
-					# Sort so Primary comes first, then Secondary, then others
-					if ($_.Name -eq "Primary") { 0 }
-					elseif ($_.Name -eq "Secondary") { 1 }
-					else { 2 }
-				}
+				# Group by Monitor within this desktop, ordered Primary, Secondary, Monitor3,
+				# Monitor4, ... The previous inline three-way sort collapsed everything past
+				# Secondary to 2, so Monitor3/4/5 tied and rendered in arbitrary input order.
+				$monitorGroups = $desktopWindows | Group-Object -Property Monitor |
+					Sort-Object @(
+						@{ Expression = { Resolve-MonitorLabel -Label $_.Name }; Ascending = $true }
+						@{ Expression = { $_.Name }; Ascending = $true }
+					)
 
 				foreach ($monitorGroup in $monitorGroups) {
 					$monitorName = $monitorGroup.Name

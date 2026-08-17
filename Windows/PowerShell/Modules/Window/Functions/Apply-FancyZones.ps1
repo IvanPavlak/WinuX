@@ -130,6 +130,7 @@ function Apply-FancyZones {
 	$monitorSpecs = Get-MonitorSpecs -MonitorInfo $monitors
 	$resolvedMonitorByKey = @{}
 	$matchedMonitorByKey = @{}
+	$unresolvableKeys = @()
 	foreach ($monitorKey in $MonitorConfig.Keys) {
 		$resolvedMonitor = if ($monitorSpecs) { $monitorSpecs.($monitorKey) } else { $null }
 		if ($resolvedMonitor) {
@@ -139,6 +140,23 @@ function Apply-FancyZones {
 				$_.Width -eq $resolvedMonitor.Width -and $_.Height -eq $resolvedMonitor.Height
 			} | Select-Object -First 1
 		}
+		else {
+			$unresolvableKeys += $monitorKey
+		}
+	}
+
+	# A layout naming a monitor that is not attached (Monitor6 on a two-monitor machine) is not
+	# fatal - the attached monitors are still laid out - but it used to pass without a trace, so
+	# the mismatch only surfaced later as windows landing somewhere unexpected. Warn once here
+	# rather than per desktop, since the resolution is per invocation.
+	if ($unresolvableKeys.Count -gt 0) {
+		$attachedLabels = if ($monitorSpecs) {
+			@($monitorSpecs.PSObject.Properties.Name | Sort-Object { Resolve-MonitorLabel -Label $_ }) -join ', '
+		}
+		else { "none detected" }
+
+		$orderedUnresolvable = @($unresolvableKeys | Sort-Object { Resolve-MonitorLabel -Label $_ }) -join ', '
+		Write-LogWarning "Layout targets monitor(s) [$orderedUnresolvable] that are not attached - skipping them. Attached monitors: $attachedLabels"
 	}
 
 	# Generic List with reference semantics: the $applyLayouts scriptblock below receives this
