@@ -25,6 +25,13 @@ function Configure-Taskbar {
 		stamped in place, an `.exe` Value gets a machine-local shortcut generated under
 		`TaskbarPins\<Name>.lnk` next to the layout file.
 
+		Explorer applies the pin list asynchronously for several seconds after it starts, and
+		it records the layout file's timestamp (Taskband\LayoutXMLLastModified) so an unchanged
+		file is never re-applied - a restart landing mid-apply therefore truncates the pins
+		permanently. The icon cache rebuild is done up front and the final Restart-Explorer is
+		the last Explorer-touching operation, with the applied-layout marker reset just before
+		it so the layout is guaranteed to apply on that start.
+
 		With `-FromBootstrap`, skips a 5-second initialization delay (used when called
 		during the bootstrap sequence before all processes are fully settled).
 
@@ -57,7 +64,14 @@ function Configure-Taskbar {
 		Unpin-TaskbarApps -FromBootstrap
 	}
 	else {
-		Unpin-TaskbarApps
+		# The icon cache rebuild bounces Explorer, so it must happen BEFORE the new layout is
+		# written: Explorer applies the pin list asynchronously for several seconds after it
+		# starts, and any Explorer restart landing in that window truncates the pin list
+		# mid-apply. Unpin skips its own restart and the rebuild provides the single bounce
+		# that clears the pins on screen - the final Restart-Explorer below is then the only
+		# instance that ever sees the new layout, and nothing restarts Explorer after it.
+		Unpin-TaskbarApps -SkipExplorerRestart
+		Rebuild-IconCache
 	}
 
 	if ($FromBootstrap) {
@@ -214,9 +228,23 @@ function Configure-Taskbar {
 			Write-LogWarning "Could not lock layout => [$($_.Exception.Message)]"
 		}
 
-		Restart-Explorer -Message "Allowing Explorer to apply XML layout..."
+		# Explorer records the layout file's timestamp in Taskband\LayoutXMLLastModified when it
+		# applies a taskbar layout and silently skips a file whose timestamp it already recorded.
+		# An earlier Explorer instance (the icon-cache bounce above) may have raced ahead, read
+		# this layout mid-write and recorded it without finishing the pins - bump the file's
+		# timestamp and drop the marker so the instance started below is guaranteed to re-apply.
+		try {
+			(Get-Item -LiteralPath $layoutFile).LastWriteTime = Get-Date
+			Remove-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Taskband" -Name "LayoutXMLLastModified" -Force -ErrorAction SilentlyContinue
+		}
+		catch {
+			Write-LogWarning "Could not reset the applied-layout marker => [$($_.Exception.Message)]"
+		}
 
-		Rebuild-IconCache
+		# The generous delay is not cosmetic: Explorer keeps applying the pin list for several
+		# seconds after it starts, and returning early would let a caller (or the user) bounce
+		# Explorer mid-apply, truncating the pins with no automatic retry.
+		Restart-Explorer -Message "Allowing Explorer to apply XML layout..." -Delay 8
 
 		Write-LogSuccess "Taskbar configuration completed for [$MachineType]!"
 	}

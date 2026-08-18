@@ -42,7 +42,11 @@ function Clear-TaskbarPins {
 			return
 		}
 
-		$propertiesToRemove = @("Favorites", "FavoritesResolve", "FavoritesChanges", "FavoritesVersion", "FavoritesRemovedChanges")
+		# LayoutXMLLastModified is Explorer's "this layout file is already applied" marker: it
+		# records the layout file's timestamp and skips re-applying a file whose timestamp
+		# matches. Clearing it alongside the pins guarantees the next Explorer start re-applies
+		# whatever layout the policy points at, even one an interrupted apply left half-done.
+		$propertiesToRemove = @("Favorites", "FavoritesResolve", "FavoritesChanges", "FavoritesVersion", "FavoritesRemovedChanges", "LayoutXMLLastModified")
 		$removedCount = 0
 
 		foreach ($prop in $propertiesToRemove) {
