@@ -11,10 +11,17 @@ Describe "Documentation Link Validity" {
 		Only checks relative .md links - external URLs and anchor-only links are ignored.
 	#>
 
+	BeforeDiscovery {
+		# -ForEach binds at discovery time, before any BeforeAll has run. This list used to be
+		# built in BeforeAll, so it was still null at discovery: under Pester 5 the Context
+		# silently generated zero tests and the cross-reference check never actually ran.
+		# Pester 6 fails the container on a null/empty -ForEach instead of hiding it.
+		$AllDocFiles = Get-ChildItem -Path (Join-Path (Get-RepositoryPath).Repo "docs") -Recurse -Filter "*.md"
+	}
+
 	BeforeAll {
 		$DocsRoot = Join-Path (Get-RepositoryPath).Repo "docs"
 		$DocsRoot = (Resolve-Path $DocsRoot).Path
-		$AllDocFiles = Get-ChildItem -Path $DocsRoot -Recurse -Filter "*.md"
 	}
 
 	Context "Sidebar links resolve to existing files" {
@@ -44,15 +51,20 @@ Describe "Documentation Link Validity" {
 			$fileDir = [System.IO.Path]::GetDirectoryName($filePath)
 			$content = Get-Content $filePath -Raw
 
-			# Match relative links: (../path/file.md) or (path/file.md) - not starting with http or /
-			$relativeLinks = [regex]::Matches($content, '\((?!http|/)([^)]+\.md)(?:#[^)]*)?\)') |
+			# Fenced code blocks hold templates and examples, not navigable links.
+			$content = $content -replace '(?s)```.*?```', ''
+
+			# Match only real Markdown links - "](target.md)" - relative, not http or root-anchored.
+			# The old pattern matched ANY parenthesized text ending in .md, which flagged prose
+			# parentheticals; it went unnoticed because these tests never ran (see BeforeDiscovery).
+			$relativeLinks = [regex]::Matches($content, '\]\((?!http|/)([^)\s]+\.md)(?:#[^)]*)?\)') |
 				ForEach-Object { $_.Groups[1].Value }
 
 			$broken = @()
 			foreach ($link in $relativeLinks) {
 				$linkPath = $link -split '#' | Select-Object -First 1
 				$fullPath = [System.IO.Path]::GetFullPath((Join-Path $fileDir $linkPath))
-				if (-not (Test-Path $fullPath)) {
+				if (-not (Test-Path -LiteralPath $fullPath)) {
 					$broken += "$link (in $([System.IO.Path]::GetFileName($filePath)))"
 				}
 			}

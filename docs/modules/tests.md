@@ -45,7 +45,9 @@ if ($results.FailedCount -gt 0) {
 
 [Invoke-TestSuite.ps1](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Tests/Invoke-TestSuite.ps1) is the harness both `Run-Tests` and the `Tests` CI workflow run. It sits at the module root rather than in `Functions/` because it is a script, not an exported function.
 
-Pester 5 has no native parallelism, so the harness provides it. Discovered test files are bucketed by expected duration and handed to N child `pwsh -NoProfile` processes. Each worker bootstraps its own session - `PSModulePath`, `$global:Configuration`, the nine engine modules plus `Custom` - and runs `Invoke-Pester` over its own bucket.
+Pester (6.x included) has no native parallelism, so the harness provides it. Discovered test files are bucketed by expected duration and handed to N child `pwsh -NoProfile` processes. Each worker bootstraps its own session - `PSModulePath`, `$global:Configuration`, the nine engine modules plus `Custom` - and runs `Invoke-Pester` over its own bucket.
+
+The Pester version is pinned repo-wide in `Modules/Tests/RequiredPesterVersion.txt` - the single source of truth the worker bootstrap (`Import-Module -RequiredVersion`), `Install-PowerShellModules`, and the `Tests` CI workflow all read. A machine without exactly that version fails loudly at worker bootstrap (exit code `2`) instead of silently running the suite on a version it was not written for; run `Install-PowerShellModules` to install the pin side-by-side with whatever else is present (the in-box 3.4.0 included). To bump the version, edit the pin file, re-run `Install-PowerShellModules` on each machine, and fix any new breaking changes in the same PR - the CI cache key rolls over automatically.
 
 Two consequences matter day to day:
 
@@ -113,7 +115,7 @@ Tests are grouped by the module they validate, not by the Tests module itself.
 
 ### Pester Test Pattern
 
-Tests use the [Pester](https://pester.dev/) framework (v5+):
+Tests use the [Pester](https://pester.dev/) framework, pinned repo-wide via `Modules/Tests/RequiredPesterVersion.txt`:
 
 ```powershell
 # MyFunction.Tests.ps1

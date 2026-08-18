@@ -31,7 +31,17 @@ function Write-ManualInstructionsToDesktop {
 		[string]$Content
 	)
 
+	# GetFolderPath VERIFIES the folder by default and returns an EMPTY STRING when that
+	# check does not succeed (e.g. service/CI profiles without a Desktop), which Join-Path
+	# rejects outright. DoNotVerify answers from the known-folder registration without
+	# touching the disk; the profile path is the last resort.
 	$desktopPath = [Environment]::GetFolderPath("Desktop")
+	if ([string]::IsNullOrWhiteSpace($desktopPath)) {
+		$desktopPath = [Environment]::GetFolderPath("Desktop", "DoNotVerify")
+	}
+	if ([string]::IsNullOrWhiteSpace($desktopPath)) {
+		$desktopPath = Join-Path $env:USERPROFILE "Desktop"
+	}
 	$filePath = Join-Path $desktopPath $FileName
 
 	$separator = "=" * $Title.Length

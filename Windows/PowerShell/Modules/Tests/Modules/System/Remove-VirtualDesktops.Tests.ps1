@@ -12,6 +12,11 @@ BeforeAll {
 
 	function Reset-VirtualDesktopState { }
 
+	# Captured before any mock exists: invoking the CommandInfo directly executes the genuine
+	# cmdlet without name resolution, so a Get-Command mock body can delegate to it without
+	# re-entering itself. (A module-qualified call does NOT bypass the mock - it recurses.)
+	$script:RealGetCommand = Get-Command -Name Get-Command -CommandType Cmdlet
+
 	# VirtualDesktop cmdlets come from an optional external module absent on CI runners.
 	# Stub the ones these tests mock so Mock can attach (no-op where the real module exists).
 	if (-not (Get-Command Get-DesktopCount -ErrorAction SilentlyContinue)) {
@@ -250,6 +255,13 @@ Describe "Remove-VirtualDesktops" {
 	}
 
 	Context "EmptyOnly mode" {
+		BeforeEach {
+			# Pester 6 throws when a mocked command is called and no parameter filter matches;
+			# v5 fell through to the real command. This default mock restores the v5 fallthrough
+			# by delegating to the CommandInfo captured in BeforeAll.
+			Mock Get-Command { & $script:RealGetCommand @PesterBoundParameters }
+		}
+
 		It "does nothing when only one desktop exists" {
 			Mock Get-DesktopCount { 1 }
 			Mock Remove-Desktop { }

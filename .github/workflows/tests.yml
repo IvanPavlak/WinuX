@@ -21,10 +21,6 @@ permissions:
   checks: write          # dorny/test-reporter creates a Check Run
   pull-requests: write   # annotations / check summary on PRs
 
-env:
-  # Pinned so the cache key is exact. Bump deliberately.
-  PESTER_VERSION: '5.7.1'
-
 jobs:
   test:
     name: Pester Tests
@@ -33,8 +29,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # windows-latest ships Pester 3.4.0 in-box, so the 5.x line has to be installed. Pulling it
-      # from PSGallery on every run cost ~29s; the cache turns that into a few seconds.
+      # The pinned version lives in one file the harness and Install-PowerShellModules also
+      # read, so CI can never disagree with a local run. Bump it there, deliberately.
+      - name: Resolve pinned Pester version
+        shell: pwsh
+        run: '"PESTER_VERSION=$((Get-Content Windows/PowerShell/Modules/Tests/RequiredPesterVersion.txt).Trim())" >> $env:GITHUB_ENV'
+
+      # windows-latest ships Pester 3.4.0 in-box, so the pinned version has to be installed.
+      # Pulling it from PSGallery on every run cost ~29s; the cache turns that into a few seconds.
       - name: Cache Pester
         id: cache-pester
         uses: actions/cache@v4

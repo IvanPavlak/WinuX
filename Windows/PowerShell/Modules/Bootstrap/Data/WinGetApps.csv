@@ -33,8 +33,8 @@ App,Version,Scope,Interactive,Source,Machine
 #   Microsoft.PowerToys  0.100.2  -> pinned by the row below (installed with --version;
 #                                    version-specific rows are re-pinned in winget by Upgrade-All)
 #   VirtualDesktop       1.5.11   -> $pinnedModules in Modules\Application\Functions\Install-PowerShellModules.ps1
-#   Pester               5.7.1    -> CI only: .github\workflows\tests.yml (PESTER_VERSION);
-#                                    local installs float >= 5.0.0 via Install-PowerShellModules
+#   Pester               pinned   -> repo-wide: Modules\Tests\RequiredPesterVersion.txt (read by
+#                                    the test harness, Install-PowerShellModules, and CI alike)
 #   PowerShell           7.6.4    -> NOT enforced (row below installs Latest; last tested 7.6.4)
 #   Windows 11           25H2     -> NOT enforced (build 26200; environment, not a package)
 # ===============================================================================================

@@ -6,7 +6,7 @@
 	The single source of truth for running this repository's tests, locally and in CI. Run-Tests
 	is a thin wrapper around it; the Tests workflow calls it directly with -CI.
 
-	Pester 5 has no native parallelism, so the harness provides it: the discovered *.Tests.ps1
+	Pester (6.x included) has no native parallelism, so the harness provides it: the discovered *.Tests.ps1
 	files are bucketed by expected duration and handed to N child `pwsh -NoProfile` processes,
 	each of which bootstraps its own hermetic session (the same bootstrap the CI job used to
 	inline) and runs Invoke-Pester over its own bucket. Because every worker is a separate
@@ -224,10 +224,15 @@ if ($PSCmdlet.ParameterSetName -eq 'Worker') {
 		}
 
 		try {
-			Import-Module -Name Pester -MinimumVersion 5.5.0 -ErrorAction Stop
+			# Pinned repo-wide: RequiredPesterVersion.txt is the single source of truth this
+			# harness, Install-PowerShellModules, and CI all read. -RequiredVersion (exact), not
+			# -MinimumVersion: Pester installs side-by-side, so exactness costs nothing and a
+			# machine with the wrong version fails loudly here instead of drifting silently.
+			$requiredPesterVersion = (Get-Content -LiteralPath (Join-Path (Get-RepositoryPath).Modules "Tests\RequiredPesterVersion.txt")).Trim()
+			Import-Module -Name Pester -RequiredVersion $requiredPesterVersion -ErrorAction Stop
 		}
 		catch {
-			throw "Pester 5.5+ is not available. Please run Install-PowerShellModules first. ($($_.Exception.Message))"
+			throw "Pester $requiredPesterVersion is not available. Please run Install-PowerShellModules first. ($($_.Exception.Message))"
 		}
 		$summary.pesterVersion = (Get-Module -Name Pester | Sort-Object Version -Descending | Select-Object -First 1).Version.ToString()
 	}

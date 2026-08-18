@@ -24,7 +24,7 @@ Describe "Invoke-WithOptionalRetry" {
 			$result = Invoke-WithOptionalRetry -EnableRetry -ScriptBlock { "ignored" } -MaxAttempts 4 -InitialDelayMs 150
 
 			$result | Should -Be "retried"
-			Assert-MockCalled Invoke-WithRetry -Times 1 -Exactly -ParameterFilter { $MaxAttempts -eq 4 -and $InitialDelayMs -eq 150 }
+			Should -Invoke Invoke-WithRetry -Times 1 -Exactly -ParameterFilter { $MaxAttempts -eq 4 -and $InitialDelayMs -eq 150 }
 		}
 
 		It "Passes OnRetry to Invoke-WithRetry when provided" {
@@ -35,7 +35,7 @@ Describe "Invoke-WithOptionalRetry" {
 			$result = Invoke-WithOptionalRetry -EnableRetry -ScriptBlock { "ignored" } -OnRetry $retryHook
 
 			$result | Should -Be "retried"
-			Assert-MockCalled Invoke-WithRetry -Times 1 -Exactly -ParameterFilter { $OnRetry -eq $retryHook }
+			Should -Invoke Invoke-WithRetry -Times 1 -Exactly -ParameterFilter { $OnRetry -eq $retryHook }
 		}
 
 		It "Falls back to direct execution when retry is enabled but helper is unavailable" {
