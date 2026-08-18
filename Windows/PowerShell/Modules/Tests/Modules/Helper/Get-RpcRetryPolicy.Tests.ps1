@@ -42,8 +42,8 @@ Describe "Get-RpcRetryPolicy" {
 
 			$null = Get-RpcRetryPolicy -Probe
 
-			Assert-MockCalled Test-RpcServerHealth -Times 1 -Exactly -ParameterFilter { $Probe }
-			Assert-MockCalled Repair-RpcServer -Times 0
+			Should -Invoke Test-RpcServerHealth -Times 1 -Exactly -ParameterFilter { $Probe }
+			Should -Invoke Repair-RpcServer -Times 0
 		}
 
 		It "Does not call Repair-RpcServer when RPC services are healthy" {
@@ -52,8 +52,8 @@ Describe "Get-RpcRetryPolicy" {
 
 			$null = Get-RpcRetryPolicy
 
-			Assert-MockCalled Test-RpcServerHealth -Times 1 -Exactly
-			Assert-MockCalled Repair-RpcServer -Times 0
+			Should -Invoke Test-RpcServerHealth -Times 1 -Exactly
+			Should -Invoke Repair-RpcServer -Times 0
 		}
 
 		It "Calls Repair-RpcServer when RPC services are unhealthy" {
@@ -62,8 +62,8 @@ Describe "Get-RpcRetryPolicy" {
 
 			$null = Get-RpcRetryPolicy -OperationLabel "desktop cleanup"
 
-			Assert-MockCalled Test-RpcServerHealth -Times 1 -Exactly
-			Assert-MockCalled Repair-RpcServer -Times 1 -Exactly
+			Should -Invoke Test-RpcServerHealth -Times 1 -Exactly
+			Should -Invoke Repair-RpcServer -Times 1 -Exactly
 		}
 	}
 }

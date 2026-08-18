@@ -103,7 +103,7 @@ Install-FromExecutable -Name "MyApp" -Path "D:\installers\myapp-setup.exe" -Argu
 - **Description:** Installs the required PowerShell modules from PSGallery (Terminal-Icons, PSReadLine, z, VirtualDesktop, ps2exe, Pester). Ensures the NuGet provider and the PSGallery trusted repository are configured first, then installs each module only if it is not already present. Called automatically by Bootstrap.
 - **Usage:** `Install-PowerShellModules`
 
-Ensures the NuGet package provider (minimum 2.8.5.201) is available and that PSGallery is set as a `Trusted` installation policy, then iterates a fixed module list and installs anything missing into the `CurrentUser` scope. VirtualDesktop is pinned to `1.5.11` (via the `$pinnedModules` hashtable) because it wraps undocumented COM interfaces that break between Windows builds, so only tested/verified versions are used; if a different VirtualDesktop version is present it is reinstalled at the pinned version. The tested combination this pin belongs to is tracked in the `TESTED VERSIONS` block in `Modules/Bootstrap/Data/WinGetApps.csv` - update both together. Pester is handled separately: Windows ships an unupdatable 3.4.0, so it is installed with `-SkipPublisherCheck` and is left alone only when v5.0.0 or newer is already present. Errors during installation are written in red and rethrown.
+Ensures the NuGet package provider (minimum 2.8.5.201) is available and that PSGallery is set as a `Trusted` installation policy, then iterates a fixed module list and installs anything missing into the `CurrentUser` scope. VirtualDesktop is pinned to `1.5.11` (via the `$pinnedModules` hashtable) because it wraps undocumented COM interfaces that break between Windows builds, so only tested/verified versions are used; if a different VirtualDesktop version is present it is reinstalled at the pinned version. The tested combination this pin belongs to is tracked in the `TESTED VERSIONS` block in `Modules/Bootstrap/Data/WinGetApps.csv` - update both together. Pester is handled separately: it is pinned repo-wide to the version in `Modules/Tests/RequiredPesterVersion.txt` - the same single source of truth the test harness and the `Tests` CI workflow read - and is installed side-by-side (Windows ships an unupdatable 3.4.0) with `-SkipPublisherCheck`, skipped only when exactly the pinned version is already present. Bumping the pin file and re-running this function on every machine is the whole upgrade procedure. Errors during installation are written in red and rethrown.
 
 | Module           | Purpose                                                             |
 | ---------------- | ------------------------------------------------------------------- |
@@ -112,7 +112,7 @@ Ensures the NuGet package provider (minimum 2.8.5.201) is available and that PSG
 | `z`              | Frecency-based directory jump shortcut                              |
 | `VirtualDesktop` | Windows virtual desktop COM API wrapper (pinned to 1.5.11)          |
 | `ps2exe`         | PowerShell-to-EXE compiler                                          |
-| `Pester`         | PowerShell testing framework (installed with `-SkipPublisherCheck`) |
+| `Pester`         | PowerShell testing framework (pinned via `Tests/RequiredPesterVersion.txt`, installed side-by-side with `-SkipPublisherCheck`) |
 
 ```powershell
 # Install all required modules that are not already present

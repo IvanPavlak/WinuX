@@ -4,6 +4,12 @@ BeforeAll {
 	$script:OriginalConfiguration = $global:Configuration
 	$AppFunctionsPath = Join-Path (Get-RepositoryPath).Modules "Application\Functions"
 	. "$AppFunctionsPath\Install-DotnetEf.ps1"
+
+	# Mock requires the command to exist; machines without the .NET SDK have no dotnet.
+	# The stub gives Pester a resolvable target - every test then mocks over it.
+	if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
+		function script:dotnet { }
+	}
 }
 
 AfterAll {

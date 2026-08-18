@@ -2024,8 +2024,8 @@ When you want to upgrade a pinned dependency:
       source of truth) **and** the pinned `Microsoft.PowerToys` row below it
     - `Modules/Application/Functions/Install-PowerShellModules.ps1` - the `$pinnedModules`
       hashtable, for VirtualDesktop
-    - `.github/workflows/tests.yml` - `PESTER_VERSION`, for the CI Pester pin (local installs
-      float >= 5.0.0)
+    - `Modules/Tests/RequiredPesterVersion.txt` - the repo-wide Pester pin (the test harness,
+      `Install-PowerShellModules`, and CI all read this one file)
     - This documentation section (it mirrors the CSV block)
 
 ### Zone Geometry Contract

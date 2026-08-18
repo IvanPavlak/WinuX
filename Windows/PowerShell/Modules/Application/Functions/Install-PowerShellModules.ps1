@@ -11,7 +11,8 @@ function Install-PowerShellModules {
 		- z                 - directory jump shortcut (frecency-based)
 		- VirtualDesktop    - Windows virtual desktop COM API wrapper (pinned to 1.5.11)
 		- ps2exe            - PowerShell-to-EXE compiler
-		- Pester            - PowerShell testing framework (pinned, skipped if present)
+		- Pester            - PowerShell testing framework (pinned to the repo's required
+		                      version, skipped if that exact version is present)
 
 		VirtualDesktop is pinned because the module wraps undocumented COM interfaces that
 		break between Windows builds. Only tested/verified versions are used - the tested
@@ -85,18 +86,19 @@ function Install-PowerShellModules {
 		# Handle Pester separately due to side-by-side installation requirements
 		# Windows 10/Server 2016+ ships with Pester 3.4.0 which cannot be updated normally
 		# Must use -SkipPublisherCheck due to different certificate between Microsoft and community versions
-		$pesterModule = Get-Module -ListAvailable -Name Pester | Sort-Object Version -Descending | Select-Object -First 1
-		if ($pesterModule -and $pesterModule.Version -ge [Version]"5.0.0") {
-			Write-LogWarning " [Pester] latest version already installed! (v$($pesterModule.Version))"
+		#
+		# Pester is pinned repo-wide: the harness imports exactly this version (side-by-side with
+		# the un-removable in-box 3.4.0 and anything else already installed). Single source of
+		# truth is Tests\RequiredPesterVersion.txt - bump it there, then re-run this function on
+		# every machine.
+		$requiredPesterVersion = [Version](Get-Content -LiteralPath (Join-Path (Get-RepositoryPath).Modules "Tests\RequiredPesterVersion.txt")).Trim()
+		$pesterInstalled = Get-Module -ListAvailable -Name Pester | Where-Object { $_.Version -eq $requiredPesterVersion }
+		if ($pesterInstalled) {
+			Write-LogWarning " [Pester] pinned version already installed! (v$requiredPesterVersion)"
 		}
 		else {
-			if ($pesterModule) {
-				Write-LogStep " Upgrading Pester from v$($pesterModule.Version) to latest..."
-			}
-			else {
-				Write-LogStep " Installing Pester..."
-			}
-			Install-Module -Name Pester -Force -SkipPublisherCheck -Scope CurrentUser
+			Write-LogStep " Installing Pester v$requiredPesterVersion (side-by-side)..."
+			Install-Module -Name Pester -RequiredVersion $requiredPesterVersion -Force -SkipPublisherCheck -Scope CurrentUser
 			$installedAny = $true
 		}
 

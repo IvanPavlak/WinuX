@@ -67,7 +67,7 @@ WinuX targets **Windows 11** and **PowerShell 7+**.
 | Windows 11    | Primary supported OS.                                                                   |
 | PowerShell 7+ | `winget install Microsoft.PowerShell`. PowerShell 5.1 is only used to bootstrap into 7. |
 | Git           | `winget install Git.Git`.                                                               |
-| Pester 5+     | Test framework. `Install-Module Pester -MinimumVersion 5.0 -Scope CurrentUser`.         |
+| Pester        | Test framework, pinned repo-wide to the version in `Windows/PowerShell/Modules/Tests/RequiredPesterVersion.txt`. `Install-PowerShellModules` installs it; manually: `Install-Module Pester -RequiredVersion (Get-Content Windows/PowerShell/Modules/Tests/RequiredPesterVersion.txt).Trim() -SkipPublisherCheck -Scope CurrentUser`. |
 | Administrator | Needed to exercise symlink/bootstrap code paths (not needed just to run tests).         |
 
 1. **Fork** the repository on GitHub, then **clone your fork**:
@@ -114,10 +114,20 @@ once per changed area and confirm each is green.
 Every new exported function should ship with tests.
 
 1. Create `Windows/PowerShell/Modules/Tests/Modules/<Module>/<FunctionName>.Tests.ps1`.
-2. Follow the existing Pester 5 structure used by neighbouring test files.
+2. Follow the existing Pester structure used by neighbouring test files.
 3. **Test behavior, side effects, branching, and edge cases** - not output/log strings.
 4. Mock external/destructive calls (filesystem writes, `winget`, symlink creation, network)
    so tests are hermetic and safe to run repeatedly.
+5. **A `-ParameterFilter` mock is always accompanied by a default mock of the same command.**
+   Pester 6 throws when a mocked command is called and no parameter filter matches (Pester 5
+   silently fell through to the real command), so every filtered mock needs an unfiltered
+   fallback - unless the filters provably cover every call the code under test can make. To
+   delegate the fallback to the real command, capture it **before any mock exists**
+   (`$script:RealGetCommand = Get-Command -Name Get-Command -CommandType Cmdlet` in
+   `BeforeAll`) and mock with
+   `Mock Get-Command { & $script:RealGetCommand @PesterBoundParameters }`. Do not call the
+   command by name (module-qualified included) inside its own mock body - the mock intercepts
+   it and recurses until call depth overflow.
 
 ---
 
