@@ -8,7 +8,7 @@ BeforeAll {
 	. "$FunctionsPath\Resolve-Selection.ps1"
 
 	# Stub Custom-ReadHost for interactive prompts
-	function Custom-ReadHost { param($Prompt, [switch]$AddNewLine) "" }
+	function Custom-ReadHost { param($Prompt, [string]$ForegroundColor, [switch]$AddNewLine) "" }
 }
 
 Describe "Resolve-Selection" {
@@ -109,6 +109,54 @@ Describe "Resolve-Selection" {
 			$result = Resolve-Selection -AllowEmptyPromptResponse -OptionList @("A", "B")
 
 			$result | Should -BeNullOrEmpty
+		}
+	}
+
+	Context "When ConfirmationMessage is provided" {
+		BeforeEach {
+			Mock Write-Host { }
+		}
+
+		It "Should default to No when Enter is pressed" {
+			Mock Custom-ReadHost { "" }
+
+			$result = Resolve-Selection -ConfirmationMessage "Are you sure?"
+
+			$result | Should -Be "No"
+		}
+
+		It "Should return Yes only on explicit confirmation" {
+			Mock Custom-ReadHost { "Yes" }
+
+			$result = Resolve-Selection -ConfirmationMessage "Are you sure?"
+
+			$result | Should -Be "Yes"
+		}
+
+		It "Should render the confirmation message as a red prompt" {
+			Mock Custom-ReadHost { "No" }
+
+			Resolve-Selection -ConfirmationMessage "Are you sure you want to delete all volumes?" | Out-Null
+
+			Should -Invoke Custom-ReadHost -Times 1 -ParameterFilter {
+				$ForegroundColor -eq "Red" -and $Prompt -match 'Are you sure you want to delete all volumes\?'
+			}
+		}
+
+		It "Should let an explicit DefaultOptionIndex win over the No default" {
+			Mock Custom-ReadHost { "" }
+
+			$result = Resolve-Selection -ConfirmationMessage "Are you sure?" -DefaultOptionIndex 1
+
+			$result | Should -Be "Yes"
+		}
+
+		It "Should not force a default when the OptionList has no No option" {
+			Mock Custom-ReadHost { "Proceed" }
+
+			$result = Resolve-Selection -ConfirmationMessage "Are you sure?" -OptionList @("Proceed", "Abort")
+
+			$result | Should -Be "Proceed"
 		}
 	}
 }

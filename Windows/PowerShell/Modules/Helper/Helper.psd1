@@ -56,6 +56,7 @@
 		'ReRun-LastCommand',
 		'Resolve-HostingTerminalTab',
 		'Resolve-ProjectPath',
+		'Resolve-RunProjectSteps',
 		'Resolve-Selection',
 		'Run-Project',
 		'Show-FunctionDetails',

@@ -8,6 +8,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.37] - 2026-08-18
+
+### Added
+
+- **`Start-Containers` (Workflow module): start the configured Docker Compose stacks without running any project.** `DockerWizard` with no arguments starts Docker Desktop and stops there, and the knowledge of which compose file the databases need lived only inside `Run-Project`, inlined between the project menu and the terminal-tab logic - there was no way to bring up the database containers (e.g. for DBeaver) without also opening tabs and starting servers. The unit of control is deliberately the compose file, not a project: the stacks are shared by design (every PostgreSQL project talks to the same centralized containers), so a project menu would offer choices that all mean the same stack. `Start-Containers` reads `Configuration.DockerComposeFiles` (name => compose file, resolved relative to `MachineSpecificPaths.DockerDirectory` or used as-is when absolute, so arbitrary non-database stacks can be registered too); with a single configured entry it is a pure on/off switch that asks nothing, with several it shows a multi-select menu. After a start it prints the compose file's published host ports so the connection target is obvious. `-Stop` runs `docker compose stop` (containers kept, fast resume); adding `-Down` runs `docker compose down` instead (containers and network removed, volumes kept). Docker Desktop itself stays up either way - that remains `DockerWizard -Stop`'s job. Also works as a workspace/project action: `@{ Action = "Start-Containers" }`.
+
+- **`Resolve-ProjectDockerCompose` (Workflow module): the Docker Compose resolution extracted from `Run-Project`.** Takes `-ProjectName` and an optional `-DatabaseProvider` (which skips the provider menu), and returns either `$null` (project needs no Docker) or the resolved provider plus exactly one of `ComposeFilePath` (centralized compose file under `MachineSpecificPaths.DockerDirectory`) / `ComposeProjectPath` (project root with its own `docker-compose.yml`) - the same shapes `DockerWizard` accepts. `Run-Project` stays thin, and the compose knowledge is no longer buried between its menu and its tab logic.
+
+- **`RunProject.Steps.Docker` + `Run-Project -Skip`/`-Include` (via the new `Resolve-RunProjectSteps`, Helper module): Docker as an opt-in step, following the `KillAll.Steps` pattern.** `Run-Project` was tied to Docker too closely: the generic configuration ships a PostgreSQL-to-compose-file mapping, so merely declaring `DatabaseProviders = @("PostgreSQL")` on a project mapping forced Docker onto setups that run PostgreSQL locally and use no Docker at all. The Docker step now resolves through `Resolve-RunProjectSteps` - a thin wrapper over the shared `Resolve-Steps`, exactly like `Resolve-KillAllSteps` - so `RunProject = @{ Steps = @{ Docker = $false } }` (a plain boolean or a per-machine-type hashtable with a `Default` fallback) turns it off once in `Configuration.local.psd1`, and `Run-Project -Skip Docker` / `-Include Docker` override per invocation. Disabled means genuinely untouched: not even the database provider prompt appears. The default is on, which is inert unless a project mapping declares `DatabaseProviders` or `UsesDocker`, so existing setups are unchanged.
+
+- **`Docker-Cleanup` (Workflow module): menu-driven Docker maintenance behind confirmation safeguards.** The actions come from the new `DockerCleanupActions` configuration - each entry a `Name` (menu label), a `Command` (the PowerShell command line to run) and an optional `ConfirmationMessage`. The shipped defaults cover the three classic teardown moves: stop all containers, `docker system prune -a --volumes -f`, and delete all volumes. An action carrying a `ConfirmationMessage` only runs after an explicit "Yes" on a red confirmation prompt, and pressing Enter defaults to "No", so a slip of muscle memory cannot delete every volume on the machine. Forks replace the list wholesale in `Configuration.local.psd1` to add their own actions.
+
+- **`Resolve-Selection -ConfirmationMessage`: a reusable destructive-action safeguard.** The message is rendered as the prompt in red, and when the OptionList contains "No" (the default Yes/No list does) Enter selects it, so the destructive path always takes an explicit "Yes". An explicitly passed `-PromptMessage` or `-DefaultOptionIndex` still wins, and `-InputObject` bypasses the prompt entirely - never pass it on a confirmation call. `Docker-Cleanup` is the first consumer; any menu offering something irreversible can reuse it.
+
+- **`DockerTimeouts` (Configuration.psd1): configurable `DockerWizard` polling budgets.** `StartSeconds`/`StopSeconds`/`CleanupSeconds` replace the hardcoded 180/60/30 second loops (which remain the defaults when the configuration is absent), so machines where Docker Desktop boots slowly can raise them instead of editing the function.
+
+### Changed
+
+- **`DockerWizard` runs `docker compose up -d` unconditionally when a compose source is given.** It used to skip compose startup while *any* container of the stack was running, so a half-stopped stack never healed. `up -d` is idempotent - running it always reconciles the stack to the compose file. A compose path that does not exist (typoed `-ComposeFilePath`, project directory without a compose file) is now reported instead of being silently swallowed by the path guard, and counts as a **failure** rather than a no-op: compose work was requested and did not happen, so `-PassThru` reports `Success = $false` and callers stop instead of announcing containers that never started. A failing `up -d` is reported the same way.
+
+### Fixed
+
+- **`Run-Project` never actually skipped a project when Docker failed to start.** `DockerWizard` set `$script:DockerStartFailed` in the **Workflow** module's script scope while `Run-Project` read the **Helper** module's - both `.psm1` files dot-source their functions into their own module scope, so these were two different variables and the guard could never trip: when the daemon did not come up, the terminal tabs opened anyway against a database that was not there. `DockerWizard` now reports its outcome through `-PassThru` (`[PSCustomObject]@{ Success; ComposeFilePath }`), `Run-Project` branches on the return value, and the module-scoped flag is gone.
+
 ## [0.1.36] - 2026-08-17
 
 ### Added
@@ -684,7 +708,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.36...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.37...HEAD
+[0.1.37]: https://github.com/IvanPavlak/WinuX/compare/v0.1.36...v0.1.37
 [0.1.36]: https://github.com/IvanPavlak/WinuX/compare/v0.1.35...v0.1.36
 [0.1.35]: https://github.com/IvanPavlak/WinuX/compare/v0.1.34...v0.1.35
 [0.1.34]: https://github.com/IvanPavlak/WinuX/compare/v0.1.33...v0.1.34

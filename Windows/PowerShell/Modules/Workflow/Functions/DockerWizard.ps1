@@ -9,6 +9,17 @@ function DockerWizard {
 		When stopping, first requests a graceful Docker Desktop shutdown and then
 		cleans up any Docker-owned WSL distros or helper processes that remain.
 
+		Polling timeouts are configurable via Configuration.DockerTimeouts
+		(StartSeconds/StopSeconds/CleanupSeconds); built-in defaults apply when the
+		configuration is absent.
+
+		With -PassThru, returns a status object callers can branch on instead of
+		communicating through module-scoped state:
+		[PSCustomObject]@{ Success = <bool>; ComposeFilePath = <string or $null> }
+		Success means everything ASKED for happened: the daemon came up, and - when a
+		compose source was given - it resolved to a real file and `up -d` returned 0.
+		A requested compose file that does not exist is a failure, not a no-op.
+
     .EXAMPLE
         DockerWizard
 
@@ -20,6 +31,9 @@ function DockerWizard {
 
     .EXAMPLE
         DockerWizard -ComposeFilePath "C:\WinuX\Docker\docker-compose.postgresql.yml"
+
+    .EXAMPLE
+        $result = DockerWizard -ComposeFilePath "C:\WinuX\Docker\docker-compose.postgresql.yml" -PassThru
     #>
 	[CmdletBinding()]
 	param (
@@ -30,11 +44,28 @@ function DockerWizard {
 		[string]$ComposeProjectPath,
 
 		[Parameter()]
-		[string]$ComposeFilePath
+		[string]$ComposeFilePath,
+
+		[Parameter()]
+		[switch]$PassThru
 	)
+
+	$newStatus = {
+		param($Success, $ComposeFile)
+		return [PSCustomObject]@{
+			Success         = $Success
+			ComposeFilePath = $ComposeFile
+		}
+	}
+
+	$dockerTimeouts = $Configuration.DockerTimeouts
+	$startTimeoutSeconds = if ($dockerTimeouts -and $dockerTimeouts.StartSeconds) { [int]$dockerTimeouts.StartSeconds } else { 180 }
+	$stopTimeoutSeconds = if ($dockerTimeouts -and $dockerTimeouts.StopSeconds) { [int]$dockerTimeouts.StopSeconds } else { 60 }
+	$cleanupTimeoutSeconds = if ($dockerTimeouts -and $dockerTimeouts.CleanupSeconds) { [int]$dockerTimeouts.CleanupSeconds } else { 30 }
 
 	if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
 		Write-LogWarning "Docker is not installed!"
+		if ($PassThru) { return & $newStatus $false $null }
 		return
 	}
 
@@ -102,6 +133,7 @@ function DockerWizard {
 
 		if (& $testDockerFullyStopped) {
 			Write-LogWarning "Docker Desktop is already stopped!"
+			if ($PassThru) { return & $newStatus $true $null }
 			return
 		}
 
@@ -117,7 +149,7 @@ function DockerWizard {
 			& $stopDockerResidualState
 		}
 
-		$timeout = 60
+		$timeout = $stopTimeoutSeconds
 		$elapsed = 0
 		$dockerStopped = $false
 
@@ -136,6 +168,7 @@ function DockerWizard {
 		}
 
 		Loading-Spinner -Stop -Spinner $spinner
+		if ($PassThru) { return & $newStatus $dockerStopped $null }
 		return
 	}
 
@@ -146,6 +179,7 @@ function DockerWizard {
 	if ($daemonAlreadyRunning) {
 		if (-not $ComposeProjectPath -and -not $ComposeFilePath) {
 			Write-LogWarning "Docker is already running!"
+			if ($PassThru) { return & $newStatus $true $null }
 			return
 		}
 	}
@@ -165,7 +199,7 @@ function DockerWizard {
 		if ($requiresCleanup) {
 			& $stopDockerResidualState
 
-			$cleanupTimeout = 30
+			$cleanupTimeout = $cleanupTimeoutSeconds
 			$cleanupElapsed = 0
 
 			while ($cleanupElapsed -lt $cleanupTimeout) {
@@ -191,7 +225,7 @@ function DockerWizard {
 			}
 		}
 
-		$timeout = 180
+		$timeout = $startTimeoutSeconds
 		$elapsed = 0
 		$dockerReady = $false
 
@@ -208,20 +242,28 @@ function DockerWizard {
 		Loading-Spinner -Stop -Spinner $spinner
 
 		if (-not $dockerReady) {
-			Write-LogError "Docker daemon did not become ready within 180 seconds!"
-			$script:DockerStartFailed = $true
+			Write-LogError "Docker daemon did not become ready within $startTimeoutSeconds seconds!"
+			if ($PassThru) { return & $newStatus $false $null }
 			return
 		}
-
-		$script:DockerStartFailed = $false
 	}
 
 	# Docker Compose handling
 	$composeFile = $null
 
+	# Whether compose work was ASKED for, which is not the same as it being
+	# resolvable: a requested-but-missing compose file is a failure, and reporting
+	# Success for it would have callers announce containers that never started
+	$composeRequested = [bool]$ComposeFilePath -or [bool]$ComposeProjectPath
+
 	# Use explicit compose file path if provided
-	if ($ComposeFilePath -and (Test-Path $ComposeFilePath -ErrorAction SilentlyContinue)) {
-		$composeFile = $ComposeFilePath
+	if ($ComposeFilePath) {
+		if (Test-Path $ComposeFilePath -ErrorAction SilentlyContinue) {
+			$composeFile = $ComposeFilePath
+		}
+		else {
+			Write-LogWarning "Docker Compose file not found => [$ComposeFilePath]"
+		}
 	}
 	elseif ($ComposeProjectPath) {
 		if (Test-Path (Join-Path $ComposeProjectPath "docker-compose.yml") -ErrorAction SilentlyContinue) {
@@ -230,16 +272,26 @@ function DockerWizard {
 		elseif (Test-Path (Join-Path $ComposeProjectPath "compose.yml") -ErrorAction SilentlyContinue) {
 			$composeFile = Join-Path $ComposeProjectPath "compose.yml"
 		}
+		else {
+			Write-LogWarning "No Docker Compose file found in => [$ComposeProjectPath]"
+		}
 	}
 
+	# `up -d` is idempotent - running it unconditionally reconciles a half-stopped
+	# stack to the compose file instead of skipping while any one container runs
+	$composeStarted = $false
+
 	if ($composeFile) {
-		$runningContainers = docker compose -f $composeFile ps -q 2>$null
-		if (-not $runningContainers) {
-			Write-LogStep "=> Starting Docker Compose services..."
-			docker compose -f $composeFile up -d
+		Write-LogStep "=> Starting Docker Compose services..."
+		docker compose -f $composeFile up -d
+		$composeStarted = $LASTEXITCODE -eq 0
+
+		if (-not $composeStarted) {
+			Write-LogError "Docker Compose failed to start services from => [$composeFile]"
 		}
-		elseif ($daemonAlreadyRunning) {
-			Write-LogWarning "Docker is already running!"
-		}
+	}
+
+	if ($PassThru) {
+		return & $newStatus (-not $composeRequested -or $composeStarted) $composeFile
 	}
 }
