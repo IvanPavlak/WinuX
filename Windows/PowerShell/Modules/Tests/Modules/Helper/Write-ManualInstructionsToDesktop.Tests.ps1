@@ -20,8 +20,18 @@ Describe "Write-ManualInstructionsToDesktop" {
 		# test was green off a mocking artifact, not off the function. Pester 6 binds it fine.
 		Write-ManualInstructionsToDesktop -FileName "setup.txt" -Title "Setup" -Content "Step 1"
 
+		# Mirror the function's fallback chain: on runner profiles without a Desktop folder,
+		# plain GetFolderPath returns an empty string that Join-Path rejects.
+		$expectedDesktop = [Environment]::GetFolderPath("Desktop")
+		if ([string]::IsNullOrWhiteSpace($expectedDesktop)) {
+			$expectedDesktop = [Environment]::GetFolderPath("Desktop", "DoNotVerify")
+		}
+		if ([string]::IsNullOrWhiteSpace($expectedDesktop)) {
+			$expectedDesktop = Join-Path $env:USERPROFILE "Desktop"
+		}
+
 		Should -Invoke Out-File -Times 1 -Exactly -ParameterFilter {
-			$FilePath -eq (Join-Path ([Environment]::GetFolderPath("Desktop")) "setup.txt")
+			$FilePath -eq (Join-Path $expectedDesktop "setup.txt")
 		}
 		Should -Invoke Write-LogSuccess -Times 1 -Exactly
 	}

@@ -1375,7 +1375,7 @@ Test-WSLDistributionInstalled
 - **Parameters:** -FileName, -Title, -Content
 - **Usage:** `Write-ManualInstructionsToDesktop -FileName "setup-instructions.txt" -Title "MyProject Setup" -Content "1. Do this...`n2. Then that..."`
 
-The file is created at the current user's Desktop (resolved via `[Environment]::GetFolderPath("Desktop")`) and written as UTF-8, overwriting any existing file of the same name. The layout is the title, a separator line of `=` characters matching the title length, a blank line, the supplied content, and a trailing `Generated: <yyyy-MM-dd HH:mm:ss>` timestamp. All three parameters are mandatory.
+The file is created at the current user's Desktop (resolved via `[Environment]::GetFolderPath("Desktop")`, falling back to the `DoNotVerify` overload and then to `$env:USERPROFILE\Desktop` on profiles where the Desktop known folder fails verification) and written as UTF-8, overwriting any existing file of the same name. The layout is the title, a separator line of `=` characters matching the title length, a blank line, the supplied content, and a trailing `Generated: <yyyy-MM-dd HH:mm:ss>` timestamp. All three parameters are mandatory.
 
 | Parameter   | Description                                                    |
 | ----------- | -------------------------------------------------------------- |
