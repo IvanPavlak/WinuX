@@ -44,6 +44,13 @@ function Resolve-Selection {
 	.PARAMETER DefaultOptionIndex
 		1-based index of the default option (returned if user presses Enter with no input); 0 = no default.
 
+	.PARAMETER ConfirmationMessage
+		Turns the menu into a safeguard for destructive actions: the message is shown as the
+		prompt in red, and when the OptionList contains "No" (it does by default) pressing
+		Enter selects it, so the destructive option always takes an explicit "Yes". An
+		explicitly passed -PromptMessage or -DefaultOptionIndex still wins. Note that
+		-InputObject bypasses the prompt entirely - do not pass it on a confirmation call.
+
 	.PARAMETER GroupsConfig
 		For hierarchical mode: hashtable of nested group definitions. Enables parent/child navigation and
 		expansion. Required to unlock hierarchical menu functionality.
@@ -55,6 +62,10 @@ function Resolve-Selection {
 	.EXAMPLE
 		Resolve-Selection -GroupsConfig $Configuration.BrowserGroups -AllowMultipleSelections
 		Shows a hierarchical browser group menu with multi-select support.
+
+	.EXAMPLE
+		Resolve-Selection -ConfirmationMessage "Are you sure you want to delete all volumes?"
+		Red Yes/No confirmation prompt; Enter defaults to "No". Returns "Yes" or "No".
 	#>
 	[CmdletBinding()]
 	param(
@@ -87,6 +98,9 @@ function Resolve-Selection {
 
 		[Parameter(Mandatory = $false)]
 		[int]$DefaultOptionIndex = 0,
+
+		[Parameter(Mandatory = $false)]
+		[string]$ConfirmationMessage,
 
 		[Parameter(Mandatory = $false)]
 		$GroupsConfig
@@ -217,17 +231,33 @@ function Resolve-Selection {
 		}
 	}
 
+	# A confirmation prompt must never confirm on muscle memory: pressing Enter
+	# selects "No" (when present), and the message itself is rendered in red
+	if ($ConfirmationMessage -and -not $PSBoundParameters.ContainsKey('DefaultOptionIndex')) {
+		for ($noIndex = 0; $noIndex -lt $OptionList.Count; $noIndex++) {
+			if ($OptionList[$noIndex] -eq "No") {
+				$DefaultOptionIndex = $noIndex + 1
+				break
+			}
+		}
+	}
+
 	$hasDefault = $DefaultOptionIndex -ge 1 -and $DefaultOptionIndex -le $OptionList.Count
 	$defaultLabel = if ($hasDefault) { $OptionList[$DefaultOptionIndex - 1] } else { $null }
 
 	if (-not $PSBoundParameters.ContainsKey('PromptMessage')) {
-		$PromptMessage = if ($AllowMultipleSelections) {
+		$PromptMessage = if ($ConfirmationMessage) {
+			$ConfirmationMessage
+		}
+		elseif ($AllowMultipleSelections) {
 			"Enter selection(s) by number or name"
 		}
 		else {
 			"Enter selection by number or name"
 		}
 	}
+
+	$promptColor = if ($ConfirmationMessage) { "Red" } else { "White" }
 
 	do {
 		if ($HideSelection) {
@@ -241,7 +271,7 @@ function Resolve-Selection {
 
 		$defaultHint = if ($hasDefault) { " (default: $defaultLabel)" } else { "" }
 		$displayPrompt = if ($HidePromptMessage) { "$promptPrefix$promptSuffix" } else { "$promptPrefix$($PromptMessage)$defaultHint$promptSuffix" }
-		$userInput = Custom-ReadHost $displayPrompt -AddNewLine:$false
+		$userInput = Custom-ReadHost $displayPrompt -ForegroundColor $promptColor -AddNewLine:$false
 		if ([string]::IsNullOrWhiteSpace($userInput)) {
 			if ($hasDefault) {
 				return $defaultLabel

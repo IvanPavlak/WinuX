@@ -89,6 +89,10 @@
 # → Projects, ProjectActions      : Open-Project
 # → ProjectTerminals              : Open-ProjectTerminals, Run-Project, Resolve-ProjectPath
 # → RunnableProjects              : Run-Project
+# → RunProject.Steps              : Run-Project (optional steps, e.g. Docker)
+# → DockerComposeFiles            : Start-Containers, Resolve-ProjectDockerCompose (Run-Project)
+# → DockerTimeouts                : DockerWizard
+# → DockerCleanupActions          : Docker-Cleanup
 # → VisualStudioSolutions         : Open-VisualStudio
 # → VSCodeProjects                : Open-VSCode
 #
@@ -1500,6 +1504,8 @@
 			#@{ Action = "Open-VisualStudio"; Parameters = @{ Solution = "{ProjectName}" } }
 			@{ Action = "Open-VSCode"; Parameters = @{ Folder = "{ProjectName}" } }
 			@{ Action = "Open-ProjectTerminals-Or-RunProject"; Parameters = @{ Project = "{ProjectName}" } }
+			# Bring up only the configured Docker Compose stack (no API/UI) instead:
+			#@{ Action = "Start-Containers" }
 		)
 
 		Server         = @(
@@ -1532,12 +1538,60 @@
 	# ==========================================================================
 	DefaultDatabaseProvider       = "PostgreSQL"
 
-	# Docker Compose file mappings for database providers managed by WinuX.
-	# These are NOT committed to individual project repos - they live in WinuX/Docker/
-	# and are used by Run-Project to spin up containers transparently.
+	# Optional Run-Project steps, resolved like KillAll.Steps: each entry is a plain
+	# boolean or a per-machine-type hashtable with a Default fallback, and
+	# Run-Project -Skip / -Include override config per invocation.
+	# → Docker : resolve the project's Docker Compose source and start containers
+	#            before the project runs. On by default (inert unless a project
+	#            mapping declares DatabaseProviders or UsesDocker); set $false if
+	#            your databases run locally and Docker is not part of your setup.
+	RunProject                    = @{
+		Steps = @{
+			Docker = $true
+		}
+	}
+
+	# Docker Compose stacks by name. Used two ways:
+	# - Start-Containers: the menu source. One entry = on/off switch (no menu);
+	#   several = multi-select menu. Any stack qualifies, not just databases.
+	# - Run-Project: database providers map onto these stacks via the provider name
+	#   (Resolve-ProjectDockerCompose), so containers start before a project runs.
+	# Values resolve relative to MachineSpecificPaths.DockerDirectory; absolute
+	# paths are used as-is. These compose files are NOT committed to individual
+	# project repos - they live in WinuX/Docker/.
 	DockerComposeFiles            = @{
 		PostgreSQL = "docker-compose.postgresql.yml"
 	}
+
+	# Timeouts (in seconds) for DockerWizard's polling loops. Raise StartSeconds on
+	# machines where Docker Desktop takes longer to boot. Omitted keys fall back to
+	# these same built-in defaults.
+	DockerTimeouts                = @{
+		StartSeconds   = 180 # wait for the daemon to become ready after a start
+		StopSeconds    = 60  # wait for a graceful shutdown before force-cleanup escalates
+		CleanupSeconds = 30  # wait for a partial-state cleanup before starting anyway
+	}
+
+	# Docker maintenance actions offered by Docker-Cleanup. Each entry:
+	# - Name                : menu label (also accepted directly: Docker-Cleanup "<Name>")
+	# - Command             : PowerShell command line to run
+	# - ConfirmationMessage : optional - when present, the action only runs after an
+	#                         explicit "Yes" on a red confirmation prompt (Enter cancels)
+	# Override this list wholesale in Configuration.local.psd1 to add your own actions.
+	DockerCleanupActions          = @(
+		@{ Name                = "Stop all containers";
+			Command             = 'docker ps -q | ForEach-Object { docker stop $_ }';
+			ConfirmationMessage = "Are you sure you want to stop all running containers?"
+		}
+		@{ Name                = "Delete all containers, images and volumes";
+			Command             = 'docker system prune -a --volumes -f';
+			ConfirmationMessage = "Are you sure you want to delete ALL containers, images and volumes?"
+		}
+		@{ Name                = "Delete all volumes";
+			Command             = 'docker volume ls -q | ForEach-Object { docker volume rm $_ }';
+			ConfirmationMessage = "Are you sure you want to delete ALL volumes?"
+		}
+	)
 
 	RunnableProjects              = @(
 		"WinuX",

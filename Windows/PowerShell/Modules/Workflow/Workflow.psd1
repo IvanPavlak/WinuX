@@ -9,6 +9,7 @@
 		'Close-Project',
 		'Close-ProjectTerminals',
 		'Close-Workspace',
+		'Docker-Cleanup',
 		'DockerWizard',
 		'EfCoreMigrationWizard',
 		'Focus-TerminalTab',
@@ -23,8 +24,10 @@
 		'Open-ProjectTerminals',
 		'Open-Training',
 		'Open-Workspace',
+		'Resolve-ProjectDockerCompose',
 		'Resolve-SwaggerBrowserGroup',
 		'Save-WorkspaceState',
+		'Start-Containers',
 		'Test-TerminalTabsAlreadyOpen',
 		'Training-Backup'
 	)

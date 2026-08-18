@@ -8,16 +8,33 @@ function Run-Project {
 		Opens Windows Terminal tabs configured for each selected project.
 		Uses Resolve-Selection for interactive menu with -InSameShell option to run in current tab.
 
+		The Docker step (resolving a project's compose source and starting containers)
+		is optional, resolved Kill-All-style via Resolve-RunProjectSteps: configure it
+		persistently with RunProject.Steps.Docker in Configuration.psd1 /
+		Configuration.local.psd1 (a plain boolean or a per-machine-type hashtable with
+		a Default fallback), or override per invocation with -Skip / -Include. A setup
+		that runs its databases locally sets it to $false once and Run-Project never
+		touches Docker - not even the database provider prompt.
+
 	.PARAMETER Project
 		Optional project name(s) to run. If omitted, shows interactive menu.
 
 	.PARAMETER InSameShell
 		If $true (default), use current shell tab. If $false, open new tabs.
 
+	.PARAMETER Skip
+		Step names to skip for this invocation, overriding config. Valid names: Docker.
+		Wins over -Include when a step appears in both.
+
+	.PARAMETER Include
+		Step names to run for this invocation even if config disables them.
+		Same valid names as -Skip.
+
 	.EXAMPLE
 		Run-Project  # Interactive menu
 		Run-Project -Project "MyApp", "OtherApp"
 		Run-Project -Project "MyApp" -InSameShell:$false
+		Run-Project -Project "MyApp" -Skip Docker
 	#>
 	[CmdletBinding()]
 	param (
@@ -25,8 +42,18 @@ function Run-Project {
 		[string[]]$Project,
 
 		[Parameter()]
-		[switch]$InSameShell = $true
+		[switch]$InSameShell = $true,
+
+		[Parameter()]
+		[ValidateSet("Docker")]
+		[string[]]$Skip,
+
+		[Parameter()]
+		[ValidateSet("Docker")]
+		[string[]]$Include
 	)
+
+	$stepStates = Resolve-RunProjectSteps -Skip $Skip -Include $Include
 
 	$resolveParams = @{
 		InputObject             = $Project
@@ -60,73 +87,23 @@ function Run-Project {
 				continue
 			}
 
-			# Resolve database provider
-			$usesDocker = $runnableMapping.UsesDocker
-			$selectedProvider = $null
+			# Resolve the project's Docker Compose source (provider menu included) and
+			# start Docker if the project requires it - unless the Docker step is
+			# disabled, in which case not even the provider prompt appears
+			$dockerCompose = if ($stepStates.Docker) { Resolve-ProjectDockerCompose -ProjectName $Name } else { $null }
 
-			$hasDatabaseProviders = $runnableMapping.DatabaseProviders -and $runnableMapping.DatabaseProviders.Count -gt 0
+			if ($dockerCompose) {
+				$dockerParams = @{ PassThru = $true }
 
-			if ($hasDatabaseProviders -and $runnableMapping.DatabaseProviders.Count -gt 1) {
-				# Multiple providers available - ask which one to use
-				$providerParams = @{
-					InputObject        = $null
-					OptionList         = $runnableMapping.DatabaseProviders
-					MenuTitle          = "[Database providers for $Name]"
-					DefaultOptionIndex = 1
-				}
-				$selectedProvider = Resolve-Selection @providerParams
-
-				if (-not $selectedProvider) {
-					Write-LogError "No database provider selected! Skipping [$Name]!"
-					continue
-				}
-
-				Write-LogDebug " Selected database provider => [$selectedProvider]" -Style Step
-			}
-			elseif ($hasDatabaseProviders -and $runnableMapping.DatabaseProviders.Count -eq 1) {
-				$selectedProvider = $runnableMapping.DatabaseProviders[0]
-				Write-LogDebug " Single database provider configured => [$selectedProvider]" -Style Step
-			}
-			else {
-				# No database providers configured - project does not use a database
-				Write-LogDebug " No database providers configured => Docker not required for database" -Style Step
-			}
-
-			# Determine if Docker is needed: either explicitly set on the mapping,
-			# or the selected provider has a centralized/project Docker Compose file
-			if ($selectedProvider -and ($selectedProvider -eq "Oracle" -or $Configuration.DockerComposeFiles.ContainsKey($selectedProvider))) {
-				$usesDocker = $true
-			}
-
-			# Start Docker service and compose if the project requires it
-			if ($usesDocker) {
-				$script:DockerStartFailed = $false
-				$dockerParams = @{}
-
-				# Check if this provider has a centralized Docker Compose file in WinuX
-				$centralComposeFile = $Configuration.DockerComposeFiles[$selectedProvider]
-				if ($centralComposeFile) {
-					# Use the centralized compose file from WinuX/Docker/
-					$composeFilePath = Join-Path $MachineSpecificPaths.DockerDirectory $centralComposeFile
-					$dockerParams["ComposeFilePath"] = $composeFilePath
-
-					Write-LogDebug "Using centralized Docker Compose => [$composeFilePath]" -Style Step -NoLeadingNewline
+				if ($dockerCompose.ComposeFilePath) {
+					$dockerParams["ComposeFilePath"] = $dockerCompose.ComposeFilePath
 				}
 				else {
-					# Fall back to project-specific docker-compose.yml (e.g., Oracle in ExampleProject)
-					$mapping = $Configuration.ProjectTerminals | Where-Object { $_.Name -eq $Name }
-					$current = $MachineSpecificPaths
-					foreach ($property in $mapping.BasePath.Split('.')) {
-						$current = $current.$property
-					}
-					$projectRoot = $current.Root
-					$dockerParams["ComposeProjectPath"] = $projectRoot
-
-					Write-LogDebug "Using project Docker Compose => [$projectRoot]" -Style Step -NoLeadingNewline
+					$dockerParams["ComposeProjectPath"] = $dockerCompose.ComposeProjectPath
 				}
 
-				DockerWizard @dockerParams
-				if ($script:DockerStartFailed) {
+				$dockerResult = DockerWizard @dockerParams
+				if (-not $dockerResult.Success) {
 					Write-LogError "Docker is required but could not be started! Skipping [$Name]!"
 					continue
 				}

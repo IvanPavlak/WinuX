@@ -1058,13 +1058,33 @@ Resolve-ProjectPath -ProjectName MyProject
 $repo = Resolve-ProjectPath -ProjectName MyRepo -ForRepository
 ```
 
+## [Resolve-RunProjectSteps](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Resolve-RunProjectSteps.ps1)
+
+- **Description:** Resolves which optional `Run-Project` steps should run - a thin wrapper over [Resolve-Steps](#resolve-steps), the same shape as `Resolve-KillAllSteps`. Per step, `-Skip` beats `-Include` beats config (`RunProject.Steps.<Name>` - a plain boolean or a per-machine-type hashtable with a `Default` fallback) beats the built-in defaults. `Docker` is the one step so far, on by default.
+- **Parameters:** -Skip, -Include
+- **Usage:** `Resolve-RunProjectSteps`, `Resolve-RunProjectSteps -Skip Docker`
+
+Docker on by default reproduces the classic behavior - it is inert unless a project's mapping actually declares `DatabaseProviders` or `UsesDocker`. Its purpose is the opposite direction: a setup that runs its databases locally (no Docker at all) sets `RunProject = @{ Steps = @{ Docker = $false } }` once in `Configuration.local.psd1` instead of stripping provider metadata from every project mapping, and `Run-Project` then never touches Docker - not even the database provider prompt.
+
+```powershell
+# The step map a parameterless Run-Project would use with the current config
+Resolve-RunProjectSteps
+
+# Docker forced off for one resolution
+Resolve-RunProjectSteps -Skip Docker
+```
+
+**See also:** [Resolve-Steps](#resolve-steps), [Run-Project](#run-project), [Resolve-KillAllSteps](system.md#resolve-killallsteps)
+
 ## [Resolve-Selection](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Resolve-Selection.ps1)
 
-- **Description:** The canonical interactive menu selector used throughout the system. Presents a numbered menu and returns the selected option(s) by number or name. Supports a flat mode (simple Yes/No or custom option list) and a hierarchical mode (when `-GroupsConfig` is provided) that navigates nested groups with dot-notation selection ("Parent.ChildGroup"), automatic expansion of parent groups, and parent/child navigation. Honors a default option via `-DefaultOptionIndex` so pressing Enter with no input selects it.
-- **Parameters:** -OptionList, -InputObject, -MenuTitle, -HideMenuTitle, -HideSelection, -PromptMessage, -HidePromptMessage, -AllowEmptyPromptResponse, -AllowMultipleSelections, -DefaultOptionIndex, -GroupsConfig
-- **Usage:** `Resolve-Selection`, `Resolve-Selection -OptionList @("Alpha", "Beta", "Gamma")`, `Resolve-Selection -OptionList @("English", "Espanol", "Francais") -PromptMessage "Select a language"`, `Resolve-Selection -OptionList @("Alpha", "Beta", "Gamma") -DefaultOptionIndex 1`, `Resolve-Selection -GroupsConfig $Configuration.BrowserGroups -AllowMultipleSelections`
+- **Description:** The canonical interactive menu selector used throughout the system. Presents a numbered menu and returns the selected option(s) by number or name. Supports a flat mode (simple Yes/No or custom option list) and a hierarchical mode (when `-GroupsConfig` is provided) that navigates nested groups with dot-notation selection ("Parent.ChildGroup"), automatic expansion of parent groups, and parent/child navigation. Honors a default option via `-DefaultOptionIndex` so pressing Enter with no input selects it, and doubles as a destructive-action safeguard via `-ConfirmationMessage`.
+- **Parameters:** -OptionList, -InputObject, -MenuTitle, -HideMenuTitle, -HideSelection, -PromptMessage, -HidePromptMessage, -AllowEmptyPromptResponse, -AllowMultipleSelections, -DefaultOptionIndex, -ConfirmationMessage, -GroupsConfig
+- **Usage:** `Resolve-Selection`, `Resolve-Selection -OptionList @("Alpha", "Beta", "Gamma")`, `Resolve-Selection -OptionList @("English", "Espanol", "Francais") -PromptMessage "Select a language"`, `Resolve-Selection -OptionList @("Alpha", "Beta", "Gamma") -DefaultOptionIndex 1`, `Resolve-Selection -GroupsConfig $Configuration.BrowserGroups -AllowMultipleSelections`, `Resolve-Selection -ConfirmationMessage "Are you sure?"`
 
 Used by `Open-Browser`, `Open-Project`, `Set-Locale`, `Set-DisplayLanguage`, `Configure-NerdFont`, and others as the shared selection primitive. In flat mode it accepts a number (1-based) or the literal option text. In hierarchical mode (`-GroupsConfig`), parent groups expand to their direct children automatically, and `-AllowMultipleSelections` permits space/comma-separated picks. Pre-selected values can be passed via `-InputObject` (or the pipeline) to skip the interactive prompt entirely. An invalid hierarchical pre-selection reports the offending value(s) (naming the caller) and returns `$null` rather than executing a bare `break`, which would propagate out of the function into the nearest loop in the caller (e.g. `Open-Workspace`'s action loop) and silently abort every remaining action - callers already handle `$null`.
+
+`-ConfirmationMessage` turns the menu into a safeguard for destructive actions (used by [Docker-Cleanup](workflow.md#docker-cleanup)): the message is rendered as the prompt in red, and when the OptionList contains "No" - it does by default - pressing Enter selects it, so the destructive path always takes an explicit "Yes". An explicitly passed `-PromptMessage` or `-DefaultOptionIndex` still wins, and `-InputObject` bypasses the prompt entirely, so never pass it on a confirmation call.
 
 | Parameter                   | Type       | Description                                                                                            |
 | --------------------------- | ---------- | ------------------------------------------------------------------------------------------------------ |
@@ -1078,6 +1098,7 @@ Used by `Open-Browser`, `Open-Project`, `Set-Locale`, `Set-DisplayLanguage`, `Co
 | `-AllowEmptyPromptResponse` | `switch`   | Returns `$null` on empty input instead of re-prompting (when no default is set).                       |
 | `-AllowMultipleSelections`  | `switch`   | Accepts space/comma-separated numbers or names to select multiple items.                               |
 | `-DefaultOptionIndex`       | `int`      | 1-based index of the option returned when the user presses Enter (`0` = no default).                   |
+| `-ConfirmationMessage`      | `string`   | Destructive-action safeguard: shows the message as a red prompt and defaults Enter to "No".            |
 | `-GroupsConfig`             | `object`   | Hierarchical group definitions (hashtable). Enables nested menu navigation and expansion.              |
 
 ```powershell
@@ -1093,30 +1114,37 @@ Resolve-Selection -OptionList @("English", "Espanol", "Francais") -PromptMessage
 
 # Hierarchical browser-group menu with multi-select support
 Resolve-Selection -GroupsConfig $Configuration.BrowserGroups -AllowMultipleSelections
+
+# Destructive-action safeguard: red prompt, Enter defaults to "No"
+if ((Resolve-Selection -ConfirmationMessage "Are you sure you want to delete all volumes?") -eq "Yes") { ... }
 ```
 
 ## [Resolve-Steps](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Resolve-Steps.ps1)
 
-- **Description:** The generic step-map resolver shared by every configurable step set (`Resolve-KillAllSteps` and `Resolve-SystemThemeSteps` in the System module, `Resolve-BootstrapSteps` in the Bootstrap module are thin wrappers over it). Per step, single-pass tri-state resolution: `-Skip` beats `-Include` beats config (a plain boolean, or a per-machine-type hashtable with a `Default` fallback - the `BootstrapConfig.Steps.WSL` shape) beats the built-in `-Defaults`. `$false` is a real config value, so booleans resolve with explicit `$null` checks rather than truthiness. Returns an ordered hashtable of step name → boolean in the order `-Defaults` defines; the only side effect is a warning for each step that appears in both `-Skip` and `-Include` (the step is skipped).
+- **Description:** The generic step-map resolver shared by every configurable step set (`Resolve-KillAllSteps` and `Resolve-SystemThemeSteps` in the System module, `Resolve-BootstrapSteps` in the Bootstrap module, and `Resolve-RunProjectSteps` in this module are thin wrappers over it). Per step, single-pass tri-state resolution: `-Skip` beats `-Include` beats config (a plain boolean, or a per-machine-type hashtable with a `Default` fallback - the `BootstrapConfig.Steps.WSL` shape) beats the built-in `-Defaults`. `$false` is a real config value, so booleans resolve with explicit `$null` checks rather than truthiness. Returns an ordered hashtable of step name → boolean in the order `-Defaults` defines; the only side effect is a warning for each step that appears in both `-Skip` and `-Include` (the step is skipped).
 - **Parameters:** -Defaults (ordered step → default map, defines the step set and order), -ConfigSteps (the configuration `Steps` hashtable, or `$null`), -Skip, -Include
 - **Usage:** `Resolve-Steps -Defaults ([ordered]@{ Docker = $true }) -ConfigSteps $global:Configuration.KillAll.Steps`, `Resolve-Steps -Defaults $defaults -ConfigSteps $configSteps -Skip Docker, Browsers`
 
-**See also:** [Resolve-KillAllSteps](system.md#resolve-killallsteps), [Resolve-SystemThemeSteps](system.md#resolve-systemthemesteps), [Resolve-BootstrapSteps](bootstrap.md#resolve-bootstrapsteps)
+**See also:** [Resolve-KillAllSteps](system.md#resolve-killallsteps), [Resolve-SystemThemeSteps](system.md#resolve-systemthemesteps), [Resolve-BootstrapSteps](bootstrap.md#resolve-bootstrapsteps), [Resolve-RunProjectSteps](#resolve-runprojectsteps)
 
 ## [Run-Project](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Run-Project.ps1)
 
-- **Description:** Opens Windows Terminal tabs for one or more configured runnable projects. Selects from `Configuration.RunnableProjects` (with optional multi-select via `Resolve-Selection`) and runs each project's configured commands in its own tab. Existing terminal tabs for a project are detected and closed first to prevent duplicates, then fresh tabs are opened; a database provider is resolved (prompting when several are configured) and Docker is started when required. Both the project selection and database provider menus default to the first option when Enter is pressed.
+- **Description:** Opens Windows Terminal tabs for one or more configured runnable projects. Selects from `Configuration.RunnableProjects` (with optional multi-select via `Resolve-Selection`) and runs each project's configured commands in its own tab. Existing terminal tabs for a project are detected and closed first to prevent duplicates, then fresh tabs are opened; behind the optional Docker step, the project's Docker Compose source is resolved via `Resolve-ProjectDockerCompose` (prompting for the database provider when several are configured) and Docker is started when required. Both the project selection and database provider menus default to the first option when Enter is pressed.
 - **Implementation Note:** Passes the originating Windows Terminal handle/title into `Close-ProjectTerminals` so Docker cold-start focus changes do not cause duplicate tabs in a different terminal window.
-- **Parameters:** -Project, -InSameShell
-- **Usage:** `Run-Project`, `Run-Project -Project "MyProject", "OtherProject"`, `Run-Project -Project "MyProject" -InSameShell:$false`
+- **Parameters:** -Project, -InSameShell, -Skip, -Include
+- **Usage:** `Run-Project`, `Run-Project -Project "MyProject", "OtherProject"`, `Run-Project -Project "MyProject" -InSameShell:$false`, `Run-Project -Skip Docker`
 - **Alias:** rp
 
-Reads `Configuration.RunnableProjects` for the menu and `RunnableProjectMappings` for each project's run commands, pairing them against `ProjectTerminals` path keys (e.g. `Api`, `Ui`) so every path key gets a matching command and its own tab titled `<Project>.<PathKey>`. If a project has database providers configured, the matching Docker Compose file is started before the project runs; when the starting tab already matches a project tab it is reused instead of opening a duplicate, and focus is returned to the starting tab after all projects have been opened.
+Reads `Configuration.RunnableProjects` for the menu and `RunnableProjectMappings` for each project's run commands, pairing them against `ProjectTerminals` path keys (e.g. `Api`, `Ui`) so every path key gets a matching command and its own tab titled `<Project>.<PathKey>`. The Docker resolution lives in [Resolve-ProjectDockerCompose](workflow.md#resolve-projectdockercompose), and `DockerWizard` is called with `-PassThru`: when the daemon never becomes ready the project is skipped instead of opening tabs against a database that is not there. When the starting tab already matches a project tab it is reused instead of opening a duplicate, and focus is returned to the starting tab after all projects have been opened.
 
-| Parameter      | Description                                                                         |
-| -------------- | ----------------------------------------------------------------------------------- |
-| `-Project`     | One or more project name(s) to run. Omit to show the interactive multi-select menu. |
-| `-InSameShell` | When `$true` (default) reuse the current shell tab; when `$false` open new tabs.    |
+Docker is an optional step, resolved Kill-All-style through [Resolve-RunProjectSteps](#resolve-runprojectsteps): `RunProject.Steps.Docker` in configuration (plain boolean or per-machine-type hashtable with a `Default` fallback) decides persistently, and `-Skip Docker` / `-Include Docker` override per invocation. It defaults to on - inert unless a project mapping declares `DatabaseProviders` or `UsesDocker` - and a setup that runs its databases locally disables it once, after which `Run-Project` never touches Docker, not even the provider prompt.
+
+| Parameter      | Description                                                                            |
+| -------------- | ----------------------------------------------------------------------------------------- |
+| `-Project`     | One or more project name(s) to run. Omit to show the interactive multi-select menu.    |
+| `-InSameShell` | When `$true` (default) reuse the current shell tab; when `$false` open new tabs.       |
+| `-Skip`        | Step names to skip for this invocation, overriding config. Valid: `Docker`. Wins over `-Include`. |
+| `-Include`     | Step names to run even if config disables them. Valid: `Docker`.                       |
 
 ```powershell
 # Interactive menu (press Enter to accept the first project)
@@ -1127,9 +1155,12 @@ Run-Project -Project "MyProject", "OtherProject"
 
 # Open in fresh tabs instead of reusing the current shell
 Run-Project -Project "MyProject" -InSameShell:$false
+
+# One-off run without touching Docker (e.g. the database is already up)
+Run-Project -Project "MyProject" -Skip Docker
 ```
 
-**See also:** [Configuration Reference](../configuration/configuration-reference.md)
+**See also:** [Start-Containers](workflow.md#start-containers), [Resolve-ProjectDockerCompose](workflow.md#resolve-projectdockercompose), [Resolve-RunProjectSteps](#resolve-runprojectsteps), [Configuration Reference](../configuration/configuration-reference.md)
 
 ## [Show-FunctionDetails](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Show-FunctionDetails.ps1)
 
