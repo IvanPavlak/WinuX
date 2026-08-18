@@ -194,4 +194,59 @@ Describe "Configure-Taskbar" {
 			$layout | Should -Match ([regex]::Escape("DesktopApplicationLinkPath=`"C:\Apps\plain.exe`""))
 		}
 	}
+
+	# Explorer applies a taskbar layout asynchronously for seconds after it starts and records the
+	# layout file's timestamp so an unchanged file is never re-applied, which makes any restart
+	# landing mid-apply a permanent truncation of the pins. The interactive path is therefore
+	# ordered so exactly one bounce precedes the layout and the final restart is never followed by
+	# another - these tests pin that ordering, which -FromBootstrap skips entirely.
+	Context "Explorer restart ordering (interactive path)" {
+		BeforeEach {
+			$script:Configuration.TaskbarConfiguration = @(
+				@{ Name = "AllApp"; Type = "AUMID"; Value = "App.All"; Machine = "All" }
+			)
+			$global:MachineSpecificPaths = [PSCustomObject]@{ TaskbarLayoutFile = (Join-Path "$TestDrive" "taskbar_layout.xml") }
+			Mock New-Item { }
+			Mock Set-ItemProperty { }
+			Mock Test-MachineTypeScope { $true }
+
+			# Every Explorer-touching step appends to one list, so the assertions can check order
+			# and not merely that each was called. File existence is probed through .NET rather
+			# than Test-Path, which the outer BeforeEach mocks to a blanket $false.
+			$script:steps = [System.Collections.Generic.List[string]]::new()
+			Mock Unpin-TaskbarApps { $script:steps.Add("Unpin(Skip=$([bool]$SkipExplorerRestart))") }
+			Mock Rebuild-IconCache {
+				$script:steps.Add("Rebuild(layoutWritten=$([System.IO.File]::Exists($global:MachineSpecificPaths.TaskbarLayoutFile)))")
+			}
+			Mock Restart-Explorer { $script:steps.Add("Restart(Delay=$Delay)") }
+			# The interactive path clears the real HKCU marker; mock it so a test run cannot
+			# disturb the machine's actual taskbar state.
+			Mock Remove-ItemProperty { $script:steps.Add("ClearMarker") }
+		}
+
+		It "bounces Explorer once before the layout and restarts it last" {
+			Configure-Taskbar
+
+			# The rebuild is the single pre-layout bounce, so Unpin must not add one of its own,
+			# and the rebuild must land while the layout file is still unwritten.
+			$script:steps[0] | Should -Be "Unpin(Skip=True)"
+			$script:steps[1] | Should -Be "Rebuild(layoutWritten=False)"
+			# Nothing may touch Explorer after the final restart - that instance is the one that
+			# has to finish applying the pins.
+			$script:steps[-1] | Should -Be "Restart(Delay=8)"
+			Should -Invoke Rebuild-IconCache -Times 1 -Exactly
+			Should -Invoke Restart-Explorer -Times 1 -Exactly
+		}
+
+		It "clears the applied-layout marker immediately before the final restart" {
+			Configure-Taskbar
+
+			# Explorer skips a layout whose timestamp it already recorded, so the marker has to be
+			# gone before the restart that is expected to apply it.
+			$script:steps[-2] | Should -Be "ClearMarker"
+			Should -Invoke Remove-ItemProperty -Times 1 -Exactly -ParameterFilter {
+				$Name -eq "LayoutXMLLastModified" -and "$Path" -like "*\Explorer\Taskband"
+			}
+		}
+	}
 }

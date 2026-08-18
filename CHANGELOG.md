@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.38] - 2026-08-18
+
+### Fixed
+
+- **`Configure-Taskbar` truncated the pin list and the loss was permanent: `Rebuild-IconCache` force-killed Explorer seconds into the asynchronous pin apply, and the interrupted layout was never retried.** Explorer applies a taskbar layout asynchronously for several seconds after it starts, and it records the layout file's timestamp in `Taskband\LayoutXMLLastModified` when it does - a file whose timestamp is already on record is silently skipped on every later start. `Configure-Taskbar` restarted Explorer to apply the XML layout and then immediately called `Rebuild-IconCache`, whose `Stop-Process -Force` landed about one second later, mid-apply: only the first pins survived (Terminal and Obsidian out of eight configured), and no subsequent Explorer start would finish the job because the timestamp said the layout was already applied. The icon cache rebuild now runs up front and provides the single Explorer bounce that clears the old pins (`Unpin-TaskbarApps -SkipExplorerRestart` no longer bounces on its own), the final `Restart-Explorer` is the last Explorer-touching operation and waits 8 seconds so control does not return mid-apply, and the applied-layout marker plus the layout file's timestamp are reset just before that restart, so the final Explorer start is guaranteed to re-apply the layout even when an earlier instance raced ahead and recorded it. `Clear-TaskbarPins` now also removes `LayoutXMLLastModified` alongside the pin values, so a cleared taskbar can never be stuck believing a half-applied layout is done. The interactive path's ordering is pinned by new tests that assert the single pre-layout bounce, the marker reset, and the final restart being last - the existing coverage drove everything through `-FromBootstrap`, which skips both branches this bug lived in.
+
 ## [0.1.37] - 2026-08-18
 
 ### Added
@@ -708,7 +714,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.37...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.38...HEAD
+[0.1.38]: https://github.com/IvanPavlak/WinuX/compare/v0.1.37...v0.1.38
 [0.1.37]: https://github.com/IvanPavlak/WinuX/compare/v0.1.36...v0.1.37
 [0.1.36]: https://github.com/IvanPavlak/WinuX/compare/v0.1.35...v0.1.36
 [0.1.35]: https://github.com/IvanPavlak/WinuX/compare/v0.1.34...v0.1.35
