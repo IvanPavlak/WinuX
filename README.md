@@ -13,6 +13,12 @@ A comprehensive PowerShell-based dotfiles system that turns a fresh Windows 11 i
 ---
 
 <p align="center">
+  <img src="https://raw.githubusercontent.com/IvanPavlak/WinuX/master/docs/assets/showcase.svg" width="880" alt="Animated terminal tour of WinuX: one-command bootstrap, workspaces across virtual desktops, multi-machine layouts, and system theming" />
+</p>
+
+---
+
+<p align="center">
   <img src="https://raw.githubusercontent.com/IvanPavlak/WinuX/master/docs/assets/demo.webp" width="720" alt="WinuX demo" />
 </p>
 
