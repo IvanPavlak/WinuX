@@ -87,6 +87,8 @@ Every step is individually toggleable via `BootstrapConfig.Steps` (or per invoca
 │  │   └─ Full WSL setup and distribution install                             │
 │  ├─→ SymbolicLinkMaker                                                      │
 │  │   └─ Creates all symlinks from SymbolicLinks config                      │
+│  ├─→ Deploy-CoreAiRules (opt-in via Steps.CoreAiRules)                      │
+│  │   └─ CoreAiRules managed settings inside WSL (/etc/claude-code)          │
 │  └─→ Configure-WSLSSH                                                       │
 │      └─ Sets up SSH keys in WSL                                             │
 │                                                                             │

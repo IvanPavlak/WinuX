@@ -14,6 +14,7 @@
 		'Configure-Taskbar',
 		'Configure-WSL',
 		'Configure-WSLSSH',
+		'Deploy-CoreAiRules',
 		'Determine-DotnetDependencies',
 		'Display-SystemLanguageSettings',
 		'Enable-DeveloperMode',

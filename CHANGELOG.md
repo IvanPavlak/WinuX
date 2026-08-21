@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.40] - 2026-08-21
+
+### Added
+
+- **CoreAiRules: machine-global guardrails for AI coding agents, deployed by Bootstrap and enforced through Claude Code's managed settings.** The rules themselves are simple - never commit, push, tag, rebase, hard-reset, force, or merge a PR on the agent's own initiative; even an explicit request gets a stated summary and a confirmation first; no AI co-author trailers or "Generated with" footers, ever - but until now they lived only in per-repository instruction files, so every new repo and every new machine started unguarded. CoreAiRules makes them machine-uniform in three layers, strongest wins. The instruction layer is harness-agnostic: one canonical `AI/CoreAiRules.md` is symlinked into every harness's *global* instruction file (`~/.claude/CLAUDE.md` for Claude Code, `~/.codex/AGENTS.md` for Codex, `~/.gemini/GEMINI.md` for Gemini CLI), on Windows and inside WSL, via ordinary `PathTemplates.SymbolicLinks` entries - the commented `AI` block in `Configuration.psd1` is the opt-in template. The enforcement layer is Claude Code's managed-settings tier (`C:\ProgramData\ClaudeCode\managed-settings.json` on Windows, `/etc/claude-code/` per WSL distribution), which no project, repo, or user settings file can override and which Claude Code never writes to: `AI/Claude/managed-settings.json` carries `permissions.ask` rules for every commit/push-class git command plus a PreToolUse hook that scans the full raw command on stdin (dependency-free `sed` + `grep`, so compound commands, `git -C <path> push`, and multi-line commands with a commit on the second line all still trigger the prompt - a false positive costs one extra prompt, never a block). The attribution layer rides in the same file: `attribution.commit`/`attribution.pr` empty plus legacy `includeCoAuthoredBy: false`, so no lower-precedence file can re-add the trailer. The one link `SymbolicLinkMaker` cannot create - root-owned `/etc/claude-code/` inside WSL, since the engine's WSL branch never elevates - is handled by the new `Deploy-CoreAiRules` (System module), which runs its `wsl.exe` calls as root, no-ops without an installed distribution, never links to a missing target, and self-heals via `ln -sfn`. Everything is opt-in: the new `BootstrapConfig.Steps.CoreAiRules` toggle defaults **off**, exactly like the other act-the-moment-they-run steps, so a vanilla WinuX bootstrap imposes no AI policy on anyone - a fork enables the step and the symlink entries in `Configuration.local.psd1`. Design, deployed paths per harness and OS, and a per-machine verification checklist are documented in `docs/ai/coreairules.md`.
+
 ## [0.1.39] - 2026-08-18
 
 ### Changed
@@ -724,7 +730,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.39...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.40...HEAD
+[0.1.40]: https://github.com/IvanPavlak/WinuX/compare/v0.1.39...v0.1.40
 [0.1.39]: https://github.com/IvanPavlak/WinuX/compare/v0.1.38...v0.1.39
 [0.1.38]: https://github.com/IvanPavlak/WinuX/compare/v0.1.37...v0.1.38
 [0.1.37]: https://github.com/IvanPavlak/WinuX/compare/v0.1.36...v0.1.37

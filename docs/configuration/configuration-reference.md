@@ -877,7 +877,9 @@ Anything other than the three valid values is reported as unknown rather than si
   optional - missing entries use the built-in defaults. Most steps default on because their
   functions no-op when their configuration section is empty; the steps that act the moment they
   run default OFF and are opted into here: `MicrosoftActivationScripts`, `Win11Debloat`,
-  `DeveloperMode`, `NuGetConfig` (prompts for a GitHub PAT), `LockedStartLayout`. Per invocation,
+  `DeveloperMode`, `NuGetConfig` (prompts for a GitHub PAT), `CoreAiRules` (machine-global AI
+  agent policy applied via `Deploy-CoreAiRules` and the opt-in `SymbolicLinks` entries - see
+  [CoreAiRules](../ai/coreairules.md)), `LockedStartLayout`. Per invocation,
   `Bootstrap -Skip <steps>` / `-Include <steps>` override this config. Repository updates are
   governed by `RepositoryUpdateScope` above, not by a step. The full step list in execution
   order is documented next to the section in `Configuration.psd1`. The deprecated `WSLSetup`

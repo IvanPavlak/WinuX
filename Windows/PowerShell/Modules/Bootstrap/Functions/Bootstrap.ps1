@@ -12,7 +12,7 @@ function Bootstrap {
 		no-op on their own when their configuration section is empty, so an enabled step on
 		the empty base config applies nothing. Opt-in steps that act the moment they run
 		default off: MicrosoftActivationScripts, Win11Debloat, DeveloperMode, NuGetConfig,
-		LockedStartLayout.
+		CoreAiRules, LockedStartLayout.
 
 		Execution sequence:
 		1. (WithInitialSetup only) Rename-Machine, Start-MicrosoftActivationScripts, Start-Win11Debloat
@@ -25,7 +25,8 @@ function Bootstrap {
 		7. WinGet, Scoop, and Chocolatey - install package managers then apps from CSVs
 		8. Upgrade all packages, fork-defined personal steps (BootstrapConfig.PersonalSteps, optionally machine-gated), .NET EF CLI
 		9. Environment variables, Conda environments, NuGet config, taskbar pins
-		10. WSL environment initialization, symbolic links, WSL SSH setup (WSL steps use the same gate)
+		10. WSL environment initialization, symbolic links, CoreAiRules enforcement layer (opt-in via
+		    Steps.CoreAiRules), WSL SSH setup (WSL steps use the same gate)
 		11. Lock taskbar layout, restart Explorer, restart machine
 
 		Logs are written via Start-Logging / Stop-Logging for the duration of the run.
@@ -260,6 +261,11 @@ function Bootstrap {
 		}
 
 		if ($steps.SymbolicLinks) { SymbolicLinkMaker } else { Write-LogWarning "Symbolic links skipped (BootstrapConfig.Steps.SymbolicLinks)" }
+
+		# Machine-global AI agent policy (docs/ai/coreairules.md) - never imposed by a vanilla
+		# bootstrap; the instruction/enforcement symlinks it complements are opt-in
+		# SymbolicLinks entries handled by SymbolicLinkMaker above.
+		if ($steps.CoreAiRules) { Deploy-CoreAiRules } else { Write-LogWarning "CoreAiRules skipped - opt in via BootstrapConfig.Steps.CoreAiRules" }
 
 		if ($steps.WSL) {
 			Configure-WSLSSH

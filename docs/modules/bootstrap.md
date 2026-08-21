@@ -10,7 +10,7 @@ The Bootstrap module is the **heart of WinuX** - it orchestrates the entire syst
 
 Transforms a fresh Windows installation into a fully configured development environment. The `-WithInitialSetup` switch adds first-time-only steps (machine rename, Windows activation, Win11Debloat) and should be omitted on subsequent runs. If `-RepoRoot` is not supplied it defaults to `$global:MachineSpecificPaths.Projects.Self.Root`. Logging runs via `Start-Logging` / `Stop-Logging` for the duration of the run.
 
-Every step is individually toggleable via `BootstrapConfig.Steps`, resolved once per run by [Resolve-BootstrapSteps](#resolve-bootstrapsteps); `-Skip`/`-Include` override the config per invocation. Most steps also no-op on their own when their configuration section is empty, so an enabled step on the empty base config applies nothing. The opt-in steps that act the moment they run default off: `MicrosoftActivationScripts`, `Win11Debloat`, `DeveloperMode`, `NuGetConfig`, `LockedStartLayout`.
+Every step is individually toggleable via `BootstrapConfig.Steps`, resolved once per run by [Resolve-BootstrapSteps](#resolve-bootstrapsteps); `-Skip`/`-Include` override the config per invocation. Most steps also no-op on their own when their configuration section is empty, so an enabled step on the empty base config applies nothing. The opt-in steps that act the moment they run default off: `MicrosoftActivationScripts`, `Win11Debloat`, `DeveloperMode`, `NuGetConfig`, `CoreAiRules`, `LockedStartLayout`.
 
 The three package-manager steps are additionally gated by [Resolve-PackageManagers](#resolve-packagemanagers), called once per run: a manager is installed only when it is listed in `PackageManagers` **and** has at least one app for this machine type. The step toggle can therefore only turn a manager off - enabling `ScoopApps` does not install Scoop if `PackageManagers` omits it or its app list is empty. On the base configuration that means WinGet alone, because `ScoopApps.csv` and `ChocolateyApps.csv` ship empty.
 
@@ -25,7 +25,7 @@ Execution sequence:
 7. WinGet, Scoop, and Chocolatey - install each manager in play then its apps from CSVs
 8. Upgrade all packages, fork-defined personal steps (BootstrapConfig.PersonalSteps, each entry optionally machine-gated like the app CSVs' `Machine` column), .NET EF CLI
 9. Environment variables, Conda environments, NuGet config, taskbar pins
-10. WSL environment initialization, symbolic links, WSL SSH setup
+10. WSL environment initialization, symbolic links, CoreAiRules enforcement layer (opt-in via `Steps.CoreAiRules`), WSL SSH setup
 11. Lock taskbar layout, restart Explorer, restart machine
 
 | Parameter           | Type     | Required | Description                                                                                                                  |
@@ -310,9 +310,9 @@ Merge-Hashtable -Target $config -Overrides $overrides
 - **Parameters:** -Skip (step names forced off), -Include (step names forced on)
 - **Usage:** `Resolve-BootstrapSteps`, `Resolve-BootstrapSteps -Skip UpgradeAll, WSL`
 
-Step names, in execution order: `RenameMachine`, `MicrosoftActivationScripts`, `Win11Debloat` (these three only run with `-WithInitialSetup`), `ExecutionPolicy`, `DeveloperMode`, `PowerPlan`, `PowerButtonActions`, `SystemTheme`, `Locale`, `DisplayLanguage`, `KeyboardLayouts`, `NerdFont`, `PowerShellModules`, `SpecialFolders`, `WSL`, `WinGetApps`, `ScoopApps`, `ChocolateyApps`, `UpgradeAll`, `DotnetEf`, `EnvironmentVariables`, `CondaEnvironments`, `NuGetConfig`, `Taskbar`, `SymbolicLinks`, `LockedStartLayout`.
+Step names, in execution order: `RenameMachine`, `MicrosoftActivationScripts`, `Win11Debloat` (these three only run with `-WithInitialSetup`), `ExecutionPolicy`, `DeveloperMode`, `PowerPlan`, `PowerButtonActions`, `SystemTheme`, `Locale`, `DisplayLanguage`, `KeyboardLayouts`, `NerdFont`, `PowerShellModules`, `SpecialFolders`, `WSL`, `WinGetApps`, `ScoopApps`, `ChocolateyApps`, `UpgradeAll`, `DotnetEf`, `EnvironmentVariables`, `CondaEnvironments`, `NuGetConfig`, `Taskbar`, `SymbolicLinks`, `CoreAiRules`, `LockedStartLayout`.
 
-Most steps default **on**, because their functions no-op when their configuration section is empty - an enabled step on the empty base config applies nothing. The opt-in exceptions default **off**, because they have no configuration to be empty and act the moment they run: `MicrosoftActivationScripts`, `Win11Debloat`, `DeveloperMode`, `NuGetConfig` (prompts for a GitHub PAT), and `LockedStartLayout`. Repository updates are deliberately not a step - they are governed by `BootstrapConfig.RepositoryUpdateScope` (`"None"` is its off switch).
+Most steps default **on**, because their functions no-op when their configuration section is empty - an enabled step on the empty base config applies nothing. The opt-in exceptions default **off**, because they have no configuration to be empty and act the moment they run: `MicrosoftActivationScripts`, `Win11Debloat`, `DeveloperMode`, `NuGetConfig` (prompts for a GitHub PAT), `CoreAiRules` (machine-global AI agent policy - see [CoreAiRules](../ai/coreairules.md)), and `LockedStartLayout`. Repository updates are deliberately not a step - they are governed by `BootstrapConfig.RepositoryUpdateScope` (`"None"` is its off switch).
 
 **Deprecated:** the old `BootstrapConfig.WSLSetup` key (same shape as a `Steps` value) is still honored as a fallback when `Steps` carries no `WSL` entry, so forks that predate `Steps` keep working unmodified. The `PromptForActivation` / `PromptForDebloat` keys are gone entirely - MAS and Win11Debloat no longer prompt on a vanilla install and are opted into via `Steps`.
 

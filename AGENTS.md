@@ -99,6 +99,7 @@ State which tests each command covers, then wait for the developer's pass/fail r
 ## AI System
 
 - Centralized AI configuration lives in `AI/` - provider-agnostic, human-readable
+- Machine-global agent guardrails live in `AI/CoreAiRules.md` (deployed as an opt-in Bootstrap step with Claude Code managed-settings enforcement - see `docs/ai/coreairules.md`); they restate the CRITICAL SAFETY policy below and never replace it
 - Use `/oneoff` or `/research` prompts for conversation persistence
 - Use `/document` to generate documentation from code comments
 - Configuration functions in `Modules/Configuration/` for reliable configuration modifications

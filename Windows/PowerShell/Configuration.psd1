@@ -596,6 +596,46 @@
 			#       Path   = "{AppData}\lazydocker\config.yml"
 			#       Target = "{RepoRoot}\LazyDocker\config.yml"
 			#   }
+			# CoreAiRules - machine-global AI coding agent policy (see docs/ai/coreairules.md).
+			# One canonical rules file (AI/CoreAiRules.md) linked into every harness's global
+			# instruction file, on Windows and inside WSL, plus the Claude Code managed
+			# settings enforcement layer. The managed-settings entry uses a literal
+			# ProgramData path (no placeholder exists for it; literals pass through
+			# expansion untouched) and backslashes only, because any forward slash would
+			# route the entry to the WSL branch. The root-owned /etc/claude-code link
+			# inside WSL is created by Deploy-CoreAiRules instead (opt in via
+			# BootstrapConfig.Steps.CoreAiRules; SymbolicLinkMaker's WSL branch does not
+			# elevate). Adjust the /home/<user>/ paths to your WSL username:
+			#   AI = @{
+			#       ClaudeCoreAiRules       = @{
+			#           Path   = "{User}\.claude\CLAUDE.md"
+			#           Target = "{RepoRoot}\AI\CoreAiRules.md"
+			#       }
+			#       CodexCoreAiRules        = @{
+			#           Path   = "{User}\.codex\AGENTS.md"
+			#           Target = "{RepoRoot}\AI\CoreAiRules.md"
+			#       }
+			#       GeminiCoreAiRules       = @{
+			#           Path   = "{User}\.gemini\GEMINI.md"
+			#           Target = "{RepoRoot}\AI\CoreAiRules.md"
+			#       }
+			#       ClaudeManagedSettings = @{
+			#           Path   = "C:\ProgramData\ClaudeCode\managed-settings.json"
+			#           Target = "{RepoRoot}\AI\Claude\managed-settings.json"
+			#       }
+			#       WSLClaudeCoreAiRules    = @{
+			#           Path   = "/home/<user>/.claude/CLAUDE.md"
+			#           Target = "{RepoRoot}/AI/CoreAiRules.md"
+			#       }
+			#       WSLCodexCoreAiRules     = @{
+			#           Path   = "/home/<user>/.codex/AGENTS.md"
+			#           Target = "{RepoRoot}/AI/CoreAiRules.md"
+			#       }
+			#       WSLGeminiCoreAiRules    = @{
+			#           Path   = "/home/<user>/.gemini/GEMINI.md"
+			#           Target = "{RepoRoot}/AI/CoreAiRules.md"
+			#       }
+			#   }
 			# SSH config symlinking is a natural fit for WinuX, but no example ssh/config
 			# ships in the public repo (it would expose private hosts). To manage your own,
 			# add an entry pointing at a config file you keep in your fork, e.g.:
@@ -701,7 +741,7 @@
 	# - Configure-WSL, Install package managers and apps
 	# - Upgrade-All, fork-defined PersonalSteps, Install-DotnetEF
 	# - Set-EnvironmentVariables, Create-CondaEnvironments, Configure-NuGetConfig
-	# - Configure-Taskbar, Initialize-WSLEnvironment, SymbolicLinkMaker
+	# - Configure-Taskbar, Initialize-WSLEnvironment, SymbolicLinkMaker, Deploy-CoreAiRules (opt-in)
 	# - Configure-WSLSSH, Lock taskbar layout, Restart-Machine
 	#
 	# HOW TO ADD NEW APPLICATIONS:
@@ -740,7 +780,8 @@
 		# config an enabled step applies nothing. Steps that act the moment they
 		# run have no empty state to detect and default OFF - opt in here:
 		# MicrosoftActivationScripts, Win11Debloat, DeveloperMode, NuGetConfig
-		# (prompts for a GitHub PAT), LockedStartLayout.
+		# (prompts for a GitHub PAT), CoreAiRules (machine-global AI agent policy),
+		# LockedStartLayout.
 		#
 		# Per invocation, Bootstrap -Skip <steps> forces steps off and
 		# Bootstrap -Include <steps> forces them on, both overriding this config.
@@ -776,6 +817,8 @@
 		# - NuGetConfig                : Configure-NuGetConfig (OFF by default)
 		# - Taskbar                    : Configure-Taskbar -FromBootstrap
 		# - SymbolicLinks              : SymbolicLinkMaker
+		# - CoreAiRules                  : Deploy-CoreAiRules (OFF by default - machine-global AI
+		#                                agent policy, see docs/ai/coreairules.md)
 		# - LockedStartLayout          : lock the taskbar layout via registry policy (OFF by default)
 		#
 		# Repository updates are NOT a step here - they are governed by
