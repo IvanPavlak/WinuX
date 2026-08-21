@@ -1,0 +1,33 @@
+{
+	"permissions": {
+		"ask": [
+			"Bash(git commit*)",
+			"Bash(git push*)",
+			"Bash(git tag*)",
+			"Bash(git rebase*)",
+			"Bash(git reset --hard*)",
+			"Bash(gh pr merge*)",
+			"PowerShell(git commit*)",
+			"PowerShell(git push*)",
+			"PowerShell(git tag*)",
+			"PowerShell(git rebase*)",
+			"PowerShell(git reset --hard*)",
+			"PowerShell(gh pr merge*)"
+		]
+	},
+	"attribution": { "commit": "", "pr": "" },
+	"includeCoAuthoredBy": false,
+	"hooks": {
+		"PreToolUse": [
+			{
+				"matcher": "Bash|PowerShell",
+				"hooks": [
+					{
+						"type": "command",
+						"command": "sed -E 's/\\\\\\\\[ntr]/ /g' | grep -qiE '(^|[^a-z])(git([\" ]+[^\" &|;]+)*[\" ]+(commit|push|rebase|tag|reset[\" ]+--hard|branch[\" ]+-D)|gh[\" ]+pr[\" ]+merge|--force(-with-lease)?)' && echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"ask\",\"permissionDecisionReason\":\"CoreAiRules: git history/remote writes require explicit approval\"}}' || true"
+					}
+				]
+			}
+		]
+	}
+}

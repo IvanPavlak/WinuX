@@ -175,6 +175,17 @@ Every `wsl` call targets the configured `DefaultWSLDistribution` explicitly (`ws
 
 Removes any existing `.ssh` in the WSL home directory, recreates it, then copies the SSH files over from the Windows profile. Ownership is reset to the WSL user, after which permissions are tightened (all as root): `700` on the directory, `600` on the `config` file and all private keys (everything that is not `*.pub`, `known_hosts*`, `authorized_keys*`, or `config`), and `644` on public keys. This avoids the strict-permission errors SSH raises when keys carried over from Windows are world-readable. Exit codes are checked along the way - the closing message reports failure instead of claiming success when any command failed.
 
+## [Deploy-CoreAiRules](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Deploy-CoreAiRules.ps1)
+
+- **Description:** Deploys the CoreAiRules enforcement layer into WSL by symlinking `AI/Claude/managed-settings.json` to `/etc/claude-code/managed-settings.json` inside the default WSL distribution, so Claude Code sessions running in WSL are governed by the same managed (admin-owned, highest-precedence) settings as Windows sessions. Does nothing when the configured distribution is not installed, and never links to a missing target. Called by Bootstrap when the opt-in `BootstrapConfig.Steps.CoreAiRules` toggle is enabled (OFF by default - machine-global AI policy is never imposed by a vanilla bootstrap).
+- **Usage:** `Deploy-CoreAiRules`
+
+This is the one CoreAiRules link `SymbolicLinkMaker` cannot create: `/etc` is root-owned and the engine's WSL branch never elevates, while this function runs every `wsl.exe` call as root (`wsl -u root`, no sudo prompt). Every other CoreAiRules link (the per-harness instruction files on Windows and in WSL, and the Windows managed settings under `C:\ProgramData\ClaudeCode`) is a regular `PathTemplates.SymbolicLinks` entry handled by `SymbolicLinkMaker` - the commented `AI` block in `Configuration.psd1` is the opt-in template.
+
+Idempotent (`ln -sfn`): reruns self-heal the link, so it is safe to run any time. The full CoreAiRules design (layers, deployed paths, verification) is documented in [CoreAiRules](../ai/coreairules.md).
+
+**See also:** [SymbolicLinkMaker](#symboliclinkmaker), [Configure-WSL](#configure-wsl)
+
 ## [Determine-DotnetDependencies](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Determine-DotnetDependencies.ps1)
 
 - **Description:** Scans a directory tree for .NET projects and lists their dependencies. Recursively finds project files (`.csproj`, `.fsproj`, `.vbproj`), parses their target frameworks, compares the required modern .NET versions against the installed SDKs and runtimes, and reports which required SDKs are present or missing. For any missing SDKs it prints ready-to-use installation commands in both WinGet and `WinGetApps.csv` formats.

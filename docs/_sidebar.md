@@ -42,6 +42,7 @@
 - **AI Integration**
     - [Overview](/ai/overview.md)
     - [Agent System](/ai/agent-system.md)
+    - [CoreAiRules](/ai/coreairules.md)
 
 - **Contributing**
     - [Fork Model](/contributing/fork-model.md)

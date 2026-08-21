@@ -25,7 +25,7 @@ Describe "Resolve-BootstrapSteps" {
 	}
 
 	Context "Built-in defaults" {
-		It "Should default every step on except the five opt-in steps" {
+		It "Should default every step on except the six opt-in steps" {
 			$states = Resolve-BootstrapSteps
 
 			foreach ($name in @(
@@ -35,7 +35,7 @@ Describe "Resolve-BootstrapSteps" {
 					"DotnetEf", "EnvironmentVariables", "CondaEnvironments", "Taskbar", "SymbolicLinks")) {
 				$states[$name] | Should -BeTrue -Because "step [$name] defaults to on"
 			}
-			foreach ($name in @("MicrosoftActivationScripts", "Win11Debloat", "DeveloperMode", "NuGetConfig", "LockedStartLayout")) {
+			foreach ($name in @("MicrosoftActivationScripts", "Win11Debloat", "DeveloperMode", "NuGetConfig", "CoreAiRules", "LockedStartLayout")) {
 				$states[$name] | Should -BeFalse -Because "step [$name] is opt-in"
 			}
 		}
@@ -43,7 +43,7 @@ Describe "Resolve-BootstrapSteps" {
 		It "Should list the steps in Bootstrap execution order" {
 			$states = Resolve-BootstrapSteps
 
-			@($states.Keys) -join "," | Should -Be "RenameMachine,MicrosoftActivationScripts,Win11Debloat,ExecutionPolicy,DeveloperMode,PowerPlan,PowerButtonActions,SystemTheme,Locale,DisplayLanguage,KeyboardLayouts,NerdFont,PowerShellModules,SpecialFolders,WSL,WinGetApps,ScoopApps,ChocolateyApps,UpgradeAll,DotnetEf,EnvironmentVariables,CondaEnvironments,NuGetConfig,Taskbar,SymbolicLinks,LockedStartLayout"
+			@($states.Keys) -join "," | Should -Be "RenameMachine,MicrosoftActivationScripts,Win11Debloat,ExecutionPolicy,DeveloperMode,PowerPlan,PowerButtonActions,SystemTheme,Locale,DisplayLanguage,KeyboardLayouts,NerdFont,PowerShellModules,SpecialFolders,WSL,WinGetApps,ScoopApps,ChocolateyApps,UpgradeAll,DotnetEf,EnvironmentVariables,CondaEnvironments,NuGetConfig,Taskbar,SymbolicLinks,CoreAiRules,LockedStartLayout"
 		}
 
 		It "Should return the defaults when Configuration itself is null" {

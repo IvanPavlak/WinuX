@@ -15,7 +15,8 @@ function Resolve-BootstrapSteps {
 		enabled step apply nothing. The opt-in exceptions default off
 		because they have no configuration to be empty and act the moment
 		they run: MicrosoftActivationScripts, Win11Debloat, DeveloperMode,
-		NuGetConfig (prompts for a GitHub PAT), and LockedStartLayout.
+		NuGetConfig (prompts for a GitHub PAT), CoreAiRules (machine-global
+		AI agent policy), and LockedStartLayout.
 
 		Legacy alias: when Steps.WSL is absent but the deprecated
 		BootstrapConfig.WSLSetup exists, WSL resolves from WSLSetup, so
@@ -83,6 +84,7 @@ function Resolve-BootstrapSteps {
 		NuGetConfig                = $false
 		Taskbar                    = $true
 		SymbolicLinks              = $true
+		CoreAiRules                = $false
 		LockedStartLayout          = $false
 	}
 

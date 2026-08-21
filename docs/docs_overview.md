@@ -85,6 +85,7 @@ The authoritative, always-current function reference is the set of per-module pa
 | `ResizeWindowsPercent`                             | `Resize-Windows` (via `Resolve-ResizeWindowsPercent`) |
 | `SnapInsetPercent`                                 | `Get-WindowInsetPercent` (for the five pre-snap placement paths) |
 | `KillAll.Steps`                                    | `Kill-All`, `Resolve-KillAllSteps`                 |
+| `BootstrapConfig.Steps`                            | `Bootstrap`, `Resolve-BootstrapSteps` (incl. the opt-in `CoreAiRules` step → `Deploy-CoreAiRules`) |
 | `AutoEnvironmentVariables`                         | `Set-EnvironmentVariables`                         |
 | `Locales`, `DefaultLocale`                         | `Set-Locale`                                       |
 | `DisplayLanguages`                                 | `Set-DisplayLanguage`                              |
@@ -142,7 +143,9 @@ Phase 5 (Dev Tools):             PersonalSteps (fork-defined; base runs none) �
 Phase 6 (Environment):           Set-EnvironmentVariables -Auto → Create-CondaEnvironments
                                  → Configure-NuGetConfig
 Phase 7 (Taskbar):               Configure-Taskbar -FromBootstrap → Set-TaskbarSettings → Set-VisualEffects
-Phase 8 (WSL & Symlinks):        Initialize-WSLEnvironment → SymbolicLinkMaker → Configure-WSLSSH (WSL steps config-gated)
+Phase 8 (WSL & Symlinks):        Initialize-WSLEnvironment → SymbolicLinkMaker
+                                 → Deploy-CoreAiRules (opt-in via BootstrapConfig.Steps.CoreAiRules)
+                                 → Configure-WSLSSH (WSL steps config-gated)
 Phase 9 (Finalize):              Lock taskbar → Restart-Explorer → Restart-Machine
 ```
 
@@ -211,7 +214,8 @@ docs/
 │
 ├── ai/
 │   ├── overview.md                         # Layered AI context system, slash commands
-│   └── agent-system.md                     # Custom agents, prompts, instructions
+│   ├── agent-system.md                     # Custom agents, prompts, instructions
+│   └── coreairules.md                        # Machine-global AI agent guardrails (opt-in)
 │
 ├── contributing/
 │   └── fork-model.md                       # Fork model, config + app-list overrides, merge=ours

@@ -17,10 +17,17 @@ The system uses progressive disclosure - only load what's needed for the current
 
 This layered approach means simple questions use minimal tokens, while complex tasks automatically pull in deeper context.
 
+## CoreAiRules (machine-global guardrails)
+
+Separate from the per-repository context system above, [`AI/CoreAiRules.md`](https://github.com/IvanPavlak/WinuX/blob/master/AI/CoreAiRules.md) carries always-on safety rules for AI coding agents (never commit/push/destroy on their own initiative, no AI attribution) that deploy machine-globally: the file is symlinked into every harness's global instruction file (Claude Code, Codex, Gemini CLI), and `AI/Claude/managed-settings.json` enforces the git rules at Claude Code's managed-settings tier. Deployment is opt-in via `BootstrapConfig.Steps.CoreAiRules` plus `SymbolicLinks` entries - see [CoreAiRules](coreairules.md) for the full design.
+
 ## Directory Structure
 
 ```
 AI/
+├── CoreAiRules.md                 # Machine-global agent guardrails (symlinked into every harness)
+├── Claude/
+│   └── managed-settings.json      # Claude Code enforcement layer (managed settings)
 ├── Context/
 │   ├── REPOSITORY_CONTEXT.md      # Architecture map for AI consumption
 │   └── WINDOWS_CONTEXT.md         # Full function reference
