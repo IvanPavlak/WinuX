@@ -65,6 +65,131 @@ Bullet-block rules:
 - Omit `**Alias:**` entirely when the function has no alias.
 - The heading link target is the function's source file on GitHub.
 
+### Configuration Guide Page (`configuration/guides/<module>/<Function-Name>.md`)
+
+EVERY exported function has exactly ONE configuration guide, in the folder of its module, named after the function with `.md` appended (`Open-Browser.md`). The 1:1 mapping against `FunctionsToExport` is mechanically checked by `Modules/Tests/Modules/Infrastructure/Infrastructure-ConfigurationGuides.Tests.ps1`, so the filename is not a style preference - a mismatch fails the suite. (`Run-Tests -TestName "Infrastructure"` runs it together with the other repository-wide coherence checks: documentation links, manifest completeness, and the function reference pages.)
+
+Two templates. Use the FULL one when the function reads configuration, the STUB one when it does not. Classify by looking at the function body, not its comment-based help: it reads configuration if `Functions/<Name>.ps1` references `$global:Configuration`, `$Configuration.`, `Test-ConfigValue`, `Confirm-ConfigValue`, `Resolve-ConfigPathValue` or `$global:MachineSpecificPaths`, calls `Import-AppCsv`, reads a `Data/*.csv`, or writes `Configuration.psd1` through `Find-ConfigurationSection`. A reference that appears only in a `.EXAMPLE` does not count.
+
+Guide bodies use RELATIVE links (`../../../modules/<module>.md#<anchor>`, `../../configuration-reference.md#<anchor>`) because those are the ones CI resolves. The sidebar keeps its `/`-anchored links, and it lists the 10 module index pages - never the individual function guides.
+
+**FULL template.** The headings are fixed and mandatory, in this order, because `winux-configurator.md` parses `## Configuration Keys` and `## Decisions` out of the page:
+
+`````markdown
+# Function-Name
+
+One-sentence intro: what this function does, enough to know whether you are on the right page.
+
+> [!NOTE]
+> Every value on this page belongs in `Configuration.local.psd1`, never in the base
+> `Configuration.psd1`. ... See [Fork Model](../../../contributing/fork-model.md).
+
+## Configuration Keys
+
+| Key | Type | Default (base) | What it controls |
+| --- | ---- | -------------- | ---------------- |
+| [`SomeKey`](../../configuration-reference.md#anchor) | hashtable | `@{}` (empty) | What it drives |
+
+## Decisions
+
+1. The question, phrased as it should be asked out loud.
+    - Options: what the acceptable answers are.
+    - Default: what happens if the reader does nothing.
+    - More detail: [`SomeKey`](../../configuration-reference.md#anchor)
+
+## Where to Put Values
+
+Which local-overlay file, and where it sits.
+
+> [!WARNING]
+> The merge is not uniform. **Hashtables deep-merge per key** ... **Arrays and scalars replace
+> wholesale** ...
+
+## Steps Overview
+
+1. Set `SomeKey`
+2. Reload and confirm the merge landed
+
+## Step 1: Set `SomeKey`
+
+What it controls, then a `powershell` fenced fragment with GENERIC values.
+
+## Step 2: Reload and confirm the merge landed
+
+...
+
+## Verification
+
+Read-only commands only. Nothing here may change state.
+
+## Complete Example
+
+A whole `Configuration.local.psd1` covering every key on the page.
+
+## Related
+
+- [`Function-Name` in the Module module reference](../../../modules/module.md#function-name)
+- [Module configuration guides](README.md)
+- [WinuXConfigurator](../../winux-configurator.md)
+`````
+
+Each `## Decisions` item is a numbered question with exactly three sub-bullets - `Options:`, `Default:`, `More detail:` - in that order. Do not add a fourth, and do not drop one.
+
+**STUB template.** For a function that reads nothing. The sentence under `## Configuration Keys` is VERBATIM MANDATORY: it is what makes stubs greppable and what makes the stub-to-full upgrade rule enforceable.
+
+`````markdown
+# Function-Name
+
+One-sentence purpose.
+
+## Configuration Keys
+
+This function reads no `Configuration.psd1` keys. There is nothing to configure.
+
+## Usage
+
+```powershell
+Function-Name
+Function-Name -Param "value"
+```
+
+## Related
+
+- [`Function-Name` in the Module module reference](../../../modules/module.md#function-name)
+- [Module configuration guides](README.md)
+`````
+
+**Module index template** (`configuration/guides/<module>/README.md`). One per module. It is the only inbound link most guides have, so every guide in the folder must appear in it:
+
+`````markdown
+# Module Module Configuration Guides
+
+Intro sentence describing what the module covers, plus a link to
+[the module reference](../../../modules/module.md). No function counts anywhere in the guides -
+they rot on every function add/remove, and the Configurable Functions table plus the
+no-configuration list already convey the split.
+
+## Configurable Functions
+
+| Function | Configuration keys | Guide |
+| -------- | ------------------ | ----- |
+| `Open-Browser` | `BrowserGroups`, `Universal` | [Open-Browser](Open-Browser.md) |
+
+## Task Guides
+
+Only in the modules that own one of the 7 task guides.
+
+## Functions With No Configuration
+
+A comma-separated list of links, so every stub has an inbound link.
+
+## Related
+
+...
+`````
+
+**Values in guides are always generic.** `DESKTOP-GAMING`, `LAPTOP-PERSONAL`, `WORKSTATION-01`, `C:\Users\You`, `MyProject`, `MyRepo`, `you@example.com`. Never a real MAC address, IP, hostname, work repository, or personal identifier - a guide is a public page.
+
 ### Getting Started / Configuration Page
 
 - Step-by-step numbered sections
@@ -136,6 +261,8 @@ Docs must always reflect the current system. Every change to a documented surfac
 | Prompt / agent / instruction / provider / template under `AI/` or `.github/` change | `ai/agent-system.md`, `ai/overview.md`                                           |
 | New failure mode, gotcha, or workaround                                             | `reference/troubleshooting.md`                                                   |
 | Page or module added/removed                                                        | `_sidebar.md`, `docs_overview.md`                                                |
+| Exported function added/renamed/removed                                             | `configuration/guides/<module>/<Function-Name>.md` (+ that module's `guides/<module>/README.md` index) |
+| `Configuration.psd1` key added/renamed/removed, or a function starts/stops reading configuration | the configuration guide of every function that reads the key; the function is upgraded/downgraded between the full and stub templates in the same change |
 
 When in doubt whether a change is user-facing, assume it is and update the matching page. A change that touches a documented surface without updating its page is incomplete.
 
@@ -149,8 +276,9 @@ When adding/renaming/removing a function:
 
 1. Add/update/remove its man-style entry alphabetically in `modules/<module>.md`
 2. Update the module `.psd1` `FunctionsToExport`
-3. Run `List-Functions -ListDiscrepancies` (must report none)
-4. Update `docs_overview.md`'s per-module index if the function set changed
+3. Add, rename or remove its configuration guide `configuration/guides/<module>/<Function-Name>.md` (full template if it reads configuration, stub template otherwise) and its entry in that module's `guides/<module>/README.md` index
+4. Run `List-Functions -ListDiscrepancies` (must report none)
+5. Update `docs_overview.md`'s per-module index if the function set changed
 
 Fork-only (Custom area) functions follow the same steps except: the entry lives in
 `custom/<module>.md`, and the `FunctionsToExport` update is to `Custom.psd1` (the fork-owned

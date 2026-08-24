@@ -291,7 +291,8 @@
 
 		# Browser Configuration
 		# Maps browser names to their executable paths and command-line arguments
-		# Used by Open-Browser function to support multiple browsers
+		# Used by Open-Browser to support multiple browsers, and by Resolve-LayoutTokens to
+		# expand the "Browser" token in window-layout files to every browser listed here
 		Browsers                 = @{
 			Firefox = @{
 				Exe          = "C:\Program Files\Mozilla Firefox\firefox.exe"

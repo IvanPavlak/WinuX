@@ -20,7 +20,7 @@ Navigates to the Obsidian vault directory (`$MachineSpecificPaths.ObsidianDirect
 Git-Obsidian
 ```
 
-**See also:** [Configuration: Add Repository](../configuration/guides/add-new-repository.md)
+**See also:** [Configuration: Add Repository](../configuration/guides/git/add-new-repository.md)
 
 ## [GitBranch](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Git/Functions/GitBranch.ps1)
 
@@ -202,7 +202,7 @@ Update-Repositories -All -Archive
 Update-Repositories MyRepo OtherProject -Archive -InCurrentDirectory
 ```
 
-**See also:** [Configuration: Add Repository](../configuration/guides/add-new-repository.md), [Modules: Workflow](workflow.md)
+**See also:** [Configuration: Add Repository](../configuration/guides/git/add-new-repository.md), [Modules: Workflow](workflow.md)
 
 ## Configuration
 

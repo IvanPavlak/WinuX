@@ -97,6 +97,12 @@ Center-Terminal
 
 **See also:** [Center-Windows](window.md#center-windows), [Resolve-CenterTerminalSizing](window.md#resolve-centerterminalsizing), [Resolve-CenteredWindowPercent](window.md#resolve-centeredwindowpercent), [Display-Aware Window Sizing](../configuration/configuration-reference.md#display-aware-window-sizing)
 
+## [Center-Text](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Center-Text.ps1)
+
+- **Description:** Centers a string within a specified character width by adding padding on both sides. If the text is longer than the width, it is truncated to fit. Used by Generate-LayoutVisualization to create centered text in ASCII-art layout visualizations.
+- **Parameters:** -Text, -Width
+- **Usage:** `Center-Text -Text "Hello" -Width 20`
+
 ## [Center-Windows](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Center-Windows.ps1)
 
 - **Description:** Centers all open windows on their respective monitors. Enumerates all visible application windows, determines which monitor each window is currently on based on its center point, then moves and resizes every window to a centered position within that monitor's work area. By default windows are resized to 40% of the monitor work area width and 50% of the height (override with `-WidthPercent` / `-HeightPercent`). Off-screen windows are automatically moved to the primary monitor. Pass `-OnPrimary` to force every matched window onto the primary monitor (whichever is currently primary), or `-Monitor` to force them onto a specific monitor by index, label, or device name (resolved by `Resolve-TargetMonitor`, the same path `Move-Windows` uses); the two are mutually exclusive. Forcing a target instead of deriving one per window is what makes a consolidation pass self-correcting - see the note below. Optionally restrict centering to matching windows with `-ProcessName` and/or `-WindowTitle` (exact, wildcard, or regex; OR logic when both are given), delegated to `Get-WindowHandle` - the same filtering path as `Move-Windows`. The actual move/resize is delegated to `Resize-Windows` in target-bounds mode (with `-InsetPercent 0` for exact placement), so all window placement flows through a single shared path (DRY).
@@ -140,12 +146,6 @@ Center-Windows -ProcessName "WindowsTerminal" -OnPrimary
 ```
 
 **See also:** [Reset-Windows](window.md#reset-windows), [Resolve-TargetMonitor](window.md#resolve-targetmonitor)
-
-## [Center-Text](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Center-Text.ps1)
-
-- **Description:** Centers a string within a specified character width by adding padding on both sides. If the text is longer than the width, it is truncated to fit. Used by Generate-LayoutVisualization to create centered text in ASCII-art layout visualizations.
-- **Parameters:** -Text, -Width
-- **Usage:** `Center-Text -Text "Hello" -Width 20`
 
 ## [Clear-FancyZonesCache](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Clear-FancyZonesCache.ps1)
 
@@ -299,7 +299,7 @@ Ensure-VirtualDesktops -Count 3 -SwitchToDesktop 2
 Set-LogLevel Verbose { Ensure-VirtualDesktops -Count 4 }
 ```
 
-**See also:** [Configuration: Window Layout](../configuration/guides/configure-window-layout.md)
+**See also:** [Configuration: Window Layout](../configuration/guides/window/configure-window-layout.md)
 
 ## [Ensure-WindowsFormsLoaded](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Ensure-WindowsFormsLoaded.ps1)
 
@@ -321,7 +321,7 @@ Called by `Set-WorkspaceWindowLayout` immediately after a layout file is loaded,
 
 The template is the first monitor the file defines in label order (`Primary`, `Secondary`, `Monitor3`, ...) rather than hashtable order, so which monitor gets cloned does not depend on the order `Import-PowerShellDataFile` happens to enumerate the keys in. Returns an empty array when the layout already covers every attached monitor, when it opted out, or when the template monitor carries no `VirtualDesktopLayouts` to clone.
 
-**See also:** [Get-MonitorSpecs](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Get-MonitorSpecs.ps1), [Configuration: Window Layout](../configuration/guides/configure-window-layout.md)
+**See also:** [Get-MonitorSpecs](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Get-MonitorSpecs.ps1), [Configuration: Window Layout](../configuration/guides/window/configure-window-layout.md)
 
 ## [Focus-VirtualDesktop](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Focus-VirtualDesktop.ps1)
 
@@ -1089,6 +1089,29 @@ Reset-KeyboardModifiers -IncludeMouseButton
 
 **See also:** [Snap-AllWindows](window.md#snap-allwindows), [Set-WorkspaceWindowLayout](window.md#set-workspacewindowlayout)
 
+## [Reset-VirtualDesktopComProxy](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Reset-VirtualDesktopComProxy.ps1)
+
+- **Description:** Reconnects the `VirtualDesktop` module's cached COM proxies to the current shell via reflection. The module's compiled `DesktopManager` class creates its COM proxies once per process in a static constructor and caches them in static fields; after an Explorer restart those proxies are permanently disconnected and every VirtualDesktop call fails with "The RPC server is unavailable" (`0x800706BA`) - and re-importing the module can never fix it, because the compiled assembly stays loaded and the constructor never runs again. This function replays that constructor: it creates a fresh ImmersiveShell service provider and overwrites the static COM fields with newly connected proxies, recovering the session in place without a new shell.
+- **Usage:** `Reset-VirtualDesktopComProxy`, `if (Test-RpcUnavailableError $_) { [void](Reset-VirtualDesktopComProxy) }`
+
+Returns a Boolean: `$true` when the compiled types are not loaded yet (the first real call creates fresh proxies on its own) or when every field was rebuilt; `$false` when the rebuild failed - typically while a restarted Explorer is still re-registering its COM classes, in which case retrying after a short delay succeeds. Used by `Reset-VirtualDesktopState` as the first (and decisive) recovery layer.
+
+**See also:** [Reset-VirtualDesktopState](window.md#reset-virtualdesktopstate), [Test-VirtualDesktopComHealth](window.md#test-virtualdesktopcomhealth), [Test-RpcUnavailableError](helper.md#test-rpcunavailableerror)
+
+## [Reset-VirtualDesktopState](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Reset-VirtualDesktopState.ps1)
+
+- **Description:** Restores a working VirtualDesktop session in place after the COM/RPC state has gone stale (the `0x800706BA` failure family an Explorer restart leaves behind). Two recovery layers: first `Reset-VirtualDesktopComProxy` reconnects the compiled type's cached static COM proxies to the current shell (the step that actually repairs a stale session - re-importing the module alone can never refresh them), then the module is removed, the module-scoped lazy-load cache (`$script:VirtualDesktopState`) is cleared, and the module is re-imported via `Import-VirtualDesktopModule`. When `Test-VirtualDesktopComHealth` is available, a live in-process roundtrip verifies the session actually works before success is reported.
+- **Usage:** `Reset-VirtualDesktopState`, `if (Reset-VirtualDesktopState) { Switch-Desktop -Desktop 0 }`
+
+Returns a Boolean: `$true` only when the VirtualDesktop session is verified ready after the reset, otherwise `$false` (safe to retry after a delay - a restarted Explorer needs a moment to re-register its COM classes). Module removal failures are ignored (the module may not currently be loaded). Callers: `Snap-AllWindows` and `Focus-VirtualDesktop` when a desktop switch cannot be verified, the RPC retry hooks in `Ensure-VirtualDesktops` and `Remove-VirtualDesktops`, `Repair-RpcServer` as its primary recovery step, and `Restart-Explorer` proactively right after restarting the shell.
+
+```powershell
+# Reconnect the session and only switch when it is verified ready again
+if (Reset-VirtualDesktopState) { Switch-Desktop -Desktop 0 }
+```
+
+**See also:** [Reset-VirtualDesktopComProxy](window.md#reset-virtualdesktopcomproxy), [Focus-VirtualDesktop](window.md#focus-virtualdesktop)
+
 ## [Reset-Windows](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Reset-Windows.ps1)
 
 - **Description:** Convenience wrapper that resets the window layout to a clean slate for layout testing. Runs four steps in order: `Remove-VirtualDesktops` (collapse down to a single virtual desktop), `Move-Windows` (move every window to the target virtual desktop and, optionally, a target monitor), `Center-Windows` (center every window on the configured monitor, or on its current monitor when none is configured), and finally `Focus-TerminalTab` (focuses Windows Terminal to continue working). The configured monitor is passed on to `Center-Windows` so the last pass re-asserts the intended target rather than re-deriving one per window, which makes the reset self-correcting when something moves a window mid-run. A `Remove-VirtualDesktops` failure is surfaced as a warning instead of being ignored. Defaults for `-VirtualDesktop` and `-Monitor` are read per machine from configuration, keyed by the machine type `Get-LayoutMachineType` resolves - the same one the window layouts are read under, so a `LayoutMachineTypeOverrides` entry (or a small primary display) selects the matching reset profile too.
@@ -1128,28 +1151,28 @@ Reset-Windows -VirtualDesktop 2 -Monitor Primary
 Reset-Windows -Monitor ""
 ```
 
-## [Reset-VirtualDesktopComProxy](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Reset-VirtualDesktopComProxy.ps1)
+## [Resize-PositionedWindows](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Resize-PositionedWindows.ps1)
 
-- **Description:** Reconnects the `VirtualDesktop` module's cached COM proxies to the current shell via reflection. The module's compiled `DesktopManager` class creates its COM proxies once per process in a static constructor and caches them in static fields; after an Explorer restart those proxies are permanently disconnected and every VirtualDesktop call fails with "The RPC server is unavailable" (`0x800706BA`) - and re-importing the module can never fix it, because the compiled assembly stays loaded and the constructor never runs again. This function replays that constructor: it creates a fresh ImmersiveShell service provider and overwrites the static COM fields with newly connected proxies, recovering the session in place without a new shell.
-- **Usage:** `Reset-VirtualDesktopComProxy`, `if (Test-RpcUnavailableError $_) { [void](Reset-VirtualDesktopComProxy) }`
+- **Description:** Reapplies the shared pre-snap inset resize bounds to every tracked positioned window before FancyZones snapping. Uses the same `Resize-Windows` target-bounds path as `Set-WindowLayouts` and `Snap-AllWindows`, so every pre-snap resize comes from one source of truth and the first snap attempt always starts from the same geometry used during initial positioning and snap retries.
+- **Parameters:** -InsetPercent, -Tolerance
+- **Usage:** `Resize-PositionedWindows`, `Resize-PositionedWindows -Tolerance 0`
 
-Returns a Boolean: `$true` when the compiled types are not loaded yet (the first real call creates fresh proxies on its own) or when every field was rebuilt; `$false` when the rebuild failed - typically while a restarted Explorer is still re-registering its COM classes, in which case retrying after a short delay succeeds. Used by `Reset-VirtualDesktopState` as the first (and decisive) recovery layer.
+Called by `Set-WorkspaceWindowLayout` after the initial positioning pass and immediately before `Snap-AllWindows`. For each tracked window it invokes `Resize-Windows` in target-bounds mode with that window's expected zone bounds, skipping windows already at the adjusted pre-snap position (within `Tolerance`). Returns a result object with `ResizedCount`, `SkippedCount`, and `FailedWindows`.
 
-**See also:** [Reset-VirtualDesktopState](window.md#reset-virtualdesktopstate), [Test-VirtualDesktopComHealth](window.md#test-virtualdesktopcomhealth), [Test-RpcUnavailableError](helper.md#test-rpcunavailableerror)
-
-## [Reset-VirtualDesktopState](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Reset-VirtualDesktopState.ps1)
-
-- **Description:** Restores a working VirtualDesktop session in place after the COM/RPC state has gone stale (the `0x800706BA` failure family an Explorer restart leaves behind). Two recovery layers: first `Reset-VirtualDesktopComProxy` reconnects the compiled type's cached static COM proxies to the current shell (the step that actually repairs a stale session - re-importing the module alone can never refresh them), then the module is removed, the module-scoped lazy-load cache (`$script:VirtualDesktopState`) is cleared, and the module is re-imported via `Import-VirtualDesktopModule`. When `Test-VirtualDesktopComHealth` is available, a live in-process roundtrip verifies the session actually works before success is reported.
-- **Usage:** `Reset-VirtualDesktopState`, `if (Reset-VirtualDesktopState) { Switch-Desktop -Desktop 0 }`
-
-Returns a Boolean: `$true` only when the VirtualDesktop session is verified ready after the reset, otherwise `$false` (safe to retry after a delay - a restarted Explorer needs a moment to re-register its COM classes). Module removal failures are ignored (the module may not currently be loaded). Callers: `Snap-AllWindows` and `Focus-VirtualDesktop` when a desktop switch cannot be verified, the RPC retry hooks in `Ensure-VirtualDesktops` and `Remove-VirtualDesktops`, `Repair-RpcServer` as its primary recovery step, and `Restart-Explorer` proactively right after restarting the shell.
+| Parameter       | Description                                                                                                                                                                                                            |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `-InsetPercent` | Inset percentage applied on each side. Defaults to `Get-WindowInsetPercent` (`SnapInsetPercent`, `0.05` when unset), constrained to the range `0.0`-`0.49`.                                                            |
+| `-Tolerance`    | Pixel tolerance for deciding whether a window is already at the adjusted pre-snap position. Defaults to the module's shared position verification tolerance (`$script:WindowModuleTolerances.PositionVerificationPx`). |
 
 ```powershell
-# Reconnect the session and only switch when it is verified ready again
-if (Reset-VirtualDesktopState) { Switch-Desktop -Desktop 0 }
+# Reapply the shared pre-snap inset to all tracked windows
+Resize-PositionedWindows
+
+# Verbose diagnostic output
+Set-LogLevel Verbose { Resize-PositionedWindows -Tolerance 0 }
 ```
 
-**See also:** [Reset-VirtualDesktopComProxy](window.md#reset-virtualdesktopcomproxy), [Focus-VirtualDesktop](window.md#focus-virtualdesktop)
+**See also:** [Window module](window.md)
 
 ## [Resize-Windows](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Resize-Windows.ps1)
 
@@ -1191,29 +1214,6 @@ Resize-Windows -WindowHandle $handle -TargetX 0 -TargetY 0 -TargetWidth 1720 -Ta
 ```
 
 **See also:** [Window Layout System](../modules/window.md), [Resolve-ResizeWindowsPercent](window.md#resolve-resizewindowspercent), [Get-WindowInsetPercent](window.md#get-windowinsetpercent), [Display-Aware Window Sizing](../configuration/configuration-reference.md#display-aware-window-sizing)
-
-## [Resize-PositionedWindows](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Resize-PositionedWindows.ps1)
-
-- **Description:** Reapplies the shared pre-snap inset resize bounds to every tracked positioned window before FancyZones snapping. Uses the same `Resize-Windows` target-bounds path as `Set-WindowLayouts` and `Snap-AllWindows`, so every pre-snap resize comes from one source of truth and the first snap attempt always starts from the same geometry used during initial positioning and snap retries.
-- **Parameters:** -InsetPercent, -Tolerance
-- **Usage:** `Resize-PositionedWindows`, `Resize-PositionedWindows -Tolerance 0`
-
-Called by `Set-WorkspaceWindowLayout` after the initial positioning pass and immediately before `Snap-AllWindows`. For each tracked window it invokes `Resize-Windows` in target-bounds mode with that window's expected zone bounds, skipping windows already at the adjusted pre-snap position (within `Tolerance`). Returns a result object with `ResizedCount`, `SkippedCount`, and `FailedWindows`.
-
-| Parameter       | Description                                                                                                                                                                                                            |
-| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `-InsetPercent` | Inset percentage applied on each side. Defaults to `Get-WindowInsetPercent` (`SnapInsetPercent`, `0.05` when unset), constrained to the range `0.0`-`0.49`.                                                            |
-| `-Tolerance`    | Pixel tolerance for deciding whether a window is already at the adjusted pre-snap position. Defaults to the module's shared position verification tolerance (`$script:WindowModuleTolerances.PositionVerificationPx`). |
-
-```powershell
-# Reapply the shared pre-snap inset to all tracked windows
-Resize-PositionedWindows
-
-# Verbose diagnostic output
-Set-LogLevel Verbose { Resize-PositionedWindows -Tolerance 0 }
-```
-
-**See also:** [Window module](window.md)
 
 ## [Resolve-CenteredWindowPercent](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Resolve-CenteredWindowPercent.ps1)
 
@@ -1303,11 +1303,11 @@ Resolve-DisplayAwareProfile -Section $global:Configuration.ResizeWindowsPercent
 
 ## [Resolve-LayoutTokens](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Resolve-LayoutTokens.ps1)
 
-- **Description:** Expands layout-file tokens to regex patterns at the matching boundary. Layout entries may use the literal token `"Browser"` as a value for `ProcessName` and/or `WindowTitle`; this helper returns a shallow clone of the entry with those tokens expanded to a regex covering every browser declared in `$global:Configuration.Browsers` (Tor excluded - SecureBrowser layouts opt into `tor` explicitly). Other values, including literal alternation regex like `(firefox|chrome|msedge|brave)`, are returned unchanged. Tokens are matched case-sensitively and expanded patterns are cached at module scope so it stays cheap inside the per-entry Set-WindowLayouts / Confirm-WorkspaceWindowPositions loops. The original entry is never mutated, so Visualize-Layouts still renders the raw `Browser` cell.
+- **Description:** Expands layout-file tokens to regex patterns at the matching boundary. Layout entries may use the literal token `"Browser"` as a value for `ProcessName` and/or `WindowTitle`; this helper returns a shallow clone of the entry with those tokens expanded to a regex covering every browser declared in `Configuration.Universal.Browsers` - the same map `Open-Browser` reads - with a legacy top-level `Configuration.Browsers` map honoured as a fallback (Tor excluded - SecureBrowser layouts opt into `tor` explicitly). Other values, including literal alternation regex like `(firefox|chrome|msedge|brave)`, are returned unchanged. Tokens are matched case-sensitively and expanded patterns are cached at module scope so it stays cheap inside the per-entry Set-WindowLayouts / Confirm-WorkspaceWindowPositions loops. The original entry is never mutated, so Visualize-Layouts still renders the raw `Browser` cell.
 - **Parameters:** -LayoutEntry
 - **Usage:** `Resolve-LayoutTokens -LayoutEntry @{ ProcessName = "Browser"; Zone = "Left" }`, `Resolve-LayoutTokens -LayoutEntry @{ ProcessName = "firefox" }`
 
-Layout files (under `Windows/PowerShell/Modules/Window/Layouts/**`) can stay browser-agnostic by using the literal token `Browser` instead of a specific browser name. At match time the token is expanded to a regex covering every browser declared under `Configuration.Browsers`, so the same layout works whether Firefox, Chrome, Edge, or Brave is the active default. The process side expands to the exe basenames (e.g. `(firefox|chrome|msedge|brave)`) and the title side to an escaped, case-insensitive alternation of the friendly browser names. When `Configuration` is not loaded (e.g. isolated Pester tests), a built-in fallback set is used. Returns a `[hashtable]` shallow clone of the input with the token fields expanded.
+Layout files (under `Windows/PowerShell/Modules/Window/Layouts/**`) can stay browser-agnostic by using the literal token `Browser` instead of a specific browser name. At match time the token is expanded to a regex covering every browser declared under `Configuration.Universal.Browsers`, so the same layout works whether Firefox, Chrome, Edge, or Brave is the active default - and a browser a fork adds to that map joins the token automatically. A top-level `Configuration.Browsers` map is honoured as a legacy fallback (it was the only location an earlier version of this function read). The process side expands to the exe basenames (e.g. `(firefox|chrome|msedge|brave)`) and the title side to an escaped, case-insensitive alternation of the friendly browser names. When `Configuration` is not loaded (e.g. isolated Pester tests), a built-in fallback set is used. Returns a `[hashtable]` shallow clone of the input with the token fields expanded.
 
 | Parameter      | Description                                                                                                                                                                                                                                 |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1827,7 +1827,7 @@ if (-not $result.IsValid) {
 }
 ```
 
-**See also:** [Configuration: Window Layout](../configuration/guides/configure-window-layout.md)
+**See also:** [Configuration: Window Layout](../configuration/guides/window/configure-window-layout.md)
 
 ## [Visualize-Layouts](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Visualize-Layouts.ps1)
 
@@ -1858,7 +1858,7 @@ Visualize-Layouts -All -Update
 Visualize-Layouts -DisplayAvailableLayouts
 ```
 
-**See also:** [Set-WorkspaceWindowLayout](#set-workspacewindowlayout), [Configure Window Layout](../configuration/guides/configure-window-layout.md)
+**See also:** [Set-WorkspaceWindowLayout](#set-workspacewindowlayout), [Configure Window Layout](../configuration/guides/window/configure-window-layout.md)
 
 ## [Wait-DesktopSwitch](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Wait-DesktopSwitch.ps1)
 
@@ -2149,7 +2149,7 @@ Both `ProcessName` and `WindowTitle` support exact names, wildcard patterns, and
 
 ### Browser Token
 
-Layout entries can use the literal token `Browser` in `ProcessName` (and optionally `WindowTitle`) instead of a specific browser name. At match time, `Resolve-LayoutTokens` expands it to a regex covering every browser declared under `Configuration.Browsers` (Tor excluded - use `tor` explicitly for secure-browser layouts).
+Layout entries can use the literal token `Browser` in `ProcessName` (and optionally `WindowTitle`) instead of a specific browser name. At match time, `Resolve-LayoutTokens` expands it to a regex covering every browser declared under `Configuration.Universal.Browsers` (Tor excluded - use `tor` explicitly for secure-browser layouts).
 
 ```powershell
 @{

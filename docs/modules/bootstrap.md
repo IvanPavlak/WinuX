@@ -438,7 +438,7 @@ Result: C:\Users\<User>\.gitconfig → WinuX\Git\.gitconfig
 | WSL paths (`/home/...`)  | `wsl ln -sf`                      |
 | Nested configs           | Recursive processing              |
 
-See [Add Symbolic Link Guide](../configuration/guides/add-symbolic-link.md) for details.
+See [Add Symbolic Link Guide](../configuration/guides/system/add-symbolic-link.md) for details.
 
 ## Profile Initialization
 

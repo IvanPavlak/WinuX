@@ -65,7 +65,7 @@ Add-Project -Name "MyProject" -Actions @(
 ) -BasePath "Projects.MyProject" -Paths @("ROOT", "API") -Runnable
 ```
 
-**See also:** [Add a New Project](../configuration/guides/add-new-project.md)
+**See also:** [Add a New Project](../configuration/guides/workflow/add-new-project.md)
 
 ## [Add-SymbolicLink](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Configuration/Functions/Add-SymbolicLink.ps1)
 
@@ -171,7 +171,7 @@ ConvertTo-ActionString -Action @{
 # Output: @{ Action = "Open-Browser"; Parameters = @{ Groups = @("GroupName", "OtherGroup") } }
 ```
 
-**See also:** [Add Workspace](../configuration/guides/add-new-workspace.md), [Add Project](../configuration/guides/add-new-project.md)
+**See also:** [Add Workspace](../configuration/guides/workflow/add-new-workspace.md), [Add Project](../configuration/guides/workflow/add-new-project.md)
 
 ## [Find-ConfigurationSection](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Configuration/Functions/Find-ConfigurationSection.ps1)
 
@@ -193,7 +193,7 @@ $section = Find-ConfigurationSection -Lines $lines -SectionName "BrowserGroups"
 # Returns @{ StartIndex = 1829; EndIndex = 2050; Indent = "`t"; BracketType = "(" }
 ```
 
-**See also:** [Add Browser Group](../configuration/guides/add-browser-group.md)
+**See also:** [Add Browser Group](../configuration/guides/application/add-browser-group.md)
 
 ## [Save-AppCsvOverlay](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Configuration/Functions/Save-AppCsvOverlay.ps1)
 

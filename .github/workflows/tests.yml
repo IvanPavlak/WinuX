@@ -27,7 +27,7 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       # The pinned version lives in one file the harness and Install-PowerShellModules also
       # read, so CI can never disagree with a local run. Bump it there, deliberately.
@@ -39,7 +39,7 @@ jobs:
       # Pulling it from PSGallery on every run cost ~29s; the cache turns that into a few seconds.
       - name: Cache Pester
         id: cache-pester
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~\Documents\PowerShell\Modules\Pester
           key: pester-${{ runner.os }}-${{ env.PESTER_VERSION }}
@@ -70,7 +70,7 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: pester-results
           path: |
@@ -80,7 +80,7 @@ jobs:
 
       - name: Publish test report
         if: always()
-        uses: dorny/test-reporter@v1
+        uses: dorny/test-reporter@v3
         with:
           name: Pester Results
           path: Windows/PowerShell/Modules/Tests/Results/pester-results-*.xml   # one XML per worker, merged into a single check run

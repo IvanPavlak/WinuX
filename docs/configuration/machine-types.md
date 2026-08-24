@@ -219,7 +219,7 @@ LayoutMachineTypeOverrides = @{
 SmallDisplayMachineType = "Laptop"
 ```
 
-Both keys are resolved by `Get-LayoutMachineType`, which `Set-WorkspaceWindowLayout` and `Reset-Windows` share - so the layouts and the reset target can never disagree about which monitor setup is attached. The override name is not a machine type: it needs no `ValidMachineTypes` entry, no base paths, and no payload files, only `<Workspace>_<Name>.psd1` layouts (and optionally its own `ResetAllWindowsDefaults` entry). See [Configure Window Layout](guides/configure-window-layout.md#running-a-machine-on-a-different-monitor-setup).
+Both keys are resolved by `Get-LayoutMachineType`, which `Set-WorkspaceWindowLayout` and `Reset-Windows` share - so the layouts and the reset target can never disagree about which monitor setup is attached. The override name is not a machine type: it needs no `ValidMachineTypes` entry, no base paths, and no payload files, only `<Workspace>_<Name>.psd1` layouts (and optionally its own `ResetAllWindowsDefaults` entry). See [Configure Window Layout](guides/window/configure-window-layout.md#running-a-machine-on-a-different-monitor-setup).
 
 ### 6. Window Sizing (`CenterTerminalSizing`, `ResizeWindowsPercent`)
 
@@ -404,7 +404,7 @@ DetermineMachineType
 
 ## Adding a New Machine
 
-See [Add New Machine](guides/add-new-machine.md) for step-by-step instructions.
+See [Add New Machine](guides/bootstrap/add-new-machine.md) for step-by-step instructions.
 
 ## Application Filtering
 

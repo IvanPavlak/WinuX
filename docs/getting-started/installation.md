@@ -169,7 +169,7 @@ WinuX's shipped configuration defines a machine type you can adapt:
 The active machine type is chosen by matching your hostname in
 `Configuration.psd1 → HostnameToMachineType`; if your hostname isn't listed, WinuX falls back
 to `DefaultMachineType` (no need to rename your computer just to get started). Add more machine
-types by following the [Add a New Machine](../configuration/guides/add-new-machine.md) guide.
+types by following the [Add a New Machine](../configuration/guides/bootstrap/add-new-machine.md) guide.
 
 ## Troubleshooting installation
 

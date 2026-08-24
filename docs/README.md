@@ -41,7 +41,7 @@ Deep dive into the configuration system.
 
 - [Overview](configuration/overview.md) - How Configuration.psd1 works
 - [Placeholder System](configuration/placeholder-system.md) - `{Dev}`, `{User}`, etc.
-- [How-To Guides](configuration/guides/add-new-project.md) - Step-by-step tutorials
+- [How-To Guides](configuration/guides/workflow/add-new-project.md) - Step-by-step tutorials
 
 ### Modules
 

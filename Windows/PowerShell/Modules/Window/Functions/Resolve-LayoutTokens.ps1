@@ -6,8 +6,12 @@ function Resolve-LayoutTokens {
 	.DESCRIPTION
 		Layout files (under Windows/PowerShell/Modules/Window/Layouts/**) may use the literal
 		token "Browser" as a value for `ProcessName` and/or `WindowTitle`. This helper expands
-		those tokens to a regex covering every browser declared in `$global:Configuration.Browsers`
-		(excluding Tor - see SecureBrowser workspace for the intentional opt-out).
+		those tokens to a regex covering every browser declared in
+		`$global:Configuration.Universal.Browsers` - the same map Open-Browser and
+		Terminate-AllBrowserProcesses read - excluding Tor (see SecureBrowser workspace for the
+		intentional opt-out). A top-level `$global:Configuration.Browsers` map is honoured as a
+		legacy fallback: it was the only location this function used to read, so a fork may have
+		placed its map there.
 
 		Other values - including literal regex patterns like `(firefox|chrome|msedge|brave)` -
 		are returned unchanged. Tokens are matched case-sensitively to avoid clashing with real
@@ -45,12 +49,25 @@ function Resolve-LayoutTokens {
 		$browserProcesses = $null
 		$browserTitles = $null
 
-		# Preferred source: $global:Configuration.Browsers (keys + Exe basenames), minus Tor.
-		if ($global:Configuration -and $global:Configuration.Browsers) {
+		# Preferred source: Universal.Browsers (keys + Exe basenames), minus Tor. That is where the
+		# shipped browser map lives and what Open-Browser reads. A top-level Browsers map is kept
+		# as a legacy fallback - this function used to look ONLY there (which the base config never
+		# populates, so the built-in fallback always won), and a fork may have adopted that spot.
+		$browserMap = $null
+		if ($global:Configuration) {
+			if ($global:Configuration.Universal -and $global:Configuration.Universal.Browsers) {
+				$browserMap = $global:Configuration.Universal.Browsers
+			}
+			elseif ($global:Configuration.Browsers) {
+				$browserMap = $global:Configuration.Browsers
+			}
+		}
+
+		if ($browserMap) {
 			$processSet = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
 			$titleSet = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
 
-			foreach ($entry in $global:Configuration.Browsers.GetEnumerator()) {
+			foreach ($entry in $browserMap.GetEnumerator()) {
 				$name = $entry.Key
 				# Intentional exclusion: SecureBrowser_*.psd1 targets tor explicitly.
 				if ($name -ieq 'Tor') { continue }

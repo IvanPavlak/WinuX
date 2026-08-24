@@ -386,4 +386,4 @@ $Configuration.Universal.FirefoxExe
 ## Next Steps
 
 - Learn about [Machine Types](machine-types.md)
-- See [Adding a New Machine](guides/add-new-machine.md) for practical examples
+- See [Adding a New Machine](guides/bootstrap/add-new-machine.md) for practical examples

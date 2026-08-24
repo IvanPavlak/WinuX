@@ -190,7 +190,7 @@ This triggers the following process:
 4. Add wallpaper settings in `WallpaperDarkSettings`/`WallpaperLightSettings`
 5. Create layout files in `Layouts/{MachineType}/`
 
-→ See [Add New Machine Guide](guides/add-new-machine.md)
+→ See [Add New Machine Guide](guides/bootstrap/add-new-machine.md)
 
 ### Add a New Project
 
@@ -199,21 +199,21 @@ This triggers the following process:
 3. Add `ProjectActions` entry
 4. Optionally add to `VSCodeProjects`, `VisualStudioSolutions`, `RunnableProjects`
 
-→ See [Add New Project Guide](guides/add-new-project.md)
+→ See [Add New Project Guide](guides/workflow/add-new-project.md)
 
 ### Add a New Repository
 
 1. Add URL in `Universal.GitHub.Private` or `Universal.GitHub.YourGroup`
 2. Add a repository entry in `RepositoryGroups`
 
-→ See [Add New Repository Guide](guides/add-new-repository.md)
+→ See [Add New Repository Guide](guides/git/add-new-repository.md)
 
 ### Add a Symbolic Link
 
 1. Add entry in `PathTemplates.SymbolicLinks`
 2. Run `SymbolicLinkMaker` or `Bootstrap`
 
-→ See [Add Symbolic Link Guide](guides/add-symbolic-link.md)
+→ See [Add Symbolic Link Guide](guides/system/add-symbolic-link.md)
 
 ### Add a Workspace
 
@@ -221,7 +221,7 @@ This triggers the following process:
 2. Add `WorkspaceActions` entry
 3. Create layout file in `Layouts/{MachineType}/`
 
-→ See [Add New Workspace Guide](guides/add-new-workspace.md)
+→ See [Add New Workspace Guide](guides/workflow/add-new-workspace.md)
 
 ## Example: Full Project Configuration
 
@@ -353,4 +353,4 @@ WallpaperDarkSettings = @{
 
 - Learn about the [Placeholder System](placeholder-system.md)
 - Understand [Machine Types](machine-types.md)
-- Follow the [How-To Guides](guides/add-new-project.md) for step-by-step tutorials
+- Follow the [How-To Guides](guides/workflow/add-new-project.md) for step-by-step tutorials

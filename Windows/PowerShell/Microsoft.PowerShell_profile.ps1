@@ -188,3 +188,5 @@ Register-EngineEvent -SourceIdentifier PowerShell.OnIdle -SupportEvent -Action {
 # must stay fast). Run them on-demand instead:
 #   List-Functions -ListDiscrepancies   - functions loaded vs documented in docs/modules
 #   Test-ManifestCompleteness           - function files on disk vs each module's FunctionsToExport
+#   Run-Tests -TestName "Infrastructure" - the hermetic CI versions of both, plus documentation
+#                                          links and the per-function configuration guides

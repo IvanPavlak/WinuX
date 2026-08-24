@@ -102,7 +102,9 @@ Modules/Tests/
     ├── Configuration/       # Configuration module tests
     ├── Git/                 # Git module tests
     ├── Helper/              # Helper module tests
-    ├── Infrastructure/      # Repository-wide checks (e.g. documentation links)
+    ├── Infrastructure/      # Repository-wide coherence checks (Infrastructure-*.Tests.ps1:
+    │                        #   docs links, manifest completeness, function reference pages,
+    │                        #   configuration guides) - run all with -TestName "Infrastructure"
     ├── Logging/             # Logging module tests
     ├── System/              # System module tests
     ├── Window/              # Window module tests
