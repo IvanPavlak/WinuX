@@ -25,19 +25,29 @@ Describe "Resolve-BootstrapSteps" {
 	}
 
 	Context "Built-in defaults" {
-		It "Should default every step on except the six opt-in steps" {
+		It "Should default every step on except the seven opt-in steps" {
 			$states = Resolve-BootstrapSteps
 
 			foreach ($name in @(
 					"RenameMachine", "ExecutionPolicy", "PowerPlan", "PowerButtonActions", "SystemTheme",
 					"Locale", "DisplayLanguage", "KeyboardLayouts", "NerdFont", "PowerShellModules",
-					"SpecialFolders", "WSL", "WinGetApps", "ScoopApps", "ChocolateyApps", "UpgradeAll",
+					"SpecialFolders", "WSL", "WinGetApps", "ScoopApps", "ChocolateyApps",
 					"DotnetEf", "EnvironmentVariables", "CondaEnvironments", "Taskbar", "SymbolicLinks")) {
 				$states[$name] | Should -BeTrue -Because "step [$name] defaults to on"
 			}
-			foreach ($name in @("MicrosoftActivationScripts", "Win11Debloat", "DeveloperMode", "NuGetConfig", "CoreAiRules", "LockedStartLayout")) {
+			foreach ($name in @("MicrosoftActivationScripts", "Win11Debloat", "DeveloperMode", "NuGetConfig", "UpgradeAll", "CoreAiRules", "LockedStartLayout")) {
 				$states[$name] | Should -BeFalse -Because "step [$name] is opt-in"
 			}
+		}
+
+		It "Should keep UpgradeAll off until it is opted into" {
+			# Upgrade-All runs `winget upgrade --all` and its Scoop/Chocolatey equivalents, so it
+			# touches every package already on the machine, not only the ones WinuX installs.
+			(Resolve-BootstrapSteps)["UpgradeAll"] | Should -BeFalse
+
+			$global:Configuration.BootstrapConfig = @{ Steps = @{ UpgradeAll = $true } }
+
+			(Resolve-BootstrapSteps)["UpgradeAll"] | Should -BeTrue
 		}
 
 		It "Should list the steps in Bootstrap execution order" {
@@ -56,20 +66,22 @@ Describe "Resolve-BootstrapSteps" {
 		}
 
 		It "Should return the default for steps absent from a partial Steps section" {
-			$global:Configuration.BootstrapConfig = @{ Steps = @{ UpgradeAll = $false } }
+			# UpgradeAll is set to the OPPOSITE of its default so the assertion proves the config
+			# was read, not merely that the built-in default happens to match.
+			$global:Configuration.BootstrapConfig = @{ Steps = @{ UpgradeAll = $true } }
 
 			$states = Resolve-BootstrapSteps
 
-			$states["UpgradeAll"] | Should -BeFalse
+			$states["UpgradeAll"] | Should -BeTrue
 			$states["WinGetApps"] | Should -BeTrue
 		}
 	}
 
 	Context "Parameter overrides" {
 		It "Should force a step off with Skip" {
-			$states = Resolve-BootstrapSteps -Skip @("UpgradeAll")
+			$states = Resolve-BootstrapSteps -Skip @("WinGetApps")
 
-			$states["UpgradeAll"] | Should -BeFalse
+			$states["WinGetApps"] | Should -BeFalse
 		}
 
 		It "Should force an opt-in step on with Include" {
@@ -116,14 +128,14 @@ Describe "Resolve-BootstrapSteps" {
 
 		It "Should resolve WSL from WSLSetup when Steps exists but carries no WSL entry" {
 			$global:Configuration.BootstrapConfig = @{
-				Steps    = @{ UpgradeAll = $false }
+				Steps    = @{ UpgradeAll = $true }
 				WSLSetup = @{ Default = $false }
 			}
 
 			$states = Resolve-BootstrapSteps
 
 			$states["WSL"] | Should -BeFalse
-			$states["UpgradeAll"] | Should -BeFalse
+			$states["UpgradeAll"] | Should -BeTrue
 		}
 
 		It "Should let Steps.WSL win over the deprecated WSLSetup" {
@@ -137,7 +149,7 @@ Describe "Resolve-BootstrapSteps" {
 
 		It "Should not mutate the global configuration when applying the fallback" {
 			$global:Configuration.BootstrapConfig = @{
-				Steps    = @{ UpgradeAll = $false }
+				Steps    = @{ UpgradeAll = $true }
 				WSLSetup = @{ Default = $false }
 			}
 
