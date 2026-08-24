@@ -36,6 +36,13 @@ function Add-PositionedWindow {
 	.PARAMETER ExpectedProcessId
 		Optional process ID fingerprint captured during positioning.
 
+	.PARAMETER SingleZone
+		Marks the window as belonging to a single-zone FancyZones layout (e.g. "Zero" via
+		Zone = "Fullscreen"). Snap-AllWindows places such windows directly at the zone rect
+		(Invoke-SingleZoneWindowPlacement) instead of snapping them: FancyZones' Win+Arrow
+		is a relative move, and a single-zone layout has no neighbouring zone on the same
+		monitor to make it deterministic.
+
 	.EXAMPLE
 		Add-PositionedWindow -WindowHandle $window.Handle -ExpectedX 100 -ExpectedY 200 -ExpectedWidth 800 -ExpectedHeight 600 -WindowTitle "MyApp" -DesktopNumber 0
 	#>
@@ -66,7 +73,10 @@ function Add-PositionedWindow {
 		[string]$ExpectedProcessName,
 
 		[Parameter()]
-		[uint32]$ExpectedProcessId = 0
+		[uint32]$ExpectedProcessId = 0,
+
+		[Parameter()]
+		[switch]$SingleZone
 	)
 
 	if (-not $script:PositionedWindowHandles) {
@@ -97,6 +107,7 @@ function Add-PositionedWindow {
 		DesktopNumber  = $DesktopNumber
 		ProcessName    = $ExpectedProcessName
 		ProcessId      = $ExpectedProcessId
+		SingleZone     = [bool]$SingleZone
 	}
 
 	$script:PositionedWindowHandles.Add($windowState) > $null

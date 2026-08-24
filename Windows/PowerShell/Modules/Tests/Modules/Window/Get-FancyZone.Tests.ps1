@@ -12,6 +12,19 @@ Describe "Get-FancyZone" {
 		$testLayouts = @{
 			'custom-layouts' = @(
 				@{
+					name = "Zero"
+					type = "grid"
+					info = @{
+						rows                 = 1
+						columns              = 1
+						'rows-percentage'    = @(10000)
+						'columns-percentage' = @(10000)
+						'cell-child-map'     = @(, @(, 0))
+						'show-spacing'       = $false
+						spacing              = 0
+					}
+				}
+				@{
 					name = "One"
 					type = "grid"
 					info = @{
@@ -44,6 +57,10 @@ Describe "Get-FancyZone" {
 		# Set up global Configuration with ZoneNameMappings
 		$global:Configuration = @{
 			ZoneNameMappings = @{
+				"Zero" = @{
+					"Full"       = 0
+					"Fullscreen" = 0
+				}
 				"One"  = @{
 					"Left"  = 0
 					"Right" = 1
@@ -99,6 +116,32 @@ Describe "Get-FancyZone" {
 			$result.Y | Should -Be 500
 			$result.Width | Should -Be 1000
 			$result.Height | Should -Be 500
+		}
+	}
+
+	Context "TotalZoneCount (single-zone detection)" {
+		# The snap pipeline branches on this member: a single-zone layout has no neighbouring
+		# zone for FancyZones' relative Win+Arrow, so Snap-AllWindows places it directly.
+		It "Should report 1 for the single-zone Zero layout" {
+			$result = Get-FancyZone -LayoutName "Zero" -ZoneName "Fullscreen" -MonitorX 0 -MonitorY 0 -MonitorWidth 2000 -MonitorHeight 1000 -CustomLayoutsPath $script:TestLayoutsPath
+
+			$result | Should -Not -BeNullOrEmpty
+			$result.TotalZoneCount | Should -Be 1
+		}
+
+		It "Should count zones from the layout definition, not the name mappings" {
+			# "Full" and "Fullscreen" both map to index 0 - two names, still one zone.
+			$result = Get-FancyZone -LayoutName "Zero" -ZoneName "Full" -MonitorX 0 -MonitorY 0 -MonitorWidth 2000 -MonitorHeight 1000 -CustomLayoutsPath $script:TestLayoutsPath
+
+			$result.TotalZoneCount | Should -Be 1
+		}
+
+		It "Should report the full zone count for multi-zone layouts" {
+			$one = Get-FancyZone -LayoutName "One" -ZoneName "Left" -MonitorX 0 -MonitorY 0 -MonitorWidth 2000 -MonitorHeight 1000 -CustomLayoutsPath $script:TestLayoutsPath
+			$four = Get-FancyZone -LayoutName "Four" -ZoneName "Bottom-Right" -MonitorX 0 -MonitorY 0 -MonitorWidth 2000 -MonitorHeight 1000 -CustomLayoutsPath $script:TestLayoutsPath
+
+			$one.TotalZoneCount | Should -Be 2
+			$four.TotalZoneCount | Should -Be 4
 		}
 	}
 

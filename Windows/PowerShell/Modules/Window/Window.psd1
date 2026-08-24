@@ -51,6 +51,7 @@
 		'Import-VirtualDesktopModule',
 		'Initialize-PositionedWindowTracking',
 		'Initialize-WorkspaceWindowLayoutRerun',
+		'Invoke-SingleZoneWindowPlacement',
 		'Move-Windows',
 		'Move-WindowToVirtualDesktop',
 		'Resize-PositionedWindows',

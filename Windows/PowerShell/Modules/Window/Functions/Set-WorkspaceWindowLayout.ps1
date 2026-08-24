@@ -57,8 +57,10 @@ function Set-WorkspaceWindowLayout {
 		Default is 60 seconds.
 
 	.PARAMETER SnapDelayMs
-		Milliseconds to wait after positioning before snapping windows.
-		Default is 10. Increase if windows are not properly snapped.
+		Milliseconds to wait between positioning and the snap pass, and the per-window delay
+		on the simple-layout path (forwarded to Snap-AllWindows -All). Default is 10. It is
+		NOT a per-window delay in the workspace flow - the positioned-window snap path
+		verifies every snap with Wait-WindowRect instead of fixed delays.
 
 	.PARAMETER DisableAutoWait
 		Disables automatic window detection and applies layout immediately.
@@ -328,11 +330,12 @@ function Set-WorkspaceWindowLayout {
 			Write-LogDebug "Window-Only Retry Mode: preserving virtual desktops, reapplying FancyZones"
 		}
 
-		# Window-only retry applies the FULL layout config: a snap pass aborts at the first
-		# exhausted window, so entries after it were never snapped - filtering the retry to the
-		# single recorded failure used to strand those windows at their inset size and verify
-		# only the filtered subset. Idempotent skips keep the full pass cheap (already-correct
-		# windows are position-checked and left alone). The recorded markers are diagnostics.
+		# Window-only retry applies the FULL layout config: a snap pass records EVERY window
+		# that exhausted its attempts (and its circuit breaker can still abort a systemically
+		# failing pass mid-way), so filtering the retry to a single recorded failure would
+		# strand the other failures at their inset size and verify only the filtered subset.
+		# Idempotent skips keep the full pass cheap (already-correct windows are
+		# position-checked and left alone). The recorded markers are diagnostics.
 		if ($windowOnlyRetryActive -and ($windowOnlyRetryTitle -or $windowOnlyRetryProcess)) {
 			Write-LogDebug " Window-only retry trigger => [$(@($windowOnlyRetryProcess, $windowOnlyRetryTitle) | Where-Object { $_ } | Select-Object -First 1)] (applying full layout config)" -Style Warning
 		}
@@ -340,6 +343,26 @@ function Set-WorkspaceWindowLayout {
 		$simpleLayoutWorkspaces = $global:Configuration.SimpleLayoutWorkspaces
 
 		if ($simpleLayoutWorkspaces -contains $layoutNameToUse) {
+			# Capture where every window sits BEFORE the zone grids are (re)applied. Applying a
+			# changed zone set can make FancyZones itself relocate remembered windows across
+			# monitors (its "move windows on zone-set change" behavior consults
+			# app-zone-history) - seen after Reset-Windows gathers everything onto one monitor
+			# while the history still records zones on another. "Fullscreen wherever the window
+			# is" means wherever it was when the workspace was INVOKED, so the placement pass
+			# below resolves each window's monitor from this snapshot, not from wherever the
+			# layout application left it.
+			$preApplyWindowRects = @{}
+			if ($layoutNameToUse -ne 'Empty') {
+				foreach ($preWin in @(Get-WindowHandle -ErrorAction SilentlyContinue)) {
+					$preApplyWindowRects[$preWin.Handle] = [PSCustomObject]@{
+						Left   = $preWin.Left
+						Top    = $preWin.Top
+						Width  = $preWin.Width
+						Height = $preWin.Height
+					}
+				}
+			}
+
 			if ($config.Monitors) {
 				# Monitor coverage was already extended for every workspace right after the layout
 				# file was loaded (Expand-LayoutMonitorCoverage), so all attached monitors are
@@ -375,63 +398,205 @@ function Set-WorkspaceWindowLayout {
 			}
 
 			if ($layoutNameToUse -ne 'Empty') {
-				# Phase 2: now that the FancyZones "Zero" (fullscreen) layout is applied to every
-				# monitor on every desktop, snap each desktop's windows into that zone. We must
-				# switch to each desktop in turn because snapping requires the target window to be
-				# focusable on the active desktop. Snap-AllWindows -CurrentDesktopOnly restricts
-				# each pass to the windows that actually live on that desktop, so every window is
-				# snapped exactly once on its own desktop/monitor instead of being re-snapped on
-				# every pass (GetAllWindows enumerates windows across all virtual desktops).
-				$allDesktops = Get-DesktopList
-				$desktopCount = ($allDesktops | Measure-Object).Count
+				# Phase 2: place every window into its monitor's fullscreen zone. The zone grid
+				# was just applied above; windows are placed DIRECTLY at each monitor's single
+				# zone rect (Invoke-SingleZoneWindowPlacement) instead of being snapped with
+				# Win+Up. FancyZones' Win+Arrow is a RELATIVE move and a single-zone layout has
+				# no neighbouring zone to resolve to: with moveWindowAcrossMonitors enabled it
+				# throws an already-recognised window to the OTHER monitor's zone, and on one
+				# monitor it no-ops - the exact mechanics that jumbled fullscreen opens. Direct
+				# SetWindowPos placement is verified per window (Wait-WindowRect) and works on
+				# windows parked on INVISIBLE desktops, so the desktop-switching loop, the focus
+				# stealing, and the repeated re-snap of windows whose desktop could not be
+				# resolved (the old "-1 bucket") are all gone with it.
+				#
+				# Each monitor's zone rect is computed once from the base (desktop 1) layout -
+				# the expansion above clones that same layout to every desktop, so the rect is
+				# desktop-independent.
+				$simpleMonitorSpecs = Get-MonitorSpecs -MonitorInfo $cachedMonitorInfo
+				$monitorZoneRects = [System.Collections.Generic.List[object]]::new()
+				$allMonitorsSingleZone = $true
 
-				if ($desktopCount -gt 1) {
-					# Resolve each window's desktop ONCE up front (two COM calls per window).
-					# The previous per-pass -CurrentDesktopOnly filter re-resolved EVERY window
-					# on EVERY desktop pass (O(desktops x windows) COM roundtrips). Windows
-					# whose desktop cannot be resolved (pinned/system) go into the -1 bucket
-					# and are offered on every pass - same behavior as the old filter.
-					$windowsByDesktopIndex = @{}
-					foreach ($win in @(Get-WindowHandle -ErrorAction SilentlyContinue)) {
-						$winDesktopIndex = -1
-						try {
-							$winDesktopIndex = Get-DesktopIndex (Get-DesktopFromWindow -Hwnd $win.Handle.ToInt64())
-						}
-						catch {
-							$winDesktopIndex = -1
-						}
-						if (-not $windowsByDesktopIndex.ContainsKey($winDesktopIndex)) {
-							$windowsByDesktopIndex[$winDesktopIndex] = [System.Collections.Generic.List[IntPtr]]::new()
-						}
-						$windowsByDesktopIndex[$winDesktopIndex].Add($win.Handle)
+				foreach ($monitorKey in @($config.Monitors.Keys)) {
+					$monitorEntry = $config.Monitors[$monitorKey]
+					$baseLayoutName = $null
+					if ($monitorEntry.VirtualDesktopLayouts -and $monitorEntry.VirtualDesktopLayouts.ContainsKey(1)) {
+						$baseLayoutName = $monitorEntry.VirtualDesktopLayouts[1]
+					}
+					elseif ($monitorEntry.Layout) {
+						$baseLayoutName = $monitorEntry.Layout
 					}
 
-					for ($d = 0; $d -lt $desktopCount; $d++) {
-						$desktopHandles = [System.Collections.Generic.List[IntPtr]]::new()
-						if ($windowsByDesktopIndex.ContainsKey($d)) {
-							$desktopHandles.AddRange($windowsByDesktopIndex[$d])
-						}
-						if ($windowsByDesktopIndex.ContainsKey(-1)) {
-							$desktopHandles.AddRange($windowsByDesktopIndex[-1])
-						}
+					$monitorSpec = $simpleMonitorSpecs.($monitorKey)
+					if (-not $baseLayoutName -or -not $monitorSpec) {
+						continue
+					}
 
-						if ($desktopHandles.Count -eq 0) {
-							Write-LogDebug " Desktop [$($d + 1)] has no windows to snap - skipping switch"
+					# Zone geometry uses the WORK AREA, same as Set-WindowLayouts - FancyZones
+					# lays zones over the work area, not the full bounds.
+					$workX = if ($null -ne $monitorSpec.WorkX) { $monitorSpec.WorkX } else { $monitorSpec.X }
+					$workY = if ($null -ne $monitorSpec.WorkY) { $monitorSpec.WorkY } else { $monitorSpec.Y }
+					$workWidth = if ($monitorSpec.WorkWidth) { $monitorSpec.WorkWidth } else { $monitorSpec.Width }
+					$workHeight = if ($monitorSpec.WorkHeight) { $monitorSpec.WorkHeight } else { $monitorSpec.Height }
+
+					$monitorZones = @(Get-FancyZoneCoordinates -LayoutName $baseLayoutName -MonitorX $workX -MonitorY $workY -MonitorWidth $workWidth -MonitorHeight $workHeight)
+					if ($monitorZones.Count -eq 1) {
+						# Full bounds for window-to-monitor matching (a window's center can sit
+						# in the taskbar strip that the work area excludes).
+						$monitorZoneRects.Add([PSCustomObject]@{
+								Label  = $monitorKey
+								Left   = $monitorSpec.X
+								Top    = $monitorSpec.Y
+								Right  = $monitorSpec.X + $monitorSpec.Width
+								Bottom = $monitorSpec.Y + $monitorSpec.Height
+								Zone   = $monitorZones[0]
+							})
+					}
+					else {
+						$allMonitorsSingleZone = $false
+					}
+				}
+
+				if ($allMonitorsSingleZone -and $monitorZoneRects.Count -gt 0) {
+					$placedCount = 0
+					$skippedCount = 0
+					$failedPlacements = [System.Collections.Generic.List[string]]::new()
+
+					foreach ($win in @(Get-WindowHandle -ErrorAction SilentlyContinue)) {
+						# Same shell-window exclusions as Snap-AllWindows -All.
+						if ($win.Title -match '^(Program Manager|Windows Input Experience|TextInputHost|Search|Start|Action center)$') {
 							continue
 						}
 
-						Write-LogDebug " Switching to Desktop [$($d + 1)] for snapping..."
-						$null = Switch-Desktop -Desktop $d
-						if (-not (Wait-DesktopSwitch -TargetDesktopIndex $d)) {
-							Start-Sleep -Milliseconds 25
+						# Resolve the window's monitor from its center point, preferring the
+						# pre-apply snapshot: FancyZones may have relocated the window while the
+						# zone grids were applied above, and the window belongs fullscreen on the
+						# monitor it sat on when the workspace was invoked. A minimized window
+						# reports an off-screen rect (around -32000) in both readings, so restore
+						# it once - the way the old foreground-based snap implicitly did - and
+						# re-read its live position.
+						$winLeft = $win.Left
+						$winTop = $win.Top
+						$winWidth = $win.Width
+						$winHeight = $win.Height
+
+						$preApplyRect = $preApplyWindowRects[$win.Handle]
+						if ($preApplyRect) {
+							$winLeft = $preApplyRect.Left
+							$winTop = $preApplyRect.Top
+							$winWidth = $preApplyRect.Width
+							$winHeight = $preApplyRect.Height
 						}
-						$null = Snap-AllWindows -All -WindowHandles $desktopHandles.ToArray() -SnapDelayMs $SnapDelayMs
+
+						$targetMonitorZone = $null
+
+						for ($resolveAttempt = 1; $resolveAttempt -le 2 -and -not $targetMonitorZone; $resolveAttempt++) {
+							$centerX = $winLeft + ($winWidth / 2)
+							$centerY = $winTop + ($winHeight / 2)
+							$targetMonitorZone = $monitorZoneRects | Where-Object {
+								$centerX -ge $_.Left -and $centerX -le $_.Right -and
+								$centerY -ge $_.Top -and $centerY -le $_.Bottom
+							} | Select-Object -First 1
+
+							if (-not $targetMonitorZone -and $resolveAttempt -eq 1) {
+								[void][WindowModule.Native]::ShowWindow($win.Handle, [WindowModule.Native]::SW_RESTORE)
+								Start-Sleep -Milliseconds $script:WindowModuleDelays.WindowRestoreMs
+								$restoredRect = New-Object WindowModule.RECT
+								if ([WindowModule.Native]::GetWindowRect($win.Handle, [ref]$restoredRect)) {
+									$winLeft = $restoredRect.Left
+									$winTop = $restoredRect.Top
+									$winWidth = $restoredRect.Right - $restoredRect.Left
+									$winHeight = $restoredRect.Bottom - $restoredRect.Top
+								}
+								else {
+									break
+								}
+							}
+						}
+
+						if (-not $targetMonitorZone) {
+							$skippedCount++
+							Write-LogDebug "  ⚠ Could not resolve a monitor for [$($win.Title)] - skipping" -Style Warning
+							continue
+						}
+
+						$placement = Invoke-SingleZoneWindowPlacement -WindowHandle $win.Handle `
+							-TargetX $targetMonitorZone.Zone.X -TargetY $targetMonitorZone.Zone.Y `
+							-TargetWidth $targetMonitorZone.Zone.Width -TargetHeight $targetMonitorZone.Zone.Height `
+							-WindowTitle $win.Title
+
+						if ($placement.Verified) {
+							$placedCount++
+							Write-LogDebug "     ✓ Placed [$($win.Title)] => $($targetMonitorZone.Label) fullscreen zone" -Style Success
+						}
+						else {
+							$failedPlacements.Add($win.Title)
+							Write-LogDebug "     ✗ Placement unverified for [$($win.Title)] (expected $($targetMonitorZone.Zone.X), $($targetMonitorZone.Zone.Y) $($targetMonitorZone.Zone.Width)x$($targetMonitorZone.Zone.Height))" -Style Error
+						}
 					}
-					# Return to desktop 1
-					$null = Switch-Desktop -Desktop 0
+
+					if ($failedPlacements.Count -gt 0) {
+						Write-LogWarning "Placed [$placedCount] window(s) fullscreen, but [$($failedPlacements.Count)] failed:"
+						foreach ($failedTitle in $failedPlacements) {
+							Write-LogError "   $failedTitle" -NoLeadingNewline
+						}
+					}
+					else {
+						Write-LogDebug "=> Placed [$placedCount] window(s) fullscreen ([$skippedCount] skipped)!" -Style Success
+					}
 				}
 				else {
-					$null = Snap-AllWindows -All -SnapDelayMs $SnapDelayMs
+					# Legacy per-desktop keyboard snap, kept only for a simple layout whose grid
+					# is NOT single-zone (none ship today - Fullscreen is single-zone and Empty
+					# never reaches here). Snapping needs the window focusable on the active
+					# desktop, hence the switch per desktop; windows whose desktop cannot be
+					# resolved go in the -1 bucket and are offered on every pass.
+					$allDesktops = Get-DesktopList
+					$desktopCount = ($allDesktops | Measure-Object).Count
+
+					if ($desktopCount -gt 1) {
+						$windowsByDesktopIndex = @{}
+						foreach ($win in @(Get-WindowHandle -ErrorAction SilentlyContinue)) {
+							$winDesktopIndex = -1
+							try {
+								$winDesktopIndex = Get-DesktopIndex (Get-DesktopFromWindow -Hwnd $win.Handle.ToInt64())
+							}
+							catch {
+								$winDesktopIndex = -1
+							}
+							if (-not $windowsByDesktopIndex.ContainsKey($winDesktopIndex)) {
+								$windowsByDesktopIndex[$winDesktopIndex] = [System.Collections.Generic.List[IntPtr]]::new()
+							}
+							$windowsByDesktopIndex[$winDesktopIndex].Add($win.Handle)
+						}
+
+						for ($d = 0; $d -lt $desktopCount; $d++) {
+							$desktopHandles = [System.Collections.Generic.List[IntPtr]]::new()
+							if ($windowsByDesktopIndex.ContainsKey($d)) {
+								$desktopHandles.AddRange($windowsByDesktopIndex[$d])
+							}
+							if ($windowsByDesktopIndex.ContainsKey(-1)) {
+								$desktopHandles.AddRange($windowsByDesktopIndex[-1])
+							}
+
+							if ($desktopHandles.Count -eq 0) {
+								Write-LogDebug " Desktop [$($d + 1)] has no windows to snap - skipping switch"
+								continue
+							}
+
+							Write-LogDebug " Switching to Desktop [$($d + 1)] for snapping..."
+							$null = Switch-Desktop -Desktop $d
+							if (-not (Wait-DesktopSwitch -TargetDesktopIndex $d)) {
+								Start-Sleep -Milliseconds 25
+							}
+							$null = Snap-AllWindows -All -WindowHandles $desktopHandles.ToArray() -SnapDelayMs $SnapDelayMs
+						}
+						# Return to desktop 1
+						$null = Switch-Desktop -Desktop 0
+					}
+					else {
+						$null = Snap-AllWindows -All -SnapDelayMs $SnapDelayMs
+					}
 				}
 			}
 
