@@ -285,6 +285,33 @@ Describe "Get-WorkspaceOpenDelta" {
 
 			Should -Invoke Get-TerminalTabSnapshot -Times 1 -ParameterFilter { $EnsureVisible }
 		}
+
+		It "uses a pre-captured snapshot instead of reading the tab strip itself" {
+			# Open-Workspace takes the AFTER snapshot while the terminal is still on the visible
+			# desktop, precisely so this function does not have to bring an off-screen desktop up at
+			# the end of an open - a switch the user sees as the view jumping to the terminal and back
+			# AFTER the workspace's final Focus-VirtualDesktop landing. The mocked late read returns a
+			# different tab, so a delta built from it would be visible here.
+			Mock Get-TerminalTabSnapshot { New-TabSnapshot -Window @{ 777 = @('pwsh', 'Late.Read') } }
+
+			$delta = Get-WorkspaceOpenDelta -Workspace 'Server' `
+				-ExistingTerminalTabs (New-TabSnapshot -Window @{ 777 = @('pwsh') }) `
+				-PreCapturedTerminalTabs (New-TabSnapshot -Window @{ 777 = @('pwsh', 'Server.Api') })
+
+			@($delta.TerminalTabs.Title) | Should -Be @('Server.Api')
+			Should -Invoke Get-TerminalTabSnapshot -Times 0
+		}
+
+		It "honours a pre-captured snapshot that found nothing rather than reading again" {
+			# An empty map is an answer: the caller looked and no terminal was readable. Re-reading
+			# would pay for exactly the desktop round trip the pre-capture exists to avoid.
+			Mock Get-TerminalTabSnapshot { New-TabSnapshot -Window @{ 777 = @('pwsh', 'Late.Read') } }
+
+			$delta = Get-WorkspaceOpenDelta -Workspace 'Server' -PreCapturedTerminalTabs @{}
+
+			@($delta.TerminalTabs).Count | Should -Be 0
+			Should -Invoke Get-TerminalTabSnapshot -Times 0
+		}
 	}
 
 	Context "Entry shape" {

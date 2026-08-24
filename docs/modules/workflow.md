@@ -267,12 +267,15 @@ efm
 ## [Focus-TerminalTab](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Workflow/Functions/Focus-TerminalTab.ps1)
 
 - **Description:** Helper that focuses Windows Terminal and optionally navigates to a specific tab by title. Activates the Windows Terminal window and, if a `-TargetTitle` is provided, cycles through tabs with Ctrl+Tab until the matching tab is found and focused. Uses `AppActivate` with a `SetForegroundWindow` fallback when the process ID is stale. Used by Close-Project and Close-ProjectTerminals to refocus the starting tab after operations.
-- **Parameters:** -TargetTitle, -Quiet
-- **Usage:** `Focus-TerminalTab`, `Focus-TerminalTab -TargetTitle "PowerShell"`
+- **Parameters:** -TargetTitle, -WindowHandle, -Quiet
+- **Usage:** `Focus-TerminalTab`, `Focus-TerminalTab -TargetTitle "PowerShell"`, `Focus-TerminalTab -WindowHandle $window.Handle -Quiet`
+
+`-WindowHandle` exists because `AppActivate` takes a **process** id and one Windows Terminal process hosts every one of its windows: without it the window that comes forward is that process's main window, not necessarily the wanted one. A caller that has already resolved which terminal window it means - [Focus-VirtualDesktop](window.md#focus-virtualdesktop), which must not let focus wander onto a window living on another virtual desktop - passes the handle, and that exact window is activated through [Confirm-WindowForeground](window.md#confirm-windowforeground) (force and verify, retried while the focus handoff settles), falling back to `SetForegroundWindow` on the same handle. The tab-cycling loop reads its title back from that window too, so it cannot cycle tabs in one window while judging the result by another.
 
 | Parameter      | Description                                                                                          |
 | -------------- | ---------------------------------------------------------------------------------------------------- |
 | `-TargetTitle` | Title of the tab to focus. Omit to only activate the Windows Terminal window without switching tabs. |
+| `-WindowHandle` | Activate exactly this terminal window instead of the first `WindowsTerminal` process's main window. |
 | `-Quiet`       | Switch. Suppresses the informational output while focusing.                                          |
 
 ```powershell
@@ -281,6 +284,9 @@ Focus-TerminalTab
 
 # Activate Windows Terminal and cycle to the tab titled "PowerShell"
 Focus-TerminalTab -TargetTitle "PowerShell"
+
+# Activate one specific terminal window (the caller owns the section output)
+Focus-TerminalTab -WindowHandle $terminalOnTarget.Handle -Quiet
 ```
 
 ## [Format-WorkspaceStateContent](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Workflow/Functions/Format-WorkspaceStateContent.ps1)
@@ -325,14 +331,14 @@ $patterns += @(Get-SwaggerCloseTitlePatterns -Project $projectName)
 ## [Get-WorkspaceOpenDelta](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Workflow/Functions/Get-WorkspaceOpenDelta.ps1)
 
 - **Description:** The ownership rule for [Close-Workspace](#close-workspace), in one place. Given the window handles and the Windows Terminal tab snapshot taken *before* an `Open-Workspace` invocation ran its actions, this enumerates what exists now and returns the difference as a single tracker entry.
-- **Parameters:** -Workspace, -ExistingWindowHandles, -ExistingTerminalTabs, -DesktopOffset, -Alongside, -AdoptUnclaimed
+- **Parameters:** -Workspace, -ExistingWindowHandles, -ExistingTerminalTabs, -PreCapturedTerminalTabs, -DesktopOffset, -Alongside, -AdoptUnclaimed
 - **Usage:** `Get-WorkspaceOpenDelta -Workspace 'Server' -ExistingWindowHandles $before -ExistingTerminalTabs $tabsBefore`
 
 **Windows** are differenced by handle. Anything on screen whose handle was not there before belongs to this open; anything that was already there does not - which is exactly what keeps a single-instance application out of a later workspace's entry. Both process id and window title are recorded alongside the handle, because handles are the only unambiguous key while a window lives but Electron applications recreate their window (new handle, same process) and a restarted application keeps neither; the extra fields let `Close-Workspace` re-resolve a record whose handle has gone stale.
 
 Which virtual desktops the workspace occupies is deliberately **not** recorded. Desktop indexes shift whenever a desktop to their left is removed, so a stored index goes stale and acting on a stale one would reach onto another workspace's desktop; `Close-Workspace` derives the set live from where the entry's windows actually are instead.
 
-**Terminal tabs** cannot be differenced by handle - they are not top-level windows - so they are differenced per Windows Terminal window by title, and **by count rather than by set membership**. A second tab titled `MyProject.Api` opened next to an existing one is a new tab even though the title was already present; set subtraction would miss it and leave it running. The current tab strip is read through [Get-TerminalTabSnapshot](helper.md#get-terminaltabsnapshot) `-EnsureVisible`, because this runs at the *end* of an open, by which point the layout pass has moved the workspace's terminal onto one of the workspace's own desktops - and Windows Terminal exposes no tab strip while its desktop is off screen.
+**Terminal tabs** cannot be differenced by handle - they are not top-level windows - so they are differenced per Windows Terminal window by title, and **by count rather than by set membership**. A second tab titled `MyProject.Api` opened next to an existing one is a new tab even though the title was already present; set subtraction would miss it and leave it running. The current tab strip normally arrives ready-made in `-PreCapturedTerminalTabs`: `Open-Workspace` takes that snapshot while the terminal is still on the visible desktop, right before its layout action parks it on one of the workspace's own desktops. Reading it *here* is the expensive path, because this runs at the **end** of an open and Windows Terminal exposes no tab strip while its desktop is off screen - so the fallback read uses [Get-TerminalTabSnapshot](helper.md#get-terminaltabsnapshot) `-EnsureVisible` and pays a desktop round trip, which the user sees as the view jumping to the terminal and back *after* the workspace's final [Focus-VirtualDesktop](window.md#focus-virtualdesktop) landing. A supplied but **empty** map is honoured rather than re-read: it means the caller looked and found no readable terminal.
 
 `-AdoptUnclaimed` also claims what was already on screen, which is what makes an already-running application closable at all (see [Close-Workspace](#close-workspace) for why that matters). Adoption reaches only for what `Universal.VisibleWindowExclusions` does not name, and it never overrides the diff: a window this open genuinely created is always recorded. Use it for the **first** workspace of a plain run only - never for `-Alongside`, which would steal another workspace's windows, and never twice in one run, because both entries would then claim the same windows and each would protect them from the other's teardown.
 
@@ -343,6 +349,7 @@ Returns one ordered entry: `Workspace`, `Alongside`, `DesktopOffset`, `OpenedUtc
 | `-Workspace`             | string    | -       | Name of the workspace this entry belongs to. Mandatory.                                                               |
 | `-ExistingWindowHandles` | object    | -       | Handles that existed before the open. Accepts a `HashSet[IntPtr]`, raw handle values, or window objects exposing `.Handle`. |
 | `-ExistingTerminalTabs`  | hashtable | -       | The pre-open `Get-TerminalTabSnapshot` (window handle -> tab titles). Omit and every tab on screen counts as new.       |
+| `-PreCapturedTerminalTabs` | hashtable | -     | The matching **after** snapshot, taken by the caller while the terminal was still on screen. Supply it and no tab strip is read here (and no desktop is switched); omit it for the `-EnsureVisible` read. |
 | `-DesktopOffset`         | int       | `0`     | Desktop offset the open used (`0` normally, `+N` for `-Alongside`). Recorded for context.                              |
 | `-Alongside`             | switch    | off     | Records that the workspace was opened alongside existing desktops.                                                     |
 | `-AdoptUnclaimed`        | switch    | off     | Also claim what was already on screen, minus `Universal.VisibleWindowExclusions`. First workspace of a plain run only.  |
@@ -581,7 +588,7 @@ Reads the workspace list from `Configuration.Workspaces` and the per-workspace a
 
 Everything the flow spawns inherits the invoking shell's token, so running from an **elevated** shell produces elevated app windows (and, if PowerToys is not yet running, an elevated PowerToys) that a non-elevated FancyZones cannot snap. The function logs a warning when it detects an elevated shell and proceeds unchanged - prefer running workspaces from a normal shell.
 
-**Every open records what it produced, so it can be closed again.** Before the actions run, the flow captures the window handles on screen (it already did, for the layout pass) plus the Windows Terminal tab strip via [Get-TerminalTabSnapshot](helper.md#get-terminaltabsnapshot) - tabs are not top-level windows, so a handle diff cannot see them. When the actions finish it hands both to [Save-WorkspaceState](#save-workspacestate), which stores the difference as one tracker entry per workspace and is what makes [Close-Workspace](#close-workspace) possible. The record is written *before* a terminating `Terminate-WindowsTerminalTabs -OnlyCurrent`/`-IncludeCurrent` action, for the same reason the elapsed summary is: that action ends the process outright. Only the first workspace of a plain run claims what was already on screen (`-AdoptUnclaimed`); later ones append to the session it defined, and an `-Alongside` open never claims, so it cannot take another workspace's windows. Writing the tracker is best-effort - a failure warns and the open continues.
+**Every open records what it produced, so it can be closed again.** Before the actions run, the flow captures the window handles on screen (it already did, for the layout pass) plus the Windows Terminal tab strip via [Get-TerminalTabSnapshot](helper.md#get-terminaltabsnapshot) - tabs are not top-level windows, so a handle diff cannot see them. The matching **after** snapshot is taken during the run rather than at the end: right before the `Set-WorkspaceWindowLayout` action, which is what parks the terminal on one of the workspace's own desktops, and Windows Terminal shows no tab strip while its desktop is off screen. Reading it afterwards would cost a desktop round trip the user sees as the view jumping to the terminal and back *after* the workspace's final `Focus-VirtualDesktop` landing. When the actions finish it hands all of it to [Save-WorkspaceState](#save-workspacestate), which stores the difference as one tracker entry per workspace and is what makes [Close-Workspace](#close-workspace) possible. The record is written *before* a terminating `Terminate-WindowsTerminalTabs -OnlyCurrent`/`-IncludeCurrent` action, for the same reason the elapsed summary is: that action ends the process outright. Only the first workspace of a plain run claims what was already on screen (`-AdoptUnclaimed`); later ones append to the session it defined, and an `-Alongside` open never claims, so it cannot take another workspace's windows. Writing the tracker is best-effort - a failure warns and the open continues.
 
 Once the workspace names are resolved (including interactive menu picks), the exact invocation - resolved workspace names, `-Project`, `-Alongside`, and any extra arguments - is recorded in the process-scoped `$env:WORKSPACE_RERUN_COMMAND` (cleared in the `finally` block), so a failure-path respawn via `Set-WorkspaceWindowLayout`'s escalation to `ReRun-LastCommand` reruns precisely this command instead of scraping the shared PSReadLine history. In alongside mode, when `Get-NextAvailableDesktopIndex` cannot determine the next free desktop (virtual desktop enumeration failed), that workspace is skipped with a clear error instead of opening on top of the current one. And because a configured `Terminate-WindowsTerminalTabs` action with `-OnlyCurrent` or `-IncludeCurrent` ends the process via `[Environment]::Exit` - which skips `finally` blocks - the elapsed summary is printed and stuck keyboard modifiers are released before control passes to that action.
 
@@ -684,7 +691,7 @@ Resolve-SwaggerBrowserGroup -Project "MyProject" -SkipDuplicateCheck
 ## [Save-WorkspaceState](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Workflow/Functions/Save-WorkspaceState.ps1)
 
 - **Description:** Records what an `Open-Workspace` invocation actually opened, so [Close-Workspace](#close-workspace) can close it. Called once per workspace after its actions have run; delegates the before/after diff to [Get-WorkspaceOpenDelta](#get-workspaceopendelta) and the file format to [Format-WorkspaceStateContent](#format-workspacestatecontent).
-- **Parameters:** -Workspace, -ExistingWindowHandles, -ExistingTerminalTabs, -DesktopOffset, -Alongside, -AdoptUnclaimed, -Append, -Entry, -StatePath
+- **Parameters:** -Workspace, -ExistingWindowHandles, -ExistingTerminalTabs, -PreCapturedTerminalTabs, -DesktopOffset, -Alongside, -AdoptUnclaimed, -Append, -Entry, -StatePath
 - **Usage:** `Save-WorkspaceState -Workspace 'Server' -ExistingWindowHandles $before -ExistingTerminalTabs $tabsBefore`, `Save-WorkspaceState -Entry $survivingEntries`
 
 Deriving ownership from the delta rather than from `WorkspaceActions` is the whole point: a single-instance application is only ever recorded against the open that actually launched it, whereas a config-derived record would list it under every workspace that names it.
@@ -700,6 +707,7 @@ Two parameter sets: `Record` builds an entry from a pre-open capture, `Entries` 
 | `-Workspace`             | string    | Name of the workspace this entry belongs to. Mandatory in the `Record` set.                                         |
 | `-ExistingWindowHandles` | object    | Handles that existed before the open (`HashSet[IntPtr]`, raw values, or objects exposing `.Handle`).                 |
 | `-ExistingTerminalTabs`  | hashtable | The pre-open `Get-TerminalTabSnapshot` (window handle -> tab titles).                                               |
+| `-PreCapturedTerminalTabs` | hashtable | The matching after snapshot, taken while the terminal was still on the visible desktop. Forwarded to `Get-WorkspaceOpenDelta`, which otherwise reads it itself and pays a desktop round trip. |
 | `-DesktopOffset`         | int       | Desktop offset the open used (`0` normally, `+N` for `-Alongside`). Recorded for context.                            |
 | `-Alongside`             | switch    | The open was alongside existing desktops; also switches the write from replace to append.                            |
 | `-AdoptUnclaimed`        | switch    | Forwarded to `Get-WorkspaceOpenDelta`. First workspace of a plain run only.                                          |

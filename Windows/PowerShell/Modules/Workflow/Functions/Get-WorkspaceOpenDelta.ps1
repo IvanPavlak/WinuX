@@ -36,6 +36,12 @@ function Get-WorkspaceOpenDelta {
 		The Get-TerminalTabSnapshot taken before the open (window handle -> tab titles). Omit when
 		terminal tabs are not of interest; every tab currently open then counts as new.
 
+	.PARAMETER PreCapturedTerminalTabs
+		The AFTER snapshot, taken by the caller while the terminal was still on the visible desktop -
+		Open-Workspace takes it right before its layout action parks the terminal on one of the
+		workspace's own desktops. Supply it to spare this function the desktop round trip described
+		below; omit it and the snapshot is read here instead, with -EnsureVisible.
+
 	.PARAMETER DesktopOffset
 		Desktop offset this open used (0 normally, +N for -Alongside). Recorded for context.
 
@@ -90,6 +96,9 @@ function Get-WorkspaceOpenDelta {
 
 		[Parameter()]
 		[hashtable]$ExistingTerminalTabs,
+
+		[Parameter()]
+		[hashtable]$PreCapturedTerminalTabs,
 
 		[Parameter()]
 		[int]$DesktopOffset = 0,
@@ -180,11 +189,25 @@ function Get-WorkspaceOpenDelta {
 	}
 
 	$openedTabs = [System.Collections.Generic.List[object]]::new()
-	# -EnsureVisible because this runs at the END of an open, by which point the layout pass has
-	# moved the workspace's terminal onto one of the workspace's own desktops - and Windows
-	# Terminal exposes no tab strip while its desktop is off screen. Without it the terminal is
-	# read as having no tabs and the workspace's own tabs are never recorded.
-	$currentTerminalTabs = Get-TerminalTabSnapshot -EnsureVisible
+	# Prefer the snapshot the caller already took while the terminal was still on the visible
+	# desktop. Reading it HERE is the expensive path: this runs at the END of an open, by which
+	# point the layout pass has parked the workspace's terminal on one of the workspace's own
+	# desktops, and Windows Terminal exposes no tab strip while its desktop is off screen - so the
+	# read costs a desktop round trip, which the user sees as the view jumping to the terminal and
+	# back AFTER the workspace's final Focus-VirtualDesktop landing. Open-Workspace therefore
+	# captures the snapshot just before its layout action moves the terminal and passes it in.
+	#
+	# The -EnsureVisible read stays as the fallback for callers with no earlier capture: without it
+	# the terminal is read as having no tabs and the workspace's own tabs are never recorded. An
+	# explicitly supplied but EMPTY snapshot is honoured rather than re-read - it means the caller
+	# looked and found nothing readable, and re-reading would pay for the round trip this avoids.
+	$currentTerminalTabs = if ($null -ne $PreCapturedTerminalTabs) {
+		$PreCapturedTerminalTabs
+	}
+	else {
+		Get-TerminalTabSnapshot -EnsureVisible
+	}
+
 	foreach ($windowHandle in @($currentTerminalTabs.Keys)) {
 		$windowHandleValue = [int64]$windowHandle
 
