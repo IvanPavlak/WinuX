@@ -25,7 +25,7 @@ jobs:
     name: Build and publish WinuX.exe
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Build WinuX.exe
         shell: pwsh
@@ -73,7 +73,7 @@ jobs:
 
       - name: Publish build artifact (manual run)
         if: github.ref_type != 'tag'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: WinuX-installer
           path: |

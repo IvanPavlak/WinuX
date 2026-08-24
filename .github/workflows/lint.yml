@@ -24,7 +24,7 @@ jobs:
     # ruleset's required checks) once it is clean.
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # The runner images ship PSScriptAnalyzer in-box, so installing it from PSGallery
       # every run wasted ~26s. This only installs if the image ever stops bundling it.
