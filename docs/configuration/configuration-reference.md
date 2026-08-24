@@ -25,7 +25,7 @@ Defines executable paths and command-line arguments for each browser.
   empty; `Open-Browser` warns and returns until you set one (any `Browsers` key) in
   `Configuration.local.psd1`.
 
-**Consumer functions:** `Open-Browser`, `Invoke-Browser`, `Open-SecureBrowser`
+**Consumer functions:** `Open-Browser`, `Invoke-Browser`, `Open-SecureBrowser`, `Resolve-LayoutTokens` (expands the `Browser` layout token from this map)
 
 **Example (opt-in via `Configuration.local.psd1`):**
 

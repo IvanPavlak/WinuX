@@ -299,7 +299,7 @@ Ensure-VirtualDesktops -Count 3 -SwitchToDesktop 2
 Set-LogLevel Verbose { Ensure-VirtualDesktops -Count 4 }
 ```
 
-**See also:** [Configuration: Window Layout](../configuration/guides/configure-window-layout.md)
+**See also:** [Configuration: Window Layout](../configuration/guides/window/configure-window-layout.md)
 
 ## [Ensure-WindowsFormsLoaded](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Ensure-WindowsFormsLoaded.ps1)
 
@@ -321,7 +321,7 @@ Called by `Set-WorkspaceWindowLayout` immediately after a layout file is loaded,
 
 The template is the first monitor the file defines in label order (`Primary`, `Secondary`, `Monitor3`, ...) rather than hashtable order, so which monitor gets cloned does not depend on the order `Import-PowerShellDataFile` happens to enumerate the keys in. Returns an empty array when the layout already covers every attached monitor, when it opted out, or when the template monitor carries no `VirtualDesktopLayouts` to clone.
 
-**See also:** [Get-MonitorSpecs](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Get-MonitorSpecs.ps1), [Configuration: Window Layout](../configuration/guides/configure-window-layout.md)
+**See also:** [Get-MonitorSpecs](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Get-MonitorSpecs.ps1), [Configuration: Window Layout](../configuration/guides/window/configure-window-layout.md)
 
 ## [Focus-VirtualDesktop](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Focus-VirtualDesktop.ps1)
 
@@ -1303,11 +1303,11 @@ Resolve-DisplayAwareProfile -Section $global:Configuration.ResizeWindowsPercent
 
 ## [Resolve-LayoutTokens](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Resolve-LayoutTokens.ps1)
 
-- **Description:** Expands layout-file tokens to regex patterns at the matching boundary. Layout entries may use the literal token `"Browser"` as a value for `ProcessName` and/or `WindowTitle`; this helper returns a shallow clone of the entry with those tokens expanded to a regex covering every browser declared in `$global:Configuration.Browsers` (Tor excluded - SecureBrowser layouts opt into `tor` explicitly). Other values, including literal alternation regex like `(firefox|chrome|msedge|brave)`, are returned unchanged. Tokens are matched case-sensitively and expanded patterns are cached at module scope so it stays cheap inside the per-entry Set-WindowLayouts / Confirm-WorkspaceWindowPositions loops. The original entry is never mutated, so Visualize-Layouts still renders the raw `Browser` cell.
+- **Description:** Expands layout-file tokens to regex patterns at the matching boundary. Layout entries may use the literal token `"Browser"` as a value for `ProcessName` and/or `WindowTitle`; this helper returns a shallow clone of the entry with those tokens expanded to a regex covering every browser declared in `Configuration.Universal.Browsers` - the same map `Open-Browser` reads - with a legacy top-level `Configuration.Browsers` map honoured as a fallback (Tor excluded - SecureBrowser layouts opt into `tor` explicitly). Other values, including literal alternation regex like `(firefox|chrome|msedge|brave)`, are returned unchanged. Tokens are matched case-sensitively and expanded patterns are cached at module scope so it stays cheap inside the per-entry Set-WindowLayouts / Confirm-WorkspaceWindowPositions loops. The original entry is never mutated, so Visualize-Layouts still renders the raw `Browser` cell.
 - **Parameters:** -LayoutEntry
 - **Usage:** `Resolve-LayoutTokens -LayoutEntry @{ ProcessName = "Browser"; Zone = "Left" }`, `Resolve-LayoutTokens -LayoutEntry @{ ProcessName = "firefox" }`
 
-Layout files (under `Windows/PowerShell/Modules/Window/Layouts/**`) can stay browser-agnostic by using the literal token `Browser` instead of a specific browser name. At match time the token is expanded to a regex covering every browser declared under `Configuration.Browsers`, so the same layout works whether Firefox, Chrome, Edge, or Brave is the active default. The process side expands to the exe basenames (e.g. `(firefox|chrome|msedge|brave)`) and the title side to an escaped, case-insensitive alternation of the friendly browser names. When `Configuration` is not loaded (e.g. isolated Pester tests), a built-in fallback set is used. Returns a `[hashtable]` shallow clone of the input with the token fields expanded.
+Layout files (under `Windows/PowerShell/Modules/Window/Layouts/**`) can stay browser-agnostic by using the literal token `Browser` instead of a specific browser name. At match time the token is expanded to a regex covering every browser declared under `Configuration.Universal.Browsers`, so the same layout works whether Firefox, Chrome, Edge, or Brave is the active default - and a browser a fork adds to that map joins the token automatically. A top-level `Configuration.Browsers` map is honoured as a legacy fallback (it was the only location an earlier version of this function read). The process side expands to the exe basenames (e.g. `(firefox|chrome|msedge|brave)`) and the title side to an escaped, case-insensitive alternation of the friendly browser names. When `Configuration` is not loaded (e.g. isolated Pester tests), a built-in fallback set is used. Returns a `[hashtable]` shallow clone of the input with the token fields expanded.
 
 | Parameter      | Description                                                                                                                                                                                                                                 |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1827,7 +1827,7 @@ if (-not $result.IsValid) {
 }
 ```
 
-**See also:** [Configuration: Window Layout](../configuration/guides/configure-window-layout.md)
+**See also:** [Configuration: Window Layout](../configuration/guides/window/configure-window-layout.md)
 
 ## [Visualize-Layouts](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Visualize-Layouts.ps1)
 
@@ -1858,7 +1858,7 @@ Visualize-Layouts -All -Update
 Visualize-Layouts -DisplayAvailableLayouts
 ```
 
-**See also:** [Set-WorkspaceWindowLayout](#set-workspacewindowlayout), [Configure Window Layout](../configuration/guides/configure-window-layout.md)
+**See also:** [Set-WorkspaceWindowLayout](#set-workspacewindowlayout), [Configure Window Layout](../configuration/guides/window/configure-window-layout.md)
 
 ## [Wait-DesktopSwitch](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Wait-DesktopSwitch.ps1)
 
@@ -2149,7 +2149,7 @@ Both `ProcessName` and `WindowTitle` support exact names, wildcard patterns, and
 
 ### Browser Token
 
-Layout entries can use the literal token `Browser` in `ProcessName` (and optionally `WindowTitle`) instead of a specific browser name. At match time, `Resolve-LayoutTokens` expands it to a regex covering every browser declared under `Configuration.Browsers` (Tor excluded - use `tor` explicitly for secure-browser layouts).
+Layout entries can use the literal token `Browser` in `ProcessName` (and optionally `WindowTitle`) instead of a specific browser name. At match time, `Resolve-LayoutTokens` expands it to a regex covering every browser declared under `Configuration.Universal.Browsers` (Tor excluded - use `tor` explicitly for secure-browser layouts).
 
 ```powershell
 @{

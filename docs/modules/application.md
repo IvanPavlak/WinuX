@@ -262,7 +262,7 @@ Open-Browser GroupName -Instances 3
 Open-Browser GroupName -Override
 ```
 
-**See also:** [Add Browser Group](../configuration/guides/add-browser-group.md)
+**See also:** [Add Browser Group](../configuration/guides/application/add-browser-group.md)
 
 ## [Open-ClaudeDesktop](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Open-ClaudeDesktop.ps1)
 
@@ -271,7 +271,7 @@ Open-Browser GroupName -Override
 
 Launches `claude.exe` from `%LOCALAPPDATA%\AnthropicClaude` via `Start-Application -StartMethod DirectPath`, with no arguments. The `-ProcessPathFilter` restricts the "already running" detection to processes under the Claude Desktop install path, so the desktop app is distinguished from the `claude` CLI.
 
-That launcher is a Squirrel stub executable: it resolves the newest `app-*` install directory on its own, then re-executes the real Electron binary with whatever arguments it was given. Arguments must therefore be omitted — an earlier version passed `--processStart claude.exe` (an `Update.exe` flag the stub does not consume), which was forwarded through to Electron and parsed as a file path, so every launch opened an "Attach `claude.exe` to this session?" prompt.
+That launcher is a Squirrel stub executable: it resolves the newest `app-*` install directory on its own, then re-executes the real Electron binary with whatever arguments it was given. Arguments must therefore be omitted - an earlier version passed `--processStart claude.exe` (an `Update.exe` flag the stub does not consume), which was forwarded through to Electron and parsed as a file path, so every launch opened an "Attach `claude.exe` to this session?" prompt.
 
 ```powershell
 # Open Claude Desktop (no-op if already running)
@@ -713,7 +713,7 @@ Set-LogLevel Verbose { Test-BrowserGroupAlreadyOpen -Urls @("https://example.com
 Test-BrowserGroupAlreadyOpen -Urls $urls -Browser PreferredBrowser -GroupDisplayName GroupName -ReturnCount
 ```
 
-**See also:** [Open-Browser](#open-browser), [Add Browser Group](../configuration/guides/add-browser-group.md)
+**See also:** [Open-Browser](#open-browser), [Add Browser Group](../configuration/guides/application/add-browser-group.md)
 
 ## [Test-ProjectAlreadyOpen](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Test-ProjectAlreadyOpen.ps1)
 
@@ -736,7 +736,7 @@ if (-not (Test-ProjectAlreadyOpen -ProjectName MyProject -ProcessName "Code" -Ap
 }
 ```
 
-**See also:** [Add New Project](../configuration/guides/add-new-project.md)
+**See also:** [Add New Project](../configuration/guides/workflow/add-new-project.md)
 
 ## [Update-Win11DebloatVendor](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Update-Win11DebloatVendor.ps1)
 

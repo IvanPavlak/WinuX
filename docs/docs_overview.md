@@ -62,6 +62,11 @@ The authoritative, always-current function reference is the set of per-module pa
 
 ### Key Config Sections → Consumer Functions
 
+The curated table below is the quick map. The exhaustive per-function version lives under
+`configuration/guides/<module>/` - one page per exported function, listing the keys it reads, the
+decisions behind them, and where the values go. Each module's `README.md` indexes its own functions;
+[`winux-configurator.md`](configuration/winux-configurator.md) walks all of them with you.
+
 | Config Section                                     | Used By                                            |
 | -------------------------------------------------- | -------------------------------------------------- |
 | `GitConfig` (WingetPackageId, UserName, UserEmail) | `Install-Git`                                      |
@@ -191,14 +196,21 @@ docs/
 │   ├── machine-types.md                    # Test + your own types, detection, overrides
 │   ├── configuration-reference.md          # Section-by-section key reference
 │   ├── repository-structure.md             # What lives where in the repo
-│   └── guides/
-│       ├── add-new-machine.md              # 7-step guide for new machine type
-│       ├── add-new-project.md              # 9-step guide for project config
-│       ├── add-new-repository.md           # 3-step guide for Git repos
-│       ├── add-new-workspace.md            # 4-step guide for Open-Workspace
-│       ├── add-symbolic-link.md            # Symlink config, placeholders, WSL
-│       ├── add-browser-group.md            # Browser groups, nesting, search
-│       └── configure-window-layout.md      # 3-layer system, zones, visualization
+│   ├── winux-configurator.md               # AI-assisted interview that configures WinuX with you
+│   └── guides/                             # One guide per exported function, grouped by module.
+│       │                                   #   Full template where the function reads config,
+│       │                                   #   stub (sentinel + usage) where it does not.
+│       │                                   #   Task guides live in the module they belong to.
+│       ├── application/   (README + 43 guides)   # + add-browser-group.md
+│       ├── bootstrap/     (README + 13 guides)   # + add-new-machine.md
+│       ├── configuration/ (README + 10 guides)
+│       ├── git/           (README + 11 guides)   # + add-new-repository.md
+│       ├── helper/        (README + 70 guides)
+│       ├── logging/       (README + 17 guides)
+│       ├── system/        (README + 69 guides)   # + add-symbolic-link.md
+│       ├── tests/         (README + 1 guide)
+│       ├── window/        (README + 85 guides)   # + configure-window-layout.md
+│       └── workflow/      (README + 25 guides)   # + add-new-project.md, add-new-workspace.md
 │
 ├── modules/
 │   ├── application.md                      # install, launch, browser

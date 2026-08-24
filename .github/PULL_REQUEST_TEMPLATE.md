@@ -48,6 +48,7 @@ Run-Tests -TestName "..."
 
 - [ ] I updated `docs/modules/<Module>.md` for any added/renamed/removed/changed function.
 - [ ] I updated the module `.psd1` `FunctionsToExport`.
+- [ ] I added/updated the configuration guide under `docs/configuration/guides/<module>/` for every added/renamed/removed function or changed `Configuration.psd1` key (stub upgraded to full if the function now reads configuration), and its module `README.md` index.
 - [ ] I updated `docs/docs_overview.md` (and `docs/_sidebar.md` if a page was added/removed).
 - [ ] `List-Functions -ListDiscrepancies` reports no discrepancies and manifest completeness holds.
 - [ ] N/A - no exported function changed.

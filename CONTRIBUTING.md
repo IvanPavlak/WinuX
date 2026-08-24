@@ -153,6 +153,7 @@ renames, removes, or alters the **behavior, parameters, or signature** of an exp
 function MUST update the docs in the same PR:
 
 - `docs/modules/<Module>.md` - one man-style entry per function.
+- `docs/configuration/guides/<module>/<Function-Name>.md` - the function's configuration guide. Every exported function has exactly one, named after it: the full template when the function reads configuration, the stub template when it does not. Add it to that module's `guides/<module>/README.md` index too. A `Configuration.psd1` key change updates the guide of every function that reads the key. Both templates are in `AI/Instructions/DocumentationStyle.md`, and `Run-Tests -TestName "Test-ConfigurationGuides"` checks the 1:1 mapping.
 - The module `.psd1` `FunctionsToExport`.
 - `docs/docs_overview.md` (and `docs/_sidebar.md` only when adding/removing a page).
 

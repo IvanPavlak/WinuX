@@ -424,7 +424,7 @@ Set-LogLevel Verbose { Set-WorkspaceWindowLayout -WorkspaceName "Development" }
 
 During application, windows are first positioned inside their target zones using a shared inset-resize calculation. Right before snap, `Resize-PositionedWindows` reapplies that same geometry so the initial snap attempt and any later snap recovery use the exact same bounds. How much is trimmed off each side comes from `SnapInsetPercent` (default `0.05`), read through `Get-WindowInsetPercent` - one value shared by every placement path.
 
-Windows opened for the first time are also normalized by `Resize-Windows` with no explicit `-Percent`, so their scale comes from `ResizeWindowsPercent` (default `70`). Both sections are documented under [Display-Aware Window Sizing](../configuration-reference.md#display-aware-window-sizing), where a `SmallDisplay` row lets a laptop-class panel shrink windows less than a wide monitor does.
+Windows opened for the first time are also normalized by `Resize-Windows` with no explicit `-Percent`, so their scale comes from `ResizeWindowsPercent` (default `70`). Both sections are documented under [Display-Aware Window Sizing](../../configuration-reference.md#display-aware-window-sizing), where a `SmallDisplay` row lets a laptop-class panel shrink windows less than a wide monitor does.
 
 ## Running a Machine on a Different Monitor Setup
 

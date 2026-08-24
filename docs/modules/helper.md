@@ -64,7 +64,7 @@ Write-Host "Found $($result.Urls.Count) URLs"
 $result.Subgroups
 ```
 
-**See also:** [Open-Browser](../modules/application.md), [Add Browser Group](../configuration/guides/add-browser-group.md)
+**See also:** [Open-Browser](../modules/application.md), [Add Browser Group](../configuration/guides/application/add-browser-group.md)
 
 ## [Confirm-ConfigValue](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Confirm-ConfigValue.ps1)
 
@@ -928,7 +928,7 @@ This is an internal recursion primitive for menu rendering. For each group it in
 | `-PathNames`    | Array list of names representing the current path in the hierarchy.                              |
 | `-Depth`        | Current nesting depth (0 at root). Controls indentation in the display. Optional, defaults to 0. |
 
-**See also:** [Add Browser Group](../configuration/guides/add-browser-group.md)
+**See also:** [Add Browser Group](../configuration/guides/application/add-browser-group.md)
 
 ## [Refresh-BrowserTabs](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Refresh-BrowserTabs.ps1)
 

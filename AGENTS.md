@@ -27,8 +27,9 @@ Every change that adds, renames, removes, or modifies the **behavior, parameters
 
 - `docs/modules/<Module>.md` - the function reference. ONE man-style entry per function = a `## [FunctionName](<github-source-url>)` heading followed IMMEDIATELY by a contiguous `- **Key:** value` bullet block (Description first, then Parameters / Usage / Alias as applicable; omit a bullet when not applicable). Optional human-only prose, parameter tables, examples, and a `**See also:**` line may follow after a blank line. Entries are alphabetical within the page.
 - The module `.psd1` `FunctionsToExport` - keep it in sync when adding/renaming/removing a function.
+- `docs/configuration/guides/<module>/<Function-Name>.md` - the function's configuration guide. EVERY exported function has exactly one, named after it. Use the FULL template when the function reads configuration and the STUB template when it does not (see `AI/Instructions/DocumentationStyle.md` for both templates and the mandatory sentinel sentence). Add the function to the module's `docs/configuration/guides/<module>/README.md` index in the same change.
 - `docs/docs_overview.md` - internal maintenance reference (process + per-module index); update it when adding/renaming/removing a function.
-- `docs/_sidebar.md` - only when adding/removing a page (not for per-function changes).
+- `docs/_sidebar.md` - only when adding/removing a page (not for per-function changes). Per-function guides are NOT sidebar entries - the 10 module index pages are.
 
 `List-Functions` (Helper module) PARSES the module pages. After adding/renaming/removing a function, update its entry alphabetically in `modules/<Module>.md`, update the module `.psd1` `FunctionsToExport`, and run `List-Functions -ListDiscrepancies` (must report none).
 
@@ -40,9 +41,9 @@ Triggers that require a docs update:
 
 Functions (module reference):
 
-- New exported function (add a `## [Name](url)` man-style entry alphabetically in the matching `docs/modules/<Module>.md`, add it to `FunctionsToExport`, and update `docs_overview.md`)
-- Renamed function (rename the entry and its `FunctionsToExport` line; update `docs_overview.md`)
-- Removed function (remove the entry and its `FunctionsToExport` line; update `docs_overview.md`)
+- New exported function (add a `## [Name](url)` man-style entry alphabetically in the matching `docs/modules/<Module>.md`, add it to `FunctionsToExport`, update `docs_overview.md`, AND create its configuration guide `docs/configuration/guides/<module>/<Function-Name>.md` - full template if it reads configuration, stub template otherwise - plus its row or link in that module's `guides/<module>/README.md` index)
+- Renamed function (rename the entry and its `FunctionsToExport` line; update `docs_overview.md`; rename the guide file to match the new name and update the module index and every inbound link to it)
+- Removed function (remove the entry and its `FunctionsToExport` line; update `docs_overview.md`; delete its guide file and its module-index entry)
 - New/changed fork-only function (same entry format, but in `docs/custom/<module>.md`; its name goes in `Custom.psd1` `FunctionsToExport`, not an engine module's)
 - Parameter added/removed/renamed (update the `**Parameters:**` bullet in the module page entry)
 - Behavioral change visible to a caller (update the `**Description:**` bullet in the module page entry)
@@ -50,7 +51,7 @@ Functions (module reference):
 
 Everything else (equally required):
 
-- Configuration schema change - new/renamed/removed `Configuration.psd1` key, changed placeholder, or new machine type - update `docs/configuration/configuration-reference.md` (and `docs/configuration/placeholder-system.md` / `docs/configuration/machine-types.md` as applicable)
+- Configuration schema change - new/renamed/removed `Configuration.psd1` key, changed placeholder, or new machine type - update `docs/configuration/configuration-reference.md` (and `docs/configuration/placeholder-system.md` / `docs/configuration/machine-types.md` as applicable), AND update the configuration guide of EVERY function that reads the key (its `## Configuration Keys` table, its `## Decisions`, and its `## Complete Example`). A function that starts reading configuration is upgraded from the stub template to the full template in the same change; a function that stops reading configuration is downgraded to the stub template in the same change
 - Package or data-file change - `WinGetApps.csv`, Scoop, or Chocolatey app lists, or any `Data/` CSV - update `docs/reference/software-list.md`
 - Bootstrap / install / provisioning-flow change - new step, reordering, new package manager, or changed first-run behavior - update the relevant `docs/getting-started/*.md` page (and `docs/modules/bootstrap.md`)
 - AI system change - new/renamed/removed prompt, agent, instruction, provider, or template under `AI/` or `.github/` - update `docs/ai/agent-system.md` / `docs/ai/overview.md`

@@ -145,7 +145,7 @@ BrowserGroups = @(
 )
 ```
 
-No separate per-project mapping is needed - the lookup is by name. Opening the tab is opt-in per workspace: declare the [Open-ProjectSwagger](../../modules/workflow.md#open-projectswagger) action after the workspace's `Open-Project` and `Open-Browser` actions, and it resolves the active project's `Swagger` group via [Resolve-SwaggerBrowserGroup](../../modules/workflow.md#resolve-swaggerbrowsergroup) and opens it unless it is already open:
+No separate per-project mapping is needed - the lookup is by name. Opening the tab is opt-in per workspace: declare the [Open-ProjectSwagger](../../../modules/workflow.md#open-projectswagger) action after the workspace's `Open-Project` and `Open-Browser` actions, and it resolves the active project's `Swagger` group via [Resolve-SwaggerBrowserGroup](../../../modules/workflow.md#resolve-swaggerbrowsergroup) and opens it unless it is already open:
 
 ```powershell
 WorkspaceActions = @{
