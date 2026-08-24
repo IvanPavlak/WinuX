@@ -83,13 +83,14 @@ Describe "Open-Workspace" {
 		Mock Write-Host { }
 		Mock Get-TerminalTabSnapshot { param([switch]$EnsureVisible) @{} }
 		Mock Save-WorkspaceState {
-			param($Workspace, $ExistingWindowHandles, $ExistingTerminalTabs, $DesktopOffset, [switch]$Alongside, [switch]$AdoptUnclaimed, [switch]$Append, $Entry, $StatePath)
+			param($Workspace, $ExistingWindowHandles, $ExistingTerminalTabs, $PreCapturedTerminalTabs, $DesktopOffset, [switch]$Alongside, [switch]$AdoptUnclaimed, [switch]$Append, $Entry, $StatePath)
 			$script:workspaceStateCalls += [PSCustomObject]@{
-				Workspace      = $Workspace
-				DesktopOffset  = $DesktopOffset
-				Alongside      = [bool]$Alongside
-				AdoptUnclaimed = [bool]$AdoptUnclaimed
-				Append         = [bool]$Append
+				Workspace               = $Workspace
+				DesktopOffset           = $DesktopOffset
+				Alongside               = [bool]$Alongside
+				AdoptUnclaimed          = [bool]$AdoptUnclaimed
+				Append                  = [bool]$Append
+				PreCapturedTerminalTabs = $PreCapturedTerminalTabs
 			}
 		}
 		# Capture PromptMessage too: the prompt advertises what [Enter] does, so the tests
@@ -479,6 +480,42 @@ Describe "Open-Workspace" {
 			Open-Workspace -Workspace 'TestWorkspace'
 
 			Should -Invoke Get-TerminalTabSnapshot -Times 1
+		}
+
+		It "captures the tab strip again before the layout parks the terminal, and records that one" {
+			# The layout action is what moves the terminal onto one of the workspace's own desktops,
+			# and Windows Terminal shows no tab strip while its desktop is off screen. Reading it at
+			# record time therefore costs a desktop round trip - which the user sees as the view
+			# jumping to the terminal and back AFTER the workspace's final Focus-VirtualDesktop
+			# landing. Each mocked read is labelled so the snapshot handed to the recorder identifies
+			# itself: it must be the second (pre-layout) one, and there must be no third.
+			$script:tabSnapshotReads = 0
+			Mock Get-TerminalTabSnapshot {
+				param([switch]$EnsureVisible)
+				$script:tabSnapshotReads++
+				@{ 777 = @("read$script:tabSnapshotReads") }
+			}
+
+			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+				@{ Action = 'Set-WorkspaceWindowLayout'; Parameters = @{ WorkspaceName = 'TestWorkspace' } }
+			)
+
+			Open-Workspace -Workspace 'TestWorkspace'
+
+			$script:tabSnapshotReads | Should -Be 2
+			@($script:workspaceStateCalls[0].PreCapturedTerminalTabs[777]) | Should -Be @('read2')
+		}
+
+		It "forwards no pre-captured tab strip when the workspace has no layout action" {
+			# Nothing moved the terminal, so there is nothing to pre-capture and the recorder is left
+			# to read the tab strip itself - which costs no desktop switch either.
+			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } }
+			)
+
+			Open-Workspace -Workspace 'TestWorkspace'
+
+			$script:workspaceStateCalls[0].PreCapturedTerminalTabs | Should -BeNullOrEmpty
 		}
 
 		It "records one entry per selected workspace" {

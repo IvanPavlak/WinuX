@@ -27,8 +27,9 @@ function Focus-VirtualDesktop {
 		  - The Switch-Desktop + Wait-DesktopSwitch retry loop with a Reset-VirtualDesktopState
 		    recovery pass (mirrors Snap-AllWindows' desktop-switch block).
 		  - ForceForegroundWindow (from WindowNative.cs) to lock focus onto a real window on
-		    the target desktop, preferring Windows Terminal via Focus-TerminalTab so the
-		    terminal/output stays visible after the run.
+		    the target desktop, preferring Windows Terminal via Focus-TerminalTab - handed the
+		    handle of the terminal verified to live there - so the terminal/output stays
+		    visible after the run.
 
 	.PARAMETER DesktopNumber
 		The 1-based desktop number to focus (matching layout-file convention). Default is 1
@@ -161,11 +162,15 @@ function Focus-VirtualDesktop {
 
 	# Prefer the terminal (keeps post-run output visible); fall back to any window on the
 	# target desktop. Focus-TerminalTab is only safe when the terminal is on this desktop -
-	# activating a terminal that lives elsewhere would drag the view off the target desktop.
+	# activating a terminal that lives elsewhere would drag the view off the target desktop -
+	# which is why the verified HANDLE goes with the call. Left to itself Focus-TerminalTab
+	# activates the first WindowsTerminal PROCESS, and one process hosts every one of its
+	# windows, so the check above could clear one window while a sibling on another desktop
+	# is the one that actually comes forward.
 	$focusedTitle = $null
 	if ($terminalOnTarget -and (Get-Command Focus-TerminalTab -ErrorAction SilentlyContinue)) {
 		try {
-			Focus-TerminalTab -Quiet
+			Focus-TerminalTab -WindowHandle $terminalOnTarget.Handle -Quiet
 		}
 		catch {
 			[void][WindowModule.Native]::ForceForegroundWindow($terminalOnTarget.Handle)

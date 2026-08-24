@@ -37,6 +37,11 @@ function Save-WorkspaceState {
 	.PARAMETER ExistingTerminalTabs
 		The Get-TerminalTabSnapshot taken before the open (window handle -> tab titles).
 
+	.PARAMETER PreCapturedTerminalTabs
+		The matching AFTER snapshot, taken by the caller while the terminal was still on the visible
+		desktop. Forwarded to Get-WorkspaceOpenDelta, which otherwise reads it itself and pays a
+		desktop round trip to do so - see that function's help.
+
 	.PARAMETER DesktopOffset
 		Desktop offset this open used (0 normally, +N for -Alongside). Recorded for context.
 
@@ -82,6 +87,9 @@ function Save-WorkspaceState {
 		[hashtable]$ExistingTerminalTabs,
 
 		[Parameter(ParameterSetName = 'Record')]
+		[hashtable]$PreCapturedTerminalTabs,
+
+		[Parameter(ParameterSetName = 'Record')]
 		[int]$DesktopOffset = 0,
 
 		[Parameter(ParameterSetName = 'Record')]
@@ -113,6 +121,7 @@ function Save-WorkspaceState {
 			$recorded = Get-WorkspaceOpenDelta -Workspace $Workspace `
 				-ExistingWindowHandles $ExistingWindowHandles `
 				-ExistingTerminalTabs $ExistingTerminalTabs `
+				-PreCapturedTerminalTabs $PreCapturedTerminalTabs `
 				-DesktopOffset $DesktopOffset `
 				-Alongside:$Alongside `
 				-AdoptUnclaimed:$AdoptUnclaimed

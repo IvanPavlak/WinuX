@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.41] - 2026-08-24
+
+### Fixed
+
+- **`Open-Workspace` (Workflow module): an open ended on the workspace's first virtual desktop, then jumped to the terminal's desktop and back.** `Open-Workspace` records what an open produced by differencing the windows on screen and the Windows Terminal tab strip before and after it, and that second snapshot was taken once every action had already run. By then `Set-WorkspaceWindowLayout` has moved the workspace's terminal onto one of the workspace's own desktops, and Windows Terminal composes its tab strip only while its desktop is on screen - so `Get-WorkspaceOpenDelta` fell back to `Get-TerminalTabSnapshot -EnsureVisible`, which brings that desktop up, reads the tabs, and restores the view. The open therefore ended in three desktop transitions (the last desktop snapped, the configured `Focus-VirtualDesktop` landing, the terminal's desktop, then back), the final two of them *after* the landing that is supposed to be the last thing that happens. Whether it was visible at all came down to the layout: one whose `WindowsTerminal` entry sits on the same desktop the workspace lands on has nothing to switch, so the read is free and silent; any layout that places the terminal on a different desktop flashed on every single open, the more obviously the further apart the two desktops are. The snapshot is now taken at the last moment the terminal is guaranteed readable - immediately before the layout action, by which point every tab-creating action (`Open-Project`, `Open-Terminal`) has already run - and handed to the recorder through the new `-PreCapturedTerminalTabs` parameter on `Save-WorkspaceState` and `Get-WorkspaceOpenDelta`. Nothing switches desktops after `Focus-VirtualDesktop` any more and the open is a desktop round trip cheaper, while the record itself is unchanged: project tabs are created with `--title --suppressApplicationTitle`, so their titles cannot drift between the capture and the end of the open. The `-EnsureVisible` read stays as the fallback for callers that supply no pre-capture (a workspace with no layout action never moved its terminal, so it costs nothing there either), and a supplied but empty map is honoured rather than re-read - it means the caller looked and found no readable terminal.
+
+- **`Focus-VirtualDesktop` (Window module): the terminal it verified was not always the terminal it activated.** The function scans for a Windows Terminal window living on the desktop it just switched to and, finding one, handed off to `Focus-TerminalTab` - which activated the first `WindowsTerminal` **process** through `AppActivate`. One Windows Terminal process hosts every one of its windows, so what actually came forward was that process's main window, potentially a sibling parked on another virtual desktop: the guard cleared one window while a different one was activated, dragging the view straight off the desktop just landed on, which is the exact failure mode the guard exists to prevent. `Focus-TerminalTab` now accepts `-WindowHandle` and activates that one window through `Confirm-WindowForeground` (force and verify, the same helper `Snap-AllWindows` relies on before injecting keystrokes), with a `SetForegroundWindow` fallback on the same handle; its tab-cycling loop reads the title back from that window too, instead of from whichever terminal window is enumerated first. `Focus-VirtualDesktop` passes the handle it verified, and the callers that pass none - `Close-Workspace`, `Close-Project`, `Close-ProjectTerminals`, `Run-Project`, `Reset-Windows`, `Kill-All` - are unaffected.
+
 ## [0.1.40] - 2026-08-21
 
 ### Added
@@ -730,7 +738,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.40...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.41...HEAD
+[0.1.41]: https://github.com/IvanPavlak/WinuX/compare/v0.1.40...v0.1.41
 [0.1.40]: https://github.com/IvanPavlak/WinuX/compare/v0.1.39...v0.1.40
 [0.1.39]: https://github.com/IvanPavlak/WinuX/compare/v0.1.38...v0.1.39
 [0.1.38]: https://github.com/IvanPavlak/WinuX/compare/v0.1.37...v0.1.38

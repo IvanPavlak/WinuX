@@ -420,6 +420,15 @@ function Open-Workspace {
 			# need their own snapshot because they are not top-level windows - opening three project
 			# tabs in an existing window changes no window handle at all.
 			$existingTerminalTabsBeforeOpen = Get-TerminalTabSnapshot
+
+			# The matching AFTER snapshot, taken further down at the last moment the terminal is still
+			# on the visible desktop - right before the layout action parks it on one of this
+			# workspace's own desktops. Leaving it to the recorder means reading a terminal that is by
+			# then off screen, which costs a desktop round trip the user sees as the view jumping to
+			# the terminal and back AFTER this workspace's final Focus-VirtualDesktop landing. Reset
+			# per workspace: a later workspace of a multi-workspace run captures its own.
+			$terminalTabsAfterOpen = $null
+
 			$workspaceStateRecorded = $false
 			$recordWorkspaceState = {
 				# The FIRST workspace of a plain run also claims what was already on screen, not
@@ -440,6 +449,7 @@ function Open-Workspace {
 				Save-WorkspaceState -Workspace $workspaceName `
 					-ExistingWindowHandles $existingHandlesBeforeOpen `
 					-ExistingTerminalTabs $existingTerminalTabsBeforeOpen `
+					-PreCapturedTerminalTabs $terminalTabsAfterOpen `
 					-DesktopOffset $desktopOffset `
 					-Alongside:$Alongside `
 					-AdoptUnclaimed:$isFirstOfPlainRun `
@@ -569,6 +579,19 @@ function Open-Workspace {
 					$actionParams["PreCapturedExistingWindows"] = $existingHandlesBeforeOpen
 					if ($desktopOffset -gt 0) {
 						$actionParams["DesktopOffset"] = $desktopOffset
+					}
+
+					# Last moment the terminal is guaranteed readable: THIS action is what moves it onto
+					# one of the workspace's own desktops, and Windows Terminal composes its tab strip
+					# only while its desktop is on screen. Every tab-creating action (Open-Project,
+					# Open-Terminal) has already run by now, so this snapshot is the same one the
+					# recorder would take at the end of the open - minus the desktop round trip.
+					#
+					# -EnsureVisible only bites for a later workspace of a multi-workspace run, whose
+					# terminal an earlier layout may already have parked elsewhere; it is a no-op while
+					# the terminal is on the visible desktop, which is the normal case here.
+					if ($null -eq $terminalTabsAfterOpen) {
+						$terminalTabsAfterOpen = Get-TerminalTabSnapshot -EnsureVisible
 					}
 				}
 
