@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.42] - 2026-08-24
+
+### Fixed
+
+- **`Reset-Windows` / `Move-Windows` (Window module): windows quite regularly stayed on other virtual desktops while the summary reported a clean pass.** The left-behind window was typically one of several from the same process - one Firefox window while its siblings moved, one Windows Terminal window - and workspace size only changed how often it happened, not whether. Two defects stacked. First, the upstream `Move-Window` cmdlet (MScholtes VirtualDesktop) silently falls back to moving the process's MAIN window when the requested window's view cannot be moved - a different window of the same multi-window process - and does not throw, so the requested window stays put while the call "succeeds". `Move-WindowToVirtualDesktop` verifies each move against the target desktop and returns `$false` for exactly this case, but - the second defect - the cmdlet's own output (it returns the Desktop object) leaked into the function's pipeline output, turning the result into a two-element array `@(Desktop, $false)`, which is truthy in PowerShell regardless of contents. Every consumer that reads the result as a boolean - the retry ladder in `Move-Windows`, plus `Set-WindowLayouts` and `Snap-AllWindows` - therefore counted the failed move as moved, never retried, and never reported it; the tests could not see it because they stubbed `Move-Window` to return nothing, unlike the real cmdlet. The leaked object is now discarded, so a failed verify returns exactly one `$false` and the existing retry and failure-reporting paths engage again. `Move-Windows` additionally runs a verification sweep after the move pass: every window it counted as on the target desktop is re-checked through `Get-WindowDesktopIndex`, stragglers (including stale already-on-desktop reads taken while a desktop collapse was still settling) are retried once, and anything still elsewhere is reclassified into the failure count and named in the normal-mode warning instead of vanishing into a clean summary. The `Move-Window` test stubs now return the Desktop object like the real cmdlet, with regression tests pinning the exactly-one-boolean contract and the sweep's recover/reclassify behavior.
+
 ## [0.1.41] - 2026-08-24
 
 ### Fixed
@@ -738,7 +744,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.41...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.42...HEAD
+[0.1.42]: https://github.com/IvanPavlak/WinuX/compare/v0.1.41...v0.1.42
 [0.1.41]: https://github.com/IvanPavlak/WinuX/compare/v0.1.40...v0.1.41
 [0.1.40]: https://github.com/IvanPavlak/WinuX/compare/v0.1.39...v0.1.40
 [0.1.39]: https://github.com/IvanPavlak/WinuX/compare/v0.1.38...v0.1.39

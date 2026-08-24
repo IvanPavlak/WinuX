@@ -85,7 +85,10 @@ function Move-WindowToVirtualDesktop {
 
 			$moveError = $null
 			try {
-				Move-Window -Desktop $targetDesktopObj -Hwnd $WindowHandle.ToInt64()
+				# Move-Window emits the Desktop object; without discarding it the function's
+				# pipeline output becomes @(Desktop, $bool), which is truthy even when the
+				# verification below returns $false - callers would count a failed move as moved.
+				$null = Move-Window -Desktop $targetDesktopObj -Hwnd $WindowHandle.ToInt64()
 			}
 			catch {
 				# Capture the error but don't fail yet - we'll verify if the move actually succeeded

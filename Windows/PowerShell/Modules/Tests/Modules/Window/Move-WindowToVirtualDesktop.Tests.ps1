@@ -11,7 +11,9 @@ BeforeAll {
 	if (-not (Get-Command Get-DesktopCount -ErrorAction SilentlyContinue)) {
 		function Get-DesktopCount { [CmdletBinding()] param() }
 		function Get-Desktop { [CmdletBinding()] param($Index) }
-		function Move-Window { [CmdletBinding()] param($Desktop, $Hwnd) }
+		# The real Move-Window RETURNS the Desktop object - the stub must too, or tests
+		# cannot catch output leaking into Move-WindowToVirtualDesktop's boolean result.
+		function Move-Window { [CmdletBinding()] param($Desktop, $Hwnd) $Desktop }
 		function Get-DesktopFromWindow { [CmdletBinding()] param($Hwnd) }
 		function Get-DesktopIndex { [CmdletBinding()] param([Parameter(Position = 0)]$Desktop) }
 	}
@@ -28,7 +30,8 @@ Describe "Move-WindowToVirtualDesktop" {
 		Mock Import-VirtualDesktopModule { $true }
 		Mock Get-DesktopCount { 3 }
 		Mock Get-Desktop { [PSCustomObject]@{ Index = $Index } }
-		Mock Move-Window { }
+		# Mimics the real cmdlet, which returns the Desktop object (see stub note above).
+		Mock Move-Window { $Desktop }
 		Mock Get-DesktopFromWindow { [PSCustomObject]@{ Index = 1 } }
 		Mock Get-DesktopIndex { param($Desktop) $Desktop.Index }
 
@@ -62,6 +65,33 @@ Describe "Move-WindowToVirtualDesktop" {
 		Should -Invoke Move-Window -Times 1 -Exactly -ParameterFilter {
 			$Desktop.Index -eq 1 -and $Hwnd -eq 1234
 		}
+	}
+
+	It "emits exactly one boolean on a successful move (Move-Window's Desktop output must not leak)" {
+		$script:desktopLookupCount = 0
+		Mock Get-DesktopFromWindow {
+			$script:desktopLookupCount++
+			if ($script:desktopLookupCount -eq 1) { [PSCustomObject]@{ Index = 0 } }
+			else { [PSCustomObject]@{ Index = 1 } }
+		}
+
+		$result = Move-WindowToVirtualDesktop -WindowHandle ([IntPtr]1234) -DesktopNumber 1
+
+		@($result).Count | Should -Be 1
+		$result | Should -BeTrue
+	}
+
+	It "emits exactly one `$false when the move never lands - a leaked Desktop object would make the array truthy" {
+		# Window sits on desktop 0 and stays there: fast-path check fails, Move-Window
+		# runs (returning its Desktop object), and every verification poll still reports 0.
+		# Regression: @(Desktop, $false) is truthy, so callers counted this failure as moved.
+		Mock Get-DesktopFromWindow { [PSCustomObject]@{ Index = 0 } }
+
+		$result = Move-WindowToVirtualDesktop -WindowHandle ([IntPtr]1234) -DesktopNumber 1
+
+		Should -Invoke Move-Window -Times 1 -Exactly
+		@($result).Count | Should -Be 1
+		$result | Should -BeFalse
 	}
 
 	It "reports Moved in the script-scoped result only for a real move" {
