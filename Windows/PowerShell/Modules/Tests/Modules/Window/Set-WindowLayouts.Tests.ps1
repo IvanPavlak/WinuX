@@ -114,4 +114,66 @@ Describe "Set-WindowLayouts" {
 			@($results | Where-Object { $_.Status -eq 'Not Found' }).Count | Should -Be 1
 		}
 	}
+
+	Context "SingleZone plumbing (zone-based positioning)" {
+		# A single-zone layout (Zone = "Fullscreen" on the one-zone "Zero" grid) must reach
+		# Add-PositionedWindow with -SingleZone so Snap-AllWindows places the window directly
+		# instead of steering FancyZones' relative Win+Arrow, which has no neighbouring zone
+		# to resolve to on a single-zone grid.
+		BeforeEach {
+			Mock Test-LogVerbose { $false }
+			Mock Write-LogDebug { }
+			Mock Clear-WindowCache { }
+			Mock Start-Sleep { }
+			Mock Get-MonitorSpecs {
+				[PSCustomObject]@{
+					Primary = [PSCustomObject]@{ X = 0; Y = 0; WorkX = 0; WorkY = 0; WorkWidth = 2000; WorkHeight = 1000 }
+				}
+			}
+			Mock Move-WindowToVirtualDesktop { $true }
+			# The window is reported already at the adjusted (inset) bounds, so the
+			# post-positioning verification passes and Add-PositionedWindow is reached.
+			Mock Get-InsetWindowBounds {
+				[PSCustomObject]@{ AdjustedX = 100; AdjustedY = 50; AdjustedWidth = 1800; AdjustedHeight = 900; ZoneCenterX = 1000; ZoneCenterY = 500 }
+			}
+			Mock Resize-Windows { $script:LastResizeWindowsResult = [PSCustomObject]@{ ResizedCount = 1 } }
+			Mock Add-PositionedWindow { }
+			Mock Get-WindowHandle {
+				@([PSCustomObject]@{
+						Handle = [IntPtr]0xB1001; Title = 'Claude'; ProcessName = 'claude'; ProcessId = 4242
+						Left = 100; Top = 50; Width = 1800; Height = 900
+					})
+			}
+
+			$script:LastMoveWindowToVirtualDesktopResult = $null
+		}
+
+		BeforeAll {
+			$script:fullscreenEntry = @(@{ ProcessName = 'claude'; DesktopNumber = 2; Zone = 'Fullscreen'; Monitor = 'Primary' })
+			$script:zeroMonitorConfig = @{ Primary = @{ VirtualDesktopLayouts = @{ 2 = 'Zero' } } }
+			$script:dummyMonitorInfo = @([PSCustomObject]@{ DeviceName = '\\.\DISPLAY1' })
+		}
+
+		It "tracks the window with -SingleZone when the resolved layout has one zone" {
+			Mock Get-FancyZone {
+				[PSCustomObject]@{ X = 0; Y = 0; Width = 2000; Height = 1000; ZoneIndex = 0; ZoneName = 'Fullscreen'; TotalZoneCount = 1 }
+			}
+
+			$null = Set-WindowLayouts -LayoutConfig $fullscreenEntry -MonitorInfo $dummyMonitorInfo -MonitorConfig $zeroMonitorConfig
+
+			Should -Invoke Add-PositionedWindow -Times 1 -Exactly -ParameterFilter {
+				$SingleZone -eq $true -and $DesktopNumber -eq 2 -and $ExpectedX -eq 0 -and $ExpectedWidth -eq 2000
+			}
+		}
+
+		It "tracks the window without -SingleZone when the resolved layout has multiple zones" {
+			Mock Get-FancyZone {
+				[PSCustomObject]@{ X = 0; Y = 0; Width = 2000; Height = 1000; ZoneIndex = 0; ZoneName = 'Left'; TotalZoneCount = 2 }
+			}
+
+			$null = Set-WindowLayouts -LayoutConfig $fullscreenEntry -MonitorInfo $dummyMonitorInfo -MonitorConfig $zeroMonitorConfig
+
+			Should -Invoke Add-PositionedWindow -Times 1 -Exactly -ParameterFilter { -not $SingleZone }
+		}
+	}
 }

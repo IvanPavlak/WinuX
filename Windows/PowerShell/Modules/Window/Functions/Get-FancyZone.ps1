@@ -36,6 +36,12 @@ function Get-FancyZone {
 	.PARAMETER CustomLayoutsPath
 		Optional path to custom-layouts.json file.
 
+	.OUTPUTS
+		The zone object from Get-FancyZoneCoordinates (X, Y, Width, Height, ZoneIndex, ...)
+		with two members added: ZoneName (the requested human-readable name) and
+		TotalZoneCount (how many zones the resolved layout defines - 1 marks a single-zone
+		layout, which the snap pipeline places directly instead of snapping).
+
 	.EXAMPLE
 		Get-FancyZone -LayoutName "Seven" -ZoneName "Left" -MonitorY -1440
 
@@ -132,6 +138,13 @@ function Get-FancyZone {
 
 	# Add the zone name to the result
 	$zone | Add-Member -NotePropertyName "ZoneName" -NotePropertyValue $ZoneName -Force
+
+	# How many zones the resolved layout defines, straight from custom-layouts.json. A count
+	# of 1 tells the snap pipeline the layout is single-zone (e.g. "Zero"), where FancyZones'
+	# relative Win+Arrow has no neighbouring zone to disambiguate it and Snap-AllWindows must
+	# place the window directly instead. Counting ZoneNameMappings keys would be wrong - two
+	# names ("Full", "Fullscreen") map to the same index.
+	$zone | Add-Member -NotePropertyName "TotalZoneCount" -NotePropertyValue (@($zones).Count) -Force
 
 	return $zone
 }

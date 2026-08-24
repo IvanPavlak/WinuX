@@ -283,6 +283,19 @@ Center-Windows -Monitor 2
 
 If windows still drift, the FancyZones re-apply behaviors are the trigger - `fancyzones_displayOrWorkAreaChange_moveWindows` and `fancyzones_zoneSetChange_moveWindows` in `FancyZones/settings.json`. Turning them off stops the drift at the source, but they are load-bearing for workspace layouts, so prefer the self-correcting path above.
 
+### Fullscreen Windows Jumbled Or On The Wrong Monitor
+
+**Problem:** Layout entries with `Zone = "Fullscreen"`, or the `Fullscreen` workspace itself, leave windows jumbled: thrown to the other monitor, stuck at ~90% of the zone size, or (after `Reset-Windows` then `w Fullscreen`) fullscreened on a monitor the window was not sitting on.
+
+**Why it happened:** Fullscreen is a single-zone FancyZones layout (`Zero`), and the snap primitive was a synthesized `Win+Up` - a **relative** move. With only one zone per monitor there is no neighbouring zone to resolve to, so with `fancyzones_moveWindowAcrossMonitors` enabled FancyZones threw an already-recognised window to the *other* monitor's zone, and on a single monitor the key no-op'd until every retry and the shift-drag fallback were burned. One exhausted window also aborted the whole snap pass, stranding every later desktop at the pre-snap inset size. The wrong-monitor-after-`Reset-Windows` variant has a different trigger: applying the zone grids (`Apply-FancyZones`) can make FancyZones relocate remembered windows across monitors from `app-zone-history.json` *before* placement runs, so the pass fullscreened the window wherever the history had dragged it.
+
+**Solution:** This now self-corrects. Single-zone windows are no longer snapped at all: they are placed directly at the zone rect (`Invoke-SingleZoneWindowPlacement` via `SetWindowPos`) and verified with `Wait-WindowRect` - there is nothing FancyZones needs to arbitrate for one zone. The `Fullscreen` workspace resolves each window's monitor from a snapshot taken *before* the zone grids are applied, so a window is fullscreened wherever it sat when the workspace was invoked, and the snap pass records failures and continues instead of aborting on the first stubborn window. Directly placed windows are not registered in FancyZones' zone history; that is harmless - verification is geometry-only, and manual `Win+Arrow` still works because `fancyzones_moveWindowsBasedOnPosition` resolves zones from position, not history.
+
+```powershell
+# Per-window trace: look for "direct single-zone placement (verified at zone position)"
+Set-LogLevel Verbose { Set-WorkspaceWindowLayout -WorkspaceName Fullscreen }
+```
+
 ### Windows Left On Other Desktops After Reset-Windows
 
 **Problem:** `Reset-Windows` reports a clean pass, but a window is still sitting on another virtual desktop. The left-behind window is typically one of several from the same process - one Firefox window while its siblings moved, or one Windows Terminal window.

@@ -514,7 +514,8 @@ function Set-WindowLayouts {
 								-WindowTitle $verifyWindow.Title `
 								-DesktopNumber $trackingDesktopNumber `
 								-ExpectedProcessName $verifyWindow.ProcessName `
-								-ExpectedProcessId ([uint32]$verifyWindow.ProcessId)
+								-ExpectedProcessId ([uint32]$verifyWindow.ProcessId) `
+								-SingleZone:([bool]$Item.SingleZone)
 						}
 						else {
 							if (Test-LogVerbose) {
@@ -579,7 +580,8 @@ function Set-WindowLayouts {
 											-WindowTitle $retryVerifyWindow.Title `
 											-DesktopNumber $trackingDesktopNumber `
 											-ExpectedProcessName $retryVerifyWindow.ProcessName `
-											-ExpectedProcessId ([uint32]$retryVerifyWindow.ProcessId)
+											-ExpectedProcessId ([uint32]$retryVerifyWindow.ProcessId) `
+											-SingleZone:([bool]$Item.SingleZone)
 									}
 									else {
 										if (Test-LogVerbose) {
@@ -871,6 +873,11 @@ function Set-WindowLayouts {
 		# Reset per-entry so a direct-coordinate entry never inherits the previous
 		# iteration's resolved layout name when recorded into the work item.
 		$layoutName = $null
+		# Whether this entry's resolved layout defines exactly one zone. Single-zone windows
+		# are placed directly by Snap-AllWindows instead of snapped (FancyZones' relative
+		# Win+Arrow is ambiguous with no neighbouring zone). Direct-coordinate entries stay
+		# $false - they never had a zone to snap into.
+		$singleZone = $false
 
 		# Check if using zone-based positioning
 		if ($config.Zone) {
@@ -972,8 +979,12 @@ function Set-WindowLayouts {
 				$posY = $zone.Y
 				$posWidth = $zone.Width
 				$posHeight = $zone.Height
+				$singleZone = ($zone.TotalZoneCount -eq 1)
 				if (Test-LogVerbose) {
 					Write-LogDebug "✓ Zone coordinates calculated => [$posX,$posY ${posWidth}x${posHeight}]" -Style Success
+					if ($singleZone) {
+						Write-LogDebug "Single-zone layout - window will be placed directly instead of snapped" -Style Step
+					}
 				}
 			}
 			else {
@@ -1144,13 +1155,14 @@ function Set-WindowLayouts {
 			# the explicit Layout field) so Add-PositionedWindow can record where the window
 			# belongs for CurrentLayout.txt.
 			$positionWorkItem = [PSCustomObject]@{
-				Window    = $window
-				Config    = $config
-				PosX      = $posX
-				PosY      = $posY
-				PosWidth  = $posWidth
-				PosHeight = $posHeight
-				Layout    = $layoutName
+				Window     = $window
+				Config     = $config
+				PosX       = $posX
+				PosY       = $posY
+				PosWidth   = $posWidth
+				PosHeight  = $posHeight
+				Layout     = $layoutName
+				SingleZone = $singleZone
 			}
 
 			# Settle only when a real desktop move happened this iteration - the fast path

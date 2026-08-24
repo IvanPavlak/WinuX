@@ -67,6 +67,23 @@ Describe "Add-PositionedWindow" {
 		$script:PositionedWindowHandles[0].ProcessId | Should -Be ([uint32]0)
 	}
 
+	It "stores SingleZone when the switch is passed" {
+		$script:PositionedWindowHandles = [System.Collections.ArrayList]::new()
+
+		Add-PositionedWindow -WindowHandle ([IntPtr]12) -ExpectedX 0 -ExpectedY 0 -ExpectedWidth 100 -ExpectedHeight 100 -WindowTitle "Sz" -SingleZone
+
+		$script:PositionedWindowHandles[0].SingleZone | Should -BeTrue
+	}
+
+	It "defaults SingleZone to false when omitted" {
+		# Falsy default = exact pre-flag behavior for multi-zone and direct-coordinate windows.
+		$script:PositionedWindowHandles = [System.Collections.ArrayList]::new()
+
+		Add-PositionedWindow -WindowHandle ([IntPtr]13) -ExpectedX 0 -ExpectedY 0 -ExpectedWidth 100 -ExpectedHeight 100 -WindowTitle "NoSz"
+
+		$script:PositionedWindowHandles[0].SingleZone | Should -BeFalse
+	}
+
 	It "preserves the updated fingerprint when replacing an existing handle" {
 		$script:PositionedWindowHandles = [System.Collections.ArrayList]::new()
 		$null = $script:PositionedWindowHandles.Add(@{

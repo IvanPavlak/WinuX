@@ -1,18 +1,30 @@
 function Snap-AllWindows {
 	<#
 	.SYNOPSIS
-		Snaps all windows to FancyZones by sending Win+Up or Win+Down based on window position.
+		Snaps positioned windows into their FancyZones zones, desktop by desktop.
 	.DESCRIPTION
-		Intelligently snaps windows to FancyZones by:
+		Places the windows tracked by Set-WindowLayouts into their zones by:
 		- Grouping windows by virtual desktop and switching desktops as needed
-		- Sending Win+Up for most windows (default)
-		- Detecting windows in the top position that are vertically split (roughly 40-60% height)
-		- Sending Win+Down for those top-split windows
-		- Using reliable focus acquisition with thread attachment
+		- Sending Win+Up for multi-zone layouts (the window arrives pre-inset inside its
+		  target zone, so FancyZones' relative move resolves to that zone), with a
+		  shift-drag fallback when the keyboard snap does not verify
+		- Placing single-zone layouts (Zone = "Fullscreen"/"Full" on a one-zone grid)
+		  directly at the zone rect via Invoke-SingleZoneWindowPlacement - a relative
+		  Win+Arrow has no neighbouring zone there and would throw the window to another
+		  monitor (moveWindowAcrossMonitors) or no-op
+		- Using reliable focus acquisition with thread attachment (keyboard snaps only;
+		  direct placement needs no foreground focus)
 
-		A window is considered "top and vertically split" if:
-		- It's in the top half of the monitor
-		- Its height is approximately 40-60% of the monitor height (vertically split)
+		A window whose snap attempts are exhausted is recorded as failed and the pass
+		CONTINUES with the remaining windows and desktops, so one stubborn window no longer
+		strands every later desktop at its inset size. A circuit breaker aborts the pass
+		once several windows have failed - that pattern means something systemic (stuck
+		modifier, wedged FancyZones) that the caller's retry must reset first. After the
+		desktop loop, a verification sweep re-checks that every tracked window is still on
+		its assigned desktop and retries stragglers once: the upstream Move-Window falls
+		back to moving a process's MAIN window when the requested view cannot be moved, so
+		positioning a later sibling of a multi-window process can silently displace an
+		already-snapped window.
 
 		When using -All switch, snaps all visible windows without requiring prior positioning.
 		In workspace mode, failed keyboard/shift-drag snap retries are returned to
@@ -38,7 +50,9 @@ function Snap-AllWindows {
 		window-to-desktop mapping (e.g. the simple-layout loop) pass the per-desktop handle
 		list here instead of paying two COM roundtrips per window on every desktop pass.
 	.PARAMETER SnapDelayMs
-		Delay in milliseconds between each window snap operation. Default is 25ms.
+		Delay in milliseconds between each window snap in -All mode. Default is 25ms.
+		The positioned-window path (workspace flow) verifies every snap and placement with
+		Wait-WindowRect instead of fixed delays, so this parameter has no effect there.
 	.PARAMETER DesktopOffset
 		Virtual desktop offset, so alongside workspaces target the correct desktop. Default is 0.
 	.PARAMETER DesktopCount
@@ -212,6 +226,14 @@ function Snap-AllWindows {
 
 		$snappedCount = 0
 		$failedSnaps = [System.Collections.Generic.List[object]]::new()
+		# A window that exhausts its attempts is recorded in $failedSnaps and the pass moves
+		# on - the caller's retry re-runs the full layout for the stragglers. $snapAborted is
+		# reserved for the two cases where continuing is pointless: FancyZones died, or the
+		# circuit breaker below tripped because this many windows failed in one pass -
+		# individual apps fail individually; a cluster means something systemic (stuck
+		# modifier, wedged FancyZones grid) that burns 3 attempts + shift-drag for EVERY
+		# remaining window unless the pass is handed back to the caller's reset-and-retry.
+		$maxFailedWindows = 3
 		$snapAborted = $false
 
 		# Process windows in the order they were positioned (Desktop 1 Monitor 1, Desktop 1 Monitor 2, etc.)
@@ -335,8 +357,6 @@ function Snap-AllWindows {
 				}
 			}
 
-			if ($snapAborted) { break }
-
 			foreach ($windowState in $windowsByDesktop[$desktopNum]) {
 				$handle = $windowState.Handle
 				$expectedX = $windowState.ExpectedX
@@ -430,6 +450,58 @@ function Snap-AllWindows {
 
 				if (-not $windowOnTargetDesktop) {
 					Write-LogDebug "  ⚠ Skipping [$expectedTitle] - could not align window to desktop [$desktopNum]" -Style Warning
+					continue
+				}
+
+				# Single-zone layouts (Zone = "Fullscreen"/"Full" on a one-zone grid) are placed
+				# deterministically instead of snapped. FancyZones' Win+Arrow is a RELATIVE move
+				# (see Get-InsetWindowBounds), and a single-zone layout has no neighbouring zone
+				# on the same monitor to make it deterministic: with moveWindowAcrossMonitors
+				# enabled a Win+Up on a window FancyZones already recognises as zoned throws it
+				# to ANOTHER monitor's zone, and on a single monitor it no-ops - either way
+				# burning every retry plus the shift-drag fallback. With one zone there is
+				# nothing FancyZones needs to arbitrate, so the window goes straight to the zone
+				# rect (verified by the same geometry check the snap path uses). The inset
+				# pre-position and foreground focus are skipped too - both exist only to steer
+				# the relative keyboard snap.
+				if ($windowState.SingleZone) {
+					$placement = Invoke-SingleZoneWindowPlacement -WindowHandle $handle `
+						-TargetX $expectedX -TargetY $expectedY `
+						-TargetWidth $expectedWidth -TargetHeight $expectedHeight `
+						-WindowTitle $expectedTitle
+
+					if ($placement.Verified) {
+						$snappedCount++
+						if (Test-LogVerbose) {
+							$attemptLabel = if ($placement.Attempts -gt 1) { " (attempt $($placement.Attempts))" } else { "" }
+							Write-LogDebug "     ✓ Placed [$expectedTitle] → direct single-zone placement (verified at zone position)$attemptLabel" -Style Success
+						}
+					}
+					else {
+						$errorDetails = "Single-zone placement FAILED for [$expectedTitle] after $($placement.Attempts) attempts (unverified position)"
+						$actualBounds = $null
+						if ($null -ne $placement.X) {
+							$errorDetails += "`n  Expected => ($expectedX, $expectedY) ${expectedWidth}x${expectedHeight}"
+							$errorDetails += "`n  Actual   => ($($placement.X), $($placement.Y)) $($placement.Width)x$($placement.Height)"
+							$actualBounds = "($($placement.X), $($placement.Y)) $($placement.Width)x$($placement.Height)"
+						}
+						$failedSnaps.Add([PSCustomObject]@{
+								Handle      = $handle
+								WindowTitle = $expectedTitle
+								ProcessName = $windowState.ProcessName
+								Expected    = "($expectedX, $expectedY) ${expectedWidth}x${expectedHeight}"
+								Actual      = $actualBounds
+								Error       = $errorDetails
+							})
+						Write-LogDebug "     ✗ $errorDetails" -Style Error
+
+						if ($failedSnaps.Count -ge $maxFailedWindows) {
+							Write-LogDebug "     ✗ [$($failedSnaps.Count)] window(s) failed this pass - aborting (systemic failure, caller resets and retries)" -Style Error
+							$snapAborted = $true
+							break
+						}
+					}
+
 					continue
 				}
 
@@ -681,8 +753,11 @@ function Snap-AllWindows {
 
 						# Not verified on this attempt
 						if ($snapAttempt -eq $maxSnapRetries) {
-							# Final attempt exhausted - abort immediately so the outer retry logic
-							# in Set-WorkspaceWindowLayout can rerun the workspace command.
+							# Final attempt exhausted - record the failure and CONTINUE with the
+							# remaining windows and desktops, so one stubborn window no longer
+							# strands everything after it at its inset size. The outer retry in
+							# Set-WorkspaceWindowLayout re-runs the full layout for the recorded
+							# failures; only the circuit breaker below aborts the pass early.
 							$errorDetails = "Snap FAILED for [$title] after $maxSnapRetries attempts (unverified position)"
 							$expectedBounds = "($expectedX, $expectedY) ${expectedWidth}x${expectedHeight}"
 							$actualBounds = $null
@@ -703,13 +778,17 @@ function Snap-AllWindows {
 									Error       = $errorDetails
 								})
 							Write-LogDebug "     ✗ $errorDetails" -Style Error
-							$snapAborted = $true
+							if ($failedSnaps.Count -ge $maxFailedWindows) {
+								Write-LogDebug "     ✗ [$($failedSnaps.Count)] window(s) failed this pass - aborting (systemic failure, caller resets and retries)" -Style Error
+								$snapAborted = $true
+							}
 							break
 						}
 					}
 					catch {
 						if ($snapAttempt -eq $maxSnapRetries) {
-							# All retries exhausted - abort immediately
+							# All retries exhausted - record and move on (see the unverified
+							# branch above for why the pass continues).
 							$failedSnaps.Add([PSCustomObject]@{
 									Handle      = $handle
 									WindowTitle = $title
@@ -719,7 +798,10 @@ function Snap-AllWindows {
 									Error       = "Snap FAILED for [$title] after $maxSnapRetries attempts => $_"
 								})
 							Write-LogDebug "     ✗ Snap FAILED for [$title] after $maxSnapRetries attempts => $_" -Style Error
-							$snapAborted = $true
+							if ($failedSnaps.Count -ge $maxFailedWindows) {
+								Write-LogDebug "     ✗ [$($failedSnaps.Count)] window(s) failed this pass - aborting (systemic failure, caller resets and retries)" -Style Error
+								$snapAborted = $true
+							}
 							break
 						}
 						elseif (Test-LogVerbose) {
@@ -733,6 +815,65 @@ function Snap-AllWindows {
 				if ($snapVerified) {
 					$snappedCount++
 				}
+			}
+
+			if ($snapAborted) { break }
+		}
+
+		# Post-pass desktop verification sweep. The per-window alignment check above answers
+		# "was this window on its desktop right before ITS turn", not "is every window still
+		# there after the whole pass": the upstream Move-Window falls back to moving a
+		# process's MAIN window when the requested view cannot be moved, so positioning a
+		# later sibling of a multi-window process (Firefox, Windows Terminal, VS Code) can
+		# silently displace an already-placed window. Same pattern as the Move-Windows sweep:
+		# one cheap desktop read per tracked window, one recovery attempt, unrecoverable =>
+		# failure. Cross-desktop moves do not need the target desktop visible, so no desktop
+		# switching happens here - and the sweep runs even after an abort, because bringing a
+		# displaced window home needs neither FancyZones nor further snapping.
+		$failedSweepHandles = [System.Collections.Generic.HashSet[IntPtr]]::new()
+		foreach ($failure in $failedSnaps) {
+			if ($failure.Handle -and $failure.Handle -ne [IntPtr]::Zero) {
+				[void]$failedSweepHandles.Add($failure.Handle)
+			}
+		}
+
+		foreach ($windowState in $script:PositionedWindowHandles) {
+			$sweepHandle = $windowState.Handle
+			if (-not $sweepHandle -or $sweepHandle -eq [IntPtr]::Zero) { continue }
+			# Already reported as failed - the workspace retry re-places it anyway.
+			if ($failedSweepHandles.Contains($sweepHandle)) { continue }
+
+			$sweepDesktopNum = if ($null -ne $windowState.DesktopNumber) { $windowState.DesktopNumber } else { 1 }
+			$expectedDesktopIndex = ConvertTo-InternalDesktopIndex -DesktopNumber $sweepDesktopNum -DesktopOffset $DesktopOffset
+
+			$sweepIndex = Get-WindowDesktopIndex -WindowHandle $sweepHandle
+			# -1 means "cannot tell" (window closed mid-pass, pinned) - leave it be.
+			if ($sweepIndex -lt 0 -or $sweepIndex -eq $expectedDesktopIndex) { continue }
+
+			Write-LogDebug "  ! [$($windowState.WindowTitle)] is on desktop $($sweepIndex + 1) after the pass (expected $($expectedDesktopIndex + 1)) - retrying" -Style Warning
+
+			$recovered = $false
+			try {
+				$recovered = [bool](Move-WindowToVirtualDesktop -WindowHandle $sweepHandle -DesktopNumber $expectedDesktopIndex)
+			}
+			catch {
+				$recovered = $false
+			}
+
+			if ($recovered) {
+				# A desktop move does not change the window rect, so the placement this pass
+				# verified still stands - only the desktop assignment needed repair.
+				Write-LogDebug "  ✓ Recovered [$($windowState.WindowTitle)] => desktop $($expectedDesktopIndex + 1)" -Style Success
+			}
+			else {
+				$failedSnaps.Add([PSCustomObject]@{
+						Handle      = $sweepHandle
+						WindowTitle = $windowState.WindowTitle
+						ProcessName = $windowState.ProcessName
+						Expected    = "desktop $($expectedDesktopIndex + 1)"
+						Actual      = "desktop $($sweepIndex + 1)"
+						Error       = "Window [$($windowState.WindowTitle)] left desktop $($expectedDesktopIndex + 1) during the pass and could not be brought back"
+					})
 			}
 		}
 

@@ -92,6 +92,9 @@ The layouts shipped in this repo are named `Zero` through `Nine`:
 | `Eight` | Left, Top-Middle, Bottom-Middle, Top-Right, Bottom-Right                  |
 | `Nine`  | Top-Left, Bottom-Left, Top-Middle, Bottom-Middle, Top-Right, Bottom-Right |
 
+> [!NOTE]
+> Single-zone layouts (`Zero`, addressed as `Zone = "Fullscreen"` or `Zone = "Full"`) are placed **directly** at the zone rectangle instead of being snapped with `Win+Up`: FancyZones' arrow snap is a relative move and a one-zone grid has no neighbouring zone to make it deterministic. Such windows are not registered in FancyZones' zone history, which is harmless - manual `Win+Arrow` moves still resolve zones from the window's position.
+
 ### Canvas Layouts
 
 Besides `grid` layouts, FancyZones `canvas` layouts are fully supported: free-form rectangles drawn in the PowerToys FancyZones editor, saved with explicit X/Y/width/height in the layout's ref-width/ref-height space. A canvas zone's index is its position in the layout's `zones` array - map names to those indices in `ZoneNameMappings` exactly as for grid layouts. Canvas layouts ignore the `spacing` value. `Visualize-Layouts` renders them as a textual per-zone listing (e.g. `Zone 0 [Left]: x=0% y=0% w=50% h=100%`) rather than an ASCII grid.
