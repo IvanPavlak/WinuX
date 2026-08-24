@@ -1,6 +1,6 @@
 # Tests Module Configuration Guides
 
-One configuration guide per exported function of the `Tests` module, which covers the Pester test runner. 1 function in total: 0 read configuration and 1 do not.
+One configuration guide per exported function of the `Tests` module, which covers the Pester test runner.
 
 The [Tests module reference](../../../modules/tests.md) is the authority on what each function *does*. These guides cover what to *configure* for it.
 

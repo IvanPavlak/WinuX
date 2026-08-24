@@ -92,6 +92,7 @@ Skipping required documentation updates is treated the same as leaving the chang
 Do NOT run the test suite yourself - no `Import-Module` + `Invoke-Pester`, and no ad-hoc bootstrap/harness scripts. `Modules/Tests/Invoke-TestSuite.ps1` already is the harness: it bootstraps its own hermetic worker sessions, so a hand-rolled one only reproduces it worse. Instead, after you add or change functions or tests, give the developer the exact `Run-Tests` command in a single line and ask them to run it and report any failures back to you.
 
 - **Scoped to what you changed (preferred):** `Run-Tests -TestName "<ChangedFunctionOrPattern>"` - matches `*<pattern>*.Tests.ps1`. Run it once per changed area, e.g. `Run-Tests -TestName "Resize-Windows"`. List every command when several areas changed.
+- **Repository coherence (docs, manifests, guides):** `Run-Tests -TestName "Infrastructure"` - runs the `Infrastructure-*` gate: documentation links, manifest completeness in both directions, the docs/modules function reference (both directions plus alphabetical order), and the per-function configuration guides. Hand the developer this command after any change to exported functions, manifests, or documentation pages.
 - **Whole suite (only for broad/cross-cutting changes):** `Run-Tests`.
 - **Diagnosing a failure:** the developer can paste the run log the verdict points at (`Modules/Tests/Results/TestRun_<timestamp>.log`) - it already holds the full per-test output. `-Detailed` echoes the same thing to the console.
 

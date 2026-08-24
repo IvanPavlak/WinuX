@@ -1,6 +1,6 @@
 # Logging Module Configuration Guides
 
-One configuration guide per exported function of the `Logging` module, which covers console and file logging - levels, colours, retention, and the maintenance sweep. 17 functions in total: 2 read configuration and 15 do not.
+One configuration guide per exported function of the `Logging` module, which covers console and file logging - levels, colours, retention, and the maintenance sweep.
 
 The [Logging module reference](../../../modules/logging.md) is the authority on what each function *does*. These guides cover what to *configure* for it.
 

@@ -2,7 +2,7 @@
 
 An AI-assisted way to configure WinuX. Point any capable AI assistant at this document and it interviews you, one decision at a time, and writes the answers into your own configuration file. Everything, nothing, or any subset you name.
 
-WinuX ships empty by design. The base `Configuration.psd1` is 83 top-level keys of shape with almost no content: no hostnames, no paths, no identity, no app choices. That is what makes it forkable, and it is also why a fresh clone does very little until somebody fills it in. There are 344 exported functions and 115 of them read configuration. This document is the map through that.
+WinuX ships empty by design. The base `Configuration.psd1` is dozens of top-level keys of shape with almost no content: no hostnames, no paths, no identity, no app choices. That is what makes it forkable, and it is also why a fresh clone does very little until somebody fills it in. Only a subset of the exported functions read configuration at all - each module's guides index says exactly which. This document is the map through that.
 
 ## How to Start
 
@@ -142,19 +142,18 @@ Order matters. Machine type and base paths gate everything downstream: a wrong `
 
 ## Coverage Map
 
-| Module | Functions | Read configuration | What its configuration covers |
-| ------ | --------- | ------------------ | ----------------------------- |
-| [application](guides/application/README.md) | 43 | 19 | Package-manager app lists, browser groups and the default browser, editor and solution lists, WSL tabs, executable paths |
-| [bootstrap](guides/bootstrap/README.md) | 13 | 9 | Machine detection, base paths, path templates, bootstrap step toggles, package managers, the app-list read path |
-| [configuration](guides/configuration/README.md) | 10 | 8 | The `Add-*` writers, the app-list overlay writer, and the schema and section primitives they use |
-| [git](guides/git/README.md) | 11 | 2 | Git identity and package, repository groups |
-| [helper](guides/helper/README.md) | 70 | 12 | Loading spinners, console colours, translation defaults, project and step resolution, the function reference tooling |
-| [logging](guides/logging/README.md) | 17 | 2 | Console verbosity, per-level colours, file logging, log retention |
-| [system](guides/system/README.md) | 69 | 36 | Theme and wallpaper, taskbar, locale and keyboard, power, environment variables, Wake-on-LAN, WSL provisioning, symbolic links, special folders |
-| [tests](guides/tests/README.md) | 1 | 0 | Nothing. The test runner is configuration-free |
-| [window](guides/window/README.md) | 85 | 14 | FancyZones layout numbers and zone names, per-machine layout overrides, reset defaults, window sizing and snap inset |
-| [workflow](guides/workflow/README.md) | 25 | 13 | Workspaces and their action lists, projects and their action lists, terminal tabs, Docker stacks and cleanup actions, campaigns |
-| **Total** | **344** | **115** | |
+| Module | What its configuration covers |
+| ------ | ----------------------------- |
+| [application](guides/application/README.md) | Package-manager app lists, browser groups and the default browser, editor and solution lists, WSL tabs, executable paths |
+| [bootstrap](guides/bootstrap/README.md) | Machine detection, base paths, path templates, bootstrap step toggles, package managers, the app-list read path |
+| [configuration](guides/configuration/README.md) | The `Add-*` writers, the app-list overlay writer, and the schema and section primitives they use |
+| [git](guides/git/README.md) | Git identity and package, repository groups |
+| [helper](guides/helper/README.md) | Loading spinners, console colours, translation defaults, project and step resolution, the function reference tooling |
+| [logging](guides/logging/README.md) | Console verbosity, per-level colours, file logging, log retention |
+| [system](guides/system/README.md) | Theme and wallpaper, taskbar, locale and keyboard, power, environment variables, Wake-on-LAN, WSL provisioning, symbolic links, special folders |
+| [tests](guides/tests/README.md) | Nothing. The test runner is configuration-free |
+| [window](guides/window/README.md) | FancyZones layout numbers and zone names, per-machine layout overrides, reset defaults, window sizing and snap inset |
+| [workflow](guides/workflow/README.md) | Workspaces and their action lists, projects and their action lists, terminal tabs, Docker stacks and cleanup actions, campaigns |
 
 ## If the Session Is Interrupted
 

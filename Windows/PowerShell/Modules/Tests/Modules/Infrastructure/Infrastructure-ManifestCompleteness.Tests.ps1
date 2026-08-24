@@ -3,14 +3,17 @@
 Describe "Manifest Completeness" {
 	<#
 	.SYNOPSIS
-		Verifies that every .ps1 file in each module's Functions/ directory is listed in the module manifest's FunctionsToExport.
+		Verifies that each module's Functions/ directory and its manifest's FunctionsToExport list
+		the same functions, in both directions.
 
 	.DESCRIPTION
 		For each module directory under Modules/, loads the .psd1 manifest and compares
-		FunctionsToExport against the .ps1 filenames on disk. Fails if any function file
-		is missing from FunctionsToExport. The fork-owned Custom area (Modules/Custom) is checked
-		too: its mirror-payload functions must appear in Custom.psd1 (empty/absent on a
-		pure-upstream setup, so that case trivially passes).
+		FunctionsToExport against the .ps1 filenames on disk. Fails if any function file is
+		missing from FunctionsToExport, and fails if any exported name has no function file - the
+		reverse direction is what catches a removal or rename whose manifest entry was left
+		behind. The fork-owned Custom area (Modules/Custom) is checked too: its mirror-payload
+		functions must appear in Custom.psd1 (empty/absent on a pure-upstream setup, so that case
+		trivially passes).
 	#>
 
 	BeforeAll {
@@ -40,6 +43,12 @@ Describe "Manifest Completeness" {
 
 			foreach ($fn in $diskFunctions) {
 				$fn | Should -BeIn $exported -Because "Function '$fn' in $moduleName/Functions/ must appear in $moduleName.psd1 FunctionsToExport"
+			}
+
+			# Reverse direction: an exported name with no file behind it is a removal or rename
+			# whose manifest entry was left behind.
+			foreach ($fn in $exported) {
+				$fn | Should -BeIn $diskFunctions -Because "Exported name '$fn' in $moduleName.psd1 has no $moduleName/Functions/$fn.ps1 on disk"
 			}
 		}
 	}

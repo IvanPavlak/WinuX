@@ -1,6 +1,6 @@
 # Workflow Module Configuration Guides
 
-One configuration guide per exported function of the `Workflow` module, which covers workspaces and projects - what an open actually opens, what a close closes, terminals, Docker stacks, and the Swagger helpers. 25 functions in total: 13 read configuration and 12 do not.
+One configuration guide per exported function of the `Workflow` module, which covers workspaces and projects - what an open actually opens, what a close closes, terminals, Docker stacks, and the Swagger helpers.
 
 The [Workflow module reference](../../../modules/workflow.md) is the authority on what each function *does*. These guides cover what to *configure* for it.
 

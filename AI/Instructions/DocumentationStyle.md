@@ -67,7 +67,7 @@ Bullet-block rules:
 
 ### Configuration Guide Page (`configuration/guides/<module>/<Function-Name>.md`)
 
-EVERY exported function has exactly ONE configuration guide, in the folder of its module, named after the function with `.md` appended (`Open-Browser.md`). The 1:1 mapping against `FunctionsToExport` is mechanically checked by `Modules/Tests/Modules/Infrastructure/Test-ConfigurationGuides.Tests.ps1`, so the filename is not a style preference - a mismatch fails the suite.
+EVERY exported function has exactly ONE configuration guide, in the folder of its module, named after the function with `.md` appended (`Open-Browser.md`). The 1:1 mapping against `FunctionsToExport` is mechanically checked by `Modules/Tests/Modules/Infrastructure/Infrastructure-ConfigurationGuides.Tests.ps1`, so the filename is not a style preference - a mismatch fails the suite. (`Run-Tests -TestName "Infrastructure"` runs it together with the other repository-wide coherence checks: documentation links, manifest completeness, and the function reference pages.)
 
 Two templates. Use the FULL one when the function reads configuration, the STUB one when it does not. Classify by looking at the function body, not its comment-based help: it reads configuration if `Functions/<Name>.ps1` references `$global:Configuration`, `$Configuration.`, `Test-ConfigValue`, `Confirm-ConfigValue`, `Resolve-ConfigPathValue` or `$global:MachineSpecificPaths`, calls `Import-AppCsv`, reads a `Data/*.csv`, or writes `Configuration.psd1` through `Find-ConfigurationSection`. A reference that appears only in a `.EXAMPLE` does not count.
 
@@ -164,8 +164,10 @@ Function-Name -Param "value"
 `````markdown
 # Module Module Configuration Guides
 
-Intro sentence with the function count and the full/stub split, plus a link to
-[the module reference](../../../modules/module.md).
+Intro sentence describing what the module covers, plus a link to
+[the module reference](../../../modules/module.md). No function counts anywhere in the guides -
+they rot on every function add/remove, and the Configurable Functions table plus the
+no-configuration list already convey the split.
 
 ## Configurable Functions
 

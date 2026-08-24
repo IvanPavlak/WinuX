@@ -153,15 +153,21 @@ renames, removes, or alters the **behavior, parameters, or signature** of an exp
 function MUST update the docs in the same PR:
 
 - `docs/modules/<Module>.md` - one man-style entry per function.
-- `docs/configuration/guides/<module>/<Function-Name>.md` - the function's configuration guide. Every exported function has exactly one, named after it: the full template when the function reads configuration, the stub template when it does not. Add it to that module's `guides/<module>/README.md` index too. A `Configuration.psd1` key change updates the guide of every function that reads the key. Both templates are in `AI/Instructions/DocumentationStyle.md`, and `Run-Tests -TestName "Test-ConfigurationGuides"` checks the 1:1 mapping.
+- `docs/configuration/guides/<module>/<Function-Name>.md` - the function's configuration guide. Every exported function has exactly one, named after it: the full template when the function reads configuration, the stub template when it does not. Add it to that module's `guides/<module>/README.md` index too. A `Configuration.psd1` key change updates the guide of every function that reads the key. Both templates are in `AI/Instructions/DocumentationStyle.md`, and `Run-Tests -TestName "Infrastructure-ConfigurationGuides"` checks the 1:1 mapping.
 - The module `.psd1` `FunctionsToExport`.
 - `docs/docs_overview.md` (and `docs/_sidebar.md` only when adding/removing a page).
 
 Then run and confirm no drift:
 
 ```powershell
-List-Functions -ListDiscrepancies   # must report none
+Run-Tests -TestName "Infrastructure"   # the whole coherence gate: docs links, manifests (both
+                                        # directions), function reference pages, configuration guides
+List-Functions -ListDiscrepancies       # the same reference check against the live session
 ```
+
+Both must report nothing. CI runs the `Infrastructure-*` tests on every PR, so a missing docs
+entry, a stale manifest name, an out-of-order reference entry, or a missing configuration guide
+fails the `Pester Tests` check even if the local run was skipped.
 
 Use **genericized placeholders** in docs (`MyProject`, `MyRepo`, `Machine`) - no real
 personal identifiers. The root `README.md` is a minimal pointer; do **not** add per-function

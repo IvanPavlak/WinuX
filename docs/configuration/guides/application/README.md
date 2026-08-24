@@ -1,6 +1,6 @@
 # Application Module Configuration Guides
 
-One configuration guide per exported function of the `Application` module, which covers installing and launching applications - package-manager installs, browsers, editors, and the WSL tab helpers. 43 functions in total: 19 read configuration and 24 do not.
+One configuration guide per exported function of the `Application` module, which covers installing and launching applications - package-manager installs, browsers, editors, and the WSL tab helpers.
 
 The [Application module reference](../../../modules/application.md) is the authority on what each function *does*. These guides cover what to *configure* for it.
 

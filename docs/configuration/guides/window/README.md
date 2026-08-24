@@ -1,6 +1,6 @@
 # Window Module Configuration Guides
 
-One configuration guide per exported function of the `Window` module, which covers window placement: FancyZones layouts, virtual desktops, snapping, resizing, and the per-workspace layout files. 85 functions in total: 14 read configuration and 71 do not.
+One configuration guide per exported function of the `Window` module, which covers window placement: FancyZones layouts, virtual desktops, snapping, resizing, and the per-workspace layout files.
 
 The [Window module reference](../../../modules/window.md) is the authority on what each function *does*. These guides cover what to *configure* for it.
 

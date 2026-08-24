@@ -1,6 +1,6 @@
 # Bootstrap Module Configuration Guides
 
-One configuration guide per exported function of the `Bootstrap` module, which covers the provisioning entry point and the configuration loader: machine detection, path expansion, step resolution, and the app-list read path. 13 functions in total: 9 read configuration and 4 do not.
+One configuration guide per exported function of the `Bootstrap` module, which covers the provisioning entry point and the configuration loader: machine detection, path expansion, step resolution, and the app-list read path.
 
 The [Bootstrap module reference](../../../modules/bootstrap.md) is the authority on what each function *does*. These guides cover what to *configure* for it.
 

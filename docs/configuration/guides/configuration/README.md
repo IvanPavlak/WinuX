@@ -1,6 +1,6 @@
 # Configuration Module Configuration Guides
 
-One configuration guide per exported function of the `Configuration` module, which covers programmatic edits to `Configuration.psd1` itself - the `Add-*` writers, the app-list overlay writer, and the schema and section primitives they are built on. 10 functions in total: 8 read configuration and 2 do not.
+One configuration guide per exported function of the `Configuration` module, which covers programmatic edits to `Configuration.psd1` itself - the `Add-*` writers, the app-list overlay writer, and the schema and section primitives they are built on.
 
 The [Configuration module reference](../../../modules/configuration.md) is the authority on what each function *does*. These guides cover what to *configure* for it.
 

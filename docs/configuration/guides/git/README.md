@@ -1,6 +1,6 @@
 # Git Module Configuration Guides
 
-One configuration guide per exported function of the `Git` module, which covers Git installation, identity, and repository-group operations. 11 functions in total: 2 read configuration and 9 do not.
+One configuration guide per exported function of the `Git` module, which covers Git installation, identity, and repository-group operations.
 
 The [Git module reference](../../../modules/git.md) is the authority on what each function *does*. These guides cover what to *configure* for it.
 

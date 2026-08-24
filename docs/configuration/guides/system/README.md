@@ -1,6 +1,6 @@
 # System Module Configuration Guides
 
-One configuration guide per exported function of the `System` module, which covers the machine itself: registry-driven Windows settings, locale and keyboard, theme and wallpaper, taskbar, power, WSL provisioning, and symbolic links. 69 functions in total: 36 read configuration and 33 do not.
+One configuration guide per exported function of the `System` module, which covers the machine itself: registry-driven Windows settings, locale and keyboard, theme and wallpaper, taskbar, power, WSL provisioning, and symbolic links.
 
 The [System module reference](../../../modules/system.md) is the authority on what each function *does*. These guides cover what to *configure* for it.
 

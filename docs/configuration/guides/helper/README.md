@@ -1,6 +1,6 @@
 # Helper Module Configuration Guides
 
-One configuration guide per exported function of the `Helper` module, which covers the shared utilities everything else is built from: selection prompts, path and step resolution, retries, .NET and EF Core helpers, and the function reference tooling. 70 functions in total: 12 read configuration and 58 do not.
+One configuration guide per exported function of the `Helper` module, which covers the shared utilities everything else is built from: selection prompts, path and step resolution, retries, .NET and EF Core helpers, and the function reference tooling.
 
 The [Helper module reference](../../../modules/helper.md) is the authority on what each function *does*. These guides cover what to *configure* for it.
 

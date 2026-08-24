@@ -201,16 +201,16 @@ docs/
 │       │                                   #   Full template where the function reads config,
 │       │                                   #   stub (sentinel + usage) where it does not.
 │       │                                   #   Task guides live in the module they belong to.
-│       ├── application/   (README + 43 guides)   # + add-browser-group.md
-│       ├── bootstrap/     (README + 13 guides)   # + add-new-machine.md
-│       ├── configuration/ (README + 10 guides)
-│       ├── git/           (README + 11 guides)   # + add-new-repository.md
-│       ├── helper/        (README + 70 guides)
-│       ├── logging/       (README + 17 guides)
-│       ├── system/        (README + 69 guides)   # + add-symbolic-link.md
-│       ├── tests/         (README + 1 guide)
-│       ├── window/        (README + 85 guides)   # + configure-window-layout.md
-│       └── workflow/      (README + 25 guides)   # + add-new-project.md, add-new-workspace.md
+│       ├── application/   (README + guides)     # + add-browser-group.md
+│       ├── bootstrap/     (README + guides)     # + add-new-machine.md
+│       ├── configuration/ (README + guides)
+│       ├── git/           (README + guides)     # + add-new-repository.md
+│       ├── helper/        (README + guides)
+│       ├── logging/       (README + guides)
+│       ├── system/        (README + guides)     # + add-symbolic-link.md
+│       ├── tests/         (README + guides)
+│       ├── window/        (README + guides)     # + configure-window-layout.md
+│       └── workflow/      (README + guides)     # + add-new-project.md, add-new-workspace.md
 │
 ├── modules/
 │   ├── application.md                      # install, launch, browser
