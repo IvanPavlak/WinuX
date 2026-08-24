@@ -283,6 +283,20 @@ Center-Windows -Monitor 2
 
 If windows still drift, the FancyZones re-apply behaviors are the trigger - `fancyzones_displayOrWorkAreaChange_moveWindows` and `fancyzones_zoneSetChange_moveWindows` in `FancyZones/settings.json`. Turning them off stops the drift at the source, but they are load-bearing for workspace layouts, so prefer the self-correcting path above.
 
+### Windows Left On Other Desktops After Reset-Windows
+
+**Problem:** `Reset-Windows` reports a clean pass, but a window is still sitting on another virtual desktop. The left-behind window is typically one of several from the same process - one Firefox window while its siblings moved, or one Windows Terminal window.
+
+**Why it happens:** The upstream `Move-Window` cmdlet (MScholtes VirtualDesktop) has a silent fallback: when the requested window's view cannot be moved, it moves the process's MAIN window instead - a different window of the same process - and does not throw. Multi-window processes are therefore the usual victims. `Move-WindowToVirtualDesktop` verifies each move and returns `$false` when the window did not land, but that result used to be swallowed: the cmdlet's own output (the Desktop object) leaked into the function's pipeline output, and a two-element array is truthy in PowerShell, so `Move-Windows` counted the failure as moved and never retried.
+
+**Solution:** This now self-corrects. The leaked output is discarded, so failed moves engage the retry ladder in `Move-Windows` (and `Set-WindowLayouts` / `Snap-AllWindows`), and a verification sweep after the move pass re-checks every window against the target desktop, retries stragglers once, and reports anything it cannot recover as a failure instead of a clean pass:
+
+```powershell
+# Per-window trace: look for "Recovered" (sweep fixed it) or
+# "could not be brought to Virtual Desktop" (reported failure)
+Set-LogLevel Verbose { Reset-Windows }
+```
+
 ### FancyZones Not Running
 
 **Problem:** Zone snapping doesn't work.

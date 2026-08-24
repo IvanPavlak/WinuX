@@ -8,6 +8,10 @@ BeforeAll {
 	# -Monitor resolution is delegated to Resolve-TargetMonitor; load the real helper so the
 	# index/label/device-name rules are exercised rather than stubbed.
 	. "$FunctionsPath\Resolve-TargetMonitor.ps1"
+	# The verification sweep re-checks windows through Get-WindowDesktopIndex and retries
+	# stragglers through Move-WindowToVirtualDesktop; load them so Mock can attach.
+	. "$FunctionsPath\Get-WindowDesktopIndex.ps1"
+	. "$FunctionsPath\Move-WindowToVirtualDesktop.ps1"
 
 	# VirtualDesktop cmdlets come from an optional external module absent on CI runners.
 	# Stub the ones these tests mock so Mock can attach (no-op where the real module exists).
@@ -42,6 +46,10 @@ Describe "Move-Windows" {
 			param($EnableRetry, $ScriptBlock, $MaxAttempts, $InitialDelayMs)
 			& $ScriptBlock
 		}
+		# By default the sweep finds every window where the pass left it (tests target
+		# Virtual Desktop 1, i.e. index 0); sweep tests override this to plant stragglers.
+		Mock Get-WindowDesktopIndex { 0 }
+		Mock Move-WindowToVirtualDesktop { $true }
 	}
 
 	It "returns early when virtual desktop module is unavailable" {
@@ -176,6 +184,73 @@ Describe "Move-Windows" {
 		Should -Invoke Write-LogWarning -Times 1 -ParameterFilter {
 			$Message -match 'did not stay on monitor'
 		}
+	}
+
+	It "verification sweep recovers a window whose already-on-desktop read was stale" {
+		Mock Import-VirtualDesktopModule { $true }
+		Mock Get-DesktopCount { 2 }
+		Mock Switch-Desktop { }
+		Mock Test-LogVerbose { $false }
+		Mock Write-LogWarning { }
+		Mock Write-LogList { }
+		Mock Write-LogSuccess { }
+		Mock Get-CachedWindows {
+			@(
+				[PSCustomObject]@{
+					Handle = [IntPtr]3333; Title = 'Straggler'; ProcessName = 'firefox'
+					Left = 0; Top = 0; Width = 800; Height = 600
+				}
+			)
+		}
+		# In-loop check says the window is already on the target (index 0)...
+		Mock Get-DesktopFromWindow { [PSCustomObject]@{ Name = 'Desktop1' } }
+		Mock Get-DesktopIndex { 0 }
+		# ...but the post-pass sweep finds it on another desktop, and the retry lands it.
+		Mock Get-WindowDesktopIndex { 1 }
+
+		{ Move-Windows -VirtualDesktop 1 } | Should -Not -Throw
+
+		Should -Invoke Move-WindowToVirtualDesktop -Times 1 -Exactly -ParameterFilter {
+			$WindowHandle -eq [IntPtr]3333 -and $DesktopNumber -eq 0
+		}
+		# The recovery is counted as a move, not as already-there, and nothing is reported failed.
+		Should -Invoke Write-LogSuccess -Times 1 -ParameterFilter { $Message -match 'Moved 1 window' }
+		Should -Invoke Write-LogWarning -Times 0 -ParameterFilter { $Message -match 'could not be moved' }
+	}
+
+	It "verification sweep reclassifies a persistent straggler as a failure instead of reporting a clean pass" {
+		Mock Import-VirtualDesktopModule { $true }
+		Mock Get-DesktopCount { 2 }
+		Mock Switch-Desktop { }
+		Mock Test-LogVerbose { $false }
+		Mock Write-LogWarning { }
+		Mock Write-LogList { }
+		Mock Write-LogSuccess { }
+		Mock Get-CachedWindows {
+			@(
+				[PSCustomObject]@{
+					Handle = [IntPtr]4444; Title = 'Stuck Window'; ProcessName = 'WindowsTerminal'
+					Left = 0; Top = 0; Width = 800; Height = 600
+				}
+			)
+		}
+		# In-loop check reports the window elsewhere, so the move pass runs and claims success -
+		# the upstream wrong-window fallback makes exactly this claim while the window stays put.
+		Mock Get-DesktopFromWindow { [PSCustomObject]@{ Name = 'Desktop2' } }
+		Mock Get-DesktopIndex { 1 }
+		Mock Get-WindowDesktopIndex { 1 }
+		$script:moveAttempts = 0
+		Mock Move-WindowToVirtualDesktop {
+			$script:moveAttempts++
+			if ($script:moveAttempts -eq 1) { $true } else { $false }
+		}
+
+		{ Move-Windows -VirtualDesktop 1 } | Should -Not -Throw
+
+		# One in-loop move plus one sweep retry, then the window is reported as failed.
+		Should -Invoke Move-WindowToVirtualDesktop -Times 2 -Exactly
+		Should -Invoke Write-LogWarning -Times 1 -ParameterFilter { $Message -match 'could not be moved' }
+		Should -Invoke Write-LogSuccess -Times 0 -ParameterFilter { $Message -match 'Moved' }
 	}
 
 	It "returns early when monitor index is out of range" {
