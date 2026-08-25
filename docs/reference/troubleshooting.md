@@ -140,6 +140,43 @@ Run-Tests
 
 ## Symbolic Link Issues
 
+### WinuX Replaced My PowerShell Profile Or FancyZones Settings
+
+**Problem:** A file you already had - typically your PowerShell 7 profile
+(`Documents\PowerShell\Microsoft.PowerShell_profile.ps1`) or your PowerToys FancyZones
+settings - was replaced by a symlink into the repository during Bootstrap. The base
+configuration ships those links active, so a first run on a machine that was already set up
+hits them.
+
+**Solution:** Nothing was thrown away. The original was copied aside before the link replaced
+it. Look under the repository root:
+
+```powershell
+# Everything ever replaced, newest last
+Get-ChildItem "$env:USERPROFILE\Development\GitHub\WinuX\Backups\SymbolicLinks" -Recurse -File
+
+# Just the PowerShell profile entry
+Get-ChildItem "$env:USERPROFILE\Development\GitHub\WinuX\Backups\SymbolicLinks\PowerShell.Profile" -Recurse
+```
+
+Backups are filed as `Backups\SymbolicLinks\<entry key>\<yyyy-MM-dd_HH-mm-ss>\<file>` - one
+folder per link entry, one timestamped folder per replacement. To restore one, delete the symlink
+and copy the backup back:
+
+```powershell
+Remove-Item $PROFILE -Force
+Copy-Item "<backup folder>\Microsoft.PowerShell_profile.ps1" $PROFILE
+```
+
+To keep your own profile permanently, drop the `PowerShell.Profile` entry from the
+`SymbolicLinks` section in `Configuration.local.psd1` - but note that link is what loads WinuX
+into every new shell, so removing it makes the install session-only. The usual answer is to move
+your own customizations into the repository's profile instead.
+
+> [!NOTE]
+> An existing **symlink** is replaced without a backup (it has no content of its own), and if a
+> backup cannot be written the link is skipped and your file is left untouched.
+
 ### "A required privilege is not held"
 
 **Problem:** Can't create symbolic links.

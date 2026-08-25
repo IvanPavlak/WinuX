@@ -14,8 +14,8 @@ Resolves which Bootstrap provisioning steps should run, in a single pass.
 ## Decisions
 
 1. Which bootstrap steps should run on this machine?
-    - Options: Each entry under `BootstrapConfig.Steps` is either a boolean or a per-machine-type hashtable with a `Default` fallback. Steps that act the moment they run (`CoreAiRules`, taskbar, wallpaper) ship off.
-    - Default: The shipped `Steps` map. Change only the steps you actually want to flip.
+    - Options: Each entry under `BootstrapConfig.Steps` is either a boolean or a per-machine-type hashtable with a `Default` fallback. Most steps ship **on**, because they no-op when their own configuration section is empty. The seven that act the moment they run have no empty state to detect and ship **off**: `MicrosoftActivationScripts`, `Win11Debloat`, `DeveloperMode`, `NuGetConfig`, `UpgradeAll`, `CoreAiRules`, `LockedStartLayout`.
+    - Default: The shipped `Steps` map (`UpgradeAll = $false`, plus `WSL` on everywhere except the `Test` type). Change only the steps you actually want to flip. `UpgradeAll` is the one worth a deliberate decision: switching it on lets Bootstrap run `winget upgrade --all` and its Scoop/Chocolatey equivalents, which upgrade every package already on the machine, not only the ones WinuX installs.
     - More detail: [`BootstrapConfig`](../../configuration-reference.md#bootstrapconfig)
 2. Do you need to change where the app-list CSVs live?
     - Options: Repository-relative paths under `BootstrapConfig.DataFiles`, keyed `WinGetApps`, `ScoopApps`, `ChocolateyApps`.
@@ -46,6 +46,7 @@ Everything about how `Bootstrap` runs: the `Steps` toggles that decide which pro
 BootstrapConfig = @{
     Steps = @{
         CoreAiRules = $true
+        UpgradeAll  = $true
     }
 }
 ```
@@ -81,6 +82,7 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
     BootstrapConfig = @{
         Steps = @{
             CoreAiRules = $true
+            UpgradeAll  = $true
         }
     }
 }

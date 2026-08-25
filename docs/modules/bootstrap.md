@@ -6,11 +6,11 @@ The Bootstrap module is the **heart of WinuX** - it orchestrates the entire syst
 
 - **Description:** The main orchestration function and heart of WinuX. Provisions a complete machine - installs software, configures Windows, and creates symlinks - by running all setup steps in a fixed order. Requires administrator privileges and an active internet connection, and is safe to re-run since every installation and configuration step is idempotent.
 - **Parameters:** -RepoRoot, -WithInitialSetup, -Skip, -Include
-- **Usage:** `Bootstrap`, `Bootstrap -WithInitialSetup`, `Bootstrap -RepoRoot "<DevRoot>\WinuX"`, `Bootstrap -Skip UpgradeAll, WSL`
+- **Usage:** `Bootstrap`, `Bootstrap -WithInitialSetup`, `Bootstrap -RepoRoot "<DevRoot>\WinuX"`, `Bootstrap -Skip WSL`
 
 Transforms a fresh Windows installation into a fully configured development environment. The `-WithInitialSetup` switch adds first-time-only steps (machine rename, Windows activation, Win11Debloat) and should be omitted on subsequent runs. If `-RepoRoot` is not supplied it defaults to `$global:MachineSpecificPaths.Projects.Self.Root`. Logging runs via `Start-Logging` / `Stop-Logging` for the duration of the run.
 
-Every step is individually toggleable via `BootstrapConfig.Steps`, resolved once per run by [Resolve-BootstrapSteps](#resolve-bootstrapsteps); `-Skip`/`-Include` override the config per invocation. Most steps also no-op on their own when their configuration section is empty, so an enabled step on the empty base config applies nothing. The opt-in steps that act the moment they run default off: `MicrosoftActivationScripts`, `Win11Debloat`, `DeveloperMode`, `NuGetConfig`, `CoreAiRules`, `LockedStartLayout`.
+Every step is individually toggleable via `BootstrapConfig.Steps`, resolved once per run by [Resolve-BootstrapSteps](#resolve-bootstrapsteps); `-Skip`/`-Include` override the config per invocation. Most steps also no-op on their own when their configuration section is empty, so an enabled step on the empty base config applies nothing. The opt-in steps that act the moment they run default off: `MicrosoftActivationScripts`, `Win11Debloat`, `DeveloperMode`, `NuGetConfig`, `UpgradeAll`, `CoreAiRules`, `LockedStartLayout`.
 
 The three package-manager steps are additionally gated by [Resolve-PackageManagers](#resolve-packagemanagers), called once per run: a manager is installed only when it is listed in `PackageManagers` **and** has at least one app for this machine type. The step toggle can therefore only turn a manager off - enabling `ScoopApps` does not install Scoop if `PackageManagers` omits it or its app list is empty. On the base configuration that means WinGet alone, because `ScoopApps.csv` and `ChocolateyApps.csv` ship empty.
 
@@ -23,7 +23,7 @@ Execution sequence:
 5. Nerd Font, PowerShell modules, special folder redirections
 6. WSL configuration
 7. WinGet, Scoop, and Chocolatey - install each manager in play then its apps from CSVs
-8. Upgrade all packages, fork-defined personal steps (BootstrapConfig.PersonalSteps, each entry optionally machine-gated like the app CSVs' `Machine` column), .NET EF CLI
+8. Upgrade all packages (opt-in via `Steps.UpgradeAll`), fork-defined personal steps (BootstrapConfig.PersonalSteps, each entry optionally machine-gated like the app CSVs' `Machine` column), .NET EF CLI
 9. Environment variables, Conda environments, NuGet config, taskbar pins
 10. WSL environment initialization, symbolic links, CoreAiRules enforcement layer (opt-in via `Steps.CoreAiRules`), WSL SSH setup
 11. Lock taskbar layout, restart Explorer, restart machine
@@ -45,11 +45,11 @@ Bootstrap -WithInitialSetup
 # Provision using an explicit dotfiles repository path
 Bootstrap -RepoRoot "<DevRoot>\WinuX"
 
-# Re-provision without upgrading packages or touching WSL
-Bootstrap -Skip UpgradeAll, WSL
+# Re-provision without touching WSL
+Bootstrap -Skip WSL
 
 # Force a config-disabled or default-off step on for one run
-Bootstrap -Include Win11Debloat
+Bootstrap -Include UpgradeAll
 ```
 
 ## [DetermineMachineType](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Bootstrap/Functions/DetermineMachineType.ps1)
@@ -173,7 +173,7 @@ This function only reads. [Save-AppCsvOverlay](configuration.md#save-appcsvoverl
 
 ## [Initialize-Configuration](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Bootstrap/Functions/Initialize-Configuration.ps1)
 
-- **Description:** First-run writer that captures your personal identity and paths into a sibling `Configuration.local.psd1` override - never into the committed `Configuration.psd1`. WinuX ships a generic base config (blank Git identity, placeholder paths) and commits no personal data; this function writes only the keys that differ - `GitConfig.UserName`/`UserEmail`, the `BasePaths.<MachineType>` `{Dev}`/`{User}` roots, and this machine's `HostnameToMachineType` entry - which `Load-PathConfiguration` deep-merges over the base at load time. Because the base file is never edited, pulling upstream updates into a fork never conflicts on configuration. Validates that the generated override parses before writing, and does nothing if the override already has a Git identity unless `-Force` is given.
+- **Description:** First-run writer that captures your personal identity and paths into a sibling `Configuration.local.psd1` override - never into the committed `Configuration.psd1`. WinuX ships a generic base config (blank Git identity, placeholder paths) and commits no personal data; this function writes only the keys that differ - `GitConfig.UserName`/`UserEmail`, the `BasePaths.<MachineType>` `{Dev}`/`{User}` roots, and this machine's `HostnameToMachineType` entry - which `Load-PathConfiguration` deep-merges over the base at load time. Because the base file is never edited, pulling upstream updates into a fork never conflicts on configuration. Validates that the generated override parses before writing. **An existing override is never replaced**: if `Configuration.local.psd1` is there at all, the function logs that it is leaving it alone and returns, whatever the file contains. Existence alone is the guard, deliberately not "exists and parses and carries an identity" - that older test let a file which was mid-edit, identity-less, or committed by a fork be regenerated down to the three keys below, silently discarding every other key it held. `-Force` still rewrites, but copies the current file to `Configuration.local.psd1.bak` first and aborts without writing if that copy fails.
 - **Parameters:** -Owner, -GitName, -GitEmail, -DevPath, -MachineType, -ConfigPath, -LocalConfigPath, -Force
 - **Usage:** `Initialize-Configuration`, `Initialize-Configuration -GitName "Jane Doe" -GitEmail "jane@example.com" -DevPath "D:\Dev"`
 
@@ -188,7 +188,7 @@ Run once after cloning to make WinuX yours. Any value not passed as a parameter 
 | `-MachineType`     | String | No       | Machine type to map this hostname to and set `BasePaths` for. Defaults to `Test`.      |
 | `-ConfigPath`      | String | No       | Path to the base `Configuration.psd1`; used only to locate the override beside it.     |
 | `-LocalConfigPath` | String | No       | Path to the override file to write. Defaults to `Configuration.local.psd1` beside it.  |
-| `-Force`           | Switch | No       | Rewrite the override even if the Git identity is already populated.                    |
+| `-Force`           | Switch | No       | Rewrite the override even though it already exists, after copying it to `.bak` first.  |
 
 ```powershell
 # Interactive first run: prompts for owner, Git name/email, and dev path
@@ -308,11 +308,11 @@ Merge-Hashtable -Target $config -Overrides $overrides
 
 - **Description:** Resolves which Bootstrap provisioning steps should run, in a single pass. A thin wrapper over the Helper module's generic [Resolve-Steps](helper.md#resolve-steps): per step, `-Skip` beats `-Include` beats config (`BootstrapConfig.Steps.<Name>` in `$global:Configuration` - a plain boolean, or a per-machine-type hashtable with a `Default` fallback) beats the built-in defaults. Returns an ordered hashtable of step name → boolean, in Bootstrap execution order. `Bootstrap` calls this exactly once per invocation; the only side effect is a warning per step that appears in both `-Skip` and `-Include` (the step is skipped), so it is also safe to call ad hoc to inspect what a Bootstrap invocation would do with the current config.
 - **Parameters:** -Skip (step names forced off), -Include (step names forced on)
-- **Usage:** `Resolve-BootstrapSteps`, `Resolve-BootstrapSteps -Skip UpgradeAll, WSL`
+- **Usage:** `Resolve-BootstrapSteps`, `Resolve-BootstrapSteps -Skip WSL`, `Resolve-BootstrapSteps -Include UpgradeAll`
 
 Step names, in execution order: `RenameMachine`, `MicrosoftActivationScripts`, `Win11Debloat` (these three only run with `-WithInitialSetup`), `ExecutionPolicy`, `DeveloperMode`, `PowerPlan`, `PowerButtonActions`, `SystemTheme`, `Locale`, `DisplayLanguage`, `KeyboardLayouts`, `NerdFont`, `PowerShellModules`, `SpecialFolders`, `WSL`, `WinGetApps`, `ScoopApps`, `ChocolateyApps`, `UpgradeAll`, `DotnetEf`, `EnvironmentVariables`, `CondaEnvironments`, `NuGetConfig`, `Taskbar`, `SymbolicLinks`, `CoreAiRules`, `LockedStartLayout`.
 
-Most steps default **on**, because their functions no-op when their configuration section is empty - an enabled step on the empty base config applies nothing. The opt-in exceptions default **off**, because they have no configuration to be empty and act the moment they run: `MicrosoftActivationScripts`, `Win11Debloat`, `DeveloperMode`, `NuGetConfig` (prompts for a GitHub PAT), `CoreAiRules` (machine-global AI agent policy - see [CoreAiRules](../ai/coreairules.md)), and `LockedStartLayout`. Repository updates are deliberately not a step - they are governed by `BootstrapConfig.RepositoryUpdateScope` (`"None"` is its off switch).
+Most steps default **on**, because their functions no-op when their configuration section is empty - an enabled step on the empty base config applies nothing. The opt-in exceptions default **off**, because they have no configuration to be empty and act the moment they run: `MicrosoftActivationScripts`, `Win11Debloat`, `DeveloperMode`, `NuGetConfig` (prompts for a GitHub PAT), `UpgradeAll` (runs `winget upgrade --all` and its Scoop/Chocolatey equivalents, so it touches every package already on the machine, not only the ones WinuX installs), `CoreAiRules` (machine-global AI agent policy - see [CoreAiRules](../ai/coreairules.md)), and `LockedStartLayout`. Repository updates are deliberately not a step - they are governed by `BootstrapConfig.RepositoryUpdateScope` (`"None"` is its off switch).
 
 **Deprecated:** the old `BootstrapConfig.WSLSetup` key (same shape as a `Steps` value) is still honored as a fallback when `Steps` carries no `WSL` entry, so forks that predate `Steps` keep working unmodified. The `PromptForActivation` / `PromptForDebloat` keys are gone entirely - MAS and Win11Debloat no longer prompt on a vanilla install and are opted into via `Steps`.
 

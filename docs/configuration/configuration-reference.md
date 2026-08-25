@@ -877,7 +877,10 @@ Anything other than the three valid values is reported as unknown rather than si
   optional - missing entries use the built-in defaults. Most steps default on because their
   functions no-op when their configuration section is empty; the steps that act the moment they
   run default OFF and are opted into here: `MicrosoftActivationScripts`, `Win11Debloat`,
-  `DeveloperMode`, `NuGetConfig` (prompts for a GitHub PAT), `CoreAiRules` (machine-global AI
+  `DeveloperMode`, `NuGetConfig` (prompts for a GitHub PAT), `UpgradeAll` (`Upgrade-All` runs
+  `winget upgrade --all` and its Scoop/Chocolatey equivalents, so it upgrades every package
+  already on the machine, not only the ones WinuX installs - the base spells this one out as
+  `$false` rather than leaving it to the default), `CoreAiRules` (machine-global AI
   agent policy applied via `Deploy-CoreAiRules` and the opt-in `SymbolicLinks` entries - see
   [CoreAiRules](../ai/coreairules.md)), `LockedStartLayout`. Per invocation,
   `Bootstrap -Skip <steps>` / `-Include <steps>` override this config. Repository updates are
