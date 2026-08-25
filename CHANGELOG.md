@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.45] - 2026-08-25
+
 ### Changed
 
 - **`Upgrade-All` is now an opt-in Bootstrap step (`BootstrapConfig.Steps.UpgradeAll`, OFF by default).** Every other default-on step is default-on because it no-ops when its configuration section is empty, which is what makes the "empty by default" promise true: an enabled step on the base config applies nothing. `UpgradeAll` never had that property. It has no configuration section to be empty, and the moment it runs it executes `winget upgrade --all --silent --include-unknown` (plus `scoop update *` and `choco upgrade all -y` for the managers in play), which upgrades **every** package the manager knows about on that machine, not only the three the base `WinGetApps.csv` installs. A first bootstrap on a machine that already had software on it therefore bulk-upgraded unrelated applications as a side effect of installing WinuX, silently and without a prompt. It now sits with the other steps that act the moment they run, so the opt-in list is seven rather than six: `MicrosoftActivationScripts`, `Win11Debloat`, `DeveloperMode`, `NuGetConfig`, `UpgradeAll`, `CoreAiRules`, `LockedStartLayout`. The base `Configuration.psd1` spells `UpgradeAll = $false` out explicitly rather than leaving it to the built-in default, because a bootstrap that quietly upgrades unrelated software is the kind of thing worth reading in the config rather than inferring from a resolver. **To restore the old behavior**, set `UpgradeAll = $true` under `BootstrapConfig.Steps` in your `Configuration.local.psd1`; the per-invocation `Bootstrap -Include UpgradeAll` also still works, and the manager gating (`PackageManagers` plus a non-empty app list) is unchanged.
@@ -786,7 +788,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.44...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.45...HEAD
+[0.1.45]: https://github.com/IvanPavlak/WinuX/compare/v0.1.44...v0.1.45
 [0.1.44]: https://github.com/IvanPavlak/WinuX/compare/v0.1.43...v0.1.44
 [0.1.43]: https://github.com/IvanPavlak/WinuX/compare/v0.1.42...v0.1.43
 [0.1.42]: https://github.com/IvanPavlak/WinuX/compare/v0.1.41...v0.1.42

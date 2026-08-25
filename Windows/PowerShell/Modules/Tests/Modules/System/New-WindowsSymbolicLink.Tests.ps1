@@ -13,7 +13,18 @@ Describe "New-WindowsSymbolicLink" {
 		# which a test run cannot assume. Everything else (the existence probe, the backup
 		# copy, the removal) runs for real against TestDrive, so the backup behavior is
 		# verified on actual files rather than on mock bookkeeping.
+		#
+		# The unfiltered mock is what makes that possible. With only the filtered one registered,
+		# the backup folder's New-Item -ItemType Directory matches no filter and Pester fails the
+		# call outright rather than falling through, so the backup never gets written and every
+		# assertion below tests the wrong thing. This one creates the folder for real and, carrying
+		# no filter of its own, leaves the Should -Invoke counts on the SymbolicLink filter alone.
+		# It goes through .NET rather than New-Item: a mock body cannot call the command it mocks,
+		# not even module-qualified, without recursing into itself until the call depth blows.
 		Mock New-Item -ParameterFilter { $ItemType -eq 'SymbolicLink' } -MockWith { }
+		Mock New-Item -MockWith {
+			foreach ($newItemPath in $Path) { [System.IO.Directory]::CreateDirectory($newItemPath) | Out-Null }
+		}
 		Mock Initialize-Directory { }
 		Mock Write-Host { }
 		Mock Write-LogSuccess { }
@@ -23,6 +34,13 @@ Describe "New-WindowsSymbolicLink" {
 		$script:LinkPath = Join-Path $TestDrive "link.txt"
 		$script:TargetPath = Join-Path $TestDrive "target.txt"
 		$script:BackupRoot = Join-Path $TestDrive "Backups"
+
+		# TestDrive is not reset between the It blocks below, and two of them deliberately leave
+		# the original in place (the skip paths). Without this, the next test inherits a file at
+		# the link path and silently stops testing the case its name claims.
+		Remove-Item -LiteralPath $script:LinkPath -Recurse -Force -ErrorAction SilentlyContinue
+		Remove-Item -LiteralPath $script:BackupRoot -Recurse -Force -ErrorAction SilentlyContinue
+
 		Set-Content -Path $script:TargetPath -Value "target" -NoNewline
 	}
 
