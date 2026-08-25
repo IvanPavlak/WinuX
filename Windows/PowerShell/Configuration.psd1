@@ -27,8 +27,10 @@
 # Chocolatey ship empty lists and are skipped entirely (see PackageManagers).
 # Individual bootstrap steps are toggleable
 # via BootstrapConfig.Steps (see that section); invasive steps such as
-# MicrosoftActivationScripts, Win11Debloat, DeveloperMode, NuGetConfig and
-# LockedStartLayout are OFF until you opt in.
+# MicrosoftActivationScripts, Win11Debloat, DeveloperMode, NuGetConfig,
+# UpgradeAll and LockedStartLayout are OFF until you opt in. A vanilla run
+# therefore installs the framework apps but upgrades nothing else already
+# on the machine.
 #
 # The configuration uses a hierarchical structure with path templates and machine-specific overrides
 # to eliminate duplication while supporting any number of machines
@@ -781,8 +783,9 @@
 		# config an enabled step applies nothing. Steps that act the moment they
 		# run have no empty state to detect and default OFF - opt in here:
 		# MicrosoftActivationScripts, Win11Debloat, DeveloperMode, NuGetConfig
-		# (prompts for a GitHub PAT), CoreAiRules (machine-global AI agent policy),
-		# LockedStartLayout.
+		# (prompts for a GitHub PAT), UpgradeAll (upgrades every package already
+		# on the machine, not just WinuX's own), CoreAiRules (machine-global AI
+		# agent policy), LockedStartLayout.
 		#
 		# Per invocation, Bootstrap -Skip <steps> forces steps off and
 		# Bootstrap -Include <steps> forces them on, both overriding this config.
@@ -806,7 +809,9 @@
 		# - WinGetApps                 : Install-WinGetPackageManager + Install-WinGetApps
 		# - ScoopApps                  : Install-ScoopPackageManager + Install-ScoopApps
 		# - ChocolateyApps             : Install-ChocolateyPackageManager + Install-ChocolateyApps
-		# - UpgradeAll                 : Upgrade-All
+		# - UpgradeAll                 : Upgrade-All (OFF by default - `winget upgrade --all` and
+		#                                its Scoop/Chocolatey equivalents touch EVERY package
+		#                                already installed, not only the ones WinuX manages)
 		#
 		# The three *Apps steps and UpgradeAll are additionally gated by which managers are
 		# in play (PackageManagers plus a non-empty app list - see Resolve-PackageManagers).
@@ -834,7 +839,10 @@
 		# reboot, so the minimal Test profile skips it. SymbolicLinkMaker
 		# independently skips WSL symlinks when no distribution is present.
 		Steps                 = @{
-			WSL = @{
+			# Spelled out rather than left to the built-in default: a bootstrap that silently
+			# upgrades unrelated software is the kind of thing you opt into knowingly.
+			UpgradeAll = $false
+			WSL        = @{
 				Default = $true
 				Test    = $false
 			}

@@ -147,12 +147,14 @@ Describe "Bootstrap" {
 
 	It "skips a config-disabled step (plain boolean in Steps)" {
 		$global:MachineType = 'Laptop'
-		$global:Configuration.BootstrapConfig = @{ Steps = @{ UpgradeAll = $false } }
+		# WinGetApps defaults ON, so switching it off here proves the config was actually read.
+		# UpgradeAll would not: it defaults OFF, so the assertion would hold either way.
+		$global:Configuration.BootstrapConfig = @{ Steps = @{ WinGetApps = $false } }
 
 		Bootstrap
 
-		Should -Invoke Upgrade-All -Times 0
-		Should -Invoke Install-WinGetApps -Times 1 -Exactly
+		Should -Invoke Install-WinGetApps -Times 0
+		Should -Invoke Install-ScoopApps -Times 1 -Exactly
 	}
 
 	It "installs only the package managers that are in play" {
@@ -195,6 +197,8 @@ Describe "Bootstrap" {
 
 	It "hands the resolved managers to Upgrade-All instead of letting it resolve again" {
 		$global:MachineType = 'Laptop'
+		# UpgradeAll is opt-in, so it has to be switched on for the step to run at all.
+		$global:Configuration.BootstrapConfig = @{ Steps = @{ UpgradeAll = $true } }
 		Mock Resolve-PackageManagers { @('WinGet', 'Scoop') }
 
 		Bootstrap

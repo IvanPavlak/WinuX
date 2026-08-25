@@ -21,6 +21,13 @@ Windows/PowerShell/Modules/Bootstrap/Data/*.local.csv
 Configuration.local.psd1.bak
 Windows/PowerShell/Modules/Bootstrap/Data/*.local.csv.bak
 
+# Symbolic-link backups - the REAL files New-WindowsSymbolicLink / New-WSLSymbolicLink found at a
+# link path and copied aside before replacing them, one timestamped folder per replacement. Kept
+# in the repository so a replaced profile or settings file is easy to find again, but it is your
+# machine's own data (and may hold secrets), so it is never committed.
+Backups/*
+!Backups/.gitkeep
+
 # Logging module - generated logs (kept locally for inspection, never committed)
 Windows/PowerShell/Modules/Logging/Logs/*
 !Windows/PowerShell/Modules/Logging/Logs/.gitkeep

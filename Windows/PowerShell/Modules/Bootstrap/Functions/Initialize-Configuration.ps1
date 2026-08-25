@@ -18,8 +18,14 @@ function Initialize-Configuration {
 
 		Values not supplied as parameters are requested interactively. In a non-interactive session
 		missing values fall back to sensible defaults rather than prompting, so automated runs never
-		hang. If the override already exists with a Git identity, the function does nothing unless
-		-Force is given. The generated content is validated (it must parse) before it is written.
+		hang. The generated content is validated (it must parse) before it is written.
+
+		An existing Configuration.local.psd1 is never replaced: if the file is there at all the
+		function does nothing, whatever it contains. That file is yours - hand-edited, committed in
+		a fork, or carrying far more keys than the three written here - so a re-run of Bootstrap
+		(or of the installer against an existing clone) can never regenerate it down to a stub.
+		-Force rewrites it anyway, but copies the current file to Configuration.local.psd1.bak
+		first and aborts if that copy cannot be made.
 
 	.PARAMETER Owner
 		Your GitHub username/owner (used to default the Git name and for messaging).
@@ -44,7 +50,8 @@ function Initialize-Configuration {
 		Path to the override file to write. Defaults to Configuration.local.psd1 beside ConfigPath.
 
 	.PARAMETER Force
-		Rewrite the override even if it already contains a Git identity.
+		Rewrite the override even though it already exists. The current file is copied to
+		Configuration.local.psd1.bak first; if that copy fails nothing is written.
 
 	.EXAMPLE
 		Initialize-Configuration
@@ -85,16 +92,27 @@ function Initialize-Configuration {
 		$LocalConfigPath = Join-Path -Path (Split-Path -Path $ConfigPath -Parent) -ChildPath "Configuration.local.psd1"
 	}
 
-	# Already personalized? (override exists with a non-blank Git identity)
-	if ((Test-Path -Path $LocalConfigPath) -and -not $Force) {
-		try {
-			$existing = Import-PowerShellDataFile -Path $LocalConfigPath
-			if (-not [string]::IsNullOrWhiteSpace($existing.GitConfig.UserName)) {
-				Write-LogSuccess "Local configuration already exists at '$LocalConfigPath'. Use -Force to overwrite."
-				return
-			}
+	# An existing override is NEVER replaced. Existence alone is the guard - deliberately not
+	# "exists AND parses AND carries a Git identity", which let a hand-edited file that happened
+	# to be mid-edit, identity-less, or committed by a fork be silently regenerated down to the
+	# three keys below, dropping every other key it carried. The file belongs to the user: it is
+	# hand-edited, versioned in a fork, or simply grown past what this writer knows about.
+	# -Force still rewrites it, but only after a .bak copy is safely beside it.
+	if (Test-Path -LiteralPath $LocalConfigPath) {
+		if (-not $Force) {
+			Write-LogSuccess "Local configuration already exists at '$LocalConfigPath' - leaving it untouched. Use -Force to rewrite it (the current file is copied to .bak first)."
+			return
 		}
-		catch { }
+
+		$backupPath = "$LocalConfigPath.bak"
+		try {
+			Copy-Item -LiteralPath $LocalConfigPath -Destination $backupPath -Force -ErrorAction Stop
+			Write-LogWarning "Existing local configuration backed up to '$backupPath'."
+		}
+		catch {
+			Write-LogError "Could not back up '$LocalConfigPath'; aborting without changes. $($_.Exception.Message)"
+			return
+		}
 	}
 
 	# Interactive only when a real console is attached; otherwise keep supplied values / defaults.

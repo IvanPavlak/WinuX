@@ -13,7 +13,9 @@ opt-in via `BootstrapConfig.Steps`. Personalization is opted into per feature vi
 
 What a vanilla run DOES do: update the repository, install the framework apps (PowerShell 7,
 Windows Terminal, PowerToys), install the PowerShell modules, and create the framework symlinks
-(the PowerShell profile + configuration and the FancyZones files).
+(the PowerShell profile + configuration and the FancyZones files). It does **not** upgrade the
+software already on the machine - `UpgradeAll` is opt-in (see below) - and it does not throw away
+whatever it links over: a real file already sitting at a link path is backed up first.
 
 Every step is individually toggleable via `BootstrapConfig.Steps` (or per invocation with
 `Bootstrap -Skip <steps>` / `-Include <steps>`) - see the
@@ -64,7 +66,7 @@ Every step is individually toggleable via `BootstrapConfig.Steps` (or per invoca
 │  ├─→ Install-ScoopApps (from ScoopApps.csv)                                 │
 │  ├─→ Install-ChocolateyPackageManager (skipped: empty ChocolateyApps.csv)   │
 │  ├─→ Install-ChocolateyApps (from ChocolateyApps.csv)                       │
-│  └─→ Upgrade-All (update packages of every manager in play)                 │
+│  └─→ Upgrade-All (opt-in via Steps.UpgradeAll; OFF by default)              │
 │                                                                             │
 │  PHASE 5: DEVELOPMENT TOOLS                                                 │
 │  ├─→ PersonalSteps (fork-defined; base config runs none)                    │
@@ -115,6 +117,16 @@ This adds the first-time-only steps:
 | `Rename-Machine`                   | Set hostname for machine type detection | On (interactive prompt)                                    |
 | `Start-MicrosoftActivationScripts` | Windows/Office activation               | Off - opt in via `BootstrapConfig.Steps` (no prompt)       |
 | `Start-Win11Debloat`               | Runs local vendored Win11Debloat        | Off - opt in via `BootstrapConfig.Steps` (no prompt)       |
+
+Steps that run on **every** Bootstrap but ship off, because they act the moment they run:
+
+| Step                 | Description                                                     | Default                                       |
+| -------------------- | --------------------------------------------------------------- | --------------------------------------------- |
+| `UpgradeAll`         | `winget upgrade --all` (+ Scoop/Chocolatey), so **every** package already on the machine, not just WinuX's | Off - opt in via `BootstrapConfig.Steps` |
+| `DeveloperMode`      | Enables Developer Mode (symlinks without admin)                 | Off - opt in via `BootstrapConfig.Steps`      |
+| `NuGetConfig`        | Writes a NuGet config (prompts for a GitHub PAT)                | Off - opt in via `BootstrapConfig.Steps`      |
+| `CoreAiRules`        | Machine-global AI agent policy                                  | Off - opt in via `BootstrapConfig.Steps`      |
+| `LockedStartLayout`  | Locks the taskbar layout via registry policy                    | Off - opt in via `BootstrapConfig.Steps`      |
 
 ## What Gets Installed
 
@@ -178,6 +190,36 @@ and what the window layouts need:
 Everything else (Git, FastFetch, Oh-My-Posh, Windows Terminal, LazyGit, LazyDocker, ...) ships as
 commented examples in the `SymbolicLinks` section - copy the ones you want into
 `Configuration.local.psd1`.
+
+### What happens to a file already sitting at a link path
+
+Two of the framework links land on paths a machine may well already be using: the PowerShell 7
+profile, and the PowerToys FancyZones files (the same bootstrap installs PowerToys, so a machine
+that already ran it has them).
+
+Nothing is thrown away. Before a link replaces a **real** file or directory, WinuX copies it to:
+
+```
+<repo>\Backups\SymbolicLinks\<entry key>\<yyyy-MM-dd_HH-mm-ss>\
+```
+
+One folder per link entry, one timestamped folder per replacement, so every version ever displaced
+sits side by side with the newest last. For example, a profile replaced by the `PowerShell.Profile`
+entry lands in `Backups\SymbolicLinks\PowerShell.Profile\2026-08-24_18-30-00\`.
+
+`Backups/` is gitignored (only a `.gitkeep` is tracked): the copies hold your own data and possibly
+secrets, so they stay on your machine and are never committed.
+
+Two details worth knowing:
+
+- If the backup **cannot** be written, the link is skipped and the existing file is left alone. A
+  file that could not be saved is never removed.
+- An existing **symlink** is replaced without a backup. It carries no content of its own, so
+  archiving it would just deposit a copy of WinuX's own link on every re-run.
+
+WSL links behave the same way: a real file inside the distribution is copied out to the same
+Windows-side folder before it is replaced, which matters most for files that only ever existed in
+the distro (a shell profile, an SSH config) and so have no Windows copy to fall back on.
 
 ## Logging
 

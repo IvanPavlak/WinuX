@@ -1,11 +1,22 @@
 function New-WindowsSymbolicLink {
 	<#
 	.SYNOPSIS
-		Creates a single native Windows symbolic link.
+		Creates a single native Windows symbolic link, backing up whatever it replaces.
 
 	.DESCRIPTION
 		Creates a symbolic link at Path pointing to Target. The parent directory is
-		created if missing and any pre-existing item at Path is removed first.
+		created if missing.
+
+		A REAL file or directory already sitting at Path is copied into the repository's
+		backup folder before it is removed, so linking over a hand-written PowerShell
+		profile or an existing PowerToys settings file never loses it. The copy lands in
+		<Repo>\Backups\SymbolicLinks\<DisplayName>\<timestamp>\ and is gitignored - easy
+		to find, never committed. When the backup cannot be written the link is skipped
+		rather than removing an item that could not be saved first.
+
+		An existing SYMLINK at Path is removed without a backup: it carries no content of
+		its own, so archiving it would only pile up copies of WinuX's own links on every
+		re-run.
 
 		Never links to a missing target - that would delete the real file at Path,
 		leave a dangling link, and pointlessly create parent folders; such calls are
@@ -20,11 +31,18 @@ function New-WindowsSymbolicLink {
 		What the symbolic link points to.
 
 	.PARAMETER DisplayName
-		Label used in log messages (SymbolicLinkMaker passes the entry's dotted key,
-		e.g. "PowerToys.Settings"). Defaults to Path.
+		Label used in log messages and as the backup subfolder name (SymbolicLinkMaker
+		passes the entry's dotted key, e.g. "PowerToys.Settings"). Defaults to Path.
+
+	.PARAMETER BackupRoot
+		Where replaced items are copied. Defaults to <Repo>\Backups\SymbolicLinks.
 
 	.EXAMPLE
 		New-WindowsSymbolicLink -Path "$env:USERPROFILE\.gitconfig" -Target "C:\Repo\Git\.gitconfig"
+
+	.EXAMPLE
+		New-WindowsSymbolicLink -Path "C:\link" -Target "C:\target" -BackupRoot "D:\Archive"
+		Copies whatever C:\link was into D:\Archive instead of the repository's Backups folder.
 	#>
 	param(
 		[Parameter(Mandatory)]
@@ -33,7 +51,9 @@ function New-WindowsSymbolicLink {
 		[Parameter(Mandatory)]
 		[string]$Target,
 
-		[string]$DisplayName = ""
+		[string]$DisplayName = "",
+
+		[string]$BackupRoot = ""
 	)
 
 	if (-not $DisplayName) {
@@ -50,8 +70,48 @@ function New-WindowsSymbolicLink {
 		Initialize-Directory $parentDir
 	}
 
-	if (Test-Path $Path) {
-		Remove-Item -Path $Path -Force | Out-Null
+	if (Test-Path -LiteralPath $Path) {
+		$existing = Get-Item -LiteralPath $Path -Force
+		$isLink = ($existing.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -eq [System.IO.FileAttributes]::ReparsePoint
+
+		if (-not $isLink) {
+			if (-not $BackupRoot) {
+				try {
+					$BackupRoot = Join-Path -Path (Get-RepositoryPath -StartPath $PSScriptRoot).Repo -ChildPath "Backups\SymbolicLinks"
+				}
+				catch {
+					Write-LogError "Skipped symlink (cannot resolve the backup folder) => [$DisplayName] => $($_.Exception.Message)"
+					return
+				}
+			}
+
+			# One folder per entry, one timestamped folder per replacement, so every version ever
+			# replaced stays side by side and the newest is last. DisplayName defaults to Path, so
+			# strip the characters a path carries but a folder name cannot hold.
+			$safeName = $DisplayName -replace '[\\/:*?"<>|]', '_'
+			$backupDir = Join-Path -Path (Join-Path -Path $BackupRoot -ChildPath $safeName) -ChildPath (Get-Date -Format 'yyyy-MM-dd_HH-mm-ss')
+
+			try {
+				if (-not (Test-Path -LiteralPath $backupDir)) {
+					New-Item -ItemType Directory -Path $backupDir -Force -ErrorAction Stop | Out-Null
+				}
+				Copy-Item -LiteralPath $Path -Destination $backupDir -Recurse -Force -ErrorAction Stop
+				Write-LogWarning "Backed up existing item => [$Path] => [$backupDir]"
+			}
+			catch {
+				Write-LogError "Skipped symlink (could not back up the existing item) => [$DisplayName] => [$Path] => $($_.Exception.Message)"
+				return
+			}
+		}
+
+		# A real directory needs -Recurse to be removable at all; a symlink must NOT get it -
+		# on a directory link -Recurse follows the link and deletes the TARGET's contents.
+		if (-not $isLink -and $existing.PSIsContainer) {
+			Remove-Item -LiteralPath $Path -Force -Recurse | Out-Null
+		}
+		else {
+			Remove-Item -LiteralPath $Path -Force | Out-Null
+		}
 		Write-LogWarning "Removed existing item => [$Path]"
 	}
 

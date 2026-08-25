@@ -12,7 +12,7 @@ function Bootstrap {
 		no-op on their own when their configuration section is empty, so an enabled step on
 		the empty base config applies nothing. Opt-in steps that act the moment they run
 		default off: MicrosoftActivationScripts, Win11Debloat, DeveloperMode, NuGetConfig,
-		CoreAiRules, LockedStartLayout.
+		UpgradeAll, CoreAiRules, LockedStartLayout.
 
 		Execution sequence:
 		1. (WithInitialSetup only) Rename-Machine, Start-MicrosoftActivationScripts, Start-Win11Debloat
@@ -229,7 +229,7 @@ function Bootstrap {
 			Upgrade-All -PackageManager $managers
 		}
 		elseif (-not $steps.UpgradeAll) {
-			Write-LogWarning "Package upgrade skipped (BootstrapConfig.Steps.UpgradeAll)"
+			Write-LogWarning "Package upgrade skipped - opt in via BootstrapConfig.Steps.UpgradeAll"
 		}
 
 		# Fork-defined optional install steps (BootstrapConfig.PersonalSteps) - the base config

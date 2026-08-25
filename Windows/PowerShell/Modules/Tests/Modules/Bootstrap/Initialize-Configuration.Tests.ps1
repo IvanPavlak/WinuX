@@ -23,6 +23,7 @@ Describe "Initialize-Configuration" {
 		$script:LocalConfig = Join-Path $TestDrive "Configuration.local.psd1"
 		Set-Content -Path $script:BaseConfig -Value "@{ GitConfig = @{ UserName = '' } }" -NoNewline
 		Remove-Item -Path $script:LocalConfig -ErrorAction SilentlyContinue
+		Remove-Item -Path "$($script:LocalConfig).bak" -ErrorAction SilentlyContinue
 	}
 
 	It "writes the supplied Git identity and dev path into Configuration.local.psd1" {
@@ -55,7 +56,30 @@ Describe "Initialize-Configuration" {
 		$result.GitConfig.UserName | Should -Be "Existing"
 	}
 
-	It "overwrites an existing override when -Force is given" {
+	It "leaves an existing override alone even when it carries no Git identity" {
+		# Existence alone is the guard. The old "exists AND parses AND has an identity" check let
+		# a fork's committed override - or any hand-edited file that had not filled in an identity
+		# yet - be regenerated down to the three keys this writer knows, silently dropping the rest.
+		$existing = "@{ BootstrapConfig = @{ Steps = @{ UpgradeAll = `$true } } }"
+		Set-Content -Path $script:LocalConfig -Value $existing -NoNewline
+
+		Initialize-Configuration -ConfigPath $script:BaseConfig -LocalConfigPath $script:LocalConfig `
+			-GitName "Jane Doe" -GitEmail "jane@example.com" -DevPath "D:\Dev"
+
+		Get-Content -Path $script:LocalConfig -Raw | Should -Be $existing
+	}
+
+	It "leaves an existing override alone even when it does not parse" {
+		$existing = "@{ this is not valid powershell data"
+		Set-Content -Path $script:LocalConfig -Value $existing -NoNewline
+
+		Initialize-Configuration -ConfigPath $script:BaseConfig -LocalConfigPath $script:LocalConfig `
+			-GitName "Jane Doe" -GitEmail "jane@example.com" -DevPath "D:\Dev"
+
+		Get-Content -Path $script:LocalConfig -Raw | Should -Be $existing
+	}
+
+	It "overwrites an existing override when -Force is given, keeping a .bak copy" {
 		Set-Content -Path $script:LocalConfig -Value "@{ GitConfig = @{ UserName = 'Existing' } }" -NoNewline
 
 		Initialize-Configuration -ConfigPath $script:BaseConfig -LocalConfigPath $script:LocalConfig `
@@ -63,6 +87,20 @@ Describe "Initialize-Configuration" {
 
 		$result = Import-PowerShellDataFile -Path $script:LocalConfig
 		$result.GitConfig.UserName | Should -Be "Jane Doe"
+
+		$backup = Import-PowerShellDataFile -Path "$($script:LocalConfig).bak"
+		$backup.GitConfig.UserName | Should -Be "Existing"
+	}
+
+	It "writes nothing when -Force cannot back the existing override up" {
+		$existing = "@{ GitConfig = @{ UserName = 'Existing' } }"
+		Set-Content -Path $script:LocalConfig -Value $existing -NoNewline
+		Mock Copy-Item { throw "access denied" }
+
+		Initialize-Configuration -ConfigPath $script:BaseConfig -LocalConfigPath $script:LocalConfig `
+			-GitName "Jane Doe" -GitEmail "jane@example.com" -DevPath "D:\Dev" -Force
+
+		Get-Content -Path $script:LocalConfig -Raw | Should -Be $existing
 	}
 
 	It "writes a parseable override file" {

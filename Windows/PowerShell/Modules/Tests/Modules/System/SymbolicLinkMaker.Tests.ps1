@@ -34,6 +34,14 @@ Describe "SymbolicLinkMaker" {
 		Mock New-Item { }
 		Mock Remove-Item { }
 		Mock Test-Path { $true }
+		# Test-Path is pinned to $true, so the link writers always take their replace-existing
+		# branch. Report the existing item as a symlink - the state of a re-run, where the links
+		# are already in place - so no backup is attempted: these tests cover which entries get
+		# processed, and the backup behavior has its own tests in New-WindowsSymbolicLink.Tests.ps1
+		# / New-WSLSymbolicLink.Tests.ps1. Copy-Item is mocked as a hard stop regardless, so a
+		# regression here can never write into the real repository's Backups folder.
+		Mock Get-Item { [pscustomobject]@{ Attributes = [System.IO.FileAttributes]::ReparsePoint; PSIsContainer = $false } }
+		Mock Copy-Item { throw "Copy-Item must not run in SymbolicLinkMaker tests" }
 		Mock Write-Host { }
 		Mock Write-LogTitle { }
 		Mock Write-LogError { }
