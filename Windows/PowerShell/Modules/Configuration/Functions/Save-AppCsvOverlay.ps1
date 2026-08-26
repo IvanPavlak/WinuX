@@ -21,9 +21,11 @@ function Save-AppCsvOverlay {
 		   which is the most confusing possible outcome.
 		3. The candidate must round-trip through `Import-Csv` and come back with the same row count.
 
-		Only then is the existing overlay copied to `<name>.local.csv.bak` and the candidate moved over
-		it, staged in the destination folder so the replace is a same-volume rename a reader can never
-		observe half-written. Restoring the `.bak` is a complete undo.
+		Only then is the existing overlay copied into the repository's unified backup sink
+		(Backups\Windows\Config\<name>.local\<timestamp>\, via Backup-RepositoryItem) and the candidate
+		moved over it, staged in the destination folder so the replace is a same-volume rename a reader
+		can never observe half-written. Restoring the backup is a complete undo, and every save keeps
+		its own timestamped copy rather than overwriting the last one.
 
 		A removal is expressed as a row whose `App` is `-<id>`, which is how the overlay opts out of an
 		app the committed list ships. `Import-AppCsv` applies that; nothing here needs to know the base
@@ -43,7 +45,7 @@ function Save-AppCsvOverlay {
 		Repository root the data-file path is resolved against. Defaults to the running repository.
 
 	.PARAMETER NoBackup
-		Skip the `.bak` copy. Not recommended; it removes the one-click undo.
+		Skip the backup copy. Not recommended; it removes the one-click undo.
 
 	.EXAMPLE
 		Save-AppCsvOverlay -DataFileKey WinGetApps -Row @(
@@ -186,7 +188,6 @@ function Save-AppCsvOverlay {
 		throw "The app overlay would not be valid, so nothing was written => $($_.Exception.Message)"
 	}
 
-	$backupPath = "$overlayPath.bak"
 	$overlayExists = Test-Path -Path $overlayPath
 
 	if (-not $PSCmdlet.ShouldProcess($overlayPath, "Write $($Row.Count) app row(s)")) {
@@ -199,11 +200,19 @@ function Save-AppCsvOverlay {
 		}
 	}
 
+	# The backup goes into the unified sink under the same root the overlay lives in, so a
+	# sandboxed -RepoRoot keeps its backups in the sandbox too. A backup that cannot be taken
+	# aborts the save - the previous overlay must be safe before the rename replaces it.
+	$backupPath = $null
 	if ($overlayExists -and -not $NoBackup) {
-		Copy-Item -Path $overlayPath -Destination $backupPath -Force
-	}
-	else {
-		$backupPath = $null
+		try {
+			$backupDir = Backup-RepositoryItem -Path $overlayPath -Category "Config" -Key "$DataFileKey.local" -BackupRoot (Join-Path -Path $RepoRoot -ChildPath "Backups\Windows")
+			$backupPath = Join-Path -Path $backupDir -ChildPath (Split-Path -Path $overlayPath -Leaf)
+		}
+		catch {
+			Remove-Item -Path $stagedPath -Force -WhatIf:$false -Confirm:$false -ErrorAction SilentlyContinue
+			throw "Could not back up the existing overlay, so nothing was written => $($_.Exception.Message)"
+		}
 	}
 
 	try {

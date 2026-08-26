@@ -197,18 +197,21 @@ Two of the framework links land on paths a machine may well already be using: th
 profile, and the PowerToys FancyZones files (the same bootstrap installs PowerToys, so a machine
 that already ran it has them).
 
-Nothing is thrown away. Before a link replaces a **real** file or directory, WinuX copies it to:
+Nothing is thrown away. Before a link replaces a **real** file or directory, WinuX copies it to
+the unified backup sink:
 
 ```
-<repo>\Backups\SymbolicLinks\<entry key>\<yyyy-MM-dd_HH-mm-ss>\
+<repo>\Backups\Windows\SymbolicLinks\<entry key>\<yyyy-MM-dd_HH-mm-ss>\
 ```
 
 One folder per link entry, one timestamped folder per replacement, so every version ever displaced
 sits side by side with the newest last. For example, a profile replaced by the `PowerShell.Profile`
-entry lands in `Backups\SymbolicLinks\PowerShell.Profile\2026-08-24_18-30-00\`.
+entry lands in `Backups\Windows\SymbolicLinks\PowerShell.Profile\2026-08-24_18-30-00\`.
 
 `Backups/` is gitignored (only a `.gitkeep` is tracked): the copies hold your own data and possibly
-secrets, so they stay on your machine and are never committed.
+secrets, so they stay on your machine and are never committed. The sink is bounded by configurable
+retention that never deletes the newest backup of anything - the [Backups](../reference/backups.md)
+reference covers the full policy and the restore recipes.
 
 Two details worth knowing:
 

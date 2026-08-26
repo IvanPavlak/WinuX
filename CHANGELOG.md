@@ -8,6 +8,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.46] - 2026-08-26
+
+### Added
+
+- **`Backup-RepositoryItem` and `Clear-OldBackups` (Helper module): one backup primitive and one retention sweep for everything WinuX replaces.** Backups used to be four unrelated mechanisms with three different destinations: the symlink writers' timestamped folders under `Backups\SymbolicLinks\`, two single-slot sidecar `.bak` files that each `-Force`/save overwrote (destroying the previous undo - exactly the multi-version loss 0.1.45 fixed for symlinks), and nothing at all for the five `Add-*` configuration writers, which rewrote the tracked `Configuration.psd1` with no backup of any kind. Every writer now calls `Backup-RepositoryItem`, which files a timestamped copy into one unified, OS-namespaced sink - `<Repo>\Backups\Windows\<Category>\<Key>\<yyyy-MM-dd_HH-mm-ss>\`, with `SymbolicLinks`/`Config`/`System` as the categories - and throws on failure so the caller keeps the 0.1.45 contract: a file that could not be backed up is never replaced. The OS namespace exists for forks that will carry macOS/Linux tooling beside this repository: each system gets its own sibling (`Backups/macOS/...`) and the sinks can never mix. The sink is bounded for the first time: a new `Backups.Retention` section in `Configuration.psd1` (MaxAgeDays 0 = never, MaxBackupsPerKey 10, MaxTotalSizeMB 500; 0 disables a limit) drives `Clear-OldBackups`, which the existing idle-time `Invoke-LogMaintenance` sweep now runs beside the log pruning - with one invariant no limit can break: **the newest backup of every key is never deleted**, because a replaced original is not regenerable the way a log is. `Backup-RepositoryItem` also prunes the key it just backed up opportunistically, so the sink stays bounded even on machines whose idle sweep never fires. The full policy - taxonomy, restore recipes, retention, and the AI-assistant convention (WinuXConfigurator ground rule 6 now points agents at the central sink, with the legacy sidecar `.bak` as fallback) - lives on a new `docs/reference/backups.md` page.
+
+### Changed
+
+- **Every writer that replaces an existing file now backs it up into the unified sink first - including seven that previously backed up nothing.** The symlink writers' backups move from `Backups\SymbolicLinks\<key>\` to `Backups\Windows\SymbolicLinks\<key>\` (their `-BackupRoot` parameter now names the sink root); `Initialize-Configuration -Force` and `Save-AppCsvOverlay` trade their self-overwriting sidecar `.bak` files for timestamped copies under `Backups\Windows\Config\`, so every rewrite keeps its own undo instead of destroying the previous one (`Save-AppCsvOverlay` also aborts the save when the backup cannot be taken, and its returned `BackupPath` now points into the sink); the five `Add-*` configuration writers (`Add-SymbolicLink`, `Add-BrowserGroup`, `Add-Workspace`, `Add-Project`, `Add-WindowLayout`) back the tracked `Configuration.psd1` up before every write and abort when they cannot - one shared `Config\Configuration\` history across all five; `Configure-Taskbar` and `Unpin-TaskbarApps` back up an existing real taskbar layout XML (a user's own hand-pinned arrangement) before overwriting it; `Configure-NuGetConfig` backs up an existing real `NuGet.Config`, whose credentials for unrelated feeds were previously overwritten without a trace; and `Visualize-Layouts -Update` backs each layout file up so uncommitted hand edits survive the rewrite. Old backups on existing machines are left exactly where they are: nothing is migrated, and `Clear-OldBackups` scans only `Backups\Windows`, so pre-existing `Backups\SymbolicLinks\` content and stale sidecar `.bak` files are never pruned. The two sidecar `.gitignore` entries stay as legacy/defensive guards (stale copies exist on machines and in forks, and hold a real Git identity).
+
+### Fixed
+
+- **Two documentation pages described backups that did not exist - in opposite directions.** `docs/configuration/guides/system/add-symbolic-link.md` still said an existing file at a link path "is removed (no backup is made)", stale since 0.1.45 shipped the backups and contradicting every other page; `docs/configuration/guides/configuration/Add-BrowserGroup.md` claimed the writer "leaves a `.bak` copy beside the file" when it left nothing at all. Both now describe the real (unified-sink) behavior.
+
+- **`Update-Win11DebloatVendor` no longer destroys the vendored Win11Debloat's own registry backups on every vendor update.** The updater removed the whole `vendor\` tree before copying the new release in, taking `vendor\Backups\` (the registry snapshots that undo debloat operations) and `vendor\Logs\` with it - data the vendor's own updater (`Get.ps1`) deliberately preserves. The wrapper now mirrors the vendor's behavior, excluding `Config`, `Logs`, and `Backups` from the removal.
+
 ## [0.1.45] - 2026-08-25
 
 ### Changed
@@ -788,7 +804,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.45...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.46...HEAD
+[0.1.46]: https://github.com/IvanPavlak/WinuX/compare/v0.1.45...v0.1.46
 [0.1.45]: https://github.com/IvanPavlak/WinuX/compare/v0.1.44...v0.1.45
 [0.1.44]: https://github.com/IvanPavlak/WinuX/compare/v0.1.43...v0.1.44
 [0.1.43]: https://github.com/IvanPavlak/WinuX/compare/v0.1.42...v0.1.43

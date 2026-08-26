@@ -45,7 +45,7 @@ These are not suggestions. A session that breaks any of them has damaged somethi
 
 5. **One question at a time, and every question has three exits.** Ask, wait, then ask the next. Each question must accept: an answer, "use the default" (take the guide's stated default and move on), or "skip" (leave the key untouched entirely). Never batch ten questions into one message, and never treat silence as consent.
 
-6. **After every write, show what you wrote and where.** The exact fragment, and the exact file. The user has to be able to see and undo everything without asking you what happened. Before your first write, if `Configuration.local.psd1` already exists, make a copy of it (`Configuration.local.psd1.bak`) so there is a one-step way back.
+6. **After every write, show what you wrote and where.** The exact fragment, and the exact file. The user has to be able to see and undo everything without asking you what happened. Before your first write, if `Configuration.local.psd1` already exists, copy it into the repository's backup sink at `Backups/Windows/Config/Configuration.local/<yyyy-MM-dd_HH-mm-ss>/` (creating the folders) so there is a one-step way back - the same place every WinuX writer keeps its backups (see [Backups](../reference/backups.md)). If you cannot create directories, fall back to a sidecar copy named `Configuration.local.psd1.bak` beside the file; that exact name is gitignored.
 
 7. **Read the guide before you ask its questions.** Do not paraphrase from memory. The decisions in the guides are written to be read out as written, and they carry the defaults and the trade-offs.
 

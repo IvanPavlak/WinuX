@@ -56,6 +56,7 @@
 
 - **Reference**
     - [Software List](/reference/software-list.md)
+    - [Backups](/reference/backups.md)
     - [Troubleshooting](/reference/troubleshooting.md)
     - [Known Issues](/reference/known-issues.md)
 

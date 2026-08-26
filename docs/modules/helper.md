@@ -2,6 +2,33 @@
 
 The Helper module provides **utility functions** used across all other WinuX modules. It's the foundational toolkit for path resolution, user interaction, and common operations. (Logging now lives in its own [Logging](/modules/logging.md) module.)
 
+## [Backup-RepositoryItem](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Backup-RepositoryItem.ps1)
+
+- **Description:** Copies an item into the repository's unified backup sink before a writer replaces it. Every WinuX function that overwrites or displaces an existing file calls this first, so all replaced originals land in one findable, OS-namespaced, gitignored place: `<Repo>\Backups\Windows\<Category>\<Key>\<yyyy-MM-dd_HH-mm-ss>\` - one folder per key, one timestamped folder per replacement, newest last. Returns the timestamped backup folder on success. On any failure it removes the partial folder and **throws**, so a caller's `try/catch` can skip the replacement and leave the original untouched - a file that could not be backed up is never removed. After a successful copy it opportunistically prunes the key's folder down to `Backups.Retention.MaxBackupsPerKey` entries.
+- **Parameters:** -Path, -Category, -Key, -BackupRoot, -DirectoryOnly
+- **Usage:** `Backup-RepositoryItem -Path $PROFILE -Category SymbolicLinks -Key "PowerShell.Profile"`
+
+| Parameter        | Description                                                                                                            |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `-Path`          | The existing file or directory to back up. Directories are copied recursively. Mandatory.                               |
+| `-Category`      | Taxonomy folder inside the sink: `SymbolicLinks`, `Config`, or `System`. Mandatory.                                      |
+| `-Key`           | Display key naming what was backed up, typically the dotted configuration key (e.g. `PowerShell.Profile`). Mandatory.   |
+| `-BackupRoot`    | Sink root override. Defaults to `<Repo>\Backups\Windows` resolved via `Get-RepositoryPath`.                              |
+| `-DirectoryOnly` | Create and return the timestamped folder without copying - for callers that copy themselves (e.g. `New-WSLSymbolicLink`). |
+
+```powershell
+# Back up an existing profile before a symlink replaces it; skip the replacement if the backup fails
+try {
+    $backupDir = Backup-RepositoryItem -Path $PROFILE -Category SymbolicLinks -Key "PowerShell.Profile"
+}
+catch {
+    Write-LogError "Skipped (could not back up) => $($_.Exception.Message)"
+    return
+}
+```
+
+**See also:** [Clear-OldBackups](helper.md#clear-oldbackups), [Backups reference](../reference/backups.md)
+
 ## [BranchExists](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/BranchExists.ps1)
 
 - **Description:** Checks whether a Git branch exists in the local repository. Queries the repo for a branch with the specified name and returns `$true` if found, `$false` otherwise.
@@ -19,6 +46,22 @@ if (BranchExists -Branch "feature/my-feature") {
 
 - **Description:** Navigates the shell to the user's Desktop directory. Sets the current location to the Desktop folder resolved from environment variables, equivalent to `cd ~/Desktop`.
 - **Usage:** `Cd-Desktop`
+
+## [Clear-OldBackups](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Clear-OldBackups.ps1)
+
+- **Description:** Enforces backup retention so `Backups\Windows` stays bounded but never loses the last copy of anything. Prunes the timestamped folders `Backup-RepositoryItem` creates by three independent limits applied in order - maximum age in days, maximum backups per key, then maximum total sink size in MB (oldest removed first) - with one invariant no limit can break: **the newest backup of every key is never deleted**, because a replaced original is not regenerable. Folders left empty by pruning are removed. Limits default from `$Configuration.Backups.Retention` (`MaxAgeDays 0`, `MaxBackupsPerKey 10`, `MaxTotalSizeMB 500`; `0` disables a limit). Called automatically by the idle-time `Invoke-LogMaintenance` sweep; safe to run manually.
+- **Parameters:** -MaxAgeDays, -MaxBackupsPerKey, -MaxTotalSizeMB, -BackupRoot
+- **Usage:** `Clear-OldBackups`, `Clear-OldBackups -MaxBackupsPerKey 3`
+
+```powershell
+# Prune with the configured retention limits
+Clear-OldBackups
+
+# Keep only the three newest backups of every key
+Clear-OldBackups -MaxBackupsPerKey 3
+```
+
+**See also:** [Backup-RepositoryItem](helper.md#backup-repositoryitem), [Invoke-LogMaintenance](logging.md#invoke-logmaintenance), [Backups reference](../reference/backups.md)
 
 ## [Close-WindowsTerminalTab](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Close-WindowsTerminalTab.ps1)
 

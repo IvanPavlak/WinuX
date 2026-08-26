@@ -10,21 +10,12 @@ BeforeAll {
 Describe "New-WindowsSymbolicLink" {
 	BeforeEach {
 		# Only the symlink creation itself is mocked - it needs elevation or Developer Mode,
-		# which a test run cannot assume. Everything else (the existence probe, the backup
-		# copy, the removal) runs for real against TestDrive, so the backup behavior is
-		# verified on actual files rather than on mock bookkeeping.
-		#
-		# The unfiltered mock is what makes that possible. With only the filtered one registered,
-		# the backup folder's New-Item -ItemType Directory matches no filter and Pester fails the
-		# call outright rather than falling through, so the backup never gets written and every
-		# assertion below tests the wrong thing. This one creates the folder for real and, carrying
-		# no filter of its own, leaves the Should -Invoke counts on the SymbolicLink filter alone.
-		# It goes through .NET rather than New-Item: a mock body cannot call the command it mocks,
-		# not even module-qualified, without recursing into itself until the call depth blows.
+		# which a test run cannot assume. Everything else (the existence probe, the backup via
+		# Backup-RepositoryItem, the removal) runs for real against TestDrive, so the backup
+		# behavior is verified on actual files rather than on mock bookkeeping. The backup's own
+		# directory creation happens inside the Helper module, out of reach of this mock, so the
+		# filtered mock needs no unfiltered companion.
 		Mock New-Item -ParameterFilter { $ItemType -eq 'SymbolicLink' } -MockWith { }
-		Mock New-Item -MockWith {
-			foreach ($newItemPath in $Path) { [System.IO.Directory]::CreateDirectory($newItemPath) | Out-Null }
-		}
 		Mock Initialize-Directory { }
 		Mock Write-Host { }
 		Mock Write-LogSuccess { }
@@ -55,9 +46,10 @@ Describe "New-WindowsSymbolicLink" {
 		$backup[0].Name | Should -Be "link.txt"
 		Get-Content -Path $backup[0].FullName -Raw | Should -Be "original user content"
 
-		# The backup is filed under the entry key, so a replaced file is findable by the
-		# name of the link that replaced it rather than by its own path.
-		$backup[0].FullName | Should -Match "PowerShell\.Profile"
+		# The backup is filed in the sink's SymbolicLinks category under the entry key, so a
+		# replaced file is findable by the name of the link that replaced it rather than by
+		# its own path.
+		$backup[0].FullName | Should -Match "SymbolicLinks\\PowerShell\.Profile\\\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}"
 
 		Test-Path -LiteralPath $script:LinkPath | Should -BeFalse
 		Should -Invoke New-Item -Times 1 -Exactly -ParameterFilter { $ItemType -eq 'SymbolicLink' }
@@ -65,7 +57,9 @@ Describe "New-WindowsSymbolicLink" {
 
 	It "backs up a real directory and removes it recursively" {
 		$dir = Join-Path $TestDrive "linkdir"
-		New-Item -ItemType Directory -Path $dir | Out-Null
+		# Not New-Item: the filtered SymbolicLink mock has no default to fall back to, so a
+		# non-matching New-Item call would fail the test's own setup.
+		[System.IO.Directory]::CreateDirectory($dir) | Out-Null
 		Set-Content -Path (Join-Path $dir "nested.txt") -Value "nested" -NoNewline
 
 		New-WindowsSymbolicLink -Path $dir -Target $script:TargetPath `
@@ -95,7 +89,9 @@ Describe "New-WindowsSymbolicLink" {
 
 	It "keeps the original and skips the link when the backup cannot be written" {
 		Set-Content -Path $script:LinkPath -Value "irreplaceable" -NoNewline
-		Mock Copy-Item { throw "access denied" }
+		# The copy happens inside the Helper module, out of reach of a Copy-Item mock here, so
+		# the failure is injected at the seam the writer actually calls.
+		Mock Backup-RepositoryItem { throw "access denied" }
 
 		New-WindowsSymbolicLink -Path $script:LinkPath -Target $script:TargetPath `
 			-DisplayName "PowerShell.Profile" -BackupRoot $script:BackupRoot

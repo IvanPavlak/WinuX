@@ -3,6 +3,9 @@
 Generates ASCII art visualizations of FancyZones layouts and adds them as commented sections at the top of layout files.
 
 > [!NOTE]
+> With `-Update`, each layout file is first copied into the unified [backup sink](../../../reference/backups.md) (`Backups/Windows/Config/WindowLayouts.<name>/<timestamp>/`) so uncommitted hand edits survive the rewrite; a file whose backup cannot be taken is skipped.
+
+> [!NOTE]
 > Every value on this page belongs in `Configuration.local.psd1`, never in the base `Configuration.psd1`. The base file is upstream's, it ships empty-by-default, and it is deep-merged with your local file at load time by `Load-PathConfiguration`. See [Fork Model](../../../contributing/fork-model.md).
 
 ## Configuration Keys

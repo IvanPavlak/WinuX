@@ -3,6 +3,9 @@
 Configures the Windows taskbar pins from configuration.
 
 > [!NOTE]
+> An existing **real** taskbar layout XML (which may encode your own hand-pinned arrangement) is copied into the unified [backup sink](../../../reference/backups.md) (`Backups/Windows/System/TaskbarLayout/<timestamp>/`) before it is overwritten; if the backup cannot be taken the write is skipped. A leftover symlink at the layout path is removed without a backup.
+
+> [!NOTE]
 > Every value on this page belongs in `Configuration.local.psd1`, never in the base `Configuration.psd1`. The base file is upstream's, it ships empty-by-default, and it is deep-merged with your local file at load time by `Load-PathConfiguration`. See [Fork Model](../../../contributing/fork-model.md).
 
 ## Configuration Keys

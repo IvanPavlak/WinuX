@@ -21,7 +21,7 @@ function SymbolicLinkMaker {
 		run once the target exists.
 
 		A real file or directory already sitting at an entry's Path is copied into
-		<Repo>\Backups\SymbolicLinks\<entry key>\<timestamp>\ before the link replaces
+		<Repo>\Backups\Windows\SymbolicLinks\<entry key>\<timestamp>\ before the link replaces
 		it (gitignored, never committed), so a first run over a machine that already has
 		its own PowerShell profile or PowerToys settings loses nothing. An entry whose
 		backup cannot be written is skipped instead of replaced.

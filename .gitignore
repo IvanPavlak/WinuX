@@ -17,14 +17,20 @@ Configuration.local.psd1
 # so committing them downstream never conflicts on a pull.
 Windows/PowerShell/Modules/Bootstrap/Data/*.local.csv
 
-# The one-click undo copies the writers leave behind. Noise everywhere, upstream and forks alike.
+# LEGACY sidecar backups. The writers now back up into Backups/ instead, but older WinuX versions
+# left these beside the files they protected, stale copies still sit on existing machines and in
+# forks, and an AI assistant that cannot create directories still falls back to the .psd1.bak
+# (see docs/reference/backups.md). They hold a real Git identity, so they must stay uncommittable.
 Configuration.local.psd1.bak
 Windows/PowerShell/Modules/Bootstrap/Data/*.local.csv.bak
 
-# Symbolic-link backups - the REAL files New-WindowsSymbolicLink / New-WSLSymbolicLink found at a
-# link path and copied aside before replacing them, one timestamped folder per replacement. Kept
-# in the repository so a replaced profile or settings file is easy to find again, but it is your
-# machine's own data (and may hold secrets), so it is never committed.
+# The unified backup sink - everything a WinuX writer replaces (files displaced by symlinks,
+# rewritten configuration files, overwritten system files) is first copied by Backup-RepositoryItem
+# into Backups/<OS>/<Category>/<Key>/<timestamp>/, one timestamped folder per replacement, bounded
+# by Clear-OldBackups. OS-namespaced (Backups/Windows/ here) so a fork carrying other systems'
+# tooling can give each its own sibling. Kept in the repository so a replaced profile or settings
+# file is easy to find again, but it is your machine's own data (and may hold secrets), so it is
+# never committed. See docs/reference/backups.md for the full policy.
 Backups/*
 !Backups/.gitkeep
 

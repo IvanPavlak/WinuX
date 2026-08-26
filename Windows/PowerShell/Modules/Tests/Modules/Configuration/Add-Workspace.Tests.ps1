@@ -9,7 +9,14 @@ BeforeAll {
 
 Describe "Add-Workspace" {
 	BeforeEach {
-		$testConfig = Join-Path $TestDrive "Configuration.psd1"
+		# The writer backs Configuration.psd1 up into the sink of the repository the file belongs
+		# to, so the sandbox mirrors the real layout and the backups stay inside TestDrive.
+		$repoRoot = Join-Path $TestDrive "repo"
+		$psDir = Join-Path $repoRoot "Windows\PowerShell"
+		if (Test-Path $repoRoot) { Remove-Item -Path $repoRoot -Recurse -Force }
+		New-Item -ItemType Directory -Path $psDir -Force | Out-Null
+		$backupKeyDir = Join-Path $repoRoot "Backups\Windows\Config\Configuration"
+		$testConfig = Join-Path $psDir "Configuration.psd1"
 		$configContent = @(
 			'@{'
 			'	Workspaces = @('
@@ -63,6 +70,27 @@ Describe "Add-Workspace" {
 			$parsed | Should -Not -BeNullOrEmpty
 			$parsed.Workspaces | Should -Contain "NewWS"
 			$parsed.WorkspaceActions.NewWS | Should -Not -BeNullOrEmpty
+		}
+	}
+
+	Context "Backups" {
+		It "Backs the configuration file up into the repository's sink; the copy is the pre-write content" {
+			$before = Get-Content -Path $testConfig -Raw
+
+			Add-Workspace -Name "NewWS" -ConfigurationFilePath $testConfig
+
+			$backups = @(Get-ChildItem -Path $backupKeyDir -Recurse -File)
+			$backups.Count | Should -Be 1
+			Get-Content -Path $backups[0].FullName -Raw | Should -Be $before
+		}
+
+		It "Aborts the write when the backup cannot be taken" {
+			Mock Backup-RepositoryItem { throw "access denied" }
+			$before = Get-Content -Path $testConfig -Raw
+
+			Add-Workspace -Name "NewWS" -ConfigurationFilePath $testConfig
+
+			Get-Content -Path $testConfig -Raw | Should -Be $before
 		}
 	}
 }

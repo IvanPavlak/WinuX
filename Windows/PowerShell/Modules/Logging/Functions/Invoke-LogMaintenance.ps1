@@ -4,13 +4,15 @@ function Invoke-LogMaintenance {
 		Runs the periodic, silent housekeeping sweep over every log the repository generates.
 
 	.DESCRIPTION
-		Single entry point for background log hygiene. Enforces session-log retention via
-		Clear-OldLogs (limits from $Configuration.Logging.FileLogging.Retention), then prunes the
-		Tests\Results folder with the same rules Invoke-TestSuite applies at run start: the ten
-		newest TestRun_*.log files are kept, orphaned pester-results-*.xml files (whose owning run
-		log is gone) are removed, and abandoned Work\ directories are swept. Results artifacts are
-		only touched when older than one day, so a test run in flight can never lose its files.
-		timings.json, .gitkeep files, and Logs/Pinned are never touched.
+		Single entry point for background housekeeping. Enforces session-log retention via
+		Clear-OldLogs (limits from $Configuration.Logging.FileLogging.Retention) and backup
+		retention via Clear-OldBackups (limits from $Configuration.Backups.Retention, over the
+		unified Backups\Windows sink), then prunes the Tests\Results folder with the same rules
+		Invoke-TestSuite applies at run start: the ten newest TestRun_*.log files are kept,
+		orphaned pester-results-*.xml files (whose owning run log is gone) are removed, and
+		abandoned Work\ directories are swept. Results artifacts are only touched when older than
+		one day, so a test run in flight can never lose its files. timings.json, .gitkeep files,
+		and Logs/Pinned are never touched.
 
 		Produces no console output and swallows per-file errors, so it is safe to call from the
 		profile's idle-time hook. Throttled by a stamp file (Logs\.last-maintenance): when the last
@@ -71,6 +73,9 @@ function Invoke-LogMaintenance {
 
 	# Session logs + error log: existing retention, limits from configuration.
 	try { Clear-OldLogs } catch { }
+
+	# The unified backup sink (Backups\Windows): retention from Configuration.Backups.Retention.
+	try { Clear-OldBackups } catch { }
 
 	# Tests\Results: same shape Invoke-TestSuite enforces at run start, so the folder stays
 	# bounded even on machines that stopped running the suite. Everything here is age-gated to

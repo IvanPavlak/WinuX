@@ -21,9 +21,10 @@ Describe "Initialize-Configuration" {
 		Mock Read-Host { throw "Initialize-Configuration should not prompt when values are supplied" }
 		$script:BaseConfig = Join-Path $TestDrive "Configuration.psd1"
 		$script:LocalConfig = Join-Path $TestDrive "Configuration.local.psd1"
+		$script:BackupRoot = Join-Path $TestDrive "Backups"
 		Set-Content -Path $script:BaseConfig -Value "@{ GitConfig = @{ UserName = '' } }" -NoNewline
 		Remove-Item -Path $script:LocalConfig -ErrorAction SilentlyContinue
-		Remove-Item -Path "$($script:LocalConfig).bak" -ErrorAction SilentlyContinue
+		Remove-Item -Path $script:BackupRoot -Recurse -Force -ErrorAction SilentlyContinue
 	}
 
 	It "writes the supplied Git identity and dev path into Configuration.local.psd1" {
@@ -79,26 +80,29 @@ Describe "Initialize-Configuration" {
 		Get-Content -Path $script:LocalConfig -Raw | Should -Be $existing
 	}
 
-	It "overwrites an existing override when -Force is given, keeping a .bak copy" {
+	It "overwrites an existing override when -Force is given, keeping a timestamped backup in the sink" {
 		Set-Content -Path $script:LocalConfig -Value "@{ GitConfig = @{ UserName = 'Existing' } }" -NoNewline
 
 		Initialize-Configuration -ConfigPath $script:BaseConfig -LocalConfigPath $script:LocalConfig `
-			-GitName "Jane Doe" -GitEmail "jane@example.com" -DevPath "D:\Dev" -Force
+			-GitName "Jane Doe" -GitEmail "jane@example.com" -DevPath "D:\Dev" -BackupRoot $script:BackupRoot -Force
 
 		$result = Import-PowerShellDataFile -Path $script:LocalConfig
 		$result.GitConfig.UserName | Should -Be "Jane Doe"
 
-		$backup = Import-PowerShellDataFile -Path "$($script:LocalConfig).bak"
-		$backup.GitConfig.UserName | Should -Be "Existing"
+		$backupFile = @(Get-ChildItem -Path (Join-Path $script:BackupRoot "Config\Configuration.local") -Recurse -File)
+		$backupFile.Count | Should -Be 1
+		(Import-PowerShellDataFile -Path $backupFile[0].FullName).GitConfig.UserName | Should -Be "Existing"
 	}
 
 	It "writes nothing when -Force cannot back the existing override up" {
 		$existing = "@{ GitConfig = @{ UserName = 'Existing' } }"
 		Set-Content -Path $script:LocalConfig -Value $existing -NoNewline
-		Mock Copy-Item { throw "access denied" }
+		# The copy happens inside the Helper module, out of reach of a Copy-Item mock here, so
+		# the failure is injected at the seam the writer actually calls.
+		Mock Backup-RepositoryItem { throw "access denied" }
 
 		Initialize-Configuration -ConfigPath $script:BaseConfig -LocalConfigPath $script:LocalConfig `
-			-GitName "Jane Doe" -GitEmail "jane@example.com" -DevPath "D:\Dev" -Force
+			-GitName "Jane Doe" -GitEmail "jane@example.com" -DevPath "D:\Dev" -BackupRoot $script:BackupRoot -Force
 
 		Get-Content -Path $script:LocalConfig -Raw | Should -Be $existing
 	}

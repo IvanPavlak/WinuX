@@ -73,8 +73,11 @@ function Update-Win11DebloatVendor {
 			throw "Unable to locate extracted Win11Debloat folder."
 		}
 
+		# Preserve the vendor's own machine-local data across the update - Config, Logs, and the
+		# Backups folder holding the registry snapshots that undo debloat operations. The vendor's
+		# own updater (Get.ps1) preserves exactly these three; nuking the whole tree destroyed them.
 		if (Test-Path -Path $vendorPath) {
-			Remove-Item -Path $vendorPath -Recurse -Force
+			Get-ChildItem -Path $vendorPath -Exclude 'Config', 'Logs', 'Backups' | Remove-Item -Recurse -Force
 		}
 
 		New-Item -ItemType Directory -Path $vendorPath -Force | Out-Null

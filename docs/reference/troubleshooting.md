@@ -153,15 +153,15 @@ it. Look under the repository root:
 
 ```powershell
 # Everything ever replaced, newest last
-Get-ChildItem "$env:USERPROFILE\Development\GitHub\WinuX\Backups\SymbolicLinks" -Recurse -File
+Get-ChildItem "$env:USERPROFILE\Development\GitHub\WinuX\Backups\Windows\SymbolicLinks" -Recurse -File
 
 # Just the PowerShell profile entry
-Get-ChildItem "$env:USERPROFILE\Development\GitHub\WinuX\Backups\SymbolicLinks\PowerShell.Profile" -Recurse
+Get-ChildItem "$env:USERPROFILE\Development\GitHub\WinuX\Backups\Windows\SymbolicLinks\PowerShell.Profile" -Recurse
 ```
 
-Backups are filed as `Backups\SymbolicLinks\<entry key>\<yyyy-MM-dd_HH-mm-ss>\<file>` - one
-folder per link entry, one timestamped folder per replacement. To restore one, delete the symlink
-and copy the backup back:
+Backups are filed as `Backups\Windows\SymbolicLinks\<entry key>\<yyyy-MM-dd_HH-mm-ss>\<file>` -
+one folder per link entry, one timestamped folder per replacement (see [Backups](backups.md) for
+the full policy). To restore one, delete the symlink and copy the backup back:
 
 ```powershell
 Remove-Item $PROFILE -Force

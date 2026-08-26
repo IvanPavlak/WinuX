@@ -24,8 +24,9 @@ function Initialize-Configuration {
 		function does nothing, whatever it contains. That file is yours - hand-edited, committed in
 		a fork, or carrying far more keys than the three written here - so a re-run of Bootstrap
 		(or of the installer against an existing clone) can never regenerate it down to a stub.
-		-Force rewrites it anyway, but copies the current file to Configuration.local.psd1.bak
-		first and aborts if that copy cannot be made.
+		-Force rewrites it anyway, but first copies the current file into the unified backup sink
+		(Backups\Windows\Config\Configuration.local\<timestamp>\, via Backup-RepositoryItem) and
+		aborts if that copy cannot be made.
 
 	.PARAMETER Owner
 		Your GitHub username/owner (used to default the Git name and for messaging).
@@ -49,9 +50,13 @@ function Initialize-Configuration {
 	.PARAMETER LocalConfigPath
 		Path to the override file to write. Defaults to Configuration.local.psd1 beside ConfigPath.
 
+	.PARAMETER BackupRoot
+		Root of the unified backup sink the -Force backup is copied into. Defaults to
+		<Repo>\Backups\Windows resolved inside Backup-RepositoryItem.
+
 	.PARAMETER Force
-		Rewrite the override even though it already exists. The current file is copied to
-		Configuration.local.psd1.bak first; if that copy fails nothing is written.
+		Rewrite the override even though it already exists. The current file is copied into
+		the backup sink first; if that copy fails nothing is written.
 
 	.EXAMPLE
 		Initialize-Configuration
@@ -70,6 +75,7 @@ function Initialize-Configuration {
 		[string]$MachineType = "Test",
 		[string]$ConfigPath,
 		[string]$LocalConfigPath,
+		[string]$BackupRoot = "",
 		[switch]$Force
 	)
 
@@ -97,17 +103,16 @@ function Initialize-Configuration {
 	# to be mid-edit, identity-less, or committed by a fork be silently regenerated down to the
 	# three keys below, dropping every other key it carried. The file belongs to the user: it is
 	# hand-edited, versioned in a fork, or simply grown past what this writer knows about.
-	# -Force still rewrites it, but only after a .bak copy is safely beside it.
+	# -Force still rewrites it, but only after a copy is safely in the unified backup sink.
 	if (Test-Path -LiteralPath $LocalConfigPath) {
 		if (-not $Force) {
-			Write-LogSuccess "Local configuration already exists at '$LocalConfigPath' - leaving it untouched. Use -Force to rewrite it (the current file is copied to .bak first)."
+			Write-LogSuccess "Local configuration already exists at '$LocalConfigPath' - leaving it untouched. Use -Force to rewrite it (the current file is backed up first)."
 			return
 		}
 
-		$backupPath = "$LocalConfigPath.bak"
 		try {
-			Copy-Item -LiteralPath $LocalConfigPath -Destination $backupPath -Force -ErrorAction Stop
-			Write-LogWarning "Existing local configuration backed up to '$backupPath'."
+			$backupDir = Backup-RepositoryItem -Path $LocalConfigPath -Category "Config" -Key "Configuration.local" -BackupRoot $BackupRoot
+			Write-LogWarning "Existing local configuration backed up to '$backupDir'."
 		}
 		catch {
 			Write-LogError "Could not back up '$LocalConfigPath'; aborting without changes. $($_.Exception.Message)"

@@ -103,7 +103,8 @@ Describe "Save-AppCsvOverlay" {
 
 		$script:winGetBase = Join-Path $script:dataRoot "WinGetApps.csv"
 		$script:winGetOverlay = Join-Path $script:dataRoot "WinGetApps.local.csv"
-		$script:winGetBackup = "$($script:winGetOverlay).bak"
+		# Backups land in the sandbox's own unified sink, keyed by the overlay they protect.
+		$script:winGetBackupKeyDir = Join-Path $script:repoRoot "Backups\Windows\Config\WinGetApps.local"
 		$script:chocoBase = Join-Path $script:dataRoot "ChocolateyApps.csv"
 		$script:chocoOverlay = Join-Path $script:dataRoot "ChocolateyApps.local.csv"
 
@@ -188,7 +189,7 @@ Describe "Save-AppCsvOverlay" {
 	}
 
 	Context "Backups" {
-		It "copies the previous overlay to a .bak whose content is the pre-save content" {
+		It "copies the previous overlay into the sink; the copy is the pre-save content" {
 			Write-AppCsvFixture -Path $script:winGetOverlay -Line @(
 				'App,Version,Scope,Interactive,Source,Machine'
 				''
@@ -199,22 +200,23 @@ Describe "Save-AppCsvOverlay" {
 
 			$result = Save-AppCsvOverlay -DataFileKey WinGetApps -Row (Get-SampleWinGetRow) -RepoRoot $script:repoRoot
 
-			$result.BackupPath | Should -Be $script:winGetBackup
-			Test-Path -Path $script:winGetBackup | Should -BeTrue
+			# One timestamped folder per save, filed in the sandbox's own sink under the overlay's key.
+			$result.BackupPath | Should -Match ([regex]::Escape($script:winGetBackupKeyDir) + '\\\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}.*\\WinGetApps\.local\.csv$')
+			Test-Path -Path $result.BackupPath | Should -BeTrue
 
-			# Restoring the .bak is the complete undo, so it has to be the exact pre-save bytes.
-			Get-FileFingerprint -Path $script:winGetBackup | Should -Be $before
-			@(Get-OverlayDataRow -Path $script:winGetBackup)[0].App | Should -Be 'Overlay.Previous'
+			# Restoring the backup is the complete undo, so it has to be the exact pre-save bytes.
+			Get-FileFingerprint -Path $result.BackupPath | Should -Be $before
+			@(Get-OverlayDataRow -Path $result.BackupPath)[0].App | Should -Be 'Overlay.Previous'
 		}
 
-		It "does not create a .bak when there was no overlay to back up" {
+		It "does not back up when there was no overlay to back up" {
 			$result = Save-AppCsvOverlay -DataFileKey WinGetApps -Row (Get-SampleWinGetRow) -RepoRoot $script:repoRoot
 
-			Test-Path -Path $script:winGetBackup | Should -BeFalse
+			Test-Path -Path $script:winGetBackupKeyDir | Should -BeFalse
 			$result.BackupPath | Should -BeNullOrEmpty
 		}
 
-		It "does not create a .bak when -NoBackup is given" {
+		It "does not back up when -NoBackup is given" {
 			Write-AppCsvFixture -Path $script:winGetOverlay -Line @(
 				'App,Version,Scope,Interactive,Source,Machine'
 				''
@@ -223,7 +225,7 @@ Describe "Save-AppCsvOverlay" {
 
 			$result = Save-AppCsvOverlay -DataFileKey WinGetApps -Row (Get-SampleWinGetRow) -RepoRoot $script:repoRoot -NoBackup
 
-			Test-Path -Path $script:winGetBackup | Should -BeFalse
+			Test-Path -Path $script:winGetBackupKeyDir | Should -BeFalse
 			$result.BackupPath | Should -BeNullOrEmpty
 			@(Get-OverlayDataRow -Path $script:winGetOverlay)[0].App | Should -Be 'Overlay.One'
 		}
@@ -244,7 +246,7 @@ Describe "Save-AppCsvOverlay" {
 			$result.Written | Should -BeFalse
 			$result.RowCount | Should -Be 1
 			Get-FileFingerprint -Path $script:winGetOverlay | Should -Be $before
-			Test-Path -Path $script:winGetBackup | Should -BeFalse
+			Test-Path -Path $script:winGetBackupKeyDir | Should -BeFalse
 
 			# The candidate is still staged and parsed under -WhatIf, because reporting what would be
 			# written is only useful if the same validation ran, so the cleanup has to happen anyway.
@@ -270,7 +272,7 @@ Describe "Save-AppCsvOverlay" {
 				Should -Throw -ExpectedMessage '*no App id*'
 
 			Get-FileFingerprint -Path $script:winGetOverlay | Should -Be $script:overlayBefore
-			Test-Path -Path $script:winGetBackup | Should -BeFalse
+			Test-Path -Path $script:winGetBackupKeyDir | Should -BeFalse
 		}
 
 		It "refuses a row that is not assigned to any machine" {
@@ -281,7 +283,7 @@ Describe "Save-AppCsvOverlay" {
 				Should -Throw -ExpectedMessage '*not assigned to any PC*'
 
 			Get-FileFingerprint -Path $script:winGetOverlay | Should -Be $script:overlayBefore
-			Test-Path -Path $script:winGetBackup | Should -BeFalse
+			Test-Path -Path $script:winGetBackupKeyDir | Should -BeFalse
 		}
 
 		It "refuses an unknown machine type" {
@@ -289,7 +291,7 @@ Describe "Save-AppCsvOverlay" {
 				Should -Throw -ExpectedMessage '*not a known machine type*'
 
 			Get-FileFingerprint -Path $script:winGetOverlay | Should -Be $script:overlayBefore
-			Test-Path -Path $script:winGetBackup | Should -BeFalse
+			Test-Path -Path $script:winGetBackupKeyDir | Should -BeFalse
 		}
 
 		It "refuses an unknown token inside a slash-joined machine list" {
@@ -299,7 +301,7 @@ Describe "Save-AppCsvOverlay" {
 				Should -Throw -ExpectedMessage "*targets 'Labtop'*"
 
 			Get-FileFingerprint -Path $script:winGetOverlay | Should -Be $script:overlayBefore
-			Test-Path -Path $script:winGetBackup | Should -BeFalse
+			Test-Path -Path $script:winGetBackupKeyDir | Should -BeFalse
 		}
 
 		It "refuses a -RepoRoot that was given but is empty" {

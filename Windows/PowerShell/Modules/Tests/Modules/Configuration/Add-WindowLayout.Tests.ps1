@@ -15,7 +15,14 @@ Describe "Add-WindowLayout" {
 		New-Item -Path (Join-Path $testLayoutsDir "PC") -ItemType Directory -Force | Out-Null
 		New-Item -Path (Join-Path $testLayoutsDir "Laptop") -ItemType Directory -Force | Out-Null
 
-		$testConfig = Join-Path $TestDrive "Configuration.psd1"
+		# The writer backs Configuration.psd1 up into the sink of the repository the file belongs
+		# to, so the sandbox mirrors the real layout and the backups stay inside TestDrive.
+		$repoRoot = Join-Path $TestDrive "repo"
+		$psDir = Join-Path $repoRoot "Windows\PowerShell"
+		if (Test-Path $repoRoot) { Remove-Item -Path $repoRoot -Recurse -Force }
+		New-Item -ItemType Directory -Path $psDir -Force | Out-Null
+		$backupKeyDir = Join-Path $repoRoot "Backups\Windows\Config\Configuration"
+		$testConfig = Join-Path $psDir "Configuration.psd1"
 		$configContent = @(
 			'@{'
 			'	SimpleLayoutWorkspaces = @("Fullscreen", "Empty")'
@@ -96,6 +103,35 @@ Describe "Add-WindowLayout" {
 			Add-WindowLayout -WorkspaceName "TestWS" -MachineType @("NewMachine") -LayoutsDirectory $testLayoutsDir
 
 			Test-Path (Join-Path $newMachineDir "TestWS_NewMachine.psd1") | Should -BeTrue
+		}
+	}
+
+	Context "Backups" {
+		It "Backs the configuration file up into the repository's sink before the -Simple write" {
+			$before = Get-Content -Path $testConfig -Raw
+
+			Add-WindowLayout -WorkspaceName "TestWS" -MachineType @("PC") -Simple `
+				-LayoutsDirectory $testLayoutsDir -ConfigurationFilePath $testConfig
+
+			$backups = @(Get-ChildItem -Path $backupKeyDir -Recurse -File)
+			$backups.Count | Should -Be 1
+			Get-Content -Path $backups[0].FullName -Raw | Should -Be $before
+		}
+
+		It "Takes no backup without -Simple (no configuration write happens)" {
+			Add-WindowLayout -WorkspaceName "TestWS" -MachineType @("PC") -LayoutsDirectory $testLayoutsDir
+
+			Test-Path -Path $backupKeyDir | Should -BeFalse
+		}
+
+		It "Aborts the -Simple write when the backup cannot be taken" {
+			Mock Backup-RepositoryItem { throw "access denied" }
+			$before = Get-Content -Path $testConfig -Raw
+
+			Add-WindowLayout -WorkspaceName "TestWS" -MachineType @("PC") -Simple `
+				-LayoutsDirectory $testLayoutsDir -ConfigurationFilePath $testConfig
+
+			Get-Content -Path $testConfig -Raw | Should -Be $before
 		}
 	}
 }
