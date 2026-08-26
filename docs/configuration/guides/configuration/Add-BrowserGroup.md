@@ -13,7 +13,7 @@ Adds a new browser URL group to the `BrowserGroups` array in `Configuration.psd1
 | --- | ---- | -------------- | ---------------- |
 | [`BrowserGroups`](../../configuration-reference.md#browser-groups) | array of single-key hashtables | array of 12 example groups | The named URL groups `Open-Browser` opens. Groups nest without limit; a leaf is either a bare URL string or `@{ Name; Url }`. Every `Name` must be unique across the whole tree, because a name is a valid selector on its own. |
 
-The writer edits the `BrowserGroups` section of `Configuration.psd1` textually (through `Find-ConfigurationSection`), so it preserves the surrounding comments and formatting. It leaves a `.bak` copy beside the file as a one-click undo.
+The writer edits the `BrowserGroups` section of `Configuration.psd1` textually (through `Find-ConfigurationSection`), so it preserves the surrounding comments and formatting. Before every write it copies the file into the unified [backup sink](../../../reference/backups.md) (`Backups/Windows/Config/Configuration/<timestamp>/`) as a one-click undo; a write whose backup cannot be taken is aborted.
 
 ## Decisions
 

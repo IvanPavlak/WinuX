@@ -184,8 +184,11 @@ Enable-DeveloperMode
 
 `SymbolicLinkMaker` handles existing items:
 
-- If a symlink or regular file already exists at the path: it is removed (no backup is made) and the link is recreated
+- If a **real** file or directory already exists at the path: it is copied into `Backups\Windows\SymbolicLinks\<entry key>\<timestamp>\` (gitignored) before the link replaces it. If the backup cannot be written, the entry is skipped and the existing file is left untouched.
+- If a **symlink** already exists at the path: it is removed without a backup (it carries no content of its own) and the link is recreated
 - If the entry's target does not exist: the entry is skipped with a warning and the existing file is left untouched
+
+See [Backups](../../../reference/backups.md) for the full policy and restore recipes.
 
 ### WSL Symlink Failed
 

@@ -3,7 +3,7 @@
 Creates symbolic links defined in `SymbolicLinks` under `MachineSpecificPaths` in `Configuration.psd1` for the current machine type.
 
 > [!NOTE]
-> A **real** file or directory already sitting at a link path is copied into `<Repo>\Backups\SymbolicLinks\<entry key>\<timestamp>\` before the link replaces it, so pointing a link at a path you already use (a hand-written PowerShell profile, existing PowerToys FancyZones settings) does not lose the original. That folder is gitignored: easy to find, never committed. An entry whose backup cannot be written is skipped rather than replaced, and an existing symlink is replaced without a backup.
+> A **real** file or directory already sitting at a link path is copied into `<Repo>\Backups\Windows\SymbolicLinks\<entry key>\<timestamp>\` before the link replaces it, so pointing a link at a path you already use (a hand-written PowerShell profile, existing PowerToys FancyZones settings) does not lose the original. That folder is gitignored: easy to find, never committed. An entry whose backup cannot be written is skipped rather than replaced, and an existing symlink is replaced without a backup. See [Backups](../../../reference/backups.md) for the full policy.
 
 > [!NOTE]
 > Every value on this page belongs in `Configuration.local.psd1`, never in the base `Configuration.psd1`. The base file is upstream's, it ships empty-by-default, and it is deep-merged with your local file at load time by `Load-PathConfiguration`. See [Fork Model](../../../contributing/fork-model.md).

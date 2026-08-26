@@ -32,6 +32,10 @@ Describe "Configure-Taskbar" {
 		Mock Test-AdminPrivileges { }
 		Mock Unpin-TaskbarApps { }
 		Mock Test-Path { $false }
+		# An existing real layout file is backed up via Backup-RepositoryItem before the
+		# overwrite; stub it so no test can ever write into the real repository's Backups sink
+		# (TestDrive persists across Its, so a second write finds the first one's file).
+		Mock Backup-RepositoryItem { Join-Path "$TestDrive" "BackupSink" }
 		Mock Loading-Spinner { }
 		Mock Write-Host { }
 		Mock Write-LogTitle { }
@@ -125,6 +129,30 @@ Describe "Configure-Taskbar" {
 			Configure-Taskbar -FromBootstrap
 
 			Should -Invoke Remove-Item -Times 1 -Exactly -ParameterFilter { "$LiteralPath" -like "*taskbar_layout.xml" }
+			# A symlink carries no content of its own - it is removed, never backed up.
+			Should -Invoke Backup-RepositoryItem -Times 0
+		}
+
+		It "backs a pre-existing real layout file up before overwriting it" {
+			Mock Test-MachineTypeScope { $true }
+			Set-Content -Path (Join-Path "$TestDrive" "taskbar_layout.xml") -Value "<hand-pinned/>" -NoNewline
+
+			Configure-Taskbar -FromBootstrap
+
+			Should -Invoke Backup-RepositoryItem -Times 1 -Exactly -ParameterFilter {
+				$Category -eq "System" -and $Key -eq "TaskbarLayout"
+			}
+		}
+
+		It "skips the layout write when the backup cannot be taken" {
+			Mock Test-MachineTypeScope { $true }
+			Mock Backup-RepositoryItem { throw "access denied" }
+			Set-Content -Path (Join-Path "$TestDrive" "taskbar_layout.xml") -Value "<hand-pinned/>" -NoNewline
+
+			Configure-Taskbar -FromBootstrap
+
+			# The layout that could not be saved is never replaced.
+			Get-Content -Path (Join-Path "$TestDrive" "taskbar_layout.xml") -Raw | Should -Be "<hand-pinned/>"
 		}
 	}
 

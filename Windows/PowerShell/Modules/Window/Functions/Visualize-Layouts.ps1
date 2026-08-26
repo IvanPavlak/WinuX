@@ -23,6 +23,12 @@ function Visualize-Layouts {
 	.PARAMETER Update
 		When specified, updates the layout files with the generated visualizations.
 		Without this parameter, only displays the visualizations without modifying files.
+		Each file is first copied into the unified backup sink; a file whose backup cannot
+		be taken is skipped rather than rewritten.
+
+	.PARAMETER BackupRoot
+		Root of the unified backup sink -Update copies each layout file into before rewriting
+		it. Defaults to <Repo>\Backups\Windows resolved inside Backup-RepositoryItem.
 
 	.EXAMPLE
 		Visualize-Layouts
@@ -56,7 +62,9 @@ function Visualize-Layouts {
 		[switch]$DisplayAvailableLayouts,
 
 		[Parameter(Mandatory = $false)]
-		[switch]$Update
+		[switch]$Update,
+
+		[string]$BackupRoot = ""
 	)
 
 	# Handle -DisplayAvailableLayouts parameter
@@ -342,6 +350,17 @@ function Visualize-Layouts {
 
 				# Combine visualization with content
 				$newContent = $visualizationBlock + $contentWithUpdatedSections
+
+				# Layout files are tracked but may carry uncommitted hand edits; keep an undo in
+				# the unified backup sink before rewriting. A backup that cannot be taken skips
+				# this file rather than overwriting an unsaved original.
+				try {
+					Backup-RepositoryItem -Path $file.FullName -Category "Config" -Key "WindowLayouts.$($file.BaseName)" -BackupRoot $BackupRoot | Out-Null
+				}
+				catch {
+					Write-Host -ForegroundColor Red "  => Skipped update (could not back up the layout file): $($_.Exception.Message)"
+					continue
+				}
 
 				# Write back to file
 				Set-Content -Path $file.FullName -Value $newContent -NoNewline

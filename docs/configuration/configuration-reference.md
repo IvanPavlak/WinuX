@@ -996,6 +996,20 @@ VisualEffects = @{
 
 ---
 
+## Backups
+
+Retention limits for the unified backup sink at `<Repo>\Backups\Windows` (gitignored), where every WinuX writer keeps a timestamped copy of whatever it replaces - files displaced by symlinks, rewritten configuration files, overwritten system files. See [Backups](../reference/backups.md) for the full policy.
+
+**Keys:**
+
+- `Backups.Retention.MaxAgeDays` - Delete backups older than this many days. Ships `0` (never) - replaced originals are precious, unlike logs.
+- `Backups.Retention.MaxBackupsPerKey` - Keep at most this many timestamped backups per key, newest retained. Ships `10`; also enforced opportunistically after every backup.
+- `Backups.Retention.MaxTotalSizeMB` - Cap the whole sink's combined size, oldest removed first. Ships `500`.
+
+A limit set to `0` is disabled. Whatever the limits, **the newest backup of every key is never deleted**. Enforced by `Clear-OldBackups`, which the idle-time maintenance sweep (`Invoke-LogMaintenance`) runs automatically.
+
+---
+
 ## More Sections (quick reference)
 
 Sections not detailed above, with their real shapes and consumers:

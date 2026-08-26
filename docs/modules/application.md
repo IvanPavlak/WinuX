@@ -740,7 +740,7 @@ if (-not (Test-ProjectAlreadyOpen -ProjectName MyProject -ProcessName "Code" -Ap
 
 ## [Update-Win11DebloatVendor](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Update-Win11DebloatVendor.ps1)
 
-- **Description:** Updates the vendored Win11Debloat files in this repository. Invokes the repository-local updater script at `Windows\Win11Debloat\Update-Win11DebloatVendor.ps1` from the terminal, refreshing the vendored release in `Windows\Win11Debloat\vendor` and its metadata so `Start-Win11Debloat` stays pinned to a known local version.
+- **Description:** Updates the vendored Win11Debloat files in this repository. Invokes the repository-local updater script at `Windows\Win11Debloat\Update-Win11DebloatVendor.ps1` from the terminal, refreshing the vendored release in `Windows\Win11Debloat\vendor` and its metadata so `Start-Win11Debloat` stays pinned to a known local version. The vendor's own machine-local `Config`, `Logs`, and `Backups` folders (registry snapshots that undo debloat operations) are preserved across the update, mirroring the vendor's own updater.
 - **Parameters:** -ReleaseTag, -Repository
 - **Usage:** `Update-Win11DebloatVendor`, `Update-Win11DebloatVendor -ReleaseTag "2026.05.11"`
 

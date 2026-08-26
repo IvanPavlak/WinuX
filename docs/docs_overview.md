@@ -234,6 +234,7 @@ docs/
 │
 └── reference/
     ├── software-list.md                    # Packages installed from the CSV files
+    ├── backups.md                          # Unified backup sink: taxonomy, retention, restore recipes
     ├── troubleshooting.md                  # Common issues and solutions
     └── known-issues.md                     # Known problems and workarounds
 ```

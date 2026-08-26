@@ -7,12 +7,14 @@ function New-WSLSymbolicLink {
 		Creates a symlink at Path pointing to Target inside the given WSL distribution
 		(`ln -s`). The parent directory is created with `mkdir -p` if missing.
 
-		A REAL file already sitting at Path is copied out to the repository's backup
-		folder on the Windows side before it is removed, so linking over a shell profile
-		or an SSH config that only ever existed inside the distro never loses it. The
-		copy lands in <Repo>\Backups\SymbolicLinks\<DisplayName>\<timestamp>\ and is
-		gitignored - easy to find, never committed. When the backup cannot be written the
-		link is skipped rather than removing an item that could not be saved first.
+		A REAL file already sitting at Path is copied out to the repository's unified
+		backup sink on the Windows side before it is removed, so linking over a shell
+		profile or an SSH config that only ever existed inside the distro never loses it.
+		Backup-RepositoryItem creates the timestamped folder (the copy itself happens
+		inside the distro with cp -a) and the copy lands in
+		<Repo>\Backups\Windows\SymbolicLinks\<DisplayName>\<timestamp>\, gitignored - easy
+		to find, never committed. When the backup cannot be written the link is skipped
+		rather than removing an item that could not be saved first.
 
 		An existing SYMLINK at Path is removed without a backup: it carries no content of
 		its own, so archiving it would only pile up copies of WinuX's own links on every
@@ -40,8 +42,9 @@ function New-WSLSymbolicLink {
 		passes the entry's dotted key, e.g. "WSLFastFetch.Configuration"). Defaults to Path.
 
 	.PARAMETER BackupRoot
-		Where replaced items are copied, as a WINDOWS path (it is translated into the
-		distribution with `wslpath`). Defaults to <Repo>\Backups\SymbolicLinks.
+		Root of the unified backup sink replaced items are copied into, as a WINDOWS path
+		(it is translated into the distribution with `wslpath`). Defaults to
+		<Repo>\Backups\Windows.
 
 	.EXAMPLE
 		New-WSLSymbolicLink -Path "/home/user/.ssh/config" -Target "/mnt/c/Users/User/.ssh/config" -Distribution "Ubuntu"
@@ -87,26 +90,11 @@ function New-WSLSymbolicLink {
 		$isLink = ($LASTEXITCODE -eq 0)
 
 		if (-not $isLink) {
-			if (-not $BackupRoot) {
-				try {
-					$BackupRoot = Join-Path -Path (Get-RepositoryPath -StartPath $PSScriptRoot).Repo -ChildPath "Backups\SymbolicLinks"
-				}
-				catch {
-					Write-LogError "Skipped WSL symlink (cannot resolve the backup folder) => [$DisplayName] => $($_.Exception.Message)"
-					return
-				}
-			}
-
-			# One folder per entry, one timestamped folder per replacement, so every version ever
-			# replaced stays side by side and the newest is last. DisplayName defaults to Path, so
-			# strip the characters a path carries but a folder name cannot hold.
-			$safeName = $DisplayName -replace '[\\/:*?"<>|]', '_'
-			$backupDir = Join-Path -Path (Join-Path -Path $BackupRoot -ChildPath $safeName) -ChildPath (Get-Date -Format 'yyyy-MM-dd_HH-mm-ss')
-
+			# The unified backup sink: one folder per entry, one timestamped folder per replacement.
+			# The helper only creates the timestamped folder (-DirectoryOnly) - the copy itself has
+			# to happen inside the distro so ownership and permissions survive (cp -a).
 			try {
-				if (-not (Test-Path -LiteralPath $backupDir)) {
-					New-Item -ItemType Directory -Path $backupDir -Force -ErrorAction Stop | Out-Null
-				}
+				$backupDir = Backup-RepositoryItem -Path $Path -Category "SymbolicLinks" -Key $DisplayName -BackupRoot $BackupRoot -DirectoryOnly
 			}
 			catch {
 				Write-LogError "Skipped WSL symlink (could not create the backup folder) => [$DisplayName] => $($_.Exception.Message)"
@@ -118,12 +106,14 @@ function New-WSLSymbolicLink {
 			$wslBackupDir = (wsl -d $Distribution wslpath -a "$backupDir" | Select-Object -First 1)
 			if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($wslBackupDir)) {
 				Write-LogError "Skipped WSL symlink (could not translate the backup folder for [$Distribution]) => [$DisplayName] => [$backupDir]"
+				try { Remove-Item -LiteralPath $backupDir -Force -ErrorAction Stop } catch { }
 				return
 			}
 
 			wsl -d $Distribution cp -a $Path "$($wslBackupDir.Trim())/"
 			if ($LASTEXITCODE -ne 0) {
 				Write-LogError "Skipped WSL symlink (could not back up the existing item) => [$DisplayName] => [$Path]"
+				try { Remove-Item -LiteralPath $backupDir -Force -ErrorAction Stop } catch { }
 				return
 			}
 			Write-LogWarning "Backed up existing item => [$Path] => [$backupDir]"

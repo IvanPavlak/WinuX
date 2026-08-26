@@ -58,8 +58,10 @@ Describe "New-WSLSymbolicLink" {
 		Should -Invoke wsl -ParameterFilter { $args -contains 'rm' } -Times 1 -Exactly
 		Should -Invoke wsl -ParameterFilter { $args -contains 'ln' } -Times 1 -Exactly
 
-		# The Windows-side destination folder is created before the in-distro copy runs.
-		(Get-ChildItem -Path $script:BackupRoot -Recurse -Directory).FullName | Should -Match "WSLShell\.Bashrc"
+		# The Windows-side destination folder is created (in the sink's SymbolicLinks category)
+		# before the in-distro copy runs: one timestamped folder under the entry's key.
+		$keyDir = Join-Path $script:BackupRoot "SymbolicLinks\WSLShell.Bashrc"
+		@(Get-ChildItem -Path $keyDir -Directory).Count | Should -Be 1
 	}
 
 	It "keeps the original and skips the link when the backup copy fails" {

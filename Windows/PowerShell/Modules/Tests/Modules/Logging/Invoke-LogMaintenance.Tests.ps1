@@ -47,6 +47,7 @@ Describe "Invoke-LogMaintenance" {
 	Context "throttling and configuration" {
 		BeforeEach {
 			Mock -ModuleName Logging Clear-OldLogs { }
+			Mock -ModuleName Logging Clear-OldBackups { }
 		}
 
 		It "skips the sweep when the stamp is younger than the interval" {
@@ -100,7 +101,30 @@ Describe "Invoke-LogMaintenance" {
 		}
 	}
 
+	Context "backup retention" {
+		BeforeEach {
+			Mock -ModuleName Logging Clear-OldLogs { }
+			Mock -ModuleName Logging Clear-OldBackups { }
+		}
+
+		It "enforces backup retention through Clear-OldBackups in the same sweep" {
+			Invoke-LogMaintenance -Force -ResultsDirectory $script:ResultsDir
+			Should -Invoke -ModuleName Logging Clear-OldBackups -Times 1 -Exactly
+		}
+
+		It "does not touch backups when the sweep is throttled" {
+			Set-Content -Path $script:StampFile -Value 'stamp'
+			Invoke-LogMaintenance -ResultsDirectory $script:ResultsDir
+			Should -Invoke -ModuleName Logging Clear-OldBackups -Times 0 -Exactly
+		}
+	}
+
 	Context "session-log retention" {
+		BeforeEach {
+			# Keep the sweep away from the real repository's backup sink.
+			Mock -ModuleName Logging Clear-OldBackups { }
+		}
+
 		It "prunes session logs through Clear-OldLogs using configured retention" {
 			1..5 | ForEach-Object {
 				$f = Join-Path $script:LogsDir ("Session_2026-01-{0:D2}_00-00-00_{1}.log" -f $_, $_)
@@ -115,6 +139,7 @@ Describe "Invoke-LogMaintenance" {
 	Context "test-results pruning" {
 		BeforeEach {
 			Mock -ModuleName Logging Clear-OldLogs { }
+			Mock -ModuleName Logging Clear-OldBackups { }
 
 			# Helper: create a file with a given age in days.
 			$script:NewAgedFile = {

@@ -17,6 +17,9 @@ function Add-WindowLayout {
 		Override the Configuration.psd1 path (for testing).
 	.PARAMETER LayoutsDirectory
 		Override the Layouts directory path (for testing).
+	.PARAMETER BackupRoot
+		Override the backup sink root for the -Simple configuration write. Defaults to
+		Backups\Windows in the repository the configuration file belongs to.
 	.EXAMPLE
 		Add-WindowLayout -WorkspaceName "MyWorkspace"
 	.EXAMPLE
@@ -32,7 +35,8 @@ function Add-WindowLayout {
 		[switch]$Simple,
 
 		[string]$ConfigurationFilePath,
-		[string]$LayoutsDirectory
+		[string]$LayoutsDirectory,
+		[string]$BackupRoot
 	)
 
 	$layoutsDir = if ($LayoutsDirectory) { $LayoutsDirectory } else { $script:LayoutsPath }
@@ -133,6 +137,20 @@ VIRTUAL DESKTOP 1 - Monitor: Primary - Layout: One
 				$newLines = [System.Collections.ArrayList]::new($lines)
 				$newLines.Insert($section.EndIndex, "$($section.Indent)$t`"$WorkspaceName`"")
 				$lines = @($newLines)
+			}
+
+			# Configuration.psd1 is a tracked file - keep a timestamped undo in the unified
+			# backup sink of the repository the file belongs to before rewriting it. A backup
+			# that cannot be taken aborts the write.
+			try {
+				if (-not $BackupRoot) {
+					$BackupRoot = Join-Path -Path (Get-RepositoryPath -StartPath (Split-Path -Path $configPath -Parent)).Repo -ChildPath "Backups\Windows"
+				}
+				Backup-RepositoryItem -Path $configPath -Category "Config" -Key "Configuration" -BackupRoot $BackupRoot | Out-Null
+			}
+			catch {
+				Write-LogError "Could not back up '$configPath'; aborting without changes. $($_.Exception.Message)"
+				return
 			}
 
 			Set-Content -Path $configPath -Value $lines

@@ -40,6 +40,10 @@ function Configure-Taskbar {
 	.PARAMETER FromBootstrap
 		Skips the 5-second wait for Explorer initialization (used internally during setup).
 
+	.PARAMETER BackupRoot
+		Root of the unified backup sink an existing real layout file is copied into before it
+		is overwritten. Defaults to <Repo>\Backups\Windows resolved inside Backup-RepositoryItem.
+
 	.EXAMPLE
 		Configure-Taskbar
 		Clears and reconfigures the taskbar pins.
@@ -47,7 +51,9 @@ function Configure-Taskbar {
 	[CmdletBinding()]
 	param(
 		[Parameter(Mandatory = $false)]
-		[switch]$FromBootstrap
+		[switch]$FromBootstrap,
+
+		[string]$BackupRoot = ""
 	)
 
 	Test-AdminPrivileges
@@ -190,6 +196,19 @@ function Configure-Taskbar {
 	$existingLayout = Get-Item -LiteralPath $layoutFile -Force -ErrorAction SilentlyContinue
 	if ($existingLayout -and $existingLayout.LinkType) {
 		Remove-Item -LiteralPath $layoutFile -Force -ErrorAction SilentlyContinue
+	}
+	elseif ($existingLayout) {
+		# A REAL layout file may encode the user's own hand-pinned arrangement; keep an undo in
+		# the unified backup sink before overwriting it. A backup that cannot be taken skips the
+		# write - a layout that could not be saved is never replaced.
+		try {
+			$backupDir = Backup-RepositoryItem -Path $layoutFile -Category "System" -Key "TaskbarLayout" -BackupRoot $BackupRoot
+			Write-LogWarning "Backed up existing taskbar layout => [$layoutFile] => [$backupDir]"
+		}
+		catch {
+			Write-LogError "Skipped taskbar layout (could not back up the existing file) => [$layoutFile] => $($_.Exception.Message)"
+			return
+		}
 	}
 
 	try {

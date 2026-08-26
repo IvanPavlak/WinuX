@@ -1,6 +1,9 @@
 # Invoke-LogMaintenance
 
-Periodic, silent housekeeping sweep over every log the repository generates.
+Periodic, silent housekeeping sweep over the repository's generated state: session logs, the unified backup sink, and stale test-run artifacts.
+
+> [!NOTE]
+> The same sweep also enforces backup retention over `Backups\Windows` through [`Clear-OldBackups`](../helper/Clear-OldBackups.md), whose limits come from the separate `Backups.Retention` section (see [Backups](../../../reference/backups.md)).
 
 > [!NOTE]
 > Every value on this page belongs in `Configuration.local.psd1`, never in the base `Configuration.psd1`. The base file is upstream's, it ships empty-by-default, and it is deep-merged with your local file at load time by `Load-PathConfiguration`. See [Fork Model](../../../contributing/fork-model.md).

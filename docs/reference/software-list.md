@@ -74,8 +74,8 @@ Microsoft.PowerShell,7.4.6,d,n,w,All
 
 You can write an overlay by hand, or through `Save-AppCsvOverlay`, which validates every row before
 it replaces anything (an empty `App`, a blank `Machine` cell, or an unknown machine token is refused,
-because such a row would look installed and never install), keeps a `.bak` of the previous overlay,
-and swaps the new one in atomically.
+because such a row would look installed and never install), keeps a timestamped copy of the previous
+overlay in the gitignored [backup sink](backups.md), and swaps the new one in atomically.
 
 ### Committing your overlays in a fork
 
@@ -83,7 +83,8 @@ WinuX gitignores `*.local.csv`, exactly as it gitignores `Configuration.local.ps
 personal, and upstream ships only the generic baseline. If you run several machines and want your
 app choices to travel between them, **commit the overlays in your fork** - remove the ignore line
 (or `git add -f` them). Upstream never tracks those paths, so committing them downstream never
-conflicts on a pull. Ignore the writers' `.bak` files either way; they are noise.
+conflicts on a pull. The writer's backups stay out of the way either way - they live in the
+gitignored `Backups/` sink, never beside the overlays.
 
 ## Shipped WinGet apps
 

@@ -2369,7 +2369,7 @@
 	# the retention limits below so they stay detailed but small. Pinned logs (Logs/Pinned,
 	# created via Protect-Log) are never pruned. Maintenance controls the automatic background
 	# sweep (Invoke-LogMaintenance, fired from the profile once the shell is idle) that enforces
-	# retention and clears stale test-run artifacts without adding startup time.
+	# log and backup retention and clears stale test-run artifacts without adding startup time.
 	# → Consumer: Initialize-LoggingState, Write-Log, Clear-OldLogs, Invoke-LogMaintenance
 	#
 	# Example:
@@ -2409,13 +2409,38 @@
 			}
 		}
 
-		# Automatic background housekeeping (Invoke-LogMaintenance). Enforces the retention above
-		# and prunes stale Tests\Results artifacts, at most once per interval, fired from the
+		# Automatic background housekeeping (Invoke-LogMaintenance). Enforces the retention above,
+		# backup retention (Backups.Retention, via Clear-OldBackups), and prunes stale
+		# Tests\Results artifacts, at most once per interval, fired from the
 		# profile only after the shell is idle - never during startup. No setup required; set
 		# Enabled = $false to opt out and prune manually instead.
 		Maintenance  = @{
 			Enabled       = $true # Set $false to disable the automatic idle-time sweep
 			IntervalHours = 24    # Minimum hours between sweeps (stamp file: Logs\.last-maintenance)
+		}
+	}
+
+	# ==========================================================================
+	# Backups Configuration
+	# ==========================================================================
+	# Retention limits for the unified backup sink (Backups\Windows, gitignored). Every writer
+	# that replaces an existing file first copies it there via Backup-RepositoryItem, one
+	# timestamped folder per replacement. The limits below keep the sink bounded; they are
+	# enforced by the same idle-time maintenance sweep that prunes logs, and per-key opportunistic
+	# pruning runs on every backup. THE NEWEST BACKUP OF EVERY KEY IS NEVER DELETED by any limit -
+	# unlike a log, a replaced original is not regenerable. A limit of 0 disables it.
+	# → Consumer: Backup-RepositoryItem, Clear-OldBackups
+	#
+	# Example:
+	#   Backups = @{
+	#       Retention = @{ MaxAgeDays = 0; MaxBackupsPerKey = 10; MaxTotalSizeMB = 500 }
+	#   }
+	# ==========================================================================
+	Backups                       = @{
+		Retention = @{
+			MaxAgeDays       = 0   # Delete backups older than this many days (0 = never; replaced originals are precious)
+			MaxBackupsPerKey = 10  # Keep at most this many timestamped backups per key (newest retained; 0 = unlimited)
+			MaxTotalSizeMB   = 500 # Cap the whole sink's combined size (oldest removed first; 0 = uncapped)
 		}
 	}
 

@@ -8,7 +8,7 @@ This page documents the layout of the WinuX repository: the annotated repo-root 
 WinuX/
 ├── .github/                                        # CI workflows, issue/PR templates, AI instructions & prompts
 ├── AI/                                             # Layered AI context system (see docs/ai/overview.md)
-├── Backups/                                        # Replaced files saved by SymbolicLinkMaker (gitignored, .gitkeep only)
+├── Backups/                                        # Unified backup sink, OS-namespaced (Backups/Windows/...): everything WinuX writers replace (gitignored, .gitkeep only; see docs/reference/backups.md)
 ├── Docker/                                         # Docker Compose files (centralized)
 │   └── docker-compose.postgresql.yml               # Shared PostgreSQL (PG17 + PG16 + pgAdmin)
 ├── FastFetch/                                      # CLI system info

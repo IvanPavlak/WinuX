@@ -83,7 +83,7 @@ it - all three `Install-*Apps` functions and `Get-PinnedApps` - so what the over
 installed. An overlay row **adds** a new app, **replaces** a committed row with the same `App` (to pin a
 version, change the scope, or re-target the machine), or - written as `-<id>` - **removes** one you don't
 want. [`Save-AppCsvOverlay`](../modules/configuration.md#save-appcsvoverlay) writes it with validation and
-a `.bak`; you can also just edit the file. The full reference is in
+a timestamped backup in the gitignored sink; you can also just edit the file. The full reference is in
 [Software List: Machine-Local Overlay](../reference/software-list.md#machine-local-overlay).
 
 **Never edit the committed CSVs in your fork.** They are ordinary upstream-tracked files now, exactly like

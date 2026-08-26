@@ -11,6 +11,8 @@ The [Helper module reference](../../../modules/helper.md) is the authority on wh
 
 | Function | Configuration keys | Guide |
 | -------- | ------------------ | ----- |
+| `Backup-RepositoryItem` | `Backups.Retention` | [Backup-RepositoryItem](Backup-RepositoryItem.md) |
+| `Clear-OldBackups` | `Backups.Retention` | [Clear-OldBackups](Clear-OldBackups.md) |
 | `Confirm-ConfigValue` | caller-supplied | [Confirm-ConfigValue](Confirm-ConfigValue.md) |
 | `Invoke-GoogleTranslate` | `DefaultTranslateLanguages` | [Invoke-GoogleTranslate](Invoke-GoogleTranslate.md) |
 | `List-Functions` | `FunctionDiscrepancyExclusions`, `ListFunctionsColors` | [List-Functions](List-Functions.md) |

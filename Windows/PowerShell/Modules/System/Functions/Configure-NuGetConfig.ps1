@@ -11,6 +11,10 @@ function Configure-NuGetConfig {
     .PARAMETER Override
         Force reconfiguration of NuGet settings even if already configured.
 
+    .PARAMETER BackupRoot
+        Root of the unified backup sink an existing real config is copied into before it is
+        overwritten. Defaults to <Repo>\Backups\Windows resolved inside Backup-RepositoryItem.
+
     .EXAMPLE
         Configure-NuGetConfig
         Configures NuGet settings if not already done.
@@ -22,7 +26,9 @@ function Configure-NuGetConfig {
 	[CmdletBinding()]
 	param(
 		[Parameter(Mandatory = $false)]
-		[switch]$Override
+		[switch]$Override,
+
+		[string]$BackupRoot = ""
 	)
 
 	Write-LogTitle "NuGet Config Setup"
@@ -135,6 +141,21 @@ function Configure-NuGetConfig {
 	$destinationDir = Split-Path $destinationPath -Parent
 	if (-not (Test-Path $destinationDir)) {
 		New-Item -Path $destinationDir -ItemType Directory -Force | Out-Null
+	}
+
+	# An existing real config may carry credentials for feeds this template knows nothing about;
+	# keep an undo in the unified backup sink before overwriting it (the sink is gitignored, so
+	# the token in the copy never reaches git). A backup that cannot be taken aborts the write.
+	$existingConfig = Get-Item -LiteralPath $destinationPath -Force -ErrorAction SilentlyContinue
+	if ($existingConfig -and -not $existingConfig.LinkType) {
+		try {
+			$backupDir = Backup-RepositoryItem -Path $destinationPath -Category "System" -Key "NuGetConfig" -BackupRoot $BackupRoot
+			Write-LogWarning "Backed up existing NuGet config => [$destinationPath] => [$backupDir]"
+		}
+		catch {
+			Write-LogError "Skipped NuGet config (could not back up the existing file) => [$destinationPath] => $($_.Exception.Message)"
+			return
+		}
 	}
 
 	$configContent | Set-Content -Path $destinationPath -Encoding UTF8

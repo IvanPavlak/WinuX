@@ -13,6 +13,9 @@ function Add-Workspace {
 		If omitted, creates a default Set-WorkspaceWindowLayout action.
 	.PARAMETER ConfigurationFilePath
 		Override the Configuration.psd1 path (for testing).
+	.PARAMETER BackupRoot
+		Override the backup sink root. Defaults to Backups\Windows in the repository the
+		configuration file belongs to.
 	.EXAMPLE
 		Add-Workspace -Name "MyWorkspace" -Actions @(
 			@{ Action = "Open-Project"; Parameters = @{ Project = "MyProject" } }
@@ -27,7 +30,9 @@ function Add-Workspace {
 
 		[hashtable[]]$Actions,
 
-		[string]$ConfigurationFilePath
+		[string]$ConfigurationFilePath,
+
+		[string]$BackupRoot
 	)
 
 	$configPath = if ($ConfigurationFilePath) { $ConfigurationFilePath } else { $script:ConfigurationPath }
@@ -80,6 +85,20 @@ function Add-Workspace {
 	$insertIndex = $waSection.EndIndex
 	for ($i = 0; $i -lt $actionLines.Count; $i++) {
 		$newLines.Insert($insertIndex + $i, $actionLines[$i])
+	}
+
+	# Configuration.psd1 is a tracked file - keep a timestamped undo in the unified backup sink
+	# of the repository the file belongs to (so a sandboxed config never pollutes the real sink)
+	# before rewriting it. A backup that cannot be taken aborts the write.
+	try {
+		if (-not $BackupRoot) {
+			$BackupRoot = Join-Path -Path (Get-RepositoryPath -StartPath (Split-Path -Path $configPath -Parent)).Repo -ChildPath "Backups\Windows"
+		}
+		Backup-RepositoryItem -Path $configPath -Category "Config" -Key "Configuration" -BackupRoot $BackupRoot | Out-Null
+	}
+	catch {
+		Write-LogError "Could not back up '$configPath'; aborting without changes. $($_.Exception.Message)"
+		return
 	}
 
 	Set-Content -Path $configPath -Value $newLines

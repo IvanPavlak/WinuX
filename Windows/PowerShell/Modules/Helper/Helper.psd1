@@ -4,8 +4,10 @@
 	Description       = ""
 	RootModule        = "Helper.psm1"
 	FunctionsToExport = @(
+		'Backup-RepositoryItem',
 		'BranchExists',
 		'Cd-Desktop',
+		'Clear-OldBackups',
 		'Close-WindowsTerminalTab',
 		'Collect-BrowserUrls',
 		'Confirm-ConfigValue',
