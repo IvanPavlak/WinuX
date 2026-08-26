@@ -115,6 +115,75 @@ Describe "Set-WindowLayouts" {
 		}
 	}
 
+	Context "ProtectedWindowHandles (plain-open preservation)" {
+		# A preserved alongside workspace's window matches layout regexes exactly like any
+		# other ("Browser" matches any browser window). It must be dropped from the candidate
+		# list before claiming - a starved entry reports "Not Found" instead of stealing the
+		# preserved window - and the per-window backstop must refuse one that arrives by a
+		# path bypassing the filter.
+		BeforeEach {
+			Mock Test-LogVerbose { $false }
+			Mock Write-LogDebug { }
+			Mock Clear-WindowCache { }
+			Mock Start-Sleep { }
+		}
+
+		BeforeAll {
+			$script:protectedBrowserEntry = @(@{ ProcessName = 'chrome' })
+
+			function New-ProtectedSet {
+				param([int[]]$Handle)
+				$set = New-Object 'System.Collections.Generic.HashSet[IntPtr]'
+				foreach ($item in $Handle) { [void]$set.Add([IntPtr]$item) }
+				$set
+			}
+		}
+
+		It "reports Not Found when the only candidate is a protected window" {
+			Mock Get-WindowHandle {
+				@([PSCustomObject]@{ Handle = [IntPtr]0xC1001; Title = 'YouTube - Google Chrome'; ProcessName = 'chrome'; ProcessId = 4242 })
+			}
+
+			$results = @(Set-WindowLayouts -LayoutConfig $protectedBrowserEntry -ProtectedWindowHandles (New-ProtectedSet 0xC1001))
+
+			$results.Count | Should -Be 1
+			$results[0].Status | Should -Be 'Not Found'
+		}
+
+		It "still claims an unprotected sibling next to a protected one" {
+			Mock Get-WindowHandle {
+				@(
+					[PSCustomObject]@{ Handle = [IntPtr]0xC1001; Title = 'YouTube - Google Chrome'; ProcessName = 'chrome'; ProcessId = 4242 }
+					[PSCustomObject]@{ Handle = [IntPtr]0xC1002; Title = 'GitHub - Google Chrome'; ProcessName = 'chrome'; ProcessId = 4243 }
+				)
+			}
+
+			$results = @(Set-WindowLayouts -LayoutConfig $protectedBrowserEntry -ProtectedWindowHandles (New-ProtectedSet 0xC1001))
+
+			$results.Count | Should -Be 1
+			$results[0].Status | Should -Be 'Configured'
+			$results[0].Handle | Should -Be ([IntPtr]0xC1002)
+		}
+
+		It "never claims a protected window recovered by the wait-phase handle fallback" {
+			# ExpectedWindowState's handle-recovery fallback resurrects windows the title search
+			# missed - the exclusion (filter first, move-loop backstop behind it) must refuse a
+			# protected window arriving by that route too.
+			Mock Get-WindowHandle {
+				param($ProcessName, $WindowTitle)
+				if ($WindowTitle) { return $null }
+				@([PSCustomObject]@{ Handle = [IntPtr]0xC1001; Title = 'Drifted Title'; ProcessName = 'chrome'; ProcessId = 4242 })
+			}
+			$expectedState = @{ ([IntPtr]0xC1001) = [PSCustomObject]@{ Title = 'YouTube - Google Chrome' } }
+			$titleEntry = @(@{ ProcessName = 'chrome'; WindowTitle = 'YouTube.*' })
+
+			$results = @(Set-WindowLayouts -LayoutConfig $titleEntry -ExpectedWindowState $expectedState `
+					-ProtectedWindowHandles (New-ProtectedSet 0xC1001))
+
+			@($results | Where-Object { $_.Status -eq 'Configured' }).Count | Should -Be 0
+		}
+	}
+
 	Context "SingleZone plumbing (zone-based positioning)" {
 		# A single-zone layout (Zone = "Fullscreen" on the one-zone "Zero" grid) must reach
 		# Add-PositionedWindow with -SingleZone so Snap-AllWindows places the window directly

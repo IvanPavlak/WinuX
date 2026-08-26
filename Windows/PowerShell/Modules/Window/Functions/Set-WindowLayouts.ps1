@@ -61,6 +61,13 @@ function Set-WindowLayouts {
 		entry's candidate list before any claiming happens, so an entry left with none reports
 		"Not Found" (a visible, countable shortfall) instead of silently placing nothing.
 
+	.PARAMETER ProtectedWindowHandles
+		Live window handles a plain open must preserve (they belong to a live alongside
+		workspace - see Get-WorkspaceOpenProtection). Protected windows are removed from every
+		entry's candidate list before claiming, from the per-window backstop, and from every
+		recreated-window recovery lookup, so no layout entry can ever move or reposition one.
+		An entry whose only matches are protected reports "Not Found".
+
 	.PARAMETER PinnedHandleMap
 		Optional hashtable from a previous successful run (built by Set-WorkspaceWindowLayout
 		from CurrentLayout.txt), keyed by "<DesktopNumber>|<Monitor>|<Zone>" mapping to the
@@ -157,7 +164,10 @@ function Set-WindowLayouts {
 		[switch]$SkipExistingWindows,
 
 		[Parameter()]
-		[hashtable]$PinnedHandleMap
+		[hashtable]$PinnedHandleMap,
+
+		[Parameter()]
+		[System.Collections.Generic.HashSet[IntPtr]]$ProtectedWindowHandles
 	)
 
 	Initialize-PositionedWindowTracking
@@ -332,11 +342,15 @@ function Set-WindowLayouts {
 						Write-LogDebug "Original handle invalid, searching for window by title pattern..." -Style Warning
 					}
 
+					# Recreated-window recovery searches by title - exactly the signal a preserved
+					# alongside workspace's identically titled window would answer to. Filter it
+					# out so a mid-positioning recovery can never pick up a protected window.
 					$possibleWindows = Get-WindowHandle -ProcessName $config.ProcessName -ErrorAction SilentlyContinue |
-						Where-Object { $_.Title -eq $window.Title }
+						Where-Object { $_.Title -eq $window.Title -and -not ($ProtectedWindowHandles -and $ProtectedWindowHandles.Contains($_.Handle)) }
 
 					if (-not $possibleWindows -and $config.WindowTitle) {
-						$possibleWindows = Get-WindowHandle -WindowTitle $config.WindowTitle -ErrorAction SilentlyContinue
+						$possibleWindows = Get-WindowHandle -WindowTitle $config.WindowTitle -ErrorAction SilentlyContinue |
+							Where-Object { -not ($ProtectedWindowHandles -and $ProtectedWindowHandles.Contains($_.Handle)) }
 					}
 
 					if ($possibleWindows -and $possibleWindows.Count -gt 0) {
@@ -463,9 +477,12 @@ function Set-WindowLayouts {
 						Where-Object { $_.Handle -eq $window.Handle } |
 						Select-Object -First 1
 
+					# Both verify-by-title fallbacks exclude protected windows for the same reason
+					# as the recreated-window recovery above: a title match is exactly how a
+					# preserved workspace's window would be mistaken for the one just positioned.
 					if (-not $verifyWindow -and $window.Title) {
 						$verifyWindow = Get-WindowHandle -ProcessName $config.ProcessName -ErrorAction SilentlyContinue |
-							Where-Object { $_.Title -eq $window.Title } |
+							Where-Object { $_.Title -eq $window.Title -and -not ($ProtectedWindowHandles -and $ProtectedWindowHandles.Contains($_.Handle)) } |
 							Select-Object -First 1
 
 						if ($verifyWindow -and (Test-LogVerbose)) {
@@ -475,6 +492,7 @@ function Set-WindowLayouts {
 
 					if (-not $verifyWindow -and $config.WindowTitle) {
 						$verifyWindow = Get-WindowHandle -WindowTitle $config.WindowTitle -ErrorAction SilentlyContinue |
+							Where-Object { -not ($ProtectedWindowHandles -and $ProtectedWindowHandles.Contains($_.Handle)) } |
 							Select-Object -First 1
 
 						if ($verifyWindow -and (Test-LogVerbose)) {
@@ -542,12 +560,13 @@ function Set-WindowLayouts {
 
 								if (-not $retryVerifyWindow -and $verifyWindow.Title) {
 									$retryVerifyWindow = Get-WindowHandle -ProcessName $config.ProcessName -ErrorAction SilentlyContinue |
-										Where-Object { $_.Title -eq $verifyWindow.Title } |
+										Where-Object { $_.Title -eq $verifyWindow.Title -and -not ($ProtectedWindowHandles -and $ProtectedWindowHandles.Contains($_.Handle)) } |
 										Select-Object -First 1
 								}
 
 								if (-not $retryVerifyWindow -and $config.WindowTitle) {
 									$retryVerifyWindow = Get-WindowHandle -WindowTitle $config.WindowTitle -ErrorAction SilentlyContinue |
+										Where-Object { -not ($ProtectedWindowHandles -and $ProtectedWindowHandles.Contains($_.Handle)) } |
 										Select-Object -First 1
 								}
 
@@ -826,6 +845,20 @@ function Set-WindowLayouts {
 			$windows = @($windows | Where-Object { -not $ExistingWindowHandles.Contains($_.Handle) })
 			if ((Test-LogVerbose) -and $windows.Count -ne $candidateCount) {
 				Write-LogDebug "⊘ Excluded $($candidateCount - $windows.Count) pre-existing window(s) - not eligible for an alongside layout" -Style Warning
+			}
+		}
+
+		# Plain-mode candidate exclusion, same position and same reasoning as the alongside
+		# filter above: a preserved workspace's window matches layout regexes ("Browser" matches
+		# any browser window) but is another workspace's to keep - drop it before any entry can
+		# claim it, so a genuine shortfall reports as "Not Found" instead of a stolen window.
+		# After the search ladder, not inside it: no amount of re-querying makes a protected
+		# window eligible.
+		if ($ProtectedWindowHandles -and $windows) {
+			$candidateCount = @($windows).Count
+			$windows = @($windows | Where-Object { -not $ProtectedWindowHandles.Contains($_.Handle) })
+			if ((Test-LogVerbose) -and $windows.Count -ne $candidateCount) {
+				Write-LogDebug "⊘ Excluded $($candidateCount - $windows.Count) protected window(s) - preserved for a live alongside workspace" -Style Warning
 			}
 		}
 
@@ -1110,6 +1143,15 @@ function Set-WindowLayouts {
 			if ($SkipExistingWindows -and $ExistingWindowHandles -and $ExistingWindowHandles.Contains($window.Handle)) {
 				if (Test-LogVerbose) {
 					Write-LogDebug "⊘ Skipping - window existed before this workspace (belongs to another workspace)" -Style Warning
+				}
+				continue
+			}
+
+			# Same backstop for protected windows: the candidate filter above already removed
+			# them, so reaching this guard means the window arrived by a path that bypassed it.
+			if ($ProtectedWindowHandles -and $ProtectedWindowHandles.Contains($window.Handle)) {
+				if (Test-LogVerbose) {
+					Write-LogDebug "⊘ Skipping - window is preserved for a live alongside workspace" -Style Warning
 				}
 				continue
 			}

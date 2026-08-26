@@ -331,7 +331,7 @@ $patterns += @(Get-SwaggerCloseTitlePatterns -Project $projectName)
 ## [Get-WorkspaceOpenDelta](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Workflow/Functions/Get-WorkspaceOpenDelta.ps1)
 
 - **Description:** The ownership rule for [Close-Workspace](#close-workspace), in one place. Given the window handles and the Windows Terminal tab snapshot taken *before* an `Open-Workspace` invocation ran its actions, this enumerates what exists now and returns the difference as a single tracker entry.
-- **Parameters:** -Workspace, -ExistingWindowHandles, -ExistingTerminalTabs, -PreCapturedTerminalTabs, -DesktopOffset, -Alongside, -AdoptUnclaimed
+- **Parameters:** -Workspace, -ExistingWindowHandles, -ExistingTerminalTabs, -PreCapturedTerminalTabs, -DesktopOffset, -Alongside, -AdoptUnclaimed, -ProtectedWindowHandles
 - **Usage:** `Get-WorkspaceOpenDelta -Workspace 'Server' -ExistingWindowHandles $before -ExistingTerminalTabs $tabsBefore`
 
 **Windows** are differenced by handle. Anything on screen whose handle was not there before belongs to this open; anything that was already there does not - which is exactly what keeps a single-instance application out of a later workspace's entry. Both process id and window title are recorded alongside the handle, because handles are the only unambiguous key while a window lives but Electron applications recreate their window (new handle, same process) and a restarted application keeps neither; the extra fields let `Close-Workspace` re-resolve a record whose handle has gone stale.
@@ -340,7 +340,7 @@ Which virtual desktops the workspace occupies is deliberately **not** recorded. 
 
 **Terminal tabs** cannot be differenced by handle - they are not top-level windows - so they are differenced per Windows Terminal window by title, and **by count rather than by set membership**. A second tab titled `MyProject.Api` opened next to an existing one is a new tab even though the title was already present; set subtraction would miss it and leave it running. The current tab strip normally arrives ready-made in `-PreCapturedTerminalTabs`: `Open-Workspace` takes that snapshot while the terminal is still on the visible desktop, right before its layout action parks it on one of the workspace's own desktops. Reading it *here* is the expensive path, because this runs at the **end** of an open and Windows Terminal exposes no tab strip while its desktop is off screen - so the fallback read uses [Get-TerminalTabSnapshot](helper.md#get-terminaltabsnapshot) `-EnsureVisible` and pays a desktop round trip, which the user sees as the view jumping to the terminal and back *after* the workspace's final [Focus-VirtualDesktop](window.md#focus-virtualdesktop) landing. A supplied but **empty** map is honoured rather than re-read: it means the caller looked and found no readable terminal.
 
-`-AdoptUnclaimed` also claims what was already on screen, which is what makes an already-running application closable at all (see [Close-Workspace](#close-workspace) for why that matters). Adoption reaches only for what `Universal.VisibleWindowExclusions` does not name, and it never overrides the diff: a window this open genuinely created is always recorded. Use it for the **first** workspace of a plain run only - never for `-Alongside`, which would steal another workspace's windows, and never twice in one run, because both entries would then claim the same windows and each would protect them from the other's teardown.
+`-AdoptUnclaimed` also claims what was already on screen, which is what makes an already-running application closable at all (see [Close-Workspace](#close-workspace) for why that matters). Adoption reaches only for what `Universal.VisibleWindowExclusions` does not name, and it never overrides the diff: a window this open genuinely created is always recorded. Use it for the **first** workspace of a plain run only - never for `-Alongside`, which would steal another workspace's windows, and never twice in one run, because both entries would then claim the same windows and each would protect them from the other's teardown. `-ProtectedWindowHandles` bounds adoption once more: the handles of alongside workspaces a plain open preserves (from [Get-WorkspaceOpenProtection](#get-workspaceopenprotection)) are never adopted - neither the windows nor, for a protected terminal window, its tabs - or closing this workspace would take the preserved one's windows down with it.
 
 Returns one ordered entry: `Workspace`, `Alongside`, `DesktopOffset`, `OpenedUtc` (round-trippable `o` format), `ShellPid`, `Windows`, `TerminalTabs`.
 
@@ -353,6 +353,7 @@ Returns one ordered entry: `Workspace`, `Alongside`, `DesktopOffset`, `OpenedUtc
 | `-DesktopOffset`         | int       | `0`     | Desktop offset the open used (`0` normally, `+N` for `-Alongside`). Recorded for context.                              |
 | `-Alongside`             | switch    | off     | Records that the workspace was opened alongside existing desktops.                                                     |
 | `-AdoptUnclaimed`        | switch    | off     | Also claim what was already on screen, minus `Universal.VisibleWindowExclusions`. First workspace of a plain run only.  |
+| `-ProtectedWindowHandles` | object   | -       | Live handles of preserved alongside workspaces (same accepted shapes as `-ExistingWindowHandles`). Adoption never claims them, tabs included; diff-created windows are always recorded regardless. |
 
 ```powershell
 # What did this open actually produce?
@@ -360,7 +361,33 @@ $entry = Get-WorkspaceOpenDelta -Workspace 'Server' -ExistingWindowHandles $befo
 "$(@($entry.Windows).Count) window(s), $(@($entry.TerminalTabs).Count) tab(s)"
 ```
 
-**See also:** [Save-WorkspaceState](#save-workspacestate), [Close-Workspace](#close-workspace), [Get-TerminalTabSnapshot](helper.md#get-terminaltabsnapshot)
+**See also:** [Save-WorkspaceState](#save-workspacestate), [Close-Workspace](#close-workspace), [Get-WorkspaceOpenProtection](#get-workspaceopenprotection), [Get-TerminalTabSnapshot](helper.md#get-terminaltabsnapshot)
+
+## [Get-WorkspaceOpenProtection](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Workflow/Functions/Get-WorkspaceOpenProtection.ps1)
+
+- **Description:** Resolves what a plain workspace open must leave alone: tracked `-Alongside` workspaces that still have at least one live window. Returns their tracker entries verbatim plus a `HashSet[IntPtr]` of the live window handles they own, or `$null` when there is nothing to preserve. This is what makes a plain rerun of workspace A stop destroying a workspace B that is open alongside it.
+- **Parameters:** -StatePath
+- **Usage:** `Get-WorkspaceOpenProtection`, `Get-WorkspaceOpenProtection -StatePath $trackerPath`
+
+Without protection a plain rerun destroyed a live alongside workspace three ways at once: the virtual-desktop resize shrank the count back to the plain layout's requirement and removed exactly the alongside desktops (with their FancyZones grids), the plain layout pass matched and moved the alongside windows (layout entries match by process/title, and `Browser` matches any browser window), and the plain tracker/CurrentLayout writes replaced both files wholesale - wiping the alongside entry (making it unclosable) and its zone-pinning section.
+
+The protection set is derived the same way [Close-Workspace](#close-workspace) derives what a teardown must spare: from the tracker [Save-WorkspaceState](#save-workspacestate) wrote, never from configuration. Every tracked entry with `Alongside = $true` is checked against the live windows; an entry with at least one live window is **preserved** - its tracker entry travels forward verbatim (dead records included, the same staleness `Close-Workspace` tolerates) and its resolved handles become untouchable for the whole open. Records are resolved with `Close-Workspace`'s exact ladder: live handle first, then same `ProcessId` + `ProcessName` (Electron applications recreate their window without restarting), then same `ProcessName` + exact `Title` (the application restarted outright) - the third step sharing that function's accepted false-positive risk, since two workspaces routinely hold identically titled windows. Plain entries are never preserved: a plain rerun replaces the plain session by design. The common case - no alongside workspace tracked - pays one file parse and short-circuits to `$null` before any window enumeration.
+
+Consumed by [Open-Workspace](#open-workspace), which resolves it once per plain run (before any action can spawn a process) and threads the handle set to every action that declares `-ProtectedWindowHandles` and the entries into the tracker write. [Set-WorkspaceWindowLayout](window.md#set-workspacewindowlayout) also self-derives the set on a standalone plain call when this function is available.
+
+| Parameter    | Description                                                                                  |
+| ------------ | ---------------------------------------------------------------------------------------------- |
+| `-StatePath` | Full path to the tracker file. Defaults to [Get-WorkspaceStatePath](#get-workspacestatepath). Mainly a test seam. |
+
+```powershell
+# What would a plain open preserve right now?
+$protection = Get-WorkspaceOpenProtection
+if ($protection) {
+    "preserving $(@($protection.Entries).Count) alongside workspace(s), $($protection.WindowHandles.Count) window(s)"
+}
+```
+
+**See also:** [Open-Workspace](#open-workspace), [Close-Workspace](#close-workspace), [Save-WorkspaceState](#save-workspacestate), [Get-WorkspaceOpenDelta](#get-workspaceopendelta), [Set-WorkspaceWindowLayout](window.md#set-workspacewindowlayout)
 
 ## [Get-WorkspaceState](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Workflow/Functions/Get-WorkspaceState.ps1)
 
@@ -590,6 +617,8 @@ Everything the flow spawns inherits the invoking shell's token, so running from 
 
 **Every open records what it produced, so it can be closed again.** Before the actions run, the flow captures the window handles on screen (it already did, for the layout pass) plus the Windows Terminal tab strip via [Get-TerminalTabSnapshot](helper.md#get-terminaltabsnapshot) - tabs are not top-level windows, so a handle diff cannot see them. The matching **after** snapshot is taken during the run rather than at the end: right before the `Set-WorkspaceWindowLayout` action, which is what parks the terminal on one of the workspace's own desktops, and Windows Terminal shows no tab strip while its desktop is off screen. Reading it afterwards would cost a desktop round trip the user sees as the view jumping to the terminal and back *after* the workspace's final `Focus-VirtualDesktop` landing. When the actions finish it hands all of it to [Save-WorkspaceState](#save-workspacestate), which stores the difference as one tracker entry per workspace and is what makes [Close-Workspace](#close-workspace) possible. The record is written *before* a terminating `Terminate-WindowsTerminalTabs -OnlyCurrent`/`-IncludeCurrent` action, for the same reason the elapsed summary is: that action ends the process outright. Only the first workspace of a plain run claims what was already on screen (`-AdoptUnclaimed`); later ones append to the session it defined, and an `-Alongside` open never claims, so it cannot take another workspace's windows. Writing the tracker is best-effort - a failure warns and the open continues.
 
+**A plain open resets only what it owns.** Before any action runs, a plain (non-`-Alongside`) open calls [Get-WorkspaceOpenProtection](#get-workspaceopenprotection): tracked `-Alongside` workspaces that still have at least one live window are **preserved**. Their window handles are forwarded as `-ProtectedWindowHandles` to every action that declares the parameter (the same `Get-FilteredParams` mechanism as `-Alongside`), so the layout pass never moves or counts them, count-based openers such as `Open-Browser -Instances` never count them, and the desktop resize never shrinks below them; their tracker entries seed the tracker write (`Save-WorkspaceState -PreserveEntry`) and their `CurrentLayout.txt` sections survive the plain snapshot write. Rerunning `w A` with workspace B open alongside therefore resets A without destroying B. Alongside opens already add without destroying and resolve no protection of their own.
+
 Once the workspace names are resolved (including interactive menu picks), the exact invocation - resolved workspace names, `-Project`, `-Alongside`, and any extra arguments - is recorded in the process-scoped `$env:WORKSPACE_RERUN_COMMAND` (cleared in the `finally` block), so a failure-path respawn via `Set-WorkspaceWindowLayout`'s escalation to `ReRun-LastCommand` reruns precisely this command instead of scraping the shared PSReadLine history. In alongside mode, when `Get-NextAvailableDesktopIndex` cannot determine the next free desktop (virtual desktop enumeration failed), that workspace is skipped with a clear error instead of opening on top of the current one. And because a configured `Terminate-WindowsTerminalTabs` action with `-OnlyCurrent` or `-IncludeCurrent` ends the process via `[Environment]::Exit` - which skips `finally` blocks - the elapsed summary is printed and stuck keyboard modifiers are released before control passes to that action.
 
 | Parameter          | Description                                                                                                                                                                                                                                                                         |
@@ -691,12 +720,12 @@ Resolve-SwaggerBrowserGroup -Project "MyProject" -SkipDuplicateCheck
 ## [Save-WorkspaceState](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Workflow/Functions/Save-WorkspaceState.ps1)
 
 - **Description:** Records what an `Open-Workspace` invocation actually opened, so [Close-Workspace](#close-workspace) can close it. Called once per workspace after its actions have run; delegates the before/after diff to [Get-WorkspaceOpenDelta](#get-workspaceopendelta) and the file format to [Format-WorkspaceStateContent](#format-workspacestatecontent).
-- **Parameters:** -Workspace, -ExistingWindowHandles, -ExistingTerminalTabs, -PreCapturedTerminalTabs, -DesktopOffset, -Alongside, -AdoptUnclaimed, -Append, -Entry, -StatePath
+- **Parameters:** -Workspace, -ExistingWindowHandles, -ExistingTerminalTabs, -PreCapturedTerminalTabs, -DesktopOffset, -Alongside, -AdoptUnclaimed, -Append, -PreserveEntry, -ProtectedWindowHandles, -Entry, -StatePath
 - **Usage:** `Save-WorkspaceState -Workspace 'Server' -ExistingWindowHandles $before -ExistingTerminalTabs $tabsBefore`, `Save-WorkspaceState -Entry $survivingEntries`
 
 Deriving ownership from the delta rather than from `WorkspaceActions` is the whole point: a single-instance application is only ever recorded against the open that actually launched it, whereas a config-derived record would list it under every workspace that names it.
 
-A plain open **replaces** the file - it reset the virtual desktops, so no earlier open survives it. Every `-Alongside` open **appends**, including for a name that is already tracked, because that is a genuinely separate instance with its own windows. `-Append` covers the remaining case: the second and later workspaces of a single plain `Open-Workspace a, b` run, which must add to the session the first one defined instead of replacing its entry and leaving it untracked.
+A plain open **replaces** the file - it reset the virtual desktops, so no earlier open survives it. Every `-Alongside` open **appends**, including for a name that is already tracked, because that is a genuinely separate instance with its own windows. `-Append` covers the remaining case: the second and later workspaces of a single plain `Open-Workspace a, b` run, which must add to the session the first one defined instead of replacing its entry and leaving it untracked. A plain open that is **preserving** live alongside workspaces (see [Get-WorkspaceOpenProtection](#get-workspaceopenprotection)) seeds the replaced file with their entries via `-PreserveEntry` - the plain non-`-Append` path only, because an appending save reads the file back and it already holds them - and forwards `-ProtectedWindowHandles` to the delta so adoption can never claim a preserved workspace's windows or terminal tabs.
 
 Writing is **best-effort**. Any failure is logged as a warning and swallowed, because a snapshot write must never fail an otherwise successful workspace open; the cost is that `Close-Workspace` reports that workspace as untracked. The state directory is created on demand.
 
@@ -712,6 +741,8 @@ Two parameter sets: `Record` builds an entry from a pre-open capture, `Entries` 
 | `-Alongside`             | switch    | The open was alongside existing desktops; also switches the write from replace to append.                            |
 | `-AdoptUnclaimed`        | switch    | Forwarded to `Get-WorkspaceOpenDelta`. First workspace of a plain run only.                                          |
 | `-Append`                | switch    | Add to the tracker instead of replacing it, without implying `-Alongside`.                                           |
+| `-PreserveEntry`         | object[]  | Preserved alongside entries to carry forward through a plain (replacing) save. Seeded ahead of the new record on the plain non-`-Append` path only. |
+| `-ProtectedWindowHandles` | object   | Handles of preserved alongside workspaces, forwarded to `Get-WorkspaceOpenDelta` so adoption never claims them.       |
 | `-Entry`                 | object[]  | Write exactly these entries, replacing the file. Mandatory in the `Entries` set; pass `@()` to clear the tracker.     |
 | `-StatePath`             | string    | Full path to the state file. Defaults to [Get-WorkspaceStatePath](#get-workspacestatepath).                          |
 

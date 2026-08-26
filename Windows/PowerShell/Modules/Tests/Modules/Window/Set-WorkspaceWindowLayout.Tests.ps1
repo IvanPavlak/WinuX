@@ -743,6 +743,174 @@ Describe "Set-WorkspaceWindowLayout" {
 		}
 	}
 
+	Context "ProtectedWindowHandles (preserving alongside workspaces on a plain open)" {
+		# A plain rerun of workspace A with workspace B open -Alongside used to destroy B three
+		# ways: the desktop resize removed B's desktops (Ensure-VirtualDesktops removes from the
+		# right - exactly where alongside lives), the layout pass stole B's windows, and the
+		# snapshot write dropped B's CurrentLayout section. These tests pin the protection that
+		# stops each mechanism.
+		BeforeAll {
+			# Local stub so the self-derive test can mock the Workflow-owned function without
+			# importing the Workflow module here.
+			function Get-WorkspaceOpenProtection { $null }
+
+			function New-ProtectedHandleSet {
+				param([int[]]$Handle)
+				$set = New-Object 'System.Collections.Generic.HashSet[IntPtr]'
+				foreach ($item in $Handle) { [void]$set.Add([IntPtr]$item) }
+				$set
+			}
+		}
+
+		BeforeEach {
+			Mock Write-LogWarning { }
+			Mock Get-WindowDesktopIndex { -1 }
+			Mock Test-Path { $true }
+			# One-desktop layout: small enough that any preserved alongside desktops sit above it.
+			Mock Import-PowerShellDataFile {
+				@{
+					Layout   = @(
+						@{ ProcessName = 'Code'; WindowTitle = '*'; DesktopNumber = 1 }
+					)
+					Monitors = @{
+						MonitorA = @{
+							VirtualDesktopLayouts = @{
+								1 = 'One'
+							}
+						}
+					}
+				}
+			}
+			Mock Get-DesktopList { @(0) }
+			Mock Snap-AllWindows { $script:LastSnapAllWindowsResult = [PSCustomObject]@{ SnappedCount = 1; FailedWindows = @() } }
+		}
+
+		It "never shrinks below the desktops the protected windows stand on" {
+			# A (1 desktop) reruns while B holds desktops 2-3: current 3, layout needs 1, B's
+			# highest window is on index 2 => the floor is 3 and nothing may be removed.
+			Mock Get-DesktopList { @(0, 1, 2) }
+			Mock Get-WindowDesktopIndex { 2 }
+
+			Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace' -ProtectedWindowHandles (New-ProtectedHandleSet 60)
+
+			Should -Invoke Ensure-VirtualDesktops -Times 0
+			Should -Invoke Remove-VirtualDesktops -Times 0
+		}
+
+		It "still grows when the layout needs more desktops than exist" {
+			Mock Import-PowerShellDataFile {
+				@{
+					Layout   = @(@{ ProcessName = 'Code'; WindowTitle = '*'; DesktopNumber = 1 })
+					Monitors = @{
+						MonitorA = @{ VirtualDesktopLayouts = @{ 1 = 'One'; 2 = 'Two'; 3 = 'Three'; 4 = 'Four' } }
+					}
+				}
+			}
+			Mock Get-DesktopList { @(0, 1, 2) }
+			Mock Get-WindowDesktopIndex { 2 }
+
+			Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace' -ProtectedWindowHandles (New-ProtectedHandleSet 60)
+
+			Should -Invoke Ensure-VirtualDesktops -Times 1 -Exactly -ParameterFilter { $Count -eq 4 }
+		}
+
+		It "never shrinks when the protected windows' desktops cannot be resolved" {
+			# Protected windows exist but every lookup returned -1 (enumeration hiccup). Shrinking
+			# on unknown occupancy could delete the alongside workspace - keep the current count.
+			Mock Get-DesktopList { @(0, 1, 2, 3, 4) }
+			Mock Get-WindowDesktopIndex { -1 }
+
+			Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace' -ProtectedWindowHandles (New-ProtectedHandleSet 60)
+
+			Should -Invoke Ensure-VirtualDesktops -Times 0
+		}
+
+		It "warns when a protected window sits inside this layout's own desktop range" {
+			Mock Get-DesktopList { @(0) }
+			Mock Get-WindowDesktopIndex { 0 }
+
+			Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace' -ProtectedWindowHandles (New-ProtectedHandleSet 60)
+
+			Should -Invoke Write-LogWarning -ParameterFilter { $Message -match 'overlap' }
+		}
+
+		It "threads the protected handles into the layout pass, the verification, and the snapshot merge" {
+			Mock Get-DesktopList { @(0, 1, 2) }
+			Mock Get-WindowDesktopIndex { 2 }
+			Mock Set-WindowLayouts { @([PSCustomObject]@{ Status = 'Configured' }) }
+
+			Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace' -ProtectedWindowHandles (New-ProtectedHandleSet 60)
+
+			Should -Invoke Set-WindowLayouts -Times 1 -Exactly -ParameterFilter {
+				$ProtectedWindowHandles -and $ProtectedWindowHandles.Contains([IntPtr]60)
+			}
+			# Plain-mode verification excludes the preserved windows - the layout pass was
+			# forbidden from touching them, so they must not be judged either.
+			Should -Invoke Confirm-WorkspaceWindowPositions -Times 1 -Exactly -ParameterFilter {
+				$ExcludeWindowHandles -and $ExcludeWindowHandles.Contains([IntPtr]60)
+			}
+			# The plain snapshot write merges so the preserved workspaces keep their sections.
+			Should -Invoke Save-CurrentLayout -Times 1 -Exactly -ParameterFilter { $PreserveOtherSections }
+		}
+
+		It "does not merge the snapshot on an unprotected plain open" {
+			Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace'
+
+			Should -Invoke Save-CurrentLayout -Times 1 -Exactly -ParameterFilter { -not $PreserveOtherSections }
+		}
+
+		It "skips protected windows during the early move callback" {
+			Mock Get-DesktopList { @(0, 1, 2) }
+			Mock Get-WindowDesktopIndex { 2 }
+			Mock Wait-ForWorkspaceWindows {
+				param($LayoutConfig, $TimeoutSeconds, $OnWindowStable)
+
+				& $OnWindowStable $LayoutConfig[0] ([PSCustomObject]@{
+						Handle = [IntPtr]60
+						Title  = 'Preserved alongside window'
+					})
+
+				@{ Success = $true; WindowStates = @{} }
+			}
+
+			Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace' -ProtectedWindowHandles (New-ProtectedHandleSet 60)
+
+			Should -Invoke Move-WindowToVirtualDesktop -Times 0 -Exactly
+		}
+
+		It "self-derives protection on a standalone plain call when the Workflow function is available" {
+			# The blanket Get-Command mock returns $null (hermetic default: no self-derive); this
+			# test opts the one lookup back in and stubs the function it finds.
+			Mock Get-Command { $true } -ParameterFilter { $Name -eq 'Get-WorkspaceOpenProtection' }
+			Mock Get-WorkspaceOpenProtection {
+				[PSCustomObject]@{
+					Entries       = @([ordered]@{ Workspace = 'AlongsideB'; Alongside = $true })
+					WindowHandles = (New-ProtectedHandleSet 60)
+				}
+			}
+			Mock Get-DesktopList { @(0, 1, 2) }
+			Mock Get-WindowDesktopIndex { 2 }
+			Mock Set-WindowLayouts { @([PSCustomObject]@{ Status = 'Configured' }) }
+
+			Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace'
+
+			Should -Invoke Get-WorkspaceOpenProtection -Times 1 -Exactly
+			Should -Invoke Set-WindowLayouts -Times 1 -Exactly -ParameterFilter {
+				$ProtectedWindowHandles -and $ProtectedWindowHandles.Contains([IntPtr]60)
+			}
+		}
+
+		It "never self-derives for an alongside open" {
+			Mock Get-Command { $true } -ParameterFilter { $Name -eq 'Get-WorkspaceOpenProtection' }
+			Mock Get-WorkspaceOpenProtection { throw 'must not be called' }
+			Mock Get-DesktopList { @(0) }
+
+			Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace' -Alongside
+
+			Should -Invoke Get-WorkspaceOpenProtection -Times 0
+		}
+	}
+
 	Context "FancyZones reset between retries" {
 		# Reproduction harness for the retry loop that could never recover.
 		#

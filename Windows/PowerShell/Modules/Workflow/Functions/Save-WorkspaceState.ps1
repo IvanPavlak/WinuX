@@ -59,6 +59,17 @@ function Save-WorkspaceState {
 		and later workspaces of a single plain "Open-Workspace a, b" run, which would otherwise each
 		replace the previous one's entry.
 
+	.PARAMETER PreserveEntry
+		Tracker entries to carry forward through a plain (replacing) save - the live alongside
+		entries Get-WorkspaceOpenProtection resolved. Seeded ahead of the new record on the plain
+		non-Append path only: an -Alongside or -Append save reads the existing file back, which
+		already holds them, and seeding again would duplicate every preserved entry.
+
+	.PARAMETER ProtectedWindowHandles
+		Window handles belonging to preserved alongside workspaces. Forwarded to
+		Get-WorkspaceOpenDelta so adoption can never claim a preserved workspace's windows (or
+		its terminal tabs) into this entry.
+
 	.PARAMETER Entry
 		Low-level form: write exactly these entries, replacing the file. Used by Close-Workspace to
 		persist what remains open after a teardown, and by Kill-All to clear the tracker. Pass an
@@ -101,6 +112,12 @@ function Save-WorkspaceState {
 		[Parameter(ParameterSetName = 'Record')]
 		[switch]$Append,
 
+		[Parameter(ParameterSetName = 'Record')]
+		[object[]]$PreserveEntry,
+
+		[Parameter(ParameterSetName = 'Record')]
+		[object]$ProtectedWindowHandles,
+
 		[Parameter(Mandatory = $true, ParameterSetName = 'Entries')]
 		[AllowEmptyCollection()]
 		[object[]]$Entry,
@@ -118,20 +135,38 @@ function Save-WorkspaceState {
 			$entries = @($Entry | Where-Object { $_ })
 		}
 		else {
-			$recorded = Get-WorkspaceOpenDelta -Workspace $Workspace `
-				-ExistingWindowHandles $ExistingWindowHandles `
-				-ExistingTerminalTabs $ExistingTerminalTabs `
-				-PreCapturedTerminalTabs $PreCapturedTerminalTabs `
-				-DesktopOffset $DesktopOffset `
-				-Alongside:$Alongside `
-				-AdoptUnclaimed:$AdoptUnclaimed
+			$deltaParams = @{
+				Workspace               = $Workspace
+				ExistingWindowHandles   = $ExistingWindowHandles
+				ExistingTerminalTabs    = $ExistingTerminalTabs
+				PreCapturedTerminalTabs = $PreCapturedTerminalTabs
+				DesktopOffset           = $DesktopOffset
+				Alongside               = [bool]$Alongside
+				AdoptUnclaimed          = [bool]$AdoptUnclaimed
+			}
+			# A preserved workspace's windows must never be adopted into this entry, or closing
+			# this workspace would take them down with it.
+			if ($PSBoundParameters.ContainsKey('ProtectedWindowHandles') -and $null -ne $ProtectedWindowHandles) {
+				$deltaParams['ProtectedWindowHandles'] = $ProtectedWindowHandles
+			}
+
+			$recorded = Get-WorkspaceOpenDelta @deltaParams
 
 			# A plain open reset the desktops, so nothing that was tracked before it is still on
 			# screen - start clean. -Alongside added to what was already there, so keep it all.
 			# -Append covers the remaining case: the second and later workspaces of a single plain
 			# "Open-Workspace a, b" run, which must add to the session the first one defined instead
 			# of replacing its entry and leaving it untracked.
+			#
+			# -PreserveEntry seeds the clean plain path with the alongside entries a protecting
+			# open resolved as still live, so they stay closable after the replace. Only the
+			# plain non-Append path seeds: an Append (or Alongside) save reads the file back,
+			# which ALREADY holds the preserved entries from the first workspace's save -
+			# seeding again would duplicate them.
 			$entries = @()
+			if (-not ($Alongside -or $Append) -and $PreserveEntry) {
+				$entries = @($PreserveEntry | Where-Object { $_ })
+			}
 			if ($Alongside -or $Append) {
 				$existingState = Get-WorkspaceState -StatePath $StatePath
 				if ($existingState) {

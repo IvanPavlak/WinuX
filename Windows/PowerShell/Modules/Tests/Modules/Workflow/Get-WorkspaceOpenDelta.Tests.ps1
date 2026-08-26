@@ -212,6 +212,44 @@ Describe "Get-WorkspaceOpenDelta" {
 
 			@($delta.Windows.ProcessName) | Should -Be @('WindowsTerminal', 'Rainmeter')
 		}
+
+		It "never adopts a protected pre-existing window" {
+			# The window belongs to a live alongside workspace this plain open preserves -
+			# adopting it would let closing THIS workspace take the alongside one's window down.
+			$script:Configuration.Universal.VisibleWindowExclusions = @()
+
+			$delta = Get-WorkspaceOpenDelta -Workspace 'Server' -ExistingWindowHandles (New-HandleSet 1, 2, 3) `
+				-ProtectedWindowHandles (New-HandleSet 3) -AdoptUnclaimed
+
+			@($delta.Windows.ProcessName) | Should -Be @('WindowsTerminal', 'Rainmeter')
+		}
+
+		It "still records a protected window the diff proves this open created" {
+			# Protection limits adoption, never the diff: a handle absent from the pre-open
+			# capture was created by this open, whatever set claims it (and a live protection
+			# set can never actually contain such a handle anyway).
+			$script:Configuration.Universal.VisibleWindowExclusions = @()
+
+			$delta = Get-WorkspaceOpenDelta -Workspace 'Server' -ExistingWindowHandles (New-HandleSet 1, 2) `
+				-ProtectedWindowHandles (New-HandleSet 3) -AdoptUnclaimed
+
+			@($delta.Windows.ProcessName) | Should -Contain 'claude'
+		}
+
+		It "does not adopt a protected terminal window's tabs even with tab adoption enabled" {
+			# WindowsTerminal off the exclusion list means an adopting open claims every tab on
+			# screen - except a preserved workspace's terminal, whose tabs closing this
+			# workspace must never take.
+			$script:Configuration.Universal.VisibleWindowExclusions = @()
+			Mock Get-TerminalTabSnapshot { New-TabSnapshot -Window @{ 777 = @('pwsh', 'Alongside.Api'); 888 = @('Server.Api') } }
+
+			$delta = Get-WorkspaceOpenDelta -Workspace 'Server' `
+				-ExistingTerminalTabs (New-TabSnapshot -Window @{ 777 = @('pwsh', 'Alongside.Api'); 888 = @() }) `
+				-ProtectedWindowHandles (New-HandleSet 777) -AdoptUnclaimed
+
+			@($delta.TerminalTabs.Title) | Should -Be @('Server.Api')
+			@($delta.TerminalTabs.WindowHandle) | Should -Be @(888)
+		}
 	}
 
 	Context "Terminal tab ownership" {

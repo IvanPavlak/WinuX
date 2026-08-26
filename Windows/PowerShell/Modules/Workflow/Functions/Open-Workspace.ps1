@@ -14,6 +14,13 @@ function Open-Workspace {
 		consuming action (e.g. Open-ProjectSwagger) can no-op or apply its own default. Declare
 		consumers AFTER the Open-Project action.
 
+		A plain (non-Alongside) open resets only what it owns. Workspaces that are tracked as
+		opened -Alongside and still have at least one live window are PRESERVED
+		(Get-WorkspaceOpenProtection): their windows are never moved or counted by any action,
+		their virtual desktops are never removed, and their tracker entries and CurrentLayout
+		sections survive the plain open's writes. Rerunning "Open-Workspace A" with workspace B
+		open alongside therefore resets A without destroying B.
+
 	.PARAMETER Workspace
 		The name of the workspace(s) to open. Can be specified by name or selected from a menu.
 		Omit it for the interactive menu; pressing [Enter] there with no input opens the workspace
@@ -323,6 +330,18 @@ function Open-Workspace {
 		}
 		$env:WORKSPACE_RERUN_COMMAND = $rerunTokens -join ' '
 
+		# What this plain open must leave alone: alongside workspaces that are still standing.
+		# Resolved ONCE, before any action can spawn a process - a window created mid-run must
+		# never be mistaken for a protected one. The handle set is threaded to every action
+		# below and the entries seed the tracker write, so a plain rerun of workspace A no
+		# longer removes B's desktops, steals B's windows, or wipes B's records. Alongside
+		# opens already add without destroying and need no protection of their own.
+		$openProtection = if (-not $Alongside) { Get-WorkspaceOpenProtection } else { $null }
+		if ($openProtection) {
+			$protectedNames = @($openProtection.Entries | ForEach-Object { [string]$_.Workspace } | Select-Object -Unique)
+			Write-LogDebug " [Open-Workspace] Preserving live alongside workspace(s) => [$($protectedNames -join ', ')] ($($openProtection.WindowHandles.Count) protected window(s))" -Style Success
+		}
+
 		# How many workspaces of THIS invocation have been recorded so far. Only the first one of a
 		# plain run defines the session (and so adopts what is on screen); the rest append to it.
 		$workspacesRecorded = 0
@@ -446,14 +465,26 @@ function Open-Workspace {
 				# they do not replace the entry of the workspace that defined the session.
 				$isFirstOfPlainRun = (-not $Alongside) -and ($workspacesRecorded -eq 0)
 
-				Save-WorkspaceState -Workspace $workspaceName `
-					-ExistingWindowHandles $existingHandlesBeforeOpen `
-					-ExistingTerminalTabs $existingTerminalTabsBeforeOpen `
-					-PreCapturedTerminalTabs $terminalTabsAfterOpen `
-					-DesktopOffset $desktopOffset `
-					-Alongside:$Alongside `
-					-AdoptUnclaimed:$isFirstOfPlainRun `
-					-Append:($workspacesRecorded -gt 0)
+				$saveStateParams = @{
+					Workspace               = $workspaceName
+					ExistingWindowHandles   = $existingHandlesBeforeOpen
+					ExistingTerminalTabs    = $existingTerminalTabsBeforeOpen
+					PreCapturedTerminalTabs = $terminalTabsAfterOpen
+					DesktopOffset           = $desktopOffset
+					Alongside               = [bool]$Alongside
+					AdoptUnclaimed          = [bool]$isFirstOfPlainRun
+					Append                  = ($workspacesRecorded -gt 0)
+				}
+
+				# A plain rerun's tracker write must carry the surviving alongside entries forward
+				# (or they become unclosable) and must not adopt their windows into this entry.
+				# Keys are added conditionally - the parameters are never bound to $null.
+				if ($openProtection) {
+					$saveStateParams['PreserveEntry'] = $openProtection.Entries
+					$saveStateParams['ProtectedWindowHandles'] = $openProtection.WindowHandles
+				}
+
+				Save-WorkspaceState @saveStateParams
 			}
 
 			$selectedProjects = @()
@@ -520,6 +551,15 @@ function Open-Workspace {
 				# ones that do not.
 				if ($Alongside) {
 					$actionParams["Alongside"] = $true
+				}
+
+				# Plain-open counterpart of the -Alongside forwarding above: every action that
+				# declares ProtectedWindowHandles receives the handles of the alongside
+				# workspaces being preserved (Get-FilteredParams drops it from the rest). The
+				# layout pass must not move them, count-based openers must not count them, and
+				# the desktop resize must not shrink below them.
+				if ($openProtection) {
+					$actionParams["ProtectedWindowHandles"] = $openProtection.WindowHandles
 				}
 
 				# Generic project-context handoff: a parameter whose FULL value is the literal

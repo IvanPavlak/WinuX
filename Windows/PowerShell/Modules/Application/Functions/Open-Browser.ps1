@@ -43,6 +43,13 @@ function Open-Browser {
 		Target number of browser windows to have open when used with `-NoMenu`.
 		Counts existing windows and opens only the deficit. 0 means open exactly one.
 
+	.PARAMETER ProtectedWindowHandles
+		Set by `Open-Workspace` on a plain open that preserves live alongside workspaces. A
+		preserved browser window is not available to this open's layout pass, so it is excluded
+		from every already-open count (`-Instances` targets and group idempotency) - otherwise
+		the layout is starved by exactly the preserved windows. The cold-start/warm gates keep
+		seeing it: a protected window genuinely proves the browser is warm.
+
 	.PARAMETER Alongside
 		Set by `Open-Workspace` when the workspace is opening alongside existing desktops.
 		Changes `-Instances` from "ensure N windows exist" to "open N NEW windows": an
@@ -93,7 +100,10 @@ function Open-Browser {
 		[int]$Instances = 0,
 
 		[Parameter()]
-		[switch]$Alongside
+		[switch]$Alongside,
+
+		[Parameter()]
+		[System.Collections.Generic.HashSet[IntPtr]]$ProtectedWindowHandles
 	)
 
 	if (-not $PSBoundParameters.ContainsKey('Browser') -or [string]::IsNullOrWhiteSpace($Browser)) {
@@ -168,7 +178,20 @@ function Open-Browser {
 			# N - existing usable windows and left that many zones permanently unfillable -
 			# worse on every rerun, since each run adds to the pre-existing count. Count nothing
 			# in that mode and open the full N as new windows.
-			$countableWindows = if ($Alongside) { 0 } else { $existingWindows.Count }
+			#
+			# The same starvation applies per-window on a plain protecting open: a preserved
+			# alongside workspace's browser window is refused by the layout pass, so counting it
+			# toward the target leaves one zone unfillable. Counts only - the cold-start gate
+			# below still sees protected windows, which genuinely prove the browser is warm.
+			$countableWindows = if ($Alongside) {
+				0
+			}
+			elseif ($ProtectedWindowHandles) {
+				@($existingWindows | Where-Object { -not $ProtectedWindowHandles.Contains($_.Handle) }).Count
+			}
+			else {
+				$existingWindows.Count
+			}
 
 			$targetInstances = if ($Instances -gt 0) { $Instances } else { 1 }
 			$toOpen = [Math]::Max(0, $targetInstances - $countableWindows)
@@ -260,10 +283,19 @@ function Open-Browser {
 
 				# Cold-start detection for the Instances burst below. Filtered by title
 				# because Firefox and Tor Browser share the firefox.exe process name.
+				# Deliberately computed from the UNFILTERED enumeration: a preserved window
+				# still proves the browser process is warm and accepting new-window hand-offs.
 				$groupTitlePattern = Get-BrowserTitlePattern -BrowserName $Browser
 				$browserWarm = @($cachedWindows | Where-Object {
 						-not $groupTitlePattern -or $_.Title -match $groupTitlePattern
 					}).Count -gt 0
+
+				# The group checks, by contrast, must not see a preserved workspace's windows:
+				# its window showing this group's URLs would read as "already open" and starve
+				# the plain open's layout of the window it was going to create.
+				if ($ProtectedWindowHandles) {
+					$cachedWindows = @($cachedWindows | Where-Object { -not $ProtectedWindowHandles.Contains($_.Handle) })
+				}
 			}
 
 			foreach ($selection in $resolvedGroups) {
@@ -350,7 +382,17 @@ function Open-Browser {
 					}
 					if ($cachedWindows) { $countParams['CachedBrowserWindows'] = $cachedWindows }
 
-					$existingCount = Test-BrowserGroupAlreadyOpen @countParams
+					# A cache the protection filter EMPTIED is an answer ("no countable
+					# windows"), not a missing one - Test-BrowserGroupAlreadyOpen re-enumerates
+					# when handed nothing, which would count the very protected windows the
+					# filter above just removed. Without protection an empty cache keeps
+					# today's behavior (the check enumerates for itself).
+					$existingCount = if ($ProtectedWindowHandles -and $null -ne $cachedWindows -and @($cachedWindows).Count -eq 0) {
+						0
+					}
+					else {
+						Test-BrowserGroupAlreadyOpen @countParams
+					}
 					# Same alongside rule as the -NoMenu branch above: windows that existed
 					# before the workspace opened are excluded from an alongside layout, so
 					# they must not count toward the target.
@@ -404,7 +446,13 @@ function Open-Browser {
 					}
 					if ($cachedWindows) { $testParams['CachedBrowserWindows'] = $cachedWindows }
 
-					$alreadyOpen = Test-BrowserGroupAlreadyOpen @testParams
+					# Same protection-emptied-cache short-circuit as the Instances count above.
+					$alreadyOpen = if ($ProtectedWindowHandles -and $null -ne $cachedWindows -and @($cachedWindows).Count -eq 0) {
+						$false
+					}
+					else {
+						Test-BrowserGroupAlreadyOpen @testParams
+					}
 
 					if ($alreadyOpen) {
 						continue

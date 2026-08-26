@@ -63,6 +63,11 @@ function Save-CurrentLayout {
 		The Monitors hashtable from the workspace .psd1 ($config.Monitors), used to record which
 		FancyZones layout was applied to each monitor on each desktop.
 
+	.PARAMETER PreserveOtherSections
+		Merge with the existing snapshot instead of replacing it, exactly as an -Alongside save
+		does. Passed by a plain Set-WorkspaceWindowLayout run that is preserving live alongside
+		workspaces, whose sections (and zone pinning) must survive the plain open's write.
+
 	.PARAMETER WindowStates
 		Optional. The positioned-window records to serialize. Defaults to the module-scoped
 		$script:PositionedWindowHandles populated by Set-WindowLayouts. Pass @() for layouts
@@ -99,7 +104,10 @@ function Save-CurrentLayout {
 		[hashtable]$MonitorConfig,
 
 		[Parameter()]
-		[object]$WindowStates
+		[object]$WindowStates,
+
+		[Parameter()]
+		[switch]$PreserveOtherSections
 	)
 
 	if ([string]::IsNullOrWhiteSpace($LayoutsDir) -or [string]::IsNullOrWhiteSpace($Workspace)) {
@@ -217,8 +225,11 @@ function Save-CurrentLayout {
 		}
 
 		# --- Merge with existing sections so alongside preserves other open workspaces ---
+		# -PreserveOtherSections extends the same merge to a plain open that is protecting live
+		# alongside workspaces: replacing the file would drop their sections and with them the
+		# zone pinning their next reopen depends on.
 		$workspaces = [ordered]@{}
-		if ($Alongside) {
+		if ($Alongside -or $PreserveOtherSections) {
 			$existing = Get-CurrentLayout -LayoutsDir $LayoutsDir
 			if ($existing -and $existing.Workspaces) {
 				foreach ($key in $existing.Workspaces.Keys) {

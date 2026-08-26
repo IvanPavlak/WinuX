@@ -204,6 +204,82 @@ Describe "Open-Browser" {
 		}
 	}
 
+	Context "ProtectedWindowHandles (preserving alongside workspaces on a plain open)" {
+		# A preserved alongside workspace's browser window is refused by the plain open's layout
+		# pass, so counting it toward any already-open target starves the layout by exactly one
+		# window per preserved window. Counts only: the cold-start/warm gates keep seeing the
+		# window, because it genuinely proves the browser is warm.
+		BeforeAll {
+			function New-ProtectedHandleSet {
+				param([int[]]$Handle)
+				$set = New-Object 'System.Collections.Generic.HashSet[IntPtr]'
+				foreach ($item in $Handle) { [void]$set.Add([IntPtr]$item) }
+				$set
+			}
+		}
+
+		It "does not count protected windows toward the NoMenu instance target" {
+			Mock Get-WindowHandle {
+				@(
+					[PSCustomObject]@{ Handle = [IntPtr]11; Title = 'New Tab - Google Chrome' },
+					[PSCustomObject]@{ Handle = [IntPtr]60; Title = 'YouTube - Google Chrome' }
+				)
+			}
+
+			Open-Browser -NoMenu -Browser Chrome -Instances 2 -ProtectedWindowHandles (New-ProtectedHandleSet 60)
+
+			# One countable window exists (11), so exactly one more is launched.
+			Should -Invoke Start-Process -Times 1 -Exactly -ParameterFilter {
+				$ArgumentList -contains '--new-window'
+			}
+		}
+
+		It "hands the group check a cache with the protected windows removed" {
+			Mock Get-WindowHandle {
+				@(
+					[PSCustomObject]@{ Handle = [IntPtr]11; Title = 'New Tab - Google Chrome' },
+					[PSCustomObject]@{ Handle = [IntPtr]60; Title = 'GitHub - Google Chrome' }
+				)
+			}
+
+			Open-Browser -Groups Work -Browser Chrome -ProtectedWindowHandles (New-ProtectedHandleSet 60)
+
+			# The preserved window showing this group's URLs must not read as "already open".
+			Should -Invoke Test-BrowserGroupAlreadyOpen -Times 1 -Exactly -ParameterFilter {
+				@($CachedBrowserWindows).Count -eq 1 -and
+				-not (@($CachedBrowserWindows) | Where-Object { $_.Handle -eq [IntPtr]60 })
+			}
+		}
+
+		It "treats an entirely protected window set as no windows instead of re-enumerating" {
+			# Test-BrowserGroupAlreadyOpen re-enumerates when handed nothing, which would count
+			# the very windows the filter removed - the empty cache is the answer.
+			Mock Get-WindowHandle {
+				@([PSCustomObject]@{ Handle = [IntPtr]60; Title = 'GitHub - Google Chrome' })
+			}
+			Mock Test-BrowserGroupAlreadyOpen { $true }
+
+			Open-Browser -Groups Work -Browser Chrome -ProtectedWindowHandles (New-ProtectedHandleSet 60)
+
+			Should -Invoke Test-BrowserGroupAlreadyOpen -Times 0
+			Should -Invoke Start-Process -Times 1 -Exactly
+		}
+
+		It "keeps the cold-start gate on the unfiltered enumeration" {
+			# A protected window still proves the browser process is warm and accepting
+			# new-window hand-offs - waiting for a "first window" that already exists would
+			# stall every burst.
+			Mock Get-WindowHandle {
+				@([PSCustomObject]@{ Handle = [IntPtr]60; Title = 'New Tab - Google Chrome' })
+			}
+
+			Open-Browser -NoMenu -Browser Chrome -Instances 3 -ProtectedWindowHandles (New-ProtectedHandleSet 60)
+
+			Should -Invoke Start-Process -Times 3 -Exactly
+			Should -Invoke Wait-BrowserWindowReady -Times 0
+		}
+	}
+
 	It "warns and launches nothing when no browser is given and DefaultBrowser is blank (empty base)" {
 		$global:Configuration.Universal.DefaultBrowser = ''
 		Mock Write-LogWarning { }
