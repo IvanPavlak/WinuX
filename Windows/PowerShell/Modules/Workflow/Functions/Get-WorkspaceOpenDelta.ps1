@@ -72,6 +72,12 @@ function Get-WorkspaceOpenDelta {
 		windows. For the same reason only the FIRST workspace of a multi-workspace plain run should
 		adopt; the rest are additions to the session it just defined.
 
+	.PARAMETER ProtectedWindowHandles
+		Live window handles belonging to alongside workspaces this plain open preserves (from
+		Get-WorkspaceOpenProtection). Adoption never claims them - neither the windows nor, for a
+		protected terminal window, its tabs. Windows the diff proves this open created are always
+		recorded regardless. Accepts the same shapes as ExistingWindowHandles.
+
 	.OUTPUTS
 		[ordered] one tracker entry: Workspace, Alongside, DesktopOffset, OpenedUtc, ShellPid,
 		Windows, TerminalTabs.
@@ -107,7 +113,10 @@ function Get-WorkspaceOpenDelta {
 		[switch]$Alongside,
 
 		[Parameter()]
-		[switch]$AdoptUnclaimed
+		[switch]$AdoptUnclaimed,
+
+		[Parameter()]
+		[object]$ProtectedWindowHandles
 	)
 
 	# Handles reach this function as IntPtr, as window objects, or as plain numbers depending on
@@ -131,6 +140,17 @@ function Get-WorkspaceOpenDelta {
 		}
 	}
 
+	# Windows a plain open must preserve (they belong to a live alongside workspace). Same
+	# normalisation as the existing set: whatever shape the caller has, the comparison below
+	# happens in int64.
+	$protectedHandles = New-Object 'System.Collections.Generic.HashSet[int64]'
+	foreach ($protected in @($ProtectedWindowHandles)) {
+		$handleValue = & $toHandleValue $protected
+		if ($null -ne $handleValue) {
+			[void]$protectedHandles.Add($handleValue)
+		}
+	}
+
 	# The processes adoption must not reach for. Read from configuration rather than hard-coded so
 	# there is one answer in the repository to "which windows does a teardown leave alone", the
 	# same one Terminate-AllProcessesWithVisibleWindows uses. Matched on the exact process name,
@@ -150,10 +170,13 @@ function Get-WorkspaceOpenDelta {
 		if ($null -eq $handleValue -or $handleValue -eq 0) { continue }
 
 		# Already there before the open, so only adoption can claim it - and only when its process
-		# is not one of the ones a teardown always leaves alone.
+		# is not one of the ones a teardown always leaves alone, and never when it belongs to a
+		# preserved alongside workspace. The protection guard sits on the adoption branch ONLY:
+		# a window the diff proves this open created is always recorded, whatever set it is in.
 		if ($existingHandles.Contains($handleValue)) {
 			if (-not $AdoptUnclaimed) { continue }
 			if ($adoptionExclusions.Contains([string]$window.ProcessName)) { continue }
+			if ($protectedHandles.Contains($handleValue)) { continue }
 		}
 
 		$processId = 0
@@ -210,6 +233,11 @@ function Get-WorkspaceOpenDelta {
 
 	foreach ($windowHandle in @($currentTerminalTabs.Keys)) {
 		$windowHandleValue = [int64]$windowHandle
+
+		# A preserved workspace's terminal window is never adoptable, tabs included - even when
+		# WindowsTerminal is missing from VisibleWindowExclusions. Adoption-only, like the
+		# window guard above: tabs this open genuinely added to such a window still diff in.
+		if ($adoptTerminalTabs -and $protectedHandles.Contains($windowHandleValue)) { continue }
 
 		# Consume one prior occurrence per matching title: whatever is left over after the existing
 		# tabs have been accounted for is what this open added. Adopting skips that accounting

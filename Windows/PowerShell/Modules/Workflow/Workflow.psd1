@@ -16,6 +16,7 @@
 		'Format-WorkspaceStateContent',
 		'Get-SwaggerCloseTitlePatterns',
 		'Get-WorkspaceOpenDelta',
+		'Get-WorkspaceOpenProtection',
 		'Get-WorkspaceState',
 		'Get-WorkspaceStatePath',
 		'Open-DnD',

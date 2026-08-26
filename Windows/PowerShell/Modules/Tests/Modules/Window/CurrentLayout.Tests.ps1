@@ -125,6 +125,22 @@ Describe "CurrentLayout persistence" {
 			$snapshot.Workspaces.Contains('WinuX_PC') | Should -BeFalse
 		}
 
+		It "preserves existing workspaces on a non-alongside save with -PreserveOtherSections" {
+			# A plain open that is protecting live alongside workspaces must not drop their
+			# sections (and with them the zone pinning their next reopen depends on).
+			Save-CurrentLayout -Workspace 'WinuX_PC' -LayoutsDir $script:TestLayoutsDir -MachineType 'PC' `
+				-DesktopCount 1 -MonitorConfig $script:TestMonitorConfig -WindowStates @()
+
+			Save-CurrentLayout -Workspace 'Server_PC' -LayoutsDir $script:TestLayoutsDir -MachineType 'PC' `
+				-PreserveOtherSections -DesktopCount 1 -MonitorConfig $script:TestMonitorConfig -WindowStates @()
+
+			$snapshot = Get-CurrentLayout -LayoutsDir $script:TestLayoutsDir
+			$snapshot.Workspaces.Contains('Server_PC') | Should -BeTrue
+			$snapshot.Workspaces.Contains('WinuX_PC') | Should -BeTrue
+			# The merged plain section itself stays a plain section.
+			$snapshot.Workspaces['Server_PC'].Alongside | Should -BeFalse
+		}
+
 		It "preserves existing workspaces on an alongside save" {
 			Save-CurrentLayout -Workspace 'WinuX_PC' -LayoutsDir $script:TestLayoutsDir -MachineType 'PC' `
 				-DesktopCount 1 -MonitorConfig $script:TestMonitorConfig -WindowStates @()

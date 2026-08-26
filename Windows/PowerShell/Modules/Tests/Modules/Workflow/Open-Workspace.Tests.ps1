@@ -31,14 +31,18 @@ BeforeAll {
 	function Get-WindowHandle { param($ProcessName) @() }
 	function Get-TerminalTabSnapshot { param([switch]$EnsureVisible) @{} }
 	function Save-WorkspaceState {
-		param($Workspace, $ExistingWindowHandles, $ExistingTerminalTabs, $DesktopOffset, [switch]$Alongside, [switch]$AdoptUnclaimed, [switch]$Append, $Entry, $StatePath)
+		param($Workspace, $ExistingWindowHandles, $ExistingTerminalTabs, $DesktopOffset, [switch]$Alongside, [switch]$AdoptUnclaimed, [switch]$Append, $PreserveEntry, $ProtectedWindowHandles, $Entry, $StatePath)
 	}
+	# Required for hermeticity: the Workflow module is bootstrap-imported, so without this stub
+	# every plain open in these tests would run the REAL Get-WorkspaceOpenProtection against the
+	# machine's actual tracker file.
+	function Get-WorkspaceOpenProtection { $null }
 	function Get-NextAvailableDesktopIndex { 0 }
 	function Reset-KeyboardModifiers { param([switch]$IncludeMouseButton) @() }
 	function Test-BrowserGroupAlreadyOpen { $false }
 	function Open-Browser { param($Groups, $Browser) }
 	function Open-Terminal { param($Command, [switch]$Administrator, [switch]$InSameShell, $WindowId, $TabTitles) }
-	function Set-WorkspaceWindowLayout { param($WorkspaceName, $PreCapturedExistingWindows, $DesktopOffset, [switch]$Alongside) }
+	function Set-WorkspaceWindowLayout { param($WorkspaceName, $PreCapturedExistingWindows, $DesktopOffset, [switch]$Alongside, $ProtectedWindowHandles) }
 
 	function Open-Project {
 		param($Project)
@@ -83,16 +87,23 @@ Describe "Open-Workspace" {
 		Mock Write-Host { }
 		Mock Get-TerminalTabSnapshot { param([switch]$EnsureVisible) @{} }
 		Mock Save-WorkspaceState {
-			param($Workspace, $ExistingWindowHandles, $ExistingTerminalTabs, $PreCapturedTerminalTabs, $DesktopOffset, [switch]$Alongside, [switch]$AdoptUnclaimed, [switch]$Append, $Entry, $StatePath)
+			param($Workspace, $ExistingWindowHandles, $ExistingTerminalTabs, $PreCapturedTerminalTabs, $DesktopOffset, [switch]$Alongside, [switch]$AdoptUnclaimed, [switch]$Append, $PreserveEntry, $ProtectedWindowHandles, $Entry, $StatePath)
 			$script:workspaceStateCalls += [PSCustomObject]@{
-				Workspace               = $Workspace
-				DesktopOffset           = $DesktopOffset
-				Alongside               = [bool]$Alongside
-				AdoptUnclaimed          = [bool]$AdoptUnclaimed
-				Append                  = [bool]$Append
-				PreCapturedTerminalTabs = $PreCapturedTerminalTabs
+				Workspace                    = $Workspace
+				DesktopOffset                = $DesktopOffset
+				Alongside                    = [bool]$Alongside
+				AdoptUnclaimed               = [bool]$AdoptUnclaimed
+				Append                       = [bool]$Append
+				PreCapturedTerminalTabs      = $PreCapturedTerminalTabs
+				PreserveEntry                = $PreserveEntry
+				ProtectedWindowHandles       = $ProtectedWindowHandles
+				# "Not bound" is the assertion the null-protection test needs - a null VALUE
+				# cannot distinguish "omitted" from "bound to $null".
+				PreserveEntryBound           = $PSBoundParameters.ContainsKey('PreserveEntry')
+				ProtectedWindowHandlesBound  = $PSBoundParameters.ContainsKey('ProtectedWindowHandles')
 			}
 		}
+		Mock Get-WorkspaceOpenProtection { $null }
 		# Capture PromptMessage too: the prompt advertises what [Enter] does, so the tests
 		# below assert the string and the behaviour agree instead of only the behaviour.
 		Mock Resolve-Selection {
@@ -135,12 +146,14 @@ Describe "Open-Workspace" {
 			$script:swaggerCalls += [PSCustomObject]@{ Project = @($Project); Browser = $Browser }
 		}
 		Mock Set-WorkspaceWindowLayout {
-			param($WorkspaceName, $PreCapturedExistingWindows, $DesktopOffset, [switch]$Alongside)
+			param($WorkspaceName, $PreCapturedExistingWindows, $DesktopOffset, [switch]$Alongside, $ProtectedWindowHandles)
 			$script:setLayoutCalls += [PSCustomObject]@{
-				WorkspaceName              = $WorkspaceName
-				PreCapturedExistingWindows = $PreCapturedExistingWindows
-				DesktopOffset              = $DesktopOffset
-				Alongside                  = [bool]$Alongside
+				WorkspaceName               = $WorkspaceName
+				PreCapturedExistingWindows  = $PreCapturedExistingWindows
+				DesktopOffset               = $DesktopOffset
+				Alongside                   = [bool]$Alongside
+				ProtectedWindowHandles      = $ProtectedWindowHandles
+				ProtectedWindowHandlesBound = $PSBoundParameters.ContainsKey('ProtectedWindowHandles')
 			}
 		}
 		Mock Terminate-WindowsTerminalTabs { param([switch]$OnlyCurrent) $script:terminateCalls += [PSCustomObject]@{ OnlyCurrent = [bool]$OnlyCurrent } }
@@ -629,6 +642,75 @@ Describe "Open-Workspace" {
 			Open-Workspace -Workspace 'TestWorkspace' -Alongside
 
 			$script:workspaceStateCalls.Count | Should -Be 0
+		}
+	}
+
+	Context "preserving alongside workspaces on a plain open" {
+		BeforeEach {
+			$protectedHandles = New-Object 'System.Collections.Generic.HashSet[IntPtr]'
+			[void]$protectedHandles.Add([IntPtr]60)
+			$script:testProtection = [PSCustomObject]@{
+				Entries       = @([ordered]@{ Workspace = 'AlongsideB'; Alongside = $true; DesktopOffset = 3; Windows = @() })
+				WindowHandles = $protectedHandles
+			}
+		}
+
+		It "threads the protected handles to the layout action and the preserved entries to the tracker write" {
+			Mock Get-WorkspaceOpenProtection { $script:testProtection }
+			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+				@{ Action = 'Set-WorkspaceWindowLayout'; Parameters = @{ WorkspaceName = 'TestWorkspace' } }
+			)
+
+			Open-Workspace -Workspace 'TestWorkspace'
+
+			$script:setLayoutCalls.Count | Should -Be 1
+			$script:setLayoutCalls[0].ProtectedWindowHandles.Contains([IntPtr]60) | Should -BeTrue
+			$script:workspaceStateCalls.Count | Should -Be 1
+			@($script:workspaceStateCalls[0].PreserveEntry).Count | Should -Be 1
+			$script:workspaceStateCalls[0].PreserveEntry[0].Workspace | Should -Be 'AlongsideB'
+			$script:workspaceStateCalls[0].ProtectedWindowHandles.Contains([IntPtr]60) | Should -BeTrue
+		}
+
+		It "resolves protection once, before any action can spawn a process" {
+			# A window created mid-run must never be mistaken for a protected one, and re-reading
+			# the tracker per action would race the very writes this open performs.
+			Mock Get-WorkspaceOpenProtection { $script:testProtection }
+			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } },
+				@{ Action = 'Test-ActionTwo'; Parameters = @{ Beta = 2 } }
+			)
+
+			Open-Workspace -Workspace 'TestWorkspace'
+
+			Should -Invoke Get-WorkspaceOpenProtection -Times 1 -Exactly
+		}
+
+		It "never resolves protection for an alongside open, which adds without destroying" {
+			$env:OPEN_WORKSPACE_ALONGSIDE_SHELL = '1'
+			Mock Get-WorkspaceOpenProtection { $script:testProtection }
+			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+				@{ Action = 'Set-WorkspaceWindowLayout'; Parameters = @{ WorkspaceName = 'TestWorkspace' } }
+			)
+
+			Open-Workspace -Workspace 'TestWorkspace' -Alongside
+
+			Should -Invoke Get-WorkspaceOpenProtection -Times 0 -Exactly
+			$script:setLayoutCalls[0].ProtectedWindowHandlesBound | Should -BeFalse
+		}
+
+		It "binds no protection parameters at all when there is nothing to preserve" {
+			# The parameters must be OMITTED, never bound to $null - a bound $null would defeat
+			# downstream defaulting (e.g. the layout's self-derive path).
+			Mock Get-WorkspaceOpenProtection { $null }
+			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+				@{ Action = 'Set-WorkspaceWindowLayout'; Parameters = @{ WorkspaceName = 'TestWorkspace' } }
+			)
+
+			Open-Workspace -Workspace 'TestWorkspace'
+
+			$script:setLayoutCalls[0].ProtectedWindowHandlesBound | Should -BeFalse
+			$script:workspaceStateCalls[0].PreserveEntryBound | Should -BeFalse
+			$script:workspaceStateCalls[0].ProtectedWindowHandlesBound | Should -BeFalse
 		}
 	}
 

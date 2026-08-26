@@ -15,7 +15,7 @@ BeforeAll {
 	# cover persistence and merge semantics, so the delta is stubbed and asserted separately in
 	# Get-WorkspaceOpenDelta.Tests.ps1.
 	function Get-WorkspaceOpenDelta {
-		param($Workspace, $ExistingWindowHandles, $ExistingTerminalTabs, $DesktopOffset, [switch]$Alongside)
+		param($Workspace, $ExistingWindowHandles, $ExistingTerminalTabs, $DesktopOffset, [switch]$Alongside, $ProtectedWindowHandles)
 	}
 
 	function Get-WorkspaceStatePath { $script:TestStatePath }
@@ -40,7 +40,7 @@ Describe "Workspace state persistence" {
 		Mock Write-LogWarning { }
 
 		Mock Get-WorkspaceOpenDelta {
-			param($Workspace, $ExistingWindowHandles, $ExistingTerminalTabs, $DesktopOffset, [switch]$Alongside)
+			param($Workspace, $ExistingWindowHandles, $ExistingTerminalTabs, $DesktopOffset, [switch]$Alongside, $ProtectedWindowHandles)
 			New-TestEntry -Workspace $Workspace -Alongside:$Alongside -DesktopOffset $DesktopOffset -Windows @(
 				[ordered]@{ Handle = 101; ProcessId = 11; ProcessName = 'firefox'; Title = "$Workspace tab" }
 			)
@@ -173,6 +173,45 @@ Describe "Workspace state persistence" {
 			@($entries | Where-Object { $_.Workspace -eq 'Server' }).Count | Should -Be 2
 			$entries[0].Alongside | Should -BeFalse
 			$entries[1].Alongside | Should -BeTrue
+		}
+
+		It "seeds a plain save with the preserved alongside entries, ahead of the new record" {
+			# A plain protecting open replaces the file - without the seed the preserved
+			# workspaces' entries would be wiped and Close-Workspace could never close them.
+			$preserved = New-TestEntry -Workspace 'Alongside' -Alongside -DesktopOffset 5
+
+			Save-WorkspaceState -Workspace 'Server' -PreserveEntry @($preserved) -StatePath $script:TestStatePath
+
+			$entries = @((Get-WorkspaceState -StatePath $script:TestStatePath).Entries)
+			$entries.Count | Should -Be 2
+			$entries[0].Workspace | Should -Be 'Alongside'
+			$entries[0].Alongside | Should -BeTrue
+			$entries[1].Workspace | Should -Be 'Server'
+		}
+
+		It "does not double-seed an appending save, whose file already holds the preserved entries" {
+			# The second workspace of a plain "Open-Workspace a, b" run appends - the file was
+			# just written by the first workspace's seeded save, so seeding again would duplicate
+			# every preserved entry.
+			$preserved = New-TestEntry -Workspace 'Alongside' -Alongside -DesktopOffset 5
+
+			Save-WorkspaceState -Workspace 'First' -PreserveEntry @($preserved) -StatePath $script:TestStatePath
+			Save-WorkspaceState -Workspace 'Second' -Append -PreserveEntry @($preserved) -StatePath $script:TestStatePath
+
+			$entries = @((Get-WorkspaceState -StatePath $script:TestStatePath).Entries)
+			$entries.Count | Should -Be 3
+			@($entries | Where-Object { $_.Workspace -eq 'Alongside' }).Count | Should -Be 1
+		}
+
+		It "forwards the protected handles to the delta so adoption cannot claim them" {
+			$protected = New-Object 'System.Collections.Generic.HashSet[IntPtr]'
+			[void]$protected.Add([IntPtr]9)
+
+			Save-WorkspaceState -Workspace 'Server' -ProtectedWindowHandles $protected -StatePath $script:TestStatePath
+
+			Should -Invoke Get-WorkspaceOpenDelta -Times 1 -ParameterFilter {
+				$ProtectedWindowHandles -and $ProtectedWindowHandles.Contains([IntPtr]9)
+			}
 		}
 
 		It "forwards the pre-open captures to the delta rather than diffing them itself" {

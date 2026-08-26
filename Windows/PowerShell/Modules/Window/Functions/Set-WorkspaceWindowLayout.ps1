@@ -92,6 +92,15 @@ function Set-WorkspaceWindowLayout {
 		the entries this pass placed a window for, checked only against this open's windows,
 		so the retry loop still catches real drift without ever judging a stranger's window.
 
+	.PARAMETER ProtectedWindowHandles
+		Live window handles belonging to alongside workspaces a plain open preserves. These
+		windows are never moved, normalized, counted or verified, the virtual desktop resize
+		never shrinks below the highest desktop they stand on, and the CurrentLayout write
+		merges instead of replacing so their sections survive. Threaded in by Open-Workspace
+		(from Get-WorkspaceOpenProtection); a standalone plain call derives the set itself when
+		that function is available. Simple layouts (Fullscreen/Empty) stay global gestures and
+		ignore protection by design.
+
 	.EXAMPLE
 		Set-WorkspaceWindowLayout -WorkspaceName "WinuX"
 		# Uses automatic window detection
@@ -132,7 +141,10 @@ function Set-WorkspaceWindowLayout {
 		[int]$DesktopOffset = 0,
 
 		[Parameter()]
-		[switch]$Alongside
+		[switch]$Alongside,
+
+		[Parameter()]
+		[System.Collections.Generic.HashSet[IntPtr]]$ProtectedWindowHandles
 	)
 
 	$offsetLabel = if ($Alongside) { " (alongside" + $(if ($DesktopOffset -gt 0) { ", offset: +$DesktopOffset" }) + ")" } else { "" }
@@ -204,6 +216,22 @@ function Set-WorkspaceWindowLayout {
 
 	try {
 		$snapResult = $null
+
+		# A standalone plain call (no Open-Workspace threading the set in) must still not
+		# destroy a live alongside workspace - derive the protection itself. Guarded by
+		# Get-Command because the Workflow module owns the function and this module can run
+		# without it (and tests blanket-mock Get-Command to $null, keeping this hermetic).
+		# Alongside opens add without destroying and need no protection.
+		if (-not $PSBoundParameters.ContainsKey('ProtectedWindowHandles') -and -not $Alongside) {
+			if (Get-Command Get-WorkspaceOpenProtection -ErrorAction SilentlyContinue) {
+				$selfProtection = Get-WorkspaceOpenProtection
+				if ($selfProtection) {
+					$ProtectedWindowHandles = $selfProtection.WindowHandles
+					Write-LogDebug " Self-derived protection for $($ProtectedWindowHandles.Count) alongside window(s)" -Style Success
+				}
+			}
+		}
+		$hasProtectedWindows = ($null -ne $ProtectedWindowHandles -and $ProtectedWindowHandles.Count -gt 0)
 
 		# Pre-flight RPC health check using the shared helper. The live probe runs
 		# in-process against this session's VirtualDesktop COM state (cheap when
@@ -342,6 +370,10 @@ function Set-WorkspaceWindowLayout {
 
 		$simpleLayoutWorkspaces = $global:Configuration.SimpleLayoutWorkspaces
 
+		# Documented boundary: simple layouts (Fullscreen/Empty) deliberately ignore
+		# ProtectedWindowHandles. They are global-by-design gestures - fullscreen every window
+		# on every desktop, replace CurrentLayout.txt whole - and scoping them would change
+		# what the gesture means.
 		if ($simpleLayoutWorkspaces -contains $layoutNameToUse) {
 			# Capture where every window sits BEFORE the zone grids are (re)applied. Applying a
 			# changed zone set can make FancyZones itself relocate remembered windows across
@@ -681,19 +713,66 @@ function Set-WorkspaceWindowLayout {
 					Write-LogDebug "=> Sufficient desktops already exist ($currentDesktopCount >= $totalRequiredDesktops)" -Style Success
 				}
 			}
-			elseif ($currentDesktopCount -eq $requiredVirtualDesktops) {
-				Write-LogDebug "=> Virtual desktop count already matches required count ($requiredVirtualDesktops) - skipping reset" -Style Success
-			}
 			else {
-				Write-LogDebug "=> Virtual desktop count mismatch (current: $currentDesktopCount, required: $requiredVirtualDesktops) - resizing to required count" -Style Warning
+				# The resize target starts at what THIS layout needs, but a preserved alongside
+				# workspace's desktops raise the floor: Ensure-VirtualDesktops removes desktops
+				# from the RIGHT, which is exactly where an alongside workspace lives, so
+				# shrinking to the layout's own count would delete it. The floor is resolved
+				# LIVE from where the protected windows stand (desktop indexes shift and stored
+				# ones go stale - same rule as Close-Workspace).
+				$targetDesktopCount = $requiredVirtualDesktops
+				if ($hasProtectedWindows) {
+					$protectedFloor = 0
+					$anyProtectedResolved = $false
+					$overlappingProtected = 0
 
-				# Delta resize: Ensure-VirtualDesktops grows AND shrinks. The previous
-				# Remove-all-then-recreate pair collapsed to one desktop first, so going
-				# 2->3 desktops paid one removal plus two creates (each a COM roundtrip
-				# with settle sleeps) plus gratuitous desktop churn, instead of one create.
-				$vdResult = Ensure-VirtualDesktops -Count $requiredVirtualDesktops
-				if (-not $vdResult) {
-					throw "Failed to resize virtual desktops to required count (RPC server may be unavailable)"
+					foreach ($protectedHandle in $ProtectedWindowHandles) {
+						$protectedIndex = Get-WindowDesktopIndex -WindowHandle $protectedHandle
+						if ($protectedIndex -lt 0) { continue }
+
+						$anyProtectedResolved = $true
+						if (($protectedIndex + 1) -gt $protectedFloor) { $protectedFloor = $protectedIndex + 1 }
+
+						# A protected window INSIDE this layout's own desktop range cannot be
+						# protected by desktop arithmetic - the layout pass works those desktops.
+						# Its window is still exempt from moving/counting, but the collision is
+						# worth a warning: the workspaces are overlapping.
+						if ($protectedIndex -lt $requiredVirtualDesktops) { $overlappingProtected++ }
+					}
+
+					if ($overlappingProtected -gt 0) {
+						Write-LogWarning "$overlappingProtected preserved alongside window(s) sit inside this layout's desktop range (desktops 1-$requiredVirtualDesktops) - the workspaces overlap"
+					}
+
+					if ($anyProtectedResolved) {
+						$targetDesktopCount = [Math]::Max($requiredVirtualDesktops, $protectedFloor)
+					}
+					else {
+						# Protected windows exist but none resolved to a desktop (enumeration
+						# hiccup). Shrinking on unknown occupancy could delete the alongside
+						# workspace - never shrink; growing to the layout's need is still safe.
+						$targetDesktopCount = [Math]::Max($requiredVirtualDesktops, $currentDesktopCount)
+					}
+
+					if ($targetDesktopCount -gt $requiredVirtualDesktops) {
+						Write-LogDebug "=> Preserving alongside desktops - keeping $targetDesktopCount desktop(s) instead of shrinking to $requiredVirtualDesktops" -Style Success
+					}
+				}
+
+				if ($currentDesktopCount -eq $targetDesktopCount) {
+					Write-LogDebug "=> Virtual desktop count already matches required count ($targetDesktopCount) - skipping reset" -Style Success
+				}
+				else {
+					Write-LogDebug "=> Virtual desktop count mismatch (current: $currentDesktopCount, required: $targetDesktopCount) - resizing to required count" -Style Warning
+
+					# Delta resize: Ensure-VirtualDesktops grows AND shrinks. The previous
+					# Remove-all-then-recreate pair collapsed to one desktop first, so going
+					# 2->3 desktops paid one removal plus two creates (each a COM roundtrip
+					# with settle sleeps) plus gratuitous desktop churn, instead of one create.
+					$vdResult = Ensure-VirtualDesktops -Count $targetDesktopCount
+					if (-not $vdResult) {
+						throw "Failed to resize virtual desktops to required count (RPC server may be unavailable)"
+					}
 				}
 			}
 
@@ -755,6 +834,9 @@ function Set-WorkspaceWindowLayout {
 
 			if ($null -eq $layoutEntry.DesktopNumber) { return }
 			if ($Alongside -and $existingWindowHandles -and $existingWindowHandles.Contains($window.Handle)) { return }
+			# Plain-mode analogue of the alongside guard above: a preserved workspace's window
+			# matched a layout entry by title/process, but it is not this open's to move.
+			if ($ProtectedWindowHandles -and $ProtectedWindowHandles.Contains($window.Handle)) { return }
 
 			$internalDesktopIndex = ($layoutEntry.DesktopNumber - 1) + $DesktopOffset
 			try {
@@ -856,6 +938,10 @@ function Set-WorkspaceWindowLayout {
 				foreach ($titlePattern in $browserEntryTitlePatterns) {
 					$patternMatched = $false
 					foreach ($candidateWindow in $allWindows) {
+						# A preserved workspace's window can never resolve an entry - the layout
+						# pass is not allowed to use it, so counting it here would leave the
+						# entry starved while claiming it is resolved.
+						if ($ProtectedWindowHandles -and $ProtectedWindowHandles.Contains($candidateWindow.Handle)) { continue }
 						if (Test-WindowTitleMatch -WindowTitle $candidateWindow.Title -Patterns @($titlePattern)) {
 							$patternMatched = $true
 							break
@@ -880,6 +966,14 @@ function Set-WorkspaceWindowLayout {
 
 						if ($browserWindows) {
 							foreach ($window in $browserWindows) {
+								# A preserved workspace's browser window is never normalized -
+								# resetting it to tab 1 would rearrange a workspace this open
+								# must leave alone.
+								if ($ProtectedWindowHandles -and $ProtectedWindowHandles.Contains($window.Handle)) {
+									Write-LogDebug "  Skipping preserved alongside browser window => [$($window.Title)]" -Style Warning
+									continue
+								}
+
 								# Windows opened by THIS flow are always normalized; pre-existing
 								# ones only when an entry is still unresolved (see above).
 								$isNewWindow = -not ($existingWindowHandles -and $existingWindowHandles.Contains($window.Handle))
@@ -989,6 +1083,9 @@ function Set-WorkspaceWindowLayout {
 		}
 		if ($Alongside) {
 			$setLayoutParams["SkipExistingWindows"] = $true
+		}
+		if ($hasProtectedWindows) {
+			$setLayoutParams["ProtectedWindowHandles"] = $ProtectedWindowHandles
 		}
 		if ($pinnedHandleMap -and $pinnedHandleMap.Count -gt 0) {
 			$setLayoutParams["PinnedHandleMap"] = $pinnedHandleMap
@@ -1162,11 +1259,19 @@ function Set-WorkspaceWindowLayout {
 			# checked nor mistaken for ours, so the false failures the blanket skip existed to
 			# avoid still cannot happen.
 			$verificationResult = if (-not $Alongside) {
-				Confirm-WorkspaceWindowPositions `
-					-LayoutConfig $config.Layout `
-					-MonitorInfo $cachedMonitorInfo `
-					-MonitorConfig $config.Monitors `
-					-DesktopOffset $DesktopOffset
+				# A preserved workspace's windows are excluded: the layout pass was forbidden
+				# from touching them, so judging an entry against one would verify a window
+				# this open never placed.
+				$plainVerifyParams = @{
+					LayoutConfig  = $config.Layout
+					MonitorInfo   = $cachedMonitorInfo
+					MonitorConfig = $config.Monitors
+					DesktopOffset = $DesktopOffset
+				}
+				if ($hasProtectedWindows) {
+					$plainVerifyParams['ExcludeWindowHandles'] = $ProtectedWindowHandles
+				}
+				Confirm-WorkspaceWindowPositions @plainVerifyParams
 			}
 			else {
 				$claimedEntries = @(
@@ -1329,9 +1434,12 @@ function Set-WorkspaceWindowLayout {
 					}
 				}
 			)
+			# A protecting plain open merges instead of replacing, so the preserved alongside
+			# workspaces keep their CurrentLayout sections (and with them their zone pinning).
 			Save-CurrentLayout -Workspace $layoutNameToUse -LayoutsDir $layoutsDir -MachineType $machineType `
 				-DesktopOffset $DesktopOffset -Alongside:$Alongside -DesktopCount $requiredVirtualDesktops `
-				-LayoutConfig $config.Layout -MonitorConfig $config.Monitors -WindowStates $recordedWindows
+				-LayoutConfig $config.Layout -MonitorConfig $config.Monitors -WindowStates $recordedWindows `
+				-PreserveOtherSections:$hasProtectedWindows
 		}
 
 		# Empty-desktop cleanup runs LAST, once, after the snapshot is written. It used to run
