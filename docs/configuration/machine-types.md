@@ -164,7 +164,7 @@ SymbolicLinks = @{
     # Oh-My-Posh theme per machine
     OhMyPosh = @{
         Path   = "{User}\AppData\Local\Programs\oh-my-posh\themes\WinuX.omp.json"
-        Target = "{RepoRoot}\Windows\Oh-My-Posh\WinuX_{MachineType}.omp.json"
+        Target = "{RepoRoot}\Oh-My-Posh\WinuX_{MachineType}.omp.json"
     }
 
     # Windows Terminal settings per machine
@@ -313,7 +313,7 @@ FastFetch/Windows/config_Server.jsonc
 FastFetch/Windows/FastFetchLogo_Server.txt
 
 # Oh-My-Posh
-Windows/Oh-My-Posh/WinuX_Server.omp.json
+Oh-My-Posh/WinuX_Server.omp.json
 
 # Windows Terminal
 Windows/WindowsTerminal/settings_Server.json

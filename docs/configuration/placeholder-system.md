@@ -198,7 +198,7 @@ SymbolicLinks = @{
     # Machine-specific symlink
     OhMyPosh = @{
         Path   = "{User}\AppData\Local\Programs\oh-my-posh\themes\WinuX.omp.json"
-        Target = "{RepoRoot}\Windows\Oh-My-Posh\WinuX_{MachineType}.omp.json"
+        Target = "{RepoRoot}\Oh-My-Posh\WinuX_{MachineType}.omp.json"
     }
 
     # Nested symlinks
