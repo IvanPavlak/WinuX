@@ -166,7 +166,7 @@ When you need to add or modify something, these are the typical operations:
 | `Docker/`             | Docker Compose configurations                                                |
 | `Conda/`              | Conda environment definitions                                                |
 | `Firefox/`            | Firefox `user.js` configuration                                              |
-| `Windows/Oh-My-Posh/` | Per-machine terminal prompt themes                                           |
+| `Oh-My-Posh/`         | Per-machine terminal prompt themes (OS-agnostic: Windows, macOS and Linux)   |
 | `Windows/FancyZones/` | PowerToys FancyZones layouts                                                 |
 | `Windows/Rainmeter/`  | Per-machine Rainmeter desktop widgets                                        |
 | `Windows/VSCode/`     | VS Code settings and profiles                                                |

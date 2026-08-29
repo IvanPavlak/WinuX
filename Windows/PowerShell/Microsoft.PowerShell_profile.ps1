@@ -75,12 +75,6 @@ Test-ConfigurationSchema -WarningAction Continue
 
 # | ------------------------------ < Enhance Console Experience > ------------------------------ | #
 
-# Oh-My-Posh - binary resolution + init live in Initialize-OhMyPosh. Dot-invoked so the
-# prompt it defines lands in this scope. On provisioned machines (AutoPathAdditions puts
-# the install locations on the User PATH) this is effectively the classic one-liner.
-. (Join-Path $ModulesPath "System\Functions\Initialize-OhMyPosh.ps1")
-. Initialize-OhMyPosh
-
 # Display system information (skip silently when fastfetch is not installed yet)
 if (Get-Command fastfetch -ErrorAction SilentlyContinue) {
 	fastfetch
@@ -102,7 +96,15 @@ if (Get-Module -ListAvailable -Name Terminal-Icons) {
 # PSReadLine interactive options. Guarded: the prediction options throw in consoles without
 # virtual-terminal support (redirected output, CI, automation hosts) - a cosmetic feature must
 # never break shell startup there.
+#
+# ORDER MATTERS. -EditMode installs that mode's entire key map, so every binding made before it
+# is silently reset - which is what happened to the arrow keys below, leaving plain
+# PreviousHistory instead of prefix search. It goes first for that reason, and the prediction
+# options go last so that when they throw, everything above them has already applied.
 try {
+	# Set the editing mode to Windows (Ctrl+C to copy, Ctrl+V to paste, etc.)
+	Set-PSReadLineOption -EditMode Windows
+
 	# Set the Up/Down Arrow keys to search through command history
 	Set-PSReadLineKeyHandler -Key UpArrow -Function HistorySearchBackward
 	Set-PSReadLineKeyHandler -Key DownArrow -Function HistorySearchForward
@@ -112,13 +114,20 @@ try {
 
 	# Set the command suggestion display style to a list view
 	Set-PSReadLineOption -PredictionViewStyle ListView
-
-	# Set the editing mode to Windows (Ctrl+C to copy, Ctrl+V to paste, etc.)
-	Set-PSReadLineOption -EditMode Windows
 }
 catch {
 	# Non-interactive/limited console - keep defaults silently.
 }
+
+# Oh-My-Posh - binary resolution + init live in Initialize-OhMyPosh. Dot-invoked so the
+# prompt it defines lands in this scope. On provisioned machines (AutoPathAdditions puts
+# the install locations on the User PATH) this is effectively the classic one-liner.
+#
+# MUST stay below the PSReadLine block. A theme carrying a `transient_prompt` object makes the
+# init script bind Enter to OhMyPoshEnterKeyHandler; an -EditMode call after it resets Enter to
+# AcceptLine and the transient prompt then silently never fires.
+. (Join-Path $ModulesPath "System\Functions\Initialize-OhMyPosh.ps1")
+. Initialize-OhMyPosh
 
 # | ------------------------------ < Aliases > ------------------------------ | #
 

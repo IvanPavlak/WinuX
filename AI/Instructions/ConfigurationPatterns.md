@@ -226,7 +226,7 @@ BasePaths = @{
 
 4. Create machine-specific config files:
     - `FastFetch/Windows/config_NewMachine.jsonc`
-    - `Windows/Oh-My-Posh/WinuX_NewMachine.omp.json`
+    - `Oh-My-Posh/WinuX_NewMachine.omp.json`
     - `Windows/Rainmeter/Rainmeter_NewMachine.ini`
     - Window layout `.psd1` files
 

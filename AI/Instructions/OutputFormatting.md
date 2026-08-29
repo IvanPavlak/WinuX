@@ -172,7 +172,7 @@ DefaultLocale = "hr-HR"
 
 ```powershell
 FastFetch = "{RepoRoot}\FastFetch\Windows\config_{MachineType}.jsonc"
-OhMyPosh = "{RepoRoot}\Windows\Oh-My-Posh\WinuX_{MachineType}.omp.json"
+OhMyPosh = "{RepoRoot}\Oh-My-Posh\WinuX_{MachineType}.omp.json"
 ```
 
 **List:**

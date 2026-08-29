@@ -24,6 +24,8 @@ WinuX/
 ├── LazyGit/                                        # LazyGit config
 ├── LazyDocker/                                     # LazyDocker config
 ├── NuGet/                                          # NuGet config template (fork-owned via merge=ours)
+├── Oh-My-Posh/                                     # Terminal prompt themes (OS-agnostic: Windows, macOS, Linux)
+│   └── WinuX_{MachineType}.omp.json                # Machine-specific Oh-My-Posh themes
 ├── Wallpapers/                                     # Wallpapers
 ├── docs/                                           # Docsify documentation site (this site)
 └── Windows/
@@ -31,8 +33,6 @@ WinuX/
     │   ├── custom-layouts.json                     # Custom zone layouts (grid & canvas, arbitrary spacing)
     │   ├── layout-hotkeys.json                     # Layout hotkey bindings
     │   └── settings.json                           # FancyZones settings
-    ├── Oh-My-Posh/                                 # Terminal prompt theme
-    │   └── WinuX_{MachineType}.omp.json            # Machine-specific Oh-My-Posh themes
     ├── PowerShell/
     │   ├── Configuration.psd1                      # Central configuration hub
     │   ├── Microsoft.PowerShell_profile.ps1        # Profile loader
@@ -86,11 +86,11 @@ WinuX/
 
 While this repository is primarily PowerShell-based, several system components use their own configuration files:
 
-| Component      | Location                              | Purpose                                                   |
-| -------------- | ------------------------------------- | --------------------------------------------------------- |
-| **FastFetch**  | `FastFetch/Windows/config_*.jsonc`    | System information display customization per machine type |
-| **Oh-My-Posh** | `Windows/Oh-My-Posh/WinuX_*.omp.json` | PowerShell prompt theme configuration per machine type    |
-| **LazyGit**    | `LazyGit/config.yml`                  | Git UI and keybindings                                    |
-| **LazyDocker** | `LazyDocker/config.yml`               | Docker container UI and settings                          |
+| Component      | Location                           | Purpose                                                     |
+| -------------- | ---------------------------------- | ----------------------------------------------------------- |
+| **FastFetch**  | `FastFetch/Windows/config_*.jsonc` | System information display customization per machine type   |
+| **Oh-My-Posh** | `Oh-My-Posh/WinuX_*.omp.json`      | Shell prompt theme per machine type (Windows, macOS, Linux) |
+| **LazyGit**    | `LazyGit/config.yml`               | Git UI and keybindings                                      |
+| **LazyDocker** | `LazyDocker/config.yml`            | Docker container UI and settings                            |
 
 These configurations are symlinked from `Configuration.psd1` via the `SymbolicLinkMaker` function. For example, LazyGit links `LazyGit/config.yml` to `{User}\AppData\Local\lazygit\config.yml`, and LazyDocker links `LazyDocker/config.yml` to `{AppData}\lazydocker\config.yml`.
