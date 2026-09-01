@@ -218,12 +218,25 @@ namespace WindowModule
 		[DllImport("user32.dll", SetLastError = true)]
 		public static extern bool SetProcessDpiAwarenessContext(IntPtr value);
 
+		[DllImport("user32.dll", CharSet = CharSet.Unicode)]
+		public static extern IntPtr GetProp(IntPtr hWnd, string lpString);
+
+		[DllImport("user32.dll", CharSet = CharSet.Unicode)]
+		public static extern IntPtr RemoveProp(IntPtr hWnd, string lpString);
+
 		#endregion
 
 		#region Kernel32 Imports
 
 		[DllImport("kernel32.dll")]
 		public static extern uint GetCurrentThreadId();
+
+		#endregion
+
+		#region Dwmapi Imports
+
+		[DllImport("dwmapi.dll")]
+		public static extern int DwmGetWindowAttribute(IntPtr hwnd, int dwAttribute, out RECT pvAttribute, int cbAttribute);
 
 		#endregion
 
@@ -284,6 +297,15 @@ namespace WindowModule
 		public const int GWL_EXSTYLE = -20;
 		public const int WS_EX_TOOLWINDOW = 0x00000080;
 		public const int WS_EX_APPWINDOW = 0x00040000;
+
+		// DWM Window Attributes
+		public const int DWMWA_EXTENDED_FRAME_BOUNDS = 9;
+
+		// FancyZones stamps every window it assigns to a zone with this window property
+		// (the value is a zone-index bitmask). It is how FancyZones itself tells a snapped
+		// window from a merely positioned one, and it survives programmatic SetWindowPos
+		// moves - only FancyZones' own operations set or clear it.
+		public const string FANCYZONES_ZONE_PROPERTY = "FancyZones_zones";
 
 		// AllowSetForegroundWindow
 		public const int ASFW_ANY = -1;
@@ -368,6 +390,66 @@ namespace WindowModule
 			catch (Exception)
 			{
 				// EntryPointNotFoundException on pre-1703 Windows - awareness stays as-is.
+				return false;
+			}
+		}
+
+		/// <summary>
+		/// Reads the window's VISIBLE frame rectangle - what the user actually sees, without
+		/// the DWM invisible resize border that GetWindowRect includes. This is the rect
+		/// FancyZones sizes windows against when it snaps them, so the difference between the
+		/// two readings is exactly the compensation a direct SetWindowPos placement needs to
+		/// land flush with a zone. Returns false with zeroed bounds when DWM reports an error
+		/// or the call is unavailable, so callers fall back to the raw frame rect.
+		/// </summary>
+		public static bool GetExtendedFrameBounds(IntPtr hWnd, out RECT bounds)
+		{
+			bounds = new RECT();
+			try
+			{
+				int hr = DwmGetWindowAttribute(hWnd, DWMWA_EXTENDED_FRAME_BOUNDS, out bounds, Marshal.SizeOf(typeof(RECT)));
+				return hr == 0;
+			}
+			catch (Exception)
+			{
+				// dwmapi.dll missing or the attribute unsupported - no visible-frame data.
+				return false;
+			}
+		}
+
+		/// <summary>
+		/// Reads FancyZones' zone-assignment marker for a window: the FancyZones_zones window
+		/// property, a zone-index bitmask FancyZones stamps on every window IT moved into a
+		/// zone. Zero means the window is not registered (a plain SetWindowPos never sets it).
+		/// Returns 0 for any unreadable window.
+		/// </summary>
+		public static ulong GetWindowZoneAssignment(IntPtr hWnd)
+		{
+			try
+			{
+				return (ulong)GetProp(hWnd, FANCYZONES_ZONE_PROPERTY).ToInt64();
+			}
+			catch (Exception)
+			{
+				return 0;
+			}
+		}
+
+		/// <summary>
+		/// Removes FancyZones' zone-assignment marker from a window. FancyZones' position-based
+		/// Win+Arrow only considers zones the window is NOT assigned to, so on a one-zone grid a
+		/// stale assignment (which survives every programmatic move) makes the snap a no-op or a
+		/// cross-monitor throw; clearing it first makes the keyboard snap deterministic again.
+		/// Returns true when a value was present and removed.
+		/// </summary>
+		public static bool ClearWindowZoneAssignment(IntPtr hWnd)
+		{
+			try
+			{
+				return RemoveProp(hWnd, FANCYZONES_ZONE_PROPERTY) != IntPtr.Zero;
+			}
+			catch (Exception)
+			{
 				return false;
 			}
 		}

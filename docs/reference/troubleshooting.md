@@ -326,12 +326,61 @@ If windows still drift, the FancyZones re-apply behaviors are the trigger - `fan
 
 **Why it happened:** Fullscreen is a single-zone FancyZones layout (`Zero`), and the snap primitive was a synthesized `Win+Up` - a **relative** move. With only one zone per monitor there is no neighbouring zone to resolve to, so with `fancyzones_moveWindowAcrossMonitors` enabled FancyZones threw an already-recognised window to the *other* monitor's zone, and on a single monitor the key no-op'd until every retry and the shift-drag fallback were burned. One exhausted window also aborted the whole snap pass, stranding every later desktop at the pre-snap inset size. The wrong-monitor-after-`Reset-Windows` variant has a different trigger: applying the zone grids (`Apply-FancyZones`) can make FancyZones relocate remembered windows across monitors from `app-zone-history.json` *before* placement runs, so the pass fullscreened the window wherever the history had dragged it.
 
-**Solution:** This now self-corrects. Single-zone windows are no longer snapped at all: they are placed directly at the zone rect (`Invoke-SingleZoneWindowPlacement` via `SetWindowPos`) and verified with `Wait-WindowRect` - there is nothing FancyZones needs to arbitrate for one zone. The `Fullscreen` workspace resolves each window's monitor from a snapshot taken *before* the zone grids are applied, so a window is fullscreened wherever it sat when the workspace was invoked, and the snap pass records failures and continues instead of aborting on the first stubborn window. Directly placed windows are not registered in FancyZones' zone history; that is harmless - verification is geometry-only, and manual `Win+Arrow` still works because `fancyzones_moveWindowsBasedOnPosition` resolves zones from position, not history.
+**Solution:** This now self-corrects. 0.1.44 replaced the ambiguous `Win+Up` with direct placement (`Invoke-SingleZoneWindowPlacement` via `SetWindowPos`) verified by `Wait-WindowRect`; 0.1.49 refined the workspace flow to `Invoke-SingleZoneWindowSnap`, which makes `Win+Up` deterministic again by clearing the stale FancyZones assignment that caused the ambiguity in the first place (see the next two sections), so those windows are also registered as zoned. The `Fullscreen` workspace resolves each window's monitor from a snapshot taken *before* the zone grids are applied, so a window is fullscreened wherever it sat when the workspace was invoked, and the snap pass records failures and continues instead of aborting on the first stubborn window. The `Fullscreen` simple layout still places directly (its windows sit on invisible desktops FancyZones' own paths cannot reach), so those windows are not registered in FancyZones' zone history; manual `Win+Arrow` on them still works because `fancyzones_moveWindowsBasedOnPosition` resolves zones from position, not history.
 
 ```powershell
 # Per-window trace: look for "direct single-zone placement (verified at zone position)"
 Set-LogLevel Verbose { Set-WorkspaceWindowLayout -WorkspaceName Fullscreen }
 ```
+
+### Fullscreen Window Slightly Smaller Than Its Zone
+
+**Problem:** A window with `Zone = "Fullscreen"` (or every window in the `Fullscreen` workspace) ends the pass *almost* right: correct monitor, correct desktop, but a thin strip of desktop shows down its left, right and bottom edges, and it looks a few pixels smaller than the neighbouring windows that snapped normally. Pressing `Win+Arrow` on it afterwards visibly finishes the job. The run reports a clean pass with every window verified.
+
+**Why it happened:** Placing a window directly (the 0.1.44 fix above) put the window's **frame** rectangle at the zone rectangle. `SetWindowPos` and `GetWindowRect` both work on the frame, which extends past the window you see by the DWM invisible resize border - about 7px on the left, right and bottom at 100% scaling. FancyZones sizes a snapped window against the **visible** frame instead, so a keyboard-snapped window's `GetWindowRect` deliberately overhangs its zone by that border while the window itself sits flush. Directly placed windows got no such compensation and were inset by the border instead. Nothing caught it because the geometry checks are looser than the error: `Wait-WindowRect` allows 20px and the final workspace verification allows 50px, both deliberately, so applications that enforce their own size constraints do not false-fail.
+
+**Solution:** This now self-corrects. The workspace flow snaps single-zone windows through FancyZones again (`Invoke-SingleZoneWindowSnap` - see the next section), which produces FancyZones' own compensated geometry by construction, and verification compares the frame rect a snap actually produces: the zone grown by `Get-WindowFrameMargin` (`DWMWA_EXTENDED_FRAME_BOUNDS` against `GetWindowRect`) - on a 3440x1440 work area, the fullscreen zone `(3, 3) 3434x1434` lands at `(-4, 3) 3448x1441`, exactly where a manual `Win+Up` puts the same window. Where direct placement still runs (the `Fullscreen` simple layout), `Invoke-SingleZoneWindowPlacement` grows its target by the same margins, so its geometry matches too. Borderless and console windows measure zero margins and use the zone rectangle unchanged; an unreadable measurement falls back to zero margins, which is simply the previous behaviour. **The native layer is compiled once per PowerShell session and cannot be recompiled in place**, so a session started before this release keeps the old geometry until you open a new one.
+
+```powershell
+# Per-window trace: look for "Frame compensation for [...]" before each placement
+Set-LogLevel Verbose { Set-WorkspaceWindowLayout -WorkspaceName Fullscreen }
+```
+
+### Fullscreen Window Not Registered With FancyZones
+
+**Problem:** A fullscreen window opened by a workspace looks perfectly placed, but FancyZones does not treat it as zoned: it is skipped when FancyZones relocates windows on a zone-set or display/resolution change, and it has no entry behind "move newly created windows to their last known zone". A window you snapped by hand with `Win+Arrow` does not have the problem.
+
+**Why it happened:** Between 0.1.44 and 0.1.48, single-zone windows were placed with a plain `SetWindowPos`. That reproduces a snap's geometry but never tells FancyZones anything: FancyZones only registers a window it moved through its own paths - a `Win+Arrow`, a shift-drag, or its own relocation - stamping it with the `FancyZones_zones` window property and writing `app-zone-history.json`. Direct placement sets neither. And the reason 0.1.44 stopped using `Win+Up` was itself a registration effect: the marker survives every programmatic move, so a window `Reset-Windows` had gathered was still assigned to its old zone, and FancyZones' position-based `Win+Arrow` excludes assigned zones - on a one-zone grid that leaves nothing to move to, so the key no-op'd (one monitor) or threw the window to the other monitor's zone (`moveWindowAcrossMonitors`).
+
+**Solution:** This now self-corrects in the workspace flow. `Invoke-SingleZoneWindowSnap` clears a stale assignment (`Clear-FancyZonesWindowAssignment`) so `Win+Up` resolves deterministically into the single zone, centers the window in the zone at double the shared inset so the position-based move has one clearly-containing zone to pick, sends `Win+Up`, and falls back to shift-drag (FancyZones' real drag path, which registers just as well). The `Fullscreen` simple layout deliberately keeps direct placement: its windows sit on invisible desktops, and registering requires FancyZones' own keyboard or drag path, which only works on the visible desktop.
+
+One caveat is FancyZones' own and no snap method avoids it: `app-zone-history.json` has no per-window identity, so several windows of one process spread across several desktops contend for a single entry and only one of those desktops keeps FancyZones' tracking once a desktop switch rebuilds the work area. The snap itself is correct on every desktop - see [Changing The FancyZones Layout Re-Tiles Some Desktops But Not Others](#changing-the-fancyzones-layout-re-tiles-some-desktops-but-not-others) below.
+
+```powershell
+# Per-window trace: "Snapped [...] => Win+Up (registered, verified at zone position)"
+Set-LogLevel Verbose { w <workspace> }
+```
+
+### Changing The FancyZones Layout Re-Tiles Some Desktops But Not Others
+
+**Problem:** After a workspace open, the FancyZones layout hotkey (`Win+Ctrl+Alt+<n>`) re-tiles the windows on one desktop as expected, while on another the zone grid changes but the windows do not move at all. The desktops that work usually hold a window of an application that appears only ONCE in the workspace (VS Code); the ones that do not hold windows of an application that appears on several desktops (Firefox).
+
+**Why it happens:** FancyZones relocates only the windows it currently tracks in that work area's live window-to-zone map, and it rebuilds that map from `app-zone-history.json` every time a desktop switch recreates the work area. That store has no per-window identity: it is keyed by **app path** plus monitor plus virtual desktop and holds exactly one zone entry per key, and every virtual-desktop sync re-stamps the whole file onto whichever desktop is current at that moment. A workspace open creates and destroys desktops, so the sync fires repeatedly and keeps moving which single desktop owns a given application's row. Eight Firefox windows spread over seven desktops therefore contend for one row: at most one of those desktops re-seeds and the rest are left untracked. Nothing else about those windows is wrong - they are placed flush in their zone and still carry the `FancyZones_zones` assignment marker, so the workspace's `(registered, verified at zone position)` report is accurate. The tracking is lost afterwards, at the work-area rebuild, which is why no amount of care in the snap prevents it.
+
+**Solution:** None from this side; it is FancyZones' own per-application bookkeeping. Re-running the workspace open puts everything back, and a manual `Win+Arrow` on an affected window once the desktops have settled rewrites the row for that desktop (taking it from whichever desktop held it before). Confirm the diagnosis in FancyZones' own log under `%LOCALAPPDATA%\Microsoft\PowerToys\FancyZones\Logs`: a desktop that re-seeds logs the lookup AND a hit, a desktop that does not logs only the lookup.
+
+```text
+# Re-seeded - this desktop follows a layout change
+Get Code.exe zone history on work area: <device>_<desktop-guid>
+App zone history found on the work area <device>_<desktop-guid>
+Add app zone history, device: <device>_<desktop-guid>, layout: {...}
+
+# Not re-seeded - this desktop ignores a layout change
+Get firefox.exe zone history on work area: <device>_<desktop-guid>
+Get firefox.exe zone history on work area: <device>_<desktop-guid>
+```
+
+The `registry:` list in FancyZones' `Synced virtual desktops` lines is in desktop order, which is how a GUID above maps back to a desktop number.
 
 ### Windows Left On Other Desktops After Reset-Windows
 

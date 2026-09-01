@@ -38,10 +38,11 @@ function Add-PositionedWindow {
 
 	.PARAMETER SingleZone
 		Marks the window as belonging to a single-zone FancyZones layout (e.g. "Zero" via
-		Zone = "Fullscreen"). Snap-AllWindows places such windows directly at the zone rect
-		(Invoke-SingleZoneWindowPlacement) instead of snapping them: FancyZones' Win+Arrow
-		is a relative move, and a single-zone layout has no neighbouring zone on the same
-		monitor to make it deterministic.
+		Zone = "Fullscreen"). Snap-AllWindows routes such windows through
+		Invoke-SingleZoneWindowSnap - clear any stale FancyZones assignment (which would make
+		the relative Win+Arrow a no-op or a cross-monitor throw on a one-zone grid), center
+		the window in the zone at a deeper inset, Win+Up, shift-drag fallback - so they end up
+		registered with FancyZones, not merely positioned.
 
 	.EXAMPLE
 		Add-PositionedWindow -WindowHandle $window.Handle -ExpectedX 100 -ExpectedY 200 -ExpectedWidth 800 -ExpectedHeight 600 -WindowTitle "MyApp" -DesktopNumber 0

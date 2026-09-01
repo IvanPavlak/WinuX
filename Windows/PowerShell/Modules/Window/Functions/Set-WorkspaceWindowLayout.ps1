@@ -440,7 +440,12 @@ function Set-WorkspaceWindowLayout {
 				# SetWindowPos placement is verified per window (Wait-WindowRect) and works on
 				# windows parked on INVISIBLE desktops, so the desktop-switching loop, the focus
 				# stealing, and the repeated re-snap of windows whose desktop could not be
-				# resolved (the old "-1 bucket") are all gone with it.
+				# resolved (the old "-1 bucket") are all gone with it. The trade-off is that
+				# these windows are NOT registered with FancyZones (no zone assignment, no
+				# app-zone-history entry) - registering requires FancyZones' own keyboard or
+				# drag path, which only works on the visible desktop; the workspace flow
+				# (Snap-AllWindows) uses Invoke-SingleZoneWindowSnap for exactly that, but this
+				# path keeps the no-switching speed by design.
 				#
 				# Each monitor's zone rect is computed once from the base (desktop 1) layout -
 				# the expansion above clones that same layout to every desktop, so the rect is
