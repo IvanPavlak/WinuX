@@ -8,12 +8,12 @@ function Snap-AllWindows {
 		- Sending Win+Up for multi-zone layouts (the window arrives pre-inset inside its
 		  target zone, so FancyZones' relative move resolves to that zone), with a
 		  shift-drag fallback when the keyboard snap does not verify
-		- Placing single-zone layouts (Zone = "Fullscreen"/"Full" on a one-zone grid)
-		  directly at the zone rect via Invoke-SingleZoneWindowPlacement - a relative
-		  Win+Arrow has no neighbouring zone there and would throw the window to another
-		  monitor (moveWindowAcrossMonitors) or no-op
-		- Using reliable focus acquisition with thread attachment (keyboard snaps only;
-		  direct placement needs no foreground focus)
+		- Snapping single-zone layouts (Zone = "Fullscreen"/"Full" on a one-zone grid)
+		  through Invoke-SingleZoneWindowSnap so those windows end up REGISTERED with
+		  FancyZones, not merely positioned: a stale zone assignment is cleared first (it
+		  makes Win+Up a no-op or a cross-monitor throw on a one-zone grid), the window is
+		  centered in the zone at a deeper inset, then Win+Up with a shift-drag fallback
+		- Using reliable focus acquisition with thread attachment for every keyboard snap
 
 		A window whose snap attempts are exhausted is recorded as failed and the pass
 		CONTINUES with the remaining windows and desktops, so one stubborn window no longer
@@ -453,37 +453,44 @@ function Snap-AllWindows {
 					continue
 				}
 
-				# Single-zone layouts (Zone = "Fullscreen"/"Full" on a one-zone grid) are placed
-				# deterministically instead of snapped. FancyZones' Win+Arrow is a RELATIVE move
-				# (see Get-InsetWindowBounds), and a single-zone layout has no neighbouring zone
-				# on the same monitor to make it deterministic: with moveWindowAcrossMonitors
-				# enabled a Win+Up on a window FancyZones already recognises as zoned throws it
-				# to ANOTHER monitor's zone, and on a single monitor it no-ops - either way
-				# burning every retry plus the shift-drag fallback. With one zone there is
-				# nothing FancyZones needs to arbitrate, so the window goes straight to the zone
-				# rect (verified by the same geometry check the snap path uses). The inset
-				# pre-position and foreground focus are skipped too - both exist only to steer
-				# the relative keyboard snap.
+				# Single-zone layouts (Zone = "Fullscreen"/"Full" on a one-zone grid) snap through
+				# FancyZones' own paths - centered in the zone at a deeper inset, Win+Up,
+				# shift-drag fallback - so the window ends up REGISTERED (zone assignment,
+				# live work-area tracking), not merely positioned. Win+Up is deterministic
+				# because Invoke-SingleZoneWindowSnap clears a stale assignment first:
+				# FancyZones' position-based move excludes zones the window is already
+				# assigned to, which is what used to make single-zone Win+Up a no-op or a
+				# cross-monitor throw (the marker survives every programmatic move, so
+				# Reset-Windows leaves it behind routinely). An exhausted window is recorded
+				# as failed for the caller's retry, exactly like the multi-zone path.
 				if ($windowState.SingleZone) {
-					$placement = Invoke-SingleZoneWindowPlacement -WindowHandle $handle `
+					$snap = Invoke-SingleZoneWindowSnap -WindowHandle $handle `
 						-TargetX $expectedX -TargetY $expectedY `
 						-TargetWidth $expectedWidth -TargetHeight $expectedHeight `
-						-WindowTitle $expectedTitle
+						-WindowTitle $expectedTitle -InsetPercent $insetPercent
 
-					if ($placement.Verified) {
+					if ($snap.Verified) {
 						$snappedCount++
-						if (Test-LogVerbose) {
-							$attemptLabel = if ($placement.Attempts -gt 1) { " (attempt $($placement.Attempts))" } else { "" }
-							Write-LogDebug "     ✓ Placed [$expectedTitle] → direct single-zone placement (verified at zone position)$attemptLabel" -Style Success
+						if (-not $snap.Registered) {
+							Write-LogWarning "[$expectedTitle] is at its zone but its FancyZones assignment could not be read back - a manual Win+Arrow on it will re-register it"
+						}
+						elseif (Test-LogVerbose) {
+							$methodLabel = switch ($snap.Method) {
+								'KeyboardSnap' { 'Win+Up' }
+								'ShiftDrag' { 'Shift+Drag' }
+								default { $snap.Method }
+							}
+							$attemptLabel = if ($snap.Attempts -gt 1) { " (attempt $($snap.Attempts))" } else { "" }
+							Write-LogDebug "     ✓ Snapped [$expectedTitle] → $methodLabel (registered, verified at zone position)$attemptLabel" -Style Success
 						}
 					}
 					else {
-						$errorDetails = "Single-zone placement FAILED for [$expectedTitle] after $($placement.Attempts) attempts (unverified position)"
+						$errorDetails = "Single-zone snap FAILED for [$expectedTitle] after $($snap.Attempts) attempts (unverified position)"
 						$actualBounds = $null
-						if ($null -ne $placement.X) {
+						if ($null -ne $snap.X) {
 							$errorDetails += "`n  Expected => ($expectedX, $expectedY) ${expectedWidth}x${expectedHeight}"
-							$errorDetails += "`n  Actual   => ($($placement.X), $($placement.Y)) $($placement.Width)x$($placement.Height)"
-							$actualBounds = "($($placement.X), $($placement.Y)) $($placement.Width)x$($placement.Height)"
+							$errorDetails += "`n  Actual   => ($($snap.X), $($snap.Y)) $($snap.Width)x$($snap.Height)"
+							$actualBounds = "($($snap.X), $($snap.Y)) $($snap.Width)x$($snap.Height)"
 						}
 						$failedSnaps.Add([PSCustomObject]@{
 								Handle      = $handle

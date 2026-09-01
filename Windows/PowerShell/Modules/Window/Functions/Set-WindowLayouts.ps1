@@ -907,9 +907,10 @@ function Set-WindowLayouts {
 		# iteration's resolved layout name when recorded into the work item.
 		$layoutName = $null
 		# Whether this entry's resolved layout defines exactly one zone. Single-zone windows
-		# are placed directly by Snap-AllWindows instead of snapped (FancyZones' relative
-		# Win+Arrow is ambiguous with no neighbouring zone). Direct-coordinate entries stay
-		# $false - they never had a zone to snap into.
+		# take Snap-AllWindows' dedicated snap path (Invoke-SingleZoneWindowSnap: stale
+		# FancyZones assignments cleared, centered at a deeper inset, Win+Up with shift-drag
+		# fallback). Direct-coordinate entries stay $false - they never had a zone to snap
+		# into.
 		$singleZone = $false
 
 		# Check if using zone-based positioning
@@ -1016,7 +1017,7 @@ function Set-WindowLayouts {
 				if (Test-LogVerbose) {
 					Write-LogDebug "✓ Zone coordinates calculated => [$posX,$posY ${posWidth}x${posHeight}]" -Style Success
 					if ($singleZone) {
-						Write-LogDebug "Single-zone layout - window will be placed directly instead of snapped" -Style Step
+						Write-LogDebug "Single-zone layout - window will snap through the dedicated single-zone path" -Style Step
 					}
 				}
 			}
