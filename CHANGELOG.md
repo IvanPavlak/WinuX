@@ -30,7 +30,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
   The delays exist because these are asynchronous Win32 and FancyZones operations with no completion signal to wait on, so the only options are a fixed wait or a verification loop. The workspace flow already has the latter: geometry is verified against the zone rectangle and an unsatisfied window is retried and ultimately reported unverified, so a delay that turns out to be too short surfaces as a retry or a failed verification rather than as a silently mispositioned window. That is what makes trimming them a bounded risk rather than a blind one.
 
-  **Currently stable on the Laptop machine, which is where the new values were exercised.** They are deliberately kept in one module-scoped table rather than spread through the call sites, so a slower machine that needs more headroom is a single edit in `Window.psm1`; there is no configuration key for them.
+  **Currently stable on the Work machine, which is where the new values were exercised.** They are deliberately kept in one module-scoped table rather than spread through the call sites, so a slower machine that needs more headroom is a single edit in `Window.psm1`; there is no configuration key for them.
 
 ### Fixed
 
