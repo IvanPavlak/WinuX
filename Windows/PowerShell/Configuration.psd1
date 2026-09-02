@@ -236,6 +236,21 @@
 		OhMyPoshThemeFile        = "{User}\AppData\Local\Programs\oh-my-posh\themes\WinuX.omp.json"
 		TrainingFile             = ""
 		WhatsAppLocalStoragePath = "{User}\AppData\Local\Packages\5319275A.WhatsAppDesktop_cv1g1gvanyjgm\LocalState\shared\transfers"
+
+		# OPT-IN. An image fastfetch renders instead of the text logo, in the terminals that can
+		# display one - WezTerm and Windows Terminal. Read by Get-FastfetchLogoArgument, which the
+		# all-hosts profile (Windows\PowerShell\profile.ps1, itself an opt-in symbolic link)
+		# wires into a global `fastfetch` function. $null keeps the text logo everywhere. WinuX
+		# ships its own logo at Windows\WinuX\WinuXLogoTransparent.png to point this at:
+		#   FastFetchImageLogo = "{RepoRoot}\Windows\WinuX\WinuXLogoTransparent.png"
+		#
+		# A hashtable keyed by machine type gives each machine its own image. A machine with no
+		# entry gets none, so adding one never turns the feature on for the others:
+		#   FastFetchImageLogo = @{
+		#       PC   = "{RepoRoot}\Windows\WinuX\WinuXLogoTransparent.png"
+		#       Work = "{RepoRoot}\FastFetch\Windows\CompanyLogo.png"
+		#   }
+		FastFetchImageLogo       = $null
 		FirefoxExe               = "C:\Program Files\Mozilla Firefox\firefox.exe"
 		OutlookLauncherExe       = "C:\Windows\explorer.exe"
 		DockerExe                = "C:\Program Files\Docker\Docker\frontend\Docker Desktop.exe"
@@ -553,6 +568,12 @@
 			}
 			# Opt-in examples for the payloads WinuX ships - add the ones you use to
 			# Configuration.local.psd1:
+			#   PowerShell.AllHostsProfile (nest it inside the PowerShell entry above) = @{
+			#       Path   = "{User}\Documents\PowerShell\profile.ps1"
+			#       Target = "{RepoRoot}\Windows\PowerShell\profile.ps1"
+			#   }
+			#   Loads BEFORE the host profile and carries the fastfetch image logo; inert until
+			#   Universal.FastFetchImageLogo is set.
 			#   Git = @{
 			#       Path   = "{User}\.gitconfig"
 			#       Target = "{RepoRoot}\Git\.gitconfig"
@@ -2216,8 +2237,18 @@
 	# ==========================================================================
 	# List-Functions Configuration
 	# ==========================================================================
-	# Functions excluded from discrepancy checks by List-Functions.
-	# These appear in README but aren't loaded in session (standalone scripts).
+	# Functions excluded from discrepancy checks by List-Functions, in BOTH directions -
+	# documented but not loaded, and loaded but not documented. Anything here is not an exported
+	# module function: a standalone script that is documented anyway (Install-Bootstrap), or a
+	# function the profile chain defines rather than a module (the rest).
+	#
+	# The profile-defined ones need explaining. Reload-PowerShellProfile dot-sources the profile
+	# chain from inside the System module, and PowerShell stamps the DEFINING module onto every
+	# function created during that call - even one declared global: - so these report an empty
+	# ModuleName in a fresh session and "System" after a reload, at which point the check would
+	# flag them as undocumented System exports.
+	#   fastfetch          - the all-hosts profile's image-logo wrapper (see profile.ps1)
+	#   Get-PoshStackCount - defined by oh-my-posh's own init, which Initialize-OhMyPosh invokes
 	#
 	# Example:
 	#   FunctionDiscrepancyExclusions = @(
@@ -2226,7 +2257,9 @@
 	#   )
 	# ==========================================================================
 	FunctionDiscrepancyExclusions = @(
-		"Install-Bootstrap"
+		"Install-Bootstrap",
+		"fastfetch",
+		"Get-PoshStackCount"
 	)
 
 	# Color scheme for List-Functions output

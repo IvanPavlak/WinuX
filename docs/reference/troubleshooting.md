@@ -475,6 +475,114 @@ Modules/Window/Layouts/PC/WorkspaceName_PC.psd1
 $MachineType  # Should match folder name
 ```
 
+## fastfetch Logo Issues
+
+Setting `Universal.FastFetchImageLogo` makes fastfetch render that image instead of the text logo,
+in the two terminals that can display one - WezTerm and Windows Terminal. Every other host keeps the
+text logo declared in the fastfetch configuration. The feature is gated twice: the
+`PathTemplates.SymbolicLinks.PowerShell.AllHostsProfile` link has to exist, and the configuration
+key has to be set. See [`Get-FastfetchLogoArgument`](../modules/system.md#get-fastfetchlogoargument)
+and its [configuration guide](../configuration/guides/system/Get-FastfetchLogoArgument.md).
+
+### Logo Is A Block Of Slashes Instead Of An Image
+
+**Problem:** The logo renders as colored `/////` blocks, and `fastfetch --show-errors` prints
+`Logo: getCharacterPixelDimensions() failed`.
+
+This is fastfetch calling its own image path rather than going through the override. fastfetch
+cannot measure a character cell in pixels on Windows - its `getCharacterPixelDimensions()` calls
+`GetCurrentConsoleFontEx()`, which only works for ConHost - so `--logo-type sixel`, `chafa`,
+`kitty` and `iterm` all fail under Windows Terminal and fall back to that placeholder.
+
+**Solution:**
+
+1. Confirm the override is loaded. The global function must exist, and it must be a `Function`, not
+   the `Application`:
+
+```powershell
+(Get-Command fastfetch).CommandType   # Function
+```
+
+2. If it is `Application`, the all-hosts profile did not load. Check the symlink exists and points
+   into the repository:
+
+```powershell
+Get-Item $PROFILE.CurrentUserAllHosts -Force | Select-Object Target
+```
+
+3. Recreate it if missing, then open a new tab. Requires an elevated shell:
+
+```powershell
+SymbolicLinkMaker -Name "PowerShell"
+```
+
+4. Never set `type` to `sixel` or `chafa` in the fastfetch configuration file. The config keeps the
+   TEXT logo on purpose; the image is applied by command-line arguments, which is what makes the
+   fallback in other hosts work.
+
+### Image Logo Missing, Text Logo Shown Instead
+
+**Problem:** The panel renders with the text logo in a terminal you expected an image in.
+
+**Solution:** This is the designed fallback and it never reports an error. Turn on verbose logging
+to see which check declined:
+
+```powershell
+Set-LogLevel Verbose { c }
+```
+
+The reasons, all of them deliberate:
+
+| Debug line | Meaning |
+| ---------- | ------- |
+| `Universal.FastFetchImageLogo is not set` | The feature is off. This is the base configuration's state; set the key in `Configuration.local.psd1`. |
+| `output redirected` | Output is being captured, not displayed. |
+| `terminal has no supported image protocol` | Not WezTerm, and `$env:WT_SESSION` is unset - VS Code, ConHost, SSH, CI. |
+| `terminal did not report its cell size` | The terminal ignored `CSI 16 t`. Windows Terminal answers only from 1.22.2362.0; check `(Get-AppxPackage Microsoft.WindowsTerminal*).Version`. |
+| `sixel encoding unavailable` | ImageMagick is not on PATH and the sixel cache is cold. Install it with `winget install ImageMagick.ImageMagick`. |
+| `logo image not found` | The configured path does not exist. |
+
+Note that [`Invoke-ClearAndFastfetch`](../modules/system.md#invoke-clearandfastfetch) measures the
+panel by running the fastfetch binary directly, bypassing the wrapper - so the text logo appearing
+in a captured measurement is correct and expected, not the bug it looks like.
+
+### Image Logo Overlaps The Info Panel
+
+**Problem:** The image spills into the module list, or leaves a large gap before it.
+
+The image is encoded to fit a block of character cells measured from the text logo it replaces, so
+the two occupy identical space. A mismatch means the encoded size no longer matches the cell size in
+use - most often a stale sixel cache after a font change that did not alter the reported cell size.
+
+**Solution:**
+
+1. Clear the cache and let the next call re-encode:
+
+```powershell
+Remove-Item "$env:LOCALAPPDATA\WinuX\SixelCache" -Recurse
+```
+
+2. Reset the font to the profile default, which is the size the block is judged against:
+
+```
+Ctrl+0
+```
+
+3. A wide, short text logo (a banner rather than a square block) gives the image a wide, short box
+   to fit inside, so the image comes out small. Pass `-CellWidth` / `-CellHeight` explicitly, or
+   point `-ReferenceLogoPath` at a logo with the proportions you want.
+
+### Sixel Artifacts Or A Cleared Image After Resizing
+
+**Problem:** The image vanishes, smears, or leaves fragments after resizing the window, scrolling
+back, or switching tabs.
+
+Windows Terminal's sixel implementation is young and does not always survive reflow. Nothing in
+this repository can fix it.
+
+**Solution:** Redraw the panel with `c`. WezTerm's inline-image path does not have this problem, so
+prefer WezTerm if it bothers you.
+
 ## Browser Issues
 
 ### URLs Not Opening

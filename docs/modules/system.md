@@ -267,6 +267,49 @@ Get-BrowserWindowsByTarget -TargetPids @(1234) -TitlePattern "Google Chrome"
 
 **See also:** [Close-BrowserWindows](../modules/system.md)
 
+## [Get-FastfetchLogoArgument](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Get-FastfetchLogoArgument.ps1)
+
+- **Description:** Builds the fastfetch arguments that render an image logo in the current terminal, returning an empty array whenever an image is not possible so the caller runs fastfetch exactly as configured. Opt-in: returns nothing until `Universal.FastFetchImageLogo` names an image - either one path for every machine, or a hashtable keyed by machine type, where a machine with no entry gets no image. Dispatches per terminal: WezTerm gets `--logo-type iterm` (the OSC 1337 inline-image protocol, which WezTerm scales itself), Windows Terminal gets `--logo-type raw` over a sixel that [`Get-TerminalCellSize`](#get-terminalcellsize) and [`New-SixelImage`](#new-sixelimage) have already sized to fit, and every other host gets nothing. Reserves a fixed block of character cells and fits the image inside it preserving the aspect ratio, so the panel has the geometry it would have with a text logo of the same dimensions; `-ReferenceLogoPath` defaults to the deployed fastfetch text logo (`PathTemplates.SymbolicLinks.FastFetch.Logo`), so the block is measured from the very logo the image replaces. Returns nothing when output is redirected, so a shell whose whole stdout is a file or a pipe gets text rather than 50KB of sixel. Never throws.
+- **Parameters:** `[-ImagePath]` `[-ReferenceLogoPath]` `[-CellWidth]` `[-CellHeight]` `[-PaddingRight]` `[-OutputRedirected]`
+- **Usage:** `Get-FastfetchLogoArgument`, `Get-FastfetchLogoArgument -ImagePath $logo -CellWidth 30 -CellHeight 15`
+
+This exists because fastfetch cannot render an image logo on Windows by itself. Its
+`getCharacterPixelDimensions()` has two implementations and the Windows one calls
+`GetCurrentConsoleFontEx()`, which its own source notes "only works for ConHost"; the
+escape-sequence measurement is compiled only on Unix. Under Windows Terminal the call fails and
+every image logo type that has to SCALE the image (`sixel`, `chafa`, `kitty`, `iterm`) degrades to
+a placeholder block of slashes with `Logo: getCharacterPixelDimensions() failed` on stderr. The
+types that PASS THE IMAGE THROUGH for the terminal to scale (`iterm`, `kitty-direct`) need no
+measurement and work fine, but Windows Terminal implements neither protocol - it renders sixel
+instead. Pre-encoding the sixel and handing it over with `--logo-type raw` is the workaround
+fastfetch's own maintainer recommends for Windows, and it is what this function automates.
+
+The wiring is the all-hosts profile (`Windows/PowerShell/profile.ps1`), an opt-in symbolic link
+that defines a global `fastfetch` function. PowerShell resolves functions before external
+applications, so the profile's startup panel and every
+[`Invoke-ClearAndFastfetch`](#invoke-clearandfastfetch) call pick the image up without either of
+those files changing. Two opt-ins therefore gate the feature: the symbolic link and the
+configuration key.
+
+| Parameter | Description |
+| --------- | ----------- |
+| `-ImagePath` | The image to use as the logo. Anything ImageMagick can decode. Omit it and the value comes from `Universal.FastFetchImageLogo` - the whole string, or this machine's entry when that key is a per-machine hashtable. With neither set the function returns an empty array. |
+| `-ReferenceLogoPath` | Text logo whose dimensions define the cell block: its line count becomes the height, its longest line - fastfetch's `$1`-`$9` color placeholders removed - becomes the width. Defaults to `PathTemplates.SymbolicLinks.FastFetch.Logo`. Overrides `-CellWidth` and `-CellHeight` when readable. |
+| `-CellWidth` | Width of the reserved block in cells, used when no reference logo is readable. Default 36. |
+| `-CellHeight` | Height of the reserved block in cells, used when no reference logo is readable. Default 16. |
+| `-PaddingRight` | Blank columns between the logo block and the module list. Default 4. |
+| `-OutputRedirected` | Whether this process's own output is redirected rather than going to a terminal. Defaults to the real console state; a parameter so the per-terminal branches are testable without a terminal. |
+
+```powershell
+# What the all-hosts profile's `fastfetch` wrapper does on every call
+& $fastfetchExe @(Get-FastfetchLogoArgument)
+
+# Override both the image and the cell block, ignoring the configured values
+Get-FastfetchLogoArgument -ImagePath "C:\Logos\Flag.png" -CellWidth 30 -CellHeight 15
+```
+
+**See also:** [Get-TerminalCellSize](#get-terminalcellsize), [New-SixelImage](#new-sixelimage), [Invoke-ClearAndFastfetch](#invoke-clearandfastfetch), [Get-FastfetchLogoArgument configuration guide](../configuration/guides/system/Get-FastfetchLogoArgument.md)
+
 ## [Get-InstalledApps](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Get-InstalledApps.ps1)
 
 - **Description:** Enumerates all installed Windows applications (both 64-bit and 32-bit) by scanning the registry's Uninstall keys, then exports the results to `installed_apps.txt` on the Desktop.
@@ -320,6 +363,33 @@ Each returned object carries `Key` (the entry's own key), `FullKey` (the dotted 
 
 **See also:** [SymbolicLinkMaker](#symboliclinkmaker), [New-WindowsSymbolicLink](#new-windowssymboliclink), [New-WSLSymbolicLink](#new-wslsymboliclink)
 
+## [Get-TerminalCellSize](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Get-TerminalCellSize.ps1)
+
+- **Description:** Reports the pixel width and height of one character cell by asking the terminal itself, with the XTWINOPS "report cell size" query (`CSI 16 t`), parsing the `CSI 6 ; height ; width t` reply. Returns `$null` - never throws - when the host has no console, when input or output is redirected, when no reply arrives before the timeout, or when the reply is degenerate. The reply is read from the console input buffer, so keystrokes typed during the round trip are discarded along with any other unrecognized input.
+- **Parameters:** `[-TimeoutMilliseconds]`
+- **Usage:** `Get-TerminalCellSize`, `Get-TerminalCellSize -TimeoutMilliseconds 500`
+
+Nothing else can answer this question. A terminal image protocol places an image sized in PIXELS
+into a grid measured in CELLS, so the encoder has to know the conversion factor or the image lands
+on a fractional number of cells and overlaps whatever is drawn beside it. The query is the only
+portable source of that factor: there is no environment variable, and no Windows console API
+reports it correctly under a modern terminal - `GetCurrentConsoleFontEx()` works for ConHost only,
+which is exactly why fastfetch cannot do this itself on Windows. Windows Terminal answers since
+1.22.2362.0, as do WezTerm, xterm and mlterm; everything else stays silent, costs the timeout once,
+and yields `$null`.
+
+| Parameter | Description |
+| --------- | ----------- |
+| `-TimeoutMilliseconds` | How long to wait for the reply. Default 200 - generous for a local terminal, short enough to be unnoticeable when nothing answers. |
+
+```powershell
+# Convert a 36-cell logo width into the pixel width an image has to be encoded at
+$cell = Get-TerminalCellSize
+if ($cell) { $pixelWidth = 36 * $cell.Width }
+```
+
+**See also:** [Get-FastfetchLogoArgument](#get-fastfetchlogoargument), [New-SixelImage](#new-sixelimage)
+
 ## [Initialize-OhMyPosh](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Initialize-OhMyPosh.ps1)
 
 - **Description:** Resolves the `oh-my-posh` binary and initializes the prompt theme for the current session - the robust form of the classic profile one-liner `oh-my-posh init pwsh --config <theme> | Invoke-Expression`. Resolution order: PATH (`Get-Command`), then the known install locations (winget EXE per-user and machine scope, WinGet portable links, Store alias). When a fallback location hits, its directory is prepended to the session PATH so `oh-my-posh` also resolves as a plain command afterwards. When the binary is genuinely absent, prints a single install hint instead of erroring on every prompt. The theme file is read from `Universal.OhMyPoshThemeFile` in `Configuration.psd1`.
@@ -358,12 +428,12 @@ Initialize-WSLEnvironment
 
 ## [Invoke-ClearAndFastfetch](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Invoke-ClearAndFastfetch.ps1)
 
-- **Description:** Clears the terminal screen with `Clear-Host` and displays the fastfetch system info panel, shrinking the font once if the panel does not fit the window. Inside Windows Terminal it first measures the panel by capturing fastfetch's output (in pipe mode fastfetch emits one line per visual row, so the captured line count is the panel height and the longest line is its width), then sends `Ctrl+0` ("reset font size") so the panel is always judged against - and returns to - the default font; if it still overflows at the default size it sends a single `Ctrl+Minus` ("decrease font size") so it fits, then clears and renders the colored panel. Resetting first keeps the result deterministic (default font when it fits, one step smaller when it does not) and avoids oscillating on repeated calls.
+- **Description:** Clears the terminal screen with `Clear-Host` and displays the fastfetch system info panel, shrinking the font once if the panel does not fit the window. Inside Windows Terminal it first measures the panel by capturing fastfetch's output (in pipe mode fastfetch emits one line per visual row, so the captured line count is the panel height and the longest line is its width), then sends `Ctrl+0` ("reset font size") so the panel is always judged against - and returns to - the default font; if it still overflows at the default size it sends a single `Ctrl+Minus` ("decrease font size") so it fits, then clears and renders the colored panel. Resetting first keeps the result deterministic (default font when it fits, one step smaller when it does not) and avoids oscillating on repeated calls. The measuring run invokes the fastfetch BINARY rather than the `fastfetch` command name, so a profile-defined `fastfetch` function cannot distort the measurement with a decoration that has no measurable width - an inline-image logo is a single enormous line. The displaying run goes through the command name as usual, so such a wrapper still decorates what you see.
 - **Parameters:** -NoResize, -PromptReserve
 - **Usage:** `c`, `Invoke-ClearAndFastfetch`, `Invoke-ClearAndFastfetch -NoResize`, `Invoke-ClearAndFastfetch -PromptReserve 2`
 - **Alias:** c
 
-Because measuring and displaying are separate steps, `fastfetch` runs twice when auto-fit is active; use `-NoResize` to keep the original single-run clear + fastfetch behavior. Auto-fit is Windows Terminal specific (the `Ctrl+0` / `Ctrl+Minus` bindings) and is skipped automatically outside Windows Terminal and in non-interactive hosts with no console window. Any failure while measuring or sending the keystrokes degrades gracefully to a plain clear + fastfetch.
+Because measuring and displaying are separate steps, `fastfetch` runs twice when auto-fit is active; use `-NoResize` to keep the original single-run clear + fastfetch behavior. Auto-fit is Windows Terminal specific (the `Ctrl+0` / `Ctrl+Minus` bindings) and is skipped automatically outside Windows Terminal and in non-interactive hosts with no console window. Any failure while measuring or sending the keystrokes degrades gracefully to a plain clear + fastfetch. A profile-defined `fastfetch` wrapper that swaps the logo for an inline image should size that image to the same cell block the text logo occupies, so the measured panel and the displayed one have identical geometry.
 
 | Parameter        | Type     | Default | Description                                                                             |
 | ---------------- | -------- | ------- | --------------------------------------------------------------------------------------- |
@@ -456,6 +526,33 @@ Kill-All -ReloadPowerShellProfile
 
 - **Description:** Lists all FileSystem PSDrives (mounted drives). A thin alias for `Get-PSDrive -PSProvider FileSystem`, showing all mounted drives including local disks, network drives, and removable media along with their Name, Used (GB), Free (GB), Provider, and Root.
 - **Usage:** `List-Drives`
+
+## [New-SixelImage](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/New-SixelImage.ps1)
+
+- **Description:** Encodes an image as a cached DEC sixel file - the one inline-image protocol Windows Terminal renders - scaled to fit a pixel box with its aspect ratio preserved, never stretched and never cropped, so a caller can reserve a fixed block of character cells and know the image cannot spill out of it. Transparency survives: the encoder writes the sixel background-select parameter, so a logo with an alpha channel does not arrive on a black rectangle. Caching is keyed on the box AND on the source file's length and last-write time, so editing or replacing the source invalidates the cache with no bookkeeping; ImageMagick is looked for only on a miss, so a warm cache keeps working on a machine that does not have it. Returns `$null` - never throws - when ImageMagick is absent, the source is missing, or the conversion produces nothing.
+- **Parameters:** `-Path` `-MaxPixelWidth` `-MaxPixelHeight` `[-CachePath]` `[-Force]`
+- **Usage:** `New-SixelImage -Path $logo -MaxPixelWidth 360 -MaxPixelHeight 320`, `New-SixelImage -Path $logo -MaxPixelWidth 360 -MaxPixelHeight 320 -Force`
+
+A cache hit costs two file stats; a miss costs one ImageMagick invocation, around 120ms for a
+small logo. That matters because the caller runs on every shell start and on every `c`, and because
+the box changes with the terminal's font size - each size gets its own cache entry rather than
+re-encoding whenever the font changes back. Requires ImageMagick on PATH for the first encode of
+each size (`winget install ImageMagick.ImageMagick`).
+
+| Parameter | Description |
+| --------- | ----------- |
+| `-Path` | The source image. Anything ImageMagick can decode (PNG, JPEG, SVG, ICO, WEBP). |
+| `-MaxPixelWidth` | Width of the box to fit the image into, in pixels. |
+| `-MaxPixelHeight` | Height of the box to fit the image into, in pixels. |
+| `-CachePath` | Directory holding the generated sixel files, created if missing. Defaults to `$env:LOCALAPPDATA\WinuX\SixelCache`. |
+| `-Force` | Re-encode even when a valid cache entry exists. |
+
+```powershell
+# A 36x16 cell block on a terminal reporting 10x20 pixel cells
+New-SixelImage -Path $logo -MaxPixelWidth (36 * 10) -MaxPixelHeight (16 * 20)
+```
+
+**See also:** [Get-FastfetchLogoArgument](#get-fastfetchlogoargument), [Get-TerminalCellSize](#get-terminalcellsize)
 
 ## [New-WindowsSymbolicLink](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/New-WindowsSymbolicLink.ps1)
 

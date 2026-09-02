@@ -80,6 +80,18 @@ Common system paths that do not vary by machine.
 - `IconCacheDb`, `IconCacheFolder` - Windows Explorer icon cache
 - `OhMyPoshThemeFile` - Oh-My-Posh theme location
 - `WhatsAppLocalStoragePath` - WhatsApp cache directory
+- `FastFetchImageLogo` - **Opt-in.** An image fastfetch renders instead of its text logo, in the
+  terminals that can display one (WezTerm, Windows Terminal). Ships `$null`, which keeps the text
+  logo everywhere. Takes either a **string** (one image for every machine) or a **hashtable keyed
+  by machine type** (each machine its own; a machine with no entry gets none, so adding one never
+  turns the feature on for the others). Placeholders expand inside the map as they do in a plain
+  string. Also needs the `PathTemplates.SymbolicLinks.PowerShell.AllHostsProfile` link, since that
+  is what deploys the profile which applies it. WinuX ships its own logo at
+  `Windows\WinuX\WinuXLogoTransparent.png` to point it at. See
+  [Get-FastfetchLogoArgument](guides/system/Get-FastfetchLogoArgument.md).
+
+**Consumer functions:** `Get-FastfetchLogoArgument` (`FastFetchImageLogo`), `Initialize-OhMyPosh`,
+`Clear-WhatsAppLocalStorage`, `Rebuild-IconCache`
 
 ### Process Cleanup
 

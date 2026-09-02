@@ -156,9 +156,26 @@ function List-Functions {
 		$exclusions = $Configuration.FunctionDiscrepancyExclusions
 	}
 
+	# Exclusions apply in BOTH directions. A name on the list is not an exported module function
+	# at all, so it can surface either way: documented but never exported (Install-Bootstrap, a
+	# standalone script), or present in the session but nowhere in the docs. The second case is
+	# what the profile chain produces. Reload-PowerShellProfile dot-sources that chain from inside
+	# the System module, and PowerShell stamps the DEFINING module onto every function created
+	# during the call - even one declared global: - so a profile-defined helper reports an empty
+	# ModuleName in a fresh session and 'System' after a reload, at which point it starts looking
+	# like an undocumented System export.
 	$comparison = Compare-Object -ReferenceObject $documentedFunctions -DifferenceObject $loadedFunctions -PassThru
-	$missingFromSession = $comparison | Where-Object { $_.SideIndicator -eq '<=' } | Where-Object { $_ -notin $exclusions }
-	$missingFromDocs = $comparison | Where-Object { $_.SideIndicator -eq '=>' }
+	# $loadedFunctions is built per module, via Get-Command -Module, which cannot see a function
+	# the profile has redefined in global scope: the global copy carries no module attribution, so
+	# it shadows the module's export and the module stops reporting it. That is what the profile
+	# does to Initialize-OhMyPosh and Test-PowerPlan - it dot-sources their files so the prompt and
+	# the power-plan check land in the caller's scope - and it made both look absent from a session
+	# that had them loaded the whole time. A documented name is therefore only missing when it does
+	# not resolve AT ALL; a genuinely absent function still fails, because nothing answers for it.
+	$missingFromSession = $comparison | Where-Object { $_.SideIndicator -eq '<=' } |
+		Where-Object { $_ -notin $exclusions } |
+		Where-Object { -not (Get-Command -Name $_ -CommandType Function -ErrorAction SilentlyContinue) }
+	$missingFromDocs = $comparison | Where-Object { $_.SideIndicator -eq '=>' } | Where-Object { $_ -notin $exclusions }
 
 	$discrepancyMessages = @()
 	if ($missingFromSession.Count -gt 0 -or $missingFromDocs.Count -gt 0) {
