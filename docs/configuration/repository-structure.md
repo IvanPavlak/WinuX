@@ -36,6 +36,7 @@ WinuX/
     ├── PowerShell/
     │   ├── Configuration.psd1                      # Central configuration hub
     │   ├── Microsoft.PowerShell_profile.ps1        # Profile loader
+    │   ├── profile.ps1                             # All-hosts profile (opt-in): fastfetch image logo
     │   └── Modules/
     │       ├── Application/                        # App launchers & installers
     │       ├── Bootstrap/                          # System initialization
@@ -70,7 +71,7 @@ WinuX/
         ├── WinuX.exe                               # Build output - gitignored; download from the release assets
         ├── WinuXLogo.ico                           # WinuX icon
         ├── WinuXLogo.png                           # WinuX logo
-        ├── WinuXLogoTransparent.png                # Transparent logo variant
+        ├── WinuXLogoTransparent.png                # Transparent logo variant; the default for Universal.FastFetchImageLogo
         └── ExecutableCreation.md                   # How the executable is built and released
 ```
 

@@ -12,6 +12,12 @@ function Invoke-ClearAndFastfetch {
 		In pipe mode fastfetch emits one line per visual row, so the captured line
 		count is the panel height and the longest captured line is its width.
 
+		The measuring run invokes the fastfetch BINARY rather than the `fastfetch`
+		command name, so a profile-defined `fastfetch` function cannot distort the
+		measurement with a decoration that has no measurable width - an inline-image
+		logo is a single enormous line. The displaying run at the end goes through the
+		command name as usual, so such a wrapper still decorates what you see.
+
 		It then sends Ctrl+0 ("reset font size") so the panel is always judged
 		against - and returns to - the default font. If the panel still overflows
 		the window at the default size, it sends a single Ctrl+Minus ("decrease
@@ -66,7 +72,18 @@ function Invoke-ClearAndFastfetch {
 			# pipe mode: one line per visual row, no color/cursor escape sequences,
 			# so the line count is the height and the longest line is the width.
 			# Panel size is font-independent, so it can be measured before resizing.
-			$captured = @(fastfetch 2>$null)
+			#
+			# Measure with the BINARY rather than with whatever `fastfetch` currently
+			# resolves to. A profile is free to define a `fastfetch` function that
+			# decorates the panel, and a decoration can be unmeasurable: an inline-image
+			# logo is a single enormous line, so a 50KB sixel would read as a
+			# 50,000-column panel and shrink the font on every call. The binary renders
+			# the panel the configuration describes, which is the geometry being judged -
+			# and a wrapper that swaps the logo for an image of the same cell block
+			# produces exactly that geometry anyway.
+			$fastfetchExe = Get-Command -Name fastfetch -CommandType Application -ErrorAction SilentlyContinue |
+				Select-Object -First 1
+			$captured = if ($fastfetchExe) { @(& $fastfetchExe.Source 2>$null) } else { @(fastfetch 2>$null) }
 			$panelHeight = $captured.Count
 			$panelWidth = ($captured | Measure-Object -Property Length -Maximum).Maximum
 			if (-not $panelWidth) { $panelWidth = 0 }

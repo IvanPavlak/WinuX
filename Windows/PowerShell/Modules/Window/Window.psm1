@@ -23,21 +23,21 @@ if (([System.Management.Automation.PSTypeName]'WindowModule.Native').Type) {
 # These can be adjusted for performance tuning while maintaining reliability
 $script:WindowModuleDelays = @{
 	# Delay after cursor movement before sending keys (monitor activation)
-	CursorSettleMs     = 25
+	CursorSettleMs     = 10
 	# Delay after SetForegroundWindow before sending keys
-	FocusSettleMs      = 25
+	FocusSettleMs      = 10
 	# Delay after keyboard shortcut is sent (for FancyZones to process)
-	KeyboardShortcutMs = 25
+	KeyboardShortcutMs = 10
 	# Delay allowing FancyZones to asynchronously commit a layout switch to disk before
 	# a virtual-desktop switch fires. Too short a delay lets the last desktop's layout
 	# "bleed" onto the desktop we switch back to (see Apply-FancyZones return-desktop reapply).
-	LayoutCommitMs     = 25
+	LayoutCommitMs     = 10
 	# Delay after ShowWindow restore operations
-	WindowRestoreMs    = 25
+	WindowRestoreMs    = 10
 	# Delay after SetWindowPos for window to settle
-	WindowPositionMs   = 25
+	WindowPositionMs   = 10
 	# Delay after Move-Window for virtual desktop operations
-	VirtualDesktopMs   = 25
+	VirtualDesktopMs   = 10
 }
 
 # Module-scoped position tolerances (in pixels)
