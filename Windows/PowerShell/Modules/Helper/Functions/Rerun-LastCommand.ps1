@@ -27,8 +27,9 @@ function ReRun-LastCommand {
 		Exact command to rerun in the fresh shell. When provided, PSReadLine history is not
 		consulted at all - the shared history file is written incrementally by every open
 		pwsh session, so its most recent line can be a command typed in another window.
-		Open-Workspace records its resolved invocation in $env:WORKSPACE_RERUN_COMMAND and
-		Set-WorkspaceWindowLayout passes it through here on escalation.
+		Open-Workspace records its resolved invocation through Set-WorkspaceRerunCommand
+		(Window module state, never the environment) and Set-WorkspaceWindowLayout passes it
+		through here on escalation.
 
 	.EXAMPLE
 		ReRun-LastCommand

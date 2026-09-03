@@ -87,34 +87,38 @@ function Open-Workspace {
 		[Environment]::SetEnvironmentVariable($alongsideShellEnvVar, $null, 'Process')
 	}
 
+	# Base of the elapsed summary: the start of THIS invocation, unless this is the relaunched
+	# alongside shell, whose bootstrap command handed the original start over in
+	# OPEN_WORKSPACE_START_UTC so the reported duration includes the relaunch. That hand-over is
+	# the ONLY place the variable is read, and it is consumed right here in every case. It used
+	# to be set in this process for the whole open, so every application and terminal tab the
+	# open spawned inherited it (Windows Terminal hands the wt.exe caller's environment to
+	# command-line-created panes), and a later Open-Workspace typed into such a tab reported the
+	# time since the earlier open - 597 s and 704 s in the session logs.
 	$workspaceTimerEnvVar = 'OPEN_WORKSPACE_START_UTC'
 	$currentInvocationStartUtc = [DateTimeOffset]::UtcNow
 	$carryOverElapsed = [TimeSpan]::Zero
-	$persistedStartUtc = $null
-	$persistedStartUtcRaw = [Environment]::GetEnvironmentVariable($workspaceTimerEnvVar, 'Process')
+	$handedOverStartUtcRaw = [Environment]::GetEnvironmentVariable($workspaceTimerEnvVar, 'Process')
+	if (-not [string]::IsNullOrWhiteSpace($handedOverStartUtcRaw)) {
+		[Environment]::SetEnvironmentVariable($workspaceTimerEnvVar, $null, 'Process')
+	}
 
-	if (-not [string]::IsNullOrWhiteSpace($persistedStartUtcRaw)) {
+	if ($isAlongsideShell -and -not [string]::IsNullOrWhiteSpace($handedOverStartUtcRaw)) {
 		try {
-			$persistedStartUtc = [DateTimeOffset]::ParseExact(
-				$persistedStartUtcRaw,
+			$handedOverStartUtc = [DateTimeOffset]::ParseExact(
+				$handedOverStartUtcRaw,
 				'o',
 				[System.Globalization.CultureInfo]::InvariantCulture,
 				[System.Globalization.DateTimeStyles]::RoundtripKind
 			)
 
-			if ($currentInvocationStartUtc -ge $persistedStartUtc) {
-				$carryOverElapsed = $currentInvocationStartUtc - $persistedStartUtc
-			}
-			else {
-				[Environment]::SetEnvironmentVariable($workspaceTimerEnvVar, $currentInvocationStartUtc.ToString('o'), 'Process')
+			if ($currentInvocationStartUtc -ge $handedOverStartUtc) {
+				$carryOverElapsed = $currentInvocationStartUtc - $handedOverStartUtc
 			}
 		}
 		catch {
-			[Environment]::SetEnvironmentVariable($workspaceTimerEnvVar, $currentInvocationStartUtc.ToString('o'), 'Process')
+			$carryOverElapsed = [TimeSpan]::Zero
 		}
-	}
-	else {
-		[Environment]::SetEnvironmentVariable($workspaceTimerEnvVar, $currentInvocationStartUtc.ToString('o'), 'Process')
 	}
 
 	$stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
@@ -301,8 +305,13 @@ function Open-Workspace {
 		# Record this exact invocation (with RESOLVED workspace names - the user may have picked
 		# them from the interactive menu) so a failure-path respawn reruns precisely this command
 		# instead of scraping the shared PSReadLine history, where any other session may have
-		# written a newer line meanwhile. Cleared in the finally block; consumed by
-		# Set-WorkspaceWindowLayout when it escalates to ReRun-LastCommand.
+		# written a newer line meanwhile. Kept as Window-module state
+		# (Set-WorkspaceRerunCommand), never in the environment: an environment variable would be
+		# inherited by every terminal tab this open spawns, and a standalone
+		# Set-WorkspaceWindowLayout escalation typed into such a tab later would respawn the whole
+		# inherited workspace open. Cleared in the finally block; consumed by
+		# Set-WorkspaceWindowLayout when it escalates to ReRun-LastCommand. Guarded like the other
+		# Window-module calls here - the module may be absent.
 		$quoteRerunToken = { param($value) "'" + ([string]$value -replace "'", "''") + "'" }
 		$rerunTokens = @('Open-Workspace')
 		$rerunTokens += '-Workspace'
@@ -328,7 +337,9 @@ function Open-Workspace {
 				$rerunTokens += & $quoteRerunToken $extraArg
 			}
 		}
-		$env:WORKSPACE_RERUN_COMMAND = $rerunTokens -join ' '
+		if (Get-Command Set-WorkspaceRerunCommand -ErrorAction SilentlyContinue) {
+			Set-WorkspaceRerunCommand -Command ($rerunTokens -join ' ')
+		}
 
 		# What this plain open must leave alone: alongside workspaces that are still standing.
 		# Resolved ONCE, before any action can spawn a process - a window created mid-run must
@@ -740,8 +751,9 @@ function Open-Workspace {
 					$elapsedSeconds = [math]::Round(($carryOverElapsed + $stopwatch.Elapsed).TotalSeconds, 1)
 					Write-LogSuccess "Workspace(s) opened in $elapsedSeconds seconds!"
 					$summaryPrinted = $true
-					[Environment]::SetEnvironmentVariable($workspaceTimerEnvVar, $null, 'Process')
-					[Environment]::SetEnvironmentVariable('WORKSPACE_RERUN_COMMAND', $null, 'Process')
+					if (Get-Command Set-WorkspaceRerunCommand -ErrorAction SilentlyContinue) {
+						Set-WorkspaceRerunCommand -Clear
+					}
 					if (Get-Command Reset-KeyboardModifiers -ErrorAction SilentlyContinue) {
 						$null = Reset-KeyboardModifiers
 					}
@@ -781,8 +793,9 @@ function Open-Workspace {
 		}
 	}
 	finally {
-		[Environment]::SetEnvironmentVariable($workspaceTimerEnvVar, $null, 'Process')
-		[Environment]::SetEnvironmentVariable('WORKSPACE_RERUN_COMMAND', $null, 'Process')
+		if (Get-Command Set-WorkspaceRerunCommand -ErrorAction SilentlyContinue) {
+			Set-WorkspaceRerunCommand -Clear
+		}
 
 		# The flow above synthesizes keyboard input (FancyZones shortcuts, Win+Arrow
 		# snaps, shift-drag, terminal tab cycling). Guarantee the session never leaves

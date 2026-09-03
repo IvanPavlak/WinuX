@@ -25,10 +25,11 @@ function Set-WorkspaceWindowLayout {
 		Desktops are positioned and snapped as they become ready, not after the slowest window
 		of the whole workspace. Wait-ForWorkspaceWindows reports each virtual desktop whose
 		windows are all stable while others still load (-OnDesktopReady), and that desktop's
-		entries are positioned (Set-WindowLayouts, restricted to exactly those windows and
-		appending to the shared tracking), resized and snapped (Snap-AllWindows for that
-		desktop alone) right then; the tail after the wait finishes only the desktops that were
-		not ready, and verification stays global. WorkspaceLayoutPipelining = $false in the
+		entries are positioned (Set-WindowLayouts over the whole layout restricted to that
+		desktop, claiming only windows the wait has confirmed stable, appending to the shared
+		tracking), resized and snapped (Snap-AllWindows for that desktop alone) right then; the
+		tail after the wait finishes every entry those passes did not place, and verification
+		stays global. WorkspaceLayoutPipelining = $false in the
 		configuration turns this off and restores the strictly sequential wait -> position ->
 		snap order.
 
@@ -976,14 +977,20 @@ function Set-WorkspaceWindowLayout {
 		# second; every other window has been sitting stable for seconds by then, and the whole
 		# position and snap cost used to be paid after that. Wait-ForWorkspaceWindows now reports
 		# each desktop whose entries are all stable while others still load, and this callback
-		# positions, resizes and snaps that desktop right away - only the windows the wait
-		# confirmed stable for it (-CandidateWindowHandles), appended to the one tracking set the
-		# whole open shares (-KeepPositionedWindows), snapped for that desktop alone
-		# (-DesktopNumbers). The tail after the wait finishes the desktops that were not ready,
-		# verification stays global, and the in-process retries run the full layout as before.
+		# positions, resizes and snaps that desktop right away - the whole layout handed to
+		# Set-WindowLayouts so duplicate keys are counted across desktops, only that desktop's
+		# entries processed (-DesktopNumbers), claims restricted to windows the wait has confirmed
+		# stable ANYWHERE so far (-CandidateWindowHandles: a window still loading is never
+		# claimed), appended to the one tracking set the whole open shares
+		# (-KeepPositionedWindows), snapped for that desktop alone. The tail after the wait
+		# finishes every ENTRY the per-desktop passes did not place - not every desktop they did
+		# not reach: an entry can come back Not Found in its desktop's pass (its window not yet
+		# stable, or matched to another entry) and is then simply placed after the wait, as it
+		# always was. Verification stays global and the in-process retries run the full layout.
 		# The phase clock books the callback's own time under Position and Snap, not Wait.
 		$pipeliningEnabled = ($null -eq $global:Configuration.WorkspaceLayoutPipelining -or [bool]$global:Configuration.WorkspaceLayoutPipelining)
 		$pipelinedDesktops = @{}
+		$pipelinedEntryKeys = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
 		$pipelinedResults = [System.Collections.Generic.List[PSObject]]::new()
 		$pipelinedSnapFailures = [System.Collections.Generic.List[object]]::new()
 		$pipelinedHandles = New-Object 'System.Collections.Generic.HashSet[IntPtr]'
@@ -993,7 +1000,7 @@ function Set-WorkspaceWindowLayout {
 		}
 
 		$onDesktopReadyCallback = {
-			param($readyDesktopNumber, $readyEntries)
+			param($readyDesktopNumber, $readyEntries, $stableWindowHandles)
 
 			$displayDesktop = [int]$readyDesktopNumber + $DesktopOffset
 			try {
@@ -1001,12 +1008,21 @@ function Set-WorkspaceWindowLayout {
 				& $recordPhase 'Wait'
 				if ($spinner) { Loading-Spinner -Pause }
 
+				# Claims are restricted to windows the wait has confirmed stable - for ANY entry,
+				# not just this desktop's. The wait matches an entry by process OR title, so its
+				# window for a titled browser entry is often a different window of that browser;
+				# a per-entry whitelist therefore filtered out the very window the layout pass
+				# finds by title and left the entry unplaced (the 2026-09-03 regression). What the
+				# whitelist has to guarantee is only that a window still loading is never claimed.
 				$candidateHandles = New-Object 'System.Collections.Generic.HashSet[IntPtr]'
+				foreach ($stableHandle in @($stableWindowHandles)) {
+					if ($null -ne $stableHandle -and $stableHandle -ne [IntPtr]::Zero) { [void]$candidateHandles.Add([IntPtr]$stableHandle) }
+				}
 				$readyStates = @{}
-				$readyLayoutEntries = @()
+				$readyCount = 0
 				foreach ($ready in @($readyEntries)) {
 					if ($null -eq $ready -or $null -eq $ready.Window -or $null -eq $ready.Window.Handle) { continue }
-					$readyLayoutEntries += $ready.LayoutEntry
+					$readyCount++
 					[void]$candidateHandles.Add($ready.Window.Handle)
 					$readyStates[$ready.Window.Handle] = @{
 						Title  = $ready.Window.Title
@@ -1016,12 +1032,15 @@ function Set-WorkspaceWindowLayout {
 						Height = $ready.Window.Height
 					}
 				}
-				if ($readyLayoutEntries.Count -eq 0) { return }
+				if ($readyCount -eq 0 -or $candidateHandles.Count -eq 0) { return }
 
-				Write-LogDebug " Desktop [$displayDesktop] is ready while the rest still load - positioning and snapping it now ($($readyLayoutEntries.Count) window(s))" -Style Success
+				Write-LogDebug " Desktop [$displayDesktop] is ready while the rest still load - positioning and snapping it now ($readyCount window(s))" -Style Success
 
+				# The WHOLE layout, restricted to this desktop's entries: duplicate keys are counted
+				# across desktops, so an entry whose twin sits on another desktop claims one window.
 				$desktopLayoutParams = @{
-					LayoutConfig           = $readyLayoutEntries
+					LayoutConfig           = $layoutConfigToApply
+					DesktopNumbers         = @([int]$readyDesktopNumber)
 					MonitorInfo            = $cachedMonitorInfo
 					MonitorConfig          = $config.Monitors
 					ExistingWindowHandles  = $existingWindowHandles
@@ -1029,6 +1048,9 @@ function Set-WorkspaceWindowLayout {
 					DesktopOffset          = $DesktopOffset
 					CandidateWindowHandles = $candidateHandles
 					KeepPositionedWindows  = $true
+				}
+				if ($pipelinedHandles.Count -gt 0) {
+					$desktopLayoutParams["ExcludeWindowHandles"] = $pipelinedHandles
 				}
 				if ($Alongside) {
 					$desktopLayoutParams["SkipExistingWindows"] = $true
@@ -1040,12 +1062,28 @@ function Set-WorkspaceWindowLayout {
 					$desktopLayoutParams["PinnedHandleMap"] = $pinnedHandleMap
 				}
 
+				# Only what was actually placed counts as done. An entry that came back Not Found
+				# here is finished by the pass after the wait, exactly as before pipelining; its
+				# row is dropped so the shortfall tally is not counted twice.
 				$desktopResults = @(Set-WindowLayouts @desktopLayoutParams)
+				$placedHere = 0
 				foreach ($desktopResult in $desktopResults) {
+					if ($desktopResult.Status -ne 'Configured') { continue }
 					$pipelinedResults.Add($desktopResult)
-					if ($desktopResult.Status -eq 'Configured' -and $null -ne $desktopResult.Handle -and $desktopResult.Handle -ne [IntPtr]::Zero) {
+					$placedHere++
+					if (-not [string]::IsNullOrEmpty($desktopResult.EntryKey)) {
+						[void]$pipelinedEntryKeys.Add([string]$desktopResult.EntryKey)
+					}
+					if ($null -ne $desktopResult.Handle -and $desktopResult.Handle -ne [IntPtr]::Zero) {
 						[void]$pipelinedHandles.Add($desktopResult.Handle)
 					}
+				}
+				if ($placedHere -eq 0) {
+					Write-LogDebug " Desktop [$displayDesktop]: no entry could be placed yet - left to the pass after the wait" -Style Warning
+					return
+				}
+				if ($placedHere -lt $readyCount) {
+					Write-LogDebug " Desktop [$displayDesktop]: placed $placedHere of $readyCount entries now - the rest follow after the wait" -Style Warning
 				}
 
 				Start-Sleep -Milliseconds $SnapDelayMs
@@ -1404,29 +1442,39 @@ function Set-WorkspaceWindowLayout {
 
 			$phaseState.Attempts = $layoutAttempt
 
-			# Which tracked desktops this attempt resizes and snaps: $null means every one (the
-			# ordinary full pass), a list means only those (attempt 1 finishing what the
-			# per-desktop passes left), an empty list means nothing is left to do.
+			# What this attempt resizes and snaps after positioning: $null means the ordinary full
+			# pass; $false means attempt 1 is finishing what the per-desktop passes left, with the
+			# already-snapped windows pruned from the tracking so the resize and snap below touch
+			# only the windows this pass placed; an empty result set means nothing is left to do.
 			$attemptDesktopFilter = $null
-			if ($layoutAttempt -eq 1 -and $pipelinedDesktops.Count -gt 0) {
-				# The per-desktop passes during the wait already placed and snapped these desktops.
-				# Attempt 1 finishes the rest: the remaining desktops' entries, appended to the same
-				# tracking, resized and snapped on those desktops alone; the windows already placed
-				# are off limits to them. The results of both halves make up this attempt's set.
-				$entryDesktopOf = { param($entry) if ($null -ne $entry.DesktopNumber) { [int]$entry.DesktopNumber } else { 1 } }
-				$remainingEntries = @($layoutConfigToApply | Where-Object { -not $pipelinedDesktops.ContainsKey((& $entryDesktopOf $_)) })
-				$remainingDesktops = @($remainingEntries | ForEach-Object { (& $entryDesktopOf $_) + $DesktopOffset } | Select-Object -Unique)
-				Write-LogDebug " Per-desktop passes covered [$($pipelinedDesktops.Count)] desktop(s) during the wait - finishing [$($remainingEntries.Count)] remaining entry(ies) on [$($remainingDesktops.Count)] desktop(s)"
+			$remainingEntryCount = -1
+			if ($layoutAttempt -eq 1 -and $pipelinedEntryKeys.Count -gt 0) {
+				# The per-desktop passes during the wait already placed and snapped these ENTRIES.
+				# Attempt 1 finishes the rest: the whole layout with those entries skipped (so
+				# duplicate keys are still counted across the layout), appended to the same tracking,
+				# with the windows already placed off limits. The results of both halves make up this
+				# attempt's set, and the windows already snapped leave the tracking first so the
+				# resize and snap below never pull a snapped window back to its inset.
+				$remainingEntryCount = $layoutConfigToApply.Count - $pipelinedEntryKeys.Count
+				Write-LogDebug " Per-desktop passes placed [$($pipelinedEntryKeys.Count)] of [$($layoutConfigToApply.Count)] entries on [$($pipelinedDesktops.Count)] desktop(s) during the wait - finishing the remaining [$remainingEntryCount]"
 
-				if ($remainingEntries.Count -gt 0) {
+				if ($script:PositionedWindowHandles -and $pipelinedHandles.Count -gt 0) {
+					$keptTracking = [System.Collections.ArrayList]::new()
+					foreach ($trackedState in @($script:PositionedWindowHandles)) {
+						if (-not $pipelinedHandles.Contains([IntPtr]$trackedState.Handle)) { [void]$keptTracking.Add($trackedState) }
+					}
+					$script:PositionedWindowHandles = $keptTracking
+				}
+
+				if ($remainingEntryCount -gt 0) {
 					$remainingLayoutParams = $setLayoutParams.Clone()
-					$remainingLayoutParams["LayoutConfig"] = $remainingEntries
+					$remainingLayoutParams["SkipEntryKeys"] = @($pipelinedEntryKeys)
 					$remainingLayoutParams["KeepPositionedWindows"] = $true
 					if ($pipelinedHandles.Count -gt 0) {
 						$remainingLayoutParams["ExcludeWindowHandles"] = $pipelinedHandles
 					}
 					$results = @($pipelinedResults) + @(Set-WindowLayouts @remainingLayoutParams)
-					$attemptDesktopFilter = @($remainingDesktops)
+					$attemptDesktopFilter = $false
 				}
 				else {
 					$results = @($pipelinedResults)
@@ -1457,14 +1505,14 @@ function Set-WorkspaceWindowLayout {
 			# Default (20px) tolerance: with 0, apps that self-adjust by a pixel (terminal cell
 			# rounding, min-size constraints, DPI rounding) were re-positioned on EVERY open
 			# forever and never converged.
-			$resizeResult = if ($null -eq $attemptDesktopFilter) {
-				Resize-PositionedWindows
-			}
-			elseif ($attemptDesktopFilter.Count -gt 0) {
-				Resize-PositionedWindows -DesktopNumbers $attemptDesktopFilter
+			$nothingLeftToSnap = ($attemptDesktopFilter -is [array] -and $attemptDesktopFilter.Count -eq 0)
+			$resizeResult = if ($nothingLeftToSnap) {
+				[PSCustomObject]@{ ResizedCount = 0; SkippedCount = 0; FailedWindows = @() }
 			}
 			else {
-				[PSCustomObject]@{ ResizedCount = 0; SkippedCount = 0; FailedWindows = @() }
+				# Either the ordinary full pass, or the remaining pass over a tracking set the
+				# already-snapped windows were pruned from - unfiltered either way.
+				Resize-PositionedWindows
 			}
 			if ((Test-LogVerbose) -and $resizeResult.FailedWindows.Count -gt 0) {
 				Write-LogDebug "Pre-snap resize failures => [$($resizeResult.FailedWindows.Count)]" -Style Warning
@@ -1488,10 +1536,7 @@ function Set-WorkspaceWindowLayout {
 				DesktopCount  = $requiredVirtualDesktops
 				ZoneReset     = $resetFancyZonesState
 			}
-			if ($null -ne $attemptDesktopFilter -and $attemptDesktopFilter.Count -gt 0) {
-				$snapParams["DesktopNumbers"] = $attemptDesktopFilter
-			}
-			if ($null -eq $attemptDesktopFilter -or $attemptDesktopFilter.Count -gt 0) {
+			if (-not $nothingLeftToSnap) {
 				$null = Snap-AllWindows @snapParams
 				$snapResult = $script:LastSnapAllWindowsResult
 			}
@@ -1661,9 +1706,12 @@ function Set-WorkspaceWindowLayout {
 					ErrorMessage = " Rerunning workspace setup in a fresh shell (in-process retries exhausted)! (attempt $($rerunCount + 1)/$maxReruns)"
 				}
 				# Prefer the exact recorded invocation over PSReadLine history scraping - the
-				# shared history file may contain a newer command typed in another session.
-				if (-not [string]::IsNullOrWhiteSpace($env:WORKSPACE_RERUN_COMMAND)) {
-					$rerunParams["Command"] = $env:WORKSPACE_RERUN_COMMAND
+				# shared history file may contain a newer command typed in another session. The
+				# record is module state (Set-WorkspaceRerunCommand), not an environment variable
+				# a terminal tab spawned by the open could have inherited.
+				$recordedRerunCommand = Get-WorkspaceRerunCommand
+				if (-not [string]::IsNullOrWhiteSpace($recordedRerunCommand)) {
+					$rerunParams["Command"] = $recordedRerunCommand
 				}
 
 				try {
@@ -1796,8 +1844,9 @@ function Set-WorkspaceWindowLayout {
 				AutoAccept   = $true
 				ErrorMessage = " Rerunning workspace setup (window-only retry)! (attempt $($rerunCount + 1)/$maxReruns)"
 			}
-			if (-not [string]::IsNullOrWhiteSpace($env:WORKSPACE_RERUN_COMMAND)) {
-				$rerunParams["Command"] = $env:WORKSPACE_RERUN_COMMAND
+			$recordedRerunCommand = Get-WorkspaceRerunCommand
+			if (-not [string]::IsNullOrWhiteSpace($recordedRerunCommand)) {
+				$rerunParams["Command"] = $recordedRerunCommand
 			}
 
 			try {

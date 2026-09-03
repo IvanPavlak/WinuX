@@ -75,6 +75,18 @@ function Set-WindowLayouts {
 		other candidate filters. Set-WorkspaceWindowLayout passes the windows its per-desktop
 		passes already placed when it finishes the remaining desktops.
 
+	.PARAMETER DesktopNumbers
+		Processes only the entries on these desktops (the layout's own 1-based DesktopNumber,
+		default 1) while the WHOLE layout still drives duplicate-key detection and sort order.
+		This is how Set-WorkspaceWindowLayout positions one desktop while the rest of the
+		workspace is still loading: a key that appears once on that desktop but again on
+		another must still claim exactly one window, which a layout subset could not know.
+
+	.PARAMETER SkipEntryKeys
+		Entry keys (the EntryKey field of an earlier result row) to leave alone, after
+		duplicate-key detection over the whole layout. Set-WorkspaceWindowLayout passes the
+		entries its per-desktop passes already placed when it finishes the rest of the layout.
+
 	.PARAMETER KeepPositionedWindows
 		Appends to the positioned-window tracking instead of resetting it first. Every call
 		resets the tracking by default so Snap-AllWindows sees exactly the windows of that
@@ -194,6 +206,12 @@ function Set-WindowLayouts {
 
 		[Parameter()]
 		[System.Collections.Generic.HashSet[IntPtr]]$ExcludeWindowHandles,
+
+		[Parameter()]
+		[int[]]$DesktopNumbers,
+
+		[Parameter()]
+		[string[]]$SkipEntryKeys,
 
 		[Parameter()]
 		[switch]$KeepPositionedWindows
@@ -317,6 +335,21 @@ function Set-WindowLayouts {
 
 	# Clear window cache before processing to ensure fresh data
 	Clear-WindowCache
+
+	# One key per layout entry - desktop, monitor and zone (or the direct coordinates) - so a
+	# caller can tell which entries an earlier pass placed (every result row carries it as
+	# EntryKey) and hand them back through -SkipEntryKeys.
+	$entryKeyOf = {
+		param($entry)
+		$entryDesktop = if ($entry.DesktopNumber) { [int]$entry.DesktopNumber } else { 1 }
+		$monitorPart = if ($entry.Monitor -is [string]) { $entry.Monitor } elseif ($entry.Monitor) { "$($entry.Monitor.X),$($entry.Monitor.Y)" } else { '' }
+		$placePart = if ($entry.Zone) { [string]$entry.Zone } elseif ($null -ne $entry.X) { "$($entry.X),$($entry.Y),$($entry.Width),$($entry.Height)" } else { '' }
+		"$entryDesktop|$monitorPart|$placePart|$($entry.ProcessName)|$($entry.WindowTitle)"
+	}
+	$skipEntryKeySet = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+	foreach ($skipKey in @($SkipEntryKeys)) {
+		if (-not [string]::IsNullOrEmpty($skipKey)) { [void]$skipEntryKeySet.Add($skipKey) }
+	}
 
 	$applyPositionWorkItem = {
 		param(
@@ -723,11 +756,24 @@ function Set-WindowLayouts {
 				ExpectedY         = $posY
 				ExpectedWidth     = $posWidth
 				ExpectedHeight    = $posHeight
+				EntryKey          = $currentEntryKey
 			})
 	}
 
 	foreach ($item in $sortedLayoutConfig) {
 		$config = $item.Config
+
+		# Per-desktop pipelining: the whole layout was counted above, so a duplicate key is
+		# known as such even when only one of its entries is on the desktop being processed.
+		# Entries outside the requested desktops, and entries an earlier pass already placed,
+		# produce no row - the caller merges its passes' rows itself.
+		if ($DesktopNumbers -and $DesktopNumbers.Count -gt 0) {
+			$entryDesktop = if ($config.DesktopNumber) { [int]$config.DesktopNumber } else { 1 }
+			if ($DesktopNumbers -notcontains $entryDesktop) { continue }
+		}
+		$currentEntryKey = & $entryKeyOf $config
+		if ($skipEntryKeySet.Count -gt 0 -and $skipEntryKeySet.Contains($currentEntryKey)) { continue }
+
 		if (Test-LogVerbose) {
 			Write-LogDebug "[$($config.ProcessName) -> Desktop $($config.DesktopNumber)]"
 			if ($config.ZoneName) {
@@ -941,6 +987,7 @@ function Set-WindowLayouts {
 					ProcessName   = $config.ProcessName
 					Status        = "Not Found"
 					DesktopNumber = $config.DesktopNumber
+					EntryKey      = $currentEntryKey
 				})
 			continue
 		}
@@ -1113,6 +1160,7 @@ function Set-WindowLayouts {
 						ProcessName   = $config.ProcessName
 						Status        = "Not Found"
 						DesktopNumber = $config.DesktopNumber
+						EntryKey      = $currentEntryKey
 					})
 				continue
 			}

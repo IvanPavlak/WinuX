@@ -100,6 +100,12 @@ $script:AppliedLayoutsCache = @{
 	MaxAgeSec = 10  # Short TTL - file changes when layouts are applied
 }
 
+# The exact Open-Workspace invocation of the open in progress, for the failure-path respawn
+# (Set-WorkspaceWindowLayout -> ReRun-LastCommand -Command). Module state on purpose: an
+# environment variable is inherited by every terminal tab the open spawns, and a standalone
+# layout escalation typed into such a tab would then respawn the whole inherited open.
+$script:WorkspaceRerunCommand = $null
+
 $ModulesPath = Join-Path -Path $PSScriptRoot -ChildPath "\Functions"
 
 $Functions = Get-ChildItem -Path (Join-Path $ModulesPath "*.ps1")

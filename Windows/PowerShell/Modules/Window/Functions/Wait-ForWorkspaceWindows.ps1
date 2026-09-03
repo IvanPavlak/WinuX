@@ -63,9 +63,14 @@ function Wait-ForWorkspaceWindows {
 	.PARAMETER OnDesktopReady
 		Optional scriptblock fired once per virtual desktop (the entries' DesktopNumber,
 		default 1) as soon as every entry on that desktop is individually stable or abandoned
-		while at least one other entry is still pending. It receives the desktop number and
-		an array of @{ LayoutEntry; Window } for the desktop's stable entries, so the caller
-		can position and snap that desktop while the remaining windows are still loading.
+		while at least one other entry is still pending. It receives the desktop number, an
+		array of @{ LayoutEntry; Window } for the desktop's stable entries, and the handles of
+		EVERY window that is stable in that poll (any entry, any desktop), so the caller can
+		position and snap that desktop while the remaining windows are still loading and
+		restrict its claims to windows that have finished loading. The per-entry window is
+		the wait's own match, which for an entry matched by process OR title need not be the
+		window the layout pass would pick - the caller must not treat it as the entry's
+		identity.
 		Entries handed over this way count as ready for the rest of the wait, whatever their
 		windows do afterwards (the caller is moving them on purpose). It never fires for the
 		desktops that complete in the same poll as the wait itself - the caller's ordinary
@@ -623,6 +628,7 @@ function Wait-ForWorkspaceWindows {
 					$readyPayload = @($stableEntries | ForEach-Object {
 							@{ LayoutEntry = $_.LayoutEntry; Window = $stableWindowsThisIteration[$_.Description] }
 						})
+					$stableHandlesThisIteration = @($stableWindowsThisIteration.Values | ForEach-Object { $_.Handle } | Where-Object { $_ })
 
 					if (Test-LogVerbose) {
 						Write-LogDebug "=> Desktop $readyDesktopNumber ready ($($stableEntries.Count) window(s) stable) while $($activeExpectedCount - $foundCount) window(s) still load - handing it over" -Style Success
@@ -634,7 +640,7 @@ function Wait-ForWorkspaceWindows {
 						[void][WindowModule.Native]::SetWindowTopmost($terminalHandle, $false)
 					}
 					try {
-						& $OnDesktopReady $readyDesktopNumber $readyPayload
+						& $OnDesktopReady $readyDesktopNumber $readyPayload $stableHandlesThisIteration
 					}
 					catch {
 						Write-LogDebug " OnDesktopReady for desktop $readyDesktopNumber failed: $($_.Exception.Message)" -Style Warning

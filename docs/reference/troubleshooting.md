@@ -568,6 +568,14 @@ $MachineType  # Should match folder name
 
 **Solution:** Nothing to do - it saves roughly the position and snap time of every desktop but the slowest one on cold opens. To compare the two orders, or if a layout misbehaves only with pipelining on, set `WorkspaceLayoutPipelining = $false` in `Configuration.local.psd1`, reload, and open the workspace again; `Get-WorkspaceBenchmark -Workspace MyWorkspace -Formatted` shows both runs side by side.
 
+### Workspace Open Reports Hundreds Of Seconds, Or A Layout Retry Reopens The Whole Workspace
+
+**Problem:** `Workspace(s) opened in 597.1 seconds!` for an open that visibly took 20; or a standalone `Set-WorkspaceWindowLayout` in a project tab escalates and a fresh shell suddenly runs a complete `Open-Workspace` nobody typed.
+
+**Why it happened:** `Open-Workspace` kept its start time and its resolved invocation in process environment variables (`OPEN_WORKSPACE_START_UTC`, `WORKSPACE_RERUN_COMMAND`) for the whole open. Every application and terminal tab the open spawned inherited them - Windows Terminal hands the `wt.exe` caller's environment to command-line-created panes - so a later open typed into one of those tabs measured from the earlier open's start, and a layout escalation there handed the inherited command to `ReRun-LastCommand`.
+
+**Solution:** Fixed. The start time is a local of the invocation, and the rerun command is Window-module state (`Set-WorkspaceRerunCommand` / `Get-WorkspaceRerunCommand`) that a child process cannot inherit. The only hand-over left is the alongside bootstrap, which sets `OPEN_WORKSPACE_START_UTC` for the relaunched shell so its summary includes the relaunch; that shell consumes it at entry. A shell started before the fix may still carry the old variables; `Remove-Item Env:OPEN_WORKSPACE_START_UTC, Env:WORKSPACE_RERUN_COMMAND -ErrorAction SilentlyContinue` clears them, and any new tab is clean.
+
 ## fastfetch Logo Issues
 
 Setting `Universal.FastFetchImageLogo` makes fastfetch render that image instead of the text logo,

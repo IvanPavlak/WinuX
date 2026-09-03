@@ -303,6 +303,48 @@ Describe "Set-WindowLayouts" {
 			@($results | Where-Object { $_.Status -eq 'Configured' }).Count | Should -Be 2
 		}
 
+		It "counts duplicate keys over the whole layout while processing only the -DesktopNumbers entries" {
+			# The same catch-all key on desktops 1 and 2: processing desktop 2 alone must still claim
+			# exactly ONE window - a subset of one entry would have "applied the layout to all".
+			$layout = @(
+				@{ ProcessName = 'chrome'; DesktopNumber = 1 }
+				@{ ProcessName = 'chrome'; DesktopNumber = 2 }
+			)
+
+			$results = @(Set-WindowLayouts -LayoutConfig $layout -DesktopNumbers 2)
+
+			$results.Count | Should -Be 1
+			$results[0].Status | Should -Be 'Configured'
+			$results[0].DesktopNumber | Should -Be 2
+			$results[0].EntryKey | Should -Be '2|||chrome|'
+		}
+
+		It "skips the entries named in -SkipEntryKeys and still counts them as duplicates" {
+			$layout = @(
+				@{ ProcessName = 'chrome'; DesktopNumber = 1 }
+				@{ ProcessName = 'chrome'; DesktopNumber = 2 }
+			)
+			$placed = New-Object 'System.Collections.Generic.HashSet[IntPtr]'
+			[void]$placed.Add([IntPtr]0xB1001)
+
+			$results = @(Set-WindowLayouts -LayoutConfig $layout -SkipEntryKeys '2|||chrome|' -ExcludeWindowHandles $placed)
+
+			# Only desktop 1's entry runs, as a duplicate-key entry, and claims the one unplaced window.
+			$results.Count | Should -Be 1
+			$results[0].DesktopNumber | Should -Be 1
+			$results[0].Handle | Should -Be ([IntPtr]0xB1002)
+		}
+
+		It "puts the entry key on every result row, Not Found included" {
+			$candidates = New-Object 'System.Collections.Generic.HashSet[IntPtr]'
+			[void]$candidates.Add([IntPtr]0xB1003)
+
+			$results = @(Set-WindowLayouts -LayoutConfig @(@{ ProcessName = 'chrome'; DesktopNumber = 3 }) -CandidateWindowHandles $candidates)
+
+			$results[0].Status | Should -Be 'Not Found'
+			$results[0].EntryKey | Should -Be '3|||chrome|'
+		}
+
 		It "leaves the positioned-window tracking alone with -KeepPositionedWindows" {
 			$null = Set-WindowLayouts -LayoutConfig $script:chromeEntry -KeepPositionedWindows
 

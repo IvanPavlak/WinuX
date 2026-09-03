@@ -49,6 +49,19 @@ BeforeAll {
 	function Write-WorkspaceBenchmark { param($Workspace, $TotalSeconds, $ActionTimings, $LayoutTimings, [switch]$Alongside, $BenchmarkPath, [switch]$Quiet, [switch]$PassThru) }
 	function Get-WorkspaceLayoutTimings { $null }
 	function Get-WorkspaceBenchmark { param($Workspace, $Last, [switch]$Summary, [switch]$Formatted, $BenchmarkPath) }
+	# The rerun-command store is real module state in a bootstrap-imported session; stub it so
+	# these tests observe the calls without touching the module's record.
+	function Set-WorkspaceRerunCommand { param([string]$Command, [switch]$Clear) }
+
+	# Reads both variables while an open is running - the point of the in-process timer and
+	# rerun record is that nothing spawned by the open can inherit them.
+	function Test-CaptureEnvironmentAction {
+		param()
+		$script:envDuringOpen = [PSCustomObject]@{
+			Timer        = [Environment]::GetEnvironmentVariable('OPEN_WORKSPACE_START_UTC', 'Process')
+			RerunCommand = [Environment]::GetEnvironmentVariable('WORKSPACE_RERUN_COMMAND', 'Process')
+		}
+	}
 
 	function Open-Project {
 		param($Project)
@@ -90,6 +103,11 @@ Describe "Open-Workspace" {
 		$script:resolveSelectionCalls = @()
 		$script:workspaceStateCalls = @()
 		$script:benchmarkCalls = @()
+		$script:rerunCommandCalls = @()
+		$script:envDuringOpen = $null
+		Mock Set-WorkspaceRerunCommand {
+			$script:rerunCommandCalls += [PSCustomObject]@{ Command = $Command; Clear = [bool]$Clear }
+		}
 
 		Mock Write-Host { }
 		Mock Get-WorkspaceLayoutTimings { $null }
@@ -1052,6 +1070,78 @@ Describe "Open-Workspace" {
 			# The parameter is dropped, so the (real) action would no-op on its own
 			$script:swaggerCalls.Count | Should -Be 1
 			$script:swaggerCalls[0].Project | Should -BeNullOrEmpty
+		}
+	}
+
+	Context "elapsed timer and rerun command stay out of the process environment" {
+		# Both used to be process environment variables for the whole open. Every application and
+		# terminal tab the open spawned inherited them, so a later Open-Workspace typed into such
+		# a tab reported the time since the earlier open (597 s and 704 s in the session logs),
+		# and a standalone layout escalation in a project tab would have respawned the whole
+		# inherited workspace open.
+		BeforeEach {
+			$script:successLines = @()
+			Mock Write-LogSuccess { $script:successLines += $Message }
+			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+				@{ Action = 'Test-CaptureEnvironmentAction'; Parameters = @{} }
+			)
+			[Environment]::SetEnvironmentVariable('OPEN_WORKSPACE_START_UTC', $null, 'Process')
+			[Environment]::SetEnvironmentVariable('OPEN_WORKSPACE_ALONGSIDE_SHELL', $null, 'Process')
+			[Environment]::SetEnvironmentVariable('WORKSPACE_RERUN_COMMAND', $null, 'Process')
+		}
+
+		AfterEach {
+			[Environment]::SetEnvironmentVariable('OPEN_WORKSPACE_START_UTC', $null, 'Process')
+			[Environment]::SetEnvironmentVariable('OPEN_WORKSPACE_ALONGSIDE_SHELL', $null, 'Process')
+			[Environment]::SetEnvironmentVariable('WORKSPACE_RERUN_COMMAND', $null, 'Process')
+		}
+
+		It "records the resolved invocation through Set-WorkspaceRerunCommand and clears it when the open ends" {
+			Open-Workspace -Workspace 'TestWorkspace'
+
+			$script:rerunCommandCalls.Count | Should -BeGreaterOrEqual 2
+			$script:rerunCommandCalls[0].Clear | Should -BeFalse
+			$script:rerunCommandCalls[0].Command | Should -Be "Open-Workspace -Workspace 'TestWorkspace'"
+			$script:rerunCommandCalls[-1].Clear | Should -BeTrue
+		}
+
+		It "puts neither the timer nor the rerun command into the environment while actions run" {
+			Open-Workspace -Workspace 'TestWorkspace'
+
+			$script:envDuringOpen | Should -Not -BeNullOrEmpty
+			$script:envDuringOpen.Timer | Should -BeNullOrEmpty
+			$script:envDuringOpen.RerunCommand | Should -BeNullOrEmpty
+			[Environment]::GetEnvironmentVariable('OPEN_WORKSPACE_START_UTC', 'Process') | Should -BeNullOrEmpty
+		}
+
+		It "ignores an inherited timer start on a plain open and consumes it" {
+			# A tab spawned by an earlier open carries that open's start; the summary must not.
+			$tenMinutesAgo = [DateTimeOffset]::UtcNow.AddMinutes(-10).ToString('o')
+			[Environment]::SetEnvironmentVariable('OPEN_WORKSPACE_START_UTC', $tenMinutesAgo, 'Process')
+
+			Open-Workspace -Workspace 'TestWorkspace'
+
+			$summary = @($script:successLines | Where-Object { $_ -like 'Workspace(s) opened in *' })
+			$summary.Count | Should -Be 1
+			[double]($summary[0] -replace '[^0-9.]', '') | Should -BeLessThan 60
+			[Environment]::GetEnvironmentVariable('OPEN_WORKSPACE_START_UTC', 'Process') | Should -BeNullOrEmpty
+		}
+
+		It "carries the handed-over start only inside the relaunched alongside shell, and consumes it" {
+			# The bootstrap command sets both markers for the child shell: the reported duration
+			# of an alongside open includes the relaunch.
+			$fiveMinutesAgo = [DateTimeOffset]::UtcNow.AddMinutes(-5).ToString('o')
+			[Environment]::SetEnvironmentVariable('OPEN_WORKSPACE_START_UTC', $fiveMinutesAgo, 'Process')
+			[Environment]::SetEnvironmentVariable('OPEN_WORKSPACE_ALONGSIDE_SHELL', '1', 'Process')
+
+			Open-Workspace -Workspace 'TestWorkspace' -Alongside
+
+			$summary = @($script:successLines | Where-Object { $_ -like 'Workspace(s) opened in *' })
+			$summary.Count | Should -Be 1
+			[double]($summary[0] -replace '[^0-9.]', '') | Should -BeGreaterOrEqual 300
+			[Environment]::GetEnvironmentVariable('OPEN_WORKSPACE_START_UTC', 'Process') | Should -BeNullOrEmpty
+			# Consumed at entry, so the tabs this open spawns cannot inherit it either.
+			$script:envDuringOpen.Timer | Should -BeNullOrEmpty
 		}
 	}
 }

@@ -133,8 +133,8 @@ Describe "Wait-ForWorkspaceWindows" {
 
 			$script:readyFired = @()
 			$script:onDesktopReady = {
-				param($desktopNumber, $entries)
-				$script:readyFired += [PSCustomObject]@{ Desktop = $desktopNumber; Count = @($entries).Count; Handle = @($entries)[0].Window.Handle; Entry = @($entries)[0].LayoutEntry }
+				param($desktopNumber, $entries, $stableHandles)
+				$script:readyFired += [PSCustomObject]@{ Desktop = $desktopNumber; Count = @($entries).Count; Handle = @($entries)[0].Window.Handle; Entry = @($entries)[0].LayoutEntry; StableHandles = @($stableHandles) }
 			}
 			$script:layout = @(
 				@{ ProcessName = 'App'; DesktopNumber = 1 }
@@ -151,6 +151,9 @@ Describe "Wait-ForWorkspaceWindows" {
 			$script:readyFired[0].Count | Should -Be 1
 			$script:readyFired[0].Handle | Should -Be ([IntPtr]100)
 			$script:readyFired[0].Entry.ProcessName | Should -Be 'App'
+			# Every window stable in that poll comes along as the candidate set - here App alone,
+			# since Slow had not appeared yet.
+			@($script:readyFired[0].StableHandles) | Should -Be @([IntPtr]100)
 			# Desktop 2 completed in the poll that completed the wait - never handed over.
 			@($result.ReadyDesktops) | Should -Be @(1)
 		}

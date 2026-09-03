@@ -32,6 +32,8 @@ BeforeAll {
 
 	function Remove-PositionedWindowHandles { }
 	function Verify-WindowPlacement { $true }
+	# The rerun-command store (Window module state); stubbed so the escalation tests control it.
+	function Get-WorkspaceRerunCommand { }
 	# Stub so Mock can attach without loading the whole Window module; the real
 	# validator has its own suite (Test-FancyZonesConfiguration.Tests.ps1).
 	function Test-FancyZonesConfiguration { [PSCustomObject]@{ Valid = $true; Errors = @(); Warnings = @() } }
@@ -69,6 +71,7 @@ Describe "Set-WorkspaceWindowLayout" {
 		# markers the assertions below read.
 		Mock Get-WorkspaceRerunMirror { $null }
 		Mock Set-WorkspaceRerunMirror { }
+		Mock Get-WorkspaceRerunCommand { $null }
 		Mock Resize-Windows { }
 		Mock Move-WindowToVirtualDesktop { $true }
 		Mock Remove-VirtualDesktops { $true }
@@ -1279,16 +1282,33 @@ Describe "Set-WorkspaceWindowLayout" {
 			}
 			Mock Get-DesktopList { @(0, 1) }
 
+			# Entries the per-desktop pass must report as Not Found (by desktop number) - the case
+			# behind the 2026-09-03 regression, where such an entry was skipped after the wait.
+			$script:notFoundInDesktopPass = @()
 			$script:layoutCalls = @()
 			Mock Set-WindowLayouts {
 				$script:layoutCalls += [PSCustomObject]@{
 					Entries    = @($LayoutConfig)
+					Desktops   = $DesktopNumbers
+					SkipKeys   = $SkipEntryKeys
 					Keep       = [bool]$KeepPositionedWindows
 					Candidates = $CandidateWindowHandles
 					Excluded   = $ExcludeWindowHandles
 				}
-				@($LayoutConfig | ForEach-Object {
-						[PSCustomObject]@{ Status = 'Configured'; Handle = [IntPtr](100 + $_.DesktopNumber); ProcessName = $_.ProcessName; WindowProcessName = $_.ProcessName; DesktopNumber = $_.DesktopNumber; ExpectedX = 0 }
+				# Honour the two entry filters the way the real function does: rows only for the
+				# processed entries, keyed by desktop.
+				$processed = @($LayoutConfig | Where-Object {
+						$d = [int]$_.DesktopNumber
+						(-not $DesktopNumbers -or $DesktopNumbers -contains $d) -and (-not $SkipEntryKeys -or $SkipEntryKeys -notcontains "$d|||$($_.ProcessName)|$($_.WindowTitle)")
+					})
+				@($processed | ForEach-Object {
+						$key = "$($_.DesktopNumber)|||$($_.ProcessName)|$($_.WindowTitle)"
+						if ($DesktopNumbers -and $script:notFoundInDesktopPass -contains [int]$_.DesktopNumber) {
+							[PSCustomObject]@{ Status = 'Not Found'; ProcessName = $_.ProcessName; DesktopNumber = $_.DesktopNumber; EntryKey = $key }
+						}
+						else {
+							[PSCustomObject]@{ Status = 'Configured'; Handle = [IntPtr](100 + $_.DesktopNumber); ProcessName = $_.ProcessName; WindowProcessName = $_.ProcessName; DesktopNumber = $_.DesktopNumber; ExpectedX = 0; EntryKey = $key }
+						}
 					})
 			}
 
@@ -1307,10 +1327,12 @@ Describe "Set-WorkspaceWindowLayout" {
 			Mock Wait-ForWorkspaceWindows {
 				param($LayoutConfig, $TimeoutSeconds, $OnWindowStable, $OnDesktopReady)
 				if ($OnDesktopReady) {
+					# Desktop 2 ready; window 102 is its entry's match, window 777 is some other
+					# entry's stable window elsewhere - both are stable, so both are candidates.
 					& $OnDesktopReady 2 @(@{
 							LayoutEntry = $LayoutConfig[1]
 							Window      = [PSCustomObject]@{ Handle = [IntPtr]102; Title = 'Terminal'; Left = 0; Top = 0; Width = 800; Height = 600 }
-						})
+						}) @([IntPtr]102, [IntPtr]777)
 				}
 				@{
 					Success       = $true
@@ -1324,29 +1346,56 @@ Describe "Set-WorkspaceWindowLayout" {
 			Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace'
 
 			$script:layoutCalls.Count | Should -Be 2
-			# During the wait: desktop 2's entry alone, appended to the shared tracking, restricted
-			# to the window the wait handed over.
-			$script:layoutCalls[0].Entries.Count | Should -Be 1
-			$script:layoutCalls[0].Entries[0].ProcessName | Should -Be 'WindowsTerminal'
+			# During the wait: the WHOLE layout restricted to desktop 2 (duplicate keys are counted
+			# across desktops), appended to the shared tracking, claims restricted to every window
+			# the wait has confirmed stable - not just the one it matched to this desktop's entry.
+			$script:layoutCalls[0].Entries.Count | Should -Be 2
+			@($script:layoutCalls[0].Desktops) | Should -Be @(2)
 			$script:layoutCalls[0].Keep | Should -BeTrue
 			$script:layoutCalls[0].Candidates.Contains([IntPtr]102) | Should -BeTrue
-			# After the wait: desktop 1's entry alone, still appending, with the placed window off limits.
-			$script:layoutCalls[1].Entries.Count | Should -Be 1
-			$script:layoutCalls[1].Entries[0].ProcessName | Should -Be 'Code'
+			$script:layoutCalls[0].Candidates.Contains([IntPtr]777) | Should -BeTrue
+			# After the wait: the whole layout with the placed entry skipped, still appending, with
+			# the placed window off limits.
+			$script:layoutCalls[1].Entries.Count | Should -Be 2
+			$script:layoutCalls[1].Desktops | Should -BeNullOrEmpty
+			@($script:layoutCalls[1].SkipKeys) | Should -Contain "2|||WindowsTerminal|"
 			$script:layoutCalls[1].Keep | Should -BeTrue
 			$script:layoutCalls[1].Excluded.Contains([IntPtr]102) | Should -BeTrue
 
-			# Resize and snap run per desktop, in that order, each with the FancyZones reset attached.
+			# Resize and snap run for desktop 2 during the wait, then unfiltered after it (the snapped
+			# window left the tracking first), each with the FancyZones reset attached.
 			$script:resizeCalls.Count | Should -Be 2
 			@($script:resizeCalls[0]) | Should -Be @(2)
-			@($script:resizeCalls[1]) | Should -Be @(1)
+			@($script:resizeCalls[1]) | Should -BeNullOrEmpty
 			$script:snapCalls.Count | Should -Be 2
 			@($script:snapCalls[0].Desktops) | Should -Be @(2)
-			@($script:snapCalls[1].Desktops) | Should -Be @(1)
+			$script:snapCalls[1].Desktops | Should -BeNullOrEmpty
 			$script:snapCalls | ForEach-Object { $_.HasReset | Should -BeTrue }
 
 			# One global verification, and both halves' results feed the snapshot.
 			Should -Invoke Confirm-WorkspaceWindowPositions -Times 1 -Exactly
+			Should -Invoke Save-CurrentLayout -Times 1 -Exactly -ParameterFilter { @($WindowStates).Count -eq 2 }
+		}
+
+		It "finishes after the wait an entry its desktop's pass could not place, instead of skipping it" {
+			# The regression of 2026-09-03: the per-desktop pass reported the entry Not Found (the
+			# whitelist had filtered its window out), the desktop was still marked done, the entry
+			# was skipped after the wait and only the in-process retry placed it.
+			$script:notFoundInDesktopPass = @(2)
+
+			Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace'
+
+			# Nothing was placed during the wait, so no resize or snap ran there, and the pass after
+			# the wait is the ordinary full pass over both entries with nothing skipped.
+			$script:layoutCalls.Count | Should -Be 2
+			$script:layoutCalls[1].SkipKeys | Should -BeNullOrEmpty
+			$script:layoutCalls[1].Keep | Should -BeFalse
+			$script:resizeCalls.Count | Should -Be 1
+			$script:snapCalls.Count | Should -Be 1
+			$script:snapCalls[0].Desktops | Should -BeNullOrEmpty
+			Should -Invoke Confirm-WorkspaceWindowPositions -Times 1 -Exactly
+			Should -Invoke Start-FancyZones -Times 0 -Exactly -ParameterFilter { $ForceRestart }
+			# Both entries reach the snapshot exactly once.
 			Should -Invoke Save-CurrentLayout -Times 1 -Exactly -ParameterFilter { @($WindowStates).Count -eq 2 }
 		}
 
@@ -1389,11 +1438,13 @@ Describe "Set-WorkspaceWindowLayout" {
 			Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace'
 
 			# Attempt 1: the per-desktop half plus the remaining half. Attempt 2: the whole layout,
-			# fresh tracking, every desktop.
+			# fresh tracking, every desktop, nothing skipped.
 			$script:layoutCalls.Count | Should -Be 3
 			$script:layoutCalls[2].Entries.Count | Should -Be 2
 			$script:layoutCalls[2].Keep | Should -BeFalse
 			$script:layoutCalls[2].Excluded | Should -BeNullOrEmpty
+			$script:layoutCalls[2].SkipKeys | Should -BeNullOrEmpty
+			$script:layoutCalls[2].Desktops | Should -BeNullOrEmpty
 			$script:snapCalls.Count | Should -Be 3
 			$script:snapCalls[2].Desktops | Should -BeNullOrEmpty
 			Should -Invoke Start-FancyZones -Times 1 -Exactly -ParameterFilter { $ForceRestart }
@@ -1434,6 +1485,52 @@ Describe "Set-WorkspaceWindowLayout" {
 			# Window 102 was placed by the per-desktop pass; only 101 is normalized.
 			Should -Invoke Resize-Windows -Times 1 -Exactly -ParameterFilter { $WindowHandle -eq [IntPtr]101 -and $null -eq $TargetX }
 			Should -Invoke Resize-Windows -Times 0 -Exactly -ParameterFilter { $WindowHandle -eq [IntPtr]102 }
+		}
+	}
+
+	Context "Rerun command for the escalation" {
+		BeforeEach {
+			Mock Test-Path { $true }
+			Mock Import-PowerShellDataFile {
+				@{
+					Layout   = @(@{ ProcessName = 'Code'; WindowTitle = '*Code*'; DesktopNumber = 1 })
+					Monitors = @{ MonitorA = @{ VirtualDesktopLayouts = @{ 1 = 'One' } } }
+				}
+			}
+			Mock Get-DesktopList { @(0) }
+			Mock Set-WindowLayouts { @([PSCustomObject]@{ Status = 'Configured' }) }
+			Mock Snap-AllWindows {
+				$script:LastSnapAllWindowsResult = [PSCustomObject]@{
+					SnappedCount  = 0
+					FailedWindows = @([PSCustomObject]@{ Handle = [IntPtr]99; WindowTitle = 'Code'; ProcessName = 'Code'; Expected = '(0,0) 100x100'; Actual = '(10,10) 90x90'; Error = 'Snap failed after retries' })
+				}
+			}
+		}
+
+		It "hands the recorded Open-Workspace invocation to ReRun-LastCommand instead of history" {
+			Mock Get-WorkspaceRerunCommand { "Open-Workspace -Workspace 'MyWorkspace'" }
+
+			Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace'
+
+			Should -Invoke ReRun-LastCommand -Times 1 -Exactly -ParameterFilter { $Command -eq "Open-Workspace -Workspace 'MyWorkspace'" }
+		}
+
+		It "leaves ReRun-LastCommand to its history prompt when nothing was recorded" {
+			Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace'
+
+			Should -Invoke ReRun-LastCommand -Times 1 -Exactly -ParameterFilter { [string]::IsNullOrEmpty($Command) }
+		}
+
+		It "never reads the rerun command from the process environment" {
+			[Environment]::SetEnvironmentVariable('WORKSPACE_RERUN_COMMAND', "Open-Workspace -Workspace 'Inherited'", 'Process')
+			try {
+				Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace'
+
+				Should -Invoke ReRun-LastCommand -Times 0 -Exactly -ParameterFilter { $Command -like '*Inherited*' }
+			}
+			finally {
+				[Environment]::SetEnvironmentVariable('WORKSPACE_RERUN_COMMAND', $null, 'Process')
+			}
 		}
 	}
 }
