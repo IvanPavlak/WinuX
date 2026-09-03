@@ -76,7 +76,7 @@ decisions behind them, and where the values go. Each module's `README.md` indexe
 | `RepositoryGroups`                                 | `Update-Repositories`, `Initialize-Repository`     |
 | `BrowserGroups`                                    | `Open-Browser`, `Collect-BrowserUrls`              |
 | `Projects`, `ProjectActions`                       | `Open-Project`                                     |
-| `Workspaces`, `DefaultWorkspace`, `WorkspaceActions` | `Open-Workspace`                                 |
+| `Workspaces`, `DefaultWorkspace`, `WorkspaceActions`, `WorkspaceBenchmark` | `Open-Workspace`           |
 | `Themes`                                           | `Set-SystemTheme`                                  |
 | `SystemTheme.Steps`                                | `Set-SystemTheme`, `Resolve-SystemThemeSteps`      |
 | `WallpaperDarkSettings`, `WallpaperLightSettings`  | `Set-Wallpaper`                                    |

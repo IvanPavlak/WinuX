@@ -20,7 +20,7 @@ The [Workflow module reference](../../../modules/workflow.md) is the authority o
 | `Open-Project` | `ProjectActions`, `Projects` | [Open-Project](Open-Project.md) |
 | `Open-ProjectTerminals` | `DefaultWSLDistribution`, `ProjectTerminals` | [Open-ProjectTerminals](Open-ProjectTerminals.md) |
 | `Open-Training` | `Universal` | [Open-Training](Open-Training.md) |
-| `Open-Workspace` | `DefaultVSCodeWorkspaces`, `DefaultWorkspace`, `ProjectTerminals`, `WorkspaceActions`, `Workspaces` | [Open-Workspace](Open-Workspace.md) |
+| `Open-Workspace` | `DefaultVSCodeWorkspaces`, `DefaultWorkspace`, `ProjectTerminals`, `WorkspaceActions`, `WorkspaceBenchmark`, `Workspaces` | [Open-Workspace](Open-Workspace.md) |
 | `Resolve-ProjectDockerCompose` | `DockerComposeFiles`, `ProjectTerminals`, `RunnableProjectMappings` | [Resolve-ProjectDockerCompose](Resolve-ProjectDockerCompose.md) |
 | `Resolve-SwaggerBrowserGroup` | `BrowserGroupMatching`, `BrowserGroups`, `Universal` | [Resolve-SwaggerBrowserGroup](Resolve-SwaggerBrowserGroup.md) |
 | `Start-Containers` | `DockerComposeFiles` | [Start-Containers](Start-Containers.md) |

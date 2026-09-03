@@ -154,6 +154,18 @@ Describe "Vanilla Configuration (empty-by-default contract)" {
 		}
 	}
 
+	Context "Workspace benchmark opt-in" {
+		# Measurement is opt-in: a vanilla open must print exactly what it printed before the
+		# benchmark existed, so the base ships the key present but disabled.
+		It "Should ship WorkspaceBenchmark disabled, with the Table display and ten rows" {
+			$benchmark = $script:BaseConfig.WorkspaceBenchmark
+			$benchmark | Should -BeOfType [hashtable]
+			$benchmark.Enabled | Should -BeFalse
+			$benchmark.Display | Should -Be 'Table'
+			$benchmark.Last | Should -Be 10
+		}
+	}
+
 	Context "Schema validation of the untouched base" {
 		# The vanilla base must be a VALID configuration, not a broken one: the schema
 		# validator may only require framework keys. The two GitConfig entries are the

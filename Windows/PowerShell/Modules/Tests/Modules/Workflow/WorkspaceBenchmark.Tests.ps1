@@ -125,6 +125,7 @@ Describe "Get-WorkspaceBenchmark" {
 	BeforeEach {
 		Mock Write-LogStep { }
 		Mock Write-LogWarning { }
+		Mock Write-LogTitle { }
 		$script:BenchmarkFile = Join-Path $TestDrive ("Benchmark_" + [guid]::NewGuid().ToString('N') + ".csv")
 	}
 
@@ -190,6 +191,35 @@ Describe "Get-WorkspaceBenchmark" {
 		$alongside = $summary | Where-Object { $_.Mode -eq 'Alongside' }
 		$alongside.Runs | Should -Be 1
 		$alongside.NotApplied | Should -Be 1
+	}
+
+	It "renders the standard columns as a table with -Formatted instead of returning rows" {
+		Write-WorkspaceBenchmark -Workspace 'MyWorkspace' -TotalSeconds 10 -LayoutTimings (New-LayoutTimings -Phases @{ Wait = 6; FancyZones = 2 }) -BenchmarkPath $script:BenchmarkFile -Quiet
+		Write-WorkspaceBenchmark -Workspace 'MyWorkspace' -TotalSeconds 12 -BenchmarkPath $script:BenchmarkFile -Quiet
+
+		$output = @(Get-WorkspaceBenchmark -Workspace 'MyWorkspace' -BenchmarkPath $script:BenchmarkFile -Formatted)
+
+		$output.Count | Should -BeGreaterThan 0
+		$output[0].GetType().FullName | Should -BeLike 'Microsoft.PowerShell.Commands.Internal.Format.*'
+		# A fixed width: the auto-sized table is wider than a test worker's console, and a
+		# narrow render wraps header names across lines, which is a console property, not a
+		# result of the function.
+		$rendered = ($output | Out-String -Width 500)
+		foreach ($column in 'Timestamp', 'Attempts', 'Outcome', 'TotalSeconds', 'ActionsSeconds', 'FancyZonesSeconds', 'WaitSeconds', 'PositionSeconds', 'SnapSeconds') {
+			$rendered | Should -Match $column
+		}
+		# The wide columns stay out of the standard view.
+		$rendered | Should -Not -Match 'NormalizeSeconds'
+		$rendered | Should -Not -Match 'Actions='
+	}
+
+	It "renders the summary as a table with -Summary -Formatted" {
+		Write-WorkspaceBenchmark -Workspace 'MyWorkspace' -TotalSeconds 10 -BenchmarkPath $script:BenchmarkFile -Quiet
+
+		$output = @(Get-WorkspaceBenchmark -Summary -BenchmarkPath $script:BenchmarkFile -Formatted)
+
+		$output[0].GetType().FullName | Should -BeLike 'Microsoft.PowerShell.Commands.Internal.Format.*'
+		($output | Out-String -Width 500) | Should -Match 'AvgTotal'
 	}
 }
 

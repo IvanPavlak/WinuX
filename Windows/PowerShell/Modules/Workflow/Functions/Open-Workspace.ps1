@@ -496,13 +496,25 @@ function Open-Workspace {
 
 			# Measured, not eyeballed: one benchmark row per workspace open, from the per-action
 			# clock above and the phase clock Set-WorkspaceWindowLayout publishes through
-			# Get-WorkspaceLayoutTimings. Both calls are guarded by Get-Command - the Window
-			# module may be absent and the tests stub them - and the write is best-effort, so the
-			# benchmark can never fail an open. The layout record is attached only when it was
-			# produced by THIS workspace: the getter returns the session's most recent run, which
-			# a workspace without a layout action would otherwise inherit from an earlier open.
+			# Get-WorkspaceLayoutTimings. Opt-in through Configuration.WorkspaceBenchmark - a
+			# vanilla install measures nothing and prints exactly what it printed before. The
+			# calls are guarded by Get-Command - the Window module may be absent and the tests
+			# stub them - and the write is best-effort, so the benchmark can never fail an open.
+			# The layout record is attached only when it was produced by THIS workspace: the
+			# getter returns the session's most recent run, which a workspace without a layout
+			# action would otherwise inherit from an earlier open.
 			$recordWorkspaceBenchmark = {
+				$benchmarkConfig = $Configuration.WorkspaceBenchmark
+				if (-not ($benchmarkConfig -and $benchmarkConfig.Enabled)) { return }
 				if (-not (Get-Command Write-WorkspaceBenchmark -ErrorAction SilentlyContinue)) { return }
+
+				# Display: "Table" (the workspace's recent runs, the default), "Line" (one
+				# "Timing [Workspace] =>" line) or "None" (record only).
+				$benchmarkDisplay = if ([string]::IsNullOrWhiteSpace([string]$benchmarkConfig.Display)) { 'Table' } else { ([string]$benchmarkConfig.Display).Trim() }
+				$benchmarkLast = 10
+				if ($null -ne $benchmarkConfig.Last) {
+					try { $benchmarkLast = [int]$benchmarkConfig.Last } catch { $benchmarkLast = 10 }
+				}
 
 				$layoutTimings = $null
 				if (Get-Command Get-WorkspaceLayoutTimings -ErrorAction SilentlyContinue) {
@@ -517,7 +529,14 @@ function Open-Workspace {
 						-TotalSeconds ([math]::Round($workspaceClock.Elapsed.TotalSeconds, 2)) `
 						-ActionTimings $actionTimings.ToArray() `
 						-LayoutTimings $layoutTimings `
-						-Alongside:$Alongside
+						-Alongside:$Alongside `
+						-Quiet:($benchmarkDisplay -ne 'Line')
+
+					if ($benchmarkDisplay -eq 'Table' -and (Get-Command Get-WorkspaceBenchmark -ErrorAction SilentlyContinue)) {
+						# Rendered here rather than emitted: Format-Table -AutoSize buffers until the
+						# pipeline ends, which would print the table AFTER the elapsed summary.
+						Get-WorkspaceBenchmark -Workspace $workspaceName -Last $benchmarkLast -Formatted | Out-Host
+					}
 				}
 				catch {
 					Write-LogDebug " [Open-Workspace] Benchmark row not written => $($_.Exception.Message)" -Style Warning

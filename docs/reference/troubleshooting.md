@@ -489,21 +489,29 @@ Set-WorkspaceRerunMirror -Name 'WORKSPACE_WINDOW_ONLY_RETRY' -Value $null
 
 **Why it happened:** `Apply-FancyZones` compares its target against the applied-layouts state under an instance-qualified key, `EDID|INSTANCE:{DesktopGUID}`, so two identical monitors can be told apart. The instance came from `GetMonitorDeviceInfo` in `WindowNative.cs`, which called `EnumDisplayDevices` without `EDD_GET_DEVICE_INTERFACE_NAME` and therefore received the device-class form of the ID - `MONITOR\DELA1A8\{4d36e96e-e325-11ce-bfc1-08002be10318}\0004` - whose braced segment is the monitor device CLASS GUID, identical for every monitor on every machine. FancyZones derives `monitor-instance` from the interface-name form - `\\?\DISPLAY#DELA1A8#4&1cfdc60e&0&UID8262#{...}` - so the key the check built could never match the key the file held, and every desktop fell through to a hotkey re-send.
 
-**Solution:** Fixed: the enumeration now asks for the interface name and takes the same two segments FancyZones does. The native type is compiled once per process, so the fix takes effect in a new shell, not in one that already loaded the Window module. To confirm, open a workspace twice in a row under `Set-LogLevel Verbose { w MyWorkspace }` - the second run logs `all layouts already applied, skipping switch` per desktop and no `Switching to Desktop` lines - or compare the `FancyZonesSeconds` column of two consecutive runs:
+**Solution:** Fixed: the enumeration now asks for the interface name and takes the same two segments FancyZones does. The native type is compiled once per process, so the fix takes effect in a new shell, not in one that already loaded the Window module. To confirm, open a workspace twice in a row under `Set-LogLevel Verbose { w MyWorkspace }` - the second run logs `all layouts already applied, skipping switch` per desktop and no `Switching to Desktop` lines - or, with `WorkspaceBenchmark.Enabled` set, compare the `FancyZonesSeconds` column of two consecutive runs:
 
 ```powershell
-Get-WorkspaceBenchmark -Workspace MyWorkspace -Last 5 | Format-Table Timestamp, Attempts, TotalSeconds, FancyZonesSeconds, WaitSeconds, SnapSeconds
+Get-WorkspaceBenchmark -Workspace MyWorkspace -Last 5 -Formatted
 ```
 
 ### Measuring Where A Workspace Open Spends Its Time
 
 **Problem:** A workspace open feels slow, or a change was made to speed it up, and the only number available is the `Workspace(s) opened in N seconds` line.
 
-**Solution:** Every open prints a `Timing [Workspace] =>` line before that summary (launch actions, then each layout phase - `preamble`, `desktops`, `fancyzones`, `wait`, `normalize`, `position`, `snap`, `verify`, `retry`, `save` - plus `retries N` when the layout needed more than one attempt) and appends the same numbers as a row to `WorkspaceBenchmark.csv` next to the session logs. Compare runs with `Get-WorkspaceBenchmark`; read `Attempts` and `Outcome` before the seconds, because a faster run that needed a retry is not faster:
+**Solution:** Opt in to the workspace benchmark in `Configuration.local.psd1`:
 
 ```powershell
-Get-WorkspaceBenchmark | Format-Table -AutoSize
-Get-WorkspaceBenchmark -Summary | Format-Table -AutoSize
+WorkspaceBenchmark = @{
+    Enabled = $true
+}
+```
+
+Every open then appends a row to `WorkspaceBenchmark.csv` next to the session logs (launch actions, then each layout phase - `Preamble`, `Desktops`, `FancyZones`, `Wait`, `Normalize`, `Position`, `Snap`, `Verify`, `Retry`, `Save` - plus the attempt count and outcome) and ends with the workspace's recent runs as a table, the same view `Get-WorkspaceBenchmark -Workspace <name> -Formatted` prints. `Display = "Line"` prints one `Timing [Workspace] => actions 0.8s | fancyzones 3.8s | wait 15.1s | ...` line instead, `"None"` only records. Compare runs with `Get-WorkspaceBenchmark`; read `Attempts` and `Outcome` before the seconds, because a faster run that needed a retry is not faster:
+
+```powershell
+Get-WorkspaceBenchmark -Workspace MyWorkspace -Formatted
+Get-WorkspaceBenchmark -Summary -Formatted
 ```
 
 `wait` is application start-up (VS Code, Claude Desktop, browser pages resolving their titles) plus a one-second stability floor per window and cannot be reduced from this side; `fancyzones` and `snap` scale with the number of virtual desktops, because each desktop switch costs roughly 0.5 to 0.8 s.

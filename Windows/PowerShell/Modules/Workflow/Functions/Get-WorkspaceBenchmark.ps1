@@ -18,8 +18,12 @@ function Get-WorkspaceBenchmark {
 		and the runs that did not end Applied.
 
 		The rows have more columns than PowerShell shows as a table by default, so pipe them to
-		Format-Table with the columns of interest. Warns and returns nothing when no run has been
-		recorded yet.
+		Format-Table with the columns of interest - or pass -Formatted, which renders the standard
+		columns (Timestamp, Attempts, Outcome, TotalSeconds, ActionsSeconds, FancyZonesSeconds,
+		WaitSeconds, PositionSeconds, SnapSeconds) as an auto-sized table, and the summary table
+		when combined with -Summary. Open-Workspace shows exactly that table at the end of an open
+		when Configuration.WorkspaceBenchmark.Display is "Table". Warns and returns nothing when no
+		run has been recorded yet.
 
 	.PARAMETER Workspace
 		One or more workspace names to keep. Omit for every workspace.
@@ -30,8 +34,17 @@ function Get-WorkspaceBenchmark {
 	.PARAMETER Summary
 		Aggregate per workspace and mode instead of returning the raw rows.
 
+	.PARAMETER Formatted
+		Render the result as a table instead of returning objects: the standard columns for rows
+		(Timestamp, Attempts, Outcome, TotalSeconds, ActionsSeconds, FancyZonesSeconds, WaitSeconds,
+		PositionSeconds, SnapSeconds), every column for -Summary, both auto-sized.
+
 	.PARAMETER BenchmarkPath
 		Read a different benchmark file. Defaults to Get-WorkspaceBenchmarkPath.
+
+	.EXAMPLE
+		Get-WorkspaceBenchmark -Workspace MyWorkspace -Formatted
+		# The last ten opens of one workspace as a table - what Open-Workspace shows after an open.
 
 	.EXAMPLE
 		Get-WorkspaceBenchmark | Format-Table -AutoSize
@@ -59,8 +72,13 @@ function Get-WorkspaceBenchmark {
 		[switch]$Summary,
 
 		[Parameter()]
+		[switch]$Formatted,
+
+		[Parameter()]
 		[string]$BenchmarkPath
 	)
+
+	Write-LogTitle "Workspace Benchmark"
 
 	if ([string]::IsNullOrWhiteSpace($BenchmarkPath)) {
 		$BenchmarkPath = Get-WorkspaceBenchmarkPath
@@ -123,6 +141,9 @@ function Get-WorkspaceBenchmark {
 	}
 
 	if (-not $Summary) {
+		if ($Formatted) {
+			return ($rows | Format-Table -Property Timestamp, Attempts, Outcome, TotalSeconds, ActionsSeconds, FancyZonesSeconds, WaitSeconds, PositionSeconds, SnapSeconds -AutoSize)
+		}
 		return $rows
 	}
 
@@ -157,5 +178,8 @@ function Get-WorkspaceBenchmark {
 		}
 	}
 
+	if ($Formatted) {
+		return (@($summaries) | Format-Table -AutoSize)
+	}
 	return @($summaries)
 }

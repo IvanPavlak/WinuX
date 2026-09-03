@@ -48,6 +48,7 @@ BeforeAll {
 	# benchmark file or reads a real layout record.
 	function Write-WorkspaceBenchmark { param($Workspace, $TotalSeconds, $ActionTimings, $LayoutTimings, [switch]$Alongside, $BenchmarkPath, [switch]$Quiet, [switch]$PassThru) }
 	function Get-WorkspaceLayoutTimings { $null }
+	function Get-WorkspaceBenchmark { param($Workspace, $Last, [switch]$Summary, [switch]$Formatted, $BenchmarkPath) }
 
 	function Open-Project {
 		param($Project)
@@ -92,6 +93,7 @@ Describe "Open-Workspace" {
 
 		Mock Write-Host { }
 		Mock Get-WorkspaceLayoutTimings { $null }
+		Mock Get-WorkspaceBenchmark { }
 		Mock Write-WorkspaceBenchmark {
 			param($Workspace, $TotalSeconds, $ActionTimings, $LayoutTimings, [switch]$Alongside, $BenchmarkPath, [switch]$Quiet, [switch]$PassThru)
 			$script:benchmarkCalls += [PSCustomObject]@{
@@ -100,6 +102,7 @@ Describe "Open-Workspace" {
 				ActionTimings = @($ActionTimings)
 				LayoutTimings = $LayoutTimings
 				Alongside     = [bool]$Alongside
+				Quiet         = [bool]$Quiet
 			}
 		}
 		Mock Get-TerminalTabSnapshot { param([switch]$EnsureVisible) @{} }
@@ -185,12 +188,14 @@ Describe "Open-Workspace" {
 		Mock Test-ThrowingAction { throw 'intentional action failure' }
 
 		$script:Configuration = @{
-			Workspaces       = @('TestWorkspace')
-			DefaultWorkspace = ''
-			WorkspaceActions = @{}
-			ProjectTerminals = @()
-			BrowserGroups    = @()
-			Universal        = @{ DefaultBrowser = 'Firefox' }
+			Workspaces         = @('TestWorkspace')
+			DefaultWorkspace   = ''
+			WorkspaceActions   = @{}
+			ProjectTerminals   = @()
+			BrowserGroups      = @()
+			Universal          = @{ DefaultBrowser = 'Firefox' }
+			# The shipped default: measurement is opt-in.
+			WorkspaceBenchmark = @{ Enabled = $false; Display = 'Table'; Last = 10 }
 		}
 
 		$script:previousWtProjectTab = $env:WT_PROJECT_TAB
@@ -232,6 +237,51 @@ Describe "Open-Workspace" {
 	}
 
 	Context "workspace benchmark" {
+		BeforeEach {
+			# Opt in for this context; Display None keeps the tests free of console rendering.
+			$script:Configuration.WorkspaceBenchmark = @{ Enabled = $true; Display = 'None'; Last = 10 }
+		}
+
+		It "records nothing while WorkspaceBenchmark.Enabled is off, which is the shipped default" {
+			$script:Configuration.WorkspaceBenchmark = @{ Enabled = $false; Display = 'Table'; Last = 10 }
+			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } }
+			)
+
+			Open-Workspace -Workspace 'TestWorkspace'
+
+			$script:invokedActions.Count | Should -Be 1
+			$script:benchmarkCalls.Count | Should -Be 0
+			Should -Invoke Get-WorkspaceBenchmark -Times 0
+		}
+
+		It "shows the workspace's recent runs as a table after the row is written when Display is Table" {
+			$script:Configuration.WorkspaceBenchmark = @{ Enabled = $true; Display = 'Table'; Last = 5 }
+			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } }
+			)
+
+			Open-Workspace -Workspace 'TestWorkspace'
+
+			$script:benchmarkCalls.Count | Should -Be 1
+			# The one-line summary is suppressed in favour of the table.
+			$script:benchmarkCalls[0].Quiet | Should -BeTrue
+			Should -Invoke Get-WorkspaceBenchmark -Times 1 -Exactly -ParameterFilter { $Workspace -eq 'TestWorkspace' -and $Last -eq 5 -and $Formatted }
+		}
+
+		It "prints the one-line summary instead of the table when Display is Line" {
+			$script:Configuration.WorkspaceBenchmark = @{ Enabled = $true; Display = 'Line' }
+			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } }
+			)
+
+			Open-Workspace -Workspace 'TestWorkspace'
+
+			$script:benchmarkCalls.Count | Should -Be 1
+			$script:benchmarkCalls[0].Quiet | Should -BeFalse
+			Should -Invoke Get-WorkspaceBenchmark -Times 0
+		}
+
 		It "records one benchmark row per workspace with every executed action timed, in order" {
 			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
 				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } },

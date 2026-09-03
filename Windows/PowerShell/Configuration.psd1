@@ -99,7 +99,7 @@
 # → VSCodeProjects                : Open-VSCode
 #
 # Workspace Management:
-# → Workspaces, DefaultWorkspace, WorkspaceActions : Open-Workspace
+# → Workspaces, DefaultWorkspace, WorkspaceActions, WorkspaceBenchmark : Open-Workspace
 #
 # Application Configuration:
 # → BrowserGroups                   : Open-Browser, Collect-BrowserUrls
@@ -1704,6 +1704,37 @@
 	# anything. Only the interactive [Enter] uses this; a mistyped "Open-Workspace Wrkspce"
 	# still exits rather than silently opening the default.
 	DefaultWorkspace              = "Default"
+
+	# ==========================================================================
+	# Workspace Benchmark (Opt-In)
+	# ==========================================================================
+	# → Consumer: Open-Workspace (records through Write-WorkspaceBenchmark, shows
+	#   through Get-WorkspaceBenchmark -Formatted)
+	#
+	# Measures every workspace open: each configured action is timed, the phase
+	# clock Set-WorkspaceWindowLayout publishes (Preamble, Desktops, FancyZones,
+	# Wait, Normalize, Position, Snap, Verify, Retry, Save) is read back, and one
+	# row per workspace is appended to WorkspaceBenchmark.csv next to the session
+	# logs. Off by default - a vanilla install measures nothing and prints exactly
+	# what it printed before.
+	#
+	#   Enabled - $true records the row and shows the result after every open.
+	#   Display - what the end of an open shows:
+	#               "Table" => the workspace's recent runs as a table
+	#                          (Get-WorkspaceBenchmark -Workspace <name> -Formatted)
+	#               "Line"  => one "Timing [Workspace] => ..." line
+	#               "None"  => record only
+	#   Last    - how many recent runs the Table display shows.
+	#
+	# Hashtables deep-merge, so opting in from Configuration.local.psd1 needs only
+	# the flag; Display and Last fall through to the values below:
+	#   WorkspaceBenchmark = @{ Enabled = $true }
+	# ==========================================================================
+	WorkspaceBenchmark            = @{
+		Enabled = $false
+		Display = "Table"
+		Last    = 10
+	}
 
 	# ==========================================================================
 	# Default VS Code Workspace Per Workspace

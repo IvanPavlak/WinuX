@@ -1,6 +1,6 @@
 # Write-WorkspaceBenchmark
 
-Records how long one workspace open took and where the time went - appends a row to the workspace benchmark file and prints a one-line `Timing =>` summary. `Open-Workspace` calls it once per workspace.
+Records how long one workspace open took and where the time went - appends a row to the workspace benchmark file and prints a one-line `Timing =>` summary. `Open-Workspace` calls it once per workspace when `WorkspaceBenchmark.Enabled` is set.
 
 ## Configuration Keys
 

@@ -479,6 +479,30 @@ Workspace opened when Enter is pressed with no input at the `Open-Workspace` men
 
 The name must have a `WorkspaceActions` entry - `Open-Workspace` only advertises the default in its prompt (`press [Enter] to open default workspace => Default`) when that entry exists. Set it to `""` to drop the offer: the prompt becomes `press [Enter] to cancel` and Enter exits without opening anything. Only the interactive Enter uses this; a mistyped `Open-Workspace Wrkspce` still exits rather than silently opening the default.
 
+### Workspace Benchmark
+
+Opt-in measurement of every workspace open. When enabled, `Open-Workspace` times each configured action, reads back the phase clock `Set-WorkspaceWindowLayout` publishes (`Preamble`, `Desktops`, `FancyZones`, `Wait`, `Normalize`, `Position`, `Snap`, `Verify`, `Retry`, `Save`), appends one row per workspace to `WorkspaceBenchmark.csv` next to the session logs through `Write-WorkspaceBenchmark`, and shows the result at the end of the open. Off by default, so a vanilla install prints exactly what it printed before.
+
+**Key:** `WorkspaceBenchmark` → Hashtable
+
+- `Enabled` - `$false` out of the box. `$true` records the row and shows the result after every open.
+- `Display` - what the end of an open shows: `"Table"` (the workspace's recent runs, exactly as `Get-WorkspaceBenchmark -Workspace <name> -Formatted` prints them - the default), `"Line"` (one `Timing [Workspace] => ...` line listing the phases above 0.05 s, with `retries N` when the layout needed more than one attempt), or `"None"` (record only).
+- `Last` - how many recent runs the `Table` display shows (`10`).
+
+**Consumer function:** `Open-Workspace` (records through `Write-WorkspaceBenchmark`, shows through `Get-WorkspaceBenchmark`)
+
+Hashtables deep-merge, so opting in from `Configuration.local.psd1` needs only the flag; `Display` and `Last` fall through to the base.
+
+**Example (opt-in via `Configuration.local.psd1`):**
+
+```powershell
+WorkspaceBenchmark = @{
+    Enabled = $true
+}
+```
+
+The history can be read at any time with `Get-WorkspaceBenchmark` (`-Workspace`, `-Last`, `-Summary`, `-Formatted`), whether or not the automatic display is on. The rows are per-machine measurements and the file is git-ignored.
+
 ### Workspace Actions
 
 Defines what happens when a workspace opens.
