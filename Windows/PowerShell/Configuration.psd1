@@ -126,6 +126,7 @@
 #
 # Window Management & FancyZones:
 # → LayoutNumbers                : Apply-FancyZones (keyboard shortcut mapping)
+# → FancyZonesApplyMethod        : Apply-FancyZones (applied-layouts.json write or hotkeys)
 # → ZoneNameMappings             : Get-FancyZone (human-readable zone names to indices)
 # → Layout files in Layouts/*/   : Set-WorkspaceWindowLayout, Visualize-Layouts
 # → SmallDisplayMachineType      : Get-LayoutMachineType (layout set for a small display)
@@ -2773,6 +2774,19 @@
 		"Eight" = 8
 		"Nine"  = 9
 	}
+
+	# ==========================================================================
+	# FancyZones Apply Method
+	# ==========================================================================
+	# How Apply-FancyZones puts a workspace's zone layouts onto its virtual desktops.
+	#   "File"    - write the entries for every desktop into FancyZones' applied-layouts.json;
+	#               FancyZones watches that file and reloads it, so no desktop switching and no
+	#               Win+Ctrl+Alt+[Number] shortcut per desktop. One probe shortcut on the current
+	#               desktop confirms FancyZones took the change; any desktop that does not verify
+	#               falls back to the shortcut pass automatically. Default.
+	#   "Hotkeys" - the previous behaviour: switch to every desktop and send the shortcut there.
+	#               Use it if a PowerToys update changes the file format or the file watcher.
+	FancyZonesApplyMethod         = "File"
 
 	# ==========================================================================
 	# Zone Name Mappings by Layout

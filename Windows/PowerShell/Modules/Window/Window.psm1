@@ -38,6 +38,10 @@ $script:WindowModuleDelays = @{
 	WindowPositionMs   = 10
 	# Delay after Move-Window for virtual desktop operations
 	VirtualDesktopMs   = 10
+	# Delay after writing applied-layouts.json before the probe shortcut that confirms FancyZones
+	# reloaded it. FancyZones' file watcher posts the reload to its main thread; its own log shows
+	# the reload landing 40-60 ms after a write, so this leaves headroom without adding real time.
+	AppliedLayoutsReloadMs = 150
 }
 
 # Module-scoped position tolerances (in pixels)

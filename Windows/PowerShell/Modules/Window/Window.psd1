@@ -39,6 +39,7 @@
 		'Get-FancyZonesWindowAssignment',
 		'Get-LayoutDefinition',
 		'Get-LayoutMachineType',
+		'Get-MonitorDeviceIdentityMap',
 		'Get-MonitorInfo',
 		'Get-MonitorSpecs',
 		'Get-NextAvailableDesktopIndex',
@@ -74,6 +75,7 @@
 		'Reset-VirtualDesktopComProxy',
 		'Reset-VirtualDesktopState',
 		'Save-CurrentLayout',
+		'Send-FancyZonesLayoutShortcut',
 		'Set-WindowCacheMaxAge',
 		'Set-WindowLayouts',
 		'Set-WindowModuleDelays',
@@ -82,6 +84,7 @@
 		'Set-WorkspaceWindowLayout',
 		'Snap-AllWindows',
 		'Test-FancyZonesConfiguration',
+		'Test-AppliedFancyZonesLayouts',
 		'Test-FancyZonesLayoutApplied',
 		'Test-PositionedWindow',
 		'Test-SmallPrimaryDisplay',
@@ -93,6 +96,7 @@
 		'Wait-ForWorkspaceWindows',
 		'Wait-WindowRect',
 		'Wait-WindowsClosed',
+		'Write-AppliedFancyZonesLayouts',
 		'Write-WindowInfoBlock',
 		'Get-InsetWindowBounds'
 	)

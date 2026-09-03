@@ -491,7 +491,7 @@ Set-WorkspaceRerunMirror -Name 'WORKSPACE_WINDOW_ONLY_RETRY' -Value $null
 
 **Why it happened:** `Apply-FancyZones` compares its target against the applied-layouts state under an instance-qualified key, `EDID|INSTANCE:{DesktopGUID}`, so two identical monitors can be told apart. The instance came from `GetMonitorDeviceInfo` in `WindowNative.cs`, which called `EnumDisplayDevices` without `EDD_GET_DEVICE_INTERFACE_NAME` and therefore received the device-class form of the ID - `MONITOR\DELA1A8\{4d36e96e-e325-11ce-bfc1-08002be10318}\0004` - whose braced segment is the monitor device CLASS GUID, identical for every monitor on every machine. FancyZones derives `monitor-instance` from the interface-name form - `\\?\DISPLAY#DELA1A8#4&1cfdc60e&0&UID8262#{...}` - so the key the check built could never match the key the file held, and every desktop fell through to a hotkey re-send.
 
-**Solution:** Fixed: the enumeration now asks for the interface name and takes the same two segments FancyZones does. The native type is compiled once per process, so the fix takes effect in a new shell, not in one that already loaded the Window module. To confirm, open a workspace twice in a row under `Set-LogLevel Verbose { w MyWorkspace }` - the second run logs `all layouts already applied, skipping switch` per desktop and no `Switching to Desktop` lines - or, with `WorkspaceBenchmark.Enabled` set, compare the `FancyZonesSeconds` column of two consecutive runs:
+**Solution:** Fixed: the enumeration now asks for the interface name and takes the same two segments FancyZones does. Cold opens, where every desktop is new and nothing can be "already applied", no longer switch either: the layouts are written into `applied-layouts.json` and proved with one probe shortcut (see "Zone Layouts Reach FancyZones Through applied-layouts.json, Not Through Shortcuts" below), so `Switching to Desktop [n]` before the wait phase now means a desktop fell back to the shortcut pass. The native type is compiled once per process, so the fix takes effect in a new shell, not in one that already loaded the Window module. To confirm, open a workspace twice in a row under `Set-LogLevel Verbose { w MyWorkspace }` - the second run logs `all layouts already applied, skipping switch` per desktop and no `Switching to Desktop` lines - or, with `WorkspaceBenchmark.Enabled` set, compare the `FancyZonesSeconds` column of two consecutive runs:
 
 ```powershell
 Get-WorkspaceBenchmark -Workspace MyWorkspace -Last 5 -Formatted
@@ -535,6 +535,22 @@ Modules/Window/Layouts/PC/WorkspaceName_PC.psd1
 ```powershell
 $MachineType  # Should match folder name
 ```
+
+### Zone Layouts Reach FancyZones Through applied-layouts.json, Not Through Shortcuts
+
+**Problem:** A workspace open applies its zone layouts without visiting the desktops, or the verbose log shows `Writing FancyZones layouts for [n] desktop(s) into applied-layouts.json...` followed by `using the shortcut pass`, and you want to know which path ran and why.
+
+**How it works:** `Apply-FancyZones` writes the entries for every desktop of the workspace straight into FancyZones' `applied-layouts.json` (`Write-AppliedFancyZonesLayouts`); FancyZones watches that file and reloads it. One probe shortcut on the current desktop then makes FancyZones save its in-memory layout map back to the file, and `Test-AppliedFancyZonesLayouts` checks that every written entry survived - that is the proof the reload happened. Desktops that verify are done; any other desktop goes through the desktop-switching shortcut pass, which is why a partial fallback shows up as `[n] left to the shortcut pass` under `Set-LogLevel Verbose`.
+
+**Reasons a desktop falls back:**
+
+- `applied-layouts.json has no device entry for the attached monitor(s) yet` - FancyZones has never written an entry for that monitor (fresh PowerToys install, monitor attached for the first time). The shortcut pass runs once; FancyZones writes the entry as it applies the layout, and the next open uses the file.
+- `FancyZones did not rewrite applied-layouts.json after the probe shortcut` - the probe shortcut was not processed (FancyZones still starting, hotkey hooks not live yet). The shortcut pass runs and the snap verification decides the outcome as before.
+- `Duplicate` in the verification - FancyZones added its own entry next to the written one, meaning the cloned device block (serial number, monitor number) no longer matches its live work area. The shortcut pass repairs the file; the next open clones the fresh block.
+
+**Confirming with FancyZones' own log** (`%LOCALAPPDATA%\Microsoft\PowerToys\FancyZones\Logs\<version>\log_<date>.log`): after a file-mode open every workspace desktop has an `Initialize layout on <monitor>_..._{desktop GUID}` line and no `Clone layout from` or `Set default layout on` line for that GUID. Either of the latter means FancyZones did not have the entry when it switched there.
+
+**Forcing the old behaviour:** `FancyZonesApplyMethod = "Hotkeys"` in `Configuration.local.psd1` (the base ships `"File"`), then `Reload-PowerShellProfile`. Use it when a PowerToys update changes the file schema or the file watcher, and report the version so the writer can be adjusted.
 
 ## fastfetch Logo Issues
 

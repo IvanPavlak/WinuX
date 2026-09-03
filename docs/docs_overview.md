@@ -83,7 +83,7 @@ decisions behind them, and where the values go. Each module's `README.md` indexe
 | `TaskbarConfiguration`                             | `Configure-Taskbar`                                |
 | `TaskbarSettings`                                  | `Set-TaskbarSettings`                              |
 | `VisualEffects`                                    | `Set-VisualEffects`                                |
-| `LayoutNumbers`, `ZoneNameMappings`                | `Apply-FancyZones`, `Get-FancyZone`, `Test-FancyZonesConfiguration` |
+| `LayoutNumbers`, `ZoneNameMappings`, `FancyZonesApplyMethod` | `Apply-FancyZones`, `Get-FancyZone`, `Test-FancyZonesConfiguration` |
 | `LayoutMachineTypeOverrides`, `SmallDisplayMachineType` | `Get-LayoutMachineType` (for `Set-WorkspaceWindowLayout`, `Reset-Windows`, `Resolve-DisplayAwareProfile`) |
 | `ResetAllWindowsDefaults`                          | `Reset-Windows`                                    |
 | `CenterTerminalSizing`                             | `Center-Terminal` (via `Resolve-CenterTerminalSizing`) |

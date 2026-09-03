@@ -166,6 +166,14 @@ Describe "Vanilla Configuration (empty-by-default contract)" {
 		}
 	}
 
+	Context "FancyZones apply method" {
+		# Zone layouts reach FancyZones through applied-layouts.json by default; "Hotkeys" is the
+		# escape hatch back to the desktop-switching shortcut pass.
+		It "Should ship FancyZonesApplyMethod as File" {
+			$script:BaseConfig.FancyZonesApplyMethod | Should -Be 'File'
+		}
+	}
+
 	Context "Schema validation of the untouched base" {
 		# The vanilla base must be a VALID configuration, not a broken one: the schema
 		# validator may only require framework keys. The two GitConfig entries are the
