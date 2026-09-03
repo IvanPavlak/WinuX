@@ -14,12 +14,21 @@ function Resize-PositionedWindows {
 	.PARAMETER Tolerance
 		Pixel tolerance for deciding whether a window is already at the adjusted
 		pre-snap position. Default is the module's shared position verification tolerance.
+	.PARAMETER DesktopNumbers
+		Only the tracked windows on these desktops (the 1-based numbers Add-PositionedWindow
+		recorded, offset already folded in) are resized. Set-WorkspaceWindowLayout uses it to
+		prepare one desktop for its snap while the others are still loading - a window on a
+		desktop that was already snapped sits at its FULL zone rect and must not be pulled
+		back to the inset. Default (empty) resizes every tracked window.
 	#>
 	[CmdletBinding()]
 	param(
 		[Parameter()]
 		[ValidateRange(0.0, 0.49)]
 		[double]$InsetPercent = (Get-WindowInsetPercent),
+
+		[Parameter()]
+		[int[]]$DesktopNumbers,
 
 		[Parameter()]
 		[int]$Tolerance = $script:WindowModuleTolerances.PositionVerificationPx
@@ -40,6 +49,11 @@ function Resize-PositionedWindows {
 	$failedWindows = [System.Collections.Generic.List[object]]::new()
 
 	foreach ($windowState in $script:PositionedWindowHandles) {
+		if ($DesktopNumbers -and $DesktopNumbers.Count -gt 0) {
+			$trackedDesktop = if ($null -ne $windowState.DesktopNumber) { [int]$windowState.DesktopNumber } else { 1 }
+			if ($DesktopNumbers -notcontains $trackedDesktop) { continue }
+		}
+
 		$null = Resize-Windows `
 			-WindowHandle $windowState.Handle `
 			-TargetX $windowState.ExpectedX `

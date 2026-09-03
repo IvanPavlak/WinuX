@@ -127,6 +127,7 @@
 # Window Management & FancyZones:
 # → LayoutNumbers                : Apply-FancyZones (keyboard shortcut mapping)
 # → FancyZonesApplyMethod        : Apply-FancyZones (applied-layouts.json write or hotkeys)
+# → WorkspaceLayoutPipelining    : Set-WorkspaceWindowLayout (position and snap each desktop as it is ready)
 # → ZoneNameMappings             : Get-FancyZone (human-readable zone names to indices)
 # → Layout files in Layouts/*/   : Set-WorkspaceWindowLayout, Visualize-Layouts
 # → SmallDisplayMachineType      : Get-LayoutMachineType (layout set for a small display)
@@ -2787,6 +2788,17 @@
 	#   "Hotkeys" - the previous behaviour: switch to every desktop and send the shortcut there.
 	#               Use it if a PowerToys update changes the file format or the file watcher.
 	FancyZonesApplyMethod         = "File"
+
+	# ==========================================================================
+	# Workspace Layout Pipelining
+	# ==========================================================================
+	# Set-WorkspaceWindowLayout positions and snaps each virtual desktop as soon as every
+	# window on it is stable, while the slower windows on other desktops are still loading,
+	# instead of waiting for the slowest window of the whole workspace and doing all of it
+	# afterwards. Verification stays global and the in-process retries run the full layout.
+	# Set to $false to restore the strictly sequential wait -> position -> snap order (for
+	# example to compare the two with Get-WorkspaceBenchmark).
+	WorkspaceLayoutPipelining     = $true
 
 	# ==========================================================================
 	# Zone Name Mappings by Layout

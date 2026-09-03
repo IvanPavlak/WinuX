@@ -22,6 +22,13 @@ BeforeAll {
 	. "$FunctionsPath\Get-CurrentLayout.ps1"
 	. "$FunctionsPath\Save-CurrentLayout.ps1"
 	. "$FunctionsPath\Set-WorkspaceWindowLayout.ps1"
+	# Mocked below, dot-sourced so Pester builds the mocks from the CURRENT parameter blocks
+	# (-OnDesktopReady, -DesktopNumbers, -ZoneReset, -CandidateWindowHandles, ...) whatever
+	# module version the session has loaded.
+	. "$FunctionsPath\Wait-ForWorkspaceWindows.ps1"
+	. "$FunctionsPath\Set-WindowLayouts.ps1"
+	. "$FunctionsPath\Resize-PositionedWindows.ps1"
+	. "$FunctionsPath\Snap-AllWindows.ps1"
 
 	function Remove-PositionedWindowHandles { }
 	function Verify-WindowPlacement { $true }
@@ -1244,6 +1251,189 @@ Describe "Set-WorkspaceWindowLayout" {
 			Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace'
 
 			Should -Invoke Apply-FancyZones -Times 1 -Exactly -ParameterFilter { $Force }
+		}
+	}
+
+	Context "Per-desktop pipelining and the in-pass zone reset" {
+		# Two desktops. The wait reports desktop 2 ready while desktop 1's window still loads,
+		# then completes; the layout pass for desktop 2 must run DURING the wait, restricted to
+		# the window the wait handed over, and the tail after the wait must finish desktop 1
+		# without touching what was already placed.
+		BeforeEach {
+			Mock Test-Path { $true }
+			Mock Import-PowerShellDataFile {
+				@{
+					Layout   = @(
+						@{ ProcessName = 'Code'; WindowTitle = '*Code*'; DesktopNumber = 1 }
+						@{ ProcessName = 'WindowsTerminal'; DesktopNumber = 2 }
+					)
+					Monitors = @{
+						MonitorA = @{
+							VirtualDesktopLayouts = @{
+								1 = 'One'
+								2 = 'Two'
+							}
+						}
+					}
+				}
+			}
+			Mock Get-DesktopList { @(0, 1) }
+
+			$script:layoutCalls = @()
+			Mock Set-WindowLayouts {
+				$script:layoutCalls += [PSCustomObject]@{
+					Entries    = @($LayoutConfig)
+					Keep       = [bool]$KeepPositionedWindows
+					Candidates = $CandidateWindowHandles
+					Excluded   = $ExcludeWindowHandles
+				}
+				@($LayoutConfig | ForEach-Object {
+						[PSCustomObject]@{ Status = 'Configured'; Handle = [IntPtr](100 + $_.DesktopNumber); ProcessName = $_.ProcessName; WindowProcessName = $_.ProcessName; DesktopNumber = $_.DesktopNumber; ExpectedX = 0 }
+					})
+			}
+
+			$script:snapCalls = @()
+			Mock Snap-AllWindows {
+				$script:snapCalls += [PSCustomObject]@{ Desktops = $DesktopNumbers; HasReset = ($null -ne $ZoneReset) }
+				$script:LastSnapAllWindowsResult = [PSCustomObject]@{ SnappedCount = 1; FailedWindows = @() }
+			}
+
+			$script:resizeCalls = @()
+			Mock Resize-PositionedWindows {
+				$script:resizeCalls += , @($DesktopNumbers)
+				@{ FailedWindows = @() }
+			}
+
+			Mock Wait-ForWorkspaceWindows {
+				param($LayoutConfig, $TimeoutSeconds, $OnWindowStable, $OnDesktopReady)
+				if ($OnDesktopReady) {
+					& $OnDesktopReady 2 @(@{
+							LayoutEntry = $LayoutConfig[1]
+							Window      = [PSCustomObject]@{ Handle = [IntPtr]102; Title = 'Terminal'; Left = 0; Top = 0; Width = 800; Height = 600 }
+						})
+				}
+				@{
+					Success       = $true
+					WindowStates  = @{ ([IntPtr]101) = @{ Title = 'Code' }; ([IntPtr]102) = @{ Title = 'Terminal' } }
+					ReadyDesktops = @(2)
+				}
+			}
+		}
+
+		It "positions and snaps a desktop reported ready during the wait, then finishes the rest without it" {
+			Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace'
+
+			$script:layoutCalls.Count | Should -Be 2
+			# During the wait: desktop 2's entry alone, appended to the shared tracking, restricted
+			# to the window the wait handed over.
+			$script:layoutCalls[0].Entries.Count | Should -Be 1
+			$script:layoutCalls[0].Entries[0].ProcessName | Should -Be 'WindowsTerminal'
+			$script:layoutCalls[0].Keep | Should -BeTrue
+			$script:layoutCalls[0].Candidates.Contains([IntPtr]102) | Should -BeTrue
+			# After the wait: desktop 1's entry alone, still appending, with the placed window off limits.
+			$script:layoutCalls[1].Entries.Count | Should -Be 1
+			$script:layoutCalls[1].Entries[0].ProcessName | Should -Be 'Code'
+			$script:layoutCalls[1].Keep | Should -BeTrue
+			$script:layoutCalls[1].Excluded.Contains([IntPtr]102) | Should -BeTrue
+
+			# Resize and snap run per desktop, in that order, each with the FancyZones reset attached.
+			$script:resizeCalls.Count | Should -Be 2
+			@($script:resizeCalls[0]) | Should -Be @(2)
+			@($script:resizeCalls[1]) | Should -Be @(1)
+			$script:snapCalls.Count | Should -Be 2
+			@($script:snapCalls[0].Desktops) | Should -Be @(2)
+			@($script:snapCalls[1].Desktops) | Should -Be @(1)
+			$script:snapCalls | ForEach-Object { $_.HasReset | Should -BeTrue }
+
+			# One global verification, and both halves' results feed the snapshot.
+			Should -Invoke Confirm-WorkspaceWindowPositions -Times 1 -Exactly
+			Should -Invoke Save-CurrentLayout -Times 1 -Exactly -ParameterFilter { @($WindowStates).Count -eq 2 }
+		}
+
+		It "runs the plain sequential order when WorkspaceLayoutPipelining is false" {
+			$global:Configuration.WorkspaceLayoutPipelining = $false
+
+			Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace'
+
+			Should -Invoke Wait-ForWorkspaceWindows -Times 1 -Exactly -ParameterFilter { $null -eq $OnDesktopReady }
+			$script:layoutCalls.Count | Should -Be 1
+			$script:layoutCalls[0].Entries.Count | Should -Be 2
+			$script:layoutCalls[0].Keep | Should -BeFalse
+			$script:snapCalls.Count | Should -Be 1
+			$script:snapCalls[0].Desktops | Should -BeNullOrEmpty
+			# The in-pass zone reset is handed over regardless of pipelining.
+			$script:snapCalls[0].HasReset | Should -BeTrue
+		}
+
+		It "does not pipeline a single-desktop layout" {
+			Mock Import-PowerShellDataFile {
+				@{
+					Layout   = @(@{ ProcessName = 'Code'; WindowTitle = '*Code*'; DesktopNumber = 1 })
+					Monitors = @{ MonitorA = @{ VirtualDesktopLayouts = @{ 1 = 'One' } } }
+				}
+			}
+			Mock Get-DesktopList { @(0) }
+
+			Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace'
+
+			Should -Invoke Wait-ForWorkspaceWindows -Times 1 -Exactly -ParameterFilter { $null -eq $OnDesktopReady }
+		}
+
+		It "runs the full layout again on the in-process retry after a pipelined first attempt" {
+			$script:verifyCalls = 0
+			Mock Confirm-WorkspaceWindowPositions {
+				$script:verifyCalls++
+				if ($script:verifyCalls -eq 1) { @{ Success = $false; Failures = @(); Total = 2 } } else { @{ Success = $true } }
+			}
+
+			Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace'
+
+			# Attempt 1: the per-desktop half plus the remaining half. Attempt 2: the whole layout,
+			# fresh tracking, every desktop.
+			$script:layoutCalls.Count | Should -Be 3
+			$script:layoutCalls[2].Entries.Count | Should -Be 2
+			$script:layoutCalls[2].Keep | Should -BeFalse
+			$script:layoutCalls[2].Excluded | Should -BeNullOrEmpty
+			$script:snapCalls.Count | Should -Be 3
+			$script:snapCalls[2].Desktops | Should -BeNullOrEmpty
+			Should -Invoke Start-FancyZones -Times 1 -Exactly -ParameterFilter { $ForceRestart }
+		}
+
+		It "counts a pipelined desktop's snap failures against the first attempt" {
+			Mock Snap-AllWindows {
+				$script:snapCalls += [PSCustomObject]@{ Desktops = $DesktopNumbers; HasReset = ($null -ne $ZoneReset) }
+				$failed = @()
+				if ($DesktopNumbers -and $DesktopNumbers -contains 2) {
+					$failed = @([PSCustomObject]@{ Handle = [IntPtr]102; WindowTitle = 'Terminal'; ProcessName = 'WindowsTerminal'; Expected = '(0,0) 1x1'; Actual = '(5,5) 1x1'; Error = 'Snap FAILED' })
+				}
+				$script:LastSnapAllWindowsResult = [PSCustomObject]@{ SnappedCount = 0; FailedWindows = $failed }
+			}
+
+			Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace'
+
+			# Attempt 1 ends with the pipelined failure and never verifies; attempt 2 runs the
+			# full layout after one FancyZones reset and verifies.
+			$script:layoutCalls.Count | Should -Be 3
+			Should -Invoke Start-FancyZones -Times 1 -Exactly -ParameterFilter { $ForceRestart }
+			Should -Invoke Confirm-WorkspaceWindowPositions -Times 1 -Exactly
+			Should -Invoke ReRun-LastCommand -Times 0 -Exactly
+		}
+
+		It "skips windows a per-desktop pass placed during first-open normalization" {
+			$existing = New-Object 'System.Collections.Generic.HashSet[IntPtr]'
+			[void]$existing.Add([IntPtr]5)
+			Mock Get-WindowHandle {
+				@(
+					[PSCustomObject]@{ Handle = [IntPtr]101; Title = 'Code'; ProcessName = 'Code' }
+					[PSCustomObject]@{ Handle = [IntPtr]102; Title = 'Terminal'; ProcessName = 'WindowsTerminal' }
+				)
+			}
+
+			Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace' -PreCapturedExistingWindows $existing
+
+			# Window 102 was placed by the per-desktop pass; only 101 is normalized.
+			Should -Invoke Resize-Windows -Times 1 -Exactly -ParameterFilter { $WindowHandle -eq [IntPtr]101 -and $null -eq $TargetX }
+			Should -Invoke Resize-Windows -Times 0 -Exactly -ParameterFilter { $WindowHandle -eq [IntPtr]102 }
 		}
 	}
 }

@@ -57,6 +57,7 @@
 		'Initialize-PositionedWindowTracking',
 		'Initialize-WorkspaceWindowLayoutRerun',
 		'Invoke-SingleZoneWindowPlacement',
+		'Invoke-MultiZoneWindowSnap',
 		'Invoke-SingleZoneWindowSnap',
 		'Move-Windows',
 		'Move-WindowToVirtualDesktop',

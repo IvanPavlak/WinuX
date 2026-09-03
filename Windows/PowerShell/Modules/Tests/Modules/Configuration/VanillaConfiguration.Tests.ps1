@@ -172,6 +172,10 @@ Describe "Vanilla Configuration (empty-by-default contract)" {
 		It "Should ship FancyZonesApplyMethod as File" {
 			$script:BaseConfig.FancyZonesApplyMethod | Should -Be 'File'
 		}
+
+		It "Should ship WorkspaceLayoutPipelining enabled" {
+			$script:BaseConfig.WorkspaceLayoutPipelining | Should -BeTrue
+		}
 	}
 
 	Context "Schema validation of the untouched base" {

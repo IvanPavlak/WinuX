@@ -61,6 +61,26 @@ function Set-WindowLayouts {
 		entry's candidate list before any claiming happens, so an entry left with none reports
 		"Not Found" (a visible, countable shortfall) instead of silently placing nothing.
 
+	.PARAMETER CandidateWindowHandles
+		Whitelist of window handles this pass may claim. Every other window is dropped from an
+		entry's candidate list before claiming, exactly like -SkipExistingWindows and
+		-ProtectedWindowHandles drop theirs. Set-WorkspaceWindowLayout passes the windows the
+		wait phase confirmed stable for ONE desktop when it positions that desktop while the
+		rest of the workspace is still loading, so a window still loading elsewhere - or one
+		another desktop's entry already owns - is never claimed here, whatever the title regex
+		says.
+
+	.PARAMETER ExcludeWindowHandles
+		Blacklist of window handles this pass may not claim, dropped at the same point as the
+		other candidate filters. Set-WorkspaceWindowLayout passes the windows its per-desktop
+		passes already placed when it finishes the remaining desktops.
+
+	.PARAMETER KeepPositionedWindows
+		Appends to the positioned-window tracking instead of resetting it first. Every call
+		resets the tracking by default so Snap-AllWindows sees exactly the windows of that
+		call; the per-desktop passes of one workspace open share a single tracking set and
+		therefore pass this on every call but the first.
+
 	.PARAMETER ProtectedWindowHandles
 		Live window handles a plain open must preserve (they belong to a live alongside
 		workspace - see Get-WorkspaceOpenProtection). Protected windows are removed from every
@@ -167,10 +187,23 @@ function Set-WindowLayouts {
 		[hashtable]$PinnedHandleMap,
 
 		[Parameter()]
-		[System.Collections.Generic.HashSet[IntPtr]]$ProtectedWindowHandles
+		[System.Collections.Generic.HashSet[IntPtr]]$ProtectedWindowHandles,
+
+		[Parameter()]
+		[System.Collections.Generic.HashSet[IntPtr]]$CandidateWindowHandles,
+
+		[Parameter()]
+		[System.Collections.Generic.HashSet[IntPtr]]$ExcludeWindowHandles,
+
+		[Parameter()]
+		[switch]$KeepPositionedWindows
 	)
 
-	Initialize-PositionedWindowTracking
+	# The per-desktop passes of one workspace open append to one tracking set; every other
+	# caller starts from a clean one so Snap-AllWindows sees exactly this call's windows.
+	if (-not $KeepPositionedWindows) {
+		Initialize-PositionedWindowTracking
+	}
 
 	if (Test-LogVerbose) {
 		Write-LogDebug "[Setting Custom Window Layouts]"
@@ -859,6 +892,27 @@ function Set-WindowLayouts {
 			$windows = @($windows | Where-Object { -not $ProtectedWindowHandles.Contains($_.Handle) })
 			if ((Test-LogVerbose) -and $windows.Count -ne $candidateCount) {
 				Write-LogDebug "⊘ Excluded $($candidateCount - $windows.Count) protected window(s) - preserved for a live alongside workspace" -Style Warning
+			}
+		}
+
+		# Per-desktop pipelining, same position and same reasoning as the two filters above. A
+		# pass for ONE desktop may only claim the windows the wait phase confirmed stable for that
+		# desktop's entries (whitelist); the pass that finishes the remaining desktops may not
+		# claim the windows the per-desktop passes already placed (blacklist). Neither is a
+		# matter of title regexes - a catch-all entry matches every window of its process - so
+		# both are enforced on the candidate list, before claiming.
+		if ($null -ne $CandidateWindowHandles -and $windows) {
+			$candidateCount = @($windows).Count
+			$windows = @($windows | Where-Object { $CandidateWindowHandles.Contains($_.Handle) })
+			if ((Test-LogVerbose) -and $windows.Count -ne $candidateCount) {
+				Write-LogDebug "⊘ Excluded $($candidateCount - $windows.Count) window(s) outside this pass's candidate set" -Style Warning
+			}
+		}
+		if ($null -ne $ExcludeWindowHandles -and $ExcludeWindowHandles.Count -gt 0 -and $windows) {
+			$candidateCount = @($windows).Count
+			$windows = @($windows | Where-Object { -not $ExcludeWindowHandles.Contains($_.Handle) })
+			if ((Test-LogVerbose) -and $windows.Count -ne $candidateCount) {
+				Write-LogDebug "⊘ Excluded $($candidateCount - $windows.Count) window(s) an earlier per-desktop pass already placed" -Style Warning
 			}
 		}
 

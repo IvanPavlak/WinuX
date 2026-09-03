@@ -552,6 +552,22 @@ $MachineType  # Should match folder name
 
 **Forcing the old behaviour:** `FancyZonesApplyMethod = "Hotkeys"` in `Configuration.local.psd1` (the base ships `"File"`), then `Reload-PowerShellProfile`. Use it when a PowerToys update changes the file schema or the file watcher, and report the version so the writer can be adjusted.
 
+### A Window That Will Not Snap Resets FancyZones Mid-Pass
+
+**Problem:** Under `Set-LogLevel Verbose { w MyWorkspace }` the snap pass prints `Snap exhausted for [Title] - resetting FancyZones and retrying the same window...`, followed by the PowerToys restart lines and `Writing FancyZones layouts for [n] desktop(s)`, then three more attempts on that window - all before the next window is snapped.
+
+**Why it happened:** A window that failed keyboard AND shift-drag snapping three times is not a stubborn window; it is the signal that the zone grid it was snapped against is wrong (FancyZones wedged or holding a stale grid). The pass used to record the window, carry on snapping the rest against that same grid, and leave the recovery to `Set-WorkspaceWindowLayout`'s retry, which paid a full position-snap-verify cycle afterwards. It now resets FancyZones right there (`Snap-AllWindows -ZoneReset`, the same force-restart plus forced zone re-apply the retry uses) and gives that same window its whole attempt budget again.
+
+**Solution:** Nothing to do when the second round verifies - that is the recovery working, at a cost of about 2.5 s. When the window fails the second round too, its failure record reads `after 6 attempts (unverified position, zone grid reset once)` and the pass moves on; the in-process retry and the rerun escalation take over exactly as before. At most two such resets happen per pass - a third exhausted window records straight away, because two resets that did not help point at something the retry has to handle. A layout that produces this on every open has a zone or layout definition FancyZones cannot reproduce for that window - check its entry against `Visualize-Layouts` and `Test-FancyZonesConfiguration`.
+
+### Desktops Are Positioned And Snapped Before The Wait Phase Ends
+
+**Problem:** Under `Set-LogLevel Verbose` a workspace open shows `Desktop [2] is ready while the rest still load - positioning and snapping it now`, `[Setting Custom Window Layouts]` and `[Snapping Windows to FancyZones]` lines while `Waiting for:` lines are still being printed for other windows, and the benchmark's `WaitSeconds` is lower than before while `PositionSeconds` and `SnapSeconds` are unchanged.
+
+**Why it happened:** This is per-desktop pipelining (`WorkspaceLayoutPipelining`, on by default). The wait ends when the slowest window of the whole workspace has been stable for a second, and every position and snap second used to be paid after that although the other desktops' windows had been stable for seconds. `Wait-ForWorkspaceWindows` now reports each desktop whose windows are all stable while others still load, and `Set-WorkspaceWindowLayout` positions and snaps that desktop right then, restricted to exactly the windows the wait confirmed for it. The tail after the wait finishes only the desktops that were not ready, verification stays global, and the in-process retries run the full layout as before.
+
+**Solution:** Nothing to do - it saves roughly the position and snap time of every desktop but the slowest one on cold opens. To compare the two orders, or if a layout misbehaves only with pipelining on, set `WorkspaceLayoutPipelining = $false` in `Configuration.local.psd1`, reload, and open the workspace again; `Get-WorkspaceBenchmark -Workspace MyWorkspace -Formatted` shows both runs side by side.
+
 ## fastfetch Logo Issues
 
 Setting `Universal.FastFetchImageLogo` makes fastfetch render that image instead of the text logo,

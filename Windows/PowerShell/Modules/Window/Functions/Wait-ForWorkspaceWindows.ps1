@@ -60,6 +60,17 @@ function Wait-ForWorkspaceWindows {
 		individually stable, receiving the layout entry and the window so callers can
 		relocate it early.
 
+	.PARAMETER OnDesktopReady
+		Optional scriptblock fired once per virtual desktop (the entries' DesktopNumber,
+		default 1) as soon as every entry on that desktop is individually stable or abandoned
+		while at least one other entry is still pending. It receives the desktop number and
+		an array of @{ LayoutEntry; Window } for the desktop's stable entries, so the caller
+		can position and snap that desktop while the remaining windows are still loading.
+		Entries handed over this way count as ready for the rest of the wait, whatever their
+		windows do afterwards (the caller is moving them on purpose). It never fires for the
+		desktops that complete in the same poll as the wait itself - the caller's ordinary
+		tail handles those. The result's ReadyDesktops lists the desktops it fired for.
+
 	.EXAMPLE
 		$config = Import-PowerShellDataFile -Path "layout.psd1"
 		Wait-ForWorkspaceWindows -LayoutConfig $config.Layout
@@ -110,7 +121,10 @@ function Wait-ForWorkspaceWindows {
 		[switch]$RequireStableDimensions = $true,
 
 		[Parameter()]
-		[scriptblock]$OnWindowStable
+		[scriptblock]$OnWindowStable,
+
+		[Parameter()]
+		[scriptblock]$OnDesktopReady
 	)
 
 	# Use consolidated native types from WindowNative.cs (loaded in Window.psm1)
@@ -187,8 +201,9 @@ function Wait-ForWorkspaceWindows {
 	if ($expectedWindows.Count -eq 0) {
 		Write-LogDebug " No windows defined in layout configuration - skipping wait" -Style Warning
 		return @{
-			Success      = $true
-			WindowStates = @{}
+			Success       = $true
+			WindowStates  = @{}
+			ReadyDesktops = @()
 		}
 	}
 
@@ -230,6 +245,22 @@ function Wait-ForWorkspaceWindows {
 
 	# Track which entries have already fired the OnWindowStable callback to ensure once-per-entry invocation
 	$callbackTriggered = New-Object 'System.Collections.Generic.HashSet[string]'
+
+	# Per-desktop readiness for -OnDesktopReady: which entries each desktop owns (the layout
+	# entry's DesktopNumber, default 1), which desktops already fired, and which entries were
+	# handed over that way - those count as ready for the rest of the wait, whatever their
+	# windows do next, because the caller is positioning and snapping them on purpose.
+	$entriesByDesktop = @{}
+	foreach ($ew in $expectedWindows) {
+		$entryDesktop = if ($null -ne $ew.LayoutEntry.DesktopNumber) { [int]$ew.LayoutEntry.DesktopNumber } else { 1 }
+		$ew.DesktopNumber = $entryDesktop
+		if (-not $entriesByDesktop.ContainsKey($entryDesktop)) {
+			$entriesByDesktop[$entryDesktop] = [System.Collections.Generic.List[hashtable]]::new()
+		}
+		$entriesByDesktop[$entryDesktop].Add($ew)
+	}
+	$readyDesktopsFired = New-Object 'System.Collections.Generic.HashSet[int]'
+	$completedEntries = New-Object 'System.Collections.Generic.HashSet[string]'
 
 	# Fail-fast bookkeeping: entries abandoned because their process never appeared, and
 	# entries that have matched a window at least once (never abandoned).
@@ -299,9 +330,19 @@ function Wait-ForWorkspaceWindows {
 			# Track handles claimed during this poll iteration for duplicate entries
 			$iterationClaimedHandles = New-Object 'System.Collections.Generic.HashSet[IntPtr]'
 
+			# The window each entry is stable on THIS iteration (per-desktop readiness reads it).
+			$stableWindowsThisIteration = @{}
+
 			foreach ($expectedWindow in $expectedWindows) {
 				# Entry abandoned by the process-absent fail-fast - stop tracking it.
 				if ($abandonedEntries.Contains($expectedWindow.Description)) {
+					continue
+				}
+
+				# Entry already handed to the caller through OnDesktopReady - ready by definition;
+				# the position and snap it is receiving change its rect on purpose.
+				if ($completedEntries.Contains($expectedWindow.Description)) {
+					$foundCount++
 					continue
 				}
 
@@ -489,6 +530,7 @@ function Wait-ForWorkspaceWindows {
 						if ($isStable) {
 							$windowFound = $true
 							$foundCount++
+							$stableWindowsThisIteration[$expectedWindow.Description] = $window
 							# Track window handle for stable windows list
 							if ($window.Handle) {
 								$foundWindowHandles.Add($window.Handle)
@@ -565,6 +607,51 @@ function Wait-ForWorkspaceWindows {
 				break
 			}
 
+			# Per-desktop readiness: while the wait as a whole continues, hand a desktop whose
+			# every entry is stable (or abandoned) to the caller, so it can position and snap that
+			# desktop behind the windows still loading elsewhere. Once per desktop, and never in
+			# the poll that completes the wait - the caller's ordinary tail handles what is left.
+			if ($OnDesktopReady -and $foundCount -lt $activeExpectedCount) {
+				foreach ($readyDesktopNumber in @($entriesByDesktop.Keys | Sort-Object)) {
+					if ($readyDesktopsFired.Contains($readyDesktopNumber)) { continue }
+
+					$desktopEntries = $entriesByDesktop[$readyDesktopNumber]
+					$stableEntries = @($desktopEntries | Where-Object { $stableWindowsThisIteration.ContainsKey($_.Description) })
+					$abandonedOnDesktop = @($desktopEntries | Where-Object { $abandonedEntries.Contains($_.Description) }).Count
+					if ($stableEntries.Count -eq 0 -or ($stableEntries.Count + $abandonedOnDesktop) -ne $desktopEntries.Count) { continue }
+
+					$readyPayload = @($stableEntries | ForEach-Object {
+							@{ LayoutEntry = $_.LayoutEntry; Window = $stableWindowsThisIteration[$_.Description] }
+						})
+
+					if (Test-LogVerbose) {
+						Write-LogDebug "=> Desktop $readyDesktopNumber ready ($($stableEntries.Count) window(s) stable) while $($activeExpectedCount - $foundCount) window(s) still load - handing it over" -Style Success
+					}
+
+					# The caller snaps through keyboard and drag input; a topmost terminal over the
+					# window would catch a drag start point, so drop it for the duration.
+					if ($terminalSetTopmost -and $terminalHandle -ne [IntPtr]::Zero) {
+						[void][WindowModule.Native]::SetWindowTopmost($terminalHandle, $false)
+					}
+					try {
+						& $OnDesktopReady $readyDesktopNumber $readyPayload
+					}
+					catch {
+						Write-LogDebug " OnDesktopReady for desktop $readyDesktopNumber failed: $($_.Exception.Message)" -Style Warning
+					}
+					finally {
+						if ($terminalSetTopmost -and $terminalHandle -ne [IntPtr]::Zero) {
+							[void][WindowModule.Native]::SetWindowTopmost($terminalHandle, $true)
+						}
+					}
+
+					[void]$readyDesktopsFired.Add($readyDesktopNumber)
+					foreach ($handedEntry in $stableEntries) {
+						[void]$completedEntries.Add($handedEntry.Description)
+					}
+				}
+			}
+
 			# Check if all (non-abandoned) windows are individually stable
 			if ($foundCount -eq $activeExpectedCount) {
 				$currentTime = Get-Date
@@ -618,9 +705,10 @@ function Wait-ForWorkspaceWindows {
 					}
 
 					return @{
-						Success      = ($abandonedEntries.Count -eq 0)
-						WindowStates = $windowStates
-						Abandoned    = @($abandonedEntries)
+						Success       = ($abandonedEntries.Count -eq 0)
+						WindowStates  = $windowStates
+						Abandoned     = @($abandonedEntries)
+						ReadyDesktops = @($readyDesktopsFired)
 					}
 				}
 			}
@@ -772,16 +860,18 @@ function Wait-ForWorkspaceWindows {
 
 		# Return failure with empty window states
 		return @{
-			Success      = $false
-			WindowStates = $timeoutWindowStates
-			Abandoned    = @($abandonedEntries)
+			Success       = $false
+			WindowStates  = $timeoutWindowStates
+			Abandoned     = @($abandonedEntries)
+			ReadyDesktops = @($readyDesktopsFired)
 		}
 	}
 
 	# This should never be reached, but return success just in case
 	return @{
-		Success      = $true
-		WindowStates = @{}
-		Abandoned    = @($abandonedEntries)
+		Success       = $true
+		WindowStates  = @{}
+		Abandoned     = @($abandonedEntries)
+		ReadyDesktops = @($readyDesktopsFired)
 	}
 }

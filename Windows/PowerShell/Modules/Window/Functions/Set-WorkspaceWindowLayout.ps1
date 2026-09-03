@@ -22,6 +22,21 @@ function Set-WorkspaceWindowLayout {
 		This is used with Open-Browser's Override parameter which opens the same URL
 		group in a separate browser window, allowing both to be positioned independently.
 
+		Desktops are positioned and snapped as they become ready, not after the slowest window
+		of the whole workspace. Wait-ForWorkspaceWindows reports each virtual desktop whose
+		windows are all stable while others still load (-OnDesktopReady), and that desktop's
+		entries are positioned (Set-WindowLayouts, restricted to exactly those windows and
+		appending to the shared tracking), resized and snapped (Snap-AllWindows for that
+		desktop alone) right then; the tail after the wait finishes only the desktops that were
+		not ready, and verification stays global. WorkspaceLayoutPipelining = $false in the
+		configuration turns this off and restores the strictly sequential wait -> position ->
+		snap order.
+
+		Inside the snap pass a window that exhausts keyboard and shift-drag snapping triggers a
+		FancyZones reset (the same force-restart plus forced zone re-apply the retry below uses,
+		handed to Snap-AllWindows as -ZoneReset) and a second round for that same window before
+		anything is recorded as failed.
+
 		On snap failure or final layout verification failure, the position -> snap -> verify
 		pipeline is retried IN-PROCESS up to two times first (refreshing the existing-window
 		snapshot so already-correct windows are skipped, and verifying against the FULL
@@ -850,6 +865,67 @@ function Set-WorkspaceWindowLayout {
 		# Reconfiguration sub-steps have finished printing their output - bring the spinner back.
 		if ($spinner) { Loading-Spinner -Resume }
 
+		# Recovery action run before EVERY retry. A snap/verification failure almost never
+		# means "the window refused to move" - it means the zone grid the snap targeted was
+		# wrong: FancyZones dead, crash-looping, or holding a stale in-memory grid. Re-running
+		# position -> snap -> verify against that same grid can never succeed, which is why
+		# the liveness-only check this replaces recovered nothing:
+		#   - a bare Start-FancyZones caches a successful readiness pass for 10s, so
+		#     back-to-back retries got a cached $true and did literally nothing, and
+		#   - even a real pass only proves the PROCESS is healthy, never that the workspace's
+		#     zone grid is applied.
+		# -ForceRestart invalidates that cache and rebuilds the process; the re-apply then has
+		# to be forced too, because a restarted FancyZones reloads applied-layouts.json without
+		# re-asserting the live grid, and that same JSON is what the idempotency check reads -
+		# so an unforced re-apply reports "Already Applied" everywhere and sends nothing.
+		#
+		# This costs a PowerToys restart plus a zone re-apply per retry (the file pass makes the
+		# re-apply cheap). That is deliberate: the alternative it exists to prevent is a 15-45s
+		# terminal respawn.
+		#
+		# Defined here, before the wait, because it is also handed to Snap-AllWindows as
+		# -ZoneReset (a window that exhausts its snap attempts resets the grid and retries
+		# in-pass) and to the per-desktop passes that run DURING the wait. It reads what it
+		# needs from $resetFancyZonesContext rather than from this function's variables by
+		# name: Snap-AllWindows invokes it from its own scope, where $DesktopOffset is a
+		# parameter of its own (always 0 in the workspace flow) and would shadow this
+		# function's real offset under dynamic scoping - an alongside workspace would then
+		# re-apply its zone layouts to the wrong desktops. A uniquely named hashtable has no
+		# such shadow anywhere on the call chain. (Not a closure: GetNewClosure() binds the
+		# block to its own module scope, where the test harness's mocks are invisible and
+		# command lookup skips the caller's scope entirely.)
+		$resetFancyZonesContext = @{
+			MonitorConfig = $config.Monitors
+			MonitorInfo   = $cachedMonitorInfo
+			DesktopOffset = $DesktopOffset
+			DesktopCount  = $requiredVirtualDesktops
+		}
+		$resetFancyZonesState = {
+			param([string]$Reason)
+
+			Write-LogWarning "   Resetting FancyZones ($Reason)..." -NoLeadingNewline
+
+			try {
+				$null = Start-FancyZones -ForceRestart -MaxWaitSeconds 20 -ErrorAction Stop
+			}
+			catch {
+				Write-LogWarning "   Failed to force-restart FancyZones: $($_.Exception.Message)" -NoLeadingNewline
+			}
+
+			if (-not $resetFancyZonesContext.MonitorConfig) {
+				Write-LogWarning "   No monitor configuration - zone grids could not be re-applied" -NoLeadingNewline
+				return
+			}
+
+			try {
+				$null = Apply-FancyZones -MonitorConfig $resetFancyZonesContext.MonitorConfig -MonitorInfo $resetFancyZonesContext.MonitorInfo `
+					-DesktopOffset $resetFancyZonesContext.DesktopOffset -DesktopCount $resetFancyZonesContext.DesktopCount -Force
+			}
+			catch {
+				Write-LogWarning "   Failed to re-apply FancyZones zone layouts: $($_.Exception.Message)" -NoLeadingNewline
+			}
+		}
+
 		# Use pre-captured existing windows if provided (from Open-Workspace)
 		# Otherwise capture them now (for standalone calls to Set-WorkspaceWindowLayout)
 		if ($PreCapturedExistingWindows) {
@@ -895,6 +971,110 @@ function Set-WorkspaceWindowLayout {
 			catch {}
 		}
 
+		# --- Per-desktop pipelining: position and snap a desktop as soon as its windows are stable ---
+		# The wait ends when the SLOWEST window of the whole workspace has been stable for a
+		# second; every other window has been sitting stable for seconds by then, and the whole
+		# position and snap cost used to be paid after that. Wait-ForWorkspaceWindows now reports
+		# each desktop whose entries are all stable while others still load, and this callback
+		# positions, resizes and snaps that desktop right away - only the windows the wait
+		# confirmed stable for it (-CandidateWindowHandles), appended to the one tracking set the
+		# whole open shares (-KeepPositionedWindows), snapped for that desktop alone
+		# (-DesktopNumbers). The tail after the wait finishes the desktops that were not ready,
+		# verification stays global, and the in-process retries run the full layout as before.
+		# The phase clock books the callback's own time under Position and Snap, not Wait.
+		$pipeliningEnabled = ($null -eq $global:Configuration.WorkspaceLayoutPipelining -or [bool]$global:Configuration.WorkspaceLayoutPipelining)
+		$pipelinedDesktops = @{}
+		$pipelinedResults = [System.Collections.Generic.List[PSObject]]::new()
+		$pipelinedSnapFailures = [System.Collections.Generic.List[object]]::new()
+		$pipelinedHandles = New-Object 'System.Collections.Generic.HashSet[IntPtr]'
+		$usePipelining = $pipeliningEnabled -and -not $windowOnlyRetryActive -and -not $DisableAutoWait -and $requiredVirtualDesktops -gt 1
+		if (-not $pipeliningEnabled -and (Test-LogVerbose)) {
+			Write-LogDebug "Per-desktop pipelining disabled by configuration (WorkspaceLayoutPipelining) - positioning after the wait" -Style Warning
+		}
+
+		$onDesktopReadyCallback = {
+			param($readyDesktopNumber, $readyEntries)
+
+			$displayDesktop = [int]$readyDesktopNumber + $DesktopOffset
+			try {
+				# Wait time so far belongs to Wait; the work below to Position and Snap.
+				& $recordPhase 'Wait'
+				if ($spinner) { Loading-Spinner -Pause }
+
+				$candidateHandles = New-Object 'System.Collections.Generic.HashSet[IntPtr]'
+				$readyStates = @{}
+				$readyLayoutEntries = @()
+				foreach ($ready in @($readyEntries)) {
+					if ($null -eq $ready -or $null -eq $ready.Window -or $null -eq $ready.Window.Handle) { continue }
+					$readyLayoutEntries += $ready.LayoutEntry
+					[void]$candidateHandles.Add($ready.Window.Handle)
+					$readyStates[$ready.Window.Handle] = @{
+						Title  = $ready.Window.Title
+						X      = $ready.Window.Left
+						Y      = $ready.Window.Top
+						Width  = $ready.Window.Width
+						Height = $ready.Window.Height
+					}
+				}
+				if ($readyLayoutEntries.Count -eq 0) { return }
+
+				Write-LogDebug " Desktop [$displayDesktop] is ready while the rest still load - positioning and snapping it now ($($readyLayoutEntries.Count) window(s))" -Style Success
+
+				$desktopLayoutParams = @{
+					LayoutConfig           = $readyLayoutEntries
+					MonitorInfo            = $cachedMonitorInfo
+					MonitorConfig          = $config.Monitors
+					ExistingWindowHandles  = $existingWindowHandles
+					ExpectedWindowState    = $readyStates
+					DesktopOffset          = $DesktopOffset
+					CandidateWindowHandles = $candidateHandles
+					KeepPositionedWindows  = $true
+				}
+				if ($Alongside) {
+					$desktopLayoutParams["SkipExistingWindows"] = $true
+				}
+				if ($hasProtectedWindows) {
+					$desktopLayoutParams["ProtectedWindowHandles"] = $ProtectedWindowHandles
+				}
+				if ($pinnedHandleMap -and $pinnedHandleMap.Count -gt 0) {
+					$desktopLayoutParams["PinnedHandleMap"] = $pinnedHandleMap
+				}
+
+				$desktopResults = @(Set-WindowLayouts @desktopLayoutParams)
+				foreach ($desktopResult in $desktopResults) {
+					$pipelinedResults.Add($desktopResult)
+					if ($desktopResult.Status -eq 'Configured' -and $null -ne $desktopResult.Handle -and $desktopResult.Handle -ne [IntPtr]::Zero) {
+						[void]$pipelinedHandles.Add($desktopResult.Handle)
+					}
+				}
+
+				Start-Sleep -Milliseconds $SnapDelayMs
+				$null = Resize-PositionedWindows -DesktopNumbers @($displayDesktop)
+				& $recordPhase 'Position'
+
+				# -DesktopOffset 0 for the same reason as the main snap pass below: the tracked
+				# desktop numbers already carry the offset.
+				$null = Snap-AllWindows -DesktopOffset 0 -DesktopCount $requiredVirtualDesktops -DesktopNumbers @($displayDesktop) -ZoneReset $resetFancyZonesState
+				$desktopSnap = $script:LastSnapAllWindowsResult
+				if ($desktopSnap -and $desktopSnap.FailedWindows) {
+					foreach ($desktopFailure in @($desktopSnap.FailedWindows)) {
+						$pipelinedSnapFailures.Add($desktopFailure)
+					}
+				}
+				& $recordPhase 'Snap'
+
+				$pipelinedDesktops[[int]$readyDesktopNumber] = $true
+			}
+			catch {
+				# Nothing was marked done, so the tail after the wait positions this desktop with
+				# the others.
+				Write-LogDebug " Per-desktop pass for desktop [$displayDesktop] failed - leaving it to the main pass: $($_.Exception.Message)" -Style Warning
+			}
+			finally {
+				if ($spinner) { Loading-Spinner -Resume }
+			}
+		}
+
 		if ($DisableAutoWait -or $windowOnlyRetryActive) {
 			if (Test-LogVerbose) {
 				if ($windowOnlyRetryActive) {
@@ -906,7 +1086,15 @@ function Set-WorkspaceWindowLayout {
 			}
 		}
 		else {
-			$waitResult = Wait-ForWorkspaceWindows -LayoutConfig $config.Layout -TimeoutSeconds $TimeoutSeconds -OnWindowStable $onWindowStableCallback
+			$waitParams = @{
+				LayoutConfig   = $config.Layout
+				TimeoutSeconds = $TimeoutSeconds
+				OnWindowStable = $onWindowStableCallback
+			}
+			if ($usePipelining) {
+				$waitParams["OnDesktopReady"] = $onDesktopReadyCallback
+			}
+			$waitResult = Wait-ForWorkspaceWindows @waitParams
 
 			# Use the state snapshot whenever one was captured - even on partial success
 			# (abandoned entries) the stable windows' handles feed the title-drift fallbacks.
@@ -923,6 +1111,18 @@ function Set-WorkspaceWindowLayout {
 		}
 
 		& $recordPhase 'Wait'
+
+		# The windows the per-desktop passes already placed are done: they are skipped by the
+		# normalization passes below and excluded from the remaining layout pass, and they leave
+		# the wait snapshot so no remaining entry's title fallback can claim one of them.
+		if ($pipelinedHandles.Count -gt 0) {
+			Write-LogDebug " Per-desktop passes placed $($pipelinedHandles.Count) window(s) on $($pipelinedDesktops.Count) desktop(s) during the wait" -Style Success
+			if ($windowStates -and $windowStates.Count -gt 0) {
+				foreach ($pipelinedHandle in @($pipelinedHandles)) {
+					if ($windowStates.ContainsKey($pipelinedHandle)) { $windowStates.Remove($pipelinedHandle) }
+				}
+			}
+		}
 
 		# Focus all browser windows on their first tab to ensure correct window title matching
 		if ($layoutConfigToApply -and -not $windowOnlyRetryActive) {
@@ -1022,6 +1222,12 @@ function Set-WorkspaceWindowLayout {
 									continue
 								}
 
+								# Already matched, positioned and snapped by a per-desktop pass -
+								# resetting its tab would only change a title nothing waits for.
+								if ($pipelinedHandles.Contains($window.Handle)) {
+									continue
+								}
+
 								# Windows opened by THIS flow are always normalized; pre-existing
 								# ones only when an entry is still unresolved (see above).
 								$isNewWindow = -not ($existingWindowHandles -and $existingWindowHandles.Contains($window.Handle))
@@ -1113,7 +1319,9 @@ function Set-WorkspaceWindowLayout {
 				# The previous non-alongside branch resized EVERY visible window on the machine
 				# to 70% - including unrelated apps - only for Set-WindowLayouts to reposition
 				# the workspace ones again right after.
-				$newWindows = @($currentAllWindows | Where-Object { -not $existingWindowHandles.Contains($_.Handle) })
+				# Windows a per-desktop pass already placed are at their inset or snapped - never
+				# re-normalized.
+				$newWindows = @($currentAllWindows | Where-Object { -not $existingWindowHandles.Contains($_.Handle) -and -not $pipelinedHandles.Contains($_.Handle) })
 				Write-LogDebug "  Normalizing $($newWindows.Count) new window(s) only" -Style Step
 				foreach ($newWin in $newWindows) {
 					$null = Resize-Windows -WindowHandle $newWin.Handle
@@ -1156,47 +1364,8 @@ function Set-WorkspaceWindowLayout {
 		$results = $null
 		$retryTrigger = $null
 
-		# Recovery action run before EVERY retry. A snap/verification failure almost never
-		# means "the window refused to move" - it means the zone grid the snap targeted was
-		# wrong: FancyZones dead, crash-looping, or holding a stale in-memory grid. Re-running
-		# position -> snap -> verify against that same grid can never succeed, which is why
-		# the liveness-only check this replaces recovered nothing:
-		#   - a bare Start-FancyZones caches a successful readiness pass for 10s, so
-		#     back-to-back retries got a cached $true and did literally nothing, and
-		#   - even a real pass only proves the PROCESS is healthy, never that the workspace's
-		#     zone grid is applied.
-		# -ForceRestart invalidates that cache and rebuilds the process; the re-apply then has
-		# to be forced too, because a restarted FancyZones reloads applied-layouts.json without
-		# re-asserting the live grid, and that same JSON is what the idempotency check reads -
-		# so an unforced re-apply reports "Already Applied" everywhere and sends nothing.
-		#
-		# This costs a PowerToys restart plus a desktop-switching layout pass per retry. That is
-		# deliberate: the alternative it exists to prevent is a 15-45s terminal respawn.
-		$resetFancyZonesState = {
-			param([string]$Reason)
-
-			Write-LogWarning "   Resetting FancyZones ($Reason)..." -NoLeadingNewline
-
-			try {
-				$null = Start-FancyZones -ForceRestart -MaxWaitSeconds 20 -ErrorAction Stop
-			}
-			catch {
-				Write-LogWarning "   Failed to force-restart FancyZones: $($_.Exception.Message)" -NoLeadingNewline
-			}
-
-			if (-not $config.Monitors) {
-				Write-LogWarning "   No monitor configuration - zone grids could not be re-applied" -NoLeadingNewline
-				return
-			}
-
-			try {
-				$null = Apply-FancyZones -MonitorConfig $config.Monitors -MonitorInfo $cachedMonitorInfo `
-					-DesktopOffset $DesktopOffset -DesktopCount $requiredVirtualDesktops -Force
-			}
-			catch {
-				Write-LogWarning "   Failed to re-apply FancyZones zone layouts: $($_.Exception.Message)" -NoLeadingNewline
-			}
-		}
+		# The FancyZones reset every retry begins with is $resetFancyZonesState, defined before
+		# the wait phase (the per-desktop passes and Snap-AllWindows' -ZoneReset share it).
 
 		for ($layoutAttempt = 1; $layoutAttempt -le $maxInProcessAttempts; $layoutAttempt++) {
 			if ($layoutAttempt -gt 1) {
@@ -1234,7 +1403,39 @@ function Set-WorkspaceWindowLayout {
 			}
 
 			$phaseState.Attempts = $layoutAttempt
-			$results = Set-WindowLayouts @setLayoutParams
+
+			# Which tracked desktops this attempt resizes and snaps: $null means every one (the
+			# ordinary full pass), a list means only those (attempt 1 finishing what the
+			# per-desktop passes left), an empty list means nothing is left to do.
+			$attemptDesktopFilter = $null
+			if ($layoutAttempt -eq 1 -and $pipelinedDesktops.Count -gt 0) {
+				# The per-desktop passes during the wait already placed and snapped these desktops.
+				# Attempt 1 finishes the rest: the remaining desktops' entries, appended to the same
+				# tracking, resized and snapped on those desktops alone; the windows already placed
+				# are off limits to them. The results of both halves make up this attempt's set.
+				$entryDesktopOf = { param($entry) if ($null -ne $entry.DesktopNumber) { [int]$entry.DesktopNumber } else { 1 } }
+				$remainingEntries = @($layoutConfigToApply | Where-Object { -not $pipelinedDesktops.ContainsKey((& $entryDesktopOf $_)) })
+				$remainingDesktops = @($remainingEntries | ForEach-Object { (& $entryDesktopOf $_) + $DesktopOffset } | Select-Object -Unique)
+				Write-LogDebug " Per-desktop passes covered [$($pipelinedDesktops.Count)] desktop(s) during the wait - finishing [$($remainingEntries.Count)] remaining entry(ies) on [$($remainingDesktops.Count)] desktop(s)"
+
+				if ($remainingEntries.Count -gt 0) {
+					$remainingLayoutParams = $setLayoutParams.Clone()
+					$remainingLayoutParams["LayoutConfig"] = $remainingEntries
+					$remainingLayoutParams["KeepPositionedWindows"] = $true
+					if ($pipelinedHandles.Count -gt 0) {
+						$remainingLayoutParams["ExcludeWindowHandles"] = $pipelinedHandles
+					}
+					$results = @($pipelinedResults) + @(Set-WindowLayouts @remainingLayoutParams)
+					$attemptDesktopFilter = @($remainingDesktops)
+				}
+				else {
+					$results = @($pipelinedResults)
+					$attemptDesktopFilter = @()
+				}
+			}
+			else {
+				$results = Set-WindowLayouts @setLayoutParams
+			}
 
 			$successful = ($results | Where-Object { $_.Status -eq "Configured" }).Count
 			$notFound = ($results | Where-Object { $_.Status -eq "Not Found" }).Count
@@ -1256,7 +1457,15 @@ function Set-WorkspaceWindowLayout {
 			# Default (20px) tolerance: with 0, apps that self-adjust by a pixel (terminal cell
 			# rounding, min-size constraints, DPI rounding) were re-positioned on EVERY open
 			# forever and never converged.
-			$resizeResult = Resize-PositionedWindows
+			$resizeResult = if ($null -eq $attemptDesktopFilter) {
+				Resize-PositionedWindows
+			}
+			elseif ($attemptDesktopFilter.Count -gt 0) {
+				Resize-PositionedWindows -DesktopNumbers $attemptDesktopFilter
+			}
+			else {
+				[PSCustomObject]@{ ResizedCount = 0; SkippedCount = 0; FailedWindows = @() }
+			}
 			if ((Test-LogVerbose) -and $resizeResult.FailedWindows.Count -gt 0) {
 				Write-LogDebug "Pre-snap resize failures => [$($resizeResult.FailedWindows.Count)]" -Style Warning
 			}
@@ -1270,8 +1479,25 @@ function Set-WorkspaceWindowLayout {
 			# on: with -DesktopOffset 2, a window tracked as desktop 3 resolved to internal
 			# index 4 while it actually sat on index 2, and nothing on that desktop could snap.
 			# Only alongside was passing 0 - and only alongside was correct.
-			$null = Snap-AllWindows -DesktopOffset 0 -DesktopCount $requiredVirtualDesktops
-			$snapResult = $script:LastSnapAllWindowsResult
+			#
+			# -ZoneReset: a window that exhausts keyboard and shift-drag snapping resets the zone
+			# grid (this function's own FancyZones reset) and gets a second round in-pass, before
+			# the pass moves on or anything is recorded.
+			$snapParams = @{
+				DesktopOffset = 0
+				DesktopCount  = $requiredVirtualDesktops
+				ZoneReset     = $resetFancyZonesState
+			}
+			if ($null -ne $attemptDesktopFilter -and $attemptDesktopFilter.Count -gt 0) {
+				$snapParams["DesktopNumbers"] = $attemptDesktopFilter
+			}
+			if ($null -eq $attemptDesktopFilter -or $attemptDesktopFilter.Count -gt 0) {
+				$null = Snap-AllWindows @snapParams
+				$snapResult = $script:LastSnapAllWindowsResult
+			}
+			else {
+				$snapResult = [PSCustomObject]@{ SnappedCount = 0; FailedWindows = @() }
+			}
 			& $recordPhase 'Snap'
 
 			$snapFailures = @()
@@ -1280,6 +1506,10 @@ function Set-WorkspaceWindowLayout {
 				if ($failedWindowsProperty -and $failedWindowsProperty.Value) {
 					$snapFailures = @($failedWindowsProperty.Value)
 				}
+			}
+			# The per-desktop passes' failures belong to attempt 1 too.
+			if ($layoutAttempt -eq 1 -and $pipelinedSnapFailures.Count -gt 0) {
+				$snapFailures = @($pipelinedSnapFailures) + $snapFailures
 			}
 
 			if ($snapFailures.Count -gt 0) {

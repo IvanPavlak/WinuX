@@ -11,6 +11,7 @@ Loads and applies a predefined, machine-specific window layout for a workspace.
 | --- | ---- | -------------- | ---------------- |
 | [`SimpleLayoutWorkspaces`](../../configuration-reference.md#workspace-layouts) | array of workspace names | `@("Fullscreen", "Empty")` | Workspaces that use a single simple layout instead of a per-machine `<Workspace>_<MachineType>.psd1` file. `Set-WorkspaceWindowLayout` and `Add-WindowLayout` both consult it. |
 | [`LayoutMachineTypeOverrides`](../../configuration-reference.md#layout-set-overrides) | hashtable of machine type to layout set name | `@{ Test = "" }` | Lets a machine use another machine layout set - for example a laptop docked to a different monitor arrangement. `Get-LayoutMachineType` resolves it, so layouts and the reset target can never disagree. An override name is not a machine type: it needs no `ValidMachineTypes` entry and no base paths, only `<Workspace>_<Name>.psd1` layout files. |
+| [`WorkspaceLayoutPipelining`](../../configuration-reference.md#layout-numbers--zone-mappings) | bool | `$true` | Whether each virtual desktop is positioned and snapped as soon as every window on it is stable, while the slower windows on other desktops still load. `$false` restores the strictly sequential wait, then position, then snap order. |
 
 ## Decisions
 
@@ -22,6 +23,10 @@ Loads and applies a predefined, machine-specific window layout for a workspace.
     - Options: Machine type to override name. Empty means use the machine own type.
     - Default: Empty - no override.
     - More detail: [`LayoutMachineTypeOverrides`](../../configuration-reference.md#layout-set-overrides)
+3. Should desktops be positioned and snapped as they become ready?
+    - Options: `$true` pipelines each desktop into the wait phase; `$false` waits for the slowest window first.
+    - Default: `$true`. Switch it off to compare the two orders with `Get-WorkspaceBenchmark`, or if a layout misbehaves only with pipelining on.
+    - More detail: [`WorkspaceLayoutPipelining`](../../configuration-reference.md#layout-numbers--zone-mappings)
 
 ## Where to Put Values
 
@@ -36,7 +41,8 @@ On this page that bites on `SimpleLayoutWorkspaces` - that key is an array, so w
 
 1. Set `SimpleLayoutWorkspaces`
 2. Set `LayoutMachineTypeOverrides`
-3. Reload and confirm the merge landed
+3. Set `WorkspaceLayoutPipelining`
+4. Reload and confirm the merge landed
 
 ## Step 1: Set `SimpleLayoutWorkspaces`
 
@@ -56,7 +62,15 @@ LayoutMachineTypeOverrides = @{
 }
 ```
 
-## Step 3: Reload and confirm the merge landed
+## Step 3: Set `WorkspaceLayoutPipelining`
+
+Whether `Set-WorkspaceWindowLayout` positions and snaps each virtual desktop as soon as every window on it is stable, while the slower windows on other desktops are still loading. The shipped default is `$true`; set `$false` for the strictly sequential order.
+
+```powershell
+WorkspaceLayoutPipelining = $false
+```
+
+## Step 4: Reload and confirm the merge landed
 
 Reload the profile, then read the merged value back. `$global:Configuration` after a reload is the ground truth - if what you set is not there, the local file did not parse or the key is nested one level away from where you put it.
 
