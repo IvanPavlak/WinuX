@@ -169,4 +169,69 @@ Describe "Start-FancyZones" {
 			$output | Should -BeNullOrEmpty
 		}
 	}
+
+	Context "Startup polling after launching PowerToys" {
+		BeforeEach {
+			# FancyZones is not running; PowerToys.exe is installed under Program Files.
+			Mock Test-Path {
+				param($Path)
+				if ($Path -like '*Microsoft\PowerToys\FancyZones') { return $true }
+				if ($Path -eq 'C:\Program Files\PowerToys\PowerToys.exe') { return $true }
+				return $false
+			}
+
+			$script:powerToysLaunched = $false
+			$script:fancyZonesLookupsAfterLaunch = 0
+			Mock Start-Process { $script:powerToysLaunched = $true }
+		}
+
+		It "checks readiness immediately after launching PowerToys instead of sleeping first" {
+			Mock Get-Process {
+				param($Name)
+				if ($Name -eq 'PowerToys.FancyZones' -and $script:powerToysLaunched) {
+					# Old enough to skip the PID-stability sampling, so the only sleeps left would
+					# be the poll's own.
+					return [PSCustomObject]@{ Id = 4321; ProcessName = 'PowerToys.FancyZones'; HasExited = $false; StartTime = (Get-Date).AddMinutes(-30) }
+				}
+				return $null
+			}
+
+			$result = Start-FancyZones -PassThru
+
+			$result | Should -BeTrue
+			Should -Invoke Start-Process -Times 1 -Exactly
+			# The first readiness check runs before any poll sleep - the old loop slept 500 ms
+			# first. The only sleep left is the 50 ms post-readiness settle.
+			Should -Invoke Start-Sleep -Times 0 -Exactly -ParameterFilter { $Milliseconds -ge 100 }
+		}
+
+		It "polls every 100 ms until the FancyZones process is enumerable" {
+			Mock Get-Process {
+				param($Name)
+				if ($Name -eq 'PowerToys.FancyZones' -and $script:powerToysLaunched) {
+					$script:fancyZonesLookupsAfterLaunch++
+					if ($script:fancyZonesLookupsAfterLaunch -le 3) { return $null }
+					return [PSCustomObject]@{ Id = 4321; ProcessName = 'PowerToys.FancyZones'; HasExited = $false; StartTime = (Get-Date).AddMinutes(-30) }
+				}
+				return $null
+			}
+
+			$result = Start-FancyZones -PassThru
+
+			$result | Should -BeTrue
+			# Three empty lookups, three 100 ms polls, then the process is picked up.
+			Should -Invoke Start-Sleep -Times 3 -Exactly -ParameterFilter { $Milliseconds -eq 100 }
+			Should -Invoke Start-Sleep -Times 0 -Exactly -ParameterFilter { $Milliseconds -eq 500 }
+		}
+
+		It "gives up at the -MaxWaitSeconds deadline when FancyZones never appears" {
+			Mock Get-Process { $null }
+
+			$result = Start-FancyZones -MaxWaitSeconds 0 -PassThru
+
+			$result | Should -BeFalse
+			Should -Invoke Start-Process -Times 1 -Exactly
+			Should -Invoke Loading-Spinner -Times 1 -Exactly -ParameterFilter { $Stop -and $Discard }
+		}
+	}
 }

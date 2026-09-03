@@ -415,6 +415,8 @@ Start-Process "C:\Program Files\PowerToys\PowerToys.exe"
 
 `Set-WorkspaceWindowLayout` performs this forced restart path automatically before every retry, and follows it with `Apply-FancyZones -Force`.
 
+A forced restart is quick when PowerToys is healthy: `PowerToys.exe` has no main window to close, so `Stop-PowerToysCompletely` skips its graceful wait and the kills land in well under a second, and FancyZones is back and verified about 1 to 1.5 s after the relaunch (the PID-stability sampling of a young process is most of that). Under `Set-LogLevel Verbose` the restart prints `PowerToys has no main window to close - skipping the graceful wait` and `FancyZones started and passed readiness checks (PID: n, ready after Nms)`. A restart that takes several seconds is PowerToys itself starting slowly (disk, antivirus, a settings migration after an update), not the flow waiting.
+
 **Why both steps:** a restart alone does not fix a wrong layout. FancyZones reloads `applied-layouts.json` on startup but does not re-assert the live zone grid, and that same file is what the idempotency check reads - so an ordinary re-apply reports "Already Applied" for every monitor and sends nothing. If the live grid is stale or was never applied (FancyZones was down, crash-looping, or missed the hotkey), every retry snaps into the same wrong grid and cannot converge. `-Force` skips the check and re-sends the shortcuts.
 
 To reset the zone grid by hand after FancyZones has been misbehaving:
