@@ -347,6 +347,13 @@ function Open-Workspace {
 		$workspacesRecorded = 0
 
 		foreach ($workspaceName in $workspaces) {
+			# Benchmark clocks for this workspace: one for the whole open, one per action. The
+			# layout action's own phase breakdown is read back from Get-WorkspaceLayoutTimings
+			# when the row is written - see $recordWorkspaceBenchmark below.
+			$workspaceClock = [System.Diagnostics.Stopwatch]::StartNew()
+			$workspaceStartedAt = [DateTimeOffset]::Now
+			$actionTimings = [System.Collections.Generic.List[object]]::new()
+
 			# Calculate desktop offset if -Alongside flag is used
 			$desktopOffset = 0
 			if ($Alongside) {
@@ -487,6 +494,36 @@ function Open-Workspace {
 				Save-WorkspaceState @saveStateParams
 			}
 
+			# Measured, not eyeballed: one benchmark row per workspace open, from the per-action
+			# clock above and the phase clock Set-WorkspaceWindowLayout publishes through
+			# Get-WorkspaceLayoutTimings. Both calls are guarded by Get-Command - the Window
+			# module may be absent and the tests stub them - and the write is best-effort, so the
+			# benchmark can never fail an open. The layout record is attached only when it was
+			# produced by THIS workspace: the getter returns the session's most recent run, which
+			# a workspace without a layout action would otherwise inherit from an earlier open.
+			$recordWorkspaceBenchmark = {
+				if (-not (Get-Command Write-WorkspaceBenchmark -ErrorAction SilentlyContinue)) { return }
+
+				$layoutTimings = $null
+				if (Get-Command Get-WorkspaceLayoutTimings -ErrorAction SilentlyContinue) {
+					$candidateTimings = Get-WorkspaceLayoutTimings
+					if ($candidateTimings -and $candidateTimings.RecordedAt -and $candidateTimings.RecordedAt -ge $workspaceStartedAt) {
+						$layoutTimings = $candidateTimings
+					}
+				}
+
+				try {
+					Write-WorkspaceBenchmark -Workspace $workspaceName `
+						-TotalSeconds ([math]::Round($workspaceClock.Elapsed.TotalSeconds, 2)) `
+						-ActionTimings $actionTimings.ToArray() `
+						-LayoutTimings $layoutTimings `
+						-Alongside:$Alongside
+				}
+				catch {
+					Write-LogDebug " [Open-Workspace] Benchmark row not written => $($_.Exception.Message)" -Style Warning
+				}
+			}
+
 			$selectedProjects = @()
 
 			# Pre-compute which project tab names belong to THIS workspace
@@ -597,6 +634,7 @@ function Open-Workspace {
 					}
 
 					# Capture the selected projects for {SelectedProjects} substitution in later actions
+					$actionClock = [System.Diagnostics.Stopwatch]::StartNew()
 					try {
 						$filteredParams = Get-FilteredParams -CommandName $action -Params $actionParams
 						if ($filteredParams.Count -gt 0) {
@@ -609,6 +647,7 @@ function Open-Workspace {
 					catch {
 						Write-LogError "Error executing action [$action] for workspace [$workspaceName]: $_"
 					}
+					$actionTimings.Add([PSCustomObject]@{ Action = $action; Seconds = [math]::Round($actionClock.Elapsed.TotalSeconds, 2) })
 
 					# Skip the general execution block for Open-Project since we already executed it
 					continue
@@ -674,6 +713,7 @@ function Open-Workspace {
 					if (-not $workspaceStateRecorded) {
 						$workspaceStateRecorded = $true
 						& $recordWorkspaceState
+						& $recordWorkspaceBenchmark
 						$workspacesRecorded++
 					}
 
@@ -688,6 +728,7 @@ function Open-Workspace {
 					}
 				}
 
+				$actionClock = [System.Diagnostics.Stopwatch]::StartNew()
 				try {
 					$filteredParams = Get-FilteredParams -CommandName $action -Params $actionParams
 					if ($filteredParams.Count -gt 0) {
@@ -700,6 +741,7 @@ function Open-Workspace {
 				catch {
 					Write-LogError "Error executing action [$action] for workspace [$workspaceName]: $_" -NoLeadingNewline
 				}
+				$actionTimings.Add([PSCustomObject]@{ Action = $action; Seconds = [math]::Round($actionClock.Elapsed.TotalSeconds, 2) })
 			}
 
 			# Every action has run, so whatever is on screen beyond the pre-open capture is this
@@ -708,6 +750,7 @@ function Open-Workspace {
 			if (-not $workspaceStateRecorded) {
 				$workspaceStateRecorded = $true
 				& $recordWorkspaceState
+				& $recordWorkspaceBenchmark
 				$workspacesRecorded++
 			}
 		}

@@ -43,6 +43,11 @@ BeforeAll {
 	function Open-Browser { param($Groups, $Browser) }
 	function Open-Terminal { param($Command, [switch]$Administrator, [switch]$InSameShell, $WindowId, $TabTitles) }
 	function Set-WorkspaceWindowLayout { param($WorkspaceName, $PreCapturedExistingWindows, $DesktopOffset, [switch]$Alongside, $ProtectedWindowHandles) }
+	# The benchmark writer and the layout phase getter are real module functions in a
+	# bootstrap-imported session; stub them so no test run appends rows to the machine's
+	# benchmark file or reads a real layout record.
+	function Write-WorkspaceBenchmark { param($Workspace, $TotalSeconds, $ActionTimings, $LayoutTimings, [switch]$Alongside, $BenchmarkPath, [switch]$Quiet, [switch]$PassThru) }
+	function Get-WorkspaceLayoutTimings { $null }
 
 	function Open-Project {
 		param($Project)
@@ -83,8 +88,20 @@ Describe "Open-Workspace" {
 
 		$script:resolveSelectionCalls = @()
 		$script:workspaceStateCalls = @()
+		$script:benchmarkCalls = @()
 
 		Mock Write-Host { }
+		Mock Get-WorkspaceLayoutTimings { $null }
+		Mock Write-WorkspaceBenchmark {
+			param($Workspace, $TotalSeconds, $ActionTimings, $LayoutTimings, [switch]$Alongside, $BenchmarkPath, [switch]$Quiet, [switch]$PassThru)
+			$script:benchmarkCalls += [PSCustomObject]@{
+				Workspace     = $Workspace
+				TotalSeconds  = $TotalSeconds
+				ActionTimings = @($ActionTimings)
+				LayoutTimings = $LayoutTimings
+				Alongside     = [bool]$Alongside
+			}
+		}
 		Mock Get-TerminalTabSnapshot { param([switch]$EnsureVisible) @{} }
 		Mock Save-WorkspaceState {
 			param($Workspace, $ExistingWindowHandles, $ExistingTerminalTabs, $PreCapturedTerminalTabs, $DesktopOffset, [switch]$Alongside, [switch]$AdoptUnclaimed, [switch]$Append, $PreserveEntry, $ProtectedWindowHandles, $Entry, $StatePath)
@@ -212,6 +229,75 @@ Describe "Open-Workspace" {
 		$script:invokedActions[0].Alpha | Should -Be 1
 		$script:invokedActions[1].Name | Should -Be 'Test-ActionTwo'
 		$script:invokedActions[1].Beta | Should -Be 2
+	}
+
+	Context "workspace benchmark" {
+		It "records one benchmark row per workspace with every executed action timed, in order" {
+			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } },
+				@{ Action = 'Test-ActionTwo'; Parameters = @{ Beta = 2 } }
+			)
+
+			Open-Workspace -Workspace 'TestWorkspace'
+
+			$script:benchmarkCalls.Count | Should -Be 1
+			$script:benchmarkCalls[0].Workspace | Should -Be 'TestWorkspace'
+			$script:benchmarkCalls[0].Alongside | Should -BeFalse
+			@($script:benchmarkCalls[0].ActionTimings.Action) | Should -Be @('Test-ActionOne', 'Test-ActionTwo')
+			$script:benchmarkCalls[0].TotalSeconds | Should -BeGreaterOrEqual 0
+			# No layout action ran, so no layout record is attached.
+			$script:benchmarkCalls[0].LayoutTimings | Should -BeNullOrEmpty
+		}
+
+		It "times the Open-Project action too and writes one row per workspace of a multi-workspace run" {
+			$script:Configuration.Workspaces = @('TestWorkspace', 'SecondWorkspace')
+			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+				@{ Action = 'Open-Project'; Parameters = @{ Project = 'ProjectA' } }
+			)
+			$script:Configuration.WorkspaceActions['SecondWorkspace'] = @(
+				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } }
+			)
+
+			Open-Workspace -Workspace 'TestWorkspace', 'SecondWorkspace'
+
+			$script:benchmarkCalls.Count | Should -Be 2
+			@($script:benchmarkCalls[0].ActionTimings.Action) | Should -Be @('Open-Project')
+			$script:benchmarkCalls[1].Workspace | Should -Be 'SecondWorkspace'
+		}
+
+		It "attaches the layout phase record only when it was produced by this open" {
+			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+				@{ Action = 'Set-WorkspaceWindowLayout'; Parameters = @{ WorkspaceName = 'TestWorkspace' } }
+			)
+			# A record left by an earlier open in the same session must not be attributed to this one.
+			Mock Get-WorkspaceLayoutTimings { [PSCustomObject]@{ Workspace = 'Stale'; RecordedAt = [DateTimeOffset]::Now.AddMinutes(-5) } }
+
+			Open-Workspace -Workspace 'TestWorkspace'
+
+			$script:benchmarkCalls.Count | Should -Be 1
+			$script:benchmarkCalls[0].LayoutTimings | Should -BeNullOrEmpty
+
+			Mock Get-WorkspaceLayoutTimings { [PSCustomObject]@{ Workspace = 'TestWorkspace'; RecordedAt = [DateTimeOffset]::Now.AddMinutes(5) } }
+			$script:benchmarkCalls = @()
+
+			Open-Workspace -Workspace 'TestWorkspace'
+
+			$script:benchmarkCalls.Count | Should -Be 1
+			$script:benchmarkCalls[0].LayoutTimings.Workspace | Should -Be 'TestWorkspace'
+		}
+
+		It "writes the row before a terminating Terminate-WindowsTerminalTabs action ends the process" {
+			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } },
+				@{ Action = 'Terminate-WindowsTerminalTabs'; Parameters = @{ OnlyCurrent = $true } }
+			)
+
+			Open-Workspace -Workspace 'TestWorkspace'
+
+			$script:terminateCalls.Count | Should -Be 1
+			$script:benchmarkCalls.Count | Should -Be 1
+			@($script:benchmarkCalls[0].ActionTimings.Action) | Should -Be @('Test-ActionOne')
+		}
 	}
 
 	Context "default workspace on empty selection" {

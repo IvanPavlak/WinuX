@@ -266,6 +266,49 @@ Describe "Set-WorkspaceWindowLayout" {
 		Should -Invoke Apply-FancyZones -Times 1 -Exactly -ParameterFilter { $DesktopCount -eq 2 }
 	}
 
+	It "publishes a phase record for Get-WorkspaceLayoutTimings covering the pipeline it ran" {
+		Mock Test-Path { $true }
+		Mock Import-PowerShellDataFile {
+			@{
+				Layout   = @(
+					@{ ProcessName = 'Code'; WindowTitle = '*'; DesktopNumber = 1 }
+				)
+				Monitors = @{
+					MonitorA = @{ VirtualDesktopLayouts = @{ 1 = 'One' } }
+				}
+			}
+		}
+		Mock Get-DesktopList { @(0) }
+		Mock Wait-ForWorkspaceWindows { @() }
+		$script:LastWorkspaceLayoutTimings = $null
+
+		Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace'
+
+		$timings = $script:LastWorkspaceLayoutTimings
+		$timings | Should -Not -BeNullOrEmpty
+		$timings.Workspace | Should -Be 'MyWorkspace'
+		$timings.Outcome | Should -Be 'Applied'
+		$timings.Attempts | Should -Be 1
+		$timings.Alongside | Should -BeFalse
+		$timings.TotalSeconds | Should -BeGreaterOrEqual 0
+		foreach ($phase in 'Preamble', 'Desktops', 'FancyZones', 'Wait', 'Normalize', 'Position', 'Snap', 'Verify', 'Save') {
+			@($timings.Phases.Keys) | Should -Contain $phase
+		}
+		# One clean pass: nothing was retried.
+		@($timings.Phases.Keys) | Should -Not -Contain 'Retry'
+	}
+
+	It "publishes an Aborted record when the layout file is missing" {
+		Mock Test-Path { $false }
+		$script:LastWorkspaceLayoutTimings = $null
+
+		Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace'
+
+		$script:LastWorkspaceLayoutTimings | Should -Not -BeNullOrEmpty
+		$script:LastWorkspaceLayoutTimings.Outcome | Should -Be 'Aborted'
+		$script:LastWorkspaceLayoutTimings.Attempts | Should -Be 0
+	}
+
 	It "in alongside mode adds required desktops and performs cleanup pass" {
 		Mock Test-Path { $true }
 		Mock Import-PowerShellDataFile {

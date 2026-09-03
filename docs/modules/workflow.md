@@ -328,6 +328,40 @@ $patterns += @(Get-SwaggerCloseTitlePatterns -Project $projectName)
 
 **See also:** [Close-Project](#close-project), [Close-BrowserTabsByPattern](#close-browsertabsbypattern), [Open-ProjectSwagger](#open-projectswagger)
 
+## [Get-WorkspaceBenchmark](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Workflow/Functions/Get-WorkspaceBenchmark.ps1)
+
+- **Description:** Reads the workspace benchmark back. [Write-WorkspaceBenchmark](#write-workspacebenchmark) appends one row per workspace open to `WorkspaceBenchmark.csv` (resolved by [Get-WorkspaceBenchmarkPath](#get-workspacebenchmarkpath)); this returns those rows as objects with typed numbers, oldest first: the total, the seconds the launch actions took, the seconds `Set-WorkspaceWindowLayout` spent in each phase (`Preamble`, `Desktops`, `FancyZones`, `Wait`, `Normalize`, `Position`, `Snap`, `Verify`, `Retry`, `Save`), the attempt count and the outcome. This is what a change to the open flow is judged by - run the same workspace a few times before and after, compare the phase columns, and read `Attempts` and `Outcome` first, because a saving that arrives with retries is not a saving. `-Workspace` keeps one or more workspaces, `-Last` bounds the result to the most recent N runs after filtering (10 by default, 0 for all), and `-Summary` aggregates instead: per workspace and mode, the number of runs, average/min/max total, the average of every phase, the retries and the runs that did not end `Applied`. The rows have more columns than PowerShell shows as a table by default, so pipe them to `Format-Table`. Warns and returns nothing when no run has been recorded yet.
+- **Parameters:** -Workspace, -Last, -Summary, -BenchmarkPath
+- **Usage:** `Get-WorkspaceBenchmark | Format-Table -AutoSize`, `Get-WorkspaceBenchmark -Workspace MyWorkspace -Last 20 | Format-Table Timestamp, Attempts, TotalSeconds, FancyZonesSeconds, WaitSeconds, SnapSeconds`, `Get-WorkspaceBenchmark -Summary | Format-Table -AutoSize`
+
+| Parameter        | Description                                                                          |
+| ---------------- | ------------------------------------------------------------------------------------ |
+| `-Workspace`     | One or more workspace names to keep. Omit for every workspace.                       |
+| `-Last`          | Number of most recent runs to return, after filtering. `10` by default; `0` for all. |
+| `-Summary`       | Aggregate per workspace and mode instead of returning the raw rows.                  |
+| `-BenchmarkPath` | Read a different benchmark file. Defaults to `Get-WorkspaceBenchmarkPath`.          |
+
+```powershell
+# The last ten opens, one row each
+Get-WorkspaceBenchmark | Format-Table -AutoSize
+
+# Before/after comparison for one workspace
+Get-WorkspaceBenchmark -Workspace MyWorkspace -Last 20 |
+    Format-Table Timestamp, Attempts, TotalSeconds, ActionsSeconds, FancyZonesSeconds, WaitSeconds, PositionSeconds, SnapSeconds
+
+# Averages per workspace and mode
+Get-WorkspaceBenchmark -Summary | Format-Table -AutoSize
+```
+
+**See also:** [Write-WorkspaceBenchmark](#write-workspacebenchmark), [Get-WorkspaceBenchmarkPath](#get-workspacebenchmarkpath), [Get-WorkspaceLayoutTimings](window.md#get-workspacelayouttimings), [Open-Workspace](#open-workspace)
+
+## [Get-WorkspaceBenchmarkPath](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Workflow/Functions/Get-WorkspaceBenchmarkPath.ps1)
+
+- **Description:** Resolves the path of the workspace benchmark file - `WorkspaceBenchmark.csv` in the Logging module's `Logs` folder (`Get-LogPath -Directory`, which honours the `Logging.FileLogging.Directory` override) - so [Write-WorkspaceBenchmark](#write-workspacebenchmark) and [Get-WorkspaceBenchmark](#get-workspacebenchmark) can never disagree about where the rows live. Falls back to the Workflow module's `State` folder, beside the open-workspace tracker, when the Logging module is not loaded. Both locations are git-ignored: the rows are per-machine measurements with no meaning anywhere else. The file may not exist yet; nothing here creates it.
+- **Usage:** `Get-WorkspaceBenchmarkPath`, `Import-Csv (Get-WorkspaceBenchmarkPath)`
+
+**See also:** [Get-WorkspaceBenchmark](#get-workspacebenchmark), [Write-WorkspaceBenchmark](#write-workspacebenchmark), [Get-WorkspaceStatePath](#get-workspacestatepath), [Get-LogPath](logging.md#get-logpath)
+
 ## [Get-WorkspaceOpenDelta](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Workflow/Functions/Get-WorkspaceOpenDelta.ps1)
 
 - **Description:** The ownership rule for [Close-Workspace](#close-workspace), in one place. Given the window handles and the Windows Terminal tab snapshot taken *before* an `Open-Workspace` invocation ran its actions, this enumerates what exists now and returns the difference as a single tracker entry.
@@ -606,7 +640,7 @@ Open-ProjectTerminals -Project "MyProject" -Force
 
 ## [Open-Workspace](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Workflow/Functions/Open-Workspace.ps1)
 
-- **Description:** The main entry point for starting work. Opens a predefined workspace by executing a configured sequence of actions (projects, browser tab groups, applications, and window layouts) across virtual desktops. Use `-Alongside` to spawn the workspace on new virtual desktops to the right of existing ones, letting multiple workspaces run simultaneously without interfering. An `-Alongside` invocation always runs in a completely new shell: it relaunches itself in a fresh Windows Terminal window (the calling shell gets its prompt back immediately) and, inside that window, forces `-InSameShell` on terminal-opening actions so the workspace's terminal tabs join the new window instead of spawning further windows. In alongside mode the computed desktop offset is injected into the workspace's actions so they land on the new desktops - both `Set-WorkspaceWindowLayout` and the final `Focus-VirtualDesktop` action receive `-DesktopOffset`, so the configured landing (e.g. `DesktopNumber = 1`) focuses the new workspace's own first desktop instead of the original desktop 1. Automatically reconciles the calling terminal tab via `Terminate-WindowsTerminalTabs -OnlyCurrent` (skipped when re-running from a same-workspace project tab; in alongside mode it runs inside the relaunched window and closes that window's now-redundant bootstrap tab). When the flow ends - success or failure - it releases any logically stuck keyboard modifiers via `Reset-KeyboardModifiers` (Window module), so orchestration can never leave the session with the stuck-modifier input lockup. Diagnostic output for the workspace and its actions is shown when run under `Set-LogLevel Verbose`.
+- **Description:** The main entry point for starting work. Opens a predefined workspace by executing a configured sequence of actions (projects, browser tab groups, applications, and window layouts) across virtual desktops. Use `-Alongside` to spawn the workspace on new virtual desktops to the right of existing ones, letting multiple workspaces run simultaneously without interfering. An `-Alongside` invocation always runs in a completely new shell: it relaunches itself in a fresh Windows Terminal window (the calling shell gets its prompt back immediately) and, inside that window, forces `-InSameShell` on terminal-opening actions so the workspace's terminal tabs join the new window instead of spawning further windows. In alongside mode the computed desktop offset is injected into the workspace's actions so they land on the new desktops - both `Set-WorkspaceWindowLayout` and the final `Focus-VirtualDesktop` action receive `-DesktopOffset`, so the configured landing (e.g. `DesktopNumber = 1`) focuses the new workspace's own first desktop instead of the original desktop 1. Automatically reconciles the calling terminal tab via `Terminate-WindowsTerminalTabs -OnlyCurrent` (skipped when re-running from a same-workspace project tab; in alongside mode it runs inside the relaunched window and closes that window's now-redundant bootstrap tab). When the flow ends - success or failure - it releases any logically stuck keyboard modifiers via `Reset-KeyboardModifiers` (Window module), so orchestration can never leave the session with the stuck-modifier input lockup. Diagnostic output for the workspace and its actions is shown when run under `Set-LogLevel Verbose`. Every workspace it opens is measured: each action is timed, the layout phase clock is read back through [Get-WorkspaceLayoutTimings](window.md#get-workspacelayouttimings), and [Write-WorkspaceBenchmark](#write-workspacebenchmark) appends the row to `WorkspaceBenchmark.csv` and prints a one-line `Timing =>` breakdown before the elapsed summary; [Get-WorkspaceBenchmark](#get-workspacebenchmark) reads the history back.
 - **Parameters:** -Workspace, -Project, -Alongside, -VSCodeWorkspace
 - **Usage:** `Open-Workspace`, `Open-Workspace MyWorkspace`, `Open-Workspace MyWorkspace MyProject`, `Open-Workspace MyWorkspace -Alongside`, `w dotfiles -VSCodeWorkspace Consolidation`, `w MyWorkspace`
 - **Alias:** w
@@ -833,6 +867,32 @@ The backup script and its directory live outside this WinuX repository, so the a
 # Run the training backup script
 Training-Backup
 ```
+
+## [Write-WorkspaceBenchmark](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Workflow/Functions/Write-WorkspaceBenchmark.ps1)
+
+- **Description:** Records how long one workspace open took and where the time went: appends a row to the workspace benchmark file ([Get-WorkspaceBenchmarkPath](#get-workspacebenchmarkpath)) and prints a one-line `Timing [Workspace] =>` summary. [Open-Workspace](#open-workspace) calls it once per workspace with the seconds each configured action took and the phase record `Set-WorkspaceWindowLayout` published ([Get-WorkspaceLayoutTimings](window.md#get-workspacelayouttimings)). The row carries the timestamp, workspace, mode (`Plain` or `Alongside`), the layout outcome and attempt count, the total, the seconds spent in the launch actions (`ActionsSeconds`), in the layout action as a whole (`LayoutSeconds`), in each layout phase (`Preamble`, `Desktops`, `FancyZones`, `Wait`, `Normalize`, `Position`, `Snap`, `Verify`, `Retry`, `Save`), the remainder (`OtherSeconds`, the open's own bookkeeping) and the per-action breakdown as `Name=seconds` pairs. Numbers are written culture-invariant, so the file reads the same on a comma-decimal machine. The summary line lists the phases above 0.05 s, plus `retries N` when the layout needed more than one attempt and the outcome when it is not `Applied`. Writing is best-effort: a failure warns and never fails the open. `-Quiet` suppresses the console line, `-PassThru` emits the row.
+- **Parameters:** -Workspace, -TotalSeconds, -ActionTimings, -LayoutTimings, -Alongside, -BenchmarkPath, -Quiet, -PassThru
+- **Usage:** `Write-WorkspaceBenchmark -Workspace MyWorkspace -TotalSeconds 27.5 -ActionTimings @(@{ Action = 'Open-Browser'; Seconds = 0.8 }) -LayoutTimings (Get-WorkspaceLayoutTimings)`, `Write-WorkspaceBenchmark -Workspace MyWorkspace -TotalSeconds 5.3 -Quiet -PassThru`
+
+| Parameter        | Description                                                                                               |
+| ---------------- | --------------------------------------------------------------------------------------------------------- |
+| `-Workspace`     | Workspace the row describes. Mandatory.                                                                   |
+| `-TotalSeconds`  | Wall-clock seconds of the whole open, as measured by the caller.                                          |
+| `-ActionTimings` | Objects with `Action` and `Seconds`, one per executed action, in order. `Set-WorkspaceWindowLayout` is reported as `LayoutSeconds`, every other action adds to `ActionsSeconds`. |
+| `-LayoutTimings` | The record returned by `Get-WorkspaceLayoutTimings`. Omit when no layout ran; the row then reads `NoLayout` with every phase at 0. |
+| `-Alongside`     | Marks the row as an alongside open.                                                                       |
+| `-BenchmarkPath` | Write to a different file. Defaults to `Get-WorkspaceBenchmarkPath`.                                     |
+| `-Quiet`         | Do not print the `Timing =>` summary line.                                                                |
+| `-PassThru`      | Also return the row that was written.                                                                     |
+
+```powershell
+# What Open-Workspace does at the end of every workspace
+Write-WorkspaceBenchmark -Workspace MyWorkspace -TotalSeconds 27.5 `
+    -ActionTimings @(@{ Action = 'Open-Project'; Seconds = 0.4 }, @{ Action = 'Set-WorkspaceWindowLayout'; Seconds = 25.9 }) `
+    -LayoutTimings (Get-WorkspaceLayoutTimings)
+```
+
+**See also:** [Get-WorkspaceBenchmark](#get-workspacebenchmark), [Get-WorkspaceBenchmarkPath](#get-workspacebenchmarkpath), [Get-WorkspaceLayoutTimings](window.md#get-workspacelayouttimings), [Open-Workspace](#open-workspace)
 
 ## Parameter Forwarding
 

@@ -50,6 +50,7 @@
 		'Get-WindowHandle',
 		'Get-WindowInsetPercent',
 		'Get-WindowModuleDelays',
+		'Get-WorkspaceLayoutTimings',
 		'Get-WorkspaceRerunMirror',
 		'Import-VirtualDesktopModule',
 		'Initialize-PositionedWindowTracking',

@@ -154,6 +154,22 @@ function Set-WorkspaceWindowLayout {
 		$spinner = Loading-Spinner -Start -Label "Applying layout"
 	}
 
+	# Phase clock behind Get-WorkspaceLayoutTimings (the workspace benchmark's read side). Each
+	# mark books the time since the previous mark under a phase name, CUMULATIVELY - the
+	# in-process retry loop positions, snaps and verifies again, and those seconds belong to the
+	# same phases, not to a second set. The state is a hashtable rather than scalars because the
+	# recorder runs as a scriptblock in a child scope, where assigning a scalar would rebind a
+	# local copy; only a reference type carries the totals out to the finally block that
+	# publishes them.
+	$phaseClock = [System.Diagnostics.Stopwatch]::StartNew()
+	$phaseState = @{ LastMs = 0; Timings = [ordered]@{}; Attempts = 0; Outcome = 'Aborted' }
+	$recordPhase = {
+		param([string]$Name)
+		$nowMs = $phaseClock.ElapsedMilliseconds
+		$phaseState.Timings[$Name] = [double]$phaseState.Timings[$Name] + ($nowMs - $phaseState.LastMs)
+		$phaseState.LastMs = $nowMs
+	}
+
 	$windowOnlyRetryEnvVar = 'WORKSPACE_WINDOW_ONLY_RETRY'
 	$windowOnlyRetryTitleEnvVar = 'WORKSPACE_WINDOW_ONLY_RETRY_TITLE'
 	$windowOnlyRetryProcessEnvVar = 'WORKSPACE_WINDOW_ONLY_RETRY_PROCESS'
@@ -384,6 +400,9 @@ function Set-WorkspaceWindowLayout {
 
 		$simpleLayoutWorkspaces = $global:Configuration.SimpleLayoutWorkspaces
 
+		# Everything up to here - RPC probe, layout file, validation, snapshot read - is preamble.
+		& $recordPhase 'Preamble'
+
 		# Documented boundary: simple layouts (Fullscreen/Empty) deliberately ignore
 		# ProtectedWindowHandles. They are global-by-design gestures - fullscreen every window
 		# on every desktop, replace CurrentLayout.txt whole - and scoping them would change
@@ -442,6 +461,7 @@ function Set-WorkspaceWindowLayout {
 			else {
 				Write-LogDebug " No Monitor configuration found for $layoutNameToUse layout!" -Style Warning
 			}
+			& $recordPhase 'FancyZones'
 
 			if ($layoutNameToUse -ne 'Empty') {
 				# Phase 2: place every window into its monitor's fullscreen zone. The zone grid
@@ -651,6 +671,8 @@ function Set-WorkspaceWindowLayout {
 				}
 			}
 
+			& $recordPhase 'Position'
+
 			if ($spinner) {
 				Loading-Spinner -Stop -Spinner $spinner -Completed
 				$spinner = $null
@@ -670,6 +692,8 @@ function Set-WorkspaceWindowLayout {
 
 			Visualize-Layouts -Layout $machineSpecificLayoutFileName.Replace(".psd1", "")
 
+			& $recordPhase 'Save'
+			$phaseState.Outcome = 'Applied'
 			return
 		}
 
@@ -799,6 +823,7 @@ function Set-WorkspaceWindowLayout {
 		elseif (Test-LogVerbose) {
 			Write-LogDebug "Window-only retry active - skipping virtual desktop reconfiguration" -Style Warning
 		}
+		& $recordPhase 'Desktops'
 
 		if ($config.Monitors) {
 			if ($windowOnlyRetryActive -and (Test-LogVerbose)) {
@@ -819,6 +844,8 @@ function Set-WorkspaceWindowLayout {
 		elseif ($windowOnlyRetryActive -and (Test-LogVerbose)) {
 			Write-LogDebug "Window-only retry active - no monitor config found to reapply FancyZones" -Style Warning
 		}
+
+		& $recordPhase 'FancyZones'
 
 		# Reconfiguration sub-steps have finished printing their output - bring the spinner back.
 		if ($spinner) { Loading-Spinner -Resume }
@@ -894,6 +921,8 @@ function Set-WorkspaceWindowLayout {
 				Write-LogDebug " Wait-ForWorkspaceWindows did not fully succeed (timeout or partial detection)" -Style Warning
 			}
 		}
+
+		& $recordPhase 'Wait'
 
 		# Focus all browser windows on their first tab to ensure correct window title matching
 		if ($layoutConfigToApply -and -not $windowOnlyRetryActive) {
@@ -1092,6 +1121,8 @@ function Set-WorkspaceWindowLayout {
 			}
 		}
 
+		& $recordPhase 'Normalize'
+
 		$setLayoutParams = @{
 			LayoutConfig          = $layoutConfigToApply
 			MonitorInfo           = $cachedMonitorInfo
@@ -1196,8 +1227,13 @@ function Set-WorkspaceWindowLayout {
 					}
 					$setLayoutParams["ExistingWindowHandles"] = $retryExistingHandles
 				}
+
+				# The FancyZones reset and the snapshot refresh above are retry overhead, not a
+				# second Position pass.
+				& $recordPhase 'Retry'
 			}
 
+			$phaseState.Attempts = $layoutAttempt
 			$results = Set-WindowLayouts @setLayoutParams
 
 			$successful = ($results | Where-Object { $_.Status -eq "Configured" }).Count
@@ -1224,6 +1260,7 @@ function Set-WorkspaceWindowLayout {
 			if ((Test-LogVerbose) -and $resizeResult.FailedWindows.Count -gt 0) {
 				Write-LogDebug "Pre-snap resize failures => [$($resizeResult.FailedWindows.Count)]" -Style Warning
 			}
+			& $recordPhase 'Position'
 
 			# Always 0, never $DesktopOffset. Add-PositionedWindow records each window's desktop
 			# with the offset ALREADY folded in (Set-WindowLayouts: $config.DesktopNumber +
@@ -1235,6 +1272,7 @@ function Set-WorkspaceWindowLayout {
 			# Only alongside was passing 0 - and only alongside was correct.
 			$null = Snap-AllWindows -DesktopOffset 0 -DesktopCount $requiredVirtualDesktops
 			$snapResult = $script:LastSnapAllWindowsResult
+			& $recordPhase 'Snap'
 
 			$snapFailures = @()
 			if ($snapResult) {
@@ -1314,6 +1352,8 @@ function Set-WorkspaceWindowLayout {
 				}
 			}
 
+			& $recordPhase 'Verify'
+
 			if ($verificationResult.Success) {
 				$layoutApplied = $true
 				break
@@ -1332,6 +1372,7 @@ function Set-WorkspaceWindowLayout {
 		}
 
 		if (-not $layoutApplied) {
+			$phaseState.Outcome = 'Escalated'
 			if (-not (Test-LogVerbose)) {
 				Loading-Spinner -Stop -Spinner $spinner
 			}
@@ -1475,9 +1516,12 @@ function Set-WorkspaceWindowLayout {
 
 		Visualize-Layouts -Layout $machineSpecificLayoutFileName.Replace(".psd1", "")
 
+		& $recordPhase 'Save'
+		$phaseState.Outcome = 'Applied'
 		return
 	}
 	catch {
+		$phaseState.Outcome = 'Error'
 		if ($spinner) {
 			Loading-Spinner -Stop -Spinner $spinner -Discard
 			$spinner = $null
@@ -1546,5 +1590,28 @@ function Set-WorkspaceWindowLayout {
 		# early-return paths above, so its background animation timer never leaks.
 		# Erase (no checkmark) - reaching here with a live spinner is not a clean success.
 		if ($spinner) { [void](Loading-Spinner -Stop -Spinner $spinner -Discard) }
+
+		# Publish the phase clock for Get-WorkspaceLayoutTimings. Whatever ran since the last
+		# mark - an early return, the escalation bookkeeping, the catch block - is booked as
+		# Other, so the phases always add up to the total. Published on every exit path, so a
+		# benchmark row can never carry a previous run's breakdown.
+		$phaseClock.Stop()
+		& $recordPhase 'Other'
+		$phaseSeconds = [ordered]@{}
+		foreach ($phaseName in @($phaseState.Timings.Keys)) {
+			$phaseSeconds[$phaseName] = [math]::Round(([double]$phaseState.Timings[$phaseName]) / 1000, 2)
+		}
+		$timedWorkspace = if ($layoutNameToUse) { $layoutNameToUse } elseif ($LayoutPath) { [System.IO.Path]::GetFileNameWithoutExtension($LayoutPath) } else { $WorkspaceName }
+		$script:LastWorkspaceLayoutTimings = [PSCustomObject]@{
+			Workspace     = $timedWorkspace
+			LayoutFile    = $LayoutPath
+			Alongside     = [bool]$Alongside
+			DesktopOffset = $DesktopOffset
+			Attempts      = [int]$phaseState.Attempts
+			Outcome       = $phaseState.Outcome
+			TotalSeconds  = [math]::Round($phaseClock.Elapsed.TotalSeconds, 2)
+			Phases        = $phaseSeconds
+			RecordedAt    = [DateTimeOffset]::Now
+		}
 	}
 }

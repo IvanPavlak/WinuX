@@ -310,6 +310,13 @@ namespace WindowModule
 		// AllowSetForegroundWindow
 		public const int ASFW_ANY = -1;
 
+		// EnumDisplayDevices flag: return the monitor's device INTERFACE name
+		// ("\\?\DISPLAY#DELA1A8#4&1cfdc60e&0&UID8262#{e6f07b5f-...}") instead of the device-class
+		// form ("MONITOR\DELA1A8\{4d36e96e-...}\0004"). FancyZones derives the monitor identity it
+		// writes to applied-layouts.json from the interface name (MonitorUtils::SplitDisplayDeviceId),
+		// so it is the only form whose second segment is the "monitor-instance" that file records.
+		public const uint EDD_GET_DEVICE_INTERFACE_NAME = 0x00000001;
+
 		#endregion
 
 		#region Cache Management
@@ -507,7 +514,9 @@ namespace WindowModule
 		/// <summary>
 		/// Enumerates display adapters and their monitors via EnumDisplayDevices to build a mapping
 		/// from WinForms DeviceName (e.g., "\\.\DISPLAY2") to the EDID hardware code (e.g., "LEN8ABC")
-		/// and PnP monitor-instance used by FancyZones in applied-layouts.json.
+		/// and the PnP monitor-instance FancyZones records in applied-layouts.json. The monitor is
+		/// queried with EDD_GET_DEVICE_INTERFACE_NAME so both values come from the same interface
+		/// name FancyZones itself parses, and the instance-qualified applied-layouts keys can match.
 		/// </summary>
 		public static List<MonitorDeviceInfo> GetMonitorDeviceInfo()
 		{
@@ -525,20 +534,48 @@ namespace WindowModule
 				DISPLAY_DEVICE monitor = new DISPLAY_DEVICE();
 				monitor.cb = Marshal.SizeOf(typeof(DISPLAY_DEVICE));
 
-				if (EnumDisplayDevices(adapterName, 0, ref monitor, 0))
+				if (EnumDisplayDevices(adapterName, 0, ref monitor, EDD_GET_DEVICE_INTERFACE_NAME))
 				{
 					string deviceId = monitor.DeviceID;
 					if (!string.IsNullOrEmpty(deviceId))
 					{
-						// DeviceID format: "Monitor\LEN8ABC\{4&...&UID...}" or "Monitor\LEN8ABC\4&...&UID..."
-						string[] parts = deviceId.Split('\\');
-						if (parts.Length >= 2)
+						deviceId = deviceId.TrimEnd('\0');
+						string edidCode = null;
+						string monitorInstance = "";
+
+						// Interface-name form, the one FancyZones parses (MonitorUtils::SplitDisplayDeviceId):
+						//   \\?\DISPLAY#DELA1A8#4&1cfdc60e&0&UID8262#{e6f07b5f-ee97-4a90-b076-33f57bf4eaa7}
+						// Segment 1 is the EDID hardware code, segment 2 the PnP instance path that
+						// applied-layouts.json records as "monitor-instance". Without the flag the API
+						// returns "MONITOR\DELA1A8\{4d36e96e-e325-11ce-bfc1-08002be10318}\0004", whose
+						// braced segment is the monitor device CLASS GUID - identical for every monitor
+						// on every machine, never an instance. Recording it as one made every
+						// instance-qualified applied-layouts key miss, so Apply-FancyZones re-sent every
+						// layout shortcut, with a desktop switch per desktop, on every workspace open.
+						string[] interfaceParts = deviceId.Split('#');
+						if (interfaceParts.Length >= 3)
 						{
-							string monitorInstance = parts.Length >= 3 ? parts[2].Trim('{', '}') : "";
+							edidCode = interfaceParts[1];
+							monitorInstance = interfaceParts[2];
+						}
+						else
+						{
+							// Device-class form (interface name unavailable): keep the EDID code and
+							// record no instance, so consumers fall back to the EDID-only key instead
+							// of a value that can never match.
+							string[] classParts = deviceId.Split('\\');
+							if (classParts.Length >= 2)
+							{
+								edidCode = classParts[1];
+							}
+						}
+
+						if (!string.IsNullOrEmpty(edidCode))
+						{
 							result.Add(new MonitorDeviceInfo
 							{
 								DisplayName = adapterName,
-								EdidCode = parts[1],
+								EdidCode = edidCode,
 								MonitorInstance = monitorInstance
 							});
 						}
