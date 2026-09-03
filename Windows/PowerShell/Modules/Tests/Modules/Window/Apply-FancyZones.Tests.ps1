@@ -36,6 +36,7 @@ Describe "Apply-FancyZones" {
 			@(
 				[PSCustomObject]@{
 					DeviceName = 'TESTMON1'
+					IsPrimary  = $true
 					Left       = 0
 					Top        = 0
 					Width      = 1920

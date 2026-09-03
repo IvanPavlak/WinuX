@@ -615,6 +615,30 @@ function Apply-FancyZones {
 			Start-Sleep -Milliseconds 50
 		}
 
+		# Physical monitor per config key, resolved the way the shortcut pass resolves it: the
+		# layout's own X/Y/Width/Height when it carries them, else the bounds Get-MonitorSpecs
+		# assigned to the label. A key that resolves neither way has no device to write for.
+		$fileMonitorByKey = @{}
+		foreach ($monitorKey in $MonitorConfig.Keys) {
+			$monitor = $MonitorConfig[$monitorKey]
+			$rect = $null
+			if ($null -ne $monitor.X -and $null -ne $monitor.Y -and $null -ne $monitor.Width -and $null -ne $monitor.Height) {
+				$rect = @{ X = $monitor.X; Y = $monitor.Y; Width = $monitor.Width; Height = $monitor.Height }
+			}
+			elseif ($resolvedMonitorByKey.ContainsKey($monitorKey)) {
+				$resolvedMonitor = $resolvedMonitorByKey[$monitorKey]
+				$rect = @{ X = $resolvedMonitor.X; Y = $resolvedMonitor.Y; Width = $resolvedMonitor.Width; Height = $resolvedMonitor.Height }
+			}
+			if (-not $rect) { continue }
+
+			$device = $monitors | Where-Object {
+				$_.Left -eq $rect.X -and $_.Top -eq $rect.Y -and $_.Width -eq $rect.Width -and $_.Height -eq $rect.Height
+			} | Select-Object -First 1
+			if ($device) {
+				$fileMonitorByKey[$monitorKey] = @{ Rect = $rect; DeviceName = $device.DeviceName }
+			}
+		}
+
 		# One target per (desktop, monitor) with a layout. A monitor without an EDID/instance mapping
 		# (old FancyZones schema, EnumDisplayDevices unavailable) cannot be written, so its desktop
 		# stays with the shortcut pass.
@@ -643,8 +667,7 @@ function Apply-FancyZones {
 				if (-not $layoutName) { continue }
 
 				$desktopLayoutCounts[$internalIndex]++
-				$matchedMonitor = if ($matchedMonitorByKey.ContainsKey($monitorKey)) { $matchedMonitorByKey[$monitorKey] } else { $null }
-				$deviceName = if ($matchedMonitor) { $matchedMonitor.DeviceName } else { $null }
+				$deviceName = if ($fileMonitorByKey.ContainsKey($monitorKey)) { $fileMonitorByKey[$monitorKey].DeviceName } else { $null }
 				if (-not $desktopGuid -or -not $deviceName -or -not $displayToEdidMap.ContainsKey($deviceName) -or -not $displayToInstanceMap.ContainsKey($deviceName)) {
 					$desktopTargetable[$internalIndex] = $false
 					continue
@@ -710,7 +733,7 @@ function Apply-FancyZones {
 			$probe = $null
 			foreach ($candidate in @($resolved | Where-Object { $_.Target.DesktopIndex -eq $probeIndex })) {
 				$candidateKey = $candidate.Target.MonitorKey
-				$rect = if ($resolvedMonitorByKey.ContainsKey($candidateKey)) { $resolvedMonitorByKey[$candidateKey] } else { $null }
+				$rect = if ($fileMonitorByKey.ContainsKey($candidateKey)) { $fileMonitorByKey[$candidateKey].Rect } else { $null }
 				$candidateMonitor = $MonitorConfig[$candidateKey]
 				$number = $null
 				if ($candidateMonitor.VirtualDesktopLayouts -and $candidateMonitor.VirtualDesktopLayouts.ContainsKey($candidate.Target.LayoutKey)) {

@@ -43,9 +43,9 @@ Only `-MonitorConfig` is mandatory. With no `-DesktopNumber`, it covers every vi
 
 **Why the file, and why the probe.** FancyZones keys `applied-layouts.json` by monitor (EDID code, PnP instance path, serial number, monitor number) and virtual desktop GUID, watches the file and reloads it on change, and the work areas it creates when a desktop is first switched to read their entry from the reloaded data (`WorkArea::InitLayout`). Writing the entries therefore replaces one desktop switch, one shortcut and the layout-commit wait per desktop with a single file write - the whole FancyZones phase of a cold open, 3.8 s for 3 desktops and about 7 s for 8 or 10. The probe closes the one gap in that story: whether FancyZones actually reloaded. It never writes the file on a plain reload, but it does save the whole map after a layout shortcut (`ApplyQuickLayout` ends in `SaveData`), so the written entries either survive that save - proving they were loaded - or vanish, in which case those desktops are handed to the shortcut pass. A duplicate entry for the probe desktop means the cloned device block was not FancyZones' own and is treated the same way. The probe lands on the current desktop when this call owns it, otherwise on the first owned desktop, where the shortcut pass would have ended anyway in a `-DesktopOffset` call. Under `Set-LogLevel Verbose` the pass reports `FancyZones took the file update: [n] desktop(s) verified without switching`, or names the reason it fell back.
 
-Monitor handling is **count-agnostic**: the `Monitors` keys are iterated as given, so any number of displays is supported. A key that names a monitor which is not attached (`Monitor6` on a two-monitor machine) is not fatal - the attached monitors are still laid out - but it produces a single warning naming the unresolvable keys and the labels that *are* attached, so a layout/display mismatch is visible instead of passing without a trace. A monitor FancyZones has never written an `applied-layouts.json` entry for cannot be written to and stays with the shortcut pass until it has (FancyZones writes one the first time it runs with the monitor attached).
+Monitor handling is **count-agnostic**: the `Monitors` keys are iterated as given, so any number of displays is supported. A key that names a monitor which is not attached (`Monitor6` on a two-monitor machine) is not fatal - the attached monitors are still laid out - but it produces a single warning naming the unresolvable keys and the labels that *are* attached, so a layout/display mismatch is visible instead of passing without a trace. Both passes find the physical monitor the same way: by the layout's own `X`/`Y`/`Width`/`Height` when it carries them, otherwise by the bounds `Get-MonitorSpecs` assigned to the label. A monitor FancyZones has never written an `applied-layouts.json` entry for cannot be written to and stays with the shortcut pass until it has (FancyZones writes one the first time it runs with the monitor attached).
 
-Cost in file mode is one write, one reload settle (`AppliedLayoutsReloadMs`, 150 ms), one shortcut and one verification read, independent of the number of desktops. The shortcut pass scales as **monitors x desktops**: one shortcut send per pair, each carrying the cursor-settle, focus-settle and keyboard-shortcut delays from `Get-WindowModuleDelays` (10 ms each by default) plus one `Switch-Desktop` per desktop; its applied-layouts idempotency skip keeps repeat opens cheap, and `-Force` or a duplicate-EDID collision without instance data disables that skip.
+Cost in file mode is one write, one reload settle (`AppliedLayoutsReloadMs`, 150 ms), one shortcut and one verification read, independent of the number of desktops. The shortcut pass scales as **monitors x desktops**: one shortcut send per pair, each carrying the cursor-settle, focus-settle and keyboard-shortcut delays from `Get-WindowModuleDelays` (25 ms each by default) plus one `Switch-Desktop` per desktop; its applied-layouts idempotency skip keeps repeat opens cheap, and `-Force` or a duplicate-EDID collision without instance data disables that skip.
 
 | Parameter        | Description                                                                                                                                                                                                                                                                                       |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1662,17 +1662,18 @@ Set-WindowLayouts -ConfigPath "<DevRoot>\MyLayouts\development.json" -DesktopOff
 - **Parameters:** -Delays
 - **Usage:** `Set-WindowModuleDelays -Delays @{ FocusSettleMs = 10; WindowRestoreMs = 10 }`
 
-Accepts a hashtable of timing values and merges them into the module-scoped `$script:WindowModuleDelays` table, leaving any key it does not recognize untouched. These delays govern the small settle pauses the Window module inserts between cursor moves, focus changes, keyboard shortcuts, and window/desktop operations.
+Accepts a hashtable of timing values and merges them into the module-scoped `$script:WindowModuleDelays` table, leaving any key it does not recognize untouched. These delays govern the small settle pauses the Window module inserts between cursor moves, focus changes, keyboard shortcuts, and window/desktop operations. The input-facing delays default to 25 ms rather than 10: on a fast machine 10 ms is short enough that a chord occasionally reaches the wrong monitor or a window that has not finished taking focus, and 25 ms holds full reliability while adding only milliseconds per send.
 
-| Key                  | Description                                               |
-| -------------------- | --------------------------------------------------------- |
-| `CursorSettleMs`     | Delay after cursor movement before sending keys.          |
-| `FocusSettleMs`      | Delay after `SetForegroundWindow` before sending keys.    |
-| `KeyboardShortcutMs` | Delay after a keyboard shortcut is sent.                  |
-| `WindowRestoreMs`    | Delay after `ShowWindow` restore operations.              |
-| `WindowPositionMs`   | Delay after `SetWindowPos` for the window to settle.      |
-| `VirtualDesktopMs`   | Delay after `Move-Window` for virtual desktop operations. |
-| `AppliedLayoutsReloadMs` | Delay after writing `applied-layouts.json` before the probe shortcut that confirms FancyZones reloaded it (150 ms; FancyZones' own log shows the reload landing 40 to 60 ms after a change). |
+| Key                  | Default | Description                                               |
+| -------------------- | ------- | --------------------------------------------------------- |
+| `CursorSettleMs`     | 25      | Delay after cursor movement before sending keys.          |
+| `FocusSettleMs`      | 25      | Delay after `SetForegroundWindow` before sending keys.    |
+| `KeyboardShortcutMs` | 25      | Delay after a keyboard shortcut is sent.                  |
+| `LayoutCommitMs`     | 25      | Delay letting FancyZones commit a layout switch to disk before a virtual-desktop switch fires. |
+| `WindowRestoreMs`    | 25      | Delay after `ShowWindow` restore operations.              |
+| `WindowPositionMs`   | 25      | Delay after `SetWindowPos` for the window to settle.      |
+| `VirtualDesktopMs`   | 25      | Delay after `Move-Window` for virtual desktop operations. |
+| `AppliedLayoutsReloadMs` | 150 | Delay after writing `applied-layouts.json` before the probe shortcut that confirms FancyZones reloaded it (FancyZones' own log shows the reload landing 40 to 60 ms after a change). |
 
 ```powershell
 # Tighten focus and restore settle delays to 10ms each
