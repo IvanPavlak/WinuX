@@ -5,11 +5,15 @@ function Get-WorkspaceRerunMirror {
 
 	.DESCRIPTION
 		Set-WorkspaceWindowLayout tracks its auto-rerun state in process-scoped environment
-		variables, which survive the terminal respawn only when Windows Terminal spawns a fresh
-		host per `wt` call (windowingBehavior "useNew"). Under "useAnyExisting" the new tab
-		inherits the WT host's stale environment instead, resetting every marker and uncapping the
-		rerun loop - so each value is additionally mirrored outside the process by
-		Set-WorkspaceRerunMirror as "value|unix-timestamp".
+		variables, which do not survive the terminal respawn: Windows Terminal generates a new
+		environment block for every session it starts (its reloadEnvironmentVariables setting, on
+		by default), built from the registry rather than inherited from the shell that ran `wt`,
+		so the respawned shell never sees the escalating run's process copies - every marker reset
+		and the rerun loop was uncapped. Each value is therefore additionally mirrored at User
+		scope by Set-WorkspaceRerunMirror as "value|unix-timestamp". That registry-built block is
+		also how the mirror reaches the new shell: verbatim, stamp included, as the process copy
+		of the same variable - which is why Set-WorkspaceWindowLayout skips a stamped process copy
+		and relies on this function's result instead.
 
 		This function reads that mirror back. It is deliberately one-shot: a value found is
 		cleared as it is read, so a marker can influence exactly the run it was written for and

@@ -457,6 +457,32 @@ Look for `Layout short by N window(s) - placed X of Y entries!`. If it still app
 
 Three changes fix it: `-Alongside` is forwarded to every action that declares it (so `-Instances N` opens N **new** windows), alongside verification is scoped rather than skipped (only the entries this pass placed, matched only against this open's windows), and a genuine shortfall is reported once with both counts instead of a verbose-only per-entry line.
 
+### Workspace Rerun Fails With `Cannot convert value "1|<timestamp>" to type "System.Int32"`
+
+**Problem:** A workspace open fails verification, escalates to a fresh shell as announced (`Rerunning workspace setup in a fresh shell ... (attempt 1/2)`), and the respawned run then aborts the moment it needs the rerun counter - twice, because the `catch` block reads the same counter:
+
+```text
+=> Error applying workspace layout: Cannot convert value "1|1788349256" to type "System.Int32". Error: "The input string '1|1788349256' was not in a correct format."
+=>    Stack trace => at Set-WorkspaceWindowLayout, ...\Modules\Window\Functions\Set-WorkspaceWindowLayout.ps1: line 1334
+=> Error executing action [Set-WorkspaceWindowLayout] for workspace [MyWorkspace]: Cannot convert value "1|1788349256" to type "System.Int32". ...
+```
+
+The same respawned run also never behaves as a window-only retry - no forced FancyZones re-apply, and no `Window-Only Retry Mode` line under `Set-LogLevel Verbose` - even though the run that escalated announced one.
+
+**Why it happened:** The rerun state (`WORKSPACE_RERUN_COUNT`, `WORKSPACE_WINDOW_ONLY_RETRY` and the two informational marker variables) is written twice: plain into the process environment, and stamped as `value|unix-timestamp` into the User-scope environment - the mirror that outlives the respawn (see `Get-WorkspaceRerunMirror`). Windows Terminal generates a new environment block for every session it starts (its `reloadEnvironmentVariables` setting, on by default), built from the registry rather than inherited from the shell that ran `wt`, so the respawned shell's process copy of each variable **is** the stamped mirror value. `Set-WorkspaceWindowLayout` preferred the process copy whenever one existed and read it as plain: `[int]"1|1788349256"` threw, and `"1|..." -eq '1'` was false, so the window-only marker was ignored. The count mirror had already been consumed on the way to the error, so nothing was left behind afterwards - the rerun chain simply ended with the layout unverified.
+
+**Solution:** This now self-corrects (0.1.51): a process copy carrying the stamp is skipped and the mirror is used instead, so the counter counts, the two-rerun cap holds across respawns, and the respawned run really is a window-only retry. The shell a rerun respawns into is a fresh session and loads the fix automatically; only the shell you are typing in keeps the old code until you restart it. Nothing needs cleaning up after an interrupted rerun chain - a stale mirror ages out after 10 minutes and is consumed on the next open regardless - but both copies can be inspected, and the mirror cleared, by hand:
+
+```powershell
+# What this shell inherited (stamped) versus what the mirror currently holds
+$env:WORKSPACE_RERUN_COUNT
+[Environment]::GetEnvironmentVariable('WORKSPACE_RERUN_COUNT', 'User')
+
+# Clear a mirror by hand (one User-scope broadcast each)
+Set-WorkspaceRerunMirror -Name 'WORKSPACE_RERUN_COUNT' -Value $null
+Set-WorkspaceRerunMirror -Name 'WORKSPACE_WINDOW_ONLY_RETRY' -Value $null
+```
+
 ### Layout File Not Found
 
 **Problem:** "Cannot find layout file" error.
