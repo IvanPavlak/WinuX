@@ -158,21 +158,35 @@ function Set-WorkspaceWindowLayout {
 	$windowOnlyRetryTitleEnvVar = 'WORKSPACE_WINDOW_ONLY_RETRY_TITLE'
 	$windowOnlyRetryProcessEnvVar = 'WORKSPACE_WINDOW_ONLY_RETRY_PROCESS'
 
-	# Rerun state must survive the terminal respawn performed by ReRun-LastCommand. The
-	# process-scoped env vars survive only when Windows Terminal spawns a fresh host per
-	# `wt` call (windowingBehavior "useNew"); under "useAnyExisting" the new tab inherits
-	# the WT host's stale environment, resetting every marker/counter and uncapping the
-	# rerun loop. Each value is therefore mirrored outside the process, by
-	# Set-WorkspaceRerunMirror / Get-WorkspaceRerunMirror, which own the stamping, the
-	# one-shot consume, the TTL and the read-before-clear guard - see those two for why the
-	# mirror is shaped the way it is. Reads here prefer the process copy (identical behavior
-	# to the plain env vars when it propagates) and fall back to the mirror.
+	# Rerun state must survive the terminal respawn performed by ReRun-LastCommand, and the
+	# process-scoped env vars do not: Windows Terminal generates a NEW environment block for
+	# every session it starts (its reloadEnvironmentVariables setting, on by default), built
+	# from the registry rather than inherited from the shell that ran `wt`, so the respawned
+	# shell never sees the plain copies this process writes. Each value is therefore mirrored
+	# at User scope by Set-WorkspaceRerunMirror / Get-WorkspaceRerunMirror, which own the
+	# "value|unix-timestamp" stamping, the one-shot consume, the TTL and the read-before-clear
+	# guard - see those two for why the mirror is shaped the way it is.
+	#
+	# That registry-built block is also how the mirror reaches the new shell: verbatim, stamp
+	# included ("1|1788349256"), as the PROCESS copy of the same variable. Reads therefore use
+	# the process copy only when it is a plain value this process wrote (identical behavior to
+	# the plain env vars within one run) and otherwise fall back to the mirror. A stamped
+	# process copy is skipped rather than parsed: it is a snapshot of the mirror taken when the
+	# shell started - never newer than the mirror, and possibly far older in a long-lived host
+	# under windowingBehavior "useAnyExisting" - so the mirror read, which the TTL and the
+	# one-shot consume already protect, is the only authoritative copy. Treating it as plain
+	# fed "1|1788349256" into the [int] cast of the rerun counter (which threw in the
+	# escalation path and once more in the catch block) and read the window-only marker,
+	# never equal to '1' with its stamp, as inactive on every respawn.
 	$rerunStateTtlMinutes = 10
+	$rerunStateStampPattern = '\|\d+$'
 	$readRerunState = {
 		param([string]$Name)
 		$processValue = [Environment]::GetEnvironmentVariable($Name, 'Process')
+		# Read (and consume) the mirror unconditionally, so it can never leak into a later run
+		# even when the process copy is the one returned.
 		$persisted = Get-WorkspaceRerunMirror -Name $Name -TtlMinutes $rerunStateTtlMinutes
-		if (-not [string]::IsNullOrEmpty($processValue)) { return $processValue }
+		if (-not [string]::IsNullOrEmpty($processValue) -and $processValue -notmatch $rerunStateStampPattern) { return $processValue }
 		return $persisted
 	}
 	$writeRerunState = {

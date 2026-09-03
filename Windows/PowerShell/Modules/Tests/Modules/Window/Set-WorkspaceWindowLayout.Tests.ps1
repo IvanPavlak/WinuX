@@ -532,6 +532,129 @@ Describe "Set-WorkspaceWindowLayout" {
 		Should -Invoke ReRun-LastCommand -Times 0
 	}
 
+	Context "Rerun state inherited from the registry by a respawned shell" {
+		# Windows Terminal generates a new environment block for every session it starts, built
+		# from the registry, so the shell a rerun respawns into never sees the plain process-scoped
+		# values the escalating run wrote - its process copies ARE the User-scope mirror values,
+		# stamp included ("1|<unix-timestamp>"). Read as plain, that stamp went into the [int]
+		# cast of the rerun counter (which threw in the escalation path and once more in the catch
+		# block) and made the window-only marker compare unequal to '1' on every respawn. These
+		# tests give the process copies exactly that shape and let the (mocked) mirror decide.
+		BeforeEach {
+			Mock Test-Path { $true }
+			Mock Import-PowerShellDataFile {
+				@{
+					Layout   = @(
+						@{ ProcessName = 'Code'; WindowTitle = '*'; DesktopNumber = 1 }
+					)
+					Monitors = @{
+						MonitorA = @{
+							VirtualDesktopLayouts = @{
+								1 = 'One'
+							}
+						}
+					}
+				}
+			}
+			Mock Get-DesktopList { @(0) }
+			Mock Set-WindowLayouts {
+				@(
+					[PSCustomObject]@{ Status = 'Configured' }
+				)
+			}
+			Mock Write-LogError { }
+			# The same unverifiable window every time: one initial pass plus two in-process
+			# retries, then the escalation that reads the counter.
+			$script:FailedVerification = @{
+				Success  = $false
+				Total    = 1
+				Failures = @(
+					[PSCustomObject]@{
+						Handle      = [IntPtr]99
+						WindowTitle = 'Code'
+						Expected    = '(0,0) 100x100'
+						Actual      = '(10,10) 90x90'
+					}
+				)
+			}
+			$script:RegistryStamp = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+		}
+
+		It "escalates from the mirrored rerun count when the process copy carries the registry stamp" {
+			[Environment]::SetEnvironmentVariable('WORKSPACE_RERUN_COUNT', "1|$script:RegistryStamp", 'Process')
+			Mock Get-WorkspaceRerunMirror { if ($Name -eq 'WORKSPACE_RERUN_COUNT') { '1' } }
+			Mock Confirm-WorkspaceWindowPositions { $script:FailedVerification }
+
+			Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace'
+
+			# One rerun is already spent, so this is attempt 2 of 2: it escalates once more and
+			# hands the next shell the incremented count - through both copies, as always.
+			Should -Invoke Write-LogError -Times 0
+			Should -Invoke ReRun-LastCommand -Times 1 -Exactly
+			[Environment]::GetEnvironmentVariable('WORKSPACE_RERUN_COUNT', 'Process') | Should -Be '2'
+			Should -Invoke Set-WorkspaceRerunMirror -Times 1 -Exactly -ParameterFilter { $Name -eq 'WORKSPACE_RERUN_COUNT' -and $Value -eq '2' }
+		}
+
+		It "stops at the rerun cap read from the mirror when the process copy carries the registry stamp" {
+			[Environment]::SetEnvironmentVariable('WORKSPACE_RERUN_COUNT', "2|$script:RegistryStamp", 'Process')
+			Mock Get-WorkspaceRerunMirror { if ($Name -eq 'WORKSPACE_RERUN_COUNT') { '2' } }
+			Mock Confirm-WorkspaceWindowPositions { $script:FailedVerification }
+
+			Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace'
+
+			Should -Invoke ReRun-LastCommand -Times 0
+			Should -Invoke Initialize-WorkspaceWindowLayoutRerun -Times 0
+			# The cap clears the counter in both copies so the next manual open starts from zero.
+			[Environment]::GetEnvironmentVariable('WORKSPACE_RERUN_COUNT', 'Process') | Should -BeNullOrEmpty
+			Should -Invoke Set-WorkspaceRerunMirror -Times 1 -Exactly -ParameterFilter { $Name -eq 'WORKSPACE_RERUN_COUNT' -and [string]::IsNullOrEmpty($Value) }
+		}
+
+		It "starts counting from the mirror when the stamped process copy is stale and the mirror is gone" {
+			# A long-lived host (windowingBehavior "useAnyExisting") hands every new tab the registry
+			# snapshot taken when the host started. Once the mirror it copied has been consumed or has
+			# aged out, that copy is history and must not reopen the count at 1 - the default mirror
+			# mock (nothing valid persisted) is the whole truth here.
+			[Environment]::SetEnvironmentVariable('WORKSPACE_RERUN_COUNT', "1|$($script:RegistryStamp - 3600)", 'Process')
+			Mock Confirm-WorkspaceWindowPositions { $script:FailedVerification }
+
+			Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace'
+
+			Should -Invoke Write-LogError -Times 0
+			Should -Invoke ReRun-LastCommand -Times 1 -Exactly
+			[Environment]::GetEnvironmentVariable('WORKSPACE_RERUN_COUNT', 'Process') | Should -Be '1'
+		}
+
+		It "still prefers a plain process copy the running shell wrote itself" {
+			[Environment]::SetEnvironmentVariable('WORKSPACE_RERUN_COUNT', '1', 'Process')
+			Mock Confirm-WorkspaceWindowPositions { $script:FailedVerification }
+
+			Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace'
+
+			Should -Invoke ReRun-LastCommand -Times 1 -Exactly
+			[Environment]::GetEnvironmentVariable('WORKSPACE_RERUN_COUNT', 'Process') | Should -Be '2'
+		}
+
+		It "honors the window-only retry marker from the mirror when the process copies carry the registry stamp" {
+			[Environment]::SetEnvironmentVariable('WORKSPACE_WINDOW_ONLY_RETRY', "1|$script:RegistryStamp", 'Process')
+			[Environment]::SetEnvironmentVariable('WORKSPACE_WINDOW_ONLY_RETRY_TITLE', "Code|$script:RegistryStamp", 'Process')
+			Mock Get-WorkspaceRerunMirror {
+				switch ($Name) {
+					'WORKSPACE_WINDOW_ONLY_RETRY' { '1' }
+					'WORKSPACE_WINDOW_ONLY_RETRY_TITLE' { 'Code' }
+				}
+			}
+
+			Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace'
+
+			# The respawned run must force the zone re-apply - the grid it escalated over was wrong -
+			# and consume the one-shot markers, stamped process copies included, so the next open in
+			# this shell is a plain one.
+			Should -Invoke Apply-FancyZones -Times 1 -Exactly -ParameterFilter { $Force }
+			[Environment]::GetEnvironmentVariable('WORKSPACE_WINDOW_ONLY_RETRY', 'Process') | Should -BeNullOrEmpty
+			[Environment]::GetEnvironmentVariable('WORKSPACE_WINDOW_ONLY_RETRY_TITLE', 'Process') | Should -BeNullOrEmpty
+		}
+	}
+
 	It "forwards SnapDelayMs and snap desktop parameters in standard flow" {
 		Mock Test-Path { $true }
 		Mock Import-PowerShellDataFile {

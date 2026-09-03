@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.51] - 2026-09-02
+
+### Fixed
+
+- **`Set-WorkspaceWindowLayout` (Window module): the auto-rerun a failed workspace open escalates to no longer fails on its own rerun counter, and the respawned run finally behaves as the window-only retry it was announced as.** When the in-process retries are exhausted, the run records its rerun state (`WORKSPACE_RERUN_COUNT`, `WORKSPACE_WINDOW_ONLY_RETRY` and the two informational marker variables) and respawns the shell through `ReRun-LastCommand`. Since 0.1.22 that state is written twice: plain into the process environment, and stamped as `value|unix-timestamp` into the User-scope environment - the mirror that outlives the respawn, read back one-shot and aged out after 10 minutes by `Get-WorkspaceRerunMirror`. The reader preferred the process copy whenever one existed, on the assumption that a fresh Windows Terminal host inherits the escalating shell's environment. It does not: Windows Terminal generates a NEW environment block for every session it starts (its `reloadEnvironmentVariables` setting, on by default), built from the registry rather than inherited from the process that ran `wt`. The respawned shell's process copy of each variable was therefore the User-scope mirror itself, stamp included - `"1|1788349256"` - and it was read as if the shell had written it. `[int]"1|1788349256"` threw the moment the respawned run needed its counter (`Cannot convert value "1|1788349256" to type "System.Int32"`), in the escalation path and then once more in the `catch` block that reads the same counter, which is why the error surfaced twice and the layout was left unverified with no further retry. The window-only marker fared no better: `"1|..." -eq '1'` is false, so every respawned run ran as a plain open - no forced FancyZones re-apply, no consumed markers, no `Window-Only Retry Mode` trace - even though the escalating run had announced one.
+
+  A process copy carrying the stamp is now skipped and the mirror is used instead. Such a copy is a snapshot of the mirror taken when the shell started - never newer than the mirror, and possibly far older in a long-lived host under `windowingBehavior "useAnyExisting"`, where every new tab gets the registry as it was when the host launched - so the mirror read, already guarded by the TTL and the one-shot consume, is the only authoritative copy; a plain process copy written by the running shell is still preferred exactly as before. On a failing open the counter now counts (the second escalation logs `attempt 2/2`), the two-rerun cap holds across respawns instead of being crashed through, and the respawned run force-reapplies the zone layouts and consumes its markers as designed. `Set-WorkspaceWindowLayout.Tests.ps1` gains a context that hands the function exactly the process copies a respawned shell inherits - a fresh stamp, a stale stamp, the cap value, the window-only markers, and the plain copy that must keep winning. Nothing needs clearing on an affected machine: the mirror was consumed on the way to the error, and a stale one ages out regardless. The shell you are typing in keeps the old code until it is restarted; the shell a rerun respawns into is a fresh session and loads the fix automatically. The mechanism is written up in `docs/reference/troubleshooting.md`.
+
 ## [0.1.50] - 2026-09-01
 
 ### Added
@@ -884,7 +892,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.50...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.51...HEAD
+[0.1.51]: https://github.com/IvanPavlak/WinuX/compare/v0.1.50...v0.1.51
 [0.1.50]: https://github.com/IvanPavlak/WinuX/compare/v0.1.49...v0.1.50
 [0.1.49]: https://github.com/IvanPavlak/WinuX/compare/v0.1.48...v0.1.49
 [0.1.48]: https://github.com/IvanPavlak/WinuX/compare/v0.1.47...v0.1.48
