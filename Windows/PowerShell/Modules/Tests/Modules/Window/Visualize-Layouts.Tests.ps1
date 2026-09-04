@@ -158,6 +158,25 @@ Describe "Visualize-Layouts" {
 		}
 	}
 
+	Context "When given the layout file path directly" {
+		# Set-WorkspaceWindowLayout hands over the file it has just applied; the recursive scan
+		# of the Layouts tree (0.1 to 0.7 s per open) is for finding a file by name or the menu.
+		It "Should render the file without scanning the Layouts tree" {
+			Mock Get-ChildItem { @() } -ModuleName Window -ParameterFilter { $Filter -eq "*.psd1" }
+
+			Visualize-Layouts -LayoutPath (Join-Path $script:TestLayoutsDir "TestLayout.psd1")
+
+			Should -Invoke Get-ChildItem -ModuleName Window -Times 0 -ParameterFilter { $Filter -eq "*.psd1" }
+			@($script:HostLines | Where-Object { $_ -match "\[TestLayout\]" }).Count | Should -BeGreaterThan 0
+		}
+
+		It "Should report a missing file instead of scanning" {
+			Visualize-Layouts -LayoutPath (Join-Path $script:TestLayoutsDir "Missing.psd1")
+
+			Should -Invoke Write-LogError -ModuleName Window -ParameterFilter { $Message -match "Layout file not found" }
+		}
+	}
+
 	AfterAll {
 		Remove-Variable -Name Configuration -Scope Global -ErrorAction SilentlyContinue
 	}

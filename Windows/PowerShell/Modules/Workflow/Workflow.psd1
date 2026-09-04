@@ -15,6 +15,8 @@
 		'Focus-TerminalTab',
 		'Format-WorkspaceStateContent',
 		'Get-SwaggerCloseTitlePatterns',
+		'Get-WorkspaceBenchmark',
+		'Get-WorkspaceBenchmarkPath',
 		'Get-WorkspaceOpenDelta',
 		'Get-WorkspaceOpenProtection',
 		'Get-WorkspaceState',
@@ -30,6 +32,7 @@
 		'Save-WorkspaceState',
 		'Start-Containers',
 		'Test-TerminalTabsAlreadyOpen',
-		'Training-Backup'
+		'Training-Backup',
+		'Write-WorkspaceBenchmark'
 	)
 }

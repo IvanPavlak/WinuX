@@ -18,8 +18,10 @@ function Wait-ForWorkspaceWindows {
 
 	.PARAMETER LayoutConfig
 		The layout configuration array containing window definitions with ProcessName
-		and/or WindowTitle properties. When both are provided for a window, it will
-		match if EITHER criterion is satisfied, making detection more robust.
+		and/or WindowTitle properties. When both are provided for a window, a window of
+		that process matches by process OR title (a still-loading browser window counts
+		before its title has resolved), but never a window of another process, whatever
+		its title says.
 
 	.PARAMETER TimeoutSeconds
 		Maximum number of seconds to wait for all windows. Default is 15 seconds.
@@ -59,6 +61,37 @@ function Wait-ForWorkspaceWindows {
 		Optional scriptblock fired once per layout entry as each window first becomes
 		individually stable, receiving the layout entry and the window so callers can
 		relocate it early.
+
+	.PARAMETER OnDesktopReady
+		Optional scriptblock fired once per virtual desktop (the entries' DesktopNumber,
+		default 1) as soon as every entry on that desktop is individually stable or abandoned
+		while at least one other entry is still pending. It receives the desktop number, an
+		array of @{ LayoutEntry; Window } for the desktop's stable entries, and the handles of
+		EVERY window that is stable in that poll (any entry, any desktop), so the caller can
+		position and snap that desktop while the remaining windows are still loading and
+		restrict its claims to windows that have finished loading. A titled entry counts
+		towards its desktop's readiness only on a window whose title matches its pattern;
+		found-by-process alone keeps the wait going but does not hand the desktop over. The
+		per-entry window is the wait's own match - the caller must not treat it as the
+		entry's identity.
+		Entries handed over this way count as ready for the rest of the wait, whatever their
+		windows do afterwards (the caller is moving them on purpose). It never fires for the
+		desktops that complete in the same poll as the wait itself - the caller's ordinary
+		tail handles those. The result's ReadyDesktops lists the desktops it fired for. A fourth
+		argument carries the layout entries abandoned so far, so the caller's layout pass can
+		skip its not-found retry ladder for them.
+
+	.PARAMETER PreExistingWindowHandles
+		Handles of windows that existed before the workspace was opened (a plain open's pre-open
+		capture). A window in this set has nothing to stabilize and counts as stable the first
+		time an entry matches it, instead of being observed unchanged for
+		MinimumStableDurationSeconds first.
+
+	.PARAMETER ExcludeWindowHandles
+		Handles that never match an entry (an alongside open's pre-existing windows, a plain
+		open's protected windows - the layout pass may not use them either). An entry whose only
+		matches are excluded is abandoned after ProcessAbsentGraceSeconds like an entry whose
+		process never appeared, so a starved entry costs the grace period, not the timeout.
 
 	.EXAMPLE
 		$config = Import-PowerShellDataFile -Path "layout.psd1"
@@ -110,7 +143,16 @@ function Wait-ForWorkspaceWindows {
 		[switch]$RequireStableDimensions = $true,
 
 		[Parameter()]
-		[scriptblock]$OnWindowStable
+		[scriptblock]$OnWindowStable,
+
+		[Parameter()]
+		[scriptblock]$OnDesktopReady,
+
+		[Parameter()]
+		[System.Collections.Generic.HashSet[IntPtr]]$PreExistingWindowHandles,
+
+		[Parameter()]
+		[System.Collections.Generic.HashSet[IntPtr]]$ExcludeWindowHandles
 	)
 
 	# Use consolidated native types from WindowNative.cs (loaded in Window.psm1)
@@ -187,8 +229,11 @@ function Wait-ForWorkspaceWindows {
 	if ($expectedWindows.Count -eq 0) {
 		Write-LogDebug " No windows defined in layout configuration - skipping wait" -Style Warning
 		return @{
-			Success      = $true
-			WindowStates = @{}
+			Success          = $true
+			WindowStates     = @{}
+			Abandoned        = @()
+			AbandonedEntries = @()
+			ReadyDesktops    = @()
 		}
 	}
 
@@ -231,11 +276,34 @@ function Wait-ForWorkspaceWindows {
 	# Track which entries have already fired the OnWindowStable callback to ensure once-per-entry invocation
 	$callbackTriggered = New-Object 'System.Collections.Generic.HashSet[string]'
 
+	# Per-desktop readiness for -OnDesktopReady: which entries each desktop owns (the layout
+	# entry's DesktopNumber, default 1), which desktops already fired, and which entries were
+	# handed over that way - those count as ready for the rest of the wait, whatever their
+	# windows do next, because the caller is positioning and snapping them on purpose.
+	$entriesByDesktop = @{}
+	foreach ($ew in $expectedWindows) {
+		$entryDesktop = if ($null -ne $ew.LayoutEntry.DesktopNumber) { [int]$ew.LayoutEntry.DesktopNumber } else { 1 }
+		$ew.DesktopNumber = $entryDesktop
+		if (-not $entriesByDesktop.ContainsKey($entryDesktop)) {
+			$entriesByDesktop[$entryDesktop] = [System.Collections.Generic.List[hashtable]]::new()
+		}
+		$entriesByDesktop[$entryDesktop].Add($ew)
+	}
+	$readyDesktopsFired = New-Object 'System.Collections.Generic.HashSet[int]'
+	$completedEntries = New-Object 'System.Collections.Generic.HashSet[string]'
+
 	# Fail-fast bookkeeping: entries abandoned because their process never appeared, and
 	# entries that have matched a window at least once (never abandoned).
 	$abandonedEntries = New-Object 'System.Collections.Generic.HashSet[string]'
 	$entryEverMatched = New-Object 'System.Collections.Generic.HashSet[string]'
 	$lastProcessAbsenceCheck = [datetime]::MinValue
+	# Entries whose every match so far was an excluded window (another workspace's): abandoned
+	# after the grace period like an entry whose process never appeared.
+	$entryOnlyExcludedMatches = New-Object 'System.Collections.Generic.HashSet[string]'
+	# The abandoned entries as layout entries, for the result and the desktop callback.
+	$abandonedLayoutEntries = {
+		@($expectedWindows | Where-Object { $abandonedEntries.Contains($_.Description) } | ForEach-Object { $_.LayoutEntry })
+	}
 
 	$startTime = Get-Date
 	$allWindowsFound = $false
@@ -299,9 +367,19 @@ function Wait-ForWorkspaceWindows {
 			# Track handles claimed during this poll iteration for duplicate entries
 			$iterationClaimedHandles = New-Object 'System.Collections.Generic.HashSet[IntPtr]'
 
+			# The window each entry is stable on THIS iteration (per-desktop readiness reads it).
+			$stableWindowsThisIteration = @{}
+
 			foreach ($expectedWindow in $expectedWindows) {
 				# Entry abandoned by the process-absent fail-fast - stop tracking it.
 				if ($abandonedEntries.Contains($expectedWindow.Description)) {
+					continue
+				}
+
+				# Entry already handed to the caller through OnDesktopReady - ready by definition;
+				# the position and snap it is receiving change its rect on purpose.
+				if ($completedEntries.Contains($expectedWindow.Description)) {
+					$foundCount++
 					continue
 				}
 
@@ -320,6 +398,32 @@ function Wait-ForWorkspaceWindows {
 					}
 
 					$windows = Get-WindowHandle @getWindowParams -ErrorAction SilentlyContinue
+
+					# Windows the layout pass may not use (another workspace's) are not waited for
+					# either. Remembered per entry so the fail-fast below can abandon an entry that
+					# only ever matched such windows.
+					if ($ExcludeWindowHandles -and $ExcludeWindowHandles.Count -gt 0 -and $windows -and @($windows).Count -gt 0) {
+						$eligibleWindows = @($windows | Where-Object { -not $ExcludeWindowHandles.Contains($_.Handle) })
+						if ($eligibleWindows.Count -eq 0) { [void]$entryOnlyExcludedMatches.Add($expectedWindow.Description) }
+						$windows = $eligibleWindows
+					}
+
+					# Get-WindowHandle matches process OR title, and a title pattern can match a
+					# window of another process: a browser entry's "\bSEUP\b" matched
+					# "seup-ui - Visual Studio Code", the early move carried VS Code to the browser's
+					# desktop after its own desktop's pass had placed it, and the open needed a second
+					# attempt. An entry with a process pattern only ever matches windows of that
+					# process; the title is a redundancy within it (Set-WindowLayouts enforces the
+					# same AND when it places the window).
+					if ($expectedWindow.SearchProcessName -and $windows -and @($windows).Count -gt 0) {
+						$entryProcessPattern = [string]$expectedWindow.SearchProcessName
+						$entryProcessIsRegex = $entryProcessPattern -match '[\.\[\]\(\)\{\}\+\^\$\|\\*\?]'
+						$windows = @($windows | Where-Object {
+								$candidateProcess = [string]$_.ProcessName
+								if ([string]::IsNullOrEmpty($candidateProcess)) { return $true }
+								if ($entryProcessIsRegex) { $candidateProcess -match $entryProcessPattern } else { $candidateProcess -ieq $entryProcessPattern }
+							})
+					}
 
 					# For duplicate keys, filter out handles already claimed by earlier entries
 					# in this poll iteration so each entry tracks a distinct window
@@ -416,7 +520,20 @@ function Wait-ForWorkspaceWindows {
 						$isStable = $false
 
 						if (-not $windowTitleHistory.ContainsKey($windowKey)) {
-							# First time seeing this window
+							# First time seeing this window. Only a window that existed before the open
+							# carries stability credit in - it has nothing to stabilize. No other window
+							# does, however long it has been visible: an application's first window can be
+							# replaced within seconds of its launch (VS Code hands its window from the
+							# launcher to the main process 2 to 3 s in, same title, same size), and the
+							# floor below is what catches that. Crediting a window the time it had been
+							# visible before the wait started once handed VS Code over mid-replacement, and
+							# the real window ended on the wrong desktop.
+							$firstStableTime = $currentTime
+							$creditReason = $null
+							if ($PreExistingWindowHandles -and $PreExistingWindowHandles.Contains($window.Handle)) {
+								$firstStableTime = $currentTime.AddSeconds(-$MinimumStableDurationSeconds)
+								$creditReason = 'pre-existing window'
+							}
 							$windowTitleHistory[$windowKey] = @{
 								Handle             = $window.Handle
 								Title              = $windowTitle
@@ -424,12 +541,26 @@ function Wait-ForWorkspaceWindows {
 								Height             = $window.Height
 								Left               = $window.Left
 								Top                = $window.Top
-								ConsecutiveMatches = 1
-								FirstStableTime    = $currentTime
+								ConsecutiveMatches = $(if ($creditReason) { 2 } else { 1 })
+								FirstStableTime    = $firstStableTime
 								LastSeen           = $currentTime
 							}
 							# Update reverse lookup
 							$handleToKey[$window.Handle] = $windowKey
+
+							if ($creditReason) {
+								$creditedSeconds = ($currentTime - $firstStableTime).TotalSeconds
+								if ($creditedSeconds -ge $MinimumStableDurationSeconds) {
+									$isStable = $true
+									if (Test-LogVerbose) {
+										Write-LogDebug " [$($expectedWindow.Description)] stable on first sight ($creditReason, $([math]::Round($creditedSeconds, 1))s credited)" -Style Success
+									}
+								}
+								elseif (-not $notFoundWindows.Contains($expectedWindow.Description)) {
+									$remainingTime = [math]::Round($MinimumStableDurationSeconds - $creditedSeconds, 1)
+									$notFoundWindows.Add("$($expectedWindow.Description) (stabilizing: ${remainingTime}s remaining, $creditReason)")
+								}
+							}
 						}
 						else {
 							$history = $windowTitleHistory[$windowKey]
@@ -489,6 +620,16 @@ function Wait-ForWorkspaceWindows {
 						if ($isStable) {
 							$windowFound = $true
 							$foundCount++
+							# The desktop hand-over counts a titled entry only on a window whose title
+							# matches ITS pattern. Found-by-process is enough for the wait itself (the
+							# layout pass sorts the browser windows out afterwards), but a desktop
+							# handed over on a "Slack" entry that was stable on some other browser window
+							# had its pass search for a window that was not there yet, and paid the
+							# not-found ladder for it inside the wait.
+							$titleMatchesEntry = (-not $expectedWindow.SearchWindowTitle) -or (Test-WindowTitleMatch -WindowTitle $windowTitle -Patterns @($expectedWindow.SearchWindowTitle))
+							if ($titleMatchesEntry) {
+								$stableWindowsThisIteration[$expectedWindow.Description] = $window
+							}
 							# Track window handle for stable windows list
 							if ($window.Handle) {
 								$foundWindowHandles.Add($window.Handle)
@@ -537,6 +678,14 @@ function Wait-ForWorkspaceWindows {
 					if ($abandonedEntries.Contains($pendingEntry.Description)) { continue }
 					if ($entryEverMatched.Contains($pendingEntry.Description)) { continue }
 
+					# Every window this entry ever matched belongs to another workspace: no amount of
+					# waiting makes one eligible, and the layout pass would refuse it anyway.
+					if ($entryOnlyExcludedMatches.Contains($pendingEntry.Description)) {
+						[void]$abandonedEntries.Add($pendingEntry.Description)
+						Write-LogDebug " ✗ Abandoning wait for [$($pendingEntry.Description)] - only windows of another workspace match after ${elapsedSeconds}s" -Style Error
+						continue
+					}
+
 					$processPattern = $pendingEntry.SearchProcessName
 					if (-not $processPattern) { continue }
 
@@ -563,6 +712,54 @@ function Wait-ForWorkspaceWindows {
 			if ($activeExpectedCount -le 0) {
 				# Everything left was abandoned - no point polling out the timeout.
 				break
+			}
+
+			# Per-desktop readiness: while the wait as a whole continues, hand a desktop whose
+			# every entry is stable (or abandoned) to the caller, so it can position and snap that
+			# desktop behind the windows still loading elsewhere. Once per desktop, and never in
+			# the poll that completes the wait - the caller's ordinary tail handles what is left.
+			if ($OnDesktopReady -and $foundCount -lt $activeExpectedCount) {
+				foreach ($readyDesktopNumber in @($entriesByDesktop.Keys | Sort-Object)) {
+					if ($readyDesktopsFired.Contains($readyDesktopNumber)) { continue }
+
+					$desktopEntries = $entriesByDesktop[$readyDesktopNumber]
+					$stableEntries = @($desktopEntries | Where-Object { $stableWindowsThisIteration.ContainsKey($_.Description) })
+					$abandonedOnDesktop = @($desktopEntries | Where-Object { $abandonedEntries.Contains($_.Description) }).Count
+					if ($stableEntries.Count -eq 0 -or ($stableEntries.Count + $abandonedOnDesktop) -ne $desktopEntries.Count) { continue }
+
+					$readyPayload = @($stableEntries | ForEach-Object {
+							@{ LayoutEntry = $_.LayoutEntry; Window = $stableWindowsThisIteration[$_.Description] }
+						})
+					# Every window stable in this poll is a legitimate claim for the pass, whichever
+					# entry it was matched to - the whitelist only has to keep loading windows out.
+					$stableHandlesThisIteration = @($foundWindowHandles | Where-Object { $_ } | Select-Object -Unique)
+
+					if (Test-LogVerbose) {
+						Write-LogDebug "=> Desktop $readyDesktopNumber ready ($($stableEntries.Count) window(s) stable) while $($activeExpectedCount - $foundCount) window(s) still load - handing it over" -Style Success
+					}
+
+					# The caller snaps through keyboard and drag input; a topmost terminal over the
+					# window would catch a drag start point, so drop it for the duration.
+					if ($terminalSetTopmost -and $terminalHandle -ne [IntPtr]::Zero) {
+						[void][WindowModule.Native]::SetWindowTopmost($terminalHandle, $false)
+					}
+					try {
+						& $OnDesktopReady $readyDesktopNumber $readyPayload $stableHandlesThisIteration (& $abandonedLayoutEntries)
+					}
+					catch {
+						Write-LogDebug " OnDesktopReady for desktop $readyDesktopNumber failed: $($_.Exception.Message)" -Style Warning
+					}
+					finally {
+						if ($terminalSetTopmost -and $terminalHandle -ne [IntPtr]::Zero) {
+							[void][WindowModule.Native]::SetWindowTopmost($terminalHandle, $true)
+						}
+					}
+
+					[void]$readyDesktopsFired.Add($readyDesktopNumber)
+					foreach ($handedEntry in $stableEntries) {
+						[void]$completedEntries.Add($handedEntry.Description)
+					}
+				}
 			}
 
 			# Check if all (non-abandoned) windows are individually stable
@@ -618,9 +815,11 @@ function Wait-ForWorkspaceWindows {
 					}
 
 					return @{
-						Success      = ($abandonedEntries.Count -eq 0)
-						WindowStates = $windowStates
-						Abandoned    = @($abandonedEntries)
+						Success          = ($abandonedEntries.Count -eq 0)
+						WindowStates     = $windowStates
+						Abandoned        = @($abandonedEntries)
+						AbandonedEntries = @(& $abandonedLayoutEntries)
+						ReadyDesktops    = @($readyDesktopsFired)
 					}
 				}
 			}
@@ -772,16 +971,20 @@ function Wait-ForWorkspaceWindows {
 
 		# Return failure with empty window states
 		return @{
-			Success      = $false
-			WindowStates = $timeoutWindowStates
-			Abandoned    = @($abandonedEntries)
+			Success          = $false
+			WindowStates     = $timeoutWindowStates
+			Abandoned        = @($abandonedEntries)
+			AbandonedEntries = @(& $abandonedLayoutEntries)
+			ReadyDesktops    = @($readyDesktopsFired)
 		}
 	}
 
 	# This should never be reached, but return success just in case
 	return @{
-		Success      = $true
-		WindowStates = @{}
-		Abandoned    = @($abandonedEntries)
+		Success          = $true
+		WindowStates     = @{}
+		Abandoned        = @($abandonedEntries)
+		AbandonedEntries = @(& $abandonedLayoutEntries)
+		ReadyDesktops    = @($readyDesktopsFired)
 	}
 }

@@ -479,6 +479,30 @@ Workspace opened when Enter is pressed with no input at the `Open-Workspace` men
 
 The name must have a `WorkspaceActions` entry - `Open-Workspace` only advertises the default in its prompt (`press [Enter] to open default workspace => Default`) when that entry exists. Set it to `""` to drop the offer: the prompt becomes `press [Enter] to cancel` and Enter exits without opening anything. Only the interactive Enter uses this; a mistyped `Open-Workspace Wrkspce` still exits rather than silently opening the default.
 
+### Workspace Benchmark
+
+Opt-in measurement of every workspace open. When enabled, `Open-Workspace` times each configured action, reads back the phase clock `Set-WorkspaceWindowLayout` publishes (`Preamble`, `Desktops`, `FancyZones`, `Wait`, `Normalize`, `Position`, `Snap`, `Verify`, `Retry`, `Save`), appends one row per workspace to `WorkspaceBenchmark.csv` next to the session logs through `Write-WorkspaceBenchmark`, and shows the result at the end of the open. Off by default, so a vanilla install prints exactly what it printed before.
+
+**Key:** `WorkspaceBenchmark` → Hashtable
+
+- `Enabled` - `$false` out of the box. `$true` records the row and shows the result after every open.
+- `Display` - what the end of an open shows: `"Table"` (the workspace's recent runs, exactly as `Get-WorkspaceBenchmark -Workspace <name> -Formatted` prints them - the default), `"Line"` (one `Timing [Workspace] => ...` line listing the phases above 0.05 s, with `retries N` when the layout needed more than one attempt), or `"None"` (record only).
+- `Last` - how many recent runs the `Table` display shows (`10`).
+
+**Consumer function:** `Open-Workspace` (records through `Write-WorkspaceBenchmark`, shows through `Get-WorkspaceBenchmark`)
+
+Hashtables deep-merge, so opting in from `Configuration.local.psd1` needs only the flag; `Display` and `Last` fall through to the base.
+
+**Example (opt-in via `Configuration.local.psd1`):**
+
+```powershell
+WorkspaceBenchmark = @{
+    Enabled = $true
+}
+```
+
+The history can be read at any time with `Get-WorkspaceBenchmark` (`-Workspace`, `-Last`, `-Summary`, `-Formatted`), whether or not the automatic display is on. The rows are per-machine measurements and the file is git-ignored.
+
 ### Workspace Actions
 
 Defines what happens when a workspace opens.
@@ -1128,10 +1152,13 @@ Animation styles for long-running operations.
 
 - `LayoutNumbers` - Maps layout names (from `custom-layouts.json`) to `Win+Ctrl+Alt+[Number]` hotkey slots. Layout names are arbitrary; up to 10 layouts, values 0-9, each value unique, and every name must exist in `custom-layouts.json`. Each entry must also stay in sync with `layout-hotkeys.json`: the same-numbered hotkey there must point at that layout's uuid, or `Apply-FancyZones` applies the wrong layout.
 - `ZoneNameMappings` → Human-readable zone names to zone indices, per layout. Indices must exist in the layout's `custom-layouts.json` definition (for canvas layouts, a zone's index is its position in the `zones` array); update the mappings in lockstep when adding or reshaping layouts.
+- `FancyZonesApplyMethod` - How `Apply-FancyZones` puts a workspace's zone layouts onto its virtual desktops. `"File"` (the shipped default) writes the entries for every desktop into FancyZones' `applied-layouts.json`, lets FancyZones reload the file and proves the reload with one probe shortcut on the current desktop, so no desktop is switched to; any desktop that does not verify falls back to the shortcut pass automatically. `"Hotkeys"` is the previous behaviour: switch to every desktop and send `Win+Ctrl+Alt+[Number]` there. Set it in `Configuration.local.psd1` when a PowerToys update changes the file format or the file watcher; anything other than these two values is treated as `"File"` with a note in the verbose log.
+- `WorkspaceLayoutPipelining` - Whether `Set-WorkspaceWindowLayout` positions and snaps each virtual desktop as soon as every window on it is stable, while the slower windows on other desktops are still loading (`$true`, the shipped default), or waits for the slowest window of the whole workspace and does all of it afterwards (`$false`). Verification stays global and the in-process retries run the full layout either way; the flag exists to compare the two orders with `Get-WorkspaceBenchmark` and as an escape hatch.
+- `WorkspaceLayoutPrepareEarly` - Whether `Open-Workspace` runs the layout preamble - the RPC probe, the layout file and its validation, the virtual desktop resize and the FancyZones zone layouts (`Set-WorkspaceWindowLayout -PrepareOnly`) - BEFORE the launch actions (`$true`, the shipped default) or leaves all of it to the layout action after them (`$false`). That work depends on no window and ran at 3.4 s under the start-up load of a dozen applications against 0.2 s idle; the layout action then finds the desktops and zone layouts in place and skips them. A window-only retry is never prepared, and a failed preparation leaves the action to do the work as before.
 
 `Test-FancyZonesConfiguration` validates all of these constraints (plus `custom-layouts.json` internal consistency) automatically at the start of every workspace open.
 
-**Consumer functions:** `Apply-FancyZones`, `Get-FancyZone`, `Set-WorkspaceWindowLayout`, `Test-FancyZonesConfiguration`
+**Consumer functions:** `Apply-FancyZones`, `Get-FancyZone`, `Open-Workspace`, `Set-WorkspaceWindowLayout`, `Test-FancyZonesConfiguration`
 
 ### Reset-Windows Defaults
 

@@ -308,9 +308,14 @@ function Confirm-WorkspaceWindowPositions {
 			$windows = @($windows | Where-Object { -not $ExcludeWindowHandles.Contains($_.Handle) })
 		}
 
-		# Prefer candidates on the expected virtual desktop. If none exist there,
-		# keep cross-desktop candidates as a fallback.
-		if ($windows -and $windows.Count -gt 1 -and $hasVirtualDesktopModule -and $null -ne $cfg.DesktopNumber) {
+		# The virtual desktop is part of "in place". Candidates on the expected desktop win; a
+		# candidate whose desktop resolves to ANOTHER desktop is never accepted - a window at the
+		# right rect on the wrong desktop used to pass this check whenever it was the only match
+		# (the desktop was only ever consulted to choose between several), which is how a VS Code
+		# window that appeared on the desktop the snap pass happened to be on, at the bounds VS
+		# Code itself restored, verified as placed. Only candidates whose desktop cannot be
+		# resolved at all remain a fallback.
+		if ($windows -and $windows.Count -ge 1 -and $hasVirtualDesktopModule -and $null -ne $cfg.DesktopNumber) {
 			$originalCandidateCount = $windows.Count
 			$expectedDesktopIndex = ConvertTo-InternalDesktopIndex -DesktopNumber $cfg.DesktopNumber -DesktopOffset $DesktopOffset
 			$desktopCacheKey = "$layoutKey|$expectedDesktopIndex"
@@ -347,10 +352,36 @@ function Confirm-WorkspaceWindowPositions {
 
 			if ($expectedDesktopCandidates.Count -gt 0) {
 				$windows = $expectedDesktopCandidates
-				Write-LogDebug "[$label] Prefer expected desktop $($cfg.DesktopNumber + $DesktopOffset) ($($expectedDesktopCandidates.Count)/$originalCandidateCount candidate(s))"
+				if ($originalCandidateCount -gt 1) {
+					Write-LogDebug "[$label] Prefer expected desktop $($cfg.DesktopNumber + $DesktopOffset) ($($expectedDesktopCandidates.Count)/$originalCandidateCount candidate(s))"
+				}
 			}
 			else {
-				Write-LogDebug "[$label] No candidates found on expected desktop $($cfg.DesktopNumber + $DesktopOffset) - falling back to cross-desktop candidates" -Style Warning
+				$unresolvedDesktopCandidates = @($windows | Where-Object { $null -eq $desktopIndexCache[$_.Handle.ToInt64().ToString()] })
+				if ($unresolvedDesktopCandidates.Count -gt 0) {
+					$windows = $unresolvedDesktopCandidates
+					Write-LogDebug "[$label] No candidates found on expected desktop $($cfg.DesktopNumber + $DesktopOffset) - keeping $($unresolvedDesktopCandidates.Count) whose desktop could not be resolved" -Style Warning
+				}
+				else {
+					# Every candidate is on some other desktop: the entry is not in place, whatever
+					# its rect says. Report the first one so the retry knows which window to move.
+					$wrongDesktopWindow = $windows[0]
+					$wrongDesktopIndex = $desktopIndexCache[$wrongDesktopWindow.Handle.ToInt64().ToString()]
+					$expectedDisplayDesktop = [int]$cfg.DesktopNumber + $DesktopOffset
+					$wrongDesktopLabel = if (-not [string]::IsNullOrWhiteSpace($wrongDesktopWindow.Title)) { $wrongDesktopWindow.Title } else { $label }
+					$result.Success = $false
+					$result.Failures.Add([PSCustomObject]@{
+							WindowTitle = $wrongDesktopLabel
+							LayoutEntry = $label
+							ProcessName = $processName
+							Handle      = $wrongDesktopWindow.Handle
+							Expected    = "($expectedX, $expectedY) ${expectedW}x${expectedH} on desktop $expectedDisplayDesktop"
+							Actual      = "On desktop $([int]$wrongDesktopIndex + 1)"
+							DeltaX = $null; DeltaY = $null; DeltaW = $null; DeltaH = $null
+						})
+					Write-LogDebug "  ✗ [$wrongDesktopLabel] - on virtual desktop $([int]$wrongDesktopIndex + 1), expected $expectedDisplayDesktop" -Style Error
+					continue
+				}
 			}
 		}
 

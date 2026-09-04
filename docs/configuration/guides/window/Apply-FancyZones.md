@@ -10,6 +10,7 @@ Applies predefined FancyZones layouts to monitors by sending the `Win+Ctrl+Alt+[
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
 | [`LayoutNumbers`](../../configuration-reference.md#layout-numbers--zone-mappings) | hashtable of name to FancyZones layout number | hashtable, 10 keys (`One` .. `Ten`) | Maps a readable layout name to the FancyZones custom-layout index `Apply-FancyZones` applies. |
+| [`FancyZonesApplyMethod`](../../configuration-reference.md#layout-numbers--zone-mappings) | string, `File` or `Hotkeys` | `File` | Whether the layouts are written into FancyZones' `applied-layouts.json` (one write, one probe shortcut, no desktop switching, shortcut pass as the per-desktop fallback) or sent as `Win+Ctrl+Alt+[Number]` on every desktop. |
 
 ## Decisions
 
@@ -17,6 +18,10 @@ Applies predefined FancyZones layouts to monitors by sending the `Win+Ctrl+Alt+[
     - Options: Name to index. The names are what layout files and `Visualize-Layouts` use.
     - Default: The shipped `One` .. `Ten` mapping to 1 .. 10.
     - More detail: [`LayoutNumbers`](../../configuration-reference.md#layout-numbers--zone-mappings)
+2. Should the layouts be written into `applied-layouts.json` or sent as shortcuts on every desktop?
+    - Options: `File` or `Hotkeys`.
+    - Default: `File`. Keep it; a desktop whose entry FancyZones does not take falls back to the shortcut pass on its own. Switch to `Hotkeys` only when a PowerToys update changes the file format or the file watcher.
+    - More detail: [`FancyZonesApplyMethod`](../../configuration-reference.md#layout-numbers--zone-mappings)
 
 ## Where to Put Values
 
@@ -28,7 +33,8 @@ All of it goes in `Configuration.local.psd1`, at the repository's `Windows/Power
 ## Steps Overview
 
 1. Set `LayoutNumbers`
-2. Reload and confirm the merge landed
+2. Choose `FancyZonesApplyMethod` (optional)
+3. Reload and confirm the merge landed
 
 ## Step 1: Set `LayoutNumbers`
 
@@ -41,7 +47,15 @@ LayoutNumbers = @{
 }
 ```
 
-## Step 2: Reload and confirm the merge landed
+## Step 2: Choose `FancyZonesApplyMethod` (optional)
+
+`File` (the default) writes the workspace's zone layouts into FancyZones' `applied-layouts.json`, lets FancyZones reload the file and proves the reload with one probe shortcut, so a workspace open no longer switches through its desktops to apply layouts. `Hotkeys` is the previous desktop-switching shortcut pass. Only set the key to switch back:
+
+```powershell
+FancyZonesApplyMethod = 'Hotkeys'
+```
+
+## Step 3: Reload and confirm the merge landed
 
 Reload the profile, then read the merged value back. `$global:Configuration` after a reload is the ground truth - if what you set is not there, the local file did not parse or the key is nested one level away from where you put it.
 
@@ -57,7 +71,7 @@ Read-only checks. None of these change anything.
 ```powershell
 Reload-PowerShellProfile
 $global:Configuration.LayoutNumbers
-$global:Configuration.LayoutNumbers
+$global:Configuration.FancyZonesApplyMethod
 Test-FancyZonesConfiguration
 ```
 
@@ -74,6 +88,7 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
         One = 1
         Two = 2
     }
+    FancyZonesApplyMethod = 'File'
 }
 ```
 

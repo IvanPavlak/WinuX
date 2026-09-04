@@ -12,6 +12,10 @@ function Visualize-Layouts {
 	.PARAMETER Layout
 		The name of a specific layout to visualize (e.g., "WinuX_Test", "Example_Test").
 
+	.PARAMETER LayoutPath
+		Full path of one layout file to visualize. The recursive scan of the Layouts tree is
+		skipped; Set-WorkspaceWindowLayout passes the file it has just applied this way.
+
 	.PARAMETER All
 		Process all layout files in the Layouts directory and its machine-specific subfolders.
 
@@ -39,6 +43,10 @@ function Visualize-Layouts {
 		# Displays visualization for a specific layout
 
 	.EXAMPLE
+		Visualize-Layouts -LayoutPath "C:\...\Layouts\PC\WinuX_PC.psd1"
+		# Displays one layout file named directly, without scanning the Layouts tree
+
+	.EXAMPLE
 		Visualize-Layouts -All
 		# Displays visualizations for all layouts
 
@@ -54,6 +62,9 @@ function Visualize-Layouts {
 	param (
 		[Parameter(ParameterSetName = 'Specific', Mandatory = $true)]
 		[string]$Layout,
+
+		[Parameter(ParameterSetName = 'Path', Mandatory = $true)]
+		[string]$LayoutPath,
 
 		[Parameter(ParameterSetName = 'All', Mandatory = $false)]
 		[switch]$All,
@@ -173,25 +184,38 @@ function Visualize-Layouts {
 		Write-LogTitle "Displaying Layout Visualizations" -BlankLineAfter
 	}
 
-	$layoutsDir = Join-Path $PSScriptRoot "..\Layouts"
+	# A caller that already holds the resolved file (Set-WorkspaceWindowLayout, after every open)
+	# names it directly. The recursive scan of the whole Layouts tree exists only to find a file
+	# by base name or to offer the menu, and cost 0.1 to 0.7 s per workspace open.
+	$layoutFiles = @()
+	if ($PSCmdlet.ParameterSetName -ne 'Path') {
+		$layoutsDir = Join-Path $PSScriptRoot "..\Layouts"
 
-	if (-not (Test-Path $layoutsDir)) {
-		Write-LogError "Layouts directory not found: $layoutsDir"
-		return
-	}
+		if (-not (Test-Path $layoutsDir)) {
+			Write-LogError "Layouts directory not found: $layoutsDir"
+			return
+		}
 
-	# Get all layout files (search recursively in machine-specific folders: Laptop, PC, Work)
-	$layoutFiles = Get-ChildItem -Path $layoutsDir -Filter "*.psd1" -Recurse
+		# Get all layout files (search recursively in machine-specific folders: Laptop, PC, Work)
+		$layoutFiles = @(Get-ChildItem -Path $layoutsDir -Filter "*.psd1" -Recurse)
 
-	if ($layoutFiles.Count -eq 0) {
-		Write-LogWarning "No layout files found in $layoutsDir"
-		return
+		if ($layoutFiles.Count -eq 0) {
+			Write-LogWarning "No layout files found in $layoutsDir"
+			return
+		}
 	}
 
 	# Determine which files to process
 	$filesToProcess = @()
 
-	if ($PSCmdlet.ParameterSetName -eq 'All') {
+	if ($PSCmdlet.ParameterSetName -eq 'Path') {
+		if (-not (Test-Path -LiteralPath $LayoutPath -PathType Leaf)) {
+			Write-LogError "Layout file not found: $LayoutPath"
+			return
+		}
+		$filesToProcess = @(Get-Item -LiteralPath $LayoutPath)
+	}
+	elseif ($PSCmdlet.ParameterSetName -eq 'All') {
 		$filesToProcess = $layoutFiles
 	}
 	elseif ($PSCmdlet.ParameterSetName -eq 'Specific') {

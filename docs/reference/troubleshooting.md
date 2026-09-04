@@ -415,6 +415,8 @@ Start-Process "C:\Program Files\PowerToys\PowerToys.exe"
 
 `Set-WorkspaceWindowLayout` performs this forced restart path automatically before every retry, and follows it with `Apply-FancyZones -Force`.
 
+A forced restart is quick when PowerToys is healthy: `PowerToys.exe` has no main window to close, so `Stop-PowerToysCompletely` skips its graceful wait and the kills land in well under a second, and FancyZones is back and verified about 1 to 1.5 s after the relaunch (the PID-stability sampling of a young process is most of that). Under `Set-LogLevel Verbose` the restart prints `PowerToys has no main window to close - skipping the graceful wait` and `FancyZones started and passed readiness checks (PID: n, ready after Nms)`. A restart that takes several seconds is PowerToys itself starting slowly (disk, antivirus, a settings migration after an update), not the flow waiting.
+
 **Why both steps:** a restart alone does not fix a wrong layout. FancyZones reloads `applied-layouts.json` on startup but does not re-assert the live zone grid, and that same file is what the idempotency check reads - so an ordinary re-apply reports "Already Applied" for every monitor and sends nothing. If the live grid is stale or was never applied (FancyZones was down, crash-looping, or missed the hotkey), every retry snaps into the same wrong grid and cannot converge. `-Force` skips the check and re-sends the shortcuts.
 
 To reset the zone grid by hand after FancyZones has been misbehaving:
@@ -483,6 +485,39 @@ Set-WorkspaceRerunMirror -Name 'WORKSPACE_RERUN_COUNT' -Value $null
 Set-WorkspaceRerunMirror -Name 'WORKSPACE_WINDOW_ONLY_RETRY' -Value $null
 ```
 
+### Every Workspace Open Switches Through All Desktops To Apply FancyZones
+
+**Problem:** A plain rerun of a workspace that is already laid out still cycles through every virtual desktop before the windows are waited for - `Switching to Desktop [1]`, `[2]`, `[3]`, `Switching back to desktop [1]` in the session log, roughly 0.6 s per desktop - although `applied-layouts.json` already holds the right layout for every one of them and `Apply-FancyZones` documents an idempotency skip for exactly that case.
+
+**Why it happened:** `Apply-FancyZones` compares its target against the applied-layouts state under an instance-qualified key, `EDID|INSTANCE:{DesktopGUID}`, so two identical monitors can be told apart. The instance came from `GetMonitorDeviceInfo` in `WindowNative.cs`, which called `EnumDisplayDevices` without `EDD_GET_DEVICE_INTERFACE_NAME` and therefore received the device-class form of the ID - `MONITOR\DELA1A8\{4d36e96e-e325-11ce-bfc1-08002be10318}\0004` - whose braced segment is the monitor device CLASS GUID, identical for every monitor on every machine. FancyZones derives `monitor-instance` from the interface-name form - `\\?\DISPLAY#DELA1A8#4&1cfdc60e&0&UID8262#{...}` - so the key the check built could never match the key the file held, and every desktop fell through to a hotkey re-send.
+
+**Solution:** Fixed in 0.1.52: the enumeration now asks for the interface name and takes the same two segments FancyZones does. Cold opens, where every desktop is new and nothing can be "already applied", no longer switch either: the layouts are written into `applied-layouts.json` and proved with one probe shortcut (see "Zone Layouts Reach FancyZones Through applied-layouts.json, Not Through Shortcuts" below), so `Switching to Desktop [n]` before the wait phase now means a desktop fell back to the shortcut pass. The native type is compiled once per process, so the fix takes effect in a new shell, not in one that already loaded the Window module. To confirm, open a workspace twice in a row under `Set-LogLevel Verbose { w MyWorkspace }` - the second run logs `all layouts already applied, skipping switch` per desktop and no `Switching to Desktop` lines - or, with `WorkspaceBenchmark.Enabled` set, compare the `FancyZonesSeconds` column of two consecutive runs:
+
+```powershell
+Get-WorkspaceBenchmark -Workspace MyWorkspace -Last 5 -Formatted
+```
+
+### Measuring Where A Workspace Open Spends Its Time
+
+**Problem:** A workspace open feels slow, or a change was made to speed it up, and the only number available is the `Workspace(s) opened in N seconds` line.
+
+**Solution:** Opt in to the workspace benchmark in `Configuration.local.psd1`:
+
+```powershell
+WorkspaceBenchmark = @{
+    Enabled = $true
+}
+```
+
+Every open then appends a row to `WorkspaceBenchmark.csv` next to the session logs (launch actions, then each layout phase - `Preamble`, `Desktops`, `FancyZones`, `Wait`, `Normalize`, `Position`, `Snap`, `Verify`, `Retry`, `Save` - plus the attempt count and outcome) and ends with the workspace's recent runs as a table, the same view `Get-WorkspaceBenchmark -Workspace <name> -Formatted` prints. `Display = "Line"` prints one `Timing [Workspace] => actions 0.8s | fancyzones 3.8s | wait 15.1s | ...` line instead, `"None"` only records. Compare runs with `Get-WorkspaceBenchmark`; read `Attempts` and `Outcome` before the seconds, because a faster run that needed a retry is not faster:
+
+```powershell
+Get-WorkspaceBenchmark -Workspace MyWorkspace -Formatted
+Get-WorkspaceBenchmark -Summary -Formatted
+```
+
+`wait` is application start-up (VS Code, Claude Desktop, browser pages resolving their titles) plus a one-second stability floor per window and cannot be reduced from this side; `fancyzones` and `snap` scale with the number of virtual desktops, because each desktop switch costs roughly 0.5 to 0.8 s.
+
 ### Layout File Not Found
 
 **Problem:** "Cannot find layout file" error.
@@ -500,6 +535,78 @@ Modules/Window/Layouts/PC/WorkspaceName_PC.psd1
 ```powershell
 $MachineType  # Should match folder name
 ```
+
+### Zone Layouts Reach FancyZones Through applied-layouts.json, Not Through Shortcuts
+
+**Problem:** A workspace open applies its zone layouts without visiting the desktops, or the verbose log shows `Writing FancyZones layouts for [n] desktop(s) into applied-layouts.json...` followed by `using the shortcut pass`, and you want to know which path ran and why.
+
+**How it works:** `Apply-FancyZones` writes the entries for every desktop of the workspace straight into FancyZones' `applied-layouts.json` (`Write-AppliedFancyZonesLayouts`); FancyZones watches that file and reloads it. One probe shortcut on the current desktop then makes FancyZones save its in-memory layout map back to the file, and `Test-AppliedFancyZonesLayouts` checks that every written entry survived - that is the proof the reload happened. Desktops that verify are done; any other desktop goes through the desktop-switching shortcut pass, which is why a partial fallback shows up as `[n] left to the shortcut pass` under `Set-LogLevel Verbose`.
+
+**Reasons a desktop falls back:**
+
+- `applied-layouts.json has no device entry for the attached monitor(s) yet` - FancyZones has never written an entry for that monitor (fresh PowerToys install, monitor attached for the first time). The shortcut pass runs once; FancyZones writes the entry as it applies the layout, and the next open uses the file.
+- `FancyZones did not rewrite applied-layouts.json after the probe shortcut` - the probe shortcut was not processed (FancyZones still starting, hotkey hooks not live yet). The shortcut pass runs and the snap verification decides the outcome as before.
+- `Duplicate` in the verification - FancyZones added its own entry next to the written one, meaning the cloned device block (serial number, monitor number) no longer matches its live work area. The shortcut pass repairs the file; the next open clones the fresh block.
+
+**Confirming with FancyZones' own log** (`%LOCALAPPDATA%\Microsoft\PowerToys\FancyZones\Logs\<version>\log_<date>.log`): after a file-mode open every workspace desktop has an `Initialize layout on <monitor>_..._{desktop GUID}` line and no `Clone layout from` or `Set default layout on` line for that GUID. Either of the latter means FancyZones did not have the entry when it switched there.
+
+**Forcing the old behaviour:** `FancyZonesApplyMethod = "Hotkeys"` in `Configuration.local.psd1` (the base ships `"File"`), then `Reload-PowerShellProfile`. Use it when a PowerToys update changes the file schema or the file watcher, and report the version so the writer can be adjusted.
+
+### A Window That Will Not Snap Resets FancyZones Mid-Pass
+
+**Problem:** Under `Set-LogLevel Verbose { w MyWorkspace }` the snap pass prints `Snap exhausted for [Title] - resetting FancyZones and retrying the same window...`, followed by the PowerToys restart lines and `Writing FancyZones layouts for [n] desktop(s)`, then three more attempts on that window - all before the next window is snapped.
+
+**Why it happened:** A window that failed keyboard AND shift-drag snapping three times is not a stubborn window; it is the signal that the zone grid it was snapped against is wrong (FancyZones wedged or holding a stale grid). The pass used to record the window, carry on snapping the rest against that same grid, and leave the recovery to `Set-WorkspaceWindowLayout`'s retry, which paid a full position-snap-verify cycle afterwards. It now resets FancyZones right there (`Snap-AllWindows -ZoneReset`, the same force-restart plus forced zone re-apply the retry uses) and gives that same window its whole attempt budget again.
+
+**Solution:** Nothing to do when the second round verifies - that is the recovery working, at a cost of about 2.5 s. When the window fails the second round too, its failure record reads `after 6 attempts (unverified position, zone grid reset once)` and the pass moves on; the in-process retry and the rerun escalation take over exactly as before. At most two such resets happen per pass - a third exhausted window records straight away, because two resets that did not help point at something the retry has to handle. A layout that produces this on every open has a zone or layout definition FancyZones cannot reproduce for that window - check its entry against `Visualize-Layouts` and `Test-FancyZonesConfiguration`.
+
+### Desktops Are Positioned And Snapped Before The Wait Phase Ends
+
+**Problem:** Under `Set-LogLevel Verbose` a workspace open shows `Desktop [2] is ready while the rest still load - positioning and snapping it now`, `[Setting Custom Window Layouts]` and `[Snapping Windows to FancyZones]` lines while `Waiting for:` lines are still being printed for other windows, and the benchmark's `WaitSeconds` is lower than before while `PositionSeconds` and `SnapSeconds` are unchanged.
+
+**Why it happened:** This is per-desktop pipelining (`WorkspaceLayoutPipelining`, on by default). The wait ends when the slowest window of the whole workspace has been stable for a second, and every position and snap second used to be paid after that although the other desktops' windows had been stable for seconds. `Wait-ForWorkspaceWindows` now reports each desktop whose windows are all stable while others still load, and `Set-WorkspaceWindowLayout` positions and snaps that desktop right then, restricted to exactly the windows the wait confirmed for it. The tail after the wait finishes only the desktops that were not ready, verification stays global, and the in-process retries run the full layout as before.
+
+**Solution:** Nothing to do - it saves roughly the position and snap time of every desktop but the slowest one on cold opens. To compare the two orders, or if a layout misbehaves only with pipelining on, set `WorkspaceLayoutPipelining = $false` in `Configuration.local.psd1`, reload, and open the workspace again; `Get-WorkspaceBenchmark -Workspace MyWorkspace -Formatted` shows both runs side by side.
+
+### Desktops And Zone Layouts Are Prepared Before The Applications Launch
+
+**Problem:** A workspace open prints `Preparing MyWorkspace Workspace Layout` and the virtual desktop and FancyZones lines before the first application is launched, and the layout action afterwards reports `Virtual desktop count already matches` and `Already Applied` for every desktop. The benchmark row lists `Set-WorkspaceWindowLayout -PrepareOnly` in its `Actions`.
+
+**Why it happened:** This is the early layout preparation (`WorkspaceLayoutPrepareEarly`, on by default). The layout preamble - RPC probe, layout file, validation, desktop resize, zone layouts - depends on no window, yet it used to run inside the layout action, after every application had been launched and while all of them were starting: 3.4 s on a cold 8-desktop open against 0.2 s on an idle machine. `Open-Workspace` now runs it first, as `Set-WorkspaceWindowLayout -PrepareOnly`, with the same parameters the layout action gets; the action then finds that work done. Its seconds are still booked under the `Desktops` and `FancyZones` phases of the row (the preparation's phase record is folded into the layout action's) and it counts as layout time, not as a launch action.
+
+**Solution:** Nothing to do. A window-only retry is never prepared, and if the preparation fails the action does the work as before, so the open cannot end up without desktops or zone layouts. To compare, or if a workspace misbehaves only with the preparation on, set `WorkspaceLayoutPrepareEarly = $false` in `Configuration.local.psd1`, reload and open the workspace again.
+
+### The Wait Phase Ends Sooner For Windows That Were Already Open, Or Abandons An Entry Another Workspace's Window Matches
+
+**Problem:** Under `Set-LogLevel Verbose` the wait phase logs `stable on first sight (pre-existing window, 1s credited)` for some windows and completes without the usual `stabilizing: 1.0s remaining` lines for them; on an alongside open an entry logs `Abandoning wait for [...] - only windows of another workspace match after 10s` and the layout reports it `Not Found`.
+
+**Why it happened:** Two trims to the wait, neither of which changes the stability rules. A window that existed before the open has nothing to stabilize, so on a plain open it counts as stable the first time an entry matches it; on an alongside open, and for protected windows on a plain open, it never matches an entry at all - the layout pass may not use it, and waiting a second for it only to refuse it hid a real shortfall behind a `found` entry. Such an entry is abandoned after the process-absent grace period (10 s) rather than the 60 s timeout, and the layout gives it one search instead of its 1.5 s not-found ladder. Windows the launch actions created earn the floor as before.
+
+**Solution:** Nothing to do. The abandoned alongside entry is the shortfall the layout would have reported anyway (`Layout short by N window(s)`), now visible in the wait too; fix it by opening enough new windows for the alongside workspace (`Open-Browser -Alongside` opens N new ones). `MinimumStableDurationSeconds` is unchanged at 1 s for every window that appeared during the open.
+
+### VS Code (Or Another Freshly Launched Application) Ends Up On The Wrong Virtual Desktop
+
+**Problem:** After a workspace open the VS Code window is at its full zone size but on a desktop the layout does not assign it to; the open reported success, and the session log shows `Process fingerprint changed for [... - Visual Studio Code] (expected PID: N, current PID: 0)` followed by `Skipping ... - stale window handle could not be refreshed`.
+
+**Why it happened:** VS Code's first window is replaced about 2 to 3 s after launch - same handle value, same title, same size, but owned by the main process instead of the launcher - and a window created at that moment appears on whatever virtual desktop is active, which during a per-desktop snap pass is not desktop 1. Three things had to line up for the open to still report success: the wait handed the window over before the replacement (a first cut of the 0.1.52 wait trims credited a freshly launched window the time it had been visible before the wait started, which put a 2-second-old VS Code over the 1 s floor), the snap pass refused the replaced window because its process id no longer matched the tracked one, and verification accepted the lone window at the zone bounds VS Code itself restores without looking at its desktop.
+
+**Solution:** Fixed in 0.1.52 on all three counts: only windows that pre-existed the open skip the stability floor, `Resolve-PositionedWindowHandle` accepts the sole window that still carries the tracked title and process name when the tracked process is gone (so the snap pass moves and snaps it), and `Confirm-WorkspaceWindowPositions` fails an entry whose window sits on another desktop (`On desktop 4`, expected 3), which makes the in-process retry move it. A window already on the wrong desktop from an earlier open is put right by the next `w <Workspace>`.
+
+### A Workspace Open Regularly Needs Two Attempts With Pipelining On
+
+**Problem:** `Attempts 2` on most opens of a many-desktop workspace, the first verification failing with `on virtual desktop 4, expected 3` for a window a per-desktop pass had already snapped on desktop 3, and `No windows found after 3 attempts` inside several per-desktop passes under `Set-LogLevel Verbose`.
+
+**Why it happened:** The wait matched entries by process OR title, so a browser entry whose title pattern contained `\bSEUP\b` matched the `seup-ui - Visual Studio Code` window, and the early move carried that window to the browser's desktop after VS Code's own desktop had been positioned and snapped; the new desktop check then failed the entry and the retry moved it back. Separately, a desktop was handed over as soon as its entries were stable on SOME window of their process (a `Slack` entry on a `Problem loading page` window), so its pass searched for a window that was not there yet and paid the 0.5 s + 1 s not-found ladder for it, inside the wait, per such entry.
+
+**Solution:** Fixed in 0.1.52. An entry with a process pattern only ever matches windows of that process; the early move never touches a window a per-desktop pass already placed; a titled entry counts towards its desktop's hand-over only on a window whose title matches; and a per-desktop pass searches each entry once, leaving a miss to the pass after the wait. A catch-all entry (process, no title) whose process gained a window after its desktop's pass is run again in the tail, so both VS Code windows of a two-project open land in the zone.
+
+### Workspace Open Reports Hundreds Of Seconds, Or A Layout Retry Reopens The Whole Workspace
+
+**Problem:** `Workspace(s) opened in 597.1 seconds!` for an open that visibly took 20; or a standalone `Set-WorkspaceWindowLayout` in a project tab escalates and a fresh shell suddenly runs a complete `Open-Workspace` nobody typed.
+
+**Why it happened:** `Open-Workspace` kept its start time and its resolved invocation in process environment variables (`OPEN_WORKSPACE_START_UTC`, `WORKSPACE_RERUN_COMMAND`) for the whole open. Every application and terminal tab the open spawned inherited them - Windows Terminal hands the `wt.exe` caller's environment to command-line-created panes - so a later open typed into one of those tabs measured from the earlier open's start, and a layout escalation there handed the inherited command to `ReRun-LastCommand`.
+
+**Solution:** Fixed in 0.1.52. The start time is a local of the invocation, and the rerun command is Window-module state (`Set-WorkspaceRerunCommand` / `Get-WorkspaceRerunCommand`) that a child process cannot inherit. The only hand-over left is the alongside bootstrap, which sets `OPEN_WORKSPACE_START_UTC` for the relaunched shell so its summary includes the relaunch; that shell consumes it at entry. A shell started before the fix may still carry the old variables; `Remove-Item Env:OPEN_WORKSPACE_START_UTC, Env:WORKSPACE_RERUN_COMMAND -ErrorAction SilentlyContinue` clears them, and any new tab is clean.
 
 ## fastfetch Logo Issues
 

@@ -87,34 +87,38 @@ function Open-Workspace {
 		[Environment]::SetEnvironmentVariable($alongsideShellEnvVar, $null, 'Process')
 	}
 
+	# Base of the elapsed summary: the start of THIS invocation, unless this is the relaunched
+	# alongside shell, whose bootstrap command handed the original start over in
+	# OPEN_WORKSPACE_START_UTC so the reported duration includes the relaunch. That hand-over is
+	# the ONLY place the variable is read, and it is consumed right here in every case. It used
+	# to be set in this process for the whole open, so every application and terminal tab the
+	# open spawned inherited it (Windows Terminal hands the wt.exe caller's environment to
+	# command-line-created panes), and a later Open-Workspace typed into such a tab reported the
+	# time since the earlier open - 597 s and 704 s in the session logs.
 	$workspaceTimerEnvVar = 'OPEN_WORKSPACE_START_UTC'
 	$currentInvocationStartUtc = [DateTimeOffset]::UtcNow
 	$carryOverElapsed = [TimeSpan]::Zero
-	$persistedStartUtc = $null
-	$persistedStartUtcRaw = [Environment]::GetEnvironmentVariable($workspaceTimerEnvVar, 'Process')
+	$handedOverStartUtcRaw = [Environment]::GetEnvironmentVariable($workspaceTimerEnvVar, 'Process')
+	if (-not [string]::IsNullOrWhiteSpace($handedOverStartUtcRaw)) {
+		[Environment]::SetEnvironmentVariable($workspaceTimerEnvVar, $null, 'Process')
+	}
 
-	if (-not [string]::IsNullOrWhiteSpace($persistedStartUtcRaw)) {
+	if ($isAlongsideShell -and -not [string]::IsNullOrWhiteSpace($handedOverStartUtcRaw)) {
 		try {
-			$persistedStartUtc = [DateTimeOffset]::ParseExact(
-				$persistedStartUtcRaw,
+			$handedOverStartUtc = [DateTimeOffset]::ParseExact(
+				$handedOverStartUtcRaw,
 				'o',
 				[System.Globalization.CultureInfo]::InvariantCulture,
 				[System.Globalization.DateTimeStyles]::RoundtripKind
 			)
 
-			if ($currentInvocationStartUtc -ge $persistedStartUtc) {
-				$carryOverElapsed = $currentInvocationStartUtc - $persistedStartUtc
-			}
-			else {
-				[Environment]::SetEnvironmentVariable($workspaceTimerEnvVar, $currentInvocationStartUtc.ToString('o'), 'Process')
+			if ($currentInvocationStartUtc -ge $handedOverStartUtc) {
+				$carryOverElapsed = $currentInvocationStartUtc - $handedOverStartUtc
 			}
 		}
 		catch {
-			[Environment]::SetEnvironmentVariable($workspaceTimerEnvVar, $currentInvocationStartUtc.ToString('o'), 'Process')
+			$carryOverElapsed = [TimeSpan]::Zero
 		}
-	}
-	else {
-		[Environment]::SetEnvironmentVariable($workspaceTimerEnvVar, $currentInvocationStartUtc.ToString('o'), 'Process')
 	}
 
 	$stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
@@ -301,8 +305,13 @@ function Open-Workspace {
 		# Record this exact invocation (with RESOLVED workspace names - the user may have picked
 		# them from the interactive menu) so a failure-path respawn reruns precisely this command
 		# instead of scraping the shared PSReadLine history, where any other session may have
-		# written a newer line meanwhile. Cleared in the finally block; consumed by
-		# Set-WorkspaceWindowLayout when it escalates to ReRun-LastCommand.
+		# written a newer line meanwhile. Kept as Window-module state
+		# (Set-WorkspaceRerunCommand), never in the environment: an environment variable would be
+		# inherited by every terminal tab this open spawns, and a standalone
+		# Set-WorkspaceWindowLayout escalation typed into such a tab later would respawn the whole
+		# inherited workspace open. Cleared in the finally block; consumed by
+		# Set-WorkspaceWindowLayout when it escalates to ReRun-LastCommand. Guarded like the other
+		# Window-module calls here - the module may be absent.
 		$quoteRerunToken = { param($value) "'" + ([string]$value -replace "'", "''") + "'" }
 		$rerunTokens = @('Open-Workspace')
 		$rerunTokens += '-Workspace'
@@ -328,7 +337,9 @@ function Open-Workspace {
 				$rerunTokens += & $quoteRerunToken $extraArg
 			}
 		}
-		$env:WORKSPACE_RERUN_COMMAND = $rerunTokens -join ' '
+		if (Get-Command Set-WorkspaceRerunCommand -ErrorAction SilentlyContinue) {
+			Set-WorkspaceRerunCommand -Command ($rerunTokens -join ' ')
+		}
 
 		# What this plain open must leave alone: alongside workspaces that are still standing.
 		# Resolved ONCE, before any action can spawn a process - a window created mid-run must
@@ -347,6 +358,13 @@ function Open-Workspace {
 		$workspacesRecorded = 0
 
 		foreach ($workspaceName in $workspaces) {
+			# Benchmark clocks for this workspace: one for the whole open, one per action. The
+			# layout action's own phase breakdown is read back from Get-WorkspaceLayoutTimings
+			# when the row is written - see $recordWorkspaceBenchmark below.
+			$workspaceClock = [System.Diagnostics.Stopwatch]::StartNew()
+			$workspaceStartedAt = [DateTimeOffset]::Now
+			$actionTimings = [System.Collections.Generic.List[object]]::new()
+
 			# Calculate desktop offset if -Alongside flag is used
 			$desktopOffset = 0
 			if ($Alongside) {
@@ -487,6 +505,133 @@ function Open-Workspace {
 				Save-WorkspaceState @saveStateParams
 			}
 
+			# Measured, not eyeballed: one benchmark row per workspace open, from the per-action
+			# clock above and the phase clock Set-WorkspaceWindowLayout publishes through
+			# Get-WorkspaceLayoutTimings. Opt-in through Configuration.WorkspaceBenchmark - a
+			# vanilla install measures nothing and prints exactly what it printed before. The
+			# calls are guarded by Get-Command - the Window module may be absent and the tests
+			# stub them - and the write is best-effort, so the benchmark can never fail an open.
+			# The layout record is attached only when it was produced by THIS workspace: the
+			# getter returns the session's most recent run, which a workspace without a layout
+			# action would otherwise inherit from an earlier open.
+			$recordWorkspaceBenchmark = {
+				$benchmarkConfig = $Configuration.WorkspaceBenchmark
+				if (-not ($benchmarkConfig -and $benchmarkConfig.Enabled)) { return }
+				if (-not (Get-Command Write-WorkspaceBenchmark -ErrorAction SilentlyContinue)) { return }
+
+				# Display: "Table" (the workspace's recent runs, the default), "Line" (one
+				# "Timing [Workspace] =>" line) or "None" (record only).
+				$benchmarkDisplay = if ([string]::IsNullOrWhiteSpace([string]$benchmarkConfig.Display)) { 'Table' } else { ([string]$benchmarkConfig.Display).Trim() }
+				$benchmarkLast = 10
+				if ($null -ne $benchmarkConfig.Last) {
+					try { $benchmarkLast = [int]$benchmarkConfig.Last } catch { $benchmarkLast = 10 }
+				}
+
+				$layoutTimings = $null
+				if (Get-Command Get-WorkspaceLayoutTimings -ErrorAction SilentlyContinue) {
+					$candidateTimings = Get-WorkspaceLayoutTimings
+					if ($candidateTimings -and $candidateTimings.RecordedAt -and $candidateTimings.RecordedAt -ge $workspaceStartedAt) {
+						$layoutTimings = $candidateTimings
+					}
+				}
+				# The early preparation (see $prepareLayoutTimings below) published its own record
+				# and the layout action replaced it; fold its phases and seconds into the row so the
+				# Desktops and FancyZones columns still show that work wherever it ran.
+				if ($layoutTimings -and $prepareLayoutTimings -and -not [object]::ReferenceEquals($prepareLayoutTimings, $layoutTimings)) {
+					$mergedPhases = [ordered]@{}
+					if ($layoutTimings.Phases) {
+						foreach ($phaseName in @($layoutTimings.Phases.Keys)) { $mergedPhases[$phaseName] = [double]$layoutTimings.Phases[$phaseName] }
+					}
+					if ($prepareLayoutTimings.Phases) {
+						foreach ($phaseName in @($prepareLayoutTimings.Phases.Keys)) {
+							$mergedPhases[$phaseName] = [math]::Round([double]$mergedPhases[$phaseName] + [double]$prepareLayoutTimings.Phases[$phaseName], 2)
+						}
+					}
+					$layoutTimings = [PSCustomObject]@{
+						Workspace     = $layoutTimings.Workspace
+						LayoutFile    = $layoutTimings.LayoutFile
+						Alongside     = $layoutTimings.Alongside
+						DesktopOffset = $layoutTimings.DesktopOffset
+						Attempts      = $layoutTimings.Attempts
+						Outcome       = $layoutTimings.Outcome
+						TotalSeconds  = [math]::Round([double]$layoutTimings.TotalSeconds + [double]$prepareLayoutTimings.TotalSeconds, 2)
+						Phases        = $mergedPhases
+						RecordedAt    = $layoutTimings.RecordedAt
+					}
+				}
+
+				try {
+					Write-WorkspaceBenchmark -Workspace $workspaceName `
+						-TotalSeconds ([math]::Round($workspaceClock.Elapsed.TotalSeconds, 2)) `
+						-ActionTimings $actionTimings.ToArray() `
+						-LayoutTimings $layoutTimings `
+						-Alongside:$Alongside `
+						-Quiet:($benchmarkDisplay -ne 'Line')
+
+					if ($benchmarkDisplay -eq 'Table' -and (Get-Command Get-WorkspaceBenchmark -ErrorAction SilentlyContinue)) {
+						# Rendered here rather than emitted: Format-Table -AutoSize buffers until the
+						# pipeline ends, which would print the table AFTER the elapsed summary.
+						Get-WorkspaceBenchmark -Workspace $workspaceName -Last $benchmarkLast -Formatted | Out-Host
+					}
+				}
+				catch {
+					Write-LogDebug " [Open-Workspace] Benchmark row not written => $($_.Exception.Message)" -Style Warning
+				}
+			}
+
+			# The layout preamble ahead of the launch actions. Set-WorkspaceWindowLayout's RPC probe,
+			# layout file, validation, virtual desktop resize and FancyZones zone layouts depend on
+			# no window existing, yet they used to run AFTER every application had been launched and
+			# cost 3.4 s under that CPU load against 0.2 s idle (the probe runspace alone 1.7 s).
+			# -PrepareOnly runs exactly that part now; the layout action below finds the desktops and
+			# zone layouts in place and skips them. Same parameters as the action itself, plus the
+			# alongside, protection and pre-capture threading the action loop adds, so the prepared
+			# state is the one the action would have produced. Skipped in a window-only retry (whose
+			# whole point is to leave the desktops alone; the marker's process copy is read without
+			# consuming the mirror) and when WorkspaceLayoutPrepareEarly is $false. Best-effort: a
+			# failure here leaves the action to do the work as before.
+			$prepareLayoutTimings = $null
+			$prepareLayoutEarly = ($null -eq $Configuration.WorkspaceLayoutPrepareEarly -or [bool]$Configuration.WorkspaceLayoutPrepareEarly)
+			$layoutActionConfig = @($workspaceActions | Where-Object { $_.Action -eq 'Set-WorkspaceWindowLayout' }) | Select-Object -First 1
+			$windowOnlyRetryMarker = [Environment]::GetEnvironmentVariable('WORKSPACE_WINDOW_ONLY_RETRY', 'Process')
+			if ($prepareLayoutEarly -and $layoutActionConfig -and [string]::IsNullOrEmpty($windowOnlyRetryMarker) -and (Get-Command Set-WorkspaceWindowLayout -ErrorAction SilentlyContinue)) {
+				$prepareParams = @{}
+				if ($layoutActionConfig.Parameters) {
+					foreach ($key in $layoutActionConfig.Parameters.Keys) { $prepareParams[$key] = $layoutActionConfig.Parameters[$key] }
+				}
+				foreach ($key in $effectiveExtraParams.Keys) {
+					if (-not $prepareParams.ContainsKey($key)) { $prepareParams[$key] = $effectiveExtraParams[$key] }
+				}
+				if ($Alongside) { $prepareParams['Alongside'] = $true }
+				if ($openProtection) { $prepareParams['ProtectedWindowHandles'] = $openProtection.WindowHandles }
+				$prepareParams['PreCapturedExistingWindows'] = $existingHandlesBeforeOpen
+				if ($desktopOffset -gt 0) { $prepareParams['DesktopOffset'] = $desktopOffset }
+				$prepareParams['PrepareOnly'] = $true
+
+				$actionClock = [System.Diagnostics.Stopwatch]::StartNew()
+				try {
+					$filteredPrepareParams = Get-FilteredParams -CommandName 'Set-WorkspaceWindowLayout' -Params $prepareParams
+					Set-WorkspaceWindowLayout @filteredPrepareParams
+				}
+				catch {
+					Write-LogWarning "Layout preparation failed - the layout action will do that work after the launch actions: $($_.Exception.Message)"
+				}
+				$actionTimings.Add([PSCustomObject]@{ Action = 'Set-WorkspaceWindowLayout -PrepareOnly'; Seconds = [math]::Round($actionClock.Elapsed.TotalSeconds, 2) })
+
+				if (Get-Command Get-WorkspaceLayoutTimings -ErrorAction SilentlyContinue) {
+					$preparedTimings = Get-WorkspaceLayoutTimings
+					if ($preparedTimings -and $preparedTimings.RecordedAt -and $preparedTimings.RecordedAt -ge $workspaceStartedAt) {
+						$prepareLayoutTimings = $preparedTimings
+					}
+				}
+			}
+			elseif ($prepareLayoutEarly -and $layoutActionConfig -and -not [string]::IsNullOrEmpty($windowOnlyRetryMarker)) {
+				Write-LogDebug " [Open-Workspace] Window-only retry - the layout is not prepared ahead of the launch actions" -Style Warning
+			}
+			elseif (-not $prepareLayoutEarly -and $layoutActionConfig) {
+				Write-LogDebug " [Open-Workspace] Layout preparation ahead of the launch actions disabled by configuration (WorkspaceLayoutPrepareEarly)" -Style Warning
+			}
+
 			$selectedProjects = @()
 
 			# Pre-compute which project tab names belong to THIS workspace
@@ -597,6 +742,7 @@ function Open-Workspace {
 					}
 
 					# Capture the selected projects for {SelectedProjects} substitution in later actions
+					$actionClock = [System.Diagnostics.Stopwatch]::StartNew()
 					try {
 						$filteredParams = Get-FilteredParams -CommandName $action -Params $actionParams
 						if ($filteredParams.Count -gt 0) {
@@ -609,6 +755,7 @@ function Open-Workspace {
 					catch {
 						Write-LogError "Error executing action [$action] for workspace [$workspaceName]: $_"
 					}
+					$actionTimings.Add([PSCustomObject]@{ Action = $action; Seconds = [math]::Round($actionClock.Elapsed.TotalSeconds, 2) })
 
 					# Skip the general execution block for Open-Project since we already executed it
 					continue
@@ -674,6 +821,7 @@ function Open-Workspace {
 					if (-not $workspaceStateRecorded) {
 						$workspaceStateRecorded = $true
 						& $recordWorkspaceState
+						& $recordWorkspaceBenchmark
 						$workspacesRecorded++
 					}
 
@@ -681,13 +829,15 @@ function Open-Workspace {
 					$elapsedSeconds = [math]::Round(($carryOverElapsed + $stopwatch.Elapsed).TotalSeconds, 1)
 					Write-LogSuccess "Workspace(s) opened in $elapsedSeconds seconds!"
 					$summaryPrinted = $true
-					[Environment]::SetEnvironmentVariable($workspaceTimerEnvVar, $null, 'Process')
-					[Environment]::SetEnvironmentVariable('WORKSPACE_RERUN_COMMAND', $null, 'Process')
+					if (Get-Command Set-WorkspaceRerunCommand -ErrorAction SilentlyContinue) {
+						Set-WorkspaceRerunCommand -Clear
+					}
 					if (Get-Command Reset-KeyboardModifiers -ErrorAction SilentlyContinue) {
 						$null = Reset-KeyboardModifiers
 					}
 				}
 
+				$actionClock = [System.Diagnostics.Stopwatch]::StartNew()
 				try {
 					$filteredParams = Get-FilteredParams -CommandName $action -Params $actionParams
 					if ($filteredParams.Count -gt 0) {
@@ -700,6 +850,7 @@ function Open-Workspace {
 				catch {
 					Write-LogError "Error executing action [$action] for workspace [$workspaceName]: $_" -NoLeadingNewline
 				}
+				$actionTimings.Add([PSCustomObject]@{ Action = $action; Seconds = [math]::Round($actionClock.Elapsed.TotalSeconds, 2) })
 			}
 
 			# Every action has run, so whatever is on screen beyond the pre-open capture is this
@@ -708,6 +859,7 @@ function Open-Workspace {
 			if (-not $workspaceStateRecorded) {
 				$workspaceStateRecorded = $true
 				& $recordWorkspaceState
+				& $recordWorkspaceBenchmark
 				$workspacesRecorded++
 			}
 		}
@@ -719,8 +871,9 @@ function Open-Workspace {
 		}
 	}
 	finally {
-		[Environment]::SetEnvironmentVariable($workspaceTimerEnvVar, $null, 'Process')
-		[Environment]::SetEnvironmentVariable('WORKSPACE_RERUN_COMMAND', $null, 'Process')
+		if (Get-Command Set-WorkspaceRerunCommand -ErrorAction SilentlyContinue) {
+			Set-WorkspaceRerunCommand -Clear
+		}
 
 		# The flow above synthesizes keyboard input (FancyZones shortcuts, Win+Arrow
 		# snaps, shift-drag, terminal tab cycling). Guarantee the session never leaves

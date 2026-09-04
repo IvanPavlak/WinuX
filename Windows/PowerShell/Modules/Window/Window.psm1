@@ -21,23 +21,28 @@ if (([System.Management.Automation.PSTypeName]'WindowModule.Native').Type) {
 
 # Module-scoped timing configuration (in milliseconds)
 # These can be adjusted for performance tuning while maintaining reliability
+# From personal experience, on stronger machines 10ms is a bit too fast - 25 seems to be the sweet spot for 100% reliability
 $script:WindowModuleDelays = @{
 	# Delay after cursor movement before sending keys (monitor activation)
-	CursorSettleMs     = 10
+	CursorSettleMs     = 25
 	# Delay after SetForegroundWindow before sending keys
-	FocusSettleMs      = 10
+	FocusSettleMs      = 25
 	# Delay after keyboard shortcut is sent (for FancyZones to process)
-	KeyboardShortcutMs = 10
+	KeyboardShortcutMs = 25
 	# Delay allowing FancyZones to asynchronously commit a layout switch to disk before
 	# a virtual-desktop switch fires. Too short a delay lets the last desktop's layout
 	# "bleed" onto the desktop we switch back to (see Apply-FancyZones return-desktop reapply).
-	LayoutCommitMs     = 10
+	LayoutCommitMs     = 25
 	# Delay after ShowWindow restore operations
-	WindowRestoreMs    = 10
+	WindowRestoreMs    = 25
 	# Delay after SetWindowPos for window to settle
-	WindowPositionMs   = 10
+	WindowPositionMs   = 25
 	# Delay after Move-Window for virtual desktop operations
-	VirtualDesktopMs   = 10
+	VirtualDesktopMs   = 25
+	# Delay after writing applied-layouts.json before the probe shortcut that confirms FancyZones
+	# reloaded it. FancyZones' file watcher posts the reload to its main thread; its own log shows
+	# the reload landing 40-60 ms after a write, so this leaves headroom without adding real time.
+	AppliedLayoutsReloadMs = 150
 }
 
 # Module-scoped position tolerances (in pixels)
@@ -94,6 +99,12 @@ $script:AppliedLayoutsCache = @{
 	Timestamp = [datetime]::MinValue
 	MaxAgeSec = 10  # Short TTL - file changes when layouts are applied
 }
+
+# The exact Open-Workspace invocation of the open in progress, for the failure-path respawn
+# (Set-WorkspaceWindowLayout -> ReRun-LastCommand -Command). Module state on purpose: an
+# environment variable is inherited by every terminal tab the open spawns, and a standalone
+# layout escalation typed into such a tab would then respawn the whole inherited open.
+$script:WorkspaceRerunCommand = $null
 
 $ModulesPath = Join-Path -Path $PSScriptRoot -ChildPath "\Functions"
 

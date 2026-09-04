@@ -20,8 +20,16 @@ function Start-FancyZones {
 		(cleared by -ForceRestart and on any failed check), so the several Start-FancyZones
 		calls of one workspace open pay for a single readiness pass.
 
+		After launching PowerToys the readiness check runs immediately and then every 100ms
+		until -MaxWaitSeconds has elapsed (a deadline, not an attempt count), so the FancyZones
+		process is picked up as soon as it is enumerable rather than at the next half-second
+		boundary. -ForceRestart shuts PowerToys down through Stop-PowerToysCompletely
+		-PreferGracefulExit, which skips its graceful wait when PowerToys has no main window
+		to close.
+
 	.PARAMETER MaxWaitSeconds
-		Maximum time to wait for FancyZones to start (default: 10 seconds).
+		Maximum time to wait for FancyZones to start (default: 10 seconds). Readiness is
+		checked immediately after the launch and then every 100ms until this deadline.
 
 	.PARAMETER ForceRestart
 		Forces PowerToys/FancyZones to restart even if already running. This ensures
@@ -283,19 +291,25 @@ function Start-FancyZones {
 			return
 		}
 
-		# Wait for FancyZones process to become ready
-		$waitInterval = 500  # milliseconds
-		$maxAttempts = [Math]::Max([Math]::Ceiling(($MaxWaitSeconds * 1000) / $waitInterval), 1)
-		$attempt = 0
+		# Wait for the FancyZones process to become ready. The first check runs right away and
+		# the poll is 100ms: FancyZones is enumerable well inside the first half second after
+		# PowerToys.exe starts (session logs: ready 1.4 to 1.5s after Start-Process every time,
+		# which is the old fixed 500ms lead-in plus the 750ms PID-stability sampling of a young
+		# process), so a check-then-sleep loop starts the sampling the moment the process exists
+		# instead of at the next half-second boundary. -MaxWaitSeconds is a deadline: the old
+		# attempt counter never accounted for the sampling inside each check, so a slow start
+		# could run for two and a half times the requested wait.
+		$pollIntervalMs = 100
+		$progressEverySeconds = 2
+		$nextProgressAtSeconds = $progressEverySeconds
+		$startupClock = [System.Diagnostics.Stopwatch]::StartNew()
+		$deadline = [timespan]::FromSeconds([Math]::Max($MaxWaitSeconds, 0))
 
-		while ($attempt -lt $maxAttempts) {
-			Start-Sleep -Milliseconds $waitInterval
-			$attempt++
-
+		while ($true) {
 			if (& $testFancyZonesReady) {
 				$fancyZonesProcess = Get-Process -Name "PowerToys.FancyZones" -ErrorAction SilentlyContinue | Select-Object -First 1
 				if (Test-LogVerbose) {
-					Write-LogDebug "  ✓ FancyZones started and passed readiness checks (PID: $($fancyZonesProcess.Id))" -Style Success
+					Write-LogDebug "  ✓ FancyZones started and passed readiness checks (PID: $($fancyZonesProcess.Id), ready after $($startupClock.ElapsedMilliseconds)ms)" -Style Success
 				}
 
 				$script:FancyZonesReadyCache.VerifiedAt = [datetime]::Now
@@ -307,9 +321,17 @@ function Start-FancyZones {
 				return
 			}
 
-			if ($attempt % 4 -eq 0) {
-				Write-LogDebug "    Waiting for FancyZones... ($([int]($attempt * $waitInterval / 1000))s / $MaxWaitSeconds`s)" -Style Step
+			if ($startupClock.Elapsed -ge $deadline) {
+				break
 			}
+
+			$elapsedSeconds = $startupClock.Elapsed.TotalSeconds
+			if ($elapsedSeconds -ge $nextProgressAtSeconds) {
+				Write-LogDebug "    Waiting for FancyZones... ($([int]$elapsedSeconds)s / $MaxWaitSeconds`s)" -Style Step
+				$nextProgressAtSeconds += $progressEverySeconds
+			}
+
+			Start-Sleep -Milliseconds $pollIntervalMs
 		}
 
 		if (Test-LogVerbose) {

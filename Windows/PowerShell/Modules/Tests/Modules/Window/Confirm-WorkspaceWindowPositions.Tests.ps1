@@ -11,6 +11,15 @@ BeforeAll {
 	# Dot-source the function under test into script scope so plain Mock (no -ModuleName)
 	# intercepts its internal calls, mirroring the rest of this file.
 	. "$FunctionsPath\Confirm-WorkspaceWindowPositions.ps1"
+
+	# VirtualDesktop cmdlets come from an optional external module absent on CI runners.
+	# Stub the ones the desktop check calls so Mock can attach (no-op where the module exists).
+	if (-not (Get-Command Get-DesktopFromWindow -ErrorAction SilentlyContinue)) {
+		function Get-DesktopFromWindow { [CmdletBinding()] param($Hwnd) }
+	}
+	if (-not (Get-Command Get-DesktopIndex -ErrorAction SilentlyContinue)) {
+		function Get-DesktopIndex { [CmdletBinding()] param([Parameter(Position = 0)]$Desktop) }
+	}
 }
 
 Describe "Confirm-WorkspaceWindowPositions" {
@@ -150,6 +159,68 @@ Describe "Confirm-WorkspaceWindowPositions" {
 			$result.Failures[0].Actual | Should -Be 'Window not found'
 			# Nothing better exists here - the pattern is genuinely all that is known.
 			$result.Failures[0].WindowTitle | Should -Be '(firefox|chrome|msedge|brave)'
+		}
+	}
+
+	Context "Virtual desktop of the matched window" {
+		# A window at the right rect on the wrong desktop is not in place. The desktop used to be
+		# consulted only to choose between several candidates, so a lone VS Code window that
+		# appeared on the desktop the snap pass happened to be on, at the bounds VS Code itself
+		# restored, verified as placed.
+		BeforeAll {
+			$script:codeLayout = @(
+				@{
+					ProcessName   = 'Code'
+					DesktopNumber = 3
+					X = 2; Y = 2; Width = 1717; Height = 1437
+				}
+			)
+		}
+
+		BeforeEach {
+			Mock Import-VirtualDesktopModule { $true }
+			Mock Get-WindowHandle -ParameterFilter { $ProcessName -and -not $WindowTitle } {
+				@([PSCustomObject]@{ Handle = [IntPtr]0x9D001; Title = 'asseto - Visual Studio Code' })
+			}
+			Mock Get-DesktopFromWindow { 'desktop' }
+		}
+
+		It "fails an entry whose only window sits on another desktop, naming both desktops" {
+			Mock Get-DesktopIndex { 3 }
+
+			$result = Confirm-WorkspaceWindowPositions -LayoutConfig $codeLayout
+
+			$result.Success | Should -BeFalse
+			$result.Failures.Count | Should -Be 1
+			$result.Failures[0].WindowTitle | Should -Be 'asseto - Visual Studio Code'
+			$result.Failures[0].Handle | Should -Be ([IntPtr]0x9D001)
+			$result.Failures[0].Actual | Should -Be 'On desktop 4'
+			$result.Failures[0].Expected | Should -Match 'on desktop 3$'
+		}
+
+		It "accepts the window when it is on the expected desktop" {
+			Mock Get-DesktopIndex { 2 }
+
+			$result = Confirm-WorkspaceWindowPositions -LayoutConfig $codeLayout
+
+			# A window WAS selected - the bogus handle only fails the rect read.
+			$result.Failures[0].Actual | Should -Be 'Handle invalid'
+		}
+
+		It "applies the desktop offset of an alongside open" {
+			Mock Get-DesktopIndex { 5 }
+
+			$result = Confirm-WorkspaceWindowPositions -LayoutConfig $codeLayout -DesktopOffset 3
+
+			$result.Failures[0].Actual | Should -Be 'Handle invalid'
+		}
+
+		It "keeps a window whose desktop cannot be resolved as a fallback" {
+			Mock Get-DesktopFromWindow { throw 'RPC unavailable' }
+
+			$result = Confirm-WorkspaceWindowPositions -LayoutConfig $codeLayout
+
+			$result.Failures[0].Actual | Should -Be 'Handle invalid'
 		}
 	}
 

@@ -61,6 +61,46 @@ function Set-WindowLayouts {
 		entry's candidate list before any claiming happens, so an entry left with none reports
 		"Not Found" (a visible, countable shortfall) instead of silently placing nothing.
 
+	.PARAMETER CandidateWindowHandles
+		Whitelist of window handles this pass may claim. Every other window is dropped from an
+		entry's candidate list before claiming, exactly like -SkipExistingWindows and
+		-ProtectedWindowHandles drop theirs. Set-WorkspaceWindowLayout passes the windows the
+		wait phase confirmed stable for ONE desktop when it positions that desktop while the
+		rest of the workspace is still loading, so a window still loading elsewhere - or one
+		another desktop's entry already owns - is never claimed here, whatever the title regex
+		says. Such a pass searches each entry once: a miss means the window is not stable yet
+		and the pass after the wait places it, so the not-found retry ladder is skipped.
+
+	.PARAMETER ExcludeWindowHandles
+		Blacklist of window handles this pass may not claim, dropped at the same point as the
+		other candidate filters. Set-WorkspaceWindowLayout passes the windows its per-desktop
+		passes already placed when it finishes the remaining desktops.
+
+	.PARAMETER DesktopNumbers
+		Processes only the entries on these desktops (the layout's own 1-based DesktopNumber,
+		default 1) while the WHOLE layout still drives duplicate-key detection and sort order.
+		This is how Set-WorkspaceWindowLayout positions one desktop while the rest of the
+		workspace is still loading: a key that appears once on that desktop but again on
+		another must still claim exactly one window, which a layout subset could not know.
+
+	.PARAMETER SkipEntryKeys
+		Entry keys (the EntryKey field of an earlier result row) to leave alone, after
+		duplicate-key detection over the whole layout. Set-WorkspaceWindowLayout passes the
+		entries its per-desktop passes already placed when it finishes the rest of the layout.
+
+	.PARAMETER KeepPositionedWindows
+		Appends to the positioned-window tracking instead of resetting it first. Every call
+		resets the tracking by default so Snap-AllWindows sees exactly the windows of that
+		call; the per-desktop passes of one workspace open share a single tracking set and
+		therefore pass this on every call but the first.
+
+	.PARAMETER AbandonedEntries
+		Layout entries the wait phase abandoned (Wait-ForWorkspaceWindows' AbandonedEntries: no
+		window ever matched and no live process). They still produce their Not Found row, but
+		get ONE search instead of the three-attempt retry ladder with its 0.5 s and 1 s waits -
+		that ladder rides out transient title drift on a window that exists, and these have
+		none.
+
 	.PARAMETER ProtectedWindowHandles
 		Live window handles a plain open must preserve (they belong to a live alongside
 		workspace - see Get-WorkspaceOpenProtection). Protected windows are removed from every
@@ -167,10 +207,32 @@ function Set-WindowLayouts {
 		[hashtable]$PinnedHandleMap,
 
 		[Parameter()]
-		[System.Collections.Generic.HashSet[IntPtr]]$ProtectedWindowHandles
+		[System.Collections.Generic.HashSet[IntPtr]]$ProtectedWindowHandles,
+
+		[Parameter()]
+		[System.Collections.Generic.HashSet[IntPtr]]$CandidateWindowHandles,
+
+		[Parameter()]
+		[System.Collections.Generic.HashSet[IntPtr]]$ExcludeWindowHandles,
+
+		[Parameter()]
+		[int[]]$DesktopNumbers,
+
+		[Parameter()]
+		[string[]]$SkipEntryKeys,
+
+		[Parameter()]
+		[switch]$KeepPositionedWindows,
+
+		[Parameter()]
+		[array]$AbandonedEntries
 	)
 
-	Initialize-PositionedWindowTracking
+	# The per-desktop passes of one workspace open append to one tracking set; every other
+	# caller starts from a clean one so Snap-AllWindows sees exactly this call's windows.
+	if (-not $KeepPositionedWindows) {
+		Initialize-PositionedWindowTracking
+	}
 
 	if (Test-LogVerbose) {
 		Write-LogDebug "[Setting Custom Window Layouts]"
@@ -284,6 +346,29 @@ function Set-WindowLayouts {
 
 	# Clear window cache before processing to ensure fresh data
 	Clear-WindowCache
+
+	# One key per layout entry - desktop, monitor and zone (or the direct coordinates) - so a
+	# caller can tell which entries an earlier pass placed (every result row carries it as
+	# EntryKey) and hand them back through -SkipEntryKeys.
+	$entryKeyOf = {
+		param($entry)
+		$entryDesktop = if ($entry.DesktopNumber) { [int]$entry.DesktopNumber } else { 1 }
+		$monitorPart = if ($entry.Monitor -is [string]) { $entry.Monitor } elseif ($entry.Monitor) { "$($entry.Monitor.X),$($entry.Monitor.Y)" } else { '' }
+		$placePart = if ($entry.Zone) { [string]$entry.Zone } elseif ($null -ne $entry.X) { "$($entry.X),$($entry.Y),$($entry.Width),$($entry.Height)" } else { '' }
+		"$entryDesktop|$monitorPart|$placePart|$($entry.ProcessName)|$($entry.WindowTitle)"
+	}
+	$skipEntryKeySet = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+	foreach ($skipKey in @($SkipEntryKeys)) {
+		if (-not [string]::IsNullOrEmpty($skipKey)) { [void]$skipEntryKeySet.Add($skipKey) }
+	}
+	# Entries the wait abandoned, keyed the same way (tokens resolved as the layout above was),
+	# so the search below can tell them apart from an entry whose window merely lost its title.
+	$abandonedEntryKeySet = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+	foreach ($abandonedEntry in @($AbandonedEntries)) {
+		if ($null -eq $abandonedEntry) { continue }
+		$resolvedAbandoned = if ($abandonedEntry -is [hashtable]) { Resolve-LayoutTokens -LayoutEntry $abandonedEntry } else { $abandonedEntry }
+		[void]$abandonedEntryKeySet.Add((& $entryKeyOf $resolvedAbandoned))
+	}
 
 	$applyPositionWorkItem = {
 		param(
@@ -690,11 +775,24 @@ function Set-WindowLayouts {
 				ExpectedY         = $posY
 				ExpectedWidth     = $posWidth
 				ExpectedHeight    = $posHeight
+				EntryKey          = $currentEntryKey
 			})
 	}
 
 	foreach ($item in $sortedLayoutConfig) {
 		$config = $item.Config
+
+		# Per-desktop pipelining: the whole layout was counted above, so a duplicate key is
+		# known as such even when only one of its entries is on the desktop being processed.
+		# Entries outside the requested desktops, and entries an earlier pass already placed,
+		# produce no row - the caller merges its passes' rows itself.
+		if ($DesktopNumbers -and $DesktopNumbers.Count -gt 0) {
+			$entryDesktop = if ($config.DesktopNumber) { [int]$config.DesktopNumber } else { 1 }
+			if ($DesktopNumbers -notcontains $entryDesktop) { continue }
+		}
+		$currentEntryKey = & $entryKeyOf $config
+		if ($skipEntryKeySet.Count -gt 0 -and $skipEntryKeySet.Contains($currentEntryKey)) { continue }
+
 		if (Test-LogVerbose) {
 			Write-LogDebug "[$($config.ProcessName) -> Desktop $($config.DesktopNumber)]"
 			if ($config.ZoneName) {
@@ -705,9 +803,20 @@ function Set-WindowLayouts {
 		# Get windows for this process with retry logic.
 		# Windows (especially browser tabs) can temporarily lose their title during page loads,
 		# redirects, or handle recreation. Retry with cache clearing to catch transient misses.
-		$maxSearchRetries = 3
+		# An entry the wait phase abandoned has no window to ride out title drift on: one search,
+		# no 0.5 s + 1 s ladder, the same Not Found row. A per-desktop pass (-CandidateWindowHandles)
+		# searches once too: the wait confirmed its candidates stable in this very poll, so a miss
+		# means the entry's window is not there yet and the pass after the wait places it - the
+		# ladder inside the wait only delayed every other desktop by 1.5 s per miss.
+		$entryAbandonedByWait = ($abandonedEntryKeySet.Count -gt 0 -and $abandonedEntryKeySet.Contains($currentEntryKey))
+		$singleSearchOnly = $entryAbandonedByWait -or ($null -ne $CandidateWindowHandles)
+		$maxSearchRetries = if ($singleSearchOnly) { 1 } else { 3 }
 		$searchRetryDelayMs = 500
 		$windows = $null
+		if ($singleSearchOnly -and (Test-LogVerbose)) {
+			$singleSearchReason = if ($entryAbandonedByWait) { "Entry abandoned by the wait phase" } else { "Per-desktop pass" }
+			Write-LogDebug "$singleSearchReason - single search, no retry ladder" -Style Warning
+		}
 
 		for ($searchAttempt = 1; $searchAttempt -le $maxSearchRetries; $searchAttempt++) {
 			if ($searchAttempt -gt 1) {
@@ -862,6 +971,27 @@ function Set-WindowLayouts {
 			}
 		}
 
+		# Per-desktop pipelining, same position and same reasoning as the two filters above. A
+		# pass for ONE desktop may only claim the windows the wait phase confirmed stable for that
+		# desktop's entries (whitelist); the pass that finishes the remaining desktops may not
+		# claim the windows the per-desktop passes already placed (blacklist). Neither is a
+		# matter of title regexes - a catch-all entry matches every window of its process - so
+		# both are enforced on the candidate list, before claiming.
+		if ($null -ne $CandidateWindowHandles -and $windows) {
+			$candidateCount = @($windows).Count
+			$windows = @($windows | Where-Object { $CandidateWindowHandles.Contains($_.Handle) })
+			if ((Test-LogVerbose) -and $windows.Count -ne $candidateCount) {
+				Write-LogDebug "⊘ Excluded $($candidateCount - $windows.Count) window(s) outside this pass's candidate set" -Style Warning
+			}
+		}
+		if ($null -ne $ExcludeWindowHandles -and $ExcludeWindowHandles.Count -gt 0 -and $windows) {
+			$candidateCount = @($windows).Count
+			$windows = @($windows | Where-Object { -not $ExcludeWindowHandles.Contains($_.Handle) })
+			if ((Test-LogVerbose) -and $windows.Count -ne $candidateCount) {
+				Write-LogDebug "⊘ Excluded $($candidateCount - $windows.Count) window(s) an earlier per-desktop pass already placed" -Style Warning
+			}
+		}
+
 		if (-not $windows) {
 			if (Test-LogVerbose) {
 				Write-LogDebug "✗ No windows found after $maxSearchRetries attempts" -Style Warning
@@ -887,6 +1017,7 @@ function Set-WindowLayouts {
 					ProcessName   = $config.ProcessName
 					Status        = "Not Found"
 					DesktopNumber = $config.DesktopNumber
+					EntryKey      = $currentEntryKey
 				})
 			continue
 		}
@@ -1059,6 +1190,7 @@ function Set-WindowLayouts {
 						ProcessName   = $config.ProcessName
 						Status        = "Not Found"
 						DesktopNumber = $config.DesktopNumber
+						EntryKey      = $currentEntryKey
 					})
 				continue
 			}

@@ -99,7 +99,7 @@
 # → VSCodeProjects                : Open-VSCode
 #
 # Workspace Management:
-# → Workspaces, DefaultWorkspace, WorkspaceActions : Open-Workspace
+# → Workspaces, DefaultWorkspace, WorkspaceActions, WorkspaceBenchmark : Open-Workspace
 #
 # Application Configuration:
 # → BrowserGroups                   : Open-Browser, Collect-BrowserUrls
@@ -126,6 +126,9 @@
 #
 # Window Management & FancyZones:
 # → LayoutNumbers                : Apply-FancyZones (keyboard shortcut mapping)
+# → FancyZonesApplyMethod        : Apply-FancyZones (applied-layouts.json write or hotkeys)
+# → WorkspaceLayoutPipelining    : Set-WorkspaceWindowLayout (position and snap each desktop as it is ready)
+# → WorkspaceLayoutPrepareEarly  : Open-Workspace (desktops and zone layouts before the launch actions)
 # → ZoneNameMappings             : Get-FancyZone (human-readable zone names to indices)
 # → Layout files in Layouts/*/   : Set-WorkspaceWindowLayout, Visualize-Layouts
 # → SmallDisplayMachineType      : Get-LayoutMachineType (layout set for a small display)
@@ -1706,6 +1709,37 @@
 	DefaultWorkspace              = "Default"
 
 	# ==========================================================================
+	# Workspace Benchmark (Opt-In)
+	# ==========================================================================
+	# → Consumer: Open-Workspace (records through Write-WorkspaceBenchmark, shows
+	#   through Get-WorkspaceBenchmark -Formatted)
+	#
+	# Measures every workspace open: each configured action is timed, the phase
+	# clock Set-WorkspaceWindowLayout publishes (Preamble, Desktops, FancyZones,
+	# Wait, Normalize, Position, Snap, Verify, Retry, Save) is read back, and one
+	# row per workspace is appended to WorkspaceBenchmark.csv next to the session
+	# logs. Off by default - a vanilla install measures nothing and prints exactly
+	# what it printed before.
+	#
+	#   Enabled - $true records the row and shows the result after every open.
+	#   Display - what the end of an open shows:
+	#               "Table" => the workspace's recent runs as a table
+	#                          (Get-WorkspaceBenchmark -Workspace <name> -Formatted)
+	#               "Line"  => one "Timing [Workspace] => ..." line
+	#               "None"  => record only
+	#   Last    - how many recent runs the Table display shows.
+	#
+	# Hashtables deep-merge, so opting in from Configuration.local.psd1 needs only
+	# the flag; Display and Last fall through to the values below:
+	#   WorkspaceBenchmark = @{ Enabled = $true }
+	# ==========================================================================
+	WorkspaceBenchmark            = @{
+		Enabled = $false
+		Display = "Table"
+		Last    = 10
+	}
+
+	# ==========================================================================
 	# Default VS Code Workspace Per Workspace
 	# ==========================================================================
 	# Optional. Maps an Open-Workspace name to a .code-workspace file (base name, no
@@ -2742,6 +2776,37 @@
 		"Eight" = 8
 		"Nine"  = 9
 	}
+
+	# ==========================================================================
+	# FancyZones Apply Method
+	# ==========================================================================
+	# How Apply-FancyZones puts a workspace's zone layouts onto its virtual desktops.
+	#   "File"    - write the entries for every desktop into FancyZones' applied-layouts.json;
+	#               FancyZones watches that file and reloads it, so no desktop switching and no
+	#               Win+Ctrl+Alt+[Number] shortcut per desktop. One probe shortcut on the current
+	#               desktop confirms FancyZones took the change; any desktop that does not verify
+	#               falls back to the shortcut pass automatically. Default.
+	#   "Hotkeys" - the previous behaviour: switch to every desktop and send the shortcut there.
+	#               Use it if a PowerToys update changes the file format or the file watcher.
+	FancyZonesApplyMethod         = "File"
+
+	# ==========================================================================
+	# Workspace Layout Pipelining
+	# ==========================================================================
+	# Set-WorkspaceWindowLayout positions and snaps each virtual desktop as soon as every
+	# window on it is stable, while the slower windows on other desktops are still loading,
+	# instead of waiting for the slowest window of the whole workspace and doing all of it
+	# afterwards. Verification stays global and the in-process retries run the full layout.
+	# Set to $false to restore the strictly sequential wait -> position -> snap order (for
+	# example to compare the two with Get-WorkspaceBenchmark).
+	WorkspaceLayoutPipelining     = $true
+
+	# Open-Workspace runs the layout preamble - virtual desktop resize and FancyZones zone
+	# layouts (Set-WorkspaceWindowLayout -PrepareOnly) - BEFORE the launch actions, on an idle
+	# machine, instead of after every application has started and is competing for the CPU.
+	# The layout action then finds that work done and skips it. Set to $false to run the whole
+	# layout after the launch actions as before.
+	WorkspaceLayoutPrepareEarly   = $true
 
 	# ==========================================================================
 	# Zone Name Mappings by Layout

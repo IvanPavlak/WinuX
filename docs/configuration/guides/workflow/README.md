@@ -20,7 +20,7 @@ The [Workflow module reference](../../../modules/workflow.md) is the authority o
 | `Open-Project` | `ProjectActions`, `Projects` | [Open-Project](Open-Project.md) |
 | `Open-ProjectTerminals` | `DefaultWSLDistribution`, `ProjectTerminals` | [Open-ProjectTerminals](Open-ProjectTerminals.md) |
 | `Open-Training` | `Universal` | [Open-Training](Open-Training.md) |
-| `Open-Workspace` | `DefaultVSCodeWorkspaces`, `DefaultWorkspace`, `ProjectTerminals`, `WorkspaceActions`, `Workspaces` | [Open-Workspace](Open-Workspace.md) |
+| `Open-Workspace` | `DefaultVSCodeWorkspaces`, `DefaultWorkspace`, `ProjectTerminals`, `WorkspaceActions`, `WorkspaceBenchmark`, `Workspaces` | [Open-Workspace](Open-Workspace.md) |
 | `Resolve-ProjectDockerCompose` | `DockerComposeFiles`, `ProjectTerminals`, `RunnableProjectMappings` | [Resolve-ProjectDockerCompose](Resolve-ProjectDockerCompose.md) |
 | `Resolve-SwaggerBrowserGroup` | `BrowserGroupMatching`, `BrowserGroups`, `Universal` | [Resolve-SwaggerBrowserGroup](Resolve-SwaggerBrowserGroup.md) |
 | `Start-Containers` | `DockerComposeFiles` | [Start-Containers](Start-Containers.md) |
@@ -36,7 +36,7 @@ Longer walkthroughs that cut across several functions and keys.
 
 These read no `Configuration.psd1` keys. Their guides record that fact and show how to call them.
 
-[Close-BrowserTabsByPattern](Close-BrowserTabsByPattern.md), [Close-ProjectTerminals](Close-ProjectTerminals.md), [Close-Workspace](Close-Workspace.md), [EfCoreMigrationWizard](EfCoreMigrationWizard.md), [Focus-TerminalTab](Focus-TerminalTab.md), [Format-WorkspaceStateContent](Format-WorkspaceStateContent.md), [Get-WorkspaceOpenProtection](Get-WorkspaceOpenProtection.md), [Get-WorkspaceState](Get-WorkspaceState.md), [Get-WorkspaceStatePath](Get-WorkspaceStatePath.md), [Open-ProjectSwagger](Open-ProjectSwagger.md), [Save-WorkspaceState](Save-WorkspaceState.md), [Test-TerminalTabsAlreadyOpen](Test-TerminalTabsAlreadyOpen.md), [Training-Backup](Training-Backup.md)
+[Close-BrowserTabsByPattern](Close-BrowserTabsByPattern.md), [Close-ProjectTerminals](Close-ProjectTerminals.md), [Close-Workspace](Close-Workspace.md), [EfCoreMigrationWizard](EfCoreMigrationWizard.md), [Focus-TerminalTab](Focus-TerminalTab.md), [Format-WorkspaceStateContent](Format-WorkspaceStateContent.md), [Get-WorkspaceBenchmark](Get-WorkspaceBenchmark.md), [Get-WorkspaceBenchmarkPath](Get-WorkspaceBenchmarkPath.md), [Get-WorkspaceOpenProtection](Get-WorkspaceOpenProtection.md), [Get-WorkspaceState](Get-WorkspaceState.md), [Get-WorkspaceStatePath](Get-WorkspaceStatePath.md), [Open-ProjectSwagger](Open-ProjectSwagger.md), [Save-WorkspaceState](Save-WorkspaceState.md), [Test-TerminalTabsAlreadyOpen](Test-TerminalTabsAlreadyOpen.md), [Training-Backup](Training-Backup.md), [Write-WorkspaceBenchmark](Write-WorkspaceBenchmark.md)
 
 ## Related
 

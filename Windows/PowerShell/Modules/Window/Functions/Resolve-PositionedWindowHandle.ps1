@@ -8,10 +8,15 @@ function Resolve-PositionedWindowHandle {
 		searches the current windows to find the matching live window. It enumerates the
 		window list once via Get-CachedWindows and filters in memory: by tracked title
 		(literal substring match), then by process name, then by the captured process ID
-		when a fingerprint was recorded. This lets Snap-AllWindows recover when a window
-		was recreated or its handle was reassigned during a long-running session - the
-		primary reason snaps fail only in reused shells but succeed from a fresh shell.
-		Returns the first matching live window, or $null.
+		when a fingerprint was recorded. When no window of the tracked process is left but
+		exactly one window still carries the tracked title AND process name, that window is
+		accepted: the process was replaced under the window (VS Code's launcher hands its
+		window to the main process it spawns a few seconds after launch; an application that
+		restarted), and refusing it left the window unsnapped and on whatever desktop it
+		appeared on. Several such windows stay ambiguous and resolve to $null. This lets
+		Snap-AllWindows recover when a window was recreated or its handle was reassigned
+		during a long-running session - the primary reason snaps fail only in reused shells
+		but succeed from a fresh shell. Returns the first matching live window, or $null.
 
 	.PARAMETER WindowState
 		The tracked window state object. Expected members: WindowTitle, ProcessName, ProcessId.
@@ -46,8 +51,19 @@ function Resolve-PositionedWindowHandle {
 	}
 
 	if ($WindowState.ProcessId -and $WindowState.ProcessId -gt 0) {
-		# Strongest signal: only accept a window owned by the originally tracked process.
-		$candidates = @($candidates | Where-Object { [uint32]$_.ProcessId -eq [uint32]$WindowState.ProcessId })
+		# Strongest signal: prefer a window owned by the originally tracked process.
+		$sameProcess = @($candidates | Where-Object { [uint32]$_.ProcessId -eq [uint32]$WindowState.ProcessId })
+		if ($sameProcess.Count -gt 0) {
+			$candidates = $sameProcess
+		}
+		elseif ($candidates.Count -ne 1 -or [string]::IsNullOrEmpty($WindowState.ProcessName)) {
+			# None owned by the tracked process, and either several same-titled windows of that
+			# process name (ambiguous - do not guess) or no process name to pin the title to.
+			return $null
+		}
+		# Exactly one window still carries the tracked title and process name while the tracked
+		# process id is gone: the process was replaced under the window. Accept it - the caller
+		# re-reads its rect and desktop before doing anything with it.
 	}
 
 	return $candidates | Select-Object -First 1

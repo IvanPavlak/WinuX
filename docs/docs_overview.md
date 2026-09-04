@@ -76,14 +76,16 @@ decisions behind them, and where the values go. Each module's `README.md` indexe
 | `RepositoryGroups`                                 | `Update-Repositories`, `Initialize-Repository`     |
 | `BrowserGroups`                                    | `Open-Browser`, `Collect-BrowserUrls`              |
 | `Projects`, `ProjectActions`                       | `Open-Project`                                     |
-| `Workspaces`, `DefaultWorkspace`, `WorkspaceActions` | `Open-Workspace`                                 |
+| `Workspaces`, `DefaultWorkspace`, `WorkspaceActions`, `WorkspaceBenchmark` | `Open-Workspace`           |
 | `Themes`                                           | `Set-SystemTheme`                                  |
 | `SystemTheme.Steps`                                | `Set-SystemTheme`, `Resolve-SystemThemeSteps`      |
 | `WallpaperDarkSettings`, `WallpaperLightSettings`  | `Set-Wallpaper`                                    |
 | `TaskbarConfiguration`                             | `Configure-Taskbar`                                |
 | `TaskbarSettings`                                  | `Set-TaskbarSettings`                              |
 | `VisualEffects`                                    | `Set-VisualEffects`                                |
-| `LayoutNumbers`, `ZoneNameMappings`                | `Apply-FancyZones`, `Get-FancyZone`, `Test-FancyZonesConfiguration` |
+| `LayoutNumbers`, `ZoneNameMappings`, `FancyZonesApplyMethod` | `Apply-FancyZones`, `Get-FancyZone`, `Test-FancyZonesConfiguration` |
+| `WorkspaceLayoutPipelining`                        | `Set-WorkspaceWindowLayout`                        |
+| `WorkspaceLayoutPrepareEarly`                      | `Open-Workspace`                                   |
 | `LayoutMachineTypeOverrides`, `SmallDisplayMachineType` | `Get-LayoutMachineType` (for `Set-WorkspaceWindowLayout`, `Reset-Windows`, `Resolve-DisplayAwareProfile`) |
 | `ResetAllWindowsDefaults`                          | `Reset-Windows`                                    |
 | `CenterTerminalSizing`                             | `Center-Terminal` (via `Resolve-CenterTerminalSizing`) |

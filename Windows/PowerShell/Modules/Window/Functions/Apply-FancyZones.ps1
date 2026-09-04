@@ -1,11 +1,19 @@
 function Apply-FancyZones {
 	<#
 	.SYNOPSIS
-		Applies FancyZones layouts to monitors using keyboard shortcuts.
+		Applies FancyZones layouts to monitors on the workspace's virtual desktops.
 
 	.DESCRIPTION
-		Applies predefined FancyZones layouts to monitors by triggering FancyZones
-		keyboard shortcuts on a window positioned on each monitor.
+		Puts the zone layouts a layout file names - per monitor, per virtual desktop - in place.
+		By default (Configuration.FancyZonesApplyMethod = "File") the entries are written straight
+		into FancyZones' applied-layouts.json for every desktop this call owns
+		(Write-AppliedFancyZonesLayouts); FancyZones watches that file and reloads it. One probe
+		shortcut on the current desktop then makes FancyZones save its in-memory layout map back to
+		the file, and Test-AppliedFancyZonesLayouts checks that every written entry survived - which
+		proves the reload without switching to a single desktop. Any desktop that does not verify,
+		and every desktop when the method is "Hotkeys", is handled by the shortcut pass: switch to
+		the desktop, position the cursor on each monitor and send Win+Ctrl+Alt+[Number]
+		(Send-FancyZonesLayoutShortcut).
 
 	.PARAMETER MonitorConfig
 		A hashtable containing monitor configurations with Layout property.
@@ -31,12 +39,13 @@ function Apply-FancyZones {
 		adjacent workspaces' layouts. Default is 0.
 
 	.PARAMETER Force
-		Bypasses the applied-layouts idempotency check and re-sends the layout shortcut for
-		every monitor/desktop. Use it whenever the on-disk applied-layouts state cannot be
-		trusted to describe the LIVE zone grid: FancyZones was just restarted, or it is
-		holding a stale grid while applied-layouts.json still claims the correct layout.
-		That is exactly the case where a plain (idempotent) call reports "Already Applied"
-		for every monitor and changes nothing.
+		Bypasses the applied-layouts idempotency check. In file mode the entries are rewritten
+		even when the file already holds them, so FancyZones reloads the file and the probe
+		verifies what it holds; in the shortcut pass every layout shortcut is re-sent. Use it
+		whenever the on-disk applied-layouts state cannot be trusted to describe the LIVE zone
+		grid: FancyZones was just restarted, or it is holding a stale grid while
+		applied-layouts.json still claims the correct layout. That is exactly the case where a
+		plain (idempotent) call reports "Already Applied" for every monitor and changes nothing.
 
 	.EXAMPLE
 		$config = Import-PowerShellDataFile -Path "WinuX-workspace-layout.psd1"
@@ -54,6 +63,9 @@ function Apply-FancyZones {
 		- PowerToys FancyZones must be installed and running
 		- FancyZones layouts must be numbered (0-9) for keyboard shortcuts
 		- Keyboard shortcut: Win+Ctrl+Alt+[Number] to switch to layout
+		- File mode additionally needs an applied-layouts.json entry FancyZones itself wrote for
+		  each attached monitor (it writes one on its first start with the monitor attached); a
+		  monitor without one falls back to the shortcut pass
 	#>
 	[CmdletBinding()]
 	param (
@@ -109,6 +121,28 @@ function Apply-FancyZones {
 	if (-not $fancyZonesReady) {
 		Write-Error "FancyZones is not ready after restart attempt."
 		return $false
+	}
+
+	# How the layouts reach FancyZones. "File" writes applied-layouts.json for every owned desktop
+	# and proves the reload with one probe shortcut (see $applyLayoutsViaFile below); "Hotkeys" is
+	# the desktop-switching shortcut pass alone. An unknown value falls back to File with a note.
+	$applyViaFile = $true
+	$configuredApplyMethod = [string]$global:Configuration.FancyZonesApplyMethod
+	if (-not [string]::IsNullOrWhiteSpace($configuredApplyMethod)) {
+		switch ($configuredApplyMethod.Trim().ToLowerInvariant()) {
+			'file' { $applyViaFile = $true }
+			'hotkeys' { $applyViaFile = $false }
+			default {
+				Write-LogDebug "FancyZonesApplyMethod [$configuredApplyMethod] is neither File nor Hotkeys - using File" -Style Warning
+			}
+		}
+	}
+	if ($applyViaFile) {
+		foreach ($requiredCommand in @('Write-AppliedFancyZonesLayouts', 'Test-AppliedFancyZonesLayouts', 'Send-FancyZonesLayoutShortcut', 'Get-VirtualDesktopGuid')) {
+			if (-not (Get-Command $requiredCommand -ErrorAction SilentlyContinue)) {
+				$applyViaFile = $false
+			}
+		}
 	}
 
 	# Get monitor information (use cached if provided)
@@ -196,76 +230,61 @@ function Apply-FancyZones {
 					}
 				}
 			}
+		}
 
-			# Build desktop index → GUID lookup from Windows registry
-			$regPath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VirtualDesktops"
-			$vdIds = (Get-ItemProperty -Path $regPath -Name "VirtualDesktopIDs" -ErrorAction Stop).VirtualDesktopIDs
-			if ($vdIds -and $vdIds.Length -gt 0) {
-				$guidSize = 16
-				$vdCount = [math]::Floor($vdIds.Length / $guidSize)
-				for ($i = 0; $i -lt $vdCount; $i++) {
-					$bytes = $vdIds[($i * $guidSize)..((($i + 1) * $guidSize) - 1)]
-					$guid = [System.Guid]::new([byte[]]$bytes)
-					$desktopGuidLookup[$i] = "{$($guid.ToString().ToUpper())}"
+		# Desktop index → GUID lookup. Get-VirtualDesktopGuid reads the registry value
+		# (VirtualDesktopIDs) FancyZones keys its entries by; the idempotency check AND the file
+		# pass need it, so it is built regardless of -Force.
+		$registryDesktopIndex = 0
+		while ($true) {
+			$registryGuid = Get-VirtualDesktopGuid -DesktopIndex $registryDesktopIndex
+			if (-not $registryGuid) { break }
+			$desktopGuidLookup[$registryDesktopIndex] = $registryGuid
+			$registryDesktopIndex++
+		}
+
+		# Display name → EDID code / PnP instance via EnumDisplayDevices. FancyZones keys
+		# applied-layouts.json by EDID code (e.g., "LEN8ABC") and instance, not by "\\.\DISPLAY2".
+		# The idempotency check and the file pass both need the mapping; empty maps (native type
+		# not loaded yet) fall back to DeviceName matching.
+		$deviceIdentity = Get-MonitorDeviceIdentityMap
+		$displayToEdidMap = if ($deviceIdentity -and $deviceIdentity.Edid) { $deviceIdentity.Edid } else { @{} }
+		$displayToInstanceMap = if ($deviceIdentity -and $deviceIdentity.Instance) { $deviceIdentity.Instance } else { @{} }
+
+		# Guard against ambiguous monitor identity: FancyZones' applied-layouts.json keys each
+		# entry by EDID code + virtual desktop only. Two identical monitors (same model) share
+		# the same EDID, so their idempotency keys collide (last write wins). That makes the
+		# "already applied" check unreliable - it can report a monitor as already correct based
+		# on the OTHER monitor's layout and skip applying, leaving a stale layout in place.
+		# When duplicate EDIDs are present we cannot safely skip, so disable the optimization
+		# entirely and always (re)apply every monitor's layout.
+		if ($appliedState -and $displayToEdidMap.Count -gt 0) {
+			$duplicateEdids = @(Get-DuplicateMonitorEdid -DisplayToEdidMap $displayToEdidMap)
+			if ($duplicateEdids.Count -gt 0) {
+				# Duplicate EDIDs are only ambiguous when the PnP instance path cannot
+				# disambiguate them: newer FancyZones schemas key applied-layouts.json by
+				# EDID + monitor-instance, and the state lookup stores instance-qualified
+				# keys. Idempotency stays enabled when every duplicated display has an
+				# instance; otherwise fall back to always reapplying (previous behavior).
+				$duplicatesWithoutInstance = @(
+					$displayToEdidMap.Keys | Where-Object {
+						$duplicateEdids -contains $displayToEdidMap[$_] -and -not $displayToInstanceMap.ContainsKey($_)
+					}
+				)
+
+				if ($duplicatesWithoutInstance.Count -gt 0) {
+					Write-LogDebug "  ⚠ Duplicate monitor EDID(s) detected ($($duplicateEdids -join ', ')) without instance paths - disabling idempotency skip to guarantee correct per-monitor layouts" -Style Warning
+					$appliedState = $null
+				}
+				elseif (Test-LogVerbose) {
+					Write-LogDebug "  Duplicate monitor EDID(s) detected ($($duplicateEdids -join ', ')) - idempotency kept via instance-qualified keys" -Style Warning
 				}
 			}
+		}
 
-			# Build display name → EDID code mapping via EnumDisplayDevices
-			# FancyZones applied-layouts.json uses EDID codes (e.g., "LEN8ABC"), not "\\.\DISPLAY2"
-			try {
-				$deviceInfoList = [WindowModule.Native]::GetMonitorDeviceInfo()
-				foreach ($devInfo in $deviceInfoList) {
-					if ($devInfo.DisplayName -and $devInfo.EdidCode) {
-						$displayToEdidMap[$devInfo.DisplayName] = $devInfo.EdidCode.ToUpper()
-						# PnP instance path - unique per physical device, present in newer
-						# FancyZones schemas; enables idempotency for duplicate-EDID monitors.
-						if ($devInfo.MonitorInstance) {
-							$displayToInstanceMap[$devInfo.DisplayName] = $devInfo.MonitorInstance.ToUpper()
-						}
-					}
-				}
-			}
-			catch {
-				# EnumDisplayDevices unavailable (type not loaded yet) - fall back to DeviceName matching
-				$displayToEdidMap = @{}
-				$displayToInstanceMap = @{}
-			}
-
-			# Guard against ambiguous monitor identity: FancyZones' applied-layouts.json keys each
-			# entry by EDID code + virtual desktop only. Two identical monitors (same model) share
-			# the same EDID, so their idempotency keys collide (last write wins). That makes the
-			# "already applied" check unreliable - it can report a monitor as already correct based
-			# on the OTHER monitor's layout and skip applying, leaving a stale layout in place.
-			# When duplicate EDIDs are present we cannot safely skip, so disable the optimization
-			# entirely and always (re)apply every monitor's layout.
-			if ($displayToEdidMap.Count -gt 0) {
-				$duplicateEdids = @(Get-DuplicateMonitorEdid -DisplayToEdidMap $displayToEdidMap)
-				if ($duplicateEdids.Count -gt 0) {
-					# Duplicate EDIDs are only ambiguous when the PnP instance path cannot
-					# disambiguate them: newer FancyZones schemas key applied-layouts.json by
-					# EDID + monitor-instance, and the state lookup stores instance-qualified
-					# keys. Idempotency stays enabled when every duplicated display has an
-					# instance; otherwise fall back to always reapplying (previous behavior).
-					$duplicatesWithoutInstance = @(
-						$displayToEdidMap.Keys | Where-Object {
-							$duplicateEdids -contains $displayToEdidMap[$_] -and -not $displayToInstanceMap.ContainsKey($_)
-						}
-					)
-
-					if ($duplicatesWithoutInstance.Count -gt 0) {
-						Write-LogDebug "  ⚠ Duplicate monitor EDID(s) detected ($($duplicateEdids -join ', ')) without instance paths - disabling idempotency skip to guarantee correct per-monitor layouts" -Style Warning
-						$appliedState = $null
-					}
-					elseif (Test-LogVerbose) {
-						Write-LogDebug "  Duplicate monitor EDID(s) detected ($($duplicateEdids -join ', ')) - idempotency kept via instance-qualified keys" -Style Warning
-					}
-				}
-			}
-
-			if ((Test-LogVerbose) -and $appliedState -and $layoutUuidLookup -and $desktopGuidLookup.Count -gt 0) {
-				$edidInfo = if ($displayToEdidMap.Count -gt 0) { ", $($displayToEdidMap.Count) EDID mapping(s)" } else { "" }
-				Write-LogDebug "Idempotency check enabled ($($desktopGuidLookup.Count) desktop(s), $($layoutUuidLookup.Count) layout(s)$edidInfo)"
-			}
+		if ((Test-LogVerbose) -and $appliedState -and $layoutUuidLookup -and $desktopGuidLookup.Count -gt 0) {
+			$edidInfo = if ($displayToEdidMap.Count -gt 0) { ", $($displayToEdidMap.Count) EDID mapping(s)" } else { "" }
+			Write-LogDebug "Idempotency check enabled ($($desktopGuidLookup.Count) desktop(s), $($layoutUuidLookup.Count) layout(s)$edidInfo)"
 		}
 	}
 	catch {
@@ -537,29 +556,9 @@ function Apply-FancyZones {
 			}
 
 			try {
-				# Move cursor to center of target monitor to activate it
-				$cursorX = $monitorX + ($monitorWidth / 2)
-				$cursorY = $monitorY + ($monitorHeight / 2)
-
-				if (Test-LogVerbose) {
-					Write-LogDebug "Moving cursor to monitor center ($cursorX, $cursorY)" -Style Step
-				}
-				[void][WindowModule.Native]::SetCursorPos($cursorX, $cursorY)
-				Start-Sleep -Milliseconds $script:WindowModuleDelays.CursorSettleMs
-
-				$desktopHandle = [WindowModule.Native]::GetDesktopWindow()
-				[void][WindowModule.Native]::SetForegroundWindow($desktopHandle)
-				Start-Sleep -Milliseconds $script:WindowModuleDelays.FocusSettleMs
-
-				# Send FancyZones layout switch shortcut: Win+Ctrl+Alt+[Number] using batched SendInput
-				if (Test-LogVerbose) {
-					Write-LogDebug "Sending keyboard shortcut [Win+Ctrl+Alt+$layoutNumber]" -Style Step
-				}
-
-				# Use optimized batched SendInput instead of multiple keybd_event calls
-				[WindowModule.Native]::SendFancyZonesLayoutShortcut($layoutNumber)
-
-				Start-Sleep -Milliseconds $script:WindowModuleDelays.KeyboardShortcutMs
+				# Cursor to the monitor's center, desktop window to the foreground, then the
+				# Win+Ctrl+Alt+[Number] chord through batched SendInput.
+				Send-FancyZonesLayoutShortcut -LayoutNumber $layoutNumber -MonitorX $monitorX -MonitorY $monitorY -MonitorWidth $monitorWidth -MonitorHeight $monitorHeight
 
 				if (Test-LogVerbose) {
 					Write-LogDebug "Layout shortcut sent" -Style Success
@@ -588,6 +587,247 @@ function Apply-FancyZones {
 		}
 	}
 
+	# File-based application. Writes the entries for every owned desktop into applied-layouts.json
+	# (Write-AppliedFancyZonesLayouts), lets FancyZones reload it, then proves the reload with ONE
+	# shortcut on the current desktop: FancyZones answers a layout shortcut by saving its whole
+	# in-memory layout map back to the file (ApplyQuickLayout -> SaveData), so re-reading the file
+	# afterwards shows exactly what it holds - written entries that survive were loaded, entries
+	# that vanish were not. Returns a hashtable of the 0-based desktop indexes whose every monitor
+	# verified; the shortcut pass below skips those and handles the rest exactly as before.
+	$applyLayoutsViaFile = {
+		param($OwnedDesktops, [int]$CurrentDesktopIndex, $ResultsArray)
+
+		$verifiedDesktops = @{}
+		$owned = @($OwnedDesktops)
+		if ($owned.Count -eq 0) { return $verifiedDesktops }
+
+		$layoutKeyFor = {
+			param([int]$InternalIndex)
+			if ($DesktopOffset -gt 0) { $InternalIndex - $DesktopOffset + 1 } else { $InternalIndex + 1 }
+		}
+
+		# Explorer persists a new desktop's GUID to the registry moments after creating it; give the
+		# highest owned index a short grace period instead of sending that desktop to the shortcut
+		# pass for want of a GUID.
+		$highestIndex = [int](($owned | Measure-Object -Property Number -Maximum).Maximum)
+		$registryClock = [System.Diagnostics.Stopwatch]::StartNew()
+		while (-not (Get-VirtualDesktopGuid -DesktopIndex $highestIndex) -and $registryClock.ElapsedMilliseconds -lt 1000) {
+			Start-Sleep -Milliseconds 50
+		}
+
+		# Physical monitor per config key, resolved the way the shortcut pass resolves it: the
+		# layout's own X/Y/Width/Height when it carries them, else the bounds Get-MonitorSpecs
+		# assigned to the label. A key that resolves neither way has no device to write for.
+		$fileMonitorByKey = @{}
+		foreach ($monitorKey in $MonitorConfig.Keys) {
+			$monitor = $MonitorConfig[$monitorKey]
+			$rect = $null
+			if ($null -ne $monitor.X -and $null -ne $monitor.Y -and $null -ne $monitor.Width -and $null -ne $monitor.Height) {
+				$rect = @{ X = $monitor.X; Y = $monitor.Y; Width = $monitor.Width; Height = $monitor.Height }
+			}
+			elseif ($resolvedMonitorByKey.ContainsKey($monitorKey)) {
+				$resolvedMonitor = $resolvedMonitorByKey[$monitorKey]
+				$rect = @{ X = $resolvedMonitor.X; Y = $resolvedMonitor.Y; Width = $resolvedMonitor.Width; Height = $resolvedMonitor.Height }
+			}
+			if (-not $rect) { continue }
+
+			$device = $monitors | Where-Object {
+				$_.Left -eq $rect.X -and $_.Top -eq $rect.Y -and $_.Width -eq $rect.Width -and $_.Height -eq $rect.Height
+			} | Select-Object -First 1
+			if ($device) {
+				$fileMonitorByKey[$monitorKey] = @{ Rect = $rect; DeviceName = $device.DeviceName }
+			}
+		}
+
+		# One target per (desktop, monitor) with a layout. A monitor without an EDID/instance mapping
+		# (old FancyZones schema, EnumDisplayDevices unavailable) cannot be written, so its desktop
+		# stays with the shortcut pass.
+		$targets = [System.Collections.Generic.List[object]]::new()
+		$desktopLayoutCounts = @{}
+		$desktopTargetable = @{}
+		foreach ($desktop in $owned) {
+			$internalIndex = [int]$desktop.Number
+			$layoutKey = & $layoutKeyFor $internalIndex
+			$desktopGuid = Get-VirtualDesktopGuid -DesktopIndex $internalIndex
+			$desktopLayoutCounts[$internalIndex] = 0
+			$desktopTargetable[$internalIndex] = [bool]$desktopGuid
+
+			foreach ($monitorKey in $MonitorConfig.Keys) {
+				$monitor = $MonitorConfig[$monitorKey]
+				$layoutName = $null
+				if ($monitor.VirtualDesktopLayouts) {
+					if ($monitor.VirtualDesktopLayouts.ContainsKey($layoutKey)) {
+						$lc = $monitor.VirtualDesktopLayouts[$layoutKey]
+						$layoutName = if ($lc -is [string]) { $lc } elseif ($lc -is [hashtable] -and $lc.Layout) { $lc.Layout } else { $null }
+					}
+				}
+				elseif ($monitor.Layout) {
+					$layoutName = $monitor.Layout
+				}
+				if (-not $layoutName) { continue }
+
+				$desktopLayoutCounts[$internalIndex]++
+				$deviceName = if ($fileMonitorByKey.ContainsKey($monitorKey)) { $fileMonitorByKey[$monitorKey].DeviceName } else { $null }
+				if (-not $desktopGuid -or -not $deviceName -or -not $displayToEdidMap.ContainsKey($deviceName) -or -not $displayToInstanceMap.ContainsKey($deviceName)) {
+					$desktopTargetable[$internalIndex] = $false
+					continue
+				}
+
+				$targets.Add([PSCustomObject]@{
+						Monitor         = $displayToEdidMap[$deviceName]
+						MonitorInstance = $displayToInstanceMap[$deviceName]
+						VirtualDesktop  = $desktopGuid
+						LayoutName      = $layoutName
+						Label           = "$monitorKey/desktop $($internalIndex + 1)"
+						MonitorKey      = $monitorKey
+						DesktopIndex    = $internalIndex
+						LayoutKey       = $layoutKey
+					})
+			}
+		}
+
+		if ($targets.Count -eq 0) {
+			if (Test-LogVerbose) {
+				Write-LogDebug " No desktop/monitor pair could be written to applied-layouts.json - using the shortcut pass" -Style Warning
+			}
+			return $verifiedDesktops
+		}
+
+		Write-LogDebug " Writing FancyZones layouts for [$($owned.Count)] desktop(s) into applied-layouts.json..."
+		$writeResult = Write-AppliedFancyZonesLayouts -Targets $targets.ToArray() -Force:$Force
+		if ($writeResult.Error) {
+			Write-LogDebug " applied-layouts.json write failed - using the shortcut pass: $($writeResult.Error)" -Style Warning
+			return $verifiedDesktops
+		}
+
+		# The writer's records line up with the targets by position; keep the ones it could resolve
+		# and mark the desktop of every unresolved one for the shortcut pass.
+		$resolved = @()
+		for ($targetIndex = 0; $targetIndex -lt $targets.Count; $targetIndex++) {
+			$record = $writeResult.Targets[$targetIndex]
+			if ($record.Status -in @('Written', 'AlreadyApplied')) {
+				$resolved += [PSCustomObject]@{ Target = $targets[$targetIndex]; Record = $record }
+			}
+			else {
+				$desktopTargetable[$targets[$targetIndex].DesktopIndex] = $false
+			}
+		}
+		if ($resolved.Count -eq 0) {
+			Write-LogDebug " applied-layouts.json has no device entry for the attached monitor(s) yet - using the shortcut pass" -Style Warning
+			return $verifiedDesktops
+		}
+
+		$verify = $null
+		if ($writeResult.Written) {
+			Start-Sleep -Milliseconds $script:WindowModuleDelays.AppliedLayoutsReloadMs
+
+			# Probe on the current desktop when this call owns it, else on the first owned desktop -
+			# the desktop the shortcut pass ends on in a DesktopOffset call anyway.
+			$probeIndex = if ($desktopTargetable.ContainsKey($CurrentDesktopIndex) -and $desktopTargetable[$CurrentDesktopIndex] -and $desktopLayoutCounts[$CurrentDesktopIndex] -gt 0) {
+				$CurrentDesktopIndex
+			}
+			else {
+				[int]($owned | Select-Object -First 1).Number
+			}
+
+			$probe = $null
+			foreach ($candidate in @($resolved | Where-Object { $_.Target.DesktopIndex -eq $probeIndex })) {
+				$candidateKey = $candidate.Target.MonitorKey
+				$rect = if ($fileMonitorByKey.ContainsKey($candidateKey)) { $fileMonitorByKey[$candidateKey].Rect } else { $null }
+				$candidateMonitor = $MonitorConfig[$candidateKey]
+				$number = $null
+				if ($candidateMonitor.VirtualDesktopLayouts -and $candidateMonitor.VirtualDesktopLayouts.ContainsKey($candidate.Target.LayoutKey)) {
+					$lc = $candidateMonitor.VirtualDesktopLayouts[$candidate.Target.LayoutKey]
+					if ($lc -is [hashtable] -and $null -ne $lc.LayoutNumber) { $number = $lc.LayoutNumber }
+				}
+				elseif ($null -ne $candidateMonitor.LayoutNumber) {
+					$number = $candidateMonitor.LayoutNumber
+				}
+				if ($null -eq $number -and $global:Configuration.LayoutNumbers -and $global:Configuration.LayoutNumbers.ContainsKey($candidate.Target.LayoutName)) {
+					$number = $global:Configuration.LayoutNumbers[$candidate.Target.LayoutName]
+				}
+				if ($rect -and $null -ne $number -and [int]$number -ge 0 -and [int]$number -le 9) {
+					$probe = @{ Rect = $rect; Number = [int]$number; Target = $candidate.Target }
+					break
+				}
+			}
+			if (-not $probe) {
+				Write-LogDebug " No probe shortcut available on desktop [$($probeIndex + 1)] - using the shortcut pass" -Style Warning
+				return $verifiedDesktops
+			}
+
+			if ($probeIndex -ne $CurrentDesktopIndex) {
+				Write-LogDebug " Switching to Desktop [$($probeIndex + 1)] for the layout probe"
+				try {
+					$null = Invoke-WithRetry -ScriptBlock {
+						$null = Switch-Desktop -Desktop $probeIndex -ErrorAction Stop
+					} -MaxAttempts 3 -InitialDelayMs 100
+				}
+				catch {
+					Write-LogDebug " Could not switch to desktop [$($probeIndex + 1)] for the probe: $_" -Style Warning
+					return $verifiedDesktops
+				}
+				if (-not (Wait-DesktopSwitch -TargetDesktopIndex $probeIndex)) {
+					Write-LogDebug " Desktop switch for the probe not confirmed - using the shortcut pass" -Style Warning
+					return $verifiedDesktops
+				}
+			}
+
+			if (Test-LogVerbose) {
+				Write-LogDebug " Probe: layout [$($probe.Target.LayoutName)] on $($probe.Target.Label) - FancyZones saves its layout map in response" -Style Step
+			}
+			Send-FancyZonesLayoutShortcut -LayoutNumber $probe.Number -MonitorX $probe.Rect.X -MonitorY $probe.Rect.Y -MonitorWidth $probe.Rect.Width -MonitorHeight $probe.Rect.Height
+
+			$verify = Test-AppliedFancyZonesLayouts -Targets @($resolved | ForEach-Object { $_.Record }) -WaitForWriteAfterUtc $writeResult.WrittenAtUtc
+			if (-not $verify.SaveObserved) {
+				Write-LogDebug " FancyZones did not rewrite applied-layouts.json after the probe shortcut - using the shortcut pass" -Style Warning
+				return $verifiedDesktops
+			}
+		}
+		else {
+			# Nothing needed writing: the file already holds every layout. Confirm it as it stands.
+			$verify = Test-AppliedFancyZonesLayouts -Targets @($resolved | ForEach-Object { $_.Record })
+		}
+
+		# A desktop counts as done only when every monitor with a layout on it resolved and verified.
+		foreach ($desktop in $owned) {
+			$internalIndex = [int]$desktop.Number
+			if (-not $desktopTargetable[$internalIndex] -or $desktopLayoutCounts[$internalIndex] -eq 0) { continue }
+
+			$desktopResolved = @()
+			for ($resolvedIndex = 0; $resolvedIndex -lt $resolved.Count; $resolvedIndex++) {
+				if ($resolved[$resolvedIndex].Target.DesktopIndex -eq $internalIndex) { $desktopResolved += $resolvedIndex }
+			}
+			if ($desktopResolved.Count -ne $desktopLayoutCounts[$internalIndex]) { continue }
+
+			$allVerified = $true
+			foreach ($resolvedIndex in $desktopResolved) {
+				if ($verify.Targets[$resolvedIndex].Status -ne 'Verified') { $allVerified = $false }
+			}
+			if (-not $allVerified) { continue }
+
+			$verifiedDesktops[$internalIndex] = $true
+			foreach ($resolvedIndex in $desktopResolved) {
+				$ResultsArray.Add([PSCustomObject]@{
+						Monitor       = $resolved[$resolvedIndex].Target.MonitorKey
+						Layout        = $resolved[$resolvedIndex].Target.LayoutName
+						DesktopNumber = $resolved[$resolvedIndex].Target.LayoutKey
+						Status        = $(if ($resolved[$resolvedIndex].Record.Status -eq 'Written') { 'Layout Written' } else { 'Already Applied' })
+					})
+			}
+		}
+
+		$leftToShortcuts = $owned.Count - $verifiedDesktops.Count
+		if ($verifiedDesktops.Count -gt 0) {
+			Write-LogDebug " FancyZones took the file update: [$($verifiedDesktops.Count)] desktop(s) verified without switching$(if ($leftToShortcuts -gt 0) { ", [$leftToShortcuts] left to the shortcut pass" })" -Style Success
+		}
+		else {
+			Write-LogDebug " applied-layouts.json write did not verify on any desktop - using the shortcut pass" -Style Warning
+		}
+
+		return $verifiedDesktops
+	}
+
 	if ($hasVirtualDesktopModule) {
 		try {
 			if ($DesktopNumber) {
@@ -605,6 +845,32 @@ function Apply-FancyZones {
 				$allDesktops = (Get-DesktopList) | Sort-Object -Property Number
 
 				$desktopCount = ($allDesktops | Measure-Object).Count
+
+				# File pass first: the desktops it verifies are skipped by the shortcut pass below.
+				# Its owned set is exactly what the two branches iterate.
+				$fileVerifiedDesktops = @{}
+				if ($applyViaFile -and $desktopCount -gt 1) {
+					$ownedDesktops = if ($DesktopOffset -gt 0) {
+						$ownedUpperBound = if ($DesktopCount -gt 0) { $DesktopOffset + $DesktopCount } else { [int]::MaxValue }
+						@($allDesktops | Where-Object { $_.Number -ge $DesktopOffset -and $_.Number -lt $ownedUpperBound })
+					}
+					elseif ($DesktopCount -gt 0) {
+						@($allDesktops | Where-Object { $_.Number -lt $DesktopCount })
+					}
+					else {
+						@($allDesktops)
+					}
+
+					try {
+						$fileResult = & $applyLayoutsViaFile -OwnedDesktops $ownedDesktops -CurrentDesktopIndex $originalDesktopIndex -ResultsArray $results
+						$fileVerifiedDesktops = @($fileResult | Where-Object { $_ -is [hashtable] } | Select-Object -Last 1)[0]
+						if (-not $fileVerifiedDesktops) { $fileVerifiedDesktops = @{} }
+					}
+					catch {
+						Write-LogDebug " File-based layout application failed - using the shortcut pass: $_" -Style Warning
+						$fileVerifiedDesktops = @{}
+					}
+				}
 
 				if ($desktopCount -gt 1) {
 					# When using DesktopOffset, only apply to desktops starting from the offset
@@ -628,6 +894,11 @@ function Apply-FancyZones {
 								# Layout lookup uses 1-based key relative to workspace (desktop at offset=2 uses layout key 1)
 								$layoutLookupKey = $internalDesktopIndex - $DesktopOffset + 1
 								$displayDesktopNumber = $internalDesktopIndex + 1  # 1-based for display
+
+								# The file pass already put and verified this desktop's layouts.
+								if ($fileVerifiedDesktops.ContainsKey($internalDesktopIndex)) {
+									continue
+								}
 
 								# Skip switching to this desktop if all monitors already have the correct layout
 								if (& $checkDesktopFullyApplied -desktopLookupKey $layoutLookupKey -desktopIndex $internalDesktopIndex) {
@@ -695,6 +966,11 @@ function Apply-FancyZones {
 							try {
 								$internalDesktopIndex = $desktop.Number  # 0-based from VirtualDesktop module
 								$desktopNumberToApply = $internalDesktopIndex + 1  # Convert to 1-based for layout lookup
+
+								# The file pass already put and verified this desktop's layouts.
+								if ($fileVerifiedDesktops.ContainsKey($internalDesktopIndex)) {
+									continue
+								}
 
 								# Skip switching to this desktop if all monitors already have the correct layout
 								if (& $checkDesktopFullyApplied -desktopLookupKey $desktopNumberToApply -desktopIndex $internalDesktopIndex) {
@@ -798,15 +1074,17 @@ function Apply-FancyZones {
 		& $applyLayouts -currentDesktopNumber $DesktopNumber -resultsArray $results
 	}
 
-	# Invalidate applied-layouts cache if any layouts were actually sent
+	# Invalidate applied-layouts cache if any layouts were actually sent (the file writer
+	# invalidates it for its own writes)
 	$appliedCount = ($results | Where-Object { $_.Status -eq "Shortcut Sent" } | Measure-Object).Count
+	$writtenCount = ($results | Where-Object { $_.Status -eq "Layout Written" } | Measure-Object).Count
 	if ($appliedCount -gt 0) {
 		$script:AppliedLayoutsCache.Data = $null
 		$script:AppliedLayoutsCache.Timestamp = [datetime]::MinValue
 	}
 
-	# Only print results table when shortcuts were actually sent, or in debug mode
-	if ($appliedCount -gt 0 -or (Test-LogVerbose)) {
+	# Only print results table when layouts were actually changed, or in debug mode
+	if ($appliedCount -gt 0 -or $writtenCount -gt 0 -or (Test-LogVerbose)) {
 		$results | Format-Table -AutoSize
 	}
 

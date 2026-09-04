@@ -15,11 +15,16 @@ function Snap-AllWindows {
 		  centered in the zone at a deeper inset, then Win+Up with a shift-drag fallback
 		- Using reliable focus acquisition with thread attachment for every keyboard snap
 
-		A window whose snap attempts are exhausted is recorded as failed and the pass
-		CONTINUES with the remaining windows and desktops, so one stubborn window no longer
-		strands every later desktop at its inset size. A circuit breaker aborts the pass
-		once several windows have failed - that pattern means something systemic (stuck
-		modifier, wedged FancyZones) that the caller's retry must reset first. After the
+		A window that exhausts its attempts (keyboard snap and shift-drag, three times) is
+		not treated as a stubborn window but as the signal that the zone grid it was snapped
+		against is wrong: the pass resets FancyZones ONCE for it (-ZoneReset, or a plain
+		FancyZones restart when the caller supplied none), re-confirms the window's desktop,
+		re-insets the window and runs the whole attempt budget a second time for the SAME
+		window before touching the next one. Only a window that fails that second round is
+		recorded as failed, and the pass then continues with the remaining windows. Two resets
+		per pass at most - two resets that did not help are systemic, and the third exhausted
+		window records without one - and a circuit breaker still aborts the pass once several
+		windows have failed, handing it back to the caller's retry. After the
 		desktop loop, a verification sweep re-checks that every tracked window is still on
 		its assigned desktop and retries stragglers once: the upstream Move-Window falls
 		back to moving a process's MAIN window when the requested view cannot be moved, so
@@ -57,9 +62,23 @@ function Snap-AllWindows {
 		Virtual desktop offset, so alongside workspaces target the correct desktop. Default is 0.
 	.PARAMETER DesktopCount
 		Number of desktops to process. Default is 0.
+	.PARAMETER DesktopNumbers
+		Restricts the positioned-windows pass to the tracked windows on these desktops (the
+		1-based numbers Add-PositionedWindow recorded, offset already folded in). Used by
+		Set-WorkspaceWindowLayout to snap one desktop as soon as its windows are stable while
+		the rest are still loading. Default (empty) processes every tracked window.
+	.PARAMETER ZoneReset
+		Scriptblock run when a window exhausts its snap attempts, before the second round for
+		that window; receives one string argument, the reason. Set-WorkspaceWindowLayout passes
+		its FancyZones reset (force-restart plus Apply-FancyZones -Force). When omitted the
+		recovery is a FancyZones force-restart alone - a standalone call has no monitor
+		configuration to re-apply the zone layouts with.
 	.EXAMPLE
 		Snap-AllWindows
 		# Snaps positioned windows to FancyZones (workspace flow)
+	.EXAMPLE
+		Snap-AllWindows -DesktopNumbers 2 -ZoneReset { param($Reason) Start-FancyZones -ForceRestart; Apply-FancyZones -MonitorConfig $config.Monitors -Force }
+		# Snaps only the tracked windows on desktop 2, resetting the zone grid through the caller's scriptblock when one exhausts its attempts
 	.EXAMPLE
 		Snap-AllWindows -All
 		# Snaps all visible windows to FancyZones (standalone usage)
@@ -91,7 +110,17 @@ function Snap-AllWindows {
 		[int]$DesktopOffset = 0,
 
 		[Parameter()]
-		[int]$DesktopCount = 0
+		[int]$DesktopCount = 0,
+
+		# Restrict the positioned-windows pass to these tracked desktop numbers (1-based, offset
+		# folded in). Empty processes every tracked window.
+		[Parameter()]
+		[int[]]$DesktopNumbers,
+
+		# Zone-grid reset run once for a window that exhausted its attempts, before its second
+		# round. Restart-only when omitted.
+		[Parameter()]
+		[scriptblock]$ZoneReset
 	)
 
 	begin {
@@ -236,6 +265,67 @@ function Snap-AllWindows {
 		$maxFailedWindows = 3
 		$snapAborted = $false
 
+		# A window that exhausted keyboard AND shift-drag is not a window problem - it is the same
+		# wedged-FancyZones signal the circuit breaker above waits three windows for, and carrying
+		# on snaps the rest of the pass against a grid that may be wrong, only for the caller's
+		# retry to pay a full position-snap-verify cycle afterwards. So the grid is reset right
+		# there, ONCE per window, and the same window gets its whole attempt budget again before
+		# anything is recorded. Two resets per pass at most: two resets that did not help ARE the
+		# systemic signal, and the third exhausted window records without one so the caller's
+		# retry and the rerun escalation take over as before.
+		$maxZoneResetsPerPass = 2
+		$zoneResetsThisPass = 0
+
+		$recoverZoneGrid = {
+			param([string]$Reason, [int]$InternalDesktopIndex, [int]$DisplayDesktopNumber)
+
+			Write-LogWarning "   Snap exhausted for $Reason - resetting FancyZones and retrying the same window..." -NoLeadingNewline
+
+			# Synthesized input from the failed attempts may have stranded a modifier or the
+			# shift-drag's mouse button.
+			$null = Reset-KeyboardModifiers -IncludeMouseButton
+
+			if ($ZoneReset) {
+				try {
+					$null = & $ZoneReset "snap exhausted for $Reason"
+				}
+				catch {
+					Write-LogWarning "   Zone reset failed: $($_.Exception.Message)" -NoLeadingNewline
+				}
+			}
+			else {
+				# No caller-supplied reset (standalone call): restart FancyZones. There is no
+				# monitor configuration here to re-apply the zone layouts with.
+				try {
+					$null = Start-FancyZones -ForceRestart -MaxWaitSeconds 20 -PassThru
+				}
+				catch {
+					Write-LogWarning "   FancyZones restart failed: $($_.Exception.Message)" -NoLeadingNewline
+				}
+			}
+
+			# The reset may have moved the active desktop (the shortcut fallback of the zone
+			# re-apply ends elsewhere), and the snap needs the window's desktop visible.
+			$backOnDesktop = $false
+			try {
+				$null = Switch-Desktop -Desktop $InternalDesktopIndex -ErrorAction Stop
+				$backOnDesktop = [bool](Wait-DesktopSwitch -TargetDesktopIndex $InternalDesktopIndex)
+			}
+			catch {
+				$backOnDesktop = $false
+			}
+			if (-not $backOnDesktop) {
+				Write-LogDebug "  ⚠ Could not return to desktop [$DisplayDesktopNumber] after the zone reset - recording the failure" -Style Warning
+				return $false
+			}
+
+			# Windows and monitors may have moved during the restart - never snap against a stale
+			# enumeration.
+			Clear-WindowCache
+			Clear-MonitorCache
+			return $true
+		}
+
 		# Process windows in the order they were positioned (Desktop 1 Monitor 1, Desktop 1 Monitor 2, etc.)
 		if (-not $script:PositionedWindowHandles) {
 			Write-LogDebug " Positioned window tracking not initialized!" -Style Warning
@@ -251,6 +341,9 @@ function Snap-AllWindows {
 		$windowsByDesktop = @{}
 		foreach ($windowState in $script:PositionedWindowHandles) {
 			$desktopNum = if ($null -ne $windowState.DesktopNumber) { $windowState.DesktopNumber } else { 1 }
+			# A per-desktop call (Set-WorkspaceWindowLayout snapping one desktop while the others
+			# are still loading) leaves every other tracked window alone.
+			if ($DesktopNumbers -and $DesktopNumbers.Count -gt 0 -and $DesktopNumbers -notcontains [int]$desktopNum) { continue }
 			if (-not $windowsByDesktop.ContainsKey($desktopNum)) {
 				$windowsByDesktop[$desktopNum] = [System.Collections.Generic.List[object]]::new()
 			}
@@ -464,10 +557,25 @@ function Snap-AllWindows {
 				# Reset-Windows leaves it behind routinely). An exhausted window is recorded
 				# as failed for the caller's retry, exactly like the multi-zone path.
 				if ($windowState.SingleZone) {
-					$snap = Invoke-SingleZoneWindowSnap -WindowHandle $handle `
-						-TargetX $expectedX -TargetY $expectedY `
-						-TargetWidth $expectedWidth -TargetHeight $expectedHeight `
-						-WindowTitle $expectedTitle -InsetPercent $insetPercent
+					$snap = $null
+					$singleZoneAttempts = 0
+					$singleZoneReset = $false
+					for ($snapRound = 1; $snapRound -le 2; $snapRound++) {
+						$snap = Invoke-SingleZoneWindowSnap -WindowHandle $handle `
+							-TargetX $expectedX -TargetY $expectedY `
+							-TargetWidth $expectedWidth -TargetHeight $expectedHeight `
+							-WindowTitle $expectedTitle -InsetPercent $insetPercent
+						$singleZoneAttempts += [int]$snap.Attempts
+						if ($snap.Verified) { break }
+
+						# Exhausted: reset the zone grid once and run the budget again for THIS window.
+						if ($snapRound -eq 1 -and $zoneResetsThisPass -lt $maxZoneResetsPerPass) {
+							$zoneResetsThisPass++
+							$singleZoneReset = $true
+							if (& $recoverZoneGrid "[$expectedTitle]" $internalDesktopIndex $desktopNum) { continue }
+						}
+						break
+					}
 
 					if ($snap.Verified) {
 						$snappedCount++
@@ -485,7 +593,8 @@ function Snap-AllWindows {
 						}
 					}
 					else {
-						$errorDetails = "Single-zone snap FAILED for [$expectedTitle] after $($snap.Attempts) attempts (unverified position)"
+						$resetNote = if ($singleZoneReset) { ", zone grid reset once" } else { "" }
+						$errorDetails = "Single-zone snap FAILED for [$expectedTitle] after $singleZoneAttempts attempts (unverified position$resetNote)"
 						$actualBounds = $null
 						if ($null -ne $snap.X) {
 							$errorDetails += "`n  Expected => ($expectedX, $expectedY) ${expectedWidth}x${expectedHeight}"
@@ -608,212 +717,79 @@ function Snap-AllWindows {
 					continue
 				}
 
-				# Win+Up for every window (true = up, false = down for SendSnapKey).
-				# The window arrives here already inset INSIDE its target zone, and the two
-				# arrow directions are NOT symmetric for that state: Win+Up snaps the window
-				# into the zone it is sitting in, while Win+Down hands it to the zone BELOW.
-				# A "top half of a vertically split monitor" special case used to send
-				# Win+Down for exactly those windows, so every top-half zone (Seven's
-				# Top-Right, Four's top row, ...) landed one zone too low, failed
-				# verification, and had to be recovered by the slow shift-drag fallback.
-				$direction = "Up"
-				$snapUp = $true
-
-				# Snap the window with retry logic
-				# FancyZones can miss keyboard/shift-drag snaps due to focus timing, event processing lag,
-				# or input injection races. Retry with increasing delays to give FancyZones time to respond.
-				$maxSnapRetries = 3
+				# Snap through the attempt budget (Win+Up, shift-drag fallback, three attempts -
+				# Invoke-MultiZoneWindowSnap), and when it is exhausted reset the zone grid ONCE and
+				# run the budget again for THIS window before anything is recorded.
 				$snapVerified = $false
-
-				for ($snapAttempt = 1; $snapAttempt -le $maxSnapRetries; $snapAttempt++) {
-					if ($snapVerified) { break }
-
-					# Focus settle grows on retries; snap verification itself polls (Wait-WindowRect)
-					# with a budget that also grows per attempt, replacing the old fixed delays.
-					$focusSettleMs = 10 + (($snapAttempt - 1) * 40)
-
-					if ($snapAttempt -gt 1) {
-						Write-LogDebug "     ↻ Retry $snapAttempt/$maxSnapRetries for [$title]..."
-
-						# The failed attempt itself may have stranded a modifier (or the
-						# attempt failed BECAUSE one was already stuck and corrupted the
-						# combo). Clear the keyboard state before injecting again so the
-						# retry starts from a known-good baseline.
-						$null = Reset-KeyboardModifiers
-
-						# Re-position window before retrying (it may have been left in a bad state)
-						try {
-							$null = Resize-Windows `
-								-WindowHandle $handle `
-								-TargetX $expectedX `
-								-TargetY $expectedY `
-								-TargetWidth $expectedWidth `
-								-TargetHeight $expectedHeight `
-								-InsetPercent $insetPercent
-							Start-Sleep -Milliseconds 20
-						}
-						catch {
-							# Continue anyway
-						}
+				$snap = $null
+				$multiZoneAttempts = 0
+				$multiZoneReset = $false
+				for ($snapRound = 1; $snapRound -le 2; $snapRound++) {
+					$snap = Invoke-MultiZoneWindowSnap -WindowHandle $handle `
+						-ExpectedX $expectedX -ExpectedY $expectedY `
+						-ExpectedWidth $expectedWidth -ExpectedHeight $expectedHeight `
+						-WindowTitle $title -InsetPercent $insetPercent
+					$multiZoneAttempts += [int]$snap.Attempts
+					if ($snap.Verified) {
+						$snapVerified = $true
+						break
 					}
 
-					try {
-						# Acquire stable foreground focus immediately before injecting snap hotkeys.
-						$focusAcquired = Confirm-WindowForeground -WindowHandle $handle -BaseSettleMs $focusSettleMs
-
-						if (-not $focusAcquired) {
-							Write-LogDebug "  ⚠ Could not acquire stable focus for [$title] (attempt $snapAttempt/$maxSnapRetries)" -Style Warning
+					if ($snapRound -eq 1 -and $zoneResetsThisPass -lt $maxZoneResetsPerPass) {
+						$zoneResetsThisPass++
+						$multiZoneReset = $true
+						if (& $recoverZoneGrid "[$title]" $internalDesktopIndex $desktopNum) {
+							# Round two starts from the inset, exactly like the first attempt did.
+							try {
+								$null = Resize-Windows `
+									-WindowHandle $handle `
+									-TargetX $expectedX `
+									-TargetY $expectedY `
+									-TargetWidth $expectedWidth `
+									-TargetHeight $expectedHeight `
+									-InsetPercent $insetPercent
+								Start-Sleep -Milliseconds 20
+							}
+							catch {
+								# Continue anyway - the snap verifies.
+							}
 							continue
 						}
-
-						# Re-check foreground atomically right before sending input.
-						if ([WindowModule.Native]::GetForegroundWindow() -ne $handle) {
-							[void][WindowModule.Native]::ForceForegroundWindow($handle)
-							if ([WindowModule.Native]::GetForegroundWindow() -ne $handle) {
-								Write-LogDebug "  ⚠ Foreground changed before snap key injection for [$title]" -Style Warning
-								continue
-							}
-						}
-
-						# Send Win + Arrow (UP or DOWN) using batched SendInput
-						[WindowModule.Native]::SendSnapKey($snapUp)
-
-						# Poll until FancyZones moves the window to the FULL zone position (not inset)
-						# instead of a single fixed-delay check: returns as soon as the snap lands and
-						# only escalates to the expensive shift-drag fallback when the budget is
-						# genuinely exhausted (budget grows on retries).
-						$snapWait = Wait-WindowRect -WindowHandle $handle `
-							-ExpectedX $expectedX -ExpectedY $expectedY `
-							-ExpectedWidth $expectedWidth -ExpectedHeight $expectedHeight `
-							-TimeoutMs (200 + (($snapAttempt - 1) * 150))
-						$snapVerified = $snapWait.Verified
-
-						if ($snapVerified) {
-							if (Test-LogVerbose) {
-								$retryLabel = if ($snapAttempt -gt 1) { " (attempt $snapAttempt)" } else { "" }
-								Write-LogDebug "     ✓ Snapped [$title] → Win+$direction (verified at zone position)$retryLabel" -Style Success
-							}
-							break
-						}
-
-						# If keyboard snap failed, try shift-drag snapping as fallback
-						Write-LogDebug "     ⚠ Keyboard snap unverified for [$title], attempting shift-drag snap..." -Style Warning
-
-						# First reposition the window to the inset position for shift-drag
-						try {
-							$null = Resize-Windows `
-								-WindowHandle $handle `
-								-TargetX $expectedX `
-								-TargetY $expectedY `
-								-TargetWidth $expectedWidth `
-								-TargetHeight $expectedHeight `
-								-InsetPercent $insetPercent
-							Start-Sleep -Milliseconds 10
-						}
-						catch {
-							# Continue anyway
-						}
-
-						# Perform shift-drag snap using the native consolidated method.
-						# Browser tabs should always drag from the left inset to avoid tab detachment.
-						# Other apps keep the rotating start-point behavior across retries.
-						$isBrowserWindow = [WindowModule.Native]::IsBrowserWindow($handle)
-						$dragStartMode = if ($isBrowserWindow) {
-							0
-						}
-						else {
-							switch ($snapAttempt) {
-								1 { 0 }
-								2 { 1 }
-								default { 2 }
-							}
-						}
-						$dragStartLabel = switch ($dragStartMode) {
-							0 { 'left-inset' }
-							1 { 'top-center' }
-							default { 'top-right-third-center' }
-						}
-
-						if (Test-LogVerbose) {
-							$windowTypeLabel = if ($isBrowserWindow) { 'browser' } else { 'non-browser' }
-							Write-LogDebug "     ↳ Shift-drag start point: $dragStartLabel [$windowTypeLabel]"
-						}
-
-						$shiftDragResult = [WindowModule.Native]::ShiftDragSnap($handle, $expectedX, $expectedY, $expectedWidth, $expectedHeight, $dragStartMode)
-
-						if ($shiftDragResult) {
-							# Same poll-until-verified pattern as the keyboard snap above.
-							$dragWait = Wait-WindowRect -WindowHandle $handle `
-								-ExpectedX $expectedX -ExpectedY $expectedY `
-								-ExpectedWidth $expectedWidth -ExpectedHeight $expectedHeight `
-								-TimeoutMs (250 + (($snapAttempt - 1) * 150))
-							$snapVerified = $dragWait.Verified
-						}
-
-						if ($snapVerified) {
-							if (Test-LogVerbose) {
-								$retryLabel = if ($snapAttempt -gt 1) { " (attempt $snapAttempt)" } else { "" }
-								Write-LogDebug "     ✓ Snapped [$title] → Shift+Drag (verified at zone position)$retryLabel" -Style Success
-							}
-							break
-						}
-
-						# Not verified on this attempt
-						if ($snapAttempt -eq $maxSnapRetries) {
-							# Final attempt exhausted - record the failure and CONTINUE with the
-							# remaining windows and desktops, so one stubborn window no longer
-							# strands everything after it at its inset size. The outer retry in
-							# Set-WorkspaceWindowLayout re-runs the full layout for the recorded
-							# failures; only the circuit breaker below aborts the pass early.
-							$errorDetails = "Snap FAILED for [$title] after $maxSnapRetries attempts (unverified position)"
-							$expectedBounds = "($expectedX, $expectedY) ${expectedWidth}x${expectedHeight}"
-							$actualBounds = $null
-							$postFinalRect = New-Object WindowModule.RECT
-							if ([WindowModule.Native]::GetWindowRect($handle, [ref]$postFinalRect)) {
-								$finalX = $postFinalRect.Left; $finalY = $postFinalRect.Top
-								$finalW = $postFinalRect.Right - $postFinalRect.Left; $finalH = $postFinalRect.Bottom - $postFinalRect.Top
-								$errorDetails += "`n  Expected => ($expectedX, $expectedY) ${expectedWidth}x${expectedHeight}"
-								$errorDetails += "`n  Actual   => ($finalX, $finalY) ${finalW}x${finalH}"
-								$actualBounds = "($finalX, $finalY) ${finalW}x${finalH}"
-							}
-							$failedSnaps.Add([PSCustomObject]@{
-									Handle      = $handle
-									WindowTitle = $title
-									ProcessName = $windowState.ProcessName
-									Expected    = $expectedBounds
-									Actual      = $actualBounds
-									Error       = $errorDetails
-								})
-							Write-LogDebug "     ✗ $errorDetails" -Style Error
-							if ($failedSnaps.Count -ge $maxFailedWindows) {
-								Write-LogDebug "     ✗ [$($failedSnaps.Count)] window(s) failed this pass - aborting (systemic failure, caller resets and retries)" -Style Error
-								$snapAborted = $true
-							}
-							break
-						}
 					}
-					catch {
-						if ($snapAttempt -eq $maxSnapRetries) {
-							# All retries exhausted - record and move on (see the unverified
-							# branch above for why the pass continues).
-							$failedSnaps.Add([PSCustomObject]@{
-									Handle      = $handle
-									WindowTitle = $title
-									ProcessName = $windowState.ProcessName
-									Expected    = "($expectedX, $expectedY) ${expectedWidth}x${expectedHeight}"
-									Actual      = $null
-									Error       = "Snap FAILED for [$title] after $maxSnapRetries attempts => $_"
-								})
-							Write-LogDebug "     ✗ Snap FAILED for [$title] after $maxSnapRetries attempts => $_" -Style Error
-							if ($failedSnaps.Count -ge $maxFailedWindows) {
-								Write-LogDebug "     ✗ [$($failedSnaps.Count)] window(s) failed this pass - aborting (systemic failure, caller resets and retries)" -Style Error
-								$snapAborted = $true
-							}
-							break
-						}
-						elseif (Test-LogVerbose) {
-							Write-Warning "`n  ✗ Failed to snap [$title] (attempt $snapAttempt) => $_"
-						}
+					break
+				}
+
+				if (-not $snapVerified) {
+					# Recorded, and the pass CONTINUES with the remaining windows and desktops so
+					# one window cannot strand everything after it at its inset size. The caller's
+					# retry re-runs the full layout for the recorded failures; only the circuit
+					# breaker below aborts the pass early.
+					$resetNote = if ($multiZoneReset) { ", zone grid reset once" } else { "" }
+					$errorDetails = if ($snap.Error) {
+						"Snap FAILED for [$title] after $multiZoneAttempts attempts$resetNote => $($snap.Error)"
+					}
+					else {
+						"Snap FAILED for [$title] after $multiZoneAttempts attempts (unverified position$resetNote)"
+					}
+					$expectedBounds = "($expectedX, $expectedY) ${expectedWidth}x${expectedHeight}"
+					$actualBounds = $null
+					if ($null -ne $snap.X) {
+						$actualBounds = "($($snap.X), $($snap.Y)) $($snap.Width)x$($snap.Height)"
+						$errorDetails += "`n  Expected => $expectedBounds"
+						$errorDetails += "`n  Actual   => $actualBounds"
+					}
+					$failedSnaps.Add([PSCustomObject]@{
+							Handle      = $handle
+							WindowTitle = $title
+							ProcessName = $windowState.ProcessName
+							Expected    = $expectedBounds
+							Actual      = $actualBounds
+							Error       = $errorDetails
+						})
+					Write-LogDebug "     ✗ $errorDetails" -Style Error
+					if ($failedSnaps.Count -ge $maxFailedWindows) {
+						Write-LogDebug "     ✗ [$($failedSnaps.Count)] window(s) failed this pass - aborting (systemic failure, caller resets and retries)" -Style Error
+						$snapAborted = $true
 					}
 				}
 
@@ -845,6 +821,8 @@ function Snap-AllWindows {
 		}
 
 		foreach ($windowState in $script:PositionedWindowHandles) {
+			$sweepDesktopFilterNum = if ($null -ne $windowState.DesktopNumber) { $windowState.DesktopNumber } else { 1 }
+			if ($DesktopNumbers -and $DesktopNumbers.Count -gt 0 -and $DesktopNumbers -notcontains [int]$sweepDesktopFilterNum) { continue }
 			$sweepHandle = $windowState.Handle
 			if (-not $sweepHandle -or $sweepHandle -eq [IntPtr]::Zero) { continue }
 			# Already reported as failed - the workspace retry re-places it anyway.

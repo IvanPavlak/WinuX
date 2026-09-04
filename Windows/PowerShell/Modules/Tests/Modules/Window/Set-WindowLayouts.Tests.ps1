@@ -245,4 +245,150 @@ Describe "Set-WindowLayouts" {
 			Should -Invoke Add-PositionedWindow -Times 1 -Exactly -ParameterFilter { -not $SingleZone }
 		}
 	}
+
+	Context "Per-desktop pipelining filters (CandidateWindowHandles, ExcludeWindowHandles, KeepPositionedWindows)" {
+		# Same shape as the alongside-eligibility cases: no Zone and no coordinates, so the
+		# positioning branch is skipped and the result rows are all that matters. A catch-all
+		# entry matches BOTH windows of its process, which is exactly why these filters are
+		# enforced on the candidate list rather than left to the title regex.
+		BeforeEach {
+			Mock Test-LogVerbose { $false }
+			Mock Write-LogDebug { }
+			Mock Clear-WindowCache { }
+			Mock Start-Sleep { }
+			Mock Get-WindowHandle {
+				@(
+					[PSCustomObject]@{ Handle = [IntPtr]0xB1001; Title = 'Docs - Google Chrome'; ProcessName = 'chrome' }
+					[PSCustomObject]@{ Handle = [IntPtr]0xB1002; Title = 'Mail - Google Chrome'; ProcessName = 'chrome' }
+				)
+			}
+			$script:chromeEntry = @(@{ ProcessName = 'chrome' })
+		}
+
+		It "claims only the windows inside -CandidateWindowHandles" {
+			$candidates = New-Object 'System.Collections.Generic.HashSet[IntPtr]'
+			[void]$candidates.Add([IntPtr]0xB1002)
+
+			$results = @(Set-WindowLayouts -LayoutConfig $script:chromeEntry -CandidateWindowHandles $candidates)
+
+			$configured = @($results | Where-Object { $_.Status -eq 'Configured' })
+			$configured.Count | Should -Be 1
+			$configured[0].Handle | Should -Be ([IntPtr]0xB1002)
+		}
+
+		It "reports Not Found when no candidate window is eligible, after a single search" {
+			$candidates = New-Object 'System.Collections.Generic.HashSet[IntPtr]'
+			[void]$candidates.Add([IntPtr]0xB1003)
+
+			$results = @(Set-WindowLayouts -LayoutConfig $script:chromeEntry -CandidateWindowHandles $candidates)
+
+			$results.Count | Should -Be 1
+			$results[0].Status | Should -Be 'Not Found'
+			# A per-desktop pass never runs the 0.5 s + 1 s ladder: a miss means the window is
+			# not stable yet, and the pass after the wait places it.
+			Should -Invoke Start-Sleep -Times 0 -Exactly
+		}
+
+		It "never claims a window in -ExcludeWindowHandles" {
+			$excluded = New-Object 'System.Collections.Generic.HashSet[IntPtr]'
+			[void]$excluded.Add([IntPtr]0xB1001)
+
+			$results = @(Set-WindowLayouts -LayoutConfig $script:chromeEntry -ExcludeWindowHandles $excluded)
+
+			$configured = @($results | Where-Object { $_.Status -eq 'Configured' })
+			$configured.Count | Should -Be 1
+			$configured[0].Handle | Should -Be ([IntPtr]0xB1002)
+		}
+
+		It "claims every match when neither filter is given" {
+			$results = @(Set-WindowLayouts -LayoutConfig $script:chromeEntry)
+
+			@($results | Where-Object { $_.Status -eq 'Configured' }).Count | Should -Be 2
+		}
+
+		It "counts duplicate keys over the whole layout while processing only the -DesktopNumbers entries" {
+			# The same catch-all key on desktops 1 and 2: processing desktop 2 alone must still claim
+			# exactly ONE window - a subset of one entry would have "applied the layout to all".
+			$layout = @(
+				@{ ProcessName = 'chrome'; DesktopNumber = 1 }
+				@{ ProcessName = 'chrome'; DesktopNumber = 2 }
+			)
+
+			$results = @(Set-WindowLayouts -LayoutConfig $layout -DesktopNumbers 2)
+
+			$results.Count | Should -Be 1
+			$results[0].Status | Should -Be 'Configured'
+			$results[0].DesktopNumber | Should -Be 2
+			$results[0].EntryKey | Should -Be '2|||chrome|'
+		}
+
+		It "skips the entries named in -SkipEntryKeys and still counts them as duplicates" {
+			$layout = @(
+				@{ ProcessName = 'chrome'; DesktopNumber = 1 }
+				@{ ProcessName = 'chrome'; DesktopNumber = 2 }
+			)
+			$placed = New-Object 'System.Collections.Generic.HashSet[IntPtr]'
+			[void]$placed.Add([IntPtr]0xB1001)
+
+			$results = @(Set-WindowLayouts -LayoutConfig $layout -SkipEntryKeys '2|||chrome|' -ExcludeWindowHandles $placed)
+
+			# Only desktop 1's entry runs, as a duplicate-key entry, and claims the one unplaced window.
+			$results.Count | Should -Be 1
+			$results[0].DesktopNumber | Should -Be 1
+			$results[0].Handle | Should -Be ([IntPtr]0xB1002)
+		}
+
+		It "puts the entry key on every result row, Not Found included" {
+			$candidates = New-Object 'System.Collections.Generic.HashSet[IntPtr]'
+			[void]$candidates.Add([IntPtr]0xB1003)
+
+			$results = @(Set-WindowLayouts -LayoutConfig @(@{ ProcessName = 'chrome'; DesktopNumber = 3 }) -CandidateWindowHandles $candidates)
+
+			$results[0].Status | Should -Be 'Not Found'
+			$results[0].EntryKey | Should -Be '3|||chrome|'
+		}
+
+		It "leaves the positioned-window tracking alone with -KeepPositionedWindows" {
+			$null = Set-WindowLayouts -LayoutConfig $script:chromeEntry -KeepPositionedWindows
+
+			Should -Invoke Initialize-PositionedWindowTracking -Times 0 -Exactly
+		}
+
+		It "resets the positioned-window tracking by default" {
+			$null = Set-WindowLayouts -LayoutConfig $script:chromeEntry
+
+			Should -Invoke Initialize-PositionedWindowTracking -Times 1 -Exactly
+		}
+	}
+
+	Context "AbandonedEntries (no retry ladder for entries the wait abandoned)" {
+		# The three-attempt search ladder (0.5 s, then 1 s) rides out transient title drift on a
+		# window that exists. An entry the wait abandoned has no window and no process, so the
+		# ladder only delayed the pass by 1.5 s per such entry.
+		BeforeEach {
+			Mock Test-LogVerbose { $false }
+			Mock Write-LogDebug { }
+			Mock Clear-WindowCache { }
+			Mock Start-Sleep { }
+			Mock Get-WindowHandle { @() }
+			$script:ghostEntry = @(@{ ProcessName = 'ghost' })
+		}
+
+		It "searches once and never sleeps for an entry the wait abandoned, and still reports it Not Found" {
+			$results = @(Set-WindowLayouts -LayoutConfig $script:ghostEntry -AbandonedEntries @(@{ ProcessName = 'ghost' }))
+
+			$results.Count | Should -Be 1
+			$results[0].Status | Should -Be 'Not Found'
+			Should -Invoke Start-Sleep -Times 0 -Exactly
+			Should -Invoke Get-WindowHandle -Times 1 -Exactly
+		}
+
+		It "keeps the three-attempt ladder for an entry that was not abandoned" {
+			$results = @(Set-WindowLayouts -LayoutConfig $script:ghostEntry -AbandonedEntries @(@{ ProcessName = 'other' }))
+
+			$results[0].Status | Should -Be 'Not Found'
+			Should -Invoke Start-Sleep -Times 2 -Exactly
+			Should -Invoke Get-WindowHandle -Times 3 -Exactly
+		}
+	}
 }
