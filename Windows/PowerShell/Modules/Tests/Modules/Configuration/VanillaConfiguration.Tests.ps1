@@ -176,6 +176,10 @@ Describe "Vanilla Configuration (empty-by-default contract)" {
 		It "Should ship WorkspaceLayoutPipelining enabled" {
 			$script:BaseConfig.WorkspaceLayoutPipelining | Should -BeTrue
 		}
+
+		It "Should ship WorkspaceLayoutPrepareEarly enabled" {
+			$script:BaseConfig.WorkspaceLayoutPrepareEarly | Should -BeTrue
+		}
 	}
 
 	Context "Schema validation of the untouched base" {

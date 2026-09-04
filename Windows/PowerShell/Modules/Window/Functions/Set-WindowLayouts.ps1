@@ -68,7 +68,8 @@ function Set-WindowLayouts {
 		wait phase confirmed stable for ONE desktop when it positions that desktop while the
 		rest of the workspace is still loading, so a window still loading elsewhere - or one
 		another desktop's entry already owns - is never claimed here, whatever the title regex
-		says.
+		says. Such a pass searches each entry once: a miss means the window is not stable yet
+		and the pass after the wait places it, so the not-found retry ladder is skipped.
 
 	.PARAMETER ExcludeWindowHandles
 		Blacklist of window handles this pass may not claim, dropped at the same point as the
@@ -92,6 +93,13 @@ function Set-WindowLayouts {
 		resets the tracking by default so Snap-AllWindows sees exactly the windows of that
 		call; the per-desktop passes of one workspace open share a single tracking set and
 		therefore pass this on every call but the first.
+
+	.PARAMETER AbandonedEntries
+		Layout entries the wait phase abandoned (Wait-ForWorkspaceWindows' AbandonedEntries: no
+		window ever matched and no live process). They still produce their Not Found row, but
+		get ONE search instead of the three-attempt retry ladder with its 0.5 s and 1 s waits -
+		that ladder rides out transient title drift on a window that exists, and these have
+		none.
 
 	.PARAMETER ProtectedWindowHandles
 		Live window handles a plain open must preserve (they belong to a live alongside
@@ -214,7 +222,10 @@ function Set-WindowLayouts {
 		[string[]]$SkipEntryKeys,
 
 		[Parameter()]
-		[switch]$KeepPositionedWindows
+		[switch]$KeepPositionedWindows,
+
+		[Parameter()]
+		[array]$AbandonedEntries
 	)
 
 	# The per-desktop passes of one workspace open append to one tracking set; every other
@@ -349,6 +360,14 @@ function Set-WindowLayouts {
 	$skipEntryKeySet = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
 	foreach ($skipKey in @($SkipEntryKeys)) {
 		if (-not [string]::IsNullOrEmpty($skipKey)) { [void]$skipEntryKeySet.Add($skipKey) }
+	}
+	# Entries the wait abandoned, keyed the same way (tokens resolved as the layout above was),
+	# so the search below can tell them apart from an entry whose window merely lost its title.
+	$abandonedEntryKeySet = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+	foreach ($abandonedEntry in @($AbandonedEntries)) {
+		if ($null -eq $abandonedEntry) { continue }
+		$resolvedAbandoned = if ($abandonedEntry -is [hashtable]) { Resolve-LayoutTokens -LayoutEntry $abandonedEntry } else { $abandonedEntry }
+		[void]$abandonedEntryKeySet.Add((& $entryKeyOf $resolvedAbandoned))
 	}
 
 	$applyPositionWorkItem = {
@@ -784,9 +803,20 @@ function Set-WindowLayouts {
 		# Get windows for this process with retry logic.
 		# Windows (especially browser tabs) can temporarily lose their title during page loads,
 		# redirects, or handle recreation. Retry with cache clearing to catch transient misses.
-		$maxSearchRetries = 3
+		# An entry the wait phase abandoned has no window to ride out title drift on: one search,
+		# no 0.5 s + 1 s ladder, the same Not Found row. A per-desktop pass (-CandidateWindowHandles)
+		# searches once too: the wait confirmed its candidates stable in this very poll, so a miss
+		# means the entry's window is not there yet and the pass after the wait places it - the
+		# ladder inside the wait only delayed every other desktop by 1.5 s per miss.
+		$entryAbandonedByWait = ($abandonedEntryKeySet.Count -gt 0 -and $abandonedEntryKeySet.Contains($currentEntryKey))
+		$singleSearchOnly = $entryAbandonedByWait -or ($null -ne $CandidateWindowHandles)
+		$maxSearchRetries = if ($singleSearchOnly) { 1 } else { 3 }
 		$searchRetryDelayMs = 500
 		$windows = $null
+		if ($singleSearchOnly -and (Test-LogVerbose)) {
+			$singleSearchReason = if ($entryAbandonedByWait) { "Entry abandoned by the wait phase" } else { "Per-desktop pass" }
+			Write-LogDebug "$singleSearchReason - single search, no retry ladder" -Style Warning
+		}
 
 		for ($searchAttempt = 1; $searchAttempt -le $maxSearchRetries; $searchAttempt++) {
 			if ($searchAttempt -gt 1) {

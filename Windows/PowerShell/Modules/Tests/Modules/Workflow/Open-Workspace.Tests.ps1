@@ -42,7 +42,7 @@ BeforeAll {
 	function Test-BrowserGroupAlreadyOpen { $false }
 	function Open-Browser { param($Groups, $Browser) }
 	function Open-Terminal { param($Command, [switch]$Administrator, [switch]$InSameShell, $WindowId, $TabTitles) }
-	function Set-WorkspaceWindowLayout { param($WorkspaceName, $PreCapturedExistingWindows, $DesktopOffset, [switch]$Alongside, $ProtectedWindowHandles) }
+	function Set-WorkspaceWindowLayout { param($WorkspaceName, $PreCapturedExistingWindows, $DesktopOffset, [switch]$Alongside, $ProtectedWindowHandles, [switch]$PrepareOnly) }
 	# The benchmark writer and the layout phase getter are real module functions in a
 	# bootstrap-imported session; stub them so no test run appends rows to the machine's
 	# benchmark file or reads a real layout record.
@@ -98,6 +98,7 @@ Describe "Open-Workspace" {
 		$script:browserCalls = @()
 		$script:swaggerCalls = @()
 		$script:setLayoutCalls = @()
+		$script:prepareLayoutCalls = @()
 		$script:openTerminalCalls = @()
 
 		$script:resolveSelectionCalls = @()
@@ -184,15 +185,19 @@ Describe "Open-Workspace" {
 			$script:swaggerCalls += [PSCustomObject]@{ Project = @($Project); Browser = $Browser }
 		}
 		Mock Set-WorkspaceWindowLayout {
-			param($WorkspaceName, $PreCapturedExistingWindows, $DesktopOffset, [switch]$Alongside, $ProtectedWindowHandles)
-			$script:setLayoutCalls += [PSCustomObject]@{
+			param($WorkspaceName, $PreCapturedExistingWindows, $DesktopOffset, [switch]$Alongside, $ProtectedWindowHandles, [switch]$PrepareOnly)
+			$layoutCall = [PSCustomObject]@{
 				WorkspaceName               = $WorkspaceName
 				PreCapturedExistingWindows  = $PreCapturedExistingWindows
 				DesktopOffset               = $DesktopOffset
 				Alongside                   = [bool]$Alongside
 				ProtectedWindowHandles      = $ProtectedWindowHandles
 				ProtectedWindowHandlesBound = $PSBoundParameters.ContainsKey('ProtectedWindowHandles')
+				ActionsRunBefore            = @($script:invokedActions).Count
 			}
+			# The early preparation (-PrepareOnly) is recorded apart from the layout action, so
+			# every count on $script:setLayoutCalls still means "the layout action ran".
+			if ($PrepareOnly) { $script:prepareLayoutCalls += $layoutCall } else { $script:setLayoutCalls += $layoutCall }
 		}
 		Mock Terminate-WindowsTerminalTabs { param([switch]$OnlyCurrent) $script:terminateCalls += [PSCustomObject]@{ OnlyCurrent = [bool]$OnlyCurrent } }
 		Mock Test-BrowserGroupAlreadyOpen { $false }
@@ -1142,6 +1147,108 @@ Describe "Open-Workspace" {
 			[Environment]::GetEnvironmentVariable('OPEN_WORKSPACE_START_UTC', 'Process') | Should -BeNullOrEmpty
 			# Consumed at entry, so the tabs this open spawns cannot inherit it either.
 			$script:envDuringOpen.Timer | Should -BeNullOrEmpty
+		}
+	}
+
+	Context "layout preparation ahead of the launch actions" {
+		# The layout's preamble (RPC probe, layout file, desktop resize, FancyZones zone layouts)
+		# depends on no window and used to run after every application had been launched, under
+		# their start-up load. It now runs first, as Set-WorkspaceWindowLayout -PrepareOnly.
+		BeforeEach {
+			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } },
+				@{ Action = 'Set-WorkspaceWindowLayout'; Parameters = @{ WorkspaceName = 'TestWorkspace' } }
+			)
+		}
+
+		It "prepares the desktops and zone layouts before the first launch action, then runs the layout action as before" {
+			Open-Workspace -Workspace 'TestWorkspace'
+
+			$script:prepareLayoutCalls.Count | Should -Be 1
+			$script:prepareLayoutCalls[0].WorkspaceName | Should -Be 'TestWorkspace'
+			$script:prepareLayoutCalls[0].ActionsRunBefore | Should -Be 0
+			($null -ne $script:prepareLayoutCalls[0].PreCapturedExistingWindows) | Should -BeTrue
+			$script:setLayoutCalls.Count | Should -Be 1
+			$script:setLayoutCalls[0].ActionsRunBefore | Should -Be 1
+		}
+
+		It "forwards the desktop offset and the alongside mode to the preparation of an alongside open" {
+			$env:OPEN_WORKSPACE_ALONGSIDE_SHELL = '1'
+
+			Open-Workspace -Workspace 'TestWorkspace' -Alongside
+
+			$script:prepareLayoutCalls.Count | Should -Be 1
+			$script:prepareLayoutCalls[0].DesktopOffset | Should -Be 3
+			$script:prepareLayoutCalls[0].Alongside | Should -BeTrue
+		}
+
+		It "forwards the protected handles of a plain open to the preparation" {
+			$protectedHandles = New-Object 'System.Collections.Generic.HashSet[IntPtr]'
+			[void]$protectedHandles.Add([IntPtr]60)
+			Mock Get-WorkspaceOpenProtection { [PSCustomObject]@{ Entries = @(); WindowHandles = $protectedHandles } }
+
+			Open-Workspace -Workspace 'TestWorkspace'
+
+			$script:prepareLayoutCalls.Count | Should -Be 1
+			$script:prepareLayoutCalls[0].ProtectedWindowHandles.Contains([IntPtr]60) | Should -BeTrue
+		}
+
+		It "skips the preparation when WorkspaceLayoutPrepareEarly is false" {
+			$script:Configuration.WorkspaceLayoutPrepareEarly = $false
+
+			Open-Workspace -Workspace 'TestWorkspace'
+
+			$script:prepareLayoutCalls.Count | Should -Be 0
+			$script:setLayoutCalls.Count | Should -Be 1
+		}
+
+		It "skips the preparation for a workspace without a layout action" {
+			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } }
+			)
+
+			Open-Workspace -Workspace 'TestWorkspace'
+
+			$script:prepareLayoutCalls.Count | Should -Be 0
+		}
+
+		It "skips the preparation inside a window-only retry, which must leave the desktops alone" {
+			[Environment]::SetEnvironmentVariable('WORKSPACE_WINDOW_ONLY_RETRY', '1|1788349256', 'Process')
+			try {
+				Open-Workspace -Workspace 'TestWorkspace'
+			}
+			finally {
+				[Environment]::SetEnvironmentVariable('WORKSPACE_WINDOW_ONLY_RETRY', $null, 'Process')
+			}
+
+			$script:prepareLayoutCalls.Count | Should -Be 0
+			$script:setLayoutCalls.Count | Should -Be 1
+		}
+
+		It "times the preparation as its own layout action and folds its phases into the layout record of the benchmark row" {
+			$script:Configuration.WorkspaceBenchmark = @{ Enabled = $true; Display = 'None'; Last = 10 }
+			$script:timingsReads = 0
+			Mock Get-WorkspaceLayoutTimings {
+				$script:timingsReads++
+				if ($script:timingsReads -eq 1) {
+					[PSCustomObject]@{ Workspace = 'TestWorkspace'; Outcome = 'Prepared'; Attempts = 0; TotalSeconds = 1.5; Phases = [ordered]@{ Preamble = 0.5; Desktops = 0.4; FancyZones = 0.6 }; RecordedAt = [DateTimeOffset]::Now.AddSeconds(1) }
+				}
+				else {
+					[PSCustomObject]@{ Workspace = 'TestWorkspace'; Outcome = 'Applied'; Attempts = 1; TotalSeconds = 10; Phases = [ordered]@{ Preamble = 0.1; Desktops = 0; FancyZones = 0.1; Wait = 8; Snap = 1.8 }; RecordedAt = [DateTimeOffset]::Now.AddSeconds(2) }
+				}
+			}
+
+			Open-Workspace -Workspace 'TestWorkspace'
+
+			$script:benchmarkCalls.Count | Should -Be 1
+			@($script:benchmarkCalls[0].ActionTimings.Action) | Should -Be @('Set-WorkspaceWindowLayout -PrepareOnly', 'Test-ActionOne', 'Set-WorkspaceWindowLayout')
+			$record = $script:benchmarkCalls[0].LayoutTimings
+			$record.Outcome | Should -Be 'Applied'
+			$record.Attempts | Should -Be 1
+			$record.TotalSeconds | Should -Be 11.5
+			$record.Phases['Desktops'] | Should -Be 0.4
+			$record.Phases['FancyZones'] | Should -Be 0.7
+			$record.Phases['Wait'] | Should -Be 8
 		}
 	}
 }

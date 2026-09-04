@@ -29,8 +29,9 @@ function Write-WorkspaceBenchmark {
 
 	.PARAMETER ActionTimings
 		Objects with Action and Seconds, one per executed action, in execution order. The action
-		named Set-WorkspaceWindowLayout is reported as LayoutSeconds, every other one adds to
-		ActionsSeconds.
+		named Set-WorkspaceWindowLayout - and its early preparation, timed by Open-Workspace as
+		"Set-WorkspaceWindowLayout -PrepareOnly" - is reported as LayoutSeconds, every other one
+		adds to ActionsSeconds.
 
 	.PARAMETER LayoutTimings
 		The record returned by Get-WorkspaceLayoutTimings. Omit when no layout ran; the row then
@@ -106,7 +107,9 @@ function Write-WorkspaceBenchmark {
 		$seconds = 0.0
 		try { $seconds = [double]$timing.Seconds } catch { $seconds = 0.0 }
 
-		if ($actionName -eq $layoutActionName) { $layoutSeconds += $seconds } else { $actionsSeconds += $seconds }
+		# The early preparation is timed as "Set-WorkspaceWindowLayout -PrepareOnly": layout
+		# work, not a launch action.
+		if ($actionName -eq $layoutActionName -or $actionName -like "$layoutActionName -*") { $layoutSeconds += $seconds } else { $actionsSeconds += $seconds }
 		$actionParts.Add("$actionName=$(([math]::Round($seconds, 2)).ToString('0.##', $invariant))")
 	}
 

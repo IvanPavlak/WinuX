@@ -29,6 +29,7 @@ BeforeAll {
 	. "$FunctionsPath\Set-WindowLayouts.ps1"
 	. "$FunctionsPath\Resize-PositionedWindows.ps1"
 	. "$FunctionsPath\Snap-AllWindows.ps1"
+	. "$FunctionsPath\Visualize-Layouts.ps1"
 
 	function Remove-PositionedWindowHandles { }
 	function Verify-WindowPlacement { $true }
@@ -708,7 +709,7 @@ Describe "Set-WorkspaceWindowLayout" {
 		}
 	}
 
-	It "forwards SnapDelayMs and snap desktop parameters in standard flow" {
+	It "never sleeps between positioning and the snap pass, and forwards the snap desktop parameters" {
 		Mock Test-Path { $true }
 		Mock Import-PowerShellDataFile {
 			@{
@@ -730,7 +731,10 @@ Describe "Set-WorkspaceWindowLayout" {
 
 		Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace' -DesktopOffset 5 -SnapDelayMs 25
 
-		Should -Invoke Start-Sleep -Times 1 -Exactly -ParameterFilter { $Milliseconds -eq 25 }
+		# SnapDelayMs is the simple-layout path's per-window delay. The workspace flow used to
+		# sleep it once between positioning and the snap pass, which did nothing: every
+		# SetWindowPos is already settled and every snap is verified with Wait-WindowRect.
+		Should -Invoke Start-Sleep -Times 0 -Exactly -ParameterFilter { $Milliseconds -eq 25 }
 		# Offset 0 even with -DesktopOffset 5: the tracked desktop numbers Snap-AllWindows
 		# reads already have the offset folded in (Set-WindowLayouts adds it before calling
 		# Add-PositionedWindow), and Snap-AllWindows adds it again. Forwarding the real offset
@@ -1307,7 +1311,7 @@ Describe "Set-WorkspaceWindowLayout" {
 							[PSCustomObject]@{ Status = 'Not Found'; ProcessName = $_.ProcessName; DesktopNumber = $_.DesktopNumber; EntryKey = $key }
 						}
 						else {
-							[PSCustomObject]@{ Status = 'Configured'; Handle = [IntPtr](100 + $_.DesktopNumber); ProcessName = $_.ProcessName; WindowProcessName = $_.ProcessName; DesktopNumber = $_.DesktopNumber; ExpectedX = 0; EntryKey = $key }
+							[PSCustomObject]@{ Status = 'Configured'; Handle = [IntPtr](100 + $_.DesktopNumber); ProcessName = $_.ProcessName; WindowProcessName = $_.ProcessName; DesktopNumber = $_.DesktopNumber; ExpectedX = 0; EntryKey = $key; LayoutEntry = $_ }
 						}
 					})
 			}
@@ -1486,6 +1490,50 @@ Describe "Set-WorkspaceWindowLayout" {
 			Should -Invoke Resize-Windows -Times 1 -Exactly -ParameterFilter { $WindowHandle -eq [IntPtr]101 -and $null -eq $TargetX }
 			Should -Invoke Resize-Windows -Times 0 -Exactly -ParameterFilter { $WindowHandle -eq [IntPtr]102 }
 		}
+
+		It "never lets the early move carry off a window a per-desktop pass already placed" {
+			Mock Wait-ForWorkspaceWindows {
+				param($LayoutConfig, $TimeoutSeconds, $OnWindowStable, $OnDesktopReady)
+				$placed = [PSCustomObject]@{ Handle = [IntPtr]102; Title = 'Terminal'; Left = 0; Top = 0; Width = 800; Height = 600 }
+				if ($OnDesktopReady) {
+					& $OnDesktopReady 2 @(@{ LayoutEntry = $LayoutConfig[1]; Window = $placed }) @([IntPtr]102)
+				}
+				# A later poll matches the OTHER entry (desktop 1) to the same window by process.
+				if ($OnWindowStable) { & $OnWindowStable $LayoutConfig[0] $placed }
+				@{ Success = $true; WindowStates = @{ ([IntPtr]102) = @{ Title = 'Terminal' } }; ReadyDesktops = @(2) }
+			}
+
+			Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace'
+
+			Should -Invoke Move-WindowToVirtualDesktop -Times 0 -Exactly -ParameterFilter { $WindowHandle -eq [IntPtr]102 }
+		}
+
+		It "re-runs a catch-all entry in the tail when a window of its process appeared after its desktop's pass" {
+			# The desktop-2 entry is process-only (WindowsTerminal). Its pass placed window 102;
+			# a second WindowsTerminal window (555) exists after the wait and must be placed too.
+			Mock Get-WindowHandle {
+				if ($ProcessName -eq 'WindowsTerminal') {
+					return @(
+						[PSCustomObject]@{ Handle = [IntPtr]102; Title = 'Terminal'; ProcessName = 'WindowsTerminal' }
+						[PSCustomObject]@{ Handle = [IntPtr]555; Title = 'Terminal 2'; ProcessName = 'WindowsTerminal' }
+					)
+				}
+				@()
+			}
+
+			Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace'
+
+			$script:layoutCalls.Count | Should -Be 2
+			@($script:layoutCalls[1].SkipKeys) | Should -Not -Contain "2|||WindowsTerminal|"
+			# The placed window stays off limits, so only the newcomer moves.
+			$script:layoutCalls[1].Excluded.Contains([IntPtr]102) | Should -BeTrue
+		}
+
+		It "keeps a placed catch-all entry skipped when no further window of its process exists" {
+			Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace'
+
+			@($script:layoutCalls[1].SkipKeys) | Should -Contain "2|||WindowsTerminal|"
+		}
 	}
 
 	Context "Rerun command for the escalation" {
@@ -1531,6 +1579,138 @@ Describe "Set-WorkspaceWindowLayout" {
 			finally {
 				[Environment]::SetEnvironmentVariable('WORKSPACE_RERUN_COMMAND', $null, 'Process')
 			}
+		}
+	}
+
+	Context "Wait trims, the abandoned-entry ladder and the direct visualization path" {
+		# Note: windows the launch actions created get no stability credit for the time they
+		# were visible before the wait started - the first cut did that from an entry snapshot
+		# and handed a 2-second-old VS Code window over while VS Code was replacing it.
+		BeforeEach {
+			Mock Test-Path { $true }
+			Mock Import-PowerShellDataFile {
+				@{
+					Layout   = @(@{ ProcessName = 'Code'; WindowTitle = '*Code*'; DesktopNumber = 1 })
+					Monitors = @{ MonitorA = @{ VirtualDesktopLayouts = @{ 1 = 'One' } } }
+				}
+			}
+			Mock Get-DesktopList { @(0) }
+			Mock Get-WindowDesktopIndex { -1 }
+			Mock Set-WindowLayouts { @([PSCustomObject]@{ Status = 'Configured' }) }
+			$script:waitCall = $null
+			Mock Wait-ForWorkspaceWindows {
+				$script:waitCall = [PSCustomObject]@{
+					PreExisting = $PreExistingWindowHandles
+					Excluded    = $ExcludeWindowHandles
+				}
+				@{ Success = $true; WindowStates = @{}; Abandoned = @(); AbandonedEntries = @(); ReadyDesktops = @() }
+			}
+			$script:preOpen = New-Object 'System.Collections.Generic.HashSet[IntPtr]'
+			[void]$script:preOpen.Add([IntPtr]501)
+		}
+
+		It "tells the wait which windows pre-existed a plain open, and excludes none of them" {
+			Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace' -PreCapturedExistingWindows $script:preOpen
+
+			$script:waitCall | Should -Not -BeNullOrEmpty
+			$script:waitCall.PreExisting.Contains([IntPtr]501) | Should -BeTrue
+			$script:waitCall.Excluded | Should -BeNullOrEmpty
+		}
+
+		It "excludes the pre-open windows from an alongside wait instead of waiting for them" {
+			Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace' -PreCapturedExistingWindows $script:preOpen -Alongside
+
+			$script:waitCall.PreExisting | Should -BeNullOrEmpty
+			$script:waitCall.Excluded.Contains([IntPtr]501) | Should -BeTrue
+		}
+
+		It "excludes protected windows from a plain open's wait" {
+			$protected = New-Object 'System.Collections.Generic.HashSet[IntPtr]'
+			[void]$protected.Add([IntPtr]777)
+
+			Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace' -PreCapturedExistingWindows $script:preOpen -ProtectedWindowHandles $protected
+
+			$script:waitCall.Excluded.Contains([IntPtr]777) | Should -BeTrue
+			$script:waitCall.PreExisting.Contains([IntPtr]501) | Should -BeTrue
+		}
+
+		It "hands the wait's abandoned entries to the layout pass so they skip the not-found ladder" {
+			Mock Import-PowerShellDataFile {
+				@{
+					Layout   = @(
+						@{ ProcessName = 'Code'; WindowTitle = '*Code*'; DesktopNumber = 1 }
+						@{ ProcessName = 'Ghost'; DesktopNumber = 1 }
+					)
+					Monitors = @{ MonitorA = @{ VirtualDesktopLayouts = @{ 1 = 'One' } } }
+				}
+			}
+			Mock Wait-ForWorkspaceWindows {
+				@{ Success = $false; WindowStates = @{}; Abandoned = @('Ghost'); AbandonedEntries = @($LayoutConfig[1]); ReadyDesktops = @() }
+			}
+
+			Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace'
+
+			Should -Invoke Set-WindowLayouts -Times 1 -Exactly -ParameterFilter { @($AbandonedEntries).Count -eq 1 -and @($AbandonedEntries)[0].ProcessName -eq 'Ghost' }
+		}
+
+		It "visualizes the applied layout file by path instead of rescanning the Layouts tree" {
+			Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace'
+
+			Should -Invoke Visualize-Layouts -Times 1 -Exactly -ParameterFilter { $LayoutPath -like '*MyWorkspace_PC.psd1' }
+		}
+	}
+
+	Context "-PrepareOnly (the layout preamble ahead of the launch actions)" {
+		BeforeEach {
+			Mock Test-Path { $true }
+			Mock Import-PowerShellDataFile {
+				@{
+					Layout   = @(@{ ProcessName = 'Code'; WindowTitle = '*Code*'; DesktopNumber = 1 })
+					Monitors = @{ MonitorA = @{ VirtualDesktopLayouts = @{ 1 = 'One'; 2 = 'Two' } } }
+				}
+			}
+			Mock Get-DesktopList { @(0) }
+		}
+
+		It "resizes the desktops and applies the zone layouts, then stops before the wait" {
+			$script:LastWorkspaceLayoutTimings = $null
+
+			Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace' -PrepareOnly
+
+			Should -Invoke Ensure-VirtualDesktops -Times 1 -Exactly -ParameterFilter { $Count -eq 2 }
+			Should -Invoke Apply-FancyZones -Times 1 -Exactly
+			Should -Invoke Wait-ForWorkspaceWindows -Times 0 -Exactly
+			Should -Invoke Set-WindowLayouts -Times 0 -Exactly
+			Should -Invoke Snap-AllWindows -Times 0 -Exactly
+			Should -Invoke Save-CurrentLayout -Times 0 -Exactly
+			Should -Invoke Visualize-Layouts -Times 0 -Exactly
+			$script:LastWorkspaceLayoutTimings.Outcome | Should -Be 'Prepared'
+			@($script:LastWorkspaceLayoutTimings.Phases.Keys) | Should -Contain 'FancyZones'
+			@($script:LastWorkspaceLayoutTimings.Phases.Keys) | Should -Not -Contain 'Wait'
+		}
+
+		It "never reads the one-shot rerun markers, which the full run must still see" {
+			Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace' -PrepareOnly
+
+			Should -Invoke Get-WorkspaceRerunMirror -Times 0 -Exactly
+		}
+
+		It "enumerates no windows - nothing below the FancyZones phase runs" {
+			Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace' -PrepareOnly
+
+			Should -Invoke Get-WindowHandle -Times 0 -Exactly
+		}
+
+		It "returns immediately for a simple layout" {
+			$global:Configuration = @{ SimpleLayoutWorkspaces = @('Fullscreen') }
+			$script:Configuration = @{ SimpleLayoutWorkspaces = @('Fullscreen') }
+			$script:LastWorkspaceLayoutTimings = $null
+
+			Set-WorkspaceWindowLayout -WorkspaceName 'Fullscreen' -PrepareOnly
+
+			Should -Invoke Apply-FancyZones -Times 0 -Exactly
+			Should -Invoke Ensure-VirtualDesktops -Times 0 -Exactly
+			$script:LastWorkspaceLayoutTimings.Outcome | Should -Be 'Prepared'
 		}
 	}
 }

@@ -119,6 +119,19 @@ Describe "Write-WorkspaceBenchmark" {
 		{ Write-WorkspaceBenchmark -Workspace 'MyWorkspace' -TotalSeconds 5 -BenchmarkPath $blockedPath -Quiet } | Should -Not -Throw
 		Should -Invoke Write-LogWarning -Times 1 -Exactly
 	}
+
+	It "counts the early layout preparation as layout seconds, not as a launch action" {
+		$timings = @(
+			[PSCustomObject]@{ Action = 'Set-WorkspaceWindowLayout -PrepareOnly'; Seconds = 1.5 }
+			[PSCustomObject]@{ Action = 'Open-Project'; Seconds = 0.5 }
+			[PSCustomObject]@{ Action = 'Set-WorkspaceWindowLayout'; Seconds = 20.0 }
+		)
+
+		$row = Write-WorkspaceBenchmark -Workspace 'MyWorkspace' -TotalSeconds 22 -ActionTimings $timings -BenchmarkPath $script:BenchmarkFile -Quiet -PassThru
+
+		$row.ActionsSeconds | Should -Be 0.5
+		$row.LayoutSeconds | Should -Be 21.5
+	}
 }
 
 Describe "Get-WorkspaceBenchmark" {

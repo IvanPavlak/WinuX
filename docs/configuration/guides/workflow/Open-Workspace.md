@@ -15,6 +15,7 @@ The main entry point for starting work. Alias: `w`.
 | [`WorkspaceActions`](../../configuration-reference.md#workspace-actions) | hashtable of workspace name to action array | hashtable, 5 keys | What `Open-Workspace` does for each workspace: an ordered array of `@{ Action; Parameters }` entries. `Close-Workspace` reads what the open actually produced, not this map. |
 | [`WorkspaceBenchmark`](../../configuration-reference.md#workspace-benchmark) | hashtable (`Enabled`, `Display`, `Last`) | `@{ Enabled = $false; Display = "Table"; Last = 10 }` | Whether every open is measured - each action timed, the layout phases read back, one row appended to `WorkspaceBenchmark.csv` - and what the end of the open shows: the workspace's recent runs as a table, one `Timing =>` line, or nothing. |
 | [`Workspaces`](../../configuration-reference.md#workspaces-list) | array of workspace names | `@("Default", "Example", "Fullscreen", "Empty", "WinuX")` | The workspace names `Open-Workspace` offers. Each needs a `WorkspaceActions` entry to do anything. |
+| [`WorkspaceLayoutPrepareEarly`](../../configuration-reference.md#layout-numbers--zone-mappings) | bool | `$true` | Whether the layout's virtual desktops and FancyZones zone layouts are prepared before the launch actions (`Set-WorkspaceWindowLayout -PrepareOnly`), on an idle machine, or left to the layout action after them. |
 
 Action order is the whole of the behaviour here. Everything that creates a window runs first, `Set-WorkspaceWindowLayout` places them, and `Focus-VirtualDesktop` is meant to be the last thing that happens - a workspace that ends by jumping to another desktop and back almost always has an action after the focus call.
 
@@ -48,6 +49,10 @@ Action order is the whole of the behaviour here. Everything that creates a windo
     - Options: `Enabled = $true` records one row per open in `WorkspaceBenchmark.csv`; `Display` picks what the end of the open shows - `"Table"` (the workspace's recent runs), `"Line"` (one `Timing =>` line) or `"None"` (record only); `Last` sets how many runs the table shows.
     - Default: Off - nothing is recorded and nothing extra is printed.
     - More detail: [`WorkspaceBenchmark`](../../configuration-reference.md#workspace-benchmark)
+8. Should the layout's desktops and zone layouts be prepared before the applications launch?
+    - Options: `$true` runs the layout preamble first, on an idle machine; `$false` leaves all of it to the layout action after the launch actions.
+    - Default: `$true`. Switch it off to compare the two with `Get-WorkspaceBenchmark`, or if a workspace misbehaves only with the preparation on.
+    - More detail: [`WorkspaceLayoutPrepareEarly`](../../configuration-reference.md#layout-numbers--zone-mappings)
 
 ## Where to Put Values
 
@@ -66,7 +71,8 @@ On this page that bites on `ProjectTerminals`, `Workspaces` - those keys are arr
 4. Set `WorkspaceActions`
 5. Set `Workspaces`
 6. Set `WorkspaceBenchmark`
-7. Reload and confirm the merge landed
+7. Set `WorkspaceLayoutPrepareEarly`
+8. Reload and confirm the merge landed
 
 ## Step 1: Set `DefaultVSCodeWorkspaces`
 
@@ -130,7 +136,15 @@ WorkspaceBenchmark = @{
 }
 ```
 
-## Step 7: Reload and confirm the merge landed
+## Step 7: Set `WorkspaceLayoutPrepareEarly`
+
+Whether `Open-Workspace` runs the layout preamble - virtual desktop resize and FancyZones zone layouts, as `Set-WorkspaceWindowLayout -PrepareOnly` - before the launch actions. On in the base; the layout action then finds that work done and skips it. Set `$false` to run the whole layout after the launch actions, for comparison with `Get-WorkspaceBenchmark` or as an escape hatch.
+
+```powershell
+WorkspaceLayoutPrepareEarly = $false
+```
+
+## Step 8: Reload and confirm the merge landed
 
 Reload the profile, then read the merged value back. `$global:Configuration` after a reload is the ground truth - if what you set is not there, the local file did not parse or the key is nested one level away from where you put it.
 
@@ -151,6 +165,7 @@ $global:Configuration.ProjectTerminals
 $global:Configuration.WorkspaceActions
 $global:Configuration.Workspaces
 $global:Configuration.WorkspaceBenchmark
+$global:Configuration.WorkspaceLayoutPrepareEarly
 $global:Configuration.Workspaces
 $global:Configuration.WorkspaceActions.Keys
 $global:Configuration.DefaultWorkspace
@@ -185,6 +200,7 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
     WorkspaceBenchmark = @{
         Enabled = $true
     }
+    WorkspaceLayoutPrepareEarly = $true
 }
 ```
 

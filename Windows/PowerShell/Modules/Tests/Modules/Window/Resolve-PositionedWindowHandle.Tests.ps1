@@ -93,6 +93,37 @@ Describe "Resolve-PositionedWindowHandle" {
 		$result | Should -BeNullOrEmpty
 	}
 
+	It "accepts the sole window that still carries the tracked title and process name when the tracked process is gone" {
+		# VS Code hands its window from the launcher process to the main process a few seconds
+		# after launch: same handle, same title, same process name, new process id. Refusing it
+		# left the window unsnapped and on whatever desktop it had appeared on.
+		Mock Get-CachedWindows {
+			@(
+				[PSCustomObject]@{ Handle = [IntPtr]510; ProcessId = 32128; ProcessName = "Code"; Title = "asseto - Visual Studio Code" }
+				[PSCustomObject]@{ Handle = [IntPtr]511; ProcessId = 60; ProcessName = "firefox"; Title = "asseto - Mozilla Firefox" }
+			)
+		}
+
+		$state = @{ WindowTitle = "asseto - Visual Studio Code"; ProcessName = "Code"; ProcessId = [uint32]31828 }
+		$result = Resolve-PositionedWindowHandle -WindowState $state
+
+		$result.Handle | Should -Be ([IntPtr]510)
+	}
+
+	It "stays null when several same-titled windows of the process name remain and none is owned by the tracked process" {
+		Mock Get-CachedWindows {
+			@(
+				[PSCustomObject]@{ Handle = [IntPtr]520; ProcessId = 61; ProcessName = "firefox"; Title = "Inbox" }
+				[PSCustomObject]@{ Handle = [IntPtr]521; ProcessId = 61; ProcessName = "firefox"; Title = "Inbox" }
+			)
+		}
+
+		$state = @{ WindowTitle = "Inbox"; ProcessName = "firefox"; ProcessId = [uint32]999 }
+		$result = Resolve-PositionedWindowHandle -WindowState $state
+
+		$result | Should -BeNullOrEmpty
+	}
+
 	It "returns null when the tracked title matches no live window" {
 		Mock Get-CachedWindows {
 			@(

@@ -33,6 +33,23 @@ function Set-WorkspaceWindowLayout {
 		configuration turns this off and restores the strictly sequential wait -> position ->
 		snap order.
 
+		The wait phase credits what it can see. A window that existed before the open (the
+		pre-open capture) has nothing to stabilize and counts as stable on first sight in plain
+		mode; in alongside mode, and for protected windows in plain mode, it never matches an
+		entry at all, since the layout pass may not use it, and an entry that only ever matches
+		such windows is abandoned after the process-absent grace period instead of the timeout.
+		Windows the launch actions created earn the stability floor as before. Entries the wait
+		abandoned (no window ever, no live process) get one search in the layout pass instead
+		of the not-found retry ladder.
+
+		With -PrepareOnly the function stops after the FancyZones phase: RPC probe, layout file,
+		validation, virtual desktops and zone layouts, nothing else - no wait, no positioning, no
+		snap, no snapshot write, and the one-shot rerun markers are left untouched for the full
+		run. Open-Workspace calls it that way BEFORE the launch actions (WorkspaceLayoutPrepareEarly,
+		on by default), so that preamble runs on an idle machine instead of competing with a
+		dozen starting applications; the ordinary layout action then finds the desktops and zone
+		layouts already in place and skips them.
+
 		Inside the snap pass a window that exhausts keyboard and shift-drag snapping triggers a
 		FancyZones reset (the same force-restart plus forced zone re-apply the retry below uses,
 		handed to Snap-AllWindows as -ZoneReset) and a second round for that same window before
@@ -73,10 +90,11 @@ function Set-WorkspaceWindowLayout {
 		Default is 60 seconds.
 
 	.PARAMETER SnapDelayMs
-		Milliseconds to wait between positioning and the snap pass, and the per-window delay
-		on the simple-layout path (forwarded to Snap-AllWindows -All). Default is 10. It is
-		NOT a per-window delay in the workspace flow - the positioned-window snap path
-		verifies every snap with Wait-WindowRect instead of fixed delays.
+		Per-window delay on the simple-layout path (forwarded to Snap-AllWindows -All).
+		Default is 10. Not used in the workspace flow: nothing sleeps between positioning and
+		the snap pass (Set-WindowLayouts already settles every SetWindowPos, the pre-snap
+		resize re-reads each rect), and the positioned-window snap path verifies every snap
+		with Wait-WindowRect instead of fixed delays.
 
 	.PARAMETER DisableAutoWait
 		Disables automatic window detection and applies layout immediately.
@@ -117,6 +135,13 @@ function Set-WorkspaceWindowLayout {
 		that function is available. Simple layouts (Fullscreen/Empty) stay global gestures and
 		ignore protection by design.
 
+	.PARAMETER PrepareOnly
+		Runs only the preamble - RPC probe, layout file, validation, virtual desktop resize and
+		FancyZones zone layouts - and returns with outcome Prepared. Nothing waits, moves or
+		snaps, no snapshot is written, and the rerun markers are not read (reading consumes
+		them). Open-Workspace uses it to do that work before the launch actions; the full call
+		that follows finds it done. A simple layout returns immediately.
+
 	.EXAMPLE
 		Set-WorkspaceWindowLayout -WorkspaceName "WinuX"
 		# Uses automatic window detection
@@ -132,6 +157,10 @@ function Set-WorkspaceWindowLayout {
 	.EXAMPLE
 		Set-WorkspaceWindowLayout -WorkspaceName "Server" -DisableAutoWait
 		# Applies layout immediately without waiting
+
+	.EXAMPLE
+		Set-WorkspaceWindowLayout -WorkspaceName "Server" -PrepareOnly
+		# Desktops and zone layouts only - what Open-Workspace runs before the launch actions
 	#>
 	[CmdletBinding(DefaultParameterSetName = 'ByWorkspace')]
 	param (
@@ -160,14 +189,22 @@ function Set-WorkspaceWindowLayout {
 		[switch]$Alongside,
 
 		[Parameter()]
-		[System.Collections.Generic.HashSet[IntPtr]]$ProtectedWindowHandles
+		[System.Collections.Generic.HashSet[IntPtr]]$ProtectedWindowHandles,
+
+		[Parameter()]
+		[switch]$PrepareOnly
 	)
 
 	$offsetLabel = if ($Alongside) { " (alongside" + $(if ($DesktopOffset -gt 0) { ", offset: +$DesktopOffset" }) + ")" } else { "" }
-	Write-LogTitle "Applying $WorkspaceName Workspace Layout$offsetLabel"
+	if ($PrepareOnly) {
+		Write-LogTitle "Preparing $WorkspaceName Workspace Layout$offsetLabel"
+	}
+	else {
+		Write-LogTitle "Applying $WorkspaceName Workspace Layout$offsetLabel"
+	}
 
 	if (-not (Test-LogVerbose)) {
-		$spinner = Loading-Spinner -Start -Label "Applying layout"
+		$spinner = Loading-Spinner -Start -Label $(if ($PrepareOnly) { "Preparing layout" } else { "Applying layout" })
 	}
 
 	# Phase clock behind Get-WorkspaceLayoutTimings (the workspace benchmark's read side). Each
@@ -227,9 +264,16 @@ function Set-WorkspaceWindowLayout {
 		Set-WorkspaceRerunMirror -Name $Name -Value $Value
 	}
 
-	$windowOnlyRetryActive = (& $readRerunState $windowOnlyRetryEnvVar) -eq '1'
-	$windowOnlyRetryTitle = & $readRerunState $windowOnlyRetryTitleEnvVar
-	$windowOnlyRetryProcess = & $readRerunState $windowOnlyRetryProcessEnvVar
+	# -PrepareOnly never reads the rerun state: the read consumes the one-shot User-scope mirror,
+	# and the full run that follows the launch actions is the one that has to see it.
+	$windowOnlyRetryActive = $false
+	$windowOnlyRetryTitle = $null
+	$windowOnlyRetryProcess = $null
+	if (-not $PrepareOnly) {
+		$windowOnlyRetryActive = (& $readRerunState $windowOnlyRetryEnvVar) -eq '1'
+		$windowOnlyRetryTitle = & $readRerunState $windowOnlyRetryTitleEnvVar
+		$windowOnlyRetryProcess = & $readRerunState $windowOnlyRetryProcessEnvVar
+	}
 	# Restart-only on purpose: this runs microseconds before the process is replaced by the
 	# respawned shell, and that shell force-re-applies the zone layouts as its first FancyZones
 	# action (see the -Force:$windowOnlyRetryActive apply below). Re-applying here as well would
@@ -423,6 +467,15 @@ function Set-WorkspaceWindowLayout {
 		# ProtectedWindowHandles. They are global-by-design gestures - fullscreen every window
 		# on every desktop, replace CurrentLayout.txt whole - and scoping them would change
 		# what the gesture means.
+		if ($PrepareOnly -and $simpleLayoutWorkspaces -contains $layoutNameToUse) {
+			# A simple layout applies its zone grids and places its windows in one pass; there is
+			# nothing to pull ahead of the launch actions.
+			if ($spinner) { [void](Loading-Spinner -Stop -Spinner $spinner -Discard); $spinner = $null }
+			Write-LogDebug " Simple layout [$layoutNameToUse] - nothing to prepare ahead of the launch actions" -Style Warning
+			$phaseState.Outcome = 'Prepared'
+			return
+		}
+
 		if ($simpleLayoutWorkspaces -contains $layoutNameToUse) {
 			# Capture where every window sits BEFORE the zone grids are (re)applied. Applying a
 			# changed zone set can make FancyZones itself relocate remembered windows across
@@ -706,7 +759,7 @@ function Set-WorkspaceWindowLayout {
 
 			Write-LogSuccess "Workspace layout applied successfully!"
 
-			Visualize-Layouts -Layout $machineSpecificLayoutFileName.Replace(".psd1", "")
+			Visualize-Layouts -LayoutPath $LayoutPath
 
 			& $recordPhase 'Save'
 			$phaseState.Outcome = 'Applied'
@@ -863,6 +916,21 @@ function Set-WorkspaceWindowLayout {
 
 		& $recordPhase 'FancyZones'
 
+		# -PrepareOnly ends here. Everything above depends on no window at all; everything below
+		# needs the launched applications. Open-Workspace runs this half before its launch actions
+		# and the whole function after them, where the desktop count already matches and the
+		# zone layouts are already in the file, so both phases collapse to their checks.
+		if ($PrepareOnly) {
+			if ($spinner) {
+				Loading-Spinner -Resume
+				Loading-Spinner -Stop -Spinner $spinner -Completed
+				$spinner = $null
+			}
+			Write-LogDebug "=> Layout prepared: virtual desktops and FancyZones zone layouts are in place ahead of the launch actions" -Style Success
+			$phaseState.Outcome = 'Prepared'
+			return
+		}
+
 		# Reconfiguration sub-steps have finished printing their output - bring the spinner back.
 		if ($spinner) { Loading-Spinner -Resume }
 
@@ -960,6 +1028,10 @@ function Set-WorkspaceWindowLayout {
 			# Plain-mode analogue of the alongside guard above: a preserved workspace's window
 			# matched a layout entry by title/process, but it is not this open's to move.
 			if ($ProtectedWindowHandles -and $ProtectedWindowHandles.Contains($window.Handle)) { return }
+			# A window a per-desktop pass has already placed and snapped is where it belongs;
+			# another entry matching it by process (every browser entry matches every browser
+			# window until the titles resolve) must not carry it off to its own desktop.
+			if ($pipelinedHandles.Contains($window.Handle)) { return }
 
 			$internalDesktopIndex = ($layoutEntry.DesktopNumber - 1) + $DesktopOffset
 			try {
@@ -1000,7 +1072,7 @@ function Set-WorkspaceWindowLayout {
 		}
 
 		$onDesktopReadyCallback = {
-			param($readyDesktopNumber, $readyEntries, $stableWindowHandles)
+			param($readyDesktopNumber, $readyEntries, $stableWindowHandles, $abandonedSoFar)
 
 			$displayDesktop = [int]$readyDesktopNumber + $DesktopOffset
 			try {
@@ -1052,6 +1124,11 @@ function Set-WorkspaceWindowLayout {
 				if ($pipelinedHandles.Count -gt 0) {
 					$desktopLayoutParams["ExcludeWindowHandles"] = $pipelinedHandles
 				}
+				# An entry the wait already abandoned on this desktop gets one search here, not the
+				# 1.5 s not-found ladder - inside the wait that ladder would delay the other desktops.
+				if ($abandonedSoFar -and @($abandonedSoFar).Count -gt 0) {
+					$desktopLayoutParams["AbandonedEntries"] = @($abandonedSoFar)
+				}
 				if ($Alongside) {
 					$desktopLayoutParams["SkipExistingWindows"] = $true
 				}
@@ -1086,7 +1163,6 @@ function Set-WorkspaceWindowLayout {
 					Write-LogDebug " Desktop [$displayDesktop]: placed $placedHere of $readyCount entries now - the rest follow after the wait" -Style Warning
 				}
 
-				Start-Sleep -Milliseconds $SnapDelayMs
 				$null = Resize-PositionedWindows -DesktopNumbers @($displayDesktop)
 				& $recordPhase 'Position'
 
@@ -1113,6 +1189,10 @@ function Set-WorkspaceWindowLayout {
 			}
 		}
 
+		# Entries the wait abandoned (no window ever, no live process): the layout pass gives
+		# them one search instead of the 0.5 s + 1 s retry ladder.
+		$waitAbandonedEntries = @()
+
 		if ($DisableAutoWait -or $windowOnlyRetryActive) {
 			if (Test-LogVerbose) {
 				if ($windowOnlyRetryActive) {
@@ -1132,6 +1212,27 @@ function Set-WorkspaceWindowLayout {
 			if ($usePipelining) {
 				$waitParams["OnDesktopReady"] = $onDesktopReadyCallback
 			}
+			# Wait trims. Windows that pre-existed the open have nothing to stabilize: in plain
+			# mode they count as stable on first sight; in alongside mode they belong to another
+			# workspace and never match an entry (the layout pass refuses them anyway - waiting a
+			# second for one only to refuse it wasted the second and hid a real shortfall), and a
+			# protected window is never matched in plain mode for the same reason. Windows the
+			# launch actions created get no credit for the time they were visible before the wait
+			# started: an application's first window can be replaced seconds after launch (VS
+			# Code), and the stability floor is what catches that.
+			$waitExcludedHandles = New-Object 'System.Collections.Generic.HashSet[IntPtr]'
+			if ($Alongside) {
+				foreach ($existingHandle in @($existingWindowHandles)) { [void]$waitExcludedHandles.Add($existingHandle) }
+			}
+			elseif ($existingWindowHandles -and $existingWindowHandles.Count -gt 0) {
+				$waitParams["PreExistingWindowHandles"] = $existingWindowHandles
+			}
+			if ($hasProtectedWindows) {
+				foreach ($protectedHandle in @($ProtectedWindowHandles)) { [void]$waitExcludedHandles.Add($protectedHandle) }
+			}
+			if ($waitExcludedHandles.Count -gt 0) {
+				$waitParams["ExcludeWindowHandles"] = $waitExcludedHandles
+			}
 			$waitResult = Wait-ForWorkspaceWindows @waitParams
 
 			# Use the state snapshot whenever one was captured - even on partial success
@@ -1145,6 +1246,9 @@ function Set-WorkspaceWindowLayout {
 
 			if (-not ($waitResult -and $waitResult.Success)) {
 				Write-LogDebug " Wait-ForWorkspaceWindows did not fully succeed (timeout or partial detection)" -Style Warning
+			}
+			if ($waitResult -and $waitResult.AbandonedEntries) {
+				$waitAbandonedEntries = @($waitResult.AbandonedEntries)
 			}
 		}
 
@@ -1386,6 +1490,9 @@ function Set-WorkspaceWindowLayout {
 		if ($pinnedHandleMap -and $pinnedHandleMap.Count -gt 0) {
 			$setLayoutParams["PinnedHandleMap"] = $pinnedHandleMap
 		}
+		if ($waitAbandonedEntries.Count -gt 0) {
+			$setLayoutParams["AbandonedEntries"] = $waitAbandonedEntries
+		}
 		# --- Position -> snap -> verify, with bounded IN-PROCESS retries ---
 		# A failed snap/verification used to escalate straight to a full terminal-respawn rerun
 		# (15-45s: other tabs killed, fresh shell + full module load, whole action list re-run).
@@ -1455,7 +1562,32 @@ function Set-WorkspaceWindowLayout {
 				# with the windows already placed off limits. The results of both halves make up this
 				# attempt's set, and the windows already snapped leave the tracking first so the
 				# resize and snap below never pull a snapped window back to its inset.
-				$remainingEntryCount = $layoutConfigToApply.Count - $pipelinedEntryKeys.Count
+				# A catch-all entry (process, no title) places EVERY window of its process. Its
+				# per-desktop pass placed the windows that were stable at that moment; a window of
+				# the process that appeared later (the second VS Code window of a two-project open)
+				# would otherwise never be placed, because the entry is done. Such an entry runs
+				# again in the tail when an unplaced window of its process exists - the placed
+				# windows are excluded below, so only the newcomers move.
+				$tailSkipKeys = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+				foreach ($placedKey in $pipelinedEntryKeys) { [void]$tailSkipKeys.Add($placedKey) }
+				foreach ($placedRow in $pipelinedResults) {
+					if ($null -eq $placedRow.LayoutEntry -or [string]::IsNullOrEmpty($placedRow.EntryKey)) { continue }
+					$placedTitle = $placedRow.LayoutEntry.WindowTitle
+					if ($placedTitle -and $placedTitle -ne '$null') { continue }
+					if ([string]::IsNullOrEmpty($placedRow.LayoutEntry.ProcessName)) { continue }
+					if (-not $tailSkipKeys.Contains([string]$placedRow.EntryKey)) { continue }
+					$processWindows = @(Get-WindowHandle -ProcessName $placedRow.LayoutEntry.ProcessName -ErrorAction SilentlyContinue)
+					$newcomer = $processWindows | Where-Object {
+						$null -ne $_.Handle -and -not $pipelinedHandles.Contains($_.Handle) -and
+						-not ($hasProtectedWindows -and $ProtectedWindowHandles.Contains($_.Handle)) -and
+						-not ($Alongside -and $existingWindowHandles -and $existingWindowHandles.Contains($_.Handle))
+					} | Select-Object -First 1
+					if ($newcomer) {
+						[void]$tailSkipKeys.Remove([string]$placedRow.EntryKey)
+						Write-LogDebug " Catch-all entry [$($placedRow.LayoutEntry.ProcessName)] has a window that appeared after its desktop's pass ([$($newcomer.Title)]) - placing it in the tail" -Style Warning
+					}
+				}
+				$remainingEntryCount = $layoutConfigToApply.Count - $tailSkipKeys.Count
 				Write-LogDebug " Per-desktop passes placed [$($pipelinedEntryKeys.Count)] of [$($layoutConfigToApply.Count)] entries on [$($pipelinedDesktops.Count)] desktop(s) during the wait - finishing the remaining [$remainingEntryCount]"
 
 				if ($script:PositionedWindowHandles -and $pipelinedHandles.Count -gt 0) {
@@ -1468,7 +1600,7 @@ function Set-WorkspaceWindowLayout {
 
 				if ($remainingEntryCount -gt 0) {
 					$remainingLayoutParams = $setLayoutParams.Clone()
-					$remainingLayoutParams["SkipEntryKeys"] = @($pipelinedEntryKeys)
+					$remainingLayoutParams["SkipEntryKeys"] = @($tailSkipKeys)
 					$remainingLayoutParams["KeepPositionedWindows"] = $true
 					if ($pipelinedHandles.Count -gt 0) {
 						$remainingLayoutParams["ExcludeWindowHandles"] = $pipelinedHandles
@@ -1498,9 +1630,10 @@ function Set-WorkspaceWindowLayout {
 			}
 
 			Write-LogDebug "=> [$successful] layout(s) applied successfully!" -Style Success
-			Write-LogDebug " Waiting for windows to stabilize..."
 
-			Start-Sleep -Milliseconds $SnapDelayMs
+			# No settle sleep between positioning and the snap pass: Set-WindowLayouts already
+			# waits WindowPositionMs after every SetWindowPos, the pre-snap resize below re-reads
+			# and corrects each rect, and the snap verifies with Wait-WindowRect.
 
 			# Default (20px) tolerance: with 0, apps that self-adjust by a pixel (terminal cell
 			# rounding, min-size constraints, DPI rounding) were re-positioned on EVERY open
@@ -1792,7 +1925,7 @@ function Set-WorkspaceWindowLayout {
 
 		Write-LogSuccess "Workspace layout applied successfully!"
 
-		Visualize-Layouts -Layout $machineSpecificLayoutFileName.Replace(".psd1", "")
+		Visualize-Layouts -LayoutPath $LayoutPath
 
 		& $recordPhase 'Save'
 		$phaseState.Outcome = 'Applied'

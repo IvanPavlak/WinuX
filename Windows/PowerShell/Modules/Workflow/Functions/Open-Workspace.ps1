@@ -534,6 +534,31 @@ function Open-Workspace {
 						$layoutTimings = $candidateTimings
 					}
 				}
+				# The early preparation (see $prepareLayoutTimings below) published its own record
+				# and the layout action replaced it; fold its phases and seconds into the row so the
+				# Desktops and FancyZones columns still show that work wherever it ran.
+				if ($layoutTimings -and $prepareLayoutTimings -and -not [object]::ReferenceEquals($prepareLayoutTimings, $layoutTimings)) {
+					$mergedPhases = [ordered]@{}
+					if ($layoutTimings.Phases) {
+						foreach ($phaseName in @($layoutTimings.Phases.Keys)) { $mergedPhases[$phaseName] = [double]$layoutTimings.Phases[$phaseName] }
+					}
+					if ($prepareLayoutTimings.Phases) {
+						foreach ($phaseName in @($prepareLayoutTimings.Phases.Keys)) {
+							$mergedPhases[$phaseName] = [math]::Round([double]$mergedPhases[$phaseName] + [double]$prepareLayoutTimings.Phases[$phaseName], 2)
+						}
+					}
+					$layoutTimings = [PSCustomObject]@{
+						Workspace     = $layoutTimings.Workspace
+						LayoutFile    = $layoutTimings.LayoutFile
+						Alongside     = $layoutTimings.Alongside
+						DesktopOffset = $layoutTimings.DesktopOffset
+						Attempts      = $layoutTimings.Attempts
+						Outcome       = $layoutTimings.Outcome
+						TotalSeconds  = [math]::Round([double]$layoutTimings.TotalSeconds + [double]$prepareLayoutTimings.TotalSeconds, 2)
+						Phases        = $mergedPhases
+						RecordedAt    = $layoutTimings.RecordedAt
+					}
+				}
 
 				try {
 					Write-WorkspaceBenchmark -Workspace $workspaceName `
@@ -552,6 +577,59 @@ function Open-Workspace {
 				catch {
 					Write-LogDebug " [Open-Workspace] Benchmark row not written => $($_.Exception.Message)" -Style Warning
 				}
+			}
+
+			# The layout preamble ahead of the launch actions. Set-WorkspaceWindowLayout's RPC probe,
+			# layout file, validation, virtual desktop resize and FancyZones zone layouts depend on
+			# no window existing, yet they used to run AFTER every application had been launched and
+			# cost 3.4 s under that CPU load against 0.2 s idle (the probe runspace alone 1.7 s).
+			# -PrepareOnly runs exactly that part now; the layout action below finds the desktops and
+			# zone layouts in place and skips them. Same parameters as the action itself, plus the
+			# alongside, protection and pre-capture threading the action loop adds, so the prepared
+			# state is the one the action would have produced. Skipped in a window-only retry (whose
+			# whole point is to leave the desktops alone; the marker's process copy is read without
+			# consuming the mirror) and when WorkspaceLayoutPrepareEarly is $false. Best-effort: a
+			# failure here leaves the action to do the work as before.
+			$prepareLayoutTimings = $null
+			$prepareLayoutEarly = ($null -eq $Configuration.WorkspaceLayoutPrepareEarly -or [bool]$Configuration.WorkspaceLayoutPrepareEarly)
+			$layoutActionConfig = @($workspaceActions | Where-Object { $_.Action -eq 'Set-WorkspaceWindowLayout' }) | Select-Object -First 1
+			$windowOnlyRetryMarker = [Environment]::GetEnvironmentVariable('WORKSPACE_WINDOW_ONLY_RETRY', 'Process')
+			if ($prepareLayoutEarly -and $layoutActionConfig -and [string]::IsNullOrEmpty($windowOnlyRetryMarker) -and (Get-Command Set-WorkspaceWindowLayout -ErrorAction SilentlyContinue)) {
+				$prepareParams = @{}
+				if ($layoutActionConfig.Parameters) {
+					foreach ($key in $layoutActionConfig.Parameters.Keys) { $prepareParams[$key] = $layoutActionConfig.Parameters[$key] }
+				}
+				foreach ($key in $effectiveExtraParams.Keys) {
+					if (-not $prepareParams.ContainsKey($key)) { $prepareParams[$key] = $effectiveExtraParams[$key] }
+				}
+				if ($Alongside) { $prepareParams['Alongside'] = $true }
+				if ($openProtection) { $prepareParams['ProtectedWindowHandles'] = $openProtection.WindowHandles }
+				$prepareParams['PreCapturedExistingWindows'] = $existingHandlesBeforeOpen
+				if ($desktopOffset -gt 0) { $prepareParams['DesktopOffset'] = $desktopOffset }
+				$prepareParams['PrepareOnly'] = $true
+
+				$actionClock = [System.Diagnostics.Stopwatch]::StartNew()
+				try {
+					$filteredPrepareParams = Get-FilteredParams -CommandName 'Set-WorkspaceWindowLayout' -Params $prepareParams
+					Set-WorkspaceWindowLayout @filteredPrepareParams
+				}
+				catch {
+					Write-LogWarning "Layout preparation failed - the layout action will do that work after the launch actions: $($_.Exception.Message)"
+				}
+				$actionTimings.Add([PSCustomObject]@{ Action = 'Set-WorkspaceWindowLayout -PrepareOnly'; Seconds = [math]::Round($actionClock.Elapsed.TotalSeconds, 2) })
+
+				if (Get-Command Get-WorkspaceLayoutTimings -ErrorAction SilentlyContinue) {
+					$preparedTimings = Get-WorkspaceLayoutTimings
+					if ($preparedTimings -and $preparedTimings.RecordedAt -and $preparedTimings.RecordedAt -ge $workspaceStartedAt) {
+						$prepareLayoutTimings = $preparedTimings
+					}
+				}
+			}
+			elseif ($prepareLayoutEarly -and $layoutActionConfig -and -not [string]::IsNullOrEmpty($windowOnlyRetryMarker)) {
+				Write-LogDebug " [Open-Workspace] Window-only retry - the layout is not prepared ahead of the launch actions" -Style Warning
+			}
+			elseif (-not $prepareLayoutEarly -and $layoutActionConfig) {
+				Write-LogDebug " [Open-Workspace] Layout preparation ahead of the launch actions disabled by configuration (WorkspaceLayoutPrepareEarly)" -Style Warning
 			}
 
 			$selectedProjects = @()

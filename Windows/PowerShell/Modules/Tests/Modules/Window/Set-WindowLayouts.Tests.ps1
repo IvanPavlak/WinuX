@@ -276,7 +276,7 @@ Describe "Set-WindowLayouts" {
 			$configured[0].Handle | Should -Be ([IntPtr]0xB1002)
 		}
 
-		It "reports Not Found when no candidate window is eligible" {
+		It "reports Not Found when no candidate window is eligible, after a single search" {
 			$candidates = New-Object 'System.Collections.Generic.HashSet[IntPtr]'
 			[void]$candidates.Add([IntPtr]0xB1003)
 
@@ -284,6 +284,9 @@ Describe "Set-WindowLayouts" {
 
 			$results.Count | Should -Be 1
 			$results[0].Status | Should -Be 'Not Found'
+			# A per-desktop pass never runs the 0.5 s + 1 s ladder: a miss means the window is
+			# not stable yet, and the pass after the wait places it.
+			Should -Invoke Start-Sleep -Times 0 -Exactly
 		}
 
 		It "never claims a window in -ExcludeWindowHandles" {
@@ -355,6 +358,37 @@ Describe "Set-WindowLayouts" {
 			$null = Set-WindowLayouts -LayoutConfig $script:chromeEntry
 
 			Should -Invoke Initialize-PositionedWindowTracking -Times 1 -Exactly
+		}
+	}
+
+	Context "AbandonedEntries (no retry ladder for entries the wait abandoned)" {
+		# The three-attempt search ladder (0.5 s, then 1 s) rides out transient title drift on a
+		# window that exists. An entry the wait abandoned has no window and no process, so the
+		# ladder only delayed the pass by 1.5 s per such entry.
+		BeforeEach {
+			Mock Test-LogVerbose { $false }
+			Mock Write-LogDebug { }
+			Mock Clear-WindowCache { }
+			Mock Start-Sleep { }
+			Mock Get-WindowHandle { @() }
+			$script:ghostEntry = @(@{ ProcessName = 'ghost' })
+		}
+
+		It "searches once and never sleeps for an entry the wait abandoned, and still reports it Not Found" {
+			$results = @(Set-WindowLayouts -LayoutConfig $script:ghostEntry -AbandonedEntries @(@{ ProcessName = 'ghost' }))
+
+			$results.Count | Should -Be 1
+			$results[0].Status | Should -Be 'Not Found'
+			Should -Invoke Start-Sleep -Times 0 -Exactly
+			Should -Invoke Get-WindowHandle -Times 1 -Exactly
+		}
+
+		It "keeps the three-attempt ladder for an entry that was not abandoned" {
+			$results = @(Set-WindowLayouts -LayoutConfig $script:ghostEntry -AbandonedEntries @(@{ ProcessName = 'other' }))
+
+			$results[0].Status | Should -Be 'Not Found'
+			Should -Invoke Start-Sleep -Times 2 -Exactly
+			Should -Invoke Get-WindowHandle -Times 3 -Exactly
 		}
 	}
 }

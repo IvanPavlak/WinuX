@@ -128,6 +128,7 @@
 # → LayoutNumbers                : Apply-FancyZones (keyboard shortcut mapping)
 # → FancyZonesApplyMethod        : Apply-FancyZones (applied-layouts.json write or hotkeys)
 # → WorkspaceLayoutPipelining    : Set-WorkspaceWindowLayout (position and snap each desktop as it is ready)
+# → WorkspaceLayoutPrepareEarly  : Open-Workspace (desktops and zone layouts before the launch actions)
 # → ZoneNameMappings             : Get-FancyZone (human-readable zone names to indices)
 # → Layout files in Layouts/*/   : Set-WorkspaceWindowLayout, Visualize-Layouts
 # → SmallDisplayMachineType      : Get-LayoutMachineType (layout set for a small display)
@@ -2799,6 +2800,13 @@
 	# Set to $false to restore the strictly sequential wait -> position -> snap order (for
 	# example to compare the two with Get-WorkspaceBenchmark).
 	WorkspaceLayoutPipelining     = $true
+
+	# Open-Workspace runs the layout preamble - virtual desktop resize and FancyZones zone
+	# layouts (Set-WorkspaceWindowLayout -PrepareOnly) - BEFORE the launch actions, on an idle
+	# machine, instead of after every application has started and is competing for the CPU.
+	# The layout action then finds that work done and skips it. Set to $false to run the whole
+	# layout after the launch actions as before.
+	WorkspaceLayoutPrepareEarly   = $true
 
 	# ==========================================================================
 	# Zone Name Mappings by Layout
