@@ -31,6 +31,14 @@ Describe "Center-Windows" {
 				FailedWindows = @()
 			}
 		}
+		# Every placement is verified through Wait-WindowRect (real GetWindowRect is unavailable
+		# here); report the requested bounds as verified unless a test overrides this.
+		Mock Wait-WindowRect {
+			[PSCustomObject]@{
+				Verified = $true; X = $ExpectedX; Y = $ExpectedY
+				Width = $ExpectedWidth; Height = $ExpectedHeight; ElapsedMs = 0
+			}
+		}
 	}
 
 	It "returns early when no monitors are detected" {
@@ -184,6 +192,67 @@ Describe "Center-Windows" {
 			Should -Invoke Resize-Windows -Times 1 -ParameterFilter {
 				$TargetX -eq 2496
 			}
+		}
+	}
+
+	Context "placement verification" {
+		BeforeEach {
+			Mock Get-MonitorInfo {
+				@([PSCustomObject]@{
+						DeviceName = '\\.\DISPLAY1'
+						Left = 0; Top = 0; Right = 1920; Bottom = 1080
+						Width = 1920; Height = 1080
+						WorkAreaLeft = 0; WorkAreaTop = 0; WorkAreaRight = 1920; WorkAreaBottom = 1040
+						WorkAreaWidth = 1920; WorkAreaHeight = 1040
+						IsPrimary  = $true
+					})
+			}
+			Mock Get-WindowDisplayName { 'Drifter' }
+			Mock Test-LogVerbose { $false }
+			Mock Write-LogSuccess { }
+			Mock Write-LogWarning { }
+			Mock Write-LogList { }
+			Mock Get-CachedWindows {
+				@([PSCustomObject]@{
+						Handle      = [IntPtr]3
+						Title       = 'Drifting Window'
+						ProcessName = 'firefox'
+						Left = 100; Top = 100; Width = 800; Height = 600
+					})
+			}
+		}
+
+		It "re-applies the placement once when the window does not hold the centered bounds" {
+			$script:checks = 0
+			Mock Wait-WindowRect {
+				$script:checks++
+				if ($script:checks -eq 1) {
+					[PSCustomObject]@{ Verified = $false; X = 100; Y = 100; Width = 800; Height = 600; ElapsedMs = 150 }
+				}
+				else {
+					[PSCustomObject]@{ Verified = $true; X = $ExpectedX; Y = $ExpectedY; Width = $ExpectedWidth; Height = $ExpectedHeight; ElapsedMs = 0 }
+				}
+			}
+
+			Center-Windows -ProcessName "firefox"
+
+			Should -Invoke Resize-Windows -Times 2 -Exactly
+			Should -Invoke Write-LogSuccess -Times 1 -ParameterFilter { $Message -match 'Centered 1 window' }
+			Should -Invoke Write-LogWarning -Times 0
+		}
+
+		It "reports a window that will not stay centered instead of counting it" {
+			# Something keeps pulling the window back after every placement.
+			Mock Wait-WindowRect {
+				[PSCustomObject]@{ Verified = $false; X = 100; Y = 100; Width = 800; Height = 600; ElapsedMs = 150 }
+			}
+
+			Center-Windows -ProcessName "firefox"
+
+			Should -Invoke Resize-Windows -Times 2 -Exactly
+			Should -Invoke Write-LogSuccess -Times 1 -ParameterFilter { $Message -match 'Centered 0 window' }
+			Should -Invoke Write-LogWarning -Times 1 -ParameterFilter { $Message -match 'could not be centered' }
+			Should -Invoke Write-LogList -Times 1 -ParameterFilter { @($Items) -contains 'Drifter' }
 		}
 	}
 }

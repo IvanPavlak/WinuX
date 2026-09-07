@@ -42,6 +42,9 @@ function Initialize-Win32BrowserHelperType {
 				[DllImport("user32.dll")]
 				public static extern bool IsWindowVisible(IntPtr hWnd);
 
+				[DllImport("user32.dll")]
+				public static extern bool IsWindow(IntPtr hWnd);
+
 				public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
 			}
 "@

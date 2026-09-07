@@ -26,15 +26,20 @@ function Move-Windows {
 		Windows that could not be moved, or that would not stay on the target
 		monitor, are reported in normal mode as well as under verbose logging.
 
-		After the per-window pass, a verification sweep re-checks every window
-		the pass counted as on the target desktop and retries stragglers once.
-		The per-window verify answers "did this move land right now", not "is
-		every window still there after the whole pass": a stale already-on-desktop
-		read taken while a desktop collapse was still settling, or the upstream
-		Move-Window moving a sibling window of the same multi-window process (its
-		fallback when the requested view cannot be moved), leaves a window
-		elsewhere while the counters say otherwise. A window the sweep cannot
-		recover is reclassified as a failure so the summary reports it.
+		After the per-window pass, up to three convergence rounds re-enumerate
+		the windows fresh and re-check every eligible one against the target
+		desktop, retrying each straggler at most twice across rounds. The
+		per-window verify answers "did this move land right now", not "is every
+		window there after the whole pass": a stale already-on-desktop read taken
+		while a desktop collapse was still settling, the upstream Move-Window
+		moving a sibling window of the same multi-window process (its fallback
+		when the requested view cannot be moved), or a window that had no title
+		yet (and so was not enumerated) while it loaded, all leave a window
+		elsewhere while the first pass believed otherwise. Re-enumerating rather
+		than re-checking the first pass's list is what catches the last case. The
+		loop ends as soon as a round finds nothing off the target; a window it
+		cannot recover is reported as a failure so the summary never shows a
+		clean pass over a straggler.
 
 		Use -Current to move windows to the same virtual desktop as the
 		calling terminal, without needing to know which desktop number it is.
@@ -284,16 +289,20 @@ function Move-Windows {
 			''
 		)
 
-		$movedCount = 0
-		$movedLabels = [System.Collections.Generic.List[string]]::new()
-		$alreadyCount = 0
-		$skippedCount = 0
-		$skippedLabels = @()
+		# One record per eligible window, keyed by handle: Category is 'Moved', 'Already' or
+		# 'Failed' and is overwritten as the convergence rounds below learn more. The summary is
+		# derived from this map at the end, so a window recovered (or lost) after the first pass
+		# never needs a counter decremented by hand. $outcomeOrder keeps first-seen order for the
+		# printed lists.
+		$outcomes = @{}
+		$outcomeOrder = [System.Collections.Generic.List[string]]::new()
+		$recordOutcome = {
+			param($Handle, $Category, $Label, $Title, $ProcessName)
+			$key = [string]$Handle
+			if (-not $outcomes.ContainsKey($key)) { $outcomeOrder.Add($key) }
+			$outcomes[$key] = @{ Category = $Category; Label = $Label; Title = $Title; ProcessName = $ProcessName }
+		}
 
-		# Every window the pass counts as on the target desktop, re-checked by the verification
-		# sweep after the loop. Category records how it was counted so a sweep failure can be
-		# reclassified out of the right counter.
-		$verifyQueue = [System.Collections.Generic.List[hashtable]]::new()
 		$monitorMovedCount = 0
 		$monitorSkippedCount = 0
 		$monitorSkippedLabels = @()
@@ -337,8 +346,7 @@ function Move-Windows {
 				if ($windowDesktopIndex -eq $desktopIndex) {
 					$isAlreadyOnDesktop = $true
 					if (-not $targetMonitor) {
-						$alreadyCount++
-						$verifyQueue.Add(@{ Handle = $handle; Title = $title; ProcessName = $procName; Label = (Get-WindowDisplayName -ProcessName $procName -Title $title); Category = 'Already' })
+						& $recordOutcome $handle 'Already' (Get-WindowDisplayName -ProcessName $procName -Title $title) $title $procName
 						Write-LogDebug "     ○ [$title] ($procName) is already on Virtual Desktop $VirtualDesktop" -Style Warning
 						continue
 					}
@@ -374,23 +382,19 @@ function Move-Windows {
 				}
 
 				if ($result) {
-					$movedCount++
-					$movedLabel = Get-WindowDisplayName -ProcessName $procName -Title $title
-					$movedLabels.Add($movedLabel)
-					$verifyQueue.Add(@{ Handle = $handle; Title = $title; ProcessName = $procName; Label = $movedLabel; Category = 'Moved' })
+					& $recordOutcome $handle 'Moved' (Get-WindowDisplayName -ProcessName $procName -Title $title) $title $procName
 					Write-LogDebug "     ✓ Moved [$title] ($procName) => Virtual Desktop $VirtualDesktop" -Style Success
 				}
 				else {
-					$skippedCount++
-					$skippedLabels += Get-WindowDisplayName -ProcessName $procName -Title $title
+					# Recorded as failed for now; the convergence rounds below get another go at it.
+					& $recordOutcome $handle 'Failed' (Get-WindowDisplayName -ProcessName $procName -Title $title) $title $procName
 					$reason = if ($moveFailureMessage) { ": $moveFailureMessage" } elseif ($moveErr) { ": $($moveErr[0].Exception.Message)" } else { '' }
 					Write-LogDebug "     ✗ Failed to move [$title] ($procName)$reason" -Style Warning
 					continue
 				}
 			}
 			else {
-				$alreadyCount++
-				$verifyQueue.Add(@{ Handle = $handle; Title = $title; ProcessName = $procName; Label = (Get-WindowDisplayName -ProcessName $procName -Title $title); Category = 'Already' })
+				& $recordOutcome $handle 'Already' (Get-WindowDisplayName -ProcessName $procName -Title $title) $title $procName
 				Write-LogDebug "     ○ [$title] ($procName) is already on Virtual Desktop $VirtualDesktop" -Style Warning
 			}
 
@@ -478,54 +482,105 @@ function Move-Windows {
 			}
 		}
 
-		# Verification sweep: the in-loop verify answers "did this move land right now", not "is
-		# every window still on the target once the whole pass has run". A stale already-on-desktop
-		# read taken while desktop-collapse migrations were still settling, a verify race inside
+		# Convergence rounds: the in-loop verify answers "did this move land right now", not "is
+		# every window on the target once the whole pass has run". A stale already-on-desktop read
+		# taken while desktop-collapse migrations were still settling, a verify race inside
 		# Move-WindowToVirtualDesktop, or the upstream Move-Window moving a sibling window of the
 		# same multi-window process (its documented fallback when the requested view cannot be
-		# moved) all leave a window elsewhere while the counters say otherwise. Re-check every
-		# window counted as on the target, retry stragglers once, and reclassify what still fails
+		# moved) all leave a window elsewhere while the records say otherwise. Each round
+		# re-enumerates the windows FRESH instead of re-checking only the ones the pass saw: a
+		# window that had no title yet while it loaded, or that Windows was still migrating off a
+		# collapsing desktop, was not in the first enumeration at all and would otherwise never be
+		# looked at. Every window found off the target is retried, at most $maxRetriesPerWindow
+		# times across rounds, and the loop ends as soon as a round finds nothing left to do (or
+		# every remaining straggler has spent its retries). What still fails is recorded as such,
 		# so the summary reports it instead of showing a clean pass.
-		foreach ($entry in $verifyQueue) {
-			try {
-				$sweepIndex = Get-WindowDesktopIndex -WindowHandle $entry.Handle
-				# -1 means "cannot tell" (pinned/system window, window closed mid-pass) - leave it be.
-				if ($sweepIndex -lt 0 -or $sweepIndex -eq $desktopIndex) { continue }
+		$convergenceRounds = 3
+		$maxRetriesPerWindow = 2
+		$roundSettleMs = 150
+		$retryCounts = @{}
 
-				Write-LogDebug "     ! [$($entry.Title)] ($($entry.ProcessName)) is on Virtual Desktop $($sweepIndex + 1) after the pass - retrying" -Style Warning
+		for ($round = 1; $round -le $convergenceRounds; $round++) {
+			Clear-WindowCache
+			$roundWindows = if ($hasFilter) { Get-WindowHandle @filterParams } else { Get-CachedWindows }
+
+			$stragglers = @()
+			foreach ($window in @($roundWindows)) {
+				if ($window.Title -in $skipTitles) { continue }
+				if ($window.Width -le 0 -or $window.Height -le 0) { continue }
+
+				try {
+					$roundIndex = Get-WindowDesktopIndex -WindowHandle $window.Handle
+				}
+				catch {
+					continue
+				}
+				# -1 means "cannot tell" (pinned/system window, window closed mid-pass) - leave it be.
+				if ($roundIndex -lt 0 -or $roundIndex -eq $desktopIndex) { continue }
+
+				$stragglers += @{ Window = $window; Index = $roundIndex }
+			}
+
+			if ($stragglers.Count -eq 0) {
+				Write-LogDebug "     Convergence round ${round}: every window is on Virtual Desktop $VirtualDesktop" -Style Success
+				break
+			}
+
+			$retriedAny = $false
+			foreach ($straggler in $stragglers) {
+				$window = $straggler.Window
+				$key = [string]$window.Handle
+				$label = if ($outcomes.ContainsKey($key)) { $outcomes[$key].Label } else { Get-WindowDisplayName -ProcessName $window.ProcessName -Title $window.Title }
+
+				if (-not $retryCounts.ContainsKey($key)) { $retryCounts[$key] = 0 }
+				if ($retryCounts[$key] -ge $maxRetriesPerWindow) {
+					# Out of retries: it stays recorded as failed (set below on its last failure).
+					continue
+				}
+				$retryCounts[$key]++
+				$retriedAny = $true
+
+				Write-LogDebug "     ! [$($window.Title)] ($($window.ProcessName)) is on Virtual Desktop $($straggler.Index + 1) after round $round - retrying ($($retryCounts[$key])/$maxRetriesPerWindow)" -Style Warning
 
 				$recovered = $false
 				try {
-					$recovered = [bool](Move-WindowToVirtualDesktop -WindowHandle $entry.Handle -DesktopNumber $desktopIndex -ErrorAction SilentlyContinue)
+					$recovered = [bool](Move-WindowToVirtualDesktop -WindowHandle $window.Handle -DesktopNumber $desktopIndex -ErrorAction SilentlyContinue)
 				}
 				catch {
 					$recovered = $false
 				}
 
 				if ($recovered) {
-					if ($entry.Category -eq 'Already') {
-						# It was never on the target after all - count the recovery as a move.
-						$alreadyCount--
-						$movedCount++
-						$movedLabels.Add($entry.Label)
-					}
-					Write-LogDebug "     ✓ Recovered [$($entry.Title)] ($($entry.ProcessName)) => Virtual Desktop $VirtualDesktop" -Style Success
+					# Whatever the first pass believed ('Already' from a stale read, 'Failed' from a
+					# transient error, or not seen at all), the window is on the target now and got
+					# there because this pass moved it.
+					& $recordOutcome $window.Handle 'Moved' $label $window.Title $window.ProcessName
+					Write-LogDebug "     ✓ Recovered [$($window.Title)] ($($window.ProcessName)) => Virtual Desktop $VirtualDesktop" -Style Success
 				}
 				else {
-					if ($entry.Category -eq 'Moved') {
-						$movedCount--
-						[void]$movedLabels.Remove($entry.Label)
-					}
-					else {
-						$alreadyCount--
-					}
-					$skippedCount++
-					$skippedLabels += $entry.Label
-					Write-LogDebug "     ✗ [$($entry.Title)] ($($entry.ProcessName)) could not be brought to Virtual Desktop $VirtualDesktop" -Style Warning
+					& $recordOutcome $window.Handle 'Failed' $label $window.Title $window.ProcessName
+					Write-LogDebug "     ✗ [$($window.Title)] ($($window.ProcessName)) could not be brought to Virtual Desktop $VirtualDesktop" -Style Warning
 				}
 			}
-			catch {
-				# One bad handle must not abort the sweep for the remaining windows.
+
+			# Nothing left that may still be retried - another round could only re-read the same state.
+			if (-not $retriedAny) { break }
+
+			Start-Sleep -Milliseconds $roundSettleMs
+		}
+
+		# Derive the summary from the outcome records.
+		$movedCount = 0
+		$movedLabels = [System.Collections.Generic.List[string]]::new()
+		$alreadyCount = 0
+		$skippedCount = 0
+		$skippedLabels = @()
+		foreach ($key in $outcomeOrder) {
+			$outcome = $outcomes[$key]
+			switch ($outcome.Category) {
+				'Moved' { $movedCount++; $movedLabels.Add($outcome.Label) }
+				'Already' { $alreadyCount++ }
+				'Failed' { $skippedCount++; $skippedLabels += $outcome.Label }
 			}
 		}
 

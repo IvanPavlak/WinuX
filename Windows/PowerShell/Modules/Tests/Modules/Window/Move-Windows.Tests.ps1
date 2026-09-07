@@ -205,8 +205,13 @@ Describe "Move-Windows" {
 		# In-loop check says the window is already on the target (index 0)...
 		Mock Get-DesktopFromWindow { [PSCustomObject]@{ Name = 'Desktop1' } }
 		Mock Get-DesktopIndex { 0 }
-		# ...but the post-pass sweep finds it on another desktop, and the retry lands it.
-		Mock Get-WindowDesktopIndex { 1 }
+		# ...but the first convergence round finds it on another desktop; the retry lands it, and
+		# the next round confirms it is home.
+		$script:sweepReads = 0
+		Mock Get-WindowDesktopIndex {
+			$script:sweepReads++
+			if ($script:sweepReads -eq 1) { 1 } else { 0 }
+		}
 
 		{ Move-Windows -VirtualDesktop 1 } | Should -Not -Throw
 
@@ -216,6 +221,67 @@ Describe "Move-Windows" {
 		# The recovery is counted as a move, not as already-there, and nothing is reported failed.
 		Should -Invoke Write-LogSuccess -Times 1 -ParameterFilter { $Message -match 'Moved 1 window' }
 		Should -Invoke Write-LogWarning -Times 0 -ParameterFilter { $Message -match 'could not be moved' }
+	}
+
+	It "convergence rounds pick up a window the first pass never enumerated" {
+		Mock Import-VirtualDesktopModule { $true }
+		Mock Get-DesktopCount { 2 }
+		Mock Switch-Desktop { }
+		Mock Test-LogVerbose { $false }
+		Mock Write-LogWarning { }
+		Mock Write-LogList { }
+		Mock Write-LogSuccess { }
+		# First enumeration: nothing eligible (the window still had no title while it loaded).
+		# Every later enumeration (the convergence rounds) sees it.
+		$script:enumerations = 0
+		Mock Get-CachedWindows {
+			$script:enumerations++
+			if ($script:enumerations -eq 1) { @() }
+			else {
+				@(
+					[PSCustomObject]@{
+						Handle = [IntPtr]5555; Title = 'Late Bloomer'; ProcessName = 'Code'
+						Left = 0; Top = 0; Width = 800; Height = 600
+					}
+				)
+			}
+		}
+		$script:lateReads = 0
+		Mock Get-WindowDesktopIndex {
+			$script:lateReads++
+			if ($script:lateReads -eq 1) { 1 } else { 0 }
+		}
+
+		{ Move-Windows -VirtualDesktop 1 } | Should -Not -Throw
+
+		# Never seen by the per-window pass, still moved by the convergence round and counted.
+		Should -Invoke Move-WindowToVirtualDesktop -Times 1 -Exactly -ParameterFilter {
+			$WindowHandle -eq [IntPtr]5555 -and $DesktopNumber -eq 0
+		}
+		Should -Invoke Write-LogSuccess -Times 1 -ParameterFilter { $Message -match 'Moved 1 window' }
+	}
+
+	It "convergence rounds stop as soon as a round finds every window on the target" {
+		Mock Import-VirtualDesktopModule { $true }
+		Mock Get-DesktopCount { 2 }
+		Mock Switch-Desktop { }
+		Mock Get-DesktopFromWindow { [PSCustomObject]@{ Name = 'Desktop1' } }
+		Mock Get-DesktopIndex { 0 }
+		Mock Get-CachedWindows {
+			@(
+				[PSCustomObject]@{
+					Handle = [IntPtr]6666; Title = 'Settled'; ProcessName = 'notepad'
+					Left = 0; Top = 0; Width = 800; Height = 600
+				}
+			)
+		}
+		Mock Get-WindowDesktopIndex { 0 }
+
+		{ Move-Windows -VirtualDesktop 1 } | Should -Not -Throw
+
+		# One check in the single convergence round; no second round, no retry.
+		Should -Invoke Get-WindowDesktopIndex -Times 1 -Exactly
+		Should -Invoke Move-WindowToVirtualDesktop -Times 0
 	}
 
 	It "verification sweep reclassifies a persistent straggler as a failure instead of reporting a clean pass" {
@@ -247,8 +313,9 @@ Describe "Move-Windows" {
 
 		{ Move-Windows -VirtualDesktop 1 } | Should -Not -Throw
 
-		# One in-loop move plus one sweep retry, then the window is reported as failed.
-		Should -Invoke Move-WindowToVirtualDesktop -Times 2 -Exactly
+		# One in-loop move plus the two convergence retries a straggler is allowed, then the
+		# window is reported as failed - never as a clean pass.
+		Should -Invoke Move-WindowToVirtualDesktop -Times 3 -Exactly
 		Should -Invoke Write-LogWarning -Times 1 -ParameterFilter { $Message -match 'could not be moved' }
 		Should -Invoke Write-LogSuccess -Times 0 -ParameterFilter { $Message -match 'Moved' }
 	}

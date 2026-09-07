@@ -25,6 +25,7 @@
 		'Get-PinnedApps',
 		'Get-SymbolicLinkEntries',
 		'Get-TerminalCellSize',
+		'Get-VisibleWindowProcess',
 		'Initialize-OhMyPosh',
 		'Initialize-Win32BrowserHelperType',
 		'Initialize-WSLEnvironment',
@@ -42,6 +43,7 @@
 		'Remove-VirtualDesktops',
 		'Rename-Machine',
 		'Repair-RpcServer',
+		'Report-KillAllSurvivors',
 		'Resolve-KillAllSteps',
 		'Resolve-SystemThemeSteps',
 		'Restart-Explorer',
@@ -69,12 +71,14 @@
 		'Terminate-AllProcessesByName',
 		'Terminate-AllProcessesWithVisibleWindows',
 		'Terminate-WindowsTerminalTabs',
+		'Test-BrowserWindowOpen',
 		'Test-MachineOnline',
 		'Test-PowerPlan',
 		'Test-RpcServerHealth',
 		'Test-WindowTitleMatch',
 		'Unpin-TaskbarApps',
 		'Update-DirectoryNames',
-		'Upgrade-All'
+		'Upgrade-All',
+		'Wait-BrowserWindowsClosed'
 	)
 }

@@ -398,6 +398,23 @@ if ($cell) { $pixelWidth = 36 * $cell.Width }
 
 **See also:** [Get-FastfetchLogoArgument](#get-fastfetchlogoargument), [New-SixelImage](#new-sixelimage)
 
+## [Get-VisibleWindowProcess](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Get-VisibleWindowProcess.ps1)
+
+- **Description:** Lists every process that owns at least one visible, titled application window - the discovery step behind `Terminate-AllProcessesWithVisibleWindows` and the `Kill-All` survivor audit. It answers "which processes have a window on screen" from the window side: every visible, titled top-level window is enumerated (`EnumWindows`, through the Window module's `Get-CachedWindows` after a cache clear) and grouped by owning process, so a process is a candidate as soon as any of its windows is on screen. Shell windows (the same title list `Move-Windows` and `Center-Windows` skip) and shell processes that are the desktop or host other apps' windows (`explorer`, `ApplicationFrameHost`, `TextInputHost`, `ShellExperienceHost`, `StartMenuExperienceHost`, `SearchHost`, `SearchApp`, `LockApp`, `sihost`, `dwm`) are never returned. Without the Window module it falls back to `Get-Process` and `MainWindowTitle` with the same shell filter.
+- **Usage:** `Get-VisibleWindowProcess`, `Get-VisibleWindowProcess | Where-Object { $_.WindowTitles.Count -gt 1 }`
+
+This replaces the classic `Get-Process | Where-Object MainWindowTitle` test, which skipped windows at random. .NET's `MainWindowHandle` is the FIRST visible, unowned top-level window of the process in z-order, titled or not: a process whose untitled helper window happened to sit above its real window (Electron and Chromium apps create such windows) reported an empty `MainWindowTitle` and was passed over, and because z-order follows focus history the same app was seen on one run and missed on the next. Packaged (UWP) apps were missed the same way, since their visible frames belong to `ApplicationFrameHost` while the app's own process reports no main window. Enumerating the windows sidesteps both. Each returned object carries `ProcessName`, `Id`, `WindowTitles` (every visible titled window of the process), `MainWindowTitle` (the first of those - what exclusion matching and log lines use) and `Source` (`EnumWindows` or `MainWindowTitle`).
+
+```powershell
+# What a Kill-All run would consider
+Get-VisibleWindowProcess | Format-Table ProcessName, Id, MainWindowTitle
+
+# Multi-window processes only
+Get-VisibleWindowProcess | Where-Object { $_.WindowTitles.Count -gt 1 }
+```
+
+**See also:** [Terminate-AllProcessesWithVisibleWindows](#terminate-allprocesseswithvisiblewindows), [Report-KillAllSurvivors](#report-killallsurvivors)
+
 ## [Initialize-OhMyPosh](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Initialize-OhMyPosh.ps1)
 
 - **Description:** Resolves the `oh-my-posh` binary and initializes the prompt theme for the current session - the robust form of the classic profile one-liner `oh-my-posh init pwsh --config <theme> | Invoke-Expression`. Resolution order: PATH (`Get-Command`), then the known install locations (winget EXE per-user and machine scope, WinGet portable links, Store alias). When a fallback location hits, its directory is prepended to the session PATH so `oh-my-posh` also resolves as a plain command afterwards. When the binary is genuinely absent, prints a single install hint instead of erroring on every prompt. The theme file is read from `Universal.OhMyPoshThemeFile` in `Configuration.psd1`.
@@ -500,6 +517,8 @@ Invoke-TerminateWindowsTerminalTabsIncludeCurrentCleanup -ClosedTabs @("TabA") -
 Coordinates desktop cleanup as a sequence of terminators. If virtual desktop cleanup cannot recover from a VirtualDesktop/RPC failure, `Remove-VirtualDesktops` owns the failure reporting while `Kill-All` suppresses its nested `$false` return value so process cleanup continues. PowerToys (`PowerToys`, `PowerToys.FancyZones`, `PowerToys.Settings`) is excluded from the visible-window terminator by the default `Universal.VisibleWindowExclusions` configuration, since partially killing it leaves the FancyZones supervisor in a "running but FancyZones absent" half-state that breaks the next workspace layout application.
 
 Step resolution is tri-state: `-Skip` beats `-Include` beats the `KillAll.Steps` config (see [Configuration Reference: Kill-All Step Toggles](../configuration/configuration-reference.md#kill-all-step-toggles)) beats the built-in defaults (everything on except `ReloadProfile`). With no `KillAll` section configured, behavior is identical to the classic full run. `-IncludeCurrent` suppresses `CenterTerminal` and `FocusTerminal` regardless of config, since there is no surviving tab to restore.
+
+**The run ends with a survivor audit.** When `Browsers`, `VisibleWindows` and `NamedProcesses` all ran, [Report-KillAllSurvivors](#report-killallsurvivors) re-enumerates the visible, titled application windows and lists every one that is neither a configured exclusion nor an `-Exclude` match, and the closing line then says how many windows are still open instead of reporting success. The two window-taking steps verify their own work first - `Terminate-AllBrowserProcesses` waits for the windows it closed to disappear and posts `WM_CLOSE` again to any that did not, `Terminate-AllProcessesWithVisibleWindows` waits for the processes it killed to exit - so a window named by the audit is one that genuinely refused to go, typically a dialog waiting for an answer.
 
 **The open-workspace tracker is cleared too**, but only when `Browsers`, `VisibleWindows` and `NamedProcesses` all ran. A full run leaves nothing a workspace opened, so a populated tracker would have [Close-Workspace](workflow.md#close-workspace) go on offering workspaces that are long gone and then report every one of their windows as already closed. Skip any of those three steps and the tracker is **kept**: staleness is merely noisy (an item it cannot find is reported as already closed), whereas clearing too eagerly is a real capability loss, because the windows that *did* survive a partial run become unclosable. The clear happens before the tab termination, since `-IncludeCurrent` ends the process outright, and is guarded with `Get-Command` because `Workflow` is a separate module that need not be loaded.
 
@@ -716,6 +735,21 @@ Set-LogLevel Verbose { Repair-RpcServer }
 ```
 
 Even when `Repair-RpcServer` returns `$false`, callers continue their normal flow (the workspace rerun still spawns) rather than aborting; there is no reboot prompt. Running from an elevated shell gives the service-restart step better odds.
+
+## [Report-KillAllSurvivors](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Report-KillAllSurvivors.ps1)
+
+- **Description:** The closing audit of `Kill-All`. Once the `Browsers`, `VisibleWindows` and `NamedProcesses` steps have all run, nothing that is not deliberately excluded should still own a window. This re-enumerates the visible, titled application windows (`Get-VisibleWindowProcess`), drops the ones the run was told to leave alone - processes named in `Universal.VisibleWindowExclusions` and windows matching an `-Exclude` pattern (by title or process name through `Test-WindowTitleMatch`) - and reports whatever remains as a warning with one line per window (`title (process, PID n)`). Returns the survivors so `Kill-All` can end on a warning instead of its success line; prints nothing when the desktop is clean.
+- **Parameters:** -Exclude
+- **Usage:** `Report-KillAllSurvivors`, `Report-KillAllSurvivors -Exclude "*YouTube*"`
+
+Browser windows are not exempt: `Terminate-AllBrowserProcesses` closes them gracefully and waits for them to go, so a browser window still standing here is a genuine survivor - typically a dialog waiting for an answer ("close all tabs?", unsaved form data, a download in progress) - and the user should see it named rather than read a success line.
+
+```powershell
+# Ends on a warning listing every window still open, or prints nothing
+$survivors = @(Report-KillAllSurvivors -Exclude "*YouTube*")
+```
+
+**See also:** [Kill-All](#kill-all), [Get-VisibleWindowProcess](#get-visiblewindowprocess)
 
 ## [Resolve-KillAllSteps](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Resolve-KillAllSteps.ps1)
 
@@ -1322,7 +1356,9 @@ Sync-AppPins -PackageManager Scoop
 - **Parameters:** -Exclude
 - **Usage:** `Terminate-AllBrowserProcesses`, `Terminate-AllBrowserProcesses -Exclude "*YouTube*"`, `Terminate-AllBrowserProcesses -Exclude "*YouTube*", "*Gmail*"`
 
-Browser identification is two-staged: the process name is resolved from each browser's configured executable (`firefox.exe` -> `firefox`, `chrome.exe` -> `chrome`), and a brand-specific title regex from [`Get-BrowserTitlePattern`](#get-browsertitlepattern) selects only the real top-level windows. `WM_CLOSE` is posted directly to each non-excluded window handle (per handle, not via `SendKeys`), so it does not touch the foreground and excluded windows are never accidentally closed by a misfired keystroke.
+Browser identification is two-staged: the process name is resolved from each browser's configured executable (`firefox.exe` -> `firefox`, `chrome.exe` -> `chrome`), and a brand-specific title regex from [`Get-BrowserTitlePattern`](#get-browsertitlepattern) attributes each window to a brand for logging. The regex no longer decides WHICH windows are closed: every visible, titled window of a targeted browser process is closed, including the ones without the brand suffix - an undocked DevTools window, a Picture-in-Picture player, an installed web app (PWA), a print or download dialog - that used to be left standing after every cleanup. A window reachable through two targets that share a process name (Firefox and Tor Browser) is closed once. `WM_CLOSE` is posted directly to each non-excluded window handle (per handle, not via `SendKeys`), so it does not touch the foreground and excluded windows are never accidentally closed by a misfired keystroke.
+
+**The close is verified.** `WM_CLOSE` is posted, not sent, so the function then waits for the windows to disappear ([Wait-BrowserWindowsClosed](#wait-browserwindowsclosed), four seconds), posts `WM_CLOSE` once more to whatever is still standing, waits again (two seconds), and reports the survivors by title as a warning instead of printing its success line. Browsers are never force-killed: a window that ignores two `WM_CLOSE` rounds is holding a dialog - unsaved form data, a download in progress, "close all tabs?" - that the user has to answer, and killing the process would answer it for them.
 
 | Parameter  | Description                                                                                                                                                                                                                                                                 |
 | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1364,11 +1400,13 @@ Set-LogLevel Verbose { Terminate-AllProcessesByName }
 
 ## [Terminate-AllProcessesWithVisibleWindows](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Terminate-AllProcessesWithVisibleWindows.ps1)
 
-- **Description:** Forcefully terminates all processes that expose a visible top-level window (non-empty `MainWindowTitle`), preserving the default exclusions used by the desktop cleanup flow: every browser declared in `Configuration.Universal.Browsers` (handled gracefully by `Terminate-AllBrowserProcesses` instead) plus every process named in the `Universal.VisibleWindowExclusions` configuration list (`Rainmeter`, `WindowsTerminal`, `Docker Desktop`, `obs64`, and the PowerToys supervisor/FancyZones/Settings processes by default). Warns and terminates nothing when the exclusion list is absent or empty, since running without it would force-kill `WindowsTerminal` - the shell running the cleanup. Additional windows can be spared via the `-Exclude` parameter.
+- **Description:** Forcefully terminates all processes that expose a visible, titled top-level window (discovered window-side through `Get-VisibleWindowProcess`, not via `MainWindowTitle`), waits for them to exit and reports any that survive, preserving the default exclusions used by the desktop cleanup flow: every browser declared in `Configuration.Universal.Browsers` (handled gracefully by `Terminate-AllBrowserProcesses` instead) plus every process named in the `Universal.VisibleWindowExclusions` configuration list (`Rainmeter`, `WindowsTerminal`, `Docker Desktop`, `obs64`, and the PowerToys supervisor/FancyZones/Settings processes by default). Warns and terminates nothing when the exclusion list is absent or empty, since running without it would force-kill `WindowsTerminal` - the shell running the cleanup. Additional windows can be spared via the `-Exclude` parameter.
 - **Parameters:** -Exclude
 - **Usage:** `Terminate-AllProcessesWithVisibleWindows`, `Terminate-AllProcessesWithVisibleWindows -Exclude "*YouTube*"`, `Terminate-AllProcessesWithVisibleWindows -Exclude "*YouTube*", "*Obsidian*"`
 
-Enumerates every process with a non-empty `MainWindowTitle`, then drops the default-excluded process names (from `Universal.VisibleWindowExclusions`) before deciding what to kill. Browser process names are pulled dynamically from `Configuration.Universal.Browsers` so this stays in sync with `Terminate-AllBrowserProcesses`, which has already closed those windows gracefully via `WM_CLOSE` - force-killing the underlying browser processes here would race that flow and also tear down deliberately-kept tabs. Any window whose title matches an `-Exclude` pattern (via `Test-WindowTitleMatch`) is skipped; the rest are stopped with `Stop-Process -Force`.
+Candidates come from the window side: [Get-VisibleWindowProcess](#get-visiblewindowprocess) enumerates every visible, titled top-level window and groups them by owning process, so a process is a candidate as soon as any of its windows is on screen. The classic `Get-Process | Where-Object MainWindowTitle` test this replaces skipped windows at random - .NET's main window is the first visible unowned window in z-order, titled or not, so a process whose untitled helper window happened to sit on top reported an empty title and survived one run while dying the next, and packaged (UWP) apps, whose frames belong to `ApplicationFrameHost`, were never seen at all. The default-excluded process names (from `Universal.VisibleWindowExclusions`) are then dropped. Browser process names are pulled dynamically from `Configuration.Universal.Browsers` so this stays in sync with `Terminate-AllBrowserProcesses`, which has already closed those windows gracefully via `WM_CLOSE` - force-killing the underlying browser processes here would race that flow and also tear down deliberately-kept tabs. A process is spared when ANY of its windows matches an `-Exclude` pattern (via `Test-WindowTitleMatch`): a force-kill is per process, so the kept window cannot survive without its siblings. The rest are stopped with `Stop-Process -Force`.
+
+**The kill is verified.** `Stop-Process -Force` returns once the terminate request is issued, not once the process is gone, so the function waits for the targeted processes to exit (`Wait-Process`, five seconds) and then looks again. A process still alive - access denied on an elevated app, a hung teardown - is reported as a warning naming the process, PID and window instead of being counted as terminated, and the success line is printed only when nothing survived.
 
 | Parameter  | Description                                                                                                                               |
 | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
@@ -1415,6 +1453,20 @@ Terminate-WindowsTerminalTabs -OnlyCurrent -CloseWaitSeconds 5
 # Verbose diagnostic output
 Set-LogLevel Verbose { Terminate-WindowsTerminalTabs }
 ```
+
+## [Test-BrowserWindowOpen](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Test-BrowserWindowOpen.ps1)
+
+- **Description:** Tells whether a window handle still refers to a live, visible window - the liveness probe `Wait-BrowserWindowsClosed` polls. A handle counts as open only while `IsWindow` AND `IsWindowVisible` both hold: a destroyed handle and a hidden window both read as closed, because browsers hide their window before tearing the process down and a `WM_CLOSE` that reached its target has done its job at that point. The `Win32BrowserHelper` type is created on demand through `Initialize-Win32BrowserHelperType`; a zero handle is never open.
+- **Parameters:** -Handle
+- **Usage:** `Test-BrowserWindowOpen -Handle $window.Handle`
+
+Kept as its own function so the wait loop's timing can be tested without a compiled user32 wrapper.
+
+```powershell
+if (Test-BrowserWindowOpen -Handle $window.Handle) { "still open" }
+```
+
+**See also:** [Wait-BrowserWindowsClosed](#wait-browserwindowsclosed), [Initialize-Win32BrowserHelperType](#initialize-win32browserhelpertype)
 
 ## [Test-MachineOnline](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Test-MachineOnline.ps1)
 
@@ -1601,4 +1653,26 @@ Upgrade-All -PackageManager "WinGet", "Scoop"
 ## Testing
 
 > [!NOTE]
+
+## [Wait-BrowserWindowsClosed](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Wait-BrowserWindowsClosed.ps1)
+
+- **Description:** Waits for browser windows that were sent `WM_CLOSE` to actually disappear. `Close-BrowserWindows` POSTS the message, which is asynchronous - the call returns before the browser has even seen it - so `Terminate-AllBrowserProcesses` used to report success while a window was still standing (a "close all tabs?" or `beforeunload` dialog waiting for an answer, a download-in-progress prompt, a browser that had not processed the message yet). This polls the supplied handles through `Test-BrowserWindowOpen` until none is a live, visible window any more or the timeout expires, and returns the windows still standing so the caller can retry or report them.
+- **Parameters:** -Windows, -TimeoutMs (default 4000), -PollIntervalMs (default 100)
+- **Usage:** `Wait-BrowserWindowsClosed -Windows $windowsToClose`, `Wait-BrowserWindowsClosed -Windows $survivors -TimeoutMs 2000`
+
+Only the windows still open on the previous poll are probed again, and an empty input returns immediately without touching user32. The default budget of four seconds is what a browser with many tabs needs to save its session and exit.
+
+| Parameter         | Description                                                                                    |
+| ----------------- | ---------------------------------------------------------------------------------------------- |
+| `-Windows`        | Window objects with a `Handle` property, as returned by `Get-BrowserWindowsByTarget`.           |
+| `-TimeoutMs`      | How long to wait for every window to go. Default `4000`.                                        |
+| `-PollIntervalMs` | Delay between checks. Default `100`.                                                            |
+
+```powershell
+$survivors = Wait-BrowserWindowsClosed -Windows $windowsToClose
+if ($survivors) { Close-BrowserWindows -WindowsToClose $survivors }
+```
+
+**See also:** [Terminate-AllBrowserProcesses](#terminate-allbrowserprocesses), [Test-BrowserWindowOpen](#test-browserwindowopen), [Close-BrowserWindows](#close-browserwindows)
+
 > System functions are covered by Pester tests in `Windows/PowerShell/Modules/Tests/Modules/System/`. Use `Run-Tests -TestName "System"` (or `Run-Tests`) to validate current behavior after changes.

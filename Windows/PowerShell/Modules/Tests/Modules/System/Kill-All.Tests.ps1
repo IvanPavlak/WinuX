@@ -30,6 +30,9 @@ BeforeAll {
 	# calls AppActivate on it (stealing focus). Every default Kill-All call below reached both.
 	function Center-Terminal { param() }
 	function Focus-TerminalTab { param([string]$TargetTitle, [switch]$Quiet) }
+	# The closing survivor audit enumerates the live desktop for real; stubbed so a test run
+	# never reports (or depends on) whatever the developer has open.
+	function Report-KillAllSurvivors { param([string[]]$Exclude) }
 	function Save-WorkspaceState {
 		param($Workspace, $ExistingWindowHandles, $ExistingTerminalTabs, $DesktopOffset, [switch]$Alongside, [switch]$AdoptUnclaimed, [switch]$Append, $Entry, $StatePath)
 	}
@@ -59,6 +62,7 @@ Describe "Kill-All" {
 		Mock Center-Terminal { }
 		Mock Focus-TerminalTab { }
 		Mock Save-WorkspaceState { }
+		Mock Report-KillAllSurvivors { @() }
 	}
 
 	Context "Open-workspace tracker" {
@@ -310,6 +314,43 @@ Describe "Kill-All" {
 			Should -Invoke Terminate-AllBrowserProcesses -Times 1 -Exactly
 			Should -Invoke Terminate-AllProcessesWithVisibleWindows -Times 1 -Exactly
 			Should -Invoke Terminate-AllProcessesByName -Times 1 -Exactly
+		}
+	}
+
+	Context "Survivor audit" {
+		BeforeEach {
+			Mock Write-LogSuccess { }
+		}
+
+		It "Should audit survivors after a full run, passing the exclude patterns through" {
+			Kill-All -Exclude "*YouTube*"
+
+			Should -Invoke Report-KillAllSurvivors -Times 1 -Exactly -ParameterFilter {
+				@($Exclude) -contains "*YouTube*"
+			}
+			Should -Invoke Write-LogSuccess -Times 1 -ParameterFilter { $Message -match "finished successfully" }
+		}
+
+		It "Should skip the audit when a window-taking step was skipped" {
+			# A partial run leaves windows standing on purpose; listing them would be noise.
+			Kill-All -Skip Browsers
+
+			Should -Invoke Report-KillAllSurvivors -Times 0
+		}
+
+		It "Should end on a warning instead of a success line when windows survived" {
+			Mock Report-KillAllSurvivors {
+				@(
+					[PSCustomObject]@{ ProcessName = "firefox"; Id = 10; Title = "Close all tabs?" },
+					[PSCustomObject]@{ ProcessName = "Code"; Id = 11; Title = "Save changes?" }
+				)
+			}
+
+			$result = Kill-All
+
+			$result | Should -BeNullOrEmpty
+			Should -Invoke Write-LogSuccess -Times 0 -ParameterFilter { $Message -match "finished successfully" }
+			Should -Invoke Write-LogWarning -Times 1 -Exactly -ParameterFilter { $Message -match "2 window\(s\) still open" }
 		}
 	}
 }
