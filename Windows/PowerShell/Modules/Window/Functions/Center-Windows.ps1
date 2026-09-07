@@ -25,7 +25,13 @@ function Center-Windows {
 
 		The actual move/resize is delegated to Resize-Windows in target-bounds mode
 		(with -InsetPercent 0 for exact placement), so window placement flows through
-		a single source of truth (DRY) shared with the layout/snap pipeline.
+		a single source of truth (DRY) shared with the layout/snap pipeline. Each
+		placement is then verified with Wait-WindowRect and re-applied once when the
+		window did not land on the centered bounds - SetWindowPos reports success for
+		the call even when an external window manager (FancyZones restoring a
+		remembered zone) moves the window straight back. Windows that would not hold
+		the centered bounds are reported in normal mode as well as under verbose
+		logging, so a partial pass never looks like a complete one.
 
 		Uses existing module functions:
 		- Get-WindowHandle for pattern-based window filtering (wildcard, regex, exact)
@@ -33,6 +39,7 @@ function Center-Windows {
 		- Get-MonitorInfo for monitor bounds and work areas
 		- Resolve-TargetMonitor for -Monitor resolution (index, label, device name)
 		- Resize-Windows for reliable, centralized window placement
+		- Wait-WindowRect for post-placement verification
 		- Ensure-WindowsFormsLoaded for System.Windows.Forms dependency
 
 	.PARAMETER WidthPercent
@@ -218,6 +225,11 @@ function Center-Windows {
 		$centeredCount = 0
 		$centeredLabels = @()
 		$skippedCount = 0
+		$skippedLabels = @()
+		# Two placement attempts with a short verification budget per window keeps the worst
+		# case bounded for a full-desktop pass (same budget as the Move-Windows monitor leg).
+		$placementAttempts = 2
+		$placementVerifyTimeoutMs = 150
 		$excludedTitleCount = 0
 		$excludedInvalidSizeCount = 0
 		$totalEnumeratedWindows = @($allWindows).Count
@@ -285,17 +297,46 @@ function Center-Windows {
 			# keeping all placement on the shared Resize-Windows path (DRY). Bound explicitly, so
 			# it deliberately overrides the configurable Get-WindowInsetPercent default rather
 			# than tracking it - centering is exact placement, never an inset pre-snap position.
-			$null = Resize-Windows -WindowHandle $handle -TargetX $newX -TargetY $newY -TargetWidth $newWidth -TargetHeight $newHeight -InsetPercent 0
-			$resizeResult = $script:LastResizeWindowsResult
+			#
+			# The placement is then VERIFIED and re-applied once, the same way Move-Windows treats
+			# its monitor placement: SetWindowPos reports success for the call, not for where the
+			# window ends up, and an external window manager (FancyZones restoring a remembered
+			# zone) can move it straight back. Trusting the call made a window left where it was
+			# count as centered.
+			$centered = $false
+			$lastObserved = $null
+			for ($attempt = 1; $attempt -le $placementAttempts; $attempt++) {
+				$null = Resize-Windows -WindowHandle $handle -TargetX $newX -TargetY $newY -TargetWidth $newWidth -TargetHeight $newHeight -InsetPercent 0
+				$resizeResult = $script:LastResizeWindowsResult
 
-			if ($resizeResult -and $resizeResult.ResizedCount -gt 0) {
+				if (-not ($resizeResult -and $resizeResult.ResizedCount -gt 0)) {
+					continue
+				}
+
+				$placementCheck = Wait-WindowRect -WindowHandle $handle `
+					-ExpectedX $newX -ExpectedY $newY `
+					-ExpectedWidth $newWidth -ExpectedHeight $newHeight `
+					-TimeoutMs $placementVerifyTimeoutMs
+
+				if ($placementCheck.Verified) {
+					$centered = $true
+					break
+				}
+
+				$lastObserved = $placementCheck
+				Write-LogDebug "     ! [$title] ($procName) did not hold the centered bounds on attempt $attempt (observed $($placementCheck.X), $($placementCheck.Y))" -Style Warning
+			}
+
+			if ($centered) {
 				$centeredCount++
 				$centeredLabels += Get-WindowDisplayName -ProcessName $procName -Title $title
 				Write-LogDebug "     ✓ Centered [$title] ($procName) => ($newX, $newY) [${newWidth}x${newHeight}]" -Style Success
 			}
 			else {
 				$skippedCount++
-				Write-LogDebug "     ✗ Failed to center [$title] ($procName)" -Style Warning
+				$skippedLabels += Get-WindowDisplayName -ProcessName $procName -Title $title
+				$observedText = if ($lastObserved) { " (last observed $($lastObserved.X), $($lastObserved.Y))" } else { '' }
+				Write-LogDebug "     ✗ Failed to center [$title] ($procName)$observedText" -Style Warning
 			}
 		}
 
@@ -311,6 +352,12 @@ function Center-Windows {
 		else {
 			Write-LogSuccess "Centered $centeredCount window(s)!"
 			Write-LogList -Items $centeredLabels
+			# Failures are reported in normal mode too: a pass that silently left windows where
+			# they were looked identical to a complete one.
+			if ($skippedCount -gt 0) {
+				Write-LogWarning "$skippedCount window(s) could not be centered."
+				Write-LogList -Items $skippedLabels
+			}
 		}
 	}
 }

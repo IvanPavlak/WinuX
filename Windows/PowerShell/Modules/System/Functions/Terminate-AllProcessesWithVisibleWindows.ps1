@@ -70,17 +70,35 @@ function Terminate-AllProcessesWithVisibleWindows {
 		}
 	}
 
-	$allProcesses = Get-Process | Where-Object {
-		$_.MainWindowTitle -ne "" -and
-		-not $defaultExcludedProcessNames.Contains($_.ProcessName)
-	}
+	# Candidates come from the WINDOW side (Get-VisibleWindowProcess: every visible, titled
+	# top-level window grouped by owning process), not from Get-Process' MainWindowTitle. The
+	# .NET main window is the first visible unowned window in z-order, titled or not, so a
+	# process whose untitled helper window happened to sit on top reported an empty title and
+	# was skipped - which window is first depends on focus history, so the same app survived
+	# one run and died the next. Packaged apps were skipped the same way (their frames belong
+	# to ApplicationFrameHost). Enumerating windows sees every such process.
+	$allProcesses = @(Get-VisibleWindowProcess | Where-Object {
+			-not $defaultExcludedProcessNames.Contains($_.ProcessName)
+		})
 
-	# Separate processes into those to terminate and those to exclude
+	# Separate processes into those to terminate and those to exclude. A force-kill is per
+	# process, so ONE excluded window spares the whole process - the other windows cannot be
+	# taken down without also taking the kept one.
 	$processesToTerminate = @()
 	$excludedProcesses = @()
 
 	foreach ($process in $allProcesses) {
-		if ($Exclude -and (Test-WindowTitleMatch -ProcessName $process.ProcessName -WindowTitle $process.MainWindowTitle -Patterns $Exclude)) {
+		$isExcluded = $false
+		if ($Exclude) {
+			foreach ($title in @($process.WindowTitles)) {
+				if (Test-WindowTitleMatch -ProcessName $process.ProcessName -WindowTitle $title -Patterns $Exclude) {
+					$isExcluded = $true
+					break
+				}
+			}
+		}
+
+		if ($isExcluded) {
 			$excludedProcesses += $process
 		}
 		else {
@@ -107,9 +125,35 @@ function Terminate-AllProcessesWithVisibleWindows {
 		}
 	}
 
+	$survivors = @()
 	if ($processesToTerminate) {
-		$processesToTerminate | Stop-Process -Force
+		foreach ($process in $processesToTerminate) {
+			Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+		}
+
+		# Stop-Process -Force returns once the terminate request is issued, not once the process
+		# is gone. Wait for the exits (bounded) and then look again: a process that is still
+		# alive - access denied on an elevated app, a hung teardown - is reported instead of
+		# being counted as terminated.
+		$targetIds = @($processesToTerminate | ForEach-Object { [int]$_.Id })
+		Wait-Process -Id $targetIds -Timeout $script:VisibleWindowTerminationWaitSeconds -ErrorAction SilentlyContinue
+
+		foreach ($process in $processesToTerminate) {
+			if (Get-Process -Id $process.Id -ErrorAction SilentlyContinue) {
+				$survivors += $process
+			}
+		}
 	}
 
-	Write-LogSuccess "Terminated all processes with Visible Windows successfully!"
+	if ($survivors.Count -gt 0) {
+		Write-LogWarning "$($survivors.Count) process(es) with visible windows could not be terminated:"
+		Write-LogList -Items @($survivors | ForEach-Object { "$($_.ProcessName) [PID => $($_.Id) | Window => $($_.MainWindowTitle)]" })
+	}
+	else {
+		Write-LogSuccess "Terminated all processes with Visible Windows successfully!"
+	}
 }
+
+# How long Terminate-AllProcessesWithVisibleWindows waits for force-killed processes to exit
+# before it looks for survivors. Script-scoped so tests can shorten it.
+$script:VisibleWindowTerminationWaitSeconds = 5

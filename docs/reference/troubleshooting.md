@@ -388,13 +388,34 @@ The `registry:` list in FancyZones' `Synced virtual desktops` lines is in deskto
 
 **Why it happens:** The upstream `Move-Window` cmdlet (MScholtes VirtualDesktop) has a silent fallback: when the requested window's view cannot be moved, it moves the process's MAIN window instead - a different window of the same process - and does not throw. Multi-window processes are therefore the usual victims. `Move-WindowToVirtualDesktop` verifies each move and returns `$false` when the window did not land, but that result used to be swallowed: the cmdlet's own output (the Desktop object) leaked into the function's pipeline output, and a two-element array is truthy in PowerShell, so `Move-Windows` counted the failure as moved and never retried.
 
-**Solution:** This now self-corrects. The leaked output is discarded, so failed moves engage the retry ladder in `Move-Windows` (and `Set-WindowLayouts` / `Snap-AllWindows`), and a verification sweep after the move pass re-checks every window against the target desktop, retries stragglers once, and reports anything it cannot recover as a failure instead of a clean pass:
+**Solution:** This now self-corrects. The leaked output is discarded, so failed moves engage the retry ladder in `Move-Windows` (and `Set-WindowLayouts` / `Snap-AllWindows`), and after the move pass up to three convergence rounds re-enumerate the windows fresh, re-check every one against the target desktop, retry each straggler at most twice, and report anything they cannot recover as a failure instead of a clean pass. Re-enumerating (rather than re-checking the list the first pass saw) also catches a window that had no title while it loaded, which the first enumeration skips entirely. `Center-Windows`, the last step of the reset, verifies every placement with `Wait-WindowRect` too and lists the windows it could not center in normal mode:
 
 ```powershell
-# Per-window trace: look for "Recovered" (sweep fixed it) or
-# "could not be brought to Virtual Desktop" (reported failure)
+# Per-window trace: look for "Convergence round N", "Recovered" (a round fixed it)
+# or "could not be brought to Virtual Desktop" (reported failure)
 Set-LogLevel Verbose { Reset-Windows }
 ```
+
+If a window is still reported after every round, it is one the desktop manager refuses to move for this shell (typically an elevated process - run the reset from an elevated terminal, or close that window by hand).
+
+### Kill-All Leaves A Window Or Process Behind
+
+**Problem:** `Kill-All` prints its success line, but an application is still open afterwards. It happens to the same app on some runs and not on others, or always to a particular kind of window: an undocked DevTools or Picture-in-Picture window, an installed web app, a Store (UWP) app.
+
+**Why it happened:** Three gaps in the discovery, none of them reported. (1) `Terminate-AllProcessesWithVisibleWindows` selected processes by `MainWindowTitle`, and .NET's main window is the first visible unowned window of the process in z-order, titled or not: a process whose untitled helper window happened to sit on top reported an empty title and was skipped, and because z-order follows focus history the same app was seen on one run and missed on the next. Packaged apps were missed the same way, their frames belonging to `ApplicationFrameHost`. (2) `Terminate-AllBrowserProcesses` posted `WM_CLOSE` only to browser windows whose title matched the brand regex ("Mozilla Firefox", "Google Chrome"), so every browser window without the suffix stayed open, and the browser process itself is deliberately never force-killed. (3) Nothing verified anything: `WM_CLOSE` is asynchronous and `Stop-Process -Force` returns before the process is gone, so a dialog that swallowed the close ("close all tabs?", unsaved changes) or an access-denied kill on an elevated app went unnoticed.
+
+**Solution:** Discovery is now window-side (`Get-VisibleWindowProcess` groups every visible titled window by owning process), every visible window of a targeted browser process is closed, both steps wait for their work to land and retry or report, and `Kill-All` ends with a survivor audit (`Report-KillAllSurvivors`) that names every window still open and turns the closing line into a warning:
+
+```powershell
+# Ends on "Kill All finished successfully!" only when nothing survived;
+# otherwise lists each surviving window as "title (process, PID n)"
+Kill-All
+
+# Preview what a run would consider, without killing anything
+Get-VisibleWindowProcess | Format-Table ProcessName, Id, MainWindowTitle
+```
+
+A browser window named by the audit is holding a dialog that wants an answer; answer it and run `Kill-All` again. An elevated app (Task Manager, an installer) cannot be killed from a non-elevated shell - close it by hand or run the cleanup elevated.
 
 ### FancyZones Not Running
 
