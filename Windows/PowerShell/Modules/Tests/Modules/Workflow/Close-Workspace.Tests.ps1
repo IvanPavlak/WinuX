@@ -463,7 +463,7 @@ Describe "Close-Workspace" {
 	}
 
 	Context "Two workspaces with identically titled windows" {
-		# The reported failure. Open WinuX and FuturamaSoft and both have a "YouTube - Mozilla Firefox"
+		# The reported failure. Open WinuX and Client and both have a "YouTube - Mozilla Firefox"
 		# and a "New chat - Claude - Mozilla Firefox" window; closing one left its own two on screen,
 		# protected by the other workspace's identically titled ones.
 		BeforeEach {
@@ -480,10 +480,10 @@ Describe "Close-Workspace" {
 		It "closes its own window even though a surviving workspace has the same title" {
 			Set-Tracker -Entry @(
 				(New-Entry -Workspace 'WinuX' -Windows @((New-WindowRecord -Handle 101 -ProcessId 11 -ProcessName 'firefox' -Title 'YouTube - Mozilla Firefox'))),
-				(New-Entry -Workspace 'FuturamaSoft' -Alongside -DesktopOffset 1 -Windows @((New-WindowRecord -Handle 203 -ProcessId 11 -ProcessName 'firefox' -Title 'YouTube - Mozilla Firefox')))
+				(New-Entry -Workspace 'Client' -Alongside -DesktopOffset 1 -Windows @((New-WindowRecord -Handle 203 -ProcessId 11 -ProcessName 'firefox' -Title 'YouTube - Mozilla Firefox')))
 			)
 
-			Close-Workspace -Workspace 'FuturamaSoft' -StatePath $script:TestStatePath
+			Close-Workspace -Workspace 'Client' -StatePath $script:TestStatePath
 
 			@($script:postedWindows.Handle) | Should -Be @(203)
 		}
@@ -491,7 +491,7 @@ Describe "Close-Workspace" {
 		It "closes it in either order" {
 			Set-Tracker -Entry @(
 				(New-Entry -Workspace 'WinuX' -Windows @((New-WindowRecord -Handle 101 -ProcessId 11 -ProcessName 'firefox' -Title 'YouTube - Mozilla Firefox'))),
-				(New-Entry -Workspace 'FuturamaSoft' -Alongside -DesktopOffset 1 -Windows @((New-WindowRecord -Handle 203 -ProcessId 11 -ProcessName 'firefox' -Title 'YouTube - Mozilla Firefox')))
+				(New-Entry -Workspace 'Client' -Alongside -DesktopOffset 1 -Windows @((New-WindowRecord -Handle 203 -ProcessId 11 -ProcessName 'firefox' -Title 'YouTube - Mozilla Firefox')))
 			)
 
 			Close-Workspace -Workspace 'WinuX' -StatePath $script:TestStatePath
@@ -505,10 +505,10 @@ Describe "Close-Workspace" {
 			# window.
 			Set-Tracker -Entry @(
 				(New-Entry -Workspace 'WinuX' -Windows @((New-WindowRecord -Handle 101 -ProcessId 11 -ProcessName 'firefox' -Title 'YouTube - Mozilla Firefox'))),
-				(New-Entry -Workspace 'FuturamaSoft' -Alongside -Windows @((New-WindowRecord -Handle 999 -ProcessId 987 -ProcessName 'firefox' -Title 'YouTube - Mozilla Firefox')))
+				(New-Entry -Workspace 'Client' -Alongside -Windows @((New-WindowRecord -Handle 999 -ProcessId 987 -ProcessName 'firefox' -Title 'YouTube - Mozilla Firefox')))
 			)
 
-			Close-Workspace -Workspace 'FuturamaSoft' -StatePath $script:TestStatePath
+			Close-Workspace -Workspace 'Client' -StatePath $script:TestStatePath
 
 			@($script:postedWindows).Count | Should -Be 0
 		}
@@ -516,15 +516,15 @@ Describe "Close-Workspace" {
 
 	Context "The workspace's own virtual desktops" {
 		BeforeEach {
-			# WinuX on desktop 0, FuturamaSoft alongside on desktop 1, plus an untracked window that is
-			# sitting on FuturamaSoft's desktop.
+			# WinuX on desktop 0, Client alongside on desktop 1, plus an untracked window that is
+			# sitting on Client's desktop.
 			$script:desktopOfHandle = @{ '101' = 0; '203' = 1; '305' = 1 }
 			Mock Get-WindowHandle {
 				param($ProcessName, $WindowTitle)
 				if ($ProcessName -eq 'WindowsTerminal') { return @($script:liveTerminalWindows) }
 				@(
 					(New-TestWindow -Handle 101 -ProcessId 11 -ProcessName 'Code' -Title 'WinuX - VS Code'),
-					(New-TestWindow -Handle 203 -ProcessId 22 -ProcessName 'Code' -Title 'FuturamaSoft - VS Code'),
+					(New-TestWindow -Handle 203 -ProcessId 22 -ProcessName 'Code' -Title 'Client - VS Code'),
 					(New-TestWindow -Handle 305 -ProcessId 33 -ProcessName 'firefox' -Title 'opened later - Mozilla Firefox')
 				)
 			}
@@ -533,7 +533,7 @@ Describe "Close-Workspace" {
 			# variable set there is not the one an It block sees while it runs.
 			$script:twoWorkspaceEntries = @(
 				(New-Entry -Workspace 'WinuX' -Windows @((New-WindowRecord -Handle 101 -ProcessId 11 -ProcessName 'Code' -Title 'WinuX - VS Code'))),
-				(New-Entry -Workspace 'FuturamaSoft' -Alongside -DesktopOffset 1 -Windows @((New-WindowRecord -Handle 203 -ProcessId 22 -ProcessName 'Code' -Title 'FuturamaSoft - VS Code')))
+				(New-Entry -Workspace 'Client' -Alongside -DesktopOffset 1 -Windows @((New-WindowRecord -Handle 203 -ProcessId 22 -ProcessName 'Code' -Title 'Client - VS Code')))
 			)
 		}
 
@@ -542,7 +542,7 @@ Describe "Close-Workspace" {
 			# desktop, which is what makes it the workspace's.
 			Set-Tracker -Entry $script:twoWorkspaceEntries
 
-			Close-Workspace -Workspace 'FuturamaSoft' -StatePath $script:TestStatePath
+			Close-Workspace -Workspace 'Client' -StatePath $script:TestStatePath
 
 			@($script:postedWindows.Handle) | Should -Be @(203, 305)
 		}
@@ -550,7 +550,7 @@ Describe "Close-Workspace" {
 		It "leaves a window on a surviving workspace's desktop alone" {
 			Set-Tracker -Entry $script:twoWorkspaceEntries
 
-			Close-Workspace -Workspace 'FuturamaSoft' -StatePath $script:TestStatePath
+			Close-Workspace -Workspace 'Client' -StatePath $script:TestStatePath
 
 			@($script:postedWindows.Handle) | Should -Not -Contain 101
 		}
@@ -558,7 +558,7 @@ Describe "Close-Workspace" {
 		It "removes them by index rather than waiting for them to look empty" {
 			Set-Tracker -Entry $script:twoWorkspaceEntries
 
-			Close-Workspace -Workspace 'FuturamaSoft' -StatePath $script:TestStatePath
+			Close-Workspace -Workspace 'Client' -StatePath $script:TestStatePath
 
 			$script:removedDesktopIndexes | Should -Be @(1)
 		}
@@ -566,7 +566,7 @@ Describe "Close-Workspace" {
 		It "never removes a desktop a surviving workspace is on" {
 			Set-Tracker -Entry $script:twoWorkspaceEntries
 
-			Close-Workspace -Workspace 'FuturamaSoft' -StatePath $script:TestStatePath
+			Close-Workspace -Workspace 'Client' -StatePath $script:TestStatePath
 
 			$script:removedDesktopIndexes | Should -Not -Contain 0
 		}
@@ -584,7 +584,7 @@ Describe "Close-Workspace" {
 		It "removes every closed workspace's desktops when several go at once" {
 			Set-Tracker -Entry $script:twoWorkspaceEntries
 
-			Close-Workspace -Workspace 'WinuX', 'FuturamaSoft' -StatePath $script:TestStatePath
+			Close-Workspace -Workspace 'WinuX', 'Client' -StatePath $script:TestStatePath
 
 			@($script:removedDesktopIndexes | Sort-Object) | Should -Be @(0, 1)
 		}
@@ -592,7 +592,7 @@ Describe "Close-Workspace" {
 		It "still sweeps desktops it emptied without ever having a window on them" {
 			Set-Tracker -Entry $script:twoWorkspaceEntries
 
-			Close-Workspace -Workspace 'FuturamaSoft' -StatePath $script:TestStatePath
+			Close-Workspace -Workspace 'Client' -StatePath $script:TestStatePath
 
 			Should -Invoke Remove-VirtualDesktops -Times 1 -ParameterFilter { $EmptyOnly }
 		}
@@ -600,7 +600,7 @@ Describe "Close-Workspace" {
 		It "removes nothing on a dry run" {
 			Set-Tracker -Entry $script:twoWorkspaceEntries
 
-			Close-Workspace -Workspace 'FuturamaSoft' -StatePath $script:TestStatePath -WhatIf
+			Close-Workspace -Workspace 'Client' -StatePath $script:TestStatePath -WhatIf
 
 			$script:removedDesktopIndexes | Should -BeNullOrEmpty
 			Should -Invoke Remove-VirtualDesktops -Times 0
@@ -612,7 +612,7 @@ Describe "Close-Workspace" {
 			$script:desktopOfHandle['407'] = 1
 			Set-Tracker -Entry $script:twoWorkspaceEntries
 
-			Close-Workspace -Workspace 'FuturamaSoft' -StatePath $script:TestStatePath
+			Close-Workspace -Workspace 'Client' -StatePath $script:TestStatePath
 
 			@($script:postedWindows.Handle) | Should -Not -Contain 407
 		}

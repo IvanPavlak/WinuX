@@ -20,7 +20,7 @@ Opens one workspace many times under alternating configuration variants - tearin
 ## Decisions
 
 1. Which workspace is opened?
-    - Options: The shipped `Example` workspace, which every WinuX install has (its `WorkspaceActions` entry and layout files ship with the base), or any workspace of your own. A workspace whose `Open-Project` action has no project of its own shows a selection menu on every open, which would stall the experiment; give the project positionally, as for `Open-Workspace`: `Measure-WorkspaceOpen FuturamaSoft Asseto`. Anything further on the command line (`run`, for instance) is forwarded to `Open-Workspace` unchanged.
+    - Options: The shipped `Example` workspace, which every WinuX install has (its `WorkspaceActions` entry and layout files ship with the base), or any workspace of your own. A workspace whose `Open-Project` action has no project of its own shows a selection menu on every open, which would stall the experiment; give the project positionally, as for `Open-Workspace`: `Measure-WorkspaceOpen Client Asseto`. Anything further on the command line (`run`, for instance) is forwarded to `Open-Workspace` unchanged.
     - Default: `Example`. Use your own workspace once you know it well - a workspace you open every day is the one whose seconds matter.
 2. Which question is the experiment answering?
     - Options: All three flags at once (one flipped per variant), one flag only (`-Setting FancyZonesApplyMethod`), every combination (`-FullFactorial`), or hand-picked configurations (`-Variant`).
@@ -48,7 +48,7 @@ Nothing on this page needs a value in `Configuration.local.psd1`. When the exper
 ```powershell
 Measure-WorkspaceOpen -DryRun
 Measure-WorkspaceOpen WinuX -DryRun
-Measure-WorkspaceOpen FuturamaSoft Asseto -DryRun
+Measure-WorkspaceOpen Client Asseto -DryRun
 ```
 
 Prints the variants, their order and the total number of opens. Nothing is opened, torn down or changed. The first line is the shipped `Example` workspace; the other two are your own, the last one with the project its `Open-Project` action needs.
@@ -58,7 +58,7 @@ Prints the variants, their order and the total number of opens. Nothing is opene
 ```powershell
 Measure-WorkspaceOpen
 Measure-WorkspaceOpen WinuX
-Measure-WorkspaceOpen FuturamaSoft Asseto -MaxMinutes 20
+Measure-WorkspaceOpen Client Asseto -MaxMinutes 20
 ```
 
 Every open launches and lays out the whole workspace and every teardown closes it again, so do not type into the machine while it runs. Ctrl+C stops it; the configuration is restored either way. `-MaxMinutes` is the polite version of Ctrl+C: no further open starts once the budget is spent, and the opens that ran are summarized.

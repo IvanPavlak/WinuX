@@ -24,7 +24,7 @@ function Measure-WorkspaceOpen {
 		The workspace defaults to Example, which ships with WinuX (WorkspaceActions and its layout
 		files), so the experiment runs on a fresh install without anything defined first. Any
 		configured workspace works; one whose Open-Project action needs a project takes it
-		positionally, like Open-Workspace does ("Measure-WorkspaceOpen FuturamaSoft Asseto"), and
+		positionally, like Open-Workspace does ("Measure-WorkspaceOpen Client Asseto"), and
 		anything further on the command line is forwarded to Open-Workspace unchanged.
 
 		Which variants run:
@@ -70,12 +70,12 @@ function Measure-WorkspaceOpen {
 	.PARAMETER Project
 		Project name(s) handed to Open-Workspace -Project, so a workspace whose Open-Project action
 		would otherwise show a selection menu opens the same project(s) on every run without a
-		prompt. Positional, like in Open-Workspace: "Measure-WorkspaceOpen FuturamaSoft Asseto".
+		prompt. Positional, like in Open-Workspace: "Measure-WorkspaceOpen Client Asseto".
 
 	.PARAMETER ExtraArgs
 		Everything else on the command line is forwarded to Open-Workspace unchanged, which
 		forwards it to the actions that declare the parameter - the same way
-		"Open-Workspace FuturamaSoft Asseto run" does. The values are not varied between runs.
+		"Open-Workspace Client Asseto run" does. The values are not varied between runs.
 
 	.PARAMETER Runs
 		Measured opens per variant. 5 by default.
@@ -135,7 +135,7 @@ function Measure-WorkspaceOpen {
 		# The shipped Example workspace: 1 warm-up, then 5 rounds of Baseline + each layout flag flipped alone (21 opens).
 
 	.EXAMPLE
-		Measure-WorkspaceOpen FuturamaSoft Asseto
+		Measure-WorkspaceOpen Client Asseto
 		# A workspace whose Open-Project action needs a project: every open gets Asseto, no menu.
 
 	.EXAMPLE

@@ -548,7 +548,7 @@ Get-WorkspaceBenchmark -Summary -Formatted
 ```powershell
 Measure-WorkspaceOpen -DryRun                                          # the plan for the shipped Example workspace, nothing runs
 Measure-WorkspaceOpen WinuX                                            # your workspace: Baseline + each flag flipped alone, 5 rounds
-Measure-WorkspaceOpen FuturamaSoft Asseto -MaxMinutes 20               # a workspace that needs a project, with a time budget
+Measure-WorkspaceOpen Client Asseto -MaxMinutes 20               # a workspace that needs a project, with a time budget
 Measure-WorkspaceOpen WinuX -Setting FancyZonesApplyMethod -Runs 8     # one flag, File against Hotkeys
 Get-WorkspaceOpenMeasurement -Formatted                                # the table again, after the scrollback is gone
 ```
