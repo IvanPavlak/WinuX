@@ -12,13 +12,16 @@ function Run-Tests {
         parallel child pwsh processes. Each worker bootstraps its own session, so the tests can
         no longer pollute this one and no profile reload is needed afterwards.
 
-        The terminal shows only a spinner with a live test counter and the final verdict.
+        The terminal shows only a spinner with a live test counter and the final verdict. The
+        counter's total is counted from the test files before the run starts, so it is right
+        for the files about to run rather than carried over from the previous run.
         Everything a detailed serial run would have printed goes to
         Modules/Tests/Results/TestRun_<timestamp>.log (gitignored, like the Logging module's
         Logs folder), next to the per-worker NUnit XMLs.
 
     .PARAMETER TestName
-        Optional filter to run only tests matching a specific pattern (e.g., "Open-Terminal")
+        Optional filter to run only tests whose file name matches a pattern (e.g., "Open-Terminal").
+        Several patterns run the union of their matches, each file once.
 
     .PARAMETER Path
         Optional path to test files. Defaults to the Tests directory.
@@ -41,6 +44,10 @@ function Run-Tests {
         Runs only tests matching "Open-Terminal"
 
     .EXAMPLE
+        Run-Tests -TestName "Open-Terminal", "Close-Workspace"
+        Runs every test file matching either pattern
+
+    .EXAMPLE
         Run-Tests -Detailed
         Runs all tests and prints the full run log afterwards
 
@@ -51,7 +58,7 @@ function Run-Tests {
 	[CmdletBinding()]
 	param(
 		[Parameter(Position = 0)]
-		[string]$TestName,
+		[string[]]$TestName,
 
 		[Parameter()]
 		[string]$Path,

@@ -9,13 +9,13 @@ The Tests module provides **Pester test execution** for WinuX. It validates Appl
 
 - **Description:** Discovers all `.Tests.ps1` Pester tests in the PowerShell Modules Tests directory (every module's test folder plus the Infrastructure checks), and by default also the fork-owned Custom area (`Modules/Custom/<Module>/Tests`), then hands them to [Invoke-TestSuite](#invoke-testsuite) to run in parallel worker processes. Supports filtering by test name pattern, worker count, echoing the full run log, and returning the aggregate result object.
 - **Parameters:** -TestName, -Path, -Workers, -Detailed, -PassThru
-- **Usage:** `Run-Tests`, `Run-Tests -TestName "Open-Terminal"`, `Run-Tests -Detailed`, `$results = Run-Tests -PassThru`
+- **Usage:** `Run-Tests`, `Run-Tests -TestName "Open-Terminal"`, `Run-Tests -TestName "Open-Terminal", "Close-Workspace"`, `Run-Tests -Detailed`, `$results = Run-Tests -PassThru`
 
-Recursively discovers `*.Tests.ps1` files under the Tests directory and, when present, the `Modules/Custom` fork area (or only under a custom `-Path` when one is given), and invokes the harness. The terminal shows a spinner with a live test counter and then the verdict; the per-test detail goes to the run log. With `-PassThru`, the aggregate result object is returned for scripting (e.g. CI/CD).
+Recursively discovers `*.Tests.ps1` files under the Tests directory and, when present, the `Modules/Custom` fork area (or only under a custom `-Path` when one is given), and invokes the harness. The terminal shows a spinner with a live test counter and then the verdict; the counter's total is counted from the test files before the run starts, so it is right for the files about to run rather than carried over from the previous run, and the per-test detail goes to the run log. With `-PassThru`, the aggregate result object is returned for scripting (e.g. CI/CD).
 
 | Parameter   | Description                                                                       |
 | ----------- | --------------------------------------------------------------------------------- |
-| `-TestName` | Filter to run only tests whose file name matches the given pattern.               |
+| `-TestName` | Filter to run only tests whose file name matches a pattern; several patterns run the union of their matches, each file once. |
 | `-Path`     | Custom path to test files. Defaults to the Tests directory.                       |
 | `-Workers`  | Number of parallel worker processes. Defaults to `min(CPU count, 8, file count)`. |
 | `-Detailed` | Echo the whole run log, including every worker transcript, after the run.         |
@@ -27,6 +27,9 @@ Run-Tests
 
 # Run only tests matching a name pattern
 Run-Tests -TestName "Open-Terminal"
+
+# Run every file matching any of several patterns
+Run-Tests -TestName "Open-Terminal", "Close-Workspace"
 
 # Print the full run log to the console afterwards
 Run-Tests -Detailed
@@ -56,6 +59,8 @@ Two consequences matter day to day:
 
 Buckets are balanced by longest-processing-time-first, weighted by each file's measured duration from the previous run (`Results/timings.json`); on a cold checkout, file size stands in. Two files whose tests touch state shared across processes - `Set-WorkspaceWindowLayout.Tests.ps1` (real User-scope `WORKSPACE_*` variables) and `Reset-KeyboardModifiers.Tests.ps1` (real keystroke injection) - are pinned into the same bucket so they can never run concurrently with each other.
 
+The live counter's denominator is the total for the files about to run, not the previous run's. Pester 6 discovers and runs each file interleaved, so no worker knows its own total before it is done, and a discovery-only pass costs about a quarter of the whole suite; instead [Get-ExpectedTestCount.ps1](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Tests/Get-ExpectedTestCount.ps1), beside the harness, reads the count off each file's syntax tree while the workers bootstrap - one per `It`, multiplied by the element count of any literal `-ForEach`/`-TestCases` on the `It` and on every enclosing `Describe`/`Context`. That is exact for every test whose case list is written into the file. A file whose case list is computed at discovery time - the Infrastructure files that enumerate modules and documentation pages - or that generates `It` blocks from a loop or a helper function cannot be counted that way and takes the previous run's count for that file from `timings.json`; the counter never shows more tests run than expected.
+
 ### Run artifacts
 
 Everything a detailed serial run would have printed - every per-test line, and everything the code under test writes to the console - is captured per worker and merged into a single run log. `Results/` is gitignored, exactly like the Logging module's `Logs/`:
@@ -64,7 +69,7 @@ Everything a detailed serial run would have printed - every per-test line, and e
 | ------------------------------------- | --------------------------------------------------------------------------------------- |
 | `TestRun_<run>.log`                   | Summary, per-worker breakdown, failures, slowest 20 files, then every worker transcript. |
 | `pester-results-<run>-worker<N>.xml`  | One NUnit3 XML per worker. CI merges the glob into a single check run.                   |
-| `timings.json`                        | Measured per-file duration and test count, used to bucket the next run.                 |
+| `timings.json`                        | Measured per-file duration and test count: bucketing for the next run, and the counter's fallback for a file whose count cannot be read off its source. |
 
 `<run>` is `<timestamp>_<PID>`, the same shape the Logging module uses for its session logs. Naming every artifact after its run is what makes concurrent runs safe - a scoped `Run-Tests` in one terminal while a full sweep finishes in another used to have the second run wipe the first's in-flight files and then report results it never produced.
 

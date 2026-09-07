@@ -539,6 +539,22 @@ Get-WorkspaceBenchmark -Summary -Formatted
 
 `wait` is application start-up (VS Code, Claude Desktop, browser pages resolving their titles) plus a one-second stability floor per window and cannot be reduced from this side; `fancyzones` and `snap` scale with the number of virtual desktops, because each desktop switch costs roughly 0.5 to 0.8 s.
 
+### Deciding Whether A Layout Flag Actually Makes Opens Faster
+
+**Problem:** A few opens with `FancyZonesApplyMethod = "Hotkeys"`, `WorkspaceLayoutPipelining = $false` or `WorkspaceLayoutPrepareEarly = $false` looked faster than a few opens without, but the benchmark rows do not record which flags were on, the runs were not torn down the same way, and `WaitSeconds` swings from 0.1 s (warm) to 19 s (cold) between opens of the very same configuration - more than any flag can move.
+
+**Solution:** Let `Measure-WorkspaceOpen` run the experiment. It tears down (`Kill-All -Skip Docker`), settles, puts one variant's values into the live configuration, opens through the real `Open-Workspace`, collects the row, and repeats in interleaved rounds so a slow hour hits every variant alike; warm-ups are discarded, every flag in effect is stamped on every row, and the configuration is restored at the end. The summary is per variant, by median, with `Clean` and `Retries` to read first:
+
+```powershell
+Measure-WorkspaceOpen -DryRun                                          # the plan for the shipped Example workspace, nothing runs
+Measure-WorkspaceOpen WinuX                                            # your workspace: Baseline + each flag flipped alone, 5 rounds
+Measure-WorkspaceOpen Client Asseto -MaxMinutes 20               # a workspace that needs a project, with a time budget
+Measure-WorkspaceOpen WinuX -Setting FancyZonesApplyMethod -Runs 8     # one flag, File against Hotkeys
+Get-WorkspaceOpenMeasurement -Formatted                                # the table again, after the scrollback is gone
+```
+
+Judge each flag by the phase it controls (`MedianFancyZones` for the apply method, `MedianWait` and `MedianPositionSnap` for pipelining, `MedianTotal` for the early preparation) and only then by the total; the `Verdict` column says `Noise` when the difference is smaller than the spread between opens of the same configuration. Run it from a terminal you can leave alone. The experiment's opens are tagged in `WorkspaceBenchmark.csv` and `Get-WorkspaceBenchmark` leaves them out of the everyday history unless asked (`-IncludeMeasured`).
+
 ### Layout File Not Found
 
 **Problem:** "Cannot find layout file" error.

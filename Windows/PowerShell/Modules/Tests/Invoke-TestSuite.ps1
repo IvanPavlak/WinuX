@@ -14,7 +14,9 @@
 	one crashed worker cannot take the run down silently.
 
 	Terminal output is deliberately minimal: a spinner with a live test counter, then a one-line
-	verdict and the path to the run log. Everything a serial `Invoke-Pester -Verbosity Detailed`
+	verdict and the path to the run log. The counter's denominator is read off the test files'
+	syntax trees (Get-ExpectedTestCount.ps1, beside this script) while the workers bootstrap, so
+	it is the total for the files about to run, not the previous run's. Everything a serial `Invoke-Pester -Verbosity Detailed`
 	would have printed - every per-test line and everything the code under test writes to the
 	console - is captured per worker and merged into Results\TestRun_<stamp>_<PID>.log, alongside
 	the per-worker NUnit XMLs. Every artifact is named after the run that produced it, so two
@@ -26,7 +28,8 @@
 	Write-Host rather than Write-Log*: CI runs it before any WinuX module exists in the session.
 
 .PARAMETER TestName
-	Filter to files matching *<TestName>*.Tests.ps1. Omit to run everything discovered.
+	Filter to files matching *<TestName>*.Tests.ps1. Several patterns run the union of their
+	matches; a file matched by more than one runs once. Omit to run everything discovered.
 
 .PARAMETER Path
 	Root to discover tests under. Defaults to this module's own directory, and additionally
@@ -69,6 +72,10 @@
 	Runs only *Open-Terminal*.Tests.ps1 on two workers.
 
 .EXAMPLE
+	.\Invoke-TestSuite.ps1 -TestName Open-Terminal, Close-Workspace
+	Runs every file matching either pattern.
+
+.EXAMPLE
 	.\Invoke-TestSuite.ps1 -CI
 	The CI entry point: no spinner, summary on stdout, infrastructure failures exit 2.
 
@@ -82,7 +89,7 @@
 [CmdletBinding(DefaultParameterSetName = 'Orchestrate')]
 param(
 	[Parameter(ParameterSetName = 'Orchestrate', Position = 0)]
-	[string]$TestName,
+	[string[]]$TestName,
 
 	[Parameter(ParameterSetName = 'Orchestrate')]
 	[string]$Path,
@@ -345,15 +352,21 @@ else {
 	}
 }
 
-$filter = if ($TestName) { "*$TestName*.Tests.ps1" } else { '*.Tests.ps1' }
+# One -Filter per pattern rather than a single -Include: -Filter is applied by the file system
+# provider, -Include only after every file under the roots has been enumerated. The union is
+# deduplicated, so a file two patterns both match is still run once.
+$patterns = @($TestName | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+$filters = if ($patterns.Count -gt 0) { @($patterns | ForEach-Object { "*$_*.Tests.ps1" }) } else { @('*.Tests.ps1') }
 $testFiles = @(
-	Get-ChildItem -Path $searchRoots -Recurse -Filter $filter -File -ErrorAction SilentlyContinue |
-		Select-Object -ExpandProperty FullName |
-		Sort-Object -Unique
-)
+	foreach ($filter in $filters) {
+		Get-ChildItem -Path $searchRoots -Recurse -Filter $filter -File -ErrorAction SilentlyContinue |
+			Select-Object -ExpandProperty FullName
+	}
+) | Sort-Object -Unique
+$testFiles = @($testFiles)
 
 if ($testFiles.Count -eq 0) {
-	$scope = if ($TestName) { "matching pattern: $TestName" } else { "in: $($searchRoots -join ', ')" }
+	$scope = if ($patterns.Count -gt 0) { "matching pattern(s): $($patterns -join ', ')" } else { "in: $($searchRoots -join ', ')" }
 	if ($CI) {
 		Write-Host -ForegroundColor Red "`n=> No test files found $scope - refusing to report a green run."
 		exit 2
@@ -488,11 +501,7 @@ if (-not $pwshPath) {
 
 # --- Spawn ---
 
-$expectedTests = 0
-foreach ($file in $testFiles) {
-	$key = & $relativeKey $file
-	if ($timings.ContainsKey($key) -and $timings[$key].tests) { $expectedTests += [int]$timings[$key].tests }
-}
+. (Join-Path -Path $PSScriptRoot -ChildPath 'Get-ExpectedTestCount.ps1')
 
 $workerStates = @(
 	foreach ($bucket in $buckets) {
@@ -598,6 +607,23 @@ try {
 			-RedirectStandardOutput $state.OutLog -RedirectStandardError $state.ErrLog
 	}
 
+	# The counter's denominator comes from the files about to run, not from the previous run.
+	# Pester 6 discovers and runs each file interleaved, so no worker knows its own total before
+	# it is done, and a discovery-only pass costs about a quarter of the whole suite; reading the
+	# count off each file's syntax tree takes a second or two, spent here while the workers are
+	# still bootstrapping. A file whose case list is computed at discovery time cannot be counted
+	# that way and takes the previous run's count for that file instead.
+	$expectedTests = 0
+	foreach ($counted in @(Get-ExpectedTestCount -Path $testFiles)) {
+		$key = & $relativeKey $counted.Path
+		if (-not $counted.Resolved -and $timings.ContainsKey($key) -and $timings[$key].tests) {
+			$expectedTests += [int]$timings[$key].tests
+		}
+		else {
+			$expectedTests += $counted.Count
+		}
+	}
+
 	if ($CI) {
 		Write-Host "Running $($testFiles.Count) test file(s) across $($workerStates.Count) worker(s)..."
 	}
@@ -611,6 +637,9 @@ try {
 		$ran = ($workerStates | Measure-Object -Property TestCount -Sum).Sum
 		$elapsed = $runStopwatch.Elapsed.TotalSeconds
 
+		# A computed case list that grew since the cached run can push the count past the
+		# denominator; never show more tests run than expected.
+		if ($ran -gt $expectedTests) { $expectedTests = $ran }
 		$counter = if ($expectedTests -gt 0) { "$ran/$expectedTests tests" } else { "$ran tests" }
 		& $renderStatus ([string]::Format($invariant, '{0} Running {1} test file(s) on {2} worker(s)  |  {3}  |  {4}/{5} done  |  {6:N1}s',
 				$spinnerFrames[$frame % $spinnerFrames.Count], $testFiles.Count, $workerStates.Count, $counter, $finished, $workerStates.Count, $elapsed))
@@ -721,7 +750,7 @@ foreach ($state in $workerStates) {
 $serialMs = ($allContainers | Measure-Object -Property DurationMs -Sum).Sum
 if (-not $serialMs) { $serialMs = 0 }
 
-# --- Cache this run's measurements for the next run's bucketing ---
+# --- Cache this run's measurements: the next run's bucketing, and the counter's fallback ---
 
 try {
 	foreach ($container in $allContainers) {
@@ -745,7 +774,7 @@ $summaryLines = [System.Collections.Generic.List[string]]::new()
 $summaryLines.Add("Pester run - $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')")
 $summaryLines.Add("Repository     : $script:PowerShellRoot")
 $summaryLines.Add("Pester         : $pesterVersion")
-$summaryLines.Add("Test files     : $($testFiles.Count)$(if ($TestName) { " (filter: *$TestName*)" })")
+$summaryLines.Add("Test files     : $($testFiles.Count)$(if ($patterns.Count -gt 0) { " (filter: $(($patterns | ForEach-Object { "*$_*" }) -join ', '))" })")
 $summaryLines.Add("Workers        : $($workerStates.Count)")
 $summaryLines.Add("Wall clock     : $([math]::Round($wallSeconds, 2))s")
 $summaryLines.Add("Serial time    : $([math]::Round($serialMs / 1000.0, 2))s across all containers")

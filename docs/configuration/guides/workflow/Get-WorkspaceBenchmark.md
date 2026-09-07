@@ -12,6 +12,7 @@ This function reads no `Configuration.psd1` keys. There is nothing to configure.
 Get-WorkspaceBenchmark | Format-Table -AutoSize
 Get-WorkspaceBenchmark -Workspace MyWorkspace -Last 20 | Format-Table Timestamp, Attempts, TotalSeconds, FancyZonesSeconds, WaitSeconds, SnapSeconds
 Get-WorkspaceBenchmark -Summary | Format-Table -AutoSize
+Get-WorkspaceBenchmark -Workspace MyWorkspace -IncludeMeasured -Last 0   # the Measure-WorkspaceOpen rows too
 ```
 
 ## Related

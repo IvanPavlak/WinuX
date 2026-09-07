@@ -268,7 +268,7 @@ function Close-Workspace {
 	#
 	# The identity set is deliberately only consulted for a RE-RESOLVED window, never for one matched
 	# by its own recorded handle. Process name plus title is not unique across workspaces: open WinuX
-	# and FuturamaSoft and both have a "YouTube - Mozilla Firefox" and a "New chat - Claude - Mozilla
+	# and Client and both have a "YouTube - Mozilla Firefox" and a "New chat - Claude - Mozilla
 	# Firefox" window. Applying the guard to an exact handle match therefore left the closing
 	# workspace's own YouTube and AI windows on screen, protected by the OTHER workspace's identically
 	# titled ones. A live recorded handle is unambiguous and needs no guard.

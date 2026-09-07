@@ -488,6 +488,7 @@ Opt-in measurement of every workspace open. When enabled, `Open-Workspace` times
 - `Enabled` - `$false` out of the box. `$true` records the row and shows the result after every open.
 - `Display` - what the end of an open shows: `"Table"` (the workspace's recent runs, exactly as `Get-WorkspaceBenchmark -Workspace <name> -Formatted` prints them - the default), `"Line"` (one `Timing [Workspace] => ...` line listing the phases above 0.05 s, with `retries N` when the layout needed more than one attempt), or `"None"` (record only).
 - `Last` - how many recent runs the `Table` display shows (`10`).
+- `Source` - stamped on every row written while it is set (empty in the base and normally left so). `Measure-WorkspaceOpen` sets it to `Measure-WorkspaceOpen <session>` for the duration of an experiment, which is how `Get-WorkspaceBenchmark` tells the experiment's rows from your everyday opens and leaves them out unless asked (`-IncludeMeasured`).
 
 **Consumer function:** `Open-Workspace` (records through `Write-WorkspaceBenchmark`, shows through `Get-WorkspaceBenchmark`)
 
@@ -501,7 +502,7 @@ WorkspaceBenchmark = @{
 }
 ```
 
-The history can be read at any time with `Get-WorkspaceBenchmark` (`-Workspace`, `-Last`, `-Summary`, `-Formatted`), whether or not the automatic display is on. The rows are per-machine measurements and the file is git-ignored.
+The history can be read at any time with `Get-WorkspaceBenchmark` (`-Workspace`, `-Last`, `-Summary`, `-Formatted`), whether or not the automatic display is on. The rows are per-machine measurements and the file is git-ignored. To decide between configuration flags, do not compare rows by hand: `Measure-WorkspaceOpen` runs the interleaved experiment (teardown, settle, open, collect, repeat) on the shipped `Example` workspace or one of yours, forces this key on for its duration (with `Display = "None"` and a `Source` tag), restores it afterwards, and its table can be replayed with `Get-WorkspaceOpenMeasurement`.
 
 ### Workspace Actions
 
@@ -1157,6 +1158,8 @@ Animation styles for long-running operations.
 - `WorkspaceLayoutPrepareEarly` - Whether `Open-Workspace` runs the layout preamble - the RPC probe, the layout file and its validation, the virtual desktop resize and the FancyZones zone layouts (`Set-WorkspaceWindowLayout -PrepareOnly`) - BEFORE the launch actions (`$true`, the shipped default) or leaves all of it to the layout action after them (`$false`). That work depends on no window and ran at 3.4 s under the start-up load of a dozen applications against 0.2 s idle; the layout action then finds the desktops and zone layouts in place and skips them. A window-only retry is never prepared, and a failed preparation leaves the action to do the work as before.
 
 `Test-FancyZonesConfiguration` validates all of these constraints (plus `custom-layouts.json` internal consistency) automatically at the start of every workspace open.
+
+Whether any of the three flags actually makes a workspace open faster on a given machine is a question for `Measure-WorkspaceOpen`, which opens the workspace under each value in interleaved rounds and compares medians, not for two opens compared by eye - the spread between two opens of the same configuration is larger than any flag's effect.
 
 **Consumer functions:** `Apply-FancyZones`, `Get-FancyZone`, `Open-Workspace`, `Set-WorkspaceWindowLayout`, `Test-FancyZonesConfiguration`
 

@@ -6,6 +6,7 @@ BeforeAll {
 
 	. "$FunctionsPath\Get-WorkspaceBenchmarkPath.ps1"
 	. "$FunctionsPath\Write-WorkspaceBenchmark.ps1"
+	. "$FunctionsPath\Read-WorkspaceBenchmark.ps1"
 	. "$FunctionsPath\Get-WorkspaceBenchmark.ps1"
 
 	# The path resolver reaches into the Logging module and the tracker path helper; stub both
@@ -120,6 +121,35 @@ Describe "Write-WorkspaceBenchmark" {
 		Should -Invoke Write-LogWarning -Times 1 -Exactly
 	}
 
+	It "stamps -Source on the row and leaves it empty otherwise" {
+		$plain = Write-WorkspaceBenchmark -Workspace 'MyWorkspace' -TotalSeconds 5 -BenchmarkPath $script:BenchmarkFile -Quiet -PassThru
+		$tagged = Write-WorkspaceBenchmark -Workspace 'MyWorkspace' -TotalSeconds 6 -Source 'Measure-WorkspaceOpen 20260907-135804' -BenchmarkPath $script:BenchmarkFile -Quiet -PassThru
+
+		$plain.Source | Should -Be ''
+		$tagged.Source | Should -Be 'Measure-WorkspaceOpen 20260907-135804'
+		$rows = @(Import-Csv -LiteralPath $script:BenchmarkFile)
+		$rows[1].Source | Should -Be 'Measure-WorkspaceOpen 20260907-135804'
+	}
+
+	It "upgrades a file written before the Source column existed, keeping every row" {
+		# Two rows in the old shape: no Source column at all.
+		Write-WorkspaceBenchmark -Workspace 'Old' -TotalSeconds 11 -BenchmarkPath $script:BenchmarkFile -Quiet
+		Write-WorkspaceBenchmark -Workspace 'Older' -TotalSeconds 12 -BenchmarkPath $script:BenchmarkFile -Quiet
+		$old = @(Import-Csv -LiteralPath $script:BenchmarkFile | Select-Object -Property * -ExcludeProperty Source)
+		$old | Export-Csv -LiteralPath $script:BenchmarkFile -NoTypeInformation -Encoding UTF8
+		(Get-Content -LiteralPath $script:BenchmarkFile -TotalCount 1) | Should -Not -Match 'Source'
+
+		Write-WorkspaceBenchmark -Workspace 'New' -TotalSeconds 13 -Source 'tag' -BenchmarkPath $script:BenchmarkFile -Quiet
+
+		$rows = @(Import-Csv -LiteralPath $script:BenchmarkFile)
+		$rows.Count | Should -Be 3
+		$rows.Workspace | Should -Be @('Old', 'Older', 'New')
+		$rows[0].Source | Should -Be ''
+		$rows[0].TotalSeconds | Should -Be '11'
+		$rows[2].Source | Should -Be 'tag'
+		Should -Invoke Write-LogWarning -Times 0 -Exactly
+	}
+
 	It "counts the early layout preparation as layout seconds, not as a launch action" {
 		$timings = @(
 			[PSCustomObject]@{ Action = 'Set-WorkspaceWindowLayout -PrepareOnly'; Seconds = 1.5 }
@@ -131,6 +161,55 @@ Describe "Write-WorkspaceBenchmark" {
 
 		$row.ActionsSeconds | Should -Be 0.5
 		$row.LayoutSeconds | Should -Be 21.5
+	}
+}
+
+Describe "Read-WorkspaceBenchmark" {
+	BeforeEach {
+		Mock Write-LogStep { }
+		Mock Write-LogWarning { }
+		$script:BenchmarkFile = Join-Path $TestDrive ("Benchmark_" + [guid]::NewGuid().ToString('N') + ".csv")
+	}
+
+	It "reads a missing file as an empty result" {
+		@(Read-WorkspaceBenchmark -BenchmarkPath $script:BenchmarkFile).Count | Should -Be 0
+	}
+
+	It "types the numbers and returns the rows oldest first" {
+		Write-WorkspaceBenchmark -Workspace 'B' -TotalSeconds 20.5 -BenchmarkPath $script:BenchmarkFile -Quiet -LayoutTimings (New-LayoutTimings -Attempts 2)
+		Write-WorkspaceBenchmark -Workspace 'A' -TotalSeconds 10 -BenchmarkPath $script:BenchmarkFile -Quiet
+		# An older timestamp appended later must still sort first.
+		$rows = @(Import-Csv -LiteralPath $script:BenchmarkFile)
+		$rows[1].Timestamp = '2000-01-01 00:00:00'
+		$rows | Export-Csv -LiteralPath $script:BenchmarkFile -NoTypeInformation -Encoding UTF8
+
+		$read = @(Read-WorkspaceBenchmark -BenchmarkPath $script:BenchmarkFile)
+
+		$read.Count | Should -Be 2
+		$read[0].Workspace | Should -Be 'A'
+		$read[1].Workspace | Should -Be 'B'
+		$read[1].TotalSeconds | Should -BeOfType [double]
+		$read[1].TotalSeconds | Should -Be 20.5
+		$read[1].Attempts | Should -BeOfType [int]
+		$read[1].Attempts | Should -Be 2
+	}
+
+	It "throws on a file it cannot read, leaving the caller to report it" {
+		Mock Import-Csv { throw "locked" }
+		Set-Content -LiteralPath $script:BenchmarkFile -Value 'x'
+
+		{ Read-WorkspaceBenchmark -BenchmarkPath $script:BenchmarkFile } | Should -Throw
+	}
+
+	It "reads a row written before the Source column existed with an empty Source" {
+		Write-WorkspaceBenchmark -Workspace 'Old' -TotalSeconds 11 -BenchmarkPath $script:BenchmarkFile -Quiet
+		$old = @(Import-Csv -LiteralPath $script:BenchmarkFile | Select-Object -Property * -ExcludeProperty Source)
+		$old | Export-Csv -LiteralPath $script:BenchmarkFile -NoTypeInformation -Encoding UTF8
+
+		$read = @(Read-WorkspaceBenchmark -BenchmarkPath $script:BenchmarkFile)
+
+		$read[0].PSObject.Properties['Source'] | Should -Not -BeNullOrEmpty
+		$read[0].Source | Should -Be ''
 	}
 }
 
@@ -181,6 +260,19 @@ Describe "Get-WorkspaceBenchmark" {
 
 		$rows.Count | Should -Be 2
 		@($rows.Workspace | Select-Object -Unique) | Should -Be @('MyWorkspace')
+	}
+
+	It "leaves the experiment's rows out unless -IncludeMeasured or -Source asks for them" {
+		Write-WorkspaceBenchmark -Workspace 'MyWorkspace' -TotalSeconds 10 -BenchmarkPath $script:BenchmarkFile -Quiet
+		Write-WorkspaceBenchmark -Workspace 'MyWorkspace' -TotalSeconds 20 -Source 'Measure-WorkspaceOpen A' -BenchmarkPath $script:BenchmarkFile -Quiet
+		Write-WorkspaceBenchmark -Workspace 'MyWorkspace' -TotalSeconds 30 -Source 'Measure-WorkspaceOpen B' -BenchmarkPath $script:BenchmarkFile -Quiet
+		Write-WorkspaceBenchmark -Workspace 'MyWorkspace' -TotalSeconds 40 -BenchmarkPath $script:BenchmarkFile -Quiet
+
+		@(Get-WorkspaceBenchmark -BenchmarkPath $script:BenchmarkFile).TotalSeconds | Should -Be @(10, 40)
+		@(Get-WorkspaceBenchmark -BenchmarkPath $script:BenchmarkFile -IncludeMeasured).TotalSeconds | Should -Be @(10, 20, 30, 40)
+		@(Get-WorkspaceBenchmark -BenchmarkPath $script:BenchmarkFile -Source 'Measure-WorkspaceOpen B').TotalSeconds | Should -Be @(30)
+		# The summary sees the same filtered rows.
+		@(Get-WorkspaceBenchmark -BenchmarkPath $script:BenchmarkFile -Summary)[0].Runs | Should -Be 2
 	}
 
 	It "aggregates per workspace and mode with -Summary" {

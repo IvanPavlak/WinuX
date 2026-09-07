@@ -566,6 +566,7 @@ function Open-Workspace {
 						-ActionTimings $actionTimings.ToArray() `
 						-LayoutTimings $layoutTimings `
 						-Alongside:$Alongside `
+						-Source ([string]$benchmarkConfig.Source) `
 						-Quiet:($benchmarkDisplay -ne 'Line')
 
 					if ($benchmarkDisplay -eq 'Table' -and (Get-Command Get-WorkspaceBenchmark -ErrorAction SilentlyContinue)) {

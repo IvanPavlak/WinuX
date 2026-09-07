@@ -46,7 +46,7 @@ BeforeAll {
 	# The benchmark writer and the layout phase getter are real module functions in a
 	# bootstrap-imported session; stub them so no test run appends rows to the machine's
 	# benchmark file or reads a real layout record.
-	function Write-WorkspaceBenchmark { param($Workspace, $TotalSeconds, $ActionTimings, $LayoutTimings, [switch]$Alongside, $BenchmarkPath, [switch]$Quiet, [switch]$PassThru) }
+	function Write-WorkspaceBenchmark { param($Workspace, $TotalSeconds, $ActionTimings, $LayoutTimings, [switch]$Alongside, $Source, $BenchmarkPath, [switch]$Quiet, [switch]$PassThru) }
 	function Get-WorkspaceLayoutTimings { $null }
 	function Get-WorkspaceBenchmark { param($Workspace, $Last, [switch]$Summary, [switch]$Formatted, $BenchmarkPath) }
 	# The rerun-command store is real module state in a bootstrap-imported session; stub it so
@@ -114,13 +114,14 @@ Describe "Open-Workspace" {
 		Mock Get-WorkspaceLayoutTimings { $null }
 		Mock Get-WorkspaceBenchmark { }
 		Mock Write-WorkspaceBenchmark {
-			param($Workspace, $TotalSeconds, $ActionTimings, $LayoutTimings, [switch]$Alongside, $BenchmarkPath, [switch]$Quiet, [switch]$PassThru)
+			param($Workspace, $TotalSeconds, $ActionTimings, $LayoutTimings, [switch]$Alongside, $Source, $BenchmarkPath, [switch]$Quiet, [switch]$PassThru)
 			$script:benchmarkCalls += [PSCustomObject]@{
 				Workspace     = $Workspace
 				TotalSeconds  = $TotalSeconds
 				ActionTimings = @($ActionTimings)
 				LayoutTimings = $LayoutTimings
 				Alongside     = [bool]$Alongside
+				Source        = [string]$Source
 				Quiet         = [bool]$Quiet
 			}
 		}
@@ -290,6 +291,20 @@ Describe "Open-Workspace" {
 			# The one-line summary is suppressed in favour of the table.
 			$script:benchmarkCalls[0].Quiet | Should -BeTrue
 			Should -Invoke Get-WorkspaceBenchmark -Times 1 -Exactly -ParameterFilter { $Workspace -eq 'TestWorkspace' -and $Last -eq 5 -and $Formatted }
+		}
+
+		It "stamps the row with WorkspaceBenchmark.Source, empty for an everyday open" {
+			$script:Configuration.WorkspaceBenchmark = @{ Enabled = $true; Display = 'None' }
+			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } }
+			)
+
+			Open-Workspace -Workspace 'TestWorkspace'
+			$script:benchmarkCalls[0].Source | Should -Be ''
+
+			$script:Configuration.WorkspaceBenchmark = @{ Enabled = $true; Display = 'None'; Source = 'Measure-WorkspaceOpen 20260907-135804' }
+			Open-Workspace -Workspace 'TestWorkspace'
+			$script:benchmarkCalls[1].Source | Should -Be 'Measure-WorkspaceOpen 20260907-135804'
 		}
 
 		It "prints the one-line summary instead of the table when Display is Line" {
