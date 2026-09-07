@@ -7,6 +7,8 @@ BeforeAll {
 	. "$FunctionsPath\Get-WorkspaceBenchmarkPath.ps1"
 	. "$FunctionsPath\Write-WorkspaceBenchmark.ps1"
 	. "$FunctionsPath\Read-WorkspaceBenchmark.ps1"
+	. "$FunctionsPath\Get-WorkspaceOpenMeasurementPath.ps1"
+	. "$FunctionsPath\ConvertTo-WorkspaceOpenSummary.ps1"
 	. "$FunctionsPath\Measure-WorkspaceOpen.ps1"
 
 	# Stub-before-mock: the commands the harness calls must exist for Mock to attach to them,
@@ -27,17 +29,27 @@ BeforeAll {
 		function Get-WorkspaceStatePath { }
 	}
 	function Kill-All { param($Exclude, $Skip, $Include, [switch]$IncludeCurrent, [switch]$ReloadPowerShellProfile) }
-	function Open-Workspace { param($Workspace, $Project, [switch]$Alongside, $ExtraArgs) }
+	function Open-Workspace { param($Workspace, $Project, [switch]$Alongside, [Parameter(ValueFromRemainingArguments = $true)]$ExtraArgs) }
 
 	function New-TestConfiguration {
 		param([hashtable]$Overrides = @{})
 		$configuration = @{
 			WorkspaceActions      = @{
-				WinuX  = @(
+				WinuX   = @(
 					@{ Action = 'Open-Project'; Parameters = @{ Project = 'WinuX' } }
 					@{ Action = 'Set-WorkspaceWindowLayout' }
 				)
-				Exiter = @(
+				# The workspace WinuX ships: what a fresh install measures without defining anything.
+				Example = @(
+					@{ Action = 'Open-Browser'; Parameters = @{ NoMenu = $true; Instances = 3 } }
+					@{ Action = 'Set-WorkspaceWindowLayout'; Parameters = @{ WorkspaceName = 'Example' } }
+				)
+				# An Open-Project action with no project of its own: a menu on every open.
+				Picker  = @(
+					@{ Action = 'Open-Project' }
+					@{ Action = 'Set-WorkspaceWindowLayout' }
+				)
+				Exiter  = @(
 					@{ Action = 'Open-Project' }
 					@{ Action = 'Terminate-WindowsTerminalTabs'; Parameters = @{ OnlyCurrent = $true } }
 				)
@@ -78,7 +90,9 @@ BeforeAll {
 		if ($scripted.Throw) { throw "open exploded" }
 		$phases = @{ FancyZones = 1; Wait = 2; Position = 1; Snap = 1; Verify = 0.5 }
 		if ($scripted.Phases) { $phases = $scripted.Phases }
+		# Exactly what Open-Workspace does: the configured Source goes on the row.
 		Write-WorkspaceBenchmark -Workspace $Workspace -TotalSeconds $scripted.Total -BenchmarkPath $script:BenchmarkFile -Quiet `
+			-Source ([string]$script:Configuration['WorkspaceBenchmark'].Source) `
 			-ActionTimings @([PSCustomObject]@{ Action = 'Set-WorkspaceWindowLayout'; Seconds = ($scripted.Total - 1) }) `
 			-LayoutTimings (New-LayoutTimings -Phases $phases -Attempts $scripted.Attempts)
 	}
@@ -190,6 +204,28 @@ Describe "Measure-WorkspaceOpen" {
 			Should -Invoke Write-LogError -Times 1 -Exactly
 			Should -Invoke Open-Workspace -Times 0 -Exactly
 		}
+
+		It "refuses a workspace whose Open-Project action has no project unless -Project supplies one" {
+			$result = Measure-WorkspaceOpen -Workspace Picker -Runs 1 -WarmUp 0 -SettleSeconds 0 -Variant @{ Name = 'Only' } -Configuration $script:Configuration -ResultPath $script:ResultFile
+
+			$result | Should -BeNullOrEmpty
+			Should -Invoke Write-LogError -Times 1 -Exactly
+			Should -Invoke Open-Workspace -Times 0 -Exactly
+
+			Measure-WorkspaceOpen Picker Asseto -Runs 1 -WarmUp 0 -SettleSeconds 0 -Variant @{ Name = 'Only' } -Configuration $script:Configuration -ResultPath $script:ResultFile | Out-Null
+
+			Should -Invoke Write-LogError -Times 1 -Exactly
+			Should -Invoke Open-Workspace -Times 1 -Exactly -ParameterFilter { $Workspace -eq 'Picker' -and (@($Project) -join ',') -eq 'Asseto' }
+		}
+	}
+
+	Context "defaults" {
+		It "measures the shipped Example workspace when no workspace is named" {
+			$result = Measure-WorkspaceOpen -Runs 1 -WarmUp 0 -SettleSeconds 0 -Variant @{ Name = 'Only' } -Configuration $script:Configuration -ResultPath $script:ResultFile -PassThru
+
+			Should -Invoke Open-Workspace -Times 1 -Exactly -ParameterFilter { $Workspace -eq 'Example' }
+			$result.Runs[0].Workspace | Should -Be 'Example'
+		}
 	}
 
 	Context "runs" {
@@ -230,6 +266,54 @@ Describe "Measure-WorkspaceOpen" {
 			@($result.Runs | Where-Object { -not $_.Measured }).Count | Should -Be 2
 			@($result.Summary).Count | Should -Be 2
 			$result.Summary | ForEach-Object { $_.Runs | Should -Be 1 }
+		}
+
+		It "hands the project and the remaining arguments to every open, so no open shows a menu" {
+			$result = Measure-WorkspaceOpen WinuX Asseto run -Runs 1 -WarmUp 1 -SettleSeconds 0 -Variant @{ Name = 'Only' } -Configuration $script:Configuration -ResultPath $script:ResultFile -PassThru
+
+			Should -Invoke Open-Workspace -Times 2 -Exactly -ParameterFilter { $Workspace -eq 'WinuX' -and (@($Project) -join ',') -eq 'Asseto' -and (@($ExtraArgs) -join ',') -eq 'run' }
+			$result.Runs | ForEach-Object { $_.Project | Should -Be 'Asseto' }
+			(Import-Csv -LiteralPath $script:ResultFile)[0].Project | Should -Be 'Asseto'
+		}
+
+		It "opens without a project when none is given" {
+			Measure-WorkspaceOpen -Workspace WinuX -Runs 1 -WarmUp 0 -SettleSeconds 0 -Variant @{ Name = 'Only' } -Configuration $script:Configuration -ResultPath $script:ResultFile | Out-Null
+
+			Should -Invoke Open-Workspace -Times 1 -Exactly -ParameterFilter { $Workspace -eq 'WinuX' -and -not $Project -and -not $ExtraArgs }
+		}
+
+		It "tags the benchmark rows it causes with its session so the everyday history can leave them out" {
+			$result = Measure-WorkspaceOpen -Workspace WinuX -Runs 1 -WarmUp 1 -SettleSeconds 0 -Variant @{ Name = 'Only' } -Configuration $script:Configuration -ResultPath $script:ResultFile -PassThru
+
+			$benchmarkRows = @(Read-WorkspaceBenchmark -BenchmarkPath $script:BenchmarkFile)
+			$benchmarkRows.Count | Should -Be 2
+			$benchmarkRows | ForEach-Object { $_.Source | Should -Be "Measure-WorkspaceOpen $($result.Session)" }
+			# The row it read back is the tagged one, not an older untagged row of the same workspace.
+			$result.Runs[1].Outcome | Should -Be 'Applied'
+		}
+
+		It "stops starting opens once -MaxMinutes is spent and still summarizes what ran" {
+			$result = Measure-WorkspaceOpen -Workspace WinuX -Runs 3 -WarmUp 0 -SettleSeconds 0 -Variant @{ Name = 'Only' } -MaxMinutes 0.005 -Teardown { [System.Threading.Thread]::Sleep(400) } -Configuration $script:Configuration -ResultPath $script:ResultFile -PassThru
+
+			Should -Invoke Open-Workspace -Times 1 -Exactly
+			$result.Runs.Count | Should -Be 1
+			$result.Summary.Count | Should -Be 1
+			$result.Summary[0].Runs | Should -Be 1
+			Should -Invoke Write-LogWarning -ParameterFilter { $Message -like '*budget*' }
+			$script:Configuration.ContainsKey('WorkspaceBenchmark') | Should -BeFalse
+		}
+
+		It "judges every variant against the first one: Noise inside the spread, Faster or Slower outside" {
+			# Interleaved Base, Near, Far per round: Base 10/20/30, Near 21/22/23, Far 50/60/70.
+			foreach ($total in 10, 21, 50, 20, 22, 60, 30, 23, 70) { $script:ScriptedRows.Enqueue(@{ Total = $total }) }
+
+			$summary = @(Measure-WorkspaceOpen -Workspace WinuX -Runs 3 -WarmUp 0 -SettleSeconds 0 -Variant @{ Name = 'Base' }, @{ Name = 'Near' }, @{ Name = 'Far' } -Configuration $script:Configuration -ResultPath $script:ResultFile)
+
+			@($summary | Where-Object Variant -eq 'Base')[0].Verdict | Should -Be 'Reference'
+			@($summary | Where-Object Variant -eq 'Near')[0].Effect | Should -Be 2
+			@($summary | Where-Object Variant -eq 'Near')[0].Verdict | Should -Be 'Noise'
+			@($summary | Where-Object Variant -eq 'Far')[0].Effect | Should -Be 40
+			@($summary | Where-Object Variant -eq 'Far')[0].Verdict | Should -Be 'Slower'
 		}
 
 		It "uses the given teardown instead of Kill-All" {

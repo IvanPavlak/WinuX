@@ -546,12 +546,14 @@ Get-WorkspaceBenchmark -Summary -Formatted
 **Solution:** Let `Measure-WorkspaceOpen` run the experiment. It tears down (`Kill-All -Skip Docker`), settles, puts one variant's values into the live configuration, opens through the real `Open-Workspace`, collects the row, and repeats in interleaved rounds so a slow hour hits every variant alike; warm-ups are discarded, every flag in effect is stamped on every row, and the configuration is restored at the end. The summary is per variant, by median, with `Clean` and `Retries` to read first:
 
 ```powershell
-Measure-WorkspaceOpen WinuX -DryRun                                    # the plan, nothing runs
-Measure-WorkspaceOpen WinuX                                            # Baseline + each flag flipped alone, 5 rounds
+Measure-WorkspaceOpen -DryRun                                          # the plan for the shipped Example workspace, nothing runs
+Measure-WorkspaceOpen WinuX                                            # your workspace: Baseline + each flag flipped alone, 5 rounds
+Measure-WorkspaceOpen FuturamaSoft Asseto -MaxMinutes 20               # a workspace that needs a project, with a time budget
 Measure-WorkspaceOpen WinuX -Setting FancyZonesApplyMethod -Runs 8     # one flag, File against Hotkeys
+Get-WorkspaceOpenMeasurement -Formatted                                # the table again, after the scrollback is gone
 ```
 
-Judge each flag by the phase it controls (`MedianFancyZones` for the apply method, `MedianWait` and `MedianPositionSnap` for pipelining, `MedianTotal` for the early preparation) and only then by the total. Run it from a terminal you can leave alone.
+Judge each flag by the phase it controls (`MedianFancyZones` for the apply method, `MedianWait` and `MedianPositionSnap` for pipelining, `MedianTotal` for the early preparation) and only then by the total; the `Verdict` column says `Noise` when the difference is smaller than the spread between opens of the same configuration. Run it from a terminal you can leave alone. The experiment's opens are tagged in `WorkspaceBenchmark.csv` and `Get-WorkspaceBenchmark` leaves them out of the everyday history unless asked (`-IncludeMeasured`).
 
 ### Layout File Not Found
 

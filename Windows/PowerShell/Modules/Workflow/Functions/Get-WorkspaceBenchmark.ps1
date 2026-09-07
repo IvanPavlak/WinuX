@@ -17,6 +17,11 @@ function Get-WorkspaceBenchmark {
 		and mode, the number of runs, average/min/max total, the average of every phase, the retries
 		and the runs that did not end Applied.
 
+		The opens Measure-WorkspaceOpen runs land in the same file, stamped with their session in
+		the Source column ("Measure-WorkspaceOpen <session>"). They are the experiment's, not your
+		day, so they are left out by default: -IncludeMeasured keeps them, -Source keeps only the
+		rows of the given source(s) - one session's rows, for instance.
+
 		The rows have more columns than PowerShell shows as a table by default, so pipe them to
 		Format-Table with the columns of interest - or pass -Formatted, which renders the standard
 		columns (Timestamp, Attempts, Outcome, TotalSeconds, ActionsSeconds, FancyZonesSeconds,
@@ -30,6 +35,13 @@ function Get-WorkspaceBenchmark {
 
 	.PARAMETER Last
 		Number of most recent runs to return, after filtering. 10 by default; 0 returns all.
+
+	.PARAMETER Source
+		Keep only the rows whose Source is one of these (a Measure-WorkspaceOpen session tag, for
+		instance). Implies -IncludeMeasured.
+
+	.PARAMETER IncludeMeasured
+		Also return the rows Measure-WorkspaceOpen recorded, which are left out by default.
 
 	.PARAMETER Summary
 		Aggregate per workspace and mode instead of returning the raw rows.
@@ -69,6 +81,12 @@ function Get-WorkspaceBenchmark {
 		[int]$Last = 10,
 
 		[Parameter()]
+		[string[]]$Source,
+
+		[Parameter()]
+		[switch]$IncludeMeasured,
+
+		[Parameter()]
 		[switch]$Summary,
 
 		[Parameter()]
@@ -102,6 +120,14 @@ function Get-WorkspaceBenchmark {
 
 	if ($Workspace) {
 		$rows = @($rows | Where-Object { $Workspace -contains $_.Workspace })
+	}
+
+	# The experiment's rows are not the day's history: out unless asked for.
+	if ($Source) {
+		$rows = @($rows | Where-Object { $Source -contains [string]$_.Source })
+	}
+	elseif (-not $IncludeMeasured) {
+		$rows = @($rows | Where-Object { [string]::IsNullOrEmpty([string]$_.Source) })
 	}
 
 	if ($Last -gt 0 -and $rows.Count -gt $Last) {

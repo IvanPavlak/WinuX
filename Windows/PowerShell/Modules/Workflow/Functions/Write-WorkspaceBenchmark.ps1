@@ -10,7 +10,9 @@ function Write-WorkspaceBenchmark {
 		(Get-WorkspaceLayoutTimings in the Window module), so the numbers a change is judged by
 		are measured rather than read off a stopwatch.
 
-		The row carries the timestamp, workspace, mode (Plain or Alongside), the layout outcome and
+		The row carries the timestamp, workspace, mode (Plain or Alongside), the source (empty for
+		an everyday open; Measure-WorkspaceOpen stamps its session on the opens it runs, so
+		Get-WorkspaceBenchmark can leave them out of the history), the layout outcome and
 		attempt count, the total, the seconds spent in the launch actions, in the layout action as
 		a whole, in each layout phase (Preamble, Desktops, FancyZones, Wait, Normalize, Position,
 		Snap, Verify, Retry, Save), the remainder (OtherSeconds - the open's own bookkeeping) and the
@@ -19,7 +21,8 @@ function Write-WorkspaceBenchmark {
 
 		The summary line lists the phases above 0.05 s, plus "retries N" when the layout needed
 		more than one attempt and the outcome when it is not Applied. Writing is best-effort: a
-		failure warns and never fails the open.
+		failure warns and never fails the open. A file written before the Source column existed
+		is upgraded in place on the next write - every existing row kept, the new column empty.
 
 	.PARAMETER Workspace
 		Workspace the row describes.
@@ -39,6 +42,11 @@ function Write-WorkspaceBenchmark {
 
 	.PARAMETER Alongside
 		Marks the row as an alongside open.
+
+	.PARAMETER Source
+		Who caused this open. Empty for an everyday open; Measure-WorkspaceOpen passes
+		"Measure-WorkspaceOpen <session>" through Configuration.WorkspaceBenchmark.Source so its
+		rows can be told apart from the history they land in.
 
 	.PARAMETER BenchmarkPath
 		Write to a different file. Defaults to Get-WorkspaceBenchmarkPath.
@@ -79,6 +87,9 @@ function Write-WorkspaceBenchmark {
 
 		[Parameter()]
 		[switch]$Alongside,
+
+		[Parameter()]
+		[string]$Source,
 
 		[Parameter()]
 		[string]$BenchmarkPath,
@@ -140,6 +151,7 @@ function Write-WorkspaceBenchmark {
 		Timestamp         = [DateTimeOffset]::Now.ToString('yyyy-MM-dd HH:mm:ss', $invariant)
 		Workspace         = $Workspace
 		Mode              = if ($Alongside) { 'Alongside' } else { 'Plain' }
+		Source            = [string]$Source
 		Outcome           = $outcome
 		Attempts          = $attempts
 		TotalSeconds      = [math]::Round($TotalSeconds, 2)
@@ -177,6 +189,26 @@ function Write-WorkspaceBenchmark {
 		if ($directory -and -not (Test-Path -LiteralPath $directory)) {
 			New-Item -ItemType Directory -Path $directory -Force -ErrorAction Stop | Out-Null
 		}
+
+		# A file from before a column was added has a shorter header, and Export-Csv -Append
+		# refuses a row that does not match it. Rewrite such a file once with today's columns -
+		# every existing row kept, the new columns empty - so nothing recorded is lost.
+		if (Test-Path -LiteralPath $BenchmarkPath) {
+			$header = Get-Content -LiteralPath $BenchmarkPath -TotalCount 1 -ErrorAction Stop
+			$existingColumns = @(($header -replace '"', '') -split ',')
+			$missingColumns = @($csvRow.Keys | Where-Object { $existingColumns -notcontains $_ })
+			if ($missingColumns.Count -gt 0) {
+				$upgraded = foreach ($existing in @(Import-Csv -LiteralPath $BenchmarkPath -ErrorAction Stop)) {
+					$copy = [ordered]@{}
+					foreach ($column in $csvRow.Keys) {
+						$copy[$column] = if ($existing.PSObject.Properties[$column]) { [string]$existing.$column } else { '' }
+					}
+					[PSCustomObject]$copy
+				}
+				@($upgraded) | Export-Csv -LiteralPath $BenchmarkPath -NoTypeInformation -Encoding UTF8 -ErrorAction Stop
+			}
+		}
+
 		[PSCustomObject]$csvRow | Export-Csv -LiteralPath $BenchmarkPath -Append -NoTypeInformation -Encoding UTF8 -ErrorAction Stop
 	}
 	catch {

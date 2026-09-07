@@ -1728,6 +1728,9 @@
 	#               "Line"  => one "Timing [Workspace] => ..." line
 	#               "None"  => record only
 	#   Last    - how many recent runs the Table display shows.
+	#   Source  - stamped on every row written while set; leave it out. Measure-WorkspaceOpen
+	#             sets it for the duration of an experiment so Get-WorkspaceBenchmark can
+	#             leave the experiment's rows out of the everyday history.
 	#
 	# Hashtables deep-merge, so opting in from Configuration.local.psd1 needs only
 	# the flag; Display and Last fall through to the values below:

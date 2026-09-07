@@ -488,6 +488,7 @@ Opt-in measurement of every workspace open. When enabled, `Open-Workspace` times
 - `Enabled` - `$false` out of the box. `$true` records the row and shows the result after every open.
 - `Display` - what the end of an open shows: `"Table"` (the workspace's recent runs, exactly as `Get-WorkspaceBenchmark -Workspace <name> -Formatted` prints them - the default), `"Line"` (one `Timing [Workspace] => ...` line listing the phases above 0.05 s, with `retries N` when the layout needed more than one attempt), or `"None"` (record only).
 - `Last` - how many recent runs the `Table` display shows (`10`).
+- `Source` - stamped on every row written while it is set (empty in the base and normally left so). `Measure-WorkspaceOpen` sets it to `Measure-WorkspaceOpen <session>` for the duration of an experiment, which is how `Get-WorkspaceBenchmark` tells the experiment's rows from your everyday opens and leaves them out unless asked (`-IncludeMeasured`).
 
 **Consumer function:** `Open-Workspace` (records through `Write-WorkspaceBenchmark`, shows through `Get-WorkspaceBenchmark`)
 
@@ -501,7 +502,7 @@ WorkspaceBenchmark = @{
 }
 ```
 
-The history can be read at any time with `Get-WorkspaceBenchmark` (`-Workspace`, `-Last`, `-Summary`, `-Formatted`), whether or not the automatic display is on. The rows are per-machine measurements and the file is git-ignored. To decide between configuration flags, do not compare rows by hand: `Measure-WorkspaceOpen` runs the interleaved experiment (teardown, settle, open, collect, repeat) and forces this key on for its duration, restoring it afterwards.
+The history can be read at any time with `Get-WorkspaceBenchmark` (`-Workspace`, `-Last`, `-Summary`, `-Formatted`), whether or not the automatic display is on. The rows are per-machine measurements and the file is git-ignored. To decide between configuration flags, do not compare rows by hand: `Measure-WorkspaceOpen` runs the interleaved experiment (teardown, settle, open, collect, repeat) on the shipped `Example` workspace or one of yours, forces this key on for its duration (with `Display = "None"` and a `Source` tag), restores it afterwards, and its table can be replayed with `Get-WorkspaceOpenMeasurement`.
 
 ### Workspace Actions
 

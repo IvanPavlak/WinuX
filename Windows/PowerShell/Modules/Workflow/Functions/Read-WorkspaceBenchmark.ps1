@@ -7,7 +7,8 @@ function Read-WorkspaceBenchmark {
 		The read side shared by Get-WorkspaceBenchmark and Measure-WorkspaceOpen. Import-Csv yields
 		strings; the numbers were written culture-invariant by Write-WorkspaceBenchmark, so they
 		parse the same way on every machine. Every seconds column becomes a double and Attempts an
-		int; an unparseable cell reads as 0 rather than failing the whole read. Rows come back sorted
+		int; an unparseable cell reads as 0 rather than failing the whole read. A row written before
+		the Source column existed reads with an empty Source. Rows come back sorted
 		by Timestamp (written as yyyy-MM-dd HH:mm:ss, so a string sort is chronological), with rows
 		written within the same second kept in file order.
 
@@ -65,6 +66,7 @@ function Read-WorkspaceBenchmark {
 
 			$typed[$name] = $value
 		}
+		if (-not $typed.Contains('Source')) { $typed['Source'] = '' }
 		[PSCustomObject]$typed
 	}
 

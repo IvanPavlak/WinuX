@@ -21,6 +21,12 @@ function Measure-WorkspaceOpen {
 		everybody. Every configuration key the experiment touched is restored when it ends, whether
 		it finished or was interrupted.
 
+		The workspace defaults to Example, which ships with WinuX (WorkspaceActions and its layout
+		files), so the experiment runs on a fresh install without anything defined first. Any
+		configured workspace works; one whose Open-Project action needs a project takes it
+		positionally, like Open-Workspace does ("Measure-WorkspaceOpen FuturamaSoft Asseto"), and
+		anything further on the command line is forwarded to Open-Workspace unchanged.
+
 		Which variants run:
 		  - Without -Variant, the one-factor-at-a-time set over -Setting (all three layout flags by
 		    default): the current configuration as "Baseline", plus one variant per setting with
@@ -30,25 +36,46 @@ function Measure-WorkspaceOpen {
 		    value is what the run gets; an optional Name key labels the variant. Any key works, not
 		    only the three layout flags, so a delay or a retry count can be compared the same way.
 
-		Every measured run is appended to WorkspaceOpenMeasurements.csv beside the benchmark file:
-		the session id, variant name, round, the three layout flags as they were in effect, the
-		variant's own overrides, and the whole benchmark row. Nothing is thrown away - a run whose
-		open produced no benchmark row is recorded with Outcome NoRow, one that threw with Error.
+		Every measured run is appended to WorkspaceOpenMeasurements.csv beside the benchmark file
+		(Get-WorkspaceOpenMeasurementPath): the session id, variant name, round, the project, the
+		three layout flags as they were in effect, the variant's own overrides, and the whole
+		benchmark row. Nothing is thrown away - a run whose open produced no benchmark row is
+		recorded with Outcome NoRow, one that threw with Error. The benchmark rows the opens append
+		to WorkspaceBenchmark.csv carry Source "Measure-WorkspaceOpen <session>", so
+		Get-WorkspaceBenchmark leaves them out of the everyday history unless asked
+		(-IncludeMeasured).
 
-		The result is one summary per variant, printed as a table and returned as objects: the
-		number of measured runs, how many ended Applied on the first attempt, the retries, the
-		median/min/max total, and the medians of the phases the flags control (Layout, FancyZones,
-		Wait, Position+Snap, Verify), plus the median total over the clean runs only. Medians, not
-		averages - one 40-second outlier must not decide the experiment. Read Retries and Applied
-		before the seconds: a variant that wins the median by needing a retry every third run has
-		not won.
+		The result is one summary per variant, printed as a table and returned as objects
+		(ConvertTo-WorkspaceOpenSummary): the number of measured runs, how many ended Applied on the
+		first attempt, the retries, the median/min/max total, the medians of the phases the flags
+		control (Layout, FancyZones, Wait, Position+Snap, Verify), the median total over the clean
+		runs only, and - against the first variant - Effect (seconds, negative is faster), Spread
+		(the variant's own clean-run range) and a Verdict: Noise when the effect is inside the
+		within-variant scatter, Faster or Slower otherwise. Medians, not averages - one 40-second
+		outlier must not decide the experiment. Read Retries and Applied before the seconds: a
+		variant that wins the median by needing a retry every third run has not won. The table can
+		be replayed later with Get-WorkspaceOpenMeasurement -Session <id>.
 
 		Refuses to run a workspace whose actions include Terminate-WindowsTerminalTabs -OnlyCurrent
 		or -IncludeCurrent, because that action ends the calling process and would end the
-		experiment with it. -DryRun prints the plan (variants, order, opens) and changes nothing.
+		experiment with it, and a workspace whose Open-Project action has no project when -Project
+		was not given, because every open would stop at the project menu. -MaxMinutes stops
+		scheduling new opens once the budget is spent and summarizes what ran. -DryRun prints the
+		plan (variants, order, opens) and changes nothing.
 
 	.PARAMETER Workspace
-		The workspace to open. Must be configured in WorkspaceActions.
+		The workspace to open. Must be configured in WorkspaceActions. Example by default - the
+		workspace that ships with WinuX.
+
+	.PARAMETER Project
+		Project name(s) handed to Open-Workspace -Project, so a workspace whose Open-Project action
+		would otherwise show a selection menu opens the same project(s) on every run without a
+		prompt. Positional, like in Open-Workspace: "Measure-WorkspaceOpen FuturamaSoft Asseto".
+
+	.PARAMETER ExtraArgs
+		Everything else on the command line is forwarded to Open-Workspace unchanged, which
+		forwards it to the actions that declare the parameter - the same way
+		"Open-Workspace FuturamaSoft Asseto run" does. The values are not varied between runs.
 
 	.PARAMETER Runs
 		Measured opens per variant. 5 by default.
@@ -81,12 +108,16 @@ function Measure-WorkspaceOpen {
 	.PARAMETER Seed
 		Seed for -Order Shuffled.
 
+	.PARAMETER MaxMinutes
+		Time budget for the whole experiment. Once it is spent no further open is started; the
+		opens that ran are summarized and the ones that did not are reported. 0 (no budget) by
+		default.
+
 	.PARAMETER DryRun
 		Print the plan and return it without opening, tearing down or touching the configuration.
 
 	.PARAMETER ResultPath
-		Write the per-run rows to a different file. Defaults to WorkspaceOpenMeasurements.csv next
-		to the benchmark file.
+		Write the per-run rows to a different file. Defaults to Get-WorkspaceOpenMeasurementPath.
 
 	.PARAMETER BenchmarkPath
 		Read the benchmark rows from a different file. Defaults to Get-WorkspaceBenchmarkPath.
@@ -97,19 +128,23 @@ function Measure-WorkspaceOpen {
 
 	.PARAMETER PassThru
 		Return the per-run rows in addition to the summary, as the Runs property of a single
-		result object with Summary and Runs.
+		result object with Session, Summary and Runs.
 
 	.EXAMPLE
-		Measure-WorkspaceOpen WinuX
-		# 1 warm-up, then 5 rounds of Baseline + each layout flag flipped alone: 21 opens.
+		Measure-WorkspaceOpen
+		# The shipped Example workspace: 1 warm-up, then 5 rounds of Baseline + each layout flag flipped alone (21 opens).
+
+	.EXAMPLE
+		Measure-WorkspaceOpen FuturamaSoft Asseto
+		# A workspace whose Open-Project action needs a project: every open gets Asseto, no menu.
 
 	.EXAMPLE
 		Measure-WorkspaceOpen WinuX -Setting FancyZonesApplyMethod -Runs 8
 		# Only File against Hotkeys, 8 measured opens each, interleaved.
 
 	.EXAMPLE
-		Measure-WorkspaceOpen WinuX -FullFactorial -Runs 3
-		# All 8 combinations of the three flags, 3 opens each.
+		Measure-WorkspaceOpen WinuX -FullFactorial -Runs 3 -MaxMinutes 30
+		# All 8 combinations of the three flags, 3 opens each, but stop starting opens after half an hour.
 
 	.EXAMPLE
 		Measure-WorkspaceOpen WinuX -Variant @{ Name = 'Current' }, @{ Name = 'AllOff'; FancyZonesApplyMethod = 'Hotkeys'; WorkspaceLayoutPipelining = $false; WorkspaceLayoutPrepareEarly = $false }
@@ -121,8 +156,14 @@ function Measure-WorkspaceOpen {
 	[CmdletBinding()]
 	[OutputType([pscustomobject])]
 	param (
-		[Parameter(Mandatory = $true, Position = 0)]
-		[string]$Workspace,
+		[Parameter(Position = 0)]
+		[string]$Workspace = 'Example',
+
+		[Parameter(Position = 1)]
+		[string[]]$Project,
+
+		[Parameter(ValueFromRemainingArguments = $true)]
+		[object[]]$ExtraArgs,
 
 		[Parameter()]
 		[ValidateRange(1, 200)]
@@ -155,6 +196,10 @@ function Measure-WorkspaceOpen {
 
 		[Parameter()]
 		[int]$Seed,
+
+		[Parameter()]
+		[ValidateRange(0, 1440)]
+		[double]$MaxMinutes = 0,
 
 		[Parameter()]
 		[switch]$DryRun,
@@ -192,7 +237,8 @@ function Measure-WorkspaceOpen {
 	$workspaceActions = $null
 	if ($Configuration.WorkspaceActions) { $workspaceActions = $Configuration.WorkspaceActions[$Workspace] }
 	if (-not $workspaceActions) {
-		Write-LogError "Workspace [$Workspace] is not configured in WorkspaceActions." -NoLeadingNewline
+		$configured = if ($Configuration.WorkspaceActions) { @($Configuration.WorkspaceActions.Keys | Sort-Object) -join ', ' } else { 'none' }
+		Write-LogError "Workspace [$Workspace] is not configured in WorkspaceActions (configured: $configured)." -NoLeadingNewline
 		return
 	}
 
@@ -204,6 +250,20 @@ function Measure-WorkspaceOpen {
 		if ($parameters -and (($parameters.ContainsKey('OnlyCurrent') -and $parameters['OnlyCurrent']) -or ($parameters.ContainsKey('IncludeCurrent') -and $parameters['IncludeCurrent']))) {
 			Write-LogError "Workspace [$Workspace] ends with Terminate-WindowsTerminalTabs -OnlyCurrent/-IncludeCurrent, which exits the calling shell - it cannot be measured in a loop." -NoLeadingNewline
 			return
+		}
+	}
+
+	# An Open-Project action with no project of its own asks for one at a menu, and the
+	# experiment would stall there on every open unless -Project supplies it.
+	if (-not $Project) {
+		foreach ($action in @($workspaceActions)) {
+			if ($action.Action -ne 'Open-Project') { continue }
+			$parameters = $action.Parameters
+			$hasProject = $parameters -and $parameters.ContainsKey('Project') -and -not [string]::IsNullOrWhiteSpace([string]($parameters['Project'] -join ''))
+			if (-not $hasProject) {
+				Write-LogError "Workspace [$Workspace] has an Open-Project action without a project, so every open would stop at the project menu - pass the project: Measure-WorkspaceOpen $Workspace <Project>." -NoLeadingNewline
+				return
+			}
 		}
 	}
 
@@ -332,7 +392,11 @@ function Measure-WorkspaceOpen {
 		}
 	}
 
-	Write-LogStep " Workspace [$Workspace] => $($variants.Count) variant(s), $Runs run(s) each, $WarmUp warm-up(s): $($schedule.Count) opens, $Order order"
+	$openLabel = $Workspace
+	if ($Project) { $openLabel += " -Project $($Project -join ', ')" }
+	if ($ExtraArgs) { $openLabel += " $($ExtraArgs -join ' ')" }
+	$budgetLabel = if ($MaxMinutes -gt 0) { ", $($MaxMinutes.ToString('0.##', $invariant)) minute budget" } else { '' }
+	Write-LogStep " Workspace [$openLabel] => $($variants.Count) variant(s), $Runs run(s) each, $WarmUp warm-up(s): $($schedule.Count) opens, $Order order$budgetLabel"
 	foreach ($entry in $variants) {
 		$detail = if ($entry.Overrides.Count -gt 0) { & $describeOverrides $entry.Overrides } else { 'current configuration' }
 		Write-LogStep "   [$($entry.Name)] => $detail"
@@ -386,21 +450,41 @@ function Measure-WorkspaceOpen {
 		foreach ($key in $Entry.Overrides.Keys) { $Configuration[$key] = $Entry.Overrides[$key] }
 	}
 
+	# The same open every time: the workspace, the project(s) and whatever else was on the
+	# command line, exactly as Open-Workspace would have received them when typed directly.
+	$openArguments = @{ Workspace = $Workspace }
+	if ($Project) { $openArguments['Project'] = $Project }
+	$openExtraArgs = @($ExtraArgs)
+
 	$sessionId = [DateTimeOffset]::Now.ToString('yyyyMMdd-HHmmss', $invariant)
+	# Stamped on every benchmark row the opens append, so the everyday history can leave the
+	# experiment's rows out (Get-WorkspaceBenchmark) and this loop can pick its own row back up.
+	$sourceTag = "Measure-WorkspaceOpen $sessionId"
 	$runRows = [System.Collections.Generic.List[pscustomobject]]::new()
 	$benchmarkColumns = @(
 		'Timestamp', 'Mode', 'Outcome', 'Attempts', 'TotalSeconds', 'ActionsSeconds', 'LayoutSeconds',
 		'PreambleSeconds', 'DesktopsSeconds', 'FancyZonesSeconds', 'WaitSeconds', 'NormalizeSeconds',
 		'PositionSeconds', 'SnapSeconds', 'VerifySeconds', 'RetrySeconds', 'SaveSeconds', 'OtherSeconds', 'Actions'
 	)
+	$experimentClock = [System.Diagnostics.Stopwatch]::StartNew()
+	$skippedForBudget = 0
 
 	try {
 		# Record every open, show nothing per open - the summary at the end is the display.
-		$Configuration['WorkspaceBenchmark'] = @{ Enabled = $true; Display = 'None' }
+		$Configuration['WorkspaceBenchmark'] = @{ Enabled = $true; Display = 'None'; Source = $sourceTag }
 
 		$position = 0
 		foreach ($step in $schedule) {
 			$position++
+
+			# The budget is checked before an open starts, never in the middle of one: the open
+			# that is running always finishes and is recorded.
+			if ($MaxMinutes -gt 0 -and $position -gt 1 -and $experimentClock.Elapsed.TotalMinutes -ge $MaxMinutes) {
+				$skippedForBudget = $schedule.Count - $position + 1
+				Write-LogWarning "Time budget of $($MaxMinutes.ToString('0.##', $invariant)) minute(s) spent after $($position - 1) of $($schedule.Count) opens - the remaining $skippedForBudget did not run."
+				break
+			}
+
 			$entry = $step.Variant
 			$label = if ($step.Measured) { "round $($step.Round)" } else { 'warm-up' }
 			Write-LogStep " Open $position/$($schedule.Count) => [$($entry.Name)] $label"
@@ -413,14 +497,18 @@ function Measure-WorkspaceOpen {
 			$rowsBefore = @(Read-WorkspaceBenchmark -BenchmarkPath $BenchmarkPath).Count
 			$clock = [System.Diagnostics.Stopwatch]::StartNew()
 			$openError = $null
-			try { Open-Workspace -Workspace $Workspace | Out-Null } catch { $openError = $_.Exception.Message }
+			try { Open-Workspace @openArguments @openExtraArgs | Out-Null } catch { $openError = $_.Exception.Message }
 			$clock.Stop()
 
 			$benchmarkRow = $null
 			try {
 				$rowsAfter = @(Read-WorkspaceBenchmark -BenchmarkPath $BenchmarkPath)
 				if ($rowsAfter.Count -gt $rowsBefore) {
-					$benchmarkRow = @($rowsAfter | Select-Object -Skip $rowsBefore | Where-Object { $_.Workspace -eq $Workspace }) | Select-Object -Last 1
+					# Only the rows this open appended, for this workspace, and - when the writer
+					# stamped one - carrying this session's tag.
+					$benchmarkRow = @($rowsAfter | Select-Object -Skip $rowsBefore | Where-Object {
+							$_.Workspace -eq $Workspace -and ([string]::IsNullOrEmpty([string]$_.Source) -or [string]$_.Source -eq $sourceTag)
+						}) | Select-Object -Last 1
 				}
 			}
 			catch { Write-LogWarning "Could not read the benchmark rows after open $position => $($_.Exception.Message)" }
@@ -428,6 +516,7 @@ function Measure-WorkspaceOpen {
 			$row = [ordered]@{
 				Session   = $sessionId
 				Workspace = $Workspace
+				Project   = ($Project -join ' ')
 				Variant   = $entry.Name
 				Round     = $step.Round
 				Measured  = $step.Measured
@@ -478,44 +567,12 @@ function Measure-WorkspaceOpen {
 	}
 
 	# ---- Summary --------------------------------------------------------------------------------
-	$median = {
-		param([double[]]$Values)
-		$sorted = @($Values | Sort-Object)
-		if ($sorted.Count -eq 0) { return 0.0 }
-		$middle = [int][math]::Floor($sorted.Count / 2)
-		$result = if ($sorted.Count % 2 -eq 1) { $sorted[$middle] } else { ($sorted[$middle - 1] + $sorted[$middle]) / 2 }
-		return [math]::Round([double]$result, 2)
-	}
-
-	$measuredRows = @($runRows | Where-Object Measured)
-	$summaries = foreach ($entry in $variants) {
-		$items = @($measuredRows | Where-Object { $_.Variant -eq $entry.Name })
-		if ($items.Count -eq 0) { continue }
-		$clean = @($items | Where-Object { $_.Outcome -eq 'Applied' -and [int]$_.Attempts -eq 1 })
-		$totals = [double[]]@($items | ForEach-Object { [double]$_.TotalSeconds })
-
-		[PSCustomObject]@{
-			Variant            = $entry.Name
-			Runs               = $items.Count
-			Clean              = $clean.Count
-			Retries            = [int](@($items | ForEach-Object { [math]::Max(0, [int]$_.Attempts - 1) }) | Measure-Object -Sum).Sum
-			NotApplied         = @($items | Where-Object { $_.Outcome -ne 'Applied' }).Count
-			MedianTotal        = & $median $totals
-			CleanMedianTotal   = & $median ([double[]]@($clean | ForEach-Object { [double]$_.TotalSeconds }))
-			MinTotal           = [math]::Round(($totals | Measure-Object -Minimum).Minimum, 2)
-			MaxTotal           = [math]::Round(($totals | Measure-Object -Maximum).Maximum, 2)
-			MedianLayout       = & $median ([double[]]@($items | ForEach-Object { [double]$_.LayoutSeconds }))
-			MedianFancyZones   = & $median ([double[]]@($items | ForEach-Object { [double]$_.FancyZonesSeconds }))
-			MedianWait         = & $median ([double[]]@($items | ForEach-Object { [double]$_.WaitSeconds }))
-			MedianPositionSnap = & $median ([double[]]@($items | ForEach-Object { [double]$_.PositionSeconds + [double]$_.SnapSeconds }))
-			MedianVerify       = & $median ([double[]]@($items | ForEach-Object { [double]$_.VerifySeconds }))
-			Settings           = if ($entry.Overrides.Count -gt 0) { & $describeOverrides $entry.Overrides } else { 'current configuration' }
-		}
-	}
-	$summaries = @($summaries)
+	# Shared with Get-WorkspaceOpenMeasurement, so the table replayed from the file later is the
+	# table printed here. The reference is the first variant - Baseline in the default set.
+	$summaries = @(ConvertTo-WorkspaceOpenSummary -Row @($runRows) -Reference $variants[0].Name)
 
 	if ($summaries.Count -gt 0) {
-		$summaries | Format-Table -Property Variant, Runs, Clean, Retries, NotApplied, MedianTotal, CleanMedianTotal, MinTotal, MaxTotal, MedianLayout, MedianFancyZones, MedianWait, MedianPositionSnap, MedianVerify -AutoSize | Out-Host
+		$summaries | Format-Table -Property Variant, Runs, Clean, Retries, NotApplied, MedianTotal, CleanMedianTotal, MinTotal, MaxTotal, Effect, Spread, Verdict, MedianLayout, MedianFancyZones, MedianWait, MedianPositionSnap, MedianVerify -AutoSize | Out-Host
 
 		$ranked = @($summaries | Sort-Object -Property @{ Expression = 'CleanMedianTotal' }, @{ Expression = 'MedianTotal' })
 		$fastest = @($ranked | Where-Object { $_.Clean -gt 0 }) | Select-Object -First 1
@@ -523,14 +580,30 @@ function Measure-WorkspaceOpen {
 			$caveat = if ($fastest.Retries -gt 0 -or $fastest.NotApplied -gt 0) { " - but it needed $($fastest.Retries) retr$(if ($fastest.Retries -eq 1) { 'y' } else { 'ies' }) and $($fastest.NotApplied) run(s) did not end Applied" } else { '' }
 			Write-LogSuccess "Fastest clean median: [$($fastest.Variant)] at $($fastest.CleanMedianTotal.ToString('0.0', $invariant)) s over $($fastest.Clean) clean run(s)$caveat"
 		}
-		Write-LogStep " Per-run rows => [$ResultPath] (session $sessionId)"
+
+		$compared = @($summaries | Where-Object { $_.Verdict -ne 'Reference' })
+		if ($compared.Count -gt 0) {
+			$noise = @($compared | Where-Object { $_.Verdict -eq 'Noise' })
+			$reference = @($summaries | Where-Object { $_.Verdict -eq 'Reference' })[0]
+			if ($noise.Count -eq $compared.Count) {
+				Write-LogStep " Verdict => every variant is within the noise of [$($reference.Variant)]: the differences are smaller than the spread between opens of the same configuration. More runs per variant would be needed to see anything finer."
+			}
+			else {
+				$decided = @($compared | Where-Object { $_.Verdict -ne 'Noise' } | ForEach-Object { "[$($_.Variant)] $($_.Verdict.ToLower()) by $([math]::Abs($_.Effect).ToString('0.0', $invariant)) s" })
+				Write-LogStep " Verdict => $($noise.Count) of $($compared.Count) variant(s) within the noise of [$($reference.Variant)]; $($decided -join ', ')"
+			}
+		}
+		if ($skippedForBudget -gt 0) {
+			Write-LogWarning "Partial experiment: $skippedForBudget planned open(s) did not run because of -MaxMinutes - the variants may have unequal run counts."
+		}
+		Write-LogStep " Per-run rows => [$ResultPath] (session $sessionId; replay with Get-WorkspaceOpenMeasurement -Session $sessionId -Formatted)"
 	}
 	else {
 		Write-LogWarning "No measured run produced a result."
 	}
 
 	if ($PassThru) {
-		return [PSCustomObject]@{ Summary = $summaries; Runs = @($runRows) }
+		return [PSCustomObject]@{ Session = $sessionId; Summary = $summaries; Runs = @($runRows) }
 	}
 	return $summaries
 }
