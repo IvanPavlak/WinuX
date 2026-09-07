@@ -11,6 +11,7 @@ This function reads no `Configuration.psd1` keys. There is nothing to configure.
 ```powershell
 Run-Tests
 Run-Tests -TestName "Open-Terminal"
+Run-Tests -TestName "Open-Terminal", "Close-Workspace"
 Run-Tests -Detailed
 ```
 
