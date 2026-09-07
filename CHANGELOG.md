@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.53] - 2026-09-07
+
+### Fixed
+
+- **`Get-TerminalCellSize` (System module) no longer lets keystrokes typed into a loading Windows Terminal tab break the fastfetch image logo or leak the terminal's reply onto the prompt.** A tab opened with Win+<number> accepts input long before the profile runs, so anything typed while it loaded was already queued in the console input buffer when the startup `fastfetch` call asked the terminal for its cell size (`CSI 16 t`). The reply was read from that same buffer and the read stopped at the first `t` it met, which in `github` is the one in `git`: the measurement failed, `Get-FastfetchLogoArgument` fell back to the text logo, and the real `CSI 6 ; 20 ; 10 t` reply stayed queued for PSReadLine to print as `hub[6;20;10t` at the prompt. The buffer is now drained before the query - the typed-ahead characters are discarded and a debug line records how many, the deliberate price of a panel that never carries garbage - and the read stops only when the complete `CSI 6 ; height ; width t` report has arrived, so a stray `t` typed mid-round-trip cannot end it either. The parsing lives in two private helpers next to the function, `Test-TerminalCellSizeReply` and `ConvertFrom-TerminalCellSizeReply`, which `Get-TerminalCellSize.Tests.ps1` pins: the full report with characters queued before and after it, a word that merely ends in `t`, a report still arriving, the other XTWINOPS reports (`CSI 4 t`, `CSI 8 t`) that must not be mistaken for it, the height-first transposition and the degenerate-cell rejection. Documented in `docs/modules/system.md` and `docs/reference/troubleshooting.md`.
+
 ## [0.1.52] - 2026-09-04
 
 ### Added
@@ -934,7 +940,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.52...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.53...HEAD
+[0.1.53]: https://github.com/IvanPavlak/WinuX/compare/v0.1.52...v0.1.53
 [0.1.52]: https://github.com/IvanPavlak/WinuX/compare/v0.1.51...v0.1.52
 [0.1.51]: https://github.com/IvanPavlak/WinuX/compare/v0.1.50...v0.1.51
 [0.1.50]: https://github.com/IvanPavlak/WinuX/compare/v0.1.49...v0.1.50
