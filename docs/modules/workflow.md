@@ -473,6 +473,49 @@ Get-Content (Get-WorkspaceStatePath)
 
 **See also:** [Get-WorkspaceState](#get-workspacestate), [Save-WorkspaceState](#save-workspacestate), [Get-RepositoryPath](helper.md#get-repositorypath)
 
+## [Measure-WorkspaceOpen](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Workflow/Functions/Measure-WorkspaceOpen.ps1)
+
+- **Description:** The controlled experiment behind the `Open-Workspace` speed work: opens one workspace many times under alternating configuration variants and compares them. A single benchmark row cannot say whether a flag made an open faster, because the spread between two opens of the same configuration (a cold browser start against a warm one, a layout retry) is larger than any flag's effect, and comparing by hand means remembering which flag was on for which row and tearing down the same way every time. This function does the whole protocol itself. For every run it tears the machine down (`Kill-All -Skip Docker` by default, `-Teardown` for anything else), waits `-SettleSeconds`, puts the variant's values into the live configuration, opens the workspace through the real [Open-Workspace](#open-workspace) and takes the benchmark row that open appended ([Read-WorkspaceBenchmark](#read-workspacebenchmark)). Runs are **interleaved** by default - round 1 of every variant, then round 2 - so a slow hour hits every variant alike; `-Order Shuffled` randomizes each round (`-Seed` for reproducibility) and `-Order Sequential` is the order humans use and the one the experiment exists to avoid. `-WarmUp` opens (one by default) run first under the baseline and are recorded but never counted. Every configuration key the experiment touched is restored when it ends, finished or interrupted. Which variants run: without `-Variant`, the one-factor-at-a-time set over `-Setting` (all three layout flags by default) - the current configuration as `Baseline` plus one variant per setting with only that setting flipped; `-FullFactorial` runs every combination instead; `-Variant` runs exactly the hashtables given (configuration key to value, optional `Name`; any key, not only the three flags). Every open is appended to `WorkspaceOpenMeasurements.csv` beside the benchmark file with the session id, variant, round, the three flags in effect and the whole benchmark row - an open that produced no row is kept as `NoRow`, one that threw as `Error`. The result is one summary per variant, printed and returned: measured runs, `Clean` (ended `Applied` on the first attempt), `Retries`, `NotApplied`, median/min/max total, the median total over the clean runs only, and the medians of the phases the flags control (`Layout`, `FancyZones`, `Wait`, `Position+Snap`, `Verify`). Medians, not averages, so one 40-second outlier does not decide the experiment; read `Retries` and `Clean` before the seconds, because a variant that wins the median by needing a retry every third run has not won. Refuses a workspace whose actions include `Terminate-WindowsTerminalTabs -OnlyCurrent`/`-IncludeCurrent` (it would end the calling process and the experiment with it). `-DryRun` prints the plan and changes nothing. Run it from a terminal you can leave alone: every open launches and lays out the whole workspace.
+- **Parameters:** -Workspace, -Runs, -Setting, -FullFactorial, -Variant, -WarmUp, -SettleSeconds, -Teardown, -Order, -Seed, -DryRun, -ResultPath, -BenchmarkPath, -Configuration, -PassThru
+- **Usage:** `Measure-WorkspaceOpen WinuX`, `Measure-WorkspaceOpen WinuX -Setting FancyZonesApplyMethod -Runs 8`, `Measure-WorkspaceOpen WinuX -FullFactorial -Runs 3`, `Measure-WorkspaceOpen WinuX -DryRun`
+
+| Parameter        | Description                                                                                                                                  |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `-Workspace`     | The workspace to open. Must be configured in `WorkspaceActions`.                                                                             |
+| `-Runs`          | Measured opens per variant. `5` by default.                                                                                                  |
+| `-Setting`       | Layout flags to vary when `-Variant` is not given: `FancyZonesApplyMethod`, `WorkspaceLayoutPipelining`, `WorkspaceLayoutPrepareEarly`. All three by default. |
+| `-FullFactorial` | Every combination of the `-Setting` values instead of one flipped at a time.                                                                 |
+| `-Variant`       | Explicit variants: one hashtable each, configuration key to value, optional `Name`.                                                          |
+| `-WarmUp`        | Opens run first under the baseline and excluded from every summary. `1` by default.                                                          |
+| `-SettleSeconds` | Pause between teardown and the next open. `5` by default.                                                                                    |
+| `-Teardown`      | Script block run before every open. `{ Kill-All -Skip Docker }` by default.                                                                  |
+| `-Order`         | `Interleaved` (default), `Shuffled` or `Sequential`.                                                                                         |
+| `-Seed`          | Seed for `-Order Shuffled`.                                                                                                                  |
+| `-DryRun`        | Print the plan and return it; open nothing, change nothing.                                                                                  |
+| `-ResultPath`    | Per-run rows file. Defaults to `WorkspaceOpenMeasurements.csv` beside the benchmark file.                                                    |
+| `-BenchmarkPath` | Benchmark file to read the rows from. Defaults to `Get-WorkspaceBenchmarkPath`.                                                             |
+| `-Configuration` | The hashtable to modify and restore. Defaults to `$global:Configuration`.                                                                    |
+| `-PassThru`      | Return one object with `Summary` and `Runs` (every per-run row) instead of the summary alone.                                                 |
+
+```powershell
+# What would run, in which order, and how many opens that is
+Measure-WorkspaceOpen WinuX -DryRun
+
+# The default experiment: 1 warm-up, then 5 rounds of Baseline + each flag flipped alone (21 opens)
+Measure-WorkspaceOpen WinuX
+
+# One question only: does the applied-layouts.json write beat the hotkeys? 8 opens each, interleaved
+Measure-WorkspaceOpen WinuX -Setting FancyZonesApplyMethod -Runs 8
+
+# Two hand-picked configurations
+Measure-WorkspaceOpen WinuX -Runs 6 -Variant @{ Name = 'Current' }, @{ Name = 'AllOff'; FancyZonesApplyMethod = 'Hotkeys'; WorkspaceLayoutPipelining = $false; WorkspaceLayoutPrepareEarly = $false }
+
+# Every row of every session, for your own analysis
+Import-Csv (Join-Path (Split-Path (Get-WorkspaceBenchmarkPath)) 'WorkspaceOpenMeasurements.csv') | Group-Object Session, Variant
+```
+
+**See also:** [Get-WorkspaceBenchmark](#get-workspacebenchmark), [Read-WorkspaceBenchmark](#read-workspacebenchmark), [Write-WorkspaceBenchmark](#write-workspacebenchmark), [Open-Workspace](#open-workspace), [Kill-All](system.md#kill-all), [Apply-FancyZones](window.md#apply-fancyzones), [Set-WorkspaceWindowLayout](window.md#set-workspacewindowlayout)
+
 ## [Open-DnD](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Workflow/Functions/Open-DnD.ps1)
 
 - **Description:** Opens the full D&D campaign workspace for a tabletop RPG session: the Obsidian vault with campaign notes, the rulebook PDF in Acrobat, and the spell/resource URLs in the browser. The campaign is chosen from the `Campaigns` array in `Configuration.psd1` via an interactive menu when not specified, and `-FoundryVTT` additionally launches the FoundryVTT game server.
@@ -692,6 +735,14 @@ Set-LogLevel Verbose { w MyWorkspace }
 ```
 
 **See also:** [Open-Project](workflow.md#open-project), [Close-Project](workflow.md#close-project), [Close-Workspace](#close-workspace), [Open-Browser](../modules/application.md), [Open-ProjectSwagger](#open-projectswagger), [Save-WorkspaceState](#save-workspacestate)
+
+## [Read-WorkspaceBenchmark](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Workflow/Functions/Read-WorkspaceBenchmark.ps1)
+
+- **Description:** The read side of the benchmark file, shared by [Get-WorkspaceBenchmark](#get-workspacebenchmark) and [Measure-WorkspaceOpen](#measure-workspaceopen) so the two can never disagree about a row. Reads `WorkspaceBenchmark.csv` ([Get-WorkspaceBenchmarkPath](#get-workspacebenchmarkpath), or `-BenchmarkPath`) and returns every row as an object with typed numbers - the seconds columns as doubles, `Attempts` as an int, parsed culture-invariant exactly as [Write-WorkspaceBenchmark](#write-workspacebenchmark) wrote them, an unparseable cell reading as `0` - sorted by `Timestamp`, with rows written within the same second kept in file order. A file that does not exist yet reads as an empty result; a file that cannot be read throws, so the caller decides how to report it. No filtering, no title, no warning: the callers add those.
+- **Parameters:** -BenchmarkPath
+- **Usage:** `Read-WorkspaceBenchmark | Where-Object Workspace -eq MyWorkspace | Select-Object -Last 1`, `@(Read-WorkspaceBenchmark).Count`
+
+**See also:** [Get-WorkspaceBenchmark](#get-workspacebenchmark), [Measure-WorkspaceOpen](#measure-workspaceopen), [Write-WorkspaceBenchmark](#write-workspacebenchmark), [Get-WorkspaceBenchmarkPath](#get-workspacebenchmarkpath)
 
 ## [Resolve-ProjectDockerCompose](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Workflow/Functions/Resolve-ProjectDockerCompose.ps1)
 

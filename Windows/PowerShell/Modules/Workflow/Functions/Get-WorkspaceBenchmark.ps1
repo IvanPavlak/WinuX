@@ -89,52 +89,20 @@ function Get-WorkspaceBenchmark {
 		return
 	}
 
-	$rawRows = @()
+	# The typed read (culture-invariant numbers, chronological order) lives in
+	# Read-WorkspaceBenchmark so Measure-WorkspaceOpen reads exactly the same rows.
+	$rows = @()
 	try {
-		$rawRows = @(Import-Csv -LiteralPath $BenchmarkPath -ErrorAction Stop)
+		$rows = @(Read-WorkspaceBenchmark -BenchmarkPath $BenchmarkPath)
 	}
 	catch {
 		Write-LogWarning "Could not read the workspace benchmark file [$BenchmarkPath]: $($_.Exception.Message)"
 		return
 	}
 
-	$integerColumns = @('Attempts')
-	$secondColumns = @(
-		'TotalSeconds', 'ActionsSeconds', 'LayoutSeconds', 'PreambleSeconds', 'DesktopsSeconds',
-		'FancyZonesSeconds', 'WaitSeconds', 'NormalizeSeconds', 'PositionSeconds', 'SnapSeconds',
-		'VerifySeconds', 'RetrySeconds', 'SaveSeconds', 'OtherSeconds'
-	)
-	$invariant = [System.Globalization.CultureInfo]::InvariantCulture
-
-	# Import-Csv yields strings; the numbers were written culture-invariant, so they parse the
-	# same way everywhere. An unparseable cell reads as 0 rather than failing the whole read.
-	$rows = foreach ($rawRow in $rawRows) {
-		$typed = [ordered]@{}
-		foreach ($property in $rawRow.PSObject.Properties) {
-			$name = $property.Name
-			$value = $property.Value
-
-			if ($secondColumns -contains $name -or $integerColumns -contains $name) {
-				$parsed = 0.0
-				if (-not [double]::TryParse([string]$value, [System.Globalization.NumberStyles]::Float, $invariant, [ref]$parsed)) {
-					$parsed = 0.0
-				}
-				$value = if ($integerColumns -contains $name) { [int]$parsed } else { [double]$parsed }
-			}
-
-			$typed[$name] = $value
-		}
-		[PSCustomObject]$typed
-	}
-	$rows = @($rows)
-
 	if ($Workspace) {
 		$rows = @($rows | Where-Object { $Workspace -contains $_.Workspace })
 	}
-
-	# Timestamps are written as yyyy-MM-dd HH:mm:ss, so a string sort is chronological. -Stable
-	# keeps rows written within the same second in file order.
-	$rows = @($rows | Sort-Object -Property Timestamp -Stable)
 
 	if ($Last -gt 0 -and $rows.Count -gt $Last) {
 		$rows = @($rows | Select-Object -Last $Last)

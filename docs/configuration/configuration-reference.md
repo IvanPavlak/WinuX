@@ -501,7 +501,7 @@ WorkspaceBenchmark = @{
 }
 ```
 
-The history can be read at any time with `Get-WorkspaceBenchmark` (`-Workspace`, `-Last`, `-Summary`, `-Formatted`), whether or not the automatic display is on. The rows are per-machine measurements and the file is git-ignored.
+The history can be read at any time with `Get-WorkspaceBenchmark` (`-Workspace`, `-Last`, `-Summary`, `-Formatted`), whether or not the automatic display is on. The rows are per-machine measurements and the file is git-ignored. To decide between configuration flags, do not compare rows by hand: `Measure-WorkspaceOpen` runs the interleaved experiment (teardown, settle, open, collect, repeat) and forces this key on for its duration, restoring it afterwards.
 
 ### Workspace Actions
 
@@ -1157,6 +1157,8 @@ Animation styles for long-running operations.
 - `WorkspaceLayoutPrepareEarly` - Whether `Open-Workspace` runs the layout preamble - the RPC probe, the layout file and its validation, the virtual desktop resize and the FancyZones zone layouts (`Set-WorkspaceWindowLayout -PrepareOnly`) - BEFORE the launch actions (`$true`, the shipped default) or leaves all of it to the layout action after them (`$false`). That work depends on no window and ran at 3.4 s under the start-up load of a dozen applications against 0.2 s idle; the layout action then finds the desktops and zone layouts in place and skips them. A window-only retry is never prepared, and a failed preparation leaves the action to do the work as before.
 
 `Test-FancyZonesConfiguration` validates all of these constraints (plus `custom-layouts.json` internal consistency) automatically at the start of every workspace open.
+
+Whether any of the three flags actually makes a workspace open faster on a given machine is a question for `Measure-WorkspaceOpen`, which opens the workspace under each value in interleaved rounds and compares medians, not for two opens compared by eye - the spread between two opens of the same configuration is larger than any flag's effect.
 
 **Consumer functions:** `Apply-FancyZones`, `Get-FancyZone`, `Open-Workspace`, `Set-WorkspaceWindowLayout`, `Test-FancyZonesConfiguration`
 

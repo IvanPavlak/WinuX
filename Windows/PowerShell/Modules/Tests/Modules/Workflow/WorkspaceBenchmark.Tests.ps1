@@ -6,6 +6,7 @@ BeforeAll {
 
 	. "$FunctionsPath\Get-WorkspaceBenchmarkPath.ps1"
 	. "$FunctionsPath\Write-WorkspaceBenchmark.ps1"
+	. "$FunctionsPath\Read-WorkspaceBenchmark.ps1"
 	. "$FunctionsPath\Get-WorkspaceBenchmark.ps1"
 
 	# The path resolver reaches into the Logging module and the tracker path helper; stub both
@@ -131,6 +132,44 @@ Describe "Write-WorkspaceBenchmark" {
 
 		$row.ActionsSeconds | Should -Be 0.5
 		$row.LayoutSeconds | Should -Be 21.5
+	}
+}
+
+Describe "Read-WorkspaceBenchmark" {
+	BeforeEach {
+		Mock Write-LogStep { }
+		Mock Write-LogWarning { }
+		$script:BenchmarkFile = Join-Path $TestDrive ("Benchmark_" + [guid]::NewGuid().ToString('N') + ".csv")
+	}
+
+	It "reads a missing file as an empty result" {
+		@(Read-WorkspaceBenchmark -BenchmarkPath $script:BenchmarkFile).Count | Should -Be 0
+	}
+
+	It "types the numbers and returns the rows oldest first" {
+		Write-WorkspaceBenchmark -Workspace 'B' -TotalSeconds 20.5 -BenchmarkPath $script:BenchmarkFile -Quiet -LayoutTimings (New-LayoutTimings -Attempts 2)
+		Write-WorkspaceBenchmark -Workspace 'A' -TotalSeconds 10 -BenchmarkPath $script:BenchmarkFile -Quiet
+		# An older timestamp appended later must still sort first.
+		$rows = @(Import-Csv -LiteralPath $script:BenchmarkFile)
+		$rows[1].Timestamp = '2000-01-01 00:00:00'
+		$rows | Export-Csv -LiteralPath $script:BenchmarkFile -NoTypeInformation -Encoding UTF8
+
+		$read = @(Read-WorkspaceBenchmark -BenchmarkPath $script:BenchmarkFile)
+
+		$read.Count | Should -Be 2
+		$read[0].Workspace | Should -Be 'A'
+		$read[1].Workspace | Should -Be 'B'
+		$read[1].TotalSeconds | Should -BeOfType [double]
+		$read[1].TotalSeconds | Should -Be 20.5
+		$read[1].Attempts | Should -BeOfType [int]
+		$read[1].Attempts | Should -Be 2
+	}
+
+	It "throws on a file it cannot read, leaving the caller to report it" {
+		Mock Import-Csv { throw "locked" }
+		Set-Content -LiteralPath $script:BenchmarkFile -Value 'x'
+
+		{ Read-WorkspaceBenchmark -BenchmarkPath $script:BenchmarkFile } | Should -Throw
 	}
 }
 
