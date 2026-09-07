@@ -365,7 +365,7 @@ Each returned object carries `Key` (the entry's own key), `FullKey` (the dotted 
 
 ## [Get-TerminalCellSize](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Get-TerminalCellSize.ps1)
 
-- **Description:** Reports the pixel width and height of one character cell by asking the terminal itself, with the XTWINOPS "report cell size" query (`CSI 16 t`), parsing the `CSI 6 ; height ; width t` reply. Returns `$null` - never throws - when the host has no console, when input or output is redirected, when no reply arrives before the timeout, or when the reply is degenerate. The reply is read from the console input buffer, so keystrokes typed during the round trip are discarded along with any other unrecognized input.
+- **Description:** Reports the pixel width and height of one character cell by asking the terminal itself, with the XTWINOPS "report cell size" query (`CSI 16 t`), parsing the `CSI 6 ; height ; width t` reply. Returns `$null` - never throws - when the host has no console, when input or output is redirected, when no reply arrives before the timeout, or when the reply is degenerate. The reply is read from the console input buffer, which is drained first: keystrokes typed into a Windows Terminal tab before its shell was ready would otherwise sit in front of the reply, and the read stops only on the complete `CSI 6 ; height ; width t` report - never on a stray `t` inside a typed word - so typing ahead can no longer fail the measurement or leak the reply onto the prompt. The typed-ahead characters are discarded, and the debug log records how many.
 - **Parameters:** `[-TimeoutMilliseconds]`
 - **Usage:** `Get-TerminalCellSize`, `Get-TerminalCellSize -TimeoutMilliseconds 500`
 
@@ -377,6 +377,14 @@ reports it correctly under a modern terminal - `GetCurrentConsoleFontEx()` works
 which is exactly why fastfetch cannot do this itself on Windows. Windows Terminal answers since
 1.22.2362.0, as do WezTerm, xterm and mlterm; everything else stays silent, costs the timeout once,
 and yields `$null`.
+
+The input buffer is not assumed to be empty. A Windows Terminal tab opened with Win+<number> accepts
+keystrokes long before the profile runs, so anything typed while the tab was loading is queued ahead
+of the reply. The function drains that input before it sends the query and then reads until the whole
+report has arrived; the alternative - a read that stops on the first `t` - turned `github` typed into
+a loading tab into a failed measurement, the text logo instead of the image, and `hub[6;20;10t` printed
+at the prompt. Losing the typed-ahead characters is the deliberate price of a clean panel; the shell is
+ready to type into the moment the prompt appears.
 
 | Parameter | Description |
 | --------- | ----------- |

@@ -672,12 +672,30 @@ The reasons, all of them deliberate:
 | `output redirected` | Output is being captured, not displayed. |
 | `terminal has no supported image protocol` | Not WezTerm, and `$env:WT_SESSION` is unset - VS Code, ConHost, SSH, CI. |
 | `terminal did not report its cell size` | The terminal ignored `CSI 16 t`. Windows Terminal answers only from 1.22.2362.0; check `(Get-AppxPackage Microsoft.WindowsTerminal*).Version`. |
+| `discarded N queued keystroke(s) typed before the terminal was ready` | Informational. Characters typed into the tab before the shell was ready were dropped so they could not corrupt the cell-size reply; the image still renders. |
 | `sixel encoding unavailable` | ImageMagick is not on PATH and the sixel cache is cold. Install it with `winget install ImageMagick.ImageMagick`. |
 | `logo image not found` | The configured path does not exist. |
 
 Note that [`Invoke-ClearAndFastfetch`](../modules/system.md#invoke-clearandfastfetch) measures the
 panel by running the fastfetch binary directly, bypassing the wrapper - so the text logo appearing
 in a captured measurement is correct and expected, not the bug it looks like.
+
+### Typing Into A Loading Tab Showed The Text Logo And Printed `[6;20;10t`
+
+**Problem:** A new Windows Terminal tab (Win+<number> on the pinned taskbar entry) was typed into
+before fastfetch had rendered. The panel came up with the text logo instead of the image, and the
+prompt showed the tail of what was typed followed by garbage - `hub[6;20;10t` after typing `github`.
+
+Windows Terminal accepts keystrokes long before the profile runs, so they were queued in the console
+input buffer ahead of the terminal's `CSI 6 ; height ; width t` reply to the cell-size query. The
+read used to stop at the first `t` it saw - the one in `git` - so the measurement failed and the
+text logo was used, and the real reply was left in the buffer for PSReadLine to print as text.
+
+**Solution:** Fixed in 0.1.53. [`Get-TerminalCellSize`](../modules/system.md#get-terminalcellsize)
+now drains the queued input before it queries and reads until the complete report has arrived, so a
+typed-ahead word can neither end the read early nor be mistaken for the reply. The characters typed
+while the tab was loading are discarded - a debug line records how many - and typing resumes at the
+prompt. Open a new tab to pick the fix up; the tab you typed the garbage into keeps the old code.
 
 ### Image Logo Overlaps The Info Panel
 
