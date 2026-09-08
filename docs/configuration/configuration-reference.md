@@ -178,7 +178,7 @@ LayoutMachineTypeOverrides = @{
 SmallDisplayMachineType = "Laptop"
 ```
 
-**Consumer function:** `Get-LayoutMachineType`, used by `Set-WorkspaceWindowLayout`, `Reset-Windows`, and `Resolve-DisplayAwareProfile` (which picks the [display-aware window sizing](#display-aware-window-sizing) row)
+**Consumer function:** `Get-LayoutMachineType`, used by `Set-WorkspaceWindowLayout`, `Reset-Windows`, `Resolve-DisplayAwareProfile` (which picks the [display-aware window sizing](#display-aware-window-sizing) row) and `Resolve-WorkspaceActions` (which matches a `LayoutMachine` scope on a [workspace action](#workspace-actions) against the same set, so an action that produces windows for the layout follows the redirect too)
 
 **Behavior:** `LayoutMachineTypeOverrides` is checked first and wins over `SmallDisplayMachineType`, so an explicit choice is never overruled by display-size detection. The override folder needs its own `<WorkspaceName>_<value>.psd1` file per workspace you open; when one is missing, the "No layout configuration found" warning names the active layout set and the path it expected instead of silently falling back to the machine's own layouts. `ResetAllWindowsDefaults` follows the same resolution, so the profile `Reset-Windows` applies matches the monitor setup actually attached - add an entry for the override name (e.g. `Temp`) or it falls back to `Default`.
 
@@ -522,6 +522,25 @@ Defines what happens when a workspace opens.
 
 Swagger is never added on its own - a workspace that does not declare that action runs no Swagger logic at all.
 
+**Machine scope and per-machine parameters (`Machine`, `LayoutMachine`, `MachineParameters`, `LayoutMachineParameters`):** An action may say where it runs and what differs per machine, with four optional keys. Every key takes the scope string `Test-MachineTypeScope` understands (`All`, one type, or several separated by `/`) - the same shape as the `TaskbarConfiguration` rows and the app CSVs' `Machine` column. Two axes:
+
+- `Machine`, `MachineParameters` - matched against the **detected** machine type (`$global:MachineType`). Identity-shaped: a Work-only `Open-Outlook`. Tokens must exist in `ValidMachineTypes`.
+- `LayoutMachine`, `LayoutMachineParameters` - matched against the **layout set** `Get-LayoutMachineType` resolves ([Layout Set Overrides](#layout-set-overrides): a non-empty `LayoutMachineTypeOverrides` entry, else `SmallDisplayMachineType` on a small display, else the detected type) - the set `Set-WorkspaceWindowLayout` reads the layout file from. Display-shaped: a window count that has to agree with the layout, such as `Open-Browser -Instances 2`. Tokens may also be any non-empty `LayoutMachineTypeOverrides` value or the `SmallDisplayMachineType` (a layout set such as `Temp` is not a machine type).
+
+The two **scopes** decide whether the action runs: an absent or blank key means every machine, an action runs only when both match, the rest of the list runs unchanged, and a workspace whose every action is scoped to another machine is reported and skipped. The two **tables** vary one action that runs everywhere: `@{ "<scope>" = @{ <parameter overrides> } }`. `Parameters` is the default; every row whose scope covers this machine is deep-merged over a copy of it (nested hashtables merge key by key, everything else is replaced) - the `All` row first, then the other matching rows alphabetically, `MachineParameters` before `LayoutMachineParameters` so the layout set wins - and a parameter a row sets to `$null` is removed. The configured entry is never modified. The list is resolved by `Resolve-WorkspaceActions` before anything runs.
+
+A token that is not a known type (or layout set) is reported with the workspace, action and table named and never matches, so a typo cannot silently skip or keep an action or a row.
+
+```powershell
+# One Google window everywhere (fullscreen on the Laptop and Work layouts, and on the PC while
+# LayoutMachineTypeOverrides redirects it to the Work layouts); two on the PC's own layout set
+LeagueOfLegends = @(
+    @{ Action = "Open-LeagueOfLegends" }
+    @{ Action = "Open-Browser"; Parameters = @{ Groups = @("Google") }; LayoutMachineParameters = @{ PC = @{ Instances = 2 } } }
+    @{ Action = "Set-WorkspaceWindowLayout"; Parameters = @{ WorkspaceName = "LeagueOfLegends" } }
+)
+```
+
 **Example:**
 
 ```powershell
@@ -530,9 +549,13 @@ WorkspaceActions = @{
         @{ Action = "Open-Terminal"; Parameters = @{} }
         @{ Action = "Open-VSCode"; Parameters = @{ Folder = "TrainingDirectory" } }
         @{ Action = "Open-Browser"; Parameters = @{ Groups = @("Learning") } }
+        @{ Action = "Open-Project"; Parameters = @{ Project = "Client"; RunApp = $true }; MachineParameters = @{ "Laptop/Work" = @{ RunApp = $null; Project = "ClientLite" } } }
+        @{ Action = "Open-Outlook"; Machine = "Work" }
     )
 }
 ```
+
+**Consumer functions:** `Open-Workspace`, `Resolve-WorkspaceActions` (the scope filter), `Measure-WorkspaceOpen` (its pre-checks)
 
 ### Default VS Code Workspaces
 

@@ -13,8 +13,15 @@ function Test-MachineTypeScope {
 		wildcard. Unknown tokens (e.g. the typo "Labtop") are reported through Write-LogError
 		together with the valid values, and contribute nothing to the match - so a misspelled
 		scope can never silently install or skip anything. A blank scope is reported the same
-		way and never matches. When the configuration defines no ValidMachineTypes (synthetic
-		test configurations), token validation is skipped and only matching is performed.
+		way and never matches. When neither the configuration nor -AdditionalValidTypes names
+		any type (synthetic test configurations), token validation is skipped and only matching
+		is performed.
+
+		-AdditionalValidTypes widens the accepted token set for scopes that name something other
+		than a machine type. Resolve-WorkspaceActions uses it for the LayoutMachine key of
+		WorkspaceActions entries, whose tokens are LAYOUT SETS: the values of
+		LayoutMachineTypeOverrides and SmallDisplayMachineType (e.g. "Temp") are valid there even
+		though they are not machine types.
 
 	.PARAMETER Scope
 		The machine-scope string: one or more machine types separated by "/" (e.g. "PC/Laptop"),
@@ -28,6 +35,11 @@ function Test-MachineTypeScope {
 		Optional label naming the data source (e.g. "WinGetApps.csv [Git.Git]"), included in
 		error messages so an invalid token can be located and fixed immediately.
 
+	.PARAMETER AdditionalValidTypes
+		Extra tokens accepted alongside ValidMachineTypes (blanks ignored, duplicates collapsed).
+		Supplying them turns token validation on even when the configuration defines no
+		ValidMachineTypes, since there is then something to validate against.
+
 	.EXAMPLE
 		Test-MachineTypeScope -Scope "PC/Laptop" -MachineType "Laptop"
 		Returns $true - the scope covers Laptop.
@@ -35,6 +47,11 @@ function Test-MachineTypeScope {
 	.EXAMPLE
 		Test-MachineTypeScope -Scope "Labtop" -MachineType "Laptop" -Context "WinGetApps.csv [MyApp]"
 		Returns $false and reports the unknown token [Labtop] with the list of valid values.
+
+	.EXAMPLE
+		Test-MachineTypeScope -Scope "Temp" -MachineType "Temp" -AdditionalValidTypes "Temp"
+		Returns $true - "Temp" is a layout set, not a machine type, and is accepted only because it was
+		passed in explicitly.
 	#>
 	[CmdletBinding()]
 	[OutputType([bool])]
@@ -47,11 +64,20 @@ function Test-MachineTypeScope {
 		[string]$MachineType = $global:MachineType,
 
 		[Parameter(Mandatory = $false)]
-		[string]$Context
+		[string]$Context,
+
+		[Parameter(Mandatory = $false)]
+		[AllowEmptyCollection()]
+		[string[]]$AdditionalValidTypes
 	)
 
 	$contextSuffix = if ($Context) { " in [$Context]" } else { "" }
-	$validTypes = @($global:Configuration.ValidMachineTypes | Where-Object { $_ })
+	$validTypes = @(
+		@(@($global:Configuration.ValidMachineTypes) + @($AdditionalValidTypes)) |
+			ForEach-Object { if ($null -ne $_) { ([string]$_).Trim() } } |
+			Where-Object { $_ } |
+			Select-Object -Unique
+	)
 
 	$tokens = @(("$Scope").Trim() -split "/" | ForEach-Object { $_.Trim() } | Where-Object { $_ })
 	if ($tokens.Count -eq 0) {

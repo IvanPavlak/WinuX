@@ -14,6 +14,17 @@ function Open-Workspace {
 		consuming action (e.g. Open-ProjectSwagger) can no-op or apply its own default. Declare
 		consumers AFTER the Open-Project action.
 
+		An action may be scoped to machines. Machine = "PC/Work" runs it only on those detected
+		machine types; LayoutMachine = "Laptop/Work" runs it only when Get-LayoutMachineType resolves
+		one of those layout sets - the set Set-WorkspaceWindowLayout reads the layout file from, so a
+		count-shaped action (Open-Browser -Instances 2) can follow the layout even while a machine is
+		redirected to another set through LayoutMachineTypeOverrides. Absent or blank keys mean every
+		machine. An action that runs everywhere but differs per machine keeps one entry and carries the
+		differences in MachineParameters / LayoutMachineParameters tables (@{ "<scope>" = @{ ... } }),
+		merged over its Parameters for the machines the row covers - a $null removes the parameter.
+		The list is resolved by Resolve-WorkspaceActions before anything runs; a workspace whose every
+		action is scoped to another machine is reported and skipped, nothing is recorded.
+
 		A plain (non-Alongside) open resets only what it owns. Workspaces that are tracked as
 		opened -Alongside and still have at least one live window are PRESERVED
 		(Get-WorkspaceOpenProtection): their windows are never moved or counted by any action,
@@ -385,6 +396,18 @@ function Open-Workspace {
 
 			if (-not $workspaceActions) {
 				Write-LogWarning "No actions configured for workspace [$workspaceName]"
+				continue
+			}
+
+			# Only the actions scoped to this machine (Machine) and to the layout set the layout
+			# action will read from (LayoutMachine) run - see Resolve-WorkspaceActions. Resolved
+			# once, up front, so the early layout preparation, the project-tab names and the action
+			# loop below all see the same list. A workspace whose every action is scoped elsewhere
+			# is skipped like an unconfigured one: recording an open that produced nothing would
+			# hand Close-Workspace a tracker entry with nothing of its own in it (and, for the first
+			# workspace of a plain run, let it adopt windows that belong to nobody).
+			$workspaceActions = @(Resolve-WorkspaceActions -Actions $workspaceActions -Workspace $workspaceName -Configuration $Configuration)
+			if ($workspaceActions.Count -eq 0) {
 				continue
 			}
 

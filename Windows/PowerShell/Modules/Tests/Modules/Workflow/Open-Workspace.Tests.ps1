@@ -6,7 +6,27 @@ BeforeAll {
 	$SystemFunctionsPath = Join-Path $ModuleRoot "System\Functions"
 
 	. "$FunctionsPath\Open-Workspace.ps1"
+	. "$FunctionsPath\Resolve-WorkspaceActions.ps1"
 	. "$SystemFunctionsPath\Terminate-WindowsTerminalTabs.ps1"
+
+	$script:OriginalMachineType = $global:MachineType
+
+	# The resolver's cross-module dependencies, stubbed: the real Test-MachineTypeScope validates
+	# against the MACHINE's ValidMachineTypes and the real Get-LayoutMachineType measures the
+	# monitors. This stand-in keeps the gate's contract (All, "/"-separated tokens, unknown tokens
+	# reported through Write-LogError and never matched, -AdditionalValidTypes widening the set).
+	function Test-MachineTypeScope {
+		param([string]$Scope, [string]$MachineType, [string]$Context, [string[]]$AdditionalValidTypes)
+		$valid = @('PC', 'Laptop', 'Work', 'Test') + @($AdditionalValidTypes | Where-Object { $_ })
+		$tokens = @($Scope -split '/' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+		$known = @($tokens | Where-Object { $_ -eq 'All' -or $_ -in $valid })
+		foreach ($unknown in @($tokens | Where-Object { $_ -notin $known })) {
+			Write-LogError "Unknown machine type [$unknown] in [$Context]"
+		}
+		return ('All' -in $known -or ($MachineType -and $MachineType -in $known))
+	}
+	function Get-LayoutMachineType { param($MonitorInfo) 'PC' }
+	function DetermineMachineType { 'PC' }
 
 	function Resolve-Selection {
 		param(
@@ -40,7 +60,7 @@ BeforeAll {
 	function Get-NextAvailableDesktopIndex { 0 }
 	function Reset-KeyboardModifiers { param([switch]$IncludeMouseButton) @() }
 	function Test-BrowserGroupAlreadyOpen { $false }
-	function Open-Browser { param($Groups, $Browser) }
+	function Open-Browser { param($Groups, $Browser, $Instances) }
 	function Open-Terminal { param($Command, [switch]$Administrator, [switch]$InSameShell, $WindowId, $TabTitles) }
 	function Set-WorkspaceWindowLayout { param($WorkspaceName, $PreCapturedExistingWindows, $DesktopOffset, [switch]$Alongside, $ProtectedWindowHandles, [switch]$PrepareOnly) }
 	# The benchmark writer and the layout phase getter are real module functions in a
@@ -89,6 +109,10 @@ BeforeAll {
 		param()
 		throw 'intentional action failure'
 	}
+}
+
+AfterAll {
+	$global:MachineType = $script:OriginalMachineType
 }
 
 Describe "Open-Workspace" {
@@ -178,8 +202,16 @@ Describe "Open-Workspace" {
 		Mock Get-NextAvailableDesktopIndex { 3 }
 		Mock Open-Project { param($Project) $Project }
 		Mock Open-Browser {
-			param($Groups, $Browser)
-			$script:browserCalls += [PSCustomObject]@{ Groups = @($Groups); Browser = $Browser }
+			param($Groups, $Browser, $Instances)
+			$script:browserCalls += [PSCustomObject]@{
+				Groups         = @($Groups)
+				Browser        = $Browser
+				Instances      = $Instances
+				# "Not bound" is what the parameter-removal test needs: a $null VALUE cannot tell
+				# "omitted" from "bound to $null".
+				GroupsBound    = $PSBoundParameters.ContainsKey('Groups')
+				InstancesBound = $PSBoundParameters.ContainsKey('Instances')
+			}
 		}
 		Mock Open-ProjectSwagger {
 			param($Project, $Browser)
@@ -212,15 +244,20 @@ Describe "Open-Workspace" {
 		Mock Test-ThrowingAction { throw 'intentional action failure' }
 
 		$script:Configuration = @{
-			Workspaces         = @('TestWorkspace')
-			DefaultWorkspace   = ''
-			WorkspaceActions   = @{}
-			ProjectTerminals   = @()
-			BrowserGroups      = @()
-			Universal          = @{ DefaultBrowser = 'Firefox' }
+			Workspaces                 = @('TestWorkspace')
+			DefaultWorkspace           = ''
+			WorkspaceActions           = @{}
+			ProjectTerminals           = @()
+			BrowserGroups              = @()
+			Universal                  = @{ DefaultBrowser = 'Firefox' }
 			# The shipped default: measurement is opt-in.
-			WorkspaceBenchmark = @{ Enabled = $false; Display = 'Table'; Last = 10 }
+			WorkspaceBenchmark         = @{ Enabled = $false; Display = 'Table'; Last = 10 }
+			# What the action scopes (Machine / LayoutMachine) are resolved against.
+			ValidMachineTypes          = @('PC', 'Laptop', 'Work', 'Test')
+			LayoutMachineTypeOverrides = @{ PC = ''; Laptop = ''; Work = ''; Test = '' }
+			SmallDisplayMachineType    = ''
 		}
+		$global:MachineType = 'PC'
 
 		$script:previousWtProjectTab = $env:WT_PROJECT_TAB
 		Remove-Item Env:WT_PROJECT_TAB -ErrorAction SilentlyContinue
@@ -258,6 +295,163 @@ Describe "Open-Workspace" {
 		$script:invokedActions[0].Alpha | Should -Be 1
 		$script:invokedActions[1].Name | Should -Be 'Test-ActionTwo'
 		$script:invokedActions[1].Beta | Should -Be 2
+	}
+
+	Context "machine-scoped actions" {
+		BeforeEach {
+			Mock Write-LogError { }
+			Mock Get-LayoutMachineType { 'PC' }
+		}
+
+		It "skips an action whose Machine scope does not cover the detected machine type and runs the rest in order" {
+			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } },
+				@{ Action = 'Test-ActionTwo'; Parameters = @{ Beta = 2 }; Machine = 'Laptop' },
+				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 3 }; Machine = 'PC/Work' }
+			)
+
+			Open-Workspace -Workspace 'TestWorkspace'
+
+			$script:invokedActions.Count | Should -Be 2
+			$script:invokedActions[0].Alpha | Should -Be 1
+			$script:invokedActions[1].Alpha | Should -Be 3
+			# Nothing asked for the layout set, so it is never resolved.
+			Should -Invoke Get-LayoutMachineType -Times 0
+		}
+
+		It "matches LayoutMachine against the layout set, not the detected machine type" {
+			# The PC redirected to the Work layouts (LayoutMachineTypeOverrides.PC = "Work").
+			Mock Get-LayoutMachineType { 'Work' }
+			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 2 }; LayoutMachine = 'PC' },
+				@{ Action = 'Test-ActionTwo'; Parameters = @{ Beta = 1 }; LayoutMachine = 'Laptop/Work' }
+			)
+
+			Open-Workspace -Workspace 'TestWorkspace'
+
+			$script:invokedActions.Count | Should -Be 1
+			$script:invokedActions[0].Name | Should -Be 'Test-ActionTwo'
+			Should -Invoke Get-LayoutMachineType -Times 1 -Exactly
+		}
+
+		It "accepts a layout set from LayoutMachineTypeOverrides as a LayoutMachine token" {
+			$script:Configuration.LayoutMachineTypeOverrides = @{ PC = 'Temp' }
+			Mock Get-LayoutMachineType { 'Temp' }
+			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 }; LayoutMachine = 'Temp' },
+				@{ Action = 'Test-ActionTwo'; Parameters = @{ Beta = 2 }; LayoutMachine = 'PC' }
+			)
+
+			Open-Workspace -Workspace 'TestWorkspace'
+
+			$script:invokedActions.Count | Should -Be 1
+			$script:invokedActions[0].Name | Should -Be 'Test-ActionOne'
+			Should -Invoke Write-LogError -Times 0
+		}
+
+		It "leaves a scoped-out Set-WorkspaceWindowLayout out of the early preparation as well as the action loop" {
+			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } },
+				@{ Action = 'Set-WorkspaceWindowLayout'; Parameters = @{ WorkspaceName = 'TestWorkspace' }; Machine = 'Laptop' }
+			)
+
+			Open-Workspace -Workspace 'TestWorkspace'
+
+			$script:invokedActions.Count | Should -Be 1
+			$script:prepareLayoutCalls.Count | Should -Be 0
+			$script:setLayoutCalls.Count | Should -Be 0
+		}
+
+		It "honours a scoped Return only on the machines it names" {
+			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } },
+				@{ Action = 'Return'; Machine = 'Laptop' },
+				@{ Action = 'Test-ActionTwo'; Parameters = @{ Beta = 2 } }
+			)
+
+			Open-Workspace -Workspace 'TestWorkspace'
+			$script:invokedActions.Count | Should -Be 2
+
+			$script:invokedActions = @()
+			$script:Configuration.WorkspaceActions['TestWorkspace'][1].Machine = 'PC'
+
+			Open-Workspace -Workspace 'TestWorkspace'
+			$script:invokedActions.Count | Should -Be 1
+		}
+
+		It "runs nothing and records nothing when every action is scoped to another machine" {
+			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 }; Machine = 'Laptop' },
+				@{ Action = 'Set-WorkspaceWindowLayout'; Parameters = @{ WorkspaceName = 'TestWorkspace' }; LayoutMachine = 'Laptop' }
+			)
+
+			Open-Workspace -Workspace 'TestWorkspace'
+
+			$script:invokedActions.Count | Should -Be 0
+			$script:prepareLayoutCalls.Count | Should -Be 0
+			$script:setLayoutCalls.Count | Should -Be 0
+			$script:workspaceStateCalls.Count | Should -Be 0
+		}
+
+		It "reports an unknown scope token with the workspace and action named, and skips that action" {
+			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 }; Machine = 'Labtop' },
+				@{ Action = 'Test-ActionTwo'; Parameters = @{ Beta = 2 } }
+			)
+
+			Open-Workspace -Workspace 'TestWorkspace'
+
+			$script:invokedActions.Count | Should -Be 1
+			$script:invokedActions[0].Name | Should -Be 'Test-ActionTwo'
+			Should -Invoke Write-LogError -Times 1 -Exactly -ParameterFilter { $Message -like '*[[]Labtop]*' -and $Message -like '*WorkspaceActions.TestWorkspace [[]Test-ActionOne]*' }
+		}
+
+		It "hands a LayoutMachineParameters row to the action on the layout set it names, and nothing extra elsewhere" {
+			# One entry for every machine: the PC's own layout set gets two windows, everything else one.
+			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+				@{ Action = 'Open-Browser'; Parameters = @{ Groups = @('Google') }; LayoutMachineParameters = @{ PC = @{ Instances = 2 } } }
+			)
+
+			Mock Get-LayoutMachineType { 'Work' }
+			Open-Workspace -Workspace 'TestWorkspace'
+
+			$script:browserCalls.Count | Should -Be 1
+			$script:browserCalls[0].Groups | Should -Be @('Google')
+			$script:browserCalls[0].InstancesBound | Should -BeFalse
+
+			$script:browserCalls = @()
+			Mock Get-LayoutMachineType { 'PC' }
+			Open-Workspace -Workspace 'TestWorkspace'
+
+			$script:browserCalls.Count | Should -Be 1
+			$script:browserCalls[0].Instances | Should -Be 2
+		}
+
+		It "leaves a parameter unbound when a MachineParameters row sets it to null" {
+			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+				@{ Action = 'Open-Browser'; Parameters = @{ Groups = @('Google'); Instances = 3 }; MachineParameters = @{ PC = @{ Groups = $null } } }
+			)
+
+			Open-Workspace -Workspace 'TestWorkspace'
+
+			$script:browserCalls.Count | Should -Be 1
+			$script:browserCalls[0].GroupsBound | Should -BeFalse
+			$script:browserCalls[0].Instances | Should -Be 3
+		}
+
+		It "prepares the layout with the merged parameters when the layout action carries a row" {
+			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } },
+				@{ Action = 'Set-WorkspaceWindowLayout'; Parameters = @{ WorkspaceName = 'TestWorkspace' }; MachineParameters = @{ PC = @{ WorkspaceName = 'TestWorkspaceWide' } } }
+			)
+
+			Open-Workspace -Workspace 'TestWorkspace'
+
+			$script:prepareLayoutCalls.Count | Should -Be 1
+			$script:prepareLayoutCalls[0].WorkspaceName | Should -Be 'TestWorkspaceWide'
+			$script:setLayoutCalls.Count | Should -Be 1
+			$script:setLayoutCalls[0].WorkspaceName | Should -Be 'TestWorkspaceWide'
+		}
 	}
 
 	Context "workspace benchmark" {
