@@ -398,6 +398,24 @@ Set-LogLevel Verbose { Reset-Windows }
 
 If a window is still reported after every round, it is one the desktop manager refuses to move for this shell (typically an elevated process - run the reset from an elevated terminal, or close that window by hand).
 
+### The Left (Or Right) Half Of The Desktop Ignores The Mouse While A Workspace Is Open
+
+**Problem:** With a workspace open, desktop icons under one half of the primary monitor cannot be clicked, dragged or right-clicked, on every virtual desktop, even ones that show no window there. `Win+D` makes the desktop clickable again, and so does opening any window (File Explorer) over that area. The dead area is exactly the zone the layout assigns to WhatsApp - a `Left` zone gives a dead left half.
+
+**Why it happens:** The Store WhatsApp (`WhatsApp.Root`) renders in a WebView2 child process (`msedgewebview2`), and that process keeps an unowned top-level helper window (class `Chrome_WidgetWin_1`, title `WhatsApp`) sized to WhatsApp's client area. The helper is a layered window with alpha 0 (invisible), `WS_EX_TOOLWINDOW` (no taskbar button) and `WS_EX_NOACTIVATE`, but it lacks `WS_EX_TRANSPARENT`, so it still receives mouse hit-tests. It belongs to no virtual desktop: `Get-DesktopFromWindow` cannot resolve it and DWM never cloaks it, so Windows draws it on every desktop. While WhatsApp sits on the desktop you are looking at, its own window covers the same area and the helper is harmless. The moment the layout moves the WhatsApp main window to its desktop (`Move-WindowToVirtualDesktop` moves only the WinUI top-level handle), the invisible helper stays behind on every other desktop and swallows every click in that zone. The module never sees it either: `GetAllWindows` skips tool windows without `WS_EX_APPWINDOW`, so no layout, snap or reset pass touches it. `Win+D` works because it minimizes every window, the helper included.
+
+**Solution:** None in WinuX yet - this is WhatsApp's WebView2 host, not the layout code. Confirm it is this window before suspecting the layout:
+
+```powershell
+# Expect one invisible Chrome_WidgetWin_1 window titled "WhatsApp" from msedgewebview2 whose parent is WhatsApp.Root
+Get-Process msedgewebview2 | Where-Object { (Get-Process -Id $_.Parent.Id -ErrorAction SilentlyContinue).ProcessName -eq 'WhatsApp.Root' } | Select-Object Id, MainWindowHandle
+
+# The desktop where WhatsApp actually lives is unaffected; closing WhatsApp clears every desktop
+Get-Process WhatsApp.Root | Stop-Process
+```
+
+Workarounds: switch to the WhatsApp desktop and press `Win+D` there when you need the icons, or open WhatsApp Web through the browser (`Open-Browser WhatsAppWeb`) instead of the Store app for workspaces where the desktop must stay clickable. A proper fix would move the helper window along with its parent (the same desktop move, applied to the same-titled top-level windows of child `msedgewebview2` processes) if the desktop manager accepts them.
+
 ### Kill-All Leaves A Window Or Process Behind
 
 **Problem:** `Kill-All` prints its success line, but an application is still open afterwards. It happens to the same app on some runs and not on others, or always to a particular kind of window: an undocked DevTools or Picture-in-Picture window, an installed web app, a Store (UWP) app.
