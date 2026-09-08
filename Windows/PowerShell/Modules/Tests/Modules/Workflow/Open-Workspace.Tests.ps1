@@ -60,7 +60,7 @@ BeforeAll {
 	function Get-NextAvailableDesktopIndex { 0 }
 	function Reset-KeyboardModifiers { param([switch]$IncludeMouseButton) @() }
 	function Test-BrowserGroupAlreadyOpen { $false }
-	function Open-Browser { param($Groups, $Browser) }
+	function Open-Browser { param($Groups, $Browser, $Instances) }
 	function Open-Terminal { param($Command, [switch]$Administrator, [switch]$InSameShell, $WindowId, $TabTitles) }
 	function Set-WorkspaceWindowLayout { param($WorkspaceName, $PreCapturedExistingWindows, $DesktopOffset, [switch]$Alongside, $ProtectedWindowHandles, [switch]$PrepareOnly) }
 	# The benchmark writer and the layout phase getter are real module functions in a
@@ -202,8 +202,16 @@ Describe "Open-Workspace" {
 		Mock Get-NextAvailableDesktopIndex { 3 }
 		Mock Open-Project { param($Project) $Project }
 		Mock Open-Browser {
-			param($Groups, $Browser)
-			$script:browserCalls += [PSCustomObject]@{ Groups = @($Groups); Browser = $Browser }
+			param($Groups, $Browser, $Instances)
+			$script:browserCalls += [PSCustomObject]@{
+				Groups         = @($Groups)
+				Browser        = $Browser
+				Instances      = $Instances
+				# "Not bound" is what the parameter-removal test needs: a $null VALUE cannot tell
+				# "omitted" from "bound to $null".
+				GroupsBound    = $PSBoundParameters.ContainsKey('Groups')
+				InstancesBound = $PSBoundParameters.ContainsKey('Instances')
+			}
 		}
 		Mock Open-ProjectSwagger {
 			param($Project, $Browser)
@@ -396,6 +404,53 @@ Describe "Open-Workspace" {
 			$script:invokedActions.Count | Should -Be 1
 			$script:invokedActions[0].Name | Should -Be 'Test-ActionTwo'
 			Should -Invoke Write-LogError -Times 1 -Exactly -ParameterFilter { $Message -like '*[[]Labtop]*' -and $Message -like '*WorkspaceActions.TestWorkspace [[]Test-ActionOne]*' }
+		}
+
+		It "hands a LayoutMachineParameters row to the action on the layout set it names, and nothing extra elsewhere" {
+			# One entry for every machine: the PC's own layout set gets two windows, everything else one.
+			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+				@{ Action = 'Open-Browser'; Parameters = @{ Groups = @('Google') }; LayoutMachineParameters = @{ PC = @{ Instances = 2 } } }
+			)
+
+			Mock Get-LayoutMachineType { 'Work' }
+			Open-Workspace -Workspace 'TestWorkspace'
+
+			$script:browserCalls.Count | Should -Be 1
+			$script:browserCalls[0].Groups | Should -Be @('Google')
+			$script:browserCalls[0].InstancesBound | Should -BeFalse
+
+			$script:browserCalls = @()
+			Mock Get-LayoutMachineType { 'PC' }
+			Open-Workspace -Workspace 'TestWorkspace'
+
+			$script:browserCalls.Count | Should -Be 1
+			$script:browserCalls[0].Instances | Should -Be 2
+		}
+
+		It "leaves a parameter unbound when a MachineParameters row sets it to null" {
+			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+				@{ Action = 'Open-Browser'; Parameters = @{ Groups = @('Google'); Instances = 3 }; MachineParameters = @{ PC = @{ Groups = $null } } }
+			)
+
+			Open-Workspace -Workspace 'TestWorkspace'
+
+			$script:browserCalls.Count | Should -Be 1
+			$script:browserCalls[0].GroupsBound | Should -BeFalse
+			$script:browserCalls[0].Instances | Should -Be 3
+		}
+
+		It "prepares the layout with the merged parameters when the layout action carries a row" {
+			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } },
+				@{ Action = 'Set-WorkspaceWindowLayout'; Parameters = @{ WorkspaceName = 'TestWorkspace' }; MachineParameters = @{ PC = @{ WorkspaceName = 'TestWorkspaceWide' } } }
+			)
+
+			Open-Workspace -Workspace 'TestWorkspace'
+
+			$script:prepareLayoutCalls.Count | Should -Be 1
+			$script:prepareLayoutCalls[0].WorkspaceName | Should -Be 'TestWorkspaceWide'
+			$script:setLayoutCalls.Count | Should -Be 1
+			$script:setLayoutCalls[0].WorkspaceName | Should -Be 'TestWorkspaceWide'
 		}
 	}
 

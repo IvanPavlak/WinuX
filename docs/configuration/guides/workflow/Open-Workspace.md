@@ -12,7 +12,7 @@ The main entry point for starting work. Alias: `w`.
 | [`DefaultVSCodeWorkspaces`](../../configuration-reference.md#default-vs-code-workspaces) | hashtable of workspace name to VS Code workspace file | `@{}` (empty) | Which `.code-workspace` file `Open-Workspace` opens for a given WinuX workspace. |
 | [`DefaultWorkspace`](../../configuration-reference.md#default-workspace) | string | `"Default"` | Which workspace `Open-Workspace` opens with no argument. |
 | [`ProjectTerminals`](../../configuration-reference.md#project-terminals) | array of `@{ Project; Tabs; ... }` | array of 3 | Which Windows Terminal tabs `Open-ProjectTerminals` creates for a project, and with what titles and starting directories. Tabs are created with `--title --suppressApplicationTitle`, so their titles are stable. |
-| [`WorkspaceActions`](../../configuration-reference.md#workspace-actions) | hashtable of workspace name to action array | hashtable, 5 keys | What `Open-Workspace` does for each workspace: an ordered array of `@{ Action; Parameters }` entries. An entry may carry `Machine = "PC/Work"` and/or `LayoutMachine = "Laptop/Work"` to run only there ([Resolve-WorkspaceActions](Resolve-WorkspaceActions.md)). `Close-Workspace` reads what the open actually produced, not this map. |
+| [`WorkspaceActions`](../../configuration-reference.md#workspace-actions) | hashtable of workspace name to action array | hashtable, 5 keys | What `Open-Workspace` does for each workspace: an ordered array of `@{ Action; Parameters }` entries. An entry may carry `Machine = "PC/Work"` and/or `LayoutMachine = "Laptop/Work"` to run only there, or a `MachineParameters` / `LayoutMachineParameters` table to vary its parameters per machine ([Resolve-WorkspaceActions](Resolve-WorkspaceActions.md)). `Close-Workspace` reads what the open actually produced, not this map. |
 | [`WorkspaceBenchmark`](../../configuration-reference.md#workspace-benchmark) | hashtable (`Enabled`, `Display`, `Last`) | `@{ Enabled = $false; Display = "Table"; Last = 10 }` | Whether every open is measured - each action timed, the layout phases read back, one row appended to `WorkspaceBenchmark.csv` - and what the end of the open shows: the workspace's recent runs as a table, one `Timing =>` line, or nothing. |
 | [`Workspaces`](../../configuration-reference.md#workspaces-list) | array of workspace names | `@("Default", "Example", "Fullscreen", "Empty", "WinuX")` | The workspace names `Open-Workspace` offers. Each needs a `WorkspaceActions` entry to do anything. |
 | [`WorkspaceLayoutPrepareEarly`](../../configuration-reference.md#layout-numbers--zone-mappings) | bool | `$true` | Whether the layout's virtual desktops and FancyZones zone layouts are prepared before the launch actions (`Set-WorkspaceWindowLayout -PrepareOnly`), on an idle machine, or left to the layout action after them. |
@@ -34,7 +34,7 @@ Action order is the whole of the behaviour here. Everything that creates a windo
     - Default: The shipped three entries.
     - More detail: [`ProjectTerminals`](../../configuration-reference.md#project-terminals)
 4. What should opening this workspace do?
-    - Options: An ordered array of actions - any exported function name plus its `Parameters`. Typical: `Open-Project`, `Open-Browser`, `Open-Terminal`, `Set-WorkspaceWindowLayout`, `Focus-VirtualDesktop`. An action that differs per machine takes a `Machine` scope (detected machine type) or a `LayoutMachine` scope (the layout set the layout is read from) - one browser opener with `Instances = 2` scoped `LayoutMachine = "PC"` next to a one-window twin scoped `LayoutMachine = "Laptop/Work"`; see [Resolve-WorkspaceActions](Resolve-WorkspaceActions.md).
+    - Options: An ordered array of actions - any exported function name plus its `Parameters`. Typical: `Open-Project`, `Open-Browser`, `Open-Terminal`, `Set-WorkspaceWindowLayout`, `Focus-VirtualDesktop`. An action that should not run everywhere takes a `Machine` scope (detected machine type) or a `LayoutMachine` scope (the layout set the layout is read from); an action that runs everywhere but differs per machine keeps one entry and carries the difference in a `MachineParameters` or `LayoutMachineParameters` table - `Parameters = @{ Groups = @("Google") }` with `LayoutMachineParameters = @{ PC = @{ Instances = 2 } }` opens two windows on the PC's own layout set and one everywhere else; see [Resolve-WorkspaceActions](Resolve-WorkspaceActions.md).
     - Default: The shipped five workspaces, none of them scoped.
     - More detail: [`WorkspaceActions`](../../configuration-reference.md#workspace-actions)
 5. Where should the open finish?
@@ -106,13 +106,13 @@ ProjectTerminals = @(
 
 ## Step 4: Set `WorkspaceActions`
 
-What `Open-Workspace` does for each workspace: an ordered array of `@{ Action; Parameters }` entries. `Close-Workspace` reads what the open actually produced, not this map. An entry that should only run on some machines carries `Machine = "PC/Work"` (detected machine type) and/or `LayoutMachine = "Laptop/Work"` (the layout set the window layout is read from); the rest of the list is unaffected.
+What `Open-Workspace` does for each workspace: an ordered array of `@{ Action; Parameters }` entries. `Close-Workspace` reads what the open actually produced, not this map. An entry that should only run on some machines carries `Machine = "PC/Work"` (detected machine type) and/or `LayoutMachine = "Laptop/Work"` (the layout set the window layout is read from); an entry whose parameters differ per machine carries a `MachineParameters` / `LayoutMachineParameters` table keyed by the same scope strings; the rest of the list is unaffected.
 
 ```powershell
 WorkspaceActions = @{
     MyWorkspace = @(
         @{ Action = "Open-Project"; Parameters = @{ ProjectName = "MyProject" } }
-        @{ Action = "Open-Browser"; Parameters = @{ Groups = @("Monitoring") } }
+        @{ Action = "Open-Browser"; Parameters = @{ Groups = @("Monitoring") }; LayoutMachineParameters = @{ PC = @{ Instances = 2 } } }
         @{ Action = "Open-Outlook"; Machine = "Work" }
         @{ Action = "Set-WorkspaceWindowLayout" }
     )
@@ -193,7 +193,7 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
     WorkspaceActions = @{
         MyWorkspace = @(
             @{ Action = "Open-Project"; Parameters = @{ ProjectName = "MyProject" } }
-            @{ Action = "Open-Browser"; Parameters = @{ Groups = @("Monitoring") } }
+            @{ Action = "Open-Browser"; Parameters = @{ Groups = @("Monitoring") }; LayoutMachineParameters = @{ PC = @{ Instances = 2 } } }
             @{ Action = "Open-Outlook"; Machine = "Work" }
             @{ Action = "Set-WorkspaceWindowLayout" }
         )
@@ -209,7 +209,7 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 ## Related
 
 - [`Open-Workspace` in the Workflow module reference](../../../modules/workflow.md#open-workspace) - parameters, usage and behaviour
-- [`Resolve-WorkspaceActions`](Resolve-WorkspaceActions.md) - the `Machine` / `LayoutMachine` scopes an action can carry
+- [`Resolve-WorkspaceActions`](Resolve-WorkspaceActions.md) - the `Machine` / `LayoutMachine` scopes and the `MachineParameters` / `LayoutMachineParameters` tables an action can carry
 - [`Get-WorkspaceBenchmark`](Get-WorkspaceBenchmark.md) - reads the rows the benchmark records
 - [Workflow configuration guides](README.md) - every guide for this module
 - [Add New Project](add-new-project.md) - the full 9-step walk for a new project

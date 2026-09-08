@@ -77,7 +77,7 @@ decisions behind them, and where the values go. Each module's `README.md` indexe
 | `BrowserGroups`                                    | `Open-Browser`, `Collect-BrowserUrls`              |
 | `Projects`, `ProjectActions`                       | `Open-Project`                                     |
 | `Workspaces`, `DefaultWorkspace`, `WorkspaceActions`, `WorkspaceBenchmark` | `Open-Workspace`           |
-| `WorkspaceActions` entry scopes (`Machine`, `LayoutMachine`) | `Resolve-WorkspaceActions` (for `Open-Workspace`, `Measure-WorkspaceOpen`) |
+| `WorkspaceActions` entry scopes (`Machine`, `LayoutMachine`) and tables (`MachineParameters`, `LayoutMachineParameters`) | `Resolve-WorkspaceActions` (for `Open-Workspace`, `Measure-WorkspaceOpen`) |
 | `Themes`                                           | `Set-SystemTheme`                                  |
 | `SystemTheme.Steps`                                | `Set-SystemTheme`, `Resolve-SystemThemeSteps`      |
 | `WallpaperDarkSettings`, `WallpaperLightSettings`  | `Set-Wallpaper`                                    |

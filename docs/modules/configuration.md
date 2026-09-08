@@ -151,7 +151,7 @@ Add-Workspace -Name "MyWorkspace"
 
 ## [ConvertTo-ActionString](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Configuration/Functions/ConvertTo-ActionString.ps1)
 
-- **Description:** Converts an action hashtable into a properly formatted `Configuration.psd1` entry string for insertion into `WorkspaceActions` or `ProjectActions` sections. Handles array, boolean, and string parameter values, and writes the optional `Machine` / `LayoutMachine` scope keys after `Parameters` when they are present and non-blank (an array scope is joined with `/`), so `Add-Workspace` keeps a machine-scoped action intact - see [Resolve-WorkspaceActions](workflow.md#resolve-workspaceactions).
+- **Description:** Converts an action hashtable into a properly formatted `Configuration.psd1` entry string for insertion into `WorkspaceActions` or `ProjectActions` sections. Handles array, boolean, `$null` and string values and nested hashtables (written recursively with their keys in alphabetical order, so the output is stable; a key that is not a plain identifier, such as the machine scope `"Laptop/Work"`, is quoted). The per-machine tables `MachineParameters` / `LayoutMachineParameters` follow `Parameters`, and the `Machine` / `LayoutMachine` scope keys come last (an array scope is joined with `/`), so `Add-Workspace` keeps a machine-scoped or machine-varied action intact - see [Resolve-WorkspaceActions](workflow.md#resolve-workspaceactions).
 - **Parameters:** -Action, -Indent
 - **Usage:** `ConvertTo-ActionString -Action @{ Action = "Open-Browser"; Parameters = @{ Groups = @("GroupName") } } -Indent "\`t\`t\`t"` (internal use)
 
@@ -159,7 +159,7 @@ Internal helper used by the `Add-Workspace` and `Add-Project` functions to seria
 
 | Parameter | Description                                                                                   |
 | --------- | --------------------------------------------------------------------------------------------- |
-| `-Action` | The action hashtable, with an `Action` key, an optional `Parameters` hashtable and optional `Machine` / `LayoutMachine` scopes. Mandatory. |
+| `-Action` | The action hashtable, with an `Action` key, an optional `Parameters` hashtable, optional `MachineParameters` / `LayoutMachineParameters` tables and optional `Machine` / `LayoutMachine` scopes. Mandatory. |
 | `-Indent` | The indentation prefix prepended to the output string (e.g. a run of tabs). Mandatory.        |
 
 ```powershell
@@ -170,9 +170,13 @@ ConvertTo-ActionString -Action @{
 } -Indent "`t`t`t"
 # Output: @{ Action = "Open-Browser"; Parameters = @{ Groups = @("GroupName", "OtherGroup") } }
 
+# A machine-varied action keeps its table (nested hashtables, quoted scope-string keys, $null values)
+ConvertTo-ActionString -Action @{ Action = "Open-Browser"; Parameters = @{ Groups = @("Google") }; LayoutMachineParameters = @{ PC = @{ Instances = 2 } } } -Indent "`t`t`t"
+# Output: @{ Action = "Open-Browser"; Parameters = @{ Groups = @("Google") }; LayoutMachineParameters = @{ PC = @{ Instances = "2" } } }
+
 # A machine-scoped action keeps its scope
-ConvertTo-ActionString -Action @{ Action = "Open-Browser"; Parameters = @{ Groups = @("Google") }; LayoutMachine = "Laptop/Work" } -Indent "`t`t`t"
-# Output: @{ Action = "Open-Browser"; Parameters = @{ Groups = @("Google") }; LayoutMachine = "Laptop/Work" }
+ConvertTo-ActionString -Action @{ Action = "Open-Outlook"; Machine = "Work" } -Indent "`t`t`t"
+# Output: @{ Action = "Open-Outlook"; Machine = "Work" }
 ```
 
 **See also:** [Add Workspace](../configuration/guides/workflow/add-new-workspace.md), [Add Project](../configuration/guides/workflow/add-new-project.md)

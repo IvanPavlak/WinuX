@@ -21,7 +21,7 @@ The [Workflow module reference](../../../modules/workflow.md) is the authority o
 | `Open-Project` | `ProjectActions`, `Projects` | [Open-Project](Open-Project.md) |
 | `Open-ProjectTerminals` | `DefaultWSLDistribution`, `ProjectTerminals` | [Open-ProjectTerminals](Open-ProjectTerminals.md) |
 | `Open-Training` | `Universal` | [Open-Training](Open-Training.md) |
-| `Open-Workspace` | `DefaultVSCodeWorkspaces`, `DefaultWorkspace`, `ProjectTerminals`, `WorkspaceActions` (incl. the `Machine` / `LayoutMachine` scopes), `WorkspaceBenchmark`, `Workspaces` | [Open-Workspace](Open-Workspace.md) |
+| `Open-Workspace` | `DefaultVSCodeWorkspaces`, `DefaultWorkspace`, `ProjectTerminals`, `WorkspaceActions` (incl. the `Machine` / `LayoutMachine` scopes and `MachineParameters` / `LayoutMachineParameters` tables), `WorkspaceBenchmark`, `Workspaces` | [Open-Workspace](Open-Workspace.md) |
 | `Resolve-ProjectDockerCompose` | `DockerComposeFiles`, `ProjectTerminals`, `RunnableProjectMappings` | [Resolve-ProjectDockerCompose](Resolve-ProjectDockerCompose.md) |
 | `Resolve-SwaggerBrowserGroup` | `BrowserGroupMatching`, `BrowserGroups`, `Universal` | [Resolve-SwaggerBrowserGroup](Resolve-SwaggerBrowserGroup.md) |
 | `Resolve-WorkspaceActions` | `LayoutMachineTypeOverrides`, `SmallDisplayMachineType`, `ValidMachineTypes`, `WorkspaceActions` | [Resolve-WorkspaceActions](Resolve-WorkspaceActions.md) |

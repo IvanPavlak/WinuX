@@ -221,7 +221,7 @@ SmallDisplayMachineType = "Laptop"
 
 Both keys are resolved by `Get-LayoutMachineType`, which `Set-WorkspaceWindowLayout` and `Reset-Windows` share - so the layouts and the reset target can never disagree about which monitor setup is attached. The override name is not a machine type: it needs no `ValidMachineTypes` entry, no base paths, and no payload files, only `<Workspace>_<Name>.psd1` layouts (and optionally its own `ResetAllWindowsDefaults` entry). See [Configure Window Layout](guides/window/configure-window-layout.md#running-a-machine-on-a-different-monitor-setup).
 
-The actions a workspace runs can follow the same split. A `WorkspaceActions` entry may carry `Machine = "PC/Work"` (matched against the detected machine type, like a taskbar row) and/or `LayoutMachine = "Laptop/Work"` (matched against the layout set resolved above), so a browser opened twice for a two-zone layout on the desktop opens once for the fullscreen layout on the laptop - and once on the desktop too while it is redirected to that layout set. See [Workspace Actions](configuration-reference.md#workspace-actions) and [Resolve-WorkspaceActions](guides/workflow/Resolve-WorkspaceActions.md).
+The actions a workspace runs can follow the same split. A `WorkspaceActions` entry may carry `Machine = "PC/Work"` (matched against the detected machine type, like a taskbar row) and/or `LayoutMachine = "Laptop/Work"` (matched against the layout set resolved above) to run only there, or keep one entry and vary its parameters per machine through `MachineParameters` / `LayoutMachineParameters` tables (`@{ PC = @{ Instances = 2 } }`, merged over `Parameters` for the machines the row covers) - so a browser opened twice for a two-zone layout on the desktop opens once for the fullscreen layout on the laptop, and once on the desktop too while it is redirected to that layout set. See [Workspace Actions](configuration-reference.md#workspace-actions) and [Resolve-WorkspaceActions](guides/workflow/Resolve-WorkspaceActions.md).
 
 ### 6. Window Sizing (`CenterTerminalSizing`, `ResizeWindowsPercent`)
 
@@ -341,7 +341,8 @@ pins. `Test-MachineTypeScope` matches the scope against the current machine type
 app CSVs' `Machine` column: `All` pins everywhere, `PC/Work` only on PC or Work, and a row with no
 `Machine` key (or a blank one) defaults to `All`. Every type you use must exist in
 `ValidMachineTypes`, or it is reported as an unknown token. `WorkspaceActions` entries take the
-same `Machine` scope (plus `LayoutMachine` for the layout set - see
+same `Machine` scope (plus `LayoutMachine` for the layout set, and the `MachineParameters` /
+`LayoutMachineParameters` tables to vary one entry's parameters per machine - see
 [Workspace Actions](configuration-reference.md#workspace-actions)).
 
 ```powershell

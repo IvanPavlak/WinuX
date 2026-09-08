@@ -100,7 +100,7 @@
 #
 # Workspace Management:
 # → Workspaces, DefaultWorkspace, WorkspaceActions, WorkspaceBenchmark : Open-Workspace
-# → WorkspaceActions Machine / LayoutMachine scopes : Resolve-WorkspaceActions (for Open-Workspace, Measure-WorkspaceOpen)
+# → WorkspaceActions Machine / LayoutMachine scopes and MachineParameters / LayoutMachineParameters tables : Resolve-WorkspaceActions (for Open-Workspace, Measure-WorkspaceOpen)
 #
 # Application Configuration:
 # → BrowserGroups                   : Open-Browser, Collect-BrowserUrls
@@ -1822,24 +1822,35 @@
 	#   Open-Project action. When neither exists the parameter is dropped, so the consuming
 	#   action (e.g. Open-ProjectSwagger) simply no-ops.
 	#
-	# MACHINE SCOPE (Machine / LayoutMachine keys):
-	#   An action may say where it runs. Both keys take the scope string Test-MachineTypeScope
-	#   understands ("All", "PC", "PC/Laptop"); absent or blank = every machine. An action runs only
-	#   when both match, the rest of the list runs unchanged (Resolve-WorkspaceActions), and a
-	#   workspace whose every action is scoped to another machine is reported and skipped.
-	#   - Machine       : the detected machine type ($global:MachineType) - identity-shaped, e.g. a
-	#                     Work-only Open-Outlook. Tokens must exist in ValidMachineTypes.
-	#   - LayoutMachine : the layout set Get-LayoutMachineType resolves (LayoutMachineTypeOverrides,
-	#                     else SmallDisplayMachineType on a small display, else the detected type) -
-	#                     display-shaped, for window counts that must agree with the layout file the
-	#                     layout action reads. Tokens may also be a LayoutMachineTypeOverrides value or
-	#                     the SmallDisplayMachineType (e.g. "Temp").
+	# MACHINE SCOPE AND PER-MACHINE PARAMETERS (Machine / LayoutMachine / MachineParameters /
+	# LayoutMachineParameters keys, resolved by Resolve-WorkspaceActions):
+	#   Every key takes the scope string Test-MachineTypeScope understands ("All", "PC", "PC/Laptop").
+	#   Two axes:
+	#   - Machine, MachineParameters             : the detected machine type ($global:MachineType) -
+	#                                              identity-shaped, e.g. a Work-only Open-Outlook.
+	#                                              Tokens must exist in ValidMachineTypes.
+	#   - LayoutMachine, LayoutMachineParameters : the layout set Get-LayoutMachineType resolves
+	#                                              (LayoutMachineTypeOverrides, else
+	#                                              SmallDisplayMachineType on a small display, else the
+	#                                              detected type) - display-shaped, for window counts
+	#                                              that must agree with the layout file the layout
+	#                                              action reads. Tokens may also be a
+	#                                              LayoutMachineTypeOverrides value or the
+	#                                              SmallDisplayMachineType (e.g. "Temp").
+	#   SCOPES decide whether the action runs: absent or blank = every machine; an action runs only
+	#   when both match; a workspace whose every action is scoped elsewhere is reported and skipped.
+	#   TABLES vary one action that runs everywhere: @{ "<scope>" = @{ <parameter overrides> } }.
+	#   Parameters is the default; every row whose scope covers this machine is deep-merged over a
+	#   copy of it ("All" row first, then the other matching rows alphabetically, MachineParameters
+	#   before LayoutMachineParameters so the layout set wins), and a parameter set to $null by a
+	#   row is removed. The configured entry is never modified.
 	#   Unknown tokens are reported with the workspace and action named, and never match.
 	#
-	#   Example - two Google windows on the PC's own layout set, one everywhere else:
-	#     @{ Action = "Open-Browser"; Parameters = @{ Groups = @("Google"); Instances = 2 }; LayoutMachine = "PC" }
-	#     @{ Action = "Open-Browser"; Parameters = @{ Groups = @("Google") };               LayoutMachine = "Laptop/Work" }
+	#   Example - two Google windows on the PC's own layout set, one everywhere else, and Outlook
+	#   only at work:
+	#     @{ Action = "Open-Browser"; Parameters = @{ Groups = @("Google") }; LayoutMachineParameters = @{ PC = @{ Instances = 2 } } }
 	#     @{ Action = "Open-Outlook"; Machine = "Work" }
+	#     @{ Action = "Open-Project"; Parameters = @{ Project = "Client"; RunApp = $true }; MachineParameters = @{ "Laptop/Work" = @{ RunApp = $null } } }
 	#
 	# Special Cases:
 	#   - Fullscreen: Applies full-screen FancyZone layout to all windows

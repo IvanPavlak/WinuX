@@ -11,9 +11,9 @@ This function reads no `Configuration.psd1` keys. There is nothing to configure.
 ```powershell
 ConvertTo-ActionString -Action @{ Action = "Open-Browser"; Parameters = @{ Groups = @("GroupName") } } -Indent "`t`t`t"
 
-# The optional Machine / LayoutMachine scopes are written after Parameters
-ConvertTo-ActionString -Action @{ Action = "Open-Browser"; Parameters = @{ Groups = @("Google") }; LayoutMachine = "Laptop/Work" } -Indent "`t`t`t"
-# @{ Action = "Open-Browser"; Parameters = @{ Groups = @("Google") }; LayoutMachine = "Laptop/Work" }
+# Per-machine tables follow Parameters (nested hashtables, quoted scope-string keys, $null values); the scopes come last
+ConvertTo-ActionString -Action @{ Action = "Open-Browser"; Parameters = @{ Groups = @("Google") }; LayoutMachineParameters = @{ PC = @{ Instances = 2 } }; Machine = "PC/Work" } -Indent "`t`t`t"
+# @{ Action = "Open-Browser"; Parameters = @{ Groups = @("Google") }; LayoutMachineParameters = @{ PC = @{ Instances = "2" } }; Machine = "PC/Work" }
 ```
 
 ## Related

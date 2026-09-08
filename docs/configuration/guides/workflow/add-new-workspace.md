@@ -72,18 +72,18 @@ WorkspaceActions = @{
 
 ### Machine-Specific Actions
 
-An action that should only run on some machines carries a scope; every other action runs everywhere. `Machine = "PC/Work"` is matched against the detected machine type, `LayoutMachine = "Laptop/Work"` against the layout set the window layout is read from (`Get-LayoutMachineType` - the detected type unless `LayoutMachineTypeOverrides` or `SmallDisplayMachineType` redirects it). Use `LayoutMachine` for anything that produces windows the layout has to place, so the window count follows the layout file:
+An action that should only run on some machines carries a scope, and an action that runs everywhere but differs per machine carries a table; every other action runs everywhere unchanged. `Machine` / `MachineParameters` are matched against the detected machine type, `LayoutMachine` / `LayoutMachineParameters` against the layout set the window layout is read from (`Get-LayoutMachineType` - the detected type unless `LayoutMachineTypeOverrides` or `SmallDisplayMachineType` redirects it). Use the layout axis for anything that produces windows the layout has to place, so the window count follows the layout file:
 
 ```powershell
 MyNewWorkspace = @(
-    @{ Action = "Open-Browser"; Parameters = @{ Groups = @("Google"); Instances = 2 }; LayoutMachine = "PC" }
-    @{ Action = "Open-Browser"; Parameters = @{ Groups = @("Google") };               LayoutMachine = "Laptop/Work" }
+    @{ Action = "Open-Browser"; Parameters = @{ Groups = @("Google") }; LayoutMachineParameters = @{ PC = @{ Instances = 2 } } }
+    @{ Action = "Open-Project"; Parameters = @{ Project = "MyProject"; RunApp = $true }; MachineParameters = @{ "Laptop/Work" = @{ RunApp = $null } } }
     @{ Action = "Open-Outlook"; Machine = "Work" }
     @{ Action = "Set-WorkspaceWindowLayout"; Parameters = @{ WorkspaceName = "MyNewWorkspace" } }
 )
 ```
 
-The two-window layout in `Layouts/PC/` and the one-window layouts in `Layouts/Laptop/` and `Layouts/Work/` then each get exactly the windows they describe. Unknown tokens are reported, not ignored. See [Resolve-WorkspaceActions](Resolve-WorkspaceActions.md).
+The two-window layout in `Layouts/PC/` and the one-window layouts in `Layouts/Laptop/` and `Layouts/Work/` then each get exactly the windows they describe from one browser entry: `Parameters` is the default, the `PC` row adds `Instances = 2` on the PC's own layout set, and a row value of `$null` removes a parameter (`RunApp` away from the desktop). Unknown tokens are reported, not ignored. See [Resolve-WorkspaceActions](Resolve-WorkspaceActions.md).
 
 ### Action Order Matters
 
