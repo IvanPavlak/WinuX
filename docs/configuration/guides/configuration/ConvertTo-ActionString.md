@@ -9,8 +9,11 @@ This function reads no `Configuration.psd1` keys. There is nothing to configure.
 ## Usage
 
 ```powershell
-ConvertTo-ActionString -Action @{ Action = "Open-Browser"; Parameters = @{ Groups = @("GroupName") } } -Indent "\
-t\
+ConvertTo-ActionString -Action @{ Action = "Open-Browser"; Parameters = @{ Groups = @("GroupName") } } -Indent "`t`t`t"
+
+# The optional Machine / LayoutMachine scopes are written after Parameters
+ConvertTo-ActionString -Action @{ Action = "Open-Browser"; Parameters = @{ Groups = @("Google") }; LayoutMachine = "Laptop/Work" } -Indent "`t`t`t"
+# @{ Action = "Open-Browser"; Parameters = @{ Groups = @("Google") }; LayoutMachine = "Laptop/Work" }
 ```
 
 ## Related

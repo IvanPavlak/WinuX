@@ -11,7 +11,7 @@ Tests whether a machine-scope string (`All`, `PC`, `PC/Laptop`, ...) applies to 
 | --- | ---- | -------------- | ---------------- |
 | [`ValidMachineTypes`](../../configuration-reference.md#valid-machine-types) | array of strings | `@("Test")` | The machine types WinuX accepts. `DetermineMachineType` refuses anything not listed, and `Test-MachineTypeScope` uses it to decide whether a CSV row or a step applies. |
 
-This is the gate behind the `Machine` column in the app CSVs and behind the per-machine-type step toggles. A scope of `All` (or blank) applies everywhere; a comma-separated list applies only to the named types; a `!Type` entry excludes one.
+This is the gate behind the `Machine` column in the app CSVs, the `BootstrapConfig.PersonalSteps` entries, the `TaskbarConfiguration` rows and the `Machine` / `LayoutMachine` scopes of `WorkspaceActions` entries (through [Resolve-WorkspaceActions](../workflow/Resolve-WorkspaceActions.md)). A scope of `All` applies everywhere; a `/`-separated list (`PC/Laptop`) applies only to the named types. Callers that accept tokens other than machine types - the layout sets a `LayoutMachine` scope can name - pass them in with `-AdditionalValidTypes`.
 
 ## Decisions
 
@@ -81,5 +81,6 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 - [Add New Machine](add-new-machine.md) - the full 7-step walk for bringing a new machine type online
 - [`DetermineMachineType`](DetermineMachineType.md) - reads the same configuration
 - [`Save-AppCsvOverlay`](../configuration/Save-AppCsvOverlay.md) - reads the same configuration
+- [`Resolve-WorkspaceActions`](../workflow/Resolve-WorkspaceActions.md) - scopes workspace actions through this gate
 - [WinuXConfigurator](../../winux-configurator.md) - have an AI assistant walk these decisions with you
 - [Configuration reference](../../configuration-reference.md) - every key, section by section

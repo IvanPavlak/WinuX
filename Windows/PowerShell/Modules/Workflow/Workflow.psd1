@@ -35,6 +35,7 @@
 		'Read-WorkspaceOpenMeasurement',
 		'Resolve-ProjectDockerCompose',
 		'Resolve-SwaggerBrowserGroup',
+		'Resolve-WorkspaceActions',
 		'Save-WorkspaceState',
 		'Start-Containers',
 		'Test-TerminalTabsAlreadyOpen',

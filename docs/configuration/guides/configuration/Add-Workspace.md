@@ -11,7 +11,7 @@ Adds a workspace to `Configuration.psd1`: appends the name to the `Workspaces` a
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`WorkspaceActions`](../../configuration-reference.md#workspace-actions) | hashtable of workspace name to action array | hashtable, 5 keys | What `Open-Workspace` does for each workspace: an ordered array of `@{ Action; Parameters }` entries. `Close-Workspace` reads what the open actually produced, not this map. |
+| [`WorkspaceActions`](../../configuration-reference.md#workspace-actions) | hashtable of workspace name to action array | hashtable, 5 keys | What `Open-Workspace` does for each workspace: an ordered array of `@{ Action; Parameters }` entries. An entry may carry `Machine` / `LayoutMachine` scopes ([Resolve-WorkspaceActions](../workflow/Resolve-WorkspaceActions.md)); `Add-Workspace` writes them through unchanged. `Close-Workspace` reads what the open actually produced, not this map. |
 | [`Workspaces`](../../configuration-reference.md#workspaces-list) | array of workspace names | `@("Default", "Example", "Fullscreen", "Empty", "WinuX")` | The workspace names `Open-Workspace` offers. Each needs a `WorkspaceActions` entry to do anything. |
 
 ## Decisions
@@ -46,13 +46,14 @@ On this page that bites on `Workspaces` - that key is an array, so whatever you 
 
 ## Step 1: Set `WorkspaceActions`
 
-What `Open-Workspace` does for each workspace: an ordered array of `@{ Action; Parameters }` entries. `Close-Workspace` reads what the open actually produced, not this map.
+What `Open-Workspace` does for each workspace: an ordered array of `@{ Action; Parameters }` entries. `Close-Workspace` reads what the open actually produced, not this map. Pass `-Actions` entries with `Machine` or `LayoutMachine` keys to scope an action to some machines; they are serialized after `Parameters`.
 
 ```powershell
 WorkspaceActions = @{
     MyWorkspace = @(
         @{ Action = "Open-Project"; Parameters = @{ ProjectName = "MyProject" } }
         @{ Action = "Open-Browser"; Parameters = @{ Groups = @("Monitoring") } }
+        @{ Action = "Open-Outlook"; Machine = "Work" }
         @{ Action = "Set-WorkspaceWindowLayout" }
     )
 }

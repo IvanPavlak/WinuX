@@ -4,9 +4,12 @@ function ConvertTo-ActionString {
 		Converts an action hashtable to a Configuration.psd1 entry string.
 	.DESCRIPTION
 		Formats an action hashtable as a properly formatted string for
-		insertion into WorkspaceActions or ProjectActions sections.
+		insertion into WorkspaceActions or ProjectActions sections. The optional
+		machine scopes (Machine, LayoutMachine - see Resolve-WorkspaceActions) are
+		written after Parameters when present, so Add-Workspace keeps them.
 	.PARAMETER Action
-		The action hashtable with Action and optional Parameters keys.
+		The action hashtable with Action, optional Parameters, and optional
+		Machine / LayoutMachine scope keys.
 	.PARAMETER Indent
 		The indentation prefix for the output string.
 	.EXAMPLE
@@ -40,6 +43,17 @@ function ConvertTo-ActionString {
 			}
 		}
 		$str += "; Parameters = @{ $($paramParts -join '; ') }"
+	}
+
+	# Machine scopes last, the way the TaskbarConfiguration rows carry theirs.
+	foreach ($scopeKey in @('Machine', 'LayoutMachine')) {
+		if ($Action.ContainsKey($scopeKey)) {
+			$scope = $Action[$scopeKey]
+			if ($scope -is [array]) { $scope = (@($scope) | ForEach-Object { "$_".Trim() } | Where-Object { $_ }) -join '/' }
+			if (-not [string]::IsNullOrWhiteSpace([string]$scope)) {
+				$str += "; $scopeKey = `"$(([string]$scope).Trim())`""
+			}
+		}
 	}
 
 	$str += " }"

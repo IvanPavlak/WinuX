@@ -100,6 +100,8 @@ WorkspaceActions = @{
 
 **Parameter forwarding**: Command-line parameters passed to `Open-Workspace` are automatically forwarded to actions that accept them (via `Get-FilteredParams`).
 
+**Machine scope**: An action may carry `Machine = "PC/Work"` (runs only on those detected machine types) and/or `LayoutMachine = "Laptop/Work"` (runs only when `Get-LayoutMachineType` resolves one of those layout sets - use it for window counts that must agree with the layout file, e.g. `@{ Action = "Open-Browser"; Parameters = @{ Groups = @("Google"); Instances = 2 }; LayoutMachine = "PC" }` next to a one-window twin scoped `LayoutMachine = "Laptop/Work"`). Absent = every machine. Resolved by `Resolve-WorkspaceActions`; unknown tokens are reported, never ignored.
+
 ## Adding a Project
 
 ### Step 1: Add to project list

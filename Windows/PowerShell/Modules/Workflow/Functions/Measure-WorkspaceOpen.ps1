@@ -242,6 +242,14 @@ function Measure-WorkspaceOpen {
 		return
 	}
 
+	# The checks below concern the actions that will actually run here: an action scoped to another
+	# machine (Machine / LayoutMachine) neither exits the shell nor opens a menu on this one.
+	$workspaceActions = @(Resolve-WorkspaceActions -Actions $workspaceActions -Workspace $Workspace -Configuration $Configuration)
+	if ($workspaceActions.Count -eq 0) {
+		Write-LogError "Workspace [$Workspace] has no actions that apply on this machine - every open would be a no-op, so there is nothing to measure." -NoLeadingNewline
+		return
+	}
+
 	# Terminate-WindowsTerminalTabs -OnlyCurrent / -IncludeCurrent ends THIS process; one such
 	# action and the experiment would end with its first open.
 	foreach ($action in @($workspaceActions)) {

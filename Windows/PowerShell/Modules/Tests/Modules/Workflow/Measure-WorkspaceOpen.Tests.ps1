@@ -30,6 +30,9 @@ BeforeAll {
 	}
 	function Kill-All { param($Exclude, $Skip, $Include, [switch]$IncludeCurrent, [switch]$ReloadPowerShellProfile) }
 	function Open-Workspace { param($Workspace, $Project, [switch]$Alongside, [Parameter(ValueFromRemainingArguments = $true)]$ExtraArgs) }
+	# The pre-checks run on the actions that apply on this machine. Pass-through here; the scope
+	# semantics themselves are Resolve-WorkspaceActions.Tests.ps1's business.
+	function Resolve-WorkspaceActions { param($Actions, $Workspace, $MachineType, $LayoutMachineType, $Configuration) $Actions }
 
 	function New-TestConfiguration {
 		param([hashtable]$Overrides = @{})
@@ -202,6 +205,31 @@ Describe "Measure-WorkspaceOpen" {
 
 			$result | Should -BeNullOrEmpty
 			Should -Invoke Write-LogError -Times 1 -Exactly
+			Should -Invoke Open-Workspace -Times 0 -Exactly
+		}
+
+		It "judges the shell-exiting check on the actions that apply on this machine" {
+			# The exiting action is scoped to another machine: the resolver drops it, so the
+			# experiment may run.
+			Mock Resolve-WorkspaceActions {
+				param($Actions, $Workspace, $MachineType, $LayoutMachineType, $Configuration)
+				@($Actions | Where-Object { $_.Action -ne 'Terminate-WindowsTerminalTabs' })
+			}
+
+			Measure-WorkspaceOpen Exiter Asseto -Runs 1 -WarmUp 0 -SettleSeconds 0 -Variant @{ Name = 'Only' } -Configuration $script:Configuration -ResultPath $script:ResultFile | Out-Null
+
+			Should -Invoke Write-LogError -Times 0 -Exactly
+			Should -Invoke Resolve-WorkspaceActions -Times 1 -Exactly -ParameterFilter { $Workspace -eq 'Exiter' -and $null -ne $Configuration }
+			Should -Invoke Open-Workspace -Times 1 -Exactly -ParameterFilter { $Workspace -eq 'Exiter' }
+		}
+
+		It "refuses a workspace whose every action is scoped to another machine" {
+			Mock Resolve-WorkspaceActions { @() }
+
+			$result = Measure-WorkspaceOpen -Workspace Example -Configuration $script:Configuration
+
+			$result | Should -BeNullOrEmpty
+			Should -Invoke Write-LogError -Times 1 -Exactly -ParameterFilter { $Message -like '*no actions that apply*' }
 			Should -Invoke Open-Workspace -Times 0 -Exactly
 		}
 

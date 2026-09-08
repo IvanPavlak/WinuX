@@ -30,3 +30,7 @@ Add-Workspace -Name "WorkspaceName" -Actions @(
 ## Available Actions
 
 Common actions: `Open-Project`, `Open-Browser`, `Set-WorkspaceWindowLayout`, `Open-Obsidian`, `Open-DBeaver`, `Open-Outlook`, `Open-Discord`, `Send-WakeOnLan`, `Return` (stops processing).
+
+## Machine-Specific Actions
+
+If an action should only run on some machines, add `Machine = "PC/Work"` (detected machine type) or `LayoutMachine = "Laptop/Work"` (the layout set the window layout is read from - use it for window counts that must match the layout file) to that entry, e.g. `@{ Action = "Open-Browser"; Parameters = @{ Groups = @("Google"); Instances = 2 }; LayoutMachine = "PC" }`. `Add-Workspace` writes the keys through unchanged.

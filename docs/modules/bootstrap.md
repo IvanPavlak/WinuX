@@ -363,15 +363,16 @@ Resolve-PackageManagers
 
 ## [Test-MachineTypeScope](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Bootstrap/Functions/Test-MachineTypeScope.ps1)
 
-- **Description:** Tests whether a machine-scope string (`All`, `PC`, `PC/Laptop`, ...) applies to a machine type, validating every token against `ValidMachineTypes` plus the `All` wildcard. Unknown tokens - e.g. a `Labtop` typo - are reported via `Write-LogError` together with the valid values and contribute nothing to the match, so a misspelled scope can never silently install or skip anything. Matching is case-insensitive. The single gate behind the app CSVs' `Machine` column (`Install-WingetApps`, `Install-ScoopApps`, `Install-ChocolateyApps`) and `BootstrapConfig.PersonalSteps` entries (via `Invoke-PersonalSteps`).
-- **Parameters:** -Scope, -MachineType, -Context
-- **Usage:** `Test-MachineTypeScope -Scope "PC/Laptop" -MachineType "Laptop"`
+- **Description:** Tests whether a machine-scope string (`All`, `PC`, `PC/Laptop`, ...) applies to a machine type, validating every token against `ValidMachineTypes` plus the `All` wildcard. Unknown tokens - e.g. a `Labtop` typo - are reported via `Write-LogError` together with the valid values and contribute nothing to the match, so a misspelled scope can never silently install or skip anything. Matching is case-insensitive. The single gate behind the app CSVs' `Machine` column (`Install-WingetApps`, `Install-ScoopApps`, `Install-ChocolateyApps`), `BootstrapConfig.PersonalSteps` entries (via `Invoke-PersonalSteps`), the `TaskbarConfiguration` rows (`Configure-Taskbar`) and the `Machine` / `LayoutMachine` scopes of `WorkspaceActions` entries (via [Resolve-WorkspaceActions](workflow.md#resolve-workspaceactions)). `-AdditionalValidTypes` widens the accepted token set for scopes that name something other than a machine type - the layout sets a `LayoutMachine` scope can name (`LayoutMachineTypeOverrides` values, `SmallDisplayMachineType`).
+- **Parameters:** -Scope, -MachineType, -Context, -AdditionalValidTypes
+- **Usage:** `Test-MachineTypeScope -Scope "PC/Laptop" -MachineType "Laptop"`, `Test-MachineTypeScope -Scope "Temp" -MachineType "Temp" -AdditionalValidTypes "Temp"`
 
-| Parameter      | Description                                                                                                     |
-| -------------- | --------------------------------------------------------------------------------------------------------------- |
-| `-Scope`       | Machine-scope string: machine types separated by `/`, or `All`. A blank scope is reported and never matches.    |
-| `-MachineType` | Machine type to test the scope against. Defaults to `$global:MachineType`; when empty, only `All` scopes match. |
-| `-Context`     | Optional data-source label (e.g. `WinGetApps.csv [Git.Git]`) included in error messages for instant diagnosis.  |
+| Parameter               | Description                                                                                                                                                                       |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `-Scope`                | Machine-scope string: machine types separated by `/`, or `All`. A blank scope is reported and never matches.                                                                      |
+| `-MachineType`          | Machine type to test the scope against. Defaults to `$global:MachineType`; when empty, only `All` scopes match.                                                                   |
+| `-Context`              | Optional data-source label (e.g. `WinGetApps.csv [Git.Git]`) included in error messages for instant diagnosis.                                                                    |
+| `-AdditionalValidTypes` | Extra tokens accepted alongside `ValidMachineTypes` (blanks ignored, duplicates collapsed). Supplying them turns validation on even when the configuration lists no machine types. |
 
 ```powershell
 # True - the scope covers Laptop
@@ -379,9 +380,12 @@ Test-MachineTypeScope -Scope "PC/Laptop" -MachineType "Laptop"
 
 # False, and reports the unknown token [Labtop] with the list of valid values
 Test-MachineTypeScope -Scope "Labtop" -MachineType "Laptop" -Context "WinGetApps.csv [MyApp]"
+
+# True - "Temp" is a layout set, not a machine type; accepted only because it was passed in
+Test-MachineTypeScope -Scope "Temp" -MachineType "Temp" -AdditionalValidTypes "Temp"
 ```
 
-**See also:** [DetermineMachineType](#determinemachinetype)
+**See also:** [DetermineMachineType](#determinemachinetype), [Resolve-WorkspaceActions](workflow.md#resolve-workspaceactions)
 
 ## Two-Stage Architecture
 

@@ -31,4 +31,31 @@ Describe "ConvertTo-ActionString" {
 
 		$result | Should -Be "\t@{ Action = `"Open-WSLTab`" }"
 	}
+
+	Context "machine scopes" {
+		It "writes Machine and LayoutMachine after Parameters, in that order" {
+			$action = @{
+				Action        = 'Open-Browser'
+				Parameters    = @{ Groups = @('Google') }
+				Machine       = 'PC/Work'
+				LayoutMachine = 'Work'
+			}
+
+			$result = ConvertTo-ActionString -Action $action -Indent "`t"
+
+			$result | Should -Be "`t@{ Action = `"Open-Browser`"; Parameters = @{ Groups = @(`"Google`") }; Machine = `"PC/Work`"; LayoutMachine = `"Work`" }"
+		}
+
+		It "writes a scope on an action without parameters and joins an array scope with slashes" {
+			$result = ConvertTo-ActionString -Action @{ Action = 'Open-Outlook'; Machine = @('PC', 'Work') } -Indent "`t"
+
+			$result | Should -Be "`t@{ Action = `"Open-Outlook`"; Machine = `"PC/Work`" }"
+		}
+
+		It "omits blank scopes" {
+			$result = ConvertTo-ActionString -Action @{ Action = 'Open-Outlook'; Machine = ''; LayoutMachine = '   ' } -Indent "`t"
+
+			$result | Should -Be "`t@{ Action = `"Open-Outlook`" }"
+		}
+	}
 }

@@ -76,4 +76,36 @@ Describe "Test-MachineTypeScope" {
 		Test-MachineTypeScope -Scope 'All' -MachineType '' | Should -BeTrue
 		Test-MachineTypeScope -Scope 'PC' -MachineType '' | Should -BeFalse
 	}
+
+	Context "additional valid types" {
+		It "accepts an additional type as a token without reporting it" {
+			# "Temp" is a layout set (a LayoutMachineTypeOverrides value), not a machine type.
+			Test-MachineTypeScope -Scope 'Temp' -MachineType 'Temp' -AdditionalValidTypes 'Temp' | Should -BeTrue
+			Test-MachineTypeScope -Scope 'PC/Temp' -MachineType 'Temp' -AdditionalValidTypes @('Temp') | Should -BeTrue
+			Should -Invoke Write-LogError -Times 0
+		}
+
+		It "still reports an unknown token and lists the additional types among the valid values" {
+			Test-MachineTypeScope -Scope 'Tmp' -MachineType 'Temp' -AdditionalValidTypes 'Temp' -Context 'WorkspaceActions.Example [Open-Browser]' | Should -BeFalse
+			Should -Invoke Write-LogError -Times 1 -Exactly -ParameterFilter { $Message -like '*Tmp*' -and $Message -like '*Temp*' -and $Message -like '*WorkspaceActions.Example ?Open-Browser?*' }
+		}
+
+		It "ignores blank entries and duplicates in the additional types" {
+			Test-MachineTypeScope -Scope 'Temp' -MachineType 'Temp' -AdditionalValidTypes @('', '  ', 'Temp', 'Temp', $null) | Should -BeTrue
+			Should -Invoke Write-LogError -Times 0
+		}
+
+		It "does not report a configured machine type as unknown when additional types are supplied" {
+			Test-MachineTypeScope -Scope 'Laptop' -MachineType 'Laptop' -AdditionalValidTypes 'Temp' | Should -BeTrue
+			Should -Invoke Write-LogError -Times 0
+		}
+
+		It "validates against the additional types alone when the configuration has no ValidMachineTypes" {
+			$global:Configuration = @{ }
+
+			Test-MachineTypeScope -Scope 'Temp' -MachineType 'Temp' -AdditionalValidTypes 'Temp' | Should -BeTrue
+			Test-MachineTypeScope -Scope 'PC' -MachineType 'PC' -AdditionalValidTypes 'Temp' | Should -BeFalse
+			Should -Invoke Write-LogError -Times 1 -Exactly -ParameterFilter { $Message -like '*[[]PC]*' }
+		}
+	}
 }
