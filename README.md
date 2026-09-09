@@ -18,13 +18,20 @@ A comprehensive PowerShell-based dotfiles system that turns a fresh Windows 11 i
 
 ---
 
-<p align="center">
-  <img src="https://raw.githubusercontent.com/IvanPavlak/WinuX/master/docs/assets/demo.webp" width="720" alt="WinuX demo" />
-</p>
-
-<p align="center">
-  <em>An example workspace layout opened across two stacked ultrawide monitors</em>
-</p>
+<table align="center">
+  <tr>
+    <td align="center" valign="middle" width="50%">
+      <img src="https://raw.githubusercontent.com/IvanPavlak/WinuX/master/docs/assets/UltrawideDemo.webp" width="440" alt="WinuX demo on one ultrawide monitor" />
+    </td>
+    <td align="center" valign="middle" width="50%">
+      <img src="https://raw.githubusercontent.com/IvanPavlak/WinuX/master/docs/assets/StackedUltrawideDemo.webp" width="440" alt="WinuX demo on two stacked ultrawide monitors" />
+    </td>
+  </tr>
+  <tr>
+    <td align="center"><em>An example workspace layout opened across one ultrawide monitor</em></td>
+    <td align="center"><em>An example workspace layout opened across two stacked ultrawide monitors</em></td>
+  </tr>
+</table>
 
 ___
 
