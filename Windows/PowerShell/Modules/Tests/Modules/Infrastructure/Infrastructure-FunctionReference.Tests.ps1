@@ -31,7 +31,7 @@ Describe "Function Reference Coherence" {
 
 	BeforeDiscovery {
 		$ExportingModules = @(
-			'Application', 'Bootstrap', 'Configuration', 'Git', 'Helper',
+			'AI', 'Application', 'Bootstrap', 'Configuration', 'Git', 'Helper',
 			'Logging', 'System', 'Tests', 'Window', 'Workflow'
 		)
 	}

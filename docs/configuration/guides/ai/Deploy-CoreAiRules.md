@@ -73,12 +73,13 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 
 ## Related
 
-- [`Deploy-CoreAiRules` in the System module reference](../../../modules/system.md#deploy-coreairules) - parameters, usage and behaviour
-- [System configuration guides](README.md) - every guide for this module
-- [Add Symbolic Link](add-symbolic-link.md) - link shapes, placeholders and the WSL cases
+- [`Deploy-CoreAiRules` in the AI module reference](../../../modules/ai.md#deploy-coreairules) - parameters, usage and behaviour
+- [AI configuration guides](README.md) - every guide for this module
+- [Add Symbolic Link](../system/add-symbolic-link.md) - link shapes, placeholders and the WSL cases
 - [`Open-WSLTab`](../application/Open-WSLTab.md) - reads the same configuration
 - [`Test-WSLDistributionInstalled`](../helper/Test-WSLDistributionInstalled.md) - reads the same configuration
-- [`Configure-WSL`](Configure-WSL.md) - reads the same configuration
-- [`Configure-WSLSSH`](Configure-WSLSSH.md) - reads the same configuration
+- [`Configure-WSL`](../system/Configure-WSL.md) - reads the same configuration
+- [`Deploy-AiSkills`](Deploy-AiSkills.md) - the same module's skills deployment, opt-in the same way
+- [`Configure-WSLSSH`](../system/Configure-WSLSSH.md) - reads the same configuration
 - [WinuXConfigurator](../../winux-configurator.md) - have an AI assistant walk these decisions with you
 - [Configuration reference](../../configuration-reference.md) - every key, section by section

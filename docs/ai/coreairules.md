@@ -2,7 +2,7 @@
 
 Always-enforced, machine-uniform rules for AI coding agents: **no commit, no push, no destructive git, no AI co-author attribution, ever on the agent's own initiative; explicit requests still require a confirmation prompt.** Deployed through Bootstrap so every machine gets them, and (for Claude Code) placed at the managed-settings tier so they take precedence over every project, repository, and session setting.
 
-CoreAiRules is **opt-in**: the payloads ship with WinuX, but a vanilla bootstrap deploys nothing. Machine-global AI policy is only applied when a fork enables it in `Configuration.local.psd1` (the `BootstrapConfig.Steps.CoreAiRules` toggle plus the `PathTemplates.SymbolicLinks` entries below).
+CoreAiRules is **opt-in**: the payloads ship with WinuX, but a vanilla bootstrap deploys nothing. Machine-global AI policy is only applied when a fork enables it in `Configuration.local.psd1` (the `BootstrapConfig.Steps.CoreAiRules` toggle plus the `PathTemplates.SymbolicLinks` entries below). The same [AI module](../modules/ai.md) deploys Agent Skills machine-globally the same way - see [AI Skills](skills.md).
 
 ## Design: layers, strongest wins
 
@@ -40,7 +40,7 @@ Linux and macOS deployment arrives with the future Unix bootstrap (their Claude 
 ## How it deploys
 
 - **Windows and WSL home-directory links**: regular `PathTemplates.SymbolicLinks` entries (the commented `AI` opt-in block in `Configuration.psd1` is the template - copy it into `Configuration.local.psd1`), created and self-healed by [SymbolicLinkMaker](../modules/system.md#symboliclinkmaker) on every Bootstrap run. The managed-settings entry uses a literal `C:\ProgramData\...` path (no placeholder exists for ProgramData; literals pass through expansion untouched) with backslashes only, because any forward slash routes an entry to the WSL branch.
-- **WSL `/etc/claude-code`**: created by [Deploy-CoreAiRules](../modules/system.md#deploy-coreairules), gated behind the opt-in `BootstrapConfig.Steps.CoreAiRules` toggle (OFF by default). It exists because `/etc` is root-owned and SymbolicLinkMaker's WSL branch never elevates, while `Deploy-CoreAiRules` runs its `wsl.exe` calls as root. It no-ops when the configured WSL distribution is not installed.
+- **WSL `/etc/claude-code`**: created by [Deploy-CoreAiRules](../modules/ai.md#deploy-coreairules), gated behind the opt-in `BootstrapConfig.Steps.CoreAiRules` toggle (OFF by default). It exists because `/etc` is root-owned and SymbolicLinkMaker's WSL branch never elevates, while `Deploy-CoreAiRules` runs its `wsl.exe` calls as root. It no-ops when the configured WSL distribution is not installed.
 
 Enable it in `Configuration.local.psd1`:
 

@@ -942,7 +942,8 @@ Anything other than the three valid values is reported as unknown rather than si
   already on the machine, not only the ones WinuX installs - the base spells this one out as
   `$false` rather than leaving it to the default), `CoreAiRules` (machine-global AI
   agent policy applied via `Deploy-CoreAiRules` and the opt-in `SymbolicLinks` entries - see
-  [CoreAiRules](../ai/coreairules.md)), `LockedStartLayout`. Per invocation,
+  [CoreAiRules](../ai/coreairules.md)), `AiSkills` (machine-global Agent Skills linked into every
+  AI harness via `Deploy-AiSkills` - see [AI Skills](../ai/skills.md)), `LockedStartLayout`. Per invocation,
   `Bootstrap -Skip <steps>` / `-Include <steps>` override this config. Repository updates are
   governed by `RepositoryUpdateScope` above, not by a step. The full step list in execution
   order is documented next to the section in `Configuration.psd1`. The deprecated `WSLSetup`
@@ -1053,6 +1054,37 @@ VisualEffects = @{
 ```
 
 **Consumer function:** `Set-VisualEffects`
+
+---
+
+## AI Skills
+
+**Key:** `AiSkills` → Hashtable: where Agent Skills live and which AI harnesses they are linked into
+
+**Consumer functions:** [`Deploy-AiSkills`](../modules/ai.md#deploy-aiskills), [`Update-AiSkills`](../modules/ai.md#update-aiskills), both through [`Resolve-AiSkillsConfig`](../modules/ai.md#resolve-aiskillsconfig)
+
+**Subkeys:**
+
+- `Root` - The skills root (default `{RepoRoot}\AI\Skills`): one subfolder per source, each holding flat `<skill>\SKILL.md` folders. Vendored upstreams live in `<Root>\<source>\` and are filled by `Update-AiSkills`; hand-written skills go in `<Root>\own\`, which no refresh touches.
+- `Harnesses` - The Windows directories `Deploy-AiSkills` links every skill into, one symbolic link per skill (default `{User}\.claude\skills` for Claude Code and `{User}\.agents\skills` for Codex CLI and Gemini CLI). The `{User}` entries also yield the WSL twins under `/home/<DefaultWSLUsername>/`. An array - it replaces wholesale on merge.
+- `Sources` - Upstream skill repositories vendored by `Update-AiSkills`, keyed by the folder name under `Root`. Each entry: `Repository` (`owner/name`), `Ref` (branch, tag or commit; default `main`; `UPSTREAM.md` records the exact commit it resolved to), `Folders` (upstream folders whose skill subfolders are flattened; default `skills`), `Exclude` (skill names to leave out - a personal skill replaces a Claude Code built-in of the same name, so `code-review` is the usual candidate). Ships empty.
+
+Only `{RepoRoot}`, `{User}` and `{AppData}` are expanded in this section - it is machine-type independent and does not go through `PathTemplates`. Deployment is opt-in via `BootstrapConfig.Steps.AiSkills`. Design: [AI Skills](../ai/skills.md).
+
+```powershell
+AiSkills = @{
+    Root      = "{RepoRoot}\AI\Skills"
+    Harnesses = @("{User}\.claude\skills", "{User}\.agents\skills")
+    Sources   = @{
+        mattpocock = @{
+            Repository = "mattpocock/skills"
+            Ref        = "main"
+            Folders    = @("skills/engineering", "skills/productivity")
+            Exclude    = @()
+        }
+    }
+}
+```
 
 ---
 

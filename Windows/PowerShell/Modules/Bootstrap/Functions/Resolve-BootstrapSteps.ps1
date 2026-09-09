@@ -17,7 +17,8 @@ function Resolve-BootstrapSteps {
 		they run: MicrosoftActivationScripts, Win11Debloat, DeveloperMode,
 		NuGetConfig (prompts for a GitHub PAT), UpgradeAll (upgrades every
 		package already on the machine, not just WinuX's own), CoreAiRules
-		(machine-global AI agent policy), and LockedStartLayout.
+		(machine-global AI agent policy), AiSkills (machine-global Agent
+		Skills links), and LockedStartLayout.
 
 		Legacy alias: when Steps.WSL is absent but the deprecated
 		BootstrapConfig.WSLSetup exists, WSL resolves from WSLSetup, so
@@ -86,6 +87,7 @@ function Resolve-BootstrapSteps {
 		Taskbar                    = $true
 		SymbolicLinks              = $true
 		CoreAiRules                = $false
+		AiSkills                   = $false
 		LockedStartLayout          = $false
 	}
 

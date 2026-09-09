@@ -8,6 +8,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.58] - 2026-09-09
+
+### Added
+
+- **AI module and machine-global Agent Skills.** New `Modules/AI` module (`docs/modules/ai.md`, `docs/configuration/guides/ai/`) for machine-global AI coding agent setup. `Update-AiSkills` vendors Agent Skills from configured upstream repositories (`AiSkills.Sources.<name>`: `Repository`, `Ref`, `Folders`, `Exclude`) into `AI/Skills/<name>/`, flat (the upstream category level is dropped, since every harness discovers user-level skills from one flat directory of `<skill>/SKILL.md`) and pinned to an exact commit recorded in a per-source `UPSTREAM.md` next to a copy of the upstream license; it removes only the skills the previous manifest lists, so hand-made folders survive, and `-Check` reports whether a source is behind upstream without writing. `Deploy-AiSkills` links every skill under `AiSkills.Root` (default `AI/Skills`, one subfolder per source, `own` for hand-written skills) into each harness directory in `AiSkills.Harnesses` (default `~\.claude\skills` for Claude Code and `~\.agents\skills` for Codex CLI and Gemini CLI), one symbolic link per skill, on Windows and inside WSL (`/home/<DefaultWSLUsername>/...`, one `wsl -e sh` script per harness); it requires administrator privileges via `Test-AdminPrivileges`; it replaces a whole-directory link into the repository with a real directory, prunes dangling links into the skills root and never touches links to anything else. `Resolve-AiSkillsConfig` is the shared view of the new `AiSkills` configuration section (`Root`, `Harnesses`, `Sources`; `{RepoRoot}`, `{User}` and `{AppData}` expanded), `Get-AiSkillManifest` and `Get-AiSkillDescription` are its readers. Opt-in like CoreAiRules: the base ships `AiSkills` with no sources and `BootstrapConfig.Steps.AiSkills = $false`, so a vanilla bootstrap links nothing; Bootstrap runs `Deploy-AiSkills` right after `Deploy-CoreAiRules` when enabled. Upstream ships only `AI/Skills/README.md`; the source folders belong to the fork. Design page: `docs/ai/skills.md`.
+
+### Changed
+
+- **`Deploy-CoreAiRules` moved from the System module to the new AI module** (function, test and configuration guide), so everything machine-global-AI lives in one module and one reference page. Behavior and the `BootstrapConfig.Steps.CoreAiRules` toggle are unchanged; the test harness and the Infrastructure coherence tests now include the AI module.
+
 ## [0.1.57] - 2026-09-09
 
 ### Fixed
@@ -969,7 +979,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.57...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.58...HEAD
+[0.1.58]: https://github.com/IvanPavlak/WinuX/compare/v0.1.57...v0.1.58
 [0.1.57]: https://github.com/IvanPavlak/WinuX/compare/v0.1.56...v0.1.57
 [0.1.56]: https://github.com/IvanPavlak/WinuX/compare/v0.1.55...v0.1.56
 [0.1.55]: https://github.com/IvanPavlak/WinuX/compare/v0.1.54...v0.1.55

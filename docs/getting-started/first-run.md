@@ -91,6 +91,8 @@ Every step is individually toggleable via `BootstrapConfig.Steps` (or per invoca
 │  │   └─ Creates all symlinks from SymbolicLinks config                      │
 │  ├─→ Deploy-CoreAiRules (opt-in via Steps.CoreAiRules)                      │
 │  │   └─ CoreAiRules managed settings inside WSL (/etc/claude-code)          │
+│  ├─→ Deploy-AiSkills (opt-in via Steps.AiSkills)                            │
+│  │   └─ Links AI/Skills/<source>/<skill> into every harness's skills dir    │
 │  └─→ Configure-WSLSSH                                                       │
 │      └─ Sets up SSH keys in WSL                                             │
 │                                                                             │
@@ -126,6 +128,7 @@ Steps that run on **every** Bootstrap but ship off, because they act the moment 
 | `DeveloperMode`      | Enables Developer Mode (symlinks without admin)                 | Off - opt in via `BootstrapConfig.Steps`      |
 | `NuGetConfig`        | Writes a NuGet config (prompts for a GitHub PAT)                | Off - opt in via `BootstrapConfig.Steps`      |
 | `CoreAiRules`        | Machine-global AI agent policy                                  | Off - opt in via `BootstrapConfig.Steps`      |
+| `AiSkills`           | Machine-global Agent Skills linked into every AI harness        | Off - opt in via `BootstrapConfig.Steps`      |
 | `LockedStartLayout`  | Locks the taskbar layout via registry policy                    | Off - opt in via `BootstrapConfig.Steps`      |
 
 ## What Gets Installed

@@ -1,6 +1,6 @@
 # Tests Module
 
-The Tests module provides **Pester test execution** for WinuX. It validates Application, Bootstrap, Configuration, Git, Helper, Logging, System, Window, and Workflow module logic, plus repository-infrastructure checks.
+The Tests module provides **Pester test execution** for WinuX. It validates AI, Application, Bootstrap, Configuration, Git, Helper, Logging, System, Window, and Workflow module logic, plus repository-infrastructure checks.
 
 > [!NOTE]
 > The repository maintains broad module-wide test coverage with same-name test files for function behavior checks, including complete same-name coverage for the System module.

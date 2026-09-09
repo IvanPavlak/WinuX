@@ -1,7 +1,7 @@
 #Requires -Modules Pester
 
 BeforeAll {
-	$FunctionsPath = Join-Path (Get-RepositoryPath).Modules "System\Functions"
+	$FunctionsPath = Join-Path (Get-RepositoryPath).Modules "AI\Functions"
 	. "$FunctionsPath\Deploy-CoreAiRules.ps1"
 }
 
