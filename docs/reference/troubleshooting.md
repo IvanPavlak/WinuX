@@ -498,6 +498,20 @@ Look for `Layout short by N window(s) - placed X of Y entries!`. If it still app
 
 Three changes fix it: `-Alongside` is forwarded to every action that declares it (so `-Instances N` opens N **new** windows), alongside verification is scoped rather than skipped (only the entries this pass placed, matched only against this open's windows), and a genuine shortfall is reported once with both counts instead of a verbose-only per-entry line.
 
+### A Many-Window Browser Workspace Doubles Up The First Desktops And Starves The Last Ones On Its First Pass
+
+**Problem:** A workspace whose layout repeats the `Browser` entry across many desktops (the shipped `Example` with 33 Chrome windows, say) reports `Layout short by N window(s) - placed X of Y entries!` with `Y` larger than the layout, then a verification block listing every window of the last desktops as `Window not found` or `On desktop <earlier one>`, and only the in-process retry ends with `Workspace layout applied successfully!`. The open takes two to three times as long as a clean one. The browser launched exactly as many windows as the layout has zones.
+
+**Solution:** Update to 0.1.57 or later. The verbose run shows the fix in effect:
+
+```powershell
+Set-LogLevel Verbose { w <workspace> }
+```
+
+Before it, the tail after the wait printed one `Catch-all entry [...] has a window that appeared after its desktop's pass - placing it in the tail` line per entry the early desktops had already placed, and `finishing the remaining [N]` named more entries than were left. After it, the line reads `... unplaced window(s), all owed to the N entries the tail still places - its placed entries stay skipped`, and the remaining count equals the entries the per-desktop passes did not place.
+
+**Why:** While the later desktops' windows were still loading, `Set-WorkspaceWindowLayout` decided which already-placed entries to run again in the tail with the rule "a catch-all entry re-runs when any unplaced window of its process exists" - written for the second VS Code window of a two-project open. Every browser entry shares one process key, so that rule re-queued every entry the early desktops had placed. They ran first in the tail, claimed the later desktops' windows (a second copy in every zone), and the last entries found nothing. The rule now compares counts - a placed entry re-runs only when the unplaced windows outnumber the entries the tail still has to place, and only as many placed entries as there are surplus windows re-run - and `Set-WindowLayouts`' duplicate-key claim prefers a candidate already on the entry's desktop, so the early move's assignment survives the tail.
+
 ### Workspace Rerun Fails With `Cannot convert value "1|<timestamp>" to type "System.Int32"`
 
 **Problem:** A workspace open fails verification, escalates to a fresh shell as announced (`Rerunning workspace setup in a fresh shell ... (attempt 1/2)`), and the respawned run then aborts the moment it needs the rerun counter - twice, because the `catch` block reads the same counter:

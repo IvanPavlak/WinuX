@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.57] - 2026-09-09
+
+### Fixed
+
+- **A workspace whose layout repeats one catch-all entry across many desktops (the shipped `Example` places 33 `Browser` windows over nine desktops) no longer doubles up the early desktops and starves the last ones on its first pass, so it stops paying an in-process retry on every cold open.** Since 0.1.52's per-desktop pipelining, `Set-WorkspaceWindowLayout` positions and snaps each virtual desktop as soon as its windows are stable, and the tail after the wait finishes what those passes did not place. The tail decided which already-placed entries to run *again* with the rule "a catch-all entry (process, no title) re-runs when any unplaced window of its process exists" - written so the second VS Code window of a two-project open, which appears after its desktop's pass, is still placed. Every browser entry shares one process key, so on a 33-window Chrome open that rule re-queued all 13 entries desktops 2-5 had already placed while desktops 6-10 were still loading their 20 windows; `finishing the remaining [33]` where 20 were left. Those 13 entries ran first in the tail, the placed windows were rightly off limits, so they claimed 13 of the 20 windows meant for the later desktops - moving them back off the desktops the wait's early move had already put them on, a second copy in every zone of desktops 2-5 - and the last 13 entries reported `No unclaimed window left`: `Layout short by 13 window(s) - placed 34 of 47 entries!` (the 47 being 34 entries plus 13 re-runs), a verification block with every desktop 9 and 10 window `On desktop 8` or `Window not found`, and a FancyZones reset plus a full second pass (29 s of positioning against 4-7 s) before `Workspace layout applied successfully!`. The re-run rule now compares counts: a placed catch-all entry re-runs only when the unplaced windows of its process **outnumber** the entries with the same key the tail still has to place, and only as many placed entries as there are surplus windows re-run - one for the second VS Code window, none for a browser layout whose every unplaced window is owed to a later desktop. The verbose line names both counts either way (`... has 20 unplaced window(s), all owed to the 20 entries the tail still places - its placed entries stay skipped`). Alongside it, `Set-WindowLayouts`' duplicate-key claim gained a step between the `CurrentLayout.txt` pin and the closest-bounds geometry: among the unclaimed candidates, those already on the entry's virtual desktop (`Get-WindowDesktopIndex`, resolved once per window per run, unresolvable desktops kept in the pool) are preferred, so the tail keeps the early move's desktop assignment instead of shuffling windows between desktops in layout order. Tests: `Set-WorkspaceWindowLayout.Tests.ps1` (a placed catch-all entry stays skipped while every unplaced window is owed to an entry the tail still places, and re-runs only for the surplus window beyond them) and `Set-WindowLayouts.Tests.ps1` (a new block: each entry claims the window already on its desktop over the first enumerated one, one desktop lookup per candidate per run, every candidate kept when none or no resolvable one is on the desktop). Documented in `docs/modules/window.md` (`Set-WorkspaceWindowLayout` pipelining paragraph, `Set-WindowLayouts` `-PinnedHandleMap` and Duplicate Window Entries) and a new `docs/reference/troubleshooting.md` entry.
+
 ## [0.1.56] - 2026-09-08
 
 ### Added
@@ -963,7 +969,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.56...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.57...HEAD
+[0.1.57]: https://github.com/IvanPavlak/WinuX/compare/v0.1.56...v0.1.57
 [0.1.56]: https://github.com/IvanPavlak/WinuX/compare/v0.1.55...v0.1.56
 [0.1.55]: https://github.com/IvanPavlak/WinuX/compare/v0.1.54...v0.1.55
 [0.1.54]: https://github.com/IvanPavlak/WinuX/compare/v0.1.53...v0.1.54

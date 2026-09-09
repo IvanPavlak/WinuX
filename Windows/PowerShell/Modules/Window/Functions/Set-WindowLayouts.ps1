@@ -116,8 +116,13 @@ function Set-WindowLayouts {
 		window claims the zone: when the recorded window is still live and owned by the same
 		process it is reclaimed exactly, so re-runs return every identical window to its own
 		zone with no reshuffle. When no valid recorded window exists (first run, reboot, or a
-		new window) the claim falls back to closest-bounds geometry. Unique entries and first
-		runs are unaffected (the map is empty or unused).
+		new window) the claim prefers the unclaimed candidates already on the entry's virtual
+		desktop (Get-WindowDesktopIndex, resolved once per window per run; candidates whose
+		desktop cannot be resolved stay in the pool, and a pool that would otherwise be empty
+		keeps every candidate) and decides among them by closest-bounds geometry - so the tail
+		after a pipelined wait keeps the desktop assignment the wait's early move made instead
+		of shuffling windows between desktops in layout order. Unique entries and first runs
+		are unaffected (the map is empty or unused).
 
 	.EXAMPLE
 		# Direct coordinates
@@ -357,6 +362,9 @@ function Set-WindowLayouts {
 		$placePart = if ($entry.Zone) { [string]$entry.Zone } elseif ($null -ne $entry.X) { "$($entry.X),$($entry.Y),$($entry.Width),$($entry.Height)" } else { '' }
 		"$entryDesktop|$monitorPart|$placePart|$($entry.ProcessName)|$($entry.WindowTitle)"
 	}
+	# Desktop index per candidate handle, resolved at most once per run: the same-desktop
+	# preference in the duplicate-key claim asks for it once per duplicate entry.
+	$candidateDesktopIndexCache = @{}
 	$skipEntryKeySet = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
 	foreach ($skipKey in @($SkipEntryKeys)) {
 		if (-not [string]::IsNullOrEmpty($skipKey)) { [void]$skipEntryKeySet.Add($skipKey) }
@@ -1237,10 +1245,37 @@ function Set-WindowLayouts {
 				#    candidate sits on the current desktop so this just assigns distinct
 				#    windows; the pin keeps the assignment stable on every run after.
 				if (-not $chosen) {
+					# 2a) Same desktop first. The wait phase's early move has usually already put
+					#     every window on the desktop its entry wants; a candidate already there is
+					#     preferred over one that would have to be moved off ANOTHER entry's desktop,
+					#     so the tail pass after the wait keeps that assignment instead of shuffling
+					#     windows between desktops in layout order. Candidates whose desktop cannot
+					#     be resolved stay in the pool; only a pool that would otherwise be empty
+					#     keeps the off-desktop candidates.
+					$geometryPool = @($windows)
+					if ($null -ne $config.DesktopNumber -and (Get-Command Get-WindowDesktopIndex -ErrorAction SilentlyContinue)) {
+						$wantedDesktopIndex = ([int]$config.DesktopNumber - 1) + $DesktopOffset
+						$onWantedDesktop = @($windows | Where-Object {
+								$handleKey = $_.Handle.ToInt64().ToString()
+								if (-not $candidateDesktopIndexCache.ContainsKey($handleKey)) {
+									$resolvedIndex = -1
+									try { $resolvedIndex = [int](Get-WindowDesktopIndex -WindowHandle $_.Handle) } catch { $resolvedIndex = -1 }
+									$candidateDesktopIndexCache[$handleKey] = $resolvedIndex
+								}
+								$candidateDesktopIndexCache[$handleKey] -eq $wantedDesktopIndex
+							})
+						if ($onWantedDesktop.Count -gt 0) {
+							$geometryPool = $onWantedDesktop
+							if ((Test-LogVerbose) -and $onWantedDesktop.Count -lt $windows.Count) {
+								Write-LogDebug "Duplicate key => preferring $($onWantedDesktop.Count) of $($windows.Count) candidate(s) already on desktop $($config.DesktopNumber + $DesktopOffset)" -Style Step
+							}
+						}
+					}
+
 					$haveTarget = ($null -ne $posX -and $null -ne $posY -and $posWidth -and $posHeight)
 					if ($haveTarget) {
 						$bestScore = [double]::PositiveInfinity
-						foreach ($candidate in $windows) {
+						foreach ($candidate in $geometryPool) {
 							$candRect = New-Object WindowModule.RECT
 							if ([WindowModule.Native]::GetWindowRect($candidate.Handle, [ref]$candRect)) {
 								$cW = $candRect.Right - $candRect.Left
@@ -1253,7 +1288,7 @@ function Set-WindowLayouts {
 							}
 						}
 					}
-					if (-not $chosen) { $chosen = $windows[0] }
+					if (-not $chosen) { $chosen = $geometryPool[0] }
 				}
 
 				$windows = @($chosen)

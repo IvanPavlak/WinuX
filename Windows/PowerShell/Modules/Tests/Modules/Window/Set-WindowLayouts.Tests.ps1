@@ -9,6 +9,9 @@ BeforeAll {
 	# The pre-snap inset source, stubbed so Mock can attach in a dot-sourced unit and so these
 	# cases never read the live session configuration. It has its own suite.
 	function Get-WindowInsetPercent { }
+	# The desktop lookup the duplicate-key claim prefers candidates by; stubbed for the same
+	# reason (the real one needs the VirtualDesktop module). Its own suite covers it.
+	function Get-WindowDesktopIndex { param([IntPtr]$WindowHandle) }
 }
 
 Describe "Set-WindowLayouts" {
@@ -358,6 +361,65 @@ Describe "Set-WindowLayouts" {
 			$null = Set-WindowLayouts -LayoutConfig $script:chromeEntry
 
 			Should -Invoke Initialize-PositionedWindowTracking -Times 1 -Exactly
+		}
+	}
+
+	Context "Duplicate-key claiming prefers a candidate already on the entry's desktop" {
+		# Two catch-all entries for the same process on desktops 1 and 2, two windows the wait's
+		# early move has already put on those desktops - but enumerated in the OPPOSITE order.
+		# Claiming in enumeration order would move each window to the other's desktop.
+		BeforeEach {
+			Mock Test-LogVerbose { $false }
+			Mock Write-LogDebug { }
+			Mock Clear-WindowCache { }
+			Mock Start-Sleep { }
+			Mock Get-WindowHandle {
+				@(
+					[PSCustomObject]@{ Handle = [IntPtr]0xB1001; Title = 'Docs - Google Chrome'; ProcessName = 'chrome' }
+					[PSCustomObject]@{ Handle = [IntPtr]0xB1002; Title = 'Mail - Google Chrome'; ProcessName = 'chrome' }
+				)
+			}
+			# 0-based desktop indexes: window 1 sits on desktop 2, window 2 on desktop 1.
+			Mock Get-WindowDesktopIndex {
+				if ($WindowHandle -eq [IntPtr]0xB1001) { 1 } else { 0 }
+			}
+			$script:twoDesktopLayout = @(
+				@{ ProcessName = 'chrome'; DesktopNumber = 1 }
+				@{ ProcessName = 'chrome'; DesktopNumber = 2 }
+			)
+		}
+
+		It "claims for each entry the window already on its desktop" {
+			$results = @(Set-WindowLayouts -LayoutConfig $script:twoDesktopLayout)
+
+			$configured = @($results | Where-Object { $_.Status -eq 'Configured' })
+			$configured.Count | Should -Be 2
+			($configured | Where-Object { $_.DesktopNumber -eq 1 }).Handle | Should -Be ([IntPtr]0xB1002)
+			($configured | Where-Object { $_.DesktopNumber -eq 2 }).Handle | Should -Be ([IntPtr]0xB1001)
+		}
+
+		It "resolves each candidate's desktop once per run" {
+			$null = Set-WindowLayouts -LayoutConfig $script:twoDesktopLayout
+
+			Should -Invoke Get-WindowDesktopIndex -Times 2 -Exactly
+		}
+
+		It "keeps every candidate in the pool when none is on the entry's desktop" {
+			Mock Get-WindowDesktopIndex { 7 }
+
+			$results = @(Set-WindowLayouts -LayoutConfig $script:twoDesktopLayout)
+
+			$configured = @($results | Where-Object { $_.Status -eq 'Configured' })
+			$configured.Count | Should -Be 2
+			@($configured.Handle | Sort-Object -Unique).Count | Should -Be 2
+		}
+
+		It "keeps a candidate whose desktop cannot be resolved in the pool" {
+			Mock Get-WindowDesktopIndex { throw 'RPC server unavailable' }
+
+			$results = @(Set-WindowLayouts -LayoutConfig $script:twoDesktopLayout)
+
+			@($results | Where-Object { $_.Status -eq 'Configured' }).Count | Should -Be 2
 		}
 	}
 

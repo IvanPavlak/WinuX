@@ -1566,25 +1566,72 @@ function Set-WorkspaceWindowLayout {
 				# per-desktop pass placed the windows that were stable at that moment; a window of
 				# the process that appeared later (the second VS Code window of a two-project open)
 				# would otherwise never be placed, because the entry is done. Such an entry runs
-				# again in the tail when an unplaced window of its process exists - the placed
-				# windows are excluded below, so only the newcomers move.
+				# again in the tail only when the unplaced windows of its process OUTNUMBER the
+				# entries with the same key that the tail still has to place - the placed windows
+				# are excluded below, so only the true newcomers move. Merely "an unplaced window
+				# exists" is not enough: a browser layout repeats one catch-all key across every
+				# desktop, and while desktops 6-10 were still loading their 20 windows, that test
+				# re-queued the 13 entries desktops 2-5 had already placed. Those entries then ran
+				# first in the tail, claimed 13 of the 20 windows meant for the later desktops (a
+				# second copy in every zone), and the last 13 entries found nothing - a starved,
+				# doubled first pass that only the in-process retry straightened out.
 				$tailSkipKeys = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
 				foreach ($placedKey in $pipelinedEntryKeys) { [void]$tailSkipKeys.Add($placedKey) }
+				# One entry of each catch-all key is enough to decide the whole key: how many entries
+				# of that key does the tail still have to fill, and how many eligible windows of the
+				# process exist for them.
+				$catchAllKeyOf = {
+					param($entry)
+					$resolved = $entry
+					if ($entry -is [hashtable] -and (Get-Command Resolve-LayoutTokens -ErrorAction SilentlyContinue)) {
+						$resolved = Resolve-LayoutTokens -LayoutEntry $entry
+					}
+					$title = $resolved.WindowTitle
+					if ($title -and $title -ne '$null') { return $null }
+					if ([string]::IsNullOrEmpty($resolved.ProcessName)) { return $null }
+					[string]$resolved.ProcessName
+				}
+				$catchAllEntryTotals = @{}
+				foreach ($layoutEntry in @($layoutConfigToApply)) {
+					$catchAllKey = & $catchAllKeyOf $layoutEntry
+					if ($null -eq $catchAllKey) { continue }
+					$catchAllEntryTotals[$catchAllKey] = [int]$catchAllEntryTotals[$catchAllKey] + 1
+				}
+				$catchAllPlacedCounts = @{}
 				foreach ($placedRow in $pipelinedResults) {
 					if ($null -eq $placedRow.LayoutEntry -or [string]::IsNullOrEmpty($placedRow.EntryKey)) { continue }
-					$placedTitle = $placedRow.LayoutEntry.WindowTitle
-					if ($placedTitle -and $placedTitle -ne '$null') { continue }
-					if ([string]::IsNullOrEmpty($placedRow.LayoutEntry.ProcessName)) { continue }
 					if (-not $tailSkipKeys.Contains([string]$placedRow.EntryKey)) { continue }
-					$processWindows = @(Get-WindowHandle -ProcessName $placedRow.LayoutEntry.ProcessName -ErrorAction SilentlyContinue)
-					$newcomer = $processWindows | Where-Object {
-						$null -ne $_.Handle -and -not $pipelinedHandles.Contains($_.Handle) -and
-						-not ($hasProtectedWindows -and $ProtectedWindowHandles.Contains($_.Handle)) -and
-						-not ($Alongside -and $existingWindowHandles -and $existingWindowHandles.Contains($_.Handle))
-					} | Select-Object -First 1
-					if ($newcomer) {
+					$catchAllKey = & $catchAllKeyOf $placedRow.LayoutEntry
+					if ($null -eq $catchAllKey) { continue }
+					$catchAllPlacedCounts[$catchAllKey] = [int]$catchAllPlacedCounts[$catchAllKey] + 1
+				}
+				# Only as many placed entries as there are SURPLUS windows are re-queued: re-queuing
+				# every placed entry of the key would let them claim the tail's windows all over again.
+				$catchAllSurplus = @{}
+				foreach ($placedRow in $pipelinedResults) {
+					if ($null -eq $placedRow.LayoutEntry -or [string]::IsNullOrEmpty($placedRow.EntryKey)) { continue }
+					if (-not $tailSkipKeys.Contains([string]$placedRow.EntryKey)) { continue }
+					$catchAllKey = & $catchAllKeyOf $placedRow.LayoutEntry
+					if ($null -eq $catchAllKey) { continue }
+					if (-not $catchAllSurplus.ContainsKey($catchAllKey)) {
+						$processWindows = @(Get-WindowHandle -ProcessName $catchAllKey -ErrorAction SilentlyContinue)
+						$newcomers = @($processWindows | Where-Object {
+								$null -ne $_.Handle -and -not $pipelinedHandles.Contains($_.Handle) -and
+								-not ($hasProtectedWindows -and $ProtectedWindowHandles.Contains($_.Handle)) -and
+								-not ($Alongside -and $existingWindowHandles -and $existingWindowHandles.Contains($_.Handle))
+							})
+						$unplacedEntries = [int]$catchAllEntryTotals[$catchAllKey] - [int]$catchAllPlacedCounts[$catchAllKey]
+						$catchAllSurplus[$catchAllKey] = $newcomers.Count - $unplacedEntries
+						if ($catchAllSurplus[$catchAllKey] -gt 0) {
+							Write-LogDebug " Catch-all entry [$catchAllKey] has $($newcomers.Count) unplaced window(s) for $unplacedEntries remaining entr$(if ($unplacedEntries -eq 1) { 'y' } else { 'ies' }) - $($catchAllSurplus[$catchAllKey]) appeared after its desktop's pass ([$($newcomers[0].Title)]), placing $(if ($catchAllSurplus[$catchAllKey] -eq 1) { 'it' } else { 'them' }) in the tail" -Style Warning
+						}
+						elseif ($newcomers.Count -gt 0) {
+							Write-LogDebug " Catch-all entry [$catchAllKey] has $($newcomers.Count) unplaced window(s), all owed to the $unplacedEntries entr$(if ($unplacedEntries -eq 1) { 'y' } else { 'ies' }) the tail still places - its placed entries stay skipped"
+						}
+					}
+					if ($catchAllSurplus[$catchAllKey] -gt 0) {
 						[void]$tailSkipKeys.Remove([string]$placedRow.EntryKey)
-						Write-LogDebug " Catch-all entry [$($placedRow.LayoutEntry.ProcessName)] has a window that appeared after its desktop's pass ([$($newcomer.Title)]) - placing it in the tail" -Style Warning
+						$catchAllSurplus[$catchAllKey] = $catchAllSurplus[$catchAllKey] - 1
 					}
 				}
 				$remainingEntryCount = $layoutConfigToApply.Count - $tailSkipKeys.Count

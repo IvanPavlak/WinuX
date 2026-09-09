@@ -1534,6 +1534,95 @@ Describe "Set-WorkspaceWindowLayout" {
 
 			@($script:layoutCalls[1].SkipKeys) | Should -Contain "2|||WindowsTerminal|"
 		}
+
+		It "keeps a placed catch-all entry skipped while every unplaced window of its process is owed to an entry the tail still places" {
+			# The 2026-09-09 regression: a browser layout repeats one catch-all key across ten
+			# desktops. While desktops 6-10 were still loading, "an unplaced window exists" re-queued
+			# the 13 entries desktops 2-5 had already placed; they ran first in the tail, claimed 13
+			# of the 20 windows meant for the later desktops, and the last 13 entries starved. Here
+			# the same key sits on desktops 2 and 3 (twice): desktop 2 was placed during the wait,
+			# the two unplaced windows are exactly what desktop 3's two entries need.
+			Mock Import-PowerShellDataFile {
+				@{
+					Layout   = @(
+						@{ ProcessName = 'Code'; WindowTitle = '*Code*'; DesktopNumber = 1 }
+						@{ ProcessName = 'WindowsTerminal'; DesktopNumber = 2 }
+						@{ ProcessName = 'WindowsTerminal'; DesktopNumber = 3 }
+						@{ ProcessName = 'WindowsTerminal'; DesktopNumber = 3 }
+					)
+					Monitors = @{
+						MonitorA = @{
+							VirtualDesktopLayouts = @{
+								1 = 'One'
+								2 = 'Two'
+								3 = 'Two'
+							}
+						}
+					}
+				}
+			}
+			Mock Get-DesktopList { @(0, 1, 2) }
+			Mock Get-WindowHandle {
+				if ($ProcessName -eq 'WindowsTerminal') {
+					return @(
+						[PSCustomObject]@{ Handle = [IntPtr]102; Title = 'Terminal'; ProcessName = 'WindowsTerminal' }
+						[PSCustomObject]@{ Handle = [IntPtr]555; Title = 'Terminal 2'; ProcessName = 'WindowsTerminal' }
+						[PSCustomObject]@{ Handle = [IntPtr]556; Title = 'Terminal 3'; ProcessName = 'WindowsTerminal' }
+					)
+				}
+				@()
+			}
+
+			Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace'
+
+			$script:layoutCalls.Count | Should -Be 2
+			# Desktop 2's entry stays done: the tail places desktop 3's two entries with the two
+			# unplaced windows, and nothing is doubled or starved.
+			@($script:layoutCalls[1].SkipKeys) | Should -Contain "2|||WindowsTerminal|"
+			$script:layoutCalls[1].Excluded.Contains([IntPtr]102) | Should -BeTrue
+		}
+
+		It "re-runs a placed catch-all entry in the tail only for the windows in excess of the entries still to place" {
+			# Same layout, one window more than the tail's entries can absorb: that surplus window
+			# appeared after desktop 2's pass and is what the re-run exists for.
+			Mock Import-PowerShellDataFile {
+				@{
+					Layout   = @(
+						@{ ProcessName = 'Code'; WindowTitle = '*Code*'; DesktopNumber = 1 }
+						@{ ProcessName = 'WindowsTerminal'; DesktopNumber = 2 }
+						@{ ProcessName = 'WindowsTerminal'; DesktopNumber = 3 }
+						@{ ProcessName = 'WindowsTerminal'; DesktopNumber = 3 }
+					)
+					Monitors = @{
+						MonitorA = @{
+							VirtualDesktopLayouts = @{
+								1 = 'One'
+								2 = 'Two'
+								3 = 'Two'
+							}
+						}
+					}
+				}
+			}
+			Mock Get-DesktopList { @(0, 1, 2) }
+			Mock Get-WindowHandle {
+				if ($ProcessName -eq 'WindowsTerminal') {
+					return @(
+						[PSCustomObject]@{ Handle = [IntPtr]102; Title = 'Terminal'; ProcessName = 'WindowsTerminal' }
+						[PSCustomObject]@{ Handle = [IntPtr]555; Title = 'Terminal 2'; ProcessName = 'WindowsTerminal' }
+						[PSCustomObject]@{ Handle = [IntPtr]556; Title = 'Terminal 3'; ProcessName = 'WindowsTerminal' }
+						[PSCustomObject]@{ Handle = [IntPtr]557; Title = 'Terminal 4'; ProcessName = 'WindowsTerminal' }
+					)
+				}
+				@()
+			}
+
+			Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace'
+
+			$script:layoutCalls.Count | Should -Be 2
+			@($script:layoutCalls[1].SkipKeys) | Should -Not -Contain "2|||WindowsTerminal|"
+			$script:layoutCalls[1].Excluded.Contains([IntPtr]102) | Should -BeTrue
+		}
 	}
 
 	Context "Rerun command for the escalation" {
