@@ -17,7 +17,6 @@ The [System module reference](../../../modules/system.md) is the authority on wh
 | `Configure-Taskbar` | `HostnameToMachineType`, `TaskbarConfiguration`, `Universal` | [Configure-Taskbar](Configure-Taskbar.md) |
 | `Configure-WSL` | `DefaultWSLDistribution`, `DefaultWSLUsername` | [Configure-WSL](Configure-WSL.md) |
 | `Configure-WSLSSH` | `DefaultWSLDistribution` | [Configure-WSLSSH](Configure-WSLSSH.md) |
-| `Deploy-CoreAiRules` | `DefaultWSLDistribution` | [Deploy-CoreAiRules](Deploy-CoreAiRules.md) |
 | `Determine-DotnetDependencies` | `DotnetProjectsSearchPath` | [Determine-DotnetDependencies](Determine-DotnetDependencies.md) |
 | `Get-FastfetchLogoArgument` | `Universal.FastFetchImageLogo`, `PathTemplates.SymbolicLinks` | [Get-FastfetchLogoArgument](Get-FastfetchLogoArgument.md) |
 | `Get-PinnedApps` | `BootstrapConfig.DataFiles` | [Get-PinnedApps](Get-PinnedApps.md) |

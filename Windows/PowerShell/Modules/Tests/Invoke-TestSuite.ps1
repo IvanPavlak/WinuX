@@ -128,7 +128,7 @@ $ProgressPreference = 'SilentlyContinue'
 # (Write-LogTitle, Resolve-Selection, Start-Application, ...), and Pester can only mock a
 # command it can resolve - so these must be importable first or the mocks fail with
 # "Could not find Command". This list is the whole session contract.
-$script:BootstrapModules = @('Logging', 'Helper', 'System', 'Application', 'Git', 'Window', 'Workflow', 'Configuration', 'Bootstrap')
+$script:BootstrapModules = @('Logging', 'Helper', 'System', 'AI', 'Application', 'Git', 'Window', 'Workflow', 'Configuration', 'Bootstrap')
 
 # Files that touch state shared across processes and therefore may not run concurrently with
 # each other: Set-WorkspaceWindowLayout's tests write real User-scope WORKSPACE_* variables and

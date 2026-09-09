@@ -24,7 +24,7 @@ Describe "Manifest Completeness" {
 
 	Context "Each module manifest exports all on-disk functions" {
 		It "Module '<_>' exports every function in its Functions/ directory" -ForEach @(
-			'Application', 'Bootstrap', 'Configuration', 'Git', 'Helper',
+			'AI', 'Application', 'Bootstrap', 'Configuration', 'Git', 'Helper',
 			'Logging', 'System', 'Tests', 'Window', 'Workflow'
 		) {
 			$moduleName = $_

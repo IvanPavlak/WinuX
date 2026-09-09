@@ -71,7 +71,7 @@ EVERY exported function has exactly ONE configuration guide, in the folder of it
 
 Two templates. Use the FULL one when the function reads configuration, the STUB one when it does not. Classify by looking at the function body, not its comment-based help: it reads configuration if `Functions/<Name>.ps1` references `$global:Configuration`, `$Configuration.`, `Test-ConfigValue`, `Confirm-ConfigValue`, `Resolve-ConfigPathValue` or `$global:MachineSpecificPaths`, calls `Import-AppCsv`, reads a `Data/*.csv`, or writes `Configuration.psd1` through `Find-ConfigurationSection`. A reference that appears only in a `.EXAMPLE` does not count.
 
-Guide bodies use RELATIVE links (`../../../modules/<module>.md#<anchor>`, `../../configuration-reference.md#<anchor>`) because those are the ones CI resolves. The sidebar keeps its `/`-anchored links, and it lists the 10 module index pages - never the individual function guides.
+Guide bodies use RELATIVE links (`../../../modules/<module>.md#<anchor>`, `../../configuration-reference.md#<anchor>`) because those are the ones CI resolves. The sidebar keeps its `/`-anchored links, and it lists the 11 module index pages - never the individual function guides.
 
 **FULL template.** The headings are fixed and mandatory, in this order, because `winux-configurator.md` parses `## Configuration Keys` and `## Decisions` out of the page:
 

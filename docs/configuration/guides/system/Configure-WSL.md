@@ -95,6 +95,6 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 - [`Open-WSLTab`](../application/Open-WSLTab.md) - reads the same configuration
 - [`Test-WSLDistributionInstalled`](../helper/Test-WSLDistributionInstalled.md) - reads the same configuration
 - [`Configure-WSLSSH`](Configure-WSLSSH.md) - reads the same configuration
-- [`Deploy-CoreAiRules`](Deploy-CoreAiRules.md) - reads the same configuration
+- [`Deploy-CoreAiRules`](../ai/Deploy-CoreAiRules.md) - reads the same configuration
 - [WinuXConfigurator](../../winux-configurator.md) - have an AI assistant walk these decisions with you
 - [Configuration reference](../../configuration-reference.md) - every key, section by section

@@ -17,6 +17,7 @@
     - [Reference](/configuration/configuration-reference.md)
     - [WinuXConfigurator](/configuration/winux-configurator.md)
     - **Guides**
+        - [AI](/configuration/guides/ai/README.md)
         - [Application](/configuration/guides/application/README.md)
         - [Bootstrap](/configuration/guides/bootstrap/README.md)
         - [Configuration](/configuration/guides/configuration/README.md)
@@ -29,6 +30,7 @@
         - [Tests](/configuration/guides/tests/README.md)
 
 - **Modules**
+    - [AI](/modules/ai.md)
     - [Application](/modules/application.md)
     - [Bootstrap](/modules/bootstrap.md)
     - [Configuration](/modules/configuration.md)
@@ -47,6 +49,7 @@
     - [Overview](/ai/overview.md)
     - [Agent System](/ai/agent-system.md)
     - [CoreAiRules](/ai/coreairules.md)
+    - [AI Skills](/ai/skills.md)
 
 - **Contributing**
     - [Fork Model](/contributing/fork-model.md)

@@ -57,7 +57,7 @@ $Functions | ForEach-Object { Export-ModuleMember -Function $_.BaseName }
 
 The full, current function reference - every function with its parameters, usage, and aliases - lives in the per-module docsify pages and is parsed by `List-Functions`. Those pages are the single source of truth; this context file intentionally does NOT duplicate the function lists, to avoid drift.
 
-- `docs/modules/`: `application.md`, `bootstrap.md`, `configuration.md`, `git.md`, `helper.md`, `system.md`, `window.md`, `workflow.md`, `tests.md`
+- `docs/modules/`: `ai.md`, `application.md`, `bootstrap.md`, `configuration.md`, `git.md`, `helper.md`, `system.md`, `window.md`, `workflow.md`, `tests.md`
 
 For an in-session view, run `List-Functions` or `List-Functions -Category <Module>`; `List-Functions -ListDiscrepancies` confirms the docs match the loaded functions.
 

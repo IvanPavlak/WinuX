@@ -24,7 +24,7 @@ Describe "Configuration Guide Coverage" {
 	BeforeDiscovery {
 		# -ForEach binds at discovery time, before any BeforeAll runs, so this list is built here.
 		$ExportingModules = @(
-			'Application', 'Bootstrap', 'Configuration', 'Git', 'Helper',
+			'AI', 'Application', 'Bootstrap', 'Configuration', 'Git', 'Helper',
 			'Logging', 'System', 'Tests', 'Window', 'Workflow'
 		)
 	}

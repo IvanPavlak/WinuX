@@ -687,6 +687,32 @@
 	}
 
 	# ==========================================================================
+	# AI Skills (see docs/ai/skills.md)
+	# ==========================================================================
+	# Agent Skills (a SKILL.md per folder) kept in the repository and linked into every
+	# AI coding harness's user-level skills directory by Deploy-AiSkills (opt in via
+	# BootstrapConfig.Steps.AiSkills), so they are available in every project on every
+	# machine. Root holds one subfolder per source: vendored upstreams filled by
+	# Update-AiSkills from Sources, plus `own` for hand-written skills. Harnesses are
+	# the Windows directories linked into; their WSL twins are derived from the {User}
+	# entries and DefaultWSLUsername. Only {RepoRoot}, {User} and {AppData} expand here.
+	# Ships with no sources - Update-AiSkills and Deploy-AiSkills no-op until a fork adds
+	# one in Configuration.local.psd1, e.g.:
+	#   Sources = @{
+	#       mattpocock = @{
+	#           Repository = "mattpocock/skills"
+	#           Ref        = "main"
+	#           Folders    = @("skills/engineering", "skills/productivity")
+	#           Exclude    = @()
+	#       }
+	#   }
+	AiSkills                      = @{
+		Root      = "{RepoRoot}\AI\Skills"
+		Harnesses = @("{User}\.claude\skills", "{User}\.agents\skills")
+		Sources   = @{}
+	}
+
+	# ==========================================================================
 	# Machine-Specific Overrides (Only Store Differences!)
 	# ==========================================================================
 	# Contains paths or settings that differ between machines and cannot be
@@ -769,7 +795,8 @@
 	# - Configure-WSL, Install package managers and apps
 	# - Upgrade-All, fork-defined PersonalSteps, Install-DotnetEF
 	# - Set-EnvironmentVariables, Create-CondaEnvironments, Configure-NuGetConfig
-	# - Configure-Taskbar, Initialize-WSLEnvironment, SymbolicLinkMaker, Deploy-CoreAiRules (opt-in)
+	# - Configure-Taskbar, Initialize-WSLEnvironment, SymbolicLinkMaker, Deploy-CoreAiRules (opt-in),
+	#   Deploy-AiSkills (opt-in)
 	# - Configure-WSLSSH, Lock taskbar layout, Restart-Machine
 	#
 	# HOW TO ADD NEW APPLICATIONS:
@@ -810,7 +837,7 @@
 		# MicrosoftActivationScripts, Win11Debloat, DeveloperMode, NuGetConfig
 		# (prompts for a GitHub PAT), UpgradeAll (upgrades every package already
 		# on the machine, not just WinuX's own), CoreAiRules (machine-global AI
-		# agent policy), LockedStartLayout.
+		# agent policy), AiSkills (machine-global Agent Skills), LockedStartLayout.
 		#
 		# Per invocation, Bootstrap -Skip <steps> forces steps off and
 		# Bootstrap -Include <steps> forces them on, both overriding this config.
@@ -848,8 +875,10 @@
 		# - NuGetConfig                : Configure-NuGetConfig (OFF by default)
 		# - Taskbar                    : Configure-Taskbar -FromBootstrap
 		# - SymbolicLinks              : SymbolicLinkMaker
-		# - CoreAiRules                  : Deploy-CoreAiRules (OFF by default - machine-global AI
+		# - CoreAiRules                : Deploy-CoreAiRules (OFF by default - machine-global AI
 		#                                agent policy, see docs/ai/coreairules.md)
+		# - AiSkills                   : Deploy-AiSkills (OFF by default - links the skills under
+		#                                AiSkills.Root into every AI harness, see docs/ai/skills.md)
 		# - LockedStartLayout          : lock the taskbar layout via registry policy (OFF by default)
 		#
 		# Repository updates are NOT a step here - they are governed by

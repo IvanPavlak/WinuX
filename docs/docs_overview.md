@@ -13,6 +13,7 @@ Windows/
 │   ├── Configuration.psd1                     # Central config hub
 │   ├── Microsoft.PowerShell_profile.ps1       # Profile
 │   └── Modules/
+│       ├── AI/                                # CoreAiRules enforcement + Agent Skills deployment
 │       ├── Bootstrap/                         # Install-Bootstrap.ps1 + CSV data files
 │       ├── Helper/
 │       ├── Application/
@@ -32,7 +33,7 @@ Windows/
 
 The authoritative, always-current function reference is the set of per-module pages under `modules/*.md` (parsed by `List-Functions`). Each function is one man-style entry: a `## [FunctionName](github-source-url)` heading followed by a contiguous `- **Key:** value` bullet block (Description first, then Parameters / Usage / Alias). For the complete, current list of functions - with parameters, usage, and aliases - open the relevant module page:
 
-- [Application](modules/application.md) | [Bootstrap](modules/bootstrap.md) | [Configuration](modules/configuration.md) | [Git](modules/git.md) | [Helper](modules/helper.md) | [Logging](modules/logging.md) | [System](modules/system.md) | [Window](modules/window.md) | [Workflow](modules/workflow.md) | [Tests](modules/tests.md)
+- [AI](modules/ai.md) | [Application](modules/application.md) | [Bootstrap](modules/bootstrap.md) | [Configuration](modules/configuration.md) | [Git](modules/git.md) | [Helper](modules/helper.md) | [Logging](modules/logging.md) | [System](modules/system.md) | [Window](modules/window.md) | [Workflow](modules/workflow.md) | [Tests](modules/tests.md)
 
 > Function lists are intentionally NOT duplicated here, to avoid drift. Run `List-Functions` (or `List-Functions -Category <Module>`) for the live in-session view, and `List-Functions -ListDiscrepancies` to confirm the docs match the loaded functions.
 
@@ -93,7 +94,8 @@ decisions behind them, and where the values go. Each module's `README.md` indexe
 | `ResizeWindowsPercent`                             | `Resize-Windows` (via `Resolve-ResizeWindowsPercent`) |
 | `SnapInsetPercent`                                 | `Get-WindowInsetPercent` (for the five pre-snap placement paths) |
 | `KillAll.Steps`                                    | `Kill-All`, `Resolve-KillAllSteps`                 |
-| `BootstrapConfig.Steps`                            | `Bootstrap`, `Resolve-BootstrapSteps` (incl. the opt-in `CoreAiRules` step → `Deploy-CoreAiRules`) |
+| `BootstrapConfig.Steps`                            | `Bootstrap`, `Resolve-BootstrapSteps` (incl. the opt-in `CoreAiRules` step → `Deploy-CoreAiRules` and `AiSkills` step → `Deploy-AiSkills`) |
+| `AiSkills`                                         | `Deploy-AiSkills`, `Update-AiSkills` (via `Resolve-AiSkillsConfig`) |
 | `AutoEnvironmentVariables`                         | `Set-EnvironmentVariables`                         |
 | `Locales`, `DefaultLocale`                         | `Set-Locale`                                       |
 | `DisplayLanguages`                                 | `Set-DisplayLanguage`                              |
@@ -153,6 +155,7 @@ Phase 6 (Environment):           Set-EnvironmentVariables -Auto → Create-Conda
 Phase 7 (Taskbar):               Configure-Taskbar -FromBootstrap → Set-TaskbarSettings → Set-VisualEffects
 Phase 8 (WSL & Symlinks):        Initialize-WSLEnvironment → SymbolicLinkMaker
                                  → Deploy-CoreAiRules (opt-in via BootstrapConfig.Steps.CoreAiRules)
+                                 → Deploy-AiSkills (opt-in via BootstrapConfig.Steps.AiSkills)
                                  → Configure-WSLSSH (WSL steps config-gated)
 Phase 9 (Finalize):              Lock taskbar → Restart-Explorer → Restart-Machine
 ```
@@ -204,6 +207,7 @@ docs/
 │       │                                   #   Full template where the function reads config,
 │       │                                   #   stub (sentinel + usage) where it does not.
 │       │                                   #   Task guides live in the module they belong to.
+│       ├── ai/            (README + guides)
 │       ├── application/   (README + guides)     # + add-browser-group.md
 │       ├── bootstrap/     (README + guides)     # + add-new-machine.md
 │       ├── configuration/ (README + guides)
@@ -216,6 +220,7 @@ docs/
 │       └── workflow/      (README + guides)     # + add-new-project.md, add-new-workspace.md
 │
 ├── modules/
+│   ├── ai.md                               # CoreAiRules enforcement, Agent Skills deployment
 │   ├── application.md                      # install, launch, browser
 │   ├── bootstrap.md                        # Bootstrap, Load-PathConfiguration, etc.
 │   ├── configuration.md                    # programmatic config modifications
@@ -230,7 +235,8 @@ docs/
 ├── ai/
 │   ├── overview.md                         # Layered AI context system, slash commands
 │   ├── agent-system.md                     # Custom agents, prompts, instructions
-│   └── coreairules.md                        # Machine-global AI agent guardrails (opt-in)
+│   ├── coreairules.md                        # Machine-global AI agent guardrails (opt-in)
+│   └── skills.md                           # Machine-global Agent Skills (opt-in)
 │
 ├── contributing/
 │   └── fork-model.md                       # Fork model, config + app-list overrides, merge=ours
@@ -297,4 +303,4 @@ When updating documentation, verify these critical items:
 
 ---
 
-_Last verified: June 24, 2026_
+_Last verified: September 9, 2026_

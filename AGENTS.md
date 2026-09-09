@@ -29,7 +29,7 @@ Every change that adds, renames, removes, or modifies the **behavior, parameters
 - The module `.psd1` `FunctionsToExport` - keep it in sync when adding/renaming/removing a function.
 - `docs/configuration/guides/<module>/<Function-Name>.md` - the function's configuration guide. EVERY exported function has exactly one, named after it. Use the FULL template when the function reads configuration and the STUB template when it does not (see `AI/Instructions/DocumentationStyle.md` for both templates and the mandatory sentinel sentence). Add the function to the module's `docs/configuration/guides/<module>/README.md` index in the same change.
 - `docs/docs_overview.md` - internal maintenance reference (process + per-module index); update it when adding/renaming/removing a function.
-- `docs/_sidebar.md` - only when adding/removing a page (not for per-function changes). Per-function guides are NOT sidebar entries - the 10 module index pages are.
+- `docs/_sidebar.md` - only when adding/removing a page (not for per-function changes). Per-function guides are NOT sidebar entries - the 11 module index pages are.
 
 `List-Functions` (Helper module) PARSES the module pages. After adding/renaming/removing a function, update its entry alphabetically in `modules/<Module>.md`, update the module `.psd1` `FunctionsToExport`, and run `List-Functions -ListDiscrepancies` (must report none).
 
@@ -72,7 +72,7 @@ Skipping required documentation updates is treated the same as leaving the chang
 
 - **Entry point**: `Microsoft.PowerShell_profile.ps1` → Bootstrap module → loads all other modules
 - **Config hub**: `Windows/PowerShell/Configuration.psd1` - single source of truth for all settings
-- **Modules**: located in `Windows/PowerShell/Modules/` - Application, Bootstrap, Configuration, Git, Helper, System, Window, Workflow, Tests
+- **Modules**: located in `Windows/PowerShell/Modules/` - AI, Application, Bootstrap, Configuration, Git, Helper, Logging, System, Window, Workflow, Tests
 - **Placeholder system**: `{Dev}`, `{User}`, `{MachineType}`, `{RepoRoot}`, `{AppData}` - expanded at runtime via `Expand-ConfigPaths`
 - **Machine types**: PC, Laptop, Work, Test - detected from hostname
 
