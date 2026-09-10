@@ -53,18 +53,11 @@ function Deploy-AiSkills {
 	}
 
 	# Every <source>\<skill>\SKILL.md, flattened by skill name; first source (by name) wins.
-	$skills = [ordered]@{}
-	foreach ($sourceDir in (Get-ChildItem -Path $root -Directory | Sort-Object Name)) {
-		foreach ($skillDir in (Get-ChildItem -Path $sourceDir.FullName -Directory | Sort-Object Name)) {
-			if (-not (Test-Path -Path (Join-Path $skillDir.FullName "SKILL.md"))) {
-				continue
-			}
-			if ($skills.Contains($skillDir.Name)) {
-				Write-LogWarning "Duplicate skill [$($skillDir.Name)] in source [$($sourceDir.Name)] - keeping the one from [$($skills[$skillDir.Name].Source)]"
-				continue
-			}
-			$skills[$skillDir.Name] = @{ Path = $skillDir.FullName; Source = $sourceDir.Name }
-		}
+	# Shared with List-Skills so what is listed is exactly what is deployed.
+	$roster = Get-AiSkillRoster -Root $root
+	$skills = $roster.Skills
+	foreach ($duplicate in $roster.Duplicates) {
+		Write-LogWarning "Duplicate skill [$($duplicate.Name)] in source [$($duplicate.Source)] - keeping the one from [$($duplicate.KeptFrom)]"
 	}
 
 	if ($skills.Count -eq 0) {

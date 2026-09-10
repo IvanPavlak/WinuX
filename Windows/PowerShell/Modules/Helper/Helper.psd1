@@ -28,6 +28,7 @@
 		'Get-DatabaseTypeFromProject',
 		'Get-DbContextFromSnapshot',
 		'Get-DbContextsFromProject',
+		'Get-DocsReferenceMarker',
 		'Get-TargetTerminalWindow',
 		'Get-TerminalTabSnapshot',
 		'Get-DotnetVersionFromTFM',
