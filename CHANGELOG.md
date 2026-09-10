@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.60] - 2026-09-10
+
+### Fixed
+
+- **`Git-Obsidian` no longer reports `Obsidian updated!` after a failed push, and no longer answers `No changes to update!` while a commit the remote never received sits on the local branch.** The function committed and then ran `git push` without looking at its exit code, so a push that died with `fatal: unable to access 'https://github.com/...': Could not resolve host: github.com` was followed by the success banner anyway. Worse, the decision to do anything at all was made from `git status --porcelain` alone: the failed run had already committed, so the next run saw a clean working tree, said `No changes to update!` and stopped - the vault backup was silently a commit behind on GitHub until someone pushed by hand from the vault directory. Whether to push is now decided from what the remote is missing, not from the working tree: after the optional commit the function counts `git rev-list --count @{upstream}..HEAD` (the commit just made plus anything an earlier failed run left behind) and pushes whenever that count is not zero, announcing `Found [1] unpushed commit(s) from an earlier run. Pushing...` when the tree itself was clean. `No changes to update!` is reported only when the tree is clean **and** nothing is unpushed. `git commit` and `git push` are both checked through `$LASTEXITCODE`: a failed commit stops before the push (`Commit failed - nothing was pushed!`), a failed push is an error that names the state the vault is left in (`Push failed - the vault is committed locally but the remote was not updated!`) and tells the user that the next run will finish the job. A branch without an upstream makes `rev-list` fail; that is treated as "unknown" and the push is attempted anyway so git reports the real cause instead of the function hiding it behind `No changes`. Tests: `Git-Obsidian.Tests.ps1` rewritten around one scenario table (working tree, unpushed count, commit/push/rev-list exit codes): commit and push with success, a failed push reported as an error and never as success, a failed commit never pushed, a clean tree with nothing unpushed reporting no changes, a clean tree with leftover commits pushed instead of reporting no changes, a leftover push failing again, a branch without an upstream still attempting the push, the exact `rev-list --count @{upstream}..HEAD` call, and the working directory restored. Documented in `docs/modules/git.md` and a new "When A Push Fails" section in `docs/configuration/guides/git/Git-Obsidian.md`.
+
 ## [0.1.59] - 2026-09-10
 
 ### Added
@@ -995,7 +1001,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.59...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.60...HEAD
+[0.1.60]: https://github.com/IvanPavlak/WinuX/compare/v0.1.59...v0.1.60
 [0.1.59]: https://github.com/IvanPavlak/WinuX/compare/v0.1.58...v0.1.59
 [0.1.58]: https://github.com/IvanPavlak/WinuX/compare/v0.1.57...v0.1.58
 [0.1.57]: https://github.com/IvanPavlak/WinuX/compare/v0.1.56...v0.1.57
