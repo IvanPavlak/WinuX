@@ -13,10 +13,13 @@ The Git module provides **repository management**, **Git workflow automation**, 
 - **Description:** Commits and pushes all pending changes in the Obsidian vault repository, providing a quick vault backup to GitHub without opening Obsidian.
 - **Usage:** `Git-Obsidian`
 
-Navigates to the Obsidian vault directory (`$MachineSpecificPaths.ObsidianDirectory`) and checks for uncommitted changes. If any are present, it stages everything with `git add .`, creates a commit with the message `"Vault Backup: dd.MM.yyyy | HH:mm"`, and pushes to the remote. If there are no changes, it reports that nothing changed and does nothing. The original working directory is always restored on exit.
+Navigates to the Obsidian vault directory (`$MachineSpecificPaths.ObsidianDirectory`) and brings the remote up to date with the vault. If the working tree has changes, it stages everything with `git add .` and creates a commit with the message `"Vault Backup: dd.MM.yyyy | HH:mm"`. It then counts the commits the branch has that its upstream does not (`git rev-list --count @{upstream}..HEAD`) - the commit just made plus anything an earlier run left behind when its push failed - and pushes when that count is not zero. Only when the tree is clean **and** nothing is unpushed does it report `No changes to update!`. The original working directory is always restored on exit.
+
+Success is reported only when `git push` actually exited 0. A failed commit or push is logged as an error together with the state the vault is left in (`Push failed - the vault is committed locally but the remote was not updated!`), and the next run pushes the pending commits (`Found [1] unpushed commit(s) from an earlier run. Pushing...`) instead of looking at the clean tree and reporting that nothing changed. If the branch has no upstream, the function still attempts the push so that git reports the cause rather than the function hiding it behind `No changes`.
 
 ```powershell
-# Commit and push any pending vault changes (or report that nothing changed)
+# Commit and push any pending vault changes, push commits an earlier failed
+# run left behind, or report that nothing changed
 Git-Obsidian
 ```
 
