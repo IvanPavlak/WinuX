@@ -13,6 +13,8 @@ The [AI module reference](../../../modules/ai.md) is the authority on what each 
 | -------- | ------------------ | ----- |
 | `Deploy-AiSkills` | `AiSkills`, `DefaultWSLDistribution`, `DefaultWSLUsername` | [Deploy-AiSkills](Deploy-AiSkills.md) |
 | `Deploy-CoreAiRules` | `DefaultWSLDistribution` | [Deploy-CoreAiRules](Deploy-CoreAiRules.md) |
+| `Get-AiSkillRoster` | `AiSkills.Root` | [Get-AiSkillRoster](Get-AiSkillRoster.md) |
+| `List-Skills` | `AiSkills`, `ShowFunctionDetailsColors` | [List-Skills](List-Skills.md) |
 | `Resolve-AiSkillsConfig` | `AiSkills`, `DefaultWSLUsername` | [Resolve-AiSkillsConfig](Resolve-AiSkillsConfig.md) |
 | `Update-AiSkills` | `AiSkills` | [Update-AiSkills](Update-AiSkills.md) |
 

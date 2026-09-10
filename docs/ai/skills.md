@@ -55,14 +55,23 @@ Upstream ships only `AI/Skills/README.md`. The source folders are yours - a fork
 
 A personal skill replaces a bundled skill of the same name in Claude Code, so vendoring an upstream `code-review` hides Claude Code's built-in `/code-review`. Leave such a skill out with `Exclude` if you want the built-in one, or accept the replacement. Within the repository, the same skill name under two sources is reported and the first source by name wins.
 
+## Listing what is installed
+
+[List-Skills](../modules/ai.md#list-skills) is the catalog: every skill the repository carries, grouped by source, each with the `description:` from its own `SKILL.md`. It reads the disk rather than the documentation, because the vendored skills far outnumber the ones a fork writes a page for and only disk stays honest across a refresh.
+
+`List-Skills -ListDiscrepancies` is its audit half, and answers the question `Deploy-AiSkills` leaves open once it has run: **is the machine still in the state that run produced?** It compares the roster against what is actually linked into the Windows harness directories and reports a skill that is present but not linked (almost always "added a skill, never re-ran `Deploy-AiSkills`"), a harness entry that shadows a skill with a real folder or points somewhere else, and a link into the skills root whose skill is gone. Links to anything else are ignored, exactly as `Deploy-AiSkills` leaves them alone. The WSL harnesses are not read - that means shelling into the distribution, too slow for a listing - so re-run `Deploy-AiSkills` to reconcile those.
+
+Both halves share one roster walk ([Get-AiSkillRoster](../modules/ai.md#get-aiskillroster)) with `Deploy-AiSkills`, so what is listed is exactly what is deployed: same flattening, same "a folder without a `SKILL.md` is not a skill", same first-source-alphabetically-wins tiebreak. The catalog is drawn with the same `Create-CenteredBorder` and `Show-FunctionDetails` helpers `List-Functions` uses, so a skill entry reads exactly like a function entry, and everything else goes through the Logging module, so a listing and an audit land in the session log alongside the `Deploy-AiSkills` run they are checking.
+
 ## Verification (per machine, after enabling)
 
 1. Run `Update-AiSkills` once (or pull a repository that already carries the vendored folders), review the diff, then run `Deploy-AiSkills` (or full `Bootstrap`) as admin.
-2. Check that `~/.claude/skills/<skill>` and `~/.agents/skills/<skill>` are symbolic links into `AI/Skills/<source>/`, and inside WSL that `/home/<user>/.claude/skills/<skill>` resolves through `/mnt/<drive>`.
-3. In a throwaway folder outside the repository, start the harness and confirm the skills appear (`/` in Claude Code, `/skills` in Codex CLI, `gemini skills list`).
+2. Run `List-Skills -ListDiscrepancies`; it should report that every skill is linked into every harness.
+3. Check that `~/.claude/skills/<skill>` and `~/.agents/skills/<skill>` are symbolic links into `AI/Skills/<source>/`, and inside WSL that `/home/<user>/.claude/skills/<skill>` resolves through `/mnt/<drive>`.
+4. In a throwaway folder outside the repository, start the harness and confirm the skills appear (`/` in Claude Code, `/skills` in Codex CLI, `gemini skills list`).
 
 ## Related
 
-- [AI module reference](../modules/ai.md) - `Deploy-AiSkills`, `Update-AiSkills`, `Resolve-AiSkillsConfig`, `Get-AiSkillManifest`, `Get-AiSkillDescription`
+- [AI module reference](../modules/ai.md) - `Deploy-AiSkills`, `Update-AiSkills`, `List-Skills`, `Get-AiSkillRoster`, `Resolve-AiSkillsConfig`, `Get-AiSkillManifest`, `Get-AiSkillDescription`
 - [Deploy-AiSkills configuration guide](../configuration/guides/ai/Deploy-AiSkills.md) - the `AiSkills` keys, decision by decision
 - [CoreAiRules](coreairules.md) - the rules file that sits in front of the same harnesses

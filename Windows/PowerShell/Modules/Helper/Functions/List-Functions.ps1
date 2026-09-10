@@ -60,10 +60,21 @@ function List-Functions {
 		# Fork-owned Custom area pages (docs/custom/<module>.md) document fork-local functions
 		# in the same man-style format; include them so Custom functions face the same
 		# discrepancy checks. README.md is the area's landing page/template, not a module page.
+		#
+		# The sovereign area holds more than functions - Agent Skills and prose guides live there
+		# too - and the "## [Name](url)" shape alone cannot tell them apart, so a skills entry
+		# used to be harvested as a function and reported as an undocumented one. Each page
+		# therefore declares its own contract (Get-DocsReferenceMarker) and only the pages this
+		# engine claims as its function reference are parsed. A page belonging to another engine,
+		# or to no function contract at all, is simply not this listing's business.
 		$customDocsPath = Join-Path -Path $docsRoot -ChildPath 'custom'
 		if (Test-Path -Path $customDocsPath -PathType Container) {
 			$docFiles += @(Get-ChildItem -Path $customDocsPath -Filter '*.md' -File |
-					Where-Object { $_.Name -ne 'README.md' } | Sort-Object Name)
+					Where-Object { $_.Name -ne 'README.md' } |
+					Where-Object {
+						$marker = Get-DocsReferenceMarker -Path $_.FullName
+						$marker -and $marker.Kind -eq 'functions' -and $marker.Namespace -eq 'windows/Custom'
+					} | Sort-Object Name)
 		}
 	}
 	catch {

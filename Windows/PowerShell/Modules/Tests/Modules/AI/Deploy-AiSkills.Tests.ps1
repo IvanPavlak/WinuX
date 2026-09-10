@@ -3,6 +3,9 @@
 BeforeAll {
 	$FunctionsPath = Join-Path (Get-RepositoryPath).Modules "AI\Functions"
 	. "$FunctionsPath\Deploy-AiSkills.ps1"
+	# The roster walk it shares with List-Skills; dot-sourced so these tests exercise the real
+	# flattening rather than whatever the session happens to have loaded.
+	. "$FunctionsPath\Get-AiSkillRoster.ps1"
 }
 
 Describe "Deploy-AiSkills" {

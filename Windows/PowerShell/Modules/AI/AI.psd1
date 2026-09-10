@@ -8,6 +8,8 @@
 		'Deploy-CoreAiRules',
 		'Get-AiSkillDescription',
 		'Get-AiSkillManifest',
+		'Get-AiSkillRoster',
+		'List-Skills',
 		'Resolve-AiSkillsConfig',
 		'Update-AiSkills'
 	)

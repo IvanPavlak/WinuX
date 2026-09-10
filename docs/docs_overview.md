@@ -95,7 +95,7 @@ decisions behind them, and where the values go. Each module's `README.md` indexe
 | `SnapInsetPercent`                                 | `Get-WindowInsetPercent` (for the five pre-snap placement paths) |
 | `KillAll.Steps`                                    | `Kill-All`, `Resolve-KillAllSteps`                 |
 | `BootstrapConfig.Steps`                            | `Bootstrap`, `Resolve-BootstrapSteps` (incl. the opt-in `CoreAiRules` step → `Deploy-CoreAiRules` and `AiSkills` step → `Deploy-AiSkills`) |
-| `AiSkills`                                         | `Deploy-AiSkills`, `Update-AiSkills` (via `Resolve-AiSkillsConfig`) |
+| `AiSkills`                                         | `Deploy-AiSkills`, `Update-AiSkills`, `List-Skills`, `Get-AiSkillRoster` (via `Resolve-AiSkillsConfig`) |
 | `AutoEnvironmentVariables`                         | `Set-EnvironmentVariables`                         |
 | `Locales`, `DefaultLocale`                         | `Set-Locale`                                       |
 | `DisplayLanguages`                                 | `Set-DisplayLanguage`                              |
@@ -283,6 +283,16 @@ When updating documentation, verify these critical items:
    not apply). Use genericized example values.
 3. Optionally add extended prose / a parameter table / examples below a blank line.
 4. Run `List-Functions -ListDiscrepancies` - it must report no discrepancies.
+
+### When adding a page to the fork-owned `custom/` area
+
+Every page in `docs/custom/` must open with a marker naming the contract it is under -
+`<!-- reference: functions windows/Custom -->`, `<!-- reference: skills -->`, `<!-- reference: guide -->`
+or `<!-- reference: none -->` - because that area is sovereign and holds Agent Skills and prose
+alongside functions, all of which use the same `## [Name](url)` heading. Only pages marked
+`functions windows/Custom` are parsed by `List-Functions` and checked against `Custom.psd1`. A page with
+no valid marker fails the Infrastructure function-reference test on purpose: silence used to be the state
+in which a page claimed a contract by accident. See [the Custom area docs](custom/README.md).
 
 ### When a function is renamed or removed
 
