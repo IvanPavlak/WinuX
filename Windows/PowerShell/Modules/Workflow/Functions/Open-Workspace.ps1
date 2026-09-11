@@ -14,6 +14,10 @@ function Open-Workspace {
 		consuming action (e.g. Open-ProjectSwagger) can no-op or apply its own default. Declare
 		consumers AFTER the Open-Project action.
 
+		Every action that declares a CurrentWorkspace parameter receives the name of the workspace
+		being opened (Get-FilteredParams drops it from the rest; a configured Parameters value of
+		that name wins). Open-Obsidian uses it to load the same-named Obsidian workspace.
+
 		An action may be scoped to machines. Machine = "PC/Work" runs it only on those detected
 		machine types; LayoutMachine = "Laptop/Work" runs it only when Get-LayoutMachineType resolves
 		one of those layout sets - the set Set-WorkspaceWindowLayout reads the layout file from, so a
@@ -729,6 +733,14 @@ function Open-Workspace {
 				# the desktop resize must not shrink below them.
 				if ($openProtection) {
 					$actionParams["ProtectedWindowHandles"] = $openProtection.WindowHandles
+				}
+
+				# Workspace-context handoff: every action that declares CurrentWorkspace learns which
+				# WinuX workspace is being opened (Get-FilteredParams drops it from the rest). This is
+				# how Open-Obsidian lands on the same-named Obsidian workspace without any per-entry
+				# configuration. A configured Parameters value of the same name wins.
+				if (-not $actionParams.ContainsKey("CurrentWorkspace")) {
+					$actionParams["CurrentWorkspace"] = $workspaceName
 				}
 
 				# Generic project-context handoff: a parameter whose FULL value is the literal

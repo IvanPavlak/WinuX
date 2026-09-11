@@ -452,12 +452,13 @@
 		# Personal path templates ship empty - the functions that consume them warn and
 		# return until you set them in Configuration.local.psd1, e.g.:
 		#   ObsidianDirectory       = "{Dev}\Obsidian"
-		#   ObsidianStartupScript   = "{RepoRoot}\Obsidian\ObsidianStartupScript.pyw"
 		#   TrainingBackupDirectory = "{Dev}\ExampleBackup"
 		#   LearningBook            = "{User}\Learning\ExampleBook.pdf"
 		#   TrainingDirectory       = "{User}\Training\2026"
 		#   Dnd                     = @{ ExampleCharacter = "{Dev}\Obsidian\Campaigns\ExampleCampaign\ExampleCharacter.pdf" }
 		ObsidianDirectory       = ""
+		# DEPRECATED - Open-Obsidian launches Obsidian through its official CLI since 2026-09 and
+		# no longer reads this key. Kept so an existing Configuration.local.psd1 still merges.
 		ObsidianStartupScript   = ""
 		TrainingBackupDirectory = ""
 		LearningBook            = ""
@@ -1255,6 +1256,12 @@
 	#       # that do not exist are harmless on PATH.
 	#       "%LOCALAPPDATA%\Programs\oh-my-posh\bin"
 	#       "C:\Program Files\oh-my-posh\bin"
+	#       # Obsidian CLI (Obsidian.com) - Open-Obsidian loads Obsidian workspaces through it.
+	#       # Registering the CLI inside Obsidian (Settings > General > Command line interface)
+	#       # adds this entry for new shells as well; persisting it here keeps every shell
+	#       # consistent. Open-Obsidian also probes this folder directly, so the entry is a
+	#       # convenience for calling `obsidian` yourself, not a prerequisite.
+	#       "%LOCALAPPDATA%\Programs\obsidian"
 	#   )
 	AutoPathAdditions             = @()
 
@@ -1737,6 +1744,25 @@
 	# anything. Only the interactive [Enter] uses this; a mistyped "Open-Workspace Wrkspce"
 	# still exits rather than silently opening the default.
 	DefaultWorkspace              = "Default"
+
+	# ==========================================================================
+	# Obsidian
+	# ==========================================================================
+	# → Consumer: Open-Obsidian
+	# Open-Obsidian drives Obsidian through its official command line interface (Obsidian 1.12.4+;
+	# enable it once under Settings > General > Command line interface and put
+	# "%LOCALAPPDATA%\Programs\obsidian" on PATH via AutoPathAdditions). Inside a workspace
+	# open it loads the Obsidian workspace named like the WinuX workspace when the vault has one;
+	# `Parameters = @{ Workspace = "Name" }` on the action overrides that.
+	#   DefaultWorkspace - Obsidian workspace to load on a cold start when nothing else resolves.
+	#                      Empty = leave Obsidian where it was (or to plugins such as Homepage).
+	#   Vault            - Vault name for the CLI. Empty = the leaf folder of
+	#                      PathTemplates.ObsidianDirectory.
+	# Deep-merges: set only the key you need in Configuration.local.psd1.
+	Obsidian                      = @{
+		DefaultWorkspace = ""
+		Vault            = ""
+	}
 
 	# ==========================================================================
 	# Workspace Benchmark (Opt-In)

@@ -193,7 +193,7 @@ ProjectActions = @{
 | `Open-VSCode`                         | `@{ Folder = "..." }`    | Opens VS Code with folder         |
 | `Open-ProjectTerminals-Or-RunProject` | `@{ Project = "..." }`   | Opens terminals or runs project   |
 | `Open-Browser`                        | `@{ Groups = @("...") }` | Opens browser with URL groups     |
-| `Open-Obsidian`                       | -                        | Opens Obsidian vault              |
+| `Open-Obsidian`                       | `@{ Workspace = "..." }` | Opens Obsidian (same-named Obsidian workspace by default) |
 | `Open-DBeaver`                        | -                        | Opens DBeaver                     |
 
 ## Step 10: Add to Runnable Projects (if applicable)
