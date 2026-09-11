@@ -1203,6 +1203,39 @@ RepositoryGroups = @(
 
 ---
 
+## PSReadLine (Interactive Shell Options)
+
+Every editing, history and prediction option the profile applies to PSReadLine on shell start, in one section. Applied by `Initialize-PSReadLine` (System module), which the profile calls after `Import-Module PSReadLine` and **before** `Initialize-OhMyPosh` - `EditMode` installs a whole key map, and applying it after a theme has bound `Enter` for its transient prompt would reset that binding.
+
+Every key is optional. `$null` (or a missing key) means "do not touch it": `Initialize-PSReadLine` makes no call for that key and PSReadLine keeps its own default. The base ships the behaviour the profile always hardcoded and leaves the history limits alone.
+
+**Keys:**
+
+- `EditMode` - `Windows`, `Emacs` or `Vi`. Ships `Windows`. Always applied first.
+- `KeyHandlers` - `@{ <Key> = "<PSReadLine function>" }`, one `Set-PSReadLineKeyHandler` per entry. Ships `UpArrow = "HistorySearchBackward"` and `DownArrow = "HistorySearchForward"` (prefix search instead of plain history walk). Merges per key: add a binding by adding a key; drop a base binding by setting that key to `$null`.
+- `MaximumHistoryCount` - **Opt-in.** Positive integer. Sets **both** PSReadLine's recall cap (arrow keys, `Ctrl+R`) and the session `$MaximumHistoryCount` (`Get-History`, `Invoke-History`); the latter is clamped to PowerShell's 32767 ceiling, so 32767 makes the two agree exactly. Ships `$null` (PSReadLine's own 4096). Anything that is not a positive integer is reported with a warning at shell start and both limits are left alone. PSReadLine never trims its history file - it appends every command and loads the newest `MaximumHistoryCount` lines at startup - so this is what is recallable, not what is stored.
+- `HistorySavePath` - **Opt-in.** Where PSReadLine writes its history file. `%ENV%` variables are expanded. Ships `$null` (PSReadLine's `%APPDATA%\Microsoft\Windows\PowerShell\PSReadLine\ConsoleHost_history.txt`).
+- `HistoryNoDuplicates` - `$true`/`$false`. Ships `$true`. Hides repeated commands during recall and search (each distinct line shown once, at its most recent position); every invocation is still written to the file.
+- `PredictionSource` - `None`, `History`, `Plugin` or `HistoryAndPlugin`. Ships `History`.
+- `PredictionViewStyle` - `InlineView` or `ListView`. Ships `ListView`.
+
+The two prediction keys are applied last and inside a `try`/`catch`: they are the only calls that throw on a console without virtual-terminal support (redirected output, CI, automation hosts), and everything above them has already applied when they do.
+
+**Consumer function:** `Initialize-PSReadLine`
+
+**Example:**
+
+```powershell
+# Configuration.local.psd1 - raise both recall limits, keep everything else
+PSReadLine = @{
+    MaximumHistoryCount = 32767
+}
+```
+
+See [Initialize-PSReadLine](guides/system/Initialize-PSReadLine.md).
+
+---
+
 ## UI & Display Configuration
 
 ### Console Colors

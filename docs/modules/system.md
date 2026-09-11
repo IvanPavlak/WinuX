@@ -416,6 +416,32 @@ Called by the PowerShell profile on every shell start. **Must be dot-invoked** (
 . Initialize-OhMyPosh
 ```
 
+## [Initialize-PSReadLine](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Initialize-PSReadLine.ps1)
+
+- **Description:** Applies every PSReadLine editing, history and prediction option from the `PSReadLine` section of `Configuration.psd1` to the current session. It replaces the block of hardcoded `Set-PSReadLineOption` / `Set-PSReadLineKeyHandler` calls the profile used to carry, so a fork tunes the interactive shell in `Configuration.local.psd1` instead of editing the shared profile. Every key is optional: `$null` (or a missing key) is skipped and PSReadLine keeps what it already had, which for a vanilla install is its own default. That is also how a fork drops a base key binding - set that key to `$null` under `KeyHandlers`. The order is fixed and load-bearing: `EditMode` first, because `-EditMode` installs a whole key map and resets every binding made before it; then the `KeyHandlers`; then the history options; then `PredictionSource` and `PredictionViewStyle` last, inside their own `try`/`catch`, because those two are the only calls that throw on a console without virtual-terminal support and a cosmetic feature must never break shell startup. `MaximumHistoryCount` drives two limits with one number - PSReadLine's recall cap (arrow keys, `Ctrl+R`) and the session `$MaximumHistoryCount` (`Get-History`), the latter clamped to PowerShell's 32767 ceiling. A value that is not a positive integer is reported with `Write-LogWarning` and both limits are left alone. `HistorySavePath` accepts `%ENV%` variables.
+- **Usage:** `Initialize-PSReadLine [-Settings <hashtable>]`
+
+| Parameter | Description |
+| --------- | ----------- |
+| `-Settings` | The section to apply. Defaults to `$global:Configuration.PSReadLine`. `$null` or empty logs at debug level and applies nothing. |
+
+Called by the PowerShell profile on every interactive shell start, after `Import-Module PSReadLine` and **before** [Initialize-OhMyPosh](#initialize-ohmyposh): a theme carrying a `transient_prompt` binds `Enter`, and an `-EditMode` call after that binding would reset it to `AcceptLine`. A plain call, not dot-invoked - PSReadLine options are process-global, nothing has to land in the caller's scope. PSReadLine never trims its history file; it appends every command and loads the newest `MaximumHistoryCount` lines at startup, so the cap is what is recallable, not what is stored. `HistoryNoDuplicates` likewise hides repeated commands during recall only - every invocation is still written.
+
+```powershell
+# Profile usage - applies Configuration.PSReadLine
+Initialize-PSReadLine
+
+# Raise both recall limits for this session only
+Initialize-PSReadLine -Settings @{ MaximumHistoryCount = 32767 }
+
+# Confirm what took
+Get-PSReadLineOption | Select-Object EditMode, MaximumHistoryCount, HistoryNoDuplicates, PredictionSource, PredictionViewStyle
+$MaximumHistoryCount
+Get-PSReadLineKeyHandler -Bound | Where-Object Key -in UpArrow, DownArrow
+```
+
+**See also:** [Initialize-OhMyPosh](#initialize-ohmyposh), the [`PSReadLine` section](../configuration/configuration-reference.md#psreadline-interactive-shell-options) of the configuration reference, and the [configuration guide](../configuration/guides/system/Initialize-PSReadLine.md).
+
 ## [Initialize-Win32BrowserHelperType](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Initialize-Win32BrowserHelperType.ps1)
 
 - **Description:** Ensures the `Win32BrowserHelper` C# interop type is available. Adds the type used by browser window discovery and graceful window closure, enumerating visible browser windows and posting WM_CLOSE messages. The type is added only once per PowerShell session.

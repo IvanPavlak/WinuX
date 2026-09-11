@@ -93,31 +93,14 @@ if (Get-Module -ListAvailable -Name Terminal-Icons) {
 	Import-Module -Name Terminal-Icons
 }
 
-# PSReadLine interactive options. Guarded: the prediction options throw in consoles without
-# virtual-terminal support (redirected output, CI, automation hosts) - a cosmetic feature must
-# never break shell startup there.
-#
-# ORDER MATTERS. -EditMode installs that mode's entire key map, so every binding made before it
-# is silently reset - which is what happened to the arrow keys below, leaving plain
-# PreviousHistory instead of prefix search. It goes first for that reason, and the prediction
-# options go last so that when they throw, everything above them has already applied.
-try {
-	# Set the editing mode to Windows (Ctrl+C to copy, Ctrl+V to paste, etc.)
-	Set-PSReadLineOption -EditMode Windows
-
-	# Set the Up/Down Arrow keys to search through command history
-	Set-PSReadLineKeyHandler -Key UpArrow -Function HistorySearchBackward
-	Set-PSReadLineKeyHandler -Key DownArrow -Function HistorySearchForward
-
-	# Set the command suggestion source to be the command history
-	Set-PSReadLineOption -PredictionSource History
-
-	# Set the command suggestion display style to a list view
-	Set-PSReadLineOption -PredictionViewStyle ListView
-}
-catch {
-	# Non-interactive/limited console - keep defaults silently.
-}
+# PSReadLine interactive options (edit mode, key handlers, history limits, predictions) come from
+# Configuration.PSReadLine and are applied by Initialize-PSReadLine, which owns the ordering rules
+# (-EditMode first, since it resets every earlier binding; the prediction options last and guarded,
+# since they throw on consoles without virtual-terminal support). Forks tune them in
+# Configuration.local.psd1, not here. Dot-sourced like Initialize-OhMyPosh below so it is available
+# before the System module is imported.
+. (Join-Path $ModulesPath "System\Functions\Initialize-PSReadLine.ps1")
+Initialize-PSReadLine
 
 # Oh-My-Posh - binary resolution + init live in Initialize-OhMyPosh. Dot-invoked so the
 # prompt it defines lands in this scope. On provisioned machines (AutoPathAdditions puts

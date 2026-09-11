@@ -110,6 +110,28 @@ Describe "Vanilla Configuration (empty-by-default contract)" {
 			$script:BaseConfig.Universal.TerminateProcessNames | Should -Not -BeNullOrEmpty
 			$script:BaseConfig.Universal.VisibleWindowExclusions | Should -Contain "PowerToys.FancyZones"
 		}
+
+		It "Should ship the PSReadLine section with the profile's historical behaviour" {
+			# The defaults the profile hardcoded before the section existed. A vanilla shell must
+			# behave identically after the move into configuration.
+			$psrl = $script:BaseConfig.PSReadLine
+			$psrl | Should -BeOfType [hashtable]
+			$psrl.EditMode | Should -Be "Windows"
+			$psrl.KeyHandlers.UpArrow | Should -Be "HistorySearchBackward"
+			$psrl.KeyHandlers.DownArrow | Should -Be "HistorySearchForward"
+			$psrl.HistoryNoDuplicates | Should -BeTrue
+			$psrl.PredictionSource | Should -Be "History"
+			$psrl.PredictionViewStyle | Should -Be "ListView"
+		}
+
+		It "Should leave the PSReadLine history limits untouched in the base" {
+			# $null means Initialize-PSReadLine does not call Set-PSReadLineOption for the key at all,
+			# so a vanilla install keeps PSReadLine's own 4096 cap and default history file.
+			$script:BaseConfig.PSReadLine.ContainsKey("MaximumHistoryCount") | Should -BeTrue
+			$script:BaseConfig.PSReadLine.MaximumHistoryCount | Should -BeNullOrEmpty
+			$script:BaseConfig.PSReadLine.ContainsKey("HistorySavePath") | Should -BeTrue
+			$script:BaseConfig.PSReadLine.HistorySavePath | Should -BeNullOrEmpty
+		}
 	}
 
 	Context "Display-aware window sizing" {

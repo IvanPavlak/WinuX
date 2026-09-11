@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.62] - 2026-09-11
+
+### Added
+
+- **`PSReadLine` configuration section and `Initialize-PSReadLine` (System module): the interactive shell options move out of the profile and into configuration.** The profile carried a block of hardcoded `Set-PSReadLineOption` / `Set-PSReadLineKeyHandler` calls (Windows edit mode, prefix-search arrows, history predictions in a list) that a fork could only change by editing the shared profile, and nothing exposed the history limit at all - the shell recalled PSReadLine's default 4096 commands on every machine, silently. The new base section ships exactly the behaviour the profile always had (`EditMode = "Windows"`, `KeyHandlers` for `UpArrow`/`DownArrow`, `HistoryNoDuplicates = $true`, `PredictionSource = "History"`, `PredictionViewStyle = "ListView"`) plus two opt-in keys that ship `$null`: `MaximumHistoryCount` and `HistorySavePath`. `$null` (or a missing key) means the function makes no call for that key and PSReadLine keeps its own default, which is also how a fork drops a base key binding - set that key to `$null` under `KeyHandlers`, since hashtables merge per key. `MaximumHistoryCount` drives two limits with one number: PSReadLine's recall cap (arrow keys, `Ctrl+R`) and the session `$MaximumHistoryCount` (`Get-History`), the latter clamped to PowerShell's 32767 ceiling, so `PSReadLine = @{ MaximumHistoryCount = 32767 }` in `Configuration.local.psd1` is the whole opt-in and makes the two agree exactly. A value that is not a positive integer is reported through `Write-LogWarning` at shell start and both limits are left alone. `HistorySavePath` accepts `%ENV%` variables. The function preserves the ordering the profile had earned the hard way (see 0.1.5x Fixed entries on `-EditMode`): `EditMode` first because it installs a whole key map and resets every binding made before it, then the key handlers, then the history options, then the two prediction options last and inside their own `try`/`catch` because they are the only calls that throw on a console without virtual-terminal support - so when they do, everything above has already applied. The profile now dot-sources the function file and calls `Initialize-PSReadLine` where the block was, still above `Initialize-OhMyPosh` for the transient-prompt reason documented there; a vanilla install behaves identically before and after. Tests: new `Initialize-PSReadLine.Tests.ps1` (null and empty section, the default read from `$global:Configuration`, every `$null` key skipped, the base section applied key by key, `HistoryNoDuplicates` off passed through explicitly, the call order asserted as a sequence, both limits set together below the ceiling and only the session variable clamped above it, a numeric string accepted, four invalid shapes each warning once and touching nothing, `%ENV%` expansion in the path, an empty path skipped, a `$null` handler skipped beside a bound one, a non-hashtable `KeyHandlers` ignored, and a throwing prediction call leaving every earlier setting in place without rethrowing) plus two cases in `VanillaConfiguration.Tests.ps1` fencing the base section's historical defaults and its `$null` history limits. Documented in `docs/modules/system.md`, a new `docs/configuration/guides/system/Initialize-PSReadLine.md` (decisions, verification, the recall-versus-storage distinction), the System guides index, and a new "PSReadLine (Interactive Shell Options)" section in `docs/configuration/configuration-reference.md`.
+
 ## [0.1.61] - 2026-09-11
 
 ### Added
@@ -1016,7 +1022,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.61...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.62...HEAD
+[0.1.62]: https://github.com/IvanPavlak/WinuX/compare/v0.1.61...v0.1.62
 [0.1.61]: https://github.com/IvanPavlak/WinuX/compare/v0.1.60...v0.1.61
 [0.1.60]: https://github.com/IvanPavlak/WinuX/compare/v0.1.59...v0.1.60
 [0.1.59]: https://github.com/IvanPavlak/WinuX/compare/v0.1.58...v0.1.59

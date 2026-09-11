@@ -26,6 +26,7 @@
 		'Get-TerminalCellSize',
 		'Get-VisibleWindowProcess',
 		'Initialize-OhMyPosh',
+		'Initialize-PSReadLine',
 		'Initialize-Win32BrowserHelperType',
 		'Initialize-WSLEnvironment',
 		'Invoke-ClearAndFastfetch',
