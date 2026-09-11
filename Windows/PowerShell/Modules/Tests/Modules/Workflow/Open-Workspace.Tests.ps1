@@ -105,6 +105,11 @@ BeforeAll {
 		$script:invokedActions += [PSCustomObject]@{ Name = 'Test-ShellAwareAction'; Alpha = $Alpha; InSameShell = [bool]$InSameShell }
 	}
 
+	function Test-WorkspaceAwareAction {
+		param($CurrentWorkspace)
+		$script:invokedActions += [PSCustomObject]@{ Name = 'Test-WorkspaceAwareAction'; CurrentWorkspace = $CurrentWorkspace }
+	}
+
 	function Test-ThrowingAction {
 		param()
 		throw 'intentional action failure'
@@ -681,6 +686,29 @@ Describe "Open-Workspace" {
 		$script:invokedActions[0].Alpha | Should -Be 77
 		$script:invokedActions[1].Name | Should -Be 'Test-ActionTwo'
 		$script:invokedActions[1].Beta | Should -Be 2
+	}
+
+	Context "workspace-context handoff" {
+		It "hands the workspace being opened to every action that declares CurrentWorkspace" {
+			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+				@{ Action = 'Test-WorkspaceAwareAction' }
+			)
+
+			Open-Workspace -Workspace 'TestWorkspace'
+
+			$script:invokedActions.Count | Should -Be 1
+			$script:invokedActions[0].CurrentWorkspace | Should -Be 'TestWorkspace'
+		}
+
+		It "lets a configured CurrentWorkspace parameter win over the injected one" {
+			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+				@{ Action = 'Test-WorkspaceAwareAction'; Parameters = @{ CurrentWorkspace = 'Elsewhere' } }
+			)
+
+			Open-Workspace -Workspace 'TestWorkspace'
+
+			$script:invokedActions[0].CurrentWorkspace | Should -Be 'Elsewhere'
+		}
 	}
 
 	It "relaunches -Alongside into a new shell window without running any actions" {

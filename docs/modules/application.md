@@ -16,6 +16,46 @@ Create-CondaEnvironments
 
 **See also:** [Modules: Workflow](workflow.md)
 
+## [Get-ObsidianCliPath](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Get-ObsidianCliPath.ps1)
+
+- **Description:** Resolves the Obsidian command line interface: the `obsidian` command on PATH (what registering the CLI under Settings > General > Command line interface adds), else `Obsidian.com` in the default install folder `%LOCALAPPDATA%\Programs\obsidian`. Returns `$null` when neither exists.
+- **Usage:** `Get-ObsidianCliPath`
+
+Helper for `Open-Obsidian` and `Get-ObsidianExecutablePath`. A `$null` result is what makes `Open-Obsidian` fall back to a plain launch and explain how to register the CLI.
+
+```powershell
+# Where would Open-Obsidian find the CLI?
+Get-ObsidianCliPath
+```
+
+## [Get-ObsidianExecutablePath](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Get-ObsidianExecutablePath.ps1)
+
+- **Description:** Resolves `Obsidian.exe` for a detached launch: beside the CLI (`Get-ObsidianCliPath`), then in `%LOCALAPPDATA%\Programs\obsidian`, then from the `obsidian://` protocol handler registered under `HKCU:\Software\Classes\obsidian`. Returns the first candidate that exists, `$null` otherwise.
+- **Usage:** `Get-ObsidianExecutablePath`
+
+Helper for `Start-ObsidianDetached`, which needs the executable itself because a WMI-created process cannot be started from a URI alone.
+
+```powershell
+Get-ObsidianExecutablePath
+```
+
+## [Get-ObsidianWorkspaceNames](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Get-ObsidianWorkspaceNames.ps1)
+
+- **Description:** Reads the saved Obsidian workspace names (the core Workspaces plugin) from `<VaultDirectory>\.obsidian\workspaces.json`. Returns an empty array for an empty directory, a missing file or a file that does not parse.
+- **Parameters:** -VaultDirectory
+- **Usage:** `Get-ObsidianWorkspaceNames -VaultDirectory $MachineSpecificPaths.ObsidianDirectory`
+
+Helper for `Open-Obsidian`: the source of the implicit same-named match against the WinuX workspace, of the `-Select` menu and of the warning an unknown `-Workspace` gets. Reading the file rather than asking the CLI works before Obsidian is running.
+
+| Parameter         | Description                                                    |
+| ----------------- | -------------------------------------------------------------- |
+| `-VaultDirectory` | The vault root - the folder that holds the `.obsidian` folder. |
+
+```powershell
+# The names Open-Obsidian -Select offers
+Get-ObsidianWorkspaceNames -VaultDirectory $MachineSpecificPaths.ObsidianDirectory
+```
+
 ## [Get-VSCodeWorkspaceNames](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Get-VSCodeWorkspaceNames.ps1)
 
 - **Description:** Lists the available VS Code workspace names by enumerating the `*.code-workspace` files in `Projects.Self.VSCodeWorkspaces` (`<repo>\VSCode\Workspaces`) and returning each file's base name. Returns an empty array when the folder is missing or holds no workspace files.
@@ -196,6 +236,24 @@ Invoke-Browser
 
 **See also:** [Open-Browser](../modules/application.md)
 
+## [Invoke-ObsidianCli](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Invoke-ObsidianCli.ps1)
+
+- **Description:** Runs one Obsidian CLI command and returns its output lines (stdout then stderr, blank lines dropped). `Obsidian.com` writes its chatter (argument echo, callback URL, update check) straight to the console it is attached to, past any stream redirection, so the command runs in a hidden console of its own with both streams redirected to temporary files that are read back and removed. A launch failure is returned as a single `CLI call failed: ...` line rather than thrown.
+- **Parameters:** -CliPath, -Arguments
+- **Usage:** `Invoke-ObsidianCli -CliPath (Get-ObsidianCliPath) -Arguments @("vault=Obsidian", "workspaces")`
+
+The one place every CLI call from `Open-Obsidian` and `Wait-ObsidianCli` goes through, and the seam the tests mock. Arguments follow the CLI's own `parameter=value` shape; put `vault=<name>` first.
+
+| Parameter    | Description                                                                  |
+| ------------ | ---------------------------------------------------------------------------- |
+| `-CliPath`   | Path to `Obsidian.com`, normally from `Get-ObsidianCliPath`.                 |
+| `-Arguments` | The CLI tokens, e.g. `@("vault=Obsidian", "workspace:load", "name=Server")`. |
+
+```powershell
+# List the saved workspaces of the running vault
+Invoke-ObsidianCli -CliPath (Get-ObsidianCliPath) -Arguments @("vault=Obsidian", "workspaces")
+```
+
 ## [Open-Acrobat](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Open-Acrobat.ps1)
 
 - **Description:** Opens Adobe Acrobat with one or more PDF groups defined in `AcrobatPdfGroups` in `Configuration.psd1`. When a PDF key (or keys) is given it opens the corresponding file(s) directly; called with no arguments it just launches Acrobat (or reports it is already running), and with an empty `-Pdf` it shows an interactive menu of configured groups plus up to 10 recently opened PDFs.
@@ -335,8 +393,32 @@ Open-NotepadPlusPlus -File "C:\Users\<User>\config.json"
 
 ## [Open-Obsidian](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Open-Obsidian.ps1)
 
-- **Description:** Opens Obsidian by launching the vault startup Python script (`ObsidianStartupScript.pyw` via `pythonw`), with the script path resolved from `$MachineSpecificPaths.ObsidianStartupScript`. Does nothing if Obsidian is already running.
-- **Usage:** `Open-Obsidian`
+- **Description:** Opens Obsidian for the configured vault and, when a workspace resolves, loads that Obsidian workspace through the official Obsidian command line interface (`obsidian vault=<Vault> workspace:load name=<Name>`). With Obsidian already running the workspace is switched in place - no second window; without a workspace an already-running Obsidian is left alone. The workspace comes from `-Workspace`, else from the `-CurrentWorkspace` name `Open-Workspace` injects when the vault has an Obsidian workspace of the same name, else from `Configuration.Obsidian.DefaultWorkspace` on a cold start only. A cold start launches `Obsidian.exe` detached through WMI so closing the terminal never closes Obsidian, then polls the CLI (10 s at most) before loading.
+- **Parameters:** -Workspace, -Select, -CurrentWorkspace
+- **Usage:** `Open-Obsidian`, `Open-Obsidian -Workspace Server`, `Open-Obsidian -Select`
+
+The Obsidian side of a WinuX workspace. Saved Obsidian workspaces (the core Workspaces plugin) live in `<ObsidianDirectory>\.obsidian\workspaces.json`; `Get-ObsidianWorkspaceNames` reads that file for the implicit match, for the `-Select` menu and for the warning an unknown `-Workspace` name gets (the load is still attempted). Inside `Open-Workspace` a bare `@{ Action = "Open-Obsidian" }` is enough: `w Server` lands Obsidian on its `Server` workspace as soon as the vault has one, and `Parameters = @{ Workspace = "Name" }` overrides that. The vault name defaults to the leaf folder of `PathTemplates.ObsidianDirectory` (`Configuration.Obsidian.Vault` overrides it). The CLI ships with Obsidian 1.12.4+ and is enabled once under Settings > General > Command line interface; `Get-ObsidianCliPath` finds it on PATH or beside `Obsidian.exe`, and without it Obsidian still opens while a requested workspace is reported with the registration steps. The launch itself is `Start-ObsidianDetached` (the CLI cannot start Obsidian), the readiness poll is `Wait-ObsidianCli` and every CLI call goes through `Invoke-ObsidianCli`, which runs `Obsidian.com` in a hidden console so its chatter never reaches the shell.
+
+| Parameter           | Description                                                                                                      |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `-Workspace`        | The Obsidian workspace to load. Wins over `-CurrentWorkspace` and the configured default.                        |
+| `-Select`           | Pick the workspace from a menu of the vault's saved workspaces (PowerShell cannot bind a bare `-Workspace`).     |
+| `-CurrentWorkspace` | The WinuX workspace being opened - injected by `Open-Workspace`, used only when a same-named Obsidian one exists. |
+
+```powershell
+# Open Obsidian (or leave the running one alone)
+Open-Obsidian
+
+# Open Obsidian into the "Server" workspace, or switch the running instance to it
+Open-Obsidian -Workspace Server
+
+# Choose from the vault's saved workspaces
+Open-Obsidian -Select
+
+# In WorkspaceActions: implicit same-named match, or an explicit name
+@{ Action = "Open-Obsidian" }
+@{ Action = "Open-Obsidian"; Parameters = @{ Workspace = "DSA" } }
+```
 
 ## [Open-Outlook](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Open-Outlook.ps1)
 
@@ -638,6 +720,22 @@ Start-MicrosoftActivationScripts -Override
 Start-MicrosoftActivationScripts -Selection Yes
 ```
 
+## [Start-ObsidianDetached](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Start-ObsidianDetached.ps1)
+
+- **Description:** Launches Obsidian for a vault without tying it to the current shell. Creates `Obsidian.exe "obsidian://open?vault=<Vault>"` through WMI (`Win32_Process.Create`), whose parent is the WMI provider host, so the new process owns no console. Falls back to `Start-Process "obsidian://open?vault=<Vault>"` when the executable cannot be located or WMI refuses.
+- **Parameters:** -Vault
+- **Usage:** `Start-ObsidianDetached -Vault Obsidian`
+
+Why not a plain `Start-Process`: Electron attaches to the console of the process that launched it, so an Obsidian started from a terminal prints its startup log into that terminal and is closed together with it. The retired `ObsidianStartupScript.pyw` hop existed for the same reason (`pythonw` owns no console). The Obsidian CLI cannot do the launch either - it refuses to run while Obsidian is down - which is why `Open-Obsidian` starts Obsidian this way and only then talks to the CLI.
+
+| Parameter | Description                                             |
+| --------- | ------------------------------------------------------- |
+| `-Vault`  | The vault name, URI-encoded into the `obsidian://` URI. |
+
+```powershell
+Start-ObsidianDetached -Vault Obsidian
+```
+
 ## [Start-Win11Debloat](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Start-Win11Debloat.ps1)
 
 - **Description:** Runs the vendored Win11Debloat script from the local repository to remove bloatware, disable telemetry, and apply system tweaks. Validates administrator privileges first, then runs with saved settings if available or shows the interactive Win11Debloat menu, launching the vendored script through Windows PowerShell because it cannot run under PowerShell 7. Called automatically during `Bootstrap -WithInitialSetup`, but only when opted in via `BootstrapConfig.Steps.Win11Debloat` (off by default - a vanilla bootstrap never runs or prompts for it).
@@ -783,6 +881,25 @@ Wait-BrowserWindowReady -ProcessName "msedge" -TitlePattern "Microsoft.{0,2}Edge
 ```
 
 **See also:** [Open-Browser](#open-browser), [Get-BrowserTitlePattern](system.md#get-browsertitlepattern)
+
+## [Wait-ObsidianCli](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Wait-ObsidianCli.ps1)
+
+- **Description:** Polls the Obsidian CLI (`obsidian vault=<Vault> workspaces`) until it reaches the running vault or the timeout elapses. While Obsidian is still starting the CLI answers `The CLI is unable to find Obsidian`; the first answer without that line means commands will be executed. Returns `$true` or `$false`.
+- **Parameters:** -CliPath, -Vault, -TimeoutSeconds, -PollMilliseconds
+- **Usage:** `Wait-ObsidianCli -CliPath (Get-ObsidianCliPath) -Vault Obsidian -TimeoutSeconds 10`
+
+The cold-start gate in `Open-Obsidian`: after `Start-ObsidianDetached` the CLI starts answering about half a second after the window appears, and by then the Homepage plugin's startup load has run, so the `workspace:load` that follows is the one that sticks. Returns early on success; the timeout only matters on a slow start.
+
+| Parameter           | Description                            |
+| ------------------- | -------------------------------------- |
+| `-CliPath`          | Path to `Obsidian.com`.                |
+| `-Vault`            | The vault to probe.                    |
+| `-TimeoutSeconds`   | Give up after this long. Default `10`. |
+| `-PollMilliseconds` | Pause between probes. Default `200`.   |
+
+```powershell
+if (Wait-ObsidianCli -CliPath (Get-ObsidianCliPath) -Vault Obsidian) { "CLI ready" }
+```
 
 ## Configuration Reference
 

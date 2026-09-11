@@ -52,7 +52,7 @@ WorkspaceActions = @{
 
 | Action                          | Description                   | Parameters                                                       |
 | ------------------------------- | ----------------------------- | ---------------------------------------------------------------- |
-| `Open-Obsidian`                 | Opens Obsidian vault          | None                                                             |
+| `Open-Obsidian`                 | Opens Obsidian, into the same-named Obsidian workspace when one exists | None, or `Workspace = "Name"` to force one                |
 | `Open-Browser`                  | Opens browser with URL groups | `Groups = @("AI", "Tools")`, `Instances = N`, `Override = $true` |
 | `Open-Project`                  | Opens a project               | `Project = "ProjectName"` or empty for prompt                    |
 | `Open-VSCode`                   | Opens VS Code                 | `Folder = "FolderName"`                                          |

@@ -2,30 +2,223 @@
 
 BeforeAll {
 	$script:OriginalMachineSpecificPaths = $global:MachineSpecificPaths
+	$script:OriginalConfiguration = $global:Configuration
 	$AppFunctionsPath = Join-Path (Get-RepositoryPath).Modules "Application\Functions"
 	. "$AppFunctionsPath\Open-Obsidian.ps1"
+	# The helpers Open-Obsidian calls - loaded so they exist to be mocked.
+	. "$AppFunctionsPath\Get-ObsidianCliPath.ps1"
+	. "$AppFunctionsPath\Get-ObsidianWorkspaceNames.ps1"
+	. "$AppFunctionsPath\Invoke-ObsidianCli.ps1"
+	. "$AppFunctionsPath\Start-ObsidianDetached.ps1"
+	. "$AppFunctionsPath\Wait-ObsidianCli.ps1"
+
+	# A vault directory with the saved workspaces the tests reason about.
+	$script:VaultDirectory = Join-Path $TestDrive 'Obsidian'
+	New-Item -ItemType Directory -Path (Join-Path $script:VaultDirectory '.obsidian') -Force | Out-Null
+	@{
+		workspaces = @{
+			Empty  = @{ main = @{} }
+			Server = @{ main = @{} }
+			DSA    = @{ main = @{} }
+		}
+		active     = 'Server'
+	} | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $script:VaultDirectory '.obsidian\workspaces.json')
 }
 
 AfterAll {
 	$global:MachineSpecificPaths = $script:OriginalMachineSpecificPaths
+	$global:Configuration = $script:OriginalConfiguration
 }
 
 Describe "Open-Obsidian" {
 	BeforeEach {
-		$global:MachineSpecificPaths = @{ ObsidianStartupScript = 'C:\Obsidian\ObsidianStartupScript.pyw' }
-		Mock Start-Application { }
+		$global:MachineSpecificPaths = @{ ObsidianDirectory = $script:VaultDirectory }
+		$global:Configuration = @{ Obsidian = @{ DefaultWorkspace = ''; Vault = '' } }
+
+		$script:cliCalls = @()
+		$script:obsidianRunning = $false
+
+		Mock Invoke-ObsidianCli { $script:cliCalls += , @($Arguments); @() }
+		Mock Get-ObsidianCliPath { 'C:\Apps\Obsidian\Obsidian.com' }
+		Mock Wait-ObsidianCli { $true }
+		Mock Start-ObsidianDetached { }
+		Mock Resolve-Selection { 'DSA' }
+		Mock Get-Process { if ($script:obsidianRunning) { [PSCustomObject]@{ Name = 'obsidian'; MainWindowHandle = 42 } } } -ParameterFilter { $Name -eq 'obsidian' }
+		Mock Write-LogWarning { }
+		Mock Write-LogError { }
+		Mock Write-LogStep { }
+		Mock Write-LogSuccess { }
+		Mock Write-LogDebug { }
 	}
 
-	It "delegates to Start-Application with pythonw startup script and skip path validation" {
-		Open-Obsidian
+	Context "cold start" {
+		It "launches detached with the vault derived from ObsidianDirectory and loads nothing" {
+			Open-Obsidian
 
-		Should -Invoke Start-Application -Times 1 -Exactly -ParameterFilter {
-			$AppName -eq 'Obsidian' -and
-			$ProcessName -eq 'obsidian' -and
-			$StartMethod -eq 'DirectPath' -and
-			$ExecutablePath -eq 'pythonw' -and
-			$Arguments -eq 'C:\Obsidian\ObsidianStartupScript.pyw' -and
-			$SkipPathValidation
+			Should -Invoke Start-ObsidianDetached -Times 1 -Exactly -ParameterFilter { $Vault -eq 'Obsidian' }
+			$script:cliCalls.Count | Should -Be 0
+			Should -Invoke Wait-ObsidianCli -Times 0
+		}
+
+		It "launches, waits for the CLI to answer, then loads an explicit -Workspace" {
+			Open-Obsidian -Workspace Server
+
+			Should -Invoke Start-ObsidianDetached -Times 1 -Exactly -ParameterFilter { $Vault -eq 'Obsidian' }
+			Should -Invoke Wait-ObsidianCli -Times 1 -Exactly -ParameterFilter { $Vault -eq 'Obsidian' -and $TimeoutSeconds -eq 10 }
+			$script:cliCalls.Count | Should -Be 1
+			$script:cliCalls[0] | Should -Be @('vault=Obsidian', 'workspace:load', 'name=Server')
+		}
+
+		It "loads the same-named Obsidian workspace for the injected CurrentWorkspace" {
+			Open-Obsidian -CurrentWorkspace Server
+
+			$script:cliCalls[0] | Should -Be @('vault=Obsidian', 'workspace:load', 'name=Server')
+		}
+
+		It "loads nothing when CurrentWorkspace has no same-named Obsidian workspace" {
+			Open-Obsidian -CurrentWorkspace Trading
+
+			Should -Invoke Start-ObsidianDetached -Times 1 -Exactly
+			$script:cliCalls.Count | Should -Be 0
+			Should -Invoke Write-LogWarning -Times 0
+		}
+
+		It "falls back to Obsidian.DefaultWorkspace when nothing else resolves" {
+			$global:Configuration.Obsidian.DefaultWorkspace = 'Empty'
+
+			Open-Obsidian
+
+			$script:cliCalls[0] | Should -Be @('vault=Obsidian', 'workspace:load', 'name=Empty')
+		}
+
+		It "prefers an explicit -Workspace over CurrentWorkspace and the default" {
+			$global:Configuration.Obsidian.DefaultWorkspace = 'Empty'
+
+			Open-Obsidian -Workspace DSA -CurrentWorkspace Server
+
+			$script:cliCalls.Count | Should -Be 1
+			$script:cliCalls[0] | Should -Be @('vault=Obsidian', 'workspace:load', 'name=DSA')
+		}
+
+		It "uses Obsidian.Vault over the folder-derived name when set" {
+			$global:Configuration.Obsidian.Vault = 'MyVault'
+
+			Open-Obsidian -Workspace Server
+
+			Should -Invoke Start-ObsidianDetached -Times 1 -Exactly -ParameterFilter { $Vault -eq 'MyVault' }
+			$script:cliCalls[0] | Should -Be @('vault=MyVault', 'workspace:load', 'name=Server')
+		}
+
+		It "warns about an unknown workspace name and still attempts it" {
+			Open-Obsidian -Workspace Typo
+
+			Should -Invoke Write-LogWarning -Times 1 -Exactly -ParameterFilter { $Message -like '*[[]Typo[]]*not saved*' }
+			$script:cliCalls[0] | Should -Be @('vault=Obsidian', 'workspace:load', 'name=Typo')
+		}
+
+		It "does not load when the CLI never answers, and says so" {
+			Mock Wait-ObsidianCli { $false }
+
+			Open-Obsidian -Workspace Server
+
+			Should -Invoke Start-ObsidianDetached -Times 1 -Exactly
+			$script:cliCalls.Count | Should -Be 0
+			Should -Invoke Write-LogWarning -Times 1 -Exactly -ParameterFilter { $Message -like '*did not answer within 10 seconds*' }
+		}
+
+		It "still opens Obsidian when the CLI is missing and explains how to register it" {
+			Mock Get-ObsidianCliPath { $null }
+
+			Open-Obsidian -Workspace Server
+
+			Should -Invoke Start-ObsidianDetached -Times 1 -Exactly -ParameterFilter { $Vault -eq 'Obsidian' }
+			$script:cliCalls.Count | Should -Be 0
+			Should -Invoke Wait-ObsidianCli -Times 0
+			Should -Invoke Write-LogWarning -Times 1 -Exactly -ParameterFilter { $Message -like '*Obsidian CLI not found*Command line interface*' }
+		}
+
+		It "opens silently when the CLI is missing and no workspace was requested" {
+			Mock Get-ObsidianCliPath { $null }
+
+			Open-Obsidian
+
+			Should -Invoke Start-ObsidianDetached -Times 1 -Exactly
+			Should -Invoke Write-LogWarning -Times 0
+		}
+
+		It "offers the saved workspaces as a menu with -Select" {
+			Open-Obsidian -Select
+
+			Should -Invoke Resolve-Selection -Times 1 -Exactly -ParameterFilter {
+				@($OptionList) -contains 'Empty' -and @($OptionList) -contains 'Server' -and @($OptionList) -contains 'DSA' -and $AllowEmptyPromptResponse
+			}
+			$script:cliCalls[0] | Should -Be @('vault=Obsidian', 'workspace:load', 'name=DSA')
+		}
+
+		It "loads nothing when the -Select menu is skipped" {
+			Mock Resolve-Selection { $null }
+
+			Open-Obsidian -Select
+
+			Should -Invoke Start-ObsidianDetached -Times 1 -Exactly
+			$script:cliCalls.Count | Should -Be 0
+		}
+
+		It "reports a missing vault configuration and launches nothing" {
+			$global:MachineSpecificPaths = @{ ObsidianDirectory = '' }
+
+			Open-Obsidian
+
+			Should -Invoke Write-LogError -Times 1 -Exactly
+			$script:cliCalls.Count | Should -Be 0
+			Should -Invoke Start-ObsidianDetached -Times 0
+		}
+	}
+
+	Context "already running" {
+		BeforeEach {
+			$script:obsidianRunning = $true
+		}
+
+		It "leaves Obsidian alone when no workspace resolves" {
+			Open-Obsidian
+
+			$script:cliCalls.Count | Should -Be 0
+			Should -Invoke Start-ObsidianDetached -Times 0
+			Should -Invoke Write-LogWarning -Times 1 -Exactly -ParameterFilter { $Message -like '*already running*' }
+		}
+
+		It "switches the running instance with a single workspace:load and no launch" {
+			Open-Obsidian -Workspace DSA
+
+			$script:cliCalls.Count | Should -Be 1
+			$script:cliCalls[0] | Should -Be @('vault=Obsidian', 'workspace:load', 'name=DSA')
+			Should -Invoke Wait-ObsidianCli -Times 0
+			Should -Invoke Start-ObsidianDetached -Times 0
+		}
+
+		It "switches to the same-named workspace for the injected CurrentWorkspace" {
+			Open-Obsidian -CurrentWorkspace Server
+
+			$script:cliCalls[0] | Should -Be @('vault=Obsidian', 'workspace:load', 'name=Server')
+		}
+
+		It "ignores Obsidian.DefaultWorkspace - the default is for cold starts only" {
+			$global:Configuration.Obsidian.DefaultWorkspace = 'Empty'
+
+			Open-Obsidian
+
+			$script:cliCalls.Count | Should -Be 0
+		}
+
+		It "warns instead of switching when the CLI is missing" {
+			Mock Get-ObsidianCliPath { $null }
+
+			Open-Obsidian -Workspace DSA
+
+			$script:cliCalls.Count | Should -Be 0
+			Should -Invoke Start-ObsidianDetached -Times 0
+			Should -Invoke Write-LogWarning -Times 1 -Exactly -ParameterFilter { $Message -like '*Obsidian CLI not found*' }
 		}
 	}
 }

@@ -247,6 +247,8 @@ PathTemplates = @{
 
 **Consumer functions:** `Expand-ConfigPaths`, `Expand-Hashtable`, all path-dependent functions
 
+**Deprecated:** `PathTemplates.ObsidianStartupScript` - `Open-Obsidian` launched Obsidian through this Python script until 0.1.61 and now starts it detached through WMI (`Start-ObsidianDetached`). The key still parses and is ignored; remove it from your local file at leisure. See [Open-Obsidian](guides/application/Open-Obsidian.md#legacy-startup-script).
+
 ---
 
 ## Project Management
@@ -457,6 +459,30 @@ AcrobatPdfGroups = @{
 
 ---
 
+## Obsidian Configuration
+
+How `Open-Obsidian` addresses the vault and which Obsidian workspace a cold start lands on. `Open-Obsidian` drives Obsidian through its official command line interface (Obsidian 1.12.4+, enabled once under Settings > General > Command line interface). Inside a workspace open it loads the Obsidian workspace named like the WinuX workspace when the vault has one - the name arrives through the `CurrentWorkspace` parameter `Open-Workspace` injects into every action - and `Parameters = @{ Workspace = "Name" }` on the action overrides that. The vault root itself is `PathTemplates.ObsidianDirectory`.
+
+**Key:** `Obsidian` → Hashtable with two optional string keys (both `""` by default)
+
+- `DefaultWorkspace` - Obsidian workspace to load on a cold start when neither `-Workspace` nor a same-named match resolves. Empty leaves Obsidian where it was (or to plugins such as Homepage). Never applied to an already-running Obsidian.
+- `Vault` - Vault name for the CLI. Empty means the leaf folder of `PathTemplates.ObsidianDirectory`.
+
+**Consumer function:** `Open-Obsidian`
+
+**Example:**
+
+```powershell
+Obsidian = @{
+    DefaultWorkspace = "Empty"   # cold start lands here unless a workspace resolves
+    Vault            = ""        # folder name is the vault name
+}
+```
+
+Deep-merges: set only the key you need in `Configuration.local.psd1`. Persisting `%LOCALAPPDATA%\Programs\obsidian` in `AutoPathAdditions` keeps the `obsidian` command on PATH for every shell; the function also probes that folder directly.
+
+---
+
 ## Workspace Management
 
 Defines workspaces and their associated actions.
@@ -521,6 +547,8 @@ Defines what happens when a workspace opens.
 ```
 
 Swagger is never added on its own - a workspace that does not declare that action runs no Swagger logic at all.
+
+**Workspace context (`CurrentWorkspace`):** Every action that declares a `CurrentWorkspace` parameter receives the name of the workspace being opened; `Get-FilteredParams` drops it from actions that do not, and a configured `Parameters` value of that name wins over the injected one. `Open-Obsidian` uses it to load the Obsidian workspace of the same name when the vault has one, so a bare `@{ Action = "Open-Obsidian" }` under `WorkspaceActions.Server` lands Obsidian on its `Server` workspace with no per-entry configuration; `Parameters = @{ Workspace = "Name" }` overrides that.
 
 **Machine scope and per-machine parameters (`Machine`, `LayoutMachine`, `MachineParameters`, `LayoutMachineParameters`):** An action may say where it runs and what differs per machine, with four optional keys. Every key takes the scope string `Test-MachineTypeScope` understands (`All`, one type, or several separated by `/`) - the same shape as the `TaskbarConfiguration` rows and the app CSVs' `Machine` column. Two axes:
 
