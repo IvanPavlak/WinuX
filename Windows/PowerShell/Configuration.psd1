@@ -412,6 +412,43 @@
 	DefaultWakeOnLanMachine       = ""
 
 	# ==========================================================================
+	# PSReadLine (Interactive Shell Options)
+	# ==========================================================================
+	# Every editing, history and prediction option the profile applies to PSReadLine,
+	# in one place. Consumed by Initialize-PSReadLine (System module), which the
+	# profile calls on every interactive shell start - BEFORE Initialize-OhMyPosh,
+	# because EditMode installs a whole key map and would reset a theme's Enter binding.
+	#
+	# Every key is optional. $null (or a missing key) means "do not touch it" and
+	# PSReadLine keeps its own default. The base ships the framework behaviour the
+	# profile always had (Windows edit mode, prefix-search arrows, history predictions
+	# in a list) and leaves the history limits alone; a fork raises them in
+	# Configuration.local.psd1:
+	#
+	#   PSReadLine = @{ MaximumHistoryCount = 32767 }
+	#
+	# MaximumHistoryCount sets BOTH the PSReadLine recall cap (arrow keys, Ctrl+R) and
+	# the session $MaximumHistoryCount (Get-History), the latter clamped to its 32767
+	# ceiling. PSReadLine never trims its history file; this is what is recallable,
+	# not what is stored. HistoryNoDuplicates hides repeated commands during recall
+	# only - every invocation is still written to the file. HistorySavePath accepts
+	# %ENV% variables. KeyHandlers merges per key: a fork adds a binding by adding a
+	# key and drops a base binding by setting that key to $null.
+	# ==========================================================================
+	PSReadLine                    = @{
+		EditMode            = "Windows"
+		KeyHandlers         = @{
+			UpArrow   = "HistorySearchBackward"
+			DownArrow = "HistorySearchForward"
+		}
+		MaximumHistoryCount = $null
+		HistorySavePath     = $null
+		HistoryNoDuplicates = $true
+		PredictionSource    = "History"
+		PredictionViewStyle = "ListView"
+	}
+
+	# ==========================================================================
 	# Base Paths Per Machine Type
 	# ==========================================================================
 	# Defines root directories for each machine type. These paths are used to

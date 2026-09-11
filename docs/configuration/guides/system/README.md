@@ -21,6 +21,7 @@ The [System module reference](../../../modules/system.md) is the authority on wh
 | `Get-FastfetchLogoArgument` | `Universal.FastFetchImageLogo`, `PathTemplates.SymbolicLinks` | [Get-FastfetchLogoArgument](Get-FastfetchLogoArgument.md) |
 | `Get-PinnedApps` | `BootstrapConfig.DataFiles` | [Get-PinnedApps](Get-PinnedApps.md) |
 | `Initialize-OhMyPosh` | `Universal` | [Initialize-OhMyPosh](Initialize-OhMyPosh.md) |
+| `Initialize-PSReadLine` | `PSReadLine` | [Initialize-PSReadLine](Initialize-PSReadLine.md) |
 | `Initialize-WSLEnvironment` | `DefaultWSLDistribution`, `Universal` | [Initialize-WSLEnvironment](Initialize-WSLEnvironment.md) |
 | `Rebuild-IconCache` | `Universal` | [Rebuild-IconCache](Rebuild-IconCache.md) |
 | `Rename-Machine` | `HostnameToMachineType` | [Rename-Machine](Rename-Machine.md) |
