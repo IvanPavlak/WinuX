@@ -5,25 +5,33 @@ function Open-Obsidian {
 
 	.DESCRIPTION
 		Launches Obsidian through the official Obsidian command line interface (`Obsidian.com`,
-		registered as `obsidian` on PATH from Settings > General > Command line interface) and,
-		when a workspace is resolved, loads it with `obsidian vault=<Vault> workspace:load name=<Name>`.
+		registered as `obsidian` on PATH from Settings > General > Advanced > Command line interface)
+		and, when a workspace is resolved, loads it with `obsidian vault=<Vault> workspace:load name=<Name>`.
 		The CLI talks to the running instance, so with Obsidian already open the workspace is
 		switched in place - no second window. Without a workspace an already-running Obsidian is
 		left alone, as before.
 
 		The workspace to load is resolved in this order:
-		  1. -Workspace <Name>, or the menu -Select offers (names read from workspaces.json).
+		  1. -Workspace <Name>.
 		  2. -CurrentWorkspace <Name>, injected by Open-Workspace with the WinuX workspace being
 		     opened, when an Obsidian workspace of the SAME name exists in the vault. So `w Server`
 		     lands Obsidian on its "Server" workspace as soon as the vault has one; a WinuX
 		     workspace without a same-named Obsidian workspace loads nothing.
-		  3. $Configuration.Obsidian.DefaultWorkspace, on a cold start only.
-		  4. Nothing - Obsidian opens (or stays) wherever it is.
+		  3. Otherwise, unless -Default is given, a menu of the vault's saved workspaces
+		     (Resolve-Selection, the same pattern as Open-VSCode and Open-VisualStudio): a bare
+		     `Open-Obsidian` by hand picks one, [Enter] skips.
+		  4. $Configuration.Obsidian.DefaultWorkspace, on a cold start only.
+		  5. Nothing - Obsidian opens (or stays) wherever it is.
+
+		Inside a workspace open the injected CurrentWorkspace suppresses the menu, so workspace
+		actions never prompt; `Parameters = @{ Default = $true }` on them is optional and harmless.
+		An action list without that injection (ProjectActions) must pass it, or a Workspace, to
+		stay non-interactive.
 
 		The vault name for the CLI is $Configuration.Obsidian.Vault when set, else the leaf folder
 		of $MachineSpecificPaths.ObsidianDirectory. Saved workspace names are read from
-		<ObsidianDirectory>\.obsidian\workspaces.json; an explicit name that is not in that list is
-		reported and still attempted.
+		<ObsidianDirectory>\.obsidian\workspaces.json (Get-ObsidianWorkspaceNames lists them); an
+		explicit name that is not in that list is reported and still attempted.
 
 		A cold start launches Obsidian.exe with the obsidian://open?vault= URI through WMI
 		(Win32_Process.Create), so the new process is a child of the WMI provider host and owns no
@@ -31,16 +39,24 @@ function Open-Obsidian {
 		closing that terminal closes Obsidian with it - the reason the old pythonw hop existed. The
 		CLI itself refuses to run while Obsidian is down. The function then polls the CLI until it
 		answers - about half a second after launch, 10 seconds at most - and loads the workspace.
-		When the CLI cannot be found (neither on PATH nor beside Obsidian.exe) a requested workspace
-		is reported with the steps to register the CLI, and Obsidian still opens.
+
+		The CLI's answer to the load is checked. The CLI toggle is per machine (Obsidian keeps it in
+		%APPDATA%\obsidian\obsidian.json, not in the vault), so on a machine where it is off the CLI
+		answers "Command line interface is not enabled" and the workspace is reported as NOT loaded,
+		together with the fix (Enable-ObsidianCli with Obsidian closed, or the Settings toggle) -
+		never as a success. When the CLI cannot be found at all (neither on PATH nor beside
+		Obsidian.exe) a requested workspace is reported with the steps to register the CLI, and
+		Obsidian still opens.
 
 	.PARAMETER Workspace
 		The Obsidian workspace to load. Takes precedence over -CurrentWorkspace and the configured
 		default.
 
-	.PARAMETER Select
-		Pick the workspace from a menu of the vault's saved workspaces instead of naming it.
-		PowerShell cannot bind a bare "-Workspace" with no value, hence the separate switch.
+	.PARAMETER Default
+		Skip the workspace menu: open Obsidian (into Obsidian.DefaultWorkspace on a cold start when
+		configured) or leave the running one alone. Same role as -Default on Open-VSCode. Only the
+		prompt is removed - an explicit -Workspace and the same-named CurrentWorkspace match still
+		apply, so `Parameters = @{ Default = $true }` on a workspace action is safe belt-and-braces.
 
 	.PARAMETER CurrentWorkspace
 		The WinuX workspace being opened. Injected by Open-Workspace; only used when the vault has
@@ -48,15 +64,16 @@ function Open-Obsidian {
 
 	.EXAMPLE
 		Open-Obsidian
+		Lists the saved workspaces and opens Obsidian into the chosen one, or switches the running
+		instance to it; [Enter] skips the menu.
+
+	.EXAMPLE
+		Open-Obsidian -Default
 		Opens Obsidian (into Obsidian.DefaultWorkspace when configured); does nothing if it already runs.
 
 	.EXAMPLE
 		Open-Obsidian -Workspace Server
 		Opens Obsidian into the "Server" workspace, or switches the running instance to it.
-
-	.EXAMPLE
-		Open-Obsidian -Select
-		Lists the saved workspaces and loads the chosen one.
 
 	.EXAMPLE
 		@{ Action = "Open-Obsidian"; Parameters = @{ Workspace = "DSA" } }
@@ -68,7 +85,7 @@ function Open-Obsidian {
 		[string]$Workspace,
 
 		[Parameter()]
-		[switch]$Select,
+		[switch]$Default,
 
 		[Parameter()]
 		[string]$CurrentWorkspace
@@ -91,37 +108,55 @@ function Open-Obsidian {
 
 	# --- Resolve the workspace to load --------------------------------------------------------
 	$targetWorkspace = $null
-	if ($Select) {
-		if ($savedWorkspaces.Count -eq 0) {
-			Write-LogWarning "No saved Obsidian workspaces found in [$vault] to choose from!"
-		}
-		else {
-			$selection = Resolve-Selection -OptionList $savedWorkspaces `
-				-MenuTitle "[Available Obsidian workspaces]" `
-				-PromptMessage "Enter Obsidian workspace or press [Enter] to skip" `
-				-AllowEmptyPromptResponse
-			if ($selection -is [array]) { $selection = @($selection)[0] }
-			if (-not [string]::IsNullOrWhiteSpace([string]$selection)) { $targetWorkspace = ([string]$selection).Trim() }
-		}
-	}
-	elseif (-not [string]::IsNullOrWhiteSpace($Workspace)) {
+	$hasCurrentWorkspace = -not [string]::IsNullOrWhiteSpace($CurrentWorkspace)
+	if (-not [string]::IsNullOrWhiteSpace($Workspace)) {
 		$targetWorkspace = $Workspace.Trim()
 		if ($savedWorkspaces.Count -gt 0 -and $targetWorkspace -notin $savedWorkspaces) {
 			Write-LogWarning "Obsidian workspace [$targetWorkspace] is not saved in vault [$vault] (saved: $($savedWorkspaces -join ', ')) - attempting anyway."
 		}
 	}
-	elseif (-not [string]::IsNullOrWhiteSpace($CurrentWorkspace) -and $CurrentWorkspace.Trim() -in $savedWorkspaces) {
-		$targetWorkspace = $CurrentWorkspace.Trim()
-		Write-LogDebug " [Open-Obsidian] Same-named Obsidian workspace found for [$targetWorkspace]" -Style Success
+	elseif ($hasCurrentWorkspace) {
+		# Injected by Open-Workspace: match by name, never prompt inside a workspace open.
+		if ($CurrentWorkspace.Trim() -in $savedWorkspaces) {
+			$targetWorkspace = $CurrentWorkspace.Trim()
+			Write-LogDebug " [Open-Obsidian] Same-named Obsidian workspace found for [$targetWorkspace]" -Style Success
+		}
 	}
-	elseif (-not $isRunning -and -not [string]::IsNullOrWhiteSpace([string]$obsidianConfig.DefaultWorkspace)) {
+	elseif (-not $Default -and $savedWorkspaces.Count -gt 0) {
+		# Interactive call without a name: the menu, as every other opener with a selection does.
+		$selection = Resolve-Selection -OptionList $savedWorkspaces `
+			-MenuTitle "[Available Obsidian workspaces]" `
+			-PromptMessage "Enter Obsidian workspace or press [Enter] to skip" `
+			-AllowEmptyPromptResponse
+		if ($selection -is [array]) { $selection = @($selection)[0] }
+		if (-not [string]::IsNullOrWhiteSpace([string]$selection)) { $targetWorkspace = ([string]$selection).Trim() }
+	}
+
+	if (-not $targetWorkspace -and -not $isRunning -and -not [string]::IsNullOrWhiteSpace([string]$obsidianConfig.DefaultWorkspace)) {
 		$targetWorkspace = ([string]$obsidianConfig.DefaultWorkspace).Trim()
 	}
 
-	# --- Already running -------------------------------------------------------------------------
+	# --- CLI ------------------------------------------------------------------------------------
 	$cli = Get-ObsidianCliPath
-	$cliMissingWarning = "Obsidian CLI not found - cannot load a workspace. Enable it in Obsidian under Settings > General > Command line interface, then put its folder on PATH (AutoPathAdditions: `"%LOCALAPPDATA%\Programs\obsidian`") and open a new shell."
+	$cliMissingWarning = "Obsidian CLI not found - cannot load a workspace. Enable it in Obsidian under Settings > General > Advanced > Command line interface, then put its folder on PATH (AutoPathAdditions: `"%LOCALAPPDATA%\Programs\obsidian`") and open a new shell."
 
+	# Lines the CLI answers instead of doing the work. "not enabled" is the per-machine toggle
+	# being off (Obsidian.com exists and runs, so Get-ObsidianCliPath cannot tell); the other two
+	# are Obsidian gone between the readiness poll and the load, and a launch failure reported by
+	# Invoke-ObsidianCli.
+	$cliRefusal = 'not enabled|unable to find Obsidian|^CLI call failed'
+	$loadWorkspace = {
+		param([string]$Name)
+		$answer = @(Invoke-ObsidianCli -CliPath $cli -Arguments @("vault=$vault", 'workspace:load', "name=$Name"))
+		$refusal = @($answer | Where-Object { $_ -match $cliRefusal }) | Select-Object -First 1
+		if ($refusal) {
+			Write-LogWarning "Obsidian workspace [$Name] not loaded => $refusal Run [Enable-ObsidianCli] with Obsidian closed, or enable it under Settings > General > Advanced > Command line interface."
+			return $false
+		}
+		return $true
+	}
+
+	# --- Already running -------------------------------------------------------------------------
 	if ($isRunning) {
 		if (-not $targetWorkspace) {
 			Write-LogWarning "Obsidian is already running!"
@@ -132,8 +167,9 @@ function Open-Obsidian {
 			return
 		}
 		Write-LogStep "Loading Obsidian workspace [$targetWorkspace]..."
-		Invoke-ObsidianCli -CliPath $cli -Arguments @("vault=$vault", 'workspace:load', "name=$targetWorkspace") | Out-Null
-		Write-LogSuccess "Obsidian workspace [$targetWorkspace] loaded!"
+		if (& $loadWorkspace $targetWorkspace) {
+			Write-LogSuccess "Obsidian workspace [$targetWorkspace] loaded!"
+		}
 		return
 	}
 
@@ -159,8 +195,12 @@ function Open-Obsidian {
 	# 1.0 s), after the Homepage plugin has done its startup load - so this load is the one that
 	# sticks.
 	if (Wait-ObsidianCli -CliPath $cli -Vault $vault -TimeoutSeconds 10) {
-		Invoke-ObsidianCli -CliPath $cli -Arguments @("vault=$vault", 'workspace:load', "name=$targetWorkspace") | Out-Null
-		Write-LogSuccess "Obsidian opened in workspace [$targetWorkspace]!"
+		if (& $loadWorkspace $targetWorkspace) {
+			Write-LogSuccess "Obsidian opened in workspace [$targetWorkspace]!"
+		}
+		else {
+			Write-LogSuccess "Obsidian opened!"
+		}
 	}
 	else {
 		Write-LogWarning "Obsidian CLI did not answer within 10 seconds - workspace [$targetWorkspace] may not be loaded. Run [Open-Obsidian -Workspace $targetWorkspace] again once it is up."

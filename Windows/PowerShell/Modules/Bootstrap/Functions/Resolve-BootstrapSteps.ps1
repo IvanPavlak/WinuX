@@ -18,7 +18,8 @@ function Resolve-BootstrapSteps {
 		NuGetConfig (prompts for a GitHub PAT), UpgradeAll (upgrades every
 		package already on the machine, not just WinuX's own), CoreAiRules
 		(machine-global AI agent policy), AiSkills (machine-global Agent
-		Skills links), and LockedStartLayout.
+		Skills links), ObsidianCli (turns the Obsidian command line interface
+		on in Obsidian's per-machine app settings), and LockedStartLayout.
 
 		Legacy alias: when Steps.WSL is absent but the deprecated
 		BootstrapConfig.WSLSetup exists, WSL resolves from WSLSetup, so
@@ -88,6 +89,7 @@ function Resolve-BootstrapSteps {
 		SymbolicLinks              = $true
 		CoreAiRules                = $false
 		AiSkills                   = $false
+		ObsidianCli                = $false
 		LockedStartLayout          = $false
 	}
 

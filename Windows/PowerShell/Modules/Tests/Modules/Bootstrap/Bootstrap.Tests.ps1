@@ -17,6 +17,8 @@ BeforeAll {
 	# Bootstrap gates the package-manager steps through Resolve-PackageManagers; dot-source it so it
 	# exists to Mock even in sessions whose imported Bootstrap module predates the export.
 	. "$BootstrapFunctionsPath\Resolve-PackageManagers.ps1"
+	# The opt-in Obsidian CLI step; dot-sourced so it exists to Mock in every session.
+	. "$ModuleRoot\Application\Functions\Enable-ObsidianCli.ps1"
 }
 
 AfterAll {
@@ -84,6 +86,7 @@ Describe "Bootstrap" {
 		Mock Configure-WSLSSH { }
 		Mock Set-ItemProperty { }
 		Mock Restart-Machine { }
+		Mock Enable-ObsidianCli { }
 	}
 
 	It "runs initial-setup steps and uses Update-Repositories -All by default (no RepositoryUpdateScope override)" {
@@ -115,24 +118,26 @@ Describe "Bootstrap" {
 		Should -Invoke Start-Win11Debloat -Times 1 -Exactly
 	}
 
-	It "keeps the other opt-in steps off by default (DeveloperMode, NuGetConfig, LockedStartLayout)" {
+	It "keeps the other opt-in steps off by default (DeveloperMode, NuGetConfig, ObsidianCli, LockedStartLayout)" {
 		$global:MachineType = 'Laptop'
 
 		Bootstrap
 
 		Should -Invoke Enable-DeveloperMode -Times 0
 		Should -Invoke Configure-NuGetConfig -Times 0
+		Should -Invoke Enable-ObsidianCli -Times 0
 		Should -Invoke Set-ItemProperty -Times 0 -ParameterFilter { $Name -eq 'LockedStartLayout' }
 	}
 
 	It "runs the opt-in steps when BootstrapConfig.Steps enables them" {
 		$global:MachineType = 'Laptop'
-		$global:Configuration.BootstrapConfig = @{ Steps = @{ DeveloperMode = $true; NuGetConfig = $true; LockedStartLayout = $true } }
+		$global:Configuration.BootstrapConfig = @{ Steps = @{ DeveloperMode = $true; NuGetConfig = $true; ObsidianCli = $true; LockedStartLayout = $true } }
 
 		Bootstrap
 
 		Should -Invoke Enable-DeveloperMode -Times 1 -Exactly
 		Should -Invoke Configure-NuGetConfig -Times 1 -Exactly
+		Should -Invoke Enable-ObsidianCli -Times 1 -Exactly -ParameterFilter { $CreateIfMissing }
 		Should -Invoke Set-ItemProperty -Times 1 -Exactly -ParameterFilter { $Name -eq 'LockedStartLayout' }
 	}
 

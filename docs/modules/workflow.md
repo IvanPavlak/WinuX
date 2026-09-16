@@ -1161,7 +1161,7 @@ RunnableProjectMappings = @(
 | Action                                | Description                                                           |
 | ------------------------------------- | --------------------------------------------------------------------- |
 | `Open-Browser`                        | Opens browser with URL groups (supports `Instances` for multi-window) |
-| `Open-Obsidian`                       | Opens Obsidian, into the same-named Obsidian workspace when one exists |
+| `Open-Obsidian`                       | Opens Obsidian, into the same-named Obsidian workspace when one exists; `Default = $true` skips the interactive menu, `Workspace = "Name"` forces one |
 | `Open-Project`                        | Opens a project (can nest)                                            |
 | `Open-ProjectSwagger`                 | Opens the active project's Swagger tab (opt-in; see the note below)   |
 | `Open-VSCode`                         | Opens VS Code                                                         |

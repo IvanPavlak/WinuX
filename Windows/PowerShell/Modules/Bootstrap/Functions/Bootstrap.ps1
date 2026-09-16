@@ -12,7 +12,7 @@ function Bootstrap {
 		no-op on their own when their configuration section is empty, so an enabled step on
 		the empty base config applies nothing. Opt-in steps that act the moment they run
 		default off: MicrosoftActivationScripts, Win11Debloat, DeveloperMode, NuGetConfig,
-		UpgradeAll, CoreAiRules, AiSkills, LockedStartLayout.
+		UpgradeAll, CoreAiRules, AiSkills, ObsidianCli, LockedStartLayout.
 
 		Execution sequence:
 		1. (WithInitialSetup only) Rename-Machine, Start-MicrosoftActivationScripts, Start-Win11Debloat
@@ -26,8 +26,8 @@ function Bootstrap {
 		8. Upgrade all packages, fork-defined personal steps (BootstrapConfig.PersonalSteps, optionally machine-gated), .NET EF CLI
 		9. Environment variables, Conda environments, NuGet config, taskbar pins
 		10. WSL environment initialization, symbolic links, CoreAiRules enforcement layer (opt-in via
-		    Steps.CoreAiRules), AI skills links (opt-in via Steps.AiSkills), WSL SSH setup (WSL steps
-		    use the same gate)
+		    Steps.CoreAiRules), AI skills links (opt-in via Steps.AiSkills), Obsidian CLI flag
+		    (opt-in via Steps.ObsidianCli), WSL SSH setup (WSL steps use the same gate)
 		11. Lock taskbar layout, restart Explorer, restart machine
 
 		Logs are written via Start-Logging / Stop-Logging for the duration of the run.
@@ -271,6 +271,12 @@ function Bootstrap {
 		# Machine-global Agent Skills (docs/ai/skills.md) - links every skill under AiSkills.Root into
 		# each harness's skills directory. The base ships no skills, so this is opt-in as well.
 		if ($steps.AiSkills) { Deploy-AiSkills } else { Write-LogWarning "AI skills skipped - opt in via BootstrapConfig.Steps.AiSkills" }
+
+		# Obsidian's command line interface toggle is per-machine app state ("cli": true in
+		# %APPDATA%\obsidian\obsidian.json), never carried by a synced vault - Open-Obsidian cannot
+		# load workspaces until it is set. -CreateIfMissing readies a machine Obsidian has not
+		# started on yet. Opt-in: it edits another application's settings file.
+		if ($steps.ObsidianCli) { Enable-ObsidianCli -CreateIfMissing } else { Write-LogWarning "Obsidian CLI skipped - opt in via BootstrapConfig.Steps.ObsidianCli" }
 
 		if ($steps.WSL) {
 			Configure-WSLSSH

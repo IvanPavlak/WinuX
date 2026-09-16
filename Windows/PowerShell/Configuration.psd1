@@ -28,7 +28,8 @@
 # Individual bootstrap steps are toggleable
 # via BootstrapConfig.Steps (see that section); invasive steps such as
 # MicrosoftActivationScripts, Win11Debloat, DeveloperMode, NuGetConfig,
-# UpgradeAll and LockedStartLayout are OFF until you opt in. A vanilla run
+# UpgradeAll, CoreAiRules, AiSkills, ObsidianCli and LockedStartLayout are OFF
+# until you opt in. A vanilla run
 # therefore installs the framework apps but upgrades nothing else already
 # on the machine.
 #
@@ -834,7 +835,7 @@
 	# - Upgrade-All, fork-defined PersonalSteps, Install-DotnetEF
 	# - Set-EnvironmentVariables, Create-CondaEnvironments, Configure-NuGetConfig
 	# - Configure-Taskbar, Initialize-WSLEnvironment, SymbolicLinkMaker, Deploy-CoreAiRules (opt-in),
-	#   Deploy-AiSkills (opt-in)
+	#   Deploy-AiSkills (opt-in), Enable-ObsidianCli (opt-in)
 	# - Configure-WSLSSH, Lock taskbar layout, Restart-Machine
 	#
 	# HOW TO ADD NEW APPLICATIONS:
@@ -875,7 +876,8 @@
 		# MicrosoftActivationScripts, Win11Debloat, DeveloperMode, NuGetConfig
 		# (prompts for a GitHub PAT), UpgradeAll (upgrades every package already
 		# on the machine, not just WinuX's own), CoreAiRules (machine-global AI
-		# agent policy), AiSkills (machine-global Agent Skills), LockedStartLayout.
+		# agent policy), AiSkills (machine-global Agent Skills), ObsidianCli (edits
+		# Obsidian's per-machine app settings), LockedStartLayout.
 		#
 		# Per invocation, Bootstrap -Skip <steps> forces steps off and
 		# Bootstrap -Include <steps> forces them on, both overriding this config.
@@ -917,6 +919,10 @@
 		#                                agent policy, see docs/ai/coreairules.md)
 		# - AiSkills                   : Deploy-AiSkills (OFF by default - links the skills under
 		#                                AiSkills.Root into every AI harness, see docs/ai/skills.md)
+		# - ObsidianCli                : Enable-ObsidianCli -CreateIfMissing (OFF by default - sets
+		#                                "cli": true in %APPDATA%\obsidian\obsidian.json, Obsidian's
+		#                                per-machine app settings a synced vault never carries, so
+		#                                Open-Obsidian can load workspaces on this machine)
 		# - LockedStartLayout          : lock the taskbar layout via registry policy (OFF by default)
 		#
 		# Repository updates are NOT a step here - they are governed by
@@ -1294,7 +1300,7 @@
 	#       "%LOCALAPPDATA%\Programs\oh-my-posh\bin"
 	#       "C:\Program Files\oh-my-posh\bin"
 	#       # Obsidian CLI (Obsidian.com) - Open-Obsidian loads Obsidian workspaces through it.
-	#       # Registering the CLI inside Obsidian (Settings > General > Command line interface)
+	#       # Registering the CLI inside Obsidian (Settings > General > Advanced > Command line interface)
 	#       # adds this entry for new shells as well; persisting it here keeps every shell
 	#       # consistent. Open-Obsidian also probes this folder directly, so the entry is a
 	#       # convenience for calling `obsidian` yourself, not a prerequisite.
@@ -1641,7 +1647,7 @@
 	# ==========================================================================
 	ProjectActions                = @{
 		# DefaultProject = @(
-		# 	@{ Action = "Open-Obsidian" }
+		# 	@{ Action = "Open-Obsidian"; Parameters = @{ Default = $true } }  # no CurrentWorkspace here, so skip the menu
 		# 	@{ Action = "Open-Browser"; Parameters = @{ Groups = @("Google") } }
 		# )
 
@@ -1787,9 +1793,9 @@
 	# ==========================================================================
 	# → Consumer: Open-Obsidian
 	# Open-Obsidian drives Obsidian through its official command line interface (Obsidian 1.12.4+;
-	# enable it once under Settings > General > Command line interface and put
-	# "%LOCALAPPDATA%\Programs\obsidian" on PATH via AutoPathAdditions). Inside a workspace
-	# open it loads the Obsidian workspace named like the WinuX workspace when the vault has one;
+	# enable it once per machine under Settings > General > Advanced > Command line interface or
+	# with Enable-ObsidianCli, and put "%LOCALAPPDATA%\Programs\obsidian" on PATH via
+	# AutoPathAdditions). Inside a workspace open it loads the Obsidian workspace named like the WinuX workspace when the vault has one;
 	# `Parameters = @{ Workspace = "Name" }` on the action overrides that.
 	#   DefaultWorkspace - Obsidian workspace to load on a cold start when nothing else resolves.
 	#                      Empty = leave Obsidian where it was (or to plugins such as Homepage).

@@ -38,7 +38,9 @@ Describe "Open-Obsidian" {
 		$script:cliCalls = @()
 		$script:obsidianRunning = $false
 
-		Mock Invoke-ObsidianCli { $script:cliCalls += , @($Arguments); @() }
+		$script:cliAnswer = @()
+
+		Mock Invoke-ObsidianCli { $script:cliCalls += , @($Arguments); $script:cliAnswer }
 		Mock Get-ObsidianCliPath { 'C:\Apps\Obsidian\Obsidian.com' }
 		Mock Wait-ObsidianCli { $true }
 		Mock Start-ObsidianDetached { }
@@ -52,8 +54,10 @@ Describe "Open-Obsidian" {
 	}
 
 	Context "cold start" {
-		It "launches detached with the vault derived from ObsidianDirectory and loads nothing" {
-			Open-Obsidian
+		It "launches detached with the vault derived from ObsidianDirectory and loads nothing with -Default" {
+			Open-Obsidian -Default
+
+			Should -Invoke Resolve-Selection -Times 0
 
 			Should -Invoke Start-ObsidianDetached -Times 1 -Exactly -ParameterFilter { $Vault -eq 'Obsidian' }
 			$script:cliCalls.Count | Should -Be 0
@@ -86,7 +90,7 @@ Describe "Open-Obsidian" {
 		It "falls back to Obsidian.DefaultWorkspace when nothing else resolves" {
 			$global:Configuration.Obsidian.DefaultWorkspace = 'Empty'
 
-			Open-Obsidian
+			Open-Obsidian -Default
 
 			$script:cliCalls[0] | Should -Be @('vault=Obsidian', 'workspace:load', 'name=Empty')
 		}
@@ -140,14 +144,44 @@ Describe "Open-Obsidian" {
 		It "opens silently when the CLI is missing and no workspace was requested" {
 			Mock Get-ObsidianCliPath { $null }
 
-			Open-Obsidian
+			Open-Obsidian -Default
 
 			Should -Invoke Start-ObsidianDetached -Times 1 -Exactly
 			Should -Invoke Write-LogWarning -Times 0
 		}
 
-		It "offers the saved workspaces as a menu with -Select" {
-			Open-Obsidian -Select
+		It "reports a refused load instead of claiming the workspace when the CLI is not enabled on this machine" {
+			$script:cliAnswer = @('Command line interface is not enabled. Please turn it on in Settings > General > Advanced.')
+
+			Open-Obsidian -Workspace Server
+
+			Should -Invoke Start-ObsidianDetached -Times 1 -Exactly
+			$script:cliCalls[0] | Should -Be @('vault=Obsidian', 'workspace:load', 'name=Server')
+			Should -Invoke Write-LogWarning -Times 1 -Exactly -ParameterFilter { $Message -like '*[[]Server[]] not loaded*not enabled*Enable-ObsidianCli*' }
+			Should -Invoke Write-LogSuccess -Times 0 -ParameterFilter { $Message -like '*opened in workspace*' }
+			Should -Invoke Write-LogSuccess -Times 1 -Exactly -ParameterFilter { $Message -eq 'Obsidian opened!' }
+		}
+
+		It "reports a refused load for the injected CurrentWorkspace too" {
+			$script:cliAnswer = @('Command line interface is not enabled. Please turn it on in Settings > General > Advanced.')
+
+			Open-Obsidian -CurrentWorkspace Server
+
+			Should -Invoke Write-LogWarning -Times 1 -Exactly -ParameterFilter { $Message -like '*[[]Server[]] not loaded*' }
+			Should -Invoke Write-LogSuccess -Times 0 -ParameterFilter { $Message -like '*opened in workspace*' }
+		}
+
+		It "claims the workspace only when the CLI answered the load cleanly" {
+			$script:cliAnswer = @()
+
+			Open-Obsidian -Workspace Server
+
+			Should -Invoke Write-LogWarning -Times 0
+			Should -Invoke Write-LogSuccess -Times 1 -Exactly -ParameterFilter { $Message -like '*opened in workspace [[]Server[]]*' }
+		}
+
+		It "offers the saved workspaces as a menu on a bare call, like the other openers" {
+			Open-Obsidian
 
 			Should -Invoke Resolve-Selection -Times 1 -Exactly -ParameterFilter {
 				@($OptionList) -contains 'Empty' -and @($OptionList) -contains 'Server' -and @($OptionList) -contains 'DSA' -and $AllowEmptyPromptResponse
@@ -155,13 +189,45 @@ Describe "Open-Obsidian" {
 			$script:cliCalls[0] | Should -Be @('vault=Obsidian', 'workspace:load', 'name=DSA')
 		}
 
-		It "loads nothing when the -Select menu is skipped" {
+		It "opens plainly when the menu is skipped and no default is configured" {
 			Mock Resolve-Selection { $null }
 
-			Open-Obsidian -Select
+			Open-Obsidian
 
 			Should -Invoke Start-ObsidianDetached -Times 1 -Exactly
 			$script:cliCalls.Count | Should -Be 0
+			Should -Invoke Write-LogSuccess -Times 1 -Exactly -ParameterFilter { $Message -eq 'Obsidian opened!' }
+		}
+
+		It "falls back to Obsidian.DefaultWorkspace when the menu is skipped on a cold start" {
+			Mock Resolve-Selection { $null }
+			$global:Configuration.Obsidian.DefaultWorkspace = 'Empty'
+
+			Open-Obsidian
+
+			$script:cliCalls[0] | Should -Be @('vault=Obsidian', 'workspace:load', 'name=Empty')
+		}
+
+		It "never prompts when CurrentWorkspace is injected, even without a same-named match" {
+			Open-Obsidian -CurrentWorkspace Trading
+
+			Should -Invoke Resolve-Selection -Times 0
+		}
+
+		It "skips the menu with -Default" {
+			Open-Obsidian -Default
+
+			Should -Invoke Resolve-Selection -Times 0
+			$script:cliCalls.Count | Should -Be 0
+		}
+
+		It "shows no menu when the vault has no saved workspaces" {
+			Mock Get-ObsidianWorkspaceNames { @() }
+
+			Open-Obsidian
+
+			Should -Invoke Resolve-Selection -Times 0
+			Should -Invoke Start-ObsidianDetached -Times 1 -Exactly
 		}
 
 		It "reports a missing vault configuration and launches nothing" {
@@ -180,8 +246,8 @@ Describe "Open-Obsidian" {
 			$script:obsidianRunning = $true
 		}
 
-		It "leaves Obsidian alone when no workspace resolves" {
-			Open-Obsidian
+		It "leaves Obsidian alone with -Default" {
+			Open-Obsidian -Default
 
 			$script:cliCalls.Count | Should -Be 0
 			Should -Invoke Start-ObsidianDetached -Times 0
@@ -203,10 +269,27 @@ Describe "Open-Obsidian" {
 			$script:cliCalls[0] | Should -Be @('vault=Obsidian', 'workspace:load', 'name=Server')
 		}
 
+		It "offers the menu on a bare call and switches the running instance to the pick" {
+			Open-Obsidian
+
+			Should -Invoke Resolve-Selection -Times 1 -Exactly
+			$script:cliCalls[0] | Should -Be @('vault=Obsidian', 'workspace:load', 'name=DSA')
+			Should -Invoke Start-ObsidianDetached -Times 0
+		}
+
+		It "leaves Obsidian alone when the menu is skipped" {
+			Mock Resolve-Selection { $null }
+
+			Open-Obsidian
+
+			$script:cliCalls.Count | Should -Be 0
+			Should -Invoke Write-LogWarning -Times 1 -Exactly -ParameterFilter { $Message -like '*already running*' }
+		}
+
 		It "ignores Obsidian.DefaultWorkspace - the default is for cold starts only" {
 			$global:Configuration.Obsidian.DefaultWorkspace = 'Empty'
 
-			Open-Obsidian
+			Open-Obsidian -Default
 
 			$script:cliCalls.Count | Should -Be 0
 		}
@@ -219,6 +302,25 @@ Describe "Open-Obsidian" {
 			$script:cliCalls.Count | Should -Be 0
 			Should -Invoke Start-ObsidianDetached -Times 0
 			Should -Invoke Write-LogWarning -Times 1 -Exactly -ParameterFilter { $Message -like '*Obsidian CLI not found*' }
+		}
+
+		It "reports a refused switch instead of claiming the workspace when the CLI is not enabled" {
+			$script:cliAnswer = @('Command line interface is not enabled. Please turn it on in Settings > General > Advanced.')
+
+			Open-Obsidian -Workspace DSA
+
+			$script:cliCalls.Count | Should -Be 1
+			Should -Invoke Write-LogWarning -Times 1 -Exactly -ParameterFilter { $Message -like '*[[]DSA[]] not loaded*not enabled*' }
+			Should -Invoke Write-LogSuccess -Times 0
+		}
+
+		It "reports the CLI losing Obsidian between poll and load" {
+			$script:cliAnswer = @('The CLI is unable to find Obsidian. Please make sure Obsidian is running and try again.')
+
+			Open-Obsidian -Workspace DSA
+
+			Should -Invoke Write-LogWarning -Times 1 -Exactly -ParameterFilter { $Message -like '*[[]DSA[]] not loaded*unable to find Obsidian*' }
+			Should -Invoke Write-LogSuccess -Times 0
 		}
 	}
 }
