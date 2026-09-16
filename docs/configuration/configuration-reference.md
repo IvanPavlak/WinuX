@@ -971,7 +971,9 @@ Anything other than the three valid values is reported as unknown rather than si
   `$false` rather than leaving it to the default), `CoreAiRules` (machine-global AI
   agent policy applied via `Deploy-CoreAiRules` and the opt-in `SymbolicLinks` entries - see
   [CoreAiRules](../ai/coreairules.md)), `AiSkills` (machine-global Agent Skills linked into every
-  AI harness via `Deploy-AiSkills` - see [AI Skills](../ai/skills.md)), `LockedStartLayout`. Per invocation,
+  AI harness via `Deploy-AiSkills` - see [AI Skills](../ai/skills.md)), `ObsidianCli` (`Enable-ObsidianCli -CreateIfMissing`
+  writes `"cli": true` into Obsidian's per-machine `%APPDATA%\obsidian\obsidian.json`, which a synced vault never carries,
+  so `Open-Obsidian` can load workspaces - see [Enable-ObsidianCli](guides/application/Enable-ObsidianCli.md)), `LockedStartLayout`. Per invocation,
   `Bootstrap -Skip <steps>` / `-Include <steps>` override this config. Repository updates are
   governed by `RepositoryUpdateScope` above, not by a step. The full step list in execution
   order is documented next to the section in `Configuration.psd1`. The deprecated `WSLSetup`

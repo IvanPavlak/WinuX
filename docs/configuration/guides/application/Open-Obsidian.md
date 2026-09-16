@@ -66,7 +66,7 @@ On this page that bites on `AutoPathAdditions` - that key is an array, so whatev
 
 The workspace switch needs the CLI that ships with Obsidian 1.12.4 and later (installer 1.12.7 or newer), and it must be switched on. The toggle is Obsidian application state, kept as `"cli": true` in `%APPDATA%\obsidian\obsidian.json` next to the vault list - not in the vault's `.obsidian` folder, so syncing the vault to a second machine does not carry it. It is a one-time step per machine, and there are two ways to take it:
 
-- With Obsidian closed, run `Enable-ObsidianCli`. It sets the flag and leaves everything else in the file alone.
+- With Obsidian closed, run `Enable-ObsidianCli`. It sets the flag and leaves everything else in the file alone. To have every machine done by provisioning, opt into `BootstrapConfig.Steps.ObsidianCli` in `Configuration.local.psd1`; `Bootstrap` then runs it with `-CreateIfMissing`, which also readies a machine Obsidian has not started on yet.
 - Or in Obsidian open Settings > General > Advanced > Command line interface (Settings > General > Command line interface before 1.13), enable it and accept the register prompt, which also puts the install folder on your User PATH for new shells.
 
 `Obsidian.com` sits beside `Obsidian.exe` either way, so `Get-ObsidianCliPath` returning a path does not prove the toggle is on - the CLI answers `Command line interface is not enabled` until it is.

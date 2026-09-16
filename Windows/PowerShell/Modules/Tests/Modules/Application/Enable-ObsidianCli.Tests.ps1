@@ -62,7 +62,35 @@ Describe "Enable-ObsidianCli" {
 
 		Enable-ObsidianCli -SettingsPath $missing
 
-		Should -Invoke Write-LogWarning -Times 1 -Exactly -ParameterFilter { $Message -like '*not found*start Obsidian once*' }
+		Should -Invoke Write-LogWarning -Times 1 -Exactly -ParameterFilter { $Message -like '*not found*start Obsidian once*CreateIfMissing*' }
+		Test-Path -LiteralPath $missing | Should -BeFalse
+	}
+
+	It "creates a minimal obsidian.json with -CreateIfMissing, folder included" {
+		$missing = Join-Path $TestDrive 'fresh\obsidian\obsidian.json'
+
+		Enable-ObsidianCli -SettingsPath $missing -CreateIfMissing
+
+		Get-Content -LiteralPath $missing -Raw | Should -Be '{"cli":true}'
+		Should -Invoke Write-LogSuccess -Times 1 -Exactly -ParameterFilter { $Message -like '*enabled!*Created*' }
+		Should -Invoke Write-LogWarning -Times 0
+	}
+
+	It "creates nothing with -CreateIfMissing -WhatIf" {
+		$missing = Join-Path $TestDrive 'dry\obsidian.json'
+
+		Enable-ObsidianCli -SettingsPath $missing -CreateIfMissing -WhatIf
+
+		Test-Path -LiteralPath $missing | Should -BeFalse
+	}
+
+	It "still refuses while Obsidian runs, even with -CreateIfMissing" {
+		$script:obsidianRunning = $true
+		$missing = Join-Path $TestDrive 'running\obsidian.json'
+
+		Enable-ObsidianCli -SettingsPath $missing -CreateIfMissing
+
+		Should -Invoke Write-LogWarning -Times 1 -Exactly -ParameterFilter { $Message -like '*Obsidian is running*' }
 		Test-Path -LiteralPath $missing | Should -BeFalse
 	}
 

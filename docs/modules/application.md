@@ -18,15 +18,16 @@ Create-CondaEnvironments
 
 ## [Enable-ObsidianCli](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Enable-ObsidianCli.ps1)
 
-- **Description:** Turns on the Obsidian command line interface for this machine by setting `"cli": true` in `%APPDATA%\obsidian\obsidian.json`, the file Obsidian also keeps its vault list in. Refuses while Obsidian is running (Obsidian rewrites that file on every settings change), warns when the file does not exist yet (Obsidian has never been started here), reports an already enabled CLI without rewriting, and honours `-WhatIf`.
-- **Parameters:** -SettingsPath
-- **Usage:** `Enable-ObsidianCli`
+- **Description:** Turns on the Obsidian command line interface for this machine by setting `"cli": true` in `%APPDATA%\obsidian\obsidian.json`, the file Obsidian also keeps its vault list in. Refuses while Obsidian is running (Obsidian rewrites that file on every settings change), warns when the file does not exist yet (Obsidian has never been started here) unless `-CreateIfMissing` writes a minimal `{"cli":true}` for Obsidian to extend on first start, reports an already enabled CLI without rewriting, and honours `-WhatIf`. `Bootstrap` runs it with `-CreateIfMissing` as the opt-in step `BootstrapConfig.Steps.ObsidianCli`.
+- **Parameters:** -SettingsPath, -CreateIfMissing
+- **Usage:** `Enable-ObsidianCli`, `Enable-ObsidianCli -CreateIfMissing`
 
 The toggle is Obsidian application state, not vault state, so it has to be set on every machine `Open-Obsidian` should load workspaces on; the same toggle is Settings > General > Advanced > Command line interface inside Obsidian. `Open-Obsidian` points here when the CLI answers `Command line interface is not enabled`. No PATH step is involved - `Get-ObsidianCliPath` finds `Obsidian.com` beside `Obsidian.exe`.
 
-| Parameter       | Description                                                                    |
-| --------------- | ------------------------------------------------------------------------------ |
-| `-SettingsPath` | The `obsidian.json` to edit. Defaults to `%APPDATA%\obsidian\obsidian.json`. |
+| Parameter           | Description                                                                                                    |
+| ------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `-SettingsPath`     | The `obsidian.json` to edit. Defaults to `%APPDATA%\obsidian\obsidian.json`.                                   |
+| `-CreateIfMissing`  | Create a minimal `obsidian.json` with the flag when none exists yet (what the Bootstrap step passes).           |
 
 ```powershell
 # Obsidian closed
@@ -34,6 +35,9 @@ Enable-ObsidianCli
 
 # Dry run
 Enable-ObsidianCli -WhatIf
+
+# Fresh machine, Obsidian not started yet (the Bootstrap step)
+Enable-ObsidianCli -CreateIfMissing
 ```
 
 ## [Get-ObsidianCliPath](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Get-ObsidianCliPath.ps1)
