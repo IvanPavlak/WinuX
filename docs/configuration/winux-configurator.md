@@ -6,7 +6,15 @@ WinuX ships empty by design. The base `Configuration.psd1` is dozens of top-leve
 
 ## How to Start
 
-Open a session with an AI assistant that can read files in your WinuX checkout, and say:
+WinuX ships this document as an Agent Skill, `AI/Skills/own/winux-configurator/`, so with [AI Skills](../ai/skills.md) deployed (`Deploy-AiSkills`, opt-in via `BootstrapConfig.Steps.AiSkills`) the session is one command in any project, because the skill resolves the checkout from its own symbolic link:
+
+- Claude Code: `/winux-configurator`
+- Codex CLI: `$winux-configurator`
+- Gemini CLI: listed by `gemini skills list`
+
+It is also model-invoked, so "configure WinuX with me" reaches it without naming it.
+
+Without the skill deployed, open a session with any AI assistant that can read files in your WinuX checkout and say:
 
 > Read this document and configure WinuX with me.
 
@@ -15,7 +23,7 @@ Point it at whichever of these it can reach:
 - Local file: `docs/configuration/winux-configurator.md` in your checkout.
 - Raw URL: `https://raw.githubusercontent.com/IvanPavlak/WinuX/master/docs/configuration/winux-configurator.md`
 
-The assistant does the rest: it reads the guides, asks you the decisions they contain, and writes what you answer into `Configuration.local.psd1`.
+Either way the assistant does the rest: it reads the guides, asks you the decisions they contain, and writes what you answer into `Configuration.local.psd1`.
 
 > [!NOTE]
 > Nothing here is specific to one AI product. The requirements below are stated as capabilities, not tool names, so any assistant that has them can run the session.
@@ -174,3 +182,4 @@ The one thing not to do is start over by writing a fresh `Configuration.local.ps
 - [Machine types](machine-types.md) - detection, valid types, layout overrides
 - [Fork Model](../contributing/fork-model.md) - why your values live in `Configuration.local.psd1`
 - [CoreAiRules](../ai/coreairules.md) - the machine-global guardrails an AI assistant runs under
+- [AI Skills](../ai/skills.md) - how `winux-configurator` is linked into every harness
