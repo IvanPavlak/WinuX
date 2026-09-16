@@ -1294,7 +1294,7 @@
 	#       "%LOCALAPPDATA%\Programs\oh-my-posh\bin"
 	#       "C:\Program Files\oh-my-posh\bin"
 	#       # Obsidian CLI (Obsidian.com) - Open-Obsidian loads Obsidian workspaces through it.
-	#       # Registering the CLI inside Obsidian (Settings > General > Command line interface)
+	#       # Registering the CLI inside Obsidian (Settings > General > Advanced > Command line interface)
 	#       # adds this entry for new shells as well; persisting it here keeps every shell
 	#       # consistent. Open-Obsidian also probes this folder directly, so the entry is a
 	#       # convenience for calling `obsidian` yourself, not a prerequisite.
@@ -1641,7 +1641,7 @@
 	# ==========================================================================
 	ProjectActions                = @{
 		# DefaultProject = @(
-		# 	@{ Action = "Open-Obsidian" }
+		# 	@{ Action = "Open-Obsidian"; Parameters = @{ Default = $true } }  # no CurrentWorkspace here, so skip the menu
 		# 	@{ Action = "Open-Browser"; Parameters = @{ Groups = @("Google") } }
 		# )
 
@@ -1787,9 +1787,9 @@
 	# ==========================================================================
 	# → Consumer: Open-Obsidian
 	# Open-Obsidian drives Obsidian through its official command line interface (Obsidian 1.12.4+;
-	# enable it once under Settings > General > Command line interface and put
-	# "%LOCALAPPDATA%\Programs\obsidian" on PATH via AutoPathAdditions). Inside a workspace
-	# open it loads the Obsidian workspace named like the WinuX workspace when the vault has one;
+	# enable it once per machine under Settings > General > Advanced > Command line interface or
+	# with Enable-ObsidianCli, and put "%LOCALAPPDATA%\Programs\obsidian" on PATH via
+	# AutoPathAdditions). Inside a workspace open it loads the Obsidian workspace named like the WinuX workspace when the vault has one;
 	# `Parameters = @{ Workspace = "Name" }` on the action overrides that.
 	#   DefaultWorkspace - Obsidian workspace to load on a cold start when nothing else resolves.
 	#                      Empty = leave Obsidian where it was (or to plugins such as Homepage).

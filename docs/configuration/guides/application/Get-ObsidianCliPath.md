@@ -12,7 +12,7 @@ This function reads no `Configuration.psd1` keys. There is nothing to configure.
 Get-ObsidianCliPath
 ```
 
-The CLI is registered inside Obsidian under Settings > General > Command line interface (Obsidian 1.12.4 or newer); that step is described in [Open-Obsidian](Open-Obsidian.md#step-1-enable-the-obsidian-command-line-interface). A `$null` result is what makes `Open-Obsidian` fall back to a plain launch.
+The CLI is enabled inside Obsidian under Settings > General > Advanced > Command line interface (Obsidian 1.12.4 or newer) or with [`Enable-ObsidianCli`](Enable-ObsidianCli.md); that step is described in [Open-Obsidian](Open-Obsidian.md#step-1-enable-the-obsidian-command-line-interface). A `$null` result is what makes `Open-Obsidian` fall back to a plain launch. Note that `Obsidian.com` exists beside `Obsidian.exe` whether or not the toggle is on, so a path from this function does not mean the CLI will answer - `Open-Obsidian` checks the answer itself.
 
 ## Related
 

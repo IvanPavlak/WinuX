@@ -18,10 +18,11 @@ Opens Obsidian for the configured vault and, when a workspace resolves, loads th
 
 `Open-Obsidian` resolves at most one Obsidian workspace per call, in this order:
 
-1. `-Workspace <Name>`, or the name picked from the `-Select` menu of saved workspaces.
+1. `-Workspace <Name>`.
 2. `-CurrentWorkspace <Name>` - the WinuX workspace being opened, injected by `Open-Workspace` into every action - when the vault has an Obsidian workspace of exactly that name. So a bare `@{ Action = "Open-Obsidian" }` under `WorkspaceActions.Server` loads the Obsidian workspace `Server` as soon as you save one in the vault, with no configuration change.
-3. `Obsidian.DefaultWorkspace`, on a cold start only. A running Obsidian is never switched to the default.
-4. Nothing - Obsidian opens, or stays, wherever it is.
+3. Without either, and without `-Default`, a `Resolve-Selection` menu of the saved workspaces - the same pattern as `Open-VSCode` and `Open-VisualStudio`. A bare `Open-Obsidian` by hand picks one; `[Enter]` skips. The injected `CurrentWorkspace` suppresses the menu, so a workspace open never prompts; an action list without that injection (`ProjectActions`) must pass `Parameters = @{ Default = $true }` or a `Workspace`. Inside a workspace action `Default = $true` is optional (the injected `CurrentWorkspace` already suppresses the menu) and it never disables the same-named match - it only removes the prompt, so it is safe belt-and-braces for any unattended open.
+4. `Obsidian.DefaultWorkspace`, on a cold start only. A running Obsidian is never switched to the default.
+5. Nothing - Obsidian opens, or stays, wherever it is.
 
 With Obsidian already running and a workspace resolved, the running instance is switched in place. With no workspace resolved a running Obsidian is left alone, exactly as before.
 
@@ -63,14 +64,19 @@ On this page that bites on `AutoPathAdditions` - that key is an array, so whatev
 
 ## Step 1: Enable the Obsidian command line interface
 
-The workspace switch needs the CLI that ships with Obsidian 1.12.4 and later (installer 1.12.7 or newer). In Obsidian open Settings > General > Command line interface, enable it and accept the register prompt. That drops `Obsidian.com` beside `Obsidian.exe` and puts its folder on your User PATH for new shells. This is a one-time step per machine and it is the only thing on this page WinuX cannot do for you.
+The workspace switch needs the CLI that ships with Obsidian 1.12.4 and later (installer 1.12.7 or newer), and it must be switched on. The toggle is Obsidian application state, kept as `"cli": true` in `%APPDATA%\obsidian\obsidian.json` next to the vault list - not in the vault's `.obsidian` folder, so syncing the vault to a second machine does not carry it. It is a one-time step per machine, and there are two ways to take it:
+
+- With Obsidian closed, run `Enable-ObsidianCli`. It sets the flag and leaves everything else in the file alone.
+- Or in Obsidian open Settings > General > Advanced > Command line interface (Settings > General > Command line interface before 1.13), enable it and accept the register prompt, which also puts the install folder on your User PATH for new shells.
+
+`Obsidian.com` sits beside `Obsidian.exe` either way, so `Get-ObsidianCliPath` returning a path does not prove the toggle is on - the CLI answers `Command line interface is not enabled` until it is.
 
 ```powershell
 Get-Command obsidian
 obsidian vault=Obsidian workspaces
 ```
 
-Without the CLI `Open-Obsidian` still opens Obsidian; a requested workspace is reported with these registration steps instead of loaded.
+Without the CLI `Open-Obsidian` still opens Obsidian; a requested workspace is reported with these registration steps instead of loaded. With the CLI present but the toggle off, the load is reported as refused (`Obsidian workspace [Name] not loaded => Command line interface is not enabled ...`) and points at `Enable-ObsidianCli`; it is never claimed as a success.
 
 ## Step 2: Set `PathTemplates.ObsidianDirectory`
 
@@ -126,7 +132,7 @@ Get-ObsidianWorkspaceNames -VaultDirectory $global:MachineSpecificPaths.Obsidian
 
 If a value reads back as empty, the two usual causes are a parse error in `Configuration.local.psd1` (run `Test-ConfigurationSchema`) and a key placed at the wrong nesting level.
 
-Then the behaviour itself: with Obsidian closed, `Open-Obsidian -Workspace <Name>` opens it on that workspace; with Obsidian open, the same call switches it in place; `Open-Obsidian -Select` lists the saved workspaces; and closing the terminal you ran it from leaves Obsidian standing.
+Then the behaviour itself: with Obsidian closed, `Open-Obsidian -Workspace <Name>` opens it on that workspace; with Obsidian open, the same call switches it in place; a bare `Open-Obsidian` lists the saved workspaces and `Open-Obsidian -Default` opens without asking; and closing the terminal you ran it from leaves Obsidian standing. If instead you get `Obsidian workspace [Name] not loaded => Command line interface is not enabled`, Step 1 was skipped on this machine: close Obsidian, run `Enable-ObsidianCli`, start Obsidian again.
 
 ## Complete Example
 
@@ -146,7 +152,7 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
     )
     WorkspaceActions = @{
         Server = @(
-            @{ Action = "Open-Obsidian" }                                        # loads the Obsidian workspace "Server" if the vault has one
+            @{ Action = "Open-Obsidian"; Parameters = @{ Default = $true } }     # loads the Obsidian workspace "Server" if the vault has one, never prompts
         )
         Research = @(
             @{ Action = "Open-Obsidian"; Parameters = @{ Workspace = "Papers" } } # always loads "Papers"

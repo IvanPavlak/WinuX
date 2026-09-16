@@ -461,7 +461,7 @@ AcrobatPdfGroups = @{
 
 ## Obsidian Configuration
 
-How `Open-Obsidian` addresses the vault and which Obsidian workspace a cold start lands on. `Open-Obsidian` drives Obsidian through its official command line interface (Obsidian 1.12.4+, enabled once under Settings > General > Command line interface). Inside a workspace open it loads the Obsidian workspace named like the WinuX workspace when the vault has one - the name arrives through the `CurrentWorkspace` parameter `Open-Workspace` injects into every action - and `Parameters = @{ Workspace = "Name" }` on the action overrides that. The vault root itself is `PathTemplates.ObsidianDirectory`.
+How `Open-Obsidian` addresses the vault and which Obsidian workspace a cold start lands on. `Open-Obsidian` drives Obsidian through its official command line interface (Obsidian 1.12.4+, enabled once per machine under Settings > General > Advanced > Command line interface or with `Enable-ObsidianCli`). Inside a workspace open it loads the Obsidian workspace named like the WinuX workspace when the vault has one - the name arrives through the `CurrentWorkspace` parameter `Open-Workspace` injects into every action - and `Parameters = @{ Workspace = "Name" }` on the action overrides that. The vault root itself is `PathTemplates.ObsidianDirectory`.
 
 **Key:** `Obsidian` → Hashtable with two optional string keys (both `""` by default)
 

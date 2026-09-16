@@ -12,7 +12,7 @@ This function reads no `Configuration.psd1` keys. There is nothing to configure.
 Get-ObsidianWorkspaceNames -VaultDirectory $MachineSpecificPaths.ObsidianDirectory
 ```
 
-The vault directory itself comes from `PathTemplates.ObsidianDirectory`, documented in [Open-Obsidian](Open-Obsidian.md). Reading the file rather than asking the CLI works before Obsidian is running, which is why the implicit same-named match and the `-Select` menu use it.
+The vault directory itself comes from `PathTemplates.ObsidianDirectory`, documented in [Open-Obsidian](Open-Obsidian.md). Reading the file rather than asking the CLI works before Obsidian is running, which is why the implicit same-named match, the bare-call menu and the unknown-name warning use it.
 
 ## Related
 

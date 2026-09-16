@@ -24,6 +24,7 @@
 		'Open-LeagueOfLegends',
 		'Open-NotepadPlusPlus',
 		'Open-Obsidian',
+		'Enable-ObsidianCli',
 		'Get-ObsidianCliPath',
 		'Get-ObsidianExecutablePath',
 		'Get-ObsidianWorkspaceNames',
