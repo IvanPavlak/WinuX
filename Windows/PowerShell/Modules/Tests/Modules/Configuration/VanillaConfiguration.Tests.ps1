@@ -132,6 +132,17 @@ Describe "Vanilla Configuration (empty-by-default contract)" {
 			$script:BaseConfig.PSReadLine.ContainsKey("HistorySavePath") | Should -BeTrue
 			$script:BaseConfig.PSReadLine.HistorySavePath | Should -BeNullOrEmpty
 		}
+
+		It "Should ship the FastfetchAutoFit section with the resolver's built-in defaults" {
+			# Resolve-FastfetchAutoFitSettings falls back to 10 / 10 / 1 when the section is
+			# missing; the base must ship the same numbers or the documented defaults become a
+			# lie for anyone reading either place.
+			$fit = $script:BaseConfig.FastfetchAutoFit
+			$fit | Should -BeOfType [hashtable]
+			$fit.MaxShrinkSteps | Should -Be 10
+			$fit.ReflowTimeoutMilliseconds | Should -Be 10
+			$fit.PromptReserve | Should -Be 1
+		}
 	}
 
 	Context "Display-aware window sizing" {

@@ -19,6 +19,7 @@
 		'Enable-DeveloperMode',
 		'Get-BrowserTitlePattern',
 		'Get-BrowserWindowsByTarget',
+		'Get-ConsoleWindowSize',
 		'Get-FastfetchLogoArgument',
 		'Get-InstalledApps',
 		'Get-PinnedApps',
@@ -44,10 +45,12 @@
 		'Rename-Machine',
 		'Repair-RpcServer',
 		'Report-KillAllSurvivors',
+		'Resolve-FastfetchAutoFitSettings',
 		'Resolve-KillAllSteps',
 		'Resolve-SystemThemeSteps',
 		'Restart-Explorer',
 		'Restart-Machine',
+		'Send-TerminalFontKey',
 		'Send-WakeOnLan',
 		'Set-CustomExecutionPolicy',
 		'Set-DisplayLanguage',
@@ -72,6 +75,7 @@
 		'Terminate-AllProcessesWithVisibleWindows',
 		'Terminate-WindowsTerminalTabs',
 		'Test-BrowserWindowOpen',
+		'Test-FastfetchPanelOverflow',
 		'Test-MachineOnline',
 		'Test-PowerPlan',
 		'Test-RpcServerHealth',
@@ -79,6 +83,7 @@
 		'Unpin-TaskbarApps',
 		'Update-DirectoryNames',
 		'Upgrade-All',
-		'Wait-BrowserWindowsClosed'
+		'Wait-BrowserWindowsClosed',
+		'Wait-ConsoleReflow'
 	)
 }

@@ -1238,6 +1238,34 @@ See [Initialize-PSReadLine](guides/system/Initialize-PSReadLine.md).
 
 ---
 
+## Fastfetch Auto-Fit (the `c` alias)
+
+How `Invoke-ClearAndFastfetch` (alias `c`, System module) fits the fastfetch panel into the Windows Terminal window. The function resets the font to the profile default, then presses `Ctrl+Minus` one step at a time - waiting for the terminal to reflow after each - until the panel fits, `MaxShrinkSteps` steps have been taken, or the terminal stops shrinking (its minimum font). Nothing in this section is per machine: the fit is measured against the live window on every call, so a small laptop display or a high DPI scale needs no value of its own. The image logo follows the font on its own, because `Get-FastfetchLogoArgument` re-reads the cell size at display time.
+
+Resolved by `Resolve-FastfetchAutoFitSettings`, per key: an explicit parameter on the `Invoke-ClearAndFastfetch` call beats the configured value, which beats the built-in default. A value outside its range, or not an integer, is reported with a warning at the prompt and the built-in default is used for that key; `$null` (or a missing key) means "use the default" silently. The base ships the built-in defaults, so a vanilla install and a missing section behave identically.
+
+**Keys:**
+
+- `MaxShrinkSteps` - Integer, 0-50. `Ctrl+Minus` steps allowed below the default font. Ships `10`. `0` resets the font to the default and never shrinks, which shows whether the panel fits at all at the default size.
+- `ReflowTimeoutMilliseconds` - Any positive integer, no upper bound. How long `Wait-ConsoleReflow` polls the window size after a keystroke before assuming the terminal is not going to change. Ships `10`. This is the knob to tweak and test per terminal and machine: too short and a shrink step reads the old size before the terminal has reflowed, so the loop stops early with `cannot shrink further` in the verbose log; too long and every `c` waits the full value once, because the reset when the font is already at the default changes nothing. Every shrink step that does reflow returns as soon as the change is seen.
+- `PromptReserve` - Integer, 0-20. Rows kept free below the panel for the upcoming prompt when judging vertical overflow (one further row is always kept for the line the cursor ends on). Ships `1`.
+
+**Consumer functions:** `Invoke-ClearAndFastfetch`, `Resolve-FastfetchAutoFitSettings`
+
+**Example:**
+
+```powershell
+# Configuration.local.psd1 - allow at most three steps and give the prompt two rows
+FastfetchAutoFit = @{
+    MaxShrinkSteps = 3
+    PromptReserve  = 2
+}
+```
+
+See [Invoke-ClearAndFastfetch](guides/system/Invoke-ClearAndFastfetch.md) and [Resolve-FastfetchAutoFitSettings](guides/system/Resolve-FastfetchAutoFitSettings.md).
+
+---
+
 ## UI & Display Configuration
 
 ### Console Colors

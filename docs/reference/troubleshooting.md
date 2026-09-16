@@ -803,6 +803,48 @@ this repository can fix it.
 **Solution:** Redraw the panel with `c`. WezTerm's inline-image path does not have this problem, so
 prefer WezTerm if it bothers you.
 
+### The Panel Is Cut Off, Or The Font Ends Up Tiny, After `c`
+
+**Problem:** On a small display `c` leaves the panel wider or taller than the window, or shrinks the
+font further than seems necessary.
+
+`c` ([`Invoke-ClearAndFastfetch`](../modules/system.md#invoke-clearandfastfetch)) resets the font
+to the profile default, then presses `Ctrl+Minus` one step at a time - re-reading the window after
+each - until the panel fits, `FastfetchAutoFit.MaxShrinkSteps` steps (ships 10) have been taken, or
+the terminal stops shrinking. It cannot shrink past Windows Terminal's minimum font, and it never
+resizes the window itself.
+
+**Solution:**
+
+1. See what it measured and decided:
+
+```powershell
+Set-LogLevel Verbose { Invoke-ClearAndFastfetch }
+```
+
+The debug line names the panel size in cells, the window at the default font, the steps taken out of
+the cap, the final window and whether the panel fits. A panel that `still overflows` after the full
+cap - or after the terminal stopped shrinking - is wider or taller than the terminal can accommodate
+at any font it will shrink to.
+
+2. Make the panel smaller, which is the real fix: shorten the `custom` border rows in your fastfetch
+   configuration, or use a narrower text logo (the image logo takes its cell block from the text
+   logo, so it follows). Raising `FastfetchAutoFit.MaxShrinkSteps` in `Configuration.local.psd1` (or
+   `-MaxShrinkSteps` for one call) only helps while the terminal can still shrink.
+
+```powershell
+Invoke-ClearAndFastfetch -MaxShrinkSteps 20
+```
+
+   If the font shrinks further than you like, lower the cap instead - `MaxShrinkSteps = 0` resets to
+   the default and never shrinks. `Resolve-FastfetchAutoFitSettings` shows what `c` runs with and
+   warns about a value out of range.
+
+3. If the font shrinks when the panel looks like it should fit, check the `Ctrl+0` and `Ctrl+Minus`
+   bindings still exist in Windows Terminal (they are defaults, but a custom `actions` list can drop
+   them) - with either missing, the keystroke changes nothing and the loop stops after the first
+   unchanged read.
+
 ## Browser Issues
 
 ### URLs Not Opening
