@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.63] - 2026-09-16
+
+### Added
+
+- **`winux-configurator`, the first skill upstream ships under `AI/Skills/own/`: the AI-assisted configuration session becomes one command in any harness.** `docs/configuration/winux-configurator.md` has always been runnable by pointing an assistant at it, but that meant finding the document, pasting a path or a raw URL, and doing it again in the next project. The skill is the entry point: with AI Skills deployed (`Deploy-AiSkills`, opt-in via `BootstrapConfig.Steps.AiSkills`) it is `/winux-configurator` in Claude Code, `$winux-configurator` in Codex CLI and a `gemini skills list` entry in Gemini CLI, and its `description` also lets any of them fire it on "configure WinuX with me" without the name. `SKILL.md` carries no protocol of its own - it locates the checkout the way `teach-me` does (resolve the symbolic link three levels above the skill folder, or `(Get-RepositoryPath).Repo`, verified against `Windows/PowerShell/Configuration.psd1`, and ask rather than guess when that fails), then reads `docs/configuration/winux-configurator.md` in full and runs its Session Protocol against the per-function guides, so the ground rules, the walk order and the decisions stay in the document that owns them and the skill never drifts from it. Without the checkout it falls back to the raw URL and says plainly that it can interview and print fragments but not write or verify. `agents/openai.yaml` supplies the Codex CLI display metadata. Documented in the design page (`docs/ai/skills.md`), `AI/Skills/README.md`, and a new "How to Start" opening in `docs/configuration/winux-configurator.md` listing the per-harness invocations beside the unchanged point-an-assistant-at-the-document path.
+
 ## [0.1.62] - 2026-09-11
 
 ### Added
@@ -1022,7 +1028,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.62...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.63...HEAD
+[0.1.63]: https://github.com/IvanPavlak/WinuX/compare/v0.1.62...v0.1.63
 [0.1.62]: https://github.com/IvanPavlak/WinuX/compare/v0.1.61...v0.1.62
 [0.1.61]: https://github.com/IvanPavlak/WinuX/compare/v0.1.60...v0.1.61
 [0.1.60]: https://github.com/IvanPavlak/WinuX/compare/v0.1.59...v0.1.60

@@ -1,0 +1,5 @@
+interface:
+  display_name: "WinuX configurator"
+  short_description: "Interview and write your WinuX configuration, module by module"
+policy:
+  allow_implicit_invocation: true

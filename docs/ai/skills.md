@@ -18,7 +18,7 @@ The repository keeps skills under `AI/Skills/<source>/<skill>/` - one subfolder 
 
 [Update-AiSkills](../modules/ai.md#update-aiskills) fills the vendored source folders from GitHub: it resolves the configured ref to an exact commit, downloads that commit's archive, flattens the upstream's category folders, and records provenance in `AI/Skills/<source>/UPSTREAM.md` (pinned commit, folders, exclusions, a table of every skill with its description) next to a copy of the upstream license. It removes only what the previous manifest lists, so a folder you add by hand inside a source survives a refresh, and `-Check` reports whether a source is behind upstream without writing anything. It is a manual command, not a Bootstrap step: the vendored tree is committed, so a fresh machine only needs `Deploy-AiSkills`.
 
-Upstream ships only `AI/Skills/README.md`. The source folders are yours - a fork adds them, and upstream never writes there.
+Upstream ships `AI/Skills/README.md` and one own skill, `own/winux-configurator/`, the harness entry point to the [WinuXConfigurator](../configuration/winux-configurator.md) session - it locates the checkout from its own symbolic link, then reads and runs the protocol document. Every other source folder is yours - a fork adds them, and upstream never writes there.
 
 ## Configuration
 
