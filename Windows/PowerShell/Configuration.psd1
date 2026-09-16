@@ -450,6 +450,43 @@
 	}
 
 	# ==========================================================================
+	# Fastfetch Auto-Fit (the `c` alias)
+	# ==========================================================================
+	# How Invoke-ClearAndFastfetch (alias `c`) fits the fastfetch panel into the
+	# Windows Terminal window. It resets the font to the profile default, then
+	# presses Ctrl+Minus one step at a time - waiting for the terminal to reflow
+	# after each - until the panel fits, MaxShrinkSteps steps have been taken, or
+	# the terminal stops shrinking (its minimum font). Nothing here is per machine:
+	# the fit is measured against the live window on every call, so a small laptop
+	# display or a high DPI scale needs no value of its own. Resolved by
+	# Resolve-FastfetchAutoFitSettings; an explicit parameter on the call beats
+	# these values for that one call.
+	#
+	#   MaxShrinkSteps            Ctrl+Minus steps allowed below the default font
+	#                             (0-50). 0 resets and never shrinks.
+	#   ReflowTimeoutMilliseconds How long to wait for the window to change after
+	#                             a keystroke before assuming it will not. Any
+	#                             positive integer, no upper bound - this is the
+	#                             knob to tweak and test per terminal and machine.
+	#                             Too short and a shrink step reads the old size
+	#                             before the terminal has reflowed and the loop
+	#                             stops early ("cannot shrink further" in the
+	#                             verbose log); the reset wait runs to this value
+	#                             when the font is already at the default.
+	#   PromptReserve             Rows kept free below the panel for the prompt
+	#                             (0-20).
+	#
+	# A value outside its range, or not an integer, is reported with a warning and
+	# the built-in default (the value shipped here) is used for that key. $null
+	# means "use the default" silently.
+	# ==========================================================================
+	FastfetchAutoFit              = @{
+		MaxShrinkSteps            = 10
+		ReflowTimeoutMilliseconds = 10
+		PromptReserve             = 1
+	}
+
+	# ==========================================================================
 	# Base Paths Per Machine Type
 	# ==========================================================================
 	# Defines root directories for each machine type. These paths are used to
