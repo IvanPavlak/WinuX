@@ -4,7 +4,7 @@ Sends one of Windows Terminal's font-size keystrokes to the active window: `Rese
 
 ## Configuration Keys
 
-This function reads no `Configuration.psd1` keys. There is nothing to configure. It relies on the two Windows Terminal default key bindings being present; a custom `actions` list that drops them makes the keystroke a no-op, which [`Invoke-ClearAndFastfetch`](Invoke-ClearAndFastfetch.md) detects through [`Wait-ConsoleReflow`](Wait-ConsoleReflow.md).
+This function reads no `Configuration.psd1` keys. There is nothing to configure. It relies on the two Windows Terminal default key bindings being present; a custom `actions` list that drops them makes the keystroke a no-op, which [`Invoke-Fastfetch`](Invoke-Fastfetch.md) detects through [`Wait-ConsoleReflow`](Wait-ConsoleReflow.md).
 
 ## Usage
 
@@ -18,5 +18,5 @@ Send-TerminalFontKey -Action Decrease -WhatIf
 
 - [`Send-TerminalFontKey` in the System module reference](../../../modules/system.md#send-terminalfontkey) - parameters, usage and behaviour
 - [`Wait-ConsoleReflow`](Wait-ConsoleReflow.md) - how the effect of the keystroke is observed
-- [`Invoke-ClearAndFastfetch`](Invoke-ClearAndFastfetch.md) - the `c` alias built on it
+- [`Invoke-Fastfetch`](Invoke-Fastfetch.md) - the `c` alias built on it
 - [System configuration guides](README.md) - every guide for this module

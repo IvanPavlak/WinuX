@@ -25,7 +25,7 @@ Longer walkthroughs that cut across several functions and keys.
 
 These read no `Configuration.psd1` keys. Their guides record that fact and show how to call them.
 
-[Git-Diff](Git-Diff.md), [Git-Obsidian](Git-Obsidian.md), [GitBranch](GitBranch.md), [GitBranchDeleteAndPrune](GitBranchDeleteAndPrune.md), [GitMergeM](GitMergeM.md), [GitPull](GitPull.md), [GitStatus](GitStatus.md), [GitSwitch](GitSwitch.md), [Initialize-Repository](Initialize-Repository.md)
+[Git-Diff](Git-Diff.md), [Git-Obsidian](Git-Obsidian.md), [GitBranch](GitBranch.md), [GitBranchDeleteAndPrune](GitBranchDeleteAndPrune.md), [GitMergeM](GitMergeM.md), [GitPull](GitPull.md), [GitStatus](GitStatus.md), [GitSwitch](GitSwitch.md), [Initialize-Repository](Initialize-Repository.md), [Test-GitRepository](Test-GitRepository.md)
 
 ## Related
 

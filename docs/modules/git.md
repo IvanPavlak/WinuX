@@ -190,6 +190,31 @@ Resolve-RepositoryTargets -All | Format-Table Name, Group, LocalPath
 
 **See also:** [Configuration: Add Repository](../configuration/guides/git/add-new-repository.md)
 
+## [Test-GitRepository](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Git/Functions/Test-GitRepository.ps1)
+
+- **Description:** Tells whether a path is inside a git repository, by walking up to the root looking for a `.git` entry. Both shapes count: the ordinary `.git` DIRECTORY of a normal clone, and the `.git` FILE a worktree or a submodule carries (a one-line `gitdir: ...` pointer). Neither is opened; the test is `Test-Path` and nothing else. A path that does not exist is not an error - the walk simply finds no `.git` above it and returns `$false` - so a caller can pass a stale `$PWD` without guarding it.
+- **Parameters:** `[-Path]`
+- **Usage:** `Test-GitRepository`, `Test-GitRepository -Path "C:\Development\WinuX\Windows"`, `if (Test-GitRepository) { onefetch }`
+
+No process is spawned. `git rev-parse --is-inside-work-tree` answers the same question more thoroughly - it knows about `GIT_DIR`, `.git` files pointing nowhere, and the ceiling directories - but it costs a process launch, and this runs on every `Show-TerminalGreeting` call and therefore on every `c` and every shell start. The walk is a handful of stat calls and is not measurable.
+
+| Parameter | Type     | Default     | Description                                                                                                       |
+| --------- | -------- | ----------- | ------------------------------------------------------------------------------------------------------------------- |
+| `-Path`   | `string` | `$PWD.Path` | The directory to start the walk at. A file path works as long as its directory exists - the walk starts there.    |
+
+```powershell
+# Is this shell inside a repository?
+Test-GitRepository
+
+# Any directory below the root answers the same way
+Test-GitRepository -Path "C:\Development\WinuX\Windows\PowerShell"
+
+# The guard Invoke-Onefetch is built on
+if (Test-GitRepository) { onefetch }
+```
+
+**See also:** [Invoke-Onefetch](system.md#invoke-onefetch), [Show-TerminalGreeting](system.md#show-terminalgreeting), [Test-GitRepository configuration guide](../configuration/guides/git/Test-GitRepository.md)
+
 ## [Update-Repositories](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Git/Functions/Update-Repositories.ps1)
 
 - **Description:** Clones or updates one or more git repositories defined in `RepositoryGroups` in `Configuration.psd1`, where repositories are organized into named groups (for example "Private" and "Work") defined in configuration, never in code. With no parameters it shows an interactive menu grouped by group name; otherwise it updates one or more groups (`-Group`), a named repository, everything (`-All`), or a specific URL/path pair. The selection modes are mutually exclusive, enforced by parameter sets. Archive mode downloads repository contents without the `.git` directory (to the Desktop by default) via `git clone --depth 1` with `.git` removal. Requires administrator privileges.

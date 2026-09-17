@@ -167,7 +167,7 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 - [Add Symbolic Link](add-symbolic-link.md) - link shapes, placeholders and the WSL cases
 - [`Get-TerminalCellSize`](Get-TerminalCellSize.md) - the measurement this function depends on
 - [`New-SixelImage`](New-SixelImage.md) - the encoder this function depends on
-- [`Invoke-ClearAndFastfetch`](Invoke-ClearAndFastfetch.md) - the `c` alias that renders the panel
+- [`Invoke-Fastfetch`](Invoke-Fastfetch.md) - the `c` alias that renders the panel
 - [fastfetch Logo Issues](../../../reference/troubleshooting.md#fastfetch-logo-issues) - every fallback and how to diagnose it
 - [WinuXConfigurator](../../winux-configurator.md) - have an AI assistant walk these decisions with you
 - [Configuration reference](../../configuration-reference.md) - every key, section by section

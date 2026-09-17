@@ -4,7 +4,7 @@ Polls `Get-ConsoleWindowSize` until the window differs from the size read before
 
 ## Configuration Keys
 
-This function reads no `Configuration.psd1` keys. There is nothing to configure. The timeout its caller passes comes from [`FastfetchAutoFit.ReflowTimeoutMilliseconds`](../../configuration-reference.md#fastfetch-auto-fit-the-c-alias), which is configured through [`Invoke-ClearAndFastfetch`](Invoke-ClearAndFastfetch.md).
+This function reads no `Configuration.psd1` keys. There is nothing to configure. The timeout its caller passes comes from [`TerminalGreeting.Fastfetch.AutoFit.ReflowTimeoutMilliseconds`](../../configuration-reference.md#terminal-greeting-startup-and-the-c-alias), which is configured through [`Invoke-Fastfetch`](Invoke-Fastfetch.md).
 
 ## Usage
 
@@ -20,5 +20,5 @@ Wait-ConsoleReflow -Before $before -TimeoutMilliseconds 10 -PollIntervalMillisec
 - [`Wait-ConsoleReflow` in the System module reference](../../../modules/system.md#wait-consolereflow) - parameters, usage and behaviour
 - [`Get-ConsoleWindowSize`](Get-ConsoleWindowSize.md) - what it polls
 - [`Send-TerminalFontKey`](Send-TerminalFontKey.md) - the keystroke it usually follows
-- [`Invoke-ClearAndFastfetch`](Invoke-ClearAndFastfetch.md) - the `c` alias built on it
+- [`Invoke-Fastfetch`](Invoke-Fastfetch.md) - the `c` alias built on it
 - [System configuration guides](README.md) - every guide for this module

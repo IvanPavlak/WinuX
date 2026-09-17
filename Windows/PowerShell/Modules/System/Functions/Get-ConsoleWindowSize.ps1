@@ -9,7 +9,7 @@ function Get-ConsoleWindowSize {
 		at its current font size, which is the unit a text panel has to be judged against.
 
 		Throws in hosts that have no console window (automation, some IDE hosts), which is
-		exactly the signal Invoke-ClearAndFastfetch uses to skip its font auto-fit. The read
+		exactly the signal Invoke-Fastfetch uses to skip its font auto-fit. The read
 		is deliberately not wrapped: a caller that wants to degrade gracefully catches, one
 		that wants the raw failure sees it.
 

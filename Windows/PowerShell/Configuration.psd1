@@ -1,4 +1,4 @@
-# ==============================================================================
+﻿# ==============================================================================
 # OVERVIEW
 # ==============================================================================
 # This file is the central configuration hub for the entire PowerShell system.
@@ -468,18 +468,49 @@
 	}
 
 	# ==========================================================================
-	# Fastfetch Auto-Fit (the `c` alias)
+	# Terminal Greeting (startup and the `c` alias)
 	# ==========================================================================
-	# How Invoke-ClearAndFastfetch (alias `c`) fits the fastfetch panel into the
-	# Windows Terminal window. It resets the font to the profile default, then
-	# presses Ctrl+Minus one step at a time - waiting for the terminal to reflow
-	# after each - until the panel fits, MaxShrinkSteps steps have been taken, or
-	# the terminal stops shrinking (its minimum font). Nothing here is per machine:
-	# the fit is measured against the live window on every call, so a small laptop
-	# display or a high DPI scale needs no value of its own. Resolved by
-	# Resolve-FastfetchAutoFitSettings; an explicit parameter on the call beats
-	# these values for that one call.
+	# What a shell greets you with, and what `c` (Show-TerminalGreeting, System
+	# module) redraws. Three steps, each its own function and each switchable on
+	# its own:
 	#
+	#   Clear      Clear-Host.                                   Ships on.
+	#   Fastfetch  The fastfetch system info panel, font-fitted.  Ships on.
+	#   Onefetch   The onefetch repository panel.                 Ships OFF.
+	#
+	# Onefetch is opt-in: it is only meaningful inside a git repository, and not
+	# every machine has the binary. Turned on, it is still skipped silently
+	# outside a repository, so there is no directory where the greeting errors.
+	# Every step skips itself silently when its binary is missing; a verbose log
+	# (Set-LogLevel Verbose { c }) says why.
+	#
+	#   Clear.Enabled              Whether the screen is cleared.
+	#   Fastfetch.Enabled          Whether the system info panel is shown.
+	#   Onefetch.Enabled           Whether the repository panel is shown.
+	#   Onefetch.IncludeInAutoFit  Whether onefetch's height counts towards the
+	#                              font fit, so both panels are fitted together.
+	#                              Off fits fastfetch alone, and onefetch then
+	#                              scrolls the top of the panel away when the two
+	#                              do not both fit.
+	#   Onefetch.InProjectTerminals  Whether Open-ProjectTerminals appends
+	#                              Invoke-Onefetch to each project tab. The greeting
+	#                              cannot cover those tabs - a tab runs its profile
+	#                              BEFORE the Set-Location that moves it into the
+	#                              repository - so the append is the only way they
+	#                              get the panel. -InvokeOnefetch wins per call.
+	#   Onefetch.Arguments         Extra arguments for the onefetch binary, for
+	#                              example @("--no-art") or @("--no-merges").
+	#
+	# Fastfetch.AutoFit is how the panel is fitted into the Windows Terminal
+	# window. The function resets the font to the profile default, then presses
+	# Ctrl+Minus one step at a time - waiting for the terminal to reflow after
+	# each - until the panel fits, MaxShrinkSteps steps have been taken, or the
+	# terminal stops shrinking (its minimum font). Nothing here is per machine:
+	# the fit is measured against the live window on every call, so a small
+	# laptop display or a high DPI scale needs no value of its own.
+	#
+	#   Enabled                   Whether the font is fitted at all. Off shows
+	#                             the panel at whatever font the tab is on.
 	#   MaxShrinkSteps            Ctrl+Minus steps allowed below the default font
 	#                             (0-50). 0 resets and never shrinks.
 	#   ReflowTimeoutMilliseconds How long to wait for the window to change after
@@ -494,14 +525,32 @@
 	#   PromptReserve             Rows kept free below the panel for the prompt
 	#                             (0-20).
 	#
-	# A value outside its range, or not an integer, is reported with a warning and
-	# the built-in default (the value shipped here) is used for that key. $null
-	# means "use the default" silently.
+	# Resolved by Resolve-TerminalGreetingSettings; an explicit parameter on the
+	# call beats these values for that one call. A value outside its range, or
+	# not an integer, is reported with a warning and the built-in default (the
+	# value shipped here) is used for that key. $null means "use the default"
+	# silently, and a missing TerminalGreeting section behaves exactly like the
+	# values below.
 	# ==========================================================================
-	FastfetchAutoFit              = @{
-		MaxShrinkSteps            = 10
-		ReflowTimeoutMilliseconds = 10
-		PromptReserve             = 1
+	TerminalGreeting              = @{
+		Clear     = @{
+			Enabled = $true
+		}
+		Fastfetch = @{
+			Enabled = $true
+			AutoFit = @{
+				Enabled                   = $true
+				MaxShrinkSteps            = 10
+				ReflowTimeoutMilliseconds = 10
+				PromptReserve             = 1
+			}
+		}
+		Onefetch  = @{
+			Enabled            = $false
+			IncludeInAutoFit   = $true
+			InProjectTerminals = $true
+			Arguments          = @()
+		}
 	}
 
 	# ==========================================================================

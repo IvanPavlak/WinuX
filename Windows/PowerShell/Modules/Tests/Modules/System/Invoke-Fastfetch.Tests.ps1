@@ -4,8 +4,8 @@ BeforeAll {
 	$ModuleRoot = (Get-RepositoryPath).Modules
 	$FunctionsPath = Join-Path $ModuleRoot "System\Functions"
 
-	. "$FunctionsPath\Invoke-ClearAndFastfetch.ps1"
-	. "$FunctionsPath\Resolve-FastfetchAutoFitSettings.ps1"
+	. "$FunctionsPath\Invoke-Fastfetch.ps1"
+	. "$FunctionsPath\Resolve-TerminalGreetingSettings.ps1"
 	. "$FunctionsPath\Get-ConsoleWindowSize.ps1"
 	. "$FunctionsPath\Wait-ConsoleReflow.ps1"
 	. "$FunctionsPath\Send-TerminalFontKey.ps1"
@@ -34,11 +34,12 @@ BeforeAll {
 	}
 }
 
-Describe "Invoke-ClearAndFastfetch" {
+Describe "Invoke-Fastfetch" {
 	BeforeEach {
-		Mock Clear-Host { }
 		Mock fastfetch { }
+		Mock Clear-Host { }
 		Mock Write-LogWarning { }
+		Mock Write-LogDebug { }
 
 		# No keystroke may leave the suite: an unmocked Ctrl+0 / Ctrl+Minus lands in whatever
 		# window has focus while the tests run.
@@ -47,7 +48,15 @@ Describe "Invoke-ClearAndFastfetch" {
 		$script:OriginalWtSession = $env:WT_SESSION
 		$script:SavedConfiguration = $global:Configuration
 		# The base defaults, so the loop tests are independent of the machine's local overrides.
-		$global:Configuration = @{ FastfetchAutoFit = @{ MaxShrinkSteps = 10; ReflowTimeoutMilliseconds = 10; PromptReserve = 1 } }
+		$global:Configuration = @{
+			TerminalGreeting = @{
+				Fastfetch = @{ Enabled = $true; AutoFit = @{ Enabled = $true; MaxShrinkSteps = 10; ReflowTimeoutMilliseconds = 10; PromptReserve = 1 } }
+			}
+		}
+
+		# The presence check the function opens with. It is deliberately NOT filtered on
+		# -CommandType, so the binary lookup (which is) can be scripted independently below.
+		Mock Get-Command { [pscustomobject]@{ Name = "fastfetch" } } -ParameterFilter { $Name -eq "fastfetch" -and -not $CommandType }
 	}
 
 	AfterEach {
@@ -55,12 +64,33 @@ Describe "Invoke-ClearAndFastfetch" {
 		$global:Configuration = $script:SavedConfiguration
 	}
 
+	Context "when fastfetch is not installed" {
+		It "is a silent no-op with one debug line, so a fresh machine starts without an error" {
+			Mock Get-Command { $null } -ParameterFilter { $Name -eq "fastfetch" }
+
+			{ Invoke-Fastfetch } | Should -Not -Throw
+			Should -Invoke fastfetch -Times 0 -Exactly
+			Should -Invoke Send-TerminalFontKey -Times 0 -Exactly
+			Should -Invoke Write-LogDebug -Times 1 -Exactly -ParameterFilter { $Message -like "*fastfetch is not installed*" }
+		}
+	}
+
+	Context "it does not clear the screen" {
+		It "leaves clearing to Invoke-Clear, so each greeting step can be switched off on its own" {
+			$env:WT_SESSION = $null
+
+			Invoke-Fastfetch
+
+			Should -Invoke Clear-Host -Times 0 -Exactly
+			Should -Invoke fastfetch -Times 1 -Exactly
+		}
+	}
+
 	Context "outside Windows Terminal" {
 		BeforeEach { $env:WT_SESSION = $null }
 
-		It "clears terminal and invokes fastfetch once" {
-			{ Invoke-ClearAndFastfetch } | Should -Not -Throw
-			Should -Invoke Clear-Host -Times 1 -Exactly
+		It "invokes fastfetch once and sends no keystroke" {
+			{ Invoke-Fastfetch } | Should -Not -Throw
 			Should -Invoke fastfetch -Times 1 -Exactly
 			Should -Invoke Send-TerminalFontKey -Times 0 -Exactly
 		}
@@ -70,9 +100,21 @@ Describe "Invoke-ClearAndFastfetch" {
 		BeforeEach { $env:WT_SESSION = "1" }
 
 		It "skips auto-fit and invokes fastfetch once even inside Windows Terminal" {
-			{ Invoke-ClearAndFastfetch -NoResize } | Should -Not -Throw
-			Should -Invoke Clear-Host -Times 1 -Exactly
+			{ Invoke-Fastfetch -NoResize } | Should -Not -Throw
 			Should -Invoke fastfetch -Times 1 -Exactly
+			Should -Invoke Send-TerminalFontKey -Times 0 -Exactly
+		}
+	}
+
+	Context "with the whole step turned off" {
+		BeforeEach { $env:WT_SESSION = "1" }
+
+		It "renders nothing when TerminalGreeting.Fastfetch.Enabled is false" {
+			$global:Configuration = @{ TerminalGreeting = @{ Fastfetch = @{ Enabled = $false } } }
+
+			Invoke-Fastfetch
+
+			Should -Invoke fastfetch -Times 0 -Exactly
 			Should -Invoke Send-TerminalFontKey -Times 0 -Exactly
 		}
 	}
@@ -83,22 +125,20 @@ Describe "Invoke-ClearAndFastfetch" {
 
 			# No resolvable binary, so the measuring run falls back to the command name and the
 			# real fastfetch is never spawned by the suite on a machine that has it installed.
-			Mock Get-Command { $null } -ParameterFilter { $Name -eq "fastfetch" }
+			Mock Get-Command { $null } -ParameterFilter { $Name -eq "fastfetch" -and $CommandType -eq "Application" }
 		}
 
-		It "always clears and renders the panel without throwing" {
+		It "always renders the panel without throwing" {
 			# Auto-fit (font measurement / keystrokes) only engages when a real
-			# console window is present; the clear + render must run regardless.
-			{ Invoke-ClearAndFastfetch } | Should -Not -Throw
-			Should -Invoke Clear-Host -Times 1 -Exactly
+			# console window is present; the render must run regardless.
+			{ Invoke-Fastfetch } | Should -Not -Throw
 			Should -Invoke fastfetch
 		}
 
-		It "degrades to plain clear + fastfetch when the host has no console window" {
+		It "degrades to a plain single run when the host has no console window" {
 			Mock Get-ConsoleWindowSize { throw [IO.IOException]::new("The handle is invalid.") }
 
-			{ Invoke-ClearAndFastfetch } | Should -Not -Throw
-			Should -Invoke Clear-Host -Times 1 -Exactly
+			{ Invoke-Fastfetch } | Should -Not -Throw
 			Should -Invoke fastfetch -Times 1 -Exactly
 			Should -Invoke Send-TerminalFontKey -Times 0 -Exactly
 		}
@@ -114,15 +154,14 @@ Describe "Invoke-ClearAndFastfetch" {
 			# measurable width - an inline-image logo is a single enormous line.
 			$script:FakeBinary = Join-Path $TestDrive "fastfetch-stand-in.cmd"
 			Set-Content -LiteralPath $script:FakeBinary -Value @("@echo off", "echo panel row one", "echo panel row two")
-			Mock Get-Command { [pscustomobject]@{ Source = $script:FakeBinary } } -ParameterFilter { $Name -eq "fastfetch" }
+			Mock Get-Command { [pscustomobject]@{ Source = $script:FakeBinary } } -ParameterFilter { $Name -eq "fastfetch" -and $CommandType -eq "Application" }
 		}
 
 		It "renders through the command name exactly once, so the measuring run bypassed the wrapper" {
 			# One invocation of the mocked command name = the displaying run only. If the measuring
 			# run also went through it, this would be two (or one when auto-fit does not engage,
 			# which is why the assertion is an upper bound as well as a lower one).
-			{ Invoke-ClearAndFastfetch } | Should -Not -Throw
-			Should -Invoke Clear-Host -Times 1 -Exactly
+			{ Invoke-Fastfetch } | Should -Not -Throw
 			Should -Invoke fastfetch -Times 1 -Exactly
 		}
 	}
@@ -135,7 +174,7 @@ Describe "Invoke-ClearAndFastfetch" {
 			$script:FakeBinary = Join-Path $TestDrive "fastfetch-wide-panel.cmd"
 			$wideRow = "x" * 100
 			Set-Content -LiteralPath $script:FakeBinary -Value @("@echo off", "echo $wideRow", "echo row two", "echo row three")
-			Mock Get-Command { [pscustomobject]@{ Source = $script:FakeBinary } } -ParameterFilter { $Name -eq "fastfetch" }
+			Mock Get-Command { [pscustomobject]@{ Source = $script:FakeBinary } } -ParameterFilter { $Name -eq "fastfetch" -and $CommandType -eq "Application" }
 
 			# The console is scripted: the initial read, then one size per reflow wait, in order.
 			# A drained queue keeps returning -Before, which is what a terminal that stopped
@@ -157,7 +196,7 @@ Describe "Invoke-ClearAndFastfetch" {
 			$script:InitialWindow = New-WindowSize -Width 120 -Height 30
 			$script:ReflowQueue = @()
 
-			Invoke-ClearAndFastfetch
+			Invoke-Fastfetch
 
 			Should -Invoke Send-TerminalFontKey -Times 1 -Exactly -ParameterFilter { $Action -eq "Reset" }
 			Should -Invoke Send-TerminalFontKey -Times 0 -Exactly -ParameterFilter { $Action -eq "Decrease" }
@@ -173,7 +212,7 @@ Describe "Invoke-ClearAndFastfetch" {
 				(New-WindowSize -Width 110 -Height 30)   # after Decrease: fits
 			)
 
-			Invoke-ClearAndFastfetch
+			Invoke-Fastfetch
 
 			Should -Invoke Send-TerminalFontKey -Times 1 -Exactly -ParameterFilter { $Action -eq "Decrease" }
 		}
@@ -186,19 +225,18 @@ Describe "Invoke-ClearAndFastfetch" {
 				(New-WindowSize -Width 106 -Height 38)   # step 3: fits
 			)
 
-			Invoke-ClearAndFastfetch
+			Invoke-Fastfetch
 
 			Should -Invoke Send-TerminalFontKey -Times 1 -Exactly -ParameterFilter { $Action -eq "Reset" }
 			Should -Invoke Send-TerminalFontKey -Times 3 -Exactly -ParameterFilter { $Action -eq "Decrease" }
-			Should -Invoke Clear-Host -Times 1 -Exactly
 			Should -Invoke fastfetch -Times 1 -Exactly
 		}
 
 		It "stops at the configured MaxShrinkSteps when the panel never fits" {
-			$global:Configuration = @{ FastfetchAutoFit = @{ MaxShrinkSteps = 4 } }
+			$global:Configuration = @{ TerminalGreeting = @{ Fastfetch = @{ AutoFit = @{ MaxShrinkSteps = 4 } } } }
 			$script:ReflowQueue = @(1..8 | ForEach-Object { New-WindowSize -Width (80 + $_) -Height 30 })
 
-			Invoke-ClearAndFastfetch
+			Invoke-Fastfetch
 
 			Should -Invoke Send-TerminalFontKey -Times 4 -Exactly -ParameterFilter { $Action -eq "Decrease" }
 			Should -Invoke fastfetch -Times 1 -Exactly
@@ -207,16 +245,15 @@ Describe "Invoke-ClearAndFastfetch" {
 		It "shrinks at most ten steps with the base configuration" {
 			$script:ReflowQueue = @(1..20 | ForEach-Object { New-WindowSize -Width (80 + $_) -Height 30 })
 
-			Invoke-ClearAndFastfetch
+			Invoke-Fastfetch
 
 			Should -Invoke Send-TerminalFontKey -Times 10 -Exactly -ParameterFilter { $Action -eq "Decrease" }
 		}
 
 		It "lets an explicit -MaxShrinkSteps override the configured cap for one call" {
-			$global:Configuration = @{ FastfetchAutoFit = @{ MaxShrinkSteps = 10 } }
 			$script:ReflowQueue = @(1..20 | ForEach-Object { New-WindowSize -Width (80 + $_) -Height 30 })
 
-			Invoke-ClearAndFastfetch -MaxShrinkSteps 2
+			Invoke-Fastfetch -MaxShrinkSteps 2
 
 			Should -Invoke Send-TerminalFontKey -Times 2 -Exactly -ParameterFilter { $Action -eq "Decrease" }
 		}
@@ -228,87 +265,147 @@ Describe "Invoke-ClearAndFastfetch" {
 				(New-WindowSize -Width 90 -Height 30)    # step 2 changed nothing => minimum font
 			)
 
-			Invoke-ClearAndFastfetch
+			Invoke-Fastfetch
 
 			Should -Invoke Send-TerminalFontKey -Times 2 -Exactly -ParameterFilter { $Action -eq "Decrease" }
 			Should -Invoke fastfetch -Times 1 -Exactly
 		}
 
 		It "with -MaxShrinkSteps 0 resets the font and never shrinks, even when the panel overflows" {
-			Invoke-ClearAndFastfetch -MaxShrinkSteps 0
+			Invoke-Fastfetch -MaxShrinkSteps 0
 
 			Should -Invoke Send-TerminalFontKey -Times 1 -Exactly -ParameterFilter { $Action -eq "Reset" }
 			Should -Invoke Send-TerminalFontKey -Times 0 -Exactly -ParameterFilter { $Action -eq "Decrease" }
 			Should -Invoke fastfetch -Times 1 -Exactly
 		}
 
+		It "sends no keystroke at all when AutoFit.Enabled is false" {
+			# Distinct from -MaxShrinkSteps 0, which still resets the font: turning the fit off
+			# leaves the tab at whatever size the user put it at.
+			$global:Configuration = @{ TerminalGreeting = @{ Fastfetch = @{ AutoFit = @{ Enabled = $false } } } }
+
+			Invoke-Fastfetch
+
+			Should -Invoke Send-TerminalFontKey -Times 0 -Exactly
+			Should -Invoke fastfetch -Times 1 -Exactly
+		}
+
 		It "counts the configured PromptReserve rows against the height" {
 			# The panel (3 rows) fits a 120x5 window with a one-row reserve (3 <= 5 - 1 - 1) and
 			# overflows it with the configured two-row reserve (3 > 5 - 1 - 2).
-			$global:Configuration = @{ FastfetchAutoFit = @{ PromptReserve = 2 } }
+			$global:Configuration = @{ TerminalGreeting = @{ Fastfetch = @{ AutoFit = @{ PromptReserve = 2 } } } }
 			$script:InitialWindow = New-WindowSize -Width 120 -Height 5
 			$script:ReflowQueue = @(
 				(New-WindowSize -Width 120 -Height 5)
 				(New-WindowSize -Width 130 -Height 6)
 			)
 
-			Invoke-ClearAndFastfetch
+			Invoke-Fastfetch
 
 			Should -Invoke Send-TerminalFontKey -Times 1 -Exactly -ParameterFilter { $Action -eq "Decrease" }
 		}
 
 		It "lets an explicit -PromptReserve override the configured one" {
-			$global:Configuration = @{ FastfetchAutoFit = @{ PromptReserve = 2 } }
+			$global:Configuration = @{ TerminalGreeting = @{ Fastfetch = @{ AutoFit = @{ PromptReserve = 2 } } } }
 			$script:InitialWindow = New-WindowSize -Width 120 -Height 5
 			$script:ReflowQueue = @((New-WindowSize -Width 120 -Height 5))
 
-			Invoke-ClearAndFastfetch -PromptReserve 1
+			Invoke-Fastfetch -PromptReserve 1
 
 			Should -Invoke Send-TerminalFontKey -Times 0 -Exactly -ParameterFilter { $Action -eq "Decrease" }
 		}
 
 		It "passes the configured reflow timeout to every wait" {
-			$global:Configuration = @{ FastfetchAutoFit = @{ ReflowTimeoutMilliseconds = 750 } }
+			$global:Configuration = @{ TerminalGreeting = @{ Fastfetch = @{ AutoFit = @{ ReflowTimeoutMilliseconds = 750 } } } }
 			$script:ReflowQueue = @(
 				(New-WindowSize -Width 80 -Height 30)
 				(New-WindowSize -Width 110 -Height 30)
 			)
 
-			Invoke-ClearAndFastfetch
+			Invoke-Fastfetch
 
 			Should -Invoke Wait-ConsoleReflow -Times 2 -Exactly -ParameterFilter { $TimeoutMilliseconds -eq 750 }
 		}
 
 		It "lets an explicit -ReflowTimeoutMilliseconds override the configured one" {
-			$global:Configuration = @{ FastfetchAutoFit = @{ ReflowTimeoutMilliseconds = 750 } }
+			$global:Configuration = @{ TerminalGreeting = @{ Fastfetch = @{ AutoFit = @{ ReflowTimeoutMilliseconds = 750 } } } }
 			$script:ReflowQueue = @((New-WindowSize -Width 110 -Height 30))
 
-			Invoke-ClearAndFastfetch -ReflowTimeoutMilliseconds 120
+			Invoke-Fastfetch -ReflowTimeoutMilliseconds 120
 
 			Should -Invoke Wait-ConsoleReflow -Times 1 -Exactly -ParameterFilter { $TimeoutMilliseconds -eq 120 }
 		}
 
-		It "falls back to the built-in defaults when the configuration has no FastfetchAutoFit section" {
+		It "falls back to the built-in defaults when the configuration has no TerminalGreeting section" {
 			$global:Configuration = @{}
 			$script:ReflowQueue = @(1..20 | ForEach-Object { New-WindowSize -Width (80 + $_) -Height 30 })
 
-			Invoke-ClearAndFastfetch
+			Invoke-Fastfetch
 
 			Should -Invoke Send-TerminalFontKey -Times 10 -Exactly -ParameterFilter { $Action -eq "Decrease" }
 			Should -Invoke Wait-ConsoleReflow -ParameterFilter { $TimeoutMilliseconds -eq 10 }
 		}
 
-		It "always clears and renders once, however many steps were taken" {
+		It "always renders once, however many steps were taken" {
 			$script:ReflowQueue = @(
 				(New-WindowSize -Width 80 -Height 30)
 				(New-WindowSize -Width 90 -Height 30)
 				(New-WindowSize -Width 100 -Height 30)
 			)
 
-			Invoke-ClearAndFastfetch
+			Invoke-Fastfetch
 
-			Should -Invoke Clear-Host -Times 1 -Exactly
 			Should -Invoke fastfetch -Times 1 -Exactly
+		}
+	}
+
+	Context "-ExtraRows, the onefetch budget" {
+		BeforeEach {
+			$env:WT_SESSION = "1"
+
+			# A 3-row, 10-column panel: narrow enough that only the HEIGHT can overflow, which is
+			# what -ExtraRows moves.
+			$script:FakeBinary = Join-Path $TestDrive "fastfetch-short-panel.cmd"
+			Set-Content -LiteralPath $script:FakeBinary -Value @("@echo off", "echo row one", "echo row two", "echo row three")
+			Mock Get-Command { [pscustomobject]@{ Source = $script:FakeBinary } } -ParameterFilter { $Name -eq "fastfetch" -and $CommandType -eq "Application" }
+
+			# A 120x8 window: 3 rows fit with room to spare, 3 + 10 do not.
+			$script:InitialWindow = New-WindowSize -Width 120 -Height 8
+			$script:ReflowQueue = @()
+			Mock Get-ConsoleWindowSize { $script:InitialWindow }
+			Mock Wait-ConsoleReflow {
+				if ($script:ReflowQueue.Count -gt 0) {
+					$next = $script:ReflowQueue[0]
+					$script:ReflowQueue = @($script:ReflowQueue | Select-Object -Skip 1)
+					return $next
+				}
+				return $Before
+			}
+		}
+
+		It "does not shrink for a panel that fits on its own" {
+			Invoke-Fastfetch -ExtraRows 0
+
+			Should -Invoke Send-TerminalFontKey -Times 0 -Exactly -ParameterFilter { $Action -eq "Decrease" }
+		}
+
+		It "shifts the overflow decision: the same panel plus onefetch's rows no longer fits" {
+			# This is the whole reason the parameter exists - fitting fastfetch alone succeeds and
+			# then onefetch scrolls the panel off the top.
+			$script:ReflowQueue = @(
+				(New-WindowSize -Width 120 -Height 8)     # after Reset: unchanged
+				(New-WindowSize -Width 140 -Height 20)    # step 1: 13 rows now fit
+			)
+
+			Invoke-Fastfetch -ExtraRows 10
+
+			Should -Invoke Send-TerminalFontKey -Times 1 -Exactly -ParameterFilter { $Action -eq "Decrease" }
+		}
+
+		It "defaults to 0, so a caller that does not measure onefetch behaves as before" {
+			Invoke-Fastfetch
+
+			Should -Invoke Send-TerminalFontKey -Times 0 -Exactly -ParameterFilter { $Action -eq "Decrease" }
 		}
 	}
 }

@@ -258,7 +258,7 @@ Get-BrowserWindowsByTarget -TargetPids @(1234) -TitlePattern "Google Chrome"
 
 ## [Get-ConsoleWindowSize](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Get-ConsoleWindowSize.ps1)
 
-- **Description:** Reads the console window size in character cells - an object with `Width` and `Height` taken from `[Console]::WindowWidth` / `WindowHeight`, the number of columns and rows the terminal shows at its current font size. Throws in hosts that have no console window (automation, some IDE hosts), which is the signal `Invoke-ClearAndFastfetch` uses to skip its font auto-fit; the read is deliberately not wrapped so a caller can choose between degrading gracefully and seeing the failure.
+- **Description:** Reads the console window size in character cells - an object with `Width` and `Height` taken from `[Console]::WindowWidth` / `WindowHeight`, the number of columns and rows the terminal shows at its current font size. Throws in hosts that have no console window (automation, some IDE hosts), which is the signal `Invoke-Fastfetch` uses to skip its font auto-fit; the read is deliberately not wrapped so a caller can choose between degrading gracefully and seeing the failure.
 - **Usage:** `Get-ConsoleWindowSize`
 
 It exists as a function rather than an inline property read so callers that react to the window changing - `Wait-ConsoleReflow` polls it after every font keystroke - can be driven by a scripted sequence of sizes in tests.
@@ -269,7 +269,7 @@ $window = Get-ConsoleWindowSize
 if ($panelWidth -gt $window.Width) { "too wide" }
 ```
 
-**See also:** [Wait-ConsoleReflow](#wait-consolereflow), [Invoke-ClearAndFastfetch](#invoke-clearandfastfetch)
+**See also:** [Wait-ConsoleReflow](#wait-consolereflow), [Invoke-Fastfetch](#invoke-fastfetch)
 
 ## [Get-FastfetchLogoArgument](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Get-FastfetchLogoArgument.ps1)
 
@@ -291,7 +291,7 @@ fastfetch's own maintainer recommends for Windows, and it is what this function 
 The wiring is the all-hosts profile (`Windows/PowerShell/profile.ps1`), an opt-in symbolic link
 that defines a global `fastfetch` function. PowerShell resolves functions before external
 applications, so the profile's startup panel and every
-[`Invoke-ClearAndFastfetch`](#invoke-clearandfastfetch) call pick the image up without either of
+[`Invoke-Fastfetch`](#invoke-fastfetch) call pick the image up without either of
 those files changing. Two opt-ins therefore gate the feature: the symbolic link and the
 configuration key.
 
@@ -312,7 +312,7 @@ configuration key.
 Get-FastfetchLogoArgument -ImagePath "C:\Logos\Flag.png" -CellWidth 30 -CellHeight 15
 ```
 
-**See also:** [Get-TerminalCellSize](#get-terminalcellsize), [New-SixelImage](#new-sixelimage), [Invoke-ClearAndFastfetch](#invoke-clearandfastfetch), [Get-FastfetchLogoArgument configuration guide](../configuration/guides/system/Get-FastfetchLogoArgument.md)
+**See also:** [Get-TerminalCellSize](#get-terminalcellsize), [New-SixelImage](#new-sixelimage), [Invoke-Fastfetch](#invoke-fastfetch), [Get-FastfetchLogoArgument configuration guide](../configuration/guides/system/Get-FastfetchLogoArgument.md)
 
 ## [Get-InstalledApps](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Get-InstalledApps.ps1)
 
@@ -481,39 +481,94 @@ Every `wsl` call targets the configured `DefaultWSLDistribution` explicitly (`ws
 Initialize-WSLEnvironment
 ```
 
-## [Invoke-ClearAndFastfetch](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Invoke-ClearAndFastfetch.ps1)
+## [Invoke-Clear](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Invoke-Clear.ps1)
 
-- **Description:** Clears the terminal screen with `Clear-Host` and displays the fastfetch system info panel, shrinking the font step by step until the panel fits the window. Inside Windows Terminal it first measures the panel by capturing fastfetch's output (in pipe mode fastfetch emits one line per visual row, so the captured line count is the panel height and the longest line is its width), then sends `Ctrl+0` ("reset font size") so the panel is always judged against - and returns to - the default font. While `Test-FastfetchPanelOverflow` says the panel still overflows it sends `Ctrl+Minus` ("decrease font size") one step at a time through `Send-TerminalFontKey`, waiting for the terminal to reflow with `Wait-ConsoleReflow` after each step, until the panel fits, `MaxShrinkSteps` steps have been taken, or the terminal stops changing size (its minimum font); then it clears and renders the colored panel. Resetting first keeps the result deterministic (default font when it fits, the fewest steps below it that fit when it does not) and avoids oscillating on repeated calls, and the loop needs no per-machine value: a small laptop display, a high DPI scale, a wide fastfetch configuration and a tall one are all absorbed the same way. The three knobs come from the `FastfetchAutoFit` configuration section through `Resolve-FastfetchAutoFitSettings`; an explicit parameter overrides the configured value for that one call. The measuring run invokes the fastfetch BINARY rather than the `fastfetch` command name, so a profile-defined `fastfetch` function cannot distort the measurement with a decoration that has no measurable width - an inline-image logo is a single enormous line. The displaying run goes through the command name as usual, so such a wrapper still decorates what you see.
-- **Parameters:** -NoResize, -PromptReserve, -MaxShrinkSteps, -ReflowTimeoutMilliseconds
-- **Usage:** `c`, `Invoke-ClearAndFastfetch`, `Invoke-ClearAndFastfetch -NoResize`, `Invoke-ClearAndFastfetch -MaxShrinkSteps 0`, `Invoke-ClearAndFastfetch -PromptReserve 2`
-- **Alias:** c
+- **Description:** Clears the terminal screen with `Clear-Host`, unless `TerminalGreeting.Clear.Enabled` is `$false`. The first step of [Show-TerminalGreeting](#show-terminalgreeting), and thin by design: it exists so that all three greeting steps - clear, fastfetch, onefetch - are switched on and off the same way, from the same configuration section, and mocked the same way in the orchestrator's tests. A `Clear-Host` written inline in the orchestrator would need its own `if`, its own configuration lookup and its own mocking seam, and would be the one step that could not be run or skipped on its own.
+- **Parameters:** `[-Settings]`
+- **Usage:** `Invoke-Clear`, `Invoke-Clear -Settings $settings`
 
-Because measuring and displaying are separate steps, `fastfetch` runs twice when auto-fit is active; use `-NoResize` to keep the original single-run clear + fastfetch behavior. Auto-fit is Windows Terminal specific (the `Ctrl+0` / `Ctrl+Minus` bindings) and is skipped automatically outside Windows Terminal and in non-interactive hosts with no console window (`Get-ConsoleWindowSize` throws there). Any failure while measuring or sending the keystrokes degrades gracefully to a plain clear + fastfetch. A profile-defined `fastfetch` wrapper that swaps the logo for an inline image should size that image to the same cell block the text logo occupies, so the measured panel and the displayed one have identical geometry - the shipped wrapper does, and re-reads the cell size at display time, so the image follows whatever font step the loop lands on.
+| Parameter   | Type       | Default                              | Description                                                                                                       |
+| ----------- | ---------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| `-Settings` | `psobject` | `Resolve-TerminalGreetingSettings`   | The resolved greeting settings. `Show-TerminalGreeting` resolves once and passes the tree down; omitted, this resolves for itself. |
+
+```powershell
+# Clear the screen, unless the greeting's clear step is turned off
+Invoke-Clear
+
+# Why did it not clear?
+Set-LogLevel Verbose { Invoke-Clear }
+```
+
+**See also:** [Show-TerminalGreeting](#show-terminalgreeting), [Resolve-TerminalGreetingSettings](#resolve-terminalgreetingsettings), [Invoke-Clear configuration guide](../configuration/guides/system/Invoke-Clear.md)
+
+## [Invoke-Fastfetch](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Invoke-Fastfetch.ps1)
+
+- **Description:** Displays the fastfetch system info panel, shrinking the font step by step until the panel fits the window. It does NOT clear the screen - [Invoke-Clear](#invoke-clear) is the step that does, so each part of the greeting can be switched off on its own. Inside Windows Terminal it first measures the panel by capturing fastfetch's output (in pipe mode fastfetch emits one line per visual row, so the captured line count is the panel height and the longest line is its width), then sends `Ctrl+0` ("reset font size") so the panel is always judged against - and returns to - the default font. While `Test-FastfetchPanelOverflow` says the panel still overflows it sends `Ctrl+Minus` ("decrease font size") one step at a time through `Send-TerminalFontKey`, waiting for the terminal to reflow with `Wait-ConsoleReflow` after each step, until the panel fits, `MaxShrinkSteps` steps have been taken, or the terminal stops changing size (its minimum font); then it renders the colored panel. Resetting first keeps the result deterministic (default font when it fits, the fewest steps below it that fit when it does not) and avoids oscillating on repeated calls, and the loop needs no per-machine value: a small laptop display, a high DPI scale, a wide fastfetch configuration and a tall one are all absorbed the same way. `-ExtraRows` adds rows to the height the panel is judged by, which is how the greeting fits the fastfetch and onefetch panels together. The knobs come from the `TerminalGreeting.Fastfetch.AutoFit` configuration section through `Resolve-TerminalGreetingSettings`; an explicit parameter overrides the configured value for that one call. The measuring run invokes the fastfetch BINARY rather than the `fastfetch` command name, so a profile-defined `fastfetch` function cannot distort the measurement with a decoration that has no measurable width - an inline-image logo is a single enormous line. The displaying run goes through the command name as usual, so such a wrapper still decorates what you see.
+- **Parameters:** -NoResize, -ExtraRows, -PromptReserve, -MaxShrinkSteps, -ReflowTimeoutMilliseconds, `[-Settings]`
+- **Usage:** `Invoke-Fastfetch`, `Invoke-Fastfetch -NoResize`, `Invoke-Fastfetch -MaxShrinkSteps 0`, `Invoke-Fastfetch -ExtraRows 12`, `Invoke-Fastfetch -PromptReserve 2`
+
+Because measuring and displaying are separate steps, `fastfetch` runs twice when auto-fit is active; use `-NoResize`, or `TerminalGreeting.Fastfetch.AutoFit.Enabled = $false`, to keep the single-run behavior. Auto-fit is Windows Terminal specific (the `Ctrl+0` / `Ctrl+Minus` bindings) and is skipped automatically outside Windows Terminal and in non-interactive hosts with no console window (`Get-ConsoleWindowSize` throws there). Any failure while measuring or sending the keystrokes degrades gracefully to a plain single run, and a machine without fastfetch installed is a silent no-op with one debug line, so a freshly cloned machine starts without an error at the prompt. A profile-defined `fastfetch` wrapper that swaps the logo for an inline image should size that image to the same cell block the text logo occupies, so the measured panel and the displayed one have identical geometry - the shipped wrapper does, and re-reads the cell size at display time, so the image follows whatever font step the loop lands on.
 
 Every shrink step returns as soon as the terminal has reflowed. The one wait that can run to its timeout is the reset when the font is already at the default, because nothing changes and the function has no way to know the current font size beforehand.
 
-| Parameter                    | Type     | Default                                        | Description                                                                                                                  |
-| ---------------------------- | -------- | ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `-NoResize`                  | `switch` | -                                              | Skip auto-fit; clear and run fastfetch once.                                                                                 |
-| `-PromptReserve`             | `int`    | `FastfetchAutoFit.PromptReserve` (ships 1)     | Rows kept free below the panel for the upcoming prompt when checking vertical overflow (0-20).                               |
-| `-MaxShrinkSteps`            | `int`    | `FastfetchAutoFit.MaxShrinkSteps` (ships 10)   | Upper bound on the `Ctrl+Minus` steps taken below the default font (0-50). `0` resets to the default and never shrinks.      |
-| `-ReflowTimeoutMilliseconds` | `int`    | `FastfetchAutoFit.ReflowTimeoutMilliseconds` (ships 10) | How long to wait for the window size to change after each keystroke before assuming the terminal will not reflow. Any positive integer. |
+| Parameter                    | Type       | Default                                                                | Description                                                                                                                  |
+| ---------------------------- | ---------- | ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `-NoResize`                  | `switch`   | -                                                                      | Skip auto-fit; run fastfetch once.                                                                                           |
+| `-ExtraRows`                 | `int`      | `0`                                                                    | Rows to add to the measured panel height - the height of whatever will be printed below it. `Show-TerminalGreeting` passes onefetch's row count here. |
+| `-PromptReserve`             | `int`      | `TerminalGreeting.Fastfetch.AutoFit.PromptReserve` (ships 1)           | Rows kept free below the panel for the upcoming prompt when checking vertical overflow (0-20).                               |
+| `-MaxShrinkSteps`            | `int`      | `TerminalGreeting.Fastfetch.AutoFit.MaxShrinkSteps` (ships 10)         | Upper bound on the `Ctrl+Minus` steps taken below the default font (0-50). `0` resets to the default and never shrinks.      |
+| `-ReflowTimeoutMilliseconds` | `int`      | `TerminalGreeting.Fastfetch.AutoFit.ReflowTimeoutMilliseconds` (ships 10) | How long to wait for the window size to change after each keystroke before assuming the terminal will not reflow. Any positive integer. |
+| `-Settings`                  | `psobject` | `Resolve-TerminalGreetingSettings`                                     | The resolved greeting settings. Omitted, this resolves for itself.                                                           |
 
 ```powershell
-# Clear the terminal and show the system info panel, auto-fitting to the window
-c
+# Show the system info panel, auto-fitting it to the window
+Invoke-Fastfetch
 
-# Clear and show the panel without ever resizing the font
-Invoke-ClearAndFastfetch -NoResize
+# Show the panel without ever resizing the font
+Invoke-Fastfetch -NoResize
 
 # Reset to the default font and shrink nothing - does the panel fit at all at the default size?
-Invoke-ClearAndFastfetch -MaxShrinkSteps 0
+Invoke-Fastfetch -MaxShrinkSteps 0
+
+# Fit the panel with twelve rows left free below it
+Invoke-Fastfetch -ExtraRows 12
 
 # Verbose diagnostic output: panel size, default window, steps taken, final window and fit
-Set-LogLevel Verbose { Invoke-ClearAndFastfetch }
+Set-LogLevel Verbose { Invoke-Fastfetch }
 ```
 
-**See also:** [Resolve-FastfetchAutoFitSettings](#resolve-fastfetchautofitsettings), [Test-FastfetchPanelOverflow](#test-fastfetchpaneloverflow), [Wait-ConsoleReflow](#wait-consolereflow), [Send-TerminalFontKey](#send-terminalfontkey), [Get-ConsoleWindowSize](#get-consolewindowsize), [Invoke-ClearAndFastfetch configuration guide](../configuration/guides/system/Invoke-ClearAndFastfetch.md)
+**See also:** [Show-TerminalGreeting](#show-terminalgreeting), [Invoke-Onefetch](#invoke-onefetch), [Resolve-TerminalGreetingSettings](#resolve-terminalgreetingsettings), [Test-FastfetchPanelOverflow](#test-fastfetchpaneloverflow), [Wait-ConsoleReflow](#wait-consolereflow), [Send-TerminalFontKey](#send-terminalfontkey), [Get-ConsoleWindowSize](#get-consolewindowsize), [Invoke-Fastfetch configuration guide](../configuration/guides/system/Invoke-Fastfetch.md)
+
+## [Invoke-Onefetch](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Invoke-Onefetch.ps1)
+
+- **Description:** Displays the onefetch repository info panel when the shell is inside a git repository, and does nothing at all - silently, with one debug line saying why - in any of the four cases where it would be noise: `TerminalGreeting.Onefetch.Enabled` is `$false` (the shipped default, because the panel is only meaningful inside a repository and not every machine has the binary), the onefetch binary is not installed, the current directory is not inside a repository (`Test-GitRepository` walks up looking for a `.git` entry, without spawning a process), or onefetch itself exits non-zero, which is what an empty repository with no commits looks like. Silence is the point: this runs on every `c` and every shell start, including in directories that have nothing to do with git, and a greeting is the wrong place to learn that a binary is missing. `-Measure` captures the output instead of displaying it and returns the number of rows it would occupy - 0 in every case where the display run would print nothing - so `Show-TerminalGreeting` can add that height to the fit budget it hands `Invoke-Fastfetch`.
+- **Parameters:** -Measure, -Arguments, -Path, `[-Settings]`
+- **Usage:** `Invoke-Onefetch`, `Invoke-Onefetch -Measure`, `Invoke-Onefetch -Arguments "--no-art"`, `Invoke-Onefetch -Path "C:\Development\WinuX"`
+
+Like fastfetch, onefetch emits one line per visual row when its output is redirected, so the captured line count is the panel height. `-Measure` returns an `[int]`; the display form returns nothing.
+
+| Parameter    | Type       | Default                              | Description                                                                                                |
+| ------------ | ---------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| `-Measure`   | `switch`   | -                                    | Return the row count of the panel instead of displaying it. `0` when nothing would be shown.               |
+| `-Arguments` | `string[]` | `TerminalGreeting.Onefetch.Arguments` | Arguments passed through to the onefetch binary.                                                          |
+| `-Path`      | `string`   | `$PWD.Path`                          | The directory to test and run in.                                                                          |
+| `-Settings`  | `psobject` | `Resolve-TerminalGreetingSettings`   | The resolved greeting settings. Omitted, this resolves for itself.                                        |
+
+```powershell
+# Show the repository panel, if onefetch is enabled, installed, and this is a repository
+Invoke-Onefetch
+
+# How many rows would it take? Nothing is printed.
+Invoke-Onefetch -Measure
+
+# Without the ASCII language logo, whatever the configuration says
+Invoke-Onefetch -Arguments "--no-art"
+
+# Why was nothing shown?
+Set-LogLevel Verbose { Invoke-Onefetch }
+```
+
+**See also:** [Show-TerminalGreeting](#show-terminalgreeting), [Invoke-Fastfetch](#invoke-fastfetch), [Test-GitRepository](git.md#test-gitrepository), [Invoke-Onefetch configuration guide](../configuration/guides/system/Invoke-Onefetch.md)
 
 ## [Invoke-TerminateWindowsTerminalTabsExit](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Invoke-TerminateWindowsTerminalTabsExit.ps1)
 
@@ -790,31 +845,6 @@ $survivors = @(Report-KillAllSurvivors -Exclude "*YouTube*")
 
 **See also:** [Kill-All](#kill-all), [Get-VisibleWindowProcess](#get-visiblewindowprocess)
 
-## [Resolve-FastfetchAutoFitSettings](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Resolve-FastfetchAutoFitSettings.ps1)
-
-- **Description:** Resolves the font auto-fit settings `Invoke-ClearAndFastfetch` runs with, merging three layers per key: an explicit parameter beats the `FastfetchAutoFit` configuration section, which beats the built-in default (`MaxShrinkSteps` 10, `ReflowTimeoutMilliseconds` 10, `PromptReserve` 1). A value that is not an integer in range - from either layer - is reported through `Write-LogWarning` and the default is used for that key, so a typo in `Configuration.local.psd1` degrades the auto-fit to its defaults rather than throwing at the prompt; `$null` or a missing key means "use the default" silently. Returns an object with the three keys as `[int]`.
-- **Parameters:** `[-Settings]`, `[-MaxShrinkSteps]`, `[-ReflowTimeoutMilliseconds]`, `[-PromptReserve]`
-- **Usage:** `Resolve-FastfetchAutoFitSettings`, `Resolve-FastfetchAutoFitSettings -MaxShrinkSteps 0`, `Resolve-FastfetchAutoFitSettings -Settings @{ PromptReserve = 2 }`
-
-`Invoke-ClearAndFastfetch` calls it exactly once per invocation, passing only the parameters that were actually bound so an unpassed one leaves the configured value alone. It has no side effect beyond the warnings, so it is also safe to call ad hoc to see what `c` would run with under the current configuration.
-
-| Parameter                    | Type        | Default                                  | Description                                                                 |
-| ---------------------------- | ----------- | ---------------------------------------- | --------------------------------------------------------------------------- |
-| `-Settings`                  | `hashtable` | `$global:Configuration.FastfetchAutoFit` | The configuration section. `$null` or empty falls through to the defaults.  |
-| `-MaxShrinkSteps`            | `int`       | -                                        | Explicit override, 0-50.                                                    |
-| `-ReflowTimeoutMilliseconds` | `int`       | -                                        | Explicit override, any positive integer.                                    |
-| `-PromptReserve`             | `int`       | -                                        | Explicit override, 0-20.                                                    |
-
-```powershell
-# What would `c` use right now?
-Resolve-FastfetchAutoFitSettings
-
-# Warns that MaxShrinkSteps is out of range and returns the default 10 for it
-Resolve-FastfetchAutoFitSettings -Settings @{ MaxShrinkSteps = 99 }
-```
-
-**See also:** [Invoke-ClearAndFastfetch](#invoke-clearandfastfetch), [Resolve-FastfetchAutoFitSettings configuration guide](../configuration/guides/system/Resolve-FastfetchAutoFitSettings.md)
-
 ## [Resolve-KillAllSteps](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Resolve-KillAllSteps.ps1)
 
 - **Description:** Resolves which `Kill-All` cleanup steps should run, in a single pass. A thin wrapper over the Helper module's generic [Resolve-Steps](helper.md#resolve-steps). Returns an ordered hashtable of step name → boolean, in `Kill-All` execution order. Per step, tri-state resolution: `-Skip` beats `-Include` beats config (`KillAll.Steps.<Name>` in `$global:Configuration` - a plain boolean, or a per-machine-type hashtable with a `Default` fallback, the `BootstrapConfig.Steps.WSL` shape) beats the built-in defaults (everything on except `ReloadProfile`). `$false` is a real config value, so booleans resolve with explicit `$null` checks rather than truthiness. `Kill-All` calls this exactly once per invocation; the only side effect is a warning per step that appears in both `-Skip` and `-Include` (the step is skipped), so it is also safe to call ad hoc to inspect what a `Kill-All` invocation would do with the current config.
@@ -857,6 +887,49 @@ Resolve-SystemThemeSteps -Include RefreshBrowserTabs
 
 **See also:** [Set-SystemTheme](system.md#set-systemtheme), [Configuration Reference: Set-SystemTheme Step Toggles](../configuration/configuration-reference.md#set-systemtheme-step-toggles)
 
+## [Resolve-TerminalGreetingSettings](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Resolve-TerminalGreetingSettings.ps1)
+
+- **Description:** Resolves the settings `Show-TerminalGreeting` and its three steps run with, merging three layers per key: an explicit parameter beats the `TerminalGreeting` configuration section, which beats the built-in default. The tree it returns is the whole greeting, not one step of it, so every caller reads the same object and the section is parsed exactly once per greeting. A value that is not an integer in range - from either layer - is reported through `Write-LogWarning` and the default is used for that key, so a typo in `Configuration.local.psd1` degrades the greeting to its defaults rather than throwing at the prompt; `$null` or a missing key means "use the default" silently, and a missing `TerminalGreeting` section behaves exactly like the shipped values. Booleans are read with PowerShell's own truthiness rather than a parser, because a psd1 can only write `$true` / `$false` / a number / a string there and every one of those has an obvious reading; `Arguments` accepts a single string or an array and is normalized to `[string[]]` with blank entries dropped.
+- **Parameters:** `[-Settings]`, `[-MaxShrinkSteps]`, `[-ReflowTimeoutMilliseconds]`, `[-PromptReserve]`
+- **Usage:** `Resolve-TerminalGreetingSettings`, `Resolve-TerminalGreetingSettings -MaxShrinkSteps 0`, `(Resolve-TerminalGreetingSettings).Onefetch`
+
+`Show-TerminalGreeting` calls it exactly once per invocation, passing only the parameters that were actually bound so an unpassed one leaves the configured value alone, and hands the result to each step - so a bad value is reported once rather than three times. It has no side effect beyond the warnings, so it is also safe to call ad hoc to see what `c` would run with under the current configuration.
+
+The resolved tree, with the shipped defaults:
+
+| Key                                             | Type       | Default  | Range                     |
+| ----------------------------------------------- | ---------- | -------- | ------------------------- |
+| `Clear.Enabled`                                 | `bool`     | `$true`  | -                         |
+| `Fastfetch.Enabled`                             | `bool`     | `$true`  | -                         |
+| `Fastfetch.AutoFit.Enabled`                     | `bool`     | `$true`  | -                         |
+| `Fastfetch.AutoFit.MaxShrinkSteps`              | `int`      | `10`     | 0-50                      |
+| `Fastfetch.AutoFit.ReflowTimeoutMilliseconds`   | `int`      | `10`     | any positive integer      |
+| `Fastfetch.AutoFit.PromptReserve`               | `int`      | `1`      | 0-20                      |
+| `Onefetch.Enabled`                              | `bool`     | `$false` | -                         |
+| `Onefetch.IncludeInAutoFit`                     | `bool`     | `$true`  | -                         |
+| `Onefetch.InProjectTerminals`                   | `bool`     | `$true`  | -                         |
+| `Onefetch.Arguments`                            | `string[]` | `@()`    | -                         |
+
+| Parameter                    | Type        | Default                                  | Description                                                                 |
+| ---------------------------- | ----------- | ---------------------------------------- | --------------------------------------------------------------------------- |
+| `-Settings`                  | `hashtable` | `$global:Configuration.TerminalGreeting` | The configuration section. `$null` or empty falls through to the defaults.  |
+| `-MaxShrinkSteps`            | `int`       | -                                        | Explicit override, 0-50.                                                    |
+| `-ReflowTimeoutMilliseconds` | `int`       | -                                        | Explicit override, any positive integer.                                    |
+| `-PromptReserve`             | `int`       | -                                        | Explicit override, 0-20.                                                    |
+
+```powershell
+# What would `c` use right now?
+Resolve-TerminalGreetingSettings
+
+# Is the repository panel on, does it count towards the fit, and what arguments does it get?
+(Resolve-TerminalGreetingSettings).Onefetch
+
+# Warns that MaxShrinkSteps is out of range and returns the default 10 for it
+Resolve-TerminalGreetingSettings -Settings @{ Fastfetch = @{ AutoFit = @{ MaxShrinkSteps = 99 } } }
+```
+
+**See also:** [Show-TerminalGreeting](#show-terminalgreeting), [Invoke-Fastfetch](#invoke-fastfetch), [Invoke-Onefetch](#invoke-onefetch), [Resolve-TerminalGreetingSettings configuration guide](../configuration/guides/system/Resolve-TerminalGreetingSettings.md)
+
 ## [Restart-Explorer](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Restart-Explorer.ps1)
 
 - **Description:** Restarts Windows Explorer by stopping the `explorer.exe` process and waiting for it to auto-restart. An optional message is shown with an animated loading spinner during the wait. Useful after theme, icon, or taskbar changes. When the session has VirtualDesktop COM types loaded, it proactively reconnects them afterwards via `Reset-VirtualDesktopState` - an Explorer restart severs those cached proxies, and without the reconnect every later VirtualDesktop call in the session would fail with "The RPC server is unavailable" (`0x800706BA`).
@@ -898,11 +971,11 @@ Restart-Machine -Selection "Yes"
 
 ## [Send-TerminalFontKey](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Send-TerminalFontKey.ps1)
 
-- **Description:** Sends one of Windows Terminal's font-size keystrokes to the active window through `SendKeys`: `Reset` is `Ctrl+0` ("reset font size"), `Decrease` is `Ctrl+Minus` ("decrease font size"), both Windows Terminal default bindings. Windows Terminal exposes no API for the font size of a running session, so the bindings are the only way to change it from inside the shell, which is what `Invoke-ClearAndFastfetch`'s auto-fit is built on. The function does not (and cannot) check that the bindings still exist; the caller detects a keystroke that changed nothing by reading the window size before and after with `Wait-ConsoleReflow`. Honours `-WhatIf`: the mapping is logged and nothing is sent.
+- **Description:** Sends one of Windows Terminal's font-size keystrokes to the active window through `SendKeys`: `Reset` is `Ctrl+0` ("reset font size"), `Decrease` is `Ctrl+Minus` ("decrease font size"), both Windows Terminal default bindings. Windows Terminal exposes no API for the font size of a running session, so the bindings are the only way to change it from inside the shell, which is what `Invoke-Fastfetch`'s auto-fit is built on. The function does not (and cannot) check that the bindings still exist; the caller detects a keystroke that changed nothing by reading the window size before and after with `Wait-ConsoleReflow`. Honours `-WhatIf`: the mapping is logged and nothing is sent.
 - **Parameters:** `-Action`
 - **Usage:** `Send-TerminalFontKey -Action Reset`, `Send-TerminalFontKey -Action Decrease`, `Send-TerminalFontKey -Action Decrease -WhatIf`
 
-The keystroke lands in whatever window has focus, which for a shell running this function is its own tab. Its own tests run entirely under `-WhatIf`, and `Invoke-ClearAndFastfetch`'s suite mocks it outright, so running the test suite interactively never changes the font of the terminal it runs in.
+The keystroke lands in whatever window has focus, which for a shell running this function is its own tab. Its own tests run entirely under `-WhatIf`, and `Invoke-Fastfetch`'s suite mocks it outright, so running the test suite interactively never changes the font of the terminal it runs in.
 
 | Parameter | Type     | Default | Description                              |
 | --------- | -------- | ------- | ---------------------------------------- |
@@ -918,7 +991,7 @@ Send-TerminalFontKey -Action Decrease
 $after = Wait-ConsoleReflow -Before $before -TimeoutMilliseconds 10
 ```
 
-**See also:** [Wait-ConsoleReflow](#wait-consolereflow), [Invoke-ClearAndFastfetch](#invoke-clearandfastfetch)
+**See also:** [Wait-ConsoleReflow](#wait-consolereflow), [Invoke-Fastfetch](#invoke-fastfetch)
 
 ## [Send-WakeOnLan](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Send-WakeOnLan.ps1)
 
@@ -1371,6 +1444,46 @@ Show-PinnedAppsWarning -PinnedApps @("git", "nodejs")
 Show-PinnedAppsWarning -PinnedApps @("git", "nodejs") -Message "Version-locked packages"
 ```
 
+## [Show-TerminalGreeting](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Show-TerminalGreeting.ps1)
+
+- **Description:** The greeting a shell opens with, and what the `c` alias redraws: three steps, each its own exported function and each independently switchable from configuration or from a switch on the call - [Invoke-Clear](#invoke-clear) (on by default), [Invoke-Fastfetch](#invoke-fastfetch) (on by default) and [Invoke-Onefetch](#invoke-onefetch) (**off** by default). Onefetch is opt-in because it is only meaningful inside a repository and not every machine has the binary; enabled, it is still silently skipped outside a repository, so there is no directory where the greeting prints an error or an empty panel. Settings are resolved exactly once, by `Resolve-TerminalGreetingSettings`, and handed to each step, so a value out of range is reported once per greeting rather than three times. A configuration with no `TerminalGreeting` section falls through to the built-in defaults, which are the values the base ships - so a fork that has not migrated its `Configuration.local.psd1` gets the previous behavior: clear, then a font-fitted fastfetch.
+- **Parameters:** -NoClear, -NoFastfetch, -NoOnefetch, -NoResize, -PromptReserve, -MaxShrinkSteps, -ReflowTimeoutMilliseconds
+- **Usage:** `c`, `Show-TerminalGreeting`, `Show-TerminalGreeting -NoOnefetch`, `Show-TerminalGreeting -NoResize`, `Show-TerminalGreeting -MaxShrinkSteps 0`
+- **Alias:** c
+
+The order is deliberate. Onefetch is MEASURED first, before anything is drawn, so its height can be added to the budget `Invoke-Fastfetch` fits the font to - the font is then chosen for both panels together rather than for fastfetch alone, which would fit and then scroll off the top as soon as onefetch printed below it. Set `TerminalGreeting.Onefetch.IncludeInAutoFit` to `$false` to fit fastfetch on its own. The screen is cleared before the shrink keystrokes rather than after, so the `Ctrl+0` / `Ctrl+Minus` steps happen on an empty screen; the alternative - clearing last - would mean drawing the panel onto whatever was already there.
+
+The profile calls it at shell start with `-NoResize`: a fresh shell has nothing on screen to redraw, and the keystroke round trips would only delay the first prompt. `c` does fit.
+
+| Parameter                    | Type     | Default                                                                  | Description                                                                                                          |
+| ---------------------------- | -------- | ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
+| `-NoClear`                   | `switch` | -                                                                        | Skip the clear step for this call.                                                                                   |
+| `-NoFastfetch`               | `switch` | -                                                                        | Skip the fastfetch step for this call.                                                                               |
+| `-NoOnefetch`                | `switch` | -                                                                        | Skip the onefetch step for this call, including its measurement, so the font is fitted to fastfetch alone.            |
+| `-NoResize`                  | `switch` | -                                                                        | Skip the font auto-fit. What the profile passes at shell start.                                                      |
+| `-PromptReserve`             | `int`    | `TerminalGreeting.Fastfetch.AutoFit.PromptReserve` (ships 1)             | Rows kept free below the panel for the upcoming prompt (0-20).                                                        |
+| `-MaxShrinkSteps`            | `int`    | `TerminalGreeting.Fastfetch.AutoFit.MaxShrinkSteps` (ships 10)           | Upper bound on the `Ctrl+Minus` steps taken below the default font (0-50). `0` resets and never shrinks.              |
+| `-ReflowTimeoutMilliseconds` | `int`    | `TerminalGreeting.Fastfetch.AutoFit.ReflowTimeoutMilliseconds` (ships 10) | How long to wait for the window size to change after each keystroke. Any positive integer.                            |
+
+```powershell
+# The whole greeting, as configured
+c
+
+# Clear and show the system info panel only, fitted to itself
+Show-TerminalGreeting -NoOnefetch
+
+# The greeting without the font auto-fit - what the profile runs at shell start
+Show-TerminalGreeting -NoResize
+
+# Do the panels fit at all at the default font size?
+Show-TerminalGreeting -MaxShrinkSteps 0
+
+# What was measured, how many steps were taken, and why was a step skipped?
+Set-LogLevel Verbose { Show-TerminalGreeting }
+```
+
+**See also:** [Invoke-Clear](#invoke-clear), [Invoke-Fastfetch](#invoke-fastfetch), [Invoke-Onefetch](#invoke-onefetch), [Resolve-TerminalGreetingSettings](#resolve-terminalgreetingsettings), [Test-GitRepository](git.md#test-gitrepository), [Show-TerminalGreeting configuration guide](../configuration/guides/system/Show-TerminalGreeting.md)
+
 ## [SymbolicLinkMaker](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/SymbolicLinkMaker.ps1)
 
 - **Description:** Creates symbolic links defined in `SymbolicLinks` under `MachineSpecificPaths` in `Configuration.psd1` for the current machine type. The orchestrator of a three-part pipeline: [`Get-SymbolicLinkEntries`](#get-symboliclinkentries) flattens the nested configuration and applies the `-Scope`/`-Name` filters, then each entry is created via [`New-WindowsSymbolicLink`](#new-windowssymboliclink) (backslash paths) or [`New-WSLSymbolicLink`](#new-wslsymboliclink) (forward-slash paths). Modular: `-Scope` limits a run to the Windows or WSL flavor and `-Name` to specific entries, so one relink never has to redo every link. A real file or directory already sitting at an entry's path is backed up into `<Repo>\Backups\Windows\SymbolicLinks\<entry key>\<timestamp>\` before the link replaces it, so a first run over a machine that already has its own PowerShell profile or PowerToys settings loses nothing. Requires administrator privileges.
@@ -1558,7 +1671,7 @@ if (Test-BrowserWindowOpen -Handle $window.Handle) { "still open" }
 
 ## [Test-FastfetchPanelOverflow](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Test-FastfetchPanelOverflow.ps1)
 
-- **Description:** Tells whether a fastfetch panel of the given size overflows a window of the given size - the fit rule `Invoke-ClearAndFastfetch` judges by, in one place. The panel overflows when it is wider than the window, or taller than the window minus one row for the line the cursor ends on and minus `-PromptReserve` rows for the upcoming prompt. A panel exactly as wide as the window fits. Pure: no console access, no side effects, returns `[bool]`.
+- **Description:** Tells whether a fastfetch panel of the given size overflows a window of the given size - the fit rule `Invoke-Fastfetch` judges by, in one place. The panel overflows when it is wider than the window, or taller than the window minus one row for the line the cursor ends on and minus `-PromptReserve` rows for the upcoming prompt. A panel exactly as wide as the window fits. Pure: no console access, no side effects, returns `[bool]`.
 - **Parameters:** `-PanelWidth`, `-PanelHeight`, `-WindowWidth`, `-WindowHeight`, `[-PromptReserve]`
 - **Usage:** `Test-FastfetchPanelOverflow -PanelWidth 106 -PanelHeight 22 -WindowWidth 120 -WindowHeight 30`
 
@@ -1580,7 +1693,7 @@ Test-FastfetchPanelOverflow -PanelWidth 106 -PanelHeight 22 -WindowWidth 120 -Wi
 Test-FastfetchPanelOverflow -PanelWidth 106 -PanelHeight 22 -WindowWidth 100 -WindowHeight 30
 ```
 
-**See also:** [Invoke-ClearAndFastfetch](#invoke-clearandfastfetch), [Get-ConsoleWindowSize](#get-consolewindowsize)
+**See also:** [Invoke-Fastfetch](#invoke-fastfetch), [Get-ConsoleWindowSize](#get-consolewindowsize)
 
 ## [Test-MachineOnline](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Test-MachineOnline.ps1)
 
@@ -1795,7 +1908,7 @@ if ($survivors) { Close-BrowserWindows -WindowsToClose $survivors }
 - **Parameters:** `-Before`, `-TimeoutMilliseconds`, `[-PollIntervalMilliseconds]`
 - **Usage:** `Wait-ConsoleReflow -Before $before -TimeoutMilliseconds 10`
 
-It replaces the fixed sleep `Invoke-ClearAndFastfetch` used to take after each keystroke: a fixed wait is either too long on a fast machine or too short on a slow one, where the pre-reflow size was read and the fit misjudged. Polling returns the moment the terminal has moved, and a debug line records either the change and how long it took or the timeout.
+It replaces the fixed sleep `Invoke-Fastfetch` used to take after each keystroke: a fixed wait is either too long on a fast machine or too short on a slow one, where the pre-reflow size was read and the fit misjudged. Polling returns the moment the terminal has moved, and a debug line records either the change and how long it took or the timeout.
 
 | Parameter                   | Type    | Default | Description                                                                 |
 | --------------------------- | ------- | ------- | --------------------------------------------------------------------------- |
@@ -1810,6 +1923,6 @@ $after = Wait-ConsoleReflow -Before $before -TimeoutMilliseconds 10
 if ($after.Width -eq $before.Width -and $after.Height -eq $before.Height) { "the terminal did not shrink" }
 ```
 
-**See also:** [Get-ConsoleWindowSize](#get-consolewindowsize), [Send-TerminalFontKey](#send-terminalfontkey), [Invoke-ClearAndFastfetch](#invoke-clearandfastfetch)
+**See also:** [Get-ConsoleWindowSize](#get-consolewindowsize), [Send-TerminalFontKey](#send-terminalfontkey), [Invoke-Fastfetch](#invoke-fastfetch)
 
 > System functions are covered by Pester tests in `Windows/PowerShell/Modules/Tests/Modules/System/`. Use `Run-Tests -TestName "System"` (or `Run-Tests`) to validate current behavior after changes.

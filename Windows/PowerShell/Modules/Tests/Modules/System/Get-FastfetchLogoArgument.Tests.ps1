@@ -56,7 +56,7 @@ Describe "Get-FastfetchLogoArgument" {
 		}
 
 		It "returns nothing when output is redirected, so the captured panel stays measurable" {
-			# Invoke-ClearAndFastfetch sizes the panel by capturing fastfetch's output, one line per
+			# Invoke-Fastfetch sizes the panel by capturing fastfetch's output, one line per
 			# visual row. An image payload is a single enormous line - a 50KB sixel reads as a
 			# 50,000-column panel - which would make the auto-fit shrink the font on every call.
 			$env:WT_SESSION = "test-session"
@@ -212,7 +212,7 @@ Describe "Get-FastfetchLogoArgument" {
 		}
 
 		It "re-reads the cell size on every call, because the font size can change between them" {
-			# Invoke-ClearAndFastfetch's auto-fit presses Ctrl+0 / Ctrl+Minus between measuring the
+			# Invoke-Fastfetch's auto-fit presses Ctrl+0 / Ctrl+Minus between measuring the
 			# panel and displaying it, so a cell size cached from an earlier call would encode the
 			# image against a font the terminal has already stopped using.
 			Get-FastfetchLogoArgument -ImagePath $script:ImagePath -OutputRedirected $false | Out-Null

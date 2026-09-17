@@ -1,4 +1,4 @@
-@{
+﻿@{
 	ModuleVersion     = "1.0"
 	Author            = "Ivan Pavlak"
 	Description       = ""
@@ -30,7 +30,9 @@
 		'Initialize-PSReadLine',
 		'Initialize-Win32BrowserHelperType',
 		'Initialize-WSLEnvironment',
-		'Invoke-ClearAndFastfetch',
+		'Invoke-Clear',
+		'Invoke-Fastfetch',
+		'Invoke-Onefetch',
 		'Invoke-TerminateWindowsTerminalTabsExit',
 		'Invoke-TerminateWindowsTerminalTabsIncludeCurrentCleanup',
 		'Kill-All',
@@ -45,9 +47,9 @@
 		'Rename-Machine',
 		'Repair-RpcServer',
 		'Report-KillAllSurvivors',
-		'Resolve-FastfetchAutoFitSettings',
 		'Resolve-KillAllSteps',
 		'Resolve-SystemThemeSteps',
+		'Resolve-TerminalGreetingSettings',
 		'Restart-Explorer',
 		'Restart-Machine',
 		'Send-TerminalFontKey',
@@ -68,6 +70,7 @@
 		'Set-VisualEffects',
 		'Set-Wallpaper',
 		'Show-PinnedAppsWarning',
+		'Show-TerminalGreeting',
 		'SymbolicLinkMaker',
 		'Sync-AppPins',
 		'Terminate-AllBrowserProcesses',

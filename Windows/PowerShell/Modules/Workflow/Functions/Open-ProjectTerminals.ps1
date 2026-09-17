@@ -1,4 +1,4 @@
-function Send-TerminalKeys {
+﻿function Send-TerminalKeys {
 	# Thin, mockable wrapper around the .NET SendKeys call so tests can stub it: no real
 	# keystrokes are sent during testing, and the intermittent SendWait Win32 throw is avoided.
 	# Module-private (not exported / not a separate Functions file), so it adds no manifest/docs surface.
@@ -41,8 +41,19 @@ function Open-ProjectTerminals {
 		Available projects: WinuX, ExampleProject, AnotherProject
 
 	.PARAMETER InvokeOnefetch
-		Executes the onefetch command in each terminal tab to display repository information.
-		Default: $true
+		Appends Invoke-Onefetch to each path tab's command, after the Set-Location, so the tab shows
+		the onefetch repository panel. Defaults to TerminalGreeting.Onefetch.InProjectTerminals
+		(which ships $true); passing it explicitly wins for that call.
+
+		The terminal greeting cannot cover these tabs, and no configuration can make it: a tab is
+		spawned as `pwsh -NoExit -EncodedCommand <Set-Location ...>`, and PowerShell runs the
+		profile BEFORE the encoded command, so the greeting tests whatever directory Windows
+		Terminal started the tab in rather than the project it is about to move to. Appending the
+		call is the only point at which the tab is standing in the repository.
+
+		It goes through Invoke-Onefetch rather than the bare binary, so the panel obeys the same
+		TerminalGreeting.Onefetch settings everywhere - Enabled, Arguments, and the silent skip for
+		a path that is not a repository.
 
 	.PARAMETER InSameShell
 		Opens all terminal tabs in the current Windows Terminal window instead of creating a new window.
@@ -281,6 +292,35 @@ function Open-ProjectTerminals {
 	$tabNamesList = @()
 	$totalTabsCreated = 0
 
+	# Whether a tab's command should end in "; Invoke-Onefetch".
+	#
+	# The terminal greeting cannot cover these tabs, and no configuration can make it: a tab is
+	# spawned as `pwsh -NoExit -EncodedCommand <Set-Location ...>`, and PowerShell runs the profile
+	# BEFORE the encoded command - so the greeting tests whatever directory Windows Terminal
+	# started the tab in, not the project it is about to move to. Appending the call after
+	# Set-Location is the only point at which the tab is standing in the repository.
+	#
+	# It goes through Invoke-Onefetch rather than the bare binary so the panel obeys the same
+	# TerminalGreeting.Onefetch settings everywhere - Enabled, Arguments, and the silent skip
+	# outside a repository - instead of project tabs having a second, unconfigurable answer.
+	#
+	# Two switches, because they answer different questions. -InvokeOnefetch is per call and wins
+	# when it is passed; TerminalGreeting.Onefetch.InProjectTerminals is the standing preference
+	# for people who want the panel on `c` but not in every project tab.
+	$appendOnefetch = if ($PSBoundParameters.ContainsKey("InvokeOnefetch")) {
+		[bool]$InvokeOnefetch
+	}
+	elseif ($null -ne $Configuration.TerminalGreeting.Onefetch.InProjectTerminals) {
+		[bool]$Configuration.TerminalGreeting.Onefetch.InProjectTerminals
+	}
+	else {
+		$true
+	}
+
+	if (-not $appendOnefetch) {
+		Write-LogDebug "[Open-ProjectTerminals] not appending Invoke-Onefetch to the tab commands"
+	}
+
 	foreach ($terminal in $terminals) {
 		try {
 			$mapping = $Configuration.ProjectTerminals | Where-Object { $_.Name -eq $terminal }
@@ -430,7 +470,7 @@ function Open-ProjectTerminals {
 				# Handle custom path entries (hashtable with Key and Path)
 				elseif ($isCustomEntry -and $customPath) {
 					$cmd = "Set-Location -Path '$customPath'"
-					if ($InvokeOnefetch) { $cmd += "; onefetch" }
+					if ($appendOnefetch) { $cmd += "; Invoke-Onefetch" }
 
 					& $queueTab $cmd $tabName
 
@@ -443,7 +483,7 @@ function Open-ProjectTerminals {
 					$path = Resolve-ProjectPath -ProjectName $terminal -PathKey $pathKey
 
 					$cmd = "Set-Location -Path '$path'"
-					if ($InvokeOnefetch) { $cmd += "; onefetch" }
+					if ($appendOnefetch) { $cmd += "; Invoke-Onefetch" }
 
 					& $queueTab $cmd $tabName
 

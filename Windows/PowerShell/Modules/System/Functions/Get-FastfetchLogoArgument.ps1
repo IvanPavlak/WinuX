@@ -48,10 +48,10 @@ function Get-FastfetchLogoArgument {
 		so anything that reads fastfetch's output as TEXT - a shell whose whole stdout is a file or
 		a pipe, a CI log - gets the text logo rather than 50KB of sixel.
 
-		That guard does NOT cover Invoke-ClearAndFastfetch's panel measuring, and cannot: when
+		That guard does NOT cover Invoke-Fastfetch's panel measuring, and cannot: when
 		PowerShell captures a native command's output it redirects the CHILD process's stdout and
 		leaves [Console]::IsOutputRedirected false in the parent, so this function has no way to
-		see it. Invoke-ClearAndFastfetch measures with the fastfetch binary directly instead,
+		see it. Invoke-Fastfetch measures with the fastfetch binary directly instead,
 		bypassing the wrapper that calls this function - which is also why the image block is
 		matched to the text logo's footprint: the measured panel and the displayed one then have
 		the same geometry.
@@ -206,7 +206,7 @@ function Get-FastfetchLogoArgument {
 
 	# Windows Terminal: measure the cell, encode to fit, hand the bytes through untouched. The cell
 	# size is re-read on every call rather than cached because it changes with the font size, and
-	# Invoke-ClearAndFastfetch's auto-fit presses Ctrl+0 / Ctrl+Minus between the measuring run and
+	# Invoke-Fastfetch's auto-fit presses Ctrl+0 / Ctrl+Minus between the measuring run and
 	# the displaying one - a cached size would encode the image for the font it just stopped using.
 	$cell = Get-TerminalCellSize
 	if (-not $cell) {

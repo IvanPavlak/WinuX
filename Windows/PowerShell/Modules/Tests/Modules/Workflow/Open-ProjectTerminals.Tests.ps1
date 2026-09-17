@@ -1,4 +1,4 @@
-#Requires -Modules Pester
+﻿#Requires -Modules Pester
 
 BeforeAll {
 	$ModuleRoot = (Get-RepositoryPath).Modules
@@ -36,6 +36,9 @@ Describe "Open-ProjectTerminals" {
 				@{ Name = "PlainCustom"; BasePath = "Projects.PlainCustom"; Paths = @(@{ Key = "Shell" }) }
 			)
 			DefaultWSLDistribution = "Ubuntu"
+			# The append is on, which is what upstream ships - so the existing expectations,
+			# which mostly pass -InvokeOnefetch:$false, still describe the default path.
+			TerminalGreeting       = @{ Onefetch = @{ InProjectTerminals = $true } }
 		}
 
 		# Shells descended from an Open-Workspace -Alongside bootstrap carry a real
@@ -93,6 +96,65 @@ Describe "Open-ProjectTerminals" {
 		It "Should have Project parameter" {
 			$cmd = Get-Command Open-ProjectTerminals
 			$cmd.Parameters.ContainsKey('Project') | Should -BeTrue
+		}
+	}
+
+	Context "The onefetch append" {
+		BeforeEach {
+			$script:capturedCmds = $null
+			Mock Open-Terminal { $script:capturedCmds = @($Command) }
+		}
+
+		It "Should append Invoke-Onefetch after the Set-Location, not the bare binary" {
+			# It has to go through the greeting's own step so the panel obeys the same
+			# TerminalGreeting.Onefetch settings in a project tab as it does on `c`.
+			Open-ProjectTerminals -Project "ProjectA" -InSameShell
+
+			$script:capturedCmds[0] | Should -BeLike "*Set-Location*; Invoke-Onefetch"
+		}
+
+		It "Should append by default, because the greeting cannot reach these tabs" {
+			# A tab runs its profile BEFORE the encoded Set-Location, so the greeting tests the
+			# directory Windows Terminal started it in - never the project. The append is the only
+			# point at which the tab is standing in the repository.
+			$script:Configuration.Remove("TerminalGreeting")
+
+			Open-ProjectTerminals -Project "ProjectA" -InSameShell
+
+			$script:capturedCmds[0] | Should -BeLike "*Invoke-Onefetch"
+		}
+
+		It "Should append when TerminalGreeting.Onefetch.InProjectTerminals is on" {
+			$script:Configuration.TerminalGreeting = @{ Onefetch = @{ InProjectTerminals = $true } }
+
+			Open-ProjectTerminals -Project "ProjectA" -InSameShell
+
+			$script:capturedCmds[0] | Should -BeLike "*Invoke-Onefetch"
+		}
+
+		It "Should NOT append when TerminalGreeting.Onefetch.InProjectTerminals is off" {
+			$script:Configuration.TerminalGreeting = @{ Onefetch = @{ InProjectTerminals = $false } }
+
+			Open-ProjectTerminals -Project "ProjectA" -InSameShell
+
+			$script:capturedCmds[0] | Should -Not -BeLike "*Onefetch*"
+			$script:capturedCmds[0] | Should -BeLike "*Set-Location*"
+		}
+
+		It "Should let -InvokeOnefetch:`$false win over the configured `$true" {
+			$script:Configuration.TerminalGreeting = @{ Onefetch = @{ InProjectTerminals = $true } }
+
+			Open-ProjectTerminals -Project "ProjectA" -InSameShell -InvokeOnefetch:$false
+
+			$script:capturedCmds[0] | Should -Not -BeLike "*Onefetch*"
+		}
+
+		It "Should let -InvokeOnefetch win over the configured `$false" {
+			$script:Configuration.TerminalGreeting = @{ Onefetch = @{ InProjectTerminals = $false } }
+
+			Open-ProjectTerminals -Project "ProjectA" -InSameShell -InvokeOnefetch
+
+			$script:capturedCmds[0] | Should -BeLike "*Invoke-Onefetch"
 		}
 	}
 

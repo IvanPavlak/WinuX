@@ -93,6 +93,7 @@ decisions behind them, and where the values go. Each module's `README.md` indexe
 | `CenterTerminalSizing`                             | `Center-Terminal` (via `Resolve-CenterTerminalSizing`) |
 | `ResizeWindowsPercent`                             | `Resize-Windows` (via `Resolve-ResizeWindowsPercent`) |
 | `SnapInsetPercent`                                 | `Get-WindowInsetPercent` (for the five pre-snap placement paths) |
+| `TerminalGreeting`                                 | `Show-TerminalGreeting` (alias `c`, and shell startup), `Invoke-Clear`, `Invoke-Fastfetch`, `Invoke-Onefetch` (via `Resolve-TerminalGreetingSettings`); `Onefetch.InProjectTerminals` also drives `Open-ProjectTerminals` |
 | `KillAll.Steps`                                    | `Kill-All`, `Resolve-KillAllSteps`                 |
 | `BootstrapConfig.Steps`                            | `Bootstrap`, `Resolve-BootstrapSteps` (incl. the opt-in `CoreAiRules` step → `Deploy-CoreAiRules` and `AiSkills` step → `Deploy-AiSkills`) |
 | `AiSkills`                                         | `Deploy-AiSkills`, `Update-AiSkills`, `List-Skills`, `Get-AiSkillRoster` (via `Resolve-AiSkillsConfig`) |
@@ -118,7 +119,7 @@ The profile (`Microsoft.PowerShell_profile.ps1`) executes this exact sequence:
    ├─ Expands placeholders → $global:MachineSpecificPaths
    └─ Sets $global:MachineType (all other modules deferred to autoload)
 6. Oh-My-Posh init (WinuX.omp.json - symlinked to WinuX_{MachineType}.omp.json in the repo)
-7. fastfetch
+7. Dot-source the five System greeting files + Git\Functions\Test-GitRepository.ps1, then call Show-TerminalGreeting -NoResize
 8. PSReadLine (history, predictions, key bindings)
 9. Terminal-Icons
 10. Register aliases
