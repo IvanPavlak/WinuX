@@ -16,6 +16,7 @@
 		'Merge-Hashtable',
 		'Resolve-BootstrapSteps',
 		'Resolve-PackageManagers',
+		'Resolve-RepositoryUpdateScope',
 		'Test-MachineTypeScope'
 	)
 }

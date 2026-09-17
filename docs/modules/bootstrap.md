@@ -17,7 +17,7 @@ The three package-manager steps are additionally gated by [Resolve-PackageManage
 Execution sequence:
 
 1. (`-WithInitialSetup` only) `Rename-Machine`, `Start-MicrosoftActivationScripts`, `Start-Win11Debloat` (the latter two opt-in via `Steps`)
-2. `Update-Repositories` - pulls latest dotfiles and all configured repositories; scope governed by `BootstrapConfig.RepositoryUpdateScope` (`"None"` skips), not by a step
+2. `Update-Repositories` - pulls the configured repositories (opt-in via `Steps.RepositoryUpdate`); which groups it pulls is governed by `BootstrapConfig.RepositoryUpdateScope`
 3. Execution policy, Developer Mode, power plan, power button actions
 4. System theme, locale, display language, keyboard layouts
 5. Nerd Font, PowerShell modules, special folder redirections
@@ -313,7 +313,7 @@ Merge-Hashtable -Target $config -Overrides $overrides
 
 Step names, in execution order: `RenameMachine`, `MicrosoftActivationScripts`, `Win11Debloat` (these three only run with `-WithInitialSetup`), `ExecutionPolicy`, `DeveloperMode`, `PowerPlan`, `PowerButtonActions`, `SystemTheme`, `Locale`, `DisplayLanguage`, `KeyboardLayouts`, `NerdFont`, `PowerShellModules`, `SpecialFolders`, `WSL`, `WinGetApps`, `ScoopApps`, `ChocolateyApps`, `UpgradeAll`, `DotnetEf`, `EnvironmentVariables`, `CondaEnvironments`, `NuGetConfig`, `Taskbar`, `SymbolicLinks`, `CoreAiRules`, `AiSkills`, `ObsidianCli`, `LockedStartLayout`.
 
-Most steps default **on**, because their functions no-op when their configuration section is empty - an enabled step on the empty base config applies nothing. The opt-in exceptions default **off**, because they have no configuration to be empty and act the moment they run: `MicrosoftActivationScripts`, `Win11Debloat`, `DeveloperMode`, `NuGetConfig` (prompts for a GitHub PAT), `UpgradeAll` (runs `winget upgrade --all` and its Scoop/Chocolatey equivalents, so it touches every package already on the machine, not only the ones WinuX installs), `CoreAiRules` (machine-global AI agent policy - see [CoreAiRules](../ai/coreairules.md)), `AiSkills` (machine-global Agent Skills - see [AI Skills](../ai/skills.md)), `ObsidianCli` (writes `"cli": true` into Obsidian's per-machine `%APPDATA%\obsidian\obsidian.json` through `Enable-ObsidianCli -CreateIfMissing`, so `Open-Obsidian` can load workspaces on the machine - another application's settings file, hence opt-in), and `LockedStartLayout`. Repository updates are deliberately not a step - they are governed by `BootstrapConfig.RepositoryUpdateScope` (`"None"` is its off switch).
+Most steps default **on**, because their functions no-op when their configuration section is empty - an enabled step on the empty base config applies nothing. The opt-in exceptions default **off**, because they have no configuration to be empty and act the moment they run: `MicrosoftActivationScripts`, `Win11Debloat`, `DeveloperMode`, `NuGetConfig` (prompts for a GitHub PAT), `UpgradeAll` (runs `winget upgrade --all` and its Scoop/Chocolatey equivalents, so it touches every package already on the machine, not only the ones WinuX installs), `CoreAiRules` (machine-global AI agent policy - see [CoreAiRules](../ai/coreairules.md)), `AiSkills` (machine-global Agent Skills - see [AI Skills](../ai/skills.md)), `ObsidianCli` (writes `"cli": true` into Obsidian's per-machine `%APPDATA%\obsidian\obsidian.json` through `Enable-ObsidianCli -CreateIfMissing`, so `Open-Obsidian` can load workspaces on the machine - another application's settings file, hence opt-in), `RepositoryUpdate` (clones and pulls every repository the machine's scope names, which reaches outside this repository the moment it runs) and `LockedStartLayout`. `RepositoryUpdate` decides **whether** the repository step runs; **which** groups it then pulls stays `BootstrapConfig.RepositoryUpdateScope`'s job, resolved by [`Resolve-RepositoryUpdateScope`](#resolve-repositoryupdatescope).
 
 **Deprecated:** the old `BootstrapConfig.WSLSetup` key (same shape as a `Steps` value) is still honored as a fallback when `Steps` carries no `WSL` entry, so forks that predate `Steps` keep working unmodified. The `PromptForActivation` / `PromptForDebloat` keys are gone entirely - MAS and Win11Debloat no longer prompt on a vanilla install and are opted into via `Steps`.
 
@@ -360,6 +360,27 @@ Resolve-PackageManagers
 ```
 
 **See also:** [Bootstrap](#bootstrap), [Import-AppCsv](#import-appcsv), [Test-MachineTypeScope](#test-machinetypescope), [Upgrade-All](system.md#upgrade-all), [Configuration Reference: PackageManagers](../configuration/configuration-reference.md#packagemanagers)
+
+## [Resolve-RepositoryUpdateScope](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Bootstrap/Functions/Resolve-RepositoryUpdateScope.ps1)
+
+- **Description:** Resolves which repository groups Bootstrap updates on this machine, from `BootstrapConfig.RepositoryUpdateScope`. The machine type's own value wins, falling back to `Default`, falling back to `"All"` when the key is absent entirely - so a fork that configures nothing pulls every repository it defines. Returns `@{ All = <bool>; Groups = <string[]> }`, which [`Bootstrap`](#bootstrap) turns into `Update-Repositories -All` or `Update-Repositories -Group`.
+- **Parameters:** none
+- **Usage:** `Resolve-RepositoryUpdateScope`
+
+The configured value is either `"All"` (matched case-insensitively) or one or more group names from `RepositoryGroups`, written either as a comma-separated string (`"Work, Private"`) or as an array (`@("Work", "Private")`). Names are trimmed and kept in the order given. `"All"` only means "every repository" when it stands alone, so a fork is free to define a group whose name happens to be `All` and list it alongside others. A value that names nothing at all is treated like the absent key.
+
+Group names are deliberately **not** validated here - nothing in Bootstrap knows what groups a fork defines. An unknown name surfaces from [`Update-Repositories -Group`](git.md#update-repositories), which lists the configured groups and updates nothing, rather than silently falling back to updating everything.
+
+Whether the step runs at all is the separate `Steps.RepositoryUpdate` toggle (opt-in, default off), resolved by [`Resolve-BootstrapSteps`](#resolve-bootstrapsteps) like every other step - so `Bootstrap -Skip RepositoryUpdate` and `-Include RepositoryUpdate` work for free.
+
+```powershell
+# What would Bootstrap pull on this machine?
+Resolve-RepositoryUpdateScope
+
+# Base configuration => @{ All = $true; Groups = @() }
+```
+
+**See also:** [Bootstrap](#bootstrap), [Resolve-BootstrapSteps](#resolve-bootstrapsteps), [Update-Repositories](git.md#update-repositories), [Configuration Reference: BootstrapConfig](../configuration/configuration-reference.md#bootstrapconfig)
 
 ## [Test-MachineTypeScope](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Bootstrap/Functions/Test-MachineTypeScope.ps1)
 

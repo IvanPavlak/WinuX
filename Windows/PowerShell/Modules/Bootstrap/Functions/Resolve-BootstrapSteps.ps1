@@ -14,12 +14,14 @@ function Resolve-BootstrapSteps {
 		configuration section is empty - the empty base config makes an
 		enabled step apply nothing. The opt-in exceptions default off
 		because they have no configuration to be empty and act the moment
-		they run: MicrosoftActivationScripts, Win11Debloat, DeveloperMode,
-		NuGetConfig (prompts for a GitHub PAT), UpgradeAll (upgrades every
-		package already on the machine, not just WinuX's own), CoreAiRules
-		(machine-global AI agent policy), AiSkills (machine-global Agent
-		Skills links), ObsidianCli (turns the Obsidian command line interface
-		on in Obsidian's per-machine app settings), and LockedStartLayout.
+		they run: MicrosoftActivationScripts, Win11Debloat, RepositoryUpdate
+		(clones and pulls every repository the machine's scope names),
+		DeveloperMode, NuGetConfig (prompts for a GitHub PAT), UpgradeAll
+		(upgrades every package already on the machine, not just WinuX's own),
+		CoreAiRules (machine-global AI agent policy), AiSkills (machine-global
+		Agent Skills links), ObsidianCli (turns the Obsidian command line
+		interface on in Obsidian's per-machine app settings), and
+		LockedStartLayout.
 
 		Legacy alias: when Steps.WSL is absent but the deprecated
 		BootstrapConfig.WSLSetup exists, WSL resolves from WSLSetup, so
@@ -58,13 +60,14 @@ function Resolve-BootstrapSteps {
 	)
 
 	# Built-in defaults, in Bootstrap execution order. The first three only
-	# run inside -WithInitialSetup; UpdateRepositories has no entry here on
-	# purpose - it is governed by BootstrapConfig.RepositoryUpdateScope
-	# ("None" is its off switch).
+	# run inside -WithInitialSetup. RepositoryUpdate decides WHETHER the
+	# repository step runs at all; WHICH groups it then pulls stays
+	# BootstrapConfig.RepositoryUpdateScope's job.
 	$defaults = [ordered]@{
 		RenameMachine              = $true
 		MicrosoftActivationScripts = $false
 		Win11Debloat               = $false
+		RepositoryUpdate           = $false
 		ExecutionPolicy            = $true
 		DeveloperMode              = $false
 		PowerPlan                  = $true

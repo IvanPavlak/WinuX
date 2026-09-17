@@ -37,8 +37,8 @@ Every step is individually toggleable via `BootstrapConfig.Steps` (or per invoca
 │      └─ Runs local vendored Win11Debloat (opt-in via Steps)                 │
 │                                                                             │
 │  PHASE 2: REPOSITORY SYNCHRONIZATION                                        │
-│  └─→ Update-Repositories                                                    │
-│      ├─ Clone all configured Git repositories                               │
+│  └─→ Update-Repositories (opt-in via Steps.RepositoryUpdate)                 │
+│      ├─ Clone the groups RepositoryUpdateScope names for this machine       │
 │      └─ Pull latest changes for existing repos                              │
 │                                                                             │
 │  PHASE 3: SYSTEM CONFIGURATION                                              │

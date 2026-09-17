@@ -890,9 +890,11 @@
 		DefaultBranch         = "master"
 
 		# Which repositories Bootstrap clones/updates, by machine type (consumed by Bootstrap ->
-		# Update-Repositories). Values: "All" | "Private" | "Work" | "None". "Default" covers any
-		# machine type not listed; absent => "All". Override per machine type as needed, e.g.
+		# Update-Repositories). Values: "All" | "<group>" | "<group>, <group>" | @("<group>", ...),
+		# where <group> is any key from RepositoryGroups below. "Default" covers any machine type
+		# not listed; absent => "All". Override per machine type as needed, e.g.
 		# @{ Default = "All"; Test = "Private" }.
+		# This says WHICH repositories, not WHETHER: the off switch is Steps.RepositoryUpdate.
 		RepositoryUpdateScope = @{
 			Default = "All"
 		}
@@ -923,6 +925,8 @@
 		# - RenameMachine              : Rename-Machine (prompts; default on)
 		# - MicrosoftActivationScripts : Start-MicrosoftActivationScripts (OFF by default)
 		# - Win11Debloat               : Start-Win11Debloat (OFF by default)
+		# - RepositoryUpdate           : Update-Repositories (OFF by default - clones/pulls the groups
+		#                                RepositoryUpdateScope names for this machine)
 		# - ExecutionPolicy            : Set-CustomExecutionPolicy
 		# - DeveloperMode              : Enable-DeveloperMode (OFF by default)
 		# - PowerPlan                  : Set-PowerPlan -Auto
@@ -962,8 +966,8 @@
 		#                                Open-Obsidian can load workspaces on this machine)
 		# - LockedStartLayout          : lock the taskbar layout via registry policy (OFF by default)
 		#
-		# Repository updates are NOT a step here - they are governed by
-		# RepositoryUpdateScope above ("None" is the off switch).
+		# RepositoryUpdate decides WHETHER the repository step runs; WHICH groups it
+		# then pulls stays RepositoryUpdateScope's job, above.
 		#
 		# The deprecated BootstrapConfig.WSLSetup key (same shape as Steps.WSL) is
 		# still honored when Steps carries no WSL entry, so older forks keep working.
@@ -976,8 +980,13 @@
 		Steps                 = @{
 			# Spelled out rather than left to the built-in default: a bootstrap that silently
 			# upgrades unrelated software is the kind of thing you opt into knowingly.
-			UpgradeAll = $false
-			WSL        = @{
+			UpgradeAll       = $false
+			# Clones and pulls every repository RepositoryUpdateScope names for this machine.
+			# Opt-in like UpgradeAll: it reaches outside this repository the moment it runs,
+			# and a fresh clone has no repository list worth acting on yet. Set $true once
+			# RepositoryGroups describes the machines you actually provision.
+			RepositoryUpdate = $false
+			WSL              = @{
 				Default = $true
 				Test    = $false
 			}
@@ -1606,11 +1615,15 @@
 	#    - LocalPath: Dot-notation path to local directory (e.g., "Projects.MyProject.Root")
 	#
 	# HOW TO UPDATE REPOSITORIES:
-	# - Update-Repositories -Private    # Updates all repos in the "Private" group
-	# - Update-Repositories -Work       # Updates all repos in the "Work" group
-	# - Update-Repositories -All        # Updates all configured repositories
-	# - Update-Repositories WinuX       # Updates specific repository by name
-	# - Update-Repositories             # Interactive menu to select repositories
+	# - Update-Repositories -Group Private          # Updates all repos in the "Private" group
+	# - Update-Repositories -Group Private, Work    # Updates several groups, in that order
+	# - Update-Repositories -All                    # Updates all configured repositories
+	# - Update-Repositories -Repositories WinuX     # Updates specific repository by name
+	# - Update-Repositories WinuX                   # Same, positionally
+	# - Update-Repositories                         # Interactive menu to select repositories
+	#
+	# Group names are matched case-insensitively and are never known to code: -Group takes
+	# whatever keys you define here, and an unknown name lists the configured ones.
 	#
 	# Example:
 	#   RepositoryGroups = @(
@@ -1627,7 +1640,7 @@
 	RepositoryGroups              = @(
 		# The WinuX repository itself (the worked example). Name is the repo's display name;
 		# LocalPath points at the name-neutral Projects.Self entry. The group key ("Private",
-		# "Work", ...) selects which Update-Repositories flag/menu entry includes the repo.
+		# "Work", ...) is what -Group and the interactive menu select the repo by.
 		@{ Private = @(
 				@{ Name = "WinuX"; UrlPath = "Universal.GitHub.Private.WinuX"; LocalPath = "Projects.Self.Root" }
 			)

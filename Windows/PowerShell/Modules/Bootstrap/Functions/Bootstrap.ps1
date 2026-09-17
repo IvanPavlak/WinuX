@@ -11,13 +11,14 @@ function Bootstrap {
 		by Resolve-BootstrapSteps; -Skip/-Include override per invocation). Most steps also
 		no-op on their own when their configuration section is empty, so an enabled step on
 		the empty base config applies nothing. Opt-in steps that act the moment they run
-		default off: MicrosoftActivationScripts, Win11Debloat, DeveloperMode, NuGetConfig,
-		UpgradeAll, CoreAiRules, AiSkills, ObsidianCli, LockedStartLayout.
+		default off: MicrosoftActivationScripts, Win11Debloat, RepositoryUpdate, DeveloperMode,
+		NuGetConfig, UpgradeAll, CoreAiRules, AiSkills, ObsidianCli, LockedStartLayout.
 
 		Execution sequence:
 		1. (WithInitialSetup only) Rename-Machine, Start-MicrosoftActivationScripts, Start-Win11Debloat
-		2. Git identity guarantee (restored from GitConfig when unset), then Update-Repositories -
-		   scope governed by BootstrapConfig.RepositoryUpdateScope ("None" skips)
+		2. Git identity guarantee (restored from GitConfig when unset), then Update-Repositories
+		   (opt-in via Steps.RepositoryUpdate) - which groups it pulls is governed by
+		   BootstrapConfig.RepositoryUpdateScope
 		3. Execution policy, Developer Mode, power plan, power button actions
 		4. System theme, locale, display language, keyboard layouts
 		5. Nerd Font, PowerShell modules, special folder redirections
@@ -141,25 +142,19 @@ function Bootstrap {
 			Write-LogWarning "Global git user.email was not set - restored from configuration => [$($global:Configuration.GitConfig.UserEmail)]"
 		}
 
-		# Clone/update the repositories this machine defines. Scope is config-driven via
-		# BootstrapConfig.RepositoryUpdateScope (machine type -> "Private" | "Work" | "All" | "None",
-		# with a "Default" fallback). Absent => "All", so a fork pulls every repo it defines.
+		# Clone/update the repositories this machine defines. WHICH ones is config-driven via
+		# BootstrapConfig.RepositoryUpdateScope (machine type -> "All" or one or more group names,
+		# with a "Default" fallback; absent => "All", so a fork pulls every repo it defines).
+		# WHETHER it runs at all is Steps.RepositoryUpdate, opt-in like every other step that
+		# reaches outside this repository the moment it runs.
 		# Update-Repositories is idempotent (clones if missing, fast-forwards if present).
-		$scopeMap = $global:Configuration.BootstrapConfig.RepositoryUpdateScope
-		$updateScope = if ($scopeMap -and $scopeMap[$global:MachineType]) {
-			$scopeMap[$global:MachineType]
-		}
-		elseif ($scopeMap -and $scopeMap.Default) {
-			$scopeMap.Default
+		if ($steps.RepositoryUpdate) {
+			$repositoryScope = Resolve-RepositoryUpdateScope
+			if ($repositoryScope.All) { Update-Repositories -All }
+			else { Update-Repositories -Group $repositoryScope.Groups }
 		}
 		else {
-			"All"
-		}
-		switch ($updateScope) {
-			"None" { Write-LogWarning "Repository update skipped (RepositoryUpdateScope => None)" }
-			"Private" { Update-Repositories -Private }
-			"Work" { Update-Repositories -Work }
-			default { Update-Repositories -All }
+			Write-LogWarning "Repository update skipped - opt in via BootstrapConfig.Steps.RepositoryUpdate"
 		}
 
 		if ($steps.ExecutionPolicy) { Set-CustomExecutionPolicy } else { Write-LogWarning "Execution policy skipped (BootstrapConfig.Steps.ExecutionPolicy)" }

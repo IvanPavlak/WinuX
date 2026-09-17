@@ -10,7 +10,7 @@ Resolves a project's file paths from the configuration mappings.
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
 | [`ProjectTerminals`](../../configuration-reference.md#project-terminals) | array of `@{ Project; Tabs; ... }` | array of 3 | Which Windows Terminal tabs `Open-ProjectTerminals` creates for a project, and with what titles and starting directories. Tabs are created with `--title --suppressApplicationTitle`, so their titles are stable. |
-| [`RepositoryGroups`](../../configuration-reference.md#repository-groups) | array of single-key hashtables | array of 1 | The repository groups `Update-Repositories` walks and `Initialize-Repository` can clone into. Group name to an array of repository entries. |
+| [`RepositoryGroups`](../../configuration-reference.md#repository-groups) | array of single-key hashtables | array of 1 | The repository groups `Update-Repositories` walks and `Initialize-Repository` can clone into. Group name to an array of repository entries. `UrlPath` and `LocalPath` are dot-notation paths, not literal values - resolving them is exactly what `Resolve-ProjectPath -ForRepository` does. |
 | [`Universal`](../../configuration-reference.md#universal-constants) | hashtable, 26 keys | hashtable, 26 keys | Machine-independent constants: executable paths (`FirefoxExe`, `DockerExe`, `DbeaverExe`, ...), the `Browsers` map, `DefaultBrowser`, shared URLs, the `ProcessCleanup` lists, and `Desktop` (auto-resolved at load). Expanded in place by `Load-PathConfiguration`, so placeholders work here too. |
 
 ## Decisions
@@ -70,13 +70,14 @@ ProjectTerminals = @(
 
 ## Step 2: Set `RepositoryGroups`
 
-The repository groups `Update-Repositories` walks and `Initialize-Repository` can clone into. Group name to an array of repository entries.
+The repository groups `Update-Repositories` walks and `Initialize-Repository` can clone into. Group name to an array of repository entries. `UrlPath` and `LocalPath` are dot-notation paths, not literal values - resolving them is exactly what `Resolve-ProjectPath -ForRepository` does.
 
 ```powershell
 RepositoryGroups = @(
     @{ Personal = @(
-        @{ Name = "MyRepo"; Url = "https://github.com/YourUsername/MyRepo.git" }
-    )}
+            @{ Name = "MyRepo"; UrlPath = "Universal.GitHub.Private.MyRepo"; LocalPath = "Projects.MyRepo.Root" }
+        )
+    }
 )
 ```
 
@@ -134,8 +135,9 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
     )
     RepositoryGroups = @(
         @{ Personal = @(
-            @{ Name = "MyRepo"; Url = "https://github.com/YourUsername/MyRepo.git" }
-        )}
+                @{ Name = "MyRepo"; UrlPath = "Universal.GitHub.Private.MyRepo"; LocalPath = "Projects.MyRepo.Root" }
+            )
+        }
     )
     Universal = @{
         DefaultBrowser = "Firefox"

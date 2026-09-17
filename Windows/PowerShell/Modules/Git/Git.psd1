@@ -14,6 +14,7 @@
 		'GitSwitch',
 		'Initialize-Repository',
 		'Install-Git',
+		'Resolve-RepositoryTargets',
 		'Update-Repositories'
 	)
 }

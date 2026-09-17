@@ -12,6 +12,7 @@ The [Git module reference](../../../modules/git.md) is the authority on what eac
 | Function | Configuration keys | Guide |
 | -------- | ------------------ | ----- |
 | `Install-Git` | `GitConfig` | [Install-Git](Install-Git.md) |
+| `Resolve-RepositoryTargets` | `RepositoryGroups` | [Resolve-RepositoryTargets](Resolve-RepositoryTargets.md) |
 | `Update-Repositories` | `RepositoryGroups` | [Update-Repositories](Update-Repositories.md) |
 
 ## Task Guides

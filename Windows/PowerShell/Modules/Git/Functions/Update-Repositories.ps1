@@ -6,10 +6,15 @@ function Update-Repositories {
 	.DESCRIPTION
 		Reads repository URL and local path mappings from `RepositoryGroups` in
 		Configuration.psd1. Repositories are organized into named groups (for example
-		"Private" and "Work"); the group names are defined in configuration, not in code.
+		"Private" and "Work"); the group names are defined in configuration, not in code,
+		so -Group takes whatever names the configuration defines.
 
 		When called with no parameters, shows an interactive menu grouped by group name.
-		When called with switches, updates the corresponding repository group directly.
+		Otherwise selection is by repository name, by group name, by -All, or by an
+		explicit URL/path pair - the modes are mutually exclusive, enforced by parameter sets.
+
+		Repositories are updated in the order the configuration lists them, and a repository
+		that appears in more than one selected group is still updated only once.
 
 		Archive mode: downloads repository contents without the `.git` directory.
 		Tries `git archive` first (requires server-side support); falls back to
@@ -26,11 +31,10 @@ function Update-Repositories {
 	.PARAMETER LocalPath
 		Absolute local path for the repository. Must be paired with -RepositoryUrl.
 
-	.PARAMETER Private
-		Updates all repositories in the "Private" group in RepositoryGroups.
-
-	.PARAMETER Work
-		Updates all repositories in the "Work" group in RepositoryGroups.
+	.PARAMETER Group
+		One or more group names from RepositoryGroups (for example "Private", "Work").
+		Matched case-insensitively; an unknown name lists the configured groups and
+		updates nothing.
 
 	.PARAMETER All
 		Updates all repositories in RepositoryGroups regardless of group.
@@ -47,8 +51,8 @@ function Update-Repositories {
 		Opens the interactive repository selection menu.
 
 	.EXAMPLE
-		Update-Repositories -Private
-		Updates all private repositories.
+		Update-Repositories -Group Work
+		Updates every repository in the "Work" group.
 
 	.EXAMPLE
 		Update-Repositories -All
@@ -59,26 +63,24 @@ function Update-Repositories {
 		Updates or clones a specific repository.
 
 	.EXAMPLE
-		Update-Repositories -Private -Archive -InCurrentDirectory
-		Downloads all private repositories without git history into the current directory.
+		Update-Repositories -Group Work, OpenSource -Archive -InCurrentDirectory
+		Downloads both groups without git history into the current directory.
 	#>
+	[CmdletBinding(DefaultParameterSetName = 'Interactive')]
 	param(
-		[Parameter(Mandatory = $false, Position = 0)]
+		[Parameter(Mandatory = $true, Position = 0, ParameterSetName = 'ByName')]
 		[string[]]$Repositories,
 
-		[Parameter(Mandatory = $false)]
+		[Parameter(Mandatory = $true, ParameterSetName = 'Custom')]
 		[string]$RepositoryUrl,
 
-		[Parameter(Mandatory = $false)]
+		[Parameter(Mandatory = $true, ParameterSetName = 'Custom')]
 		[string]$LocalPath,
 
-		[Parameter(Mandatory = $false)]
-		[switch]$Private,
+		[Parameter(Mandatory = $true, ParameterSetName = 'ByGroup')]
+		[string[]]$Group,
 
-		[Parameter(Mandatory = $false)]
-		[switch]$Work,
-
-		[Parameter(Mandatory = $false)]
+		[Parameter(Mandatory = $true, ParameterSetName = 'All')]
 		[switch]$All,
 
 		[Parameter(Mandatory = $false)]
@@ -92,112 +94,109 @@ function Update-Repositories {
 
 	$repositoriesToUpdate = @()
 
-	$isCustomUrl = $RepositoryUrl -and $LocalPath
-	$isByType = $Private -or $Work -or $All
-	$isByName = $Repositories -and $Repositories.Count -gt 0
-
-	if ($isCustomUrl) {
-		Write-LogTitle "Updating Specified Repository"
-		$repositoriesToUpdate += @{
-			RepositoryUrl = $RepositoryUrl
-			LocalPath     = $LocalPath
-		}
-	}
-	elseif ($isByName) {
-		Write-LogTitle "Updating Selected Repositories"
-
-		foreach ($repoName in $Repositories) {
-			if ([string]::IsNullOrWhiteSpace($repoName)) { continue }
-
-			$resolvedRepo = Resolve-ProjectPath -ProjectName $repoName -ForRepository
-			if ($null -ne $resolvedRepo) {
-				$repositoriesToUpdate += $resolvedRepo
-			}
-		}
-	}
-	elseif ($isByType) {
-		$repositoryType = if ($Private) { "Private" }
-		elseif ($Work) { "Work" }
-		else { "All" }
-
-		Write-LogTitle "Updating $repositoryType Repositories"
-
-		foreach ($repositoryGroup in $Configuration.RepositoryGroups) {
-			$groupName = @($repositoryGroup.Keys)[0]
-
-			if ($repositoryType -ne 'All' -and $groupName -ne $repositoryType) { continue }
-
-			foreach ($repository in ($repositoryGroup[$groupName] | Sort-Object { $_.Name })) {
-				$resolvedRepo = Resolve-ProjectPath -ProjectName $repository.Name -ForRepository
-				if ($null -ne $resolvedRepo) {
-					$repositoriesToUpdate += $resolvedRepo
-				}
-			}
-		}
-	}
-	else {
-		$repoGroups = @()
-
-		foreach ($repositoryGroup in $Configuration.RepositoryGroups) {
-			$groupName = @($repositoryGroup.Keys)[0]
-
-			$groupRepos = @()
-			foreach ($repository in ($repositoryGroup[$groupName] | Sort-Object { $_.Name })) {
-				$groupRepos += @{ Name = $repository.Name; Url = $repository.Name }
-			}
-
-			if ($groupRepos.Count -gt 0) {
-				$repoGroups += @{ $groupName = $groupRepos }
+	switch ($PSCmdlet.ParameterSetName) {
+		'Custom' {
+			Write-LogTitle "Updating Specified Repository"
+			$repositoriesToUpdate += @{
+				RepositoryUrl = $RepositoryUrl
+				LocalPath     = $LocalPath
 			}
 		}
 
-		$resolveParams = @{
-			GroupsConfig            = $repoGroups
-			MenuTitle               = "[Available Repositories]"
-			OptionList              = $optionList
-			PromptMessage           = "Enter repository/repositories by number or name"
-			AllowMultipleSelections = $true
+		'ByName' {
+			Write-LogTitle "Updating Selected Repositories"
+			# No @() around the call: the resolver returns its array comma-wrapped so an empty
+			# result stays distinguishable from $null, and @() would nest it instead of flatten it.
+			$resolvedTargets = Resolve-RepositoryTargets -Repositories $Repositories
+			$repositoriesToUpdate += $resolvedTargets
 		}
 
-		$selectedRepos = Resolve-Selection @resolveParams
+		'ByGroup' {
+			$resolvedTargets = Resolve-RepositoryTargets -Group $Group
 
-		if (-not $selectedRepos) {
-			Write-LogWarning "No repositories selected"
-			return
+			# $null means an unknown group name - Resolve-RepositoryTargets already listed the
+			# configured ones, and deliberately resolved nothing.
+			if ($null -eq $resolvedTargets) { return }
+
+			# Echo the configured spelling of the groups that actually carry repositories;
+			# fall back to what was asked for when every requested group turned out empty.
+			$groupNames = @()
+			foreach ($target in $resolvedTargets) {
+				if ($target.Group -and $groupNames -notcontains $target.Group) { $groupNames += $target.Group }
+			}
+			if ($groupNames.Count -eq 0) { $groupNames = $Group }
+
+			Write-LogTitle "Updating [$($groupNames -join ', ')] Repositories"
+			$repositoriesToUpdate += $resolvedTargets
 		}
 
-		$message = "Updating Selected Repositories"
-		if ($selectedRepos.Count -eq 1 -and $selectedRepos[0].IsParent) {
-			$groupType = $selectedRepos[0].PathNames[-1]
-			$message = "Updating [$groupType] Repositories"
+		'All' {
+			Write-LogTitle "Updating All Repositories"
+			$resolvedTargets = Resolve-RepositoryTargets -All
+			$repositoriesToUpdate += $resolvedTargets
 		}
-		Write-LogTitle $message
 
-		foreach ($selection in $selectedRepos) {
-			$pathNames = $selection.PathNames
-			$isParent = $selection.IsParent
+		default {
+			# The menu is built from the same resolver the direct modes use, so its entries
+			# carry the real repository URL rather than a stand-in.
+			$repoGroups = @()
+			$allTargets = Resolve-RepositoryTargets -All
 
-			if ($isParent) {
-				$groupType = $pathNames[-1]
-
-				foreach ($repositoryGroup in $Configuration.RepositoryGroups) {
-					$groupName = @($repositoryGroup.Keys)[0]
-					if ($groupName -ne $groupType) { continue }
-
-					foreach ($repository in ($repositoryGroup[$groupName] | Sort-Object { $_.Name })) {
-						$resolvedRepo = Resolve-ProjectPath -ProjectName $repository.Name -ForRepository
-						if ($null -ne $resolvedRepo) {
-							$repositoriesToUpdate += $resolvedRepo
-						}
+			foreach ($target in $allTargets) {
+				$existingGroup = $null
+				foreach ($entry in $repoGroups) {
+					if (@($entry.Keys)[0] -eq $target.Group) {
+						$existingGroup = $entry
+						break
 					}
 				}
-			}
-			else {
-				$repoName = $pathNames[-1]
-				$resolvedRepo = Resolve-ProjectPath -ProjectName $repoName -ForRepository
-				if ($null -ne $resolvedRepo) {
-					$repositoriesToUpdate += $resolvedRepo
+
+				if ($null -eq $existingGroup) {
+					$repoGroups += @{ $target.Group = @(@{ Name = $target.Name; Url = $target.RepositoryUrl }) }
 				}
+				else {
+					$groupKey = @($existingGroup.Keys)[0]
+					$existingGroup[$groupKey] = @($existingGroup[$groupKey]) + @{ Name = $target.Name; Url = $target.RepositoryUrl }
+				}
+			}
+
+			$resolveParams = @{
+				GroupsConfig            = $repoGroups
+				MenuTitle               = "[Available Repositories]"
+				PromptMessage           = "Enter repository/repositories by number or name"
+				AllowMultipleSelections = $true
+			}
+
+			$selectedRepos = Resolve-Selection @resolveParams
+
+			if (-not $selectedRepos) {
+				Write-LogWarning "No repositories selected"
+				return
+			}
+
+			$selectedGroups = @()
+			$selectedNames = @()
+
+			foreach ($selection in $selectedRepos) {
+				if ($selection.IsParent) { $selectedGroups += $selection.PathNames[-1] }
+				else { $selectedNames += $selection.PathNames[-1] }
+			}
+
+			$message = "Updating Selected Repositories"
+			if ($selectedRepos.Count -eq 1 -and $selectedRepos[0].IsParent) {
+				$message = "Updating [$($selectedGroups[0])] Repositories"
+			}
+			Write-LogTitle $message
+
+			$selectedTargets = @()
+			if ($selectedGroups.Count -gt 0) { $selectedTargets += Resolve-RepositoryTargets -Group $selectedGroups }
+			if ($selectedNames.Count -gt 0) { $selectedTargets += Resolve-RepositoryTargets -Repositories $selectedNames }
+
+			# A group and one of its own repositories can both be picked in the same menu run;
+			# each resolver call dedupes itself, so only the overlap across the two is left.
+			$seenLocalPaths = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+			foreach ($target in $selectedTargets) {
+				if ($seenLocalPaths.Add([string]$target.LocalPath)) { $repositoriesToUpdate += $target }
 			}
 		}
 	}
