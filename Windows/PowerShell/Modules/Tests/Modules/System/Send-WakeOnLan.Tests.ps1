@@ -9,6 +9,8 @@ BeforeAll {
 	# mocks in these tests apply to the guard's warning.
 	. "$ModuleRoot\Helper\Functions\Test-ConfigValue.ps1"
 	. "$ModuleRoot\Helper\Functions\Confirm-ConfigValue.ps1"
+	. "$ModuleRoot\Helper\Functions\Get-OrderedNames.ps1"
+	. "$ModuleRoot\Helper\Functions\Get-OrderedEntry.ps1"
 
 	. "$FunctionsPath\Send-WakeOnLan.ps1"
 
@@ -46,21 +48,22 @@ BeforeAll {
 Describe "Send-WakeOnLan" {
 	BeforeAll {
 		$global:Configuration = @{
-			WakeOnLanConfig         = @{
-				"TestPC"     = @{
-					MacAddress                     = "AA-BB-CC-DD-EE-FF"
-					SubNetSpecificBroadcastAddress = "192.168.1.255"
-					Address                        = "192.168.1.10"
-					Port                           = 9
+			WakeOnLanConfig         = @(
+				@{ "TestPC" = @{
+						MacAddress                     = "AA-BB-CC-DD-EE-FF"
+						SubNetSpecificBroadcastAddress = "192.168.1.255"
+						Address                        = "192.168.1.10"
+						Port                           = 9
+					}
 				}
-				"TestServer" = @{
-					MacAddress                     = "11:22:33:44:55:66"
-					SubNetSpecificBroadcastAddress = "10.0.0.255"
-					Address                        = "10.0.0.5"
-					Port                           = 7
+				@{ "TestServer" = @{
+						MacAddress                     = "11:22:33:44:55:66"
+						SubNetSpecificBroadcastAddress = "10.0.0.255"
+						Address                        = "10.0.0.5"
+						Port                           = 7
+					}
 				}
-			}
-			WakeOnLanMachines       = @("TestPC", "TestServer", "All", "None")
+			)
 			DefaultWakeOnLanMachine = "TestPC"
 		}
 	}
@@ -110,6 +113,19 @@ Describe "Send-WakeOnLan" {
 		}
 	}
 
+	Context "When the menu is shown" {
+		It "Offers the configured machines in configuration order, then All and None" {
+			# "All" and "None" are menu options this function appends, not machines, so
+			# nobody has to remember to put them in their own WakeOnLanConfig.
+			$script:offeredOptions = $null
+			Mock Resolve-Selection { $script:offeredOptions = $OptionList; @("None") }
+
+			Send-WakeOnLan
+
+			@($script:offeredOptions) | Should -Be @("TestPC", "TestServer", "All", "None")
+		}
+	}
+
 	Context "When None is selected" {
 		It "Should cancel without sending" {
 			Mock Resolve-Selection { @("None") }
@@ -121,11 +137,10 @@ Describe "Send-WakeOnLan" {
 	}
 
 	Context "When Wake-on-LAN is not configured (empty base)" {
-		It "Should warn and send nothing when WakeOnLanConfig is an empty hashtable" {
-			# @{} is truthy in PowerShell - this is exactly the case a bare -not guard misses.
+		It "Should warn and send nothing when WakeOnLanConfig is an empty list" {
+			# @() is truthy in PowerShell - this is exactly the case a bare -not guard misses.
 			$global:Configuration = @{
-				WakeOnLanConfig         = @{}
-				WakeOnLanMachines       = @()
+				WakeOnLanConfig         = @()
 				DefaultWakeOnLanMachine = ""
 			}
 			Mock Resolve-Selection { }

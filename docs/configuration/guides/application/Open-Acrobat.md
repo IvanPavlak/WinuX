@@ -9,15 +9,14 @@ Opens Adobe Acrobat with one or more PDF groups defined in `AcrobatPdfGroups` in
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`AcrobatGroups`](../../configuration-reference.md#acrobat-configuration) | array of strings | array of 1 (`"ExampleRulebook"`) | The named PDF groups `Open-Acrobat` offers. A group name here must have a matching entry in `AcrobatPdfGroups`. |
-| [`AcrobatPdfGroups`](../../configuration-reference.md#acrobat-configuration) | hashtable of group name to file array | hashtable, 1 key | The actual PDF paths behind each `AcrobatGroups` name. Paths accept placeholders such as `{User}` and `{Dev}`. |
+| [`AcrobatPdfGroups`](../../configuration-reference.md#acrobat-configuration) | ordered list of groups (one single-key hashtable each) | list of 1 (`ExampleRulebook`) | Every PDF group `Open-Acrobat` offers: the group name is the key, its PDF paths are the value. The menu follows the order you write them in. Paths accept placeholders such as `{User}` and `{Dev}`. |
 
 ## Decisions
 
-1. Which PDF collections do you want to open by name?
-    - Options: One group name per collection, e.g. `Manuals`, `Contracts`, `Rulebooks`. Replaces the shipped `ExampleRulebook` entry.
+1. Which PDF collections do you want to open by name, and in what order?
+    - Options: One entry per collection, e.g. `Manuals`, `Contracts`, `Rulebooks`, in menu order. Replaces the shipped `ExampleRulebook` entry.
     - Default: Leave the shipped example alone and skip - `Open-Acrobat` then only offers `ExampleRulebook`.
-    - More detail: [`AcrobatGroups`](../../configuration-reference.md#acrobat-configuration)
+    - More detail: [`AcrobatPdfGroups`](../../configuration-reference.md#acrobat-configuration)
 2. Which PDF files belong to each group?
     - Options: Absolute paths, or placeholder paths like `{User}\Documents\Manuals\Router.pdf`.
     - Default: Skip - the shipped `ExampleRulebook` group points at a sample path and `Open-Acrobat` reports a missing file rather than failing.
@@ -30,42 +29,34 @@ All of it goes in `Configuration.local.psd1`, at the repository's `Windows/Power
 > [!WARNING]
 > The merge is not uniform. **Hashtables deep-merge per key**, so adding one entry to a hashtable leaves every other entry alone. **Arrays and scalars replace wholesale**, so supplying an array key in your local file discards the entire base array. When you want to *add* to a shipped array, copy the whole base array out of `Configuration.psd1` first and add your entry to the copy.
 
-On this page that bites on `AcrobatGroups` - that key is an array, so whatever you write is the complete value.
+On this page that bites on `AcrobatPdfGroups` - it is an ordered list, so whatever you write is the complete value.
 
 ## Steps Overview
 
-1. Set `AcrobatGroups`
-2. Set `AcrobatPdfGroups`
-3. Reload and confirm the merge landed
+1. Set `AcrobatPdfGroups`
+2. Reload and confirm the merge landed
 
-## Step 1: Set `AcrobatGroups`
+## Step 1: Set `AcrobatPdfGroups`
 
-The named PDF groups `Open-Acrobat` offers. A group name here must have a matching entry in `AcrobatPdfGroups`.
-
-```powershell
-AcrobatGroups = @("Manuals")
-```
-
-## Step 2: Set `AcrobatPdfGroups`
-
-The actual PDF paths behind each `AcrobatGroups` name. Paths accept placeholders such as `{User}` and `{Dev}`.
+Every PDF group `Open-Acrobat` offers, in the order the menu offers them. Each entry is a single-key hashtable: the key is the group name, the value is its PDF paths. There is no separate group-name list - defining a group here is what puts it in the menu.
 
 ```powershell
-AcrobatPdfGroups = @{
-    Manuals = @(
-        "{User}\Documents\Manuals\Router.pdf"
-        "{User}\Documents\Manuals\Monitor.pdf"
-    )
-}
+AcrobatPdfGroups = @(
+    @{ Manuals = @(
+            "{User}\Documents\Manuals\Router.pdf"
+            "{User}\Documents\Manuals\Monitor.pdf"
+        )
+    }
+)
 ```
 
-## Step 3: Reload and confirm the merge landed
+## Step 2: Reload and confirm the merge landed
 
 Reload the profile, then read the merged value back. `$global:Configuration` after a reload is the ground truth - if what you set is not there, the local file did not parse or the key is nested one level away from where you put it.
 
 ```powershell
 Reload-PowerShellProfile
-$global:Configuration.AcrobatGroups
+$global:Configuration.AcrobatPdfGroups
 ```
 
 ## Verification
@@ -74,8 +65,8 @@ Read-only checks. None of these change anything.
 
 ```powershell
 Reload-PowerShellProfile
-$global:Configuration.AcrobatGroups
 $global:Configuration.AcrobatPdfGroups
+Get-OrderedNames $global:Configuration.AcrobatPdfGroups
 Open-Acrobat              # interactive menu
 ```
 
@@ -88,13 +79,13 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 ```powershell
 # Configuration.local.psd1
 @{
-    AcrobatGroups = @("Manuals")
-    AcrobatPdfGroups = @{
-        Manuals = @(
-            "{User}\Documents\Manuals\Router.pdf"
-            "{User}\Documents\Manuals\Monitor.pdf"
-        )
-    }
+    AcrobatPdfGroups = @(
+        @{ Manuals = @(
+                "{User}\Documents\Manuals\Router.pdf"
+                "{User}\Documents\Manuals\Monitor.pdf"
+            )
+        }
+    )
 }
 ```
 

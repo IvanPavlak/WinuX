@@ -16,7 +16,7 @@ function Close-Project {
 		backend is running) or "Problem loading page" (when backend is not running).
 
 	.PARAMETER Project
-		Array of project names to close. Projects must be defined in $Configuration.Projects.
+		Array of project names to close. Projects must be defined in $Configuration.ProjectActions.
 		If not specified, displays an interactive selection menu.
 
 	.EXAMPLE
@@ -64,7 +64,7 @@ function Close-Project {
 
 	$resolveParams = @{
 		InputObject              = $Project
-		OptionList               = $Configuration.Projects
+		OptionList               = @(Get-OrderedNames $Configuration.ProjectActions)
 		MenuTitle                = "[Available projects to close]"
 		PromptMessage            = "Enter project(s) to close or press Enter to cancel"
 		AllowEmptyPromptResponse = $true
@@ -81,7 +81,7 @@ function Close-Project {
 	foreach ($projectName in $projects) {
 		Write-LogTitle "Closing $projectName Project Resources"
 
-		$projectActions = $Configuration.ProjectActions[$projectName]
+		$projectActions = Get-OrderedEntry $Configuration.ProjectActions $projectName
 
 		if (-not $projectActions) {
 			Write-LogWarning "No actions configured for project [$projectName], skipping..."

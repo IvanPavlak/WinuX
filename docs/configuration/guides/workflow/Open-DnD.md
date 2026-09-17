@@ -9,19 +9,18 @@ Opens the full D&D campaign workspace for a tabletop RPG session: the Obsidian v
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`CampaignResources`](../../configuration-reference.md#more-sections-quick-reference) | hashtable of campaign name to resource map | hashtable, 1 key | What `Open-DnD` opens for each campaign: the per-campaign document, map and reference paths and URLs. |
-| [`Campaigns`](../../configuration-reference.md#more-sections-quick-reference) | array of strings | array of 1 (`"ExampleCampaign"`) | The campaign names `Open-DnD` offers. Each needs a matching `CampaignResources` entry. |
+| [`CampaignResources`](../../configuration-reference.md#more-sections-quick-reference) | ordered list of campaigns (one single-key hashtable each) | list of 1 (`ExampleCampaign`) | Every campaign `Open-DnD` knows: the name is the key, the value is what to open for it. The menu follows the order you write them in. |
 
 ## Decisions
 
-1. Which resources belong to each campaign?
-    - Options: Paths and URLs per campaign name. Placeholders allowed.
+1. Which campaigns should `Open-DnD` offer, and in what order?
+    - Options: One entry per campaign, in menu order.
     - Default: Skip unless you use `Open-DnD`.
     - More detail: [`CampaignResources`](../../configuration-reference.md#more-sections-quick-reference)
-2. Which campaigns should `Open-DnD` offer?
-    - Options: One name per campaign.
+2. Which resources belong to each campaign?
+    - Options: Paths and URLs per campaign. Placeholders allowed.
     - Default: Skip unless you use `Open-DnD`.
-    - More detail: [`Campaigns`](../../configuration-reference.md#more-sections-quick-reference)
+    - More detail: [`CampaignResources`](../../configuration-reference.md#more-sections-quick-reference)
 
 ## Where to Put Values
 
@@ -30,36 +29,28 @@ All of it goes in `Configuration.local.psd1`, at the repository's `Windows/Power
 > [!WARNING]
 > The merge is not uniform. **Hashtables deep-merge per key**, so adding one entry to a hashtable leaves every other entry alone. **Arrays and scalars replace wholesale**, so supplying an array key in your local file discards the entire base array. When you want to *add* to a shipped array, copy the whole base array out of `Configuration.psd1` first and add your entry to the copy.
 
-On this page that bites on `Campaigns` - that key is an array, so whatever you write is the complete value.
+On this page that bites on `CampaignResources` - it is an ordered list, so whatever you write is the complete value.
 
 ## Steps Overview
 
 1. Set `CampaignResources`
-2. Set `Campaigns`
-3. Reload and confirm the merge landed
+2. Reload and confirm the merge landed
 
 ## Step 1: Set `CampaignResources`
 
-What `Open-DnD` opens for each campaign: the per-campaign document, map and reference paths and URLs.
+Every campaign `Open-DnD` offers, in the order the menu offers them. Each entry is a single-key hashtable: the key is the campaign name, the value is what to open for it. There is no separate campaign list - defining a campaign here is what puts it in the menu.
 
 ```powershell
-CampaignResources = @{
-    MyCampaign = @{
-        Notes = "{User}\Documents\MyCampaign\Notes.md"
-        Map   = "https://example.com/map"
+CampaignResources = @(
+    @{ MyCampaign = @{
+            Notes = "{User}\Documents\MyCampaign\Notes.md"
+            Map   = "https://example.com/map"
+        }
     }
-}
+)
 ```
 
-## Step 2: Set `Campaigns`
-
-The campaign names `Open-DnD` offers. Each needs a matching `CampaignResources` entry.
-
-```powershell
-Campaigns = @("MyCampaign")
-```
-
-## Step 3: Reload and confirm the merge landed
+## Step 2: Reload and confirm the merge landed
 
 Reload the profile, then read the merged value back. `$global:Configuration` after a reload is the ground truth - if what you set is not there, the local file did not parse or the key is nested one level away from where you put it.
 
@@ -75,9 +66,8 @@ Read-only checks. None of these change anything.
 ```powershell
 Reload-PowerShellProfile
 $global:Configuration.CampaignResources
-$global:Configuration.Campaigns
-$global:Configuration.Campaigns
-$global:Configuration.CampaignResources.Keys
+Get-OrderedNames $global:Configuration.CampaignResources
+Get-OrderedEntry $global:Configuration.CampaignResources "MyCampaign"
 ```
 
 If a value reads back as empty, the two usual causes are a parse error in `Configuration.local.psd1` (run `Test-ConfigurationSchema`) and a key placed at the wrong nesting level.
@@ -89,13 +79,13 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 ```powershell
 # Configuration.local.psd1
 @{
-    CampaignResources = @{
-        MyCampaign = @{
-            Notes = "{User}\Documents\MyCampaign\Notes.md"
-            Map   = "https://example.com/map"
+    CampaignResources = @(
+        @{ MyCampaign = @{
+                Notes = "{User}\Documents\MyCampaign\Notes.md"
+                Map   = "https://example.com/map"
+            }
         }
-    }
-    Campaigns = @("MyCampaign")
+    )
 }
 ```
 

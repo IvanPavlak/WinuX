@@ -12,10 +12,10 @@ The [Configuration module reference](../../../modules/configuration.md) is the a
 | Function | Configuration keys | Guide |
 | -------- | ------------------ | ----- |
 | `Add-BrowserGroup` | `BrowserGroups` | [Add-BrowserGroup](Add-BrowserGroup.md) |
-| `Add-Project` | `ProjectActions`, `Projects`, `ProjectTerminals`, `RunnableProjects` | [Add-Project](Add-Project.md) |
+| `Add-Project` | `ProjectActions`, `ProjectTerminals`, `RunnableProjectMappings` | [Add-Project](Add-Project.md) |
 | `Add-SymbolicLink` | `PathTemplates.SymbolicLinks` | [Add-SymbolicLink](Add-SymbolicLink.md) |
 | `Add-WindowLayout` | `SimpleLayoutWorkspaces` | [Add-WindowLayout](Add-WindowLayout.md) |
-| `Add-Workspace` | `WorkspaceActions`, `Workspaces` | [Add-Workspace](Add-Workspace.md) |
+| `Add-Workspace` | `WorkspaceActions` | [Add-Workspace](Add-Workspace.md) |
 | `Find-ConfigurationSection` | caller-supplied | [Find-ConfigurationSection](Find-ConfigurationSection.md) |
 | `Save-AppCsvOverlay` | `BootstrapConfig`, `ValidMachineTypes` | [Save-AppCsvOverlay](Save-AppCsvOverlay.md) |
 | `Test-ConfigurationSchema` | caller-supplied | [Test-ConfigurationSchema](Test-ConfigurationSchema.md) |

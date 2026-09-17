@@ -32,6 +32,8 @@
 		'Get-TargetTerminalWindow',
 		'Get-TerminalTabSnapshot',
 		'Get-DotnetVersionFromTFM',
+		'Get-OrderedEntry',
+		'Get-OrderedNames',
 		'Get-FilteredParams',
 		'Get-PowerShellFunctionDependencies',
 		'Get-RepositoryName',

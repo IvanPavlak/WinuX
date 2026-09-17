@@ -9,8 +9,7 @@ Opens a development project with all its configured tools, applications and term
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`ProjectActions`](../../configuration-reference.md#project-actions) | hashtable of project name to action array | hashtable, 3 keys | What `Open-Project` does for each project: an ordered array of `@{ Action; Parameters }` entries, where `Action` is any exported function name. `Close-Project` reads the same map to work out what to close. |
-| [`Projects`](../../configuration-reference.md#projects-list) | array of project names | `@("WinuX", "ExampleProject", "Server")` | The project names `Open-Project` offers. A name here needs a matching `ProjectActions` entry to do anything, and usually a `PathTemplates.Projects` entry for its root. |
+| [`ProjectActions`](../../configuration-reference.md#project-actions) | ordered list of projects (one single-key hashtable each) | list of 3 | Every project `Open-Project` offers, in menu order: the project name is the key, the value is the ordered array of `@{ Action; Parameters }` entries opening it runs, where `Action` is any exported function name. `Close-Project` reads the same list to work out what to close. |
 
 ## Decisions
 
@@ -22,10 +21,10 @@ Opens a development project with all its configured tools, applications and term
     - Options: Actions run top to bottom. Put the editor first and the browser last if you want focus to land on the browser.
     - Default: The order you list them.
     - More detail: [`ProjectActions`](../../configuration-reference.md#project-actions)
-3. Which projects should `Open-Project` offer?
-    - Options: One name per project - see [Add New Project](../workflow/add-new-project.md) for the whole walk. The array replaces wholesale, so include the shipped names you still want.
+3. Which projects should `Open-Project` offer, and in what order?
+    - Options: One entry per project, in menu order - see [Add New Project](../workflow/add-new-project.md) for the whole walk. The list replaces wholesale, so include the shipped entries you still want.
     - Default: The shipped three.
-    - More detail: [`Projects`](../../configuration-reference.md#projects-list)
+    - More detail: [`ProjectActions`](../../configuration-reference.md#project-actions)
 
 ## Where to Put Values
 
@@ -34,36 +33,28 @@ All of it goes in `Configuration.local.psd1`, at the repository's `Windows/Power
 > [!WARNING]
 > The merge is not uniform. **Hashtables deep-merge per key**, so adding one entry to a hashtable leaves every other entry alone. **Arrays and scalars replace wholesale**, so supplying an array key in your local file discards the entire base array. When you want to *add* to a shipped array, copy the whole base array out of `Configuration.psd1` first and add your entry to the copy.
 
-On this page that bites on `Projects` - that key is an array, so whatever you write is the complete value.
+On this page that bites on `ProjectActions` - it is an ordered list, so whatever you write is the complete value.
 
 ## Steps Overview
 
 1. Set `ProjectActions`
-2. Set `Projects`
-3. Reload and confirm the merge landed
+2. Reload and confirm the merge landed
 
 ## Step 1: Set `ProjectActions`
 
-What `Open-Project` does for each project: an ordered array of `@{ Action; Parameters }` entries, where `Action` is any exported function name. `Close-Project` reads the same map to work out what to close.
+Every project `Open-Project` offers, in the order the menu offers them. Each entry is a single-key hashtable: the key is the project name, the value is the ordered array of `@{ Action; Parameters }` entries opening it runs. There is no separate project list - defining a project here is what puts it in the menu.
 
 ```powershell
-ProjectActions = @{
-    MyProject = @(
-        @{ Action = "Open-VSCode";   Parameters = @{ Project = "MyProject" } }
-        @{ Action = "Open-Terminal"; Parameters = @{ Title = "MyProject" } }
-    )
-}
+ProjectActions = @(
+    @{ MyProject = @(
+            @{ Action = "Open-VSCode";   Parameters = @{ Project = "MyProject" } }
+            @{ Action = "Open-Terminal"; Parameters = @{ Title = "MyProject" } }
+        )
+    }
+)
 ```
 
-## Step 2: Set `Projects`
-
-The project names `Open-Project` offers. A name here needs a matching `ProjectActions` entry to do anything, and usually a `PathTemplates.Projects` entry for its root.
-
-```powershell
-Projects = @("WinuX", "MyProject")
-```
-
-## Step 3: Reload and confirm the merge landed
+## Step 2: Reload and confirm the merge landed
 
 Reload the profile, then read the merged value back. `$global:Configuration` after a reload is the ground truth - if what you set is not there, the local file did not parse or the key is nested one level away from where you put it.
 
@@ -79,9 +70,8 @@ Read-only checks. None of these change anything.
 ```powershell
 Reload-PowerShellProfile
 $global:Configuration.ProjectActions
-$global:Configuration.Projects
-$global:Configuration.Projects
-$global:Configuration.ProjectActions.Keys
+Get-OrderedNames $global:Configuration.ProjectActions
+Get-OrderedEntry $global:Configuration.ProjectActions "MyProject"
 ```
 
 If a value reads back as empty, the two usual causes are a parse error in `Configuration.local.psd1` (run `Test-ConfigurationSchema`) and a key placed at the wrong nesting level.
@@ -93,13 +83,13 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 ```powershell
 # Configuration.local.psd1
 @{
-    ProjectActions = @{
-        MyProject = @(
-            @{ Action = "Open-VSCode";   Parameters = @{ Project = "MyProject" } }
-            @{ Action = "Open-Terminal"; Parameters = @{ Title = "MyProject" } }
-        )
-    }
-    Projects = @("WinuX", "MyProject")
+    ProjectActions = @(
+        @{ MyProject = @(
+                @{ Action = "Open-VSCode";   Parameters = @{ Project = "MyProject" } }
+                @{ Action = "Open-Terminal"; Parameters = @{ Title = "MyProject" } }
+            )
+        }
+    )
 }
 ```
 

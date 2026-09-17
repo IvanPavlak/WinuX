@@ -33,7 +33,7 @@ function Set-Locale {
 		return
 	}
 
-	$localeOptions = $Configuration.Locales.Keys
+	$localeOptions = @(Get-OrderedNames $Configuration.Locales)
 	$defaultLocaleName = $Configuration.DefaultLocale
 	$targetLocaleName = ""
 
@@ -64,7 +64,7 @@ function Set-Locale {
 		}
 	}
 
-	$localeConfig = $Configuration.Locales[$targetLocaleName]
+	$localeConfig = Get-OrderedEntry $Configuration.Locales $targetLocaleName
 	$targetLocale = $localeConfig.Code
 	$targetGeoId = $localeConfig.GeoId
 

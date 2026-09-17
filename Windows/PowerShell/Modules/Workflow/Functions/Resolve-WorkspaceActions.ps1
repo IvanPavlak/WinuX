@@ -91,7 +91,7 @@ function Resolve-WorkspaceActions {
 		[object[]] The entries that apply, in configured order, with their parameters resolved.
 
 	.EXAMPLE
-		$actions = Resolve-WorkspaceActions -Actions $Configuration.WorkspaceActions['LeagueOfLegends'] -Workspace 'LeagueOfLegends'
+		$actions = Resolve-WorkspaceActions -Actions (Get-OrderedEntry $Configuration.WorkspaceActions 'LeagueOfLegends') -Workspace 'LeagueOfLegends'
 		# The entry @{ Action = "Open-Browser"; Parameters = @{ Groups = @("Google") }; LayoutMachineParameters = @{ PC = @{ Instances = 2 } } }
 		# comes back with Instances = 2 on the PC's own layout set and without Instances on Laptop, Work,
 		# and on the PC while it is redirected to the Work layouts.

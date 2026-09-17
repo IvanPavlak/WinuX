@@ -6,6 +6,8 @@ BeforeAll {
 	$WorkflowFunctionsPath = Join-Path $ModuleRoot "Workflow\Functions"
 
 	. "$HelperFunctionsPath\Resolve-ConfigPathValue.ps1"
+	. "$HelperFunctionsPath\Get-OrderedNames.ps1"
+	. "$HelperFunctionsPath\Get-OrderedEntry.ps1"
 	. "$HelperFunctionsPath\Get-WindowTitleCandidates.ps1"
 	. "$HelperFunctionsPath\Test-WindowTitleCandidates.ps1"
 	. "$WorkflowFunctionsPath\Get-SwaggerCloseTitlePatterns.ps1"
@@ -39,7 +41,6 @@ Describe "Close-Project" {
 		}
 
 		$script:Configuration = @{
-			Projects              = @("ExampleProject")
 			VisualStudioSolutions = @(
 				@{ Name = "ExampleProject"; Solution = "Projects.ExampleProject.Solution" }
 			)
@@ -47,13 +48,14 @@ Describe "Close-Project" {
 				@{ Name = "ExampleProject"; Path = "Projects.ExampleProject.Backend" }
 				@{ Name = "ExampleProject-UI"; Path = "Projects.ExampleProject.Ui" }
 			)
-			ProjectActions        = @{
-				ExampleProject = @(
-					@{ Action = "Open-VisualStudio"; Parameters = @{ Solution = "{ProjectName}" } }
-					@{ Action = "Open-VSCode"; Parameters = @{ Folder = "{ProjectName}" } }
-					@{ Action = "Open-VSCode"; Parameters = @{ Folder = "ExampleProject-UI" } }
-				)
-			}
+			ProjectActions        = @(
+				@{ ExampleProject = @(
+						@{ Action = "Open-VisualStudio"; Parameters = @{ Solution = "{ProjectName}" } }
+						@{ Action = "Open-VSCode"; Parameters = @{ Folder = "{ProjectName}" } }
+						@{ Action = "Open-VSCode"; Parameters = @{ Folder = "ExampleProject-UI" } }
+					)
+				}
+			)
 			BrowserGroups         = @{}
 			Universal             = @{
 				DefaultBrowser = "Firefox"

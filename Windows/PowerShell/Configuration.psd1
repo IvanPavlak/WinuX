@@ -37,6 +37,26 @@
 # to eliminate duplication while supporting any number of machines
 # from a single configuration file.
 #
+# ORDERING RULE - "order is where you write it":
+# Every section whose entries become a menu is an ORDERED LIST: an array of single-key
+# hashtables, one per entry, where the key is the entry name and the value is the entry.
+#
+#   WorkspaceActions = @(
+#       @{ Default = @( <actions> ) }
+#       @{ WinuX   = @( <actions> ) }
+#   )
+#
+# The menu follows the order they are written here, and an entry is defined exactly once -
+# there is no separate name list to keep in sync with the definitions. A plain hashtable
+# cannot carry the order: Import-PowerShellDataFile returns a System.Collections.Hashtable,
+# and key order is lost at load time. Sections shaped this way: BrowserGroups,
+# RepositoryGroups, ProjectActions, WorkspaceActions, CampaignResources, AcrobatPdfGroups,
+# WakeOnLanConfig, Locales, KeyboardLayoutSets and NerdFonts. RunnableProjectMappings is
+# an ordered record list (each record carries its own Name) and reads the same way.
+#
+# Plain hashtables stay plain where order means nothing - a lookup table keyed by machine
+# type (Themes, PowerPlans) or by name (KeyboardLayouts, DisplayLanguages).
+#
 # ARCHITECTURE:
 # - BasePaths: Root directories per machine type (e.g., C:\Users\Name\Dev, etc.)
 # - PathTemplates: Common paths using placeholders ({Dev}, {User}, {MachineType})
@@ -89,9 +109,9 @@
 # → GitHub URLs                  : All git clone/update operations
 #
 # Project & Workflow Management:
-# → Projects, ProjectActions      : Open-Project
+# → ProjectActions                : Open-Project
 # → ProjectTerminals              : Open-ProjectTerminals, Run-Project, Resolve-ProjectPath
-# → RunnableProjects              : Run-Project
+# → RunnableProjectMappings       : Run-Project
 # → RunProject.Steps              : Run-Project (optional steps, e.g. Docker)
 # → DockerComposeFiles            : Start-Containers, Resolve-ProjectDockerCompose (Run-Project)
 # → DockerTimeouts                : DockerWizard
@@ -100,13 +120,13 @@
 # → VSCodeProjects                : Open-VSCode
 #
 # Workspace Management:
-# → Workspaces, DefaultWorkspace, WorkspaceActions, WorkspaceBenchmark : Open-Workspace
+# → WorkspaceActions, DefaultWorkspace, WorkspaceBenchmark : Open-Workspace
 # → WorkspaceActions Machine / LayoutMachine scopes and MachineParameters / LayoutMachineParameters tables : Resolve-WorkspaceActions (for Open-Workspace, Measure-WorkspaceOpen)
 #
 # Application Configuration:
 # → BrowserGroups                   : Open-Browser, Collect-BrowserUrls
-# → AcrobatGroups, AcrobatPdfGroups : Open-Acrobat
-# → Campaigns                       : Open-DnD
+# → AcrobatPdfGroups                : Open-Acrobat
+# → CampaignResources               : Open-DnD
 # → Universal executable paths      : Open-* functions (DBeaver, VirtualBox, etc.)
 #
 # Bootstrap Process:
@@ -155,12 +175,11 @@
 # 3. Add a new project:
 #    - Add project path entry in PathTemplates.Projects
 #    - Add a repository entry in RepositoryGroups (with Name, UrlPath, LocalPath)
-#    - Add to Projects list for Open-Project menu
 #    - Add project actions in ProjectActions (defines what happens when project opens)
 #    - Optionally add to VSCodeProjects for Open-VSCode
 #    - Optionally add to VisualStudioSolutions for Open-VisualStudio
 #    - Optionally add to ProjectTerminals for Open-ProjectTerminals
-#    - Optionally add to RunnableProjects/RunnableProjectMappings for Run-Project
+#    - Optionally add to RunnableProjectMappings for Run-Project
 #
 # 4. Add a new repository:
 #    - Add URL in Universal.GitHub.Private or Universal.GitHub.YourDefinedGroup
@@ -189,7 +208,6 @@
 #    - Nested symlinks supported: PowerToys = @{ Settings = @{ Path = ...; Target = ... } }
 #
 # 7. Add workspace:
-#    - Add name to Workspaces list
 #    - Configure actions in WorkspaceActions with array of action configs
 #    - Optionally point DefaultWorkspace at it to make it the [Enter] default in the menu
 #    - Each action: @{ Action = "FunctionName"; Parameters = @{ Param1 = "Value" } }
@@ -385,30 +403,30 @@
 	# ==========================================================================
 	# Wake-on-LAN machine configurations. Used by Send-WakeOnLan and Test-MachineOnline.
 	#
-	# Each machine name listed in WakeOnLanMachines must match a key in WakeOnLanConfig
-	# exactly (quote keys that contain spaces, e.g. "Proxmox Backup Server").
+	# An ordered list of machines: one single-key hashtable per machine, the key being the
+	# machine name (quote names that contain spaces, e.g. "Proxmox Backup Server"). The menu
+	# follows this order, and Send-WakeOnLan appends its own "All" and "None" options - they
+	# are not machines, so they are not configured here.
 	#
 	# The optional 'Address' (IP or hostname) makes Wake-on-LAN reliable: Send-WakeOnLan
 	# pings it to skip machines that are already on, and to confirm a machine actually
 	# woke up after the packet is sent. Leave it as "" for fire-and-forget (no checks).
 	#
 	# Example:
-	#   WakeOnLanMachines = @("Server", "All", "None")
-	#   WakeOnLanConfig = @{
-	#       "Server" = @{
-	#           MacAddress                     = "AA-BB-CC-DD-EE-FF"
-	#           SubNetSpecificBroadcastAddress = "192.168.1.255"
-	#           Address                        = "192.168.1.10"
-	#           Port                           = 9
+	#   WakeOnLanConfig = @(
+	#       @{ Server = @{
+	#               MacAddress                     = "AA-BB-CC-DD-EE-FF"
+	#               SubNetSpecificBroadcastAddress = "192.168.1.255"
+	#               Address                        = "192.168.1.10"
+	#               Port                           = 9
+	#           }
 	#       }
-	#   }
+	#   )
 	#   DefaultWakeOnLanMachine = "Server"
 	# ==========================================================================
-	# All three ship empty - Send-WakeOnLan and Test-MachineOnline no-op until you
+	# Both ship empty - Send-WakeOnLan and Test-MachineOnline no-op until you
 	# configure your machines (see the example block above) in Configuration.local.psd1.
-	WakeOnLanMachines             = @()
-
-	WakeOnLanConfig               = @{}
+	WakeOnLanConfig               = @()
 
 	DefaultWakeOnLanMachine       = ""
 
@@ -581,7 +599,7 @@
 			# A worked example of a multi-part project (backend + UI). Replace it with your
 			# own projects, or add more entries following the same shape. Keys like Root,
 			# Solution, Api, Backend and Ui are consumed by VSCodeProjects,
-			# VisualStudioSolutions, ProjectTerminals, ProjectActions and RunnableProjects.
+			# VisualStudioSolutions, ProjectTerminals, ProjectActions and RunnableProjectMappings.
 			ExampleProject = @{
 				Root     = "{Dev}\ExampleProject"
 				Solution = "{Dev}\ExampleProject\ExampleProject.sln"
@@ -1105,16 +1123,16 @@
 	# Used by Set-Locale, Set-DisplayLanguage, and Set-KeyboardLayouts.
 	#
 	# Example:
-	#   Locales = @{
-	#       "Croatian" = @{ Code = "hr-HR"; GeoId = 191 }
-	#       "English (US)" = @{ Code = "en-US"; GeoId = 244 }
-	#   }
+	#   Locales = @(
+	#       @{ "Croatian" = @{ Code = "hr-HR"; GeoId = 191 } }
+	#       @{ "English (US)" = @{ Code = "en-US"; GeoId = 244 } }
+	#   )
 	#   DefaultLocale = "Croatian"
 	#   KeyboardLayouts = @{ "Croatian" = "0000041A"; "US" = "00000409" }
-	#   KeyboardLayoutSets = @{
-	#       "Croatian-US" = @("Croatian", "US")
-	#       "US-Croatian" = @("US", "Croatian")
-	#   }
+	#   KeyboardLayoutSets = @(
+	#       @{ "Croatian-US" = @("Croatian", "US") }
+	#       @{ "US-Croatian" = @("US", "Croatian") }
+	#   )
 	#   DefaultKeyboardLayoutSet = "Croatian-US"
 	#   DisplayLanguages = @{
 	#       "English (US)" = "en-US"
@@ -1125,13 +1143,13 @@
 	# All of these ship empty - Set-Locale, Set-KeyboardLayouts and Set-DisplayLanguage
 	# leave the system untouched until you configure them (see the example block above)
 	# in Configuration.local.psd1.
-	Locales                       = @{}
+	Locales                       = @()
 
 	DefaultLocale                 = ""
 
 	KeyboardLayouts               = @{}
 
-	KeyboardLayoutSets            = @{}
+	KeyboardLayoutSets            = @()
 
 	DefaultKeyboardLayoutSet      = ""
 
@@ -1145,18 +1163,19 @@
 	# Nerd Font installation settings. Used by Configure-NerdFont function.
 	#
 	# Example:
-	#   NerdFonts = @{
-	#       "JetBrainsMono" = @{
-	#           FolderName    = "JetBrainsMonoNerdFont"
-	#           SearchPattern = "*JetBrainsMono*Nerd*Font*"
+	#   NerdFonts = @(
+	#       @{ "JetBrainsMono" = @{
+	#               FolderName    = "JetBrainsMonoNerdFont"
+	#               SearchPattern = "*JetBrainsMono*Nerd*Font*"
+	#           }
 	#       }
-	#   }
+	#   )
 	#   DefaultNerdFont = "JetBrainsMono"
 	# ==========================================================================
 	# Ships empty - Configure-NerdFont installs nothing until you opt in (the
 	# JetBrainsMonoNerdFont payload folder stays in the repo; enable it with the
 	# example block above in Configuration.local.psd1).
-	NerdFonts                     = @{}
+	NerdFonts                     = @()
 
 	DefaultNerdFont               = ""
 
@@ -1655,22 +1674,18 @@
 	# ==========================================================================
 	# Open-Project Configuration
 	# ==========================================================================
-	Projects                      = @(
-		"WinuX",
-		"ExampleProject",
-		"Server"
-	)
-
 	# ==========================================================================
 	# Project Actions Configuration
 	# ==========================================================================
 	# Defines actions to be executed when opening each project via Open-Project.
 	# Each project can have multiple actions executed in sequence.
 	#
+	# The menu lists the entries below in the order they are written - defining a project
+	# here is what puts it in the menu, there is no separate project list.
+	#
 	# HOW TO ADD A NEW PROJECT:
-	# 1. Add project to the Projects list above
-	# 2. Add paths in PathTemplates.Projects
-	# 3. Add entry here defining what happens when the project opens
+	# 1. Add paths in PathTemplates.Projects
+	# 2. Add entry here defining what happens when the project opens
 	#
 	# Supported Action Types:
 	#   - Open-VSCode                       : Opens VS Code with folder parameter (-Folder)
@@ -1695,29 +1710,31 @@
 	#       @{ Action = "Open-ProjectTerminals-Or-RunProject"; Parameters = @{ Project = "{ProjectName}" } }
 	#   )
 	# ==========================================================================
-	ProjectActions                = @{
+	ProjectActions                = @(
 		# DefaultProject = @(
 		# 	@{ Action = "Open-Obsidian"; Parameters = @{ Default = $true } }  # no CurrentWorkspace here, so skip the menu
 		# 	@{ Action = "Open-Browser"; Parameters = @{ Groups = @("Google") } }
 		# )
+		@{ WinuX          = @(
+				@{ Action = "Open-VSCode"; Parameters = @{ Folder = "{ProjectName}" } }
+				@{ Action = "Open-ProjectTerminals-Or-RunProject"; Parameters = @{ Project = "{ProjectName}" } }
+			)
+		}
 
-		WinuX          = @(
-			@{ Action = "Open-VSCode"; Parameters = @{ Folder = "{ProjectName}" } }
-			@{ Action = "Open-ProjectTerminals-Or-RunProject"; Parameters = @{ Project = "{ProjectName}" } }
-		)
+		@{ ExampleProject = @(
+				#@{ Action = "Open-VisualStudio"; Parameters = @{ Solution = "{ProjectName}" } }
+				@{ Action = "Open-VSCode"; Parameters = @{ Folder = "{ProjectName}" } }
+				@{ Action = "Open-ProjectTerminals-Or-RunProject"; Parameters = @{ Project = "{ProjectName}" } }
+				# Bring up only the configured Docker Compose stack (no API/UI) instead:
+				#@{ Action = "Start-Containers" }
+			)
+		}
 
-		ExampleProject = @(
-			#@{ Action = "Open-VisualStudio"; Parameters = @{ Solution = "{ProjectName}" } }
-			@{ Action = "Open-VSCode"; Parameters = @{ Folder = "{ProjectName}" } }
-			@{ Action = "Open-ProjectTerminals-Or-RunProject"; Parameters = @{ Project = "{ProjectName}" } }
-			# Bring up only the configured Docker Compose stack (no API/UI) instead:
-			#@{ Action = "Start-Containers" }
-		)
-
-		Server         = @(
-			@{ Action = "Open-ProjectTerminals-Or-RunProject"; Parameters = @{ Project = "{ProjectName}" } }
-		)
-	}
+		@{ Server         = @(
+				@{ Action = "Open-ProjectTerminals-Or-RunProject"; Parameters = @{ Project = "{ProjectName}" } }
+			)
+		}
+	)
 
 	# ==========================================================================
 	# Run-Project Configuration
@@ -1726,9 +1743,11 @@
 	# Used by Run-Project function and Open-ProjectTerminals-Or-RunProject action.
 	#
 	# HOW TO ADD A RUNNABLE PROJECT:
-	# 1. Add project name to RunnableProjects list
-	# 2. Add entry to RunnableProjectMappings with Commands array
-	# 3. Commands order must match ProjectTerminals.Paths order
+	# 1. Add an entry to RunnableProjectMappings with a Name and its Commands
+	# 2. Key each command by the ProjectTerminals path it belongs to
+	#
+	# The menu lists the mappings in the order they are written here - there is no
+	# separate runnable-project list to keep in sync.
 	#
 	# HOW TO RUN A PROJECT:
 	# - Run-Project                    # Interactive menu to select project
@@ -1740,7 +1759,7 @@
 	# - "dnbr"         : DotnetBuildAndRun (dotnet build + run)
 	# - "nir"          : NpmInstallAndStart (npm install + npm run dev)
 	# - "npm run dev"  : Direct npm command
-	# - ""             : Empty (no command for that path)
+	# A path with no command in the table just gets its terminal tab, nothing run in it.
 	# ==========================================================================
 	DefaultDatabaseProvider       = "PostgreSQL"
 
@@ -1799,22 +1818,17 @@
 		}
 	)
 
-	RunnableProjects              = @(
-		"WinuX",
-		"ExampleProject"
-	)
-
-	# Command order has to match with the Paths order in ProjectTerminals
-	# For example, if ProjectTerminals has Paths = @("API", "UI")
-	# then Commands should be @("dnr", "nir") for API=dnr, UI=nir
+	# Commands is keyed by the ProjectTerminals path the command runs in, so a command
+	# lives next to the path it belongs to and no two lists have to line up by position.
+	# A path that is not named here opens its terminal tab with nothing run in it.
 	#
 	# Both DotnetRun (dnr) and DotnetBuildAndRun (dnbr) are supported
 	RunnableProjectMappings       = @(
-		@{ Name   = "WinuX";
-		 Commands = @("", "npx docsify-cli serve")
+		@{ Name     = "WinuX";
+			Commands = @{ DOCS = "npx docsify-cli serve" }
 		}
-		@{ Name            = "ExampleProject";
-			Commands          = @("dnr", "nir");
+		@{ Name              = "ExampleProject";
+			Commands          = @{ API = "dnr"; UI = "nir" };
 			DatabaseProviders = @("PostgreSQL");
 		}
 	)
@@ -1822,14 +1836,6 @@
 	# ==========================================================================
 	# Workspace Configuration
 	# ==========================================================================
-	Workspaces                    = @(
-		"Default",
-		"Example",
-		"Fullscreen",
-		"Empty",
-		"WinuX"
-	)
-
 	# Workspace opened when [Enter] is pressed with no input at the Open-Workspace menu.
 	# Must name an entry in WorkspaceActions below - Open-Workspace only advertises the
 	# default in its prompt when that entry exists. Set to "" to drop the offer entirely:
@@ -1914,11 +1920,13 @@
 	# Defines actions to be executed when opening each workspace via Open-Workspace.
 	# Each workspace can have multiple actions executed in sequence.
 	#
+	# The menu lists the entries below in the order they are written - defining a workspace
+	# here is what puts it in the menu, there is no separate workspace list.
+	#
 	# HOW TO ADD A NEW WORKSPACE:
-	# 1. Add workspace name to the Workspaces list above
-	# 2. Add entry here defining what happens when the workspace opens
-	# 3. Create a layout file in Layouts/{MachineType}/{WorkspaceName}_{MachineType}.psd1
-	# 4. Run: Visualize-Layouts -Layout "{WorkspaceName}_{MachineType}" -Update
+	# 1. Add entry here defining what happens when the workspace opens
+	# 2. Create a layout file in Layouts/{MachineType}/{WorkspaceName}_{MachineType}.psd1
+	# 3. Run: Visualize-Layouts -Layout "{WorkspaceName}_{MachineType}" -Update
 	#
 	# HOW TO OPEN A WORKSPACE:
 	# - Open-Workspace                    # Interactive menu to select workspace
@@ -2015,64 +2023,61 @@
 	#   )
 	# ==========================================================================
 	# TODO: Add support for a "universal" param which will then be sent to every action
-	WorkspaceActions              = @{
-		Example    = @(
-			@{ Action = "Open-Browser"; Parameters = @{ NoMenu = $true ; Instances = 33 } }
-			@{ Action = "Set-WorkspaceWindowLayout"; Parameters = @{ WorkspaceName = "Example" } }
-			@{ Action = "Focus-VirtualDesktop"; Parameters = @{ DesktopNumber = 1 } }
-		)
+	WorkspaceActions              = @(
+		@{ Default    = @(
+				@{ Action = "Open-Browser"; Parameters = @{ Groups = @("Google", "YouTube") } }
+				@{ Action = "Set-WorkspaceWindowLayout"; Parameters = @{ WorkspaceName = "Default" } }
+				@{ Action = "Focus-VirtualDesktop"; Parameters = @{ DesktopNumber = 1 } }
+				@{ Action = "Terminate-WindowsTerminalTabs"; Parameters = @{ IncludeCurrent = $true } }
+			)
+		}
 
-		Fullscreen = @(
-			@{ Action = "Set-WorkspaceWindowLayout"; Parameters = @{ WorkspaceName = "Fullscreen" } }
-			@{ Action = "Focus-VirtualDesktop"; Parameters = @{ DesktopNumber = 1 } }
-		)
+		@{ Example    = @(
+				@{ Action = "Open-Browser"; Parameters = @{ NoMenu = $true ; Instances = 33 } }
+				@{ Action = "Set-WorkspaceWindowLayout"; Parameters = @{ WorkspaceName = "Example" } }
+				@{ Action = "Focus-VirtualDesktop"; Parameters = @{ DesktopNumber = 1 } }
+			)
+		}
 
-		Empty      = @(
-			@{ Action = "Set-WorkspaceWindowLayout"; Parameters = @{ WorkspaceName = "Empty" } }
-			@{ Action = "Focus-VirtualDesktop"; Parameters = @{ DesktopNumber = 1 } }
-		)
+		@{ Fullscreen = @(
+				@{ Action = "Set-WorkspaceWindowLayout"; Parameters = @{ WorkspaceName = "Fullscreen" } }
+				@{ Action = "Focus-VirtualDesktop"; Parameters = @{ DesktopNumber = 1 } }
+			)
+		}
 
-		Default    = @(
-			@{ Action = "Open-Browser"; Parameters = @{ Groups = @("Google", "YouTube") } }
-			@{ Action = "Set-WorkspaceWindowLayout"; Parameters = @{ WorkspaceName = "Default" } }
-			@{ Action = "Focus-VirtualDesktop"; Parameters = @{ DesktopNumber = 1 } }
-			@{ Action = "Terminate-WindowsTerminalTabs"; Parameters = @{ IncludeCurrent = $true } }
-		)
+		@{ Empty      = @(
+				@{ Action = "Set-WorkspaceWindowLayout"; Parameters = @{ WorkspaceName = "Empty" } }
+				@{ Action = "Focus-VirtualDesktop"; Parameters = @{ DesktopNumber = 1 } }
+			)
+		}
 
 		# WinuX development: the repository's GitHub page on the left, VS Code on the right
 		# (FancyZones layout "One") on virtual desktop 1. The terminal tab that launched the
 		# workspace is closed last (OnlyCurrent leaves every other tab alive).
-		WinuX      = @(
-			@{ Action = "Open-Browser"; Parameters = @{ Groups = @("WinuX") } }
-			@{ Action = "Open-VSCode"; Parameters = @{ Folder = "WinuX" } }
-			@{ Action = "Set-WorkspaceWindowLayout"; Parameters = @{ WorkspaceName = "WinuX" } }
-			@{ Action = "Focus-VirtualDesktop"; Parameters = @{ DesktopNumber = 1 } }
-			@{ Action = "Terminate-WindowsTerminalTabs"; Parameters = @{ OnlyCurrent = $true } }
-		)
-	}
+		@{ WinuX      = @(
+				@{ Action = "Open-Browser"; Parameters = @{ Groups = @("WinuX") } }
+				@{ Action = "Open-VSCode"; Parameters = @{ Folder = "WinuX" } }
+				@{ Action = "Set-WorkspaceWindowLayout"; Parameters = @{ WorkspaceName = "WinuX" } }
+				@{ Action = "Focus-VirtualDesktop"; Parameters = @{ DesktopNumber = 1 } }
+				@{ Action = "Terminate-WindowsTerminalTabs"; Parameters = @{ OnlyCurrent = $true } }
+			)
+		}
+	)
 
 	# ==========================================================================
 	# D&D Configuration
 	# ==========================================================================
-	Campaigns                     = @(
-		"ExampleCampaign"
-	)
-
 	# Per-campaign resources consumed by Open-DnD (rulebook PDF + resource browser group).
-	CampaignResources             = @{
-		ExampleCampaign = @{ Pdf = "ExampleCharacter"; Browser = "Reference" }
-	}
+	CampaignResources             = @(
+		@{ ExampleCampaign = @{ Pdf = "ExampleCharacter"; Browser = "Reference" } }
+	)
 
 	# ==========================================================================
 	# Acrobat Configuration
 	# ==========================================================================
-	AcrobatGroups                 = @(
-		"ExampleRulebook"
+	AcrobatPdfGroups              = @(
+		@{ "ExampleRulebook" = @("Dnd.ExampleCharacter") }
 	)
-
-	AcrobatPdfGroups              = @{
-		"ExampleRulebook" = @("Dnd.ExampleCharacter")
-	}
 
 	# ==========================================================================
 	# Taskbar Configuration

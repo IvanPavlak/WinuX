@@ -5,6 +5,8 @@ BeforeAll {
 	. "$ConfigurationFunctionsPath\Find-ConfigurationSection.ps1"
 	. "$ConfigurationFunctionsPath\ConvertTo-ActionString.ps1"
 	. "$ConfigurationFunctionsPath\Add-Project.ps1"
+	. (Join-Path (Get-RepositoryPath).Modules "Helper\Functions\Get-OrderedNames.ps1")
+	. (Join-Path (Get-RepositoryPath).Modules "Helper\Functions\Get-OrderedEntry.ps1")
 }
 
 Describe "Add-Project" {
@@ -19,22 +21,21 @@ Describe "Add-Project" {
 		$testConfig = Join-Path $psDir "Configuration.psd1"
 		$configContent = @(
 			'@{'
-			'	Projects = @('
-			'		"Existing"'
-			'	)'
-			''
 			'	ProjectTerminals = @('
 			'		@{ Name = "Existing"; BasePath = "Projects.Existing"; Paths = @("ROOT") }'
 			'	)'
 			''
-			'	ProjectActions = @{'
-			'		Existing                    = @('
-			'			@{ Action = "Open-VSCode"; Parameters = @{ Folder = "{ProjectName}" } }'
-			'		)'
-			'	}'
+			'	ProjectActions = @('
+			'		@{ Existing                    = @('
+			'				@{ Action = "Open-VSCode"; Parameters = @{ Folder = "{ProjectName}" } }'
+			'			)'
+			'		}'
+			'	)'
 			''
-			'	RunnableProjects = @('
-			'		"Existing"'
+			'	RunnableProjectMappings = @('
+			'		@{ Name     = "Existing";'
+			'			Commands = @{}'
+			'		}'
 			'	)'
 			''
 			'	TerminalTabs = @{'
@@ -48,18 +49,19 @@ Describe "Add-Project" {
 	}
 
 	Context "Basic project addition" {
-		It "Should add project to Projects array" {
+		It "Should write one entry, in ProjectActions, and no second name list" {
 			Add-Project -Name "NewApp" -ConfigurationFilePath $testConfig
 
 			$parsed = Import-PowerShellDataFile -Path $testConfig
-			$parsed.Projects | Should -Contain "NewApp"
+			$parsed.ContainsKey("Projects") | Should -BeFalse
+			@(Get-OrderedNames $parsed.ProjectActions) | Should -Be @("Existing", "NewApp")
 		}
 
 		It "Should create default ProjectActions" {
 			Add-Project -Name "NewApp" -ConfigurationFilePath $testConfig
 
 			$parsed = Import-PowerShellDataFile -Path $testConfig
-			$parsed.ProjectActions.NewApp | Should -Not -BeNullOrEmpty
+			Get-OrderedEntry $parsed.ProjectActions "NewApp" | Should -Not -BeNullOrEmpty
 		}
 
 		It "Should use custom actions when provided" {
@@ -84,11 +86,16 @@ Describe "Add-Project" {
 			$parsed.TerminalTabs.NewApp.Count | Should -Be 2
 		}
 
-		It "Should add to RunnableProjects when -Runnable is set" {
+		It "Should add a RunnableProjectMappings entry when -Runnable is set" {
 			Add-Project -Name "NewApp" -Runnable -ConfigurationFilePath $testConfig
 
 			$parsed = Import-PowerShellDataFile -Path $testConfig
-			$parsed.RunnableProjects | Should -Contain "NewApp"
+			$parsed.ContainsKey("RunnableProjects") | Should -BeFalse
+			$mapping = $parsed.RunnableProjectMappings | Where-Object { $_.Name -eq "NewApp" }
+			$mapping | Should -Not -BeNullOrEmpty
+			# Commands is keyed by path and filled in by hand - an empty table runs nothing yet.
+			$mapping.Commands.Count | Should -Be 0
+			@($parsed.RunnableProjectMappings.Name) | Should -Be @("Existing", "NewApp")
 		}
 
 		It "Should add ProjectTerminals entry when BasePath and Paths provided" {
@@ -117,10 +124,9 @@ Describe "Add-Project" {
 
 			$parsed = Import-PowerShellDataFile -Path $testConfig
 			$parsed | Should -Not -BeNullOrEmpty
-			$parsed.Projects | Should -Contain "FullApp"
-			$parsed.ProjectActions.FullApp | Should -Not -BeNullOrEmpty
+			Get-OrderedEntry $parsed.ProjectActions "FullApp" | Should -Not -BeNullOrEmpty
 			$parsed.TerminalTabs.FullApp | Should -Not -BeNullOrEmpty
-			$parsed.RunnableProjects | Should -Contain "FullApp"
+			@($parsed.RunnableProjectMappings.Name) | Should -Contain "FullApp"
 			$entry = $parsed.ProjectTerminals | Where-Object { $_.Name -eq "FullApp" }
 			$entry | Should -Not -BeNullOrEmpty
 		}

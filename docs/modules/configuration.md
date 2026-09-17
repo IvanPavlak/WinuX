@@ -34,11 +34,11 @@ Add-BrowserGroup -GroupName GroupName -SimpleUrls @("https://www.google.com/")
 
 ## [Add-Project](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Configuration/Functions/Add-Project.ps1)
 
-- **Description:** Adds a project to `Configuration.psd1`. Appends the name to the `Projects` array, creates its `ProjectActions` entry, and optionally adds `TerminalTabs`, `ProjectTerminals`, and `RunnableProjects` entries. If no actions are given it creates default `Open-VSCode` + `Open-ProjectTerminals-Or-RunProject` actions.
+- **Description:** Adds a project to `Configuration.psd1`. Appends its `ProjectActions` entry - the project's only definition and its place in the `Open-Project` menu - and optionally adds `TerminalTabs`, `ProjectTerminals` and `RunnableProjectMappings` entries. If no actions are given it creates default `Open-VSCode` + `Open-ProjectTerminals-Or-RunProject` actions.
 - **Parameters:** -Name, -Actions, -TerminalTabs, -BasePath, -Paths, -Runnable, -ConfigurationFilePath
 - **Usage:** `Add-Project -Name "MyProject"`, `Add-Project -Name "MyProject" -TerminalTabs @(@{ Title = "Root"; Path = "DEFAULT" }) -Runnable`
 
-Edits `Configuration.psd1` in place by locating each section (`Projects`, `ProjectActions`, and optionally `TerminalTabs`, `RunnableProjects`, `ProjectTerminals`) and inserting the new lines. A `ProjectActions` entry is always created; the other sections are only touched when their corresponding parameters are supplied.
+Edits `Configuration.psd1` in place by locating each section (`ProjectActions`, and optionally `TerminalTabs`, `RunnableProjectMappings`, `ProjectTerminals`) and inserting the new lines. A `ProjectActions` entry is always created; the other sections are only touched when their corresponding parameters are supplied.
 
 | Parameter                | Description                                                                                                                                  |
 | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -47,7 +47,7 @@ Edits `Configuration.psd1` in place by locating each section (`Projects`, `Proje
 | `-TerminalTabs`          | Optional array of terminal tab hashtables, each `@{ Title = "..."; Path = "..." }`, added to the `TerminalTabs` section.                     |
 | `-BasePath`              | Optional dot-notation base path for the `ProjectTerminals` entry (e.g. `"Projects.MyProject"`). Requires `-Paths`.                           |
 | `-Paths`                 | Optional array of path names for the `ProjectTerminals` entry (e.g. `@("ROOT", "API")`). Requires `-BasePath`.                               |
-| `-Runnable`              | If set, adds the project to `RunnableProjects`.                                                                                              |
+| `-Runnable`              | If set, adds a `RunnableProjectMappings` entry (with an empty `Commands` table).                                                                                              |
 | `-ConfigurationFilePath` | Override the `Configuration.psd1` path (for testing).                                                                                        |
 
 ```powershell
@@ -325,7 +325,7 @@ All functions are covered by Pester tests in `Modules/Tests/Modules/Configuratio
 | `Find-ConfigurationSection.Tests.ps1` | 7     | Hashtable/array finding, single-line arrays, string placeholders, nesting                             |
 | `Add-BrowserGroup.Tests.ps1`          | 4     | Named URLs, simple URLs, valid format, error handling                                                 |
 | `Add-Workspace.Tests.ps1`             | 4     | Name addition, actions, default action, valid format                                                  |
-| `Add-Project.Tests.ps1`               | 8     | Basic, defaults, custom actions, TerminalTabs, ProjectTerminals, RunnableProjects, PathMappings, full |
+| `Add-Project.Tests.ps1`               | 8     | Basic, defaults, custom actions, TerminalTabs, ProjectTerminals, RunnableProjectMappings, PathMappings, full |
 | `Add-SymbolicLink.Tests.ps1`          | 4     | Simple link, preserve existing, nested links, valid format                                            |
 | `Add-WindowLayout.Tests.ps1`          | 8     | File creation, multiple machines, no overwrite, valid data, SimpleLayoutWorkspaces                    |
 | `Save-AppCsvOverlay.Tests.ps1`        | 20    | Overlay written and reported, the committed CSV byte-identical, header on line 1, comment banner, backups, `-WhatIf`, every machine-token refusal, blank `-RepoRoot`, comma and quote round-trips, header-only overlay, columns from the base header, temp-file hygiene |

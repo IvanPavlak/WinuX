@@ -9,6 +9,7 @@ BeforeAll {
 	# mocks in these tests apply to the guard's warning.
 	. "$ModuleRoot\Helper\Functions\Test-ConfigValue.ps1"
 	. "$ModuleRoot\Helper\Functions\Confirm-ConfigValue.ps1"
+	. "$ModuleRoot\Helper\Functions\Get-OrderedEntry.ps1"
 
 	. "$FunctionsPath\Test-MachineOnline.ps1"
 }
@@ -30,8 +31,8 @@ Describe "Test-MachineOnline" {
 			Remove-Variable -Name Configuration -Scope Global -ErrorAction SilentlyContinue
 		}
 
-		It "Returns false when WakeOnLanConfig is an empty hashtable (truthy in PowerShell)" {
-			$global:Configuration = @{ WakeOnLanConfig = @{} }
+		It "Returns false when WakeOnLanConfig is an empty list (truthy in PowerShell)" {
+			$global:Configuration = @{ WakeOnLanConfig = @() }
 
 			Test-MachineOnline -Machine "Server" | Should -BeFalse
 			Should -Invoke Write-LogWarning -ParameterFilter { $Message -match "Wake-on-LAN not configured" }
@@ -42,7 +43,7 @@ Describe "Test-MachineOnline" {
 
 	Context "When the machine is not configured" {
 		It "Returns false and reports it was not found" {
-			$global:Configuration = @{ WakeOnLanConfig = @{ "Server" = @{ Address = "10.0.0.5" } } }
+			$global:Configuration = @{ WakeOnLanConfig = @( @{ "Server" = @{ Address = "10.0.0.5" } } ) }
 
 			Test-MachineOnline -Machine "Unknown" | Should -BeFalse
 			Should -Invoke Write-LogError -ParameterFilter { $Message -match "not found" }
@@ -53,7 +54,7 @@ Describe "Test-MachineOnline" {
 
 	Context "When the machine has no Address" {
 		It "Returns false and warns that reachability cannot be tested" {
-			$global:Configuration = @{ WakeOnLanConfig = @{ "Server" = @{ Address = "" } } }
+			$global:Configuration = @{ WakeOnLanConfig = @( @{ "Server" = @{ Address = "" } } ) }
 
 			Test-MachineOnline -Machine "Server" | Should -BeFalse
 			Should -Invoke Write-LogWarning -ParameterFilter { $Message -match "No \[Address\] configured" }
@@ -64,7 +65,7 @@ Describe "Test-MachineOnline" {
 
 	Context "When -Quiet is specified on an unresolvable target" {
 		It "Returns a boolean and writes nothing" {
-			$global:Configuration = @{ WakeOnLanConfig = @{ "Server" = @{ Address = "" } } }
+			$global:Configuration = @{ WakeOnLanConfig = @( @{ "Server" = @{ Address = "" } } ) }
 
 			$result = Test-MachineOnline -Machine "Server" -Quiet
 			$result | Should -BeOfType [bool]

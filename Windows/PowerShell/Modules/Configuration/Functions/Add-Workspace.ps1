@@ -3,8 +3,9 @@ function Add-Workspace {
 	.SYNOPSIS
 		Adds a workspace to Configuration.psd1.
 	.DESCRIPTION
-		Adds a workspace name to the Workspaces array and creates its
-		WorkspaceActions entry in Configuration.psd1.
+		Appends a workspace to the WorkspaceActions list in Configuration.psd1. That list
+		is the only definition of a workspace: it is both what Open-Workspace offers and
+		the order it offers them in, so one entry is written, never two.
 	.PARAMETER Name
 		The workspace name.
 	.PARAMETER Actions
@@ -44,20 +45,6 @@ function Add-Workspace {
 	$lines = @(Get-Content -Path $configPath)
 	$t = "`t"
 
-	# 1. Add to Workspaces array
-	$wsSection = Find-ConfigurationSection -Lines $lines -SectionName "Workspaces"
-	if (-not $wsSection) {
-		Write-LogError "Error: Workspaces section not found!"
-		return
-	}
-
-	$newLines = [System.Collections.ArrayList]::new($lines)
-	$newLines.Insert($wsSection.EndIndex, "$($wsSection.Indent)$t`"$Name`"")
-	$lines = @($newLines)
-
-	Write-LogDebug " [Add-Workspace] Added '$Name' to Workspaces array"
-
-	# 2. Add WorkspaceActions entry
 	$waSection = Find-ConfigurationSection -Lines $lines -SectionName "WorkspaceActions"
 	if (-not $waSection) {
 		Write-LogError "Error: WorkspaceActions section not found!"
@@ -70,16 +57,19 @@ function Add-Workspace {
 		)
 	}
 
+	# One ordered entry: a single-key hashtable whose key is the workspace name, appended
+	# at the end of the list so the new workspace shows up last in the menu.
 	$base = $waSection.Indent + $t
 	$padded = $Name.PadRight(24)
 	$actionLines = @("")
-	$actionLines += "$base$padded= @("
+	$actionLines += "$base@{ $padded= @("
 
 	foreach ($action in $Actions) {
-		$actionLines += ConvertTo-ActionString -Action $action -Indent "$base$t"
+		$actionLines += ConvertTo-ActionString -Action $action -Indent "$base$t$t"
 	}
 
-	$actionLines += "$base)"
+	$actionLines += "$base$t)"
+	$actionLines += "$base}"
 
 	$newLines = [System.Collections.ArrayList]::new($lines)
 	$insertIndex = $waSection.EndIndex

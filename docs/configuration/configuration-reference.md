@@ -9,6 +9,41 @@
 
 ---
 
+## Ordered Sections
+
+Every section whose entries become a menu is an **ordered list**: an array of single-key
+hashtables, one per entry, where the key is the entry name and the value is the entry.
+
+```powershell
+WorkspaceActions = @(
+    @{ Default = @( <actions> ) }
+    @{ WinuX   = @( <actions> ) }
+)
+```
+
+The menu follows the order they are written in, and an entry is defined exactly once - there is no
+separate name list to keep in sync with the definitions. A plain hashtable cannot carry the order:
+`Import-PowerShellDataFile` returns a `System.Collections.Hashtable`, and key order is lost at load
+time, so a hashtable-shaped section renders sorted instead of following the file.
+`Test-ConfigurationSchema` reports a section still written as a hashtable.
+
+Sections shaped this way: `BrowserGroups`, `RepositoryGroups`, `ProjectActions`,
+`WorkspaceActions`, `CampaignResources`, `AcrobatPdfGroups`, `WakeOnLanConfig`, `Locales`,
+`KeyboardLayoutSets` and `NerdFonts`. `RunnableProjectMappings` is an ordered record array (each
+record carries its own `Name`) and reads the same way.
+
+Plain hashtables stay plain where order means nothing - a lookup table keyed by machine type
+(`Themes`, `PowerPlans`) or by name (`KeyboardLayouts`, `DisplayLanguages`).
+
+Reading one from PowerShell:
+
+```powershell
+Get-OrderedNames $global:Configuration.WorkspaceActions            # the names, in menu order
+Get-OrderedEntry $global:Configuration.WorkspaceActions "WinuX"    # one entry, by name
+```
+
+---
+
 ## Universal Constants
 
 Machine-independent settings that remain the same across all machines.
@@ -255,19 +290,16 @@ PathTemplates = @{
 
 Defines projects and their associated actions, terminals, and run configurations.
 
-### Projects List
-
-All available projects for the `Open-Project` menu.
-
-**Key:** `Projects` → Array of project names
-
-**Consumer function:** `Open-Project`
-
 ### Project Actions
 
-Defines what happens when a project opens. Each action is executed in order.
+Every project the `Open-Project` menu offers, and what opening each one does. This is an
+[ordered section](#ordered-sections): one single-key hashtable per project, the key being the
+project name and the value its action list. The menu follows the order written here, and a project
+is defined exactly once - there is no separate project list.
 
-**Key:** `ProjectActions.{ProjectName}` → Array of action objects
+**Key:** `ProjectActions` → Ordered list of `@{ <ProjectName> = @( <actions> ) }`
+
+Each action is executed in order.
 
 **Action object format:**
 
@@ -288,13 +320,14 @@ Defines what happens when a project opens. Each action is executed in order.
 **Example:**
 
 ```powershell
-ProjectActions = @{
-    MyProject = @(
-        @{ Action = "Open-VSCode"; Parameters = @{ Folder = "MyProject" } }
-        @{ Action = "Open-Browser"; Parameters = @{ Groups = @("MyProject-Api") } }
-        @{ Action = "Open-ProjectTerminals" }
-    )
-}
+ProjectActions = @(
+    @{ MyProject = @(
+            @{ Action = "Open-VSCode"; Parameters = @{ Folder = "MyProject" } }
+            @{ Action = "Open-Browser"; Parameters = @{ Groups = @("MyProject-Api") } }
+            @{ Action = "Open-ProjectTerminals" }
+        )
+    }
+)
 ```
 
 ### Project Terminals
@@ -317,9 +350,14 @@ Terminal tab configurations for each project. Defines terminal names and their w
 
 ### Runnable Project Mappings
 
-Maps project names to run commands and startup configurations.
+Every project the `Run-Project` menu offers, with its run commands and startup configuration.
+The menu follows the order written here - this list is the only definition of a runnable project.
 
-**Key:** `RunnableProjectMappings` → Array of run configurations
+**Key:** `RunnableProjectMappings` → Ordered array of run configurations, each carrying its own `Name`
+
+`Commands` is a hashtable keyed by the `ProjectTerminals` path the command runs in, so a command
+sits next to the path it belongs to instead of lining up with it by position. A path that is not
+named in `Commands` opens its terminal tab with nothing run in it.
 
 **Run command strings:**
 
@@ -327,7 +365,6 @@ Maps project names to run commands and startup configurations.
 - `"dnbr"` → `dotnet build && dotnet run`
 - `"nir"` → `npm install && npm start`
 - `"<custom-string>"` → Executed as-is in terminal
-- `""` (empty) → Terminal only (no auto-run)
 
 **Consumer function:** `Run-Project` (invoked by `rp` alias)
 
@@ -337,8 +374,8 @@ Maps project names to run commands and startup configurations.
 RunnableProjectMappings = @(
     @{
         Name              = "OtherProject"
-        Commands          = @("dnr", "nir")       # One command per ProjectTerminals Paths entry, same order
-        DatabaseProviders = @("PostgreSQL")       # Optional - starts Docker Compose via DockerWizard
+        Commands          = @{ API = "dnr"; UI = "nir" }   # Keyed by ProjectTerminals path
+        DatabaseProviders = @("PostgreSQL")                # Optional - starts Docker Compose via DockerWizard
     }
 )
 ```
@@ -439,22 +476,20 @@ Defines hierarchical URL groups for the `Open-Browser` function. Supports three 
 
 PDF document groups for `Open-Acrobat`.
 
-**Keys:**
+**Key:** `AcrobatPdfGroups` → Ordered list of `@{ <GroupName> = @( <paths> ) }`
 
-- `AcrobatPdfGroups` - Hashtable mapping group names → paths
-- `AcrobatGroups` → Alternative naming (verify current config)
+An [ordered section](#ordered-sections): the menu offers the groups in the order written here, and
+a group is defined exactly once. Paths are dot-notation references into the expanded paths.
 
 **Consumer function:** `Open-Acrobat`
 
 **Example:**
 
 ```powershell
-AcrobatPdfGroups = @{
-    Learning = "{User}\Learning\Programming C 10 Build Cloud, Web, and Desktop Applications Ian Griffiths.pdf"
-    DnD      = @{
-        MyCampaign = "{Dev}\Obsidian\03_DungeonsAndDragons\Campaigns\...\.pdf"
-    }
-}
+AcrobatPdfGroups = @(
+    @{ Learning = @("Learning.CSharpInDepth") }
+    @{ MyCampaign = @("Dnd.MyCharacter") }
+)
 ```
 
 ---
@@ -486,14 +521,6 @@ Deep-merges: set only the key you need in `Configuration.local.psd1`. Persisting
 ## Workspace Management
 
 Defines workspaces and their associated actions.
-
-### Workspaces List
-
-All available workspaces for the `Open-Workspace` menu.
-
-**Key:** `Workspaces` → Array of workspace names
-
-**Consumer function:** `Open-Workspace`
 
 ### Default Workspace
 
@@ -532,9 +559,12 @@ The history can be read at any time with `Get-WorkspaceBenchmark` (`-Workspace`,
 
 ### Workspace Actions
 
-Defines what happens when a workspace opens.
+Every workspace the `Open-Workspace` menu offers, and what opening each one does. This is an
+[ordered section](#ordered-sections): one single-key hashtable per workspace, the key being the
+workspace name and the value its action list. The menu follows the order written here, and a
+workspace is defined exactly once - there is no separate workspace list.
 
-**Key:** `WorkspaceActions.{WorkspaceName}` → Array of action objects
+**Key:** `WorkspaceActions` → Ordered list of `@{ <WorkspaceName> = @( <actions> ) }`
 
 **Format:** Same as `ProjectActions` - array of `@{ Action = "...", Parameters = @{ ... } }` objects
 
@@ -725,7 +755,7 @@ SystemTheme = @{
 
 **Keys:**
 
-- `Locales` - Hashtable keyed by language name → `@{ Code; GeoId }` (e.g. `Croatian = @{ Code = "hr-HR"; GeoId = 108 }`)
+- `Locales` - [Ordered section](#ordered-sections): `@( @{ Croatian = @{ Code = "hr-HR"; GeoId = 108 } } ... )`, offered in the order written
 - `DisplayLanguages` - Hashtable keyed by language name → language code
 - `DefaultLocale` / `DefaultDisplayLanguage` - Select which named entry Bootstrap applies
 
@@ -738,7 +768,9 @@ until you set them in `Configuration.local.psd1`.
 
 **Key:** `KeyboardLayouts` → Hashtable mapping layout name → hex layout code
 (e.g. `@{ "Croatian" = "0000041A"; "US" = "00000409" }`); `KeyboardLayoutSets` names layout
-combinations and `DefaultKeyboardLayoutSet` selects the set to apply
+combinations as an [ordered section](#ordered-sections)
+(`@( @{ "Croatian-US" = @("Croatian", "US") } ... )`, offered in the order written) and
+`DefaultKeyboardLayoutSet` selects the set to apply
 
 **Consumer function:** `Set-KeyboardLayouts`
 
@@ -1145,7 +1177,7 @@ Sections not detailed above, with their real shapes and consumers:
 | Key | Shape | Purpose | Consumer |
 | --- | --- | --- | --- |
 | `MachineOverrides` | `@{ <Type> = @{ ... } }` | Machine-specific values merged over the expanded paths after placeholder expansion - only for what cannot be templated (ships empty) | `Expand-ConfigPaths` |
-| `NerdFonts` + `DefaultNerdFont` | font name → `@{ FolderName; SearchPattern }` | Repo-bundled fonts installable by name; `DefaultNerdFont` selects the one Bootstrap installs (ships empty - `Configure-NerdFont` no-ops until set in `Configuration.local.psd1`) | `Configure-NerdFont` |
+| `NerdFonts` + `DefaultNerdFont` | [ordered section](#ordered-sections): `@( @{ <FontName> = @{ FolderName; SearchPattern } } ... )` | Repo-bundled fonts installable by name; `DefaultNerdFont` selects the one Bootstrap installs (ships empty - `Configure-NerdFont` no-ops until set in `Configuration.local.psd1`) | `Configure-NerdFont` |
 | `SpecialFolders` | array of `@{ Path; Name; Value; Description }` registry entries | Special-folder redirections, e.g. Downloads/Screenshots → Desktop (ships empty - `Set-SpecialFolders` no-ops until set in `Configuration.local.psd1`) | `Set-SpecialFolders` |
 | `ExplorerOptions` | array of registry entries (ships empty - Win11Debloat covers the defaults) | File Explorer tweaks applied via the registry | `Set-ExplorerOptions` |
 | `AutoEnvironmentVariables` | name → path (placeholders allowed) | User environment variables written by `Set-EnvironmentVariables -Auto` (ships empty - no-ops until set in `Configuration.local.psd1`) | `Set-EnvironmentVariables` |
@@ -1161,27 +1193,27 @@ Allows waking machines over LAN via `Send-WakeOnLan`, and checking reachability 
 
 **Keys:**
 
-- `WakeOnLanMachines` - Array of machine names available for WOL. Each name must match a `WakeOnLanConfig` key exactly (quote keys with spaces, e.g. `"Proxmox Backup Server"`).
-- `WakeOnLanConfig.{MachineName}` → MAC address, broadcast address, port, and optional `Address`
+- `WakeOnLanConfig` → Ordered list of `@{ <MachineName> = @{ MacAddress; SubNetSpecificBroadcastAddress; Port; Address } }`. An [ordered section](#ordered-sections): the menu offers the machines in the order written here (quote a name with spaces, e.g. `"Proxmox Backup Server"`). `Send-WakeOnLan` appends its own `All` and `None` options - they are not machines and are never configured.
 - `DefaultWakeOnLanMachine` - Default target machine
 
 The optional `Address` (IP or hostname) makes Wake-on-LAN reliable: `Send-WakeOnLan` pings it to skip machines that are already on, and polls it after sending to confirm the machine actually woke up. Omit it (or set `""`) for fire-and-forget behaviour with no ping checks.
 
-The base ships all three keys empty; `Send-WakeOnLan` and `Test-MachineOnline` warn and no-op until you set them in `Configuration.local.psd1` (no placeholder packet is ever sent).
+The base ships both keys empty; `Send-WakeOnLan` and `Test-MachineOnline` warn and no-op until you set them in `Configuration.local.psd1` (no placeholder packet is ever sent).
 
 **Consumer functions:** `Send-WakeOnLan`, `Test-MachineOnline`
 
 **Example (opt-in via `Configuration.local.psd1`):**
 
 ```powershell
-WakeOnLanConfig = @{
-    Server = @{
-        MacAddress                     = "AA-BB-CC-DD-EE-FF"
-        SubNetSpecificBroadcastAddress = "192.168.1.255"
-        Address                        = "192.168.1.10"  # IP or hostname; "" to disable ping checks
-        Port                           = 9
+WakeOnLanConfig = @(
+    @{ Server = @{
+            MacAddress                     = "AA-BB-CC-DD-EE-FF"
+            SubNetSpecificBroadcastAddress = "192.168.1.255"
+            Address                        = "192.168.1.10"  # IP or hostname; "" to disable ping checks
+            Port                           = 9
+        }
     }
-}
+)
 ```
 
 ---
@@ -1443,9 +1475,8 @@ are lowercase - note the WSL user routinely differs from the Windows username, e
 ### Adding a New Project
 
 1. Add project path in `PathTemplates.Projects`
-2. Add to `Projects` list for `Open-Project` menu
-3. Add `ProjectActions` to define what happens when opened
-4. (Optional) Add to `VSCodeProjects`, `VisualStudioSolutions`, `ProjectTerminals`, `RunnableProjectMappings`
+2. Add a `ProjectActions` entry - it defines what opening does AND puts the project in the `Open-Project` menu
+3. (Optional) Add to `VSCodeProjects`, `VisualStudioSolutions`, `ProjectTerminals`, `RunnableProjectMappings`
 
 ### Adding a New Browser Group
 

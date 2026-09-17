@@ -49,9 +49,11 @@ function Open-Acrobat {
 			return
 		}
 
-		$validPdfGroups = $Configuration.AcrobatGroups
+		# The group names in configuration order - AcrobatPdfGroups is the only definition,
+		# so the menu follows the file and nothing can drift out of sync with it.
+		$validPdfGroups = @(Get-OrderedNames $pdfGroupsConfig)
 		if (-not $validPdfGroups) {
-			Write-LogError "Error: AcrobatGroups not found in configuration."
+			Write-LogError "Error: no PDF groups configured in AcrobatPdfGroups."
 			return
 		}
 
@@ -205,7 +207,7 @@ function Open-Acrobat {
 		$allSuccessful = $true
 		foreach ($selection in $selectedPdfs) {
 			if ($validPdfGroups -contains $selection) {
-				$pathStrings = $pdfGroupsConfig[$selection]
+				$pathStrings = Get-OrderedEntry $pdfGroupsConfig $selection
 				foreach ($pathString in $pathStrings) {
 					$resolvedPath = $null
 					try {

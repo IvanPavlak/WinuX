@@ -63,7 +63,7 @@ function Open-Project {
 
 	$resolveParams = @{
 		InputObject              = $Project
-		OptionList               = $Configuration.Projects
+		OptionList               = @(Get-OrderedNames $Configuration.ProjectActions)
 		MenuTitle                = "[Available projects]"
 		PromptMessage            = "Enter project(s) or press Enter to skip"
 		AllowMultipleSelections  = $true
@@ -79,7 +79,7 @@ function Open-Project {
 	$RunAppBool = $RunApp.IsPresent
 
 	foreach ($projectName in $projects) {
-		$projectActions = $Configuration.ProjectActions[$projectName]
+		$projectActions = Get-OrderedEntry $Configuration.ProjectActions $projectName
 
 		if (-not $projectActions) {
 			Write-LogWarning "No actions configured for project [$projectName]"

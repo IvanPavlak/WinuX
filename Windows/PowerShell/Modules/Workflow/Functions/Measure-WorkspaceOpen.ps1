@@ -235,9 +235,9 @@ function Measure-WorkspaceOpen {
 	}
 
 	$workspaceActions = $null
-	if ($Configuration.WorkspaceActions) { $workspaceActions = $Configuration.WorkspaceActions[$Workspace] }
+	if ($Configuration.WorkspaceActions) { $workspaceActions = Get-OrderedEntry $Configuration.WorkspaceActions $Workspace }
 	if (-not $workspaceActions) {
-		$configured = if ($Configuration.WorkspaceActions) { @($Configuration.WorkspaceActions.Keys | Sort-Object) -join ', ' } else { 'none' }
+		$configured = if ($Configuration.WorkspaceActions) { @(Get-OrderedNames $Configuration.WorkspaceActions) -join ', ' } else { 'none' }
 		Write-LogError "Workspace [$Workspace] is not configured in WorkspaceActions (configured: $configured)." -NoLeadingNewline
 		return
 	}

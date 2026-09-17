@@ -9,28 +9,23 @@ Sends Wake-on-LAN magic packets to one or more machines configured in `WakeOnLan
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`DefaultWakeOnLanMachine`](../../configuration-reference.md#wake-on-lan-configuration) | string | empty string | Which entry from `WakeOnLanMachines` `Send-WakeOnLan` targets with no argument. |
-| [`WakeOnLanConfig`](../../configuration-reference.md#wake-on-lan-configuration) | hashtable of settings | `@{}` (empty) | Wake-on-LAN transport settings `Send-WakeOnLan` and `Test-MachineOnline` use - broadcast address, port, and reachability timeouts. Ships empty and falls back to sensible built-ins. |
-| [`WakeOnLanMachines`](../../configuration-reference.md#wake-on-lan-configuration) | array of `@{ Name; Mac; ... }` | `@()` (empty) | The machines `Send-WakeOnLan` can wake. Each entry needs a name and a MAC address. |
+| [`DefaultWakeOnLanMachine`](../../configuration-reference.md#wake-on-lan-configuration) | string | empty string | Which machine `Send-WakeOnLan` targets when you press [Enter] with no argument. |
+| [`WakeOnLanConfig`](../../configuration-reference.md#wake-on-lan-configuration) | ordered list of machines (one single-key hashtable each) | `@()` (empty) | Every machine `Send-WakeOnLan` can wake: the machine name is the key, its MAC address, broadcast address, port and optional `Address` are the value. The menu follows the order you write them in. |
 
 ## Decisions
 
-1. Which machine should Wake-on-LAN target by default?
-    - Options: A `Name` from your `WakeOnLanMachines` array.
+1. Which machines do you want to wake over the LAN, and in what order?
+    - Options: One entry per machine: the name you will type, its MAC address, the subnet broadcast address and port. Optionally an `Address` (IP or hostname) so `Send-WakeOnLan` can skip a machine that is already up and confirm one that woke.
+    - Default: Empty - `Send-WakeOnLan` has nothing to target.
+    - More detail: [`WakeOnLanConfig`](../../configuration-reference.md#wake-on-lan-configuration)
+2. Which machine should Wake-on-LAN target by default?
+    - Options: A machine name from `WakeOnLanConfig`.
     - Default: Empty - `Send-WakeOnLan` asks or reports that nothing is configured.
     - More detail: [`DefaultWakeOnLanMachine`](../../configuration-reference.md#wake-on-lan-configuration)
-2. Does your network need non-default Wake-on-LAN settings?
-    - Options: Broadcast address, UDP port and timeouts.
-    - Default: Empty - built-in defaults.
-    - More detail: [`WakeOnLanConfig`](../../configuration-reference.md#wake-on-lan-configuration)
-3. Which machines do you want to wake over the LAN?
-    - Options: One entry per machine: a name you will type, and its MAC address. Optionally an IP for `Test-MachineOnline`.
-    - Default: Empty - `Send-WakeOnLan` has nothing to target.
-    - More detail: [`WakeOnLanMachines`](../../configuration-reference.md#wake-on-lan-configuration)
-4. MAC addresses are machine-specific and this is a real network identifier. Do you want it in your fork configuration?
+3. MAC addresses are machine-specific and this is a real network identifier. Do you want it in your fork configuration?
     - Options: It goes in `Configuration.local.psd1`, which upstream never tracks. If your fork commits that file, the MAC is committed with it.
     - Default: Add it - the local file is the right place for machine-specific values.
-    - More detail: [`WakeOnLanMachines`](../../configuration-reference.md#wake-on-lan-configuration)
+    - More detail: [`WakeOnLanConfig`](../../configuration-reference.md#wake-on-lan-configuration)
 
 ## Where to Put Values
 
@@ -39,51 +34,47 @@ All of it goes in `Configuration.local.psd1`, at the repository's `Windows/Power
 > [!WARNING]
 > The merge is not uniform. **Hashtables deep-merge per key**, so adding one entry to a hashtable leaves every other entry alone. **Arrays and scalars replace wholesale**, so supplying an array key in your local file discards the entire base array. When you want to *add* to a shipped array, copy the whole base array out of `Configuration.psd1` first and add your entry to the copy.
 
-On this page that bites on `WakeOnLanMachines` - that key is an array, so whatever you write is the complete value.
+On this page that bites on `WakeOnLanConfig` - it is an ordered list, so whatever you write is the complete value.
 
 ## Steps Overview
 
-1. Set `DefaultWakeOnLanMachine`
-2. Set `WakeOnLanConfig`
-3. Set `WakeOnLanMachines`
-4. Reload and confirm the merge landed
+1. Set `WakeOnLanConfig`
+2. Set `DefaultWakeOnLanMachine`
+3. Reload and confirm the merge landed
 
-## Step 1: Set `DefaultWakeOnLanMachine`
+## Step 1: Set `WakeOnLanConfig`
 
-Which entry from `WakeOnLanMachines` `Send-WakeOnLan` targets with no argument.
+Every machine `Send-WakeOnLan` can wake, in the order the menu offers them. Each entry is a single-key hashtable: the key is the machine name you will type, the value is how to reach it. Quote a name that contains spaces.
+
+`Send-WakeOnLan` appends its own `All` and `None` options to the menu - they are not machines, so you never configure them.
+
+```powershell
+WakeOnLanConfig = @(
+    @{ HomeServer = @{
+            MacAddress                     = "00-11-22-33-44-55"
+            SubNetSpecificBroadcastAddress = "192.168.1.255"
+            Address                        = "192.168.1.50"
+            Port                           = 9
+        }
+    }
+)
+```
+
+## Step 2: Set `DefaultWakeOnLanMachine`
+
+Which machine `Send-WakeOnLan` targets when you press [Enter] with no argument.
 
 ```powershell
 DefaultWakeOnLanMachine = "HomeServer"
 ```
 
-## Step 2: Set `WakeOnLanConfig`
-
-Wake-on-LAN transport settings `Send-WakeOnLan` and `Test-MachineOnline` use - broadcast address, port, and reachability timeouts. Ships empty and falls back to sensible built-ins.
-
-```powershell
-WakeOnLanConfig = @{
-    BroadcastAddress = "192.168.1.255"
-    Port             = 9
-}
-```
-
-## Step 3: Set `WakeOnLanMachines`
-
-The machines `Send-WakeOnLan` can wake. Each entry needs a name and a MAC address.
-
-```powershell
-WakeOnLanMachines = @(
-    @{ Name = "HomeServer"; Mac = "00:11:22:33:44:55"; Ip = "192.168.1.50" }
-)
-```
-
-## Step 4: Reload and confirm the merge landed
+## Step 3: Reload and confirm the merge landed
 
 Reload the profile, then read the merged value back. `$global:Configuration` after a reload is the ground truth - if what you set is not there, the local file did not parse or the key is nested one level away from where you put it.
 
 ```powershell
 Reload-PowerShellProfile
-$global:Configuration.DefaultWakeOnLanMachine
+$global:Configuration.WakeOnLanConfig
 ```
 
 ## Verification
@@ -94,8 +85,8 @@ Read-only checks. None of these change anything.
 Reload-PowerShellProfile
 $global:Configuration.DefaultWakeOnLanMachine
 $global:Configuration.WakeOnLanConfig
-$global:Configuration.WakeOnLanMachines
-$global:Configuration.WakeOnLanMachines | Format-Table Name, Ip
+Get-OrderedNames $global:Configuration.WakeOnLanConfig
+Get-OrderedEntry $global:Configuration.WakeOnLanConfig "HomeServer"
 Test-MachineOnline -Machine "HomeServer" -Quiet
 ```
 
@@ -108,14 +99,16 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 ```powershell
 # Configuration.local.psd1
 @{
-    DefaultWakeOnLanMachine = "HomeServer"
-    WakeOnLanConfig = @{
-        BroadcastAddress = "192.168.1.255"
-        Port             = 9
-    }
-    WakeOnLanMachines = @(
-        @{ Name = "HomeServer"; Mac = "00:11:22:33:44:55"; Ip = "192.168.1.50" }
+    WakeOnLanConfig = @(
+        @{ HomeServer = @{
+                MacAddress                     = "00-11-22-33-44-55"
+                SubNetSpecificBroadcastAddress = "192.168.1.255"
+                Address                        = "192.168.1.50"
+                Port                           = 9
+            }
+        }
     )
+    DefaultWakeOnLanMachine = "HomeServer"
 }
 ```
 

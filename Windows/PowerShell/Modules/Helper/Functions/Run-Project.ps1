@@ -4,9 +4,16 @@ function Run-Project {
 		Open terminal tabs for configured runnable projects.
 
 	.DESCRIPTION
-		Selects from Configuration.RunnableProjects with optional multi-select.
+		Selects from Configuration.RunnableProjectMappings with optional multi-select - the
+		menu lists the mappings in the order they are configured, which is also the one place
+		a runnable project is defined.
 		Opens Windows Terminal tabs configured for each selected project.
 		Uses Resolve-Selection for interactive menu with -InSameShell option to run in current tab.
+
+		Each mapping's `Commands` is keyed by the ProjectTerminals path the command runs in
+		(`@{ API = "dnr"; UI = "nir" }`), so a command sits next to the path it belongs to
+		instead of lining up with it by position. A path with no command listed gets its
+		terminal tab and nothing run in it.
 
 		The Docker step (resolving a project's compose source and starting containers)
 		is optional, resolved Kill-All-style via Resolve-RunProjectSteps: configure it
@@ -57,7 +64,7 @@ function Run-Project {
 
 	$resolveParams = @{
 		InputObject             = $Project
-		OptionList              = $Configuration.RunnableProjects
+		OptionList              = @($Configuration.RunnableProjectMappings | ForEach-Object { $_.Name })
 		MenuTitle               = "[Available projects]"
 		AllowMultipleSelections = $true
 		DefaultOptionIndex      = 1
@@ -65,8 +72,10 @@ function Run-Project {
 
 	$resolvedProjects = Resolve-Selection @resolveParams
 
+	# Nothing selected is an ordinary outcome - [Enter] at the menu - so the debug lines have to
+	# survive it. $null.GetType() throws, and reporting the type of nothing is not worth a crash.
+	$resolvedProjects = @($resolvedProjects)
 	Write-LogDebug "Resolved projects count: $($resolvedProjects.Count)" -Style Step
-	Write-LogDebug "Resolved projects type: $($resolvedProjects.GetType().FullName)" -Style Step -NoLeadingNewline
 	Write-LogDebug "Resolved projects: $($resolvedProjects -join ', ')" -Style Step -NoLeadingNewline
 
 	# Capture the starting tab title so we can refocus after opening project tabs
@@ -139,27 +148,41 @@ function Run-Project {
 			$commandsToRun = @()
 			$tabTitles = @()
 
-			$pathKeys = $pathMapping.Paths
+			$pathEntries = @($pathMapping.Paths)
 			$projectCommands = $runnableMapping.Commands
-			Write-LogDebug "Path keys count: $($pathKeys.Count), Commands count: $($projectCommands.Count)" -Style Step -NoLeadingNewline
+			Write-LogDebug "Path entries count: $($pathEntries.Count), Commands count: $($projectCommands.Count)" -Style Step -NoLeadingNewline
 
-			# Ensure there's a command for each path key
-			if ($pathKeys.Count -ne $projectCommands.Count) {
-				Write-LogError "Error => Mismatch between configured paths and number of commands for project [$Name]"
-				Write-LogDebug "   Paths: $($pathKeys.Count), Commands: $($projectCommands.Count)" -Style Error -NoLeadingNewline
-				continue
-			}
-
-			for ($i = 0; $i -lt $pathKeys.Count; $i++) {
-				$pathKey = $pathKeys[$i]
+			foreach ($pathEntry in $pathEntries) {
+				# Path entry shapes, the same ones Open-ProjectTerminals accepts:
+				#   "PathKey"                           - resolves from PathTemplates
+				#   @{ Key = "Name"; Path = "C:\path" }  - custom explicit path
+				#   @{ Key = "Name" }                   - plain tab with a custom name
+				$explicitPath = $null
+				if ($pathEntry -is [System.Collections.IDictionary]) {
+					$pathKey = $pathEntry.Key
+					$explicitPath = $pathEntry.Path
+				}
+				else {
+					$pathKey = $pathEntry
+				}
 
 				# Resolve the full path using the project name and path key
-				$path = Resolve-ProjectPath -ProjectName $Name -PathKey $pathKey
+				$path = if ($explicitPath) { $explicitPath } else { Resolve-ProjectPath -ProjectName $Name -PathKey $pathKey }
+
+				# The command for this path, looked up by path key. A path with no command
+				# just gets its tab; the legacy positional array is still read by index.
+				$command = if ($projectCommands -is [System.Collections.IDictionary]) {
+					$projectCommands[$pathKey]
+				}
+				else {
+					$index = [Array]::IndexOf($pathEntries, $pathEntry)
+					if ($index -lt @($projectCommands).Count) { @($projectCommands)[$index] } else { $null }
+				}
 
 				# Construct the command
 				$commandScript = "Set-Location -Path '$path'"
-				if (-not [string]::IsNullOrWhiteSpace($projectCommands[$i])) {
-					$commandScript += "; $($projectCommands[$i])"
+				if (-not [string]::IsNullOrWhiteSpace($command)) {
+					$commandScript += "; $command"
 				}
 				$commandsToRun += $commandScript
 

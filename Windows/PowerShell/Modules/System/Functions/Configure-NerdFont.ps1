@@ -38,8 +38,10 @@ function Configure-NerdFont {
 	$defaultFontName = $Configuration.DefaultNerdFont
 	$targetFontName = ""
 
+	$fontOptions = @(Get-OrderedNames $nerdFonts)
+
 	if (-not [string]::IsNullOrWhiteSpace($FontName)) {
-		if ($nerdFonts.ContainsKey($FontName)) {
+		if ($fontOptions -contains $FontName) {
 			$targetFontName = $FontName
 		}
 		else {
@@ -48,7 +50,6 @@ function Configure-NerdFont {
 		}
 	}
  else {
-		$fontOptions = $nerdFonts.Keys
 		$resolveParams = @{
 			OptionList               = $fontOptions
 			MenuTitle                = "[Available Nerd Fonts]"
@@ -66,7 +67,7 @@ function Configure-NerdFont {
 		}
 	}
 
-	$fontConfig = $nerdFonts[$targetFontName]
+	$fontConfig = Get-OrderedEntry $nerdFonts $targetFontName
 	$fontSearchPattern = $fontConfig.SearchPattern
 	$fontFolderName = $fontConfig.FolderName
 

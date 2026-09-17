@@ -4,7 +4,10 @@ BeforeAll {
 	$script:OriginalConfiguration = $global:Configuration
 	$script:OriginalMachineSpecificPaths = $global:MachineSpecificPaths
 	$AppFunctionsPath = Join-Path (Get-RepositoryPath).Modules "Application\Functions"
+	$HelperFunctionsPath = Join-Path (Get-RepositoryPath).Modules "Helper\Functions"
 	. "$AppFunctionsPath\Open-Acrobat.ps1"
+	. "$HelperFunctionsPath\Get-OrderedNames.ps1"
+	. "$HelperFunctionsPath\Get-OrderedEntry.ps1"
 }
 
 AfterAll {
@@ -16,8 +19,9 @@ Describe "Open-Acrobat" {
 	BeforeEach {
 		$global:MachineSpecificPaths = @{}
 		$global:Configuration = @{
-			AcrobatGroups    = @('ExampleCharacter')
-			AcrobatPdfGroups = @{ ExampleCharacter = @('Docs.ExampleCharacterPdf') }
+			AcrobatPdfGroups = @(
+				@{ ExampleCharacter = @('Docs.ExampleCharacterPdf') }
+			)
 		}
 
 		Mock Write-Host { }

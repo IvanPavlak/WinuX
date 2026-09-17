@@ -5,18 +5,20 @@ BeforeAll {
 	$FunctionsPath = Join-Path $ModuleRoot "Workflow\Functions"
 
 	. "$FunctionsPath\Open-Project.ps1"
+	. (Join-Path $ModuleRoot "Helper\Functions\Get-OrderedNames.ps1")
+	. (Join-Path $ModuleRoot "Helper\Functions\Get-OrderedEntry.ps1")
 }
 
 Describe "Open-Project" {
 	BeforeEach {
 		$script:Configuration = @{
-			Projects       = @("Demo")
-			ProjectActions = @{
-				Demo = @(
-					@{ Action = "Open-ProjectTerminals-Or-RunProject"; Parameters = @{ Project = "{ProjectName}" } },
-					@{ Action = "Open-Browser"; Parameters = @{ Groups = "Docs" } }
-				)
-			}
+			ProjectActions = @(
+				@{ Demo = @(
+						@{ Action = "Open-ProjectTerminals-Or-RunProject"; Parameters = @{ Project = "{ProjectName}" } },
+						@{ Action = "Open-Browser"; Parameters = @{ Groups = "Docs" } }
+					)
+				}
+			)
 		}
 
 		Mock Resolve-Selection { @("Demo") }

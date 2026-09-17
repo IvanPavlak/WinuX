@@ -16,6 +16,12 @@ function Test-ConfigurationSchema {
 		blank and Initialize-Configuration fills into Configuration.local.psd1 on the
 		first run - they warn until then.
 
+		On top of the presence checks it validates the SHAPE of the ordered sections -
+		the ones whose entries become a menu (see the ordering rule in Configuration.psd1).
+		Each must be an array of single-key hashtables; a plain hashtable is reported,
+		because Import-PowerShellDataFile loses key order and its menu would be sorted
+		rather than following the file.
+
 		Call this function immediately after Load-PathConfiguration during the bootstrap
 		or profile initialization sequence to surface typos and missing entries early.
 
@@ -90,6 +96,38 @@ function Test-ConfigurationSchema {
 	foreach ($entry in $requiredKeys) {
 		if (-not (Test-ConfigurationKeyPath -Table $Configuration -Path $entry.Path)) {
 			$failures.Add("Missing or empty required key: $($entry.Desc)")
+		}
+	}
+
+	# Ordered sections: an array of single-key hashtables, one per entry, so the menu
+	# follows the file. Only checked when configured - every one of them may ship empty.
+	$orderedSections = @(
+		'BrowserGroups'
+		'RepositoryGroups'
+		'ProjectActions'
+		'WorkspaceActions'
+		'CampaignResources'
+		'AcrobatPdfGroups'
+		'WakeOnLanConfig'
+		'Locales'
+		'KeyboardLayoutSets'
+		'NerdFonts'
+	)
+
+	foreach ($section in $orderedSections) {
+		$value = $Configuration[$section]
+		if (-not (Test-ConfigValue $value)) {
+			continue
+		}
+
+		if ($value -is [System.Collections.IDictionary]) {
+			$failures.Add("$section is a hashtable - entry order is lost at load time. Write it as an ordered array of single-key hashtables: @( @{ Name = <entry> } ... )")
+			continue
+		}
+
+		$badEntries = @($value | Where-Object { $_ -isnot [System.Collections.IDictionary] -or $_.Count -ne 1 })
+		if ($badEntries.Count -gt 0) {
+			$failures.Add("$section has $($badEntries.Count) entr(y/ies) that are not single-key hashtables - each entry is @{ Name = <entry> }")
 		}
 	}
 

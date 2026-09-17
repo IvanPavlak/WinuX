@@ -584,16 +584,16 @@ Read-WorkspaceOpenMeasurement | Group-Object Session, Variant
 
 ## [Open-DnD](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Workflow/Functions/Open-DnD.ps1)
 
-- **Description:** Opens the full D&D campaign workspace for a tabletop RPG session: the Obsidian vault with campaign notes, the rulebook PDF in Acrobat, and the spell/resource URLs in the browser. The campaign is chosen from the `Campaigns` array in `Configuration.psd1` via an interactive menu when not specified, and `-FoundryVTT` additionally launches the FoundryVTT game server.
+- **Description:** Opens the full D&D campaign workspace for a tabletop RPG session: the Obsidian vault with campaign notes, the rulebook PDF in Acrobat, and the spell/resource URLs in the browser. The campaign is chosen from `CampaignResources` in `Configuration.psd1`, in configuration order, via an interactive menu when not specified, and `-FoundryVTT` additionally launches the FoundryVTT game server.
 - **Parameters:** -Campaign, -FoundryVTT
 - **Usage:** `Open-DnD`, `Open-DnD -Campaign "ExampleCampaign"`, `Open-DnD -Campaign "AnotherCampaign" -FoundryVTT`
 - **Campaigns:** ExampleCampaign, AnotherCampaign
 
-Selects a campaign from `Configuration.psd1` (`Campaigns`) and, per campaign, opens Obsidian, the configured rulebook PDF via `Open-Acrobat`, and the matching spell/resource browser group via `Open-Browser`. When `-FoundryVTT` is given, the FoundryVTT virtual tabletop server is started first via `Open-FoundryVTT`. Omitting `-Campaign` shows the selection menu; if no campaign is chosen the function reports it and exits without opening anything.
+Selects a campaign from `Configuration.psd1` (`CampaignResources`) and, per campaign, opens Obsidian, the configured rulebook PDF via `Open-Acrobat`, and the matching spell/resource browser group via `Open-Browser`. When `-FoundryVTT` is given, the FoundryVTT virtual tabletop server is started first via `Open-FoundryVTT`. Omitting `-Campaign` shows the selection menu; if no campaign is chosen the function reports it and exits without opening anything.
 
 | Parameter     | Description                                                                                                                   |
 | ------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `-Campaign`   | Name of the campaign to open, as defined in the `Campaigns` configuration array. Omit to show the interactive selection menu. |
+| `-Campaign`   | Name of the campaign to open, as defined in the `CampaignResources` configuration list. Omit to show the interactive selection menu. |
 | `-FoundryVTT` | Also launches the FoundryVTT virtual tabletop server.                                                                         |
 
 ```powershell

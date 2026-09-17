@@ -5,13 +5,16 @@ BeforeAll {
 	$FunctionsPath = Join-Path $ModuleRoot "Workflow\Functions"
 
 	. "$FunctionsPath\Open-DnD.ps1"
+	. (Join-Path $ModuleRoot "Helper\Functions\Get-OrderedNames.ps1")
+	. (Join-Path $ModuleRoot "Helper\Functions\Get-OrderedEntry.ps1")
 }
 
 Describe "Open-DnD" {
 	BeforeEach {
 		$script:Configuration = @{
-			Campaigns         = @("ExampleCampaign")
-			CampaignResources = @{ ExampleCampaign = @{ Pdf = "ExampleCharacter"; Browser = "Reference" } }
+			CampaignResources = @(
+				@{ ExampleCampaign = @{ Pdf = "ExampleCharacter"; Browser = "Reference" } }
+			)
 		}
 		Mock Resolve-Selection { $null }
 		Mock Open-FoundryVTT { }

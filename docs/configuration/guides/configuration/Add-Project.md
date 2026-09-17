@@ -11,10 +11,9 @@ Adds a project to `Configuration.psd1`.
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`ProjectActions`](../../configuration-reference.md#project-actions) | hashtable of project name to action array | hashtable, 3 keys | What `Open-Project` does for each project: an ordered array of `@{ Action; Parameters }` entries, where `Action` is any exported function name. `Close-Project` reads the same map to work out what to close. |
-| [`Projects`](../../configuration-reference.md#projects-list) | array of project names | `@("WinuX", "ExampleProject", "Server")` | The project names `Open-Project` offers. A name here needs a matching `ProjectActions` entry to do anything, and usually a `PathTemplates.Projects` entry for its root. |
-| [`ProjectTerminals`](../../configuration-reference.md#project-terminals) | array of `@{ Project; Tabs; ... }` | array of 3 | Which Windows Terminal tabs `Open-ProjectTerminals` creates for a project, and with what titles and starting directories. Tabs are created with `--title --suppressApplicationTitle`, so their titles are stable. |
-| [`RunnableProjects`](../../configuration-reference.md#runnable-project-mappings) | array of project names | `@("WinuX", "ExampleProject")` | Which projects `Run-Project` offers. |
+| [`ProjectActions`](../../configuration-reference.md#project-actions) | ordered list of projects (one single-key hashtable each) | list of 3 | Every project `Open-Project` offers, in menu order: the project name is the key, the value is the ordered array of `@{ Action; Parameters }` entries opening it runs. `Close-Project` reads the same list to work out what to close. |
+| [`ProjectTerminals`](../../configuration-reference.md#project-terminals) | array of `@{ Name; BasePath; Paths }` | array of 3 | Which Windows Terminal tabs `Open-ProjectTerminals` creates for a project, and where each one starts. Tabs are created with `--title --suppressApplicationTitle`, so their titles are stable. |
+| [`RunnableProjectMappings`](../../configuration-reference.md#runnable-project-mappings) | array of `@{ Name; Commands; ... }` | array of 2 | Every project `Run-Project` offers, in menu order, with the command each of its terminal paths runs. |
 
 ## Decisions
 
@@ -26,18 +25,14 @@ Adds a project to `Configuration.psd1`.
     - Options: Actions run top to bottom. Put the editor first and the browser last if you want focus to land on the browser.
     - Default: The order you list them.
     - More detail: [`ProjectActions`](../../configuration-reference.md#project-actions)
-3. Which projects should `Open-Project` offer?
-    - Options: One name per project - see [Add New Project](../workflow/add-new-project.md) for the whole walk. The array replaces wholesale, so include the shipped names you still want.
-    - Default: The shipped three.
-    - More detail: [`Projects`](../../configuration-reference.md#projects-list)
-4. Which terminal tabs should open for this project?
-    - Options: One entry per project with its tab list. Each tab can set a title and a starting directory, and can run in WSL.
+3. Which terminal tabs should open for this project?
+    - Options: One entry per project, naming the path keys its tabs start in.
     - Default: The shipped three entries.
     - More detail: [`ProjectTerminals`](../../configuration-reference.md#project-terminals)
-5. Which projects should `Run-Project` offer?
-    - Options: One name per runnable project. Needs a matching `RunnableProjectMappings` entry.
+4. Should `Run-Project` offer this project, and what does each of its paths run?
+    - Options: One entry per runnable project, with `Commands` keyed by the `ProjectTerminals` path.
     - Default: The shipped two.
-    - More detail: [`RunnableProjects`](../../configuration-reference.md#runnable-project-mappings)
+    - More detail: [`RunnableProjectMappings`](../../configuration-reference.md#runnable-project-mappings)
 
 ## Where to Put Values
 
@@ -46,58 +41,52 @@ All of it goes in `Configuration.local.psd1`, at the repository's `Windows/Power
 > [!WARNING]
 > The merge is not uniform. **Hashtables deep-merge per key**, so adding one entry to a hashtable leaves every other entry alone. **Arrays and scalars replace wholesale**, so supplying an array key in your local file discards the entire base array. When you want to *add* to a shipped array, copy the whole base array out of `Configuration.psd1` first and add your entry to the copy.
 
-On this page that bites on `Projects`, `ProjectTerminals`, `RunnableProjects` - those keys are arrays, so whatever you write is the complete value.
+On this page that bites on `ProjectActions`, `ProjectTerminals`, `RunnableProjectMappings` - those keys are lists, so whatever you write is the complete value.
 
 ## Steps Overview
 
 1. Set `ProjectActions`
-2. Set `Projects`
-3. Set `ProjectTerminals`
-4. Set `RunnableProjects`
-5. Reload and confirm the merge landed
+2. Set `ProjectTerminals`
+3. Set `RunnableProjectMappings`
+4. Reload and confirm the merge landed
 
 ## Step 1: Set `ProjectActions`
 
-What `Open-Project` does for each project: an ordered array of `@{ Action; Parameters }` entries, where `Action` is any exported function name. `Close-Project` reads the same map to work out what to close.
+Every project `Open-Project` offers, in the order the menu offers them. Each entry is a single-key hashtable: the key is the project name, the value is the ordered array of `@{ Action; Parameters }` entries opening it runs, where `Action` is any exported function name. There is no separate project list - defining a project here is what puts it in the menu. `Close-Project` reads the same list to work out what to close.
 
 ```powershell
-ProjectActions = @{
-    MyProject = @(
-        @{ Action = "Open-VSCode";   Parameters = @{ Project = "MyProject" } }
-        @{ Action = "Open-Terminal"; Parameters = @{ Title = "MyProject" } }
-    )
-}
-```
-
-## Step 2: Set `Projects`
-
-The project names `Open-Project` offers. A name here needs a matching `ProjectActions` entry to do anything, and usually a `PathTemplates.Projects` entry for its root.
-
-```powershell
-Projects = @("WinuX", "MyProject")
-```
-
-## Step 3: Set `ProjectTerminals`
-
-Which Windows Terminal tabs `Open-ProjectTerminals` creates for a project, and with what titles and starting directories. Tabs are created with `--title --suppressApplicationTitle`, so their titles are stable.
-
-```powershell
-ProjectTerminals = @(
-    @{ Project = "MyProject"; Tabs = @(
-        @{ Title = "MyProject"; Path = "{Dev}\MyProject" }
-    )}
+ProjectActions = @(
+    @{ MyProject = @(
+            @{ Action = "Open-VSCode";   Parameters = @{ Project = "MyProject" } }
+            @{ Action = "Open-Terminal"; Parameters = @{ Title = "MyProject" } }
+        )
+    }
 )
 ```
 
-## Step 4: Set `RunnableProjects`
+## Step 2: Set `ProjectTerminals`
 
-Which projects `Run-Project` offers.
+Which Windows Terminal tabs `Open-ProjectTerminals` creates for a project, and where each one starts. `Paths` names keys under the project's `PathTemplates` entry; `ROOT` is the project root.
 
 ```powershell
-RunnableProjects = @("MyProject")
+ProjectTerminals = @(
+    @{ Name = "MyProject"; BasePath = "Projects.MyProject"; Paths = @("API", "UI") }
+)
 ```
 
-## Step 5: Reload and confirm the merge landed
+## Step 3: Set `RunnableProjectMappings`
+
+Every project `Run-Project` offers, in menu order. `Commands` is keyed by the `ProjectTerminals` path the command runs in; a path with no command listed just gets its terminal tab.
+
+```powershell
+RunnableProjectMappings = @(
+    @{ Name     = "MyProject";
+        Commands = @{ API = "dnr"; UI = "nir" }
+    }
+)
+```
+
+## Step 4: Reload and confirm the merge landed
 
 Reload the profile, then read the merged value back. `$global:Configuration` after a reload is the ground truth - if what you set is not there, the local file did not parse or the key is nested one level away from where you put it.
 
@@ -113,11 +102,10 @@ Read-only checks. None of these change anything.
 ```powershell
 Reload-PowerShellProfile
 $global:Configuration.ProjectActions
-$global:Configuration.Projects
+Get-OrderedNames $global:Configuration.ProjectActions
+Get-OrderedEntry $global:Configuration.ProjectActions "MyProject"
 $global:Configuration.ProjectTerminals
-$global:Configuration.RunnableProjects
-$global:Configuration.Projects
-$global:Configuration.ProjectActions.MyProject
+$global:Configuration.RunnableProjectMappings.Name
 ```
 
 If a value reads back as empty, the two usual causes are a parse error in `Configuration.local.psd1` (run `Test-ConfigurationSchema`) and a key placed at the wrong nesting level.
@@ -129,19 +117,21 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 ```powershell
 # Configuration.local.psd1
 @{
-    ProjectActions = @{
-        MyProject = @(
-            @{ Action = "Open-VSCode";   Parameters = @{ Project = "MyProject" } }
-            @{ Action = "Open-Terminal"; Parameters = @{ Title = "MyProject" } }
-        )
-    }
-    Projects = @("WinuX", "MyProject")
-    ProjectTerminals = @(
-        @{ Project = "MyProject"; Tabs = @(
-            @{ Title = "MyProject"; Path = "{Dev}\MyProject" }
-        )}
+    ProjectActions = @(
+        @{ MyProject = @(
+                @{ Action = "Open-VSCode";   Parameters = @{ Project = "MyProject" } }
+                @{ Action = "Open-Terminal"; Parameters = @{ Title = "MyProject" } }
+            )
+        }
     )
-    RunnableProjects = @("MyProject")
+    ProjectTerminals = @(
+        @{ Name = "MyProject"; BasePath = "Projects.MyProject"; Paths = @("API", "UI") }
+    )
+    RunnableProjectMappings = @(
+        @{ Name     = "MyProject";
+            Commands = @{ API = "dnr"; UI = "nir" }
+        }
+    )
 }
 ```
 

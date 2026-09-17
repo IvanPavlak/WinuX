@@ -23,12 +23,8 @@ Describe "Vanilla Configuration (empty-by-default contract)" {
 			@{ Key = "WallpaperLightSettings" }
 			@{ Key = "PowerPlans" }
 			@{ Key = "PowerButtonActions" }
-			@{ Key = "Locales" }
 			@{ Key = "KeyboardLayouts" }
-			@{ Key = "KeyboardLayoutSets" }
 			@{ Key = "DisplayLanguages" }
-			@{ Key = "NerdFonts" }
-			@{ Key = "WakeOnLanConfig" }
 			@{ Key = "PostgreSqlPasswords" }
 			@{ Key = "AutoEnvironmentVariables" }
 			@{ Key = "VisualEffects" }
@@ -39,7 +35,12 @@ Describe "Vanilla Configuration (empty-by-default contract)" {
 		}
 
 		It "Should ship <Key> as an empty list" -ForEach @(
-			@{ Key = "WakeOnLanMachines" }
+			# The ordered sections ship as empty LISTS, not hashtables: an ordered section is
+			# an array of single-key hashtables, so its empty value is @().
+			@{ Key = "Locales" }
+			@{ Key = "KeyboardLayoutSets" }
+			@{ Key = "NerdFonts" }
+			@{ Key = "WakeOnLanConfig" }
 			@{ Key = "SpecialFolders" }
 			@{ Key = "ExplorerOptions" }
 			@{ Key = "AutoPathAdditions" }

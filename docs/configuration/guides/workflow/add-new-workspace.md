@@ -13,39 +13,28 @@ A workspace is a collection of actions that set up a complete working environmen
 
 ## Steps Overview
 
-1. Add workspace to `Workspaces` list
-2. Define workspace actions in `WorkspaceActions`
-3. Create window layout file
-4. Generate layout visualization
+1. Define the workspace in `WorkspaceActions`
+2. Create window layout file
+3. Generate layout visualization
 
-## Step 1: Add to Workspaces List
+## Step 1: Define the Workspace in WorkspaceActions
+
+`WorkspaceActions` is an ordered list: one single-key hashtable per workspace, in the order the `Open-Workspace` menu offers them. Adding the entry is what puts the workspace in the menu - there is no separate workspace list.
 
 ```powershell
-Workspaces = @(
-    "Example",
-    "Fullscreen",
-    "Empty",
-    "Default",
-    "WinuX",
-    "MyNewWorkspace"    # ← Add here
+WorkspaceActions = @(
+    # ... the workspaces already defined ...
+
+    @{ MyNewWorkspace = @(
+            @{ Action = "Open-Obsidian" }
+            @{ Action = "Open-Browser"; Parameters = @{ Groups = @("AI", "YouTube") } }
+            @{ Action = "Open-Project"; Parameters = @{ Project = "MyProject" } }
+            @{ Action = "Open-DBeaver" }
+            @{ Action = "Set-WorkspaceWindowLayout"; Parameters = @{ WorkspaceName = "MyNewWorkspace" } }
+            @{ Action = "Terminate-WindowsTerminalTabs"; Parameters = @{ OnlyCurrent = $true } }
+        )
+    }
 )
-```
-
-## Step 2: Define Workspace Actions
-
-In `WorkspaceActions`, specify what happens when opening:
-
-```powershell
-WorkspaceActions = @{
-    MyNewWorkspace = @(
-        @{ Action = "Open-Obsidian" }
-        @{ Action = "Open-Browser"; Parameters = @{ Groups = @("AI", "YouTube") } }
-        @{ Action = "Open-Project"; Parameters = @{ Project = "MyProject" } }
-        @{ Action = "Open-DBeaver" }
-        @{ Action = "Set-WorkspaceWindowLayout"; Parameters = @{ WorkspaceName = "MyNewWorkspace" } }
-        @{ Action = "Terminate-WindowsTerminalTabs"; Parameters = @{ OnlyCurrent = $true } }
-    )
-}
 ```
 
 ### Available Actions
@@ -93,7 +82,7 @@ Actions execute sequentially. Typically:
 2. Apply window layout near the end (windows need to exist first)
 3. Terminate calling tab last (if desired)
 
-## Step 3: Create Window Layout File
+## Step 2: Create Window Layout File
 
 Create a `.psd1` file in `Modules/Window/Layouts/{MachineType}/`:
 
@@ -187,7 +176,7 @@ Zone names come from `ZoneNameMappings` in `Configuration.psd1`, which maps each
 | `Eight` | Left, Top-Middle, Bottom-Middle, Top-Right, Bottom-Right                  |
 | `Nine`  | Top-Left, Bottom-Left, Top-Middle, Bottom-Middle, Top-Right, Bottom-Right |
 
-## Step 4: Generate Layout Visualization
+## Step 3: Generate Layout Visualization
 
 Add ASCII art visualization to the layout file:
 
@@ -243,15 +232,16 @@ w MyOrg OtherProject -RunApp
 For workspaces that prompt for project:
 
 ```powershell
-WorkspaceActions = @{
-    MyOrg = @(
-        @{ Action = "Open-Project" }    # Empty parameters = prompts for selection
-        @{ Action = "Open-DBeaver" }
-        @{ Action = "Open-WhatsApp" }
-        @{ Action = "Set-WorkspaceWindowLayout"; Parameters = @{ WorkspaceName = "MyOrg" } }
-        @{ Action = "Terminate-WindowsTerminalTabs"; Parameters = @{ OnlyCurrent = $true } }
-    )
-}
+WorkspaceActions = @(
+    @{ MyOrg = @(
+            @{ Action = "Open-Project" }    # Empty parameters = prompts for selection
+            @{ Action = "Open-DBeaver" }
+            @{ Action = "Open-WhatsApp" }
+            @{ Action = "Set-WorkspaceWindowLayout"; Parameters = @{ WorkspaceName = "MyOrg" } }
+            @{ Action = "Terminate-WindowsTerminalTabs"; Parameters = @{ OnlyCurrent = $true } }
+        )
+    }
+)
 ```
 
 ## Complete Example
@@ -259,20 +249,21 @@ WorkspaceActions = @{
 Adding a "Gaming" workspace:
 
 ```powershell
-# 1. Add to list
-Workspaces = @("WinuX", "MyOrg", "Gaming")
+# 1. Define the workspace - the entry is what puts it in the menu, last in the list
+WorkspaceActions = @(
+    @{ WinuX = @( <#- ... -#> ) }
+    @{ MyOrg = @( <#- ... -#> ) }
 
-# 2. Define actions
-WorkspaceActions = @{
-    Gaming = @(
-        @{ Action = "Open-Browser"; Parameters = @{ Groups = @("YouTube", "Twitch") } }
-        @{ Action = "Open-Discord" }
-        @{ Action = "Set-WorkspaceWindowLayout"; Parameters = @{ WorkspaceName = "Gaming" } }
-        @{ Action = "Terminate-WindowsTerminalTabs"; Parameters = @{ OnlyCurrent = $true } }
-    )
-}
+    @{ Gaming = @(
+            @{ Action = "Open-Browser"; Parameters = @{ Groups = @("YouTube", "Twitch") } }
+            @{ Action = "Open-Discord" }
+            @{ Action = "Set-WorkspaceWindowLayout"; Parameters = @{ WorkspaceName = "Gaming" } }
+            @{ Action = "Terminate-WindowsTerminalTabs"; Parameters = @{ OnlyCurrent = $true } }
+        )
+    }
+)
 
-# 3. Create layout file: Layouts/PC/Gaming_PC.psd1
+# 2. Create layout file: Layouts/PC/Gaming_PC.psd1
 @{
     Monitors = @{
         Primary = @{
@@ -297,6 +288,6 @@ WorkspaceActions = @{
     )
 }
 
-# 4. Generate visualization
+# 3. Generate visualization
 Visualize-Layouts -Layout "Gaming_PC" -Update
 ```
