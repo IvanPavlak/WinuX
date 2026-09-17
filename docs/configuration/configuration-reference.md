@@ -1278,31 +1278,52 @@ See [Initialize-PSReadLine](guides/system/Initialize-PSReadLine.md).
 
 ---
 
-## Fastfetch Auto-Fit (the `c` alias)
+## Terminal Greeting (startup and the `c` alias)
 
-How `Invoke-ClearAndFastfetch` (alias `c`, System module) fits the fastfetch panel into the Windows Terminal window. The function resets the font to the profile default, then presses `Ctrl+Minus` one step at a time - waiting for the terminal to reflow after each - until the panel fits, `MaxShrinkSteps` steps have been taken, or the terminal stops shrinking (its minimum font). Nothing in this section is per machine: the fit is measured against the live window on every call, so a small laptop display or a high DPI scale needs no value of its own. The image logo follows the font on its own, because `Get-FastfetchLogoArgument` re-reads the cell size at display time.
+What a shell greets you with, and what `c` (`Show-TerminalGreeting`, System module) redraws. Three steps, each its own exported function and each switchable on its own: `Clear` (`Clear-Host`, ships on), `Fastfetch` (the fastfetch system info panel, font-fitted, ships on) and `Onefetch` (the onefetch repository panel, ships **off**).
 
-Resolved by `Resolve-FastfetchAutoFitSettings`, per key: an explicit parameter on the `Invoke-ClearAndFastfetch` call beats the configured value, which beats the built-in default. A value outside its range, or not an integer, is reported with a warning at the prompt and the built-in default is used for that key; `$null` (or a missing key) means "use the default" silently. The base ships the built-in defaults, so a vanilla install and a missing section behave identically.
+Onefetch is opt-in: it is only meaningful inside a git repository, and not every machine has the binary. Turned on, it is still skipped silently outside a repository, so there is no directory where the greeting errors. Every step skips itself silently when its binary is missing, and `Set-LogLevel Verbose { c }` says why.
+
+Resolved by `Resolve-TerminalGreetingSettings`, per key: an explicit parameter on the `Show-TerminalGreeting` call beats the configured value, which beats the built-in default. A value outside its range, or not an integer, is reported with a warning at the prompt and the built-in default is used for that key; `$null` (or a missing key) means "use the default" silently. The base ships the built-in defaults, so a vanilla install, a missing section and a fork that has not migrated all behave identically.
 
 **Keys:**
 
-- `MaxShrinkSteps` - Integer, 0-50. `Ctrl+Minus` steps allowed below the default font. Ships `10`. `0` resets the font to the default and never shrinks, which shows whether the panel fits at all at the default size.
-- `ReflowTimeoutMilliseconds` - Any positive integer, no upper bound. How long `Wait-ConsoleReflow` polls the window size after a keystroke before assuming the terminal is not going to change. Ships `10`. This is the knob to tweak and test per terminal and machine: too short and a shrink step reads the old size before the terminal has reflowed, so the loop stops early with `cannot shrink further` in the verbose log; too long and every `c` waits the full value once, because the reset when the font is already at the default changes nothing. Every shrink step that does reflow returns as soon as the change is seen.
-- `PromptReserve` - Integer, 0-20. Rows kept free below the panel for the upcoming prompt when judging vertical overflow (one further row is always kept for the line the cursor ends on). Ships `1`.
+- `Clear.Enabled` - Boolean. Whether the screen is cleared. Ships `$true`.
+- `Fastfetch.Enabled` - Boolean. Whether the system info panel is shown. Ships `$true`.
+- `Onefetch.Enabled` - Boolean. Whether the repository panel is shown. Ships `$false`.
+- `Onefetch.IncludeInAutoFit` - Boolean. Whether onefetch's height counts towards the font fit, so both panels are fitted together. Ships `$true`. Off fits fastfetch alone, and onefetch then scrolls the top of the panel away when the two do not both fit.
+- `Onefetch.InProjectTerminals` - Boolean. Whether `Open-ProjectTerminals` appends `Invoke-Onefetch` to each project tab's command, after the `Set-Location`. Ships `$true`. The terminal greeting cannot cover those tabs and no configuration can make it: a tab is spawned as `pwsh -NoExit -EncodedCommand <Set-Location ...>`, and PowerShell runs the profile BEFORE the encoded command, so the greeting tests whatever directory Windows Terminal started the tab in rather than the project it is about to move to. Appending the call after `Set-Location` is the only point at which the tab is standing in the repository. `-InvokeOnefetch` on the call wins over this key.
+- `Onefetch.Arguments` - Array of strings. Extra arguments for the onefetch binary, for example `@("--no-art")` or `@("--no-merges")`. Ships `@()`. **Arrays replace wholesale on merge**, so write the whole list.
 
-**Consumer functions:** `Invoke-ClearAndFastfetch`, `Resolve-FastfetchAutoFitSettings`
+`Fastfetch.AutoFit` is how the panel is fitted into the Windows Terminal window. The function resets the font to the profile default, then presses `Ctrl+Minus` one step at a time - waiting for the terminal to reflow after each - until the panel fits, `MaxShrinkSteps` steps have been taken, or the terminal stops shrinking (its minimum font). Nothing in this branch is per machine: the fit is measured against the live window on every call, so a small laptop display or a high DPI scale needs no value of its own. The image logo follows the font on its own, because `Get-FastfetchLogoArgument` re-reads the cell size at display time.
+
+- `Fastfetch.AutoFit.Enabled` - Boolean. Whether the font is fitted at all. Ships `$true`. Off sends no keystrokes whatsoever and shows the panel at whatever font the tab is on - distinct from `MaxShrinkSteps = 0`, which still presses `Ctrl+0` to reset to the default.
+- `Fastfetch.AutoFit.MaxShrinkSteps` - Integer, 0-50. `Ctrl+Minus` steps allowed below the default font. Ships `10`. `0` resets the font to the default and never shrinks, which shows whether the panel fits at all at the default size.
+- `Fastfetch.AutoFit.ReflowTimeoutMilliseconds` - Any positive integer, no upper bound. How long `Wait-ConsoleReflow` polls the window size after a keystroke before assuming the terminal is not going to change. Ships `10`. This is the knob to tweak and test per terminal and machine: too short and a shrink step reads the old size before the terminal has reflowed, so the loop stops early with `cannot shrink further` in the verbose log; too long and every `c` waits the full value once, because the reset when the font is already at the default changes nothing. Every shrink step that does reflow returns as soon as the change is seen.
+- `Fastfetch.AutoFit.PromptReserve` - Integer, 0-20. Rows kept free below the panel for the upcoming prompt when judging vertical overflow (one further row is always kept for the line the cursor ends on). Ships `1`.
+
+**Consumer functions:** `Show-TerminalGreeting`, `Invoke-Clear`, `Invoke-Fastfetch`, `Invoke-Onefetch`, `Resolve-TerminalGreetingSettings`, `Open-ProjectTerminals` (which appends `Invoke-Onefetch` to each project tab, gated on `Onefetch.InProjectTerminals`)
 
 **Example:**
 
 ```powershell
-# Configuration.local.psd1 - allow at most three steps and give the prompt two rows
-FastfetchAutoFit = @{
-    MaxShrinkSteps = 3
-    PromptReserve  = 2
+# Configuration.local.psd1 - the repository panel on, at most three shrink steps, two prompt rows
+TerminalGreeting = @{
+    Fastfetch = @{
+        AutoFit = @{
+            MaxShrinkSteps = 3
+            PromptReserve  = 2
+        }
+    }
+    Onefetch  = @{
+        Enabled            = $true
+        InProjectTerminals = $true
+        Arguments          = @("--no-art")
+    }
 }
 ```
 
-See [Invoke-ClearAndFastfetch](guides/system/Invoke-ClearAndFastfetch.md) and [Resolve-FastfetchAutoFitSettings](guides/system/Resolve-FastfetchAutoFitSettings.md).
+See [Show-TerminalGreeting](guides/system/Show-TerminalGreeting.md), [Invoke-Fastfetch](guides/system/Invoke-Fastfetch.md), [Invoke-Onefetch](guides/system/Invoke-Onefetch.md) and [Resolve-TerminalGreetingSettings](guides/system/Resolve-TerminalGreetingSettings.md).
 
 ---
 

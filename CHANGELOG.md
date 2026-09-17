@@ -8,6 +8,52 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.68] - 2026-09-17
+
+### Added
+
+- **`Show-TerminalGreeting` (alias `c`) is the greeting a shell opens with, and three exported functions are the steps it runs.** `Invoke-Clear` clears the screen, `Invoke-Fastfetch` shows the font-fitted system info panel, `Invoke-Onefetch` shows the onefetch repository panel - each its own file, each exported from System, each switchable on its own from configuration or from a `-No*` switch on the orchestrator. The old `Invoke-ClearAndFastfetch` did two of those three in one body and its name said so; adding a third step to it would have meant a name that described nothing and a function nobody could run half of. The orchestrator resolves settings exactly once and hands the tree to each step, so a value out of range is reported once per greeting rather than three times, and each step still resolves for itself when called directly. Tests: `Show-TerminalGreeting.Tests.ps1` (call order, each `-No*` switch skipping exactly one step, the measured rows reaching `-ExtraRows`, `-NoResize` forwarded, the auto-fit knobs reaching the settings every step is handed, and a configuration with no section falling through to the shipped defaults), `Invoke-Clear.Tests.ps1`, and `Invoke-Fastfetch.Tests.ps1` / `Invoke-Onefetch.Tests.ps1` below.
+
+- **`Invoke-Onefetch` shows the repository panel inside a git repository, and nothing at all outside one.** It is silent in all four cases where it would be noise: the step is disabled (the shipped default), the `onefetch` binary is not installed, the current directory is not inside a repository, or onefetch exits non-zero - which is what an empty repository with no commits looks like, its stderr suppressed and the exit code logged at debug level only. Silence is the point: this runs on every `c` and every shell start, including in directories that have nothing to do with git, and a greeting is the wrong place to learn that a binary is missing. `-Measure` captures the output instead of displaying it and returns the row count, which is what lets the greeting budget for it. Tests: `Invoke-Onefetch.Tests.ps1` (each of the four no-ops, the row count, the exit-code case returning `0` rather than a partial count, and the configured and explicit `Arguments`).
+
+- **`Test-GitRepository` (Git module) answers "is this path inside a repository?" without spawning a process.** It walks up from the path looking for a `.git` entry and counts both shapes: the ordinary directory of a normal clone, and the file a worktree or submodule carries (a one-line `gitdir: ...` pointer). `git rev-parse --is-inside-work-tree` answers the same question more thoroughly - it knows about `GIT_DIR`, `.git` files pointing nowhere and the ceiling directories - but it costs a process launch, and this runs on every greeting and therefore on every `c` and every shell start; the walk is a handful of stat calls and is not measurable. A path that does not exist is not an error, so a caller can pass a stale `$PWD` without guarding it. Tests: `Test-GitRepository.Tests.ps1` (a real TestDrive tree: the `.git` directory at the root and from several levels below, a file inside the repository, the `.git` file of a worktree, a directory with no repository above it, a missing path, an empty path, the drive root terminating, and the `$PWD` default).
+
+- **The `TerminalGreeting` configuration section, with `Onefetch` counted into the font-fit budget.** Three branches - `Clear`, `Fastfetch` (carrying `AutoFit`) and `Onefetch` - resolved by `Resolve-TerminalGreetingSettings`. The onefetch panel is measured BEFORE anything is drawn and its height is passed to `Invoke-Fastfetch` as the new `-ExtraRows`, so the font is chosen for both panels together; fitting fastfetch alone succeeds and then onefetch scrolls the top of it away, which is the bug the parameter exists to prevent. `Onefetch.IncludeInAutoFit = $false` opts out of that and fits fastfetch to itself. The new `Fastfetch.AutoFit.Enabled = $false` skips the fit outright, keystrokes and all - distinct from `MaxShrinkSteps = 0`, which still presses `Ctrl+0` to reset to the default, and the setting to reach for when a custom Windows Terminal `actions` list has dropped those bindings. Tests: `Resolve-TerminalGreetingSettings.Tests.ps1` (the shipped defaults, a missing section, a branch written as something other than a hashtable, the boolean flags, the `Arguments` array including a single string and blank entries, the three layers per integer key, and every out-of-range case warning and falling back), and `VanillaConfiguration.Tests.ps1` asserts the base ships exactly those defaults with onefetch off.
+
+### Changed
+
+- **Shell startup goes through the greeting instead of calling `fastfetch` directly.** The profile dot-sources the five System files plus `Test-GitRepository` and calls `Show-TerminalGreeting -NoResize`, the same way it already dot-sources `Initialize-PSReadLine` - so any shell that starts inside a repository shows the repository panel, and a machine without either binary still starts without an error at the prompt. (A project tab is not one of those: it starts wherever Windows Terminal put it and only moves into the repository afterwards, which is what the `Open-ProjectTerminals` append below is for.) `-NoResize` because a fresh shell has nothing on screen to redraw and the `Ctrl+0` / `Ctrl+Minus` round trips would only delay the first prompt; `c` does fit.
+
+- **`Open-ProjectTerminals` appends `Invoke-Onefetch` rather than the bare `onefetch` binary, gated on the new `TerminalGreeting.Onefetch.InProjectTerminals`.** The greeting cannot cover a project tab and no configuration can make it: a tab is spawned as `pwsh -NoExit -EncodedCommand <Set-Location ...>`, and PowerShell runs the profile BEFORE the encoded command - so the greeting tests whatever directory Windows Terminal started the tab in, never the project it is about to move to. Appending the call after `Set-Location` is the only point at which the tab is standing in the repository. Going through `Invoke-Onefetch` instead of the binary means the panel obeys the same `TerminalGreeting.Onefetch` settings everywhere - `Enabled`, `Arguments`, and the silent skip for a path that is not a repository - rather than project tabs having a second, unconfigurable answer. The new key ships `$true` and exists for people who want the panel on `c` but not in every project tab; `-InvokeOnefetch` still wins per call, and now takes its default from the key instead of a hardcoded `$true`. Tests: `Open-ProjectTerminals.Tests.ps1` gains a context covering the appended command, the key on and off, a configuration with no section, and each direction of the explicit parameter.
+
+### Breaking
+
+- **`FastfetchAutoFit` moved to `TerminalGreeting.Fastfetch.AutoFit`, with no fallback.** The three keys and their ranges are unchanged (`MaxShrinkSteps` 0-50 ships `10`, `ReflowTimeoutMilliseconds` any positive integer ships `10`, `PromptReserve` 0-20 ships `1`); only the path changed, and the branch gained `Enabled`. There is deliberately no compatibility read of the old top-level section: it shipped in 0.1.65, two releases ago, and a silent fallback would leave two documented homes for the same three numbers. A fork that set it rewrites the block:
+
+  ```powershell
+  # before
+  FastfetchAutoFit = @{
+      MaxShrinkSteps = 3
+      PromptReserve  = 2
+  }
+
+  # after
+  TerminalGreeting = @{
+      Fastfetch = @{
+          AutoFit = @{
+              MaxShrinkSteps = 3
+              PromptReserve  = 2
+          }
+      }
+  }
+  ```
+
+  A fork that never set it changes nothing: a missing `TerminalGreeting` section resolves to exactly the shipped defaults, so the greeting behaves as it did - clear, then a font-fitted fastfetch, no onefetch.
+
+- **`Invoke-ClearAndFastfetch` and `Resolve-FastfetchAutoFitSettings` are removed.** `c` is now `Show-TerminalGreeting`, so the alias is unchanged and nothing an interactive user types breaks. A script that called `Invoke-ClearAndFastfetch` by name calls `Show-TerminalGreeting` instead, or `Invoke-Fastfetch` when it wanted the panel without the clear; `Resolve-FastfetchAutoFitSettings` becomes `Resolve-TerminalGreetingSettings`, whose result is a tree rather than a flat object - `(Resolve-TerminalGreetingSettings).Fastfetch.AutoFit` is the old shape. `-NoResize`, `-PromptReserve`, `-MaxShrinkSteps` and `-ReflowTimeoutMilliseconds` all carry over unchanged.
+
+Documented in the `TerminalGreeting` section of `Configuration.psd1`, a rewritten "Terminal Greeting (startup and the `c` alias)" chapter in `docs/configuration/configuration-reference.md`, five new entries in `docs/modules/system.md` and one in `docs/modules/git.md` with every sibling cross-reference retargeted, the `-InvokeOnefetch` paragraph in `docs/modules/workflow.md`, new `Show-TerminalGreeting`, `Invoke-Fastfetch`, `Invoke-Onefetch` and `Resolve-TerminalGreetingSettings` configuration guides plus `Invoke-Clear` and `Test-GitRepository` stubs with the System and Git guide indexes, and the `c` entries in `docs/reference/troubleshooting.md`.
+
 ## [0.1.67] - 2026-09-17
 
 ### Added

@@ -1,4 +1,4 @@
-@{
+﻿@{
 	ModuleVersion     = "1.0"
 	Author            = "Ivan Pavlak"
 	Description       = ""
@@ -15,6 +15,7 @@
 		'Initialize-Repository',
 		'Install-Git',
 		'Resolve-RepositoryTargets',
+		'Test-GitRepository',
 		'Update-Repositories'
 	)
 }

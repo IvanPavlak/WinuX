@@ -4,7 +4,7 @@ function Test-FastfetchPanelOverflow {
 		Tells whether a fastfetch panel of the given size overflows a window of the given size.
 
 	.DESCRIPTION
-		The fit rule Invoke-ClearAndFastfetch judges by, in one place. The panel overflows when
+		The fit rule Invoke-Fastfetch judges by, in one place. The panel overflows when
 		it is wider than the window, or taller than the window minus one row for the line the
 		cursor ends on and minus -PromptReserve rows for the upcoming prompt. A panel exactly as
 		wide as the window fits.

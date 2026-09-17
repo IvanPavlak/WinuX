@@ -1,4 +1,4 @@
-# | ------------------------------ < Minimal Bootstrap > ------------------------------ | #
+﻿# | ------------------------------ < Minimal Bootstrap > ------------------------------ | #
 
 # Load configuration (passed to Load-PathConfiguration below to avoid a second parse)
 $ConfigFile = Join-Path $PSScriptRoot "Configuration.psd1"
@@ -75,10 +75,22 @@ Test-ConfigurationSchema -WarningAction Continue
 
 # | ------------------------------ < Enhance Console Experience > ------------------------------ | #
 
-# Display system information (skip silently when fastfetch is not installed yet)
-if (Get-Command fastfetch -ErrorAction SilentlyContinue) {
-	fastfetch
+# The terminal greeting: clear, the fastfetch system info panel, and - inside a git repository, when
+# TerminalGreeting.Onefetch.Enabled is on - the onefetch repository panel. Each step skips itself
+# silently when its binary is not installed yet, so a freshly cloned machine starts without an error
+# at the prompt.
+#
+# -NoResize skips the font auto-fit: a fresh shell has nothing on screen to redraw, and the Ctrl+0 /
+# Ctrl+Minus round trips would only delay the first prompt. `c` (Show-TerminalGreeting) does fit.
+#
+# Dot-sourced like Initialize-PSReadLine below, because this runs before the System and Git modules
+# are imported. Six files: the orchestrator, its three steps, the settings resolver, and the
+# repository test the onefetch step is gated on.
+foreach ($greetingFunction in "Resolve-TerminalGreetingSettings", "Invoke-Clear", "Invoke-Fastfetch", "Invoke-Onefetch", "Show-TerminalGreeting") {
+	. (Join-Path $ModulesPath "System\Functions\$greetingFunction.ps1")
 }
+. (Join-Path $ModulesPath "Git\Functions\Test-GitRepository.ps1")
+Show-TerminalGreeting -NoResize
 
 # Import the PSReadLine module for enhanced command-line features if we're in the console host
 if ($host.Name -eq "ConsoleHost") {
@@ -134,7 +146,7 @@ New-Alias -Name w -Value Open-Workspace -Force
 
 New-Alias -Name cw -Value Close-Workspace -Force
 
-New-Alias -Name c -Value Invoke-ClearAndFastfetch -Force
+New-Alias -Name c -Value Show-TerminalGreeting -Force
 
 New-Alias -Name l -Value ls -Force
 

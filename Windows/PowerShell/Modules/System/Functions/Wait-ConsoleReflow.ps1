@@ -14,7 +14,7 @@ function Wait-ConsoleReflow {
 		minimum font. The returned size then equals -Before, and the caller compares the two to
 		tell "reflowed" from "nothing happened".
 
-		Replaces the fixed sleep Invoke-ClearAndFastfetch used to take after each keystroke: a
+		Replaces the fixed sleep Invoke-Fastfetch used to take after each keystroke: a
 		fixed wait is either too long on a fast machine or too short on a slow one, where the
 		pre-reflow size was read and the fit misjudged. Polling returns the moment the terminal
 		has moved.

@@ -1,4 +1,4 @@
-#Requires -Modules Pester
+﻿#Requires -Modules Pester
 
 BeforeAll {
 	# The raw base configuration, WITHOUT the Configuration.local.psd1 overlay.
@@ -134,15 +134,33 @@ Describe "Vanilla Configuration (empty-by-default contract)" {
 			$script:BaseConfig.PSReadLine.HistorySavePath | Should -BeNullOrEmpty
 		}
 
-		It "Should ship the FastfetchAutoFit section with the resolver's built-in defaults" {
-			# Resolve-FastfetchAutoFitSettings falls back to 10 / 10 / 1 when the section is
-			# missing; the base must ship the same numbers or the documented defaults become a
+		It "Should ship the TerminalGreeting section with the resolver's built-in defaults" {
+			# Resolve-TerminalGreetingSettings falls back to these values when the section is
+			# missing; the base must ship the same ones or the documented defaults become a
 			# lie for anyone reading either place.
-			$fit = $script:BaseConfig.FastfetchAutoFit
-			$fit | Should -BeOfType [hashtable]
-			$fit.MaxShrinkSteps | Should -Be 10
-			$fit.ReflowTimeoutMilliseconds | Should -Be 10
-			$fit.PromptReserve | Should -Be 1
+			$greeting = $script:BaseConfig.TerminalGreeting
+			$greeting | Should -BeOfType [hashtable]
+			$greeting.Clear.Enabled | Should -BeTrue
+			$greeting.Fastfetch.Enabled | Should -BeTrue
+			$greeting.Fastfetch.AutoFit.Enabled | Should -BeTrue
+			$greeting.Fastfetch.AutoFit.MaxShrinkSteps | Should -Be 10
+			$greeting.Fastfetch.AutoFit.ReflowTimeoutMilliseconds | Should -Be 10
+			$greeting.Fastfetch.AutoFit.PromptReserve | Should -Be 1
+			$greeting.Onefetch.IncludeInAutoFit | Should -BeTrue
+			$greeting.Onefetch.InProjectTerminals | Should -BeTrue
+			$greeting.Onefetch.Arguments | Should -BeNullOrEmpty
+		}
+
+		It "Should ship the onefetch greeting step disabled" {
+			# Opt-in upstream: the panel is only meaningful inside a git repository and needs a
+			# binary a vanilla install does not have. A fork turns it on in Configuration.local.psd1.
+			$script:BaseConfig.TerminalGreeting.Onefetch.Enabled | Should -BeFalse
+		}
+
+		It "Should no longer ship the replaced FastfetchAutoFit section" {
+			# Moved under TerminalGreeting.Fastfetch.AutoFit in 0.1.68, with no fallback - a stray
+			# top-level section left in the base would read as still supported.
+			$script:BaseConfig.ContainsKey("FastfetchAutoFit") | Should -BeFalse
 		}
 	}
 

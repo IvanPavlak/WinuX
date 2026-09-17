@@ -1,4 +1,4 @@
-# | ------------------------------ < All-Hosts Profile (Additive) > ------------------------------ | #
+﻿# | ------------------------------ < All-Hosts Profile (Additive) > ------------------------------ | #
 #
 # CurrentUserAllHosts profile. PowerShell loads this file BEFORE the host-specific
 # Microsoft.PowerShell_profile.ps1, which makes it the one place where per-terminal behavior can be
@@ -22,26 +22,26 @@
 # and passed through with --logo-type raw.
 #
 # Mechanism: a global `fastfetch` function. PowerShell resolves functions before external
-# applications, so the main profile's startup `fastfetch` call and the calls inside
-# Invoke-ClearAndFastfetch (alias `c`) both pick up the logo override - without either of those
-# files changing.
+# applications, so both calls inside Invoke-Fastfetch - the one the profile makes at startup
+# through Show-TerminalGreeting, and the one `c` makes - pick up the logo override without either
+# of those files changing.
 #
 # The arguments are resolved on every call, not once here, for two reasons. This file runs before
 # any module is imported, so Get-FastfetchLogoArgument is not loadable yet - the function body runs
 # later, once the main profile has registered the module roots and loaded the configuration. And the
-# sixel has to match the CURRENT font size: Invoke-ClearAndFastfetch's auto-fit presses Ctrl+0 /
+# sixel has to match the CURRENT font size: Invoke-Fastfetch's auto-fit presses Ctrl+0 /
 # Ctrl+Minus between measuring the panel and displaying it, which changes the cell size the image is
 # encoded against. Resolution costs one escape round trip plus a cache stat; the encode itself is
 # cached per font size.
 #
-# Invoke-ClearAndFastfetch's own panel measuring does NOT come through this function: it invokes the
+# Invoke-Fastfetch's own panel measuring does NOT come through this function: it invokes the
 # fastfetch binary directly, because a captured image payload is one enormous line and would read as
 # a 50,000-column panel. That is why the image is fitted into the block the text logo occupies - the
 # measured panel and the displayed one then have identical geometry.
 #
 # The function is only defined in a terminal that can render an image, so in every other host this
 # file defines nothing and fastfetch.exe resolves exactly as before. Windows Terminal's auto-fit
-# path in Invoke-ClearAndFastfetch is untouched either way - it is gated on $env:WT_SESSION.
+# path in Invoke-Fastfetch is untouched either way - it is gated on $env:WT_SESSION.
 
 if (-not ($env:WT_SESSION -or $env:TERM_PROGRAM -eq 'WezTerm')) { return }
 

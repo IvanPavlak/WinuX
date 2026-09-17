@@ -4,7 +4,7 @@ Tells whether a fastfetch panel of the given size overflows a window of the give
 
 ## Configuration Keys
 
-This function reads no `Configuration.psd1` keys. There is nothing to configure. The `-PromptReserve` its caller passes comes from [`FastfetchAutoFit.PromptReserve`](../../configuration-reference.md#fastfetch-auto-fit-the-c-alias), which is configured through [`Invoke-ClearAndFastfetch`](Invoke-ClearAndFastfetch.md).
+This function reads no `Configuration.psd1` keys. There is nothing to configure. The `-PromptReserve` its caller passes comes from [`TerminalGreeting.Fastfetch.AutoFit.PromptReserve`](../../configuration-reference.md#terminal-greeting-startup-and-the-c-alias), which is configured through [`Invoke-Fastfetch`](Invoke-Fastfetch.md).
 
 ## Usage
 
@@ -16,5 +16,5 @@ Test-FastfetchPanelOverflow -PanelWidth 106 -PanelHeight 22 -WindowWidth 120 -Wi
 ## Related
 
 - [`Test-FastfetchPanelOverflow` in the System module reference](../../../modules/system.md#test-fastfetchpaneloverflow) - parameters, usage and behaviour
-- [`Invoke-ClearAndFastfetch`](Invoke-ClearAndFastfetch.md) - the `c` alias that judges by this rule
+- [`Invoke-Fastfetch`](Invoke-Fastfetch.md) - the `c` alias that judges by this rule
 - [System configuration guides](README.md) - every guide for this module
