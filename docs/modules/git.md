@@ -163,22 +163,51 @@ If `git` is not already on PATH, installs it using the WinGet package ID from `G
 Install-Git
 ```
 
+## [Resolve-RepositoryTargets](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Git/Functions/Resolve-RepositoryTargets.ps1)
+
+- **Description:** Expands repository names, group names, or every configured group into resolved repository targets. The single place that turns a selection into concrete repositories: each one is resolved through `Resolve-ProjectPath -ForRepository`, so the configured `UrlPath` / `LocalPath` dot-notation becomes a real URL and a real path for this machine. Group matching is case-insensitive and the returned `Group` carries the configured spelling; an unknown group name logs one error listing every configured group and returns `$null` without resolving anything. Order follows the configuration - groups in the order they were requested (configuration order for `-All`), repositories in the order their group lists them - and the result is deduplicated by `LocalPath`, so a repository listed in two groups is still only updated once.
+- **Parameters:** -Repositories, -Group, -All
+- **Usage:** `Resolve-RepositoryTargets -Group Work`, `Resolve-RepositoryTargets -Group Work, OpenSource`, `Resolve-RepositoryTargets -All`, `Resolve-RepositoryTargets -Repositories MyRepo`
+
+Returns one `PSCustomObject` per repository with `Name`, `Group`, `RepositoryUrl` and `LocalPath`. `$null` is reserved for "a requested group name is not configured"; a group that exists but is empty yields an empty array. `Update-Repositories` delegates every selection mode to this function, including the interactive menu, which is why menu entries carry real URLs.
+
+| Parameter        | Description                                                                                              |
+| ---------------- | -------------------------------------------------------------------------------------------------------- |
+| `-Repositories`  | Repository names as defined in `RepositoryGroups`. Null or whitespace entries are skipped.               |
+| `-Group`         | One or more group names from `RepositoryGroups`. Matched case-insensitively.                              |
+| `-All`           | Expands every configured group, in configuration order.                                                  |
+
+```powershell
+# Every repository in one group, in the order the configuration lists them
+Resolve-RepositoryTargets -Group Work
+
+# Several groups at once - Work first, shared repositories listed once
+Resolve-RepositoryTargets -Group Work, OpenSource
+
+# Everything, for a report
+Resolve-RepositoryTargets -All | Format-Table Name, Group, LocalPath
+```
+
+**See also:** [Configuration: Add Repository](../configuration/guides/git/add-new-repository.md)
+
 ## [Update-Repositories](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Git/Functions/Update-Repositories.ps1)
 
-- **Description:** Clones or updates one or more git repositories defined in `RepositoryGroups` in `Configuration.psd1`, where repositories are organized into named groups (for example "Private" and "Work") defined in configuration. With no parameters it shows an interactive menu grouped by group name; with switches it updates the corresponding group, a named repository, or a specific URL/path pair directly. Archive mode downloads repository contents without the `.git` directory (to the Desktop by default), trying `git archive` first and falling back to `git clone --depth 1` with `.git` removal. Requires administrator privileges.
-- **Parameters:** -Repositories, -RepositoryUrl, -LocalPath, -Private, -Work, -All, -InCurrentDirectory, -Archive
-- **Usage:** `Update-Repositories`, `Update-Repositories MyRepo`, `Update-Repositories -Private`, `Update-Repositories -Work`, `Update-Repositories -All`, `Update-Repositories -RepositoryUrl "https://github.com/user/MyRepo" -LocalPath "<DevRoot>\MyRepo"`, `Update-Repositories -All -Archive`, `Update-Repositories -All -Archive -InCurrentDirectory`
+- **Description:** Clones or updates one or more git repositories defined in `RepositoryGroups` in `Configuration.psd1`, where repositories are organized into named groups (for example "Private" and "Work") defined in configuration, never in code. With no parameters it shows an interactive menu grouped by group name; otherwise it updates one or more groups (`-Group`), a named repository, everything (`-All`), or a specific URL/path pair. The selection modes are mutually exclusive, enforced by parameter sets. Archive mode downloads repository contents without the `.git` directory (to the Desktop by default) via `git clone --depth 1` with `.git` removal. Requires administrator privileges.
+- **Parameters:** -Repositories, -RepositoryUrl, -LocalPath, -Group, -All, -InCurrentDirectory, -Archive
+- **Usage:** `Update-Repositories`, `Update-Repositories MyRepo`, `Update-Repositories -Group Private`, `Update-Repositories -Group Private, Work`, `Update-Repositories -All`, `Update-Repositories -RepositoryUrl "https://github.com/user/MyRepo" -LocalPath "<DevRoot>\MyRepo"`, `Update-Repositories -All -Archive`, `Update-Repositories -All -Archive -InCurrentDirectory`
 
-Repository URL and local-path mappings are read from `RepositoryGroups` in `Configuration.psd1`. In a normal update the function checks each repository for uncommitted changes and, if found, creates a timestamped stash (`<branch>_yyyy-MM-dd_HH-mm-ss`), fetches from origin, pulls fast-forward-only, and then pops the stash. The stash is created with an ephemeral per-command identity (`-c user.name/-c user.email`), so it works even on machines where no global git identity is configured yet - stash authorship is throwaway metadata (Bootstrap additionally restores the real identity from `GitConfig` before calling this function). If a repository is missing locally it is cloned via `Initialize-Repository`; merge conflicts abort the pull and preserve work in the stash. In archive mode it produces plain source (no git history): it tries `git archive` against `main` then `master`, falls back to a shallow clone, removes the resulting `.git` directory, and skips any target that already exists.
+Repository URL and local-path mappings are read from `RepositoryGroups` in `Configuration.psd1`, and every selection mode is expanded by [`Resolve-RepositoryTargets`](#resolve-repositorytargets), so repositories are updated in the order the configuration lists them and a repository that appears in more than one selected group is updated only once. In a normal update the function checks each repository for uncommitted changes and, if found, creates a timestamped stash (`<branch>_yyyy-MM-dd_HH-mm-ss`), fetches from origin, pulls fast-forward-only, and then pops the stash. The stash is created with an ephemeral per-command identity (`-c user.name/-c user.email`), so it works even on machines where no global git identity is configured yet - stash authorship is throwaway metadata (Bootstrap additionally restores the real identity from `GitConfig` before calling this function). If a repository is missing locally it is cloned via `Initialize-Repository`; merge conflicts abort the pull and preserve work in the stash. In archive mode it produces plain source (no git history): a `git clone --depth 1` whose `.git` directory is then removed, skipping any target that already exists.
+
+> [!NOTE]
+> Archive mode does **not** use `git archive --remote`. That asks the server to run the `git-upload-archive` service, which GitHub serves on no protocol - it answers HTTP 422 and git exits 128. Since every URL this function builds comes from `Universal.GitHub`, the attempt could never succeed; it only cost two failed round trips per repository (one for `main`, one for `master`) and printed a misleading "git archive not supported" warning on every single download.
 
 | Parameter             | Description                                                                                                                                      |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `-Repositories`       | One or more repository names to update by name, as defined in `RepositoryGroups` (positional).                                                   |
 | `-RepositoryUrl`      | HTTPS URL of a specific repository to update. Must be paired with `-LocalPath`.                                                                  |
 | `-LocalPath`          | Absolute local path for the repository. Must be paired with `-RepositoryUrl`.                                                                    |
-| `-Private`            | Updates all repositories in the "Private" group.                                                                                                 |
-| `-Work`               | Updates all repositories in the "Work" group.                                                                                                    |
-| `-All`                | Updates every repository regardless of type.                                                                                                     |
+| `-Group`              | One or more group names from `RepositoryGroups`, matched case-insensitively. An unknown name lists the configured groups and updates nothing.     |
+| `-All`                | Updates every repository regardless of group.                                                                                                    |
 | `-InCurrentDirectory` | Clones (or archives) into the current working directory instead of the configured paths.                                                         |
 | `-Archive`            | Downloads repository contents without git history. Targets the Desktop by default; combine with `-InCurrentDirectory` to use the current folder. |
 
@@ -189,8 +218,11 @@ Update-Repositories
 # Update a single repository by name
 Update-Repositories MyRepo
 
-# Update all private repositories
-Update-Repositories -Private
+# Update all repositories in one group
+Update-Repositories -Group Private
+
+# Update several groups, in that order, with shared repositories updated once
+Update-Repositories -Group Private, Work
 
 # Update every configured repository
 Update-Repositories -All
@@ -243,7 +275,7 @@ RepositoryGroups = @(
 )
 ```
 
-- **Group key** (e.g. `Private`, `Work`): freely configurable category; `-Private`/`-Work` and the interactive menu follow whatever groups you define
+- **Group key** (e.g. `Private`, `Work`): freely configurable category; `-Group <name>` and the interactive menu follow whatever groups you define - no group name is known to code
 - **Name**: Display name and identifier
 - **UrlPath**: Dot-notation path to URL in Universal section
 - **LocalPath**: Dot-notation path to local directory

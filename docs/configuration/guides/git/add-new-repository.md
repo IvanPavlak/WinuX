@@ -96,11 +96,11 @@ Update-Repositories
 # Update specific repo by name
 Update-Repositories MyNewRepo
 
-# Update all private repos
-Update-Repositories -Private
+# Update all repos in one group
+Update-Repositories -Group Private
 
-# Update all work repos
-Update-Repositories -Work
+# Update several groups, in that order
+Update-Repositories -Group Private, Work
 
 # Update everything
 Update-Repositories -All
@@ -116,7 +116,7 @@ Update-Repositories MyNewRepo -Archive -InCurrentDirectory
 
 ### Private Repositories
 
-Personal repos that require authentication - place them under the `Private` group (included with the `-Private` flag):
+Personal repos that require authentication - place them under the `Private` group (selected with `-Group Private`):
 
 ```powershell
 @{ Private = @(
@@ -127,7 +127,7 @@ Personal repos that require authentication - place them under the `Private` grou
 
 ### Work Repositories
 
-Organization repos - place them under the `Work` group (included with the `-Work` flag):
+Organization repos - place them under the `Work` group (selected with `-Group Work`):
 
 ```powershell
 @{ Work = @(
@@ -202,7 +202,7 @@ Then:
 Update-Repositories MyAwesomeProject
 
 # Or update all private repos including the new one
-Update-Repositories -Private
+Update-Repositories -Group Private
 ```
 
 ## Troubleshooting

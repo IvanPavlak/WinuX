@@ -23,7 +23,7 @@ Bootstrap is **idempotent** - safe to run multiple times:
 
 | Action                    | Behavior                                       |
 | ------------------------- | ---------------------------------------------- |
-| **Update-Repositories**   | Pulls latest, stashes local changes if needed  |
+| **Update-Repositories**   | Pulls latest, stashes local changes if needed (opt-in via `Steps.RepositoryUpdate`) |
 | **System Configuration**  | Re-applies settings (no-op if already correct) |
 | **Package Installation**  | Installs new apps from CSV, skips existing     |
 | **Upgrade-All**           | Updates packages of every manager in play      |
@@ -43,11 +43,11 @@ warning - a run on the empty base changes nothing personal. Opt in per feature v
 # Update all repositories
 Update-Repositories -All
 
-# Update only private repos
-Update-Repositories -Private
+# Update one group (group names come from RepositoryGroups - code knows none of them)
+Update-Repositories -Group Private
 
-# Update only work repos
-Update-Repositories -Work
+# Update several groups, in that order
+Update-Repositories -Group Private, Work
 
 # Update specific repo
 Update-Repositories WinuX

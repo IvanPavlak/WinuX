@@ -17,6 +17,10 @@ BeforeAll {
 	# Bootstrap gates the package-manager steps through Resolve-PackageManagers; dot-source it so it
 	# exists to Mock even in sessions whose imported Bootstrap module predates the export.
 	. "$BootstrapFunctionsPath\Resolve-PackageManagers.ps1"
+	# Bootstrap reads the repository scope through Resolve-RepositoryUpdateScope; dot-sourced so
+	# it exists even in sessions whose imported Bootstrap module predates the export. Left
+	# unmocked on purpose - the scope shapes are exactly what these tests are about.
+	. "$BootstrapFunctionsPath\Resolve-RepositoryUpdateScope.ps1"
 	# The opt-in Obsidian CLI step; dot-sourced so it exists to Mock in every session.
 	. "$ModuleRoot\Application\Functions\Enable-ObsidianCli.ps1"
 }
@@ -89,13 +93,14 @@ Describe "Bootstrap" {
 		Mock Enable-ObsidianCli { }
 	}
 
-	It "runs initial-setup steps and uses Update-Repositories -All by default (no RepositoryUpdateScope override)" {
+	It "runs initial-setup steps and leaves the repository update off until it is opted into" {
 		$global:MachineType = 'Laptop'
 
 		Bootstrap -WithInitialSetup
 
 		Should -Invoke Rename-Machine -Times 1 -Exactly
-		Should -Invoke Update-Repositories -Times 1 -Exactly -ParameterFilter { $All }
+		Should -Invoke Update-Repositories -Times 0
+		Should -Invoke Write-LogWarning -ParameterFilter { $Message -eq "Repository update skipped - opt in via BootstrapConfig.Steps.RepositoryUpdate" }
 		Should -Invoke Set-SystemTheme -Times 1 -Exactly -ParameterFilter { $Auto -and $KeepTerminalOpen }
 	}
 
@@ -213,15 +218,67 @@ Describe "Bootstrap" {
 		}
 	}
 
-	It "uses Update-Repositories -Private when RepositoryUpdateScope maps the machine type to Private" {
+	It "passes the machine type's group to Update-Repositories -Group" {
 		$global:MachineType = 'Test'
-		$global:Configuration.BootstrapConfig = @{ RepositoryUpdateScope = @{ Default = 'All'; Test = 'Private' } }
+		$global:Configuration.BootstrapConfig = @{
+			Steps                 = @{ RepositoryUpdate = $true }
+			RepositoryUpdateScope = @{ Default = 'All'; Test = 'Private' }
+		}
 
 		Bootstrap
 
 		Should -Invoke Rename-Machine -Times 0
-		Should -Invoke Update-Repositories -Times 1 -Exactly -ParameterFilter { $Private }
+		Should -Invoke Update-Repositories -Times 1 -Exactly -ParameterFilter { $Group -contains 'Private' }
 		Should -Invoke Set-SystemTheme -Times 1 -Exactly -ParameterFilter { $Auto -and $KeepTerminalOpen }
+	}
+
+	It "uses Update-Repositories -All when the resolved scope is All" {
+		$global:MachineType = 'Laptop'
+		$global:Configuration.BootstrapConfig = @{
+			Steps                 = @{ RepositoryUpdate = $true }
+			RepositoryUpdateScope = @{ Default = 'All' }
+		}
+
+		Bootstrap
+
+		Should -Invoke Update-Repositories -Times 1 -Exactly -ParameterFilter { $All }
+	}
+
+	It "splits a comma-separated scope into several groups" {
+		$global:MachineType = 'Test'
+		$global:Configuration.BootstrapConfig = @{
+			Steps                 = @{ RepositoryUpdate = $true }
+			RepositoryUpdateScope = @{ Test = 'Work, Private' }
+		}
+
+		Bootstrap
+
+		Should -Invoke Update-Repositories -Times 1 -Exactly -ParameterFilter {
+			$Group.Count -eq 2 -and $Group[0] -eq 'Work' -and $Group[1] -eq 'Private'
+		}
+	}
+
+	It "accepts an array scope as well as a string" {
+		$global:MachineType = 'Test'
+		$global:Configuration.BootstrapConfig = @{
+			Steps                 = @{ RepositoryUpdate = $true }
+			RepositoryUpdateScope = @{ Test = @('Work', 'Private') }
+		}
+
+		Bootstrap
+
+		Should -Invoke Update-Repositories -Times 1 -Exactly -ParameterFilter {
+			$Group.Count -eq 2 -and $Group[0] -eq 'Work' -and $Group[1] -eq 'Private'
+		}
+	}
+
+	It "honours -Skip RepositoryUpdate over an enabled step" {
+		$global:MachineType = 'Test'
+		$global:Configuration.BootstrapConfig = @{ Steps = @{ RepositoryUpdate = $true } }
+
+		Bootstrap -Skip RepositoryUpdate
+
+		Should -Invoke Update-Repositories -Times 0
 	}
 
 	It "skips WSL steps when BootstrapConfig.WSLSetup disables them for the machine type" {
@@ -234,7 +291,7 @@ Describe "Bootstrap" {
 		Should -Invoke Initialize-WSLEnvironment -Times 0
 		Should -Invoke Configure-WSLSSH -Times 0
 		Should -Invoke SymbolicLinkMaker -Times 1 -Exactly
-		Should -Invoke Update-Repositories -Times 1 -Exactly -ParameterFilter { $All }
+		Should -Invoke Update-Repositories -Times 0
 	}
 
 	It "runs WSL steps when WSLSetup does not cover the machine type and has no Default" {

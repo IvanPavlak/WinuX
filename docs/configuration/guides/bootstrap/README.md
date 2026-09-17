@@ -19,6 +19,7 @@ The [Bootstrap module reference](../../../modules/bootstrap.md) is the authority
 | `Load-PathConfiguration` | `BasePaths`, `DefaultMachineType`, `HostnameToMachineType`, `Universal` | [Load-PathConfiguration](Load-PathConfiguration.md) |
 | `Resolve-BootstrapSteps` | `BootstrapConfig` | [Resolve-BootstrapSteps](Resolve-BootstrapSteps.md) |
 | `Resolve-PackageManagers` | `PackageManagers` | [Resolve-PackageManagers](Resolve-PackageManagers.md) |
+| `Resolve-RepositoryUpdateScope` | `BootstrapConfig` | [Resolve-RepositoryUpdateScope](Resolve-RepositoryUpdateScope.md) |
 | `Test-MachineTypeScope` | `ValidMachineTypes` | [Test-MachineTypeScope](Test-MachineTypeScope.md) |
 
 ## Task Guides

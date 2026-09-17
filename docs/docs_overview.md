@@ -137,7 +137,8 @@ The profile (`Microsoft.PowerShell_profile.ps1`) executes this exact sequence:
 ```
 Phase 1 (Initial Setup only):    Rename-Machine → Start-MicrosoftActivationScripts → Start-Win11Debloat
                                  (MAS and Win11Debloat are opt-in via BootstrapConfig.Steps)
-Phase 2 (Repos):                 Update-Repositories -All
+Phase 2 (Repos):                 Update-Repositories (opt-in via BootstrapConfig.Steps.RepositoryUpdate;
+                                 -All or -Group <names>, per BootstrapConfig.RepositoryUpdateScope)
 Phase 3 (System Config):         Set-CustomExecutionPolicy → Enable-DeveloperMode
                                  → Set-PowerPlan → Set-PowerButtonActions → Set-SystemTheme
                                  → Set-Locale → Set-DisplayLanguage → Set-KeyboardLayouts

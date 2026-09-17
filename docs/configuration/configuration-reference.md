@@ -957,8 +957,12 @@ Anything other than the three valid values is reported as unknown rather than si
 
 - `LogFileLocation` / `LogFilePrefix` - Where the bootstrap log is written (default: Desktop, `BootstrapLog`).
 - `DefaultBranch` - Branch that clone/update operations target (default `master`).
-- `RepositoryUpdateScope` - Which repositories Bootstrap clones/updates, per machine type
-  (`"All"` / `"Private"` / `"Work"` / `"None"`; `Default` covers unlisted types; absent → `"All"`).
+- `RepositoryUpdateScope` - **Which** repository groups Bootstrap clones/updates, per machine type.
+  Each value is `"All"` or one or more group names from [`RepositoryGroups`](#repository-groups),
+  written as a comma-separated string (`"Work, Private"`) or an array (`@("Work", "Private")`).
+  Matched case-insensitively and kept in the order given; `Default` covers unlisted types;
+  absent → `"All"`. Resolved by `Resolve-RepositoryUpdateScope`. **Whether** the step runs at
+  all is `Steps.RepositoryUpdate` below - this key has no off value.
 - `Steps` - Per-step toggles for the Bootstrap sequence, resolved by `Resolve-BootstrapSteps`.
   Each step is either a plain boolean or a per-machine-type hashtable with a `Default` fallback
   (e.g. `WSL = @{ Default = $true; Test = $false }`). The whole section and individual keys are
@@ -973,9 +977,11 @@ Anything other than the three valid values is reported as unknown rather than si
   [CoreAiRules](../ai/coreairules.md)), `AiSkills` (machine-global Agent Skills linked into every
   AI harness via `Deploy-AiSkills` - see [AI Skills](../ai/skills.md)), `ObsidianCli` (`Enable-ObsidianCli -CreateIfMissing`
   writes `"cli": true` into Obsidian's per-machine `%APPDATA%\obsidian\obsidian.json`, which a synced vault never carries,
-  so `Open-Obsidian` can load workspaces - see [Enable-ObsidianCli](guides/application/Enable-ObsidianCli.md)), `LockedStartLayout`. Per invocation,
-  `Bootstrap -Skip <steps>` / `-Include <steps>` override this config. Repository updates are
-  governed by `RepositoryUpdateScope` above, not by a step. The full step list in execution
+  so `Open-Obsidian` can load workspaces - see [Enable-ObsidianCli](guides/application/Enable-ObsidianCli.md)),
+  `RepositoryUpdate` (clones and pulls every repository the machine's `RepositoryUpdateScope`
+  names, which reaches outside this repository the moment it runs - forks that want the previous
+  always-on behaviour set it `$true`), `LockedStartLayout`. Per invocation,
+  `Bootstrap -Skip <steps>` / `-Include <steps>` override this config. The full step list in execution
   order is documented next to the section in `Configuration.psd1`. The deprecated `WSLSetup`
   key (same shape as `Steps.WSL`) is still honored when `Steps` carries no `WSL` entry.
 - `PersonalSteps` - Fork-defined optional bootstrap steps run right after `Upgrade-All`. Each
@@ -1201,7 +1207,9 @@ RepositoryGroups = @(
 )
 ```
 
-**Consumer functions:** `Update-Repositories`, `Initialize-Repository`
+**Group names are freely configurable and never known to code.** Add, rename or remove groups as you like: `Update-Repositories -Group <name>[, <name>]` takes whatever keys you define (matched case-insensitively), `-All` and the interactive menu follow the whole list, and an unknown name is reported with the configured ones rather than guessed at. Repositories are walked in the order the configuration lists them - inside a group and across several requested groups - and a repository listed in more than one selected group is updated only once.
+
+**Consumer functions:** `Resolve-RepositoryTargets` (expands a selection), `Update-Repositories`, `Initialize-Repository`, `Resolve-ProjectPath -ForRepository` (resolves one entry)
 
 ---
 

@@ -1,6 +1,6 @@
-# Update-Repositories
+# Resolve-RepositoryTargets
 
-Clones or updates one or more git repositories defined in `RepositoryGroups` in `Configuration.psd1`, where repositories are organized into named groups (for example "Private" and "Work") defined in configuration, never in code.
+Expands repository names, group names, or every configured group into resolved repository targets.
 
 > [!NOTE]
 > Every value on this page belongs in `Configuration.local.psd1`, never in the base `Configuration.psd1`. The base file is upstream's, it ships empty-by-default, and it is deep-merged with your local file at load time by `Load-PathConfiguration`. See [Fork Model](../../../contributing/fork-model.md).
@@ -9,21 +9,21 @@ Clones or updates one or more git repositories defined in `RepositoryGroups` in 
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`RepositoryGroups`](../../configuration-reference.md#repository-groups) | array of single-key hashtables | array of 1 | The repository groups `Update-Repositories` walks and `Initialize-Repository` can clone into. Group name to an array of repository entries. |
+| [`RepositoryGroups`](../../configuration-reference.md#repository-groups) | array of single-key hashtables | array of 1 | The groups this function expands, their names, and the order repositories come back in. Group name to an array of repository entries, each carrying `Name`, `UrlPath` and `LocalPath`. |
 
 ## Decisions
 
-1. Which repository groups do you want to manage?
-    - Options: One group per collection, e.g. `Personal`, `Work`, `OpenSource`. Group names are freely configurable and never known to code - `Update-Repositories -Group <name>` takes whatever keys you define, matched case-insensitively, and an unknown name lists the configured ones. Each entry carries the repository name and its remote - see [Add New Repository](../git/add-new-repository.md).
-    - Default: The shipped single example group.
+1. What should your groups be called?
+    - Options: Anything. Group names are never known to code - `-Group` takes whatever keys you define here, matched case-insensitively, and an unknown name lists the configured ones instead of guessing. `Private` and `Work` are only the shipped example; `OpenSource`, `Clients`, `Archived` are just as valid.
+    - Default: The single shipped `Private` group.
     - More detail: [`RepositoryGroups`](../../configuration-reference.md#repository-groups)
-2. Where should each repository be cloned to?
-    - Options: A `LocalPath` per repository, written in dot-notation into the machine-specific paths (normally under `{Dev}`), so the same entry resolves to a different folder on each machine.
-    - Default: The shipped path.
-    - More detail: [`RepositoryGroups`](../../configuration-reference.md#repository-groups)
-3. In what order should a group's repositories be updated?
-    - Options: Whatever order you write them in - the list is walked as configured and never sorted. A repository listed in two groups is still updated only once.
+2. In what order should repositories inside a group be updated?
+    - Options: Whatever order you write them in. The list is walked as configured and never sorted, so putting the repository you care about most first makes it update first.
     - Default: The shipped order.
+    - More detail: [`RepositoryGroups`](../../configuration-reference.md#repository-groups)
+3. Should a repository belong to more than one group?
+    - Options: Yes - list the same entry under several groups. Selecting both groups still updates it once, because the result is deduplicated by resolved `LocalPath`.
+    - Default: Each shipped repository belongs to one group.
     - More detail: [`RepositoryGroups`](../../configuration-reference.md#repository-groups)
 
 ## Where to Put Values
@@ -42,12 +42,16 @@ On this page that bites on `RepositoryGroups` - that key is an array, so whateve
 
 ## Step 1: Set `RepositoryGroups`
 
-The repository groups `Update-Repositories` walks and `Initialize-Repository` can clone into. Group name to an array of repository entries. Each entry carries `Name` (what you select it by), `UrlPath` (dot-notation into `Universal.GitHub`) and `LocalPath` (dot-notation into the machine-specific paths) - both paths are dot-notation, not literal values.
+The groups this function expands. Each repository entry carries `Name` (what you select it by), `UrlPath` (dot-notation into `Universal.GitHub`) and `LocalPath` (dot-notation into the machine-specific paths). Both paths are dot-notation, not literal values - that is how the same entry resolves to different folders on different machines.
 
 ```powershell
 RepositoryGroups = @(
-    @{ Personal = @(
+    @{ Private = @(
             @{ Name = "MyRepo"; UrlPath = "Universal.GitHub.Private.MyRepo"; LocalPath = "Projects.MyRepo.Root" }
+        )
+    }
+    @{ Work = @(
+            @{ Name = "MyWorkRepo"; UrlPath = "Universal.GitHub.MyOrg.MyWorkRepo"; LocalPath = "Projects.MyOrg.MyWorkRepo.Root" }
         )
     }
 )
@@ -69,14 +73,18 @@ Read-only checks. None of these change anything.
 ```powershell
 Reload-PowerShellProfile
 $global:Configuration.RepositoryGroups
-$global:Configuration.RepositoryGroups | ConvertTo-Json -Depth 4
 
-# What each selection mode would actually update, without updating anything
+# Every configured repository, with the URL and path each one actually resolved to
 Resolve-RepositoryTargets -All | Format-Table Name, Group, RepositoryUrl, LocalPath
+
+# One group, in configuration order
 Resolve-RepositoryTargets -Group Work | Format-Table Name, LocalPath
+
+# A deliberate typo, to see the error list your configured group names
+Resolve-RepositoryTargets -Group Wrok
 ```
 
-If a value reads back as empty, the two usual causes are a parse error in `Configuration.local.psd1` (run `Test-ConfigurationSchema`) and a key placed at the wrong nesting level.
+If a value reads back as empty, the two usual causes are a parse error in `Configuration.local.psd1` (run `Test-ConfigurationSchema`) and a key placed at the wrong nesting level. If a repository resolves with an empty `LocalPath`, its `LocalPath` dot-notation names a path this machine type does not define.
 
 ## Complete Example
 
@@ -91,34 +99,32 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
             Private = @{
                 MyRepo = "/YourUsername/MyRepo.git"
             }
+            MyOrg   = @{
+                MyWorkRepo = "/my-org/MyWorkRepo.git"
+            }
         }
     }
 
     RepositoryGroups = @(
-        @{ Personal = @(
+        @{ Private = @(
                 @{ Name = "MyRepo"; UrlPath = "Universal.GitHub.Private.MyRepo"; LocalPath = "Projects.MyRepo.Root" }
+            )
+        }
+        @{ Work = @(
+                @{ Name = "MyWorkRepo"; UrlPath = "Universal.GitHub.MyOrg.MyWorkRepo"; LocalPath = "Projects.MyOrg.MyWorkRepo.Root" }
             )
         }
     )
 }
 ```
 
-With that in place:
-
-```powershell
-Update-Repositories -Group Personal    # the whole group, in configuration order
-Update-Repositories MyRepo             # one repository by name
-Update-Repositories -All               # every group
-Update-Repositories                    # interactive menu
-```
-
 ## Related
 
-- [`Update-Repositories` in the Git module reference](../../../modules/git.md#update-repositories) - parameters, usage and behaviour
+- [`Resolve-RepositoryTargets` in the Git module reference](../../../modules/git.md#resolve-repositorytargets) - parameters, usage and behaviour
 - [Git configuration guides](README.md) - every guide for this module
 - [Add New Repository](add-new-repository.md) - repository groups and what `Update-Repositories` walks
-- [`Resolve-RepositoryTargets`](Resolve-RepositoryTargets.md) - expands every selection mode this function offers
-- [`Resolve-ProjectPath`](../helper/Resolve-ProjectPath.md) - reads the same configuration
-- [`Resolve-RepositoryUpdateScope`](../bootstrap/Resolve-RepositoryUpdateScope.md) - which groups Bootstrap pulls
+- [`Update-Repositories`](Update-Repositories.md) - reads the same configuration
+- [`Resolve-ProjectPath`](../helper/Resolve-ProjectPath.md) - resolves each entry's `UrlPath` and `LocalPath`
+- [`Resolve-RepositoryUpdateScope`](../bootstrap/Resolve-RepositoryUpdateScope.md) - which of these groups Bootstrap pulls
 - [WinuXConfigurator](../../winux-configurator.md) - have an AI assistant walk these decisions with you
 - [Configuration reference](../../configuration-reference.md) - every key, section by section

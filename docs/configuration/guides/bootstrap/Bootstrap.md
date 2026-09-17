@@ -22,7 +22,7 @@ This is the widest configuration surface in WinuX - `Bootstrap` reads the step t
 ## Decisions
 
 1. Which bootstrap steps should run on this machine?
-    - Options: Each entry under `BootstrapConfig.Steps` is either a boolean or a per-machine-type hashtable with a `Default` fallback. Most steps ship **on**, because they no-op when their own configuration section is empty. The nine that act the moment they run ship **off**: `MicrosoftActivationScripts`, `Win11Debloat`, `DeveloperMode`, `NuGetConfig`, `UpgradeAll`, `CoreAiRules`, `AiSkills`, `ObsidianCli`, `LockedStartLayout`.
+    - Options: Each entry under `BootstrapConfig.Steps` is either a boolean or a per-machine-type hashtable with a `Default` fallback. Most steps ship **on**, because they no-op when their own configuration section is empty. The ten that act the moment they run ship **off**: `MicrosoftActivationScripts`, `Win11Debloat`, `RepositoryUpdate`, `DeveloperMode`, `NuGetConfig`, `UpgradeAll`, `CoreAiRules`, `AiSkills`, `ObsidianCli`, `LockedStartLayout`.
     - Default: The shipped `Steps` map (`UpgradeAll = $false`, plus `WSL` on everywhere except the `Test` type). Change only the steps you actually want to flip. Switching `UpgradeAll` on lets a Bootstrap run `winget upgrade --all` and its Scoop/Chocolatey equivalents, which upgrade every package already on the machine, not only the ones WinuX installs.
     - More detail: [`BootstrapConfig`](../../configuration-reference.md#bootstrapconfig)
 2. Do you need to change where the app-list CSVs live?
