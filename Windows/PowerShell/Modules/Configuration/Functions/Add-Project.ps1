@@ -3,8 +3,11 @@ function Add-Project {
 	.SYNOPSIS
 		Adds a project to Configuration.psd1.
 	.DESCRIPTION
-		Adds a project name to the Projects array, creates its ProjectActions entry,
-		and optionally adds TerminalTabs, ProjectTerminals, and RunnableProjects entries.
+		Appends a project to the ProjectActions list in Configuration.psd1, and optionally
+		adds TerminalTabs, ProjectTerminals and RunnableProjectMappings entries. Each list
+		is the only definition of its side of a project - what Open-Project offers and the
+		order it offers it in comes from ProjectActions alone, so one entry is written per
+		list, never a name in one place and a definition in another.
 	.PARAMETER Name
 		The project name.
 	.PARAMETER Actions
@@ -17,7 +20,9 @@ function Add-Project {
 	.PARAMETER Paths
 		Optional array of path names for ProjectTerminals entry (e.g., @("ROOT", "API")).
 	.PARAMETER Runnable
-		If set, adds the project to RunnableProjects.
+		If set, adds a RunnableProjectMappings entry so Run-Project offers the project.
+		The commands stay empty: every configured path gets a terminal tab, and you fill
+		in `Commands = @{ <PathKey> = "<command>" }` for the paths that run something.
 	.PARAMETER ConfigurationFilePath
 		Override the Configuration.psd1 path (for testing).
 	.PARAMETER BackupRoot
@@ -54,20 +59,7 @@ function Add-Project {
 	$lines = @(Get-Content -Path $configPath)
 	$t = "`t"
 
-	# 1. Add to Projects array
-	$projSection = Find-ConfigurationSection -Lines $lines -SectionName "Projects"
-	if (-not $projSection) {
-		Write-LogError "Error: Projects section not found!"
-		return
-	}
-
-	$newLines = [System.Collections.ArrayList]::new($lines)
-	$newLines.Insert($projSection.EndIndex, "$($projSection.Indent)$t`"$Name`"")
-	$lines = @($newLines)
-
-	Write-LogDebug " [Add-Project] Added '$Name' to Projects array"
-
-	# 2. Add ProjectActions entry
+	# 1. Add ProjectActions entry - the project's only definition and its menu position
 	$paSection = Find-ConfigurationSection -Lines $lines -SectionName "ProjectActions"
 	if (-not $paSection) {
 		Write-LogError "Error: ProjectActions section not found!"
@@ -84,13 +76,14 @@ function Add-Project {
 	$base = $paSection.Indent + $t
 	$padded = $Name.PadRight(28)
 	$actionLines = @("")
-	$actionLines += "$base$padded= @("
+	$actionLines += "$base@{ $padded= @("
 
 	foreach ($action in $Actions) {
-		$actionLines += ConvertTo-ActionString -Action $action -Indent "$base$t"
+		$actionLines += ConvertTo-ActionString -Action $action -Indent "$base$t$t"
 	}
 
-	$actionLines += "$base)"
+	$actionLines += "$base$t)"
+	$actionLines += "$base}"
 
 	$newLines = [System.Collections.ArrayList]::new($lines)
 	$insertIndex = $paSection.EndIndex
@@ -99,7 +92,7 @@ function Add-Project {
 	}
 	$lines = @($newLines)
 
-	# 3. Optional: Add TerminalTabs
+	# 2. Optional: Add TerminalTabs
 	if ($TerminalTabs) {
 		$ttSection = Find-ConfigurationSection -Lines $lines -SectionName "TerminalTabs"
 		if ($ttSection) {
@@ -124,17 +117,27 @@ function Add-Project {
 
 	}
 
-	# 4. Optional: Add to RunnableProjects
+	# 3. Optional: Add to RunnableProjectMappings - the Run-Project menu reads this list,
+	#    so the mapping is what makes a project runnable; Commands is filled in by hand.
 	if ($Runnable) {
-		$rpSection = Find-ConfigurationSection -Lines $lines -SectionName "RunnableProjects"
+		$rpSection = Find-ConfigurationSection -Lines $lines -SectionName "RunnableProjectMappings"
 		if ($rpSection) {
+			$base = $rpSection.Indent + $t
+			$mappingLines = @(
+				"$base@{ Name     = `"$Name`";"
+				"$base$t`Commands = @{}"
+				"$base}"
+			)
+
 			$newLines = [System.Collections.ArrayList]::new($lines)
-			$newLines.Insert($rpSection.EndIndex, "$($rpSection.Indent)$t`"$Name`"")
+			for ($i = 0; $i -lt $mappingLines.Count; $i++) {
+				$newLines.Insert($rpSection.EndIndex + $i, $mappingLines[$i])
+			}
 			$lines = @($newLines)
 		}
 	}
 
-	# 5. Optional: Add to ProjectTerminals
+	# 4. Optional: Add to ProjectTerminals
 	if ($BasePath -and $Paths) {
 		$ptSection = Find-ConfigurationSection -Lines $lines -SectionName "ProjectTerminals"
 		if ($ptSection) {

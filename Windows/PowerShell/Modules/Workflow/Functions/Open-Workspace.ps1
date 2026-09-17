@@ -256,7 +256,7 @@ function Open-Workspace {
 		if ($defaultWorkspace -is [array]) { $defaultWorkspace = @($defaultWorkspace)[0] }
 		$defaultWorkspace = if ([string]::IsNullOrWhiteSpace($defaultWorkspace)) { $null } else { ([string]$defaultWorkspace).Trim() }
 
-		if ($defaultWorkspace -and -not ($Configuration.WorkspaceActions -and $Configuration.WorkspaceActions[$defaultWorkspace])) {
+		if ($defaultWorkspace -and -not (Get-OrderedEntry $Configuration.WorkspaceActions $defaultWorkspace)) {
 			Write-LogDebug " [Open-Workspace] Configured DefaultWorkspace [$defaultWorkspace] has no WorkspaceActions entry - [Enter] will cancel instead" -Style Warning
 			$defaultWorkspace = $null
 		}
@@ -275,7 +275,7 @@ function Open-Workspace {
 
 		$resolveParams = @{
 			InputObject              = $Workspace
-			OptionList               = $Configuration.Workspaces
+			OptionList               = @(Get-OrderedNames $Configuration.WorkspaceActions)
 			MenuTitle                = "[Available workspaces]"
 			PromptMessage            = $workspacePrompt
 			AllowEmptyPromptResponse = $true
@@ -396,7 +396,7 @@ function Open-Workspace {
 				Write-LogTitle "Opening $workspaceName Workspace"
 			}
 
-			$workspaceActions = $Configuration.WorkspaceActions[$workspaceName]
+			$workspaceActions = Get-OrderedEntry $Configuration.WorkspaceActions $workspaceName
 
 			if (-not $workspaceActions) {
 				Write-LogWarning "No actions configured for workspace [$workspaceName]"

@@ -8,6 +8,53 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.67] - 2026-09-17
+
+### Added
+
+- **`Get-OrderedNames` and `Get-OrderedEntry` (Helper module) are the one way every menu reads an ordered configuration section, so the repository has a single ordering rule: "order is where you write it".** An ordered section is an array of single-key hashtables - the shape `BrowserGroups` and `RepositoryGroups` have always used - where each item's single key is the entry name and its value is the entry. `Get-OrderedNames <section>` returns the names in configuration order (the menu), `Get-OrderedEntry <section> <name>` returns one entry by name (case-insensitive, first match wins, `$null` when it is not configured). A section cannot be a plain hashtable and keep its order: the configuration is read with `Import-PowerShellDataFile`, which returns a `System.Collections.Hashtable`, and key order is genuinely lost at load time - verified against the live file, where `WorkspaceActions.Keys` came back `Fullscreen, Empty, Example, Default, WinuX` for a file written `Example, Fullscreen, Empty, Default, WinuX`. `[ordered]@{}` is not legal inside a psd1 read that way either. Both functions still accept a plain hashtable, so a fork that has not migrated its `Configuration.local.psd1` keeps working with its menu sorted; neither warns about it, because `Test-ConfigurationSchema` is the one place that reports the shape, once at load, instead of every menu repeating it. Tests: `OrderedSections.Tests.ps1` (configuration order rather than sorted, the unconfigured section, the sorted hashtable fallback, a bare string entry naming itself; lookup by name, a name with spaces, case-insensitive matching, the missing name, the unconfigured section, the hashtable fallback, and two entries with the same name reading top to bottom).
+
+- **`Test-ConfigurationSchema` validates the shape of every ordered section.** Alongside the existing presence checks it now reports a section written as a hashtable (`WorkspaceActions is a hashtable - entry order is lost at load time. Write it as an ordered array of single-key hashtables`) and an entry inside one that is not a single-key hashtable. Only configured sections are checked, so a vanilla install - where all of them ship empty - stays silent. Tests: `Test-ConfigurationSchema.Tests.ps1` gains an `ordered section shapes` context (the valid array accepted, the hashtable reported, the multi-key entry reported, the empty section ignored).
+
+### Changed
+
+- **The two configuration writers write one place instead of two.** `Add-Workspace` appended to `Workspaces` and then wrote a `WorkspaceActions` entry; `Add-Project` appended to `Projects`, wrote a `ProjectActions` entry and, with `-Runnable`, appended to `RunnableProjects` without ever writing the `RunnableProjectMappings` entry that made the name mean anything. Both now write exactly one entry per section, in the ordered shape, appended at the end so the new workspace or project shows up last in its menu. `Add-Project -Runnable` writes a real `RunnableProjectMappings` entry with an empty `Commands = @{}` - the project is offered by `Run-Project` and each of its paths gets a tab, and you fill in the commands for the paths that run something. Tests: `Add-Workspace.Tests.ps1` and `Add-Project.Tests.ps1` assert the removed key is absent and the entry landed last in configuration order.
+
+### Breaking
+
+- **Six name lists are gone: `Workspaces`, `Projects`, `RunnableProjects`, `Campaigns`, `AcrobatGroups` and `WakeOnLanMachines`.** Every one of them existed only to give an order to a hashtable that already held the definitions, so adding a workspace, project, runnable project, campaign, PDF group or Wake-on-LAN machine meant writing the name twice and keeping the two in sync by hand - a coupling the configuration comment stated outright ("Each machine name listed in WakeOnLanMachines must match a key in WakeOnLanConfig exactly"). The definition side is now the ordered section and the only definition: `WorkspaceActions`, `ProjectActions`, `RunnableProjectMappings` (already an ordered record array with its own `Name`), `CampaignResources`, `AcrobatPdfGroups` and `WakeOnLanConfig`. Writing an entry is what puts it in the menu, in the position it is written. That the duplication was dead weight is visible in the migrated file: `WorkspaceActions` had already drifted out of order from `Workspaces` with no effect, because only the array was ever read for order.
+
+  **What a fork changes.** Delete the six keys, and rewrite the five hashtable-shaped sections as ordered arrays, in the order the old name list had:
+
+  ```powershell
+  # before
+  Workspaces       = @("WinuX", "Dotfiles")
+  WorkspaceActions = @{
+      WinuX    = @( @{ Action = "Open-VSCode"; Parameters = @{ Folder = "WinuX" } } )
+      Dotfiles = @( ... )
+  }
+
+  # after
+  WorkspaceActions = @(
+      @{ WinuX    = @( @{ Action = "Open-VSCode"; Parameters = @{ Folder = "WinuX" } } ) }
+      @{ Dotfiles = @( ... ) }
+  )
+  ```
+
+  A section left as a hashtable still works - `Get-OrderedNames` sorts its keys - so a fork that pulls this release before migrating gets alphabetical menus, not broken ones, and `Test-ConfigurationSchema` names each section to fix. The deleted name lists are simply ignored if left behind. **Note the merge semantics:** an ordered section is an array, and `Merge-Hashtable` replaces arrays wholesale, so a fork's `Configuration.local.psd1` must restate the whole list rather than adding one entry to the base's - exactly as `BrowserGroups` and `RepositoryGroups` have always worked.
+
+- **`Locales`, `KeyboardLayoutSets` and `NerdFonts` are ordered sections too, and ship as `@()` rather than `@{}`.** These three drive menus (`Set-Locale`, `Set-KeyboardLayouts`, `Configure-NerdFont`) and had no ordering at all - they rendered in whatever order the hashtable happened to enumerate. They now follow the same rule as everything else, so the whole configuration has one answer to "what order is this menu in?". `Themes` and `PowerPlans` stay plain hashtables: they are lookup tables keyed by machine type, where order means nothing. Same for `KeyboardLayouts` and `DisplayLanguages`, keyed by name.
+
+- **`RunnableProjectMappings[].Commands` is a hashtable keyed by the `ProjectTerminals` path, not a positional array.** `Commands = @("dnr", "nir")` had to line up by index with `ProjectTerminals.Paths = @("API", "UI")`, a coupling nothing enforced and only a comment described ("Command order has to match with the Paths order in ProjectTerminals"); a mismatched count was a runtime error that skipped the project, and inserting a path silently shifted every command after it onto the wrong directory. Each command now names the path it runs in - `Commands = @{ API = "dnr"; UI = "nir" }` - so the two lists cannot drift and the count check is gone: a path not named in `Commands` opens its terminal tab with nothing run in it, which is what the empty string `""` used to mean positionally. The legacy array is still read by index, so an unmigrated fork keeps working.
+
+### Fixed
+
+- **`Run-Project` crashed on an empty selection.** `Write-LogDebug "... $($resolvedProjects.GetType().FullName)"` ran unconditionally on whatever `Resolve-Selection` returned, and pressing [Enter] at the menu returns nothing - `$null.GetType()` throws. Selecting nothing is an ordinary outcome, so the selection is normalized to an array before the debug lines and the type line, which reported the type of nothing, is gone.
+
+- **`Run-Project` mishandled a `ProjectTerminals` path written as a hashtable.** `Paths` has always accepted `@{ Key = "Name"; Path = "C:\path" }` (a tab at an explicit path) and `@{ Key = "Name" }` (a plain tab with a custom name) - `Open-ProjectTerminals` handles both - but `Run-Project` passed the entry straight to `Resolve-ProjectPath -PathKey`, which stringified it to `System.Collections.Hashtable`, logged a path error and titled the tab `<Project>.System.Collections.Hashtable`. It now normalizes the entry the same way `Open-ProjectTerminals` does: the `Key` names the tab and the command, and an explicit `Path` is used as-is instead of being resolved. Tests: `Run-Project.Tests.ps1` gains the menu-order case and a per-path command case (one path with a command, one without, no error logged).
+
+Documented in the `ORDERING RULE` header of `Configuration.psd1` and every section comment it covers, a new "Ordered Sections" chapter in `docs/configuration/configuration-reference.md` that the `ProjectActions`, `WorkspaceActions`, `RunnableProjectMappings`, `AcrobatPdfGroups`, `CampaignResources`, `WakeOnLanConfig`, `Locales`, `KeyboardLayoutSets` and `NerdFonts` sections all link to, `docs/configuration/overview.md`, the `Add-Project`, `Add-Workspace`, `Open-Project`, `Close-Project`, `Open-Workspace`, `Open-DnD`, `Open-Acrobat`, `Run-Project` and `Send-WakeOnLan` configuration guides with their five guide indexes, the `add-new-project.md` (now nine steps) and `add-new-workspace.md` (now three) walkthroughs, `docs/modules/application.md`, `configuration.md`, `helper.md` (new `Get-OrderedNames` and `Get-OrderedEntry` sections), `system.md` and `workflow.md`, new `docs/configuration/guides/helper/Get-OrderedNames.md` and `Get-OrderedEntry.md` with the Helper guides index, and `AI/Context/REPOSITORY_CONTEXT.md` / `WINDOWS_CONTEXT.md`.
+
 ## [0.1.66] - 2026-09-17
 
 ### Added
@@ -1084,7 +1131,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.66...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.67...HEAD
+[0.1.67]: https://github.com/IvanPavlak/WinuX/compare/v0.1.66...v0.1.67
 [0.1.66]: https://github.com/IvanPavlak/WinuX/compare/v0.1.65...v0.1.66
 [0.1.65]: https://github.com/IvanPavlak/WinuX/compare/v0.1.64...v0.1.65
 [0.1.64]: https://github.com/IvanPavlak/WinuX/compare/v0.1.63...v0.1.64

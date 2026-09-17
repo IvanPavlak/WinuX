@@ -10,10 +10,9 @@ This guide shows how to add a new development project to WinuX for use with `Ope
 4. Add to `VSCodeProjects` (if using VS Code)
 5. Add to `ProjectTerminals` (for terminal tabs)
 6. Add a repository entry in `RepositoryGroups` (if Git repo)
-7. Add to `Projects` list
-8. Add Swagger URL to `BrowserGroups` and declare the `Open-ProjectSwagger` action (if using Swagger)
-9. Define project actions in `ProjectActions`
-10. Add to `RunnableProjects` + `RunnableProjectMappings` (if runnable)
+7. Add Swagger URL to `BrowserGroups` and declare the `Open-ProjectSwagger` action (if using Swagger)
+8. Define the project in `ProjectActions` - this is what puts it in the `Open-Project` menu
+9. Add to `RunnableProjectMappings` (if runnable)
 
 ## Step 1: Add GitHub URL
 
@@ -121,19 +120,7 @@ RepositoryGroups = @(
 
 This enables `Update-Repositories` to clone and update the repository.
 
-## Step 7: Add to Projects List
-
-```powershell
-Projects = @(
-    "WinuX",
-    "MyProject",
-    "MyNewProject"    # ← Add here
-)
-```
-
-This makes it available in the `Open-Project` interactive menu.
-
-## Step 8: Add Swagger URL (if applicable)
+## Step 7: Add Swagger URL (if applicable)
 
 Add the Swagger URL to the `Swagger` group in `BrowserGroups`. The `Name` must match the project name (case-insensitive):
 
@@ -169,18 +156,19 @@ The matching window-layout entry recognizes the Swagger window across browsers a
 
 Re-running the workspace does not stack a second error tab on top of such a placeholder: `Resolve-SwaggerBrowserGroup` probes the host and port first, and with the backend unreachable it treats any existing failed-load window as the tab already being open. The first open still happens, so the zone is filled either way.
 
-## Step 9: Define Project Actions
+## Step 8: Define the Project in ProjectActions
 
-In `ProjectActions`, define what happens when `Open-Project MyNewProject` is executed:
+`ProjectActions` is an ordered list: one single-key hashtable per project, in the order the `Open-Project` menu offers them. Adding the entry is what puts the project in the menu - there is no separate project list.
 
 ```powershell
-ProjectActions = @{
-    MyNewProject = @(
-        @{ Action = "Open-VisualStudio"; Parameters = @{ Solution = "{ProjectName}" } }
-        @{ Action = "Open-VSCode"; Parameters = @{ Folder = "{ProjectName}" } }
-        @{ Action = "Open-ProjectTerminals-Or-RunProject"; Parameters = @{ Project = "{ProjectName}" } }
-    )
-}
+ProjectActions = @(
+    @{ MyNewProject = @(
+            @{ Action = "Open-VisualStudio"; Parameters = @{ Solution = "{ProjectName}" } }
+            @{ Action = "Open-VSCode"; Parameters = @{ Folder = "{ProjectName}" } }
+            @{ Action = "Open-ProjectTerminals-Or-RunProject"; Parameters = @{ Project = "{ProjectName}" } }
+        )
+    }
+)
 ```
 
 **`{ProjectName}`** is automatically replaced with the actual project name at runtime.
@@ -196,29 +184,28 @@ ProjectActions = @{
 | `Open-Obsidian`                       | `@{ Default = $true }` or `@{ Workspace = "..." }` | Opens Obsidian; `ProjectActions` inject no `CurrentWorkspace`, so pass one of these to avoid the workspace menu |
 | `Open-DBeaver`                        | -                        | Opens DBeaver                     |
 
-## Step 10: Add to Runnable Projects (if applicable)
+## Step 9: Add to Runnable Project Mappings (if applicable)
+
+`RunnableProjectMappings` is what the `Run-Project` menu lists, in the order written here - there is no separate runnable-project list.
 
 ```powershell
-RunnableProjects = @(
-    "MyProject",
-    "MyNewProject"    # ← Add here
-)
-
 RunnableProjectMappings = @(
     @{
         Name              = "MyNewProject"
-        Commands          = @("dnr", "nir")
+        Commands          = @{ API = "dnr"; UI = "nir" }
         DatabaseProviders = @("PostgreSQL")
     }
 )
 ```
 
-**Commands must match the `Paths` order in `ProjectTerminals`:**
+**`Commands` is keyed by the `ProjectTerminals` path it runs in:**
 
-| Paths entry | Command     | What it runs                                 |
-| ----------- | ----------- | -------------------------------------------- |
-| `API` (1st) | `dnr` (1st) | `dotnet run` in the Api directory            |
-| `UI` (2nd)  | `nir` (2nd) | `npm install; npm start` in the Ui directory |
+| Paths entry | Commands key | What it runs                                 |
+| ----------- | ------------ | -------------------------------------------- |
+| `API`       | `API`        | `dotnet run` in the Api directory            |
+| `UI`        | `UI`         | `npm install; npm start` in the Ui directory |
+
+A path with no entry in `Commands` opens its terminal tab with nothing run in it.
 
 **Available run commands:**
 
@@ -291,29 +278,28 @@ RepositoryGroups = @(
     }
 )
 
-# 7. Projects List
-Projects = @("WinuX", "MyProject", "ThirdProject", "MonorepoProject", "OtherProject", "TrainingProject")
-
-# 8. Swagger - Name must match project name (case-insensitive)
+# 7. Swagger - Name must match project name (case-insensitive)
 BrowserGroups = @(
     @{ Swagger = @(
         @{ Name = "MonorepoProject"; Url = "http://localhost:3000/swagger/index.html" }
     )}
 )
 
-# 9. Project Actions
-MonorepoProject = @(
-    @{ Action = "Open-VisualStudio"; Parameters = @{ Solution = "{ProjectName}" } }
-    @{ Action = "Open-VSCode"; Parameters = @{ Folder = "{ProjectName}" } }
-    @{ Action = "Open-ProjectTerminals-Or-RunProject"; Parameters = @{ Project = "{ProjectName}" } }
+# 8. Project Actions - the entry is what puts the project in the Open-Project menu
+ProjectActions = @(
+    @{ MonorepoProject = @(
+            @{ Action = "Open-VisualStudio"; Parameters = @{ Solution = "{ProjectName}" } }
+            @{ Action = "Open-VSCode"; Parameters = @{ Folder = "{ProjectName}" } }
+            @{ Action = "Open-ProjectTerminals-Or-RunProject"; Parameters = @{ Project = "{ProjectName}" } }
+        )
+    }
 )
 
-# 10. Runnable - uses pnpm, not npm, so direct command instead of "nir"
-RunnableProjects = @("MyProject", "ThirdProject", "MonorepoProject")
+# 9. Runnable - uses pnpm, not npm, so direct command instead of "nir"
 RunnableProjectMappings = @(
     @{
         Name              = "MonorepoProject"
-        Commands          = @("dnr", "pnpm install; pnpm dev")
+        Commands          = @{ API = "dnr"; UI = "pnpm install; pnpm dev" }
         DatabaseProviders = @("PostgreSQL")
     }
 )

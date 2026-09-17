@@ -5,6 +5,10 @@ BeforeAll {
 	. "$ConfigurationFunctionsPath\Find-ConfigurationSection.ps1"
 	. "$ConfigurationFunctionsPath\ConvertTo-ActionString.ps1"
 	. "$ConfigurationFunctionsPath\Add-Workspace.ps1"
+	. (Join-Path (Get-RepositoryPath).Modules "Helper\Functions\Get-OrderedNames.ps1")
+	. (Join-Path (Get-RepositoryPath).Modules "Helper\Functions\Get-OrderedEntry.ps1")
+	. (Join-Path (Get-RepositoryPath).Modules "Helper\Functions\Get-OrderedNames.ps1")
+	. (Join-Path (Get-RepositoryPath).Modules "Helper\Functions\Get-OrderedEntry.ps1")
 }
 
 Describe "Add-Workspace" {
@@ -19,26 +23,24 @@ Describe "Add-Workspace" {
 		$testConfig = Join-Path $psDir "Configuration.psd1"
 		$configContent = @(
 			'@{'
-			'	Workspaces = @('
-			'		"Existing"'
+			'	WorkspaceActions = @('
+			'		@{ Existing                = @('
+			'				@{ Action = "Set-WorkspaceWindowLayout"; Parameters = @{ WorkspaceName = "Existing" } }'
+			'			)'
+			'		}'
 			'	)'
-			''
-			'	WorkspaceActions = @{'
-			'		Existing                = @('
-			'			@{ Action = "Set-WorkspaceWindowLayout"; Parameters = @{ WorkspaceName = "Existing" } }'
-			'		)'
-			'	}'
 			'}'
 		)
 		Set-Content -Path $testConfig -Value $configContent
 	}
 
 	Context "Adding workspace with actions" {
-		It "Should add workspace name to Workspaces array" {
+		It "Should write one entry, in WorkspaceActions, and no second name list" {
 			Add-Workspace -Name "NewWS" -ConfigurationFilePath $testConfig
 
-			$result = Get-Content -Path $testConfig -Raw
-			$result | Should -Match '"NewWS"'
+			$parsed = Import-PowerShellDataFile -Path $testConfig
+			$parsed.ContainsKey("Workspaces") | Should -BeFalse
+			@(Get-OrderedNames $parsed.WorkspaceActions) | Should -Be @("Existing", "NewWS")
 		}
 
 		It "Should add WorkspaceActions entry" {
@@ -68,8 +70,9 @@ Describe "Add-Workspace" {
 
 			$parsed = Import-PowerShellDataFile -Path $testConfig
 			$parsed | Should -Not -BeNullOrEmpty
-			$parsed.Workspaces | Should -Contain "NewWS"
-			$parsed.WorkspaceActions.NewWS | Should -Not -BeNullOrEmpty
+			Get-OrderedEntry $parsed.WorkspaceActions "NewWS" | Should -Not -BeNullOrEmpty
+			# Appended last, so the new workspace shows up at the end of the menu.
+			@(Get-OrderedNames $parsed.WorkspaceActions)[-1] | Should -Be "NewWS"
 		}
 	}
 

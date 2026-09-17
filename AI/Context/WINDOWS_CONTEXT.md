@@ -74,11 +74,9 @@ For an in-session view, run `List-Functions` or `List-Functions -Category <Modul
 | `PathTemplates`               | `Expand-ConfigPaths`            | Placeholder-based paths              |
 | `MachineTypes`                | `DetermineMachineType`          | Hostname→type mapping                |
 | `BrowserGroups`               | `Open-Browser`                  | Hierarchical URL groups              |
-| `Workspaces`                  | `Open-Workspace`                | Workspace name list                  |
-| `WorkspaceActions`            | `Open-Workspace`                | Action sequences per workspace       |
-| `Projects`                    | `Open-Project`                  | Project name list                    |
-| `ProjectActions`              | `Open-Project`                  | Action sequences per project         |
-| `RunnableProjects`            | `Run-Project`                   | Projects with run commands           |
+| `WorkspaceActions`            | `Open-Workspace`                | Every workspace and its action sequence (ordered - this is the menu) |
+| `ProjectActions`              | `Open-Project`                  | Every project and its action sequence (ordered - this is the menu) |
+| `RunnableProjectMappings`     | `Run-Project`                   | Every runnable project and its per-path commands (ordered - this is the menu) |
 | `TerminalTabs`                | `Open-ProjectTerminals`         | Terminal configs per project         |
 | `SymbolicLinks`               | `SymbolicLinkMaker`             | Path→Target recursive mappings       |
 | `WindowLayouts`               | `Set-WorkspaceWindowLayout`     | Per-workspace window rules           |

@@ -283,9 +283,9 @@ Invoke-ObsidianCli -CliPath (Get-ObsidianCliPath) -Arguments @("vault=Obsidian",
 - **Description:** Opens Adobe Acrobat with one or more PDF groups defined in `AcrobatPdfGroups` in `Configuration.psd1`. When a PDF key (or keys) is given it opens the corresponding file(s) directly; called with no arguments it just launches Acrobat (or reports it is already running), and with an empty `-Pdf` it shows an interactive menu of configured groups plus up to 10 recently opened PDFs.
 - **Parameters:** -Pdf
 - **Usage:** `Open-Acrobat`, `Open-Acrobat -Pdf ""`, `Open-Acrobat -Pdf "MyDocs"`, `Open-Acrobat -Pdf "MyDocs","OtherDocs"`
-- **PDFs:** Configured groups from `AcrobatGroups` / `AcrobatPdfGroups` (+ up to 10 recent PDFs in the interactive menu)
+- **PDFs:** Configured groups from `AcrobatPdfGroups` (+ up to 10 recent PDFs in the interactive menu)
 
-The interactive menu (shown when `-Pdf` is empty) lists the configured groups from `AcrobatGroups` alongside recently opened PDFs and supports selecting one or more. Recent PDFs are gathered first from the Acrobat registry history at `HKCU:\Software\Adobe\Adobe Acrobat\DC\AVGeneral\cRecentFiles`, then, if fewer than 10 are found, from Windows `Recent` (`.lnk`) shortcuts as a fallback. Group paths are resolved through `$global:MachineSpecificPaths`, so each entry validates the resolved path before launching.
+The interactive menu (shown when `-Pdf` is empty) lists the configured groups from `AcrobatPdfGroups`, in configuration order, alongside recently opened PDFs and supports selecting one or more. Recent PDFs are gathered first from the Acrobat registry history at `HKCU:\Software\Adobe\Adobe Acrobat\DC\AVGeneral\cRecentFiles`, then, if fewer than 10 are found, from Windows `Recent` (`.lnk`) shortcuts as a fallback. Group paths are resolved through `$global:MachineSpecificPaths`, so each entry validates the resolved path before launching.
 
 | Parameter | Description                                                                                                                                                     |
 | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |

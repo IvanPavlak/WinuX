@@ -40,7 +40,7 @@ function Open-DnD {
 
 	$resolveParams = @{
 		InputObject              = $Campaign
-		OptionList               = $Configuration.Campaigns
+		OptionList               = @(Get-OrderedNames $Configuration.CampaignResources)
 		MenuTitle                = "[Available Campaigns]"
 		AllowEmptyPromptResponse = $true
 	}
@@ -59,11 +59,10 @@ function Open-DnD {
 	try {
 		Open-Obsidian
 
-		# Map each campaign to its rulebook PDF group (AcrobatGroups) and browser
-		# resource group (BrowserGroups). Add a case per entry in Campaigns.
-		# Per-campaign rulebook PDF (AcrobatGroups) and resource browser group (BrowserGroups),
-		# driven from Configuration.CampaignResources so personal campaign data lives only in config.
-		$resources = $Configuration.CampaignResources.$Campaign
+		# Per-campaign rulebook PDF group (AcrobatPdfGroups) and resource browser group
+		# (BrowserGroups), driven from Configuration.CampaignResources - the one place a
+		# campaign is defined, and the order the campaign menu above follows.
+		$resources = Get-OrderedEntry $Configuration.CampaignResources $Campaign
 		if ($resources) {
 			if ($resources.Pdf) { Open-Acrobat -Pdf $resources.Pdf }
 			if ($resources.Browser) { Open-Browser $resources.Browser }

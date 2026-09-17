@@ -44,8 +44,10 @@ function Set-KeyboardLayouts {
 	$defaultSetName = $Configuration.DefaultKeyboardLayoutSet
 	$targetSetName = ""
 
+	$layoutSetOptions = @(Get-OrderedNames $layoutSets)
+
 	if (-not [string]::IsNullOrWhiteSpace($LayoutSet)) {
-		if ($layoutSets.ContainsKey($LayoutSet)) {
+		if ($layoutSetOptions -contains $LayoutSet) {
 			$targetSetName = $LayoutSet
 		}
 		else {
@@ -54,7 +56,6 @@ function Set-KeyboardLayouts {
 		}
 	}
  else {
-		$layoutSetOptions = $layoutSets.Keys
 		$resolveParams = @{
 			OptionList               = $layoutSetOptions
 			MenuTitle                = "[Available Keyboard Layout Sets]"
@@ -72,12 +73,12 @@ function Set-KeyboardLayouts {
 		}
 	}
 
-	if (-not $layoutSets.ContainsKey($targetSetName)) {
+	$targetLayoutNames = Get-OrderedEntry $layoutSets $targetSetName
+	if (-not $targetLayoutNames) {
 		Write-LogError "Error: Layout set [$targetSetName] not found in configuration."
 		return
 	}
 
-	$targetLayoutNames = $layoutSets[$targetSetName]
 	$targetLayoutCodes = $targetLayoutNames | ForEach-Object { $allLayouts[$_] }
 
 	Write-LogTitle "Setting Keyboard Layouts to [$($targetLayoutNames -join ', ')]" -BlankLineAfter

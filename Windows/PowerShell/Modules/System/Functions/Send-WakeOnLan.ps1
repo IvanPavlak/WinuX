@@ -4,9 +4,12 @@ function Send-WakeOnLan {
 		Sends a Wake-on-LAN magic packet to one or more machines.
 
 	.DESCRIPTION
-		Reads machine configurations from `WakeOnLanConfig` in Configuration.psd1.
+		Reads machine configurations from `WakeOnLanConfig` in Configuration.psd1 - an
+		ordered list of single-key hashtables, one per machine, which the menu follows.
 		When called with machine names, sends magic packets to those machines.
-		When called without arguments, shows an interactive menu of available machines.
+		When called without arguments, shows an interactive menu of available machines,
+		with "All" and "None" appended: those are menu options this function adds, not
+		machines, so they are never configured.
 		Each machine entry should specify a MAC address, broadcast address and port.
 
 		If a machine also has an `Address` (IP or hostname) configured, the function
@@ -53,21 +56,23 @@ function Send-WakeOnLan {
 		[switch]$NoWait
 	)
 
-	# Confirm-ConfigValue, not truthiness: the empty base ships WakeOnLanConfig = @{},
-	# and an empty hashtable is truthy, so a bare -not guard would pass it through.
+	# Confirm-ConfigValue, not truthiness: the empty base ships WakeOnLanConfig = @(),
+	# and an empty collection is truthy, so a bare -not guard would pass it through.
 	$wolConfig = $Configuration.WakeOnLanConfig
 	if (-not (Confirm-ConfigValue $wolConfig "Wake-on-LAN not configured (WakeOnLanConfig) - nothing to wake!")) {
-		return
-	}
-	if (-not (Confirm-ConfigValue $Configuration.WakeOnLanMachines "Wake-on-LAN not configured (WakeOnLanMachines) - nothing to wake!")) {
 		return
 	}
 
 	$defaultMachine = $Configuration.DefaultWakeOnLanMachine
 
+	# The configured machines, in configuration order, plus the two options that are not
+	# machines: "All" wakes every configured one, "None" cancels. They belong to the menu,
+	# so they live here rather than in everybody's WakeOnLanConfig.
+	$machineNames = @(Get-OrderedNames $wolConfig)
+
 	$resolveParams = @{
 		InputObject              = $Machine
-		OptionList               = $Configuration.WakeOnLanMachines
+		OptionList               = @($machineNames + @("All", "None"))
 		MenuTitle                = "[Available Machines for Wake-on-LAN]"
 		PromptMessage            = "Select machine to wake (Press Enter for default => $defaultMachine)"
 		AllowEmptyPromptResponse = $true
@@ -86,7 +91,7 @@ function Send-WakeOnLan {
 
 	if ($machines -contains "All") {
 		Write-LogStep "Waking all configured machines..."
-		$machines = $wolConfig.Keys | Where-Object { $_ -notin @("All", "None") }
+		$machines = $machineNames
 	}
 
 	#Open-Browser DomainLinks
@@ -102,12 +107,12 @@ function Send-WakeOnLan {
 
 	try {
 		foreach ($machineName in $machines) {
-			if (-not $wolConfig.ContainsKey($machineName)) {
+			$config = Get-OrderedEntry $wolConfig $machineName
+			if (-not $config) {
 				Write-LogError "Error => Configuration for machine [$machineName] not found in WakeOnLanConfig!"
 				continue
 			}
 
-			$config = $wolConfig[$machineName]
 			$mac = $config.MacAddress
 			$broadcastAddress = $config.SubNetSpecificBroadcastAddress
 			$port = $config.Port

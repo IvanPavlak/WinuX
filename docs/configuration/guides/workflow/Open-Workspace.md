@@ -11,10 +11,9 @@ The main entry point for starting work. Alias: `w`.
 | --- | ---- | -------------- | ---------------- |
 | [`DefaultVSCodeWorkspaces`](../../configuration-reference.md#default-vs-code-workspaces) | hashtable of workspace name to VS Code workspace file | `@{}` (empty) | Which `.code-workspace` file `Open-Workspace` opens for a given WinuX workspace. |
 | [`DefaultWorkspace`](../../configuration-reference.md#default-workspace) | string | `"Default"` | Which workspace `Open-Workspace` opens with no argument. |
-| [`ProjectTerminals`](../../configuration-reference.md#project-terminals) | array of `@{ Project; Tabs; ... }` | array of 3 | Which Windows Terminal tabs `Open-ProjectTerminals` creates for a project, and with what titles and starting directories. Tabs are created with `--title --suppressApplicationTitle`, so their titles are stable. |
-| [`WorkspaceActions`](../../configuration-reference.md#workspace-actions) | hashtable of workspace name to action array | hashtable, 5 keys | What `Open-Workspace` does for each workspace: an ordered array of `@{ Action; Parameters }` entries. An entry may carry `Machine = "PC/Work"` and/or `LayoutMachine = "Laptop/Work"` to run only there, or a `MachineParameters` / `LayoutMachineParameters` table to vary its parameters per machine ([Resolve-WorkspaceActions](Resolve-WorkspaceActions.md)). `Close-Workspace` reads what the open actually produced, not this map. |
+| [`ProjectTerminals`](../../configuration-reference.md#project-terminals) | array of `@{ Name; BasePath; Paths }` | array of 3 | Which Windows Terminal tabs `Open-ProjectTerminals` creates for a project, and where each one starts. Tabs are created with `--title --suppressApplicationTitle`, so their titles are stable. |
+| [`WorkspaceActions`](../../configuration-reference.md#workspace-actions) | ordered list of workspaces (one single-key hashtable each) | list of 5 | Every workspace `Open-Workspace` offers, in menu order: the workspace name is the key, the value is the ordered array of `@{ Action; Parameters }` entries opening it runs. An entry may carry `Machine = "PC/Work"` and/or `LayoutMachine = "Laptop/Work"` to run only there, or a `MachineParameters` / `LayoutMachineParameters` table to vary its parameters per machine ([Resolve-WorkspaceActions](Resolve-WorkspaceActions.md)). `Close-Workspace` reads what the open actually produced, not this list. |
 | [`WorkspaceBenchmark`](../../configuration-reference.md#workspace-benchmark) | hashtable (`Enabled`, `Display`, `Last`) | `@{ Enabled = $false; Display = "Table"; Last = 10 }` | Whether every open is measured - each action timed, the layout phases read back, one row appended to `WorkspaceBenchmark.csv` - and what the end of the open shows: the workspace's recent runs as a table, one `Timing =>` line, or nothing. |
-| [`Workspaces`](../../configuration-reference.md#workspaces-list) | array of workspace names | `@("Default", "Example", "Fullscreen", "Empty", "WinuX")` | The workspace names `Open-Workspace` offers. Each needs a `WorkspaceActions` entry to do anything. |
 | [`WorkspaceLayoutPrepareEarly`](../../configuration-reference.md#layout-numbers--zone-mappings) | bool | `$true` | Whether the layout's virtual desktops and FancyZones zone layouts are prepared before the launch actions (`Set-WorkspaceWindowLayout -PrepareOnly`), on an idle machine, or left to the layout action after them. |
 
 Action order is the whole of the behaviour here. Everything that creates a window runs first, `Set-WorkspaceWindowLayout` places them, and `Focus-VirtualDesktop` is meant to be the last thing that happens - a workspace that ends by jumping to another desktop and back almost always has an action after the focus call.
@@ -26,7 +25,7 @@ Action order is the whole of the behaviour here. Everything that creates a windo
     - Default: Empty - no VS Code workspace is opened automatically.
     - More detail: [`DefaultVSCodeWorkspaces`](../../configuration-reference.md#default-vs-code-workspaces)
 2. Which workspace should open when you type `Open-Workspace` with no argument?
-    - Options: A name from `Workspaces`.
+    - Options: A name defined in `WorkspaceActions`.
     - Default: `Default`.
     - More detail: [`DefaultWorkspace`](../../configuration-reference.md#default-workspace)
 3. Which terminal tabs should open for this project?
@@ -41,11 +40,7 @@ Action order is the whole of the behaviour here. Everything that creates a windo
     - Options: Put `Set-WorkspaceWindowLayout` after everything that creates windows, and `Focus-VirtualDesktop` last - it is meant to be the final desktop transition.
     - Default: The shipped ordering.
     - More detail: [`WorkspaceActions`](../../configuration-reference.md#workspace-actions)
-6. Which workspaces should `Open-Workspace` offer?
-    - Options: One name per workspace - see [Add New Workspace](../workflow/add-new-workspace.md) for the whole walk. The array replaces wholesale, so include the shipped names you still want.
-    - Default: The shipped five.
-    - More detail: [`Workspaces`](../../configuration-reference.md#workspaces-list)
-7. Should every workspace open be measured?
+6. Should every workspace open be measured?
     - Options: `Enabled = $true` records one row per open in `WorkspaceBenchmark.csv`; `Display` picks what the end of the open shows - `"Table"` (the workspace's recent runs), `"Line"` (one `Timing =>` line) or `"None"` (record only); `Last` sets how many runs the table shows.
     - Default: Off - nothing is recorded and nothing extra is printed.
     - More detail: [`WorkspaceBenchmark`](../../configuration-reference.md#workspace-benchmark)
@@ -61,7 +56,7 @@ All of it goes in `Configuration.local.psd1`, at the repository's `Windows/Power
 > [!WARNING]
 > The merge is not uniform. **Hashtables deep-merge per key**, so adding one entry to a hashtable leaves every other entry alone. **Arrays and scalars replace wholesale**, so supplying an array key in your local file discards the entire base array. When you want to *add* to a shipped array, copy the whole base array out of `Configuration.psd1` first and add your entry to the copy.
 
-On this page that bites on `ProjectTerminals`, `Workspaces` - those keys are arrays, so whatever you write is the complete value. `WorkspaceBenchmark` is a hashtable and deep-merges, so `@{ Enabled = $true }` alone opts in and keeps the shipped `Display` and `Last`.
+On this page that bites on `ProjectTerminals` and `WorkspaceActions` - those keys are lists, so whatever you write is the complete value. `WorkspaceBenchmark` is a hashtable and deep-merges, so `@{ Enabled = $true }` alone opts in and keeps the shipped `Display` and `Last`.
 
 ## Steps Overview
 
@@ -69,10 +64,9 @@ On this page that bites on `ProjectTerminals`, `Workspaces` - those keys are arr
 2. Set `DefaultWorkspace`
 3. Set `ProjectTerminals`
 4. Set `WorkspaceActions`
-5. Set `Workspaces`
-6. Set `WorkspaceBenchmark`
-7. Set `WorkspaceLayoutPrepareEarly`
-8. Reload and confirm the merge landed
+5. Set `WorkspaceBenchmark`
+6. Set `WorkspaceLayoutPrepareEarly`
+7. Reload and confirm the merge landed
 
 ## Step 1: Set `DefaultVSCodeWorkspaces`
 
@@ -119,15 +113,7 @@ WorkspaceActions = @{
 }
 ```
 
-## Step 5: Set `Workspaces`
-
-The workspace names `Open-Workspace` offers. Each needs a `WorkspaceActions` entry to do anything.
-
-```powershell
-Workspaces = @("Default", "MyWorkspace")
-```
-
-## Step 6: Set `WorkspaceBenchmark`
+## Step 5: Set `WorkspaceBenchmark`
 
 Whether every open is measured and what the end of the open shows. Off in the base. With `Enabled = $true` and the default `Display = "Table"`, every `w MyWorkspace` ends with the workspace's recent runs as a table - the same output as `Get-WorkspaceBenchmark -Workspace MyWorkspace -Formatted` - before the elapsed summary. `"Line"` prints one `Timing [MyWorkspace] => actions 0.8s | fancyzones 3.8s | wait 15.1s | ...` line instead, `"None"` only records. The flag alone is enough; `Display` and `Last` deep-merge from the base.
 
@@ -164,11 +150,9 @@ $global:Configuration.DefaultVSCodeWorkspaces
 $global:Configuration.DefaultWorkspace
 $global:Configuration.ProjectTerminals
 $global:Configuration.WorkspaceActions
-$global:Configuration.Workspaces
 $global:Configuration.WorkspaceBenchmark
 $global:Configuration.WorkspaceLayoutPrepareEarly
-$global:Configuration.Workspaces
-$global:Configuration.WorkspaceActions.Keys
+Get-OrderedNames $global:Configuration.WorkspaceActions
 $global:Configuration.DefaultWorkspace
 ```
 
@@ -198,7 +182,6 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
             @{ Action = "Set-WorkspaceWindowLayout" }
         )
     }
-    Workspaces = @("Default", "MyWorkspace")
     WorkspaceBenchmark = @{
         Enabled = $true
     }

@@ -4,15 +4,18 @@ BeforeAll {
 	$ModuleRoot = (Get-RepositoryPath).Modules
 	$FunctionsPath = Join-Path $ModuleRoot "System\Functions"
 
+	. "$ModuleRoot\Helper\Functions\Get-OrderedNames.ps1"
+	. "$ModuleRoot\Helper\Functions\Get-OrderedEntry.ps1"
+
 	. "$FunctionsPath\Set-KeyboardLayouts.ps1"
 }
 
 Describe "Set-KeyboardLayouts" {
 	BeforeEach {
 		$script:Configuration = [PSCustomObject]@{
-			KeyboardLayoutSets       = @{
-				Default = @("US")
-			}
+			KeyboardLayoutSets       = @(
+				@{ Default = @("US") }
+			)
 			KeyboardLayouts          = @{
 				US = "00000409"
 			}

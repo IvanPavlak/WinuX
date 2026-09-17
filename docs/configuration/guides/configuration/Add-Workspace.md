@@ -1,6 +1,6 @@
 # Add-Workspace
 
-Adds a workspace to `Configuration.psd1`: appends the name to the `Workspaces` array and creates its `WorkspaceActions` entry.
+Adds a workspace to `Configuration.psd1` by appending its `WorkspaceActions` entry - the workspace's only definition, and its place in the `Open-Workspace` menu.
 
 > [!NOTE]
 > Every value on this page belongs in `Configuration.local.psd1`, never in the base `Configuration.psd1`. The base file is upstream's, it ships empty-by-default, and it is deep-merged with your local file at load time by `Load-PathConfiguration`. See [Fork Model](../../../contributing/fork-model.md).
@@ -11,8 +11,7 @@ Adds a workspace to `Configuration.psd1`: appends the name to the `Workspaces` a
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`WorkspaceActions`](../../configuration-reference.md#workspace-actions) | hashtable of workspace name to action array | hashtable, 5 keys | What `Open-Workspace` does for each workspace: an ordered array of `@{ Action; Parameters }` entries. An entry may carry `Machine` / `LayoutMachine` scopes and `MachineParameters` / `LayoutMachineParameters` tables ([Resolve-WorkspaceActions](../workflow/Resolve-WorkspaceActions.md)); `Add-Workspace` writes them through unchanged. `Close-Workspace` reads what the open actually produced, not this map. |
-| [`Workspaces`](../../configuration-reference.md#workspaces-list) | array of workspace names | `@("Default", "Example", "Fullscreen", "Empty", "WinuX")` | The workspace names `Open-Workspace` offers. Each needs a `WorkspaceActions` entry to do anything. |
+| [`WorkspaceActions`](../../configuration-reference.md#workspace-actions) | ordered list of workspaces (one single-key hashtable each) | list of 5 | Every workspace `Open-Workspace` offers, in menu order: the workspace name is the key, the value is the ordered array of `@{ Action; Parameters }` entries opening it runs. An entry may carry `Machine` / `LayoutMachine` scopes and `MachineParameters` / `LayoutMachineParameters` tables ([Resolve-WorkspaceActions](../workflow/Resolve-WorkspaceActions.md)); `Add-Workspace` writes them through unchanged. `Close-Workspace` reads what the open actually produced, not this list. |
 
 ## Decisions
 
@@ -24,10 +23,10 @@ Adds a workspace to `Configuration.psd1`: appends the name to the `Workspaces` a
     - Options: Put `Set-WorkspaceWindowLayout` after everything that creates windows, and `Focus-VirtualDesktop` last - it is meant to be the final desktop transition.
     - Default: The shipped ordering.
     - More detail: [`WorkspaceActions`](../../configuration-reference.md#workspace-actions)
-3. Which workspaces should `Open-Workspace` offer?
-    - Options: One name per workspace - see [Add New Workspace](../workflow/add-new-workspace.md) for the whole walk. The array replaces wholesale, so include the shipped names you still want.
+3. Which workspaces should `Open-Workspace` offer, and in what order?
+    - Options: One entry per workspace, in menu order - see [Add New Workspace](../workflow/add-new-workspace.md) for the whole walk. The list replaces wholesale, so include the shipped entries you still want.
     - Default: The shipped five.
-    - More detail: [`Workspaces`](../../configuration-reference.md#workspaces-list)
+    - More detail: [`WorkspaceActions`](../../configuration-reference.md#workspace-actions)
 
 ## Where to Put Values
 
@@ -36,38 +35,32 @@ All of it goes in `Configuration.local.psd1`, at the repository's `Windows/Power
 > [!WARNING]
 > The merge is not uniform. **Hashtables deep-merge per key**, so adding one entry to a hashtable leaves every other entry alone. **Arrays and scalars replace wholesale**, so supplying an array key in your local file discards the entire base array. When you want to *add* to a shipped array, copy the whole base array out of `Configuration.psd1` first and add your entry to the copy.
 
-On this page that bites on `Workspaces` - that key is an array, so whatever you write is the complete value.
+On this page that bites on `WorkspaceActions` - it is an ordered list, so whatever you write is the complete value.
 
 ## Steps Overview
 
 1. Set `WorkspaceActions`
-2. Set `Workspaces`
-3. Reload and confirm the merge landed
+2. Reload and confirm the merge landed
 
 ## Step 1: Set `WorkspaceActions`
 
-What `Open-Workspace` does for each workspace: an ordered array of `@{ Action; Parameters }` entries. `Close-Workspace` reads what the open actually produced, not this map. Pass `-Actions` entries with `Machine` or `LayoutMachine` keys to scope an action to some machines, or with a `MachineParameters` / `LayoutMachineParameters` table to vary its parameters per machine; the tables are serialized after `Parameters` and the scopes last.
+Every workspace `Open-Workspace` offers, in the order the menu offers them. Each entry is a single-key hashtable: the key is the workspace name, the value is the ordered array of `@{ Action; Parameters }` entries opening it runs. There is no separate workspace list - defining a workspace here is what puts it in the menu, and `Add-Workspace` appends its entry at the end. `Close-Workspace` reads what the open actually produced, not this list.
+
+Pass `-Actions` entries with `Machine` or `LayoutMachine` keys to scope an action to some machines, or with a `MachineParameters` / `LayoutMachineParameters` table to vary its parameters per machine; the tables are serialized after `Parameters` and the scopes last.
 
 ```powershell
-WorkspaceActions = @{
-    MyWorkspace = @(
-        @{ Action = "Open-Project"; Parameters = @{ ProjectName = "MyProject" } }
-        @{ Action = "Open-Browser"; Parameters = @{ Groups = @("Monitoring") }; LayoutMachineParameters = @{ PC = @{ Instances = 2 } } }
-        @{ Action = "Open-Outlook"; Machine = "Work" }
-        @{ Action = "Set-WorkspaceWindowLayout" }
-    )
-}
+WorkspaceActions = @(
+    @{ MyWorkspace = @(
+            @{ Action = "Open-Project"; Parameters = @{ ProjectName = "MyProject" } }
+            @{ Action = "Open-Browser"; Parameters = @{ Groups = @("Monitoring") }; LayoutMachineParameters = @{ PC = @{ Instances = 2 } } }
+            @{ Action = "Open-Outlook"; Machine = "Work" }
+            @{ Action = "Set-WorkspaceWindowLayout" }
+        )
+    }
+)
 ```
 
-## Step 2: Set `Workspaces`
-
-The workspace names `Open-Workspace` offers. Each needs a `WorkspaceActions` entry to do anything.
-
-```powershell
-Workspaces = @("Default", "MyWorkspace")
-```
-
-## Step 3: Reload and confirm the merge landed
+## Step 2: Reload and confirm the merge landed
 
 Reload the profile, then read the merged value back. `$global:Configuration` after a reload is the ground truth - if what you set is not there, the local file did not parse or the key is nested one level away from where you put it.
 
@@ -83,8 +76,8 @@ Read-only checks. None of these change anything.
 ```powershell
 Reload-PowerShellProfile
 $global:Configuration.WorkspaceActions
-$global:Configuration.Workspaces
-$global:Configuration.Workspaces
+Get-OrderedNames $global:Configuration.WorkspaceActions
+Get-OrderedEntry $global:Configuration.WorkspaceActions "MyWorkspace"
 $global:Configuration.WorkspaceActions.MyWorkspace
 ```
 
@@ -104,7 +97,6 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
             @{ Action = "Set-WorkspaceWindowLayout" }
         )
     }
-    Workspaces = @("Default", "MyWorkspace")
 }
 ```
 

@@ -88,11 +88,11 @@ Expanded by `Expand-ConfigPaths` at bootstrap time. All config entries use these
 
 ```
 Hostname → Machine Type:
-  DESKTOP-GAMING  → PC
-  LAPTOP-PERSONAL → Laptop
-  WORKSTATION-01  → Work
-  Test            → Test
-  Default         → Test (DefaultMachineType fallback for unmapped hostnames)
+  PC-Win11     → PC
+  Laptop-Win11 → Laptop
+  Work-Win11   → Work
+  Test         → Test
+  Default      → Laptop (fallback + WMI chassis detection for laptops)
 ```
 
 ### Configuration Sections → Consumer Functions
@@ -100,8 +100,8 @@ Hostname → Machine Type:
 | Config Section                    | Consumer                           | Purpose                                    |
 | --------------------------------- | ---------------------------------- | ------------------------------------------ |
 | `BrowserGroups`                   | `Open-Browser`, `Invoke-Browser`   | Hierarchical URL groups with nesting       |
-| `Workspaces` / `WorkspaceActions` | `Open-Workspace`                   | Workspace definitions and action sequences |
-| `Projects` / `ProjectActions`     | `Open-Project`                     | Project definitions and launch sequences   |
+| `WorkspaceActions`                | `Open-Workspace`                   | Workspace definitions and action sequences (ordered - this is the menu) |
+| `ProjectActions`                  | `Open-Project`                     | Project definitions and launch sequences (ordered - this is the menu) |
 | `SymbolicLinks`                   | `SymbolicLinkMaker`                | Source→target symlink mappings (recursive) |
 | `WindowLayouts`                   | `Set-WorkspaceWindowLayout`        | Per-workspace window positioning rules     |
 | `Repositories`                    | `Update-Repositories`              | Git repository paths for batch updates     |
@@ -147,8 +147,8 @@ When you need to add or modify something, these are the typical operations:
 
 1. **Add a new application** → Add to `WingetApps` CSV, create `Open-AppName.ps1` in Application module, add alias in profile
 2. **Add a browser group** → Add entry to `BrowserGroups` in `Configuration.psd1`
-3. **Add a workspace** → Add to `Workspaces` list + define `WorkspaceActions` entry
-4. **Add a project** → Add to `Projects` list + define `ProjectActions` entry + optional `TerminalTabs`
+3. **Add a workspace** → Add its `WorkspaceActions` entry (that is also its place in the menu)
+4. **Add a project** → Add its `ProjectActions` entry (that is also its place in the menu) + optional `TerminalTabs`
 5. **Add a symbolic link** → Add entry to `SymbolicLinks` section
 6. **Add a window layout** → Add/modify layout `.psd1` file in appropriate machine-type folder
 7. **Add a new function** → Create `.ps1` in the relevant module's `Functions/` dir, add to `.psd1` FunctionsToExport

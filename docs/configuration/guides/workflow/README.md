@@ -17,7 +17,7 @@ The [Workflow module reference](../../../modules/workflow.md) is the authority o
 | `Get-SwaggerCloseTitlePatterns` | `BrowserGroups` | [Get-SwaggerCloseTitlePatterns](Get-SwaggerCloseTitlePatterns.md) |
 | `Get-WorkspaceOpenDelta` | `Universal` | [Get-WorkspaceOpenDelta](Get-WorkspaceOpenDelta.md) |
 | `Measure-WorkspaceOpen` | `FancyZonesApplyMethod`, `WorkspaceActions`, `WorkspaceBenchmark`, `WorkspaceLayoutPipelining`, `WorkspaceLayoutPrepareEarly` | [Measure-WorkspaceOpen](Measure-WorkspaceOpen.md) |
-| `Open-DnD` | `CampaignResources`, `Campaigns` | [Open-DnD](Open-DnD.md) |
+| `Open-DnD` | `CampaignResources` | [Open-DnD](Open-DnD.md) |
 | `Open-Project` | `ProjectActions`, `Projects` | [Open-Project](Open-Project.md) |
 | `Open-ProjectTerminals` | `DefaultWSLDistribution`, `ProjectTerminals` | [Open-ProjectTerminals](Open-ProjectTerminals.md) |
 | `Open-Training` | `Universal` | [Open-Training](Open-Training.md) |

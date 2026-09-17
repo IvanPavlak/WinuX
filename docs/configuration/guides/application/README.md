@@ -17,7 +17,7 @@ The [Application module reference](../../../modules/application.md) is the autho
 | `Install-DotnetEf` | `DotnetEFVersion` | [Install-DotnetEf](Install-DotnetEf.md) |
 | `Install-ScoopApps` | `BootstrapConfig.DataFiles`, `PackageManagers` | [Install-ScoopApps](Install-ScoopApps.md) |
 | `Install-WingetApps` | `BootstrapConfig.DataFiles` | [Install-WingetApps](Install-WingetApps.md) |
-| `Open-Acrobat` | `AcrobatGroups`, `AcrobatPdfGroups` | [Open-Acrobat](Open-Acrobat.md) |
+| `Open-Acrobat` | `AcrobatPdfGroups` | [Open-Acrobat](Open-Acrobat.md) |
 | `Open-Browser` | `BrowserGroups`, `Universal` | [Open-Browser](Open-Browser.md) |
 | `Open-LeagueOfLegends` | `Universal` | [Open-LeagueOfLegends](Open-LeagueOfLegends.md) |
 | `Open-NotepadPlusPlus` | `Universal` | [Open-NotepadPlusPlus](Open-NotepadPlusPlus.md) |

@@ -78,11 +78,9 @@ The configuration uses a hierarchical structure designed to eliminate duplicatio
 
 | Section                    | Purpose                         | Consumer Function       |
 | -------------------------- | ------------------------------- | ----------------------- |
-| `Projects`                 | Project names list              | `Open-Project`          |
-| `ProjectActions`           | What happens when project opens | `Open-Project`          |
+| `ProjectActions`           | Every project and what opening it does (ordered - this is the menu) | `Open-Project`          |
 | `ProjectTerminals`         | Terminal tabs per project       | `Open-ProjectTerminals` |
-| `RunnableProjects`         | Projects that can be run        | `Run-Project`           |
-| `RunnableProjectMappings`  | Run commands per project        | `Run-Project`           |
+| `RunnableProjectMappings`  | Every runnable project and its per-path run commands (ordered - this is the menu) | `Run-Project`           |
 | `VisualStudioSolutions`    | VS solutions (name + path)      | `Open-VisualStudio`     |
 | `VSCodeProjects`           | VS Code projects (name + path)  | `Open-VSCode`           |
 | `DotnetProjectsSearchPath` | .NET project search paths       | `Run-Project`           |
@@ -92,18 +90,16 @@ The configuration uses a hierarchical structure designed to eliminate duplicatio
 
 | Section            | Purpose                      | Consumer Function |
 | ------------------ | ---------------------------- | ----------------- |
-| `Workspaces`       | Workspace names list         | `Open-Workspace`  |
 | `DefaultWorkspace` | Workspace opened by `[Enter]` | `Open-Workspace`  |
-| `WorkspaceActions` | Actions per workspace        | `Open-Workspace`  |
+| `WorkspaceActions` | Every workspace and what opening it does (ordered - this is the menu) | `Open-Workspace`  |
 
 ### Application Configuration
 
 | Section            | Purpose                 | Consumer Function |
 | ------------------ | ----------------------- | ----------------- |
 | `BrowserGroups`    | Hierarchical URL groups | `Open-Browser`    |
-| `AcrobatGroups`    | PDF file groups         | `Open-Acrobat`    |
-| `AcrobatPdfGroups` | PDF group definitions   | `Open-Acrobat`    |
-| `Campaigns`        | D&D campaign list       | `Open-DnD`        |
+| `AcrobatPdfGroups` | PDF groups and their files (ordered - this is the menu) | `Open-Acrobat`    |
+| `CampaignResources` | D&D campaigns and their resources (ordered - this is the menu) | `Open-DnD`        |
 
 ### Bootstrap Process
 
@@ -143,8 +139,7 @@ The configuration uses a hierarchical structure designed to eliminate duplicatio
 
 | Section                   | Purpose                               | Consumer Function                      |
 | ------------------------- | ------------------------------------- | -------------------------------------- |
-| `WakeOnLanMachines`       | WOL target machines                   | `Send-WakeOnLan`                       |
-| `WakeOnLanConfig`         | WOL network settings + ping `Address` | `Send-WakeOnLan`, `Test-MachineOnline` |
+| `WakeOnLanConfig`         | WOL target machines, their MAC/broadcast/port and ping `Address` (ordered - this is the menu) | `Send-WakeOnLan`, `Test-MachineOnline` |
 | `DefaultWakeOnLanMachine` | Default WOL target                    | `Send-WakeOnLan`                       |
 | `KeyboardLayoutSets`      | Named keyboard layout sets            | `Set-KeyboardLayouts`                  |
 
@@ -195,9 +190,8 @@ This triggers the following process:
 ### Add a New Project
 
 1. Add paths in `PathTemplates.Projects`
-2. Add to `Projects` list
-3. Add `ProjectActions` entry
-4. Optionally add to `VSCodeProjects`, `VisualStudioSolutions`, `RunnableProjects`
+2. Add a `ProjectActions` entry - it defines what opening does AND puts the project in the menu
+3. Optionally add to `VSCodeProjects`, `VisualStudioSolutions`, `RunnableProjectMappings`
 
 → See [Add New Project Guide](guides/workflow/add-new-project.md)
 
@@ -217,9 +211,8 @@ This triggers the following process:
 
 ### Add a Workspace
 
-1. Add to `Workspaces` list
-2. Add `WorkspaceActions` entry
-3. Create layout file in `Layouts/{MachineType}/`
+1. Add a `WorkspaceActions` entry - it defines what opening does AND puts the workspace in the menu
+2. Create layout file in `Layouts/{MachineType}/`
 
 → See [Add New Workspace Guide](guides/workflow/add-new-workspace.md)
 
@@ -259,39 +252,36 @@ RepositoryGroups = @(
     }
 )
 
-# 4. Add to Projects list
-Projects = @("WinuX", "MyProject", ...)
+# 4. Define the project - the entry is what puts it in the Open-Project menu
+ProjectActions = @(
+    @{ MyProject = @(
+            @{ Action = "Open-VisualStudio"; Parameters = @{ Solution = "MyProject" } }
+            @{ Action = "Open-VSCode"; Parameters = @{ Folder = "MyProject" } }
+            @{ Action = "Open-ProjectTerminals-Or-RunProject"; Parameters = @{ Project = "MyProject" } }
+        )
+    }
+)
 
-# 5. Define project actions
-ProjectActions = @{
-    MyProject = @(
-        @{ Action = "Open-VisualStudio"; Parameters = @{ Solution = "MyProject" } }
-        @{ Action = "Open-VSCode"; Parameters = @{ Folder = "MyProject" } }
-        @{ Action = "Open-ProjectTerminals-Or-RunProject"; Parameters = @{ Project = "MyProject" } }
-    )
-}
-
-# 6. Add to VS Code projects (optional)
+# 5. Add to VS Code projects (optional)
 VSCodeProjects = @(
     @{ Name = "WinuX"; Path = "Projects.Self.Root" }
     @{ Name = "MyProject"; Path = "Projects.MyProject.Root" }
 )
 
-# 7. Add to Visual Studio solutions (optional)
+# 6. Add to Visual Studio solutions (optional)
 VisualStudioSolutions = @(
     @{ Name = "MyProject"; Solution = "Projects.MyProject.Solution" }
 )
 
-# 8. Add terminal configuration (optional)
+# 7. Add terminal configuration (optional)
 ProjectTerminals = @(
     @{ Name = "WinuX"; BasePath = "Projects.Self"; Paths = @("ROOT", "DOCS") }
     @{ Name = "MyProject"; BasePath = "Projects.MyProject"; Paths = @("API", "UI") }  # Opens 2 terminal tabs
 )
 
-# 9. Add runnable project (optional)
-RunnableProjects = @("MyProject", ...)
+# 8. Add runnable project (optional) - the entry is what puts it in the Run-Project menu
 RunnableProjectMappings = @(
-    @{ Name = "MyProject"; Commands = @("dnr", "nir") }  # API=dotnet run, UI=npm install+run
+    @{ Name = "MyProject"; Commands = @{ API = "dnr"; UI = "nir" } }  # keyed by ProjectTerminals path
 )
 ```
 

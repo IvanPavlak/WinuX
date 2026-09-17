@@ -29,7 +29,7 @@ The [System module reference](../../../modules/system.md) is the authority on wh
 | `Resolve-FastfetchAutoFitSettings` | `FastfetchAutoFit` | [Resolve-FastfetchAutoFitSettings](Resolve-FastfetchAutoFitSettings.md) |
 | `Resolve-KillAllSteps` | `KillAll` | [Resolve-KillAllSteps](Resolve-KillAllSteps.md) |
 | `Resolve-SystemThemeSteps` | `SystemTheme` | [Resolve-SystemThemeSteps](Resolve-SystemThemeSteps.md) |
-| `Send-WakeOnLan` | `DefaultWakeOnLanMachine`, `WakeOnLanConfig`, `WakeOnLanMachines` | [Send-WakeOnLan](Send-WakeOnLan.md) |
+| `Send-WakeOnLan` | `DefaultWakeOnLanMachine`, `WakeOnLanConfig` | [Send-WakeOnLan](Send-WakeOnLan.md) |
 | `Set-DisplayLanguage` | `DefaultDisplayLanguage`, `DisplayLanguages` | [Set-DisplayLanguage](Set-DisplayLanguage.md) |
 | `Set-EnvironmentVariables` | `AutoEnvironmentVariables`, `AutoPathAdditions`, `BasePaths` | [Set-EnvironmentVariables](Set-EnvironmentVariables.md) |
 | `Set-ExplorerOptions` | `ExplorerOptions` | [Set-ExplorerOptions](Set-ExplorerOptions.md) |

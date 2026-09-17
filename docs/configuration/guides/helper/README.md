@@ -14,6 +14,8 @@ The [Helper module reference](../../../modules/helper.md) is the authority on wh
 | `Backup-RepositoryItem` | `Backups.Retention` | [Backup-RepositoryItem](Backup-RepositoryItem.md) |
 | `Clear-OldBackups` | `Backups.Retention` | [Clear-OldBackups](Clear-OldBackups.md) |
 | `Confirm-ConfigValue` | caller-supplied | [Confirm-ConfigValue](Confirm-ConfigValue.md) |
+| `Get-OrderedEntry` | caller-supplied | [Get-OrderedEntry](Get-OrderedEntry.md) |
+| `Get-OrderedNames` | caller-supplied | [Get-OrderedNames](Get-OrderedNames.md) |
 | `Invoke-GoogleTranslate` | `DefaultTranslateLanguages` | [Invoke-GoogleTranslate](Invoke-GoogleTranslate.md) |
 | `List-Functions` | `FunctionDiscrepancyExclusions`, `ListFunctionsColors` | [List-Functions](List-Functions.md) |
 | `Loading-Spinner` | `DefaultSpinner`, `LoadingSpinners` | [Loading-Spinner](Loading-Spinner.md) |
@@ -21,7 +23,7 @@ The [Helper module reference](../../../modules/helper.md) is the authority on wh
 | `Resolve-ConfigPathValue` | caller-supplied | [Resolve-ConfigPathValue](Resolve-ConfigPathValue.md) |
 | `Resolve-ProjectPath` | `ProjectTerminals`, `RepositoryGroups`, `Universal` | [Resolve-ProjectPath](Resolve-ProjectPath.md) |
 | `Resolve-RunProjectSteps` | `RunProject` | [Resolve-RunProjectSteps](Resolve-RunProjectSteps.md) |
-| `Run-Project` | `ProjectTerminals`, `RunnableProjectMappings`, `RunnableProjects` | [Run-Project](Run-Project.md) |
+| `Run-Project` | `ProjectTerminals`, `RunnableProjectMappings` | [Run-Project](Run-Project.md) |
 | `Show-FunctionDetails` | `ShowFunctionDetailsColors` | [Show-FunctionDetails](Show-FunctionDetails.md) |
 | `Test-ConfigValue` | caller-supplied | [Test-ConfigValue](Test-ConfigValue.md) |
 | `Test-WSLDistributionInstalled` | `DefaultWSLDistribution` | [Test-WSLDistributionInstalled](Test-WSLDistributionInstalled.md) |

@@ -926,7 +926,7 @@ $after = Wait-ConsoleReflow -Before $before -TimeoutMilliseconds 10
 - **Parameters:** -Machine, -TimeoutSeconds, -NoWait
 - **Usage:** `Send-WakeOnLan`, `Send-WakeOnLan -Machine "MyMachine"`, `Send-WakeOnLan -Machine "MyMachine" -NoWait`
 
-Each machine entry specifies a MAC address, subnet-specific broadcast address and port, and optionally an `Address` for verification. With `-NoWait` the function sends the packet only, with no online pre-check or post-send verification (the original fire-and-forget behaviour). Verification is delegated to `Test-MachineOnline`. The base ships `WakeOnLanConfig` / `WakeOnLanMachines` empty; both functions warn and no-op until they are set in `Configuration.local.psd1` - no packet is ever sent from an empty config.
+Each machine entry specifies a MAC address, subnet-specific broadcast address and port, and optionally an `Address` for verification. With `-NoWait` the function sends the packet only, with no online pre-check or post-send verification (the original fire-and-forget behaviour). Verification is delegated to `Test-MachineOnline`. Machines are configured as an ordered list of single-key hashtables, which is also the order the menu offers them in; `All` and `None` are appended by the function and never configured. The base ships `WakeOnLanConfig` empty; both functions warn and no-op until it is set in `Configuration.local.psd1` - no packet is ever sent from an empty config.
 
 | Parameter         | Description                                                                                                      |
 | ----------------- | ---------------------------------------------------------------------------------------------------------------- |

@@ -4,13 +4,16 @@ BeforeAll {
 	$ModuleRoot = (Get-RepositoryPath).Modules
 	$FunctionsPath = Join-Path $ModuleRoot "System\Functions"
 
+	. "$ModuleRoot\Helper\Functions\Get-OrderedNames.ps1"
+	. "$ModuleRoot\Helper\Functions\Get-OrderedEntry.ps1"
+
 	. "$FunctionsPath\Configure-NerdFont.ps1"
 }
 
 Describe "Configure-NerdFont" {
 	BeforeEach {
 		$script:Configuration = [PSCustomObject]@{
-			NerdFonts       = @{ JetBrainsMono = @{ SearchPattern = "JetBrainsMono*"; FolderName = "JetBrainsMonoNerdFont" } }
+			NerdFonts       = @( @{ JetBrainsMono = @{ SearchPattern = "JetBrainsMono*"; FolderName = "JetBrainsMonoNerdFont" } } )
 			DefaultNerdFont = "JetBrainsMono"
 		}
 

@@ -10,15 +10,18 @@ BeforeAll {
 	. "$ModuleRoot\Helper\Functions\Test-ConfigValue.ps1"
 	. "$ModuleRoot\Helper\Functions\Confirm-ConfigValue.ps1"
 
+	. "$ModuleRoot\Helper\Functions\Get-OrderedNames.ps1"
+	. "$ModuleRoot\Helper\Functions\Get-OrderedEntry.ps1"
+
 	. "$FunctionsPath\Set-Locale.ps1"
 }
 
 Describe "Set-Locale" {
 	BeforeEach {
 		$script:Configuration = [PSCustomObject]@{
-			Locales       = [ordered]@{
-				"en-US" = [PSCustomObject]@{ Code = "en-US"; GeoId = 244 }
-			}
+			Locales       = @(
+				@{ "en-US" = [PSCustomObject]@{ Code = "en-US"; GeoId = 244 } }
+			)
 			DefaultLocale = "en-US"
 		}
 		Mock Test-AdminPrivileges { }
@@ -33,7 +36,7 @@ Describe "Set-Locale" {
 
 	It "returns with a warning and no menu when Locales is empty (empty base)" {
 		$script:Configuration = [PSCustomObject]@{
-			Locales       = @{}
+			Locales       = @()
 			DefaultLocale = ""
 		}
 		Mock Write-LogWarning { }

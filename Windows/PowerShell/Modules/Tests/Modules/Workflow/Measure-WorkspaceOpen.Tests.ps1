@@ -10,6 +10,8 @@ BeforeAll {
 	. "$FunctionsPath\Get-WorkspaceOpenMeasurementPath.ps1"
 	. "$FunctionsPath\ConvertTo-WorkspaceOpenSummary.ps1"
 	. "$FunctionsPath\Measure-WorkspaceOpen.ps1"
+	. "$ModuleRoot\Helper\Functions\Get-OrderedNames.ps1"
+	. "$ModuleRoot\Helper\Functions\Get-OrderedEntry.ps1"
 
 	# Stub-before-mock: the commands the harness calls must exist for Mock to attach to them,
 	# and none of the real ones may run - a real Open-Workspace or Kill-All would act on the
@@ -37,26 +39,30 @@ BeforeAll {
 	function New-TestConfiguration {
 		param([hashtable]$Overrides = @{})
 		$configuration = @{
-			WorkspaceActions      = @{
-				WinuX   = @(
-					@{ Action = 'Open-Project'; Parameters = @{ Project = 'WinuX' } }
-					@{ Action = 'Set-WorkspaceWindowLayout' }
-				)
+			WorkspaceActions      = @(
+				@{ WinuX = @(
+						@{ Action = 'Open-Project'; Parameters = @{ Project = 'WinuX' } }
+						@{ Action = 'Set-WorkspaceWindowLayout' }
+					)
+				}
 				# The workspace WinuX ships: what a fresh install measures without defining anything.
-				Example = @(
-					@{ Action = 'Open-Browser'; Parameters = @{ NoMenu = $true; Instances = 3 } }
-					@{ Action = 'Set-WorkspaceWindowLayout'; Parameters = @{ WorkspaceName = 'Example' } }
-				)
+				@{ Example = @(
+						@{ Action = 'Open-Browser'; Parameters = @{ NoMenu = $true; Instances = 3 } }
+						@{ Action = 'Set-WorkspaceWindowLayout'; Parameters = @{ WorkspaceName = 'Example' } }
+					)
+				}
 				# An Open-Project action with no project of its own: a menu on every open.
-				Picker  = @(
-					@{ Action = 'Open-Project' }
-					@{ Action = 'Set-WorkspaceWindowLayout' }
-				)
-				Exiter  = @(
-					@{ Action = 'Open-Project' }
-					@{ Action = 'Terminate-WindowsTerminalTabs'; Parameters = @{ OnlyCurrent = $true } }
-				)
-			}
+				@{ Picker = @(
+						@{ Action = 'Open-Project' }
+						@{ Action = 'Set-WorkspaceWindowLayout' }
+					)
+				}
+				@{ Exiter = @(
+						@{ Action = 'Open-Project' }
+						@{ Action = 'Terminate-WindowsTerminalTabs'; Parameters = @{ OnlyCurrent = $true } }
+					)
+				}
+			)
 			FancyZonesApplyMethod = 'File'
 		}
 		foreach ($key in $Overrides.Keys) { $configuration[$key] = $Overrides[$key] }

@@ -519,6 +519,18 @@ $filtered = Get-FilteredParams -CommandName "Get-Item" -Params $all_params
 Get-Item @filtered
 ```
 
+## [Get-OrderedEntry](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Get-OrderedEntry.ps1)
+
+- **Description:** Looks one entry up by name in an ordered configuration section - the lookup counterpart of `Get-OrderedNames`, which returns the menu. Accepts both shapes: the ordered array of single-key hashtables and, for a fork that has not migrated, a plain hashtable, so a consumer reads its entry the same way whichever shape the configuration has. Name matching is case-insensitive and the first match wins, so a section that lists a name twice behaves like the file reads, top to bottom. Returns `$null` when the section is empty or the name is not configured; the caller decides what an unconfigured entry means.
+- **Parameters:** -Section (accepts `$null`), -Name
+- **Usage:** `Get-OrderedEntry $Configuration.WorkspaceActions "WinuX"`, `Get-OrderedEntry $Configuration.WakeOnLanConfig "Proxmox Backup Server"`
+
+## [Get-OrderedNames](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Get-OrderedNames.ps1)
+
+- **Description:** Returns the entry names of an ordered configuration section, in configuration order - the read side of the repository's one ordering rule, "order is where you write it". An ordered section is an array of single-key hashtables where each item's single key is the entry name and its value is the entry; the section cannot be a plain hashtable and keep its order, because `Import-PowerShellDataFile` returns a `System.Collections.Hashtable` and key order is lost at load time. A plain hashtable is still accepted so an unmigrated fork keeps working, and its keys come back sorted. Nothing is warned about here: `Test-ConfigurationSchema` is the one place that reports an ordered section written as a hashtable, once at load, instead of every menu repeating it.
+- **Parameters:** -Section (accepts `$null`)
+- **Usage:** `Get-OrderedNames $Configuration.WorkspaceActions`, `OptionList = @(Get-OrderedNames $Configuration.CampaignResources)`
+
 ## [Get-PowerShellFunctionDependencies](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Get-PowerShellFunctionDependencies.ps1)
 
 - **Description:** Analyzes a PowerShell function to discover its dependencies using the AST (Abstract Syntax Tree). Parses the function's script block to identify every command it calls and categorizes them into BuiltIn (PowerShell cmdlets), Module (external modules), Custom (functions from the WinuX modules), and Unknown (unresolved commands), and also collects any `global:` variable references. With `-Recursive` it walks the custom dependencies of those custom functions as well.
@@ -1182,13 +1194,13 @@ if ((Resolve-Selection -ConfirmationMessage "Are you sure you want to delete all
 
 ## [Run-Project](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Run-Project.ps1)
 
-- **Description:** Opens Windows Terminal tabs for one or more configured runnable projects. Selects from `Configuration.RunnableProjects` (with optional multi-select via `Resolve-Selection`) and runs each project's configured commands in its own tab. Existing terminal tabs for a project are detected and closed first to prevent duplicates, then fresh tabs are opened; behind the optional Docker step, the project's Docker Compose source is resolved via `Resolve-ProjectDockerCompose` (prompting for the database provider when several are configured) and Docker is started when required. Both the project selection and database provider menus default to the first option when Enter is pressed.
+- **Description:** Opens Windows Terminal tabs for one or more configured runnable projects. Selects from `Configuration.RunnableProjectMappings`, in configuration order (with optional multi-select via `Resolve-Selection`) and runs each project's configured commands in its own tab. Existing terminal tabs for a project are detected and closed first to prevent duplicates, then fresh tabs are opened; behind the optional Docker step, the project's Docker Compose source is resolved via `Resolve-ProjectDockerCompose` (prompting for the database provider when several are configured) and Docker is started when required. Both the project selection and database provider menus default to the first option when Enter is pressed.
 - **Implementation Note:** Passes the originating Windows Terminal handle/title into `Close-ProjectTerminals` so Docker cold-start focus changes do not cause duplicate tabs in a different terminal window.
 - **Parameters:** -Project, -InSameShell, -Skip, -Include
 - **Usage:** `Run-Project`, `Run-Project -Project "MyProject", "OtherProject"`, `Run-Project -Project "MyProject" -InSameShell:$false`, `Run-Project -Skip Docker`
 - **Alias:** rp
 
-Reads `Configuration.RunnableProjects` for the menu and `RunnableProjectMappings` for each project's run commands, pairing them against `ProjectTerminals` path keys (e.g. `Api`, `Ui`) so every path key gets a matching command and its own tab titled `<Project>.<PathKey>`. The Docker resolution lives in [Resolve-ProjectDockerCompose](workflow.md#resolve-projectdockercompose), and `DockerWizard` is called with `-PassThru`: when the daemon never becomes ready the project is skipped instead of opening tabs against a database that is not there. When the starting tab already matches a project tab it is reused instead of opening a duplicate, and focus is returned to the starting tab after all projects have been opened.
+Reads `Configuration.RunnableProjectMappings` for both the menu and each project's run commands. `Commands` is keyed by the `ProjectTerminals` path key (e.g. `Api`, `Ui`), so each path runs its own command in its own tab titled `<Project>.<PathKey>`, and a path with no command listed just gets its tab. The Docker resolution lives in [Resolve-ProjectDockerCompose](workflow.md#resolve-projectdockercompose), and `DockerWizard` is called with `-PassThru`: when the daemon never becomes ready the project is skipped instead of opening tabs against a database that is not there. When the starting tab already matches a project tab it is reused instead of opening a duplicate, and focus is returned to the starting tab after all projects have been opened.
 
 Docker is an optional step, resolved Kill-All-style through [Resolve-RunProjectSteps](#resolve-runprojectsteps): `RunProject.Steps.Docker` in configuration (plain boolean or per-machine-type hashtable with a `Default` fallback) decides persistently, and `-Skip Docker` / `-Include Docker` override per invocation. It defaults to on - inert unless a project mapping declares `DatabaseProviders` or `UsesDocker` - and a setup that runs its databases locally disables it once, after which `Run-Project` never touches Docker, not even the provider prompt.
 

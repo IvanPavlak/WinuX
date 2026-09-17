@@ -34,7 +34,6 @@ BeforeAll {
 Describe "Run-Project" {
 	BeforeEach {
 		$script:Configuration = [PSCustomObject]@{
-			RunnableProjects        = @("Demo")
 			RunnableProjectMappings = @()
 			ProjectTerminals        = @()
 			DockerComposeFiles      = @{}
@@ -63,8 +62,7 @@ Describe "Run-Project" {
 
 	It "passes the resolved compose file to DockerWizard and opens the project tabs" {
 		$script:Configuration = [PSCustomObject]@{
-			RunnableProjects        = @("Demo")
-			RunnableProjectMappings = @(@{ Name = "Demo"; Commands = @("dnr"); DatabaseProviders = @("PostgreSQL") })
+			RunnableProjectMappings = @(@{ Name = "Demo"; Commands = @{ Api = "dnr" }; DatabaseProviders = @("PostgreSQL") })
 			ProjectTerminals        = @(@{ Name = "Demo"; Paths = @("Api") })
 			DockerComposeFiles      = @{ PostgreSQL = "docker-compose.postgresql.yml" }
 		}
@@ -87,8 +85,7 @@ Describe "Run-Project" {
 
 	It "skips the project when Docker is required but fails to start" {
 		$script:Configuration = [PSCustomObject]@{
-			RunnableProjects        = @("Demo")
-			RunnableProjectMappings = @(@{ Name = "Demo"; Commands = @("dnr"); DatabaseProviders = @("PostgreSQL") })
+			RunnableProjectMappings = @(@{ Name = "Demo"; Commands = @{ Api = "dnr" }; DatabaseProviders = @("PostgreSQL") })
 			ProjectTerminals        = @(@{ Name = "Demo"; Paths = @("Api") })
 			DockerComposeFiles      = @{ PostgreSQL = "docker-compose.postgresql.yml" }
 		}
@@ -109,10 +106,45 @@ Describe "Run-Project" {
 		Should -Invoke Open-Terminal -Times 0
 	}
 
+	It "offers the runnable projects in the order the mappings are configured" {
+		# The mappings are the only definition of a runnable project - no separate name list.
+		$script:Configuration = [PSCustomObject]@{
+			RunnableProjectMappings = @(
+				@{ Name = "Zulu"; Commands = @{} }
+				@{ Name = "Alpha"; Commands = @{} }
+			)
+			ProjectTerminals        = @()
+			DockerComposeFiles      = @{}
+		}
+		$script:offeredOptions = $null
+		Mock Resolve-Selection { $script:offeredOptions = $OptionList; @() }
+
+		Run-Project
+
+		@($script:offeredOptions) | Should -Be @("Zulu", "Alpha")
+	}
+
+	It "runs each path's own command and opens a bare tab for a path with none" {
+		# Commands is keyed by path, so a path without one is not a configuration error -
+		# it just gets its terminal tab with nothing run in it.
+		$script:Configuration = [PSCustomObject]@{
+			RunnableProjectMappings = @(@{ Name = "Demo"; Commands = @{ Ui = "nir" } })
+			ProjectTerminals        = @(@{ Name = "Demo"; Paths = @("Api", "Ui") })
+			DockerComposeFiles      = @{}
+		}
+		$script:openedCommands = $null
+		Mock Open-Terminal { $script:openedCommands = $Command }
+
+		Run-Project
+
+		Should -Invoke Write-LogError -Times 0
+		@($script:openedCommands)[0] | Should -Not -Match 'nir'
+		@($script:openedCommands)[1] | Should -Match 'nir$'
+	}
+
 	It "never touches Docker or the provider prompt when the Docker step is disabled" {
 		$script:Configuration = [PSCustomObject]@{
-			RunnableProjects        = @("Demo")
-			RunnableProjectMappings = @(@{ Name = "Demo"; Commands = @("dnr"); DatabaseProviders = @("PostgreSQL") })
+			RunnableProjectMappings = @(@{ Name = "Demo"; Commands = @{ Api = "dnr" }; DatabaseProviders = @("PostgreSQL") })
 			ProjectTerminals        = @(@{ Name = "Demo"; Paths = @("Api") })
 			DockerComposeFiles      = @{ PostgreSQL = "docker-compose.postgresql.yml" }
 		}

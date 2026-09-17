@@ -9,8 +9,7 @@ Closes all project-specific resources opened by `Open-Project` (Visual Studio wi
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`ProjectActions`](../../configuration-reference.md#project-actions) | hashtable of project name to action array | hashtable, 3 keys | What `Open-Project` does for each project: an ordered array of `@{ Action; Parameters }` entries, where `Action` is any exported function name. `Close-Project` reads the same map to work out what to close. |
-| [`Projects`](../../configuration-reference.md#projects-list) | array of project names | `@("WinuX", "ExampleProject", "Server")` | The project names `Open-Project` offers. A name here needs a matching `ProjectActions` entry to do anything, and usually a `PathTemplates.Projects` entry for its root. |
+| [`ProjectActions`](../../configuration-reference.md#project-actions) | ordered list of projects (one single-key hashtable each) | list of 3 | Every project `Open-Project` offers, in menu order: the project name is the key, the value is the ordered array of `@{ Action; Parameters }` entries opening it runs, where `Action` is any exported function name. `Close-Project` reads the same list to work out what to close. |
 | [`Universal`](../../configuration-reference.md#universal-constants) | hashtable, 26 keys | hashtable, 26 keys | Machine-independent constants: executable paths (`FirefoxExe`, `DockerExe`, `DbeaverExe`, ...), the `Browsers` map, `DefaultBrowser`, shared URLs, the `ProcessCleanup` lists, and `Desktop` (auto-resolved at load). Expanded in place by `Load-PathConfiguration`, so placeholders work here too. |
 | [`VisualStudioSolutions`](../../configuration-reference.md#visual-studio-solutions) | array of `@{ Name; Path }` | array of 1 | The solutions `Open-VisualStudio` offers, and what `Close-Project` closes. |
 | [`VSCodeProjects`](../../configuration-reference.md#vs-code-projects) | array of `@{ Name; Path }` | array of 2 | The folders `Open-VSCode` offers by name. |
@@ -27,10 +26,10 @@ Closing reads the same `ProjectActions` map the open used, so a project that ope
     - Options: Actions run top to bottom. Put the editor first and the browser last if you want focus to land on the browser.
     - Default: The order you list them.
     - More detail: [`ProjectActions`](../../configuration-reference.md#project-actions)
-3. Which projects should `Open-Project` offer?
-    - Options: One name per project - see [Add New Project](../workflow/add-new-project.md) for the whole walk. The array replaces wholesale, so include the shipped names you still want.
+3. Which projects should `Open-Project` offer, and in what order?
+    - Options: One entry per project, in menu order - see [Add New Project](../workflow/add-new-project.md) for the whole walk. The list replaces wholesale, so include the shipped entries you still want.
     - Default: The shipped three.
-    - More detail: [`Projects`](../../configuration-reference.md#projects-list)
+    - More detail: [`ProjectActions`](../../configuration-reference.md#project-actions)
 4. Which browser should be the default?
     - Options: A key from `Universal.Browsers`: `Firefox`, `Chrome`, `Edge`, `Brave`, `Tor`. Ships empty, so `Open-Browser` asks or uses the system default.
     - Default: Empty.

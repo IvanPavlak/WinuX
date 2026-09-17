@@ -7,9 +7,20 @@ BeforeAll {
 
 	. "$FunctionsPath\Open-Workspace.ps1"
 	. "$FunctionsPath\Resolve-WorkspaceActions.ps1"
+	. (Join-Path $ModuleRoot "Helper\Functions\Get-OrderedNames.ps1")
+	. (Join-Path $ModuleRoot "Helper\Functions\Get-OrderedEntry.ps1")
 	. "$SystemFunctionsPath\Terminate-WindowsTerminalTabs.ps1"
 
 	$script:OriginalMachineType = $global:MachineType
+
+	# WorkspaceActions is an ordered section: one single-key hashtable per workspace, in the
+	# order the menu offers them. Setting a workspace replaces its entry and keeps the rest,
+	# so a test can define several workspaces and still control the order they appear in.
+	function Set-TestWorkspace {
+		param([Parameter(Mandatory)][string]$Name, [Parameter(Mandatory)][array]$Actions)
+		$kept = @($script:Configuration.WorkspaceActions | Where-Object { $_ -and -not $_.ContainsKey($Name) })
+		$script:Configuration.WorkspaceActions = @($kept + @{ $Name = $Actions })
+	}
 
 	# The resolver's cross-module dependencies, stubbed: the real Test-MachineTypeScope validates
 	# against the MACHINE's ValidMachineTypes and the real Get-LayoutMachineType measures the
@@ -184,7 +195,7 @@ Describe "Open-Workspace" {
 				[switch]$AllowEmptyPromptResponse,
 				[switch]$AllowMultipleSelections
 			)
-			$script:resolveSelectionCalls += [PSCustomObject]@{ InputObject = $InputObject; PromptMessage = $PromptMessage }
+			$script:resolveSelectionCalls += [PSCustomObject]@{ InputObject = $InputObject; PromptMessage = $PromptMessage; OptionList = $OptionList }
 			$InputObject
 		}
 		Mock Get-WindowHandle { @() }
@@ -249,9 +260,8 @@ Describe "Open-Workspace" {
 		Mock Test-ThrowingAction { throw 'intentional action failure' }
 
 		$script:Configuration = @{
-			Workspaces                 = @('TestWorkspace')
 			DefaultWorkspace           = ''
-			WorkspaceActions           = @{}
+			WorkspaceActions           = @()
 			ProjectTerminals           = @()
 			BrowserGroups              = @()
 			Universal                  = @{ DefaultBrowser = 'Firefox' }
@@ -288,7 +298,7 @@ Describe "Open-Workspace" {
 	}
 
 	It "executes configured actions in order" {
-		$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+		Set-TestWorkspace 'TestWorkspace' @(
 			@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } },
 			@{ Action = 'Test-ActionTwo'; Parameters = @{ Beta = 2 } }
 		)
@@ -309,7 +319,7 @@ Describe "Open-Workspace" {
 		}
 
 		It "skips an action whose Machine scope does not cover the detected machine type and runs the rest in order" {
-			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+			Set-TestWorkspace 'TestWorkspace' @(
 				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } },
 				@{ Action = 'Test-ActionTwo'; Parameters = @{ Beta = 2 }; Machine = 'Laptop' },
 				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 3 }; Machine = 'PC/Work' }
@@ -327,7 +337,7 @@ Describe "Open-Workspace" {
 		It "matches LayoutMachine against the layout set, not the detected machine type" {
 			# The PC redirected to the Work layouts (LayoutMachineTypeOverrides.PC = "Work").
 			Mock Get-LayoutMachineType { 'Work' }
-			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+			Set-TestWorkspace 'TestWorkspace' @(
 				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 2 }; LayoutMachine = 'PC' },
 				@{ Action = 'Test-ActionTwo'; Parameters = @{ Beta = 1 }; LayoutMachine = 'Laptop/Work' }
 			)
@@ -342,7 +352,7 @@ Describe "Open-Workspace" {
 		It "accepts a layout set from LayoutMachineTypeOverrides as a LayoutMachine token" {
 			$script:Configuration.LayoutMachineTypeOverrides = @{ PC = 'Temp' }
 			Mock Get-LayoutMachineType { 'Temp' }
-			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+			Set-TestWorkspace 'TestWorkspace' @(
 				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 }; LayoutMachine = 'Temp' },
 				@{ Action = 'Test-ActionTwo'; Parameters = @{ Beta = 2 }; LayoutMachine = 'PC' }
 			)
@@ -355,7 +365,7 @@ Describe "Open-Workspace" {
 		}
 
 		It "leaves a scoped-out Set-WorkspaceWindowLayout out of the early preparation as well as the action loop" {
-			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+			Set-TestWorkspace 'TestWorkspace' @(
 				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } },
 				@{ Action = 'Set-WorkspaceWindowLayout'; Parameters = @{ WorkspaceName = 'TestWorkspace' }; Machine = 'Laptop' }
 			)
@@ -368,7 +378,7 @@ Describe "Open-Workspace" {
 		}
 
 		It "honours a scoped Return only on the machines it names" {
-			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+			Set-TestWorkspace 'TestWorkspace' @(
 				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } },
 				@{ Action = 'Return'; Machine = 'Laptop' },
 				@{ Action = 'Test-ActionTwo'; Parameters = @{ Beta = 2 } }
@@ -378,14 +388,14 @@ Describe "Open-Workspace" {
 			$script:invokedActions.Count | Should -Be 2
 
 			$script:invokedActions = @()
-			$script:Configuration.WorkspaceActions['TestWorkspace'][1].Machine = 'PC'
+			(Get-OrderedEntry $script:Configuration.WorkspaceActions 'TestWorkspace')[1].Machine = 'PC'
 
 			Open-Workspace -Workspace 'TestWorkspace'
 			$script:invokedActions.Count | Should -Be 1
 		}
 
 		It "runs nothing and records nothing when every action is scoped to another machine" {
-			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+			Set-TestWorkspace 'TestWorkspace' @(
 				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 }; Machine = 'Laptop' },
 				@{ Action = 'Set-WorkspaceWindowLayout'; Parameters = @{ WorkspaceName = 'TestWorkspace' }; LayoutMachine = 'Laptop' }
 			)
@@ -399,7 +409,7 @@ Describe "Open-Workspace" {
 		}
 
 		It "reports an unknown scope token with the workspace and action named, and skips that action" {
-			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+			Set-TestWorkspace 'TestWorkspace' @(
 				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 }; Machine = 'Labtop' },
 				@{ Action = 'Test-ActionTwo'; Parameters = @{ Beta = 2 } }
 			)
@@ -413,7 +423,7 @@ Describe "Open-Workspace" {
 
 		It "hands a LayoutMachineParameters row to the action on the layout set it names, and nothing extra elsewhere" {
 			# One entry for every machine: the PC's own layout set gets two windows, everything else one.
-			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+			Set-TestWorkspace 'TestWorkspace' @(
 				@{ Action = 'Open-Browser'; Parameters = @{ Groups = @('Google') }; LayoutMachineParameters = @{ PC = @{ Instances = 2 } } }
 			)
 
@@ -433,7 +443,7 @@ Describe "Open-Workspace" {
 		}
 
 		It "leaves a parameter unbound when a MachineParameters row sets it to null" {
-			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+			Set-TestWorkspace 'TestWorkspace' @(
 				@{ Action = 'Open-Browser'; Parameters = @{ Groups = @('Google'); Instances = 3 }; MachineParameters = @{ PC = @{ Groups = $null } } }
 			)
 
@@ -445,7 +455,7 @@ Describe "Open-Workspace" {
 		}
 
 		It "prepares the layout with the merged parameters when the layout action carries a row" {
-			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+			Set-TestWorkspace 'TestWorkspace' @(
 				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } },
 				@{ Action = 'Set-WorkspaceWindowLayout'; Parameters = @{ WorkspaceName = 'TestWorkspace' }; MachineParameters = @{ PC = @{ WorkspaceName = 'TestWorkspaceWide' } } }
 			)
@@ -467,7 +477,7 @@ Describe "Open-Workspace" {
 
 		It "records nothing while WorkspaceBenchmark.Enabled is off, which is the shipped default" {
 			$script:Configuration.WorkspaceBenchmark = @{ Enabled = $false; Display = 'Table'; Last = 10 }
-			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+			Set-TestWorkspace 'TestWorkspace' @(
 				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } }
 			)
 
@@ -480,7 +490,7 @@ Describe "Open-Workspace" {
 
 		It "shows the workspace's recent runs as a table after the row is written when Display is Table" {
 			$script:Configuration.WorkspaceBenchmark = @{ Enabled = $true; Display = 'Table'; Last = 5 }
-			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+			Set-TestWorkspace 'TestWorkspace' @(
 				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } }
 			)
 
@@ -494,7 +504,7 @@ Describe "Open-Workspace" {
 
 		It "stamps the row with WorkspaceBenchmark.Source, empty for an everyday open" {
 			$script:Configuration.WorkspaceBenchmark = @{ Enabled = $true; Display = 'None' }
-			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+			Set-TestWorkspace 'TestWorkspace' @(
 				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } }
 			)
 
@@ -508,7 +518,7 @@ Describe "Open-Workspace" {
 
 		It "prints the one-line summary instead of the table when Display is Line" {
 			$script:Configuration.WorkspaceBenchmark = @{ Enabled = $true; Display = 'Line' }
-			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+			Set-TestWorkspace 'TestWorkspace' @(
 				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } }
 			)
 
@@ -520,7 +530,7 @@ Describe "Open-Workspace" {
 		}
 
 		It "records one benchmark row per workspace with every executed action timed, in order" {
-			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+			Set-TestWorkspace 'TestWorkspace' @(
 				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } },
 				@{ Action = 'Test-ActionTwo'; Parameters = @{ Beta = 2 } }
 			)
@@ -537,11 +547,10 @@ Describe "Open-Workspace" {
 		}
 
 		It "times the Open-Project action too and writes one row per workspace of a multi-workspace run" {
-			$script:Configuration.Workspaces = @('TestWorkspace', 'SecondWorkspace')
-			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+			Set-TestWorkspace 'TestWorkspace' @(
 				@{ Action = 'Open-Project'; Parameters = @{ Project = 'ProjectA' } }
 			)
-			$script:Configuration.WorkspaceActions['SecondWorkspace'] = @(
+			Set-TestWorkspace 'SecondWorkspace' @(
 				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } }
 			)
 
@@ -553,7 +562,7 @@ Describe "Open-Workspace" {
 		}
 
 		It "attaches the layout phase record only when it was produced by this open" {
-			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+			Set-TestWorkspace 'TestWorkspace' @(
 				@{ Action = 'Set-WorkspaceWindowLayout'; Parameters = @{ WorkspaceName = 'TestWorkspace' } }
 			)
 			# A record left by an earlier open in the same session must not be attributed to this one.
@@ -574,7 +583,7 @@ Describe "Open-Workspace" {
 		}
 
 		It "writes the row before a terminating Terminate-WindowsTerminalTabs action ends the process" {
-			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+			Set-TestWorkspace 'TestWorkspace' @(
 				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } },
 				@{ Action = 'Terminate-WindowsTerminalTabs'; Parameters = @{ OnlyCurrent = $true } }
 			)
@@ -587,11 +596,23 @@ Describe "Open-Workspace" {
 		}
 	}
 
+	Context "menu" {
+		It "offers the workspaces in the order WorkspaceActions defines them" {
+			# The whole point of the ordered section: the menu follows the file, with no second
+			# list to keep in sync. Alphabetical order would put Alpha first.
+			Set-TestWorkspace 'Zulu' @(@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } })
+			Set-TestWorkspace 'Alpha' @(@{ Action = 'Test-ActionTwo'; Parameters = @{ Beta = 2 } })
+
+			Open-Workspace
+
+			@($script:resolveSelectionCalls[0].OptionList) | Should -Be @('Zulu', 'Alpha')
+		}
+	}
+
 	Context "default workspace on empty selection" {
 		It "opens the configured DefaultWorkspace when the menu response is empty" {
-			$script:Configuration.Workspaces = @('TestWorkspace', 'FallbackWorkspace')
 			$script:Configuration.DefaultWorkspace = 'FallbackWorkspace'
-			$script:Configuration.WorkspaceActions['FallbackWorkspace'] = @(
+			Set-TestWorkspace 'FallbackWorkspace' @(
 				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 11 } }
 			)
 
@@ -605,9 +626,8 @@ Describe "Open-Workspace" {
 		}
 
 		It "advertises the configured DefaultWorkspace by name in the prompt" {
-			$script:Configuration.Workspaces = @('TestWorkspace', 'FallbackWorkspace')
 			$script:Configuration.DefaultWorkspace = 'FallbackWorkspace'
-			$script:Configuration.WorkspaceActions['FallbackWorkspace'] = @(
+			Set-TestWorkspace 'FallbackWorkspace' @(
 				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 11 } }
 			)
 
@@ -619,7 +639,7 @@ Describe "Open-Workspace" {
 
 		It "offers to cancel and opens nothing when no DefaultWorkspace is configured" {
 			$script:Configuration.DefaultWorkspace = ''
-			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+			Set-TestWorkspace 'TestWorkspace' @(
 				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } }
 			)
 
@@ -642,9 +662,8 @@ Describe "Open-Workspace" {
 		}
 
 		It "does not fall back to the default when an explicit -Workspace argument resolves to nothing" {
-			$script:Configuration.Workspaces = @('TestWorkspace', 'FallbackWorkspace')
 			$script:Configuration.DefaultWorkspace = 'FallbackWorkspace'
-			$script:Configuration.WorkspaceActions['FallbackWorkspace'] = @(
+			Set-TestWorkspace 'FallbackWorkspace' @(
 				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 11 } }
 			)
 			# A mistyped name is dropped by Resolve-Selection's InputObject path. That is a bad
@@ -657,12 +676,11 @@ Describe "Open-Workspace" {
 		}
 
 		It "opens the explicitly named workspace rather than the default" {
-			$script:Configuration.Workspaces = @('TestWorkspace', 'FallbackWorkspace')
 			$script:Configuration.DefaultWorkspace = 'FallbackWorkspace'
-			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+			Set-TestWorkspace 'TestWorkspace' @(
 				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } }
 			)
-			$script:Configuration.WorkspaceActions['FallbackWorkspace'] = @(
+			Set-TestWorkspace 'FallbackWorkspace' @(
 				@{ Action = 'Test-ActionTwo'; Parameters = @{ Beta = 2 } }
 			)
 
@@ -674,7 +692,7 @@ Describe "Open-Workspace" {
 	}
 
 	It "forwards ExtraArgs to actions only when parameter is not already configured" {
-		$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+		Set-TestWorkspace 'TestWorkspace' @(
 			@{ Action = 'Test-ActionOne'; Parameters = @{} },
 			@{ Action = 'Test-ActionTwo'; Parameters = @{ Beta = 2 } }
 		)
@@ -690,7 +708,7 @@ Describe "Open-Workspace" {
 
 	Context "workspace-context handoff" {
 		It "hands the workspace being opened to every action that declares CurrentWorkspace" {
-			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+			Set-TestWorkspace 'TestWorkspace' @(
 				@{ Action = 'Test-WorkspaceAwareAction' }
 			)
 
@@ -701,7 +719,7 @@ Describe "Open-Workspace" {
 		}
 
 		It "lets a configured CurrentWorkspace parameter win over the injected one" {
-			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+			Set-TestWorkspace 'TestWorkspace' @(
 				@{ Action = 'Test-WorkspaceAwareAction'; Parameters = @{ CurrentWorkspace = 'Elsewhere' } }
 			)
 
@@ -712,7 +730,7 @@ Describe "Open-Workspace" {
 	}
 
 	It "relaunches -Alongside into a new shell window without running any actions" {
-		$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+		Set-TestWorkspace 'TestWorkspace' @(
 			@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } }
 		)
 
@@ -729,7 +747,7 @@ Describe "Open-Workspace" {
 	}
 
 	It "creates the relaunch window under an explicit ID and hands it to the child via WT_WINDOW_ID" {
-		$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+		Set-TestWorkspace 'TestWorkspace' @(
 			@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } }
 		)
 
@@ -743,7 +761,7 @@ Describe "Open-Workspace" {
 	}
 
 	It "forwards Project and ExtraArgs in the relaunch command" {
-		$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+		Set-TestWorkspace 'TestWorkspace' @(
 			@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } }
 		)
 
@@ -756,7 +774,7 @@ Describe "Open-Workspace" {
 
 	It "runs Terminate-WindowsTerminalTabs -OnlyCurrent inside the relaunched alongside shell" {
 		$env:OPEN_WORKSPACE_ALONGSIDE_SHELL = '1'
-		$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+		Set-TestWorkspace 'TestWorkspace' @(
 			@{ Action = 'Terminate-WindowsTerminalTabs'; Parameters = @{ OnlyCurrent = $true } }
 		)
 
@@ -770,7 +788,7 @@ Describe "Open-Workspace" {
 
 	It "skips the alongside open when the next desktop index cannot be determined" {
 		$env:OPEN_WORKSPACE_ALONGSIDE_SHELL = '1'
-		$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+		Set-TestWorkspace 'TestWorkspace' @(
 			@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } }
 		)
 		# Desktop enumeration failed (stale RPC): the offset is unknown. Proceeding with
@@ -785,7 +803,7 @@ Describe "Open-Workspace" {
 
 	It "forces InSameShell on actions inside the relaunched alongside shell and consumes the marker" {
 		$env:OPEN_WORKSPACE_ALONGSIDE_SHELL = '1'
-		$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+		Set-TestWorkspace 'TestWorkspace' @(
 			@{ Action = 'Test-ShellAwareAction'; Parameters = @{ Alpha = 5 } }
 		)
 
@@ -800,7 +818,7 @@ Describe "Open-Workspace" {
 	}
 
 	It "does not force InSameShell when opening without Alongside" {
-		$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+		Set-TestWorkspace 'TestWorkspace' @(
 			@{ Action = 'Test-ShellAwareAction'; Parameters = @{ Alpha = 6 } }
 		)
 
@@ -815,7 +833,7 @@ Describe "Open-Workspace" {
 		$script:Configuration.ProjectTerminals = @(
 			@{ Name = 'ProjectA'; Paths = @('Api') }
 		)
-		$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+		Set-TestWorkspace 'TestWorkspace' @(
 			@{ Action = 'Open-Project'; Parameters = @{ Project = 'ProjectA' } },
 			@{ Action = 'Terminate-WindowsTerminalTabs'; Parameters = @{ OnlyCurrent = $true } }
 		)
@@ -830,7 +848,7 @@ Describe "Open-Workspace" {
 		$script:Configuration.ProjectTerminals = @(
 			@{ Name = 'ProjectA'; Paths = @('Api') }
 		)
-		$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+		Set-TestWorkspace 'TestWorkspace' @(
 			@{ Action = 'Open-Project'; Parameters = @{ Project = 'ProjectA' } },
 			@{ Action = 'Terminate-WindowsTerminalTabs'; Parameters = @{ OnlyCurrent = $true } }
 		)
@@ -843,7 +861,7 @@ Describe "Open-Workspace" {
 	}
 
 	It "continues executing later actions when one action throws" {
-		$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+		Set-TestWorkspace 'TestWorkspace' @(
 			@{ Action = 'Test-ThrowingAction'; Parameters = @{} },
 			@{ Action = 'Test-ActionTwo'; Parameters = @{ Beta = 42 } }
 		)
@@ -856,7 +874,7 @@ Describe "Open-Workspace" {
 	}
 
 	It "short-circuits remaining actions when Return action is encountered" {
-		$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+		Set-TestWorkspace 'TestWorkspace' @(
 			@{ Action = 'Return'; Parameters = @{} },
 			@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 7 } }
 		)
@@ -868,7 +886,7 @@ Describe "Open-Workspace" {
 
 	Context "teardown tracking" {
 		It "records what the open produced so Close-Workspace can close it" {
-			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+			Set-TestWorkspace 'TestWorkspace' @(
 				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } }
 			)
 
@@ -882,7 +900,7 @@ Describe "Open-Workspace" {
 		It "captures the terminal tab strip before the actions run" {
 			# Tabs are not top-level windows, so the window capture cannot see them; without this
 			# snapshot every tab in every terminal would look newly created.
-			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+			Set-TestWorkspace 'TestWorkspace' @(
 				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } }
 			)
 
@@ -905,7 +923,7 @@ Describe "Open-Workspace" {
 				@{ 777 = @("read$script:tabSnapshotReads") }
 			}
 
-			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+			Set-TestWorkspace 'TestWorkspace' @(
 				@{ Action = 'Set-WorkspaceWindowLayout'; Parameters = @{ WorkspaceName = 'TestWorkspace' } }
 			)
 
@@ -918,7 +936,7 @@ Describe "Open-Workspace" {
 		It "forwards no pre-captured tab strip when the workspace has no layout action" {
 			# Nothing moved the terminal, so there is nothing to pre-capture and the recorder is left
 			# to read the tab strip itself - which costs no desktop switch either.
-			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+			Set-TestWorkspace 'TestWorkspace' @(
 				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } }
 			)
 
@@ -928,9 +946,8 @@ Describe "Open-Workspace" {
 		}
 
 		It "records one entry per selected workspace" {
-			$script:Configuration.Workspaces = @('WorkspaceA', 'WorkspaceB')
-			$script:Configuration.WorkspaceActions['WorkspaceA'] = @(@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } })
-			$script:Configuration.WorkspaceActions['WorkspaceB'] = @(@{ Action = 'Test-ActionTwo'; Parameters = @{ Beta = 2 } })
+			Set-TestWorkspace 'WorkspaceA' @(@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } })
+			Set-TestWorkspace 'WorkspaceB' @(@{ Action = 'Test-ActionTwo'; Parameters = @{ Beta = 2 } })
 
 			Open-Workspace -Workspace @('WorkspaceA', 'WorkspaceB')
 
@@ -940,7 +957,7 @@ Describe "Open-Workspace" {
 		It "lets a plain open claim what is already on screen" {
 			# Otherwise an app that was already running produced no new window, is never recorded,
 			# and survives every teardown from then on.
-			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+			Set-TestWorkspace 'TestWorkspace' @(
 				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } }
 			)
 
@@ -953,9 +970,8 @@ Describe "Open-Workspace" {
 		It "only lets the first workspace of a plain run claim, and appends the rest" {
 			# Adopting twice would have both entries claim the same windows, and each would then
 			# protect them from the other's teardown.
-			$script:Configuration.Workspaces = @('WorkspaceA', 'WorkspaceB')
-			$script:Configuration.WorkspaceActions['WorkspaceA'] = @(@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } })
-			$script:Configuration.WorkspaceActions['WorkspaceB'] = @(@{ Action = 'Test-ActionTwo'; Parameters = @{ Beta = 2 } })
+			Set-TestWorkspace 'WorkspaceA' @(@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } })
+			Set-TestWorkspace 'WorkspaceB' @(@{ Action = 'Test-ActionTwo'; Parameters = @{ Beta = 2 } })
 
 			Open-Workspace -Workspace @('WorkspaceA', 'WorkspaceB')
 
@@ -965,7 +981,7 @@ Describe "Open-Workspace" {
 
 		It "never claims on an alongside open, which would steal another workspace's windows" {
 			$env:OPEN_WORKSPACE_ALONGSIDE_SHELL = '1'
-			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+			Set-TestWorkspace 'TestWorkspace' @(
 				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } }
 			)
 
@@ -976,7 +992,7 @@ Describe "Open-Workspace" {
 
 		It "records the alongside mode and desktop offset the open ran with" {
 			$env:OPEN_WORKSPACE_ALONGSIDE_SHELL = '1'
-			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+			Set-TestWorkspace 'TestWorkspace' @(
 				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } }
 			)
 
@@ -990,7 +1006,7 @@ Describe "Open-Workspace" {
 		It "records before a terminating action exits the process" {
 			# Terminate-WindowsTerminalTabs -OnlyCurrent ends the process, so a record written after
 			# the action loop would never happen and the workspace would be untrackable.
-			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+			Set-TestWorkspace 'TestWorkspace' @(
 				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } },
 				@{ Action = 'Terminate-WindowsTerminalTabs'; Parameters = @{ OnlyCurrent = $true } }
 			)
@@ -1002,7 +1018,7 @@ Describe "Open-Workspace" {
 		}
 
 		It "records exactly once when a terminating action is present" {
-			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+			Set-TestWorkspace 'TestWorkspace' @(
 				@{ Action = 'Terminate-WindowsTerminalTabs'; Parameters = @{ IncludeCurrent = $true } }
 			)
 
@@ -1012,7 +1028,7 @@ Describe "Open-Workspace" {
 		}
 
 		It "records nothing when a Return action aborts the open" {
-			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+			Set-TestWorkspace 'TestWorkspace' @(
 				@{ Action = 'Return'; Parameters = @{} },
 				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } }
 			)
@@ -1031,7 +1047,7 @@ Describe "Open-Workspace" {
 		}
 
 		It "records nothing for an -Alongside invocation that only relaunches" {
-			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+			Set-TestWorkspace 'TestWorkspace' @(
 				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } }
 			)
 
@@ -1053,7 +1069,7 @@ Describe "Open-Workspace" {
 
 		It "threads the protected handles to the layout action and the preserved entries to the tracker write" {
 			Mock Get-WorkspaceOpenProtection { $script:testProtection }
-			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+			Set-TestWorkspace 'TestWorkspace' @(
 				@{ Action = 'Set-WorkspaceWindowLayout'; Parameters = @{ WorkspaceName = 'TestWorkspace' } }
 			)
 
@@ -1071,7 +1087,7 @@ Describe "Open-Workspace" {
 			# A window created mid-run must never be mistaken for a protected one, and re-reading
 			# the tracker per action would race the very writes this open performs.
 			Mock Get-WorkspaceOpenProtection { $script:testProtection }
-			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+			Set-TestWorkspace 'TestWorkspace' @(
 				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } },
 				@{ Action = 'Test-ActionTwo'; Parameters = @{ Beta = 2 } }
 			)
@@ -1084,7 +1100,7 @@ Describe "Open-Workspace" {
 		It "never resolves protection for an alongside open, which adds without destroying" {
 			$env:OPEN_WORKSPACE_ALONGSIDE_SHELL = '1'
 			Mock Get-WorkspaceOpenProtection { $script:testProtection }
-			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+			Set-TestWorkspace 'TestWorkspace' @(
 				@{ Action = 'Set-WorkspaceWindowLayout'; Parameters = @{ WorkspaceName = 'TestWorkspace' } }
 			)
 
@@ -1098,7 +1114,7 @@ Describe "Open-Workspace" {
 			# The parameters must be OMITTED, never bound to $null - a bound $null would defeat
 			# downstream defaulting (e.g. the layout's self-derive path).
 			Mock Get-WorkspaceOpenProtection { $null }
-			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+			Set-TestWorkspace 'TestWorkspace' @(
 				@{ Action = 'Set-WorkspaceWindowLayout'; Parameters = @{ WorkspaceName = 'TestWorkspace' } }
 			)
 
@@ -1111,11 +1127,10 @@ Describe "Open-Workspace" {
 	}
 
 	It "stops processing later selected workspaces when an earlier workspace contains Return" {
-		$script:Configuration.Workspaces = @('WorkspaceA', 'WorkspaceB')
-		$script:Configuration.WorkspaceActions['WorkspaceA'] = @(
+		Set-TestWorkspace 'WorkspaceA' @(
 			@{ Action = 'Return'; Parameters = @{} }
 		)
-		$script:Configuration.WorkspaceActions['WorkspaceB'] = @(
+		Set-TestWorkspace 'WorkspaceB' @(
 			@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 5 } }
 		)
 
@@ -1125,8 +1140,7 @@ Describe "Open-Workspace" {
 	}
 
 	It "continues to later selected workspaces when an earlier one has no configured actions" {
-		$script:Configuration.Workspaces = @('WorkspaceA', 'WorkspaceB')
-		$script:Configuration.WorkspaceActions['WorkspaceB'] = @(
+		Set-TestWorkspace 'WorkspaceB' @(
 			@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 99 } }
 		)
 
@@ -1139,11 +1153,10 @@ Describe "Open-Workspace" {
 
 	It "recomputes desktop offset per selected workspace when opening alongside" {
 		$env:OPEN_WORKSPACE_ALONGSIDE_SHELL = '1'
-		$script:Configuration.Workspaces = @('WorkspaceA', 'WorkspaceB')
-		$script:Configuration.WorkspaceActions['WorkspaceA'] = @(
+		Set-TestWorkspace 'WorkspaceA' @(
 			@{ Action = 'Set-WorkspaceWindowLayout'; Parameters = @{ WorkspaceName = 'WorkspaceA' } }
 		)
-		$script:Configuration.WorkspaceActions['WorkspaceB'] = @(
+		Set-TestWorkspace 'WorkspaceB' @(
 			@{ Action = 'Set-WorkspaceWindowLayout'; Parameters = @{ WorkspaceName = 'WorkspaceB' } }
 		)
 
@@ -1172,7 +1185,7 @@ Describe "Open-Workspace" {
 			@([PSCustomObject]@{ Handle = [IntPtr]55; Title = 'Existing'; ProcessId = 1 })
 		}
 
-		$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+		Set-TestWorkspace 'TestWorkspace' @(
 			@{ Action = 'Set-WorkspaceWindowLayout'; Parameters = @{ WorkspaceName = 'TestWorkspace' } }
 		)
 
@@ -1203,7 +1216,7 @@ Describe "Open-Workspace" {
 			}
 		}
 
-		$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+		Set-TestWorkspace 'TestWorkspace' @(
 			@{ Action = 'Set-WorkspaceWindowLayout'; Parameters = @{ WorkspaceName = 'TestWorkspace' } }
 		)
 
@@ -1220,7 +1233,7 @@ Describe "Open-Workspace" {
 			@([PSCustomObject]@{ Handle = [IntPtr]777; Title = 'SomeWindow'; ProcessId = 42 })
 		}
 
-		$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+		Set-TestWorkspace 'TestWorkspace' @(
 			@{ Action = 'Set-WorkspaceWindowLayout'; Parameters = @{ WorkspaceName = 'TestWorkspace' } }
 		)
 
@@ -1240,7 +1253,7 @@ Describe "Open-Workspace" {
 				}
 			)
 			$script:Configuration.Universal.DefaultBrowser = 'Firefox'
-			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+			Set-TestWorkspace 'TestWorkspace' @(
 				@{ Action = 'Open-Project'; Parameters = @{ Project = 'ProjectA' } },
 				@{ Action = 'Open-Browser'; Parameters = @{ Groups = @('General'); Browser = 'Firefox' } }
 			)
@@ -1254,7 +1267,7 @@ Describe "Open-Workspace" {
 		}
 
 		It "substitutes {SelectedProjects} with the projects returned by Open-Project" {
-			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+			Set-TestWorkspace 'TestWorkspace' @(
 				@{ Action = 'Open-Project'; Parameters = @{ Project = 'ProjectA' } },
 				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = '{SelectedProjects}' } }
 			)
@@ -1266,7 +1279,7 @@ Describe "Open-Workspace" {
 		}
 
 		It "prefers the explicit -Project argument over Open-Project's selection" {
-			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+			Set-TestWorkspace 'TestWorkspace' @(
 				@{ Action = 'Open-Project' },
 				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = '{SelectedProjects}' } }
 			)
@@ -1278,7 +1291,7 @@ Describe "Open-Workspace" {
 		}
 
 		It "drops a {SelectedProjects} parameter when no projects resolve" {
-			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+			Set-TestWorkspace 'TestWorkspace' @(
 				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = '{SelectedProjects}' } }
 			)
 
@@ -1289,7 +1302,7 @@ Describe "Open-Workspace" {
 		}
 
 		It "runs a configured Open-ProjectSwagger action with the selected projects" {
-			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+			Set-TestWorkspace 'TestWorkspace' @(
 				@{ Action = 'Open-Project'; Parameters = @{ Project = 'ProjectA' } },
 				@{ Action = 'Open-Browser'; Parameters = @{ Groups = @('General') } },
 				@{ Action = 'Open-ProjectSwagger'; Parameters = @{ Project = '{SelectedProjects}' } }
@@ -1303,7 +1316,7 @@ Describe "Open-Workspace" {
 		}
 
 		It "invokes Open-ProjectSwagger without a Project when the token drops it" {
-			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+			Set-TestWorkspace 'TestWorkspace' @(
 				@{ Action = 'Open-ProjectSwagger'; Parameters = @{ Project = '{SelectedProjects}' } }
 			)
 
@@ -1324,7 +1337,7 @@ Describe "Open-Workspace" {
 		BeforeEach {
 			$script:successLines = @()
 			Mock Write-LogSuccess { $script:successLines += $Message }
-			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+			Set-TestWorkspace 'TestWorkspace' @(
 				@{ Action = 'Test-CaptureEnvironmentAction'; Parameters = @{} }
 			)
 			[Environment]::SetEnvironmentVariable('OPEN_WORKSPACE_START_UTC', $null, 'Process')
@@ -1392,7 +1405,7 @@ Describe "Open-Workspace" {
 		# depends on no window and used to run after every application had been launched, under
 		# their start-up load. It now runs first, as Set-WorkspaceWindowLayout -PrepareOnly.
 		BeforeEach {
-			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+			Set-TestWorkspace 'TestWorkspace' @(
 				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } },
 				@{ Action = 'Set-WorkspaceWindowLayout'; Parameters = @{ WorkspaceName = 'TestWorkspace' } }
 			)
@@ -1440,7 +1453,7 @@ Describe "Open-Workspace" {
 		}
 
 		It "skips the preparation for a workspace without a layout action" {
-			$script:Configuration.WorkspaceActions['TestWorkspace'] = @(
+			Set-TestWorkspace 'TestWorkspace' @(
 				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } }
 			)
 
