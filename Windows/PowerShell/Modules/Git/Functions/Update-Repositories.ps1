@@ -16,8 +16,7 @@ function Update-Repositories {
 		Repositories are updated in the order the configuration lists them, and a repository
 		that appears in more than one selected group is still updated only once.
 
-		Archive mode: downloads repository contents without the `.git` directory.
-		Tries `git archive` first (requires server-side support); falls back to
+		Archive mode: downloads repository contents without the `.git` directory, via
 		`git clone --depth 1` followed by `.git` directory removal.
 
 		Requires administrator privileges.
@@ -248,48 +247,25 @@ function Update-Repositories {
 				$url = $sanitizedUrl.Replace("https://", "https://$($cleanToken)@")
 			}
 
-			# Try git archive first (requires server-side support)
-			$archiveSuccess = $false
-			$archivePath = Join-Path ([System.IO.Path]::GetTempPath()) "$RepositoryName.zip"
-
-			if (Test-Path $archivePath) {
-				Remove-Item -Path $archivePath -Force
+			# A shallow clone with the .git directory removed, deliberately NOT
+			# `git archive --remote`: that asks the server to run the git-upload-archive
+			# service, which GitHub serves on no protocol (HTTP 422, git exits 128). Every
+			# URL this function builds is a GitHub URL, so the attempt could never succeed -
+			# it only cost two failed round trips per repository (one for `main`, one for
+			# `master`) and printed a "git archive not supported" warning every single time.
+			git clone --depth 1 $url $targetPath
+			if ($LASTEXITCODE -ne 0) {
+				Write-LogError "Failed to download [$RepositoryName]!"
+				continue
 			}
 
-			foreach ($branch in @('main', 'master')) {
-				Write-LogStep " Trying git archive (branch: $branch)..."
-				git archive --remote="$url" --format=zip --output="$archivePath" $branch 2>$null
-				if ($LASTEXITCODE -eq 0 -and (Test-Path $archivePath)) {
-					$null = New-Item -ItemType Directory -Path $targetPath -Force
-					Expand-Archive -Path $archivePath -DestinationPath $targetPath -Force
-					Remove-Item -Path $archivePath -Force
-					$archiveSuccess = $true
-					Write-LogSuccess "Archived [$RepositoryName] successfully!"
-					break
-				}
+			$gitDir = Join-Path $targetPath ".git"
+			if (Test-Path $gitDir) {
+				Remove-Item -Path $gitDir -Recurse -Force
+				Write-LogStep " Removed .git directory"
 			}
 
-			if (-not $archiveSuccess) {
-				Write-LogWarning "git archive not supported, falling back to shallow clone..."
-
-				if (Test-Path $archivePath) {
-					Remove-Item -Path $archivePath -Force
-				}
-
-				git clone --depth 1 $url $targetPath
-				if ($LASTEXITCODE -ne 0) {
-					Write-LogError "Failed to download [$RepositoryName]!"
-					continue
-				}
-
-				$gitDir = Join-Path $targetPath ".git"
-				if (Test-Path $gitDir) {
-					Remove-Item -Path $gitDir -Recurse -Force
-					Write-LogStep " Removed .git directory"
-				}
-
-				Write-LogSuccess "Downloaded [$RepositoryName] via shallow clone!"
-			}
+			Write-LogSuccess "Downloaded [$RepositoryName] without git history!"
 		}
 		return
 	}

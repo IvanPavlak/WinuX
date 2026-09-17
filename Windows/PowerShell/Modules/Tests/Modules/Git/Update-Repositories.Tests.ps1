@@ -28,6 +28,10 @@ Describe "Update-Repositories" {
 		Mock Write-LogTitle { }
 		Mock Write-LogWarning { }
 		Mock Write-LogError { }
+		Mock Write-LogStep { }
+		Mock Write-LogSuccess { }
+		Mock Remove-Item { }
+		Mock git { $global:LASTEXITCODE = 0 }
 	}
 
 	It "initializes repository when custom URL target path is missing" {
@@ -111,6 +115,66 @@ Describe "Update-Repositories" {
 				$Repositories -contains "Zulu" -and $Repositories -contains "Alfa"
 			}
 			Should -Invoke Resolve-ProjectPath -Times 0
+		}
+	}
+
+	Context "Archive mode" {
+		BeforeEach {
+			Mock Get-RepositoryName { "DSA" }
+			Mock Resolve-RepositoryTargets {
+				, @([PSCustomObject]@{ Name = "DSA"; Group = "Beta"; RepositoryUrl = "https://github.com/acme/DSA"; LocalPath = "C:\Repos\DSA" })
+			}
+		}
+
+		It "Should never reach for git archive, which GitHub serves on no protocol" {
+			# `git archive --remote` asks the server to run git-upload-archive. GitHub answers
+			# HTTP 422 and git exits 128, so the attempt failed for every repository on every
+			# branch and only ever printed a misleading "not supported" warning before the
+			# shallow clone that actually did the work.
+			Update-Repositories -Repositories "DSA" -Archive
+
+			Should -Invoke git -Times 0 -ParameterFilter { $args -contains 'archive' }
+		}
+
+		It "Should shallow-clone and strip the .git directory" {
+			Mock Test-Path { $true } -ParameterFilter { $Path -like '*\.git' }
+
+			Update-Repositories -Repositories "DSA" -Archive
+
+			Should -Invoke git -Times 1 -Exactly -ParameterFilter {
+				$args -contains 'clone' -and $args -contains '--depth' -and $args -contains '1'
+			}
+			Should -Invoke Remove-Item -Times 1 -Exactly -ParameterFilter { $Path -like '*\.git' -and $Recurse }
+		}
+
+		It "Should target the Desktop by default and the current directory with -InCurrentDirectory" {
+			Mock Get-Location { [PSCustomObject]@{ Path = "C:\Work" } }
+
+			Update-Repositories -Repositories "DSA" -Archive
+			Should -Invoke git -Times 1 -Exactly -ParameterFilter {
+				$args -contains ([System.IO.Path]::Combine([Environment]::GetFolderPath('Desktop'), 'DSA'))
+			}
+
+			Update-Repositories -Repositories "DSA" -Archive -InCurrentDirectory
+			Should -Invoke git -Times 1 -Exactly -ParameterFilter { $args -contains 'C:\Work\DSA' }
+		}
+
+		It "Should report a failed clone and not strip anything" {
+			Mock git { $global:LASTEXITCODE = 128 }
+
+			Update-Repositories -Repositories "DSA" -Archive
+
+			Should -Invoke Write-LogError -Times 1 -Exactly -ParameterFilter { $Message -match 'Failed to download' }
+			Should -Invoke Remove-Item -Times 0
+		}
+
+		It "Should skip a target that already exists" {
+			Mock Test-Path { $true }
+
+			Update-Repositories -Repositories "DSA" -Archive
+
+			Should -Invoke git -Times 0
+			Should -Invoke Write-LogWarning -Times 1 -Exactly -ParameterFilter { $Message -match 'Already exists' }
 		}
 	}
 
