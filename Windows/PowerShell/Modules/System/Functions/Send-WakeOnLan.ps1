@@ -58,12 +58,12 @@ function Send-WakeOnLan {
 
 	# Confirm-ConfigValue, not truthiness: the empty base ships WakeOnLanConfig = @(),
 	# and an empty collection is truthy, so a bare -not guard would pass it through.
-	$wolConfig = $Configuration.WakeOnLanConfig
+	$wolConfig = Get-ConfigSetting -Path 'WakeOnLanConfig'
 	if (-not (Confirm-ConfigValue $wolConfig "Wake-on-LAN not configured (WakeOnLanConfig) - nothing to wake!")) {
 		return
 	}
 
-	$defaultMachine = $Configuration.DefaultWakeOnLanMachine
+	$defaultMachine = Get-ConfigSetting -Path 'DefaultWakeOnLanMachine'
 
 	# The configured machines, in configuration order, plus the two options that are not
 	# machines: "All" wakes every configured one, "None" cancels. They belong to the menu,

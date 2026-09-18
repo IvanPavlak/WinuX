@@ -41,7 +41,7 @@ function Set-TaskbarSettings {
 	#>
 	Write-LogTitle "Setting Taskbar Settings"
 
-	$desiredSettings = $Configuration.TaskbarSettings
+	$desiredSettings = Get-ConfigSetting -Path 'TaskbarSettings'
 	if (-not ($desiredSettings -is [hashtable]) -or $desiredSettings.Count -eq 0) {
 		Write-LogWarning "TaskbarSettings is not configured - leaving the taskbar settings as-is!"
 		return

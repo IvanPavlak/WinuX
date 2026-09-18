@@ -26,6 +26,10 @@ function Wait-BrowserWindowReady {
 		Maximum time to wait. Defaults to 30 seconds; fast browsers exit the
 		poll in well under a second per 250ms tick.
 
+	.PARAMETER Clock
+		The wait clock (New-WaitClock) to read and sleep through. Defaults to a
+		real one; tests hand in a fake.
+
 	.EXAMPLE
 		Wait-BrowserWindowReady -ProcessName "brave"
 		Waits until a Brave window exists (or 30s pass).
@@ -44,23 +48,24 @@ function Wait-BrowserWindowReady {
 		[string]$TitlePattern,
 
 		[Parameter()]
-		[int]$TimeoutSeconds = 30
+		[int]$TimeoutSeconds = 30,
+
+		[Parameter()]
+		[AllowNull()]
+		[object]$Clock
 	)
 
-	$deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
-
-	do {
+	$appeared = Wait-Until -TimeoutMs ($TimeoutSeconds * 1000) -PollIntervalMs 250 -Clock $Clock -Condition {
 		$browserWindows = @(Get-WindowHandle -ProcessName $ProcessName -ErrorAction SilentlyContinue)
 		if ($TitlePattern) {
 			$browserWindows = @($browserWindows | Where-Object { $_.Title -match $TitlePattern })
 		}
+		return ($browserWindows.Count -gt 0)
+	}
 
-		if ($browserWindows.Count -gt 0) {
-			return $true
-		}
-
-		Start-Sleep -Milliseconds 250
-	} while ([DateTime]::UtcNow -lt $deadline)
+	if ($appeared) {
+		return $true
+	}
 
 	Write-LogDebug " [Wait-BrowserWindowReady] No [$ProcessName] window appeared within [$TimeoutSeconds]s - continuing anyway" -Style Warning
 	return $false

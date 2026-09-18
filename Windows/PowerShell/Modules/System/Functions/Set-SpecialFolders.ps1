@@ -16,13 +16,14 @@ function Set-SpecialFolders {
 
 	Write-LogTitle "Redirecting Special Folders"
 
-	$desiredSettings = $Configuration.SpecialFolders
+	$desiredSettings = Get-ConfigSetting -Path 'SpecialFolders'
 	if (-not (Confirm-ConfigValue $desiredSettings "SpecialFolders not configured - leaving folder redirections as-is!")) {
 		return
 	}
 
-	$basePath = $global:Configuration.BasePaths[$global:MachineType].Dev
-	$userPath = $global:Configuration.BasePaths[$global:MachineType].User
+	$basePaths = Get-ConfigSetting -Path 'BasePaths' -Default @{}
+	$basePath = $basePaths[$global:MachineType].Dev
+	$userPath = $basePaths[$global:MachineType].User
 
 	$allSettingsOk = $true
 	$processedSettings = @()

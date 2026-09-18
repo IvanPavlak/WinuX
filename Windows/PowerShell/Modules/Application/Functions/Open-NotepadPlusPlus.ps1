@@ -40,7 +40,7 @@ function Open-NotepadPlusPlus {
 			}
 
 			Write-LogStep "Opening [$File] in Notepad++..."
-			Start-Process -FilePath $Configuration.Universal.NotepadPlusPlusExe -ArgumentList $resolvedPath -ErrorAction Stop
+			Start-Process -FilePath (Get-ConfigSetting -Path 'Universal.NotepadPlusPlusExe') -ArgumentList $resolvedPath -ErrorAction Stop
 			Write-LogSuccess "File opened in Notepad++!"
 		}
 		catch {

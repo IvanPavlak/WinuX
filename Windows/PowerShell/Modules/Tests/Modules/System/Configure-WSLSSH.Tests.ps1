@@ -9,7 +9,7 @@ BeforeAll {
 
 Describe "Configure-WSLSSH" {
 	BeforeEach {
-		$script:Configuration = [PSCustomObject]@{
+		$global:Configuration = [PSCustomObject]@{
 			DefaultWSLDistribution = "Ubuntu"
 		}
 
@@ -42,7 +42,7 @@ Describe "Configure-WSLSSH" {
 	}
 
 	It "skips when no WSL distribution is configured" {
-		$script:Configuration = [PSCustomObject]@{
+		$global:Configuration = [PSCustomObject]@{
 			DefaultWSLDistribution = ""
 		}
 

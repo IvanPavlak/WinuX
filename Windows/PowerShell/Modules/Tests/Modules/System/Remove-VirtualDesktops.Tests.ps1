@@ -3,48 +3,45 @@
 BeforeAll {
 	$ModuleRoot = (Get-RepositoryPath).Modules
 	$FunctionsPath = Join-Path $ModuleRoot "System\Functions"
-	$HelperFunctionsPath = Join-Path $ModuleRoot "Helper\Functions"
 
-	. "$HelperFunctionsPath\Invoke-WithRetry.ps1"
-	. "$HelperFunctionsPath\Invoke-WithOptionalRetry.ps1"
-	. "$HelperFunctionsPath\Get-RpcRetryPolicy.ps1"
 	. "$FunctionsPath\Remove-VirtualDesktops.ps1"
-
-	function Reset-VirtualDesktopState { }
+	# Every desktop-manager call goes through the Window module's operation seam; the shared fake
+	# stands in for the VirtualDesktop cmdlets and the session plumbing behind it.
+	. (Join-Path $ModuleRoot "Window\Functions\Invoke-VirtualDesktopOperation.ps1")
+	. (Join-Path $ModuleRoot "Tests\Modules\Support\FakeVirtualDesktop.ps1")
 
 	# Captured before any mock exists: invoking the CommandInfo directly executes the genuine
 	# cmdlet without name resolution, so a Get-Command mock body can delegate to it without
 	# re-entering itself. (A module-qualified call does NOT bypass the mock - it recurses.)
 	$script:RealGetCommand = Get-Command -Name Get-Command -CommandType Cmdlet
-
-	# VirtualDesktop cmdlets come from an optional external module absent on CI runners.
-	# Stub the ones these tests mock so Mock can attach (no-op where the real module exists).
-	if (-not (Get-Command Get-DesktopCount -ErrorAction SilentlyContinue)) {
-		function Get-DesktopCount { [CmdletBinding()] param() }
-		function Get-DesktopList { [CmdletBinding()] param() }
-		function Remove-Desktop { [CmdletBinding()] param($Desktop) }
-		function Get-DesktopFromWindow { [CmdletBinding()] param($Hwnd) }
-		function Get-DesktopIndex { [CmdletBinding()] param([Parameter(Position = 0)]$Desktop) }
-	}
 }
 
 Describe "Remove-VirtualDesktops" {
 	BeforeEach {
 		$script:desktopCountCalls = 0
-		# On CI the VirtualDesktop module is absent, so the real Import-VirtualDesktopModule
-		# returns $false and the function early-exits. Mock it so the removal logic is exercised
-		# (locally the real module is installed, so this matches local behavior).
-		Mock Import-VirtualDesktopModule { $true }
+		# The scenarios below script the desktop manager through Mocks on the fake's cmdlets; the
+		# session itself only has to exist (module available, no injected failures).
+		$null = New-FakeVirtualDesktopSession -DesktopCount 1
 		Mock Write-Host { }
+		Mock Write-LogTitle { }
 		Mock Write-LogDebug { }
 		Mock Write-LogSuccess { }
 		Mock Write-LogList { }
 		Mock Test-LogVerbose { $false }
 		Mock Start-Sleep { }
-		Mock Get-RpcRetryPolicy { @{ MaxAttempts = 3; InitialDelayMs = 0 } }
 		Mock Get-DesktopFromWindow { $null }
 		Mock Get-DesktopIndex { -1 }
-		Mock Reset-VirtualDesktopState { $true }
+	}
+
+	Context "Module availability" {
+		It "returns false without touching any desktop when the VirtualDesktop module is not available" {
+			$null = New-FakeVirtualDesktopSession -DesktopCount 3 -ModuleUnavailable
+
+			$result = Remove-VirtualDesktops
+
+			$result | Should -Be $false
+			$global:FakeVirtualDesktop.RemovedLog.Count | Should -Be 0
+		}
 	}
 
 	Context "Index mode (remove named desktops outright)" {
@@ -229,6 +226,7 @@ Describe "Remove-VirtualDesktops" {
 		It "requests a live RPC probe before desktop cleanup" {
 			Mock Get-DesktopCount { 1 }
 			Mock Remove-Desktop { }
+			Mock Get-RpcRetryPolicy { @{ MaxAttempts = 5; InitialDelayMs = 0 } }
 
 			Remove-VirtualDesktops
 
@@ -250,7 +248,21 @@ Describe "Remove-VirtualDesktops" {
 			Remove-VirtualDesktops
 
 			$script:desktopCountCalls | Should -Be 2
-			Should -Invoke Reset-VirtualDesktopState -Times 1 -Exactly
+			$global:FakeVirtualDesktop.ResetCount | Should -Be 1
+		}
+
+		It "removes the desktops the fake models, reconnecting a stale session on the way" {
+			# The same scenario expressed through the desktop model instead of scripted mocks: an
+			# RPC failure on the first count is recovered once, then every desktop but 0 goes.
+			$null = New-FakeVirtualDesktopSession -DesktopCount 3
+			Set-FakeVirtualDesktopFailure -Cmdlet Get-DesktopCount -Times 1
+
+			$result = Remove-VirtualDesktops
+
+			$result | Should -BeNullOrEmpty
+			@($global:FakeVirtualDesktop.RemovedLog) | Should -Be @(2, 1)
+			$global:FakeVirtualDesktop.Desktops.Count | Should -Be 1
+			$global:FakeVirtualDesktop.ResetCount | Should -Be 1
 		}
 	}
 
@@ -404,8 +416,39 @@ Describe "Remove-VirtualDesktops" {
 
 			$result | Should -Be $false
 			Should -Invoke Remove-Desktop -Times 0
-			# The whole scan is retried (with a state reset between attempts), not each window.
-			Should -Invoke Reset-VirtualDesktopState -Times 2 -Exactly
+			# The whole scan is retried (with a state reset between attempts), not each window:
+			# five attempts, a reset between each, one window looked up per attempt.
+			$global:FakeVirtualDesktop.ResetCount | Should -Be 4
+			Should -Invoke Get-DesktopFromWindow -Times 5 -Exactly
+		}
+
+		It "recovers a stale session mid-scan and finishes the cleanup" {
+			Mock Get-DesktopCount {
+				$script:desktopCountCalls++
+				if ($script:desktopCountCalls -eq 1) { 3 } else { 2 }
+			}
+			Mock Get-Command {
+				[PSCustomObject]@{ Name = 'Get-WindowHandle' }
+			} -ParameterFilter { $Name -eq 'Get-WindowHandle' }
+			Mock Get-WindowHandle {
+				@([PSCustomObject]@{ Handle = [IntPtr]11 })
+			}
+			$script:lookupCalls = 0
+			Mock Get-DesktopFromWindow {
+				$script:lookupCalls++
+				if ($script:lookupCalls -eq 1) { throw "The RPC server is unavailable. (0x800706BA)" }
+				'desktop-1'
+			}
+			Mock Get-DesktopIndex { 1 }
+			Mock Remove-Desktop { }
+
+			$result = Remove-VirtualDesktops -EmptyOnly
+
+			$result | Should -BeNullOrEmpty
+			$global:FakeVirtualDesktop.ResetCount | Should -Be 1
+			Should -Invoke Remove-Desktop -Times 2 -Exactly
+			Should -Invoke Remove-Desktop -Times 1 -Exactly -ParameterFilter { $Desktop -eq 2 }
+			Should -Invoke Remove-Desktop -Times 1 -Exactly -ParameterFilter { $Desktop -eq 0 }
 		}
 
 		It "falls back to process MainWindowHandle enumeration when Get-WindowHandle is unavailable" {

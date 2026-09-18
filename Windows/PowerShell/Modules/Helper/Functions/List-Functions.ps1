@@ -162,10 +162,8 @@ function List-Functions {
 		$documentedFunctions = @()
 	}
 
-	$exclusions = @()
-	if ($Configuration -and $Configuration.FunctionDiscrepancyExclusions) {
-		$exclusions = $Configuration.FunctionDiscrepancyExclusions
-	}
+	$exclusions = @(Get-ConfigSetting -Path 'FunctionDiscrepancyExclusions' -Default @())
+	$listFunctionsColors = Get-ConfigSetting -Path 'ListFunctionsColors' -Default @{}
 
 	# Exclusions apply in BOTH directions. A name on the list is not an exported module function
 	# at all, so it can surface either way: documented but never exported (Install-Bootstrap, a
@@ -203,12 +201,12 @@ function List-Functions {
 
 	if ($PSCmdlet.ParameterSetName -eq 'DiscrepancyCheck') {
 		if ($discrepancyMessages.Count -gt 0) {
-			$discrepancyMessages | ForEach-Object { Write-Host -ForegroundColor $Configuration.ListFunctionsColors.DiscrepancyError $_ }
+			$discrepancyMessages | ForEach-Object { Write-Host -ForegroundColor $listFunctionsColors.DiscrepancyError $_ }
 		}
 		elseif (-not $Quiet) {
 			# -Quiet suppresses the success banner so the profile startup check stays silent
 			# when there are no discrepancies (only surfaces output when something is wrong).
-			Write-Host -ForegroundColor $Configuration.ListFunctionsColors.DiscrepancySuccess "`n=> No discrepancies found between the documentation and loaded functions!"
+			Write-Host -ForegroundColor $listFunctionsColors.DiscrepancySuccess "`n=> No discrepancies found between the documentation and loaded functions!"
 		}
 		return
 	}
@@ -231,12 +229,12 @@ function List-Functions {
 		if ($resolvedCategories) {
 			foreach ($cat in $resolvedCategories) {
 				$functions = $moduleCategories[$cat]
-				Write-Host -ForegroundColor $Configuration.ListFunctionsColors.Border (Create-CenteredBorder -Title $cat)
+				Write-Host -ForegroundColor $listFunctionsColors.Border (Create-CenteredBorder -Title $cat)
 				Write-Host ""
 				foreach ($functionName in $functions.Keys) {
 					Show-FunctionDetails -FunctionName $functionName -FunctionInfo $functions[$functionName]
 				}
-				Write-Host -ForegroundColor $Configuration.ListFunctionsColors.Border (Create-CenteredBorder -Title "Function count => $($functions.Count)")
+				Write-Host -ForegroundColor $listFunctionsColors.Border (Create-CenteredBorder -Title "Function count => $($functions.Count)")
 				Write-Host ""
 			}
 		}
@@ -258,10 +256,10 @@ function List-Functions {
 			foreach ($funcName in $resolvedFunctions) {
 				$categoryName = $functionToCategoryMap[$funcName]
 				$functionInfo = $moduleCategories[$categoryName][$funcName]
-				Write-Host -ForegroundColor $Configuration.ListFunctionsColors.Border (Create-CenteredBorder -Title $categoryName)
+				Write-Host -ForegroundColor $listFunctionsColors.Border (Create-CenteredBorder -Title $categoryName)
 				Write-Host ""
 				Show-FunctionDetails -FunctionName $funcName -FunctionInfo $functionInfo
-				Write-Host -ForegroundColor $Configuration.ListFunctionsColors.Border (Create-CenteredBorder)
+				Write-Host -ForegroundColor $listFunctionsColors.Border (Create-CenteredBorder)
 				Write-Host ""
 			}
 		}
@@ -272,18 +270,18 @@ function List-Functions {
 		foreach ($cat in $moduleCategories.Keys) {
 			$functions = $moduleCategories[$cat]
 			if ($functions.Count -gt 0) {
-				Write-Host -ForegroundColor $Configuration.ListFunctionsColors.Border (Create-CenteredBorder -Title $cat)
+				Write-Host -ForegroundColor $listFunctionsColors.Border (Create-CenteredBorder -Title $cat)
 				Write-Host ""
 				foreach ($functionName in $functions.Keys) {
 					Show-FunctionDetails -FunctionName $functionName -FunctionInfo $functions[$functionName]
 				}
 			}
 		}
-		Write-Host -ForegroundColor $Configuration.ListFunctionsColors.Border (Create-CenteredBorder -Title "Total function count => $totalCount")
+		Write-Host -ForegroundColor $listFunctionsColors.Border (Create-CenteredBorder -Title "Total function count => $totalCount")
 		Write-Host ""
 
 		if ($discrepancyMessages.Count -gt 0) {
-			$discrepancyMessages | ForEach-Object { Write-Host -ForegroundColor $Configuration.ListFunctionsColors.DiscrepancyError $_ }
+			$discrepancyMessages | ForEach-Object { Write-Host -ForegroundColor $listFunctionsColors.DiscrepancyError $_ }
 		}
 	}
 }

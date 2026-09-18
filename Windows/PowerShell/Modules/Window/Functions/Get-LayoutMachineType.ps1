@@ -56,8 +56,9 @@ function Get-LayoutMachineType {
 
 	# Manual override wins outright - see .DESCRIPTION for why it is ordered ahead of the
 	# display-size rule.
-	if ($Configuration.LayoutMachineTypeOverrides) {
-		$configuredOverride = $Configuration.LayoutMachineTypeOverrides[$machineType]
+	$layoutMachineTypeOverrides = Get-ConfigSetting -Path 'LayoutMachineTypeOverrides'
+	if ($layoutMachineTypeOverrides) {
+		$configuredOverride = $layoutMachineTypeOverrides[$machineType]
 		if ($configuredOverride -is [array]) { $configuredOverride = @($configuredOverride)[0] }
 		if (-not [string]::IsNullOrWhiteSpace($configuredOverride)) {
 			$overrideType = ([string]$configuredOverride).Trim()
@@ -66,7 +67,7 @@ function Get-LayoutMachineType {
 		}
 	}
 
-	$smallDisplayType = $Configuration.SmallDisplayMachineType
+	$smallDisplayType = Get-ConfigSetting -Path 'SmallDisplayMachineType'
 	if ([string]::IsNullOrWhiteSpace($smallDisplayType)) {
 		return $machineType
 	}

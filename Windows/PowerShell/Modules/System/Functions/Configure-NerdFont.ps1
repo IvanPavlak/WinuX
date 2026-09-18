@@ -30,12 +30,13 @@ function Configure-NerdFont {
 
 	Test-AdminPrivileges
 
-	if (-not (Confirm-ConfigValue $Configuration.NerdFonts "NerdFonts not configured - no font to install!")) {
+	$nerdFonts = Get-ConfigSetting -Path 'NerdFonts'
+	if (-not (Confirm-ConfigValue $nerdFonts "NerdFonts not configured - no font to install!")) {
 		return
 	}
 
-	$nerdFonts = $Configuration.NerdFonts
-	$defaultFontName = $Configuration.DefaultNerdFont
+	$defaultFontName = Get-ConfigSetting -Path 'DefaultNerdFont'
+	$fontsFolder = Get-ConfigSetting -Path 'Universal.Fonts'
 	$targetFontName = ""
 
 	$fontOptions = @(Get-OrderedNames $nerdFonts)
@@ -73,7 +74,7 @@ function Configure-NerdFont {
 
 	Write-LogTitle "Configuring $($targetFontName) Nerd Font"
 
-	$existingFonts = Get-ChildItem -Path $Configuration.Universal.Fonts -ErrorAction SilentlyContinue |
+	$existingFonts = Get-ChildItem -Path $fontsFolder -ErrorAction SilentlyContinue |
 		Where-Object { $_.Name -like "$($fontSearchPattern).ttf" -or $_.Name -like "$($fontSearchPattern).otf" }
 
 	$registryFonts = Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts" -ErrorAction SilentlyContinue |
@@ -102,7 +103,7 @@ function Configure-NerdFont {
 		$FontsFolder = 0x14
 		$Destination = $Shell.Namespace($FontsFolder)
 		foreach ($fontFile in $fontFiles) {
-			$destinationPath = Join-Path -Path $Configuration.Universal.Fonts -ChildPath $fontFile.Name
+			$destinationPath = Join-Path -Path $fontsFolder -ChildPath $fontFile.Name
 
 			if (Test-Path $destinationPath) {
 				Write-LogWarning "Skipping existing font file: $($fontFile.Name)"

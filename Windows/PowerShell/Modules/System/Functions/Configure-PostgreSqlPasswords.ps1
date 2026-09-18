@@ -37,12 +37,13 @@ function Configure-PostgreSqlPasswords {
 	Write-LogTitle "Configuring PostgreSQL password"
 
 	if ($Auto -or (-not $DefaultOrCurrentPassword -and -not $NewPassword)) {
-		if (-not (Confirm-ConfigValue $Configuration.PostgreSqlPasswords "PostgreSqlPasswords not configured - nothing to change!")) {
+		$postgreSqlPasswords = Get-ConfigSetting -Path 'PostgreSqlPasswords'
+		if (-not (Confirm-ConfigValue $postgreSqlPasswords "PostgreSqlPasswords not configured - nothing to change!")) {
 			return
 		}
 
-		$DefaultOrCurrentPassword = $Configuration.PostgreSqlPasswords.DefaultOrCurrent
-		$NewPassword = $Configuration.PostgreSqlPasswords.New
+		$DefaultOrCurrentPassword = $postgreSqlPasswords.DefaultOrCurrent
+		$NewPassword = $postgreSqlPasswords.New
 
 		Write-LogStep "=> Using configuration!"
 	}

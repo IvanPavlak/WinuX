@@ -30,7 +30,7 @@ function Clear-WhatsAppLocalStorage {
 		Write-LogWarning "WhatsApp is already closed!"
 	}
 
-	$whatsAppLocalStoragePath = $Configuration.Universal.WhatsAppLocalStoragePath
+	$whatsAppLocalStoragePath = Get-ConfigSetting -Path 'Universal.WhatsAppLocalStoragePath'
 
 	if (-not (Test-Path -Path $whatsAppLocalStoragePath)) {
 		Write-LogWarning "WhatsApp Storage is already cleared!"

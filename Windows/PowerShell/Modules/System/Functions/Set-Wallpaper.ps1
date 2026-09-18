@@ -69,9 +69,9 @@ function Set-Wallpaper {
 			Write-LogDebug " VirtualDesktop module not available" -Style Step
 		}
 
-		$WallpaperStyles = $Configuration.WallpaperStyles
-		$WallpaperDarkSettings = $Configuration.WallpaperDarkSettings
-		$WallpaperLightSettings = $Configuration.WallpaperLightSettings
+		$WallpaperStyles = Get-ConfigSetting -Path 'WallpaperStyles'
+		$WallpaperDarkSettings = Get-ConfigSetting -Path 'WallpaperDarkSettings'
+		$WallpaperLightSettings = Get-ConfigSetting -Path 'WallpaperLightSettings'
 
 		if (-not ([System.Management.Automation.PSTypeName]'WallpaperModule.Params').Type) {
 			try {
@@ -405,19 +405,11 @@ function Set-Wallpaper {
 						try {
 							Write-LogDebug " VirtualDesktop module available, getting desktop info..." -Style Step
 
-							$currentDesktop = Invoke-WithRetry -ScriptBlock {
-								Get-CurrentDesktop
-							} -MaxAttempts 3 -InitialDelayMs 200
-
-							$originalDesktopIndex = Invoke-WithRetry -ScriptBlock {
-								Get-DesktopIndex $currentDesktop
-							} -MaxAttempts 3 -InitialDelayMs 200
+							$originalDesktopIndex = Get-CurrentVirtualDesktopIndex
 
 							Write-LogDebug " Current desktop index: $originalDesktopIndex" -Style Step
 
-							$allDesktops = Invoke-WithRetry -ScriptBlock {
-								Get-DesktopList
-							} -MaxAttempts 3 -InitialDelayMs 200
+							$allDesktops = @(Invoke-VirtualDesktopOperation -Operation { Get-DesktopList } -Label 'listing virtual desktops')
 
 							$desktopCount = ($allDesktops | Measure-Object).Count
 
@@ -431,9 +423,11 @@ function Set-Wallpaper {
 										$desktopNumber = $desktop.Number
 										Write-LogDebug " Switching to virtual desktop #$desktopNumber..." -Style Step
 
-										Invoke-WithRetry -ScriptBlock {
-											Switch-Desktop -Desktop $desktopNumber -ErrorAction Stop | Out-Null
-										} -MaxAttempts 3 -InitialDelayMs 200
+										# The wallpaper is painted on whichever desktop is showing, so only a
+										# confirmed switch may go on.
+										if (-not (Switch-VirtualDesktop -Index $desktopNumber)) {
+											throw "Desktop [$desktopNumber] did not come on screen"
+										}
 										Start-Sleep -Milliseconds 200
 
 										# Recreate COM object so it operates in the context of the newly active desktop
@@ -481,9 +475,7 @@ function Set-Wallpaper {
 								Write-LogDebug " Switching back to original desktop #$originalDesktopIndex..." -Style Step
 
 								try {
-									Invoke-WithRetry -ScriptBlock {
-										Switch-Desktop -Desktop $originalDesktopIndex -ErrorAction Stop | Out-Null
-									} -MaxAttempts 3 -InitialDelayMs 200
+									[void](Switch-VirtualDesktop -Index $originalDesktopIndex)
 								}
 								catch {
 									if ($_.Exception.Message -match 'RPC') { throw }
@@ -623,19 +615,11 @@ function Set-Wallpaper {
 					Write-LogDebug " Single wallpaper mode - VirtualDesktop module available" -Style Step
 
 					# Retry VirtualDesktop module commands to handle RPC initialization delays
-					$currentDesktop = Invoke-WithRetry -ScriptBlock {
-						Get-CurrentDesktop
-					} -MaxAttempts 3 -InitialDelayMs 200
-
-					$originalDesktopIndex = Invoke-WithRetry -ScriptBlock {
-						Get-DesktopIndex $currentDesktop
-					} -MaxAttempts 3 -InitialDelayMs 200
+					$originalDesktopIndex = Get-CurrentVirtualDesktopIndex
 
 					Write-LogDebug " Current desktop index: $originalDesktopIndex" -Style Step
 
-					$allDesktops = Invoke-WithRetry -ScriptBlock {
-						Get-DesktopList
-					} -MaxAttempts 3 -InitialDelayMs 200
+					$allDesktops = @(Invoke-VirtualDesktopOperation -Operation { Get-DesktopList } -Label 'listing virtual desktops')
 
 					$desktopCount = ($allDesktops | Measure-Object).Count
 
@@ -649,9 +633,11 @@ function Set-Wallpaper {
 								$desktopNumber = $desktop.Number
 								Write-LogDebug " Switching to desktop #$desktopNumber..." -Style Step
 
-								Invoke-WithRetry -ScriptBlock {
-									Switch-Desktop -Desktop $desktopNumber -ErrorAction Stop | Out-Null
-								} -MaxAttempts 3 -InitialDelayMs 200
+								# The wallpaper is painted on whichever desktop is showing, so only a
+								# confirmed switch may go on.
+								if (-not (Switch-VirtualDesktop -Index $desktopNumber)) {
+									throw "Desktop [$desktopNumber] did not come on screen"
+								}
 								Start-Sleep -Milliseconds 10
 
 								Write-LogDebug " Calling SystemParametersInfo for desktop #$desktopNumber with wallpaper: $wallpaper" -Style Step
@@ -670,9 +656,7 @@ function Set-Wallpaper {
 						Write-LogDebug " Switching back to original desktop #$originalDesktopIndex..." -Style Step
 
 						try {
-							Invoke-WithRetry -ScriptBlock {
-								Switch-Desktop -Desktop $originalDesktopIndex -ErrorAction Stop | Out-Null
-							} -MaxAttempts 3 -InitialDelayMs 200
+							[void](Switch-VirtualDesktop -Index $originalDesktopIndex)
 						}
 						catch {
 							if ($_.Exception.Message -match 'RPC') { throw }

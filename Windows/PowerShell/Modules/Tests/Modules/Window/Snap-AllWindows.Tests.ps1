@@ -43,15 +43,14 @@ BeforeAll {
 	function Get-WindowInsetPercent { }
 	function Invoke-MultiZoneWindowSnap { param([IntPtr]$WindowHandle, [int]$ExpectedX, [int]$ExpectedY, [int]$ExpectedWidth, [int]$ExpectedHeight, [string]$WindowTitle, [int]$MaxAttempts, [double]$InsetPercent) }
 	function Invoke-SingleZoneWindowSnap { param([IntPtr]$WindowHandle, [int]$TargetX, [int]$TargetY, [int]$TargetWidth, [int]$TargetHeight, [string]$WindowTitle, [int]$MaxAttempts, [double]$InsetPercent) }
-	function Switch-Desktop { [CmdletBinding()] param($Desktop) }
-	function Wait-DesktopSwitch { [CmdletBinding()] param([int]$TargetDesktopIndex, [int]$TimeoutMs, [int]$PollIntervalMs) }
-	function Get-DesktopFromWindow { [CmdletBinding()] param($Hwnd) }
-	function Get-DesktopIndex { [CmdletBinding()] param($Desktop) }
-	function Reset-VirtualDesktopState { }
+	function Switch-VirtualDesktop { param([int]$Index, [int]$TimeoutMs, [int]$MaxAttempts) $true }
+	function Get-CurrentVirtualDesktopIndex { 0 }
 	function Move-WindowToVirtualDesktop { [CmdletBinding()] param([IntPtr]$WindowHandle, [int]$DesktopNumber) }
-	function Get-WindowDesktopIndex { param([IntPtr]$WindowHandle) }
+	function Get-WindowDesktopIndex { param([IntPtr]$WindowHandle) -1 }
 	function Get-CachedMonitors { }
 	function Clear-WindowCache { }
+	# The enumeration seam Snap-AllWindows reads through; here it is the live native list.
+	function Get-CachedWindows { @([WindowModule.Native]::GetAllWindows()) }
 	function Clear-MonitorCache { }
 	function Resolve-PositionedWindowHandle { param($WindowState) }
 	function Resize-Windows { param([IntPtr]$WindowHandle, [int]$TargetX, [int]$TargetY, [int]$TargetWidth, [int]$TargetHeight, [double]$InsetPercent) }
@@ -98,17 +97,14 @@ Describe "Snap-AllWindows" {
 		Mock Get-WindowInsetPercent { 0 }
 		Mock Reset-KeyboardModifiers { @() }
 		Mock Get-Process { @([PSCustomObject]@{ ProcessName = 'PowerToys.FancyZones' }) }
-		Mock Switch-Desktop { }
-		Mock Wait-DesktopSwitch { $true }
+		Mock Switch-VirtualDesktop { $true }
 		Mock Clear-WindowCache { }
 		Mock Clear-MonitorCache { }
 		Mock Get-CachedMonitors { @([PSCustomObject]@{ Bounds = [PSCustomObject]@{ Left = -100000; Top = -100000; Right = 100000; Bottom = 100000 } }) }
-		Mock Get-DesktopFromWindow { 'desktop' }
 		# The window reports the desktop being processed, so no realignment move is needed.
-		Mock Get-DesktopIndex { $script:ProcessingDesktopIndex }
 		Mock Move-WindowToVirtualDesktop { $true }
-		# Post-pass sweep: "cannot tell" leaves every window alone.
-		Mock Get-WindowDesktopIndex { -1 }
+		# Every tracked window sits on the desktop being processed (alignment check and sweep).
+		Mock Get-WindowDesktopIndex { $script:ProcessingDesktopIndex }
 		Mock Resize-Windows { }
 		Mock Resolve-PositionedWindowHandle { $null }
 		Mock Invoke-MultiZoneWindowSnap { [PSCustomObject]@{ Verified = $true; Method = 'KeyboardSnap'; Attempts = 1; X = 0; Y = 0; Width = 1; Height = 1; Error = $null } }
@@ -168,7 +164,7 @@ Describe "Snap-AllWindows" {
 			# Modifiers and the mouse button are released before the reset, the desktop is
 			# re-confirmed after it, and the window goes back to its inset for round two.
 			Should -Invoke Reset-KeyboardModifiers -Times 1 -Exactly -ParameterFilter { $IncludeMouseButton }
-			Should -Invoke Switch-Desktop -Times 2 -Exactly -ParameterFilter { $Desktop -eq 0 }
+			Should -Invoke Switch-VirtualDesktop -Times 2 -Exactly -ParameterFilter { $Index -eq 0 }
 			Should -Invoke Resize-Windows -Times 1 -Exactly -ParameterFilter { $WindowHandle -eq $script:TestHandle }
 			$script:LastSnapAllWindowsResult.SnappedCount | Should -Be 1
 			@($script:LastSnapAllWindowsResult.FailedWindows).Count | Should -Be 0
@@ -244,7 +240,7 @@ Describe "Snap-AllWindows" {
 			Mock Invoke-MultiZoneWindowSnap { [PSCustomObject]@{ Verified = $false; Method = 'None'; Attempts = 3; X = $null; Y = $null; Width = $null; Height = $null; Error = $null } }
 			$script:switchWaits = 0
 			# First confirmation (the pass entering the desktop) succeeds, the post-reset one fails.
-			Mock Wait-DesktopSwitch { $script:switchWaits++; $script:switchWaits -lt 2 }
+			Mock Switch-VirtualDesktop { $script:switchWaits++; $script:switchWaits -lt 2 }
 
 			Snap-AllWindows -DesktopOffset 0 -ZoneReset $script:zoneReset
 
@@ -263,8 +259,8 @@ Describe "Snap-AllWindows" {
 			Snap-AllWindows -DesktopOffset 0 -DesktopNumbers 2 -ZoneReset $script:zoneReset
 
 			# Only desktop 2 (internal index 1) is switched to and snapped.
-			Should -Invoke Switch-Desktop -Times 1 -Exactly
-			Should -Invoke Switch-Desktop -Times 1 -Exactly -ParameterFilter { $Desktop -eq 1 }
+			Should -Invoke Switch-VirtualDesktop -Times 1 -Exactly
+			Should -Invoke Switch-VirtualDesktop -Times 1 -Exactly -ParameterFilter { $Index -eq 1 }
 			Should -Invoke Invoke-MultiZoneWindowSnap -Times 1 -Exactly
 			$script:LastSnapAllWindowsResult.SnappedCount | Should -Be 1
 		}

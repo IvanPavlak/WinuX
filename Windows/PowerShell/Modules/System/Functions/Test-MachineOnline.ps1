@@ -90,7 +90,7 @@ function Test-MachineOnline {
 	if (-not $targetAddress) {
 		# Confirm-ConfigValue, not truthiness: the empty base ships WakeOnLanConfig = @(),
 		# and an empty collection is truthy, so a bare -not guard would pass it through.
-		$wolConfig = $Configuration.WakeOnLanConfig
+		$wolConfig = Get-ConfigSetting -Path 'WakeOnLanConfig'
 		if (-not (Confirm-ConfigValue $wolConfig "Wake-on-LAN not configured (WakeOnLanConfig) - cannot test reachability!" -Quiet:$Quiet)) {
 			return $false
 		}

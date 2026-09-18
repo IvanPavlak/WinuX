@@ -13,14 +13,13 @@ BeforeAll {
 	. "$FunctionsPath\Test-AppliedFancyZonesLayouts.ps1"
 	. "$FunctionsPath\Send-FancyZonesLayoutShortcut.ps1"
 
-	# VirtualDesktop module cmdlets and the retry helpers as stubs, so Mock can attach on a machine
-	# (or CI runner) where the module is absent. The file-mode context mocks every one of them.
-	function Get-CurrentDesktop { }
-	function Get-DesktopIndex { param($Desktop) }
+	# The Window module's virtual-desktop adapter and the one raw cmdlet that still goes through
+	# the operation seam (Get-DesktopList) as stubs, so Mock can attach on a machine (or CI
+	# runner) where the VirtualDesktop module is absent. The file-mode context mocks every one.
+	function Get-CurrentVirtualDesktopIndex { 0 }
 	function Get-DesktopList { }
-	function Switch-Desktop { param($Desktop) }
-	function Invoke-WithRetry { param([scriptblock]$ScriptBlock, $MaxAttempts, $InitialDelayMs, $OnRetry) & $ScriptBlock }
-	function Wait-DesktopSwitch { param($TargetDesktopIndex, $TimeoutMs, $PollIntervalMs) $true }
+	function Switch-VirtualDesktop { param([int]$Index, [int]$TimeoutMs, [int]$MaxAttempts) $true }
+	function Invoke-VirtualDesktopOperation { param([scriptblock]$Operation, [string]$Label, [int]$MaxAttempts, [int]$InitialDelayMs, [switch]$Probe) & $Operation }
 }
 
 Describe "Apply-FancyZones" {
@@ -205,12 +204,10 @@ Describe "Apply-FancyZones" {
 			$script:D2 = '{22222222-2222-2222-2222-222222222222}'
 			$script:D3 = '{33333333-3333-3333-3333-333333333333}'
 
-			Mock Get-CurrentDesktop { 'desktop-object' }
-			Mock Get-DesktopIndex { 0 }
+			Mock Get-CurrentVirtualDesktopIndex { 0 }
 			Mock Get-DesktopList { @([PSCustomObject]@{ Number = 0; Name = 'Desktop 1' }, [PSCustomObject]@{ Number = 1; Name = 'Desktop 2' }) }
-			Mock Invoke-WithRetry { param([scriptblock]$ScriptBlock, $MaxAttempts, $InitialDelayMs, $OnRetry) & $ScriptBlock }
-			Mock Switch-Desktop { }
-			Mock Wait-DesktopSwitch { $true }
+			Mock Invoke-VirtualDesktopOperation { param([scriptblock]$Operation, [string]$Label, [int]$MaxAttempts, [int]$InitialDelayMs, [switch]$Probe) & $Operation }
+			Mock Switch-VirtualDesktop { $true }
 			Mock Get-VirtualDesktopGuid {
 				param($DesktopIndex)
 				switch ($DesktopIndex) { 0 { $script:D1 } 1 { $script:D2 } 2 { $script:D3 } default { $null } }
@@ -272,7 +269,7 @@ Describe "Apply-FancyZones" {
 			# One probe shortcut on the current desktop, verified against FancyZones' own save.
 			Should -Invoke Send-FancyZonesLayoutShortcut -Times 1 -Exactly -ParameterFilter { $LayoutNumber -eq 1 }
 			Should -Invoke Test-AppliedFancyZonesLayouts -Times 1 -Exactly -ParameterFilter { $null -ne $WaitForWriteAfterUtc }
-			Should -Invoke Switch-Desktop -Times 0 -Exactly
+			Should -Invoke Switch-VirtualDesktop -Times 0 -Exactly
 			@($results | Where-Object { $_.Status -eq 'Layout Written' }).Count | Should -Be 2
 			@($results | Where-Object { $_.Status -eq 'Shortcut Sent' }).Count | Should -Be 0
 		}
@@ -286,8 +283,8 @@ Describe "Apply-FancyZones" {
 			# returns to the original desktop and re-applies there as it always did.
 			@($results | Where-Object { $_.Status -eq 'Layout Written' }).Count | Should -Be 1
 			@($results | Where-Object { $_.Status -eq 'Shortcut Sent' -and $_.DesktopNumber -eq 2 }).Count | Should -Be 1
-			Should -Invoke Switch-Desktop -Times 1 -Exactly -ParameterFilter { $Desktop -eq 1 }
-			Should -Invoke Switch-Desktop -Times 2 -Exactly
+			Should -Invoke Switch-VirtualDesktop -Times 1 -Exactly -ParameterFilter { $Index -eq 1 }
+			Should -Invoke Switch-VirtualDesktop -Times 2 -Exactly
 			Should -Invoke Send-FancyZonesLayoutShortcut -Times 3 -Exactly
 		}
 
@@ -301,7 +298,7 @@ Describe "Apply-FancyZones" {
 
 			@($results | Where-Object { $_.Status -eq 'Layout Written' }).Count | Should -Be 0
 			# Both desktops switched to, plus the switch back; probe + two desktops + the return re-apply.
-			Should -Invoke Switch-Desktop -Times 3 -Exactly
+			Should -Invoke Switch-VirtualDesktop -Times 3 -Exactly
 			Should -Invoke Send-FancyZonesLayoutShortcut -Times 4 -Exactly
 			@($results | Where-Object { $_.Status -eq 'Shortcut Sent' }).Count | Should -Be 3
 		}
@@ -313,7 +310,7 @@ Describe "Apply-FancyZones" {
 
 			Should -Invoke Write-AppliedFancyZonesLayouts -Times 0 -Exactly
 			Should -Invoke Test-AppliedFancyZonesLayouts -Times 0 -Exactly
-			Should -Invoke Switch-Desktop -Times 3 -Exactly
+			Should -Invoke Switch-VirtualDesktop -Times 3 -Exactly
 			@($results | Where-Object { $_.Status -eq 'Shortcut Sent' }).Count | Should -Be 3
 		}
 
@@ -323,7 +320,7 @@ Describe "Apply-FancyZones" {
 			$script:writeCalls[0].Force | Should -BeTrue
 			Should -Invoke Get-AppliedFancyZonesState -Times 0 -Exactly
 			Should -Invoke Send-FancyZonesLayoutShortcut -Times 1 -Exactly
-			Should -Invoke Switch-Desktop -Times 0 -Exactly
+			Should -Invoke Switch-VirtualDesktop -Times 0 -Exactly
 			@($results | Where-Object { $_.Status -eq 'Layout Written' }).Count | Should -Be 2
 		}
 
@@ -333,7 +330,7 @@ Describe "Apply-FancyZones" {
 			$results = @(Apply-FancyZones -MonitorConfig $script:monitorConfig)
 
 			Should -Invoke Write-AppliedFancyZonesLayouts -Times 0 -Exactly
-			Should -Invoke Switch-Desktop -Times 3 -Exactly
+			Should -Invoke Switch-VirtualDesktop -Times 3 -Exactly
 			@($results | Where-Object { $_.Status -eq 'Shortcut Sent' }).Count | Should -Be 3
 		}
 
@@ -347,7 +344,7 @@ Describe "Apply-FancyZones" {
 			@($targets | ForEach-Object LayoutKey) | Should -Be @(1, 2)
 			# One switch, to the first owned desktop for the probe - where the shortcut pass would
 			# have ended anyway - and none afterwards.
-			Should -Invoke Switch-Desktop -Times 1 -Exactly -ParameterFilter { $Desktop -eq 1 }
+			Should -Invoke Switch-VirtualDesktop -Times 1 -Exactly -ParameterFilter { $Index -eq 1 }
 			Should -Invoke Send-FancyZonesLayoutShortcut -Times 1 -Exactly
 			@($results | Where-Object { $_.Status -eq 'Layout Written' }).Count | Should -Be 2
 		}

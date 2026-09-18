@@ -67,7 +67,7 @@ function Start-Containers {
 		return
 	}
 
-	$composeStacks = $Configuration.DockerComposeFiles
+	$composeStacks = Get-ConfigSetting -Path 'DockerComposeFiles'
 	if (-not $composeStacks -or $composeStacks.Count -eq 0) {
 		Write-LogWarning "No Docker Compose stacks configured in Configuration.DockerComposeFiles!"
 		return

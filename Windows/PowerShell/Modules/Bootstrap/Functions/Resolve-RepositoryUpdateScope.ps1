@@ -34,7 +34,7 @@ function Resolve-RepositoryUpdateScope {
 	[OutputType([hashtable])]
 	param()
 
-	$scopeMap = $global:Configuration.BootstrapConfig.RepositoryUpdateScope
+	$scopeMap = Get-ConfigSetting -Path 'BootstrapConfig.RepositoryUpdateScope'
 
 	$scopeValue = if ($scopeMap -and $scopeMap[$global:MachineType]) {
 		$scopeMap[$global:MachineType]

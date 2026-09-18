@@ -1,6 +1,6 @@
 # Get-BrowserWindowsByTarget
 
-Enumerates visible top-level windows (via the native `Win32BrowserHelper` type) for the supplied browser process IDs and returns only the ones whose titles match the provided regex.
+Reads the Window module's window enumeration and returns every visible, titled window owned by the supplied browser process IDs, flagging the ones whose title matches the brand pattern.
 
 ## Configuration Keys
 

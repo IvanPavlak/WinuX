@@ -29,6 +29,10 @@ function Wait-ConsoleReflow {
 	.PARAMETER PollIntervalMilliseconds
 		Pause between two reads. Default 10.
 
+	.PARAMETER Clock
+		The wait clock (New-WaitClock) to read and sleep through. Defaults to a real one; tests
+		hand in a fake.
+
 	.OUTPUTS
 		[pscustomobject] with Width and Height - the changed size, or -Before's values when
 		nothing changed within the timeout.
@@ -54,20 +58,28 @@ function Wait-ConsoleReflow {
 		[int]$TimeoutMilliseconds,
 
 		[ValidateRange(1, 1000)]
-		[int]$PollIntervalMilliseconds = 10
+		[int]$PollIntervalMilliseconds = 10,
+
+		[Parameter()]
+		[AllowNull()]
+		[object]$Clock
 	)
 
-	$timer = [Diagnostics.Stopwatch]::StartNew()
-	$current = Get-ConsoleWindowSize
+	if ($null -eq $Clock) { $Clock = New-WaitClock }
+	$startedAt = $Clock.ElapsedMs()
 
-	while (($current.Width -eq $Before.Width -and $current.Height -eq $Before.Height) -and
-		$timer.ElapsedMilliseconds -lt $TimeoutMilliseconds) {
-		Start-Sleep -Milliseconds $PollIntervalMilliseconds
-		$current = Get-ConsoleWindowSize
+	# The last size read lands in this table (a shared object survives the condition's child
+	# scope where a local would not), so a timeout still returns what the console said last.
+	$state = @{ Current = $null }
+
+	$reflowed = Wait-Until -TimeoutMs $TimeoutMilliseconds -PollIntervalMs $PollIntervalMilliseconds -Clock $Clock -Condition {
+		$state.Current = Get-ConsoleWindowSize
+		return ($state.Current.Width -ne $Before.Width -or $state.Current.Height -ne $Before.Height)
 	}
+	$current = $state.Current
 
-	if ($current.Width -ne $Before.Width -or $current.Height -ne $Before.Height) {
-		Write-LogDebug "[Wait-ConsoleReflow] window $($Before.Width)x$($Before.Height) => $($current.Width)x$($current.Height) after $($timer.ElapsedMilliseconds)ms"
+	if ($reflowed) {
+		Write-LogDebug "[Wait-ConsoleReflow] window $($Before.Width)x$($Before.Height) => $($current.Width)x$($current.Height) after $($Clock.ElapsedMs() - $startedAt)ms"
 	}
 	else {
 		Write-LogDebug "[Wait-ConsoleReflow] window still $($Before.Width)x$($Before.Height) after ${TimeoutMilliseconds}ms - no reflow"

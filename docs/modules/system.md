@@ -46,7 +46,7 @@ Clear-WhatsAppLocalStorage
 - **Parameters:** -WindowsToClose
 - **Usage:** `Close-BrowserWindows -WindowsToClose $windows`
 
-Iterates over each supplied window object and posts `WM_CLOSE` (`0x0010`) to its native `Handle` via `[Win32BrowserHelper]::PostMessage`. Because the message is posted directly to each handle, the foreground is never touched, so windows excluded upstream are never accidentally closed by a misfired keystroke.
+Iterates over each supplied window object and posts `WM_CLOSE` to its native `Handle` through the Window module's `Close-Window`. Because the message is posted directly to each handle, the foreground is never touched, so windows excluded upstream are never accidentally closed by a misfired keystroke.
 
 | Parameter         | Type       | Default | Description                                                                                                        |
 | ----------------- | ---------- | ------- | ------------------------------------------------------------------------------------------------------------------ |
@@ -267,11 +267,11 @@ Get-BrowserTitlePattern -BrowserName "Tor"
 
 ## [Get-BrowserWindowsByTarget](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Get-BrowserWindowsByTarget.ps1)
 
-- **Description:** Enumerates visible top-level windows (via the native `Win32BrowserHelper` type) for the supplied browser process IDs and returns only the ones whose titles match the provided regex. Used to distinguish browser main windows from child/helper processes (GPU / renderer / utility) that do not own a top-level window.
+- **Description:** Reads the Window module's window enumeration (`Get-CachedWindows`, which already keeps only visible, titled top-level windows) and returns every window owned by the supplied browser process IDs; `-TitlePattern` sets a `MatchesPattern` flag on each rather than filtering. Used to distinguish browser main windows from child/helper processes (GPU / renderer / utility) that do not own a top-level window.
 - **Parameters:** -TargetPids, -TitlePattern
 - **Usage:** `Get-BrowserWindowsByTarget -TargetPids @(1234) -TitlePattern "Google Chrome"`
 
-Walks every top-level window with `Win32BrowserHelper::EnumWindows`, maps each handle back to its owning process ID, and keeps a window only when its PID is in `-TargetPids`, the window is visible, and its title matches `-TitlePattern`. Each kept window is returned as a `PSCustomObject` with `Handle` and `Title` properties.
+Filters `Get-CachedWindows` by owning process ID and returns each match as a `PSCustomObject` with `Handle`, `Title`, `ProcessId` and `MatchesPattern` properties. Titles come back as Unicode, so the zero-width space Edge embeds in "Microsoft Edge" survives the round trip and the brand pattern can match it.
 
 | Parameter       | Type     | Description                                                      |
 | --------------- | -------- | ---------------------------------------------------------------- |
@@ -433,7 +433,7 @@ if ($cell) { $pixelWidth = 36 * $cell.Width }
 
 ## [Get-VisibleWindowProcess](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Get-VisibleWindowProcess.ps1)
 
-- **Description:** Lists every process that owns at least one visible, titled application window - the discovery step behind `Terminate-AllProcessesWithVisibleWindows` and the `Kill-All` survivor audit. It answers "which processes have a window on screen" from the window side: every visible, titled top-level window is enumerated (`EnumWindows`, through the Window module's `Get-CachedWindows` after a cache clear) and grouped by owning process, so a process is a candidate as soon as any of its windows is on screen. Shell windows (the same title list `Move-Windows` and `Center-Windows` skip) and shell processes that are the desktop or host other apps' windows (`explorer`, `ApplicationFrameHost`, `TextInputHost`, `ShellExperienceHost`, `StartMenuExperienceHost`, `SearchHost`, `SearchApp`, `LockApp`, `sihost`, `dwm`) are never returned. Without the Window module it falls back to `Get-Process` and `MainWindowTitle` with the same shell filter.
+- **Description:** Lists every process that owns at least one visible, titled application window - the discovery step behind `Terminate-AllProcessesWithVisibleWindows` and the `Kill-All` survivor audit. It answers "which processes have a window on screen" from the window side: every visible, titled top-level window is enumerated (`EnumWindows`, through the Window module's `Get-CachedWindows` after a cache clear) and grouped by owning process, so a process is a candidate as soon as any of its windows is on screen. Shell windows (the same title list `Move-Windows` and `Center-Windows` skip) and the shell processes `Get-ShellProcessName` lists (the desktop itself and the hosts of other apps' windows) are never returned. Without the Window module it falls back to `Get-Process` and `MainWindowTitle` with the same shell filter.
 - **Usage:** `Get-VisibleWindowProcess`, `Get-VisibleWindowProcess | Where-Object { $_.WindowTitles.Count -gt 1 }`
 
 This replaces the classic `Get-Process | Where-Object MainWindowTitle` test, which skipped windows at random. .NET's `MainWindowHandle` is the FIRST visible, unowned top-level window of the process in z-order, titled or not: a process whose untitled helper window happened to sit above its real window (Electron and Chromium apps create such windows) reported an empty `MainWindowTitle` and was passed over, and because z-order follows focus history the same app was seen on one run and missed on the next. Packaged (UWP) apps were missed the same way, since their visible frames belong to `ApplicationFrameHost` while the app's own process reports no main window. Enumerating the windows sidesteps both. Each returned object carries `ProcessName`, `Id`, `WindowTitles` (every visible titled window of the process), `MainWindowTitle` (the first of those - what exclusion matching and log lines use) and `Source` (`EnumWindows` or `MainWindowTitle`).
@@ -485,18 +485,6 @@ Get-PSReadLineKeyHandler -Bound | Where-Object Key -in UpArrow, DownArrow
 ```
 
 **See also:** [Initialize-OhMyPosh](#initialize-ohmyposh), the [`PSReadLine` section](../configuration/configuration-reference.md#psreadline-interactive-shell-options) of the configuration reference, and the [configuration guide](../configuration/guides/system/Initialize-PSReadLine.md).
-
-## [Initialize-Win32BrowserHelperType](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Initialize-Win32BrowserHelperType.ps1)
-
-- **Description:** Ensures the `Win32BrowserHelper` C# interop type is available. Adds the type used by browser window discovery and graceful window closure, enumerating visible browser windows and posting WM_CLOSE messages. The type is added only once per PowerShell session.
-- **Usage:** `Initialize-Win32BrowserHelperType`
-
-Adds the Win32 interop type only once per session, exposing the native `user32.dll` calls (`EnumWindows`, `GetWindowThreadProcessId`, `GetWindowText`, `GetWindowTextLength`, `IsWindowVisible`, and `PostMessage`) used by `Get-BrowserWindowsByTarget` and `Close-BrowserWindows`. The text APIs marshal as Unicode (`CharSet.Unicode`): the ANSI default mangles non-ANSI title characters to `?` - including the zero-width space (U+200B) Edge embeds in "Microsoft Edge" window titles - which would break title-pattern matching against those windows.
-
-```powershell
-# Load the Win32 browser helper type if it has not already been added
-Initialize-Win32BrowserHelperType
-```
 
 ## [Initialize-WSLEnvironment](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Initialize-WSLEnvironment.ps1)
 
@@ -775,9 +763,9 @@ Reload-WinuXModules
 
 In default mode it removes every desktop except desktop `0`. In `-EmptyOnly` mode it builds the set of desktops that have at least one visible window and removes only the empty ones, iterating right-to-left so remaining indices stay stable; if desktop 0 is empty but others have windows, desktop 0 is removed last and Windows shifts the rest left. Window detection prefers `Get-WindowHandle` (EnumWindows-based, from the Window module) so it captures every visible window - including multiple browser or VSCode windows - and falls back to `Get-Process` `MainWindowHandle` when that module isn't loaded, though the fallback sees only one window per process and may treat desktops with secondary windows as empty.
 
-Before cleanup it runs `Test-RpcServerHealth -Probe` so the preflight verifies this session's live VirtualDesktop COM state rather than only checking that Windows RPC services are running, rehydrating VirtualDesktop cmdlets if preflight recovery unloaded the module. Desktop counts come from `Get-DesktopCount`, not `Get-DesktopList`: only the count is ever used, and the list pays a registry name lookup plus a wallpaper query per desktop over COM for data this function discards. Operations against `Get-DesktopCount`, `Get-DesktopFromWindow`, `Get-DesktopIndex`, and `Remove-Desktop` run through the shared RPC retry helpers with exponential backoff; when an operation fails with the RPC-unavailable error family (classified via `Test-RpcUnavailableError`, which also catches wrapped and localized errors), the session's VirtualDesktop COM proxies are reconnected via `Reset-VirtualDesktopState` before the next attempt so stale sessions recover without a fresh shell.
+Every desktop-manager call runs through the Window module's seam, [Invoke-VirtualDesktopOperation](window.md#invoke-virtualdesktopoperation) (5 attempts / 250 ms initial delay): the first count carries `-Probe`, so the live RPC endpoint is verified and repaired once, up front, rather than only checking that Windows RPC services are running; an RPC failure during the cleanup (a stale COM session after heavy desktop churn or an Explorer restart, classified via `Test-RpcUnavailableError`, which also catches wrapped and localized errors) reconnects the session's COM proxies with `Reset-VirtualDesktopState` and retries with backoff inside the seam, so stale sessions recover without a fresh shell; any other error comes straight back. The function itself carries no retry or recovery block and calls `Reset-VirtualDesktopState` nowhere. Desktop counts come from `Get-DesktopCount`, not `Get-DesktopList`: only the count is ever used, and the list pays a registry name lookup plus a wallpaper query per desktop over COM for data this function discards.
 
-In `-EmptyOnly` mode the occupancy scan is retried as a whole rather than per window. A lookup that fails on its own merits - a window closed mid-scan, or a shell window such as *Windows Input Experience* that always answers `TYPE_E_ELEMENTNOTFOUND` - can never succeed on a retry, so it is skipped immediately; putting each one through the backoff ladder cost roughly 3.7 s per unplaceable window on every run, which is why one such window dominated the whole operation. Only a genuine RPC failure restarts the scan, after the ladder has reset the session's COM state, and if RPC is still unavailable once the ladder is exhausted the cleanup aborts and returns `$false` rather than treating unknowable occupancy as "empty". The scan also resolves each distinct desktop's index once instead of once per window (`Get-DesktopIndex` re-enumerates every desktop over COM on each call) and stops as soon as every desktop is known to hold a window.
+In `-EmptyOnly` mode the occupancy scan is retried as a whole rather than per window. A lookup that fails on its own merits - a window closed mid-scan, or a shell window such as *Windows Input Experience* that always answers `TYPE_E_ELEMENTNOTFOUND` - can never succeed on a retry, so it is skipped immediately; putting each one through the backoff ladder cost roughly 3.7 s per unplaceable window on every run, which is why one such window dominated the whole operation. Only a genuine RPC failure restarts the scan - the whole scan is one operation handed to the seam, which resets the session's COM state between attempts - and if RPC is still unavailable once the seam's attempts are exhausted the cleanup aborts and returns `$false` rather than treating unknowable occupancy as "empty". The scan also resolves each distinct desktop's index once instead of once per window (`Get-DesktopIndex` re-enumerates every desktop over COM on each call) and stops as soon as every desktop is known to hold a window.
 
 `-Index` is the third mode, and the one [Close-Workspace](workflow.md#close-workspace) uses: it removes exactly the 0-based indexes named, highest first so the remaining targets do not shift. It takes precedence over `-EmptyOnly`, skips an index that no longer exists, and still refuses to remove the last desktop. Supplying `-Index` with nothing usable in it (an empty array, or only negative values) removes **nothing** - the mode is chosen by whether `-Index` was passed, not by whether it resolved to anything, so asking for nothing can never fall through to the default mode and mean "remove every desktop". Unlike `-EmptyOnly` it does not care whether the desktop is occupied - Windows relocates whatever is still there to an adjacent desktop rather than closing it. That is deliberate: the one window a workspace teardown cannot close before removing its desktops is the shell it is running in, and when the workspace opened that shell its desktop is never empty at sweep time, so an `-EmptyOnly` pass would leave it stranded on a desktop nothing ever tidies.
 
@@ -1424,11 +1412,11 @@ Set-VisualEffects
 
 ## [Set-Wallpaper](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Set-Wallpaper.ps1)
 
-- **Description:** Sets the desktop wallpaper based on `MachineType` and theme. With `-Auto` it reads paths from `WallpaperDarkSettings`/`WallpaperLightSettings` in `Configuration.psd1` (selecting the entry for the current machine type, falling back to `Default`); without `-Auto` it presents an interactive picker of available wallpapers and styles. Supports multi-monitor configurations with per-monitor wallpaper and style assignment via the `IDesktopWallpaper` COM interface, automatically filtering out disconnected/phantom monitors so only active displays are configured. When the `VirtualDesktop` module is available it applies the wallpaper across all virtual desktops; otherwise only the current desktop. Wallpaper style (Fill, Fit, Stretch, Tile, Center, Span) is read from `WallpaperStyles`. Requires administrator privileges, uses COM retry logic for transient failures, and is idempotent - skipping when wallpaper, style, and tile values are already correct.
+- **Description:** Sets the desktop wallpaper based on `MachineType` and theme. With `-Auto` it reads paths from `WallpaperDarkSettings`/`WallpaperLightSettings` in `Configuration.psd1` (selecting the entry for the current machine type, falling back to `Default`); without `-Auto` it presents an interactive picker of available wallpapers and styles. Supports multi-monitor configurations with per-monitor wallpaper and style assignment via the `IDesktopWallpaper` COM interface, automatically filtering out disconnected/phantom monitors so only active displays are configured. When the `VirtualDesktop` module is available it applies the wallpaper across all virtual desktops, hopping through them with the Window module's [Switch-VirtualDesktop](window.md#switch-virtualdesktop) (confirmed switches, stale-session reconnect and backoff live in that seam, not here) and returning to the desktop read with [Get-CurrentVirtualDesktopIndex](window.md#get-currentvirtualdesktopindex); otherwise only the current desktop. Wallpaper style (Fill, Fit, Stretch, Tile, Center, Span) is read from `WallpaperStyles`. Requires administrator privileges, retries the `IDesktopWallpaper` COM calls for transient failures, and is idempotent - skipping when wallpaper, style, and tile values are already correct.
 - **Parameters:** -Auto, -Theme [Light | Dark | Auto]
 - **Usage:** `Set-Wallpaper -Auto`, `Set-Wallpaper -Auto -Theme Dark`, `Set-Wallpaper` (interactive)
 
-Requires administrator privileges. In `-Auto` mode the theme defaults to `Auto`, which detects the current system theme from the registry (`HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize\AppsUseLightTheme`), defaulting to `Dark` if detection fails. It then resolves the wallpaper entry for the current machine type, applying per-monitor images for multi-monitor configs or a single image otherwise, and propagates the result to every virtual desktop when the `VirtualDesktop` module is loaded. Without `-Auto`, it lists wallpapers from the WinuX Wallpapers folder and prompts for a wallpaper and a style (defaulting to `Fill`).
+Requires administrator privileges. In `-Auto` mode the theme defaults to `Auto`, which detects the current system theme from the registry (`HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize\AppsUseLightTheme`), defaulting to `Dark` if detection fails. It then resolves the wallpaper entry for the current machine type, applying per-monitor images for multi-monitor configs or a single image otherwise, and propagates the result to every virtual desktop when the `VirtualDesktop` module is loaded - each switch through `Switch-VirtualDesktop`, with no desktop retry logic of its own. Without `-Auto`, it lists wallpapers from the WinuX Wallpapers folder and prompts for a wallpaper and a style (defaulting to `Fill`).
 
 **The `Monitors` array does not have to match the display count.** Active displays are enumerated through `IDesktopWallpaper` and paired with the array by index; a display past the end of the array **cycles** back to the start, so a 2-entry array on 3 displays gives the third display the first entry, and a single warning reports the mismatch. Displays past the end were previously skipped in silence and kept whatever wallpaper they already had - no warning, no fallback. Cycling applies to all three per-monitor passes (the idempotency check, the initial apply, and the per-virtual-desktop reapply). Only an empty `Monitors` array leaves a display on the Windows default.
 
@@ -1684,20 +1672,6 @@ Terminate-WindowsTerminalTabs -OnlyCurrent -CloseWaitSeconds 5
 Set-LogLevel Verbose { Terminate-WindowsTerminalTabs }
 ```
 
-## [Test-BrowserWindowOpen](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Test-BrowserWindowOpen.ps1)
-
-- **Description:** Tells whether a window handle still refers to a live, visible window - the liveness probe `Wait-BrowserWindowsClosed` polls. A handle counts as open only while `IsWindow` AND `IsWindowVisible` both hold: a destroyed handle and a hidden window both read as closed, because browsers hide their window before tearing the process down and a `WM_CLOSE` that reached its target has done its job at that point. The `Win32BrowserHelper` type is created on demand through `Initialize-Win32BrowserHelperType`; a zero handle is never open.
-- **Parameters:** -Handle
-- **Usage:** `Test-BrowserWindowOpen -Handle $window.Handle`
-
-Kept as its own function so the wait loop's timing can be tested without a compiled user32 wrapper.
-
-```powershell
-if (Test-BrowserWindowOpen -Handle $window.Handle) { "still open" }
-```
-
-**See also:** [Wait-BrowserWindowsClosed](#wait-browserwindowsclosed), [Initialize-Win32BrowserHelperType](#initialize-win32browserhelpertype)
-
 ## [Test-FastfetchPanelOverflow](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Test-FastfetchPanelOverflow.ps1)
 
 - **Description:** Tells whether a fastfetch panel of the given size overflows a window of the given size - the fit rule `Invoke-Fastfetch` judges by, in one place. The panel overflows when it is wider than the window, or taller than the window minus one row for the line the cursor ends on and minus `-PromptReserve` rows for the upcoming prompt. A panel exactly as wide as the window fits. Pure: no console access, no side effects, returns `[bool]`.
@@ -1912,38 +1886,40 @@ Upgrade-All -PackageManager "WinGet", "Scoop"
 
 ## [Wait-BrowserWindowsClosed](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Wait-BrowserWindowsClosed.ps1)
 
-- **Description:** Waits for browser windows that were sent `WM_CLOSE` to actually disappear. `Close-BrowserWindows` POSTS the message, which is asynchronous - the call returns before the browser has even seen it - so `Terminate-AllBrowserProcesses` used to report success while a window was still standing (a "close all tabs?" or `beforeunload` dialog waiting for an answer, a download-in-progress prompt, a browser that had not processed the message yet). This polls the supplied handles through `Test-BrowserWindowOpen` until none is a live, visible window any more or the timeout expires, and returns the windows still standing so the caller can retry or report them.
-- **Parameters:** -Windows, -TimeoutMs (default 4000), -PollIntervalMs (default 100)
+- **Description:** Waits for browser windows that were sent `WM_CLOSE` to actually disappear. `Close-BrowserWindows` POSTS the message, which is asynchronous - the call returns before the browser has even seen it - so `Terminate-AllBrowserProcesses` used to report success while a window was still standing (a "close all tabs?" or `beforeunload` dialog waiting for an answer, a download-in-progress prompt, a browser that had not processed the message yet). This polls the supplied handles through `Test-WindowVisible` until none is a live, visible window any more or the timeout expires, and returns the windows still standing so the caller can retry or report them.
+- **Parameters:** -Windows, -TimeoutMs (default 4000), -PollIntervalMs (default 100), -Clock
 - **Usage:** `Wait-BrowserWindowsClosed -Windows $windowsToClose`, `Wait-BrowserWindowsClosed -Windows $survivors -TimeoutMs 2000`
 
-Only the windows still open on the previous poll are probed again, and an empty input returns immediately without touching user32. The default budget of four seconds is what a browser with many tabs needs to save its session and exit.
+Only the windows still open on the previous poll are probed again, and an empty input returns immediately without touching user32. The default budget of four seconds is what a browser with many tabs needs to save its session and exit. The poll is a `Wait-Until` that reads time and sleeps through the wait clock passed as `-Clock` (a real `New-WaitClock` by default), so a test injects a fake clock and asserts the exact poll count with no real waiting.
 
 | Parameter         | Description                                                                                    |
 | ----------------- | ---------------------------------------------------------------------------------------------- |
 | `-Windows`        | Window objects with a `Handle` property, as returned by `Get-BrowserWindowsByTarget`.           |
 | `-TimeoutMs`      | How long to wait for every window to go. Default `4000`.                                        |
 | `-PollIntervalMs` | Delay between checks. Default `100`.                                                            |
+| `-Clock`          | The wait clock (`New-WaitClock`) to read and sleep through. Defaults to a real one; tests hand in a fake. |
 
 ```powershell
 $survivors = Wait-BrowserWindowsClosed -Windows $windowsToClose
 if ($survivors) { Close-BrowserWindows -WindowsToClose $survivors }
 ```
 
-**See also:** [Terminate-AllBrowserProcesses](#terminate-allbrowserprocesses), [Test-BrowserWindowOpen](#test-browserwindowopen), [Close-BrowserWindows](#close-browserwindows)
+**See also:** [Terminate-AllBrowserProcesses](#terminate-allbrowserprocesses), [Test-WindowVisible](window.md#test-windowvisible), [Close-BrowserWindows](#close-browserwindows)
 
 ## [Wait-ConsoleReflow](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Wait-ConsoleReflow.ps1)
 
 - **Description:** Waits for the console window size to change and returns the new size. After a font-size keystroke Windows Terminal reflows asynchronously, so the size read immediately afterwards is often still the old one; this polls `Get-ConsoleWindowSize` every `-PollIntervalMilliseconds` until it differs from `-Before`, or until `-TimeoutMilliseconds` passes, and returns the last size read. A timeout is not an error - it is how a keystroke that changed nothing reports itself (`Ctrl+0` at the default font, `Ctrl+Minus` at the minimum font), and the returned size then equals `-Before`.
-- **Parameters:** `-Before`, `-TimeoutMilliseconds`, `[-PollIntervalMilliseconds]`
+- **Parameters:** `-Before`, `-TimeoutMilliseconds`, `[-PollIntervalMilliseconds]`, `[-Clock]`
 - **Usage:** `Wait-ConsoleReflow -Before $before -TimeoutMilliseconds 10`
 
-It replaces the fixed sleep `Invoke-Fastfetch` used to take after each keystroke: a fixed wait is either too long on a fast machine or too short on a slow one, where the pre-reflow size was read and the fit misjudged. Polling returns the moment the terminal has moved, and a debug line records either the change and how long it took or the timeout.
+It replaces the fixed sleep `Invoke-Fastfetch` used to take after each keystroke: a fixed wait is either too long on a fast machine or too short on a slow one, where the pre-reflow size was read and the fit misjudged. Polling returns the moment the terminal has moved, and a debug line records either the change and how long it took or the timeout. The poll is a `Wait-Until` that reads time and sleeps through the wait clock passed as `-Clock` (a real `New-WaitClock` by default), so a test injects a fake clock and asserts the exact poll count with no real waiting.
 
 | Parameter                   | Type    | Default | Description                                                                 |
 | --------------------------- | ------- | ------- | --------------------------------------------------------------------------- |
 | `-Before`                   | object  | -       | The size read before the keystroke (`Width`, `Height`), from `Get-ConsoleWindowSize`. |
 | `-TimeoutMilliseconds`      | `int`   | -       | How long to keep polling before returning the unchanged size (1-10000).     |
 | `-PollIntervalMilliseconds` | `int`   | `10`    | Pause between two reads (1-1000).                                           |
+| `-Clock`                    | object  | -       | The wait clock (`New-WaitClock`) to read and sleep through. Defaults to a real one; tests hand in a fake. |
 
 ```powershell
 $before = Get-ConsoleWindowSize

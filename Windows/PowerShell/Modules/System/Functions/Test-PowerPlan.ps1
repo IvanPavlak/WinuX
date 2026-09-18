@@ -14,7 +14,7 @@ function Test-PowerPlan {
 		$activeSchemeOutput = powercfg /getactivescheme
 
 		# Detect if machine is a laptop using WMI chassis type from configuration
-		$laptopChassisTypes = $global:Configuration.LaptopChassisTypes
+		$laptopChassisTypes = @(Get-ConfigSetting -Path 'LaptopChassisTypes' -Default @())
 		$chassisTypes = (Get-CimInstance -ClassName Win32_SystemEnclosure).ChassisTypes
 		$isLaptop = $chassisTypes | Where-Object { $laptopChassisTypes -contains $_ }
 

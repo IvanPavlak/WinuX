@@ -252,11 +252,14 @@ function Open-Workspace {
 		# in the prompt, when it actually has a WorkspaceActions entry: offering a workspace whose
 		# open could merely log "No actions configured" would be the same broken promise this
 		# replaces. With no usable default the prompt says "cancel" and [Enter] does exactly that.
-		$defaultWorkspace = $Configuration.DefaultWorkspace
+		$configuredWorkspaces = @(Get-ConfigSetting -Path 'WorkspaceActions' -Default @())
+		$defaultVSCodeWorkspaces = Get-ConfigSetting -Path 'DefaultVSCodeWorkspaces' -Default @{}
+		$projectTerminals = @(Get-ConfigSetting -Path 'ProjectTerminals' -Default @())
+		$defaultWorkspace = Get-ConfigSetting -Path 'DefaultWorkspace'
 		if ($defaultWorkspace -is [array]) { $defaultWorkspace = @($defaultWorkspace)[0] }
 		$defaultWorkspace = if ([string]::IsNullOrWhiteSpace($defaultWorkspace)) { $null } else { ([string]$defaultWorkspace).Trim() }
 
-		if ($defaultWorkspace -and -not (Get-OrderedEntry $Configuration.WorkspaceActions $defaultWorkspace)) {
+		if ($defaultWorkspace -and -not (Get-OrderedEntry $configuredWorkspaces $defaultWorkspace)) {
 			Write-LogDebug " [Open-Workspace] Configured DefaultWorkspace [$defaultWorkspace] has no WorkspaceActions entry - [Enter] will cancel instead" -Style Warning
 			$defaultWorkspace = $null
 		}
@@ -275,7 +278,7 @@ function Open-Workspace {
 
 		$resolveParams = @{
 			InputObject              = $Workspace
-			OptionList               = @(Get-OrderedNames $Configuration.WorkspaceActions)
+			OptionList               = @(Get-OrderedNames $configuredWorkspaces)
 			MenuTitle                = "[Available workspaces]"
 			PromptMessage            = $workspacePrompt
 			AllowEmptyPromptResponse = $true
@@ -362,7 +365,7 @@ function Open-Workspace {
 		# below and the entries seed the tracker write, so a plain rerun of workspace A no
 		# longer removes B's desktops, steals B's windows, or wipes B's records. Alongside
 		# opens already add without destroying and need no protection of their own.
-		$openProtection = if (-not $Alongside) { Get-WorkspaceOpenProtection } else { $null }
+		$openProtection = if (-not $Alongside) { Get-WorkspaceOpenProtection -Opening $workspaces } else { $null }
 		if ($openProtection) {
 			$protectedNames = @($openProtection.Entries | ForEach-Object { [string]$_.Workspace } | Select-Object -Unique)
 			Write-LogDebug " [Open-Workspace] Preserving live alongside workspace(s) => [$($protectedNames -join ', ')] ($($openProtection.WindowHandles.Count) protected window(s))" -Style Success
@@ -383,7 +386,8 @@ function Open-Workspace {
 			# Calculate desktop offset if -Alongside flag is used
 			$desktopOffset = 0
 			if ($Alongside) {
-				$desktopOffset = Get-NextAvailableDesktopIndex
+				# Desktops are 0-based, so the count is the first index that does not exist yet.
+				$desktopOffset = try { Get-VirtualDesktopCount } catch { $null }
 				if ($null -eq $desktopOffset) {
 					# Desktop enumeration failed - proceeding with offset 0 would open this
 					# workspace ON TOP of the existing one, the exact thing -Alongside prevents.
@@ -396,7 +400,7 @@ function Open-Workspace {
 				Write-LogTitle "Opening $workspaceName Workspace"
 			}
 
-			$workspaceActions = Get-OrderedEntry $Configuration.WorkspaceActions $workspaceName
+			$workspaceActions = Get-OrderedEntry $configuredWorkspaces $workspaceName
 
 			if (-not $workspaceActions) {
 				Write-LogWarning "No actions configured for workspace [$workspaceName]"
@@ -444,8 +448,8 @@ function Open-Workspace {
 					Write-LogWarning "No VS Code workspaces found to choose from!"
 				}
 			}
-			elseif ($Configuration.DefaultVSCodeWorkspaces -and $Configuration.DefaultVSCodeWorkspaces[$workspaceName]) {
-				$resolvedVSCodeWorkspace = $Configuration.DefaultVSCodeWorkspaces[$workspaceName]
+			elseif ($defaultVSCodeWorkspaces[$workspaceName]) {
+				$resolvedVSCodeWorkspace = $defaultVSCodeWorkspaces[$workspaceName]
 			}
 
 			if ($resolvedVSCodeWorkspace -is [array]) {
@@ -542,7 +546,7 @@ function Open-Workspace {
 			# getter returns the session's most recent run, which a workspace without a layout
 			# action would otherwise inherit from an earlier open.
 			$recordWorkspaceBenchmark = {
-				$benchmarkConfig = $Configuration.WorkspaceBenchmark
+				$benchmarkConfig = Get-ConfigSetting -Path 'WorkspaceBenchmark'
 				if (-not ($benchmarkConfig -and $benchmarkConfig.Enabled)) { return }
 				if (-not (Get-Command Write-WorkspaceBenchmark -ErrorAction SilentlyContinue)) { return }
 
@@ -619,7 +623,7 @@ function Open-Workspace {
 			# consuming the mirror) and when WorkspaceLayoutPrepareEarly is $false. Best-effort: a
 			# failure here leaves the action to do the work as before.
 			$prepareLayoutTimings = $null
-			$prepareLayoutEarly = ($null -eq $Configuration.WorkspaceLayoutPrepareEarly -or [bool]$Configuration.WorkspaceLayoutPrepareEarly)
+			$prepareLayoutEarly = [bool](Get-ConfigSetting -Path 'WorkspaceLayoutPrepareEarly' -Default $true)
 			$layoutActionConfig = @($workspaceActions | Where-Object { $_.Action -eq 'Set-WorkspaceWindowLayout' }) | Select-Object -First 1
 			$windowOnlyRetryMarker = [Environment]::GetEnvironmentVariable('WORKSPACE_WINDOW_ONLY_RETRY', 'Process')
 			if ($prepareLayoutEarly -and $layoutActionConfig -and [string]::IsNullOrEmpty($windowOnlyRetryMarker) -and (Get-Command Set-WorkspaceWindowLayout -ErrorAction SilentlyContinue)) {
@@ -671,7 +675,7 @@ function Open-Workspace {
 				if ($ac.Action -eq "Open-Project") {
 					$projName = if ($ac.Parameters -and $ac.Parameters.Project) { $ac.Parameters.Project } elseif ($Project) { $Project } else { $null }
 					if ($projName) {
-						$projMapping = $Configuration.ProjectTerminals | Where-Object { $_.Name -eq $projName }
+						$projMapping = $projectTerminals | Where-Object { $_.Name -eq $projName }
 						if ($projMapping) {
 							$paths = $projMapping.Paths
 							foreach ($path in $paths) {

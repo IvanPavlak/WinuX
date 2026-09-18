@@ -109,7 +109,7 @@ function Bootstrap {
 			# disagrees with the detected type: the BasePaths override lands under the wrong type, and the
 			# next run (fresh shell, override now present) re-detects to that wrong type and silently
 			# reclassifies the machine. Fall back to the config default if somehow unset.
-			$detectedMachineType = if ($global:MachineType) { $global:MachineType } else { $global:Configuration.DefaultMachineType }
+			$detectedMachineType = if ($global:MachineType) { $global:MachineType } else { Get-ConfigSetting -Path 'DefaultMachineType' }
 			Initialize-Configuration -GitName $env:WINUX_GIT_NAME -GitEmail $env:WINUX_GIT_EMAIL -DevPath $DevRoot -MachineType $detectedMachineType
 			Load-PathConfiguration -RepoRoot $RepoRoot | Out-Null
 			# Re-resolve: Initialize-Configuration may have just written the local override
@@ -133,13 +133,15 @@ function Bootstrap {
 		# identity as the last line of defense).
 		$globalGitName = git config --global user.name 2>$null
 		$globalGitEmail = git config --global user.email 2>$null
-		if ([string]::IsNullOrWhiteSpace($globalGitName) -and -not [string]::IsNullOrWhiteSpace($global:Configuration.GitConfig.UserName)) {
-			git config --global user.name "$($global:Configuration.GitConfig.UserName)"
-			Write-LogWarning "Global git user.name was not set - restored from configuration => [$($global:Configuration.GitConfig.UserName)]"
+		$gitUserName = Get-ConfigSetting -Path 'GitConfig.UserName'
+		$gitUserEmail = Get-ConfigSetting -Path 'GitConfig.UserEmail'
+		if ([string]::IsNullOrWhiteSpace($globalGitName) -and -not [string]::IsNullOrWhiteSpace($gitUserName)) {
+			git config --global user.name "$gitUserName"
+			Write-LogWarning "Global git user.name was not set - restored from configuration => [$gitUserName]"
 		}
-		if ([string]::IsNullOrWhiteSpace($globalGitEmail) -and -not [string]::IsNullOrWhiteSpace($global:Configuration.GitConfig.UserEmail)) {
-			git config --global user.email "$($global:Configuration.GitConfig.UserEmail)"
-			Write-LogWarning "Global git user.email was not set - restored from configuration => [$($global:Configuration.GitConfig.UserEmail)]"
+		if ([string]::IsNullOrWhiteSpace($globalGitEmail) -and -not [string]::IsNullOrWhiteSpace($gitUserEmail)) {
+			git config --global user.email "$gitUserEmail"
+			Write-LogWarning "Global git user.email was not set - restored from configuration => [$gitUserEmail]"
 		}
 
 		# Clone/update the repositories this machine defines. WHICH ones is config-driven via
@@ -165,12 +167,12 @@ function Bootstrap {
 
 		if ($steps.SystemTheme) { Set-SystemTheme -Auto -KeepTerminalOpen } else { Write-LogWarning "System theme skipped (BootstrapConfig.Steps.SystemTheme)" }
 
-		if ($steps.Locale) { Set-Locale -Locale $global:Configuration.DefaultLocale } else { Write-LogWarning "Locale skipped (BootstrapConfig.Steps.Locale)" }
-		if ($steps.DisplayLanguage) { Set-DisplayLanguage -Language $global:Configuration.DefaultDisplayLanguage } else { Write-LogWarning "Display language skipped (BootstrapConfig.Steps.DisplayLanguage)" }
-		if ($steps.KeyboardLayouts) { Set-KeyboardLayouts -Layout $global:Configuration.DefaultKeyboardLayoutSet } else { Write-LogWarning "Keyboard layouts skipped (BootstrapConfig.Steps.KeyboardLayouts)" }
+		if ($steps.Locale) { Set-Locale -Locale (Get-ConfigSetting -Path 'DefaultLocale') } else { Write-LogWarning "Locale skipped (BootstrapConfig.Steps.Locale)" }
+		if ($steps.DisplayLanguage) { Set-DisplayLanguage -Language (Get-ConfigSetting -Path 'DefaultDisplayLanguage') } else { Write-LogWarning "Display language skipped (BootstrapConfig.Steps.DisplayLanguage)" }
+		if ($steps.KeyboardLayouts) { Set-KeyboardLayouts -Layout (Get-ConfigSetting -Path 'DefaultKeyboardLayoutSet') } else { Write-LogWarning "Keyboard layouts skipped (BootstrapConfig.Steps.KeyboardLayouts)" }
 		Display-SystemLanguageSettings
 
-		if ($steps.NerdFont) { Configure-NerdFont -FontName $global:Configuration.DefaultNerdFont } else { Write-LogWarning "Nerd Font skipped (BootstrapConfig.Steps.NerdFont)" }
+		if ($steps.NerdFont) { Configure-NerdFont -FontName (Get-ConfigSetting -Path 'DefaultNerdFont') } else { Write-LogWarning "Nerd Font skipped (BootstrapConfig.Steps.NerdFont)" }
 		if ($steps.PowerShellModules) { Install-PowerShellModules } else { Write-LogWarning "PowerShell modules skipped (BootstrapConfig.Steps.PowerShellModules)" }
 
 		if ($steps.SpecialFolders) { Set-SpecialFolders } else { Write-LogWarning "Special folders skipped (BootstrapConfig.Steps.SpecialFolders)" }

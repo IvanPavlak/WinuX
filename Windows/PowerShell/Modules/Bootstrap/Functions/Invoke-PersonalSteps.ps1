@@ -34,7 +34,7 @@ function Invoke-PersonalSteps {
 
 	Write-LogTitle "Invoking Personal Steps"
 
-	$personalSteps = @($global:Configuration.BootstrapConfig.PersonalSteps | Where-Object { $_ })
+	$personalSteps = @((Get-ConfigSetting -Path 'BootstrapConfig.PersonalSteps' -Default @()) | Where-Object { $_ })
 
 	# Set once any entry's machine scope covers this machine (resolvable or not). When nothing
 	# applies - empty list, or every entry gated to other machine types - say so, instead of

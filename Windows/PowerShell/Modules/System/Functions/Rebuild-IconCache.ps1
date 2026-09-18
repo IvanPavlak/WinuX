@@ -21,7 +21,7 @@ function Rebuild-IconCache {
 	Start-Sleep -Seconds 1
 
 	Write-LogStep " Deleting icon cache files..."
-	$iconCachePath = $Configuration.Universal.IconCacheDb
+	$iconCachePath = Get-ConfigSetting -Path 'Universal.IconCacheDb'
 
 	if (Test-Path $iconCachePath) {
 		Remove-Item -Path $iconCachePath -Force -ErrorAction SilentlyContinue
@@ -30,7 +30,7 @@ function Rebuild-IconCache {
 	# Only touch files that are actually present. Explorer was stopped just above, but a file that
 	# Get-ChildItem enumerated can disappear before Remove-Item reaches it, which otherwise surfaces
 	# a "cannot find the file specified" error; re-check each file and ignore per-file failures.
-	$iconCacheFolder = $Configuration.Universal.IconCacheFolder
+	$iconCacheFolder = Get-ConfigSetting -Path 'Universal.IconCacheFolder'
 	if ($iconCacheFolder -and (Test-Path -LiteralPath $iconCacheFolder)) {
 		foreach ($iconCacheFile in @(Get-ChildItem -Path $iconCacheFolder -Filter "iconcache*" -ErrorAction SilentlyContinue)) {
 			if (Test-Path -LiteralPath $iconCacheFile.FullName) {

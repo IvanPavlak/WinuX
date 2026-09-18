@@ -13,7 +13,7 @@ BeforeAll {
 
 Describe "Get-SwaggerCloseTitlePatterns" {
 	BeforeEach {
-		$script:Configuration = @{
+		$global:Configuration = @{
 			BrowserGroups = @(
 				@{ Google = @("https://google.com") }
 				@{
@@ -52,7 +52,7 @@ Describe "Get-SwaggerCloseTitlePatterns" {
 	}
 
 	It "returns nothing when no Swagger parent group exists" {
-		$script:Configuration.BrowserGroups = @(@{ Google = @("https://google.com") })
+		$global:Configuration.BrowserGroups = @(@{ Google = @("https://google.com") })
 
 		@(Get-SwaggerCloseTitlePatterns -Project 'LocalProject').Count | Should -Be 0
 	}

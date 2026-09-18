@@ -41,16 +41,17 @@ function Set-EnvironmentVariables {
 
 	Write-LogTitle "Setting System Environment Variables"
 
+	$basePaths = Get-ConfigSetting -Path 'BasePaths' -Default @{}
+	$basePath = $basePaths[$global:MachineType].Dev
+	$userPath = $basePaths[$global:MachineType].User
+
 	if ($Auto) {
-		$autoVariables = $Configuration.AutoEnvironmentVariables
+		$autoVariables = Get-ConfigSetting -Path 'AutoEnvironmentVariables'
 
 		if (-not $autoVariables -or $autoVariables.Count -eq 0) {
 			Write-LogWarning "No automatic environment variables are defined in the configuration!"
 			return
 		}
-
-		$basePath = $global:Configuration.BasePaths[$global:MachineType].Dev
-		$userPath = $global:Configuration.BasePaths[$global:MachineType].User
 
 		$updated = $false
 		foreach ($variable in $autoVariables.GetEnumerator()) {
@@ -85,7 +86,7 @@ function Set-EnvironmentVariables {
 		}
 
 		# Process AutoPathAdditions
-		$autoPathAdditions = $Configuration.AutoPathAdditions
+		$autoPathAdditions = Get-ConfigSetting -Path 'AutoPathAdditions'
 		if ($autoPathAdditions -and $autoPathAdditions.Count -gt 0) {
 			$currentPath = [Environment]::GetEnvironmentVariable("Path", "User")
 			$pathEntries = $currentPath -split ";" | Where-Object { $_ -ne "" }
@@ -117,9 +118,6 @@ function Set-EnvironmentVariables {
 			Write-LogWarning "Provide both [-Name] and [-Value] parameters or use the [-Auto] flag!" -BlankLineAfter
 			return
 		}
-
-		$basePath = $global:Configuration.BasePaths[$global:MachineType].Dev
-		$userPath = $global:Configuration.BasePaths[$global:MachineType].User
 
 		$Value = Expand-Hashtable -Source $Value -DevPath $basePath -UserPath $userPath -MachineTypeName $global:MachineType
 

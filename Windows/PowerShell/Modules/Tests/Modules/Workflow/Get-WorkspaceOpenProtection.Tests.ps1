@@ -132,6 +132,45 @@ Describe "Get-WorkspaceOpenProtection" {
 			$protection.WindowHandles.Contains([IntPtr]61) | Should -BeTrue
 		}
 
+		It "does not preserve the alongside instance of a workspace being opened, so the plain open adopts it" {
+			Mock Get-WindowHandle {
+				@((New-TestWindow -Handle 60 -ProcessId 6 -ProcessName 'firefox' -Title 'Server browser'))
+			}
+			Write-TestState -Entry @(
+				(New-TestEntry -Workspace 'Server' -Alongside -DesktopOffset 3 -Windows @(
+					(New-TestRecord -Handle 60 -ProcessId 6 -ProcessName 'firefox' -Title 'Server browser')
+				))
+			)
+
+			Get-WorkspaceOpenProtection -StatePath $script:TestStatePath -Opening 'server' | Should -BeNullOrEmpty
+			Should -Invoke Get-WindowHandle -Times 0
+		}
+
+		It "still preserves other workspaces' alongside instances when one of them is being opened" {
+			Mock Get-WindowHandle {
+				@(
+					(New-TestWindow -Handle 60 -ProcessId 6 -ProcessName 'firefox' -Title 'Server browser'),
+					(New-TestWindow -Handle 70 -ProcessId 8 -ProcessName 'Code' -Title 'WinuX editor')
+				)
+			}
+			Write-TestState -Entry @(
+				(New-TestEntry -Workspace 'Server' -Alongside -DesktopOffset 3 -Windows @(
+					(New-TestRecord -Handle 60 -ProcessId 6 -ProcessName 'firefox' -Title 'Server browser')
+				)),
+				(New-TestEntry -Workspace 'WinuX' -Alongside -DesktopOffset 6 -Windows @(
+					(New-TestRecord -Handle 70 -ProcessId 8 -ProcessName 'Code' -Title 'WinuX editor')
+				))
+			)
+
+			$protection = Get-WorkspaceOpenProtection -StatePath $script:TestStatePath -Opening 'Server', 'Other'
+
+			@($protection.Entries).Count | Should -Be 1
+			$protection.Entries[0].Workspace | Should -Be 'WinuX'
+			$protection.WindowHandles.Count | Should -Be 1
+			$protection.WindowHandles.Contains([IntPtr]70) | Should -BeTrue
+			$protection.WindowHandles.Contains([IntPtr]60) | Should -BeFalse
+		}
+
 		It "carries the preserved entry forward verbatim, dead records included" {
 			# One live window is enough to prove the workspace is standing; the entry travels
 			# whole, the same staleness Close-Workspace already tolerates.

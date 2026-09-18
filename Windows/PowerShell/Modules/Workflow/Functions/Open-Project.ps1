@@ -61,9 +61,11 @@ function Open-Project {
 		[switch]$InSameShell
 	)
 
+	$configuredProjects = @(Get-ConfigSetting -Path 'ProjectActions' -Default @())
+
 	$resolveParams = @{
 		InputObject              = $Project
-		OptionList               = @(Get-OrderedNames $Configuration.ProjectActions)
+		OptionList               = @(Get-OrderedNames $configuredProjects)
 		MenuTitle                = "[Available projects]"
 		PromptMessage            = "Enter project(s) or press Enter to skip"
 		AllowMultipleSelections  = $true
@@ -79,7 +81,7 @@ function Open-Project {
 	$RunAppBool = $RunApp.IsPresent
 
 	foreach ($projectName in $projects) {
-		$projectActions = Get-OrderedEntry $Configuration.ProjectActions $projectName
+		$projectActions = Get-OrderedEntry $configuredProjects $projectName
 
 		if (-not $projectActions) {
 			Write-LogWarning "No actions configured for project [$projectName]"

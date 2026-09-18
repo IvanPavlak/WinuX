@@ -73,7 +73,7 @@ function Close-BrowserTabsByPattern {
 
 			if ($shouldCloseWindow) {
 				Write-LogDebug "   -> Closing window directly => [$($window.Title)]" -Style Step
-				[CloseProjectWin32]::PostMessage($window.Handle, [CloseProjectWin32]::WM_CLOSE, [IntPtr]::Zero, [IntPtr]::Zero) | Out-Null
+				[void](Close-Window -Handle ([IntPtr]$window.Handle))
 				$totalClosedTabs++
 				Start-Sleep -Milliseconds 10
 				continue

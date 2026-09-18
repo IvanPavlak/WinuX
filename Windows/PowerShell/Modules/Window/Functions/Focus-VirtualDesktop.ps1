@@ -7,25 +7,25 @@ function Focus-VirtualDesktop {
 		Reliably lands the user on a specific virtual desktop after a workspace run.
 
 		Workspace setup (Set-WorkspaceWindowLayout / Snap-AllWindows) hops across every
-		virtual desktop to move and snap windows, then ends with a single, unverified
-		`Switch-Desktop -Desktop 0` and a `Focus-TerminalTab`. Two things make that final
-		landing unreliable:
+		virtual desktop to move and snap windows, then ends with a switch back to the first
+		desktop and a `Focus-TerminalTab`. Two things make that final landing unreliable:
 
-		  1. The trailing Switch-Desktop has no Wait-DesktopSwitch confirmation and no
-		     module-reset fallback. In a long-running shell the VirtualDesktop COM/RPC
-		     session can go stale and the switch silently no-ops (the exact failure mode
-		     Reset-VirtualDesktopState exists to recover), leaving the previous desktop
-		     visible.
+		  1. A desktop switch is asynchronous, and in a long-running shell the VirtualDesktop
+		     COM/RPC session can go stale and the switch silently no-ops (the exact failure
+		     mode Reset-VirtualDesktopState exists to recover), leaving the previous desktop
+		     visible unless the switch is confirmed and recovered.
 		  2. Even when the switch takes, nothing guarantees a foreground window on the
 		     target desktop. A virtual-desktop switch only "sticks" when focus lands on a
 		     window that lives there; otherwise focus can revert to whatever window was
 		     last activated on another desktop (a browser/app snapped on a higher desktop),
 		     pulling the visible desktop back with it.
 
-		This function closes both gaps using logic already proven elsewhere in the module:
+		This function closes both gaps with the Window module's own verbs:
 
-		  - The Switch-Desktop + Wait-DesktopSwitch retry loop with a Reset-VirtualDesktopState
-		    recovery pass (mirrors Snap-AllWindows' desktop-switch block).
+		  - Switch-VirtualDesktop, which switches, confirms the desktop is showing, retries,
+		    falls back to a Reset-VirtualDesktopState session reset and clears the window cache
+		    (the same call Snap-AllWindows and Ensure-DesktopVisible make). No VirtualDesktop
+		    cmdlet is called here and no retry or recovery block is hand-rolled.
 		  - ForceForegroundWindow (from WindowNative.cs) to lock focus onto a real window on
 		    the target desktop, preferring Windows Terminal via Focus-TerminalTab - handed the
 		    handle of the terminal verified to live there - so the terminal/output stays
@@ -60,13 +60,7 @@ function Focus-VirtualDesktop {
 		[int]$DesktopOffset = 0
 	)
 
-	if (-not (Get-Command Switch-Desktop -ErrorAction SilentlyContinue)) {
-		if (Get-Command Import-VirtualDesktopModule -ErrorAction SilentlyContinue) {
-			[void](Import-VirtualDesktopModule -Silent)
-		}
-	}
-
-	if (-not (Get-Command Switch-Desktop -ErrorAction SilentlyContinue)) {
+	if (-not (Import-VirtualDesktopModule -Silent)) {
 		Write-LogWarning "VirtualDesktop module unavailable - cannot focus Virtual Desktop $DesktopNumber!"
 		return
 	}
@@ -76,43 +70,14 @@ function Focus-VirtualDesktop {
 	Write-LogTitle "Focusing Virtual Desktop $DesktopNumber"
 	Write-LogDebug "  Target desktop index => [$targetIndex]"
 
-	# Robust switch - confirm via Wait-DesktopSwitch and recover stale COM state with a
-	# VirtualDesktop module reset. Mirrors the proven block in Snap-AllWindows.
+	# Switch-VirtualDesktop confirms the switch, retries, recovers a stale COM session once, and
+	# clears the window cache so the lookups below never act on the previous desktop's handles.
 	$desktopSwitched = $false
-	$maxDesktopSwitchRetries = 3
-	for ($attempt = 1; $attempt -le $maxDesktopSwitchRetries; $attempt++) {
-		try {
-			$null = Switch-Desktop -Desktop $targetIndex -ErrorAction Stop
-			if (Wait-DesktopSwitch -TargetDesktopIndex $targetIndex) {
-				$desktopSwitched = $true
-				break
-			}
-		}
-		catch {
-			Write-LogDebug "  Failed to switch to desktop index $targetIndex (attempt $attempt/$maxDesktopSwitchRetries): $_" -Style Warning
-		}
+	try {
+		$desktopSwitched = [bool](Switch-VirtualDesktop -Index $targetIndex)
 	}
-
-	if (-not $desktopSwitched) {
-		$moduleReloaded = Reset-VirtualDesktopState
-		if ($moduleReloaded) {
-			try {
-				$null = Switch-Desktop -Desktop $targetIndex -ErrorAction Stop
-				$desktopSwitched = Wait-DesktopSwitch -TargetDesktopIndex $targetIndex
-			}
-			catch {
-				$desktopSwitched = $false
-			}
-		}
-
-		if (Test-LogVerbose) {
-			if ($desktopSwitched) {
-				Write-LogDebug "  Desktop index $targetIndex recovered after VirtualDesktop module reset" -Style Warning
-			}
-			else {
-				Write-LogDebug "  Unable to switch to desktop index $targetIndex after retries" -Style Error
-			}
-		}
+	catch {
+		Write-LogDebug "  Switch to desktop index $targetIndex failed => $($_.Exception.Message)" -Style Error
 	}
 
 	if (-not $desktopSwitched) {
@@ -120,44 +85,28 @@ function Focus-VirtualDesktop {
 		return
 	}
 
-	# Refresh the window snapshot after the transition so we don't act on stale handles.
-	if (Get-Command Clear-WindowCache -ErrorAction SilentlyContinue) {
-		Clear-WindowCache
-	}
-
 	# Resolve which visible top-level windows actually live on the target desktop so we can
 	# park keyboard focus on one of them - this is what makes the switch "stick".
 	$windowsOnTarget = @()
 	$terminalOnTarget = $null
-	$desktopLookupAvailable = (Get-Command Get-DesktopFromWindow -ErrorAction SilentlyContinue) -and
-	(Get-Command Get-DesktopIndex -ErrorAction SilentlyContinue)
 
-	if ($desktopLookupAvailable) {
-		$candidateWindows = @(Get-WindowHandle -ErrorAction SilentlyContinue)
+	$candidateWindows = @(Get-WindowHandle -ErrorAction SilentlyContinue)
 
-		# Only ONE focus target is ever used below, so resolving the desktop of EVERY window
-		# (two COM roundtrips each) wasted 0.2-0.6s at the end of every open. Check terminal
-		# windows first (they are the preferred target), then everything else, and stop at
-		# the first window that lives on the target desktop.
-		$orderedCandidates = @($candidateWindows | Where-Object { $_.ProcessName -eq 'WindowsTerminal' }) +
-		@($candidateWindows | Where-Object { $_.ProcessName -ne 'WindowsTerminal' })
+	# Only ONE focus target is ever used below, so resolving the desktop of EVERY window
+	# (two COM roundtrips each) wasted 0.2-0.6s at the end of every open. Check terminal
+	# windows first (they are the preferred target), then everything else, and stop at
+	# the first window that lives on the target desktop.
+	$orderedCandidates = @($candidateWindows | Where-Object { $_.ProcessName -eq 'WindowsTerminal' }) +
+	@($candidateWindows | Where-Object { $_.ProcessName -ne 'WindowsTerminal' })
 
-		foreach ($win in $orderedCandidates) {
-			try {
-				$winDesktop = Get-DesktopFromWindow -Hwnd $win.Handle
-				if (-not $winDesktop) { continue }
-				if ((Get-DesktopIndex -Desktop $winDesktop) -eq $targetIndex) {
-					$windowsOnTarget += $win
-					if ($win.ProcessName -eq 'WindowsTerminal') {
-						$terminalOnTarget = $win
-					}
-					break
-				}
-			}
-			catch {
-				# Window may have closed between enumeration and lookup - skip it.
-			}
+	foreach ($win in $orderedCandidates) {
+		# -1 means the window closed between enumeration and lookup, or has no desktop - skip it.
+		if ((Get-WindowDesktopIndex -WindowHandle $win.Handle) -ne $targetIndex) { continue }
+		$windowsOnTarget += $win
+		if ($win.ProcessName -eq 'WindowsTerminal') {
+			$terminalOnTarget = $win
 		}
+		break
 	}
 
 	# Prefer the terminal (keeps post-run output visible); fall back to any window on the

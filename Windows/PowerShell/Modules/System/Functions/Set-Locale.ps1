@@ -29,12 +29,13 @@ function Set-Locale {
 
 	Test-AdminPrivileges
 
-	if (-not (Confirm-ConfigValue $Configuration.Locales "Locales not configured - leaving system locale as-is!")) {
+	$locales = Get-ConfigSetting -Path 'Locales'
+	if (-not (Confirm-ConfigValue $locales "Locales not configured - leaving system locale as-is!")) {
 		return
 	}
 
-	$localeOptions = @(Get-OrderedNames $Configuration.Locales)
-	$defaultLocaleName = $Configuration.DefaultLocale
+	$localeOptions = @(Get-OrderedNames $locales)
+	$defaultLocaleName = Get-ConfigSetting -Path 'DefaultLocale'
 	$targetLocaleName = ""
 
 	if (-not [string]::IsNullOrWhiteSpace($Locale)) {
@@ -64,7 +65,7 @@ function Set-Locale {
 		}
 	}
 
-	$localeConfig = Get-OrderedEntry $Configuration.Locales $targetLocaleName
+	$localeConfig = Get-OrderedEntry $locales $targetLocaleName
 	$targetLocale = $localeConfig.Code
 	$targetGeoId = $localeConfig.GeoId
 

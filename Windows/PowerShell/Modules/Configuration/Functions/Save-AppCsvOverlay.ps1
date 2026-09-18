@@ -98,7 +98,8 @@ function Save-AppCsvOverlay {
 		throw "Cannot locate the repository - pass -RepoRoot."
 	}
 
-	$relativePath = $global:Configuration.BootstrapConfig.DataFiles.$DataFileKey
+	$dataFiles = Get-ConfigSetting -Path 'BootstrapConfig.DataFiles' -Default @{}
+	$relativePath = $dataFiles[$DataFileKey]
 	if ([string]::IsNullOrWhiteSpace($relativePath)) {
 		throw "BootstrapConfig.DataFiles.$DataFileKey is not configured."
 	}
@@ -118,10 +119,7 @@ function Save-AppCsvOverlay {
 	}
 	$columns = @($headerLine -split ',' | ForEach-Object { $_.Trim() })
 
-	$validTypes = @()
-	if ($global:Configuration.ValidMachineTypes) {
-		$validTypes = @($global:Configuration.ValidMachineTypes)
-	}
+	$validTypes = @(Get-ConfigSetting -Path 'ValidMachineTypes' -Default @())
 
 	# --- validate every row before anything is written -------------------------------------------
 	$rowIndex = 0

@@ -23,13 +23,18 @@ function Set-WorkspaceWindowLayout {
 		group in a separate browser window, allowing both to be positioned independently.
 
 		Desktops are positioned and snapped as they become ready, not after the slowest window
-		of the whole workspace. Wait-ForWorkspaceWindows reports each virtual desktop whose
-		windows are all stable while others still load (-OnDesktopReady), and that desktop's
-		entries are positioned (Set-WindowLayouts over the whole layout restricted to that
-		desktop, claiming only windows the wait has confirmed stable, appending to the shared
-		tracking), resized and snapped (Snap-AllWindows for that desktop alone) right then; the
-		tail after the wait finishes every entry those passes did not place, and verification
-		stays global. WorkspaceLayoutPipelining = $false in the
+		of the whole workspace. The two callbacks handed to Wait-ForWorkspaceWindows are the
+		named functions Move-StableWindowEarly (-OnWindowStable: moves a window to its desktop
+		as soon as it is stable) and Invoke-ReadyDesktopPass (-OnDesktopReady: when every entry
+		on a virtual desktop is stable while others still load, positions that desktop -
+		Set-WindowLayouts over the whole layout restricted to it, claiming only windows the wait
+		has confirmed stable, appending to the shared tracking - then resizes and snaps it with
+		Snap-AllWindows for that desktop alone). Both read and fill one state object from
+		New-WorkspaceLayoutPipelineState, and which windows any pass may claim comes from one
+		claim set built here once by New-WindowClaimSet (the pre-open capture, the alongside
+		flag, the protected handles and the pinned-handle map) and handed to the wait and to
+		Set-WindowLayouts as -Claims. The tail after the wait finishes every entry those passes
+		did not place, and verification stays global. WorkspaceLayoutPipelining = $false in the
 		configuration turns this off and restores the strictly sequential wait -> position ->
 		snap order.
 
@@ -118,7 +123,7 @@ function Set-WorkspaceWindowLayout {
 		When not specified, the workspace replaces existing desktops (normal mode).
 
 		Alongside also narrows what the layout pass may touch: only windows created by this
-		open are eligible (Set-WindowLayouts -SkipExistingWindows), everything that was
+		open are eligible (the claim set's SkipExisting rule), everything that was
 		already on screen belongs to whichever workspace is already running. Two consequences
 		follow. Count-based openers must be told, or they top up to a total that includes
 		windows the layout cannot use and leave the layout short - hence Open-Workspace
@@ -314,7 +319,9 @@ function Set-WorkspaceWindowLayout {
 		# Alongside opens add without destroying and need no protection.
 		if (-not $PSBoundParameters.ContainsKey('ProtectedWindowHandles') -and -not $Alongside) {
 			if (Get-Command Get-WorkspaceOpenProtection -ErrorAction SilentlyContinue) {
-				$selfProtection = Get-WorkspaceOpenProtection
+				$selfProtectionParams = @{}
+				if (-not [string]::IsNullOrWhiteSpace($WorkspaceName)) { $selfProtectionParams['Opening'] = @($WorkspaceName) }
+				$selfProtection = Get-WorkspaceOpenProtection @selfProtectionParams
 				if ($selfProtection) {
 					$ProtectedWindowHandles = $selfProtection.WindowHandles
 					Write-LogDebug " Self-derived protection for $($ProtectedWindowHandles.Count) alongside window(s)" -Style Success
@@ -323,12 +330,17 @@ function Set-WorkspaceWindowLayout {
 		}
 		$hasProtectedWindows = ($null -ne $ProtectedWindowHandles -and $ProtectedWindowHandles.Count -gt 0)
 
-		# Pre-flight RPC health check using the shared helper. The live probe runs
+		# Pre-flight RPC health check through the operation seam (-Probe). The live probe runs
 		# in-process against this session's VirtualDesktop COM state (cheap when
 		# healthy), so a stale session - Explorer restarted since the module loaded -
 		# is detected and repaired here, before any desktop reconfiguration begins.
-		if (Get-Command Get-RpcRetryPolicy -ErrorAction SilentlyContinue) {
-			[void](Get-RpcRetryPolicy -OperationLabel "applying layout" -Probe)
+		if (Import-VirtualDesktopModule -Silent) {
+			try {
+				[void](Invoke-VirtualDesktopOperation -Operation { Get-DesktopCount } -Label "applying layout" -Probe)
+			}
+			catch {
+				Write-LogDebug "RPC preflight did not succeed => [$($_.Exception.Message)]" -Style Warning
+			}
 		}
 
 		$cachedMonitorInfo = Get-MonitorInfo
@@ -458,7 +470,7 @@ function Set-WorkspaceWindowLayout {
 			Write-LogDebug " Window-only retry trigger => [$(@($windowOnlyRetryProcess, $windowOnlyRetryTitle) | Where-Object { $_ } | Select-Object -First 1)] (applying full layout config)" -Style Warning
 		}
 
-		$simpleLayoutWorkspaces = $global:Configuration.SimpleLayoutWorkspaces
+		$simpleLayoutWorkspaces = @(Get-ConfigSetting -Path 'SimpleLayoutWorkspaces' -Default @())
 
 		# Everything up to here - RPC probe, layout file, validation, snapshot read - is preamble.
 		& $recordPhase 'Preamble'
@@ -505,8 +517,7 @@ function Set-WorkspaceWindowLayout {
 				# Simple layouts typically only define VirtualDesktopLayouts for desktop 1.
 				# Expand VirtualDesktopLayouts to cover ALL existing virtual desktops so
 				# Apply-FancyZones applies the layout everywhere, not just on desktop 1.
-				$existingDesktops = Get-DesktopList
-				$existingDesktopCount = ($existingDesktops | Measure-Object).Count
+				$existingDesktopCount = Get-VirtualDesktopCount
 
 				if ($existingDesktopCount -gt 1) {
 					foreach ($monitorKey in @($config.Monitors.Keys)) {
@@ -691,19 +702,12 @@ function Set-WorkspaceWindowLayout {
 					# never reaches here). Snapping needs the window focusable on the active
 					# desktop, hence the switch per desktop; windows whose desktop cannot be
 					# resolved go in the -1 bucket and are offered on every pass.
-					$allDesktops = Get-DesktopList
-					$desktopCount = ($allDesktops | Measure-Object).Count
+					$desktopCount = Get-VirtualDesktopCount
 
 					if ($desktopCount -gt 1) {
 						$windowsByDesktopIndex = @{}
 						foreach ($win in @(Get-WindowHandle -ErrorAction SilentlyContinue)) {
-							$winDesktopIndex = -1
-							try {
-								$winDesktopIndex = Get-DesktopIndex (Get-DesktopFromWindow -Hwnd $win.Handle.ToInt64())
-							}
-							catch {
-								$winDesktopIndex = -1
-							}
+							$winDesktopIndex = Get-WindowDesktopIndex -WindowHandle $win.Handle
 							if (-not $windowsByDesktopIndex.ContainsKey($winDesktopIndex)) {
 								$windowsByDesktopIndex[$winDesktopIndex] = [System.Collections.Generic.List[IntPtr]]::new()
 							}
@@ -725,14 +729,13 @@ function Set-WorkspaceWindowLayout {
 							}
 
 							Write-LogDebug " Switching to Desktop [$($d + 1)] for snapping..."
-							$null = Switch-Desktop -Desktop $d
-							if (-not (Wait-DesktopSwitch -TargetDesktopIndex $d)) {
+							if (-not (Switch-VirtualDesktop -Index $d)) {
 								Start-Sleep -Milliseconds 25
 							}
 							$null = Snap-AllWindows -All -WindowHandles $desktopHandles.ToArray() -SnapDelayMs $SnapDelayMs
 						}
 						# Return to desktop 1
-						$null = Switch-Desktop -Desktop 0
+						[void](Switch-VirtualDesktop -Index 0)
 					}
 					else {
 						$null = Snap-AllWindows -All -SnapDelayMs $SnapDelayMs
@@ -804,8 +807,7 @@ function Set-WorkspaceWindowLayout {
 			$totalRequiredDesktops = $requiredVirtualDesktops + $DesktopOffset
 
 			# Check current virtual desktop count and only reset if necessary
-			$currentDesktops = Get-DesktopList
-			$currentDesktopCount = ($currentDesktops | Measure-Object).Count
+			$currentDesktopCount = Get-VirtualDesktopCount
 
 			if ($Alongside) {
 				# Alongside mode: Don't remove existing desktops, only add more if needed
@@ -1012,37 +1014,17 @@ function Set-WorkspaceWindowLayout {
 
 		Write-LogDebug " Captured $($existingWindowHandles.Count) existing window handle(s)"
 
+		# The one object that says which windows this open may claim: the pre-open capture (off
+		# limits in alongside mode, fair game otherwise), the protected windows of live alongside
+		# workspaces, the pinned zone map from the last run, and - filled in by the per-desktop
+		# passes below as the open progresses - the windows already placed and snapped. The wait,
+		# the early move and every layout pass read their rules from it.
+		$claims = New-WindowClaimSet -Existing $existingWindowHandles -SkipExisting:$Alongside -Protected $ProtectedWindowHandles -PinnedMap $pinnedHandleMap
+
 		# Use consolidated native types from WindowNative.cs (loaded in Window.psm1)
 		# WindowModule.Native provides: SetForegroundWindow(), etc.
 
 		$windowStates = @{}
-
-		# Callback fired by Wait-ForWorkspaceWindows as each window first becomes individually stable.
-		# Immediately moves the window to its configured virtual desktop so desktop relocation
-		# overlaps with the remaining windows still loading, rather than waiting until all are ready.
-		$onWindowStableCallback = {
-			param($layoutEntry, $window)
-
-			if ($null -eq $layoutEntry.DesktopNumber) { return }
-			if ($Alongside -and $existingWindowHandles -and $existingWindowHandles.Contains($window.Handle)) { return }
-			# Plain-mode analogue of the alongside guard above: a preserved workspace's window
-			# matched a layout entry by title/process, but it is not this open's to move.
-			if ($ProtectedWindowHandles -and $ProtectedWindowHandles.Contains($window.Handle)) { return }
-			# A window a per-desktop pass has already placed and snapped is where it belongs;
-			# another entry matching it by process (every browser entry matches every browser
-			# window until the titles resolve) must not carry it off to its own desktop.
-			if ($pipelinedHandles.Contains($window.Handle)) { return }
-
-			$internalDesktopIndex = ($layoutEntry.DesktopNumber - 1) + $DesktopOffset
-			try {
-				$null = Move-WindowToVirtualDesktop -WindowHandle $window.Handle -DesktopNumber $internalDesktopIndex
-				if (Test-LogVerbose) {
-					$displayDesktop = $layoutEntry.DesktopNumber + $DesktopOffset
-					Write-LogDebug "Early move: [$($window.Title)] => Desktop $displayDesktop" -Style Success
-				}
-			}
-			catch {}
-		}
 
 		# --- Per-desktop pipelining: position and snap a desktop as soon as its windows are stable ---
 		# The wait ends when the SLOWEST window of the whole workspace has been stable for a
@@ -1052,7 +1034,7 @@ function Set-WorkspaceWindowLayout {
 		# positions, resizes and snaps that desktop right away - the whole layout handed to
 		# Set-WindowLayouts so duplicate keys are counted across desktops, only that desktop's
 		# entries processed (-DesktopNumbers), claims restricted to windows the wait has confirmed
-		# stable ANYWHERE so far (-CandidateWindowHandles: a window still loading is never
+		# stable ANYWHERE so far (the claim set's Candidates: a window still loading is never
 		# claimed), appended to the one tracking set the whole open shares
 		# (-KeepPositionedWindows), snapped for that desktop alone. The tail after the wait
 		# finishes every ENTRY the per-desktop passes did not place - not every desktop they did
@@ -1060,133 +1042,35 @@ function Set-WorkspaceWindowLayout {
 		# stable, or matched to another entry) and is then simply placed after the wait, as it
 		# always was. Verification stays global and the in-process retries run the full layout.
 		# The phase clock books the callback's own time under Position and Snap, not Wait.
-		$pipeliningEnabled = ($null -eq $global:Configuration.WorkspaceLayoutPipelining -or [bool]$global:Configuration.WorkspaceLayoutPipelining)
-		$pipelinedDesktops = @{}
-		$pipelinedEntryKeys = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
-		$pipelinedResults = [System.Collections.Generic.List[PSObject]]::new()
-		$pipelinedSnapFailures = [System.Collections.Generic.List[object]]::new()
-		$pipelinedHandles = New-Object 'System.Collections.Generic.HashSet[IntPtr]'
+		$workspaceLayoutPipelining = Get-ConfigSetting -Path 'WorkspaceLayoutPipelining'
+		$pipeliningEnabled = ($null -eq $workspaceLayoutPipelining -or [bool]$workspaceLayoutPipelining)
 		$usePipelining = $pipeliningEnabled -and -not $windowOnlyRetryActive -and -not $DisableAutoWait -and $requiredVirtualDesktops -gt 1
 		if (-not $pipeliningEnabled -and (Test-LogVerbose)) {
 			Write-LogDebug "Per-desktop pipelining disabled by configuration (WorkspaceLayoutPipelining) - positioning after the wait" -Style Warning
 		}
 
+		# The shared state of this layout pass: the inputs the per-desktop passes lay out with and
+		# the live tallies they fill in during the wait (placed results, entry keys, snap failures,
+		# finished desktops), which the tail after the wait finishes. The wait's two callbacks are
+		# thin adapters onto the named functions that take it. Every input is known here: the
+		# layout to apply, the monitor cache, the desktop count, the FancyZones reset and the
+		# phase clock were all resolved before the pre-open capture above.
+		$pipeline = New-WorkspaceLayoutPipelineState -LayoutConfig $layoutConfigToApply -Claims $claims -MonitorInfo $cachedMonitorInfo -MonitorConfig $config.Monitors `
+			-DesktopOffset $DesktopOffset -DesktopCount $requiredVirtualDesktops -Alongside:$Alongside -ZoneReset $resetFancyZonesState -RecordPhase $recordPhase -SpinnerActive:([bool]$spinner)
+
+		# Callback fired by Wait-ForWorkspaceWindows as each window first becomes individually stable.
+		# Immediately moves the window to its configured virtual desktop so desktop relocation
+		# overlaps with the remaining windows still loading, rather than waiting until all are ready.
+		$onWindowStableCallback = {
+			param($layoutEntry, $window)
+			Move-StableWindowEarly -Pipeline $pipeline -LayoutEntry $layoutEntry -Window $window
+		}
+
+		# Callback fired by Wait-ForWorkspaceWindows for each desktop whose entries are all stable
+		# while others still load: positions, resizes and snaps that desktop right away.
 		$onDesktopReadyCallback = {
 			param($readyDesktopNumber, $readyEntries, $stableWindowHandles, $abandonedSoFar)
-
-			$displayDesktop = [int]$readyDesktopNumber + $DesktopOffset
-			try {
-				# Wait time so far belongs to Wait; the work below to Position and Snap.
-				& $recordPhase 'Wait'
-				if ($spinner) { Loading-Spinner -Pause }
-
-				# Claims are restricted to windows the wait has confirmed stable - for ANY entry,
-				# not just this desktop's. The wait matches an entry by process OR title, so its
-				# window for a titled browser entry is often a different window of that browser;
-				# a per-entry whitelist therefore filtered out the very window the layout pass
-				# finds by title and left the entry unplaced (the 2026-09-03 regression). What the
-				# whitelist has to guarantee is only that a window still loading is never claimed.
-				$candidateHandles = New-Object 'System.Collections.Generic.HashSet[IntPtr]'
-				foreach ($stableHandle in @($stableWindowHandles)) {
-					if ($null -ne $stableHandle -and $stableHandle -ne [IntPtr]::Zero) { [void]$candidateHandles.Add([IntPtr]$stableHandle) }
-				}
-				$readyStates = @{}
-				$readyCount = 0
-				foreach ($ready in @($readyEntries)) {
-					if ($null -eq $ready -or $null -eq $ready.Window -or $null -eq $ready.Window.Handle) { continue }
-					$readyCount++
-					[void]$candidateHandles.Add($ready.Window.Handle)
-					$readyStates[$ready.Window.Handle] = @{
-						Title  = $ready.Window.Title
-						X      = $ready.Window.Left
-						Y      = $ready.Window.Top
-						Width  = $ready.Window.Width
-						Height = $ready.Window.Height
-					}
-				}
-				if ($readyCount -eq 0 -or $candidateHandles.Count -eq 0) { return }
-
-				Write-LogDebug " Desktop [$displayDesktop] is ready while the rest still load - positioning and snapping it now ($readyCount window(s))" -Style Success
-
-				# The WHOLE layout, restricted to this desktop's entries: duplicate keys are counted
-				# across desktops, so an entry whose twin sits on another desktop claims one window.
-				$desktopLayoutParams = @{
-					LayoutConfig           = $layoutConfigToApply
-					DesktopNumbers         = @([int]$readyDesktopNumber)
-					MonitorInfo            = $cachedMonitorInfo
-					MonitorConfig          = $config.Monitors
-					ExistingWindowHandles  = $existingWindowHandles
-					ExpectedWindowState    = $readyStates
-					DesktopOffset          = $DesktopOffset
-					CandidateWindowHandles = $candidateHandles
-					KeepPositionedWindows  = $true
-				}
-				if ($pipelinedHandles.Count -gt 0) {
-					$desktopLayoutParams["ExcludeWindowHandles"] = $pipelinedHandles
-				}
-				# An entry the wait already abandoned on this desktop gets one search here, not the
-				# 1.5 s not-found ladder - inside the wait that ladder would delay the other desktops.
-				if ($abandonedSoFar -and @($abandonedSoFar).Count -gt 0) {
-					$desktopLayoutParams["AbandonedEntries"] = @($abandonedSoFar)
-				}
-				if ($Alongside) {
-					$desktopLayoutParams["SkipExistingWindows"] = $true
-				}
-				if ($hasProtectedWindows) {
-					$desktopLayoutParams["ProtectedWindowHandles"] = $ProtectedWindowHandles
-				}
-				if ($pinnedHandleMap -and $pinnedHandleMap.Count -gt 0) {
-					$desktopLayoutParams["PinnedHandleMap"] = $pinnedHandleMap
-				}
-
-				# Only what was actually placed counts as done. An entry that came back Not Found
-				# here is finished by the pass after the wait, exactly as before pipelining; its
-				# row is dropped so the shortfall tally is not counted twice.
-				$desktopResults = @(Set-WindowLayouts @desktopLayoutParams)
-				$placedHere = 0
-				foreach ($desktopResult in $desktopResults) {
-					if ($desktopResult.Status -ne 'Configured') { continue }
-					$pipelinedResults.Add($desktopResult)
-					$placedHere++
-					if (-not [string]::IsNullOrEmpty($desktopResult.EntryKey)) {
-						[void]$pipelinedEntryKeys.Add([string]$desktopResult.EntryKey)
-					}
-					if ($null -ne $desktopResult.Handle -and $desktopResult.Handle -ne [IntPtr]::Zero) {
-						[void]$pipelinedHandles.Add($desktopResult.Handle)
-					}
-				}
-				if ($placedHere -eq 0) {
-					Write-LogDebug " Desktop [$displayDesktop]: no entry could be placed yet - left to the pass after the wait" -Style Warning
-					return
-				}
-				if ($placedHere -lt $readyCount) {
-					Write-LogDebug " Desktop [$displayDesktop]: placed $placedHere of $readyCount entries now - the rest follow after the wait" -Style Warning
-				}
-
-				$null = Resize-PositionedWindows -DesktopNumbers @($displayDesktop)
-				& $recordPhase 'Position'
-
-				# -DesktopOffset 0 for the same reason as the main snap pass below: the tracked
-				# desktop numbers already carry the offset.
-				$null = Snap-AllWindows -DesktopOffset 0 -DesktopCount $requiredVirtualDesktops -DesktopNumbers @($displayDesktop) -ZoneReset $resetFancyZonesState
-				$desktopSnap = $script:LastSnapAllWindowsResult
-				if ($desktopSnap -and $desktopSnap.FailedWindows) {
-					foreach ($desktopFailure in @($desktopSnap.FailedWindows)) {
-						$pipelinedSnapFailures.Add($desktopFailure)
-					}
-				}
-				& $recordPhase 'Snap'
-
-				$pipelinedDesktops[[int]$readyDesktopNumber] = $true
-			}
-			catch {
-				# Nothing was marked done, so the tail after the wait positions this desktop with
-				# the others.
-				Write-LogDebug " Per-desktop pass for desktop [$displayDesktop] failed - leaving it to the main pass: $($_.Exception.Message)" -Style Warning
-			}
-			finally {
-				if ($spinner) { Loading-Spinner -Resume }
-			}
+			Invoke-ReadyDesktopPass -Pipeline $pipeline -ReadyDesktopNumber $readyDesktopNumber -ReadyEntries $readyEntries -StableWindowHandles $stableWindowHandles -AbandonedEntries $abandonedSoFar
 		}
 
 		# Entries the wait abandoned (no window ever, no live process): the layout pass gives
@@ -1204,34 +1088,23 @@ function Set-WorkspaceWindowLayout {
 			}
 		}
 		else {
+			# Wait trims come from the claim set. Windows that pre-existed the open have nothing to
+			# stabilize: in plain mode they count as stable on first sight (WaitPreExisting); in
+			# alongside mode they belong to another workspace and never match an entry (the layout
+			# pass refuses them anyway - waiting a second for one only to refuse it wasted the
+			# second and hid a real shortfall), and a protected window is never matched in plain
+			# mode for the same reason (WaitExcluded). Windows the launch actions created get no
+			# credit for the time they were visible before the wait started: an application's
+			# first window can be replaced seconds after launch (VS Code), and the stability floor
+			# is what catches that.
 			$waitParams = @{
 				LayoutConfig   = $config.Layout
 				TimeoutSeconds = $TimeoutSeconds
 				OnWindowStable = $onWindowStableCallback
+				Claims         = $claims
 			}
 			if ($usePipelining) {
 				$waitParams["OnDesktopReady"] = $onDesktopReadyCallback
-			}
-			# Wait trims. Windows that pre-existed the open have nothing to stabilize: in plain
-			# mode they count as stable on first sight; in alongside mode they belong to another
-			# workspace and never match an entry (the layout pass refuses them anyway - waiting a
-			# second for one only to refuse it wasted the second and hid a real shortfall), and a
-			# protected window is never matched in plain mode for the same reason. Windows the
-			# launch actions created get no credit for the time they were visible before the wait
-			# started: an application's first window can be replaced seconds after launch (VS
-			# Code), and the stability floor is what catches that.
-			$waitExcludedHandles = New-Object 'System.Collections.Generic.HashSet[IntPtr]'
-			if ($Alongside) {
-				foreach ($existingHandle in @($existingWindowHandles)) { [void]$waitExcludedHandles.Add($existingHandle) }
-			}
-			elseif ($existingWindowHandles -and $existingWindowHandles.Count -gt 0) {
-				$waitParams["PreExistingWindowHandles"] = $existingWindowHandles
-			}
-			if ($hasProtectedWindows) {
-				foreach ($protectedHandle in @($ProtectedWindowHandles)) { [void]$waitExcludedHandles.Add($protectedHandle) }
-			}
-			if ($waitExcludedHandles.Count -gt 0) {
-				$waitParams["ExcludeWindowHandles"] = $waitExcludedHandles
 			}
 			$waitResult = Wait-ForWorkspaceWindows @waitParams
 
@@ -1257,10 +1130,10 @@ function Set-WorkspaceWindowLayout {
 		# The windows the per-desktop passes already placed are done: they are skipped by the
 		# normalization passes below and excluded from the remaining layout pass, and they leave
 		# the wait snapshot so no remaining entry's title fallback can claim one of them.
-		if ($pipelinedHandles.Count -gt 0) {
-			Write-LogDebug " Per-desktop passes placed $($pipelinedHandles.Count) window(s) on $($pipelinedDesktops.Count) desktop(s) during the wait" -Style Success
+		if ($claims.Excluded.Count -gt 0) {
+			Write-LogDebug " Per-desktop passes placed $($claims.Excluded.Count) window(s) on $($pipeline.PipelinedDesktops.Count) desktop(s) during the wait" -Style Success
 			if ($windowStates -and $windowStates.Count -gt 0) {
-				foreach ($pipelinedHandle in @($pipelinedHandles)) {
+				foreach ($pipelinedHandle in @($claims.Excluded)) {
 					if ($windowStates.ContainsKey($pipelinedHandle)) { $windowStates.Remove($pipelinedHandle) }
 				}
 			}
@@ -1366,7 +1239,7 @@ function Set-WorkspaceWindowLayout {
 
 								# Already matched, positioned and snapped by a per-desktop pass -
 								# resetting its tab would only change a title nothing waits for.
-								if ($pipelinedHandles.Contains($window.Handle)) {
+								if ($claims.Excluded.Contains($window.Handle)) {
 									continue
 								}
 
@@ -1463,7 +1336,7 @@ function Set-WorkspaceWindowLayout {
 				# the workspace ones again right after.
 				# Windows a per-desktop pass already placed are at their inset or snapped - never
 				# re-normalized.
-				$newWindows = @($currentAllWindows | Where-Object { -not $existingWindowHandles.Contains($_.Handle) -and -not $pipelinedHandles.Contains($_.Handle) })
+				$newWindows = @($currentAllWindows | Where-Object { -not $existingWindowHandles.Contains($_.Handle) -and -not $claims.Excluded.Contains($_.Handle) })
 				Write-LogDebug "  Normalizing $($newWindows.Count) new window(s) only" -Style Step
 				foreach ($newWin in $newWindows) {
 					$null = Resize-Windows -WindowHandle $newWin.Handle
@@ -1473,22 +1346,17 @@ function Set-WorkspaceWindowLayout {
 
 		& $recordPhase 'Normalize'
 
+		# The full pass and every in-process retry claim with the open's ownership rules but
+		# WITHOUT the per-desktop exclusions: a retry re-runs the whole layout and must be free to
+		# reposition a window a per-desktop pass placed. Only the pass that finishes the remaining
+		# entries after a pipelined wait (below) takes $claims itself, exclusions included.
 		$setLayoutParams = @{
-			LayoutConfig          = $layoutConfigToApply
-			MonitorInfo           = $cachedMonitorInfo
-			MonitorConfig         = $config.Monitors
-			ExistingWindowHandles = $existingWindowHandles
-			ExpectedWindowState   = $windowStates
-			DesktopOffset         = $DesktopOffset
-		}
-		if ($Alongside) {
-			$setLayoutParams["SkipExistingWindows"] = $true
-		}
-		if ($hasProtectedWindows) {
-			$setLayoutParams["ProtectedWindowHandles"] = $ProtectedWindowHandles
-		}
-		if ($pinnedHandleMap -and $pinnedHandleMap.Count -gt 0) {
-			$setLayoutParams["PinnedHandleMap"] = $pinnedHandleMap
+			LayoutConfig        = $layoutConfigToApply
+			MonitorInfo         = $cachedMonitorInfo
+			MonitorConfig       = $config.Monitors
+			Claims              = (New-WindowClaimSet -Existing $existingWindowHandles -SkipExisting:$Alongside -Protected $ProtectedWindowHandles -PinnedMap $pinnedHandleMap)
+			ExpectedWindowState = $windowStates
+			DesktopOffset       = $DesktopOffset
 		}
 		if ($waitAbandonedEntries.Count -gt 0) {
 			$setLayoutParams["AbandonedEntries"] = $waitAbandonedEntries
@@ -1529,8 +1397,9 @@ function Set-WorkspaceWindowLayout {
 
 				# Refresh the existing-handles snapshot so windows that are ALREADY correct are
 				# skipped by Set-WindowLayouts' position check and only wrong windows get redone.
-				# Not in alongside mode: there ExistingWindowHandles means "another workspace's
-				# windows - do not touch" and must stay the original pre-open capture.
+				# Not in alongside mode: there the claim set's Existing means "another workspace's
+				# windows - do not touch" and must stay the original pre-open capture. The new claim
+				# set keeps every other rule (protected, pinned) of the one it replaces.
 				if (-not $Alongside) {
 					$retrySnapshotWindows = Get-WindowHandle -ErrorAction SilentlyContinue
 					$retryExistingHandles = New-Object 'System.Collections.Generic.HashSet[IntPtr]'
@@ -1539,7 +1408,7 @@ function Set-WorkspaceWindowLayout {
 							[void]$retryExistingHandles.Add($retryWindow.Handle)
 						}
 					}
-					$setLayoutParams["ExistingWindowHandles"] = $retryExistingHandles
+					$setLayoutParams["Claims"] = New-WindowClaimSet -Existing $retryExistingHandles -Protected $ProtectedWindowHandles -PinnedMap $pinnedHandleMap
 				}
 
 				# The FancyZones reset and the snapshot refresh above are retry overhead, not a
@@ -1555,7 +1424,7 @@ function Set-WorkspaceWindowLayout {
 			# only the windows this pass placed; an empty result set means nothing is left to do.
 			$attemptDesktopFilter = $null
 			$remainingEntryCount = -1
-			if ($layoutAttempt -eq 1 -and $pipelinedEntryKeys.Count -gt 0) {
+			if ($layoutAttempt -eq 1 -and $pipeline.PipelinedEntryKeys.Count -gt 0) {
 				# The per-desktop passes during the wait already placed and snapped these ENTRIES.
 				# Attempt 1 finishes the rest: the whole layout with those entries skipped (so
 				# duplicate keys are still counted across the layout), appended to the same tracking,
@@ -1576,7 +1445,7 @@ function Set-WorkspaceWindowLayout {
 				# second copy in every zone), and the last 13 entries found nothing - a starved,
 				# doubled first pass that only the in-process retry straightened out.
 				$tailSkipKeys = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
-				foreach ($placedKey in $pipelinedEntryKeys) { [void]$tailSkipKeys.Add($placedKey) }
+				foreach ($placedKey in $pipeline.PipelinedEntryKeys) { [void]$tailSkipKeys.Add($placedKey) }
 				# One entry of each catch-all key is enough to decide the whole key: how many entries
 				# of that key does the tail still have to fill, and how many eligible windows of the
 				# process exist for them.
@@ -1598,7 +1467,7 @@ function Set-WorkspaceWindowLayout {
 					$catchAllEntryTotals[$catchAllKey] = [int]$catchAllEntryTotals[$catchAllKey] + 1
 				}
 				$catchAllPlacedCounts = @{}
-				foreach ($placedRow in $pipelinedResults) {
+				foreach ($placedRow in $pipeline.PipelinedResults) {
 					if ($null -eq $placedRow.LayoutEntry -or [string]::IsNullOrEmpty($placedRow.EntryKey)) { continue }
 					if (-not $tailSkipKeys.Contains([string]$placedRow.EntryKey)) { continue }
 					$catchAllKey = & $catchAllKeyOf $placedRow.LayoutEntry
@@ -1608,7 +1477,7 @@ function Set-WorkspaceWindowLayout {
 				# Only as many placed entries as there are SURPLUS windows are re-queued: re-queuing
 				# every placed entry of the key would let them claim the tail's windows all over again.
 				$catchAllSurplus = @{}
-				foreach ($placedRow in $pipelinedResults) {
+				foreach ($placedRow in $pipeline.PipelinedResults) {
 					if ($null -eq $placedRow.LayoutEntry -or [string]::IsNullOrEmpty($placedRow.EntryKey)) { continue }
 					if (-not $tailSkipKeys.Contains([string]$placedRow.EntryKey)) { continue }
 					$catchAllKey = & $catchAllKeyOf $placedRow.LayoutEntry
@@ -1616,7 +1485,7 @@ function Set-WorkspaceWindowLayout {
 					if (-not $catchAllSurplus.ContainsKey($catchAllKey)) {
 						$processWindows = @(Get-WindowHandle -ProcessName $catchAllKey -ErrorAction SilentlyContinue)
 						$newcomers = @($processWindows | Where-Object {
-								$null -ne $_.Handle -and -not $pipelinedHandles.Contains($_.Handle) -and
+								$null -ne $_.Handle -and -not $claims.Excluded.Contains($_.Handle) -and
 								-not ($hasProtectedWindows -and $ProtectedWindowHandles.Contains($_.Handle)) -and
 								-not ($Alongside -and $existingWindowHandles -and $existingWindowHandles.Contains($_.Handle))
 							})
@@ -1635,28 +1504,28 @@ function Set-WorkspaceWindowLayout {
 					}
 				}
 				$remainingEntryCount = $layoutConfigToApply.Count - $tailSkipKeys.Count
-				Write-LogDebug " Per-desktop passes placed [$($pipelinedEntryKeys.Count)] of [$($layoutConfigToApply.Count)] entries on [$($pipelinedDesktops.Count)] desktop(s) during the wait - finishing the remaining [$remainingEntryCount]"
+				Write-LogDebug " Per-desktop passes placed [$($pipeline.PipelinedEntryKeys.Count)] of [$($layoutConfigToApply.Count)] entries on [$($pipeline.PipelinedDesktops.Count)] desktop(s) during the wait - finishing the remaining [$remainingEntryCount]"
 
-				if ($script:PositionedWindowHandles -and $pipelinedHandles.Count -gt 0) {
+				if ($script:PositionedWindowHandles -and $claims.Excluded.Count -gt 0) {
 					$keptTracking = [System.Collections.ArrayList]::new()
 					foreach ($trackedState in @($script:PositionedWindowHandles)) {
-						if (-not $pipelinedHandles.Contains([IntPtr]$trackedState.Handle)) { [void]$keptTracking.Add($trackedState) }
+						if (-not $claims.Excluded.Contains([IntPtr]$trackedState.Handle)) { [void]$keptTracking.Add($trackedState) }
 					}
 					$script:PositionedWindowHandles = $keptTracking
 				}
 
 				if ($remainingEntryCount -gt 0) {
+					# The open's claim set itself: the windows the per-desktop passes placed are in
+					# its Excluded set and stay off limits to the remaining entries.
 					$remainingLayoutParams = $setLayoutParams.Clone()
 					$remainingLayoutParams["SkipEntryKeys"] = @($tailSkipKeys)
 					$remainingLayoutParams["KeepPositionedWindows"] = $true
-					if ($pipelinedHandles.Count -gt 0) {
-						$remainingLayoutParams["ExcludeWindowHandles"] = $pipelinedHandles
-					}
-					$results = @($pipelinedResults) + @(Set-WindowLayouts @remainingLayoutParams)
+					$remainingLayoutParams["Claims"] = $claims
+					$results = @($pipeline.PipelinedResults) + @(Set-WindowLayouts @remainingLayoutParams)
 					$attemptDesktopFilter = $false
 				}
 				else {
-					$results = @($pipelinedResults)
+					$results = @($pipeline.PipelinedResults)
 					$attemptDesktopFilter = @()
 				}
 			}
@@ -1733,8 +1602,8 @@ function Set-WorkspaceWindowLayout {
 				}
 			}
 			# The per-desktop passes' failures belong to attempt 1 too.
-			if ($layoutAttempt -eq 1 -and $pipelinedSnapFailures.Count -gt 0) {
-				$snapFailures = @($pipelinedSnapFailures) + $snapFailures
+			if ($layoutAttempt -eq 1 -and $pipeline.PipelinedSnapFailures.Count -gt 0) {
+				$snapFailures = @($pipeline.PipelinedSnapFailures) + $snapFailures
 			}
 
 			if ($snapFailures.Count -gt 0) {

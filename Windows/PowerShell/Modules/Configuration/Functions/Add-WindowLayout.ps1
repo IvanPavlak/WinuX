@@ -46,8 +46,9 @@ function Add-WindowLayout {
 	}
 
 	if (-not $MachineType) {
-		if ($Configuration -and $Configuration.MachineType) {
-			$MachineType = @($Configuration.MachineType)
+		$configuredMachineType = Get-ConfigSetting -Path 'MachineType'
+		if ($configuredMachineType) {
+			$MachineType = @($configuredMachineType)
 		}
 		else {
 			$MachineType = @("Test")

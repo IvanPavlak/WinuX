@@ -127,7 +127,7 @@ function Apply-FancyZones {
 	# and proves the reload with one probe shortcut (see $applyLayoutsViaFile below); "Hotkeys" is
 	# the desktop-switching shortcut pass alone. An unknown value falls back to File with a note.
 	$applyViaFile = $true
-	$configuredApplyMethod = [string]$global:Configuration.FancyZonesApplyMethod
+	$configuredApplyMethod = [string](Get-ConfigSetting -Path 'FancyZonesApplyMethod')
 	if (-not [string]::IsNullOrWhiteSpace($configuredApplyMethod)) {
 		switch ($configuredApplyMethod.Trim().ToLowerInvariant()) {
 			'file' { $applyViaFile = $true }
@@ -465,12 +465,13 @@ function Apply-FancyZones {
 			}
 
 			if ($null -eq $layoutNumber) {
-				if ($global:Configuration.LayoutNumbers.ContainsKey($layoutName)) {
-					$layoutNumber = $global:Configuration.LayoutNumbers[$layoutName]
+				$layoutNumbers = Get-ConfigSetting -Path 'LayoutNumbers' -Default @{}
+				if ($layoutNumbers.ContainsKey($layoutName)) {
+					$layoutNumber = $layoutNumbers[$layoutName]
 				}
 				else {
 					Write-Warning "    ✗ Layout '$layoutName' not found in configuration"
-					Write-Warning "      Available layouts: $($global:Configuration.LayoutNumbers.Keys -join ', ')"
+					Write-Warning "      Available layouts: $($layoutNumbers.Keys -join ', ')"
 					$resultsArray.Add([PSCustomObject]@{
 						Monitor = $monitorKey
 						Layout  = $layoutName
@@ -610,10 +611,7 @@ function Apply-FancyZones {
 		# highest owned index a short grace period instead of sending that desktop to the shortcut
 		# pass for want of a GUID.
 		$highestIndex = [int](($owned | Measure-Object -Property Number -Maximum).Maximum)
-		$registryClock = [System.Diagnostics.Stopwatch]::StartNew()
-		while (-not (Get-VirtualDesktopGuid -DesktopIndex $highestIndex) -and $registryClock.ElapsedMilliseconds -lt 1000) {
-			Start-Sleep -Milliseconds 50
-		}
+		$null = Wait-Until -TimeoutMs 1000 -PollIntervalMs 50 -Condition { [bool](Get-VirtualDesktopGuid -DesktopIndex $highestIndex) }
 
 		# Physical monitor per config key, resolved the way the shortcut pass resolves it: the
 		# layout's own X/Y/Width/Height when it carries them, else the bounds Get-MonitorSpecs
@@ -743,8 +741,9 @@ function Apply-FancyZones {
 				elseif ($null -ne $candidateMonitor.LayoutNumber) {
 					$number = $candidateMonitor.LayoutNumber
 				}
-				if ($null -eq $number -and $global:Configuration.LayoutNumbers -and $global:Configuration.LayoutNumbers.ContainsKey($candidate.Target.LayoutName)) {
-					$number = $global:Configuration.LayoutNumbers[$candidate.Target.LayoutName]
+				$layoutNumbers = Get-ConfigSetting -Path 'LayoutNumbers' -Default @{}
+				if ($null -eq $number -and $layoutNumbers.ContainsKey($candidate.Target.LayoutName)) {
+					$number = $layoutNumbers[$candidate.Target.LayoutName]
 				}
 				if ($rect -and $null -ne $number -and [int]$number -ge 0 -and [int]$number -le 9) {
 					$probe = @{ Rect = $rect; Number = [int]$number; Target = $candidate.Target }
@@ -758,16 +757,15 @@ function Apply-FancyZones {
 
 			if ($probeIndex -ne $CurrentDesktopIndex) {
 				Write-LogDebug " Switching to Desktop [$($probeIndex + 1)] for the layout probe"
+				$probeSwitched = $false
 				try {
-					$null = Invoke-WithRetry -ScriptBlock {
-						$null = Switch-Desktop -Desktop $probeIndex -ErrorAction Stop
-					} -MaxAttempts 3 -InitialDelayMs 100
+					$probeSwitched = [bool](Switch-VirtualDesktop -Index $probeIndex)
 				}
 				catch {
 					Write-LogDebug " Could not switch to desktop [$($probeIndex + 1)] for the probe: $_" -Style Warning
 					return $verifiedDesktops
 				}
-				if (-not (Wait-DesktopSwitch -TargetDesktopIndex $probeIndex)) {
+				if (-not $probeSwitched) {
 					Write-LogDebug " Desktop switch for the probe not confirmed - using the shortcut pass" -Style Warning
 					return $verifiedDesktops
 				}
@@ -834,15 +832,11 @@ function Apply-FancyZones {
 				& $applyLayouts -currentDesktopNumber $DesktopNumber -resultsArray $results
 			}
 			else {
-				$currentDesktop = Invoke-WithRetry -ScriptBlock {
-					Get-CurrentDesktop
-				} -MaxAttempts 3 -InitialDelayMs 500
+				$originalDesktopIndex = Get-CurrentVirtualDesktopIndex
 
-				$originalDesktopIndex = Invoke-WithRetry -ScriptBlock {
-					Get-DesktopIndex $currentDesktop
-				} -MaxAttempts 3 -InitialDelayMs 100
-
-				$allDesktops = (Get-DesktopList) | Sort-Object -Property Number
+				# The list is needed for its Number/Name, not just the count, so it goes through the
+				# operation seam directly.
+				$allDesktops = @(Invoke-VirtualDesktopOperation -Operation { Get-DesktopList } -Label 'listing virtual desktops') | Sort-Object -Property Number
 
 				$desktopCount = ($allDesktops | Measure-Object).Count
 
@@ -925,15 +919,13 @@ function Apply-FancyZones {
 								}
 
 								Write-LogDebug " Switching to Desktop [$displayDesktopNumber] (layout key => $layoutLookupKey)"
-								Invoke-WithRetry -ScriptBlock {
-									$null = Switch-Desktop -Desktop $internalDesktopIndex -ErrorAction Stop
-								} -MaxAttempts 3 -InitialDelayMs 100
-								$switchedDesktop = $true
-
 								# The desktop switch is asynchronous and the layout hotkey applies to
-								# whatever desktop is ACTIVE - confirm the switch landed before injecting,
-								# otherwise the layout is silently recorded under the PREVIOUS desktop's GUID.
-								if (-not (Wait-DesktopSwitch -TargetDesktopIndex $internalDesktopIndex)) {
+								# whatever desktop is ACTIVE - Switch-VirtualDesktop confirms the switch
+								# landed before the hotkey is injected, otherwise the layout is silently
+								# recorded under the PREVIOUS desktop's GUID.
+								$landed = Switch-VirtualDesktop -Index $internalDesktopIndex
+								$switchedDesktop = $true
+								if (-not $landed) {
 									Write-LogDebug " Desktop switch to [$displayDesktopNumber] not confirmed - skipping layout application for this desktop" -Style Warning
 									continue
 								}
@@ -997,14 +989,12 @@ function Apply-FancyZones {
 								}
 
 								Write-LogDebug " Switching to Desktop [$desktopNumberToApply]"
-								Invoke-WithRetry -ScriptBlock {
-									$null = Switch-Desktop -Desktop $internalDesktopIndex -ErrorAction Stop
-								} -MaxAttempts 3 -InitialDelayMs 100
+								# Switch-VirtualDesktop confirms the asynchronous switch landed before the
+								# layout hotkey is injected - see the matching guard in the DesktopOffset
+								# branch above.
+								$landed = Switch-VirtualDesktop -Index $internalDesktopIndex
 								$switchedDesktop = $true
-
-								# Confirm the asynchronous switch landed before injecting the layout
-								# hotkey - see the matching guard in the DesktopOffset branch above.
-								if (-not (Wait-DesktopSwitch -TargetDesktopIndex $internalDesktopIndex)) {
+								if (-not $landed) {
 									Write-LogDebug " Desktop switch to [$desktopNumberToApply] not confirmed - skipping layout application for this desktop" -Style Warning
 									continue
 								}
@@ -1028,10 +1018,6 @@ function Apply-FancyZones {
 							Start-Sleep -Milliseconds $script:WindowModuleDelays.LayoutCommitMs
 
 							Write-LogDebug " Switching back to desktop [$($returnDesktop + 1)]..." -Style Success
-							Invoke-WithRetry -ScriptBlock {
-								$null = Switch-Desktop -Desktop $returnDesktop -ErrorAction Stop
-							} -MaxAttempts 3 -InitialDelayMs 100
-
 							# Deterministically re-apply the return desktop's layout while we are actually on
 							# it. The per-desktop pass ends on the LAST desktop and then switches back here;
 							# the last desktop has no following pass to override a bled-in layout, so this
@@ -1040,7 +1026,7 @@ function Apply-FancyZones {
 							# The re-apply MUST happen on the return desktop - if the asynchronous
 							# switch-back cannot be confirmed, skip it rather than stamping this
 							# desktop's layout onto whichever desktop is still active.
-							if (Wait-DesktopSwitch -TargetDesktopIndex $returnDesktop) {
+							if (Switch-VirtualDesktop -Index $returnDesktop) {
 								Start-Sleep -Milliseconds $script:WindowModuleDelays.LayoutCommitMs
 								$returnLayoutKey = if ($DesktopOffset -gt 0) { 1 } else { $returnDesktop + 1 }
 								& $applyLayouts -currentDesktopNumber $returnLayoutKey -resultsArray $results

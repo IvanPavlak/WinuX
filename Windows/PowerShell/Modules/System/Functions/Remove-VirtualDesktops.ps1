@@ -23,22 +23,23 @@ function Remove-VirtualDesktops {
 		Desktop counts come from Get-DesktopCount rather than Get-DesktopList: only the count is ever used,
 		and Get-DesktopList pays a per-desktop registry name lookup plus a wallpaper query over COM.
 
-		Before cleanup, runs Test-RpcServerHealth -Probe so the preflight verifies
-		the live VirtualDesktop RPC endpoint instead of only checking that Windows
-		RPC services are Running. If preflight recovery unloads the VirtualDesktop
-		module, cmdlets are rehydrated before cleanup continues. VirtualDesktop
-		operations are retried with exponential backoff; if an operation reports
-		0x800706BA / 0x800706BE, the current session's VirtualDesktop module state
-		is reset before the next attempt to recover stale COM proxies without
-		requiring a fresh shell.
+		Every desktop-manager call runs through the Window module's seam,
+		Invoke-VirtualDesktopOperation (5 attempts / 250 ms initial delay). The first count
+		carries -Probe, so the live VirtualDesktop RPC endpoint is verified and repaired once,
+		up front, instead of only checking that Windows RPC services are Running. If an
+		operation reports 0x800706BA / 0x800706BE, the seam reconnects the current session's
+		VirtualDesktop COM proxies (Reset-VirtualDesktopState) and retries with exponential
+		backoff, recovering stale proxies without requiring a fresh shell; any other error
+		comes straight back. This function carries no retry or recovery block of its own.
 
 		The -EmptyOnly occupancy scan is retried as a whole rather than per window. A per-window lookup
 		that fails on its own merits - a window closed mid-scan, or a shell window such as "Windows Input
 		Experience" that always answers TYPE_E_ELEMENTNOTFOUND - can never succeed on a retry, so it is
 		skipped immediately instead of sleeping through a backoff ladder that cost seconds per run. Only a
-		genuine RPC failure restarts the scan, after the ladder has reset this session's COM state. If RPC
-		is still unavailable once the ladder is exhausted, the cleanup aborts and returns $false rather
-		than treating unknowable occupancy as "empty".
+		genuine RPC failure restarts the scan - the whole scan is one operation handed to the seam, which
+		resets this session's COM state between attempts. If RPC is still unavailable once the seam's
+		attempts are exhausted, the cleanup aborts and returns $false rather than treating unknowable
+		occupancy as "empty".
 
 		With -Index, removes exactly the named 0-based desktop indexes regardless of whether anything is
 		still on them, highest first so the remaining targets do not shift. Windows relocates windows
@@ -98,90 +99,29 @@ function Remove-VirtualDesktops {
 
 	Write-LogTitle "Removing Virtual Desktops$modeLabel"
 
-	if (Get-Command Import-VirtualDesktopModule -ErrorAction SilentlyContinue) {
-		if (-not (Import-VirtualDesktopModule -Silent)) {
-			Write-LogDebug "Could not remove virtual desktops => [VirtualDesktop module is unavailable]" -Style Error
-			return $false
-		}
+	if (-not (Import-VirtualDesktopModule -Silent)) {
+		Write-LogDebug "Could not remove virtual desktops => [VirtualDesktop module is unavailable]" -Style Error
+		return $false
 	}
 
-	$rpcPolicy = if (Get-Command Get-RpcRetryPolicy -ErrorAction SilentlyContinue) {
-		Get-RpcRetryPolicy -OperationLabel "desktop cleanup" -MaxAttempts 5 -InitialDelayMs 250 -Probe
-	}
-	else {
-		@{ MaxAttempts = 5; InitialDelayMs = 250 }
-	}
-	if (-not (Get-Command Get-DesktopCount -ErrorAction SilentlyContinue)) {
-		if (Get-Command Reset-VirtualDesktopState -ErrorAction SilentlyContinue) {
-			[void](Reset-VirtualDesktopState)
-		}
-		elseif (Get-Command Import-VirtualDesktopModule -ErrorAction SilentlyContinue) {
-			[void](Import-VirtualDesktopModule -Silent)
-		}
-		else {
-			Import-Module VirtualDesktop -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
-		}
-	}
-	$rpcMaxAttempts = [int]$rpcPolicy.MaxAttempts
-	$rpcInitialDelayMs = [int]$rpcPolicy.InitialDelayMs
-	$useRetry = [bool](Get-Command Invoke-WithRetry -ErrorAction SilentlyContinue)
-	$useOptionalRetryHelper = [bool](Get-Command Invoke-WithOptionalRetry -ErrorAction SilentlyContinue)
-	$useRpcErrorClassifier = [bool](Get-Command Test-RpcUnavailableError -ErrorAction SilentlyContinue)
-	$rpcUnavailablePattern = '0x800706BA|0x800706BE|0x80010108|RPC server is unavailable|The remote procedure call failed'
-
-	# Test-RpcUnavailableError walks the InnerException chain and HRESULTs, so
-	# wrapped RPC failures (e.g. a TypeInitializationException around the COM
-	# error) still classify correctly; the message match is the fallback.
+	# Every desktop-manager call goes through the Window module's operation seam: an RPC
+	# failure reconnects this session's COM proxies and retries with backoff; any other error
+	# (a window that closed mid-scan, a shell window with no desktop) comes straight back.
+	# The first call also probes and repairs the live RPC endpoint (-Probe), once, up front.
 	$testRpcFailure = {
 		param($ErrorRecord)
-
-		if ($useRpcErrorClassifier) {
-			return [bool](Test-RpcUnavailableError $ErrorRecord)
-		}
-
-		$errorMessage = if ($ErrorRecord.Exception) { $ErrorRecord.Exception.Message } else { [string]$ErrorRecord }
-		return [bool]($errorMessage -match $rpcUnavailablePattern)
+		return [bool](Test-RpcUnavailableError $ErrorRecord)
 	}
-	$recoverVirtualDesktopRpc = {
-		param($ErrorRecord, [int]$Attempt)
 
-		if (-not (& $testRpcFailure $ErrorRecord)) {
-			return
-		}
-
-		Write-LogDebug "  RPC endpoint unavailable during desktop cleanup; resetting VirtualDesktop state before retry $($Attempt + 1)" -Style Warning -NoLeadingNewline
-
-		if (Get-Command Reset-VirtualDesktopState -ErrorAction SilentlyContinue) {
-			[void](Reset-VirtualDesktopState)
-			return
-		}
-
-		try {
-			Remove-Module -Name VirtualDesktop -Force -ErrorAction SilentlyContinue
-			Import-Module VirtualDesktop -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
-		}
-		catch {
-			# Best-effort recovery before the next retry attempt.
-		}
-	}
 	$invokeDesktopOperation = {
 		param([scriptblock]$Operation)
-
-		if ($useOptionalRetryHelper) {
-			return Invoke-WithOptionalRetry -EnableRetry:$useRetry -ScriptBlock $Operation -MaxAttempts $rpcMaxAttempts -InitialDelayMs $rpcInitialDelayMs -OnRetry $recoverVirtualDesktopRpc
-		}
-
-		if ($useRetry) {
-			return Invoke-WithRetry -ScriptBlock $Operation -MaxAttempts $rpcMaxAttempts -InitialDelayMs $rpcInitialDelayMs -OnRetry $recoverVirtualDesktopRpc
-		}
-
-		return & $Operation
+		Invoke-VirtualDesktopOperation -Operation $Operation -Label 'desktop cleanup' -MaxAttempts 5 -InitialDelayMs 250
 	}
 
 	try {
 		# Track removed desktops so the normal-mode summary can list them.
 		$removedDesktops = @()
-		$desktopCount = [int](& $invokeDesktopOperation { Get-DesktopCount })
+		$desktopCount = [int](Invoke-VirtualDesktopOperation -Operation { Get-DesktopCount } -Label 'desktop cleanup' -MaxAttempts 5 -InitialDelayMs 250 -Probe)
 
 		if ($byIndex) {
 			if ($explicitIndexes.Count -eq 0) {
@@ -382,7 +322,7 @@ function Remove-VirtualDesktops {
 	}
 	catch {
 		$errorMessage = if ($_.Exception) { $_.Exception.Message } else { [string]$_ }
-		if ($errorMessage -match $rpcUnavailablePattern) {
+		if (Test-RpcUnavailableError $_) {
 			Write-LogDebug "Could not remove virtual desktops => [VirtualDesktop RPC endpoint stayed unavailable after live preflight and retry recovery: $errorMessage]" -Style Error
 		}
 		else {

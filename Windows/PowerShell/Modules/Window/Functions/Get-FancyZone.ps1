@@ -85,7 +85,7 @@ function Get-FancyZone {
 		Write-Error "Monitor geometry is required: MonitorWidth and MonitorHeight must both be greater than 0 (got ${MonitorWidth}x${MonitorHeight}). Resolve the monitor with Get-MonitorSpecs and pass its work area."
 		return $null
 	}
-	$zoneNameMappings = $global:Configuration.ZoneNameMappings
+	$zoneNameMappings = Get-ConfigSetting -Path 'ZoneNameMappings' -Default @{}
 
 	# Check if layout has zone name mappings
 	if (-not $zoneNameMappings.ContainsKey($LayoutName)) {

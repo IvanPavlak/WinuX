@@ -45,7 +45,7 @@ function Center-Terminal {
 	$widthPercent = 40
 	$heightPercent = 50
 
-	$section = $global:Configuration.CenterTerminalSizing
+	$section = Get-ConfigSetting -Path 'CenterTerminalSizing'
 	if ($section) {
 		$monitors = Get-MonitorInfo -Quiet
 		$primary = $monitors | Where-Object { $_.IsPrimary } | Select-Object -First 1

@@ -11,7 +11,7 @@ BeforeAll {
 
 Describe "Open-Project" {
 	BeforeEach {
-		$script:Configuration = @{
+		$global:Configuration = @{
 			ProjectActions = @(
 				@{ Demo = @(
 						@{ Action = "Open-ProjectTerminals-Or-RunProject"; Parameters = @{ Project = "{ProjectName}" } },

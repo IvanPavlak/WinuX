@@ -74,7 +74,7 @@ function Resolve-PackageManagers {
 		return [string[]]@($canonical.Keys | Where-Object { $_ -in $PackageManager })
 	}
 
-	$configured = @($global:Configuration.PackageManagers |
+	$configured = @((Get-ConfigSetting -Path 'PackageManagers' -Default @()) |
 		Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
 		ForEach-Object { "$_".Trim() })
 

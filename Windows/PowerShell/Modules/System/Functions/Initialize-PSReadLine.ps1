@@ -55,7 +55,7 @@ function Initialize-PSReadLine {
 	param(
 		[Parameter(Position = 0)]
 		[AllowNull()]
-		[hashtable]$Settings = $global:Configuration.PSReadLine
+		[hashtable]$Settings = (Get-ConfigSetting -Path 'PSReadLine')
 	)
 
 	if (-not $Settings -or $Settings.Count -eq 0) {

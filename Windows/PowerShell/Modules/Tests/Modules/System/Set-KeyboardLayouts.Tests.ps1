@@ -12,7 +12,7 @@ BeforeAll {
 
 Describe "Set-KeyboardLayouts" {
 	BeforeEach {
-		$script:Configuration = [PSCustomObject]@{
+		$global:Configuration = [PSCustomObject]@{
 			KeyboardLayoutSets       = @(
 				@{ Default = @("US") }
 			)

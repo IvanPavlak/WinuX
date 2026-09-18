@@ -53,14 +53,9 @@ function Resolve-LayoutTokens {
 		# shipped browser map lives and what Open-Browser reads. A top-level Browsers map is kept
 		# as a legacy fallback - this function used to look ONLY there (which the base config never
 		# populates, so the built-in fallback always won), and a fork may have adopted that spot.
-		$browserMap = $null
-		if ($global:Configuration) {
-			if ($global:Configuration.Universal -and $global:Configuration.Universal.Browsers) {
-				$browserMap = $global:Configuration.Universal.Browsers
-			}
-			elseif ($global:Configuration.Browsers) {
-				$browserMap = $global:Configuration.Browsers
-			}
+		$browserMap = Get-ConfigSetting -Path 'Universal.Browsers'
+		if (-not $browserMap) {
+			$browserMap = Get-ConfigSetting -Path 'Browsers'
 		}
 
 		if ($browserMap) {

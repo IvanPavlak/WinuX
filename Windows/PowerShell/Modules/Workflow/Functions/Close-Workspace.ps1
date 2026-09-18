@@ -128,21 +128,6 @@ function Close-Workspace {
 		[string]$StatePath
 	)
 
-	# Graceful close, same as Close-Project. Each closing function in the repository declares its
-	# own guarded P/Invoke type; there is no shared native close seam to reuse yet.
-	if (-not ([System.Management.Automation.PSTypeName]'CloseWorkspaceWin32').Type) {
-		Add-Type @"
-			using System;
-			using System.Runtime.InteropServices;
-			public class CloseWorkspaceWin32 {
-				[DllImport("user32.dll")]
-				public static extern bool PostMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
-
-				public const uint WM_CLOSE = 0x0010;
-			}
-"@
-	}
-
 	$stateParams = @{}
 	if (-not [string]::IsNullOrWhiteSpace($StatePath)) { $stateParams['StatePath'] = $StatePath }
 
@@ -443,7 +428,7 @@ function Close-Workspace {
 			if (-not $PSCmdlet.ShouldProcess("$($window.ProcessName) window [$($window.Title)]", "Close")) { continue }
 
 			Write-LogDebug "  Closing window => [$($window.Title)]" -Style Step
-			[void][CloseWorkspaceWin32]::PostMessage([IntPtr]$window.Handle, [CloseWorkspaceWin32]::WM_CLOSE, [IntPtr]::Zero, [IntPtr]::Zero)
+			[void](Close-Window -Handle ([IntPtr]$window.Handle))
 
 			$postedWindows.Add([PSCustomObject]@{
 					Workspace = [string]$entry.Workspace
@@ -495,7 +480,7 @@ function Close-Workspace {
 			if (-not $PSCmdlet.ShouldProcess("$($liveWindow.ProcessName) window [$($liveWindow.Title)] on desktop $liveDesktop", "Close")) { continue }
 
 			Write-LogDebug "  Closing window on this workspace's desktop $liveDesktop => [$($liveWindow.Title)]" -Style Step
-			[void][CloseWorkspaceWin32]::PostMessage([IntPtr]$liveHandle, [CloseWorkspaceWin32]::WM_CLOSE, [IntPtr]::Zero, [IntPtr]::Zero)
+			[void](Close-Window -Handle ([IntPtr]$liveHandle))
 
 			$postedWindows.Add([PSCustomObject]@{
 					Workspace = [string]$entry.Workspace
@@ -624,7 +609,7 @@ function Close-Workspace {
 			if (-not $PSCmdlet.ShouldProcess("Windows Terminal window [$($survivor.Title)]", "Close")) { continue }
 
 			Write-LogDebug "  Closing terminal window => [$($survivor.Title)]" -Style Step
-			[void][CloseWorkspaceWin32]::PostMessage([IntPtr]$ownedTerminal.Handle, [CloseWorkspaceWin32]::WM_CLOSE, [IntPtr]::Zero, [IntPtr]::Zero)
+			[void](Close-Window -Handle ([IntPtr]$ownedTerminal.Handle))
 
 			$postedWindows.Add([PSCustomObject]@{
 					Workspace = $ownedTerminal.Workspace

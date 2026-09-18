@@ -16,8 +16,6 @@ Describe "Set-EnvironmentVariables" {
 				PC = [PSCustomObject]@{ Dev = "C:\\Dev"; User = "C:\\Users\\You" }
 			}
 		}
-		$script:Configuration = $global:Configuration
-
 		Mock Test-AdminPrivileges { }
 		Mock Expand-Hashtable { $Source }
 		Mock Set-Item { }

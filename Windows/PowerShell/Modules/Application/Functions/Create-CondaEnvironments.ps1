@@ -35,7 +35,7 @@ function Create-CondaEnvironments {
 	Write-LogTitle "Updating Conda" -BlankLineAfter
 	& $condaExe update -n base -c defaults conda -y
 
-	$condaEnvFolder = Join-Path -Path $MachineSpecificPaths.Projects.Self.Root -ChildPath $global:Configuration.BootstrapConfig.DataFiles.CondaEnvironments
+	$condaEnvFolder = Join-Path -Path $MachineSpecificPaths.Projects.Self.Root -ChildPath (Get-ConfigSetting -Path 'BootstrapConfig.DataFiles.CondaEnvironments')
 
 	if (-not (Test-Path $condaEnvFolder)) {
 		Write-LogError " Conda environments folder not found => [$condaEnvFolder]"

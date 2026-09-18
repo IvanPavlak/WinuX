@@ -38,6 +38,10 @@ function Test-AppliedFancyZonesLayouts {
 	.PARAMETER AppliedLayoutsPath
 		Path of applied-layouts.json. Defaults to the FancyZones data directory under %LOCALAPPDATA%.
 
+	.PARAMETER Clock
+		The wait clock (New-WaitClock) the last-write poll and the parse retry read and sleep
+		through. Defaults to a real one; tests hand in a fake.
+
 	.OUTPUTS
 		PSCustomObject with SaveObserved ($true/$false when -WaitForWriteAfterUtc was given, else
 		$null), Readable (the file parsed), AllVerified, VerifiedCount and Targets - one record per
@@ -66,8 +70,14 @@ function Test-AppliedFancyZonesLayouts {
 		[int]$PollIntervalMs = 25,
 
 		[Parameter()]
-		[string]$AppliedLayoutsPath
+		[string]$AppliedLayoutsPath,
+
+		[Parameter()]
+		[AllowNull()]
+		[object]$Clock
 	)
+
+	if ($null -eq $Clock) { $Clock = New-WaitClock }
 
 	if ([string]::IsNullOrWhiteSpace($AppliedLayoutsPath)) {
 		$AppliedLayoutsPath = Join-Path $env:LOCALAPPDATA "Microsoft\PowerToys\FancyZones\applied-layouts.json"
@@ -86,20 +96,9 @@ function Test-AppliedFancyZonesLayouts {
 	# unset [datetime] would read as 0001-01-01 and every file would look "written after" it.
 	$saveObserved = $null
 	if ($PSBoundParameters.ContainsKey('WaitForWriteAfterUtc')) {
-		$saveObserved = $false
-		$clock = [System.Diagnostics.Stopwatch]::StartNew()
-		while ($true) {
+		$saveObserved = Wait-Until -TimeoutMs $TimeoutMs -PollIntervalMs $PollIntervalMs -Clock $Clock -Condition {
 			$stamp = try { [System.IO.File]::GetLastWriteTimeUtc($AppliedLayoutsPath) } catch { [datetime]::MinValue }
-			if ($stamp -gt $WaitForWriteAfterUtc) {
-				$saveObserved = $true
-				break
-			}
-			if ($clock.ElapsedMilliseconds -ge $TimeoutMs) {
-				break
-			}
-			if ($PollIntervalMs -gt 0) {
-				Start-Sleep -Milliseconds $PollIntervalMs
-			}
+			return ($stamp -gt $WaitForWriteAfterUtc)
 		}
 	}
 
@@ -119,7 +118,7 @@ function Test-AppliedFancyZonesLayouts {
 			$readable = $true
 		}
 		catch {
-			Start-Sleep -Milliseconds 25
+			$Clock.Sleep(25)
 		}
 	}
 

@@ -54,7 +54,8 @@ function Initialize-OhMyPosh {
 	}
 
 	if ($OmpExe) {
-		& $OmpExe init pwsh --config $global:Configuration.Universal.OhMyPoshThemeFile | Invoke-Expression
+		$ohMyPoshThemeFile = Get-ConfigSetting -Path 'Universal.OhMyPoshThemeFile'
+		& $OmpExe init pwsh --config $ohMyPoshThemeFile | Invoke-Expression
 	}
 	else {
 		Write-Host -ForegroundColor Yellow "=> Oh My Posh not found - prompt theming skipped! Install it with => winget install JanDeDobbeleer.OhMyPosh -s winget"

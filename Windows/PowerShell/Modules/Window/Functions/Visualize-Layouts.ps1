@@ -89,7 +89,7 @@ function Visualize-Layouts {
 		}
 
 		# Get ZoneNameMappings from global configuration
-		$zoneNameMappings = $global:Configuration.ZoneNameMappings
+		$zoneNameMappings = Get-ConfigSetting -Path 'ZoneNameMappings'
 
 		if (-not $zoneNameMappings -or $zoneNameMappings.Count -eq 0) {
 			Write-LogWarning "No zone name mappings found in configuration." -NoLeadingNewline
@@ -107,7 +107,7 @@ function Visualize-Layouts {
 		# Display layouts in hotkey order (LayoutNumbers), then any layouts present in
 		# custom-layouts.json but absent from LayoutNumbers in file order - arbitrary
 		# layout names must never be silently hidden.
-		$layoutNumbers = $global:Configuration.LayoutNumbers
+		$layoutNumbers = Get-ConfigSetting -Path 'LayoutNumbers'
 		$sortedLayouts = @()
 		if ($layoutNumbers -and $layoutNumbers.Count -gt 0) {
 			$sortedLayouts = @($layoutNumbers.Keys | Sort-Object { [int]$layoutNumbers[$_] })

@@ -40,7 +40,7 @@ function Resolve-ProjectDockerCompose {
 		[string]$DatabaseProvider
 	)
 
-	$runnableMapping = $Configuration.RunnableProjectMappings | Where-Object { $_.Name -eq $ProjectName }
+	$runnableMapping = (Get-ConfigSetting -Path 'RunnableProjectMappings' -Default @()) | Where-Object { $_.Name -eq $ProjectName }
 	if (-not $runnableMapping) {
 		Write-LogError "No runnable project mapping found for [$ProjectName] in Configuration.ps1"
 		return $null
@@ -83,7 +83,7 @@ function Resolve-ProjectDockerCompose {
 
 	# Resolved once, and defaulted, because ContainsKey below is a METHOD call: a setup
 	# that drops DockerComposeFiles entirely would throw on a null-valued expression
-	$composeFileMap = if ($Configuration.DockerComposeFiles) { $Configuration.DockerComposeFiles } else { @{} }
+	$composeFileMap = Get-ConfigSetting -Path 'DockerComposeFiles' -Default @{}
 
 	# Determine if Docker is needed: either explicitly set on the mapping,
 	# or the selected provider has a centralized/project Docker Compose file
@@ -108,7 +108,7 @@ function Resolve-ProjectDockerCompose {
 	}
 	else {
 		# Fall back to project-specific docker-compose.yml (e.g., Oracle in ExampleProject)
-		$mapping = $Configuration.ProjectTerminals | Where-Object { $_.Name -eq $ProjectName }
+		$mapping = (Get-ConfigSetting -Path 'ProjectTerminals' -Default @()) | Where-Object { $_.Name -eq $ProjectName }
 		if (-not $mapping -or -not $mapping.BasePath) {
 			Write-LogError "No ProjectTerminals mapping with a BasePath found for [$ProjectName] - cannot resolve its project-local Docker Compose file!"
 			return $null

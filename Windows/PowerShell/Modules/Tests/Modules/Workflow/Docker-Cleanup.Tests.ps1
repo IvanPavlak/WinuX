@@ -9,7 +9,7 @@ BeforeAll {
 
 Describe "Docker-Cleanup" {
 	BeforeEach {
-		$script:Configuration = [PSCustomObject]@{
+		$global:Configuration = [PSCustomObject]@{
 			DockerCleanupActions = @(
 				@{ Name                = "Delete all volumes";
 					Command             = 'docker volume ls -q | ForEach-Object { docker volume rm $_ }';
@@ -105,7 +105,7 @@ Describe "Docker-Cleanup" {
 	}
 
 	It "warns when no cleanup actions are configured" {
-		$script:Configuration = [PSCustomObject]@{ DockerCleanupActions = @() }
+		$global:Configuration = [PSCustomObject]@{ DockerCleanupActions = @() }
 
 		Docker-Cleanup
 
@@ -116,7 +116,7 @@ Describe "Docker-Cleanup" {
 	It "warns instead of offering a blank menu entry when the configuration key is absent" {
 		# @($null).Count is 1, so an unwrapped guard would pass and build a menu with
 		# one empty option - the realistic case for a fork that drops the key entirely
-		$script:Configuration = [PSCustomObject]@{}
+		$global:Configuration = [PSCustomObject]@{}
 
 		Docker-Cleanup
 

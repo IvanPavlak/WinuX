@@ -128,7 +128,8 @@ function Set-PowerButtonActions {
 		$MachineType = DetermineMachineType
 		Write-LogStep " Machine type => [$MachineType]" -NoLeadingNewline
 
-		$machineConfig = if (Test-ConfigValue $Configuration.PowerButtonActions) { $Configuration.PowerButtonActions[$MachineType] } else { $null }
+		$powerButtonActions = Get-ConfigSetting -Path 'PowerButtonActions'
+		$machineConfig = if (Test-ConfigValue $powerButtonActions) { $powerButtonActions[$MachineType] } else { $null }
 		$nullableToggleKeys = @('DisableFastStartup', 'DisableSleep', 'DisableHibernate')
 
 		if (-not (Test-ConfigValue $machineConfig)) {

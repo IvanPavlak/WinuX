@@ -25,6 +25,10 @@ function Wait-BrowserWindowsClosed {
 	.PARAMETER PollIntervalMs
 		Delay between checks. Default 100 ms.
 
+	.PARAMETER Clock
+		The wait clock (New-WaitClock) to read and sleep through. Defaults to a real one; tests
+		hand in a fake.
+
 	.OUTPUTS
 		The subset of Windows still alive and visible when the wait ended; empty when all closed.
 
@@ -42,7 +46,11 @@ function Wait-BrowserWindowsClosed {
 		[int]$TimeoutMs = 4000,
 
 		[Parameter()]
-		[int]$PollIntervalMs = 100
+		[int]$PollIntervalMs = 100,
+
+		[Parameter()]
+		[AllowNull()]
+		[object]$Clock
 	)
 
 	$remaining = @($Windows | Where-Object { $null -ne $_ })
@@ -50,16 +58,14 @@ function Wait-BrowserWindowsClosed {
 		return @()
 	}
 
-	$stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
-	while ($true) {
-		$remaining = @($remaining | Where-Object { Test-BrowserWindowOpen -Handle $_.Handle })
+	# Each poll re-probes only the windows the previous one still saw, narrowing Remaining in
+	# this table (a shared object survives the condition's child scope where a local would not).
+	$state = @{ Remaining = $remaining }
 
-		if ($remaining.Count -eq 0 -or $stopwatch.ElapsedMilliseconds -ge $TimeoutMs) {
-			break
-		}
-
-		Start-Sleep -Milliseconds $PollIntervalMs
+	$null = Wait-Until -TimeoutMs $TimeoutMs -PollIntervalMs $PollIntervalMs -Clock $Clock -Condition {
+		$state.Remaining = @($state.Remaining | Where-Object { Test-WindowVisible -Handle $_.Handle })
+		return ($state.Remaining.Count -eq 0)
 	}
 
-	return $remaining
+	return $state.Remaining
 }

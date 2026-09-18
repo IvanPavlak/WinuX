@@ -134,7 +134,7 @@ function Get-FastfetchLogoArgument {
 	# keyed by machine type gives each its own. Indexing is guarded because a Hashtable throws on
 	# a null key, and $global:MachineType is only set once Load-PathConfiguration has run.
 	if (-not $ImagePath) {
-		$configured = $Configuration.Universal.FastFetchImageLogo
+		$configured = Get-ConfigSetting -Path 'Universal.FastFetchImageLogo'
 
 		if ($configured -is [Collections.IDictionary]) {
 			if ($global:MachineType) {

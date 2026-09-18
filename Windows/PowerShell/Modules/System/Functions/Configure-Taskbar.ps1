@@ -61,7 +61,7 @@ function Configure-Taskbar {
 	# Empty-by-default contract: check the configuration BEFORE touching anything.
 	# The unpin/clear calls below are destructive, and users may have their taskbar
 	# arranged long before adopting WinuX - unconfigured means leave it alone.
-	$taskbarConfig = $Configuration.TaskbarConfiguration
+	$taskbarConfig = Get-ConfigSetting -Path 'TaskbarConfiguration'
 	if (-not (Confirm-ConfigValue $taskbarConfig "TaskbarConfiguration not configured - leaving taskbar pins as-is!")) {
 		return
 	}
@@ -87,7 +87,7 @@ function Configure-Taskbar {
 	Write-LogTitle "Configuring Taskbar"
 
 	Write-LogStep "Cleaning up existing taskbar shortcuts..."
-	$taskbarPinFolder = $Configuration.Universal.TaskbarPinFolder
+	$taskbarPinFolder = Get-ConfigSetting -Path 'Universal.TaskbarPinFolder'
 	if (Test-Path $taskbarPinFolder) {
 		try {
 			Get-ChildItem -Path $taskbarPinFolder -Filter "*.lnk" -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
@@ -102,7 +102,8 @@ function Configure-Taskbar {
 	# pins are being applied (or that the hostname is unmapped and the default set is used).
 	$MachineType = DetermineMachineType
 	$hostname = $env:COMPUTERNAME
-	$hostnameMapped = ($Configuration.HostnameToMachineType -is [hashtable]) -and $Configuration.HostnameToMachineType.ContainsKey($hostname)
+	$hostnameToMachineType = Get-ConfigSetting -Path 'HostnameToMachineType'
+	$hostnameMapped = ($hostnameToMachineType -is [hashtable]) -and $hostnameToMachineType.ContainsKey($hostname)
 	if ($hostnameMapped) {
 		Write-LogStep "Configuring taskbar for machine type => [$MachineType]"
 	}

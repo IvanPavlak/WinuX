@@ -16,6 +16,6 @@ function Open-LeagueOfLegends {
 		-AppName "League of Legends" `
 		-ProcessName "LeagueClient" `
 		-StartMethod DirectPath `
-		-ExecutablePath $Configuration.Universal.LeagueOfLegendsExe `
+		-ExecutablePath (Get-ConfigSetting -Path 'Universal.LeagueOfLegendsExe') `
 		-SkipPathValidation
 }

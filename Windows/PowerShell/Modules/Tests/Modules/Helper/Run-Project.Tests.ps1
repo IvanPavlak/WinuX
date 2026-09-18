@@ -33,7 +33,7 @@ BeforeAll {
 
 Describe "Run-Project" {
 	BeforeEach {
-		$script:Configuration = [PSCustomObject]@{
+		$global:Configuration = [PSCustomObject]@{
 			RunnableProjectMappings = @()
 			ProjectTerminals        = @()
 			DockerComposeFiles      = @{}
@@ -61,7 +61,7 @@ Describe "Run-Project" {
 	}
 
 	It "passes the resolved compose file to DockerWizard and opens the project tabs" {
-		$script:Configuration = [PSCustomObject]@{
+		$global:Configuration = [PSCustomObject]@{
 			RunnableProjectMappings = @(@{ Name = "Demo"; Commands = @{ Api = "dnr" }; DatabaseProviders = @("PostgreSQL") })
 			ProjectTerminals        = @(@{ Name = "Demo"; Paths = @("Api") })
 			DockerComposeFiles      = @{ PostgreSQL = "docker-compose.postgresql.yml" }
@@ -84,7 +84,7 @@ Describe "Run-Project" {
 	}
 
 	It "skips the project when Docker is required but fails to start" {
-		$script:Configuration = [PSCustomObject]@{
+		$global:Configuration = [PSCustomObject]@{
 			RunnableProjectMappings = @(@{ Name = "Demo"; Commands = @{ Api = "dnr" }; DatabaseProviders = @("PostgreSQL") })
 			ProjectTerminals        = @(@{ Name = "Demo"; Paths = @("Api") })
 			DockerComposeFiles      = @{ PostgreSQL = "docker-compose.postgresql.yml" }
@@ -108,7 +108,7 @@ Describe "Run-Project" {
 
 	It "offers the runnable projects in the order the mappings are configured" {
 		# The mappings are the only definition of a runnable project - no separate name list.
-		$script:Configuration = [PSCustomObject]@{
+		$global:Configuration = [PSCustomObject]@{
 			RunnableProjectMappings = @(
 				@{ Name = "Zulu"; Commands = @{} }
 				@{ Name = "Alpha"; Commands = @{} }
@@ -127,7 +127,7 @@ Describe "Run-Project" {
 	It "runs each path's own command and opens a bare tab for a path with none" {
 		# Commands is keyed by path, so a path without one is not a configuration error -
 		# it just gets its terminal tab with nothing run in it.
-		$script:Configuration = [PSCustomObject]@{
+		$global:Configuration = [PSCustomObject]@{
 			RunnableProjectMappings = @(@{ Name = "Demo"; Commands = @{ Ui = "nir" } })
 			ProjectTerminals        = @(@{ Name = "Demo"; Paths = @("Api", "Ui") })
 			DockerComposeFiles      = @{}
@@ -143,7 +143,7 @@ Describe "Run-Project" {
 	}
 
 	It "never touches Docker or the provider prompt when the Docker step is disabled" {
-		$script:Configuration = [PSCustomObject]@{
+		$global:Configuration = [PSCustomObject]@{
 			RunnableProjectMappings = @(@{ Name = "Demo"; Commands = @{ Api = "dnr" }; DatabaseProviders = @("PostgreSQL") })
 			ProjectTerminals        = @(@{ Name = "Demo"; Paths = @("Api") })
 			DockerComposeFiles      = @{ PostgreSQL = "docker-compose.postgresql.yml" }

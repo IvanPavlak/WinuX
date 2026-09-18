@@ -9,7 +9,7 @@ BeforeAll {
 
 Describe "Configure-WSL" {
 	BeforeEach {
-		$script:Configuration = [PSCustomObject]@{
+		$global:Configuration = [PSCustomObject]@{
 			DefaultWSLDistribution = "Ubuntu"
 			DefaultWSLUsername     = ""
 		}
@@ -57,7 +57,7 @@ Describe "Configure-WSL" {
 
 	It "creates the configured user non-interactively and sets it as default" {
 		$script:installed = $false
-		$script:Configuration.DefaultWSLUsername = "ivan"
+		$global:Configuration.DefaultWSLUsername = "ivan"
 
 		{ Configure-WSL } | Should -Not -Throw
 
@@ -70,7 +70,7 @@ Describe "Configure-WSL" {
 
 	It "lowercases a mixed-case configured username" {
 		$script:installed = $false
-		$script:Configuration.DefaultWSLUsername = "Ivan"
+		$global:Configuration.DefaultWSLUsername = "Ivan"
 
 		{ Configure-WSL } | Should -Not -Throw
 
@@ -78,7 +78,7 @@ Describe "Configure-WSL" {
 	}
 
 	It "-Force unregisters the installed distro and redoes the whole setup" {
-		$script:Configuration.DefaultWSLUsername = "ivan"
+		$global:Configuration.DefaultWSLUsername = "ivan"
 
 		{ Configure-WSL -Force } | Should -Not -Throw
 

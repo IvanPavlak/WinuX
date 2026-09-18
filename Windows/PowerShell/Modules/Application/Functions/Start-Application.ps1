@@ -163,7 +163,8 @@ function Start-Application {
 					throw "ConfigKey parameter is required for ConfigPath method"
 				}
 
-				$exePath = $Configuration.Universal.$ConfigKey
+				$universal = Get-ConfigSetting -Path 'Universal' -Default @{}
+				$exePath = $universal[$ConfigKey]
 				if (-not (Confirm-ConfigValue $exePath "[$ConfigKey] is not configured (Universal section) - set its path in Configuration.local.psd1 to launch $AppName!")) {
 					return
 				}

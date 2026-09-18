@@ -120,13 +120,14 @@ function Set-SystemTheme {
 
 			# Empty-by-default contract: an unconfigured Themes section means the user
 			# never opted into theme management, so -Auto leaves the system untouched.
-			if (-not (Confirm-ConfigValue $Configuration.Themes "Themes not configured - leaving system theme as-is!")) {
+			$themes = Get-ConfigSetting -Path 'Themes'
+			if (-not (Confirm-ConfigValue $themes "Themes not configured - leaving system theme as-is!")) {
 				return
 			}
 
 			# Check a local first: $Theme carries ValidateSet, so assigning a null
 			# config lookup to it would throw before any guard could run.
-			$configuredTheme = $Configuration.Themes[$MachineType]
+			$configuredTheme = $themes[$MachineType]
 
 			Write-LogDebug " Theme from configuration: $configuredTheme" -Style Step
 

@@ -117,7 +117,7 @@ function Backup-RepositoryItem {
 	if (-not $DirectoryOnly) {
 		try {
 			$maxPerKey = 10
-			$retention = $global:Configuration.Backups.Retention
+			$retention = Get-ConfigSetting -Path 'Backups.Retention'
 			if ($retention -and $null -ne $retention.MaxBackupsPerKey) { $maxPerKey = [int]$retention.MaxBackupsPerKey }
 			if ($maxPerKey -gt 0) {
 				$entries = @(Get-ChildItem -LiteralPath $keyDir -Directory -ErrorAction Stop |

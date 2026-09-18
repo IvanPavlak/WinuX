@@ -62,9 +62,12 @@ function Run-Project {
 
 	$stepStates = Resolve-RunProjectSteps -Skip $Skip -Include $Include
 
+	$runnableProjectMappings = @(Get-ConfigSetting -Path 'RunnableProjectMappings' -Default @())
+	$projectTerminals = @(Get-ConfigSetting -Path 'ProjectTerminals' -Default @())
+
 	$resolveParams = @{
 		InputObject             = $Project
-		OptionList              = @($Configuration.RunnableProjectMappings | ForEach-Object { $_.Name })
+		OptionList              = @($runnableProjectMappings | ForEach-Object { $_.Name })
 		MenuTitle               = "[Available projects]"
 		AllowMultipleSelections = $true
 		DefaultOptionIndex      = 1
@@ -89,7 +92,7 @@ function Run-Project {
 			Write-LogStep "Running $Name project..."
 
 			# Get the mapping for runnable commands
-			$runnableMapping = $Configuration.RunnableProjectMappings | Where-Object { $_.Name -eq $Name }
+			$runnableMapping = $runnableProjectMappings | Where-Object { $_.Name -eq $Name }
 			Write-LogDebug "Runnable mapping found: $($null -ne $runnableMapping)" -Style Step -NoLeadingNewline
 			if (-not $runnableMapping) {
 				Write-LogError "No runnable project mapping found for [$Name] in Configuration.ps1"
@@ -119,7 +122,7 @@ function Run-Project {
 			}
 
 			# Get the mapping for project paths and their keys (e.g., Api, Ui)
-			$pathMapping = $Configuration.ProjectTerminals | Where-Object { $_.Name -eq $Name }
+			$pathMapping = $projectTerminals | Where-Object { $_.Name -eq $Name }
 			Write-LogDebug "Path mapping found: $($null -ne $pathMapping)" -Style Step -NoLeadingNewline
 			if (-not $pathMapping) {
 				Write-LogError "No path mapping found for [$Name] in configuration."

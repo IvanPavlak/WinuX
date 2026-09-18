@@ -9,7 +9,7 @@ BeforeAll {
 
 Describe "Set-DisplayLanguage" {
 	BeforeEach {
-		$script:Configuration = [PSCustomObject]@{
+		$global:Configuration = [PSCustomObject]@{
 			DisplayLanguages       = [ordered]@{
 				"en-US" = "en-US"
 			}

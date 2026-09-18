@@ -10,7 +10,7 @@ BeforeAll {
 Describe "Open-Training" {
 	BeforeEach {
 		$script:MachineSpecificPaths = @{ TrainingDirectory = "C:\Training" }
-		$script:Configuration = @{ Universal = @{ TrainingFile = "Plan.docx" } }
+		$global:Configuration = @{ Universal = @{ TrainingFile = "Plan.docx" } }
 		Mock Write-Host { }
 		Mock Start-Process { }
 	}

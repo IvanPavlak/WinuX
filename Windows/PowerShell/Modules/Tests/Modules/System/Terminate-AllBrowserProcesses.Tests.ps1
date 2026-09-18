@@ -4,7 +4,6 @@ BeforeAll {
 	$ModuleRoot = (Get-RepositoryPath).Modules
 	$FunctionsPath = Join-Path $ModuleRoot "System\Functions"
 
-	. "$FunctionsPath\Initialize-Win32BrowserHelperType.ps1"
 	. "$FunctionsPath\Get-BrowserTitlePattern.ps1"
 	. "$FunctionsPath\Get-BrowserWindowsByTarget.ps1"
 	. "$FunctionsPath\Close-BrowserWindows.ps1"
@@ -28,7 +27,6 @@ Describe "Terminate-AllBrowserProcesses" {
 		Mock Add-Type { }
 		Mock Get-Process { $null }
 		Mock Test-WindowTitleMatch { $false }
-		Mock Initialize-Win32BrowserHelperType { }
 		Mock Get-BrowserWindowsByTarget { @() }
 		Mock Close-BrowserWindows {
 			param($WindowsToClose)
@@ -42,7 +40,7 @@ Describe "Terminate-AllBrowserProcesses" {
 	}
 
 	It "returns cleanly when browser configuration is missing" {
-		$script:Configuration = @{}
+		$global:Configuration = @{}
 
 		Terminate-AllBrowserProcesses
 
@@ -50,7 +48,7 @@ Describe "Terminate-AllBrowserProcesses" {
 	}
 
 	It "returns cleanly when no configured browser processes are running" {
-		$script:Configuration = @{
+		$global:Configuration = @{
 			Universal = @{
 				Browsers = @{
 					Firefox = @{ Exe = 'firefox.exe' }
@@ -66,7 +64,7 @@ Describe "Terminate-AllBrowserProcesses" {
 	}
 
 	It "skips unknown browser keys that have no title pattern mapping" {
-		$script:Configuration = @{
+		$global:Configuration = @{
 			Universal = @{
 				Browsers = @{
 					CustomBrowser = @{ Exe = 'custom.exe' }
@@ -80,7 +78,7 @@ Describe "Terminate-AllBrowserProcesses" {
 	}
 
 	It "applies exclusion patterns per window and closes only non-excluded browser windows" {
-		$script:Configuration = @{
+		$global:Configuration = @{
 			Universal = @{
 				Browsers = @{
 					Chrome = @{ Exe = 'chrome.exe' }
@@ -114,7 +112,7 @@ Describe "Terminate-AllBrowserProcesses" {
 
 	Context "waiting for the windows to close" {
 		BeforeEach {
-			$script:Configuration = @{
+			$global:Configuration = @{
 				Universal = @{
 					Browsers = @{
 						Firefox = @{ Exe = 'firefox.exe' }
@@ -171,7 +169,7 @@ Describe "Terminate-AllBrowserProcesses" {
 		}
 
 		It "closes a window reachable through two targets sharing a process name only once" {
-			$script:Configuration = @{
+			$global:Configuration = @{
 				Universal = @{
 					Browsers = @{
 						Firefox = @{ Exe = 'firefox.exe' }

@@ -32,7 +32,7 @@ function Deploy-CoreAiRules {
 		return
 	}
 
-	$distro = $Configuration.DefaultWSLDistribution
+	$distro = Get-ConfigSetting -Path 'DefaultWSLDistribution'
 	$repoRoot = (Get-RepositoryPath).Repo
 
 	# Convert the Windows repo path to its WSL mount (C:\Users\... -> /mnt/c/Users/...).

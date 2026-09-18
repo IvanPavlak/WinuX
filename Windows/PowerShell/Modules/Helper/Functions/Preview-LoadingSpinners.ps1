@@ -10,7 +10,9 @@ function Preview-LoadingSpinners {
     .EXAMPLE
         Preview-LoadingSpinners
     #>
-	$spinners = $global:Configuration.LoadingSpinners
+	# No default: an empty hashtable is truthy in PowerShell, and the missing-configuration
+	# branch below must still fire when the section is absent.
+	$spinners = Get-ConfigSetting -Path 'LoadingSpinners'
 	if (-not $spinners) {
 		Write-Host -ForegroundColor Red "`n=> Loading spinner configuration not found in global configuration"
 		return

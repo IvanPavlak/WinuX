@@ -91,7 +91,8 @@ function Open-Obsidian {
 		[string]$CurrentWorkspace
 	)
 
-	$obsidianConfig = if ($global:Configuration -and $global:Configuration.Obsidian -is [hashtable]) { $global:Configuration.Obsidian } else { @{} }
+	$obsidian = Get-ConfigSetting -Path 'Obsidian'
+	$obsidianConfig = if ($obsidian -is [hashtable]) { $obsidian } else { @{} }
 	$vaultDirectory = if ($global:MachineSpecificPaths) { [string]$global:MachineSpecificPaths.ObsidianDirectory } else { '' }
 
 	$vault = [string]$obsidianConfig.Vault

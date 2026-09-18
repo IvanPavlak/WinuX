@@ -5,7 +5,7 @@ BeforeAll {
 	$HelperFunctionsPath = Join-Path $ModuleRoot "Helper\Functions"
 	$WorkflowFunctionsPath = Join-Path $ModuleRoot "Workflow\Functions"
 
-	. "$HelperFunctionsPath\Resolve-ConfigPathValue.ps1"
+	. "$HelperFunctionsPath\Get-ConfigSetting.ps1"
 	. "$HelperFunctionsPath\Get-OrderedNames.ps1"
 	. "$HelperFunctionsPath\Get-OrderedEntry.ps1"
 	. "$HelperFunctionsPath\Get-WindowTitleCandidates.ps1"
@@ -17,6 +17,8 @@ BeforeAll {
 	function Close-ProjectTerminals { param($ProjectName) 0 }
 	function Close-BrowserTabsByPattern { param($ProcessName, $TitlePatterns) 0 }
 	function Focus-TerminalTab { param($TargetTitle) }
+	# The graceful close goes through the Window module's seam; stubbed so no WM_CLOSE is posted.
+	function Close-Window { param([IntPtr[]]$Handle) $Handle.Count }
 }
 
 Describe "Close-Project" {
@@ -30,7 +32,7 @@ Describe "Close-Project" {
 		Mock Close-ProjectTerminals { 0 }
 		Mock Close-BrowserTabsByPattern { 0 }
 
-		$script:MachineSpecificPaths = @{
+		$global:MachineSpecificPaths = @{
 			Projects = @{
 				ExampleProject = @{
 					Solution = "C:\Projects\ExampleProject\ExampleProject.sln"
@@ -40,7 +42,7 @@ Describe "Close-Project" {
 			}
 		}
 
-		$script:Configuration = @{
+		$global:Configuration = @{
 			VisualStudioSolutions = @(
 				@{ Name = "ExampleProject"; Solution = "Projects.ExampleProject.Solution" }
 			)
@@ -106,7 +108,7 @@ Describe "Close-Project" {
 		}
 
 		It "includes the swagger patterns when the project has a localhost swagger entry" {
-			$script:Configuration.BrowserGroups = @(
+			$global:Configuration.BrowserGroups = @(
 				@{
 					Swagger = @(
 						@{ Name = 'ExampleProject'; Url = 'http://localhost:5000/swagger/index.html' }

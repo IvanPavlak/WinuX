@@ -70,7 +70,7 @@ function Resolve-SwaggerBrowserGroup {
 		}
 
 		# Find the BrowserGroups "Swagger" parent group, then the entry for this project
-		$swaggerParentGroup = $Configuration.BrowserGroups | Where-Object { $_.Keys -contains "Swagger" } | Select-Object -First 1
+		$swaggerParentGroup = (Get-ConfigSetting -Path 'BrowserGroups' -Default @()) | Where-Object { $_.Keys -contains "Swagger" } | Select-Object -First 1
 		if (-not $swaggerParentGroup) {
 			return $null
 		}
@@ -93,7 +93,7 @@ function Resolve-SwaggerBrowserGroup {
 		# configured, the duplicate check has no browser process to inspect - return
 		# the group as-is and let Open-Browser handle the missing browser downstream.
 		if ([string]::IsNullOrWhiteSpace($Browser)) {
-			$Browser = $Configuration.Universal.DefaultBrowser
+			$Browser = Get-ConfigSetting -Path 'Universal.DefaultBrowser'
 		}
 		if (-not (Test-ConfigValue $Browser)) {
 			Write-LogDebug " [Resolve-SwaggerBrowserGroup] Universal.DefaultBrowser not configured - skipping duplicate check"
@@ -147,7 +147,7 @@ function Resolve-SwaggerBrowserGroup {
 				# another error tab on every workspace re-run. With no failed-load window the
 				# group is still returned, so a first open (including an intentional
 				# problem-page placeholder) works unchanged.
-				$problemPattern = $Configuration.BrowserGroupMatching.Matching.ProblemLoadingPagePattern
+				$problemPattern = Get-ConfigSetting -Path 'BrowserGroupMatching.Matching.ProblemLoadingPagePattern'
 				if ($problemPattern) {
 					$problemWindow = @($CachedBrowserWindows) |
 						Where-Object { $_.Title -match $problemPattern } |

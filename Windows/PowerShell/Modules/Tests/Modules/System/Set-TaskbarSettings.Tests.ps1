@@ -9,7 +9,7 @@ BeforeAll {
 
 Describe "Set-TaskbarSettings" {
 	BeforeEach {
-		$script:Configuration = [PSCustomObject]@{
+		$global:Configuration = [PSCustomObject]@{
 			TaskbarSettings = $null
 		}
 		Mock Write-Host { }
@@ -38,7 +38,7 @@ Describe "Set-TaskbarSettings" {
 		}
 
 		It "returns without side effects when TaskbarSettings is empty" {
-			$script:Configuration = [PSCustomObject]@{ TaskbarSettings = @{} }
+			$global:Configuration = [PSCustomObject]@{ TaskbarSettings = @{} }
 			Mock Set-ItemProperty { }
 
 			{ Set-TaskbarSettings } | Should -Not -Throw
@@ -49,7 +49,7 @@ Describe "Set-TaskbarSettings" {
 		}
 
 		It "returns without side effects when TaskbarSettings is not a hashtable" {
-			$script:Configuration = [PSCustomObject]@{ TaskbarSettings = "Centre" }
+			$global:Configuration = [PSCustomObject]@{ TaskbarSettings = "Centre" }
 			Mock Set-ItemProperty { }
 
 			{ Set-TaskbarSettings } | Should -Not -Throw
@@ -59,7 +59,7 @@ Describe "Set-TaskbarSettings" {
 		}
 
 		It "warns and applies nothing when only unknown keys are configured" {
-			$script:Configuration = [PSCustomObject]@{ TaskbarSettings = @{ NotARealControl = $true } }
+			$global:Configuration = [PSCustomObject]@{ TaskbarSettings = @{ NotARealControl = $true } }
 			Mock Set-ItemProperty { }
 
 			{ Set-TaskbarSettings } | Should -Not -Throw
@@ -74,7 +74,7 @@ Describe "Set-TaskbarSettings" {
 
 	Context "Value validation" {
 		It "skips a toggle configured with a non-boolean value" {
-			$script:Configuration = [PSCustomObject]@{ TaskbarSettings = @{ TaskView = "Off" } }
+			$global:Configuration = [PSCustomObject]@{ TaskbarSettings = @{ TaskView = "Off" } }
 			Mock Set-ItemProperty { }
 
 			{ Set-TaskbarSettings } | Should -Not -Throw
@@ -85,7 +85,7 @@ Describe "Set-TaskbarSettings" {
 		}
 
 		It "skips a dropdown configured with an unknown token and lists the valid ones" {
-			$script:Configuration = [PSCustomObject]@{ TaskbarSettings = @{ Search = "Nonsense" } }
+			$global:Configuration = [PSCustomObject]@{ TaskbarSettings = @{ Search = "Nonsense" } }
 			Mock Set-ItemProperty { }
 
 			{ Set-TaskbarSettings } | Should -Not -Throw
@@ -97,7 +97,7 @@ Describe "Set-TaskbarSettings" {
 		}
 
 		It "skips a dropdown configured with a boolean" {
-			$script:Configuration = [PSCustomObject]@{ TaskbarSettings = @{ TaskbarAlignment = $true } }
+			$global:Configuration = [PSCustomObject]@{ TaskbarSettings = @{ TaskbarAlignment = $true } }
 			Mock Set-ItemProperty { }
 
 			{ Set-TaskbarSettings } | Should -Not -Throw
@@ -107,7 +107,7 @@ Describe "Set-TaskbarSettings" {
 		}
 
 		It "resolves a dropdown token case insensitively and reports the canonical spelling" {
-			$script:Configuration = [PSCustomObject]@{ TaskbarSettings = @{ Search = "searchbox" } }
+			$global:Configuration = [PSCustomObject]@{ TaskbarSettings = @{ Search = "searchbox" } }
 			Mock Get-ItemPropertyValue { 0 }
 			Mock Test-Path { $true }
 			Mock Set-ItemProperty { }
@@ -119,7 +119,7 @@ Describe "Set-TaskbarSettings" {
 		}
 
 		It "accepts the American spelling Center for TaskbarAlignment" {
-			$script:Configuration = [PSCustomObject]@{ TaskbarSettings = @{ TaskbarAlignment = "Center" } }
+			$global:Configuration = [PSCustomObject]@{ TaskbarSettings = @{ TaskbarAlignment = "Center" } }
 			Mock Get-ItemPropertyValue { 0 }
 			Mock Test-Path { $true }
 			Mock Set-ItemProperty { }
@@ -133,7 +133,7 @@ Describe "Set-TaskbarSettings" {
 
 	Context "Idempotency" {
 		It "skips applying when every configured control already matches" {
-			$script:Configuration = [PSCustomObject]@{
+			$global:Configuration = [PSCustomObject]@{
 				TaskbarSettings = @{
 					TaskView = $false
 					Search   = "Hide"
@@ -151,7 +151,7 @@ Describe "Set-TaskbarSettings" {
 		}
 
 		It "reports already-matching controls as yellow skipped rows while applying the rest" {
-			$script:Configuration = [PSCustomObject]@{
+			$global:Configuration = [PSCustomObject]@{
 				TaskbarSettings = @{
 					TaskView                = $false
 					ShowBadgesOnTaskbarApps = $true
@@ -171,7 +171,7 @@ Describe "Set-TaskbarSettings" {
 		}
 
 		It "treats a missing registry value as a mismatch and writes it explicitly" {
-			$script:Configuration = [PSCustomObject]@{ TaskbarSettings = @{ SelectFarCornerToShowDesktop = $true } }
+			$global:Configuration = [PSCustomObject]@{ TaskbarSettings = @{ SelectFarCornerToShowDesktop = $true } }
 			Mock Get-ItemPropertyValue { throw "Property TaskbarSd does not exist" }
 			Mock Test-Path { $true }
 			Mock Set-ItemProperty { }
@@ -185,7 +185,7 @@ Describe "Set-TaskbarSettings" {
 
 	Context "Registry writes" {
 		It "writes toggles as DWord values and restarts Explorer once for the whole batch" {
-			$script:Configuration = [PSCustomObject]@{
+			$global:Configuration = [PSCustomObject]@{
 				TaskbarSettings = @{
 					TaskView                  = $true
 					ShowFlashingOnTaskbarApps = $true
@@ -205,7 +205,7 @@ Describe "Set-TaskbarSettings" {
 		}
 
 		It "writes a disabled toggle as its OffValue and renders it as a red row" {
-			$script:Configuration = [PSCustomObject]@{ TaskbarSettings = @{ Resume = $false } }
+			$global:Configuration = [PSCustomObject]@{ TaskbarSettings = @{ Resume = $false } }
 			Mock Get-ItemPropertyValue { 1 }
 			Mock Test-Path { $true }
 			Mock Set-ItemProperty { }
@@ -217,7 +217,7 @@ Describe "Set-TaskbarSettings" {
 		}
 
 		It "renders a dropdown row in the plain Step style with the selected token" {
-			$script:Configuration = [PSCustomObject]@{ TaskbarSettings = @{ TouchKeyboard = "WhenNoKeyboardAttached" } }
+			$global:Configuration = [PSCustomObject]@{ TaskbarSettings = @{ TouchKeyboard = "WhenNoKeyboardAttached" } }
 			Mock Get-ItemPropertyValue { 0 }
 			Mock Test-Path { $true }
 			Mock Set-ItemProperty { }
@@ -230,7 +230,7 @@ Describe "Set-TaskbarSettings" {
 
 		It "maps the same token to different values per control" {
 			# WhenTaskbarIsFull is 1 for the combine dropdowns but 2 for the button-size dropdown
-			$script:Configuration = [PSCustomObject]@{
+			$global:Configuration = [PSCustomObject]@{
 				TaskbarSettings = @{
 					CombineTaskbarButtonsAndHideLabels = "WhenTaskbarIsFull"
 					ShowSmallerTaskbarButtons          = "WhenTaskbarIsFull"
@@ -247,7 +247,7 @@ Describe "Set-TaskbarSettings" {
 		}
 
 		It "writes each control to its own registry key path" {
-			$script:Configuration = [PSCustomObject]@{
+			$global:Configuration = [PSCustomObject]@{
 				TaskbarSettings = @{
 					Search   = "SearchBox"
 					PenMenu  = $true
@@ -266,7 +266,7 @@ Describe "Set-TaskbarSettings" {
 		}
 
 		It "creates the registry key path when it does not exist" {
-			$script:Configuration = [PSCustomObject]@{ TaskbarSettings = @{ PenMenu = $true } }
+			$global:Configuration = [PSCustomObject]@{ TaskbarSettings = @{ PenMenu = $true } }
 			Mock Get-ItemPropertyValue { throw "Key does not exist" }
 			Mock Test-Path { $false }
 			Mock New-Item { }
@@ -279,7 +279,7 @@ Describe "Set-TaskbarSettings" {
 		}
 
 		It "continues applying remaining controls when one write fails" {
-			$script:Configuration = [PSCustomObject]@{
+			$global:Configuration = [PSCustomObject]@{
 				TaskbarSettings = @{
 					TaskView                = $true
 					ShowBadgesOnTaskbarApps = $true
@@ -300,7 +300,7 @@ Describe "Set-TaskbarSettings" {
 		}
 
 		It "does not restart Explorer or report success when every write fails" {
-			$script:Configuration = [PSCustomObject]@{ TaskbarSettings = @{ TaskView = $true } }
+			$global:Configuration = [PSCustomObject]@{ TaskbarSettings = @{ TaskView = $true } }
 			Mock Get-ItemPropertyValue { 0 }
 			Mock Test-Path { $true }
 			Mock Set-ItemProperty { throw "Access denied" }
@@ -316,7 +316,7 @@ Describe "Set-TaskbarSettings" {
 
 	Context "Automatically hide the taskbar" {
 		It "sets the auto-hide bit in the StuckRects3 blob and restarts Explorer" {
-			$script:Configuration = [PSCustomObject]@{ TaskbarSettings = @{ AutomaticallyHideTheTaskbar = $true } }
+			$global:Configuration = [PSCustomObject]@{ TaskbarSettings = @{ AutomaticallyHideTheTaskbar = $true } }
 			Mock Get-ItemPropertyValue { $script:StuckRects }
 			Mock Set-ItemProperty { }
 
@@ -334,7 +334,7 @@ Describe "Set-TaskbarSettings" {
 
 		It "clears the auto-hide bit and renders it as a red row" {
 			$script:StuckRects[8] = 0x03
-			$script:Configuration = [PSCustomObject]@{ TaskbarSettings = @{ AutomaticallyHideTheTaskbar = $false } }
+			$global:Configuration = [PSCustomObject]@{ TaskbarSettings = @{ AutomaticallyHideTheTaskbar = $false } }
 			Mock Get-ItemPropertyValue { $script:StuckRects }
 			Mock Set-ItemProperty { }
 
@@ -345,7 +345,7 @@ Describe "Set-TaskbarSettings" {
 		}
 
 		It "preserves every other byte of the blob Explorer owns" {
-			$script:Configuration = [PSCustomObject]@{ TaskbarSettings = @{ AutomaticallyHideTheTaskbar = $true } }
+			$global:Configuration = [PSCustomObject]@{ TaskbarSettings = @{ AutomaticallyHideTheTaskbar = $true } }
 			Mock Get-ItemPropertyValue { $script:StuckRects }
 			Mock Set-ItemProperty { }
 
@@ -359,7 +359,7 @@ Describe "Set-TaskbarSettings" {
 		It "leaves unrelated bits of the flag byte alone" {
 			# A build that carries other flags in byte 8 must keep them
 			$script:StuckRects[8] = 0x7A
-			$script:Configuration = [PSCustomObject]@{ TaskbarSettings = @{ AutomaticallyHideTheTaskbar = $true } }
+			$global:Configuration = [PSCustomObject]@{ TaskbarSettings = @{ AutomaticallyHideTheTaskbar = $true } }
 			Mock Get-ItemPropertyValue { $script:StuckRects }
 			Mock Set-ItemProperty { }
 
@@ -370,7 +370,7 @@ Describe "Set-TaskbarSettings" {
 
 		It "reports auto-hide as a yellow skipped row when the bit already matches" {
 			$script:StuckRects[8] = 0x03
-			$script:Configuration = [PSCustomObject]@{
+			$global:Configuration = [PSCustomObject]@{
 				TaskbarSettings = @{
 					AutomaticallyHideTheTaskbar = $true
 					TaskView                    = $true
@@ -388,7 +388,7 @@ Describe "Set-TaskbarSettings" {
 		}
 
 		It "restarts Explorer exactly once when auto-hide changes alongside a DWord control" {
-			$script:Configuration = [PSCustomObject]@{
+			$global:Configuration = [PSCustomObject]@{
 				TaskbarSettings = @{
 					AutomaticallyHideTheTaskbar = $true
 					TaskView                    = $true
@@ -405,7 +405,7 @@ Describe "Set-TaskbarSettings" {
 		}
 
 		It "skips auto-hide configured with a non-boolean value" {
-			$script:Configuration = [PSCustomObject]@{ TaskbarSettings = @{ AutomaticallyHideTheTaskbar = "Yes" } }
+			$global:Configuration = [PSCustomObject]@{ TaskbarSettings = @{ AutomaticallyHideTheTaskbar = "Yes" } }
 			Mock Set-ItemProperty { }
 
 			{ Set-TaskbarSettings } | Should -Not -Throw
@@ -415,7 +415,7 @@ Describe "Set-TaskbarSettings" {
 		}
 
 		It "skips auto-hide rather than fabricating a blob when StuckRects3 cannot be read" {
-			$script:Configuration = [PSCustomObject]@{ TaskbarSettings = @{ AutomaticallyHideTheTaskbar = $true } }
+			$global:Configuration = [PSCustomObject]@{ TaskbarSettings = @{ AutomaticallyHideTheTaskbar = $true } }
 			Mock Get-ItemPropertyValue { throw "Cannot find property Settings" }
 			Mock Set-ItemProperty { }
 

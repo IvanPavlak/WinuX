@@ -67,10 +67,7 @@ function Get-VisibleWindowProcess {
 	# cleanup candidates: explorer is the shell, ApplicationFrameHost owns the frames of every
 	# packaged app (the apps themselves are enumerated through their own CoreWindow), the rest
 	# are Start / Search / input / lock-screen surfaces that Windows restarts on its own.
-	$shellProcessNames = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-	foreach ($name in @('explorer', 'ApplicationFrameHost', 'TextInputHost', 'ShellExperienceHost', 'StartMenuExperienceHost', 'SearchHost', 'SearchApp', 'LockApp', 'sihost', 'dwm')) {
-		$null = $shellProcessNames.Add($name)
-	}
+	$shellProcessNames = [System.Collections.Generic.HashSet[string]]::new([string[]](Get-ShellProcessName), [System.StringComparer]::OrdinalIgnoreCase)
 
 	# Plain hashtable plus an explicit order list: an ordered dictionary indexed with an [int]
 	# key treats it as a POSITION, so PIDs would throw or hit the wrong entry.

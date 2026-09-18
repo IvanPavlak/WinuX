@@ -32,16 +32,16 @@ function Set-KeyboardLayouts {
 		[switch]$Override
 	)
 
-	if (-not (Confirm-ConfigValue $Configuration.KeyboardLayoutSets "KeyboardLayoutSets not configured - leaving input layouts as-is!")) {
+	$layoutSets = Get-ConfigSetting -Path 'KeyboardLayoutSets'
+	$allLayouts = Get-ConfigSetting -Path 'KeyboardLayouts'
+	if (-not (Confirm-ConfigValue $layoutSets "KeyboardLayoutSets not configured - leaving input layouts as-is!")) {
 		return
 	}
-	if (-not (Confirm-ConfigValue $Configuration.KeyboardLayouts "KeyboardLayouts not configured - leaving input layouts as-is!")) {
+	if (-not (Confirm-ConfigValue $allLayouts "KeyboardLayouts not configured - leaving input layouts as-is!")) {
 		return
 	}
 
-	$layoutSets = $Configuration.KeyboardLayoutSets
-	$allLayouts = $Configuration.KeyboardLayouts
-	$defaultSetName = $Configuration.DefaultKeyboardLayoutSet
+	$defaultSetName = Get-ConfigSetting -Path 'DefaultKeyboardLayoutSet'
 	$targetSetName = ""
 
 	$layoutSetOptions = @(Get-OrderedNames $layoutSets)

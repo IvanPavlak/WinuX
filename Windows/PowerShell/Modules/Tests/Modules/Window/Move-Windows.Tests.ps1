@@ -13,14 +13,11 @@ BeforeAll {
 	. "$FunctionsPath\Get-WindowDesktopIndex.ps1"
 	. "$FunctionsPath\Move-WindowToVirtualDesktop.ps1"
 
-	# VirtualDesktop cmdlets come from an optional external module absent on CI runners.
-	# Stub the ones these tests mock so Mock can attach (no-op where the real module exists).
-	if (-not (Get-Command Get-DesktopCount -ErrorAction SilentlyContinue)) {
-		function Get-DesktopCount { [CmdletBinding()] param() }
-		function Switch-Desktop { [CmdletBinding()] param($Desktop) }
-		function Get-DesktopFromWindow { [CmdletBinding()] param($Hwnd) }
-		function Get-DesktopIndex { [CmdletBinding()] param([Parameter(Position = 0)]$Desktop) }
-	}
+	# The rest of the Window module's virtual-desktop adapter, stubbed so Mock attaches in this
+	# script scope instead of the module.
+	function Get-VirtualDesktopCount { 1 }
+	function Get-CurrentVirtualDesktopIndex { 0 }
+	function Switch-VirtualDesktop { param([int]$Index, [int]$TimeoutMs, [int]$MaxAttempts) $true }
 }
 
 Describe "Move-Windows" {
@@ -42,12 +39,9 @@ Describe "Move-Windows" {
 				Width = $ExpectedWidth; Height = $ExpectedHeight; ElapsedMs = 0
 			}
 		}
-		Mock Invoke-WithOptionalRetry {
-			param($EnableRetry, $ScriptBlock, $MaxAttempts, $InitialDelayMs)
-			& $ScriptBlock
-		}
-		# By default the sweep finds every window where the pass left it (tests target
-		# Virtual Desktop 1, i.e. index 0); sweep tests override this to plant stragglers.
+		# By default the in-loop check and the sweep find every window where the pass left it
+		# (tests target Virtual Desktop 1, i.e. index 0); sweep tests override this to plant
+		# stragglers.
 		Mock Get-WindowDesktopIndex { 0 }
 		Mock Move-WindowToVirtualDesktop { $true }
 	}
@@ -61,20 +55,18 @@ Describe "Move-Windows" {
 
 	It "switches focus to the target desktop after moving windows" {
 		Mock Import-VirtualDesktopModule { $true }
-		Mock Get-DesktopCount { 2 }
-		Mock Switch-Desktop { }
+		Mock Get-VirtualDesktopCount { 2 }
+		Mock Switch-VirtualDesktop { $true }
 
 		{ Move-Windows -VirtualDesktop 1 } | Should -Not -Throw
 
-		Should -Invoke Switch-Desktop -Times 1 -ParameterFilter { $Desktop -eq 0 }
+		Should -Invoke Switch-VirtualDesktop -Times 1 -ParameterFilter { $Index -eq 0 }
 	}
 
 	It "repositions windows on the target monitor when -Monitor is specified" {
 		Mock Import-VirtualDesktopModule { $true }
-		Mock Get-DesktopCount { 2 }
-		Mock Get-DesktopFromWindow { [PSCustomObject]@{ Name = 'Desktop1' } }
-		Mock Get-DesktopIndex { 0 }
-		Mock Switch-Desktop { }
+		Mock Get-VirtualDesktopCount { 2 }
+		Mock Switch-VirtualDesktop { $true }
 		Mock Get-CachedWindows {
 			@(
 				[PSCustomObject]@{
@@ -140,10 +132,8 @@ Describe "Move-Windows" {
 
 	It "re-applies the monitor placement when the window does not hold its position" {
 		Mock Import-VirtualDesktopModule { $true }
-		Mock Get-DesktopCount { 2 }
-		Mock Get-DesktopFromWindow { [PSCustomObject]@{ Name = 'Desktop1' } }
-		Mock Get-DesktopIndex { 0 }
-		Mock Switch-Desktop { }
+		Mock Get-VirtualDesktopCount { 2 }
+		Mock Switch-VirtualDesktop { $true }
 		Mock Test-LogVerbose { $false }
 		Mock Write-LogWarning { }
 		Mock Write-LogList { }
@@ -188,8 +178,8 @@ Describe "Move-Windows" {
 
 	It "verification sweep recovers a window whose already-on-desktop read was stale" {
 		Mock Import-VirtualDesktopModule { $true }
-		Mock Get-DesktopCount { 2 }
-		Mock Switch-Desktop { }
+		Mock Get-VirtualDesktopCount { 2 }
+		Mock Switch-VirtualDesktop { $true }
 		Mock Test-LogVerbose { $false }
 		Mock Write-LogWarning { }
 		Mock Write-LogList { }
@@ -202,15 +192,13 @@ Describe "Move-Windows" {
 				}
 			)
 		}
-		# In-loop check says the window is already on the target (index 0)...
-		Mock Get-DesktopFromWindow { [PSCustomObject]@{ Name = 'Desktop1' } }
-		Mock Get-DesktopIndex { 0 }
-		# ...but the first convergence round finds it on another desktop; the retry lands it, and
-		# the next round confirms it is home.
-		$script:sweepReads = 0
+		# The in-loop check (first read) says the window is already on the target (index 0)...
+		# ...but the first convergence round (second read) finds it on another desktop; the retry
+		# lands it, and the next round confirms it is home.
+		$script:desktopReads = 0
 		Mock Get-WindowDesktopIndex {
-			$script:sweepReads++
-			if ($script:sweepReads -eq 1) { 1 } else { 0 }
+			$script:desktopReads++
+			if ($script:desktopReads -eq 2) { 1 } else { 0 }
 		}
 
 		{ Move-Windows -VirtualDesktop 1 } | Should -Not -Throw
@@ -225,8 +213,8 @@ Describe "Move-Windows" {
 
 	It "convergence rounds pick up a window the first pass never enumerated" {
 		Mock Import-VirtualDesktopModule { $true }
-		Mock Get-DesktopCount { 2 }
-		Mock Switch-Desktop { }
+		Mock Get-VirtualDesktopCount { 2 }
+		Mock Switch-VirtualDesktop { $true }
 		Mock Test-LogVerbose { $false }
 		Mock Write-LogWarning { }
 		Mock Write-LogList { }
@@ -263,10 +251,8 @@ Describe "Move-Windows" {
 
 	It "convergence rounds stop as soon as a round finds every window on the target" {
 		Mock Import-VirtualDesktopModule { $true }
-		Mock Get-DesktopCount { 2 }
-		Mock Switch-Desktop { }
-		Mock Get-DesktopFromWindow { [PSCustomObject]@{ Name = 'Desktop1' } }
-		Mock Get-DesktopIndex { 0 }
+		Mock Get-VirtualDesktopCount { 2 }
+		Mock Switch-VirtualDesktop { $true }
 		Mock Get-CachedWindows {
 			@(
 				[PSCustomObject]@{
@@ -279,15 +265,15 @@ Describe "Move-Windows" {
 
 		{ Move-Windows -VirtualDesktop 1 } | Should -Not -Throw
 
-		# One check in the single convergence round; no second round, no retry.
-		Should -Invoke Get-WindowDesktopIndex -Times 1 -Exactly
+		# The in-loop check plus one check in the single convergence round; no second round, no retry.
+		Should -Invoke Get-WindowDesktopIndex -Times 2 -Exactly
 		Should -Invoke Move-WindowToVirtualDesktop -Times 0
 	}
 
 	It "verification sweep reclassifies a persistent straggler as a failure instead of reporting a clean pass" {
 		Mock Import-VirtualDesktopModule { $true }
-		Mock Get-DesktopCount { 2 }
-		Mock Switch-Desktop { }
+		Mock Get-VirtualDesktopCount { 2 }
+		Mock Switch-VirtualDesktop { $true }
 		Mock Test-LogVerbose { $false }
 		Mock Write-LogWarning { }
 		Mock Write-LogList { }
@@ -302,8 +288,6 @@ Describe "Move-Windows" {
 		}
 		# In-loop check reports the window elsewhere, so the move pass runs and claims success -
 		# the upstream wrong-window fallback makes exactly this claim while the window stays put.
-		Mock Get-DesktopFromWindow { [PSCustomObject]@{ Name = 'Desktop2' } }
-		Mock Get-DesktopIndex { 1 }
 		Mock Get-WindowDesktopIndex { 1 }
 		$script:moveAttempts = 0
 		Mock Move-WindowToVirtualDesktop {
@@ -322,18 +306,18 @@ Describe "Move-Windows" {
 
 	It "returns early when monitor index is out of range" {
 		Mock Import-VirtualDesktopModule { $true }
-		Mock Get-DesktopCount { 2 }
+		Mock Get-VirtualDesktopCount { 2 }
 		Mock Get-MonitorInfo {
 			@(
 				[PSCustomObject]@{ DeviceName = '\\.\DISPLAY1'; IsPrimary = $true },
 				[PSCustomObject]@{ DeviceName = '\\.\DISPLAY2'; IsPrimary = $false }
 			)
 		}
-		Mock Switch-Desktop { }
+		Mock Switch-VirtualDesktop { $true }
 
 		{ Move-Windows -VirtualDesktop 1 -Monitor 5 } | Should -Not -Throw
 
 		Should -Invoke Write-LogError -Times 1
-		Should -Invoke Switch-Desktop -Times 0
+		Should -Invoke Switch-VirtualDesktop -Times 0
 	}
 }

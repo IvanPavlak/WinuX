@@ -61,8 +61,9 @@ function Resolve-RepositoryTargets {
 		[switch]$All
 	)
 
+	$repositoryGroups = @(Get-ConfigSetting -Path 'RepositoryGroups' -Default @())
 	$configuredGroups = @()
-	foreach ($repositoryGroup in $Configuration.RepositoryGroups) {
+	foreach ($repositoryGroup in $repositoryGroups) {
 		$configuredGroups += @($repositoryGroup.Keys)[0]
 	}
 
@@ -95,7 +96,7 @@ function Resolve-RepositoryTargets {
 	$targets = @()
 
 	foreach ($groupName in $groupsToExpand) {
-		foreach ($repositoryGroup in $Configuration.RepositoryGroups) {
+		foreach ($repositoryGroup in $repositoryGroups) {
 			if (@($repositoryGroup.Keys)[0] -ne $groupName) { continue }
 
 			foreach ($repository in $repositoryGroup[$groupName]) {
@@ -108,7 +109,7 @@ function Resolve-RepositoryTargets {
 		if ([string]::IsNullOrWhiteSpace($repositoryName)) { continue }
 
 		$owningGroup = $null
-		foreach ($repositoryGroup in $Configuration.RepositoryGroups) {
+		foreach ($repositoryGroup in $repositoryGroups) {
 			$groupName = @($repositoryGroup.Keys)[0]
 
 			foreach ($repository in $repositoryGroup[$groupName]) {

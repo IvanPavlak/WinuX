@@ -16,7 +16,7 @@ function DetermineMachineType {
 		Returns the machine type string, e.g. "PC" or "Laptop".
 	#>
 	$Hostname = $env:COMPUTERNAME
-	$ValidTypes = $global:Configuration.ValidMachineTypes
+	$ValidTypes = @(Get-ConfigSetting -Path 'ValidMachineTypes' -Default @())
 
 	if (Get-Variable -Name "MachineType" -Scope Global -ErrorAction SilentlyContinue) {
 		if ($ValidTypes.Contains($global:MachineType)) {
@@ -30,8 +30,9 @@ function DetermineMachineType {
 	}
 
 	# Try to get machine type from hostname mapping
-	if ($global:Configuration.HostnameToMachineType.ContainsKey($Hostname)) {
-		$MachineType = $global:Configuration.HostnameToMachineType[$Hostname]
+	$hostnameToMachineType = Get-ConfigSetting -Path 'HostnameToMachineType' -Default @{}
+	if ($hostnameToMachineType.ContainsKey($Hostname)) {
+		$MachineType = $hostnameToMachineType[$Hostname]
 	}
 	else {
 		$MachineType = $null

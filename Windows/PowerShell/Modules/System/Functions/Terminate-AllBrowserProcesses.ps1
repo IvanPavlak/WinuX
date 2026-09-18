@@ -57,13 +57,8 @@ function Terminate-AllBrowserProcesses {
 
 	Write-LogTitle "Terminating All Browser Processes"
 
-	Initialize-Win32BrowserHelperType
-
 	# Resolve browser definitions from Configuration.psd1.
-	$browsersConfig = $null
-	if ($Configuration -and $Configuration.Universal -and $Configuration.Universal.Browsers) {
-		$browsersConfig = $Configuration.Universal.Browsers
-	}
+	$browsersConfig = Get-ConfigSetting -Path 'Universal.Browsers'
 
 	if (-not $browsersConfig) {
 		Write-LogDebug " No browsers configured in Configuration.Universal.Browsers!" -Style Warning

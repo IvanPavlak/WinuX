@@ -21,7 +21,7 @@ Describe "Resolve-SwaggerBrowserGroup" {
 		# Backend-up default: the probe keeps the strict duplicate-check path active
 		Mock Test-TcpPortReachable { $true }
 
-		$script:Configuration = @{
+		$global:Configuration = @{
 			BrowserGroups        = @(
 				@{ Google = @("https://google.com") }
 				@{
@@ -59,7 +59,7 @@ Describe "Resolve-SwaggerBrowserGroup" {
 	}
 
 	It "returns null when no swagger parent group exists in BrowserGroups" {
-		$script:Configuration.BrowserGroups = @(@{ Google = @("https://google.com") })
+		$global:Configuration.BrowserGroups = @(@{ Google = @("https://google.com") })
 		Resolve-SwaggerBrowserGroup -Project 'ExampleProject' | Should -BeNullOrEmpty
 	}
 

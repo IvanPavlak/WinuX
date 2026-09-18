@@ -149,14 +149,23 @@ namespace WindowModule
 		[DllImport("user32.dll")]
 		public static extern bool EnumWindows(EnumWindowsProc enumProc, IntPtr lParam);
 
-		[DllImport("user32.dll")]
+		// The text APIs marshal as Unicode: without an explicit CharSet the default is ANSI,
+		// which mangles non-ANSI title characters to '?' - including the zero-width space
+		// (U+200B) Edge embeds in "Microsoft Edge" window titles, breaking title matching.
+		[DllImport("user32.dll", CharSet = CharSet.Unicode)]
 		public static extern int GetWindowText(IntPtr hWnd, StringBuilder text, int count);
 
-		[DllImport("user32.dll")]
+		[DllImport("user32.dll", CharSet = CharSet.Unicode)]
 		public static extern int GetWindowTextLength(IntPtr hWnd);
 
 		[DllImport("user32.dll")]
 		public static extern bool IsWindowVisible(IntPtr hWnd);
+
+		[DllImport("user32.dll")]
+		public static extern bool IsWindow(IntPtr hWnd);
+
+		[DllImport("user32.dll")]
+		public static extern bool PostMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
 
 		[DllImport("user32.dll")]
 		public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
@@ -241,6 +250,9 @@ namespace WindowModule
 		#endregion
 
 		#region Constants
+
+		// Window Messages
+		public const uint WM_CLOSE = 0x0010;
 
 		// Virtual Key Codes
 		public const byte VK_LWIN = 0x5B;
@@ -596,6 +608,27 @@ namespace WindowModule
 			IntPtr insertAfter = topmost ? HWND_TOPMOST : HWND_NOTOPMOST;
 			uint flags = SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE;
 			return SetWindowPos(hWnd, insertAfter, 0, 0, 0, 0, flags);
+		}
+
+		/// <summary>
+		/// Asks a window to close by posting WM_CLOSE to it. Needs neither focus nor synthesized
+		/// input: the message goes straight to the handle, so the target application runs its
+		/// own close path (unsaved-changes prompts included) exactly as if the title-bar X had
+		/// been clicked. Returns false when the message could not be posted (dead handle).
+		/// </summary>
+		public static bool PostClose(IntPtr hWnd)
+		{
+			return PostMessage(hWnd, WM_CLOSE, IntPtr.Zero, IntPtr.Zero);
+		}
+
+		/// <summary>
+		/// True while a handle refers to a live AND visible window. A destroyed handle and a
+		/// hidden window both read as false - applications hide their window before tearing
+		/// the process down, so this is the liveness probe a "did it close" wait should poll.
+		/// </summary>
+		public static bool IsLiveVisibleWindow(IntPtr hWnd)
+		{
+			return hWnd != IntPtr.Zero && IsWindow(hWnd) && IsWindowVisible(hWnd);
 		}
 
 		/// <summary>

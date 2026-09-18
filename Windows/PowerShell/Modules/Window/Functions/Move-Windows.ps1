@@ -154,14 +154,11 @@ function Move-Windows {
 
 	begin {
 		$abortProcessing = $false
-		$rpcPolicy = if (Get-Command Get-RpcRetryPolicy -ErrorAction SilentlyContinue) {
-			Get-RpcRetryPolicy -OperationLabel "moving windows"
-		}
-		else {
-			@{ MaxAttempts = 3; InitialDelayMs = 200 }
-		}
-		$rpcMaxAttempts = [int]$rpcPolicy.MaxAttempts
-		$rpcInitialDelayMs = [int]$rpcPolicy.InitialDelayMs
+		# Desktop-manager reads go through the Window module's adapter (Get-CurrentVirtualDesktopIndex,
+		# Get-VirtualDesktopCount, Get-WindowDesktopIndex, Switch-VirtualDesktop), which reconnects a
+		# stale COM session and retries RPC failures itself. The window move keeps a plain retry.
+		$moveMaxAttempts = 3
+		$moveInitialDelayMs = 200
 		$useRetry = [bool](Get-Command Invoke-WithRetry -ErrorAction SilentlyContinue)
 
 		if ($Current) {
@@ -173,8 +170,7 @@ function Move-Windows {
 			}
 
 			try {
-				$currentDesktop = Invoke-WithOptionalRetry -EnableRetry:$useRetry -ScriptBlock { Get-CurrentDesktop } -MaxAttempts $rpcMaxAttempts -InitialDelayMs $rpcInitialDelayMs
-				$desktopIndex = Invoke-WithOptionalRetry -EnableRetry:$useRetry -ScriptBlock { Get-DesktopIndex $currentDesktop } -MaxAttempts $rpcMaxAttempts -InitialDelayMs $rpcInitialDelayMs
+				$desktopIndex = Get-CurrentVirtualDesktopIndex
 				$VirtualDesktop = $desktopIndex + 1
 			}
 			catch {
@@ -194,9 +190,8 @@ function Move-Windows {
 			}
 
 			# Create the target virtual desktop if it doesn't exist
-			# Retry to handle transient RPC server unavailable errors (0x800706BA)
 			try {
-				$desktopCount = Invoke-WithOptionalRetry -EnableRetry:$useRetry -ScriptBlock { Get-DesktopCount } -MaxAttempts $rpcMaxAttempts -InitialDelayMs $rpcInitialDelayMs
+				$desktopCount = Get-VirtualDesktopCount
 			}
 			catch {
 				Write-LogError "Error: Could not query virtual desktops: $($_.Exception.Message)"
@@ -338,22 +333,16 @@ function Move-Windows {
 			$totalEligibleWindows++
 
 			# Check if the window is already on the target desktop
+			# -1 (desktop cannot be determined) never equals the target, so the move proceeds.
 			$isAlreadyOnDesktop = $false
-			try {
-				$windowDesktop = Invoke-WithOptionalRetry -EnableRetry:$useRetry -ScriptBlock { Get-DesktopFromWindow -Hwnd $handle.ToInt64() } -MaxAttempts $rpcMaxAttempts -InitialDelayMs $rpcInitialDelayMs
-				$windowDesktopIndex = Invoke-WithOptionalRetry -EnableRetry:$useRetry -ScriptBlock { Get-DesktopIndex $windowDesktop } -MaxAttempts $rpcMaxAttempts -InitialDelayMs $rpcInitialDelayMs
-
-				if ($windowDesktopIndex -eq $desktopIndex) {
-					$isAlreadyOnDesktop = $true
-					if (-not $targetMonitor) {
-						& $recordOutcome $handle 'Already' (Get-WindowDisplayName -ProcessName $procName -Title $title) $title $procName
-						Write-LogDebug "     ○ [$title] ($procName) is already on Virtual Desktop $VirtualDesktop" -Style Warning
-						continue
-					}
+			$windowDesktopIndex = Get-WindowDesktopIndex -WindowHandle $handle
+			if ($windowDesktopIndex -eq $desktopIndex) {
+				$isAlreadyOnDesktop = $true
+				if (-not $targetMonitor) {
+					& $recordOutcome $handle 'Already' (Get-WindowDisplayName -ProcessName $procName -Title $title) $title $procName
+					Write-LogDebug "     ○ [$title] ($procName) is already on Virtual Desktop $VirtualDesktop" -Style Warning
+					continue
 				}
-			}
-			catch {
-				# If we can't determine the current desktop, proceed with the move
 			}
 
 			$result = $true
@@ -374,7 +363,12 @@ function Move-Windows {
 						return $true
 					}
 
-					$result = Invoke-WithOptionalRetry -EnableRetry:$useRetry -ScriptBlock $moveAction -MaxAttempts $rpcMaxAttempts -InitialDelayMs $rpcInitialDelayMs
+					$result = if ($useRetry) {
+						Invoke-WithRetry -ScriptBlock $moveAction -MaxAttempts $moveMaxAttempts -InitialDelayMs $moveInitialDelayMs
+					}
+					else {
+						& $moveAction
+					}
 				}
 				catch {
 					$result = $false
@@ -587,8 +581,7 @@ function Move-Windows {
 		# Ensure focus follows the destination desktop after window moves complete
 		$switchedDesktop = $false
 		try {
-			Invoke-WithOptionalRetry -EnableRetry:$useRetry -ScriptBlock { Switch-Desktop -Desktop $desktopIndex -ErrorAction Stop } -MaxAttempts $rpcMaxAttempts -InitialDelayMs $rpcInitialDelayMs | Out-Null
-			$switchedDesktop = $true
+			$switchedDesktop = [bool](Switch-VirtualDesktop -Index $desktopIndex)
 		}
 		catch {
 			Write-LogDebug "     ! Could not switch focus to Virtual Desktop ${VirtualDesktop}: $($_.Exception.Message)" -Style Warning

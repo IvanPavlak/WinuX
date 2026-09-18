@@ -54,7 +54,8 @@ function Open-Browser {
 		Set by `Open-Workspace` when the workspace is opening alongside existing desktops.
 		Changes `-Instances` from "ensure N windows exist" to "open N NEW windows": an
 		alongside layout pass positions only the windows that open created (every handle
-		captured before it is refused by `Set-WindowLayouts -SkipExistingWindows`), so
+		captured before it is refused by the window claim set - `New-WindowClaimSet
+		-SkipExisting`, handed to `Set-WindowLayouts -Claims`), so
 		counting pre-existing windows toward the target starves the layout by exactly the
 		number of browser windows that happened to be open already.
 
@@ -107,24 +108,25 @@ function Open-Browser {
 	)
 
 	if (-not $PSBoundParameters.ContainsKey('Browser') -or [string]::IsNullOrWhiteSpace($Browser)) {
-		$Browser = $Configuration.Universal.DefaultBrowser
+		$Browser = Get-ConfigSetting -Path 'Universal.DefaultBrowser'
 	}
 
 	if (-not (Confirm-ConfigValue $Browser "No browser specified and Universal.DefaultBrowser is not configured - pass -Browser or set it in Configuration.local.psd1!")) {
 		return
 	}
 
-	$browserConfig = $Configuration.Universal.Browsers[$Browser]
+	$browsers = Get-ConfigSetting -Path 'Universal.Browsers' -Default @{}
+	$browserConfig = $browsers[$Browser]
 
 	if (-not $browserConfig) {
-		Write-LogError "Error: Browser [$Browser] not found in configuration! Available browsers => [$($Configuration.Universal.Browsers.Keys -join ', ')]"
+		Write-LogError "Error: Browser [$Browser] not found in configuration! Available browsers => [$($browsers.Keys -join ', ')]"
 		return
 	}
 
 	$browserPath = $browserConfig.Exe
 	$privateArg = $browserConfig.PrivateArg
 	$newWindowArg = $browserConfig.NewWindowArg
-	$urlGroups = $Configuration.BrowserGroups
+	$urlGroups = @(Get-ConfigSetting -Path 'BrowserGroups' -Default @())
 	$isTor = $Browser -eq "Tor"
 
 	Try {
@@ -172,9 +174,9 @@ function Open-Browser {
 			}
 
 			# -Instances means "have N windows available to the caller", and in alongside mode
-			# a pre-existing window is not available: Set-WindowLayouts is run with
-			# -SkipExistingWindows there, so every handle captured before the workspace opened
-			# is refused by the layout pass. Topping up to N TOTAL then handed the layout only
+			# a pre-existing window is not available: the window claim set is built with
+			# SkipExisting on there (New-WindowClaimSet, handed to Set-WindowLayouts -Claims), so
+			# every handle captured before the workspace opened is refused by the layout pass. Topping up to N TOTAL then handed the layout only
 			# N - existing usable windows and left that many zones permanently unfillable -
 			# worse on every rerun, since each run adds to the pre-existing count. Count nothing
 			# in that mode and open the full N as new windows.

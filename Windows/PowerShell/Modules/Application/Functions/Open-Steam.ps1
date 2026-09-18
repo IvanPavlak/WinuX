@@ -15,6 +15,6 @@ function Open-Steam {
 		-AppName "Steam" `
 		-ProcessName "steamwebhelper" `
 		-StartMethod DirectPath `
-		-ExecutablePath $Configuration.Universal.SteamExe `
+		-ExecutablePath (Get-ConfigSetting -Path 'Universal.SteamExe') `
 		-SkipPathValidation
 }

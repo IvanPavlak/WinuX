@@ -46,10 +46,7 @@ function Invoke-LogMaintenance {
 		[string]$ResultsDirectory
 	)
 
-	$maintenance = $null
-	if ($global:Configuration -and $global:Configuration.Logging -and $global:Configuration.Logging.Maintenance) {
-		$maintenance = $global:Configuration.Logging.Maintenance
-	}
+	$maintenance = Get-ConfigSetting -Path 'Logging.Maintenance'
 
 	$enabled = if ($maintenance -and $null -ne $maintenance.Enabled) { [bool]$maintenance.Enabled } else { $true }
 	$intervalHours = if ($maintenance -and $null -ne $maintenance.IntervalHours) { [int]$maintenance.IntervalHours } else { 24 }

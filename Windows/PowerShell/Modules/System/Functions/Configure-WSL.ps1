@@ -43,7 +43,8 @@ function Configure-WSL {
 
 		# Guard before enabling the WSL Windows feature: an unconfigured distribution
 		# means the user never opted into WSL, so nothing gets installed or enabled.
-		if (-not (Confirm-ConfigValue $Configuration.DefaultWSLDistribution "DefaultWSLDistribution not configured - skipping WSL setup!")) {
+		$distro = Get-ConfigSetting -Path 'DefaultWSLDistribution'
+		if (-not (Confirm-ConfigValue $distro "DefaultWSLDistribution not configured - skipping WSL setup!")) {
 			return
 		}
 
@@ -55,8 +56,6 @@ function Configure-WSL {
 		else {
 			Write-LogWarning "WSL is already enabled"
 		}
-
-		$distro = $Configuration.DefaultWSLDistribution
 
 		if ($Force -and (Test-WSLDistributionInstalled)) {
 			Write-LogWarning "-Force: unregistering $distro - ALL data inside the distribution is deleted!" -BlankLineAfter
@@ -72,7 +71,7 @@ function Configure-WSL {
 			# first-launch user setup if the distro is actually available now; otherwise defer
 			# with a clear message instead of dumping wsl.exe's help text and silently no-opping.
 			if (Test-WSLDistributionInstalled) {
-				$wslUser = $Configuration.DefaultWSLUsername
+				$wslUser = Get-ConfigSetting -Path 'DefaultWSLUsername'
 				if (Test-ConfigValue $wslUser) {
 					# Linux usernames are lowercase by convention (Ubuntu's default useradd
 					# NAME_REGEX rejects uppercase) - normalize instead of failing.

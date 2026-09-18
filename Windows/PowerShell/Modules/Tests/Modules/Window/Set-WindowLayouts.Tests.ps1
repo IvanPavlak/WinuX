@@ -5,6 +5,9 @@ BeforeAll {
 	$FunctionsPath = Join-Path $ModuleRoot "Window\Functions"
 
 	. "$FunctionsPath\Set-WindowLayouts.ps1"
+	# The claim set every ownership rule below is expressed through; the function builds an
+	# all-claimable one itself when none is passed.
+	. "$FunctionsPath\New-WindowClaimSet.ps1"
 
 	# The pre-snap inset source, stubbed so Mock can attach in a dot-sourced unit and so these
 	# cases never read the live session configuration. It has its own suite.
@@ -31,7 +34,7 @@ Describe "Set-WindowLayouts" {
 		Should -Invoke Write-Error -Times 1
 	}
 
-	Context "SkipExistingWindows (alongside eligibility)" {
+	Context "Claims.SkipExisting (alongside eligibility)" {
 		# In alongside mode only the windows THIS open created may be laid out. Ineligible
 		# candidates are dropped before any entry can claim one, so an entry left with nothing
 		# reports "Not Found" - a countable shortfall - instead of silently placing nothing and
@@ -58,7 +61,7 @@ Describe "Set-WindowLayouts" {
 			$existing = New-Object 'System.Collections.Generic.HashSet[IntPtr]'
 			[void]$existing.Add([IntPtr]0xA1001)
 
-			$results = @(Set-WindowLayouts -LayoutConfig $browserEntry -SkipExistingWindows -ExistingWindowHandles $existing)
+			$results = @(Set-WindowLayouts -LayoutConfig $browserEntry -Claims (New-WindowClaimSet -Existing $existing -SkipExisting))
 
 			$results.Count | Should -Be 1
 			$results[0].Status | Should -Be 'Not Found'
@@ -72,13 +75,13 @@ Describe "Set-WindowLayouts" {
 			$existing = New-Object 'System.Collections.Generic.HashSet[IntPtr]'
 			[void]$existing.Add([IntPtr]0xA1001)
 
-			$results = @(Set-WindowLayouts -LayoutConfig $browserEntry -SkipExistingWindows -ExistingWindowHandles $existing)
+			$results = @(Set-WindowLayouts -LayoutConfig $browserEntry -Claims (New-WindowClaimSet -Existing $existing -SkipExisting))
 
 			$results.Count | Should -Be 1
 			$results[0].Status | Should -Be 'Configured'
 		}
 
-		It "counts a pre-existing window normally when SkipExistingWindows is not set" {
+		It "counts a pre-existing window normally when SkipExisting is not set" {
 			# Control: the exclusion is alongside-only. A normal open legitimately re-uses
 			# windows that were already on screen.
 			Mock Get-WindowHandle {
@@ -88,7 +91,7 @@ Describe "Set-WindowLayouts" {
 			$existing = New-Object 'System.Collections.Generic.HashSet[IntPtr]'
 			[void]$existing.Add([IntPtr]0xA1001)
 
-			$results = @(Set-WindowLayouts -LayoutConfig $browserEntry -ExistingWindowHandles $existing)
+			$results = @(Set-WindowLayouts -LayoutConfig $browserEntry -Claims (New-WindowClaimSet -Existing $existing))
 
 			$results.Count | Should -Be 1
 			$results[0].Status | Should -Be 'Configured'
@@ -110,7 +113,7 @@ Describe "Set-WindowLayouts" {
 			[void]$existing.Add([IntPtr]0xA2001)
 
 			$duplicateEntries = @(@{ ProcessName = 'chrome' }, @{ ProcessName = 'chrome' })
-			$results = @(Set-WindowLayouts -LayoutConfig $duplicateEntries -SkipExistingWindows -ExistingWindowHandles $existing)
+			$results = @(Set-WindowLayouts -LayoutConfig $duplicateEntries -Claims (New-WindowClaimSet -Existing $existing -SkipExisting))
 
 			$results.Count | Should -Be 2
 			@($results | Where-Object { $_.Status -eq 'Configured' }).Count | Should -Be 1
@@ -118,7 +121,7 @@ Describe "Set-WindowLayouts" {
 		}
 	}
 
-	Context "ProtectedWindowHandles (plain-open preservation)" {
+	Context "Claims.Protected (plain-open preservation)" {
 		# A preserved alongside workspace's window matches layout regexes exactly like any
 		# other ("Browser" matches any browser window). It must be dropped from the candidate
 		# list before claiming - a starved entry reports "Not Found" instead of stealing the
@@ -138,7 +141,7 @@ Describe "Set-WindowLayouts" {
 				param([int[]]$Handle)
 				$set = New-Object 'System.Collections.Generic.HashSet[IntPtr]'
 				foreach ($item in $Handle) { [void]$set.Add([IntPtr]$item) }
-				$set
+				New-WindowClaimSet -Protected $set
 			}
 		}
 
@@ -147,7 +150,7 @@ Describe "Set-WindowLayouts" {
 				@([PSCustomObject]@{ Handle = [IntPtr]0xC1001; Title = 'YouTube - Google Chrome'; ProcessName = 'chrome'; ProcessId = 4242 })
 			}
 
-			$results = @(Set-WindowLayouts -LayoutConfig $protectedBrowserEntry -ProtectedWindowHandles (New-ProtectedSet 0xC1001))
+			$results = @(Set-WindowLayouts -LayoutConfig $protectedBrowserEntry -Claims (New-ProtectedSet 0xC1001))
 
 			$results.Count | Should -Be 1
 			$results[0].Status | Should -Be 'Not Found'
@@ -161,7 +164,7 @@ Describe "Set-WindowLayouts" {
 				)
 			}
 
-			$results = @(Set-WindowLayouts -LayoutConfig $protectedBrowserEntry -ProtectedWindowHandles (New-ProtectedSet 0xC1001))
+			$results = @(Set-WindowLayouts -LayoutConfig $protectedBrowserEntry -Claims (New-ProtectedSet 0xC1001))
 
 			$results.Count | Should -Be 1
 			$results[0].Status | Should -Be 'Configured'
@@ -181,7 +184,7 @@ Describe "Set-WindowLayouts" {
 			$titleEntry = @(@{ ProcessName = 'chrome'; WindowTitle = 'YouTube.*' })
 
 			$results = @(Set-WindowLayouts -LayoutConfig $titleEntry -ExpectedWindowState $expectedState `
-					-ProtectedWindowHandles (New-ProtectedSet 0xC1001))
+					-Claims (New-ProtectedSet 0xC1001))
 
 			@($results | Where-Object { $_.Status -eq 'Configured' }).Count | Should -Be 0
 		}
@@ -249,7 +252,7 @@ Describe "Set-WindowLayouts" {
 		}
 	}
 
-	Context "Per-desktop pipelining filters (CandidateWindowHandles, ExcludeWindowHandles, KeepPositionedWindows)" {
+	Context "Per-desktop pipelining filters (Claims.Candidates, Claims.Excluded, KeepPositionedWindows)" {
 		# Same shape as the alongside-eligibility cases: no Zone and no coordinates, so the
 		# positioning branch is skipped and the result rows are all that matters. A catch-all
 		# entry matches BOTH windows of its process, which is exactly why these filters are
@@ -268,11 +271,11 @@ Describe "Set-WindowLayouts" {
 			$script:chromeEntry = @(@{ ProcessName = 'chrome' })
 		}
 
-		It "claims only the windows inside -CandidateWindowHandles" {
+		It "claims only the windows inside the claim set's candidates" {
 			$candidates = New-Object 'System.Collections.Generic.HashSet[IntPtr]'
 			[void]$candidates.Add([IntPtr]0xB1002)
 
-			$results = @(Set-WindowLayouts -LayoutConfig $script:chromeEntry -CandidateWindowHandles $candidates)
+			$results = @(Set-WindowLayouts -LayoutConfig $script:chromeEntry -Claims (New-WindowClaimSet -Candidates $candidates))
 
 			$configured = @($results | Where-Object { $_.Status -eq 'Configured' })
 			$configured.Count | Should -Be 1
@@ -283,7 +286,7 @@ Describe "Set-WindowLayouts" {
 			$candidates = New-Object 'System.Collections.Generic.HashSet[IntPtr]'
 			[void]$candidates.Add([IntPtr]0xB1003)
 
-			$results = @(Set-WindowLayouts -LayoutConfig $script:chromeEntry -CandidateWindowHandles $candidates)
+			$results = @(Set-WindowLayouts -LayoutConfig $script:chromeEntry -Claims (New-WindowClaimSet -Candidates $candidates))
 
 			$results.Count | Should -Be 1
 			$results[0].Status | Should -Be 'Not Found'
@@ -292,11 +295,11 @@ Describe "Set-WindowLayouts" {
 			Should -Invoke Start-Sleep -Times 0 -Exactly
 		}
 
-		It "never claims a window in -ExcludeWindowHandles" {
+		It "never claims a window in the claim set's excluded set" {
 			$excluded = New-Object 'System.Collections.Generic.HashSet[IntPtr]'
 			[void]$excluded.Add([IntPtr]0xB1001)
 
-			$results = @(Set-WindowLayouts -LayoutConfig $script:chromeEntry -ExcludeWindowHandles $excluded)
+			$results = @(Set-WindowLayouts -LayoutConfig $script:chromeEntry -Claims (New-WindowClaimSet -Excluded $excluded))
 
 			$configured = @($results | Where-Object { $_.Status -eq 'Configured' })
 			$configured.Count | Should -Be 1
@@ -333,7 +336,7 @@ Describe "Set-WindowLayouts" {
 			$placed = New-Object 'System.Collections.Generic.HashSet[IntPtr]'
 			[void]$placed.Add([IntPtr]0xB1001)
 
-			$results = @(Set-WindowLayouts -LayoutConfig $layout -SkipEntryKeys '2|||chrome|' -ExcludeWindowHandles $placed)
+			$results = @(Set-WindowLayouts -LayoutConfig $layout -SkipEntryKeys '2|||chrome|' -Claims (New-WindowClaimSet -Excluded $placed))
 
 			# Only desktop 1's entry runs, as a duplicate-key entry, and claims the one unplaced window.
 			$results.Count | Should -Be 1
@@ -345,7 +348,7 @@ Describe "Set-WindowLayouts" {
 			$candidates = New-Object 'System.Collections.Generic.HashSet[IntPtr]'
 			[void]$candidates.Add([IntPtr]0xB1003)
 
-			$results = @(Set-WindowLayouts -LayoutConfig @(@{ ProcessName = 'chrome'; DesktopNumber = 3 }) -CandidateWindowHandles $candidates)
+			$results = @(Set-WindowLayouts -LayoutConfig @(@{ ProcessName = 'chrome'; DesktopNumber = 3 }) -Claims (New-WindowClaimSet -Candidates $candidates))
 
 			$results[0].Status | Should -Be 'Not Found'
 			$results[0].EntryKey | Should -Be '3|||chrome|'

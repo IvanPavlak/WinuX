@@ -64,10 +64,7 @@ function Clear-OldBackups {
 	}
 	if (-not (Test-Path -LiteralPath $BackupRoot)) { return }
 
-	$retention = $null
-	if ($global:Configuration -and $global:Configuration.Backups -and $global:Configuration.Backups.Retention) {
-		$retention = $global:Configuration.Backups.Retention
-	}
+	$retention = Get-ConfigSetting -Path 'Backups.Retention'
 
 	if (-not $PSBoundParameters.ContainsKey('MaxAgeDays')) { $MaxAgeDays = if ($retention -and $null -ne $retention.MaxAgeDays) { [int]$retention.MaxAgeDays } else { 0 } }
 	if (-not $PSBoundParameters.ContainsKey('MaxBackupsPerKey')) { $MaxBackupsPerKey = if ($retention -and $null -ne $retention.MaxBackupsPerKey) { [int]$retention.MaxBackupsPerKey } else { 10 } }

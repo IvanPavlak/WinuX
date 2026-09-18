@@ -70,7 +70,8 @@ function Import-AppCsv {
 		throw "Cannot locate the repository - pass -RepoRoot."
 	}
 
-	$relativePath = $global:Configuration.BootstrapConfig.DataFiles.$DataFileKey
+	$dataFiles = Get-ConfigSetting -Path 'BootstrapConfig.DataFiles' -Default @{}
+	$relativePath = $dataFiles[$DataFileKey]
 	if ([string]::IsNullOrWhiteSpace($relativePath)) {
 		throw "BootstrapConfig.DataFiles.$DataFileKey is not configured."
 	}

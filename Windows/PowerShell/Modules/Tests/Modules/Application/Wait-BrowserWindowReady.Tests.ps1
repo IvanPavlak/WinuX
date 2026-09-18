@@ -4,13 +4,19 @@ BeforeAll {
 	$ModuleRoot = (Get-RepositoryPath).Modules
 	$AppFunctionsPath = Join-Path $ModuleRoot "Application\Functions"
 
+	. (Join-Path $ModuleRoot "Helper\Functions\New-WaitClock.ps1")
+	. (Join-Path $ModuleRoot "Helper\Functions\Wait-Until.ps1")
 	. "$AppFunctionsPath\Wait-BrowserWindowReady.ps1"
+	. (Join-Path $ModuleRoot "Tests\Modules\Support\FakeWaitClock.ps1")
 }
 
 Describe "Wait-BrowserWindowReady" {
 	BeforeEach {
 		Mock Write-LogDebug { }
-		Mock Start-Sleep { }
+		# Time is virtual: Sleep advances the clock instead of blocking, so a 30 s budget is an
+		# exact tick count rather than a real wait.
+		$script:clock = New-FakeWaitClock
+		Mock New-WaitClock { $script:clock }
 	}
 
 	It "returns true immediately when a window already exists" {
@@ -20,7 +26,7 @@ Describe "Wait-BrowserWindowReady" {
 
 		Wait-BrowserWindowReady -ProcessName "brave" | Should -BeTrue
 
-		Should -Invoke Start-Sleep -Times 0
+		$script:clock.Sleeps.Count | Should -Be 0
 	}
 
 	It "filters candidate windows by title pattern" {
@@ -30,6 +36,9 @@ Describe "Wait-BrowserWindowReady" {
 		}
 
 		Wait-BrowserWindowReady -ProcessName "firefox" -TitlePattern "Tor Browser" -TimeoutSeconds 1 | Should -BeFalse
+
+		# One second at 250 ms ticks.
+		@($script:clock.Sleeps) | Should -Be @(250, 250, 250, 250)
 	}
 
 	It "returns false and logs when no window appears before the timeout" {
@@ -38,6 +47,17 @@ Describe "Wait-BrowserWindowReady" {
 		Wait-BrowserWindowReady -ProcessName "brave" -TimeoutSeconds 1 | Should -BeFalse
 
 		Should -Invoke Write-LogDebug -Times 1
+	}
+
+	It "gives up after the default 30 s at 250 ms ticks: 120 sleeps, 121 polls" {
+		Mock Get-WindowHandle { @() }
+
+		Wait-BrowserWindowReady -ProcessName "brave" | Should -BeFalse
+
+		$script:clock.Sleeps.Count | Should -Be 120
+		$script:clock.ElapsedMs() | Should -Be 30000
+		# The poll after the last tick still runs before giving up.
+		Should -Invoke Get-WindowHandle -Times 121 -Exactly
 	}
 
 	It "keeps polling until a window appears" {
@@ -55,5 +75,16 @@ Describe "Wait-BrowserWindowReady" {
 		Wait-BrowserWindowReady -ProcessName "brave" -TimeoutSeconds 5 | Should -BeTrue
 
 		$script:pollCount | Should -Be 3
+		@($script:clock.Sleeps) | Should -Be @(250, 250)
+	}
+
+	It "polls through the clock it is handed instead of creating one" {
+		Mock Get-WindowHandle { @() }
+		$other = New-FakeWaitClock
+
+		Wait-BrowserWindowReady -ProcessName "brave" -TimeoutSeconds 1 -Clock $other | Should -BeFalse
+
+		$other.Sleeps.Count | Should -Be 4
+		Should -Invoke New-WaitClock -Times 0
 	}
 }
