@@ -40,10 +40,7 @@ function Terminate-AllProcessesWithVisibleWindows {
 	# key's comment there - the PowerToys entries in particular are load-bearing). Refuse
 	# to run without them: with no exclusions this would force-kill WindowsTerminal,
 	# taking down the very shell (and Kill-All run) executing this function.
-	$configuredExclusions = @()
-	if ($Configuration -and $Configuration.Universal -and $Configuration.Universal.VisibleWindowExclusions) {
-		$configuredExclusions = @($Configuration.Universal.VisibleWindowExclusions)
-	}
+	$configuredExclusions = @(Get-ConfigSetting -Path 'Universal.VisibleWindowExclusions' -Default @())
 
 	if (-not $configuredExclusions) {
 		Write-LogWarning "No exclusions configured (Universal.VisibleWindowExclusions) - terminating nothing!"
@@ -61,8 +58,9 @@ function Terminate-AllProcessesWithVisibleWindows {
 		$null = $defaultExcludedProcessNames.Add($exclusion)
 	}
 
-	if ($Configuration -and $Configuration.Universal -and $Configuration.Universal.Browsers) {
-		foreach ($browserDef in $Configuration.Universal.Browsers.Values) {
+	$browsers = Get-ConfigSetting -Path 'Universal.Browsers'
+	if ($browsers) {
+		foreach ($browserDef in $browsers.Values) {
 			if ($browserDef.Exe) {
 				$null = $defaultExcludedProcessNames.Add(
 					[System.IO.Path]::GetFileNameWithoutExtension($browserDef.Exe))

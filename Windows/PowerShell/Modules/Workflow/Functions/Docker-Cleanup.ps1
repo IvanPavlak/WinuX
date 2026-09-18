@@ -38,7 +38,7 @@ function Docker-Cleanup {
 
 	# Filtered, not just wrapped: an absent DockerCleanupActions yields @($null), whose
 	# Count is 1, which would sail past the guard and offer a blank menu entry
-	$cleanupActions = @($Configuration.DockerCleanupActions | Where-Object { $_ -and $_.Name })
+	$cleanupActions = @((Get-ConfigSetting -Path 'DockerCleanupActions' -Default @()) | Where-Object { $_ -and $_.Name })
 	if ($cleanupActions.Count -eq 0) {
 		Write-LogWarning "No cleanup actions configured in Configuration.DockerCleanupActions!"
 		return

@@ -29,7 +29,7 @@ Describe "Set-PowerButtonActions" {
 	}
 
 	It "-Auto leaves power settings as-is when PowerButtonActions is empty (empty base, no hardcoded defaults)" {
-		$script:Configuration = [PSCustomObject]@{ PowerButtonActions = @{} }
+		$global:Configuration = [PSCustomObject]@{ PowerButtonActions = @{} }
 		Mock DetermineMachineType { "PC" }
 		Mock Write-LogStep { }
 		Mock Write-LogWarning { }

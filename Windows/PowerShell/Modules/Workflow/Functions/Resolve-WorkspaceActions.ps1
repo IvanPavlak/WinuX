@@ -220,19 +220,17 @@ function Resolve-WorkspaceActions {
 	# LayoutMachineTypeOverrides value and SmallDisplayMachineType (single-element arrays unwrapped
 	# the way Get-LayoutMachineType reads them).
 	$layoutSetTokens = @()
-	if ($null -ne $Configuration) {
-		$overrides = $Configuration['LayoutMachineTypeOverrides']
-		if ($overrides -is [System.Collections.IDictionary]) {
-			foreach ($overrideValue in @($overrides.Values)) {
-				$candidate = $overrideValue
-				if ($candidate -is [array]) { $candidate = @($candidate)[0] }
-				if (-not [string]::IsNullOrWhiteSpace([string]$candidate)) { $layoutSetTokens += ([string]$candidate).Trim() }
-			}
+	$overrides = Get-ConfigSetting -Path 'LayoutMachineTypeOverrides' -Configuration $Configuration
+	if ($overrides -is [System.Collections.IDictionary]) {
+		foreach ($overrideValue in @($overrides.Values)) {
+			$candidate = $overrideValue
+			if ($candidate -is [array]) { $candidate = @($candidate)[0] }
+			if (-not [string]::IsNullOrWhiteSpace([string]$candidate)) { $layoutSetTokens += ([string]$candidate).Trim() }
 		}
-		$smallDisplayType = $Configuration['SmallDisplayMachineType']
-		if ($smallDisplayType -is [array]) { $smallDisplayType = @($smallDisplayType)[0] }
-		if (-not [string]::IsNullOrWhiteSpace([string]$smallDisplayType)) { $layoutSetTokens += ([string]$smallDisplayType).Trim() }
 	}
+	$smallDisplayType = Get-ConfigSetting -Path 'SmallDisplayMachineType' -Configuration $Configuration
+	if ($smallDisplayType -is [array]) { $smallDisplayType = @($smallDisplayType)[0] }
+	if (-not [string]::IsNullOrWhiteSpace([string]$smallDisplayType)) { $layoutSetTokens += ([string]$smallDisplayType).Trim() }
 	$layoutSetTokens = @($layoutSetTokens | Select-Object -Unique)
 
 	# Applies one parameter table to the working copy: "All" row first, then the other matching rows

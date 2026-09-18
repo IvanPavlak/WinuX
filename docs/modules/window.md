@@ -175,6 +175,25 @@ Center-Windows -ProcessName "WindowsTerminal" -OnPrimary
 - **Description:** Clears the window enumeration cache. Invalidates the cached window information, forcing the next `Get-CachedWindows` call to refresh from the native API. Also clears the C# process name cache.
 - **Usage:** `Clear-WindowCache`
 
+## [Close-Window](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Close-Window.ps1)
+
+- **Description:** Asks a window to close by posting `WM_CLOSE` to its handle through `WindowModule.Native` - the one graceful-close seam in the repository. Needs neither focus nor synthesized input: the application runs its own close path (unsaved-changes prompts included) exactly as if the title-bar X had been clicked. Does not wait for the window to go away; pair it with `Wait-WindowsClosed` or `Test-WindowVisible` to tell "closed" from "refused". A zero handle is skipped. Returns the number of handles the message was posted to.
+- **Parameters:** -Handle
+- **Usage:** `Close-Window -Handle $window.Handle`
+
+Every closer used to carry its own compiled `user32` `PostMessage` declaration (`Close-Workspace`, `Close-Project`, `Rerun-LastCommand`, the browser helper). They all post through this function now, so a test mocks `Close-Window` instead of `Add-Type` and never has to invent a handle no real window can own. Window objects can be piped: their `Handle` property is bound.
+
+```powershell
+# Ask one window to close
+Close-Window -Handle $window.Handle
+
+# Ask every window in a collection to close, then see which ones refused
+$targets | Close-Window | Out-Null
+$refused = Wait-WindowsClosed -Window $targets
+```
+
+**See also:** [Wait-WindowsClosed](#wait-windowsclosed), [Test-WindowVisible](#test-windowvisible), [Close-Workspace](workflow.md#close-workspace)
+
 ## [Confirm-WindowForeground](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Confirm-WindowForeground.ps1)
 
 - **Description:** Acquires and verifies stable foreground focus for a window. Repeatedly forces the target window to the foreground and confirms the change took effect before returning. Because focus handoff is asynchronous, a single `ForceForegroundWindow` call can race with input injection; this helper retries with an increasing settle delay and only reports success once `GetForegroundWindow` confirms the window is actually focused.
@@ -2022,6 +2041,18 @@ Returns a `PSCustomObject` with `Healthy` (bool), `TimedOut` (bool), and `Error`
 
 **See also:** [Test-RpcServerHealth](system.md#test-rpcserverhealth), [Reset-VirtualDesktopState](window.md#reset-virtualdesktopstate)
 
+## [Test-WindowVisible](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Test-WindowVisible.ps1)
+
+- **Description:** Tells whether a handle still refers to a live, visible window. A handle counts as visible only while `IsWindow` AND `IsWindowVisible` both hold: a destroyed handle and a hidden window both read as `$false`, because applications hide their window before tearing the process down and a `WM_CLOSE` that reached its target has done its job at that point. A zero handle is never visible. This is the liveness probe a "did it close" wait polls after `Close-Window`.
+- **Parameters:** -Handle
+- **Usage:** `Test-WindowVisible -Handle $window.Handle`
+
+```powershell
+if (Test-WindowVisible -Handle $window.Handle) { "still open" }
+```
+
+**See also:** [Close-Window](#close-window), [Wait-WindowsClosed](#wait-windowsclosed), [Test-BrowserWindowOpen](system.md#test-browserwindowopen)
+
 ## [Update-LayoutSectionHeaders](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Update-LayoutSectionHeaders.ps1)
 
 - **Description:** Updates the section headers (e.g., `# VIRTUAL DESKTOP 1 - Monitor: Primary - Layout: One`) within the `Layout` array of a layout file to match the actual configuration. Parses the file content, strips the existing headers, sorts the entries by DesktopNumber, Monitor (`Primary`, `Secondary`, `Monitor3`, `Monitor4`, ...), and zone order, then regenerates the headers from the real DesktopNumber, Monitor, and Layout type values. Used by `Visualize-Layouts -Update` to keep both the visualization block and the inline section headers synchronized with the configuration.
@@ -2224,7 +2255,7 @@ An empty result means they all closed. `Clear-WindowCache` runs before each poll
 
 ```powershell
 # Ask windows to close, then find out which ones actually did
-foreach ($w in $targets) { [void][CloseWorkspaceWin32]::PostMessage($w.Handle, 0x0010, 0, 0) }
+$targets | Close-Window | Out-Null
 $refused = Wait-WindowsClosed -Window $targets
 if ($refused) { "still open: $($refused.Title -join ', ')" }
 ```

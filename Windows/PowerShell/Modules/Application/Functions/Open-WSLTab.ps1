@@ -11,7 +11,7 @@ function Open-WSLTab {
 		Open-WSLTab
 		Opens a new WSL tab in the current Windows Terminal window.
 	#>
-	$distro = $Configuration.DefaultWSLDistribution
+	$distro = Get-ConfigSetting -Path 'DefaultWSLDistribution'
 	if (-not (Confirm-ConfigValue $distro "DefaultWSLDistribution not configured - no WSL tab to open!")) {
 		return
 	}

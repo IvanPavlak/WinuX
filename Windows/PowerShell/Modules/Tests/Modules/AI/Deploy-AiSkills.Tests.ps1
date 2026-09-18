@@ -30,7 +30,7 @@ Describe "Deploy-AiSkills" {
 		}
 		New-Item -ItemType Directory -Path (Join-Path $script:Root "mattpocock\not-a-skill") -Force | Out-Null
 
-		$script:Configuration = [PSCustomObject]@{
+		$global:Configuration = [PSCustomObject]@{
 			DefaultWSLDistribution = "Ubuntu"
 			DefaultWSLUsername     = "you"
 		}

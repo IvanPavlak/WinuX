@@ -42,7 +42,7 @@ function Start-Win11Debloat {
 
 	Try {
 		$repoRoot = $global:MachineSpecificPaths.Projects.Self.Root
-		$win11DebloatScriptPath = $global:Configuration.BootstrapConfig.LocalScripts.Win11Debloat
+		$win11DebloatScriptPath = Get-ConfigSetting -Path 'BootstrapConfig.LocalScripts.Win11Debloat'
 
 		if (-not [string]::IsNullOrWhiteSpace($win11DebloatScriptPath) -and $win11DebloatScriptPath.Contains("{RepoRoot}")) {
 			$win11DebloatScriptPath = $win11DebloatScriptPath.Replace("{RepoRoot}", $repoRoot)

@@ -81,10 +81,11 @@ function Reset-Windows {
 	$machineType = Get-LayoutMachineType
 
 	$defaults = $null
-	if ($global:Configuration -and $global:Configuration.ResetAllWindowsDefaults) {
-		$defaults = $global:Configuration.ResetAllWindowsDefaults[$machineType]
+	$resetAllWindowsDefaults = Get-ConfigSetting -Path 'ResetAllWindowsDefaults'
+	if ($resetAllWindowsDefaults) {
+		$defaults = $resetAllWindowsDefaults[$machineType]
 		if (-not $defaults) {
-			$defaults = $global:Configuration.ResetAllWindowsDefaults["Default"]
+			$defaults = $resetAllWindowsDefaults["Default"]
 		}
 	}
 	if (-not $defaults) {

@@ -25,7 +25,7 @@ Describe "Resolve-ProjectPath" {
 			}
 		}
 
-		$script:Configuration = [PSCustomObject]@{
+		$global:Configuration = [PSCustomObject]@{
 			ProjectTerminals = @(
 				[PSCustomObject]@{
 					Name     = "SampleProject"

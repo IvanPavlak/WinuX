@@ -36,7 +36,7 @@ function Get-SwaggerCloseTitlePatterns {
 	$patterns = @()
 
 	# Check if there's a swagger group matching this project (case-insensitive)
-	$urlGroups = $Configuration.BrowserGroups
+	$urlGroups = @(Get-ConfigSetting -Path 'BrowserGroups' -Default @())
 	$swaggerParentGroup = $urlGroups | Where-Object { $_.Keys -contains "Swagger" }
 	$swaggerGroup = if ($swaggerParentGroup) {
 		($swaggerParentGroup["Swagger"] | Where-Object { $_.Name -ieq $Project }).Name

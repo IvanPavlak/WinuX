@@ -21,14 +21,14 @@ function Configure-WSLSSH {
 
 	Write-LogTitle "Configuring WSL SSH"
 
-	if (-not (Confirm-ConfigValue $Configuration.DefaultWSLDistribution "DefaultWSLDistribution not configured - skipping WSL SSH setup!")) {
+	$distro = Get-ConfigSetting -Path 'DefaultWSLDistribution'
+	if (-not (Confirm-ConfigValue $distro "DefaultWSLDistribution not configured - skipping WSL SSH setup!")) {
 		return
 	}
 
 	# Always target the configured distribution explicitly: Docker Desktop and podman
 	# machines routinely steal the WSL *default*, and a bare `wsl` would then run all
 	# of this inside the wrong distro (e.g. podman's `user` account).
-	$distro = $Configuration.DefaultWSLDistribution
 
 	# Never assume $env:USERNAME maps to the WSL account: `Ivan` on Windows is not
 	# `ivan` in Linux, and a wrong name silently builds a root-owned /home/<Wrong>

@@ -15,7 +15,7 @@ BeforeAll {
 
 Describe "Set-ExplorerOptions" {
 	BeforeEach {
-		$script:Configuration = [PSCustomObject]@{
+		$global:Configuration = [PSCustomObject]@{
 			ExplorerOptions = $null
 		}
 		Mock Write-Host { }

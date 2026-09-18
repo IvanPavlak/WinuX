@@ -9,7 +9,7 @@ BeforeAll {
 
 Describe "Clear-WhatsAppLocalStorage" {
 	BeforeEach {
-		$script:Configuration = [PSCustomObject]@{
+		$global:Configuration = [PSCustomObject]@{
 			Universal = [PSCustomObject]@{
 				WhatsAppLocalStoragePath = "C:\\Temp\\WhatsAppStorage"
 			}

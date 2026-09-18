@@ -48,23 +48,15 @@ function Close-Project {
 		[string[]]$Project
 	)
 
-	# Define Win32 API functions for window closing
-	if (-not ([System.Management.Automation.PSTypeName]'CloseProjectWin32').Type) {
-		Add-Type @"
-			using System;
-			using System.Runtime.InteropServices;
-			public class CloseProjectWin32 {
-				[DllImport("user32.dll")]
-				public static extern bool PostMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
-
-				public const uint WM_CLOSE = 0x0010;
-			}
-"@
-	}
+	$configuredProjects = @(Get-ConfigSetting -Path 'ProjectActions' -Default @())
+	$visualStudioSolutions = @(Get-ConfigSetting -Path 'VisualStudioSolutions' -Default @())
+	$vscodeProjects = @(Get-ConfigSetting -Path 'VSCodeProjects' -Default @())
+	$browser = Get-ConfigSetting -Path 'Universal.DefaultBrowser'
+	$browsers = Get-ConfigSetting -Path 'Universal.Browsers' -Default @{}
 
 	$resolveParams = @{
 		InputObject              = $Project
-		OptionList               = @(Get-OrderedNames $Configuration.ProjectActions)
+		OptionList               = @(Get-OrderedNames $configuredProjects)
 		MenuTitle                = "[Available projects to close]"
 		PromptMessage            = "Enter project(s) to close or press Enter to cancel"
 		AllowEmptyPromptResponse = $true
@@ -81,7 +73,7 @@ function Close-Project {
 	foreach ($projectName in $projects) {
 		Write-LogTitle "Closing $projectName Project Resources"
 
-		$projectActions = Get-OrderedEntry $Configuration.ProjectActions $projectName
+		$projectActions = Get-OrderedEntry $configuredProjects $projectName
 
 		if (-not $projectActions) {
 			Write-LogWarning "No actions configured for project [$projectName], skipping..."
@@ -98,9 +90,9 @@ function Close-Project {
 				# Replace {ProjectName} placeholder
 				$solutionName = $solutionParam -replace '\{ProjectName\}', $projectName
 				$resolvedSolutionPath = $null
-				$solutionEntry = $Configuration.VisualStudioSolutions | Where-Object { $_.Name -eq $solutionName }
+				$solutionEntry = $visualStudioSolutions | Where-Object { $_.Name -eq $solutionName }
 				if ($solutionEntry) {
-					$resolvedSolutionPath = Resolve-ConfigPathValue -PathExpression $solutionEntry.Solution
+					$resolvedSolutionPath = Get-ConfigSetting -Path $solutionEntry.Solution -Configuration $global:MachineSpecificPaths
 				}
 
 				$solutionTitleCandidates = Get-WindowTitleCandidates -Names @(
@@ -117,7 +109,7 @@ function Close-Project {
 				if ($vsWindows) {
 					foreach ($window in $vsWindows) {
 						Write-LogDebug "  Closing Visual Studio window => [$($window.Title)]" -Style Step
-						[CloseProjectWin32]::PostMessage($window.Handle, [CloseProjectWin32]::WM_CLOSE, [IntPtr]::Zero, [IntPtr]::Zero) | Out-Null
+						[void](Close-Window -Handle ([IntPtr]$window.Handle))
 						$closedAny = $true
 					}
 					Write-LogSuccess "Closed Visual Studio with solution [$solutionName]"
@@ -136,9 +128,9 @@ function Close-Project {
 				# Replace {ProjectName} placeholder
 				$folderName = $folderParam -replace '\{ProjectName\}', $projectName
 				$resolvedFolderPath = $null
-				$vscodeEntry = $Configuration.VSCodeProjects | Where-Object { $_.Name -eq $folderName }
+				$vscodeEntry = $vscodeProjects | Where-Object { $_.Name -eq $folderName }
 				if ($vscodeEntry) {
-					$resolvedFolderPath = Resolve-ConfigPathValue -PathExpression $vscodeEntry.Path
+					$resolvedFolderPath = Get-ConfigSetting -Path $vscodeEntry.Path -Configuration $global:MachineSpecificPaths
 				}
 
 				$folderTitleCandidates = Get-WindowTitleCandidates -Names @(
@@ -155,7 +147,7 @@ function Close-Project {
 				if ($vscodeWindows) {
 					foreach ($window in $vscodeWindows) {
 						Write-LogDebug "  Closing VSCode window => [$($window.Title)]" -Style Step
-						[CloseProjectWin32]::PostMessage($window.Handle, [CloseProjectWin32]::WM_CLOSE, [IntPtr]::Zero, [IntPtr]::Zero) | Out-Null
+						[void](Close-Window -Handle ([IntPtr]$window.Handle))
 						$closedAny = $true
 					}
 					Write-LogSuccess "Closed VSCode with folder [$folderName]"
@@ -186,8 +178,7 @@ function Close-Project {
 		Write-LogDebug " Looking for browser tabs for project [$projectName]..."
 
 		# Get the default browser
-		$browser = $Configuration.Universal.DefaultBrowser
-		$browserConfig = if (Test-ConfigValue $browser) { $Configuration.Universal.Browsers[$browser] } else { $null }
+		$browserConfig = if (Test-ConfigValue $browser) { $browsers[$browser] } else { $null }
 
 		if (-not (Test-ConfigValue $browser)) {
 			Write-LogDebug "  Universal.DefaultBrowser not configured - skipping browser tab cleanup" -Style Step

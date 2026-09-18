@@ -299,16 +299,19 @@ function Loading-Spinner {
 	}
 
 	# ---- Spinner configuration is needed for Function and Start modes ----
-	$spinners = $global:Configuration.LoadingSpinners
+	# No default: an empty hashtable is truthy in PowerShell, and the missing-configuration
+	# branch below must still fire when the section is absent.
+	$spinners = Get-ConfigSetting -Path 'LoadingSpinners'
 	if (-not $spinners) {
 		Write-Host -ForegroundColor Red "`n=> Loading spinner configuration not found in global configuration"
 		return
 	}
 
+	$defaultSpinner = Get-ConfigSetting -Path 'DefaultSpinner'
 	$selectedStyle = if ($Style) {
 		$Style
 	}
- elseif ($global:Configuration.DefaultSpinner) { $global:Configuration.DefaultSpinner }
+ elseif ($defaultSpinner) { $defaultSpinner }
 
 	$spinnerConfig = $spinners[$selectedStyle]
 

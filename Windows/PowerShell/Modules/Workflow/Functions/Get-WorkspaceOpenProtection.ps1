@@ -20,6 +20,12 @@ function Get-WorkspaceOpenProtection {
 		protect, and the tracker describes what is open). Plain entries are never preserved: a
 		plain rerun replaces the plain session by design.
 
+		Nor is an alongside entry of a workspace this open is itself opening (-Opening). A plain
+		"Open-Workspace Server" after "Open-Workspace Server -Alongside" is a re-layout of that
+		same workspace, not a second copy of it: protecting its own alongside instance would
+		hide its windows from every "already open" check, launch duplicates of all of them, and
+		carry a tracker entry forward that now describes windows the plain session owns.
+
 		Records are resolved with the same ladder Close-Workspace uses: exact handle first, then
 		same ProcessId + ProcessName (Electron applications recreate their window without
 		restarting), then same ProcessName + exact Title (the application restarted outright).
@@ -29,6 +35,10 @@ function Get-WorkspaceOpenProtection {
 
 		The common case - no alongside workspace open - pays one tracker file parse and nothing
 		else: the function short-circuits to $null before any window enumeration.
+
+	.PARAMETER Opening
+		Names of the workspaces this plain open is opening. Their own alongside entries are not
+		preserved but handed to the open to adopt and re-layout. Matching is case-insensitive.
 
 	.PARAMETER StatePath
 		Full path to the tracker file. Defaults to Get-WorkspaceStatePath. Mainly a test seam.
@@ -43,6 +53,10 @@ function Get-WorkspaceOpenProtection {
 		$protection = Get-WorkspaceOpenProtection
 		if ($protection) { "preserving $(@($protection.Entries).Count) alongside workspace(s)" }
 
+	.EXAMPLE
+		$protection = Get-WorkspaceOpenProtection -Opening 'Server'
+		Preserves every live alongside workspace except Server's own alongside instance.
+
 	.NOTES
 		Consumed by Open-Workspace on plain (non-Alongside) opens, which threads the handle set
 		through Set-WorkspaceWindowLayout, Set-WindowLayouts, Open-Browser and the tracker write.
@@ -50,6 +64,9 @@ function Get-WorkspaceOpenProtection {
 	[CmdletBinding()]
 	[OutputType([pscustomobject])]
 	param(
+		[Parameter()]
+		[string[]]$Opening,
+
 		[Parameter()]
 		[string]$StatePath
 	)
@@ -61,6 +78,13 @@ function Get-WorkspaceOpenProtection {
 	if (-not $state) { return $null }
 
 	$alongsideEntries = @($state.Entries | Where-Object { $_ -and [bool]$_.Alongside })
+
+	# The workspace being opened owns its own alongside instance: that entry is replaced by
+	# this open, not preserved from it, so it never reaches the protection set.
+	$openingNames = @($Opening | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | ForEach-Object { $_.Trim().ToLowerInvariant() })
+	if ($openingNames.Count -gt 0) {
+		$alongsideEntries = @($alongsideEntries | Where-Object { $openingNames -notcontains ([string]$_.Workspace).Trim().ToLowerInvariant() })
+	}
 	if ($alongsideEntries.Count -eq 0) { return $null }
 
 	# Something alongside is tracked - only now is a window enumeration worth paying for.

@@ -21,7 +21,7 @@ BeforeAll {
 
 Describe "Configure-Taskbar" {
 	BeforeEach {
-		$script:Configuration = [PSCustomObject]@{
+		$global:Configuration = [PSCustomObject]@{
 			Universal            = [PSCustomObject]@{ TaskbarPinFolder = "C:\\Temp\\TaskbarPins" }
 			TaskbarConfiguration = $null
 		}
@@ -56,7 +56,7 @@ Describe "Configure-Taskbar" {
 	}
 
 	It "returns without touching anything when TaskbarConfiguration is an empty array" {
-		$script:Configuration.TaskbarConfiguration = @()
+		$global:Configuration.TaskbarConfiguration = @()
 
 		{ Configure-Taskbar } | Should -Not -Throw
 
@@ -65,7 +65,7 @@ Describe "Configure-Taskbar" {
 
 	Context "machine-type filtering" {
 		BeforeEach {
-			$script:Configuration.TaskbarConfiguration = @(
+			$global:Configuration.TaskbarConfiguration = @(
 				@{ Name = "AllApp"; Type = "AUMID"; Value = "App.All"; Machine = "All" }
 				@{ Name = "TestApp"; Type = "AUMID"; Value = "App.Test"; Machine = "Test" }
 				@{ Name = "PcApp"; Type = "AUMID"; Value = "App.Pc"; Machine = "PC" }
@@ -166,7 +166,7 @@ Describe "Configure-Taskbar" {
 		}
 
 		It "pins an exe row with an Aumid through a generated, stamped TaskbarPins shortcut" {
-			$script:Configuration.TaskbarConfiguration = @(
+			$global:Configuration.TaskbarConfiguration = @(
 				@{ Name = "DBeaver"; Type = "Path"; Value = "{User}\AppData\Local\DBeaver\dbeaver.exe"; Aumid = "DBeaver" }
 			)
 
@@ -184,7 +184,7 @@ Describe "Configure-Taskbar" {
 		}
 
 		It "stamps a .lnk row with an Aumid in place instead of generating a shortcut" {
-			$script:Configuration.TaskbarConfiguration = @(
+			$global:Configuration.TaskbarConfiguration = @(
 				@{ Name = "SomeApp"; Type = "Path"; Value = "C:\Apps\SomeApp.lnk"; Aumid = "Some.App" }
 			)
 
@@ -198,7 +198,7 @@ Describe "Configure-Taskbar" {
 		}
 
 		It "falls back to pinning the raw path with a warning when stamping fails" {
-			$script:Configuration.TaskbarConfiguration = @(
+			$global:Configuration.TaskbarConfiguration = @(
 				@{ Name = "DBeaver"; Type = "Path"; Value = "{User}\AppData\Local\DBeaver\dbeaver.exe"; Aumid = "DBeaver" }
 			)
 			Mock Set-ShortcutAumid { throw "COM says no" }
@@ -211,7 +211,7 @@ Describe "Configure-Taskbar" {
 		}
 
 		It "leaves a plain Path row without an Aumid untouched" {
-			$script:Configuration.TaskbarConfiguration = @(
+			$global:Configuration.TaskbarConfiguration = @(
 				@{ Name = "PlainApp"; Type = "Path"; Value = "C:\Apps\plain.exe" }
 			)
 
@@ -230,7 +230,7 @@ Describe "Configure-Taskbar" {
 	# another - these tests pin that ordering, which -FromBootstrap skips entirely.
 	Context "Explorer restart ordering (interactive path)" {
 		BeforeEach {
-			$script:Configuration.TaskbarConfiguration = @(
+			$global:Configuration.TaskbarConfiguration = @(
 				@{ Name = "AllApp"; Type = "AUMID"; Value = "App.All"; Machine = "All" }
 			)
 			$global:MachineSpecificPaths = [PSCustomObject]@{ TaskbarLayoutFile = (Join-Path "$TestDrive" "taskbar_layout.xml") }

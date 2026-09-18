@@ -28,7 +28,7 @@ function Rename-Machine {
 
 	Write-LogTitle "Setup Machine Name"
 
-	$skipHostnames = @($global:Configuration.HostnameToMachineType.Keys)
+	$skipHostnames = @((Get-ConfigSetting -Path 'HostnameToMachineType' -Default @{}).Keys)
 	$currentHostname = $env:COMPUTERNAME
 
 	if (($skipHostnames -contains $currentHostname) -and -not $Override) {

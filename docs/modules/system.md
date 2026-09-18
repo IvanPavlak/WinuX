@@ -46,7 +46,7 @@ Clear-WhatsAppLocalStorage
 - **Parameters:** -WindowsToClose
 - **Usage:** `Close-BrowserWindows -WindowsToClose $windows`
 
-Iterates over each supplied window object and posts `WM_CLOSE` (`0x0010`) to its native `Handle` via `[Win32BrowserHelper]::PostMessage`. Because the message is posted directly to each handle, the foreground is never touched, so windows excluded upstream are never accidentally closed by a misfired keystroke.
+Iterates over each supplied window object and posts `WM_CLOSE` to its native `Handle` through the Window module's `Close-Window`. Because the message is posted directly to each handle, the foreground is never touched, so windows excluded upstream are never accidentally closed by a misfired keystroke.
 
 | Parameter         | Type       | Default | Description                                                                                                        |
 | ----------------- | ---------- | ------- | ------------------------------------------------------------------------------------------------------------------ |
@@ -267,11 +267,11 @@ Get-BrowserTitlePattern -BrowserName "Tor"
 
 ## [Get-BrowserWindowsByTarget](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Get-BrowserWindowsByTarget.ps1)
 
-- **Description:** Enumerates visible top-level windows (via the native `Win32BrowserHelper` type) for the supplied browser process IDs and returns only the ones whose titles match the provided regex. Used to distinguish browser main windows from child/helper processes (GPU / renderer / utility) that do not own a top-level window.
+- **Description:** Reads the Window module's window enumeration (`Get-CachedWindows`, which already keeps only visible, titled top-level windows) and returns every window owned by the supplied browser process IDs; `-TitlePattern` sets a `MatchesPattern` flag on each rather than filtering. Used to distinguish browser main windows from child/helper processes (GPU / renderer / utility) that do not own a top-level window.
 - **Parameters:** -TargetPids, -TitlePattern
 - **Usage:** `Get-BrowserWindowsByTarget -TargetPids @(1234) -TitlePattern "Google Chrome"`
 
-Walks every top-level window with `Win32BrowserHelper::EnumWindows`, maps each handle back to its owning process ID, and keeps a window only when its PID is in `-TargetPids`, the window is visible, and its title matches `-TitlePattern`. Each kept window is returned as a `PSCustomObject` with `Handle` and `Title` properties.
+Filters `Get-CachedWindows` by owning process ID and returns each match as a `PSCustomObject` with `Handle`, `Title`, `ProcessId` and `MatchesPattern` properties. Titles come back as Unicode, so the zero-width space Edge embeds in "Microsoft Edge" survives the round trip and the brand pattern can match it.
 
 | Parameter       | Type     | Description                                                      |
 | --------------- | -------- | ---------------------------------------------------------------- |
@@ -485,18 +485,6 @@ Get-PSReadLineKeyHandler -Bound | Where-Object Key -in UpArrow, DownArrow
 ```
 
 **See also:** [Initialize-OhMyPosh](#initialize-ohmyposh), the [`PSReadLine` section](../configuration/configuration-reference.md#psreadline-interactive-shell-options) of the configuration reference, and the [configuration guide](../configuration/guides/system/Initialize-PSReadLine.md).
-
-## [Initialize-Win32BrowserHelperType](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Initialize-Win32BrowserHelperType.ps1)
-
-- **Description:** Ensures the `Win32BrowserHelper` C# interop type is available. Adds the type used by browser window discovery and graceful window closure, enumerating visible browser windows and posting WM_CLOSE messages. The type is added only once per PowerShell session.
-- **Usage:** `Initialize-Win32BrowserHelperType`
-
-Adds the Win32 interop type only once per session, exposing the native `user32.dll` calls (`EnumWindows`, `GetWindowThreadProcessId`, `GetWindowText`, `GetWindowTextLength`, `IsWindowVisible`, and `PostMessage`) used by `Get-BrowserWindowsByTarget` and `Close-BrowserWindows`. The text APIs marshal as Unicode (`CharSet.Unicode`): the ANSI default mangles non-ANSI title characters to `?` - including the zero-width space (U+200B) Edge embeds in "Microsoft Edge" window titles - which would break title-pattern matching against those windows.
-
-```powershell
-# Load the Win32 browser helper type if it has not already been added
-Initialize-Win32BrowserHelperType
-```
 
 ## [Initialize-WSLEnvironment](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Initialize-WSLEnvironment.ps1)
 
@@ -1686,7 +1674,7 @@ Set-LogLevel Verbose { Terminate-WindowsTerminalTabs }
 
 ## [Test-BrowserWindowOpen](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Test-BrowserWindowOpen.ps1)
 
-- **Description:** Tells whether a window handle still refers to a live, visible window - the liveness probe `Wait-BrowserWindowsClosed` polls. A handle counts as open only while `IsWindow` AND `IsWindowVisible` both hold: a destroyed handle and a hidden window both read as closed, because browsers hide their window before tearing the process down and a `WM_CLOSE` that reached its target has done its job at that point. The `Win32BrowserHelper` type is created on demand through `Initialize-Win32BrowserHelperType`; a zero handle is never open.
+- **Description:** Tells whether a window handle still refers to a live, visible window - the liveness probe `Wait-BrowserWindowsClosed` polls. A handle counts as open only while `IsWindow` AND `IsWindowVisible` both hold: a destroyed handle and a hidden window both read as closed, because browsers hide their window before tearing the process down and a `WM_CLOSE` that reached its target has done its job at that point. The probe itself is the Window module's `Test-WindowVisible`; this is the browser-side name `Wait-BrowserWindowsClosed` mocks. A zero handle is never open.
 - **Parameters:** -Handle
 - **Usage:** `Test-BrowserWindowOpen -Handle $window.Handle`
 
@@ -1696,7 +1684,7 @@ Kept as its own function so the wait loop's timing can be tested without a compi
 if (Test-BrowserWindowOpen -Handle $window.Handle) { "still open" }
 ```
 
-**See also:** [Wait-BrowserWindowsClosed](#wait-browserwindowsclosed), [Initialize-Win32BrowserHelperType](#initialize-win32browserhelpertype)
+**See also:** [Wait-BrowserWindowsClosed](#wait-browserwindowsclosed), [Test-WindowVisible](window.md#test-windowvisible)
 
 ## [Test-FastfetchPanelOverflow](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Test-FastfetchPanelOverflow.ps1)
 

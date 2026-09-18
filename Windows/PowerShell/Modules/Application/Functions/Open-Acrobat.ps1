@@ -29,7 +29,7 @@ function Open-Acrobat {
 		[string[]]$Pdf
 	)
 
-	$pdfGroupsConfig = $Configuration.AcrobatPdfGroups
+	$pdfGroupsConfig = @(Get-ConfigSetting -Path 'AcrobatPdfGroups' -Default @())
 	if (-not $pdfGroupsConfig) {
 		Write-LogError "Error: AcrobatPdfGroups not found in configuration."
 		return

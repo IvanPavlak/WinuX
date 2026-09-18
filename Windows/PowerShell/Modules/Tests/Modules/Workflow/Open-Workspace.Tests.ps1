@@ -18,8 +18,8 @@ BeforeAll {
 	# so a test can define several workspaces and still control the order they appear in.
 	function Set-TestWorkspace {
 		param([Parameter(Mandatory)][string]$Name, [Parameter(Mandatory)][array]$Actions)
-		$kept = @($script:Configuration.WorkspaceActions | Where-Object { $_ -and -not $_.ContainsKey($Name) })
-		$script:Configuration.WorkspaceActions = @($kept + @{ $Name = $Actions })
+		$kept = @($global:Configuration.WorkspaceActions | Where-Object { $_ -and -not $_.ContainsKey($Name) })
+		$global:Configuration.WorkspaceActions = @($kept + @{ $Name = $Actions })
 	}
 
 	# The resolver's cross-module dependencies, stubbed: the real Test-MachineTypeScope validates
@@ -67,7 +67,7 @@ BeforeAll {
 	# Required for hermeticity: the Workflow module is bootstrap-imported, so without this stub
 	# every plain open in these tests would run the REAL Get-WorkspaceOpenProtection against the
 	# machine's actual tracker file.
-	function Get-WorkspaceOpenProtection { $null }
+	function Get-WorkspaceOpenProtection { param([string[]]$Opening, [string]$StatePath) $null }
 	function Get-NextAvailableDesktopIndex { 0 }
 	function Reset-KeyboardModifiers { param([switch]$IncludeMouseButton) @() }
 	function Test-BrowserGroupAlreadyOpen { $false }
@@ -259,7 +259,7 @@ Describe "Open-Workspace" {
 		Mock Test-ShellAwareAction { param($Alpha, [switch]$InSameShell) $script:invokedActions += [PSCustomObject]@{ Name = 'Test-ShellAwareAction'; Alpha = $Alpha; InSameShell = [bool]$InSameShell } }
 		Mock Test-ThrowingAction { throw 'intentional action failure' }
 
-		$script:Configuration = @{
+		$global:Configuration = @{
 			DefaultWorkspace           = ''
 			WorkspaceActions           = @()
 			ProjectTerminals           = @()
@@ -350,7 +350,7 @@ Describe "Open-Workspace" {
 		}
 
 		It "accepts a layout set from LayoutMachineTypeOverrides as a LayoutMachine token" {
-			$script:Configuration.LayoutMachineTypeOverrides = @{ PC = 'Temp' }
+			$global:Configuration.LayoutMachineTypeOverrides = @{ PC = 'Temp' }
 			Mock Get-LayoutMachineType { 'Temp' }
 			Set-TestWorkspace 'TestWorkspace' @(
 				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 }; LayoutMachine = 'Temp' },
@@ -388,7 +388,7 @@ Describe "Open-Workspace" {
 			$script:invokedActions.Count | Should -Be 2
 
 			$script:invokedActions = @()
-			(Get-OrderedEntry $script:Configuration.WorkspaceActions 'TestWorkspace')[1].Machine = 'PC'
+			(Get-OrderedEntry $global:Configuration.WorkspaceActions 'TestWorkspace')[1].Machine = 'PC'
 
 			Open-Workspace -Workspace 'TestWorkspace'
 			$script:invokedActions.Count | Should -Be 1
@@ -472,11 +472,11 @@ Describe "Open-Workspace" {
 	Context "workspace benchmark" {
 		BeforeEach {
 			# Opt in for this context; Display None keeps the tests free of console rendering.
-			$script:Configuration.WorkspaceBenchmark = @{ Enabled = $true; Display = 'None'; Last = 10 }
+			$global:Configuration.WorkspaceBenchmark = @{ Enabled = $true; Display = 'None'; Last = 10 }
 		}
 
 		It "records nothing while WorkspaceBenchmark.Enabled is off, which is the shipped default" {
-			$script:Configuration.WorkspaceBenchmark = @{ Enabled = $false; Display = 'Table'; Last = 10 }
+			$global:Configuration.WorkspaceBenchmark = @{ Enabled = $false; Display = 'Table'; Last = 10 }
 			Set-TestWorkspace 'TestWorkspace' @(
 				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } }
 			)
@@ -489,7 +489,7 @@ Describe "Open-Workspace" {
 		}
 
 		It "shows the workspace's recent runs as a table after the row is written when Display is Table" {
-			$script:Configuration.WorkspaceBenchmark = @{ Enabled = $true; Display = 'Table'; Last = 5 }
+			$global:Configuration.WorkspaceBenchmark = @{ Enabled = $true; Display = 'Table'; Last = 5 }
 			Set-TestWorkspace 'TestWorkspace' @(
 				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } }
 			)
@@ -503,7 +503,7 @@ Describe "Open-Workspace" {
 		}
 
 		It "stamps the row with WorkspaceBenchmark.Source, empty for an everyday open" {
-			$script:Configuration.WorkspaceBenchmark = @{ Enabled = $true; Display = 'None' }
+			$global:Configuration.WorkspaceBenchmark = @{ Enabled = $true; Display = 'None' }
 			Set-TestWorkspace 'TestWorkspace' @(
 				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } }
 			)
@@ -511,13 +511,13 @@ Describe "Open-Workspace" {
 			Open-Workspace -Workspace 'TestWorkspace'
 			$script:benchmarkCalls[0].Source | Should -Be ''
 
-			$script:Configuration.WorkspaceBenchmark = @{ Enabled = $true; Display = 'None'; Source = 'Measure-WorkspaceOpen 20260907-135804' }
+			$global:Configuration.WorkspaceBenchmark = @{ Enabled = $true; Display = 'None'; Source = 'Measure-WorkspaceOpen 20260907-135804' }
 			Open-Workspace -Workspace 'TestWorkspace'
 			$script:benchmarkCalls[1].Source | Should -Be 'Measure-WorkspaceOpen 20260907-135804'
 		}
 
 		It "prints the one-line summary instead of the table when Display is Line" {
-			$script:Configuration.WorkspaceBenchmark = @{ Enabled = $true; Display = 'Line' }
+			$global:Configuration.WorkspaceBenchmark = @{ Enabled = $true; Display = 'Line' }
 			Set-TestWorkspace 'TestWorkspace' @(
 				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } }
 			)
@@ -611,7 +611,7 @@ Describe "Open-Workspace" {
 
 	Context "default workspace on empty selection" {
 		It "opens the configured DefaultWorkspace when the menu response is empty" {
-			$script:Configuration.DefaultWorkspace = 'FallbackWorkspace'
+			$global:Configuration.DefaultWorkspace = 'FallbackWorkspace'
 			Set-TestWorkspace 'FallbackWorkspace' @(
 				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 11 } }
 			)
@@ -626,7 +626,7 @@ Describe "Open-Workspace" {
 		}
 
 		It "advertises the configured DefaultWorkspace by name in the prompt" {
-			$script:Configuration.DefaultWorkspace = 'FallbackWorkspace'
+			$global:Configuration.DefaultWorkspace = 'FallbackWorkspace'
 			Set-TestWorkspace 'FallbackWorkspace' @(
 				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 11 } }
 			)
@@ -638,7 +638,7 @@ Describe "Open-Workspace" {
 		}
 
 		It "offers to cancel and opens nothing when no DefaultWorkspace is configured" {
-			$script:Configuration.DefaultWorkspace = ''
+			$global:Configuration.DefaultWorkspace = ''
 			Set-TestWorkspace 'TestWorkspace' @(
 				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } }
 			)
@@ -653,7 +653,7 @@ Describe "Open-Workspace" {
 		It "falls back to the cancel prompt when DefaultWorkspace has no WorkspaceActions entry" {
 			# Advertising a default whose open could only log "No actions configured" would be
 			# the same broken promise the config key exists to fix.
-			$script:Configuration.DefaultWorkspace = 'GhostWorkspace'
+			$global:Configuration.DefaultWorkspace = 'GhostWorkspace'
 
 			Open-Workspace
 
@@ -662,7 +662,7 @@ Describe "Open-Workspace" {
 		}
 
 		It "does not fall back to the default when an explicit -Workspace argument resolves to nothing" {
-			$script:Configuration.DefaultWorkspace = 'FallbackWorkspace'
+			$global:Configuration.DefaultWorkspace = 'FallbackWorkspace'
 			Set-TestWorkspace 'FallbackWorkspace' @(
 				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 11 } }
 			)
@@ -676,7 +676,7 @@ Describe "Open-Workspace" {
 		}
 
 		It "opens the explicitly named workspace rather than the default" {
-			$script:Configuration.DefaultWorkspace = 'FallbackWorkspace'
+			$global:Configuration.DefaultWorkspace = 'FallbackWorkspace'
 			Set-TestWorkspace 'TestWorkspace' @(
 				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } }
 			)
@@ -830,7 +830,7 @@ Describe "Open-Workspace" {
 	}
 
 	It "skips Terminate-WindowsTerminalTabs -OnlyCurrent when caller tab belongs to same workspace project" {
-		$script:Configuration.ProjectTerminals = @(
+		$global:Configuration.ProjectTerminals = @(
 			@{ Name = 'ProjectA'; Paths = @('Api') }
 		)
 		Set-TestWorkspace 'TestWorkspace' @(
@@ -845,7 +845,7 @@ Describe "Open-Workspace" {
 	}
 
 	It "does not skip Terminate-WindowsTerminalTabs -OnlyCurrent when caller tab is from a different workspace" {
-		$script:Configuration.ProjectTerminals = @(
+		$global:Configuration.ProjectTerminals = @(
 			@{ Name = 'ProjectA'; Paths = @('Api') }
 		)
 		Set-TestWorkspace 'TestWorkspace' @(
@@ -1039,7 +1039,7 @@ Describe "Open-Workspace" {
 		}
 
 		It "records nothing when the workspace has no configured actions" {
-			$script:Configuration.WorkspaceActions = @{}
+			$global:Configuration.WorkspaceActions = @{}
 
 			Open-Workspace -Workspace 'TestWorkspace'
 
@@ -1095,6 +1095,19 @@ Describe "Open-Workspace" {
 			Open-Workspace -Workspace 'TestWorkspace'
 
 			Should -Invoke Get-WorkspaceOpenProtection -Times 1 -Exactly
+		}
+
+		It "names the workspaces it is opening so their own alongside instances are adopted, not preserved" {
+			# "Open-Workspace Server" after "Open-Workspace Server -Alongside" is a re-layout of the
+			# same workspace, not a second copy: its alongside entry must not reach the protection set.
+			Mock Get-WorkspaceOpenProtection { $null }
+			Set-TestWorkspace 'TestWorkspace' @(@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 } })
+
+			Open-Workspace -Workspace 'TestWorkspace'
+
+			Should -Invoke Get-WorkspaceOpenProtection -Times 1 -Exactly -ParameterFilter {
+				@($Opening).Count -eq 1 -and @($Opening)[0] -eq 'TestWorkspace'
+			}
 		}
 
 		It "never resolves protection for an alongside open, which adds without destroying" {
@@ -1245,14 +1258,14 @@ Describe "Open-Workspace" {
 
 	Context "project context handoff" {
 		It "no longer injects swagger groups into Open-Browser" {
-			$script:Configuration.BrowserGroups = @(
+			$global:Configuration.BrowserGroups = @(
 				@{
 					Swagger = @(
 						@{ Name = 'ProjectA'; Url = 'https://localhost:5001/swagger' }
 					)
 				}
 			)
-			$script:Configuration.Universal.DefaultBrowser = 'Firefox'
+			$global:Configuration.Universal.DefaultBrowser = 'Firefox'
 			Set-TestWorkspace 'TestWorkspace' @(
 				@{ Action = 'Open-Project'; Parameters = @{ Project = 'ProjectA' } },
 				@{ Action = 'Open-Browser'; Parameters = @{ Groups = @('General'); Browser = 'Firefox' } }
@@ -1444,7 +1457,7 @@ Describe "Open-Workspace" {
 		}
 
 		It "skips the preparation when WorkspaceLayoutPrepareEarly is false" {
-			$script:Configuration.WorkspaceLayoutPrepareEarly = $false
+			$global:Configuration.WorkspaceLayoutPrepareEarly = $false
 
 			Open-Workspace -Workspace 'TestWorkspace'
 
@@ -1476,7 +1489,7 @@ Describe "Open-Workspace" {
 		}
 
 		It "times the preparation as its own layout action and folds its phases into the layout record of the benchmark row" {
-			$script:Configuration.WorkspaceBenchmark = @{ Enabled = $true; Display = 'None'; Last = 10 }
+			$global:Configuration.WorkspaceBenchmark = @{ Enabled = $true; Display = 'None'; Last = 10 }
 			$script:timingsReads = 0
 			Mock Get-WorkspaceLayoutTimings {
 				$script:timingsReads++

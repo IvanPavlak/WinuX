@@ -14,7 +14,7 @@ Describe "Resolve-RepositoryTargets" {
 		# Three groups, five repositories. "Mike" is listed in both Beta and Gamma, so it also
 		# covers the duplicate case. Names inside Alpha are deliberately out of alphabetical
 		# order, so a stray Sort-Object would show up immediately.
-		$script:Configuration = @{
+		$global:Configuration = @{
 			Universal        = @{
 				GitHub = @{
 					Base    = "https://github.com/"
@@ -112,7 +112,7 @@ Describe "Resolve-RepositoryTargets" {
 	}
 
 	It "Should return an empty array rather than a null when a known group is empty" {
-		$script:Configuration.RepositoryGroups = @(@{ Alpha = @() })
+		$global:Configuration.RepositoryGroups = @(@{ Alpha = @() })
 
 		$targets = Resolve-RepositoryTargets -Group Alpha
 

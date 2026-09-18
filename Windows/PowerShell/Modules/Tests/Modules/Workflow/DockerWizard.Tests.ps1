@@ -36,7 +36,7 @@ Describe "DockerWizard" {
 		# Pinned so every test starts from the built-in timeout defaults regardless of
 		# the machine's real configuration, and so the DockerTimeouts test below cannot
 		# leak its override into whatever test is added after it
-		$script:Configuration = $null
+		$global:Configuration = $null
 
 		Mock Write-Host { }
 		Mock Write-LogWarning { }
@@ -331,7 +331,7 @@ Describe "DockerWizard" {
 	}
 
 	It "honors Configuration.DockerTimeouts for the daemon readiness timeout" {
-		$script:Configuration = [PSCustomObject]@{
+		$global:Configuration = [PSCustomObject]@{
 			DockerTimeouts = @{ StartSeconds = 6 }
 		}
 

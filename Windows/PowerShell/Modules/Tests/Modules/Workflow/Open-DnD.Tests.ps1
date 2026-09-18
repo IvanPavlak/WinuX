@@ -11,7 +11,7 @@ BeforeAll {
 
 Describe "Open-DnD" {
 	BeforeEach {
-		$script:Configuration = @{
+		$global:Configuration = @{
 			CampaignResources = @(
 				@{ ExampleCampaign = @{ Pdf = "ExampleCharacter"; Browser = "Reference" } }
 			)

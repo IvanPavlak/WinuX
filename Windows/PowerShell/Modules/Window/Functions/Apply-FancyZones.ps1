@@ -127,7 +127,7 @@ function Apply-FancyZones {
 	# and proves the reload with one probe shortcut (see $applyLayoutsViaFile below); "Hotkeys" is
 	# the desktop-switching shortcut pass alone. An unknown value falls back to File with a note.
 	$applyViaFile = $true
-	$configuredApplyMethod = [string]$global:Configuration.FancyZonesApplyMethod
+	$configuredApplyMethod = [string](Get-ConfigSetting -Path 'FancyZonesApplyMethod')
 	if (-not [string]::IsNullOrWhiteSpace($configuredApplyMethod)) {
 		switch ($configuredApplyMethod.Trim().ToLowerInvariant()) {
 			'file' { $applyViaFile = $true }
@@ -465,12 +465,13 @@ function Apply-FancyZones {
 			}
 
 			if ($null -eq $layoutNumber) {
-				if ($global:Configuration.LayoutNumbers.ContainsKey($layoutName)) {
-					$layoutNumber = $global:Configuration.LayoutNumbers[$layoutName]
+				$layoutNumbers = Get-ConfigSetting -Path 'LayoutNumbers' -Default @{}
+				if ($layoutNumbers.ContainsKey($layoutName)) {
+					$layoutNumber = $layoutNumbers[$layoutName]
 				}
 				else {
 					Write-Warning "    ✗ Layout '$layoutName' not found in configuration"
-					Write-Warning "      Available layouts: $($global:Configuration.LayoutNumbers.Keys -join ', ')"
+					Write-Warning "      Available layouts: $($layoutNumbers.Keys -join ', ')"
 					$resultsArray.Add([PSCustomObject]@{
 						Monitor = $monitorKey
 						Layout  = $layoutName
@@ -743,8 +744,9 @@ function Apply-FancyZones {
 				elseif ($null -ne $candidateMonitor.LayoutNumber) {
 					$number = $candidateMonitor.LayoutNumber
 				}
-				if ($null -eq $number -and $global:Configuration.LayoutNumbers -and $global:Configuration.LayoutNumbers.ContainsKey($candidate.Target.LayoutName)) {
-					$number = $global:Configuration.LayoutNumbers[$candidate.Target.LayoutName]
+				$layoutNumbers = Get-ConfigSetting -Path 'LayoutNumbers' -Default @{}
+				if ($null -eq $number -and $layoutNumbers.ContainsKey($candidate.Target.LayoutName)) {
+					$number = $layoutNumbers[$candidate.Target.LayoutName]
 				}
 				if ($rect -and $null -ne $number -and [int]$number -ge 0 -and [int]$number -le 9) {
 					$probe = @{ Rect = $rect; Number = [int]$number; Target = $candidate.Target }

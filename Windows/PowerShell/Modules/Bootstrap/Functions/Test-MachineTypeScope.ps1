@@ -73,7 +73,7 @@ function Test-MachineTypeScope {
 
 	$contextSuffix = if ($Context) { " in [$Context]" } else { "" }
 	$validTypes = @(
-		@(@($global:Configuration.ValidMachineTypes) + @($AdditionalValidTypes)) |
+		@(@(Get-ConfigSetting -Path 'ValidMachineTypes' -Default @()) + @($AdditionalValidTypes)) |
 			ForEach-Object { if ($null -ne $_) { ([string]$_).Trim() } } |
 			Where-Object { $_ } |
 			Select-Object -Unique

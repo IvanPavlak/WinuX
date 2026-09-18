@@ -95,7 +95,7 @@ Describe "List-Functions -ListDiscrepancies" {
 	}
 
 	It "reports a discrepancy in each direction when nothing is excluded" {
-		$script:Configuration = @{
+		$global:Configuration = @{
 			FunctionDiscrepancyExclusions = @()
 			ListFunctionsColors           = @{ DiscrepancyError = "Red"; DiscrepancySuccess = "Green"; Border = "DarkCyan" }
 		}
@@ -114,7 +114,7 @@ Describe "List-Functions -ListDiscrepancies" {
 		# attribution, so the per-module enumeration stops reporting it and the function looked
 		# absent from a session that had it loaded the whole time. Resolving by name fixes that
 		# without needing an exclusion entry per shadowed function.
-		$script:Configuration = @{
+		$global:Configuration = @{
 			FunctionDiscrepancyExclusions = @()
 			ListFunctionsColors           = @{ DiscrepancyError = "Red"; DiscrepancySuccess = "Green"; Border = "DarkCyan" }
 		}
@@ -126,7 +126,7 @@ Describe "List-Functions -ListDiscrepancies" {
 
 	It "still reports a documented function that resolves nowhere at all" {
 		# The guard the resolve-by-name check must not weaken.
-		$script:Configuration = @{
+		$global:Configuration = @{
 			FunctionDiscrepancyExclusions = @()
 			ListFunctionsColors           = @{ DiscrepancyError = "Red"; DiscrepancySuccess = "Green"; Border = "DarkCyan" }
 		}
@@ -137,7 +137,7 @@ Describe "List-Functions -ListDiscrepancies" {
 	}
 
 	It "honours the exclusion list in the documented-but-not-loaded direction" {
-		$script:Configuration = @{
+		$global:Configuration = @{
 			FunctionDiscrepancyExclusions = @("Get-FakeNeverLoaded")
 			ListFunctionsColors           = @{ DiscrepancyError = "Red"; DiscrepancySuccess = "Green"; Border = "DarkCyan" }
 		}
@@ -155,7 +155,7 @@ Describe "List-Functions -ListDiscrepancies" {
 		# PowerShell stamps the defining module onto every function created during the call - even
 		# one declared global: - so a profile-defined helper such as the all-hosts profile's
 		# `fastfetch` wrapper starts reporting as an undocumented System export after a reload.
-		$script:Configuration = @{
+		$global:Configuration = @{
 			FunctionDiscrepancyExclusions = @("Get-FakeUndocumented")
 			ListFunctionsColors           = @{ DiscrepancyError = "Red"; DiscrepancySuccess = "Green"; Border = "DarkCyan" }
 		}
@@ -168,7 +168,7 @@ Describe "List-Functions -ListDiscrepancies" {
 	}
 
 	It "reports no discrepancies when both remaining directions are excluded" {
-		$script:Configuration = @{
+		$global:Configuration = @{
 			FunctionDiscrepancyExclusions = @("Get-FakeNeverLoaded", "Get-FakeUndocumented")
 			ListFunctionsColors           = @{ DiscrepancyError = "Red"; DiscrepancySuccess = "Green"; Border = "DarkCyan" }
 		}
@@ -180,7 +180,7 @@ Describe "List-Functions -ListDiscrepancies" {
 
 	It "stays silent with -Quiet when there is nothing to report" {
 		# The profile startup check runs this way: output only when something is actually wrong.
-		$script:Configuration = @{
+		$global:Configuration = @{
 			FunctionDiscrepancyExclusions = @("Get-FakeNeverLoaded", "Get-FakeUndocumented")
 			ListFunctionsColors           = @{ DiscrepancyError = "Red"; DiscrepancySuccess = "Green"; Border = "DarkCyan" }
 		}

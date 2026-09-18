@@ -152,7 +152,10 @@ function Snap-AllWindows {
 			# turns Win+Up into Win+Shift+Up) and locks up terminal input session-wide.
 			$null = Reset-KeyboardModifiers
 
-			$allWindows = [WindowModule.Native]::GetAllWindows()
+			# A fresh read through the one enumeration seam: the keyboard reset above may have
+			# changed what is on screen, and the 50ms cache must not hand back an older snapshot.
+			Clear-WindowCache
+			$allWindows = @(Get-CachedWindows)
 
 			# Explicit handle list wins: the caller already resolved which windows belong to
 			# the active desktop, so no per-window COM filtering is needed.

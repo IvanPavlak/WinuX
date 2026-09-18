@@ -314,7 +314,9 @@ function Set-WorkspaceWindowLayout {
 		# Alongside opens add without destroying and need no protection.
 		if (-not $PSBoundParameters.ContainsKey('ProtectedWindowHandles') -and -not $Alongside) {
 			if (Get-Command Get-WorkspaceOpenProtection -ErrorAction SilentlyContinue) {
-				$selfProtection = Get-WorkspaceOpenProtection
+				$selfProtectionParams = @{}
+				if (-not [string]::IsNullOrWhiteSpace($WorkspaceName)) { $selfProtectionParams['Opening'] = @($WorkspaceName) }
+				$selfProtection = Get-WorkspaceOpenProtection @selfProtectionParams
 				if ($selfProtection) {
 					$ProtectedWindowHandles = $selfProtection.WindowHandles
 					Write-LogDebug " Self-derived protection for $($ProtectedWindowHandles.Count) alongside window(s)" -Style Success
@@ -458,7 +460,7 @@ function Set-WorkspaceWindowLayout {
 			Write-LogDebug " Window-only retry trigger => [$(@($windowOnlyRetryProcess, $windowOnlyRetryTitle) | Where-Object { $_ } | Select-Object -First 1)] (applying full layout config)" -Style Warning
 		}
 
-		$simpleLayoutWorkspaces = $global:Configuration.SimpleLayoutWorkspaces
+		$simpleLayoutWorkspaces = @(Get-ConfigSetting -Path 'SimpleLayoutWorkspaces' -Default @())
 
 		# Everything up to here - RPC probe, layout file, validation, snapshot read - is preamble.
 		& $recordPhase 'Preamble'
@@ -1060,7 +1062,8 @@ function Set-WorkspaceWindowLayout {
 		# stable, or matched to another entry) and is then simply placed after the wait, as it
 		# always was. Verification stays global and the in-process retries run the full layout.
 		# The phase clock books the callback's own time under Position and Snap, not Wait.
-		$pipeliningEnabled = ($null -eq $global:Configuration.WorkspaceLayoutPipelining -or [bool]$global:Configuration.WorkspaceLayoutPipelining)
+		$workspaceLayoutPipelining = Get-ConfigSetting -Path 'WorkspaceLayoutPipelining'
+		$pipeliningEnabled = ($null -eq $workspaceLayoutPipelining -or [bool]$workspaceLayoutPipelining)
 		$pipelinedDesktops = @{}
 		$pipelinedEntryKeys = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
 		$pipelinedResults = [System.Collections.Generic.List[PSObject]]::new()

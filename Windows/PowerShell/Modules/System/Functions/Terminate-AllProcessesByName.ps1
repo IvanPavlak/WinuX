@@ -32,10 +32,7 @@ function Terminate-AllProcessesByName {
 
 	Write-LogTitle "Terminating All Named Processes"
 
-	$processNames = @()
-	if ($Configuration -and $Configuration.Universal -and $Configuration.Universal.TerminateProcessNames) {
-		$processNames = @($Configuration.Universal.TerminateProcessNames)
-	}
+	$processNames = @(Get-ConfigSetting -Path 'Universal.TerminateProcessNames' -Default @())
 
 	if (-not $processNames) {
 		Write-LogWarning "No process names configured (Universal.TerminateProcessNames) - nothing to terminate!"

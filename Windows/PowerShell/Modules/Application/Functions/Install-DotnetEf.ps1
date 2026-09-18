@@ -35,7 +35,7 @@ function Install-DotnetEf {
 		return
 	}
 
-	$version = $global:Configuration.DotnetEFVersion
+	$version = Get-ConfigSetting -Path 'DotnetEFVersion'
 
 	if ($Update) {
 		Write-LogTitle "Updating Dotnet EF to latest version" -BlankLineAfter

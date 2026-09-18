@@ -52,6 +52,8 @@ BeforeAll {
 	function Get-WindowDesktopIndex { param([IntPtr]$WindowHandle) }
 	function Get-CachedMonitors { }
 	function Clear-WindowCache { }
+	# The enumeration seam Snap-AllWindows reads through; here it is the live native list.
+	function Get-CachedWindows { @([WindowModule.Native]::GetAllWindows()) }
 	function Clear-MonitorCache { }
 	function Resolve-PositionedWindowHandle { param($WindowState) }
 	function Resize-Windows { param([IntPtr]$WindowHandle, [int]$TargetX, [int]$TargetY, [int]$TargetWidth, [int]$TargetHeight, [double]$InsetPercent) }

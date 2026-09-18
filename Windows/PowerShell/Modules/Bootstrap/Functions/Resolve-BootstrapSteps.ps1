@@ -97,13 +97,14 @@ function Resolve-BootstrapSteps {
 	}
 
 	$configSteps = $null
-	if ($global:Configuration -and $global:Configuration.BootstrapConfig -is [hashtable]) {
-		$configSteps = $global:Configuration.BootstrapConfig.Steps
+	$bootstrapConfig = Get-ConfigSetting -Path 'BootstrapConfig'
+	if ($bootstrapConfig -is [hashtable]) {
+		$configSteps = $bootstrapConfig.Steps
 
 		# Deprecated-alias fallback: honor WSLSetup only when Steps carries no
 		# WSL entry of its own. Work on a copy so the merged global config is
 		# never mutated.
-		$legacyWslSetup = $global:Configuration.BootstrapConfig.WSLSetup
+		$legacyWslSetup = $bootstrapConfig.WSLSetup
 		if ($null -ne $legacyWslSetup -and -not ($configSteps -is [hashtable] -and $configSteps.ContainsKey('WSL'))) {
 			$configSteps = if ($configSteps -is [hashtable]) { $configSteps.Clone() } else { @{} }
 			$configSteps['WSL'] = $legacyWslSetup

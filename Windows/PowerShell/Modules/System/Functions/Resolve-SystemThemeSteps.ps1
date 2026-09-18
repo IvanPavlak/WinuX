@@ -67,8 +67,9 @@ function Resolve-SystemThemeSteps {
 	}
 
 	$configSteps = $null
-	if ($global:Configuration -and $global:Configuration.SystemTheme -is [hashtable]) {
-		$configSteps = $global:Configuration.SystemTheme.Steps
+	$systemTheme = Get-ConfigSetting -Path 'SystemTheme'
+	if ($systemTheme -is [hashtable]) {
+		$configSteps = $systemTheme.Steps
 	}
 
 	return Resolve-Steps -Defaults $defaults -ConfigSteps $configSteps -Skip $Skip -Include $Include

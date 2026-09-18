@@ -9,7 +9,7 @@ BeforeAll {
 
 Describe "Resolve-ProjectDockerCompose" {
 	BeforeEach {
-		$script:Configuration = [PSCustomObject]@{
+		$global:Configuration = [PSCustomObject]@{
 			RunnableProjectMappings = @(
 				@{ Name = "PostgresProject"; Commands = @("dnr"); DatabaseProviders = @("PostgreSQL") }
 				@{ Name = "OracleProject"; Commands = @("dnr"); DatabaseProviders = @("Oracle") }
@@ -73,8 +73,8 @@ Describe "Resolve-ProjectDockerCompose" {
 	}
 
 	It "honors UsesDocker on a mapping without database providers" {
-		$script:Configuration.RunnableProjectMappings += @{ Name = "ComposeOnlyProject"; Commands = @("dnr"); UsesDocker = $true }
-		$script:Configuration.ProjectTerminals += @{ Name = "ComposeOnlyProject"; BasePath = "Projects.OracleProject"; Paths = @("Api") }
+		$global:Configuration.RunnableProjectMappings += @{ Name = "ComposeOnlyProject"; Commands = @("dnr"); UsesDocker = $true }
+		$global:Configuration.ProjectTerminals += @{ Name = "ComposeOnlyProject"; BasePath = "Projects.OracleProject"; Paths = @("Api") }
 
 		$result = Resolve-ProjectDockerCompose -ProjectName "ComposeOnlyProject"
 
@@ -90,7 +90,7 @@ Describe "Resolve-ProjectDockerCompose" {
 	}
 
 	It "returns null and logs an error when the project-local fallback has no ProjectTerminals mapping" {
-		$script:Configuration.ProjectTerminals = @()
+		$global:Configuration.ProjectTerminals = @()
 
 		$result = Resolve-ProjectDockerCompose -ProjectName "OracleProject"
 
@@ -101,7 +101,7 @@ Describe "Resolve-ProjectDockerCompose" {
 	It "returns null and logs an error when the BasePath does not resolve to a Root" {
 		# Silently returning an empty ComposeProjectPath would have DockerWizard start
 		# Docker and then quietly do nothing else
-		$script:Configuration.ProjectTerminals = @(
+		$global:Configuration.ProjectTerminals = @(
 			@{ Name = "OracleProject"; BasePath = "Projects.NoSuchProject"; Paths = @("Api") }
 		)
 
@@ -114,7 +114,7 @@ Describe "Resolve-ProjectDockerCompose" {
 	It "does not throw when DockerComposeFiles is absent from the configuration" {
 		# A setup with no Docker at all drops the key; ContainsKey is a method call, so an
 		# unguarded null would throw rather than resolve to "no centralized compose file"
-		$script:Configuration = [PSCustomObject]@{
+		$global:Configuration = [PSCustomObject]@{
 			RunnableProjectMappings = @(
 				@{ Name = "PostgresProject"; Commands = @("dnr"); DatabaseProviders = @("PostgreSQL") }
 			)

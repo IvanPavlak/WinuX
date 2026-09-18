@@ -221,7 +221,7 @@ function Test-FancyZonesConfiguration {
 	# ------------------------------------------------------------------
 	# ZoneNameMappings <-> custom-layouts.json
 	# ------------------------------------------------------------------
-	$zoneNameMappings = $global:Configuration.ZoneNameMappings
+	$zoneNameMappings = Get-ConfigSetting -Path 'ZoneNameMappings'
 	if ($zoneNameMappings -and $layoutUuids.Count -gt 0) {
 		foreach ($mappedLayout in $zoneNameMappings.Keys) {
 			if (-not $layoutUuids.ContainsKey($mappedLayout)) {
@@ -259,7 +259,7 @@ function Test-FancyZonesConfiguration {
 	# ------------------------------------------------------------------
 	# LayoutNumbers (hotkey slots)
 	# ------------------------------------------------------------------
-	$layoutNumbers = $global:Configuration.LayoutNumbers
+	$layoutNumbers = Get-ConfigSetting -Path 'LayoutNumbers'
 	if ($layoutNumbers -and $layoutUuids.Count -gt 0) {
 		$usedNumbers = @{}
 		foreach ($layoutName in $layoutNumbers.Keys) {

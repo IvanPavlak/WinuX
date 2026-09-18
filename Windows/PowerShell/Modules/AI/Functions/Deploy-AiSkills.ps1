@@ -118,8 +118,8 @@ function Deploy-AiSkills {
 			Write-LogWarning "WSL distribution not installed - skipping the WSL skill links!"
 		}
 		else {
-			$distro = $Configuration.DefaultWSLDistribution
-			$wslUser = $Configuration.DefaultWSLUsername
+			$distro = Get-ConfigSetting -Path 'DefaultWSLDistribution'
+			$wslUser = Get-ConfigSetting -Path 'DefaultWSLUsername'
 
 			# C:\Users\... -> /mnt/c/Users/... for the repository, applied to every skill path.
 			$driveLetter = $repoRoot.Substring(0, 1).ToLower()

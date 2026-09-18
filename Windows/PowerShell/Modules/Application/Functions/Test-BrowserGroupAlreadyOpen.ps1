@@ -62,7 +62,7 @@ function Test-BrowserGroupAlreadyOpen {
 			}
 		}
 
-		$browserGroupMatchingConfig = $Configuration.BrowserGroupMatching
+		$browserGroupMatchingConfig = Get-ConfigSetting -Path 'BrowserGroupMatching'
 		if (-not $browserGroupMatchingConfig) {
 			Write-LogError "Error: BrowserGroupMatching configuration not found!"
 			return $false

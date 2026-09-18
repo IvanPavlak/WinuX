@@ -13,7 +13,8 @@ function Open-Training {
 	#>
 	if (-not (Get-Process -Name "WINWORD" -ErrorAction SilentlyContinue)) {
 		try {
-			Start-Process "winword" -ArgumentList (Join-Path $MachineSpecificPaths.TrainingDirectory $Configuration.Universal.TrainingFile) -ErrorAction Stop
+			$trainingFile = Get-ConfigSetting -Path 'Universal.TrainingFile'
+			Start-Process "winword" -ArgumentList (Join-Path $MachineSpecificPaths.TrainingDirectory $trainingFile) -ErrorAction Stop
 			Write-LogStep "Opening training file..."
 			Write-LogSuccess "Training file opened!"
 		}

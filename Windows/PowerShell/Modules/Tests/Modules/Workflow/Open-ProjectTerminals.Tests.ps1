@@ -25,7 +25,7 @@ Describe "Open-ProjectTerminals" {
 		Mock Resolve-ProjectPath { param($ProjectName, $PathKey) "C:\Fake\$ProjectName\$PathKey" }
 		Mock Test-TerminalTabsAlreadyOpen { [PSCustomObject]@{ AllOpen = $false; FoundTabs = @() } }
 
-		$script:Configuration = @{
+		$global:Configuration = @{
 			ProjectTerminals       = @(
 				@{ Name = "TestProject"; BasePath = "Projects.TestProject"; Paths = @("Api", "Ui") }
 				@{ Name = "ProjectA"; BasePath = "Projects.ProjectA"; Paths = @("Root") }
@@ -117,7 +117,7 @@ Describe "Open-ProjectTerminals" {
 			# A tab runs its profile BEFORE the encoded Set-Location, so the greeting tests the
 			# directory Windows Terminal started it in - never the project. The append is the only
 			# point at which the tab is standing in the repository.
-			$script:Configuration.Remove("TerminalGreeting")
+			$global:Configuration.Remove("TerminalGreeting")
 
 			Open-ProjectTerminals -Project "ProjectA" -InSameShell
 
@@ -125,7 +125,7 @@ Describe "Open-ProjectTerminals" {
 		}
 
 		It "Should append when TerminalGreeting.Onefetch.InProjectTerminals is on" {
-			$script:Configuration.TerminalGreeting = @{ Onefetch = @{ InProjectTerminals = $true } }
+			$global:Configuration.TerminalGreeting = @{ Onefetch = @{ InProjectTerminals = $true } }
 
 			Open-ProjectTerminals -Project "ProjectA" -InSameShell
 
@@ -133,7 +133,7 @@ Describe "Open-ProjectTerminals" {
 		}
 
 		It "Should NOT append when TerminalGreeting.Onefetch.InProjectTerminals is off" {
-			$script:Configuration.TerminalGreeting = @{ Onefetch = @{ InProjectTerminals = $false } }
+			$global:Configuration.TerminalGreeting = @{ Onefetch = @{ InProjectTerminals = $false } }
 
 			Open-ProjectTerminals -Project "ProjectA" -InSameShell
 
@@ -142,7 +142,7 @@ Describe "Open-ProjectTerminals" {
 		}
 
 		It "Should let -InvokeOnefetch:`$false win over the configured `$true" {
-			$script:Configuration.TerminalGreeting = @{ Onefetch = @{ InProjectTerminals = $true } }
+			$global:Configuration.TerminalGreeting = @{ Onefetch = @{ InProjectTerminals = $true } }
 
 			Open-ProjectTerminals -Project "ProjectA" -InSameShell -InvokeOnefetch:$false
 
@@ -150,7 +150,7 @@ Describe "Open-ProjectTerminals" {
 		}
 
 		It "Should let -InvokeOnefetch win over the configured `$false" {
-			$script:Configuration.TerminalGreeting = @{ Onefetch = @{ InProjectTerminals = $false } }
+			$global:Configuration.TerminalGreeting = @{ Onefetch = @{ InProjectTerminals = $false } }
 
 			Open-ProjectTerminals -Project "ProjectA" -InSameShell -InvokeOnefetch
 

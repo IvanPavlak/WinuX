@@ -19,7 +19,7 @@ function Install-Git {
 		Install-Git
 		Installs and configures Git, or re-applies git config if already installed.
 	#>
-	$gitConfig = $Configuration.GitConfig
+	$gitConfig = Get-ConfigSetting -Path 'GitConfig'
 	if (-not $gitConfig) {
 		Write-LogError "Error: GitConfig block not found in configuration!"
 		return

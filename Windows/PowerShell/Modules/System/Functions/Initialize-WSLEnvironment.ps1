@@ -13,14 +13,14 @@ function Initialize-WSLEnvironment {
 	#>
 	Write-LogTitle "Configuring WSL Environment"
 
-	if (-not (Confirm-ConfigValue $Configuration.DefaultWSLDistribution "DefaultWSLDistribution not configured - skipping WSL environment setup!")) {
+	$distro = Get-ConfigSetting -Path 'DefaultWSLDistribution'
+	if (-not (Confirm-ConfigValue $distro "DefaultWSLDistribution not configured - skipping WSL environment setup!")) {
 		return
 	}
 
 	# Always target the configured distribution explicitly: Docker Desktop and podman
 	# machines routinely steal the WSL *default*, and a bare `wsl` would then provision
 	# the wrong distro.
-	$distro = $Configuration.DefaultWSLDistribution
 
 	# Check if fastfetch is installed
 	$fastfetchInstalled = wsl -d $distro bash -c "command -v fastfetch &> /dev/null && echo 'true' || echo 'false'"
@@ -85,7 +85,8 @@ source ~/.profile 2>/dev/null || true
 
 	# Inject the current Windows username and the configured oh-my-posh theme filename into the
 	# mounted-drive (/mnt/c/Users/...) path. Theme is config-driven (Universal.OhMyPoshThemeFile).
-	$ompTheme = if ($Configuration.Universal.OhMyPoshThemeFile) { Split-Path -Leaf $Configuration.Universal.OhMyPoshThemeFile } else { "WinuX.omp.json" }
+	$ohMyPoshThemeFile = Get-ConfigSetting -Path 'Universal.OhMyPoshThemeFile'
+	$ompTheme = if ($ohMyPoshThemeFile) { Split-Path -Leaf $ohMyPoshThemeFile } else { "WinuX.omp.json" }
 	$ohmyposhScript = $ohmyposhScript.Replace('__WINUSER__', $env:USERNAME).Replace('__OMPTHEME__', $ompTheme)
 
 	$ohmyposhScript | wsl -d $distro bash -c "tr -d '\r' | tee $tempScript > /dev/null"

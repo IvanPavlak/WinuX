@@ -9,7 +9,7 @@ BeforeAll {
 
 Describe "Test-WSLDistributionInstalled" {
 	BeforeEach {
-		$script:Configuration = @{ DefaultWSLDistribution = "Ubuntu" }
+		$global:Configuration = @{ DefaultWSLDistribution = "Ubuntu" }
 		Mock Write-Host { }
 		Mock Write-LogError { }
 		Mock Write-LogDebug { }
@@ -23,7 +23,7 @@ Describe "Test-WSLDistributionInstalled" {
 	}
 
 	It "returns false quietly when no default distribution is configured" {
-		$script:Configuration = @{ }
+		$global:Configuration = @{ }
 
 		$result = Test-WSLDistributionInstalled
 

@@ -17,7 +17,7 @@ Describe "Set-LockScreenWallpaper" {
 			}
 		}
 
-		$script:Configuration = [PSCustomObject]@{
+		$global:Configuration = [PSCustomObject]@{
 			WallpaperDarkSettings  = @{ PC = @{ File = "dark.jpg" } }
 			WallpaperLightSettings = @{ PC = @{ File = "light.jpg" } }
 		}

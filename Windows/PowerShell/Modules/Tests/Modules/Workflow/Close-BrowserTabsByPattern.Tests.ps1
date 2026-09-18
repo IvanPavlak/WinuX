@@ -8,6 +8,7 @@ BeforeAll {
 
 	# Stub dependent functions
 	function Get-WindowHandle { param($ProcessName) $null }
+	function Close-Window { param([IntPtr[]]$Handle) 0 }
 }
 
 Describe "Close-BrowserTabsByPattern" {
@@ -36,8 +37,9 @@ Describe "Close-BrowserTabsByPattern" {
 			}
 			Mock Get-WindowHandle { $mockWindow }
 
-			# The function uses CloseProjectWin32 P/Invoke which we can't easily test
-			# Just ensure it doesn't throw and completes
+			# The direct close goes through the Window module's Close-Window seam, so it is mocked
+			# here and asserted on rather than posting a real WM_CLOSE.
+			Mock Close-Window { 1 }
 			{ Close-BrowserTabsByPattern -ProcessName "chrome" -TitlePatterns @("(?i)swagger") } | Should -Not -Throw
 		}
 	}

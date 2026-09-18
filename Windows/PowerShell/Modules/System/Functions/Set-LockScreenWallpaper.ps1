@@ -34,8 +34,8 @@ function Set-LockScreenWallpaper {
 	try {
 		Write-LogDebug " Parameters: Theme=$Theme" -Style Step
 
-		$WallpaperDarkSettings = $Configuration.WallpaperDarkSettings
-		$WallpaperLightSettings = $Configuration.WallpaperLightSettings
+		$WallpaperDarkSettings = Get-ConfigSetting -Path 'WallpaperDarkSettings'
+		$WallpaperLightSettings = Get-ConfigSetting -Path 'WallpaperLightSettings'
 
 		$targetTheme = $Theme
 		if ($targetTheme -eq 'Auto') {

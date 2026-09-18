@@ -9,7 +9,7 @@ BeforeAll {
 
 Describe "Initialize-WSLEnvironment" {
 	BeforeEach {
-		$script:Configuration = [PSCustomObject]@{
+		$global:Configuration = [PSCustomObject]@{
 			DefaultWSLDistribution = "Ubuntu"
 			Universal              = [PSCustomObject]@{
 				OhMyPoshThemeFile = "C:\themes\WinuX.omp.json"
@@ -40,7 +40,7 @@ Describe "Initialize-WSLEnvironment" {
 	}
 
 	It "skips when no WSL distribution is configured" {
-		$script:Configuration = [PSCustomObject]@{
+		$global:Configuration = [PSCustomObject]@{
 			DefaultWSLDistribution = ""
 			Universal              = [PSCustomObject]@{ OhMyPoshThemeFile = "" }
 		}

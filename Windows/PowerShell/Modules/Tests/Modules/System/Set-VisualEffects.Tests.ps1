@@ -9,7 +9,7 @@ BeforeAll {
 
 Describe "Set-VisualEffects" {
 	BeforeEach {
-		$script:Configuration = [PSCustomObject]@{
+		$global:Configuration = [PSCustomObject]@{
 			VisualEffects = $null
 		}
 		Mock Write-Host { }
@@ -30,7 +30,7 @@ Describe "Set-VisualEffects" {
 	}
 
 	It "returns without side effects when VisualEffects is empty" {
-		$script:Configuration = [PSCustomObject]@{ VisualEffects = @{} }
+		$global:Configuration = [PSCustomObject]@{ VisualEffects = @{} }
 
 		{ Set-VisualEffects } | Should -Not -Throw
 
@@ -39,7 +39,7 @@ Describe "Set-VisualEffects" {
 	}
 
 	It "warns and applies nothing when only unknown keys are configured" {
-		$script:Configuration = [PSCustomObject]@{ VisualEffects = @{ NotARealEffect = $true } }
+		$global:Configuration = [PSCustomObject]@{ VisualEffects = @{ NotARealEffect = $true } }
 
 		{ Set-VisualEffects } | Should -Not -Throw
 
@@ -49,7 +49,7 @@ Describe "Set-VisualEffects" {
 	}
 
 	It "skips applying when every configured effect already matches" {
-		$script:Configuration = [PSCustomObject]@{ VisualEffects = @{ EnablePeek = $false } }
+		$global:Configuration = [PSCustomObject]@{ VisualEffects = @{ EnablePeek = $false } }
 		Mock Get-ItemPropertyValue {
 			if ($Name -eq "VisualFXSetting") { 3 } else { 0 }
 		}
@@ -63,7 +63,7 @@ Describe "Set-VisualEffects" {
 	}
 
 	It "applies a mismatched registry effect and restarts Explorer once" {
-		$script:Configuration = [PSCustomObject]@{ VisualEffects = @{ EnablePeek = $false } }
+		$global:Configuration = [PSCustomObject]@{ VisualEffects = @{ EnablePeek = $false } }
 		Mock Get-ItemPropertyValue {
 			if ($Name -eq "VisualFXSetting") { 3 } else { 1 }
 		}
@@ -80,7 +80,7 @@ Describe "Set-VisualEffects" {
 	}
 
 	It "reports already-matching effects as yellow skipped rows while applying the rest" {
-		$script:Configuration = [PSCustomObject]@{
+		$global:Configuration = [PSCustomObject]@{
 			VisualEffects = @{
 				EnablePeek                        = $false
 				ShowTranslucentSelectionRectangle = $true
@@ -104,7 +104,7 @@ Describe "Set-VisualEffects" {
 	}
 
 	It "writes the inverted registry value for ShowThumbnailsInsteadOfIcons" {
-		$script:Configuration = [PSCustomObject]@{ VisualEffects = @{ ShowThumbnailsInsteadOfIcons = $true } }
+		$global:Configuration = [PSCustomObject]@{ VisualEffects = @{ ShowThumbnailsInsteadOfIcons = $true } }
 		Mock Get-ItemPropertyValue {
 			if ($Name -eq "VisualFXSetting") { 3 } else { 1 }
 		}
@@ -118,7 +118,7 @@ Describe "Set-VisualEffects" {
 	}
 
 	It "sets the Custom profile radio button when VisualFXSetting differs" {
-		$script:Configuration = [PSCustomObject]@{ VisualEffects = @{ EnablePeek = $false } }
+		$global:Configuration = [PSCustomObject]@{ VisualEffects = @{ EnablePeek = $false } }
 		Mock Get-ItemPropertyValue {
 			if ($Name -eq "VisualFXSetting") { 1 } else { 0 }
 		}
@@ -133,7 +133,7 @@ Describe "Set-VisualEffects" {
 	}
 
 	It "treats a missing registry value as a mismatch and applies it" {
-		$script:Configuration = [PSCustomObject]@{ VisualEffects = @{ AnimationsInTheTaskbar = $false } }
+		$global:Configuration = [PSCustomObject]@{ VisualEffects = @{ AnimationsInTheTaskbar = $false } }
 		Mock Get-ItemPropertyValue {
 			if ($Name -eq "VisualFXSetting") { 3 } else { throw "Property TaskbarAnimations does not exist" }
 		}
@@ -147,7 +147,7 @@ Describe "Set-VisualEffects" {
 	}
 
 	It "creates the registry key path when it does not exist" {
-		$script:Configuration = [PSCustomObject]@{ VisualEffects = @{ SaveTaskbarThumbnailPreviews = $true } }
+		$global:Configuration = [PSCustomObject]@{ VisualEffects = @{ SaveTaskbarThumbnailPreviews = $true } }
 		Mock Get-ItemPropertyValue {
 			if ($Name -eq "VisualFXSetting") { 3 } else { throw "Key does not exist" }
 		}
@@ -162,7 +162,7 @@ Describe "Set-VisualEffects" {
 	}
 
 	It "continues applying remaining effects when one write fails" {
-		$script:Configuration = [PSCustomObject]@{
+		$global:Configuration = [PSCustomObject]@{
 			VisualEffects = @{
 				EnablePeek                        = $false
 				ShowTranslucentSelectionRectangle = $true

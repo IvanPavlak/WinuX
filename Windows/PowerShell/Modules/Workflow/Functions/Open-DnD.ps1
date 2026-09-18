@@ -38,9 +38,11 @@ function Open-DnD {
 		[switch]$FoundryVTT = $false
 	)
 
+	$campaignResources = @(Get-ConfigSetting -Path 'CampaignResources' -Default @())
+
 	$resolveParams = @{
 		InputObject              = $Campaign
-		OptionList               = @(Get-OrderedNames $Configuration.CampaignResources)
+		OptionList               = @(Get-OrderedNames $campaignResources)
 		MenuTitle                = "[Available Campaigns]"
 		AllowEmptyPromptResponse = $true
 	}
@@ -62,7 +64,7 @@ function Open-DnD {
 		# Per-campaign rulebook PDF group (AcrobatPdfGroups) and resource browser group
 		# (BrowserGroups), driven from Configuration.CampaignResources - the one place a
 		# campaign is defined, and the order the campaign menu above follows.
-		$resources = Get-OrderedEntry $Configuration.CampaignResources $Campaign
+		$resources = Get-OrderedEntry $campaignResources $Campaign
 		if ($resources) {
 			if ($resources.Pdf) { Open-Acrobat -Pdf $resources.Pdf }
 			if ($resources.Browser) { Open-Browser $resources.Browser }

@@ -32,7 +32,7 @@ function Set-VisualEffects {
 	#>
 	Write-LogTitle "Setting Visual Effects"
 
-	$desiredEffects = $Configuration.VisualEffects
+	$desiredEffects = Get-ConfigSetting -Path 'VisualEffects'
 	if (-not ($desiredEffects -is [hashtable]) -or $desiredEffects.Count -eq 0) {
 		Write-LogWarning "VisualEffects is not configured - leaving visual effects as-is!"
 		return

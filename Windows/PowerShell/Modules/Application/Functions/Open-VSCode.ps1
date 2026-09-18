@@ -35,7 +35,7 @@ function Open-VSCode {
 		[string[]]$Folder
 	)
 
-	$vsCodeProjects = $Configuration.VSCodeProjects
+	$vsCodeProjects = @(Get-ConfigSetting -Path 'VSCodeProjects' -Default @())
 	if (-not $vsCodeProjects) {
 		Write-LogError "Error: VSCodeProjects not found in configuration!"
 		return

@@ -30,14 +30,14 @@ AfterAll {
 
 Describe "Set-SystemTheme" {
 	BeforeEach {
-		$script:Configuration = [PSCustomObject]@{
+		# One configuration for both the function and its step resolver, read through
+		# Get-ConfigSetting: Themes for the -Auto path, and no SystemTheme section so the
+		# built-in step defaults apply (everything on except RefreshBrowserTabs) unless a
+		# test opts a step out/in. A hashtable, so a test can add its SystemTheme section
+		# with a plain assignment. Originals are restored in AfterAll.
+		$global:Configuration = @{
 			Themes = @{ PC = "Dark" }
 		}
-		# The step resolver reads $global:Configuration / $global:MachineType. Fresh
-		# baseline with no SystemTheme section - built-in defaults apply (everything
-		# on except RefreshBrowserTabs) unless a test opts a step out/in. Originals
-		# are restored in AfterAll.
-		$global:Configuration = @{}
 		$global:MachineType = "PC"
 
 		$script:previousWtSession = $env:WT_SESSION
@@ -87,7 +87,7 @@ Describe "Set-SystemTheme" {
 		}
 
 		It "leaves the system untouched when Themes is empty" {
-			$script:Configuration = [PSCustomObject]@{ Themes = @{} }
+			$global:Configuration = [PSCustomObject]@{ Themes = @{} }
 
 			{ Set-SystemTheme -Auto } | Should -Not -Throw
 
@@ -99,7 +99,7 @@ Describe "Set-SystemTheme" {
 		}
 
 		It "leaves the system untouched when the machine type has no Themes entry" {
-			$script:Configuration = [PSCustomObject]@{ Themes = @{ Laptop = "Dark" } }
+			$global:Configuration = [PSCustomObject]@{ Themes = @{ Laptop = "Dark" } }
 
 			{ Set-SystemTheme -Auto } | Should -Not -Throw
 

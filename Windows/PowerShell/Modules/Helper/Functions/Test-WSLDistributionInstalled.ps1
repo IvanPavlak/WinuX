@@ -13,7 +13,7 @@ function Test-WSLDistributionInstalled {
 	#>
 
 	try {
-		$distroName = $Configuration.DefaultWSLDistribution
+		$distroName = Get-ConfigSetting -Path 'DefaultWSLDistribution'
 		if (-not (Test-ConfigValue $distroName)) {
 			# Not an error: the empty base config ships no distribution, and probes like
 			# SymbolicLinkMaker call this on every run - stay quiet below Warning level.

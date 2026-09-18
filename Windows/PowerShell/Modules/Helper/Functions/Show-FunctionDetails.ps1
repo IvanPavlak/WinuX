@@ -25,7 +25,7 @@ function Show-FunctionDetails {
 		[System.Collections.IDictionary]$FunctionInfo
 	)
 
-	$colors = $global:Configuration.ShowFunctionDetailsColors
+	$colors = Get-ConfigSetting -Path 'ShowFunctionDetailsColors' -Default @{}
 	$colorPalette = $colors.Parameters
 	$colorIndex = 0
 

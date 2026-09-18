@@ -7,7 +7,7 @@ BeforeAll {
 
 Describe "Deploy-CoreAiRules" {
 	BeforeEach {
-		$script:Configuration = [PSCustomObject]@{
+		$global:Configuration = [PSCustomObject]@{
 			DefaultWSLDistribution = "Ubuntu"
 		}
 
@@ -61,7 +61,7 @@ Describe "Deploy-CoreAiRules" {
 	}
 
 	It "targets the configured default distribution explicitly on every wsl call" {
-		$script:Configuration = [PSCustomObject]@{
+		$global:Configuration = [PSCustomObject]@{
 			DefaultWSLDistribution = "Debian"
 		}
 

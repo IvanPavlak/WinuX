@@ -69,9 +69,9 @@ function Set-Wallpaper {
 			Write-LogDebug " VirtualDesktop module not available" -Style Step
 		}
 
-		$WallpaperStyles = $Configuration.WallpaperStyles
-		$WallpaperDarkSettings = $Configuration.WallpaperDarkSettings
-		$WallpaperLightSettings = $Configuration.WallpaperLightSettings
+		$WallpaperStyles = Get-ConfigSetting -Path 'WallpaperStyles'
+		$WallpaperDarkSettings = Get-ConfigSetting -Path 'WallpaperDarkSettings'
+		$WallpaperLightSettings = Get-ConfigSetting -Path 'WallpaperLightSettings'
 
 		if (-not ([System.Management.Automation.PSTypeName]'WallpaperModule.Params').Type) {
 			try {

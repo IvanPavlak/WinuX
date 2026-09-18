@@ -88,10 +88,10 @@ BeforeAll {
 	function Invoke-ScriptedOpen {
 		param([string]$Workspace)
 		$script:Observed += , [PSCustomObject]@{
-			ApplyMethod  = $script:Configuration['FancyZonesApplyMethod']
-			Pipelining   = $script:Configuration['WorkspaceLayoutPipelining']
-			PrepareEarly = $script:Configuration['WorkspaceLayoutPrepareEarly']
-			Benchmark    = $script:Configuration['WorkspaceBenchmark']
+			ApplyMethod  = $global:Configuration['FancyZonesApplyMethod']
+			Pipelining   = $global:Configuration['WorkspaceLayoutPipelining']
+			PrepareEarly = $global:Configuration['WorkspaceLayoutPrepareEarly']
+			Benchmark    = $global:Configuration['WorkspaceBenchmark']
 		}
 		$scripted = if ($script:ScriptedRows.Count -gt 0) { $script:ScriptedRows.Dequeue() } else { @{ Total = 10; Attempts = 1 } }
 		if ($scripted.Skip) { return }
@@ -101,7 +101,7 @@ BeforeAll {
 		if ($scripted.Phases) { $phases = $scripted.Phases }
 		# Exactly what Open-Workspace does: the configured Source goes on the row.
 		Write-WorkspaceBenchmark -Workspace $Workspace -TotalSeconds $scripted.Total -BenchmarkPath $script:BenchmarkFile -Quiet `
-			-Source ([string]$script:Configuration['WorkspaceBenchmark'].Source) `
+			-Source ([string]$global:Configuration['WorkspaceBenchmark'].Source) `
 			-ActionTimings @([PSCustomObject]@{ Action = 'Set-WorkspaceWindowLayout'; Seconds = ($scripted.Total - 1) }) `
 			-LayoutTimings (New-LayoutTimings -Phases $phases -Attempts $scripted.Attempts)
 	}
@@ -122,14 +122,14 @@ Describe "Measure-WorkspaceOpen" {
 		$unique = [guid]::NewGuid().ToString('N')
 		$script:BenchmarkFile = Join-Path $TestDrive "Benchmark_$unique.csv"
 		$script:ResultFile = Join-Path $TestDrive "Measurements_$unique.csv"
-		$script:Configuration = New-TestConfiguration
+		$global:Configuration = New-TestConfiguration
 		$script:Observed = @()
 		$script:ScriptedRows = [System.Collections.Queue]::new()
 	}
 
 	Context "plan" {
 		It "builds Baseline plus one variant per setting with only that setting flipped" {
-			$plan = @(Measure-WorkspaceOpen -Workspace WinuX -Runs 1 -WarmUp 0 -DryRun -Configuration $script:Configuration)
+			$plan = @(Measure-WorkspaceOpen -Workspace WinuX -Runs 1 -WarmUp 0 -DryRun -Configuration $global:Configuration)
 
 			$plan.Count | Should -Be 4
 			$plan.Variant | Should -Be @('Baseline', 'ApplyMethod=Hotkeys', 'Pipelining=Off', 'PrepareEarly=Off')
@@ -146,7 +146,7 @@ Describe "Measure-WorkspaceOpen" {
 		}
 
 		It "-FullFactorial runs every combination of the chosen settings" {
-			$plan = @(Measure-WorkspaceOpen -Workspace WinuX -Runs 1 -WarmUp 0 -DryRun -FullFactorial -Setting FancyZonesApplyMethod, WorkspaceLayoutPipelining -Configuration $script:Configuration)
+			$plan = @(Measure-WorkspaceOpen -Workspace WinuX -Runs 1 -WarmUp 0 -DryRun -FullFactorial -Setting FancyZonesApplyMethod, WorkspaceLayoutPipelining -Configuration $global:Configuration)
 
 			$plan.Count | Should -Be 4
 			@($plan.Variant | Sort-Object -Unique).Count | Should -Be 4
@@ -155,7 +155,7 @@ Describe "Measure-WorkspaceOpen" {
 		}
 
 		It "interleaves the variants round by round and puts warm-ups first" {
-			$plan = @(Measure-WorkspaceOpen -Workspace WinuX -Runs 2 -WarmUp 1 -DryRun -Setting FancyZonesApplyMethod -Configuration $script:Configuration)
+			$plan = @(Measure-WorkspaceOpen -Workspace WinuX -Runs 2 -WarmUp 1 -DryRun -Setting FancyZonesApplyMethod -Configuration $global:Configuration)
 
 			$plan.Count | Should -Be 5
 			$plan[0].Measured | Should -BeFalse
@@ -164,13 +164,13 @@ Describe "Measure-WorkspaceOpen" {
 		}
 
 		It "-Order Sequential runs every round of one variant before the next" {
-			$plan = @(Measure-WorkspaceOpen -Workspace WinuX -Runs 2 -WarmUp 0 -DryRun -Order Sequential -Setting FancyZonesApplyMethod -Configuration $script:Configuration)
+			$plan = @(Measure-WorkspaceOpen -Workspace WinuX -Runs 2 -WarmUp 0 -DryRun -Order Sequential -Setting FancyZonesApplyMethod -Configuration $global:Configuration)
 
 			@($plan | ForEach-Object { "$($_.Variant)/$($_.Round)" }) | Should -Be @('Baseline/1', 'Baseline/2', 'ApplyMethod=Hotkeys/1', 'ApplyMethod=Hotkeys/2')
 		}
 
 		It "-Order Shuffled with a seed keeps every variant once per round" {
-			$plan = @(Measure-WorkspaceOpen -Workspace WinuX -Runs 3 -WarmUp 0 -DryRun -Order Shuffled -Seed 7 -Configuration $script:Configuration)
+			$plan = @(Measure-WorkspaceOpen -Workspace WinuX -Runs 3 -WarmUp 0 -DryRun -Order Shuffled -Seed 7 -Configuration $global:Configuration)
 
 			foreach ($round in 1..3) {
 				$inRound = @($plan | Where-Object Round -eq $round)
@@ -180,26 +180,26 @@ Describe "Measure-WorkspaceOpen" {
 		}
 
 		It "names explicit variants from their Name key or their overrides" {
-			$plan = @(Measure-WorkspaceOpen -Workspace WinuX -Runs 1 -WarmUp 0 -DryRun -Configuration $script:Configuration -Variant @{ Name = 'Current' }, @{ WorkspaceLayoutPrepareEarly = $false; SomeDelay = 250 }, @{})
+			$plan = @(Measure-WorkspaceOpen -Workspace WinuX -Runs 1 -WarmUp 0 -DryRun -Configuration $global:Configuration -Variant @{ Name = 'Current' }, @{ WorkspaceLayoutPrepareEarly = $false; SomeDelay = 250 }, @{})
 
 			$plan.Variant | Should -Be @('Current', 'PrepareEarly=Off SomeDelay=250', 'Variant 3')
 		}
 
 		It "-DryRun neither opens nor tears down nor changes the configuration" {
-			$before = $script:Configuration.Clone()
+			$before = $global:Configuration.Clone()
 
-			Measure-WorkspaceOpen -Workspace WinuX -DryRun -Configuration $script:Configuration | Out-Null
+			Measure-WorkspaceOpen -Workspace WinuX -DryRun -Configuration $global:Configuration | Out-Null
 
 			Should -Invoke Open-Workspace -Times 0 -Exactly
 			Should -Invoke Kill-All -Times 0 -Exactly
-			$script:Configuration.ContainsKey('WorkspaceBenchmark') | Should -BeFalse
-			$script:Configuration['FancyZonesApplyMethod'] | Should -Be $before['FancyZonesApplyMethod']
+			$global:Configuration.ContainsKey('WorkspaceBenchmark') | Should -BeFalse
+			$global:Configuration['FancyZonesApplyMethod'] | Should -Be $before['FancyZonesApplyMethod']
 		}
 	}
 
 	Context "guards" {
 		It "refuses an unknown workspace" {
-			$result = Measure-WorkspaceOpen -Workspace Nope -Configuration $script:Configuration
+			$result = Measure-WorkspaceOpen -Workspace Nope -Configuration $global:Configuration
 
 			$result | Should -BeNullOrEmpty
 			Should -Invoke Write-LogError -Times 1 -Exactly
@@ -207,7 +207,7 @@ Describe "Measure-WorkspaceOpen" {
 		}
 
 		It "refuses a workspace whose actions end the calling shell" {
-			$result = Measure-WorkspaceOpen -Workspace Exiter -Configuration $script:Configuration
+			$result = Measure-WorkspaceOpen -Workspace Exiter -Configuration $global:Configuration
 
 			$result | Should -BeNullOrEmpty
 			Should -Invoke Write-LogError -Times 1 -Exactly
@@ -222,7 +222,7 @@ Describe "Measure-WorkspaceOpen" {
 				@($Actions | Where-Object { $_.Action -ne 'Terminate-WindowsTerminalTabs' })
 			}
 
-			Measure-WorkspaceOpen Exiter Asseto -Runs 1 -WarmUp 0 -SettleSeconds 0 -Variant @{ Name = 'Only' } -Configuration $script:Configuration -ResultPath $script:ResultFile | Out-Null
+			Measure-WorkspaceOpen Exiter Asseto -Runs 1 -WarmUp 0 -SettleSeconds 0 -Variant @{ Name = 'Only' } -Configuration $global:Configuration -ResultPath $script:ResultFile | Out-Null
 
 			Should -Invoke Write-LogError -Times 0 -Exactly
 			Should -Invoke Resolve-WorkspaceActions -Times 1 -Exactly -ParameterFilter { $Workspace -eq 'Exiter' -and $null -ne $Configuration }
@@ -232,7 +232,7 @@ Describe "Measure-WorkspaceOpen" {
 		It "refuses a workspace whose every action is scoped to another machine" {
 			Mock Resolve-WorkspaceActions { @() }
 
-			$result = Measure-WorkspaceOpen -Workspace Example -Configuration $script:Configuration
+			$result = Measure-WorkspaceOpen -Workspace Example -Configuration $global:Configuration
 
 			$result | Should -BeNullOrEmpty
 			Should -Invoke Write-LogError -Times 1 -Exactly -ParameterFilter { $Message -like '*no actions that apply*' }
@@ -240,13 +240,13 @@ Describe "Measure-WorkspaceOpen" {
 		}
 
 		It "refuses a workspace whose Open-Project action has no project unless -Project supplies one" {
-			$result = Measure-WorkspaceOpen -Workspace Picker -Runs 1 -WarmUp 0 -SettleSeconds 0 -Variant @{ Name = 'Only' } -Configuration $script:Configuration -ResultPath $script:ResultFile
+			$result = Measure-WorkspaceOpen -Workspace Picker -Runs 1 -WarmUp 0 -SettleSeconds 0 -Variant @{ Name = 'Only' } -Configuration $global:Configuration -ResultPath $script:ResultFile
 
 			$result | Should -BeNullOrEmpty
 			Should -Invoke Write-LogError -Times 1 -Exactly
 			Should -Invoke Open-Workspace -Times 0 -Exactly
 
-			Measure-WorkspaceOpen Picker Asseto -Runs 1 -WarmUp 0 -SettleSeconds 0 -Variant @{ Name = 'Only' } -Configuration $script:Configuration -ResultPath $script:ResultFile | Out-Null
+			Measure-WorkspaceOpen Picker Asseto -Runs 1 -WarmUp 0 -SettleSeconds 0 -Variant @{ Name = 'Only' } -Configuration $global:Configuration -ResultPath $script:ResultFile | Out-Null
 
 			Should -Invoke Write-LogError -Times 1 -Exactly
 			Should -Invoke Open-Workspace -Times 1 -Exactly -ParameterFilter { $Workspace -eq 'Picker' -and (@($Project) -join ',') -eq 'Asseto' }
@@ -255,7 +255,7 @@ Describe "Measure-WorkspaceOpen" {
 
 	Context "defaults" {
 		It "measures the shipped Example workspace when no workspace is named" {
-			$result = Measure-WorkspaceOpen -Runs 1 -WarmUp 0 -SettleSeconds 0 -Variant @{ Name = 'Only' } -Configuration $script:Configuration -ResultPath $script:ResultFile -PassThru
+			$result = Measure-WorkspaceOpen -Runs 1 -WarmUp 0 -SettleSeconds 0 -Variant @{ Name = 'Only' } -Configuration $global:Configuration -ResultPath $script:ResultFile -PassThru
 
 			Should -Invoke Open-Workspace -Times 1 -Exactly -ParameterFilter { $Workspace -eq 'Example' }
 			$result.Runs[0].Workspace | Should -Be 'Example'
@@ -264,7 +264,7 @@ Describe "Measure-WorkspaceOpen" {
 
 	Context "runs" {
 		It "puts each variant's values in effect during its open and restores everything afterwards" {
-			Measure-WorkspaceOpen -Workspace WinuX -Runs 1 -WarmUp 0 -SettleSeconds 0 -Setting FancyZonesApplyMethod, WorkspaceLayoutPipelining -Configuration $script:Configuration -ResultPath $script:ResultFile | Out-Null
+			Measure-WorkspaceOpen -Workspace WinuX -Runs 1 -WarmUp 0 -SettleSeconds 0 -Setting FancyZonesApplyMethod, WorkspaceLayoutPipelining -Configuration $global:Configuration -ResultPath $script:ResultFile | Out-Null
 
 			$script:Observed.Count | Should -Be 3
 			$script:Observed[0].ApplyMethod | Should -Be 'File'
@@ -276,22 +276,22 @@ Describe "Measure-WorkspaceOpen" {
 			# Every open records without printing a table per open.
 			$script:Observed | ForEach-Object { $_.Benchmark.Enabled | Should -BeTrue; $_.Benchmark.Display | Should -Be 'None' }
 
-			$script:Configuration['FancyZonesApplyMethod'] | Should -Be 'File'
-			$script:Configuration.ContainsKey('WorkspaceLayoutPipelining') | Should -BeFalse
-			$script:Configuration.ContainsKey('WorkspaceBenchmark') | Should -BeFalse
+			$global:Configuration['FancyZonesApplyMethod'] | Should -Be 'File'
+			$global:Configuration.ContainsKey('WorkspaceLayoutPipelining') | Should -BeFalse
+			$global:Configuration.ContainsKey('WorkspaceBenchmark') | Should -BeFalse
 		}
 
 		It "keeps a pre-existing benchmark opt-in as it was" {
-			$script:Configuration['WorkspaceBenchmark'] = @{ Enabled = $true; Display = 'Table'; Last = 3 }
+			$global:Configuration['WorkspaceBenchmark'] = @{ Enabled = $true; Display = 'Table'; Last = 3 }
 
-			Measure-WorkspaceOpen -Workspace WinuX -Runs 1 -WarmUp 0 -SettleSeconds 0 -Setting FancyZonesApplyMethod -Configuration $script:Configuration -ResultPath $script:ResultFile | Out-Null
+			Measure-WorkspaceOpen -Workspace WinuX -Runs 1 -WarmUp 0 -SettleSeconds 0 -Setting FancyZonesApplyMethod -Configuration $global:Configuration -ResultPath $script:ResultFile | Out-Null
 
-			$script:Configuration['WorkspaceBenchmark'].Display | Should -Be 'Table'
-			$script:Configuration['WorkspaceBenchmark'].Last | Should -Be 3
+			$global:Configuration['WorkspaceBenchmark'].Display | Should -Be 'Table'
+			$global:Configuration['WorkspaceBenchmark'].Last | Should -Be 3
 		}
 
 		It "tears down and settles before every open, warm-ups included, and counts only measured runs" {
-			$result = Measure-WorkspaceOpen -Workspace WinuX -Runs 1 -WarmUp 2 -SettleSeconds 3 -Setting FancyZonesApplyMethod -Configuration $script:Configuration -ResultPath $script:ResultFile -PassThru
+			$result = Measure-WorkspaceOpen -Workspace WinuX -Runs 1 -WarmUp 2 -SettleSeconds 3 -Setting FancyZonesApplyMethod -Configuration $global:Configuration -ResultPath $script:ResultFile -PassThru
 
 			Should -Invoke Kill-All -Times 4 -Exactly
 			Should -Invoke Start-Sleep -Times 4 -Exactly -ParameterFilter { $Seconds -eq 3 }
@@ -303,7 +303,7 @@ Describe "Measure-WorkspaceOpen" {
 		}
 
 		It "hands the project and the remaining arguments to every open, so no open shows a menu" {
-			$result = Measure-WorkspaceOpen WinuX Asseto run -Runs 1 -WarmUp 1 -SettleSeconds 0 -Variant @{ Name = 'Only' } -Configuration $script:Configuration -ResultPath $script:ResultFile -PassThru
+			$result = Measure-WorkspaceOpen WinuX Asseto run -Runs 1 -WarmUp 1 -SettleSeconds 0 -Variant @{ Name = 'Only' } -Configuration $global:Configuration -ResultPath $script:ResultFile -PassThru
 
 			Should -Invoke Open-Workspace -Times 2 -Exactly -ParameterFilter { $Workspace -eq 'WinuX' -and (@($Project) -join ',') -eq 'Asseto' -and (@($ExtraArgs) -join ',') -eq 'run' }
 			$result.Runs | ForEach-Object { $_.Project | Should -Be 'Asseto' }
@@ -311,13 +311,13 @@ Describe "Measure-WorkspaceOpen" {
 		}
 
 		It "opens without a project when none is given" {
-			Measure-WorkspaceOpen -Workspace WinuX -Runs 1 -WarmUp 0 -SettleSeconds 0 -Variant @{ Name = 'Only' } -Configuration $script:Configuration -ResultPath $script:ResultFile | Out-Null
+			Measure-WorkspaceOpen -Workspace WinuX -Runs 1 -WarmUp 0 -SettleSeconds 0 -Variant @{ Name = 'Only' } -Configuration $global:Configuration -ResultPath $script:ResultFile | Out-Null
 
 			Should -Invoke Open-Workspace -Times 1 -Exactly -ParameterFilter { $Workspace -eq 'WinuX' -and -not $Project -and -not $ExtraArgs }
 		}
 
 		It "tags the benchmark rows it causes with its session so the everyday history can leave them out" {
-			$result = Measure-WorkspaceOpen -Workspace WinuX -Runs 1 -WarmUp 1 -SettleSeconds 0 -Variant @{ Name = 'Only' } -Configuration $script:Configuration -ResultPath $script:ResultFile -PassThru
+			$result = Measure-WorkspaceOpen -Workspace WinuX -Runs 1 -WarmUp 1 -SettleSeconds 0 -Variant @{ Name = 'Only' } -Configuration $global:Configuration -ResultPath $script:ResultFile -PassThru
 
 			$benchmarkRows = @(Read-WorkspaceBenchmark -BenchmarkPath $script:BenchmarkFile)
 			$benchmarkRows.Count | Should -Be 2
@@ -327,21 +327,21 @@ Describe "Measure-WorkspaceOpen" {
 		}
 
 		It "stops starting opens once -MaxMinutes is spent and still summarizes what ran" {
-			$result = Measure-WorkspaceOpen -Workspace WinuX -Runs 3 -WarmUp 0 -SettleSeconds 0 -Variant @{ Name = 'Only' } -MaxMinutes 0.005 -Teardown { [System.Threading.Thread]::Sleep(400) } -Configuration $script:Configuration -ResultPath $script:ResultFile -PassThru
+			$result = Measure-WorkspaceOpen -Workspace WinuX -Runs 3 -WarmUp 0 -SettleSeconds 0 -Variant @{ Name = 'Only' } -MaxMinutes 0.005 -Teardown { [System.Threading.Thread]::Sleep(400) } -Configuration $global:Configuration -ResultPath $script:ResultFile -PassThru
 
 			Should -Invoke Open-Workspace -Times 1 -Exactly
 			$result.Runs.Count | Should -Be 1
 			$result.Summary.Count | Should -Be 1
 			$result.Summary[0].Runs | Should -Be 1
 			Should -Invoke Write-LogWarning -ParameterFilter { $Message -like '*budget*' }
-			$script:Configuration.ContainsKey('WorkspaceBenchmark') | Should -BeFalse
+			$global:Configuration.ContainsKey('WorkspaceBenchmark') | Should -BeFalse
 		}
 
 		It "judges every variant against the first one: Noise inside the spread, Faster or Slower outside" {
 			# Interleaved Base, Near, Far per round: Base 10/20/30, Near 21/22/23, Far 50/60/70.
 			foreach ($total in 10, 21, 50, 20, 22, 60, 30, 23, 70) { $script:ScriptedRows.Enqueue(@{ Total = $total }) }
 
-			$summary = @(Measure-WorkspaceOpen -Workspace WinuX -Runs 3 -WarmUp 0 -SettleSeconds 0 -Variant @{ Name = 'Base' }, @{ Name = 'Near' }, @{ Name = 'Far' } -Configuration $script:Configuration -ResultPath $script:ResultFile)
+			$summary = @(Measure-WorkspaceOpen -Workspace WinuX -Runs 3 -WarmUp 0 -SettleSeconds 0 -Variant @{ Name = 'Base' }, @{ Name = 'Near' }, @{ Name = 'Far' } -Configuration $global:Configuration -ResultPath $script:ResultFile)
 
 			@($summary | Where-Object Variant -eq 'Base')[0].Verdict | Should -Be 'Reference'
 			@($summary | Where-Object Variant -eq 'Near')[0].Effect | Should -Be 2
@@ -353,7 +353,7 @@ Describe "Measure-WorkspaceOpen" {
 		It "uses the given teardown instead of Kill-All" {
 			$script:TeardownCalls = 0
 
-			Measure-WorkspaceOpen -Workspace WinuX -Runs 1 -WarmUp 0 -SettleSeconds 0 -Variant @{ Name = 'Only' } -Teardown { $script:TeardownCalls++ } -Configuration $script:Configuration -ResultPath $script:ResultFile | Out-Null
+			Measure-WorkspaceOpen -Workspace WinuX -Runs 1 -WarmUp 0 -SettleSeconds 0 -Variant @{ Name = 'Only' } -Teardown { $script:TeardownCalls++ } -Configuration $global:Configuration -ResultPath $script:ResultFile | Out-Null
 
 			$script:TeardownCalls | Should -Be 1
 			Should -Invoke Kill-All -Times 0 -Exactly
@@ -362,7 +362,7 @@ Describe "Measure-WorkspaceOpen" {
 		It "summarizes with medians, clean medians and retry counts" {
 			foreach ($scripted in @(@{ Total = 10; Attempts = 1 }, @{ Total = 30; Attempts = 1 }, @{ Total = 20; Attempts = 2 }, @{ Total = 100; Attempts = 1 })) { $script:ScriptedRows.Enqueue($scripted) }
 
-			$summary = @(Measure-WorkspaceOpen -Workspace WinuX -Runs 4 -WarmUp 0 -SettleSeconds 0 -Variant @{ Name = 'A' } -Configuration $script:Configuration -ResultPath $script:ResultFile)
+			$summary = @(Measure-WorkspaceOpen -Workspace WinuX -Runs 4 -WarmUp 0 -SettleSeconds 0 -Variant @{ Name = 'A' } -Configuration $global:Configuration -ResultPath $script:ResultFile)
 
 			$summary.Count | Should -Be 1
 			$summary[0].Variant | Should -Be 'A'
@@ -382,7 +382,7 @@ Describe "Measure-WorkspaceOpen" {
 			# Baseline rows 10 and 20, Hotkeys rows 40 and 60, interleaved: B, H, B, H.
 			foreach ($scripted in @(@{ Total = 10 }, @{ Total = 40 }, @{ Total = 20 }, @{ Total = 60 })) { $script:ScriptedRows.Enqueue($scripted) }
 
-			$summary = @(Measure-WorkspaceOpen -Workspace WinuX -Runs 2 -WarmUp 0 -SettleSeconds 0 -Setting FancyZonesApplyMethod -Configuration $script:Configuration -ResultPath $script:ResultFile)
+			$summary = @(Measure-WorkspaceOpen -Workspace WinuX -Runs 2 -WarmUp 0 -SettleSeconds 0 -Setting FancyZonesApplyMethod -Configuration $global:Configuration -ResultPath $script:ResultFile)
 
 			@($summary | Where-Object Variant -eq 'Baseline')[0].MedianTotal | Should -Be 15
 			@($summary | Where-Object Variant -eq 'ApplyMethod=Hotkeys')[0].MedianTotal | Should -Be 50
@@ -392,7 +392,7 @@ Describe "Measure-WorkspaceOpen" {
 			$script:ScriptedRows.Enqueue(@{ Skip = $true })
 			$script:ScriptedRows.Enqueue(@{ Total = 12 })
 
-			$result = Measure-WorkspaceOpen -Workspace WinuX -Runs 2 -WarmUp 0 -SettleSeconds 0 -Variant @{ Name = 'A' } -Configuration $script:Configuration -ResultPath $script:ResultFile -PassThru
+			$result = Measure-WorkspaceOpen -Workspace WinuX -Runs 2 -WarmUp 0 -SettleSeconds 0 -Variant @{ Name = 'A' } -Configuration $global:Configuration -ResultPath $script:ResultFile -PassThru
 
 			$result.Runs.Count | Should -Be 2
 			$result.Runs[0].Outcome | Should -Be 'NoRow'
@@ -406,16 +406,16 @@ Describe "Measure-WorkspaceOpen" {
 		It "records a throwing open as Error and still restores the configuration" {
 			$script:ScriptedRows.Enqueue(@{ Throw = $true })
 
-			$result = Measure-WorkspaceOpen -Workspace WinuX -Runs 1 -WarmUp 0 -SettleSeconds 0 -Setting WorkspaceLayoutPrepareEarly -Configuration $script:Configuration -ResultPath $script:ResultFile -PassThru
+			$result = Measure-WorkspaceOpen -Workspace WinuX -Runs 1 -WarmUp 0 -SettleSeconds 0 -Setting WorkspaceLayoutPrepareEarly -Configuration $global:Configuration -ResultPath $script:ResultFile -PassThru
 
 			$result.Runs[0].Outcome | Should -Be 'Error'
 			$result.Runs[0].Actions | Should -Match 'open exploded'
-			$script:Configuration.ContainsKey('WorkspaceLayoutPrepareEarly') | Should -BeFalse
-			$script:Configuration.ContainsKey('WorkspaceBenchmark') | Should -BeFalse
+			$global:Configuration.ContainsKey('WorkspaceLayoutPrepareEarly') | Should -BeFalse
+			$global:Configuration.ContainsKey('WorkspaceBenchmark') | Should -BeFalse
 		}
 
 		It "writes every open, warm-ups included, to the result file with the flags in effect" {
-			Measure-WorkspaceOpen -Workspace WinuX -Runs 1 -WarmUp 1 -SettleSeconds 0 -Setting WorkspaceLayoutPipelining -Configuration $script:Configuration -ResultPath $script:ResultFile | Out-Null
+			Measure-WorkspaceOpen -Workspace WinuX -Runs 1 -WarmUp 1 -SettleSeconds 0 -Setting WorkspaceLayoutPipelining -Configuration $global:Configuration -ResultPath $script:ResultFile | Out-Null
 
 			$rows = @(Import-Csv -LiteralPath $script:ResultFile)
 			$rows.Count | Should -Be 3
@@ -435,7 +435,7 @@ Describe "Measure-WorkspaceOpen" {
 			Write-WorkspaceBenchmark -Workspace WinuX -TotalSeconds 999 -BenchmarkPath $script:BenchmarkFile -Quiet
 			$script:ScriptedRows.Enqueue(@{ Total = 7 })
 
-			$summary = @(Measure-WorkspaceOpen -Workspace WinuX -Runs 1 -WarmUp 0 -SettleSeconds 0 -Variant @{ Name = 'A' } -Configuration $script:Configuration -ResultPath $script:ResultFile)
+			$summary = @(Measure-WorkspaceOpen -Workspace WinuX -Runs 1 -WarmUp 0 -SettleSeconds 0 -Variant @{ Name = 'A' } -Configuration $global:Configuration -ResultPath $script:ResultFile)
 
 			$summary[0].MedianTotal | Should -Be 7
 		}

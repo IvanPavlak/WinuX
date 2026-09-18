@@ -25,10 +25,7 @@ function Update-LayoutSectionHeaders {
 		[hashtable]$Config
 	)
 
-	$zoneNameMappings = $null
-	if ($global:Configuration -and $global:Configuration.ZoneNameMappings) {
-		$zoneNameMappings = $global:Configuration.ZoneNameMappings
-	}
+	$zoneNameMappings = Get-ConfigSetting -Path 'ZoneNameMappings'
 
 	$resolveLayoutType = {
 		param (

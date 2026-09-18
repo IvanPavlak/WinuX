@@ -10,6 +10,7 @@ This function reads no `Configuration.psd1` keys. There is nothing to configure.
 
 ```powershell
 Get-WorkspaceOpenProtection
+Get-WorkspaceOpenProtection -Opening 'Server'
 Get-WorkspaceOpenProtection -StatePath 'C:\path\to\OpenWorkspaces.txt'
 ```
 

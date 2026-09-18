@@ -42,7 +42,7 @@ function Get-WindowInsetPercent {
 		return $fallbackInset
 	}
 
-	$configured = $global:Configuration.SnapInsetPercent
+	$configured = Get-ConfigSetting -Path 'SnapInsetPercent'
 	if ($null -eq $configured) {
 		return $fallbackInset
 	}

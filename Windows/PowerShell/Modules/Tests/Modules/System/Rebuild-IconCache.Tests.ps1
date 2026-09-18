@@ -9,7 +9,7 @@ BeforeAll {
 
 Describe "Rebuild-IconCache" {
 	BeforeEach {
-		$script:Configuration = [PSCustomObject]@{
+		$global:Configuration = [PSCustomObject]@{
 			Universal = [PSCustomObject]@{
 				IconCacheDb     = "C:\\Temp\\IconCache.db"
 				IconCacheFolder = "C:\\Temp"

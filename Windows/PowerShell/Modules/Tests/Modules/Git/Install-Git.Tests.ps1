@@ -9,7 +9,7 @@ BeforeAll {
 
 Describe "Install-Git" {
 	BeforeEach {
-		$script:Configuration = @{
+		$global:Configuration = @{
 			GitConfig = @{
 				WingetPackageId = "Git.Git"
 				UserName        = "ExampleUser"

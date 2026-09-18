@@ -156,8 +156,9 @@ function Get-WorkspaceOpenDelta {
 	# same one Terminate-AllProcessesWithVisibleWindows uses. Matched on the exact process name,
 	# case-insensitively, exactly as that function does.
 	$adoptionExclusions = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-	if ($AdoptUnclaimed -and $Configuration -and $Configuration.Universal -and $Configuration.Universal.VisibleWindowExclusions) {
-		foreach ($exclusion in @($Configuration.Universal.VisibleWindowExclusions)) {
+	$visibleWindowExclusions = @(Get-ConfigSetting -Path 'Universal.VisibleWindowExclusions' -Default @())
+	if ($AdoptUnclaimed -and $visibleWindowExclusions) {
+		foreach ($exclusion in @($visibleWindowExclusions)) {
 			if (-not [string]::IsNullOrWhiteSpace($exclusion)) { [void]$adoptionExclusions.Add([string]$exclusion) }
 		}
 	}

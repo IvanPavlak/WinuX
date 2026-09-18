@@ -4,7 +4,7 @@ function Close-BrowserWindows {
 		Posts `WM_CLOSE` to each supplied browser window handle.
 
 	.DESCRIPTION
-		Gracefully closes browser windows by posting `WM_CLOSE` directly to each
+		Gracefully closes browser windows by posting `WM_CLOSE` through Close-Window to each
 		handle collected by `Get-BrowserWindowsByTarget`.
 
 	.PARAMETER WindowsToClose
@@ -21,6 +21,6 @@ function Close-BrowserWindows {
 	)
 
 	foreach ($window in $WindowsToClose) {
-		[Win32BrowserHelper]::PostMessage($window.Handle, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero) | Out-Null
+		[void](Close-Window -Handle ([IntPtr]$window.Handle))
 	}
 }

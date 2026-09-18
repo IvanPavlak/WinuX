@@ -45,7 +45,7 @@ function Generate-LayoutVisualization {
 		$LayoutsJsonPath = Get-FancyZonesLayoutsPath
 	}
 
-	$zoneMapping = $global:Configuration.ZoneNameMappings
+	$zoneMapping = Get-ConfigSetting -Path 'ZoneNameMappings' -Default @{}
 
 	# Build reverse mapping: zone index -> zone name for empty zone labels
 	$zoneIndexToName = @{}

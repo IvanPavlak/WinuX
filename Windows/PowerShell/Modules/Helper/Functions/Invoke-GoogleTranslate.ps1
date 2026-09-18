@@ -52,7 +52,7 @@ function Invoke-GoogleTranslate {
 	$translationText = ($allText -join ' ').Trim()
 
 	# Load the default output language from configuration
-	$defaults = $global:Configuration.DefaultTranslateLanguages
+	$defaults = Get-ConfigSetting -Path 'DefaultTranslateLanguages'
 	$defaultOutput = if ($defaults) { $defaults.OutputLanguage } else { "English" }
 
 	$sourceLang = if ($PSBoundParameters.ContainsKey('InputLanguage')) { $InputLanguage } else { "Auto" }

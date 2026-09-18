@@ -21,7 +21,7 @@ BeforeAll {
 Describe "SymbolicLinkMaker" {
 	BeforeEach {
 		$script:MachineSpecificPaths = @{}
-		$script:Configuration = [PSCustomObject]@{
+		$global:Configuration = [PSCustomObject]@{
 			DefaultWSLDistribution = "Ubuntu"
 		}
 

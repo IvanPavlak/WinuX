@@ -100,7 +100,7 @@ function Resolve-TerminalGreetingSettings {
 	param(
 		[Parameter(Position = 0)]
 		[AllowNull()]
-		[hashtable]$Settings = $global:Configuration.TerminalGreeting,
+		[hashtable]$Settings = (Get-ConfigSetting -Path 'TerminalGreeting'),
 
 		[AllowNull()]
 		[nullable[int]]$MaxShrinkSteps,

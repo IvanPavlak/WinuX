@@ -17,6 +17,8 @@ BeforeAll {
 	function Resolve-Selection { param($InputObject, $OptionList, $MenuTitle, $PromptMessage, [switch]$AllowEmptyPromptResponse, [switch]$AllowMultipleSelections) $InputObject }
 	function Get-WindowHandle { param($ProcessName, $WindowTitle) @() }
 	function Clear-WindowCache { }
+	# The graceful close goes through the Window module's seam; stubbed so no WM_CLOSE is posted.
+	function Close-Window { param([IntPtr[]]$Handle) $Handle.Count }
 	function Get-WindowsTerminalTabTitles { param($WindowHandle) @() }
 	function Close-WindowsTerminalTab { param($WindowHandle, $TabTitle) $true }
 	function Resolve-HostingTerminalTab { $null }

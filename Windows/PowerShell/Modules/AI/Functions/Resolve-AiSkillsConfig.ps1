@@ -54,8 +54,9 @@ function Resolve-AiSkillsConfig {
 	}
 
 	$section = @{}
-	if ($Configuration -and $Configuration.AiSkills -is [hashtable]) {
-		$section = $Configuration.AiSkills
+	$aiSkills = Get-ConfigSetting -Path 'AiSkills' -Configuration $Configuration
+	if ($aiSkills -is [hashtable]) {
+		$section = $aiSkills
 	}
 
 	$root = if ($section.Root) { [string]$section.Root } else { "{RepoRoot}\AI\Skills" }
@@ -71,7 +72,7 @@ function Resolve-AiSkillsConfig {
 	$expandedHarnesses = @($harnesses | ForEach-Object { & $expand $_ })
 
 	$wslHarnesses = @()
-	$wslUser = if ($Configuration) { [string]$Configuration.DefaultWSLUsername } else { "" }
+	$wslUser = [string](Get-ConfigSetting -Path 'DefaultWSLUsername' -Default '' -Configuration $Configuration)
 	if ($wslUser) {
 		foreach ($harness in $harnesses) {
 			$template = [string]$harness

@@ -15,7 +15,7 @@ BeforeAll {
 
 Describe "Set-Wallpaper" {
 	BeforeEach {
-		$script:Configuration = [PSCustomObject]@{
+		$global:Configuration = [PSCustomObject]@{
 			WallpaperStyles        = @{}
 			WallpaperDarkSettings  = @{}
 			WallpaperLightSettings = @{}

@@ -18,7 +18,7 @@ BeforeAll {
 
 Describe "Set-Locale" {
 	BeforeEach {
-		$script:Configuration = [PSCustomObject]@{
+		$global:Configuration = [PSCustomObject]@{
 			Locales       = @(
 				@{ "en-US" = [PSCustomObject]@{ Code = "en-US"; GeoId = 244 } }
 			)
@@ -35,7 +35,7 @@ Describe "Set-Locale" {
 	}
 
 	It "returns with a warning and no menu when Locales is empty (empty base)" {
-		$script:Configuration = [PSCustomObject]@{
+		$global:Configuration = [PSCustomObject]@{
 			Locales       = @()
 			DefaultLocale = ""
 		}

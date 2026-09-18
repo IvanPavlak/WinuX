@@ -12,7 +12,7 @@ BeforeAll {
 
 Describe "Configure-NerdFont" {
 	BeforeEach {
-		$script:Configuration = [PSCustomObject]@{
+		$global:Configuration = [PSCustomObject]@{
 			NerdFonts       = @( @{ JetBrainsMono = @{ SearchPattern = "JetBrainsMono*"; FolderName = "JetBrainsMonoNerdFont" } } )
 			DefaultNerdFont = "JetBrainsMono"
 		}

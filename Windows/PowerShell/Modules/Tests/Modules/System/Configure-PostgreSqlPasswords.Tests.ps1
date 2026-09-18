@@ -9,7 +9,7 @@ BeforeAll {
 
 Describe "Configure-PostgreSqlPasswords" {
 	BeforeEach {
-		$script:Configuration = [PSCustomObject]@{
+		$global:Configuration = [PSCustomObject]@{
 			PostgreSqlPasswords = $null
 		}
 		Mock Test-Path { $false }

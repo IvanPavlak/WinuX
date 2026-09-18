@@ -37,7 +37,8 @@ using dot-notation through MachineSpecificPaths. Supports both local and reposit
 
 	if ($ForRepository) {
 		$mapping = $null
-		foreach ($repositoryGroup in $Configuration.RepositoryGroups) {
+		$repositoryGroups = @(Get-ConfigSetting -Path 'RepositoryGroups' -Default @())
+		foreach ($repositoryGroup in $repositoryGroups) {
 			$groupName = @($repositoryGroup.Keys)[0]
 			foreach ($repository in $repositoryGroup[$groupName]) {
 				if ($repository.Name -eq $ProjectName) {
@@ -62,8 +63,8 @@ using dot-notation through MachineSpecificPaths. Supports both local and reposit
 			$currentLocal = $currentLocal.$property
 		}
 
-		$githubBase = $Configuration.Universal.GitHub.Base
-		$currentUrl = $Configuration.Universal.GitHub
+		$githubBase = Get-ConfigSetting -Path 'Universal.GitHub.Base'
+		$currentUrl = Get-ConfigSetting -Path 'Universal.GitHub'
 
 		$urlPathParts = $mapping.UrlPath.Split('.')
 
@@ -96,7 +97,8 @@ using dot-notation through MachineSpecificPaths. Supports both local and reposit
 		}
 	}
 	else {
-		$mapping = $Configuration.ProjectTerminals | Where-Object { $_.Name -eq $ProjectName }
+		$projectTerminals = @(Get-ConfigSetting -Path 'ProjectTerminals' -Default @())
+		$mapping = $projectTerminals | Where-Object { $_.Name -eq $ProjectName }
 		if (-not $mapping) {
 			Write-LogError "Error: Project [$ProjectName] not found in configuration!" -BlankLineAfter
 			break

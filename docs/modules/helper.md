@@ -342,6 +342,34 @@ Find-Item -Pattern "*" -SearchTarget "Directory" -NameFilter "Database" -MaxDown
 $proj = Find-Item -Pattern "*.csproj" -SelectFirst -ReturnFullObject
 ```
 
+## [Get-ConfigSetting](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Get-ConfigSetting.ps1)
+
+- **Description:** Reads one value from the configuration by dotted path (`'Universal.VisibleWindowExclusions'`), returning `-Default` when any segment is absent or the leaf is `$null`, and the configured value verbatim otherwise - `$false`, `0`, an empty string, an empty array and an empty hashtable are real values, not defaults. The one seam every function reads `Configuration.psd1` through: the walk is null-safe at every segment, so no caller writes the `if ($Configuration -and $Configuration.Universal -and ...)` guard. Reads `$global:Configuration` unless `-Configuration` names another source (a function's own `[hashtable]$Configuration` parameter, a test's fake, or `$global:MachineSpecificPaths`). A key containing a dot is reached by passing the segments as separate strings.
+- **Parameters:** -Path, -Default, -Configuration
+- **Usage:** `@(Get-ConfigSetting -Path 'Universal.VisibleWindowExclusions' -Default @())`, `@(Get-ConfigSetting -Path 'WorkspaceActions' -Default @())`, `Get-ConfigSetting -Path $entry.Solution -Configuration $global:MachineSpecificPaths`
+
+Output is enumerated like any command's, so an array-valued key is wrapped at the call site - `@(Get-ConfigSetting -Path 'Universal.VisibleWindowExclusions' -Default @())` is one element per configured name and zero for an empty list. A single `-Path` string is split on `.`; several strings are taken as literal segments, which is how a browser-group host key such as `claude.ai` is read. An empty segment (`'A..B'`) throws rather than silently reading the wrong key.
+
+| Parameter        | Type       | Default                  | Description                                                                              |
+| ---------------- | ---------- | ------------------------ | ---------------------------------------------------------------------------------------- |
+| `-Path`          | `string[]` | -                        | Dotted path, or the individual segments when a key contains a dot. Mandatory.           |
+| `-Default`       | `object`   | `$null`                  | Returned when the path does not resolve.                                                 |
+| `-Configuration` | `object`   | `$global:Configuration`  | The hashtable or object to read. Pass a function's own parameter, a test fake, or the machine-specific paths. |
+
+```powershell
+# A list, wrapped at the call site like any command output
+$exclusions = @(Get-ConfigSetting -Path 'Universal.VisibleWindowExclusions' -Default @())
+
+# A whole ordered section, so its consumers need no guard
+$actions = @(Get-ConfigSetting -Path 'WorkspaceActions' -Default @())
+Get-OrderedEntry $actions $workspaceName
+
+# A configuration value that names another value, against a different source
+$root = Get-ConfigSetting -Path 'Projects.MyProject.Root' -Configuration $global:MachineSpecificPaths
+```
+
+**See also:** [Get-OrderedEntry](#get-orderedentry), [Test-ConfigValue](#test-configvalue), [Confirm-ConfigValue](#confirm-configvalue), [Load-PathConfiguration](bootstrap.md#load-pathconfiguration)
+
 ## [Get-DatabaseTypeFromProject](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Get-DatabaseTypeFromProject.ps1)
 
 - **Description:** Detects the database type of a .NET project by analyzing its project name, project file path, and/or EF Core ModelSnapshot content. Returns `PostgreSQL`, `Oracle`, `SqlServer`, or `Unknown` based on pattern matching. Used by the EF Core migration workflow.
@@ -1044,12 +1072,6 @@ Rerun-LastCommand -AutoAccept -Command "Open-Workspace -Workspace 'MyWorkspace'"
 ```
 
 **See also:** [Resolve-Selection](helper.md#resolve-selection), [Open-Terminal](application.md#open-terminal), [Invoke-RerunLastCommandExit](helper.md#invoke-rerunlastcommandexit), [Initialize-WorkspaceWindowLayoutRerun](window.md#initialize-workspacewindowlayoutrerun)
-
-## [Resolve-ConfigPathValue](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Resolve-ConfigPathValue.ps1)
-
-- **Description:** Traverses a dot-notation path string through the nested `MachineSpecificPaths` configuration hashtable (e.g. `Projects.MyProject.Root`) and returns the value at the end of the path. Returns `$null` if the path is empty or any segment along the way cannot be resolved.
-- **Parameters:** -PathExpression
-- **Usage:** `Resolve-ConfigPathValue -PathExpression "Universal.DefaultBrowser"`, `Resolve-ConfigPathValue -PathExpression "Projects.MyProject.MySolution.Solution"`
 
 ## [Resolve-EfMigrationDbContext](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Resolve-EfMigrationDbContext.ps1)
 

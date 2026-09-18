@@ -48,7 +48,7 @@ function Resolve-ResizeWindowsPercent {
 		return $fallbackPercent
 	}
 
-	$section = $global:Configuration.ResizeWindowsPercent
+	$section = Get-ConfigSetting -Path 'ResizeWindowsPercent'
 	if ($section -isnot [hashtable]) {
 		return $fallbackPercent
 	}

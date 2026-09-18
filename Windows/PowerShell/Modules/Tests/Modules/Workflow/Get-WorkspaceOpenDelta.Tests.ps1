@@ -43,7 +43,7 @@ Describe "Get-WorkspaceOpenDelta" {
 
 		# No exclusions unless a test opts in, so the adoption tests below start from "adopt
 		# everything" and each exclusion assertion is visibly the thing that changed.
-		$script:Configuration = @{ Universal = @{ VisibleWindowExclusions = @() } }
+		$global:Configuration = @{ Universal = @{ VisibleWindowExclusions = @() } }
 	}
 
 	Context "Window ownership" {
@@ -141,7 +141,7 @@ Describe "Get-WorkspaceOpenDelta" {
 				)
 			}
 
-			$script:Configuration = @{
+			$global:Configuration = @{
 				Universal = @{ VisibleWindowExclusions = @('Rainmeter', 'WindowsTerminal') }
 			}
 		}
@@ -156,7 +156,7 @@ Describe "Get-WorkspaceOpenDelta" {
 		}
 
 		It "matches the exclusion list regardless of case" {
-			$script:Configuration.Universal.VisibleWindowExclusions = @('rainmeter', 'windowsterminal')
+			$global:Configuration.Universal.VisibleWindowExclusions = @('rainmeter', 'windowsterminal')
 
 			$delta = Get-WorkspaceOpenDelta -Workspace 'Server' -ExistingWindowHandles (New-HandleSet 1, 2, 3) -AdoptUnclaimed
 
@@ -173,7 +173,7 @@ Describe "Get-WorkspaceOpenDelta" {
 		}
 
 		It "adopts an excluded process once it is taken off the list" {
-			$script:Configuration.Universal.VisibleWindowExclusions = @()
+			$global:Configuration.Universal.VisibleWindowExclusions = @()
 
 			$delta = Get-WorkspaceOpenDelta -Workspace 'Server' -ExistingWindowHandles (New-HandleSet 1, 2, 3) -AdoptUnclaimed
 
@@ -181,7 +181,7 @@ Describe "Get-WorkspaceOpenDelta" {
 		}
 
 		It "adopts everything when no exclusions are configured at all" {
-			$script:Configuration = @{}
+			$global:Configuration = @{}
 
 			$delta = Get-WorkspaceOpenDelta -Workspace 'Server' -ExistingWindowHandles (New-HandleSet 1, 2, 3) -AdoptUnclaimed
 
@@ -199,7 +199,7 @@ Describe "Get-WorkspaceOpenDelta" {
 		}
 
 		It "adopts every tab on screen once WindowsTerminal is off the list" {
-			$script:Configuration.Universal.VisibleWindowExclusions = @('Rainmeter')
+			$global:Configuration.Universal.VisibleWindowExclusions = @('Rainmeter')
 			Mock Get-TerminalTabSnapshot { New-TabSnapshot -Window @{ 777 = @('pwsh', 'Server.Api') } }
 
 			$delta = Get-WorkspaceOpenDelta -Workspace 'Server' -ExistingTerminalTabs (New-TabSnapshot -Window @{ 777 = @('pwsh') }) -AdoptUnclaimed
@@ -216,7 +216,7 @@ Describe "Get-WorkspaceOpenDelta" {
 		It "never adopts a protected pre-existing window" {
 			# The window belongs to a live alongside workspace this plain open preserves -
 			# adopting it would let closing THIS workspace take the alongside one's window down.
-			$script:Configuration.Universal.VisibleWindowExclusions = @()
+			$global:Configuration.Universal.VisibleWindowExclusions = @()
 
 			$delta = Get-WorkspaceOpenDelta -Workspace 'Server' -ExistingWindowHandles (New-HandleSet 1, 2, 3) `
 				-ProtectedWindowHandles (New-HandleSet 3) -AdoptUnclaimed
@@ -228,7 +228,7 @@ Describe "Get-WorkspaceOpenDelta" {
 			# Protection limits adoption, never the diff: a handle absent from the pre-open
 			# capture was created by this open, whatever set claims it (and a live protection
 			# set can never actually contain such a handle anyway).
-			$script:Configuration.Universal.VisibleWindowExclusions = @()
+			$global:Configuration.Universal.VisibleWindowExclusions = @()
 
 			$delta = Get-WorkspaceOpenDelta -Workspace 'Server' -ExistingWindowHandles (New-HandleSet 1, 2) `
 				-ProtectedWindowHandles (New-HandleSet 3) -AdoptUnclaimed
@@ -240,7 +240,7 @@ Describe "Get-WorkspaceOpenDelta" {
 			# WindowsTerminal off the exclusion list means an adopting open claims every tab on
 			# screen - except a preserved workspace's terminal, whose tabs closing this
 			# workspace must never take.
-			$script:Configuration.Universal.VisibleWindowExclusions = @()
+			$global:Configuration.Universal.VisibleWindowExclusions = @()
 			Mock Get-TerminalTabSnapshot { New-TabSnapshot -Window @{ 777 = @('pwsh', 'Alongside.Api'); 888 = @('Server.Api') } }
 
 			$delta = Get-WorkspaceOpenDelta -Workspace 'Server' `

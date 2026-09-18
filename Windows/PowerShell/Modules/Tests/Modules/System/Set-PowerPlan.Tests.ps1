@@ -35,7 +35,7 @@ Describe "Set-PowerPlan" {
 	}
 
 	It "-Auto leaves the plan as-is when PowerPlans is empty (empty base, no Balanced fallback)" {
-		$script:Configuration = [PSCustomObject]@{ PowerPlans = @{} }
+		$global:Configuration = [PSCustomObject]@{ PowerPlans = @{} }
 		Mock DetermineMachineType { "PC" }
 		Mock Write-LogStep { }
 
@@ -46,7 +46,7 @@ Describe "Set-PowerPlan" {
 	}
 
 	It "-Auto leaves the plan as-is when the machine type has no PowerPlans entry" {
-		$script:Configuration = [PSCustomObject]@{ PowerPlans = @{ Laptop = "Balanced" } }
+		$global:Configuration = [PSCustomObject]@{ PowerPlans = @{ Laptop = "Balanced" } }
 		Mock DetermineMachineType { "PC" }
 		Mock Write-LogStep { }
 

@@ -82,7 +82,7 @@ function SymbolicLinkMaker {
 	# reboot has not happened yet) skips them with a warning instead of erroring on
 	# every wsl.exe call, and a Windows-only run never touches wsl.exe at all.
 	$wslAvailable = (@($entries | Where-Object IsWSL).Count -gt 0) -and (Test-WSLDistributionInstalled)
-	$wslDistro = $Configuration.DefaultWSLDistribution
+	$wslDistro = Get-ConfigSetting -Path 'DefaultWSLDistribution'
 
 	# Entries arrive depth-first, so a group's entries are contiguous: print each
 	# ancestor header exactly once, when it differs from the previous entry's chain.

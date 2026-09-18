@@ -18,7 +18,7 @@ Describe "Get-LayoutMachineType" {
 
 		# The function reads its two keys through the unqualified $Configuration, which resolves to
 		# this file's script scope - reset it per test so nothing leaks between cases.
-		$script:Configuration = @{}
+		$global:Configuration = @{}
 	}
 
 	It "returns the detected machine type when nothing is configured" {
@@ -26,25 +26,25 @@ Describe "Get-LayoutMachineType" {
 	}
 
 	It "returns the override layout set configured for the detected machine type" {
-		$script:Configuration = @{ LayoutMachineTypeOverrides = @{ PC = 'Temp' } }
+		$global:Configuration = @{ LayoutMachineTypeOverrides = @{ PC = 'Temp' } }
 
 		Get-LayoutMachineType | Should -BeExactly 'Temp'
 	}
 
 	It "ignores an empty override entry" {
-		$script:Configuration = @{ LayoutMachineTypeOverrides = @{ PC = '   ' } }
+		$global:Configuration = @{ LayoutMachineTypeOverrides = @{ PC = '   ' } }
 
 		Get-LayoutMachineType | Should -BeExactly 'PC'
 	}
 
 	It "ignores an override entry belonging to a different machine type" {
-		$script:Configuration = @{ LayoutMachineTypeOverrides = @{ Laptop = 'Temp' } }
+		$global:Configuration = @{ LayoutMachineTypeOverrides = @{ Laptop = 'Temp' } }
 
 		Get-LayoutMachineType | Should -BeExactly 'PC'
 	}
 
 	It "trims the configured override value" {
-		$script:Configuration = @{ LayoutMachineTypeOverrides = @{ PC = "  Temp`t" } }
+		$global:Configuration = @{ LayoutMachineTypeOverrides = @{ PC = "  Temp`t" } }
 
 		Get-LayoutMachineType | Should -BeExactly 'Temp'
 	}
@@ -52,7 +52,7 @@ Describe "Get-LayoutMachineType" {
 	It "prefers the override over the small-display machine type" {
 		# The whole reason the override is resolved first: a temporary single screen is exactly the
 		# case that would otherwise trigger the display-size rule and silently discard the choice.
-		$script:Configuration = @{
+		$global:Configuration = @{
 			LayoutMachineTypeOverrides = @{ PC = 'Temp' }
 			SmallDisplayMachineType    = 'Laptop'
 		}
@@ -62,20 +62,20 @@ Describe "Get-LayoutMachineType" {
 	}
 
 	It "falls back to the small-display machine type on a laptop-class primary display" {
-		$script:Configuration = @{ SmallDisplayMachineType = 'Laptop' }
+		$global:Configuration = @{ SmallDisplayMachineType = 'Laptop' }
 		Mock Get-MonitorInfo { @([PSCustomObject]@{ IsPrimary = $true; Width = 1920; Height = 1080 }) }
 
 		Get-LayoutMachineType | Should -BeExactly 'Laptop'
 	}
 
 	It "keeps the detected machine type on a wide primary display" {
-		$script:Configuration = @{ SmallDisplayMachineType = 'Laptop' }
+		$global:Configuration = @{ SmallDisplayMachineType = 'Laptop' }
 
 		Get-LayoutMachineType | Should -BeExactly 'PC'
 	}
 
 	It "measures the primary monitor, not the first one enumerated" {
-		$script:Configuration = @{ SmallDisplayMachineType = 'Laptop' }
+		$global:Configuration = @{ SmallDisplayMachineType = 'Laptop' }
 		Mock Get-MonitorInfo {
 			@(
 				[PSCustomObject]@{ IsPrimary = $false; Width = 1920; Height = 1080 }
@@ -87,7 +87,7 @@ Describe "Get-LayoutMachineType" {
 	}
 
 	It "does not query monitors when an override already answered" {
-		$script:Configuration = @{
+		$global:Configuration = @{
 			LayoutMachineTypeOverrides = @{ PC = 'Temp' }
 			SmallDisplayMachineType    = 'Laptop'
 		}
@@ -98,7 +98,7 @@ Describe "Get-LayoutMachineType" {
 	}
 
 	It "does not query monitors when no small-display machine type is configured" {
-		$script:Configuration = @{ SmallDisplayMachineType = '' }
+		$global:Configuration = @{ SmallDisplayMachineType = '' }
 
 		$null = Get-LayoutMachineType
 
@@ -106,7 +106,7 @@ Describe "Get-LayoutMachineType" {
 	}
 
 	It "uses a supplied monitor snapshot instead of querying" {
-		$script:Configuration = @{ SmallDisplayMachineType = 'Laptop' }
+		$global:Configuration = @{ SmallDisplayMachineType = 'Laptop' }
 
 		Get-LayoutMachineType -MonitorInfo @([PSCustomObject]@{ IsPrimary = $true; Width = 1920; Height = 1080 }) |
 			Should -BeExactly 'Laptop'
@@ -115,7 +115,7 @@ Describe "Get-LayoutMachineType" {
 	}
 
 	It "keeps the detected machine type when monitor detection yields nothing" {
-		$script:Configuration = @{ SmallDisplayMachineType = 'Laptop' }
+		$global:Configuration = @{ SmallDisplayMachineType = 'Laptop' }
 		Mock Get-MonitorInfo { @() }
 
 		Get-LayoutMachineType | Should -BeExactly 'PC'

@@ -107,24 +107,25 @@ function Open-Browser {
 	)
 
 	if (-not $PSBoundParameters.ContainsKey('Browser') -or [string]::IsNullOrWhiteSpace($Browser)) {
-		$Browser = $Configuration.Universal.DefaultBrowser
+		$Browser = Get-ConfigSetting -Path 'Universal.DefaultBrowser'
 	}
 
 	if (-not (Confirm-ConfigValue $Browser "No browser specified and Universal.DefaultBrowser is not configured - pass -Browser or set it in Configuration.local.psd1!")) {
 		return
 	}
 
-	$browserConfig = $Configuration.Universal.Browsers[$Browser]
+	$browsers = Get-ConfigSetting -Path 'Universal.Browsers' -Default @{}
+	$browserConfig = $browsers[$Browser]
 
 	if (-not $browserConfig) {
-		Write-LogError "Error: Browser [$Browser] not found in configuration! Available browsers => [$($Configuration.Universal.Browsers.Keys -join ', ')]"
+		Write-LogError "Error: Browser [$Browser] not found in configuration! Available browsers => [$($browsers.Keys -join ', ')]"
 		return
 	}
 
 	$browserPath = $browserConfig.Exe
 	$privateArg = $browserConfig.PrivateArg
 	$newWindowArg = $browserConfig.NewWindowArg
-	$urlGroups = $Configuration.BrowserGroups
+	$urlGroups = @(Get-ConfigSetting -Path 'BrowserGroups' -Default @())
 	$isTor = $Browser -eq "Tor"
 
 	Try {

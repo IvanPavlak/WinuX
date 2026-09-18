@@ -6,6 +6,10 @@ BeforeAll {
 
 	. "$FunctionsPath\Invoke-RerunLastCommandExit.ps1"
 	. "$FunctionsPath\ReRun-LastCommand.ps1"
+
+	# The graceful close goes through the Window module's Close-Window seam. Stubbed so Mock can
+	# attach without the Window module and so no WM_CLOSE is ever posted from a test.
+	function Close-Window { param([IntPtr[]]$Handle) $Handle.Count }
 }
 
 Describe "ReRun-LastCommand" {
@@ -44,18 +48,18 @@ Describe "ReRun-LastCommand" {
 			Mock Reset-KeyboardModifiers { @() }
 			Mock Invoke-RerunLastCommandExit { }
 
-			# 424243 belongs to no window (real handles are neither this small nor odd). The
-			# static [RerunWindowHelper]::PostMessage cannot be mocked, so it runs for real and
-			# its WM_CLOSE must not be able to reach anything - same approach as
-			# Close-Project.Tests.ps1, which posts WM_CLOSE to handles 1/2/3.
+			Mock Close-Window { 1 }
 			Mock Get-WindowHandle {
 				@([PSCustomObject]@{ Title = "Original"; Handle = [IntPtr]424243 })
 			}
 		}
 
-		It "posts WM_CLOSE to the captured original window handle" {
+		It "posts WM_CLOSE to the captured original window handle through Close-Window" {
 			ReRun-LastCommand -Command "Get-ChildItem"
 
+			Should -Invoke Close-Window -Times 1 -Exactly -ParameterFilter {
+				@($Handle)[0] -eq [IntPtr]424243
+			}
 			Should -Invoke Write-LogDebug -Times 1 -Exactly -ParameterFilter {
 				$Message -match 'WM_CLOSE => \[424243\]'
 			}
@@ -75,13 +79,14 @@ Describe "ReRun-LastCommand" {
 		It "closes without depending on foreground state" {
 			ReRun-LastCommand -Command "Get-ChildItem"
 
-			# The Win32 helper exposes the deterministic close only - no focus API exists to
-			# call, so the close cannot regress into a focus-then-type sequence.
-			$helperType = ([System.Management.Automation.PSTypeName]'RerunWindowHelper').Type
-			$helperType | Should -Not -BeNullOrEmpty
-			$helperType.GetMethod('PostMessage') | Should -Not -BeNullOrEmpty
-			$helperType.GetMethod('SetForegroundWindow') | Should -BeNullOrEmpty
-			$helperType.GetField('WM_CLOSE').GetValue($null) | Should -Be 0x0010
+			# The close is the deterministic Close-Window seam only - no private user32 type and no
+			# focus API in this function, so the close cannot regress into a focus-then-type sequence.
+			$definition = (Get-Command ReRun-LastCommand).Definition
+
+			$definition | Should -Not -Match 'Add-Type @"'
+			$definition | Should -Not -Match 'DllImport'
+			$definition | Should -Not -Match 'SetForegroundWindow'
+			Should -Invoke Close-Window -Times 1 -Exactly
 		}
 
 		It "heals stuck modifiers as the last act before the exit seam" {

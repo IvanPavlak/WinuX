@@ -46,7 +46,8 @@ function Set-PowerPlan {
 		Write-LogStep " Machine type => [$MachineType]"
 
 		if (-not $PSBoundParameters.ContainsKey('Mode')) {
-			$configMode = if (Test-ConfigValue $Configuration.PowerPlans) { $Configuration.PowerPlans[$MachineType] } else { $null }
+			$powerPlans = Get-ConfigSetting -Path 'PowerPlans'
+			$configMode = if (Test-ConfigValue $powerPlans) { $powerPlans[$MachineType] } else { $null }
 
 			# Empty-by-default contract: unconfigured means the user never opted
 			# into power plan management, so -Auto changes nothing.

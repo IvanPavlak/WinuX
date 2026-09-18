@@ -171,11 +171,12 @@ function Open-ProjectTerminals {
 	# Auto-detect: if only one Windows Terminal window is open, InSameShell was
 	# not explicitly specified, and no project tabs are already open, use the
 	# same window so tabs join the existing instance
+	$projectTerminals = @(Get-ConfigSetting -Path 'ProjectTerminals' -Default @())
 	if (-not $PSBoundParameters.ContainsKey('InSameShell')) {
 		$allWtWindows = @(Get-WindowHandle -ProcessName "WindowsTerminal" -ErrorAction SilentlyContinue)
 		if ($allWtWindows.Count -eq 1) {
 			# Build a regex that matches any known project tab title (e.g. "WinuX.Root")
-			$projectNames = @($Configuration.ProjectTerminals.Name)
+			$projectNames = @($projectTerminals.Name)
 			$hasProjectTabs = $false
 
 			if ($projectNames.Count -gt 0) {
@@ -263,7 +264,7 @@ function Open-ProjectTerminals {
 
 	$resolveParams = @{
 		InputObject             = $Project
-		OptionList              = $Configuration.ProjectTerminals.Name
+		OptionList              = $projectTerminals.Name
 		MenuTitle               = "[Available Project Terminals]"
 		AllowMultipleSelections = $true
 	}
@@ -307,11 +308,12 @@ function Open-ProjectTerminals {
 	# Two switches, because they answer different questions. -InvokeOnefetch is per call and wins
 	# when it is passed; TerminalGreeting.Onefetch.InProjectTerminals is the standing preference
 	# for people who want the panel on `c` but not in every project tab.
+	$inProjectTerminals = Get-ConfigSetting -Path 'TerminalGreeting.Onefetch.InProjectTerminals'
 	$appendOnefetch = if ($PSBoundParameters.ContainsKey("InvokeOnefetch")) {
 		[bool]$InvokeOnefetch
 	}
-	elseif ($null -ne $Configuration.TerminalGreeting.Onefetch.InProjectTerminals) {
-		[bool]$Configuration.TerminalGreeting.Onefetch.InProjectTerminals
+	elseif ($null -ne $inProjectTerminals) {
+		[bool]$inProjectTerminals
 	}
 	else {
 		$true
@@ -323,7 +325,7 @@ function Open-ProjectTerminals {
 
 	foreach ($terminal in $terminals) {
 		try {
-			$mapping = $Configuration.ProjectTerminals | Where-Object { $_.Name -eq $terminal }
+			$mapping = $projectTerminals | Where-Object { $_.Name -eq $terminal }
 
 			if (-not $mapping) {
 				Write-LogError "Error: Project [$terminal] not found in configuration!"
@@ -428,7 +430,7 @@ function Open-ProjectTerminals {
 
 				# Handle WSL as a special case
 				if ($pathKey -eq "WSL") {
-					$distro = $Configuration.DefaultWSLDistribution
+					$distro = Get-ConfigSetting -Path 'DefaultWSLDistribution'
 					if (-not (Test-ConfigValue $distro)) {
 						Write-LogWarning "  Skipping [$tabName] (DefaultWSLDistribution not configured)" -NoLeadingNewline
 						continue

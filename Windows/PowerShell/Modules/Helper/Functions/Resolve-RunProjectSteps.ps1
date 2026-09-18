@@ -56,8 +56,9 @@ function Resolve-RunProjectSteps {
 	}
 
 	$configSteps = $null
-	if ($global:Configuration -and $global:Configuration.RunProject -is [hashtable]) {
-		$configSteps = $global:Configuration.RunProject.Steps
+	$runProject = Get-ConfigSetting -Path 'RunProject'
+	if ($runProject -is [hashtable]) {
+		$configSteps = $runProject.Steps
 	}
 
 	return Resolve-Steps -Defaults $defaults -ConfigSteps $configSteps -Skip $Skip -Include $Include

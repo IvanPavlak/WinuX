@@ -142,23 +142,6 @@ function ReRun-LastCommand {
 		$null = Reset-KeyboardModifiers -IncludeMouseButton
 	}
 
-	# Add Win32 API for closing the original window. Deliberately exposes no focus API:
-	# WM_CLOSE is posted straight to the window handle, so nothing here needs the window
-	# to be foreground and nothing synthesizes input (see the close call below).
-	if (-not ([System.Management.Automation.PSTypeName]'RerunWindowHelper').Type) {
-		Add-Type @"
-			using System;
-			using System.Runtime.InteropServices;
-
-			public class RerunWindowHelper {
-				[DllImport("user32.dll")]
-				public static extern bool PostMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
-
-				public const uint WM_CLOSE = 0x0010;
-			}
-"@
-	}
-
 	$wtProcess = Get-Process -Name "WindowsTerminal" -ErrorAction SilentlyContinue
 	if ($wtProcess) {
 		# AppActivate lives in Microsoft.VisualBasic, which is NOT loaded by default - an
@@ -195,7 +178,7 @@ function ReRun-LastCommand {
 	# there is no "after" - the process was already gone.
 	if ($originalWindowHandle) {
 		Write-LogDebug " Closing the original terminal window via WM_CLOSE => [$originalWindowHandle]" -Style Step
-		[RerunWindowHelper]::PostMessage($originalWindowHandle, [RerunWindowHelper]::WM_CLOSE, [IntPtr]::Zero, [IntPtr]::Zero) | Out-Null
+		[void](Close-Window -Handle ([IntPtr]$originalWindowHandle))
 	}
 
 	# [Environment]::Exit skips every finally block, so this is the last chance to release

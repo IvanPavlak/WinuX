@@ -96,15 +96,11 @@ Describe "Set-WorkspaceWindowLayout" {
 			}
 		}
 
+		# The function reads its configuration through Get-ConfigSetting, which reads the GLOBAL
+		# configuration - and an It block that sets it leaks the value into every later test in
+		# this file. Reset it per test so layout-set overrides and small-display settings stay
+		# hermetic.
 		$global:Configuration = @{
-			SimpleLayoutWorkspaces = @()
-		}
-
-		# The function reads the layout-resolution keys through the unqualified $Configuration,
-		# which resolves to the SCRIPT scope here - and an It block that sets it leaks the value
-		# into every later test in this file. Reset it per test so layout-set overrides and
-		# small-display settings stay hermetic.
-		$script:Configuration = @{
 			SimpleLayoutWorkspaces = @()
 		}
 
@@ -189,7 +185,7 @@ Describe "Set-WorkspaceWindowLayout" {
 	}
 
 	It "uses Machine machine-specific workspace layout when primary monitor is small" {
-		$script:Configuration = @{ SmallDisplayMachineType = 'Machine' }
+		$global:Configuration = @{ SmallDisplayMachineType = 'Machine' }
 		Mock Get-MonitorInfo {
 			@([PSCustomObject]@{ IsPrimary = $true; Width = 1920; Height = 1080 })
 		}
@@ -204,7 +200,7 @@ Describe "Set-WorkspaceWindowLayout" {
 	}
 
 	It "reads layouts from the configured override layout set instead of the machine's own folder" {
-		$script:Configuration = @{ LayoutMachineTypeOverrides = @{ PC = 'Temp' } }
+		$global:Configuration = @{ LayoutMachineTypeOverrides = @{ PC = 'Temp' } }
 		Mock Test-Path {
 			$Path -eq 'C:\Layouts\Temp\MyWorkspace_Temp.psd1'
 		}
@@ -218,7 +214,7 @@ Describe "Set-WorkspaceWindowLayout" {
 	It "prefers the override layout set over the small-display layout set" {
 		# Both candidate files "exist", so the assertion proves which one was chosen rather than
 		# which one happened to be present.
-		$script:Configuration = @{
+		$global:Configuration = @{
 			LayoutMachineTypeOverrides = @{ PC = 'Temp' }
 			SmallDisplayMachineType    = 'Machine'
 		}
@@ -233,7 +229,7 @@ Describe "Set-WorkspaceWindowLayout" {
 	}
 
 	It "ignores an empty override entry and uses the machine's own layout set" {
-		$script:Configuration = @{ LayoutMachineTypeOverrides = @{ PC = '' } }
+		$global:Configuration = @{ LayoutMachineTypeOverrides = @{ PC = '' } }
 		Mock Test-Path { $true }
 
 		Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace'
@@ -932,7 +928,7 @@ Describe "Set-WorkspaceWindowLayout" {
 		BeforeAll {
 			# Local stub so the self-derive test can mock the Workflow-owned function without
 			# importing the Workflow module here.
-			function Get-WorkspaceOpenProtection { $null }
+			function Get-WorkspaceOpenProtection { param([string[]]$Opening, [string]$StatePath) $null }
 
 			function New-ProtectedHandleSet {
 				param([int[]]$Handle)
@@ -1792,7 +1788,6 @@ Describe "Set-WorkspaceWindowLayout" {
 
 		It "returns immediately for a simple layout" {
 			$global:Configuration = @{ SimpleLayoutWorkspaces = @('Fullscreen') }
-			$script:Configuration = @{ SimpleLayoutWorkspaces = @('Fullscreen') }
 			$script:LastWorkspaceLayoutTimings = $null
 
 			Set-WorkspaceWindowLayout -WorkspaceName 'Fullscreen' -PrepareOnly

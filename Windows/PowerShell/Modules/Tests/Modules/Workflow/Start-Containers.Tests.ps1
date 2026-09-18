@@ -20,7 +20,7 @@ Describe "Start-Containers" {
 	BeforeEach {
 		$script:composeCalls = @()
 
-		$script:Configuration = [PSCustomObject]@{
+		$global:Configuration = [PSCustomObject]@{
 			DockerComposeFiles = @{
 				PostgreSQL = "docker-compose.postgresql.yml"
 			}
@@ -69,7 +69,7 @@ Describe "Start-Containers" {
 	}
 
 	It "shows a multi-select menu when several stacks are configured" {
-		$script:Configuration = [PSCustomObject]@{
+		$global:Configuration = [PSCustomObject]@{
 			DockerComposeFiles = @{
 				PostgreSQL = "docker-compose.postgresql.yml"
 				Redis      = "docker-compose.redis.yml"
@@ -95,7 +95,7 @@ Describe "Start-Containers" {
 	}
 
 	It "uses an absolute compose path as-is instead of joining DockerDirectory" {
-		$script:Configuration = [PSCustomObject]@{
+		$global:Configuration = [PSCustomObject]@{
 			DockerComposeFiles = @{
 				PostgreSQL = "D:\Stacks\docker-compose.postgresql.yml"
 			}
@@ -119,7 +119,7 @@ Describe "Start-Containers" {
 	}
 
 	It "warns when no stacks are configured" {
-		$script:Configuration = [PSCustomObject]@{ DockerComposeFiles = @{} }
+		$global:Configuration = [PSCustomObject]@{ DockerComposeFiles = @{} }
 
 		Start-Containers
 

@@ -29,12 +29,13 @@ function Set-DisplayLanguage {
 
 	Test-AdminPrivileges
 
-	if (-not (Confirm-ConfigValue $Configuration.DisplayLanguages "DisplayLanguages not configured - leaving display language as-is!")) {
+	$displayLanguages = Get-ConfigSetting -Path 'DisplayLanguages'
+	if (-not (Confirm-ConfigValue $displayLanguages "DisplayLanguages not configured - leaving display language as-is!")) {
 		return
 	}
 
-	$languageOptions = $Configuration.DisplayLanguages.Keys
-	$defaultLanguageName = $Configuration.DefaultDisplayLanguage
+	$languageOptions = $displayLanguages.Keys
+	$defaultLanguageName = Get-ConfigSetting -Path 'DefaultDisplayLanguage'
 	$targetLanguageName = ""
 
 	if (-not [string]::IsNullOrWhiteSpace($Language)) {
@@ -64,7 +65,7 @@ function Set-DisplayLanguage {
 		}
 	}
 
-	$targetLanguage = $Configuration.DisplayLanguages[$targetLanguageName]
+	$targetLanguage = $displayLanguages[$targetLanguageName]
 
 	Write-LogTitle "Setting Windows Display Language to [$targetLanguage]"
 

@@ -58,7 +58,7 @@ function DockerWizard {
 		}
 	}
 
-	$dockerTimeouts = $Configuration.DockerTimeouts
+	$dockerTimeouts = Get-ConfigSetting -Path 'DockerTimeouts'
 	$startTimeoutSeconds = if ($dockerTimeouts -and $dockerTimeouts.StartSeconds) { [int]$dockerTimeouts.StartSeconds } else { 180 }
 	$stopTimeoutSeconds = if ($dockerTimeouts -and $dockerTimeouts.StopSeconds) { [int]$dockerTimeouts.StopSeconds } else { 60 }
 	$cleanupTimeoutSeconds = if ($dockerTimeouts -and $dockerTimeouts.CleanupSeconds) { [int]$dockerTimeouts.CleanupSeconds } else { 30 }

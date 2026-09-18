@@ -12,7 +12,7 @@ BeforeAll {
 
 Describe "Update-Repositories" {
 	BeforeEach {
-		$script:Configuration = @{ RepositoryGroups = @() }
+		$global:Configuration = @{ RepositoryGroups = @() }
 		$script:GithubPat = ""
 
 		Mock Test-AdminPrivileges { }

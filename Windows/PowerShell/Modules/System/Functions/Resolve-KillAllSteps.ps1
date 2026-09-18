@@ -60,8 +60,9 @@ function Resolve-KillAllSteps {
 	}
 
 	$configSteps = $null
-	if ($global:Configuration -and $global:Configuration.KillAll -is [hashtable]) {
-		$configSteps = $global:Configuration.KillAll.Steps
+	$killAll = Get-ConfigSetting -Path 'KillAll'
+	if ($killAll -is [hashtable]) {
+		$configSteps = $killAll.Steps
 	}
 
 	return Resolve-Steps -Defaults $defaults -ConfigSteps $configSteps -Skip $Skip -Include $Include

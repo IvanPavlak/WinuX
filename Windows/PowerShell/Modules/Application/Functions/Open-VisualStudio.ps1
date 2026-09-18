@@ -35,8 +35,8 @@ function Open-VisualStudio {
 		[string[]]$Solution
 	)
 
-	$vsSolutions = $Configuration.VisualStudioSolutions
-	$vsExecutablePath = $Configuration.Universal.VisualStudio2026Exe
+	$vsSolutions = @(Get-ConfigSetting -Path 'VisualStudioSolutions' -Default @())
+	$vsExecutablePath = Get-ConfigSetting -Path 'Universal.VisualStudio2026Exe'
 
 	if (-not $vsSolutions) {
 		Write-LogError "VisualStudioSolutions not found in configuration!"

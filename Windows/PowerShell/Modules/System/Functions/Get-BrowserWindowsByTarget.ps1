@@ -4,8 +4,9 @@ function Get-BrowserWindowsByTarget {
 		Finds visible browser windows for the specified process IDs.
 
 	.DESCRIPTION
-		Enumerates top-level windows via the `Win32BrowserHelper` type and returns every
-		visible, titled window owned by the specified process IDs.
+		Reads the Window module's enumeration (Get-CachedWindows, which already keeps only
+		visible, titled top-level windows) and returns every window owned by the specified
+		process IDs.
 
 		The title pattern no longer gates the result. It used to, and that left every
 		browser window whose title lacks the brand suffix standing after a cleanup: an
@@ -41,31 +42,19 @@ function Get-BrowserWindowsByTarget {
 
 	$browserWindows = New-Object System.Collections.ArrayList
 
-	$collectCallback = {
-		param($hwnd, $lParam)
-
-		$processId = 0
-		[Win32BrowserHelper]::GetWindowThreadProcessId($hwnd, [ref]$processId) | Out-Null
-
-		if ($TargetPids -contains $processId -and [Win32BrowserHelper]::IsWindowVisible($hwnd)) {
-			$length = [Win32BrowserHelper]::GetWindowTextLength($hwnd)
-			if ($length -gt 0) {
-				$sb = New-Object System.Text.StringBuilder($length + 1)
-				[void][Win32BrowserHelper]::GetWindowText($hwnd, $sb, $sb.Capacity)
-				$title = $sb.ToString()
-
-				[void]$browserWindows.Add([PSCustomObject]@{
-						Handle         = $hwnd
-						Title          = $title
-						ProcessId      = [int]$processId
-						MatchesPattern = [bool]($TitlePattern -and $title -match $TitlePattern)
-					})
-			}
+	foreach ($window in @(Get-CachedWindows)) {
+		$processId = [int]$window.ProcessId
+		if ($TargetPids -notcontains $processId) {
+			continue
 		}
 
-		return $true
+		[void]$browserWindows.Add([PSCustomObject]@{
+				Handle         = [IntPtr]$window.Handle
+				Title          = [string]$window.Title
+				ProcessId      = $processId
+				MatchesPattern = [bool]($TitlePattern -and $window.Title -match $TitlePattern)
+			})
 	}
 
-	[Win32BrowserHelper]::EnumWindows($collectCallback, [IntPtr]::Zero) | Out-Null
 	return @($browserWindows)
 }
