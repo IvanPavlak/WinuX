@@ -9,10 +9,10 @@ function Start-Containers {
 		Configuration.DockerComposeFiles, so tools like DBeaver can connect while the
 		project APIs/UIs stay closed.
 
-		The stacks are the DockerComposeFiles entries (name => compose file). Values
-		resolve relative to MachineSpecificPaths.DockerDirectory, or are used as-is
-		when they are absolute paths, so any stack can be registered - not just
-		database providers. With a single configured entry there is nothing to choose:
+		The stacks are the DockerComposeFiles entries (name => compose file), resolved
+		by Resolve-DockerComposeStackPath: relative to MachineSpecificPaths.DockerDirectory,
+		or used as-is when they are absolute paths, so any stack can be registered - not
+		just database providers. With a single configured entry there is nothing to choose:
 		the stack simply starts (or stops). With several, a multi-select menu is
 		shown. After a start, the compose file's published host ports are printed so
 		the connection target is obvious.
@@ -96,17 +96,6 @@ function Start-Containers {
 		return
 	}
 
-	$resolveStackFile = {
-		param($StackName)
-
-		$configuredPath = $composeStacks[$StackName]
-		if ([System.IO.Path]::IsPathRooted($configuredPath)) {
-			return $configuredPath
-		}
-
-		return Join-Path $MachineSpecificPaths.DockerDirectory $configuredPath
-	}
-
 	$writeComposePorts = {
 		param($ComposeFile)
 
@@ -147,7 +136,7 @@ function Start-Containers {
 		Write-LogTitle "Stopping containers"
 
 		foreach ($stackName in $resolvedNames) {
-			$composeFile = & $resolveStackFile $stackName
+			$composeFile = Resolve-DockerComposeStackPath -Name $stackName
 
 			if (-not (Test-Path $composeFile -ErrorAction SilentlyContinue)) {
 				Write-LogWarning "Docker Compose file not found for [$stackName] => [$composeFile]"
@@ -169,7 +158,7 @@ function Start-Containers {
 	}
 
 	foreach ($stackName in $resolvedNames) {
-		$composeFile = & $resolveStackFile $stackName
+		$composeFile = Resolve-DockerComposeStackPath -Name $stackName
 
 		# Checked before DockerWizard so a misconfigured path fails immediately
 		# instead of after a full Docker Desktop cold start

@@ -9,7 +9,7 @@ The single place that knows which Docker Compose source a runnable project's dat
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`DockerComposeFiles`](../../configuration-reference.md#more-sections-quick-reference) | hashtable of stack name to compose file | `@{ PostgreSQL = "docker-compose.postgresql.yml" }` | The Docker Compose stacks `Start-Containers` and `Resolve-ProjectDockerCompose` know. A relative value resolves under `MachineSpecificPaths.DockerDirectory`; an absolute path is used as-is, so non-database stacks can be registered too. |
+| [`DockerComposeFiles`](../../configuration-reference.md#docker-compose-files) | hashtable of stack name to compose file | `@{ PostgreSQL = "docker-compose.postgresql.yml" }` | The Docker Compose stacks `Start-Containers` and `Resolve-ProjectDockerCompose` know. A relative value resolves under `MachineSpecificPaths.DockerDirectory`; an absolute path is used as-is, so non-database stacks can be registered too. |
 | [`ProjectTerminals`](../../configuration-reference.md#project-terminals) | array of `@{ Project; Tabs; ... }` | array of 3 | Which Windows Terminal tabs `Open-ProjectTerminals` creates for a project, and with what titles and starting directories. Tabs are created with `--title --suppressApplicationTitle`, so their titles are stable. |
 | [`RunnableProjectMappings`](../../configuration-reference.md#runnable-project-mappings) | array of `@{ Project; ... }` | array of 2 | Per-project run details `Run-Project` and `Resolve-ProjectDockerCompose` need: which database providers a project uses, whether it needs Docker, and how its servers start. |
 
@@ -18,11 +18,11 @@ The single place that knows which Docker Compose source a runnable project's dat
 1. Which Compose stacks should WinuX be able to start?
     - Options: Stack name to compose filename. Relative to the Docker directory, or absolute.
     - Default: The shipped `PostgreSQL` entry.
-    - More detail: [`DockerComposeFiles`](../../configuration-reference.md#more-sections-quick-reference)
+    - More detail: [`DockerComposeFiles`](../../configuration-reference.md#docker-compose-files)
 2. With one entry `Start-Containers` is a pure on/off switch and with several it shows a multi-select menu. Do you want more than one?
     - Options: Add an entry per stack.
     - Default: One entry.
-    - More detail: [`DockerComposeFiles`](../../configuration-reference.md#more-sections-quick-reference)
+    - More detail: [`DockerComposeFiles`](../../configuration-reference.md#docker-compose-files)
 3. Which terminal tabs should open for this project?
     - Options: One entry per project with its tab list. Each tab can set a title and a starting directory, and can run in WSL.
     - Default: The shipped three entries.
@@ -31,8 +31,8 @@ The single place that knows which Docker Compose source a runnable project's dat
     - Options: One entry per runnable project. `DatabaseProviders` and `UsesDocker` are what pull the Docker step in - declare them only if the project really needs containers.
     - Default: The shipped two entries.
     - More detail: [`RunnableProjectMappings`](../../configuration-reference.md#runnable-project-mappings)
-5. Does the project have its own `docker-compose.yml`, or does it use a centralized stack?
-    - Options: Its own file lives at the project root; a centralized stack is a `DockerComposeFiles` entry.
+5. Does the project have its own compose file, or does it use a centralized stack?
+    - Options: Its own file lives at the project root (`compose.yaml`, `compose.yml`, `docker-compose.yaml` or `docker-compose.yml`, probed in that order) - set `UsesDocker = $true` on the mapping. A centralized stack is a `DockerComposeFiles` entry named after one of the mapping's `DatabaseProviders`.
     - Default: Centralized.
     - More detail: [`RunnableProjectMappings`](../../configuration-reference.md#runnable-project-mappings)
 
@@ -135,6 +135,7 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 - [Workflow configuration guides](README.md) - every guide for this module
 - [Add New Project](add-new-project.md) - the full 9-step walk for a new project
 - [Add New Workspace](add-new-workspace.md) - workspaces, action ordering and layouts
+- [`Resolve-DockerComposeStackPath`](Resolve-DockerComposeStackPath.md) - resolves the `DockerComposeFiles` entry this function hands to `DockerWizard`
 - [`Start-Containers`](Start-Containers.md) - reads the same configuration
 - [`Add-Project`](../configuration/Add-Project.md) - reads the same configuration
 - [`Resolve-ProjectPath`](../helper/Resolve-ProjectPath.md) - reads the same configuration

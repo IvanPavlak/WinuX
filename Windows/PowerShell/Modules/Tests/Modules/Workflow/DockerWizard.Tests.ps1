@@ -153,6 +153,43 @@ Describe "DockerWizard" {
 		Should -Invoke Write-LogWarning -Times 1 -ParameterFilter { $Message -match 'missing-compose\.yml' }
 	}
 
+	It "starts compose services from a project directory holding a compose.yaml" {
+		# The Compose spec's preferred name, and what `docker init` and Rails generators
+		# write - a project that owns its whole stack is otherwise skipped entirely
+		Mock Test-Path { $Path -eq 'C:epo\compose.yaml' }
+
+		$result = DockerWizard -ComposeProjectPath 'C:epo' -PassThru
+
+		$result.Success | Should -BeTrue
+		$result.ComposeFilePath | Should -Be 'C:epo\compose.yaml'
+		$script:dockerComposeUpCall | Should -Be 1
+	}
+
+	It "starts compose services from a project directory holding a docker-compose.yaml" {
+		Mock Test-Path { $Path -eq 'C:epo\docker-compose.yaml' }
+
+		$result = DockerWizard -ComposeProjectPath 'C:epo' -PassThru
+
+		$result.ComposeFilePath | Should -Be 'C:epo\docker-compose.yaml'
+	}
+
+	It "still finds a legacy docker-compose.yml in a project directory" {
+		Mock Test-Path { $Path -eq 'C:epo\docker-compose.yml' }
+
+		$result = DockerWizard -ComposeProjectPath 'C:epo' -PassThru
+
+		$result.ComposeFilePath | Should -Be 'C:epo\docker-compose.yml'
+	}
+
+	It "prefers compose.yaml over docker-compose.yml when a project carries both" {
+		# Same precedence `docker compose` applies, so the tab and the command line act alike
+		Mock Test-Path { $Path -in @('C:epo\compose.yaml', 'C:epo\docker-compose.yml') }
+
+		$result = DockerWizard -ComposeProjectPath 'C:epo' -PassThru
+
+		$result.ComposeFilePath | Should -Be 'C:epo\compose.yaml'
+	}
+
 	It "PassThru reports failure when a requested compose file does not exist" {
 		# Reporting success here would have callers announce containers that never
 		# started: compose work was asked for and did not happen

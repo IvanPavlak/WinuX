@@ -9,14 +9,14 @@ Starts or stops Docker Desktop with loading-spinner feedback, daemon readiness d
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`DockerTimeouts`](../../configuration-reference.md#more-sections-quick-reference) | hashtable, 3 keys | `@{ StartSeconds = 180; StopSeconds = 60; CleanupSeconds = 30 }` | How long `DockerWizard` waits for Docker Desktop to start, stop, and finish a cleanup before giving up. |
+| [`DockerTimeouts`](../../configuration-reference.md#docker-timeouts) | hashtable, 3 keys | `@{ StartSeconds = 180; StopSeconds = 60; CleanupSeconds = 30 }` | How long `DockerWizard` waits for Docker Desktop to start, stop, and finish a cleanup before giving up. |
 
 ## Decisions
 
 1. Are the Docker timeouts long enough on this machine?
     - Options: Seconds per phase. Raise `StartSeconds` on a slow disk.
     - Default: 180 / 60 / 30.
-    - More detail: [`DockerTimeouts`](../../configuration-reference.md#more-sections-quick-reference)
+    - More detail: [`DockerTimeouts`](../../configuration-reference.md#docker-timeouts)
 
 ## Where to Put Values
 

@@ -22,8 +22,8 @@ Opens Windows Terminal tabs for one or more configured runnable projects. Alias:
     - Options: One entry per runnable project, in menu order. `Commands` is keyed by the `ProjectTerminals` path the command runs in. `DatabaseProviders` and `UsesDocker` are what pull the Docker step in - declare them only if the project really needs containers.
     - Default: The shipped two entries.
     - More detail: [`RunnableProjectMappings`](../../configuration-reference.md#runnable-project-mappings)
-3. Does the project have its own `docker-compose.yml`, or does it use a centralized stack?
-    - Options: Its own file lives at the project root; a centralized stack is a `DockerComposeFiles` entry.
+3. Does the project have its own compose file, or does it use a centralized stack?
+    - Options: Its own file lives at the project root (`compose.yaml`, `compose.yml`, `docker-compose.yaml` or `docker-compose.yml`, probed in that order) - set `UsesDocker = $true` on the mapping. A centralized stack is a `DockerComposeFiles` entry named after one of the mapping's `DatabaseProviders`.
     - Default: Centralized.
     - More detail: [`RunnableProjectMappings`](../../configuration-reference.md#runnable-project-mappings)
 

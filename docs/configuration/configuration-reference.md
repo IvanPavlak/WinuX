@@ -359,6 +359,13 @@ The menu follows the order written here - this list is the only definition of a 
 sits next to the path it belongs to instead of lining up with it by position. A path that is not
 named in `Commands` opens its terminal tab with nothing run in it.
 
+`DatabaseProviders` and `UsesDocker` are what pull in `Run-Project`'s Docker step, and they describe
+two different shapes. `DatabaseProviders` names [Docker Compose Files](#docker-compose-files) stacks:
+the project runs on the host and borrows a shared database container. `UsesDocker = $true` (with no
+providers) means the project owns its whole stack, so its own compose file at its `ProjectTerminals`
+root is started instead - `compose.yaml`, `compose.yml`, `docker-compose.yaml` or `docker-compose.yml`,
+probed in that order by `DockerWizard`. A mapping that declares neither never touches Docker.
+
 **Run command strings:**
 
 - `"dnr"` → `dotnet run`
@@ -375,9 +382,62 @@ RunnableProjectMappings = @(
     @{
         Name              = "OtherProject"
         Commands          = @{ API = "dnr"; UI = "nir" }   # Keyed by ProjectTerminals path
-        DatabaseProviders = @("PostgreSQL")                # Optional - starts Docker Compose via DockerWizard
+        DatabaseProviders = @("PostgreSQL")                # Optional - centralized stack, started via DockerWizard
+    }
+    @{
+        Name       = "MyContainerizedApp"
+        Commands   = @{ ROOT = "docker compose logs -f web" }  # The app runs in the containers, not on the host
+        UsesDocker = $true                                     # Project's own compose file at its ProjectTerminals root
     }
 )
+```
+
+### Docker Compose Files
+
+The Docker Compose stacks WinuX can start by name.
+
+**Key:** `DockerComposeFiles` → Hashtable of stack name to compose file
+
+A relative value resolves under `MachineSpecificPaths.DockerDirectory` (`{RepoRoot}\Docker` by
+default), so the compose file ships with the repository and every project naming that stack shares
+the same containers. An absolute value is used exactly as written, so a stack whose compose file
+belongs to another repository can be registered too. `Resolve-DockerComposeStackPath` is the single
+place that applies this rule.
+
+The stack name is also the provider name a `RunnableProjectMappings` entry puts in
+[`DatabaseProviders`](#runnable-project-mappings): that is how a project says which stack it needs.
+Names not used by any project are still perfectly valid - `Start-Containers` offers every configured
+stack, and the mechanism is not database-specific.
+
+**Consumer functions:** `Start-Containers`, `Resolve-ProjectDockerCompose` (and through it `Run-Project`), `Resolve-DockerComposeStackPath`
+
+**Example:**
+
+```powershell
+DockerComposeFiles = @{
+    PostgreSQL = "docker-compose.postgresql.yml"   # Relative - under MachineSpecificPaths.DockerDirectory
+    Redis      = "docker-compose.redis.yml"        # Any stack, not just databases
+    MyStack    = "D:\Stacks\compose.yml"           # Absolute - used as-is
+}
+```
+
+### Docker Timeouts
+
+How long `DockerWizard` waits for Docker Desktop before giving up, in seconds. Omitted keys fall back
+to the same built-in defaults.
+
+**Key:** `DockerTimeouts` → Hashtable with `StartSeconds`, `StopSeconds`, `CleanupSeconds`
+
+**Consumer function:** `DockerWizard`
+
+**Example:**
+
+```powershell
+DockerTimeouts = @{
+    StartSeconds   = 180   # Daemon readiness after launching Docker Desktop
+    StopSeconds    = 60    # Graceful shutdown before force-cleanup
+    CleanupSeconds = 30    # Force-cleanup of Docker-owned processes and WSL distros
+}
 ```
 
 ### Visual Studio Solutions

@@ -33,6 +33,7 @@
 		'Open-Workspace',
 		'Read-WorkspaceBenchmark',
 		'Read-WorkspaceOpenMeasurement',
+		'Resolve-DockerComposeStackPath',
 		'Resolve-ProjectDockerCompose',
 		'Resolve-SwaggerBrowserGroup',
 		'Resolve-WorkspaceActions',
