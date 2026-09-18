@@ -29,6 +29,10 @@ function Wait-WindowsClosed {
 	.PARAMETER PollIntervalMilliseconds
 		Delay between polls. Defaults to 250.
 
+	.PARAMETER Clock
+		The wait clock (New-WaitClock) to read and sleep through. Defaults to a real one; tests
+		hand in a fake.
+
 	.OUTPUTS
 		[object[]] the input windows still open when polling stopped; empty when all closed.
 
@@ -52,7 +56,11 @@ function Wait-WindowsClosed {
 		[int]$TimeoutMilliseconds = 1500,
 
 		[Parameter()]
-		[int]$PollIntervalMilliseconds = 250
+		[int]$PollIntervalMilliseconds = 250,
+
+		[Parameter()]
+		[AllowNull()]
+		[object]$Clock
 	)
 
 	$pending = @($Window | Where-Object { $_ })
@@ -61,11 +69,12 @@ function Wait-WindowsClosed {
 		return @()
 	}
 
-	$deadline = [datetime]::UtcNow.AddMilliseconds($TimeoutMilliseconds)
+	# The poll narrows Pending in this table (a shared object survives the condition's child
+	# scope where a local would not), so what is left when the budget runs out is the answer.
+	# -SleepFirst: WM_CLOSE was just posted, so the first check is known to be premature.
+	$state = @{ Pending = $pending }
 
-	while ($true) {
-		Start-Sleep -Milliseconds $PollIntervalMilliseconds
-
+	$null = Wait-Until -TimeoutMs $TimeoutMilliseconds -PollIntervalMs $PollIntervalMilliseconds -SleepFirst -Clock $Clock -Condition {
 		Clear-WindowCache
 
 		$liveHandles = New-Object 'System.Collections.Generic.HashSet[int64]'
@@ -74,14 +83,9 @@ function Wait-WindowsClosed {
 			[void]$liveHandles.Add([int64]$liveWindow.Handle)
 		}
 
-		$pending = @($pending | Where-Object { $liveHandles.Contains([int64]$_.Handle) })
-
-		if ($pending.Count -eq 0) {
-			return @()
-		}
-
-		if ([datetime]::UtcNow -ge $deadline) {
-			return $pending
-		}
+		$state.Pending = @($state.Pending | Where-Object { $liveHandles.Contains([int64]$_.Handle) })
+		return ($state.Pending.Count -eq 0)
 	}
+
+	return $state.Pending
 }

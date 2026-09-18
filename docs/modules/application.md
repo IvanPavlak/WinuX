@@ -889,14 +889,17 @@ Update-Win11DebloatVendor -ReleaseTag "2026.05.11"
 ## [Wait-BrowserWindowReady](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Wait-BrowserWindowReady.ps1)
 
 - **Description:** Polls the window list until at least one window of the given process (optionally narrowed by a title regex) is present, or the timeout expires. Returns `$true` when a window appeared, `$false` on timeout. `Open-Browser`'s `-Instances` mode uses it as a cold-start gate: launches fired while the first browser instance is still bootstrapping are silently dropped (Chromium's process singleton is not accepting hand-offs yet), so waiting for the first window before bursting the remaining launches makes the requested instance count reliable.
-- **Parameters:** -ProcessName, -TitlePattern, -TimeoutSeconds
+- **Parameters:** -ProcessName, -TitlePattern, -TimeoutSeconds, -Clock
 - **Usage:** `Wait-BrowserWindowReady -ProcessName "brave"`, `Wait-BrowserWindowReady -ProcessName "msedge" -TitlePattern "Microsoft.{0,2}Edge" -TimeoutSeconds 10`
+
+The poll is a `Wait-Until` (Helper module) that reads time and sleeps through the wait clock passed as `-Clock` (a real `New-WaitClock` by default), so a test injects a fake clock and asserts the exact poll count with no real waiting.
 
 | Parameter         | Description                                                                                                                    |
 | ----------------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | `-ProcessName`    | Process name (without `.exe`) whose windows to wait for, e.g. `"msedge"`.                                                       |
 | `-TitlePattern`   | Optional title regex a window must also match - used to tell apart browsers that share a process name (Firefox vs. Tor Browser). |
 | `-TimeoutSeconds` | Maximum time to wait; defaults to 30 seconds. Fast browsers exit the poll in well under a second (250ms ticks).                  |
+| `-Clock`          | The wait clock (`New-WaitClock`) to read and sleep through. Defaults to a real one; tests hand in a fake.                        |
 
 ```powershell
 # Wait until a Brave window exists (or 30s pass)

@@ -8,7 +8,10 @@ BeforeAll {
 	. (Join-Path $ModuleRoot "Window\Functions\Switch-VirtualDesktop.ps1")
 	. (Join-Path $ModuleRoot "Window\Functions\Get-CurrentVirtualDesktopIndex.ps1")
 	. (Join-Path $ModuleRoot "Window\Functions\Invoke-VirtualDesktopOperation.ps1")
+	. (Join-Path $ModuleRoot "Helper\Functions\New-WaitClock.ps1")
+	. (Join-Path $ModuleRoot "Helper\Functions\Wait-Until.ps1")
 	. (Join-Path $ModuleRoot "Tests\Modules\Support\FakeVirtualDesktop.ps1")
+	. (Join-Path $ModuleRoot "Tests\Modules\Support\FakeWaitClock.ps1")
 
 	function Clear-WindowCache { }
 }
@@ -16,8 +19,13 @@ BeforeAll {
 Describe "Ensure-DesktopVisible" {
 	BeforeEach {
 		Mock Write-LogDebug { }
+		# Invoke-VirtualDesktopOperation's RPC retry backoff still sleeps for real; the switch
+		# waits inside Switch-VirtualDesktop run on the fake clock, so a desktop that never lands
+		# costs virtual milliseconds instead of three real seconds.
 		Mock Start-Sleep { }
 		Mock Clear-WindowCache { }
+		$script:clock = New-FakeWaitClock
+		Mock New-WaitClock { $script:clock }
 
 		# Desktop 1 is showing; window 407 lives on desktop 3.
 		$null = New-FakeVirtualDesktopSession -DesktopCount 4 -CurrentIndex 1 -WindowDesktops @{ 407 = 3 }
@@ -106,6 +114,9 @@ Describe "Ensure-DesktopVisible" {
 			Ensure-DesktopVisible -WindowHandle ([IntPtr]407) | Should -BeNullOrEmpty
 
 			Should -Invoke Clear-WindowCache -Times 0
+			# Three attempts and the post-reset try each wait out 750 ms at 10 ms polls.
+			$script:clock.Sleeps.Count | Should -Be 300
+			$script:clock.ElapsedMs() | Should -Be 3000
 		}
 
 		It "reports nothing when a switch throws every time" {

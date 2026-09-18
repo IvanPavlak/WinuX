@@ -27,6 +27,10 @@ function Move-WindowToVirtualDesktop {
 	.PARAMETER DesktopNumber
 		The desktop number (0-based index) to move the window to.
 
+	.PARAMETER Clock
+		The wait clock (New-WaitClock) the post-move verification poll reads and sleeps
+		through. Defaults to a real one; tests hand in a fake.
+
 	.EXAMPLE
 		$handle = (Get-WindowHandle -ProcessName "chrome")[0].Handle
 		Move-WindowToVirtualDesktop -WindowHandle $handle -DesktopNumber 0 # Moves to the first desktop
@@ -40,7 +44,11 @@ function Move-WindowToVirtualDesktop {
 		[IntPtr]$WindowHandle,
 
 		[Parameter(Mandatory = $true)]
-		[int]$DesktopNumber
+		[int]$DesktopNumber,
+
+		[Parameter()]
+		[AllowNull()]
+		[object]$Clock
 	)
 
 	# Tells callers whether a real move was performed (vs. the already-on-target fast path),
@@ -110,23 +118,23 @@ function Move-WindowToVirtualDesktop {
 		# Verify immediately, then poll briefly: the COM move is effectively synchronous
 		# most of the time, so a fixed post-move sleep wastes the common case, while a
 		# single fixed-delay check can race on a loaded system and report a false failure.
-		$verifyIndex = -1
-		$verifyError = $null
-		$verifyStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
-		while ($true) {
+		# The poll records the last index and error in this table (a shared object survives the
+		# condition's child scope where a local would not); a failed read keeps the last index.
+		$verify = @{ Index = -1; Error = $null }
+		$null = Wait-Until -TimeoutMs 100 -PollIntervalMs 10 -Clock $Clock -Condition {
 			try {
 				$verifyDesktop = Get-DesktopFromWindow -Hwnd $WindowHandle.ToInt64()
-				$verifyIndex = Get-DesktopIndex $verifyDesktop
-				$verifyError = $null
+				$verify.Index = Get-DesktopIndex $verifyDesktop
+				$verify.Error = $null
 			}
 			catch {
 				# TYPE_E_ELEMENTNOTFOUND often occurs during verification even when move succeeded
-				$verifyError = $_
+				$verify.Error = $_
 			}
-			if ($verifyIndex -eq $DesktopNumber) { break }
-			if ($verifyStopwatch.ElapsedMilliseconds -ge 100) { break }
-			Start-Sleep -Milliseconds 10
+			return ($verify.Index -eq $DesktopNumber)
 		}
+		$verifyIndex = $verify.Index
+		$verifyError = $verify.Error
 
 		if ($verifyIndex -eq $DesktopNumber) {
 			$script:LastMoveWindowToVirtualDesktopResult.Moved = $true

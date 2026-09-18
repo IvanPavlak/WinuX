@@ -25,6 +25,10 @@ function Switch-VirtualDesktop {
 	.PARAMETER MaxAttempts
 		Switch attempts before the session reset is tried. Default 3.
 
+	.PARAMETER Clock
+		The wait clock (New-WaitClock) each attempt's wait reads and sleeps through. Defaults to
+		a real one; tests hand in a fake.
+
 	.OUTPUTS
 		[bool] $true when the desktop is showing, $false when it never landed. Throws only when the
 		desktop manager cannot be reached at all (module missing, RPC dead after recovery).
@@ -49,7 +53,11 @@ function Switch-VirtualDesktop {
 
 		[Parameter()]
 		[ValidateRange(1, 10)]
-		[int]$MaxAttempts = 3
+		[int]$MaxAttempts = 3,
+
+		[Parameter()]
+		[AllowNull()]
+		[object]$Clock
 	)
 
 	if (-not (Import-VirtualDesktopModule -Silent)) {
@@ -62,12 +70,7 @@ function Switch-VirtualDesktop {
 	}
 
 	$waitUntilShowing = {
-		$stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
-		do {
-			if (& $isShowing) { return $true }
-			if ($PollIntervalMs -gt 0) { Start-Sleep -Milliseconds $PollIntervalMs }
-		} while ($stopwatch.ElapsedMilliseconds -lt $TimeoutMs)
-		return (& $isShowing)
+		Wait-Until -Condition $isShowing -TimeoutMs $TimeoutMs -PollIntervalMs $PollIntervalMs -Clock $Clock
 	}
 
 	if (& $isShowing) {

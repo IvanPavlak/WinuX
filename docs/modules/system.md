@@ -1887,16 +1887,17 @@ Upgrade-All -PackageManager "WinGet", "Scoop"
 ## [Wait-BrowserWindowsClosed](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Wait-BrowserWindowsClosed.ps1)
 
 - **Description:** Waits for browser windows that were sent `WM_CLOSE` to actually disappear. `Close-BrowserWindows` POSTS the message, which is asynchronous - the call returns before the browser has even seen it - so `Terminate-AllBrowserProcesses` used to report success while a window was still standing (a "close all tabs?" or `beforeunload` dialog waiting for an answer, a download-in-progress prompt, a browser that had not processed the message yet). This polls the supplied handles through `Test-WindowVisible` until none is a live, visible window any more or the timeout expires, and returns the windows still standing so the caller can retry or report them.
-- **Parameters:** -Windows, -TimeoutMs (default 4000), -PollIntervalMs (default 100)
+- **Parameters:** -Windows, -TimeoutMs (default 4000), -PollIntervalMs (default 100), -Clock
 - **Usage:** `Wait-BrowserWindowsClosed -Windows $windowsToClose`, `Wait-BrowserWindowsClosed -Windows $survivors -TimeoutMs 2000`
 
-Only the windows still open on the previous poll are probed again, and an empty input returns immediately without touching user32. The default budget of four seconds is what a browser with many tabs needs to save its session and exit.
+Only the windows still open on the previous poll are probed again, and an empty input returns immediately without touching user32. The default budget of four seconds is what a browser with many tabs needs to save its session and exit. The poll is a `Wait-Until` that reads time and sleeps through the wait clock passed as `-Clock` (a real `New-WaitClock` by default), so a test injects a fake clock and asserts the exact poll count with no real waiting.
 
 | Parameter         | Description                                                                                    |
 | ----------------- | ---------------------------------------------------------------------------------------------- |
 | `-Windows`        | Window objects with a `Handle` property, as returned by `Get-BrowserWindowsByTarget`.           |
 | `-TimeoutMs`      | How long to wait for every window to go. Default `4000`.                                        |
 | `-PollIntervalMs` | Delay between checks. Default `100`.                                                            |
+| `-Clock`          | The wait clock (`New-WaitClock`) to read and sleep through. Defaults to a real one; tests hand in a fake. |
 
 ```powershell
 $survivors = Wait-BrowserWindowsClosed -Windows $windowsToClose
@@ -1908,16 +1909,17 @@ if ($survivors) { Close-BrowserWindows -WindowsToClose $survivors }
 ## [Wait-ConsoleReflow](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Wait-ConsoleReflow.ps1)
 
 - **Description:** Waits for the console window size to change and returns the new size. After a font-size keystroke Windows Terminal reflows asynchronously, so the size read immediately afterwards is often still the old one; this polls `Get-ConsoleWindowSize` every `-PollIntervalMilliseconds` until it differs from `-Before`, or until `-TimeoutMilliseconds` passes, and returns the last size read. A timeout is not an error - it is how a keystroke that changed nothing reports itself (`Ctrl+0` at the default font, `Ctrl+Minus` at the minimum font), and the returned size then equals `-Before`.
-- **Parameters:** `-Before`, `-TimeoutMilliseconds`, `[-PollIntervalMilliseconds]`
+- **Parameters:** `-Before`, `-TimeoutMilliseconds`, `[-PollIntervalMilliseconds]`, `[-Clock]`
 - **Usage:** `Wait-ConsoleReflow -Before $before -TimeoutMilliseconds 10`
 
-It replaces the fixed sleep `Invoke-Fastfetch` used to take after each keystroke: a fixed wait is either too long on a fast machine or too short on a slow one, where the pre-reflow size was read and the fit misjudged. Polling returns the moment the terminal has moved, and a debug line records either the change and how long it took or the timeout.
+It replaces the fixed sleep `Invoke-Fastfetch` used to take after each keystroke: a fixed wait is either too long on a fast machine or too short on a slow one, where the pre-reflow size was read and the fit misjudged. Polling returns the moment the terminal has moved, and a debug line records either the change and how long it took or the timeout. The poll is a `Wait-Until` that reads time and sleeps through the wait clock passed as `-Clock` (a real `New-WaitClock` by default), so a test injects a fake clock and asserts the exact poll count with no real waiting.
 
 | Parameter                   | Type    | Default | Description                                                                 |
 | --------------------------- | ------- | ------- | --------------------------------------------------------------------------- |
 | `-Before`                   | object  | -       | The size read before the keystroke (`Width`, `Height`), from `Get-ConsoleWindowSize`. |
 | `-TimeoutMilliseconds`      | `int`   | -       | How long to keep polling before returning the unchanged size (1-10000).     |
 | `-PollIntervalMilliseconds` | `int`   | `10`    | Pause between two reads (1-1000).                                           |
+| `-Clock`                    | object  | -       | The wait clock (`New-WaitClock`) to read and sleep through. Defaults to a real one; tests hand in a fake. |
 
 ```powershell
 $before = Get-ConsoleWindowSize

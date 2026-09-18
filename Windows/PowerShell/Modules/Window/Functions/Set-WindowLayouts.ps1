@@ -44,9 +44,47 @@ function Set-WindowLayouts {
 		Hashtable of the Monitors configuration section; used to auto-resolve layout names
 		per monitor and desktop.
 
-	.PARAMETER ExistingWindowHandles
-		HashSet of handles open before the layout run; used to detect pre-existing windows
-		and skip already-correct positioning.
+	.PARAMETER Claims
+		The window claim set for this pass (New-WindowClaimSet), or $null for "everything is
+		claimable". One object carries the six ownership facts that used to be six parameters:
+
+		- Existing: handles open before the layout run; used to detect pre-existing windows
+		  and skip already-correct positioning.
+		- SkipExisting (alongside mode): the existing windows belong to a previous workspace
+		  and are removed from an entry's candidate list before any claiming happens, so an
+		  entry left with none reports "Not Found" (a visible, countable shortfall) instead of
+		  silently placing nothing.
+		- Protected: live window handles a plain open must preserve (they belong to a live
+		  alongside workspace - see Get-WorkspaceOpenProtection). Protected windows are removed
+		  from every entry's candidate list before claiming, from the per-window backstop, and
+		  from every recreated-window recovery lookup, so no layout entry can ever move or
+		  reposition one. An entry whose only matches are protected reports "Not Found".
+		- Candidates (HasCandidates): whitelist of window handles this pass may claim. Every
+		  other window is dropped from an entry's candidate list before claiming, exactly like
+		  the existing and protected filters drop theirs. Set-WorkspaceWindowLayout narrows the
+		  set to the windows the wait phase confirmed stable for ONE desktop when it positions
+		  that desktop while the rest of the workspace is still loading, so a window still
+		  loading elsewhere - or one another desktop's entry already owns - is never claimed
+		  here, whatever the title regex says. Such a pass searches each entry once: a miss
+		  means the window is not stable yet and the pass after the wait places it, so the
+		  not-found retry ladder is skipped.
+		- Excluded: blacklist of window handles this pass may not claim, dropped at the same
+		  point as the other candidate filters. Set-WorkspaceWindowLayout fills it with the
+		  windows its per-desktop passes already placed before it finishes the remaining desktops.
+		- PinnedMap: optional hashtable from a previous successful run (built by
+		  Set-WorkspaceWindowLayout from CurrentLayout.txt), keyed by
+		  "<DesktopNumber>|<Monitor>|<Zone>" mapping to the window that occupied that slot last
+		  time (@{ Handle; ProcessId; ProcessName }). For a duplicate (ProcessName, WindowTitle)
+		  entry it is the AUTHORITATIVE source of which window claims the zone: when the recorded
+		  window is still live and owned by the same process it is reclaimed exactly, so re-runs
+		  return every identical window to its own zone with no reshuffle. When no valid recorded
+		  window exists (first run, reboot, or a new window) the claim prefers the unclaimed
+		  candidates already on the entry's virtual desktop (Get-WindowDesktopIndex, resolved
+		  once per window per run; candidates whose desktop cannot be resolved stay in the pool,
+		  and a pool that would otherwise be empty keeps every candidate) and decides among them
+		  by closest-bounds geometry - so the tail after a pipelined wait keeps the desktop
+		  assignment the wait's early move made instead of shuffling windows between desktops in
+		  layout order. Unique entries and first runs are unaffected (the map is empty or unused).
 
 	.PARAMETER ExpectedWindowState
 		Hashtable of stable window state captured during the wait phase; enables handle-based
@@ -54,27 +92,6 @@ function Set-WindowLayouts {
 
 	.PARAMETER DesktopOffset
 		Integer shift applied to all 1-based desktop numbers. Default is 0.
-
-	.PARAMETER SkipExistingWindows
-		Switch (alongside mode) that skips windows existing before this workspace opened,
-		since they belong to a previous workspace. Ineligible windows are removed from an
-		entry's candidate list before any claiming happens, so an entry left with none reports
-		"Not Found" (a visible, countable shortfall) instead of silently placing nothing.
-
-	.PARAMETER CandidateWindowHandles
-		Whitelist of window handles this pass may claim. Every other window is dropped from an
-		entry's candidate list before claiming, exactly like -SkipExistingWindows and
-		-ProtectedWindowHandles drop theirs. Set-WorkspaceWindowLayout passes the windows the
-		wait phase confirmed stable for ONE desktop when it positions that desktop while the
-		rest of the workspace is still loading, so a window still loading elsewhere - or one
-		another desktop's entry already owns - is never claimed here, whatever the title regex
-		says. Such a pass searches each entry once: a miss means the window is not stable yet
-		and the pass after the wait places it, so the not-found retry ladder is skipped.
-
-	.PARAMETER ExcludeWindowHandles
-		Blacklist of window handles this pass may not claim, dropped at the same point as the
-		other candidate filters. Set-WorkspaceWindowLayout passes the windows its per-desktop
-		passes already placed when it finishes the remaining desktops.
 
 	.PARAMETER DesktopNumbers
 		Processes only the entries on these desktops (the layout's own 1-based DesktopNumber,
@@ -100,29 +117,6 @@ function Set-WindowLayouts {
 		get ONE search instead of the three-attempt retry ladder with its 0.5 s and 1 s waits -
 		that ladder rides out transient title drift on a window that exists, and these have
 		none.
-
-	.PARAMETER ProtectedWindowHandles
-		Live window handles a plain open must preserve (they belong to a live alongside
-		workspace - see Get-WorkspaceOpenProtection). Protected windows are removed from every
-		entry's candidate list before claiming, from the per-window backstop, and from every
-		recreated-window recovery lookup, so no layout entry can ever move or reposition one.
-		An entry whose only matches are protected reports "Not Found".
-
-	.PARAMETER PinnedHandleMap
-		Optional hashtable from a previous successful run (built by Set-WorkspaceWindowLayout
-		from CurrentLayout.txt), keyed by "<DesktopNumber>|<Monitor>|<Zone>" mapping to the
-		window that occupied that slot last time (@{ Handle; ProcessId; ProcessName }). For a
-		duplicate (ProcessName, WindowTitle) entry it is the AUTHORITATIVE source of which
-		window claims the zone: when the recorded window is still live and owned by the same
-		process it is reclaimed exactly, so re-runs return every identical window to its own
-		zone with no reshuffle. When no valid recorded window exists (first run, reboot, or a
-		new window) the claim prefers the unclaimed candidates already on the entry's virtual
-		desktop (Get-WindowDesktopIndex, resolved once per window per run; candidates whose
-		desktop cannot be resolved stay in the pool, and a pool that would otherwise be empty
-		keeps every candidate) and decides among them by closest-bounds geometry - so the tail
-		after a pipelined wait keeps the desktop assignment the wait's early move made instead
-		of shuffling windows between desktops in layout order. Unique entries and first runs
-		are unaffected (the map is empty or unused).
 
 	.EXAMPLE
 		# Direct coordinates
@@ -197,28 +191,14 @@ function Set-WindowLayouts {
 		[hashtable]$MonitorConfig,
 
 		[Parameter()]
-		[System.Collections.Generic.HashSet[IntPtr]]$ExistingWindowHandles,
+		[AllowNull()]
+		[pscustomobject]$Claims,
 
 		[Parameter()]
 		[hashtable]$ExpectedWindowState,
 
 		[Parameter()]
 		[int]$DesktopOffset = 0,
-
-		[Parameter()]
-		[switch]$SkipExistingWindows,
-
-		[Parameter()]
-		[hashtable]$PinnedHandleMap,
-
-		[Parameter()]
-		[System.Collections.Generic.HashSet[IntPtr]]$ProtectedWindowHandles,
-
-		[Parameter()]
-		[System.Collections.Generic.HashSet[IntPtr]]$CandidateWindowHandles,
-
-		[Parameter()]
-		[System.Collections.Generic.HashSet[IntPtr]]$ExcludeWindowHandles,
 
 		[Parameter()]
 		[int[]]$DesktopNumbers,
@@ -232,6 +212,11 @@ function Set-WindowLayouts {
 		[Parameter()]
 		[array]$AbandonedEntries
 	)
+
+	# No claim set means everything is claimable: empty sets, no candidate restriction.
+	if ($null -eq $Claims) {
+		$Claims = New-WindowClaimSet
+	}
 
 	# The per-desktop passes of one workspace open append to one tracking set; every other
 	# caller starts from a clean one so Snap-AllWindows sees exactly this call's windows.
@@ -409,10 +394,7 @@ function Set-WindowLayouts {
 		# Apply position if we have coordinates
 		if ($null -ne $posX -and $null -ne $posY -and $posWidth -and $posHeight) {
 			# Check if this window existed before workspace layout started
-			$isExistingWindow = $false
-			if ($ExistingWindowHandles) {
-				$isExistingWindow = $ExistingWindowHandles.Contains($window.Handle)
-			}
+			$isExistingWindow = $Claims.Existing.Contains($window.Handle)
 
 			# Re-query window position to avoid stale data
 			$currentWindowState = Get-WindowHandle -ProcessName $config.ProcessName -ErrorAction SilentlyContinue |
@@ -439,11 +421,11 @@ function Set-WindowLayouts {
 					# alongside workspace's identically titled window would answer to. Filter it
 					# out so a mid-positioning recovery can never pick up a protected window.
 					$possibleWindows = Get-WindowHandle -ProcessName $config.ProcessName -ErrorAction SilentlyContinue |
-						Where-Object { $_.Title -eq $window.Title -and -not ($ProtectedWindowHandles -and $ProtectedWindowHandles.Contains($_.Handle)) }
+						Where-Object { $_.Title -eq $window.Title -and -not $Claims.Protected.Contains($_.Handle) }
 
 					if (-not $possibleWindows -and $config.WindowTitle) {
 						$possibleWindows = Get-WindowHandle -WindowTitle $config.WindowTitle -ErrorAction SilentlyContinue |
-							Where-Object { -not ($ProtectedWindowHandles -and $ProtectedWindowHandles.Contains($_.Handle)) }
+							Where-Object { -not $Claims.Protected.Contains($_.Handle) }
 					}
 
 					if ($possibleWindows -and $possibleWindows.Count -gt 0) {
@@ -575,7 +557,7 @@ function Set-WindowLayouts {
 					# preserved workspace's window would be mistaken for the one just positioned.
 					if (-not $verifyWindow -and $window.Title) {
 						$verifyWindow = Get-WindowHandle -ProcessName $config.ProcessName -ErrorAction SilentlyContinue |
-							Where-Object { $_.Title -eq $window.Title -and -not ($ProtectedWindowHandles -and $ProtectedWindowHandles.Contains($_.Handle)) } |
+							Where-Object { $_.Title -eq $window.Title -and -not $Claims.Protected.Contains($_.Handle) } |
 							Select-Object -First 1
 
 						if ($verifyWindow -and (Test-LogVerbose)) {
@@ -585,7 +567,7 @@ function Set-WindowLayouts {
 
 					if (-not $verifyWindow -and $config.WindowTitle) {
 						$verifyWindow = Get-WindowHandle -WindowTitle $config.WindowTitle -ErrorAction SilentlyContinue |
-							Where-Object { -not ($ProtectedWindowHandles -and $ProtectedWindowHandles.Contains($_.Handle)) } |
+							Where-Object { -not $Claims.Protected.Contains($_.Handle) } |
 							Select-Object -First 1
 
 						if ($verifyWindow -and (Test-LogVerbose)) {
@@ -653,13 +635,13 @@ function Set-WindowLayouts {
 
 								if (-not $retryVerifyWindow -and $verifyWindow.Title) {
 									$retryVerifyWindow = Get-WindowHandle -ProcessName $config.ProcessName -ErrorAction SilentlyContinue |
-										Where-Object { $_.Title -eq $verifyWindow.Title -and -not ($ProtectedWindowHandles -and $ProtectedWindowHandles.Contains($_.Handle)) } |
+										Where-Object { $_.Title -eq $verifyWindow.Title -and -not $Claims.Protected.Contains($_.Handle) } |
 										Select-Object -First 1
 								}
 
 								if (-not $retryVerifyWindow -and $config.WindowTitle) {
 									$retryVerifyWindow = Get-WindowHandle -WindowTitle $config.WindowTitle -ErrorAction SilentlyContinue |
-										Where-Object { -not ($ProtectedWindowHandles -and $ProtectedWindowHandles.Contains($_.Handle)) } |
+										Where-Object { -not $Claims.Protected.Contains($_.Handle) } |
 										Select-Object -First 1
 								}
 
@@ -812,12 +794,12 @@ function Set-WindowLayouts {
 		# Windows (especially browser tabs) can temporarily lose their title during page loads,
 		# redirects, or handle recreation. Retry with cache clearing to catch transient misses.
 		# An entry the wait phase abandoned has no window to ride out title drift on: one search,
-		# no 0.5 s + 1 s ladder, the same Not Found row. A per-desktop pass (-CandidateWindowHandles)
+		# no 0.5 s + 1 s ladder, the same Not Found row. A per-desktop pass (Claims.HasCandidates)
 		# searches once too: the wait confirmed its candidates stable in this very poll, so a miss
 		# means the entry's window is not there yet and the pass after the wait places it - the
 		# ladder inside the wait only delayed every other desktop by 1.5 s per miss.
 		$entryAbandonedByWait = ($abandonedEntryKeySet.Count -gt 0 -and $abandonedEntryKeySet.Contains($currentEntryKey))
-		$singleSearchOnly = $entryAbandonedByWait -or ($null -ne $CandidateWindowHandles)
+		$singleSearchOnly = $entryAbandonedByWait -or $Claims.HasCandidates
 		$maxSearchRetries = if ($singleSearchOnly) { 1 } else { 3 }
 		$searchRetryDelayMs = 500
 		$windows = $null
@@ -957,9 +939,9 @@ function Set-WindowLayouts {
 		# window eligible. Running it per starved entry would add seconds each to a run that has
 		# already gone wrong. A window that appears late is picked up by the caller's own
 		# position -> snap -> verify retry instead.
-		if ($SkipExistingWindows -and $ExistingWindowHandles -and $windows) {
+		if ($Claims.SkipExisting -and $Claims.Existing.Count -gt 0 -and $windows) {
 			$candidateCount = @($windows).Count
-			$windows = @($windows | Where-Object { -not $ExistingWindowHandles.Contains($_.Handle) })
+			$windows = @($windows | Where-Object { -not $Claims.Existing.Contains($_.Handle) })
 			if ((Test-LogVerbose) -and $windows.Count -ne $candidateCount) {
 				Write-LogDebug "⊘ Excluded $($candidateCount - $windows.Count) pre-existing window(s) - not eligible for an alongside layout" -Style Warning
 			}
@@ -971,9 +953,9 @@ function Set-WindowLayouts {
 		# claim it, so a genuine shortfall reports as "Not Found" instead of a stolen window.
 		# After the search ladder, not inside it: no amount of re-querying makes a protected
 		# window eligible.
-		if ($ProtectedWindowHandles -and $windows) {
+		if ($Claims.Protected.Count -gt 0 -and $windows) {
 			$candidateCount = @($windows).Count
-			$windows = @($windows | Where-Object { -not $ProtectedWindowHandles.Contains($_.Handle) })
+			$windows = @($windows | Where-Object { -not $Claims.Protected.Contains($_.Handle) })
 			if ((Test-LogVerbose) -and $windows.Count -ne $candidateCount) {
 				Write-LogDebug "⊘ Excluded $($candidateCount - $windows.Count) protected window(s) - preserved for a live alongside workspace" -Style Warning
 			}
@@ -985,16 +967,16 @@ function Set-WindowLayouts {
 		# claim the windows the per-desktop passes already placed (blacklist). Neither is a
 		# matter of title regexes - a catch-all entry matches every window of its process - so
 		# both are enforced on the candidate list, before claiming.
-		if ($null -ne $CandidateWindowHandles -and $windows) {
+		if ($Claims.HasCandidates -and $windows) {
 			$candidateCount = @($windows).Count
-			$windows = @($windows | Where-Object { $CandidateWindowHandles.Contains($_.Handle) })
+			$windows = @($windows | Where-Object { $Claims.Candidates.Contains($_.Handle) })
 			if ((Test-LogVerbose) -and $windows.Count -ne $candidateCount) {
 				Write-LogDebug "⊘ Excluded $($candidateCount - $windows.Count) window(s) outside this pass's candidate set" -Style Warning
 			}
 		}
-		if ($null -ne $ExcludeWindowHandles -and $ExcludeWindowHandles.Count -gt 0 -and $windows) {
+		if ($Claims.Excluded.Count -gt 0 -and $windows) {
 			$candidateCount = @($windows).Count
-			$windows = @($windows | Where-Object { -not $ExcludeWindowHandles.Contains($_.Handle) })
+			$windows = @($windows | Where-Object { -not $Claims.Excluded.Contains($_.Handle) })
 			if ((Test-LogVerbose) -and $windows.Count -ne $candidateCount) {
 				Write-LogDebug "⊘ Excluded $($candidateCount - $windows.Count) window(s) an earlier per-desktop pass already placed" -Style Warning
 			}
@@ -1217,10 +1199,10 @@ function Set-WindowLayouts {
 				#    to its own zone with zero reshuffle. The process (name + id) guard makes
 				#    a recycled handle from a different/relaunched process fall through to
 				#    geometry instead (e.g. after a reboot the PID differs).
-				if ($PinnedHandleMap) {
+				if ($Claims.PinnedMap) {
 					$zoneKey = "$($config.DesktopNumber)|$($config.Monitor)|$($config.Zone)"
-					if ($PinnedHandleMap.ContainsKey($zoneKey)) {
-						$rec = $PinnedHandleMap[$zoneKey]
+					if ($Claims.PinnedMap.ContainsKey($zoneKey)) {
+						$rec = $Claims.PinnedMap[$zoneKey]
 						$recordedHandle = $null
 						try { $recordedHandle = [IntPtr][int64]$rec.Handle } catch { $recordedHandle = $null }
 
@@ -1308,7 +1290,7 @@ function Set-WindowLayouts {
 			# Backstop for alongside mode: ineligible candidates are already filtered out before
 			# claiming (see the exclusion in the window-search loop above), so reaching this
 			# guard means the window arrived by a path that bypassed that filter.
-			if ($SkipExistingWindows -and $ExistingWindowHandles -and $ExistingWindowHandles.Contains($window.Handle)) {
+			if ($Claims.SkipExisting -and $Claims.Existing.Contains($window.Handle)) {
 				if (Test-LogVerbose) {
 					Write-LogDebug "⊘ Skipping - window existed before this workspace (belongs to another workspace)" -Style Warning
 				}
@@ -1317,7 +1299,7 @@ function Set-WindowLayouts {
 
 			# Same backstop for protected windows: the candidate filter above already removed
 			# them, so reaching this guard means the window arrived by a path that bypassed it.
-			if ($ProtectedWindowHandles -and $ProtectedWindowHandles.Contains($window.Handle)) {
+			if ($Claims.Protected.Contains($window.Handle)) {
 				if (Test-LogVerbose) {
 					Write-LogDebug "⊘ Skipping - window is preserved for a live alongside workspace" -Style Warning
 				}

@@ -611,10 +611,7 @@ function Apply-FancyZones {
 		# highest owned index a short grace period instead of sending that desktop to the shortcut
 		# pass for want of a GUID.
 		$highestIndex = [int](($owned | Measure-Object -Property Number -Maximum).Maximum)
-		$registryClock = [System.Diagnostics.Stopwatch]::StartNew()
-		while (-not (Get-VirtualDesktopGuid -DesktopIndex $highestIndex) -and $registryClock.ElapsedMilliseconds -lt 1000) {
-			Start-Sleep -Milliseconds 50
-		}
+		$null = Wait-Until -TimeoutMs 1000 -PollIntervalMs 50 -Condition { [bool](Get-VirtualDesktopGuid -DesktopIndex $highestIndex) }
 
 		# Physical monitor per config key, resolved the way the shortcut pass resolves it: the
 		# layout's own X/Y/Width/Height when it carries them, else the bounds Get-MonitorSpecs

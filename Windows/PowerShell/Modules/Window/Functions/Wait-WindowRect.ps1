@@ -36,6 +36,10 @@ function Wait-WindowRect {
 	.PARAMETER PollIntervalMs
 		Delay between polls. Default is 15ms.
 
+	.PARAMETER Clock
+		The wait clock (New-WaitClock) to read and sleep through. Defaults to a real one; tests
+		hand in a fake.
+
 	.OUTPUTS
 		PSCustomObject with:
 		- Verified  : $true once the rect matched within the budget
@@ -70,58 +74,47 @@ function Wait-WindowRect {
 		[int]$TimeoutMs = 300,
 
 		[Parameter()]
-		[int]$PollIntervalMs = 15
+		[int]$PollIntervalMs = 15,
+
+		[Parameter()]
+		[AllowNull()]
+		[object]$Clock
 	)
 
-	$stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
-	$lastX = $null
-	$lastY = $null
-	$lastWidth = $null
-	$lastHeight = $null
+	if ($null -eq $Clock) { $Clock = New-WaitClock }
+	$startedAt = $Clock.ElapsedMs()
 
-	while ($true) {
+	# The poll records what it saw in this table rather than in locals: Wait-Until invokes the
+	# condition in a child scope, where a plain assignment would be lost, while a property set
+	# on a shared object is not.
+	$seen = @{ X = $null; Y = $null; Width = $null; Height = $null; Unreadable = $false }
+
+	$matched = Wait-Until -TimeoutMs $TimeoutMs -PollIntervalMs $PollIntervalMs -Clock $Clock -Condition {
 		$rect = New-Object WindowModule.RECT
 		if (-not [WindowModule.Native]::GetWindowRect($WindowHandle, [ref]$rect)) {
-			# Handle is no longer readable (window closed/recreated) - polling cannot succeed.
-			break
+			# Handle is no longer readable (window closed/recreated) - polling cannot succeed, so
+			# the wait ends now; the flag turns this early exit back into an unverified result.
+			$seen.Unreadable = $true
+			return $true
 		}
 
-		$lastX = $rect.Left
-		$lastY = $rect.Top
-		$lastWidth = $rect.Right - $rect.Left
-		$lastHeight = $rect.Bottom - $rect.Top
+		$seen.X = $rect.Left
+		$seen.Y = $rect.Top
+		$seen.Width = $rect.Right - $rect.Left
+		$seen.Height = $rect.Bottom - $rect.Top
 
-		$matched = ([Math]::Abs($lastX - $ExpectedX) -le $TolerancePx) -and
-			([Math]::Abs($lastY - $ExpectedY) -le $TolerancePx) -and
-			([Math]::Abs($lastWidth - $ExpectedWidth) -le $TolerancePx) -and
-			([Math]::Abs($lastHeight - $ExpectedHeight) -le $TolerancePx)
-
-		if ($matched) {
-			return [PSCustomObject]@{
-				Verified  = $true
-				X         = $lastX
-				Y         = $lastY
-				Width     = $lastWidth
-				Height    = $lastHeight
-				ElapsedMs = $stopwatch.ElapsedMilliseconds
-			}
-		}
-
-		if ($stopwatch.ElapsedMilliseconds -ge $TimeoutMs) {
-			break
-		}
-
-		if ($PollIntervalMs -gt 0) {
-			Start-Sleep -Milliseconds $PollIntervalMs
-		}
+		return (([Math]::Abs($seen.X - $ExpectedX) -le $TolerancePx) -and
+			([Math]::Abs($seen.Y - $ExpectedY) -le $TolerancePx) -and
+			([Math]::Abs($seen.Width - $ExpectedWidth) -le $TolerancePx) -and
+			([Math]::Abs($seen.Height - $ExpectedHeight) -le $TolerancePx))
 	}
 
 	return [PSCustomObject]@{
-		Verified  = $false
-		X         = $lastX
-		Y         = $lastY
-		Width     = $lastWidth
-		Height    = $lastHeight
-		ElapsedMs = $stopwatch.ElapsedMilliseconds
+		Verified  = ($matched -and -not $seen.Unreadable)
+		X         = $seen.X
+		Y         = $seen.Y
+		Width     = $seen.Width
+		Height    = $seen.Height
+		ElapsedMs = ($Clock.ElapsedMs() - $startedAt)
 	}
 }

@@ -23,13 +23,21 @@ BeforeAll {
 	. "$FunctionsPath\Save-CurrentLayout.ps1"
 	. "$FunctionsPath\Set-WorkspaceWindowLayout.ps1"
 	# Mocked below, dot-sourced so Pester builds the mocks from the CURRENT parameter blocks
-	# (-OnDesktopReady, -DesktopNumbers, -ZoneReset, -CandidateWindowHandles, ...) whatever
-	# module version the session has loaded.
+	# (-OnDesktopReady, -DesktopNumbers, -ZoneReset, -Claims, ...) whatever module version the
+	# session has loaded.
 	. "$FunctionsPath\Wait-ForWorkspaceWindows.ps1"
 	. "$FunctionsPath\Set-WindowLayouts.ps1"
 	. "$FunctionsPath\Resize-PositionedWindows.ps1"
 	. "$FunctionsPath\Snap-AllWindows.ps1"
 	. "$FunctionsPath\Visualize-Layouts.ps1"
+	# The claim set and pipeline state the function builds, and the two named callbacks the wait
+	# mocks below invoke. Dot-sourced so the callbacks run in THIS scope, where the mocks of
+	# Set-WindowLayouts, Snap-AllWindows, Move-WindowToVirtualDesktop and Loading-Spinner are
+	# visible - resolved to the module they would call the module's real functions instead.
+	. "$FunctionsPath\New-WindowClaimSet.ps1"
+	. "$FunctionsPath\New-WorkspaceLayoutPipelineState.ps1"
+	. "$FunctionsPath\Move-StableWindowEarly.ps1"
+	. "$FunctionsPath\Invoke-ReadyDesktopPass.ps1"
 
 	function Remove-PositionedWindowHandles { }
 	function Verify-WindowPlacement { $true }
@@ -771,7 +779,7 @@ Describe "Set-WorkspaceWindowLayout" {
 		Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace'
 
 		Should -Invoke Set-WindowLayouts -Times 1 -Exactly -ParameterFilter {
-			$null -ne $PinnedHandleMap -and $PinnedHandleMap.ContainsKey('1|Primary|Left')
+			$null -ne $Claims.PinnedMap -and $Claims.PinnedMap.ContainsKey('1|Primary|Left')
 		}
 		Should -Invoke Save-CurrentLayout -Times 1 -Exactly -ParameterFilter { $Workspace -eq 'MyWorkspace' }
 	}
@@ -1019,7 +1027,7 @@ Describe "Set-WorkspaceWindowLayout" {
 			Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace' -ProtectedWindowHandles (New-ProtectedHandleSet 60)
 
 			Should -Invoke Set-WindowLayouts -Times 1 -Exactly -ParameterFilter {
-				$ProtectedWindowHandles -and $ProtectedWindowHandles.Contains([IntPtr]60)
+				$Claims -and $Claims.Protected.Contains([IntPtr]60)
 			}
 			# Plain-mode verification excludes the preserved windows - the layout pass was
 			# forbidden from touching them, so they must not be judged either.
@@ -1073,7 +1081,7 @@ Describe "Set-WorkspaceWindowLayout" {
 
 			Should -Invoke Get-WorkspaceOpenProtection -Times 1 -Exactly
 			Should -Invoke Set-WindowLayouts -Times 1 -Exactly -ParameterFilter {
-				$ProtectedWindowHandles -and $ProtectedWindowHandles.Contains([IntPtr]60)
+				$Claims -and $Claims.Protected.Contains([IntPtr]60)
 			}
 		}
 
@@ -1293,8 +1301,10 @@ Describe "Set-WorkspaceWindowLayout" {
 					Desktops   = $DesktopNumbers
 					SkipKeys   = $SkipEntryKeys
 					Keep       = [bool]$KeepPositionedWindows
-					Candidates = $CandidateWindowHandles
-					Excluded   = $ExcludeWindowHandles
+					# Snapshots: the claim set's Excluded is the open's LIVE set and grows as
+					# passes place windows, so what THIS call saw must be copied out here.
+					Candidates = if ($Claims -and $Claims.HasCandidates) { , @($Claims.Candidates) } else { $null }
+					Excluded   = @(if ($Claims) { $Claims.Excluded } else { @() })
 				}
 				# Honour the two entry filters the way the real function does: rows only for the
 				# processed entries, keyed by desktop.
@@ -1686,8 +1696,8 @@ Describe "Set-WorkspaceWindowLayout" {
 			$script:waitCall = $null
 			Mock Wait-ForWorkspaceWindows {
 				$script:waitCall = [PSCustomObject]@{
-					PreExisting = $PreExistingWindowHandles
-					Excluded    = $ExcludeWindowHandles
+					PreExisting = @(if ($Claims) { $Claims.WaitPreExisting() } else { @() })
+					Excluded    = @(if ($Claims) { $Claims.WaitExcluded() } else { @() })
 				}
 				@{ Success = $true; WindowStates = @{}; Abandoned = @(); AbandonedEntries = @(); ReadyDesktops = @() }
 			}

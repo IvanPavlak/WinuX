@@ -53,6 +53,7 @@
 		'List-AvailableColors',
 		'List-Functions',
 		'Loading-Spinner',
+		'New-WaitClock',
 		'NpmInstallAndStart',
 		'Preview-LoadingSpinners',
 		'ProcessGroupRecursive',
@@ -78,6 +79,7 @@
 		'Test-RpcUnavailableError',
 		'Test-TcpPortReachable',
 		'Test-WSLDistributionInstalled',
+		'Wait-Until',
 		'Test-WSLEnabled',
 		'Write-ManualInstructionsToDesktop'
 	)

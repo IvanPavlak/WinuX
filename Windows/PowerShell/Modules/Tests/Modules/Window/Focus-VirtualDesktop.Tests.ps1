@@ -9,7 +9,10 @@ BeforeAll {
 	. (Join-Path $ModuleRoot "Window\Functions\Switch-VirtualDesktop.ps1")
 	. (Join-Path $ModuleRoot "Window\Functions\Get-CurrentVirtualDesktopIndex.ps1")
 	. (Join-Path $ModuleRoot "Window\Functions\Invoke-VirtualDesktopOperation.ps1")
+	. (Join-Path $ModuleRoot "Helper\Functions\New-WaitClock.ps1")
+	. (Join-Path $ModuleRoot "Helper\Functions\Wait-Until.ps1")
 	. (Join-Path $ModuleRoot "Tests\Modules\Support\FakeVirtualDesktop.ps1")
+	. (Join-Path $ModuleRoot "Tests\Modules\Support\FakeWaitClock.ps1")
 
 	function Get-WindowHandle { param($ProcessName, $WindowTitle) @() }
 	function Focus-TerminalTab { param([IntPtr]$WindowHandle, [switch]$Quiet) }
@@ -28,8 +31,13 @@ Describe "Focus-VirtualDesktop" {
 		Mock Write-LogSuccess { }
 		Mock Write-LogWarning { }
 		Mock Write-LogError { }
+		# Invoke-VirtualDesktopOperation's RPC retry backoff still sleeps for real; the switch
+		# waits inside Switch-VirtualDesktop run on the fake clock, so a desktop that never lands
+		# costs virtual milliseconds instead of three real seconds.
 		Mock Start-Sleep { }
 		Mock Clear-WindowCache { }
+		$script:clock = New-FakeWaitClock
+		Mock New-WaitClock { $script:clock }
 		# The native ForceForegroundWindow cannot run in a test; the terminal path never reaches
 		# it as long as Focus-TerminalTab does not throw.
 		Mock Focus-TerminalTab { }
@@ -76,6 +84,9 @@ Describe "Focus-VirtualDesktop" {
 		Should -Invoke Write-LogSuccess -Times 0
 		Should -Invoke Get-WindowHandle -Times 0
 		Should -Invoke Focus-TerminalTab -Times 0
+		# Three attempts and the post-reset try each wait out 750 ms at 10 ms polls.
+		$script:clock.Sleeps.Count | Should -Be 300
+		$script:clock.ElapsedMs() | Should -Be 3000
 	}
 
 	It "recovers a stale session inside the switch and still focuses the desktop" {

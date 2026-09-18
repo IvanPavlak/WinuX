@@ -81,17 +81,18 @@ function Wait-ForWorkspaceWindows {
 		argument carries the layout entries abandoned so far, so the caller's layout pass can
 		skip its not-found retry ladder for them.
 
-	.PARAMETER PreExistingWindowHandles
-		Handles of windows that existed before the workspace was opened (a plain open's pre-open
-		capture). A window in this set has nothing to stabilize and counts as stable the first
-		time an entry matches it, instead of being observed unchanged for
-		MinimumStableDurationSeconds first.
-
-	.PARAMETER ExcludeWindowHandles
-		Handles that never match an entry (an alongside open's pre-existing windows, a plain
-		open's protected windows - the layout pass may not use them either). An entry whose only
-		matches are excluded is abandoned after ProcessAbsentGraceSeconds like an entry whose
-		process never appeared, so a starved entry costs the grace period, not the timeout.
+	.PARAMETER Claims
+		The window claim set of this open (New-WindowClaimSet), or $null. The wait derives two
+		sets from it:
+		- WaitPreExisting(): windows that existed before the workspace was opened (a plain
+		  open's pre-open capture). Such a window has nothing to stabilize and counts as stable
+		  the first time an entry matches it, instead of being observed unchanged for
+		  MinimumStableDurationSeconds first.
+		- WaitExcluded(): handles that never match an entry (an alongside open's pre-existing
+		  windows, a plain open's protected windows - the layout pass may not use them either).
+		  An entry whose only matches are excluded is abandoned after ProcessAbsentGraceSeconds
+		  like an entry whose process never appeared, so a starved entry costs the grace period,
+		  not the timeout.
 
 	.EXAMPLE
 		$config = Import-PowerShellDataFile -Path "layout.psd1"
@@ -149,14 +150,31 @@ function Wait-ForWorkspaceWindows {
 		[scriptblock]$OnDesktopReady,
 
 		[Parameter()]
-		[System.Collections.Generic.HashSet[IntPtr]]$PreExistingWindowHandles,
+		[AllowNull()]
+		[pscustomobject]$Claims,
 
+		# The wait clock (New-WaitClock) every time read and sleep in here goes through; tests
+		# hand in a fake so the poll loop runs on virtual time.
 		[Parameter()]
-		[System.Collections.Generic.HashSet[IntPtr]]$ExcludeWindowHandles
+		[AllowNull()]
+		[object]$Clock
 	)
+
+	if ($null -eq $Clock) { $Clock = New-WaitClock }
 
 	# Use consolidated native types from WindowNative.cs (loaded in Window.psm1)
 	# WindowModule.Native provides: SetForegroundWindow(), etc.
+
+	# What the claim set tells the wait: which windows count as stable on sight and which it
+	# must never match. No claim set means neither.
+	# Plain assignments: `$x = if (...) { $hashSet }` runs the set through a pipeline and
+	# enumerates it, so a one-window set would arrive as a bare IntPtr and an empty one as $null.
+	$preExistingWindowHandles = [System.Collections.Generic.HashSet[IntPtr]]::new()
+	$excludeWindowHandles = [System.Collections.Generic.HashSet[IntPtr]]::new()
+	if ($Claims) {
+		$preExistingWindowHandles = $Claims.WaitPreExisting()
+		$excludeWindowHandles = $Claims.WaitExcluded()
+	}
 
 	# Extract expected windows from layout configuration.
 	# Each layout entry gets its own expected-window record (including duplicates).
@@ -305,7 +323,7 @@ function Wait-ForWorkspaceWindows {
 		@($expectedWindows | Where-Object { $abandonedEntries.Contains($_.Description) } | ForEach-Object { $_.LayoutEntry })
 	}
 
-	$startTime = Get-Date
+	$startTime = $Clock.Now()
 	$allWindowsFound = $false
 	$iteration = 0
 
@@ -336,7 +354,7 @@ function Wait-ForWorkspaceWindows {
 
 		while (-not $allWindowsFound) {
 			$iteration++
-			$elapsedSeconds = [math]::Round(((Get-Date) - $startTime).TotalSeconds, 1)
+			$elapsedSeconds = [math]::Round((($Clock.Now()) - $startTime).TotalSeconds, 1)
 
 			$progressColor = "Green"
 			if ($elapsedSeconds -ge 10 -and $elapsedSeconds -lt 20) {
@@ -402,8 +420,8 @@ function Wait-ForWorkspaceWindows {
 					# Windows the layout pass may not use (another workspace's) are not waited for
 					# either. Remembered per entry so the fail-fast below can abandon an entry that
 					# only ever matched such windows.
-					if ($ExcludeWindowHandles -and $ExcludeWindowHandles.Count -gt 0 -and $windows -and @($windows).Count -gt 0) {
-						$eligibleWindows = @($windows | Where-Object { -not $ExcludeWindowHandles.Contains($_.Handle) })
+					if ($excludeWindowHandles.Count -gt 0 -and $windows -and @($windows).Count -gt 0) {
+						$eligibleWindows = @($windows | Where-Object { -not $excludeWindowHandles.Contains($_.Handle) })
 						if ($eligibleWindows.Count -eq 0) { [void]$entryOnlyExcludedMatches.Add($expectedWindow.Description) }
 						$windows = $eligibleWindows
 					}
@@ -500,7 +518,7 @@ function Wait-ForWorkspaceWindows {
 										$windowTitleHistory[$windowKey] = @{
 											Title              = $windowTitle
 											ConsecutiveMatches = 0
-											LastSeen           = Get-Date
+											LastSeen           = $Clock.Now()
 										}
 									}
 									# Don't count this as found
@@ -516,7 +534,7 @@ function Wait-ForWorkspaceWindows {
 
 						# Track title and dimension stability
 						# Window must remain stable (same title, same dimensions if required) for MinimumStableDurationSeconds
-						$currentTime = Get-Date
+						$currentTime = $Clock.Now()
 						$isStable = $false
 
 						if (-not $windowTitleHistory.ContainsKey($windowKey)) {
@@ -530,7 +548,7 @@ function Wait-ForWorkspaceWindows {
 							# the real window ended on the wrong desktop.
 							$firstStableTime = $currentTime
 							$creditReason = $null
-							if ($PreExistingWindowHandles -and $PreExistingWindowHandles.Contains($window.Handle)) {
+							if ($preExistingWindowHandles.Contains($window.Handle)) {
 								$firstStableTime = $currentTime.AddSeconds(-$MinimumStableDurationSeconds)
 								$creditReason = 'pre-existing window'
 							}
@@ -670,8 +688,8 @@ function Wait-ForWorkspaceWindows {
 			# entry and no live process matches its process pattern after the grace period, stop
 			# waiting for it. Checked at most once per second to keep the poll loop cheap.
 			if ($ProcessAbsentGraceSeconds -gt 0 -and $elapsedSeconds -ge $ProcessAbsentGraceSeconds -and
-				((Get-Date) - $lastProcessAbsenceCheck).TotalSeconds -ge 1) {
-				$lastProcessAbsenceCheck = Get-Date
+				(($Clock.Now()) - $lastProcessAbsenceCheck).TotalSeconds -ge 1) {
+				$lastProcessAbsenceCheck = $Clock.Now()
 				$liveProcessNames = $null
 
 				foreach ($pendingEntry in $expectedWindows) {
@@ -764,7 +782,7 @@ function Wait-ForWorkspaceWindows {
 
 			# Check if all (non-abandoned) windows are individually stable
 			if ($foundCount -eq $activeExpectedCount) {
-				$currentTime = Get-Date
+				$currentTime = $Clock.Now()
 				$collectiveSatisfied = $false
 
 				if ($CollectiveStabilitySeconds -gt 0) {
@@ -849,7 +867,7 @@ function Wait-ForWorkspaceWindows {
 						}
 
 						[void][WindowModule.Native]::SetForegroundWindow($windowHandle)
-						Start-Sleep -Milliseconds $FocusDelayMs
+						$Clock.Sleep($FocusDelayMs)
 
 						# Mark as focused so we don't re-focus on subsequent poll iterations
 						[void]$focusedWindows.Add($windowHandle)
@@ -878,7 +896,7 @@ function Wait-ForWorkspaceWindows {
 			}
 
 			# Wait before next poll
-			Start-Sleep -Seconds $PollIntervalSeconds
+			$Clock.Sleep([int]($PollIntervalSeconds * 1000))
 		}
 
 	} # end try

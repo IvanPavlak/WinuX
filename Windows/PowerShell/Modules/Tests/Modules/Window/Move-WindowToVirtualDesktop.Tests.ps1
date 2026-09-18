@@ -5,7 +5,10 @@ BeforeAll {
 
 	. (Join-Path $ModuleRoot "Window\Functions\Move-WindowToVirtualDesktop.ps1")
 	. (Join-Path $ModuleRoot "Window\Functions\Invoke-VirtualDesktopOperation.ps1")
+	. (Join-Path $ModuleRoot "Helper\Functions\New-WaitClock.ps1")
+	. (Join-Path $ModuleRoot "Helper\Functions\Wait-Until.ps1")
 	. (Join-Path $ModuleRoot "Tests\Modules\Support\FakeVirtualDesktop.ps1")
+	. (Join-Path $ModuleRoot "Tests\Modules\Support\FakeWaitClock.ps1")
 }
 
 Describe "Move-WindowToVirtualDesktop" {
@@ -15,8 +18,12 @@ Describe "Move-WindowToVirtualDesktop" {
 		Mock Write-Warning { }
 		Mock Write-Error { }
 		Mock Write-LogDebug { }
+		# Invoke-VirtualDesktopOperation's RPC retry backoff still sleeps for real; the
+		# post-move verification poll goes through the fake clock below.
 		Mock Start-Sleep { }
 		Mock Test-LogVerbose { $false }
+		$script:clock = New-FakeWaitClock
+		Mock New-WaitClock { $script:clock }
 
 		# Three desktops; window 1234 sits on desktop 1.
 		$null = New-FakeVirtualDesktopSession -DesktopCount 3 -CurrentIndex 0 -WindowDesktops @{ 1234 = 1 }
@@ -30,7 +37,7 @@ Describe "Move-WindowToVirtualDesktop" {
 
 		$result | Should -BeTrue
 		$global:FakeVirtualDesktop.MoveLog.Count | Should -Be 0
-		Should -Invoke Start-Sleep -Times 0
+		$script:clock.Sleeps.Count | Should -Be 0
 	}
 
 	It "moves the window to the 0-based desktop index and verifies it landed" {
@@ -41,6 +48,24 @@ Describe "Move-WindowToVirtualDesktop" {
 		$global:FakeVirtualDesktop.MoveLog[0].Hwnd | Should -Be 1234
 		$global:FakeVirtualDesktop.MoveLog[0].Index | Should -Be 2
 		$global:FakeVirtualDesktop.WindowDesktops[[int64]1234] | Should -Be 2
+		# The COM move is synchronous here, so the first verification check passes: no polling.
+		$script:clock.Sleeps.Count | Should -Be 0
+	}
+
+	It "polls the verification until a slow move lands" {
+		# Move-Window returns before the manager reflects the move; the window shows up on the
+		# target 30 ms of virtual time later, which the 10 ms poll sees on its fourth check.
+		Mock Move-Window { param($Desktop, $Hwnd) $Desktop }
+		$script:clock = New-FakeWaitClock -OnSleep {
+			param($elapsedMs)
+			if ($elapsedMs -ge 30) { $global:FakeVirtualDesktop.WindowDesktops[[int64]1234] = 2 }
+		}
+
+		$result = Move-WindowToVirtualDesktop -WindowHandle ([IntPtr]1234) -DesktopNumber 2 -Clock $script:clock
+
+		$result | Should -BeTrue
+		$script:LastMoveWindowToVirtualDesktopResult.Moved | Should -BeTrue
+		@($script:clock.Sleeps) | Should -Be @(10, 10, 10)
 	}
 
 	It "emits exactly one boolean on a successful move (Move-Window's Desktop output must not leak)" {
@@ -56,11 +81,16 @@ Describe "Move-WindowToVirtualDesktop" {
 		# Regression: @(Desktop, $false) is truthy, so callers counted this failure as moved.
 		Mock Move-Window { param($Desktop, $Hwnd) $Desktop }
 
-		$result = Move-WindowToVirtualDesktop -WindowHandle ([IntPtr]1234) -DesktopNumber 2
+		$result = Move-WindowToVirtualDesktop -WindowHandle ([IntPtr]1234) -DesktopNumber 2 -Clock $script:clock
 
 		Should -Invoke Move-Window -Times 1 -Exactly
 		@($result).Count | Should -Be 1
 		$result | Should -BeFalse
+		# The verification budget is 100 ms at 10 ms polls: ten sleeps, then the check at
+		# 100 ms still runs before the move is reported unverified.
+		$script:clock.Sleeps.Count | Should -Be 10
+		$script:clock.ElapsedMs() | Should -Be 100
+		Should -Invoke New-WaitClock -Times 0
 	}
 
 	It "reports Moved in the script-scoped result only for a real move" {

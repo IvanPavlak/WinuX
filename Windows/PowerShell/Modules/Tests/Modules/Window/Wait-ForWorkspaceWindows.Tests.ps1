@@ -5,6 +5,8 @@ BeforeAll {
 	$FunctionsPath = Join-Path $ModuleRoot "Window\Functions"
 
 	. "$FunctionsPath\Wait-ForWorkspaceWindows.ps1"
+	# The claim set the wait derives its pre-existing and excluded sets from.
+	. "$FunctionsPath\New-WindowClaimSet.ps1"
 }
 
 Describe "Wait-ForWorkspaceWindows" {
@@ -235,7 +237,7 @@ Describe "Wait-ForWorkspaceWindows" {
 			$preExisting = New-Object 'System.Collections.Generic.HashSet[IntPtr]'
 			[void]$preExisting.Add([IntPtr]100)
 
-			$result = Wait-ForWorkspaceWindows -LayoutConfig $script:layout -TimeoutSeconds 5 -MinimumStableDurationSeconds 3 -PollIntervalSeconds 0.05 -PreExistingWindowHandles $preExisting
+			$result = Wait-ForWorkspaceWindows -LayoutConfig $script:layout -TimeoutSeconds 5 -MinimumStableDurationSeconds 3 -PollIntervalSeconds 0.05 -Claims (New-WindowClaimSet -Existing $preExisting)
 
 			$result.Success | Should -BeTrue
 			$script:clock.Elapsed.TotalSeconds | Should -BeLessThan 2
@@ -246,7 +248,7 @@ Describe "Wait-ForWorkspaceWindows" {
 			$preExisting = New-Object 'System.Collections.Generic.HashSet[IntPtr]'
 			[void]$preExisting.Add([IntPtr]999)
 
-			$result = Wait-ForWorkspaceWindows -LayoutConfig $script:layout -TimeoutSeconds 5 -MinimumStableDurationSeconds 1 -PollIntervalSeconds 0.05 -PreExistingWindowHandles $preExisting
+			$result = Wait-ForWorkspaceWindows -LayoutConfig $script:layout -TimeoutSeconds 5 -MinimumStableDurationSeconds 1 -PollIntervalSeconds 0.05 -Claims (New-WindowClaimSet -Existing $preExisting)
 
 			$result.Success | Should -BeTrue
 			$script:clock.Elapsed.TotalSeconds | Should -BeGreaterOrEqual 0.9
@@ -263,10 +265,11 @@ Describe "Wait-ForWorkspaceWindows" {
 		}
 
 		It "never matches an excluded window, and abandons an entry only such windows match after the grace period" {
+			# A protected window is what the claim set excludes from the wait in plain mode.
 			$excluded = New-Object 'System.Collections.Generic.HashSet[IntPtr]'
 			[void]$excluded.Add([IntPtr]100)
 
-			$result = Wait-ForWorkspaceWindows -LayoutConfig $script:layout -TimeoutSeconds 10 -MinimumStableDurationSeconds 0 -PollIntervalSeconds 0.05 -ProcessAbsentGraceSeconds 1 -ExcludeWindowHandles $excluded
+			$result = Wait-ForWorkspaceWindows -LayoutConfig $script:layout -TimeoutSeconds 10 -MinimumStableDurationSeconds 0 -PollIntervalSeconds 0.05 -ProcessAbsentGraceSeconds 1 -Claims (New-WindowClaimSet -Protected $excluded)
 
 			$result.Success | Should -BeFalse
 			@($result.Abandoned).Count | Should -Be 1
@@ -282,7 +285,8 @@ Describe "Wait-ForWorkspaceWindows" {
 			$script:extraAppWindows = @([PSCustomObject]@{ Handle = [IntPtr]300; Title = 'App New Window'; ProcessName = 'App'; Left = 0; Top = 0; Width = 800; Height = 600 })
 			$script:stableHandle = $null
 
-			$result = Wait-ForWorkspaceWindows -LayoutConfig $script:layout -TimeoutSeconds 5 -MinimumStableDurationSeconds 0 -PollIntervalSeconds 0.05 -ExcludeWindowHandles $excluded -OnWindowStable { param($entry, $window) $script:stableHandle = $window.Handle }
+			# An alongside open's pre-existing window: excluded from the wait, never pre-existing.
+			$result = Wait-ForWorkspaceWindows -LayoutConfig $script:layout -TimeoutSeconds 5 -MinimumStableDurationSeconds 0 -PollIntervalSeconds 0.05 -Claims (New-WindowClaimSet -Existing $excluded -SkipExisting) -OnWindowStable { param($entry, $window) $script:stableHandle = $window.Handle }
 
 			$result.Success | Should -BeTrue
 			$script:stableHandle | Should -Be ([IntPtr]300)

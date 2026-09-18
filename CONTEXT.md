@@ -11,7 +11,15 @@ A named set of actions (`WorkspaceActions`) that `Open-Workspace` runs and `Clos
 
 ## Layout
 
-A per-workspace description of which window goes on which virtual desktop, monitor and FancyZones zone. Applying it is the **layout pipeline**: wait for windows, place, snap, confirm. Its raw dependencies are the two seams below.
+A per-workspace description of which window goes on which virtual desktop, monitor and FancyZones zone. Applying it is the **layout pipeline**: wait for windows, place, snap, confirm. `Set-WorkspaceWindowLayout` drives it; its parts are `Wait-ForWorkspaceWindows` (the wait, which reports each window as it becomes stable and each virtual desktop as soon as every entry on it is), the two per-desktop callbacks it is handed - `Move-StableWindowEarly` (moves a window to its desktop the moment it is stable) and `Invoke-ReadyDesktopPass` (positions, resizes and snaps one desktop while the rest still load) - then `Set-WindowLayouts` (place), `Snap-AllWindows` (snap) and `Confirm-WorkspaceWindowPositions` (confirm) over what the callbacks did not finish. The callbacks and the tail share one **state object** (`New-WorkspaceLayoutPipelineState`: the layout, monitors, offset, claim set, zone reset and phase clock as inputs; the placed desktops, entry keys, results and snap failures as live tallies) and one claim set (below). Its raw dependencies are the two seams that follow.
+
+## Wait clock
+
+`Wait-Until` is the one poll loop in the repository: check, test the budget after a failed check, sleep, repeat - so the check after the last sleep always runs. It reads time through a **wait clock** from `New-WaitClock` (`Now`, `ElapsedMs`, `Sleep`), and every waiter (`Wait-WindowRect`, `Wait-WindowsClosed`, `Switch-VirtualDesktop`, `Move-WindowToVirtualDesktop`, `Test-AppliedFancyZonesLayouts`, `Wait-ForWorkspaceWindows`, `Wait-BrowserWindowsClosed`, `Wait-ConsoleReflow`, `Wait-BrowserWindowReady`) takes `-Clock` and forwards it, so a test injects the fake in `Tests/Modules/Support/FakeWaitClock.ps1` and asserts the exact poll count with no real waiting. The condition scriptblock can read the caller's locals but records state through a hashtable it mutates; a plain assignment inside it is lost.
+
+## Window claim set
+
+`New-WindowClaimSet` builds the one object that says which windows a layout pass may claim: `Existing` (on screen before the open), `SkipExisting` (they are another workspace's - alongside mode), `Protected` (a plain open preserves them), `Excluded` (a per-desktop pass already placed them), `Candidates` (when set, the only windows a pass may claim - the wait's stable windows) and `PinnedMap` (zone key to the window recorded last time). It derives the rules once - `TestClaimable`, `WaitExcluded`, `WaitPreExisting`, `WithCandidates` - so `Set-WindowLayouts` and `Wait-ForWorkspaceWindows` take it as `-Claims` instead of five handle-set parameters, and `Set-WorkspaceWindowLayout` builds it once per open.
 
 ## Win32 seam
 

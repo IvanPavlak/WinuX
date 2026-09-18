@@ -54,7 +54,8 @@ function Open-Browser {
 		Set by `Open-Workspace` when the workspace is opening alongside existing desktops.
 		Changes `-Instances` from "ensure N windows exist" to "open N NEW windows": an
 		alongside layout pass positions only the windows that open created (every handle
-		captured before it is refused by `Set-WindowLayouts -SkipExistingWindows`), so
+		captured before it is refused by the window claim set - `New-WindowClaimSet
+		-SkipExisting`, handed to `Set-WindowLayouts -Claims`), so
 		counting pre-existing windows toward the target starves the layout by exactly the
 		number of browser windows that happened to be open already.
 
@@ -173,9 +174,9 @@ function Open-Browser {
 			}
 
 			# -Instances means "have N windows available to the caller", and in alongside mode
-			# a pre-existing window is not available: Set-WindowLayouts is run with
-			# -SkipExistingWindows there, so every handle captured before the workspace opened
-			# is refused by the layout pass. Topping up to N TOTAL then handed the layout only
+			# a pre-existing window is not available: the window claim set is built with
+			# SkipExisting on there (New-WindowClaimSet, handed to Set-WindowLayouts -Claims), so
+			# every handle captured before the workspace opened is refused by the layout pass. Topping up to N TOTAL then handed the layout only
 			# N - existing usable windows and left that many zones permanently unfillable -
 			# worse on every rerun, since each run adds to the pre-existing count. Count nothing
 			# in that mode and open the full N as new windows.
