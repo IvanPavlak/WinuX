@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.71] - 2026-09-18
+
+### Fixed
+
+- **The Lint workflow no longer fails on PSScriptAnalyzer's "Collection was modified; enumeration operation may not execute" crash.** `Invoke-ScriptAnalyzer` analyzes files in parallel while its rules share one command-info cache, and on this ~900-file tree that race fired every few runs and turned the whole job red with no finding behind it - PSScriptAnalyzer's own tracker pins it on `PSUseCorrectCasing` enumerating a command's parameters while another thread fills them in (PowerShell/PSScriptAnalyzer#1516, #902). The step now runs with `-Settings PSScriptAnalyzerSettings.psd1`, the same file VS Code's Problems panel reads, so `PSUseCorrectCasing` and the other formatter- and convention-owned rules are excluded in CI exactly as they are locally instead of through a hand-copied two-rule subset; and the analysis is retried up to three times on that one `InvalidOperationException` with a `::warning` annotation per retry, while any other error still throws on the first attempt.
+
 ## [0.1.70] - 2026-09-18
 
 ### Added
@@ -1235,7 +1241,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.70...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.71...HEAD
+[0.1.71]: https://github.com/IvanPavlak/WinuX/compare/v0.1.70...v0.1.71
 [0.1.70]: https://github.com/IvanPavlak/WinuX/compare/v0.1.69...v0.1.70
 [0.1.69]: https://github.com/IvanPavlak/WinuX/compare/v0.1.68...v0.1.69
 [0.1.68]: https://github.com/IvanPavlak/WinuX/compare/v0.1.67...v0.1.68

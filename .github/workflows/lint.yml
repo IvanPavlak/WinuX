@@ -35,14 +35,30 @@ jobs:
             Install-PSResource -Name PSScriptAnalyzer -TrustRepository -Scope CurrentUser -Quiet
           }
 
+      # `-Settings` points at the same PSScriptAnalyzerSettings.psd1 VS Code uses, so CI
+      # reports exactly what the Problems panel shows locally instead of a hand-copied
+      # subset of its excludes. It also keeps PSUseCorrectCasing out of the run, the rule
+      # PSScriptAnalyzer's own bug tracker pins the intermittent "Collection was modified;
+      # enumeration operation may not execute" crash on: Invoke-ScriptAnalyzer analyzes
+      # files in parallel while the rules share one command-info cache, and on a ~900-file
+      # tree that race still fires now and then (PowerShell/PSScriptAnalyzer#1516, #902).
+      # The retry below absorbs a residual hit of that one exception; anything else throws
+      # on the first attempt as before.
       - name: Analyze PowerShell
         shell: pwsh
         run: |
-          $results = Invoke-ScriptAnalyzer `
-            -Path "$env:GITHUB_WORKSPACE/Windows/PowerShell" `
-            -Recurse `
-            -Severity @('Error','Warning') `
-            -ExcludeRule @('PSAvoidUsingWriteHost','PSUseApprovedVerbs')
+          $settings = "$env:GITHUB_WORKSPACE/PSScriptAnalyzerSettings.psd1"
+          $target   = "$env:GITHUB_WORKSPACE/Windows/PowerShell"
+          $results  = $null
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
+            try {
+              $results = Invoke-ScriptAnalyzer -Path $target -Recurse -Settings $settings -ErrorAction Stop
+              break
+            } catch [System.InvalidOperationException] {
+              if ($attempt -eq 3 -or $_.Exception.Message -notmatch 'Collection was modified') { throw }
+              Write-Host "::warning::PSScriptAnalyzer hit its known parallel-analysis race (attempt $attempt/3), retrying..."
+            }
+          }
           $results | Format-Table -AutoSize
           foreach ($r in $results) {
             $lvl = if ($r.Severity -eq 'Error') { 'error' } else { 'warning' }
