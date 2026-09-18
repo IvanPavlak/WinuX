@@ -18,6 +18,7 @@ The [System module reference](../../../modules/system.md) is the authority on wh
 | `Configure-WSL` | `DefaultWSLDistribution`, `DefaultWSLUsername` | [Configure-WSL](Configure-WSL.md) |
 | `Configure-WSLSSH` | `DefaultWSLDistribution` | [Configure-WSLSSH](Configure-WSLSSH.md) |
 | `Determine-DotnetDependencies` | `DotnetProjectsSearchPath` | [Determine-DotnetDependencies](Determine-DotnetDependencies.md) |
+| `Format-OnefetchPanel` | `TerminalGreeting.Onefetch.Style` | [Format-OnefetchPanel](Format-OnefetchPanel.md) |
 | `Get-FastfetchLogoArgument` | `Universal.FastFetchImageLogo`, `PathTemplates.SymbolicLinks` | [Get-FastfetchLogoArgument](Get-FastfetchLogoArgument.md) |
 | `Get-PinnedApps` | `BootstrapConfig.DataFiles` | [Get-PinnedApps](Get-PinnedApps.md) |
 | `Initialize-OhMyPosh` | `Universal` | [Initialize-OhMyPosh](Initialize-OhMyPosh.md) |

@@ -17,6 +17,7 @@
 		'Determine-DotnetDependencies',
 		'Display-SystemLanguageSettings',
 		'Enable-DeveloperMode',
+		'Format-OnefetchPanel',
 		'Get-BrowserTitlePattern',
 		'Get-BrowserWindowsByTarget',
 		'Get-ConsoleWindowSize',

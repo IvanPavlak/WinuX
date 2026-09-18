@@ -9,7 +9,7 @@ Displays the onefetch repository info panel when the shell is inside a git repos
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`TerminalGreeting.Onefetch`](../../configuration-reference.md#terminal-greeting-startup-and-the-c-alias) | hashtable, 4 keys | `Enabled = $false`, `IncludeInAutoFit = $true`, `InProjectTerminals = $true`, `Arguments = @()` | Whether the repository panel is shown, whether its height counts towards the font fit, whether project terminals get it too, and what arguments the binary gets. Resolved by [`Resolve-TerminalGreetingSettings`](Resolve-TerminalGreetingSettings.md). |
+| [`TerminalGreeting.Onefetch`](../../configuration-reference.md#terminal-greeting-startup-and-the-c-alias) | hashtable, 5 keys | `Enabled = $false`, `IncludeInAutoFit = $true`, `InProjectTerminals = $true`, `Arguments = @()`, `Style` off | Whether the repository panel is shown, whether its height counts towards the font fit, whether project terminals get it too, what arguments the binary gets, and how its output is restyled afterwards. Resolved by [`Resolve-TerminalGreetingSettings`](Resolve-TerminalGreetingSettings.md). |
 
 Turning it on has no effect on machines where `onefetch` is not installed, and none in directories that are not repositories: both are silent no-ops with one debug line. There is no directory where this prints an error.
 
@@ -30,7 +30,12 @@ Turning it on has no effect on machines where `onefetch` is not installed, and n
 4. What arguments should the binary get?
     - Options: `TerminalGreeting.Onefetch.Arguments`, an array. `@("--no-art")` drops the ASCII language logo, which is the usual choice when the fastfetch logo is already on screen; `@("--no-merges")` leaves merge commits out of the contributor counts; `@("--number-of-languages", "3")` shortens the language list. A single string works as one argument, and blank entries are dropped. Run `onefetch --help` for the full list.
     - Default: `@()` - onefetch's own defaults.
+    - Note: this is onefetch's ONLY configuration surface. It has no configuration file, so unlike fastfetch there is nothing to dotfile and symlink, and this array is where its whole appearance lives. What the command line still cannot express - a true colour, or a separator other than the hardcoded `:` - is handled afterwards by [`Format-OnefetchPanel`](Format-OnefetchPanel.md).
     - More detail: [`TerminalGreeting`](../../configuration-reference.md#terminal-greeting-startup-and-the-c-alias)
+5. Do you want the panel restyled beyond what the command line can say?
+    - Options: `TerminalGreeting.Onefetch.Style`, which rewrites onefetch's output on its way to the screen - a true colour (`--text-colors` takes ANSI indices `0-15` and rejects anything above) and a separator other than `:` (hardcoded, with no flag that replaces it). Needs the all-hosts profile linked and a terminal that renders a true colour.
+    - Default: off.
+    - More detail: [`Format-OnefetchPanel`](Format-OnefetchPanel.md)
 
 ## Where to Put Values
 
@@ -117,6 +122,7 @@ Set-LogLevel Verbose { Invoke-Onefetch }
 
 - [`Invoke-Onefetch` in the System module reference](../../../modules/system.md#invoke-onefetch) - parameters, usage and behaviour
 - [`Show-TerminalGreeting`](Show-TerminalGreeting.md) - the orchestrator, and the `c` alias
+- [`Format-OnefetchPanel`](Format-OnefetchPanel.md) - the true colours and the separator the command line cannot express
 - [`Invoke-Fastfetch`](Invoke-Fastfetch.md) - the panel the fit budget is shared with
 - [`Test-GitRepository`](../git/Test-GitRepository.md) - the repository test this step is gated on
 - [`Resolve-TerminalGreetingSettings`](Resolve-TerminalGreetingSettings.md) - how the three layers are merged and validated

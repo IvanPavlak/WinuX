@@ -1293,7 +1293,11 @@ Resolved by `Resolve-TerminalGreetingSettings`, per key: an explicit parameter o
 - `Onefetch.Enabled` - Boolean. Whether the repository panel is shown. Ships `$false`.
 - `Onefetch.IncludeInAutoFit` - Boolean. Whether onefetch's height counts towards the font fit, so both panels are fitted together. Ships `$true`. Off fits fastfetch alone, and onefetch then scrolls the top of the panel away when the two do not both fit.
 - `Onefetch.InProjectTerminals` - Boolean. Whether `Open-ProjectTerminals` appends `Invoke-Onefetch` to each project tab's command, after the `Set-Location`. Ships `$true`. The terminal greeting cannot cover those tabs and no configuration can make it: a tab is spawned as `pwsh -NoExit -EncodedCommand <Set-Location ...>`, and PowerShell runs the profile BEFORE the encoded command, so the greeting tests whatever directory Windows Terminal started the tab in rather than the project it is about to move to. Appending the call after `Set-Location` is the only point at which the tab is standing in the repository. `-InvokeOnefetch` on the call wins over this key.
-- `Onefetch.Arguments` - Array of strings. Extra arguments for the onefetch binary, for example `@("--no-art")` or `@("--no-merges")`. Ships `@()`. **Arrays replace wholesale on merge**, so write the whole list.
+- `Onefetch.Arguments` - Array of strings. Extra arguments for the onefetch binary, for example `@("--no-art")` or `@("--no-merges")`. Ships `@()`. **Arrays replace wholesale on merge**, so write the whole list. This is onefetch's only configuration surface: it has no configuration file, so unlike fastfetch there is nothing to dotfile and symlink, and this array is where its whole appearance lives.
+- `Onefetch.Style` - Hashtable. What the command line cannot say, rewritten in onefetch's output afterwards by `Format-OnefetchPanel`. Ships off. Needs the all-hosts profile linked (the global `onefetch` wrapper lives there) and a terminal that renders a true colour - Windows Terminal or WezTerm, the same guard the fastfetch image logo sits behind.
+- `Onefetch.Style.Enabled` - Boolean. Whether the panel is restyled at all. Ships `$false`.
+- `Onefetch.Style.Separator` - String. Replaces the hardcoded `:` after each field name, which no onefetch flag can: in `--text-colors`, "colon" is a *colour* slot rather than a string, and `--number-separator` is the thousands separator inside numbers. `" -> "` reads like a fastfetch separator. Ships `""`, which keeps the colon. A separator wider than the `:` shifts every value right, and the continuation lines are re-padded to follow it.
+- `Onefetch.Style.Colors` - Hashtable keyed by the ANSI index onefetch was told to use, valued by the SGR parameters to paint it with instead, as `@{ "12" = "38;2;30;144;255" }`. Ships `@{}`. This is the only route to a true colour: `--text-colors` takes indices `0-15` and rejects anything above with `33 is not in 0..16`, so `38;2;30;144;255` cannot be passed to the binary at all. Pair it with `Arguments`, which is where you tell onefetch *which* index to use for each slot.
 
 `Fastfetch.AutoFit` is how the panel is fitted into the Windows Terminal window. The function resets the font to the profile default, then presses `Ctrl+Minus` one step at a time - waiting for the terminal to reflow after each - until the panel fits, `MaxShrinkSteps` steps have been taken, or the terminal stops shrinking (its minimum font). Nothing in this branch is per machine: the fit is measured against the live window on every call, so a small laptop display or a high DPI scale needs no value of its own. The image logo follows the font on its own, because `Get-FastfetchLogoArgument` re-reads the cell size at display time.
 
@@ -1302,7 +1306,7 @@ Resolved by `Resolve-TerminalGreetingSettings`, per key: an explicit parameter o
 - `Fastfetch.AutoFit.ReflowTimeoutMilliseconds` - Any positive integer, no upper bound. How long `Wait-ConsoleReflow` polls the window size after a keystroke before assuming the terminal is not going to change. Ships `10`. This is the knob to tweak and test per terminal and machine: too short and a shrink step reads the old size before the terminal has reflowed, so the loop stops early with `cannot shrink further` in the verbose log; too long and every `c` waits the full value once, because the reset when the font is already at the default changes nothing. Every shrink step that does reflow returns as soon as the change is seen.
 - `Fastfetch.AutoFit.PromptReserve` - Integer, 0-20. Rows kept free below the panel for the upcoming prompt when judging vertical overflow (one further row is always kept for the line the cursor ends on). Ships `1`.
 
-**Consumer functions:** `Show-TerminalGreeting`, `Invoke-Clear`, `Invoke-Fastfetch`, `Invoke-Onefetch`, `Resolve-TerminalGreetingSettings`, `Open-ProjectTerminals` (which appends `Invoke-Onefetch` to each project tab, gated on `Onefetch.InProjectTerminals`)
+**Consumer functions:** `Show-TerminalGreeting`, `Invoke-Clear`, `Invoke-Fastfetch`, `Invoke-Onefetch`, `Format-OnefetchPanel`, `Resolve-TerminalGreetingSettings`, `Open-ProjectTerminals` (which appends `Invoke-Onefetch` to each project tab, gated on `Onefetch.InProjectTerminals`)
 
 **Example:**
 
@@ -1323,7 +1327,27 @@ TerminalGreeting = @{
 }
 ```
 
-See [Show-TerminalGreeting](guides/system/Show-TerminalGreeting.md), [Invoke-Fastfetch](guides/system/Invoke-Fastfetch.md), [Invoke-Onefetch](guides/system/Invoke-Onefetch.md) and [Resolve-TerminalGreetingSettings](guides/system/Resolve-TerminalGreetingSettings.md).
+```powershell
+# Configuration.local.psd1 - the repository panel restyled to match a fastfetch palette exactly.
+# Arguments picks which ANSI index paints each slot; Style.Colors maps those indices to the true
+# colours --text-colors cannot take, and Style.Separator replaces the colon no flag can.
+TerminalGreeting = @{
+    Onefetch = @{
+        Enabled   = $true
+        Arguments = @("--text-colors", "12", "9", "9", "12", "9", "15", "--nerd-fonts", "--no-bold")
+        Style     = @{
+            Enabled   = $true
+            Separator = " -> "
+            Colors    = @{
+                "12" = "38;2;30;144;255"  # dodger blue - fastfetch keyColor
+                "9"  = "38;2;255;0;0"     # neon red    - fastfetch display.color.separator
+            }
+        }
+    }
+}
+```
+
+See [Show-TerminalGreeting](guides/system/Show-TerminalGreeting.md), [Invoke-Fastfetch](guides/system/Invoke-Fastfetch.md), [Invoke-Onefetch](guides/system/Invoke-Onefetch.md), [Format-OnefetchPanel](guides/system/Format-OnefetchPanel.md) and [Resolve-TerminalGreetingSettings](guides/system/Resolve-TerminalGreetingSettings.md).
 
 ---
 

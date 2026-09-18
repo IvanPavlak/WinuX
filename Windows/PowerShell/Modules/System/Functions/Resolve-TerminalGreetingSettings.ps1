@@ -29,6 +29,16 @@ function Resolve-TerminalGreetingSettings {
 		                                       Set-Location that moves it into the repository - so the
 		                                       append is the only way they get the panel.
 		  Onefetch.Arguments                   Extra arguments passed to the onefetch binary. Default @().
+		  Onefetch.Style.Enabled               Whether onefetch's output is restyled on its way to the
+		                                       screen by Format-OnefetchPanel. Default $false - the
+		                                       panel is onefetch's own until a fork asks otherwise.
+		  Onefetch.Style.Separator             Replaces onefetch's hardcoded ":" after each field name,
+		                                       for example " -> ". Default "" - keep the colon.
+		  Onefetch.Style.Colors                Maps an ANSI index onefetch was told to use onto the SGR
+		                                       parameters to paint it with instead, as
+		                                       @{ "12" = "38;2;30;144;255" }. This is the only way to a
+		                                       true color: --text-colors takes 0-15 and nothing else.
+		                                       Default @{} - repaint nothing.
 
 		A value that is not an integer in range - from either layer - is reported through
 		Write-LogWarning and the built-in default is used for that key, so a typo in
@@ -80,6 +90,10 @@ function Resolve-TerminalGreetingSettings {
 	.EXAMPLE
 		(Resolve-TerminalGreetingSettings).Onefetch
 		Shows whether onefetch is on, whether it counts towards the fit, and the arguments it gets.
+
+	.EXAMPLE
+		(Resolve-TerminalGreetingSettings).Onefetch.Style
+		Shows whether the panel is restyled, with what separator and which color remapping.
 	#>
 	[CmdletBinding()]
 	[OutputType([psobject])]
@@ -178,6 +192,23 @@ function Resolve-TerminalGreetingSettings {
 	}
 	Write-LogDebug "[Resolve-TerminalGreetingSettings] TerminalGreeting.Onefetch.Arguments = [$($arguments -join ' ')]"
 
+	# Style: a separator string and a color map, both free-form enough that there is nothing to
+	# range-check here - Format-OnefetchPanel skips an index it cannot use and says so at debug
+	# level, which is the right place for it, since the same map has to survive being written by
+	# hand in a psd1.
+	$styleSection = & $branch $onefetchSection "Style"
+
+	$separator = ""
+	if ($styleSection -and $styleSection.Contains("Separator") -and $null -ne $styleSection["Separator"]) {
+		$separator = "$($styleSection["Separator"])"
+	}
+
+	$colors = @{}
+	if ($styleSection -and $styleSection.Contains("Colors") -and $styleSection["Colors"] -is [hashtable]) {
+		$colors = $styleSection["Colors"]
+	}
+	Write-LogDebug "[Resolve-TerminalGreetingSettings] TerminalGreeting.Onefetch.Style.Separator = [$separator], Colors = [$($colors.Count)]"
+
 	return [pscustomobject]@{
 		Clear     = [pscustomobject]@{
 			Enabled = & $resolveBool $clearSection "Enabled" $true "TerminalGreeting.Clear.Enabled"
@@ -196,6 +227,11 @@ function Resolve-TerminalGreetingSettings {
 			IncludeInAutoFit   = & $resolveBool $onefetchSection "IncludeInAutoFit" $true "TerminalGreeting.Onefetch.IncludeInAutoFit"
 			InProjectTerminals = & $resolveBool $onefetchSection "InProjectTerminals" $true "TerminalGreeting.Onefetch.InProjectTerminals"
 			Arguments          = [string[]]$arguments
+			Style              = [pscustomobject]@{
+				Enabled   = & $resolveBool $styleSection "Enabled" $false "TerminalGreeting.Onefetch.Style.Enabled"
+				Separator = $separator
+				Colors    = $colors
+			}
 		}
 	}
 }

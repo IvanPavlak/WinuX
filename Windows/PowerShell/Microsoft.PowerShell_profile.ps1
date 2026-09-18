@@ -84,9 +84,10 @@ Test-ConfigurationSchema -WarningAction Continue
 # Ctrl+Minus round trips would only delay the first prompt. `c` (Show-TerminalGreeting) does fit.
 #
 # Dot-sourced like Initialize-PSReadLine below, because this runs before the System and Git modules
-# are imported. Six files: the orchestrator, its three steps, the settings resolver, and the
-# repository test the onefetch step is gated on.
-foreach ($greetingFunction in "Resolve-TerminalGreetingSettings", "Invoke-Clear", "Invoke-Fastfetch", "Invoke-Onefetch", "Show-TerminalGreeting") {
+# are imported. Seven files: the orchestrator, its three steps, the settings resolver, the onefetch
+# restyler the all-hosts profile's wrapper calls, and the repository test the onefetch step is
+# gated on.
+foreach ($greetingFunction in "Resolve-TerminalGreetingSettings", "Invoke-Clear", "Invoke-Fastfetch", "Invoke-Onefetch", "Format-OnefetchPanel", "Show-TerminalGreeting") {
 	. (Join-Path $ModulesPath "System\Functions\$greetingFunction.ps1")
 }
 . (Join-Path $ModulesPath "Git\Functions\Test-GitRepository.ps1")

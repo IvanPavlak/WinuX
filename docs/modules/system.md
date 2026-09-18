@@ -214,6 +214,35 @@ The function first calls `Test-AdminPrivileges`, then checks whether `AllowDevel
 Enable-DeveloperMode
 ```
 
+## [Format-OnefetchPanel](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Format-OnefetchPanel.ps1)
+
+- **Description:** Restyles onefetch's output as it streams past, reaching the two parts of its appearance that cannot be configured at all. onefetch has no configuration file - unlike fastfetch, which reads a `config.jsonc` - and its command line cannot express either a true color (`--text-colors` takes ANSI indices `0-15` and rejects anything above with "33 is not in 0..16") or a separator other than the hardcoded `:` (in `--text-colors` "colon" is a *color* slot, not a string, and `--number-separator` is the thousands separator inside numbers). Both are reachable afterwards, in the SGR escape sequences onefetch writes and keeps writing when piped: this maps the ANSI indices it was told to use onto true-color codes, and swaps the colon for a separator of your choosing. A pure text transform - no binary, no terminal, no configuration lookup - so it is testable on a string and safe in front of any onefetch invocation, including the measuring one: it emits exactly one line per line, so a measured panel keeps its height. A line that matches nothing passes through untouched, which is also what an uncolored stream gets (onefetch honors `NO_COLOR`). Driven by `TerminalGreeting.Onefetch.Style` through the global `onefetch` wrapper in the all-hosts profile, which also hands a bare `onefetch` the configured `Arguments` - the way a bare `fastfetch` gets its configuration file - so that the indices `Style.Colors` remaps are the ones `--text-colors` actually asked for.
+- **Parameters:** -Line, -Separator, -Colors
+- **Usage:** `onefetch | Format-OnefetchPanel -Separator " -> "`, `onefetch | Format-OnefetchPanel -Colors @{ "12" = "38;2;30;144;255" }`
+
+The colon is matched structurally - a color, the colon, a reset - rather than against one particular color code, so it is found whatever `--text-colors` was set to.
+
+Alignment is the subtle part. A separator wider than the `:` it replaces pushes every value right, while onefetch's own continuation lines - the second author, the extra churn entries, the language chips - are already padded and would be left behind. Those are re-padded by the difference, and the padding is inserted at the *info column* rather than at column 0, so the rows of the ASCII logo that share a line with a language chip keep their own columns instead of acquiring a slant. The info column is measured once, off the first field line, as the last run of two spaces before the separator - the gap between logo and info is more than one space, while the words inside a field name are separated by exactly one. Three kinds of line are never padded: anything above the first field (the title and its underline are not in the value column), anything carrying a background color (the color palette row, the language bar - both drawn to a width of their own), and anything too short to reach the info column.
+
+| Parameter     | Type        | Default | Description                                                                                                                   |
+| ------------- | ----------- | ------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `-Line`       | `string`    | -       | A line of onefetch output. Takes the whole stream from the pipeline.                                                           |
+| `-Separator`  | `string`    | -       | Replaces the hardcoded `:` and the single space after it. `$null` or empty leaves the colon alone.                            |
+| `-Colors`     | `hashtable` | -       | Maps an ANSI index (`0-15`) onto the SGR parameters to paint it with instead. An index out of range, or an empty replacement, is skipped with a debug line. |
+
+```powershell
+# The panel with fastfetch's separator in place of the colon
+onefetch | Format-OnefetchPanel -Separator " -> "
+
+# Repaint everything onefetch drew in bright blue as exact dodger blue
+onefetch --text-colors 12 9 9 12 9 15 | Format-OnefetchPanel -Colors @{ "12" = "38;2;30;144;255" }
+
+# Both at once, which is what TerminalGreeting.Onefetch.Style drives
+onefetch | Format-OnefetchPanel -Separator " -> " -Colors @{ "12" = "38;2;30;144;255"; "9" = "38;2;255;0;0" }
+```
+
+**See also:** [Invoke-Onefetch](#invoke-onefetch), [Resolve-TerminalGreetingSettings](#resolve-terminalgreetingsettings), [Show-TerminalGreeting](#show-terminalgreeting), [Format-OnefetchPanel configuration guide](../configuration/guides/system/Format-OnefetchPanel.md)
+
 ## [Get-BrowserTitlePattern](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Get-BrowserTitlePattern.ps1)
 
 - **Description:** Returns the window title regex that identifies a browser's main windows, keyed by browser name from `Configuration.Universal.Browsers` (Firefox, Tor, Chrome, Edge, Brave); unknown names return `$null`. The single source of truth for browser window identification, shared by `Terminate-AllBrowserProcesses` (to find the windows to close) and `Open-Browser`'s `-Instances` mode (to count only the target browser's existing windows - Firefox and Tor Browser share the `firefox.exe` process name, so a process-level count cannot tell them apart).
@@ -568,7 +597,7 @@ Invoke-Onefetch -Arguments "--no-art"
 Set-LogLevel Verbose { Invoke-Onefetch }
 ```
 
-**See also:** [Show-TerminalGreeting](#show-terminalgreeting), [Invoke-Fastfetch](#invoke-fastfetch), [Test-GitRepository](git.md#test-gitrepository), [Invoke-Onefetch configuration guide](../configuration/guides/system/Invoke-Onefetch.md)
+**See also:** [Show-TerminalGreeting](#show-terminalgreeting), [Invoke-Fastfetch](#invoke-fastfetch), [Format-OnefetchPanel](#format-onefetchpanel), [Test-GitRepository](git.md#test-gitrepository), [Invoke-Onefetch configuration guide](../configuration/guides/system/Invoke-Onefetch.md)
 
 ## [Invoke-TerminateWindowsTerminalTabsExit](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Invoke-TerminateWindowsTerminalTabsExit.ps1)
 
