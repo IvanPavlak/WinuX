@@ -5,7 +5,9 @@ function DockerWizard {
 
 	.DESCRIPTION
 		Launches Docker Desktop so the Docker daemon becomes available.
-		Optionally starts Docker Compose services for a given project path.
+		Optionally starts Docker Compose services from an explicit compose file, or from a
+		project directory - probing compose.yaml, compose.yml, docker-compose.yaml and
+		docker-compose.yml in that order, the same precedence `docker compose` uses.
 		When stopping, first requests a graceful Docker Desktop shutdown and then
 		cleans up any Docker-owned WSL distros or helper processes that remain.
 
@@ -266,13 +268,21 @@ function DockerWizard {
 		}
 	}
 	elseif ($ComposeProjectPath) {
-		if (Test-Path (Join-Path $ComposeProjectPath "docker-compose.yml") -ErrorAction SilentlyContinue) {
-			$composeFile = Join-Path $ComposeProjectPath "docker-compose.yml"
+		# The Compose-spec file names, in the order `docker compose` itself resolves them,
+		# so a project that carries several behaves here exactly as it does on the command
+		# line. compose.yaml leads because that is the spec's preferred name and what
+		# `docker init` and modern generators write
+		$composeFileNames = @("compose.yaml", "compose.yml", "docker-compose.yaml", "docker-compose.yml")
+
+		foreach ($composeFileName in $composeFileNames) {
+			$candidateFile = Join-Path $ComposeProjectPath $composeFileName
+			if (Test-Path $candidateFile -ErrorAction SilentlyContinue) {
+				$composeFile = $candidateFile
+				break
+			}
 		}
-		elseif (Test-Path (Join-Path $ComposeProjectPath "compose.yml") -ErrorAction SilentlyContinue) {
-			$composeFile = Join-Path $ComposeProjectPath "compose.yml"
-		}
-		else {
+
+		if (-not $composeFile) {
 			Write-LogWarning "No Docker Compose file found in => [$ComposeProjectPath]"
 		}
 	}

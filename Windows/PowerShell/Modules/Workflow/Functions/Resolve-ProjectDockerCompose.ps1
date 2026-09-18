@@ -12,9 +12,11 @@ function Resolve-ProjectDockerCompose {
 		or the provider is Oracle (project-local compose file).
 
 		Returns $null when the project needs no Docker, otherwise an object with the
-		resolved provider and exactly one of ComposeFilePath (centralized compose file
-		under MachineSpecificPaths.DockerDirectory) or ComposeProjectPath (project root
-		containing its own docker-compose.yml) - the same shapes DockerWizard accepts.
+		resolved provider and exactly one of ComposeFilePath (a DockerComposeFiles stack,
+		resolved by Resolve-DockerComposeStackPath - relative to
+		MachineSpecificPaths.DockerDirectory or absolute) or ComposeProjectPath (project
+		root containing its own compose file, which DockerWizard probes for the
+		Compose-spec names) - the same shapes DockerWizard accepts.
 
 		Used by Run-Project (behind its optional Docker step); Start-Containers works
 		directly on the DockerComposeFiles entries instead.
@@ -98,16 +100,18 @@ function Resolve-ProjectDockerCompose {
 	$composeFilePath = $null
 	$composeProjectPath = $null
 
-	# Check if this provider has a centralized Docker Compose file in WinuX
-	$centralComposeFile = if ($selectedProvider) { $composeFileMap[$selectedProvider] } else { $null }
+	# Check if this provider names a stack in DockerComposeFiles. The path comes from
+	# Resolve-DockerComposeStackPath, so an absolute entry is honored here exactly as it
+	# is in Start-Containers instead of being joined under the Docker directory
+	$centralComposeFile = if ($selectedProvider) { Resolve-DockerComposeStackPath -Name $selectedProvider } else { $null }
 	if ($centralComposeFile) {
-		# Use the centralized compose file from WinuX/Docker/
-		$composeFilePath = Join-Path $MachineSpecificPaths.DockerDirectory $centralComposeFile
+		$composeFilePath = $centralComposeFile
 
 		Write-LogDebug "Using centralized Docker Compose => [$composeFilePath]" -Style Step -NoLeadingNewline
 	}
 	else {
-		# Fall back to project-specific docker-compose.yml (e.g., Oracle in ExampleProject)
+		# Fall back to the project's own compose file - the shape for a project that owns its
+		# whole stack (UsesDocker), and for Oracle. DockerWizard probes the Compose-spec names
 		$mapping = (Get-ConfigSetting -Path 'ProjectTerminals' -Default @()) | Where-Object { $_.Name -eq $ProjectName }
 		if (-not $mapping -or -not $mapping.BasePath) {
 			Write-LogError "No ProjectTerminals mapping with a BasePath found for [$ProjectName] - cannot resolve its project-local Docker Compose file!"

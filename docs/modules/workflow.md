@@ -213,18 +213,18 @@ Docker-Cleanup "Delete all volumes"
 
 ## [DockerWizard](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Workflow/Functions/DockerWizard.ps1)
 
-- **Description:** Starts or stops Docker Desktop with loading-spinner feedback, daemon readiness detection, graceful Docker Desktop CLI integration, and Docker-owned WSL cleanup. When starting, it can clean up a partial Docker state, launch Docker Desktop in detached mode (falling back to `Open-Docker`), wait for `docker info` to succeed, and optionally start Docker Compose services from an explicit compose file path or a project directory. When stopping, it first requests a graceful shutdown and then force-cleans Docker-owned helper processes and `docker-desktop` WSL distros only if Docker gets stuck. Used by `Run-Project` and `Start-Containers` to transparently spin up database containers.
+- **Description:** Starts or stops Docker Desktop with loading-spinner feedback, daemon readiness detection, graceful Docker Desktop CLI integration, and Docker-owned WSL cleanup. When starting, it can clean up a partial Docker state, launch Docker Desktop in detached mode (falling back to `Open-Docker`), wait for `docker info` to succeed, and optionally start Docker Compose services from an explicit compose file path or a project directory (probing `compose.yaml`, `compose.yml`, `docker-compose.yaml` and `docker-compose.yml`, the same precedence `docker compose` itself uses). When stopping, it first requests a graceful shutdown and then force-cleans Docker-owned helper processes and `docker-desktop` WSL distros only if Docker gets stuck. Used by `Run-Project` and `Start-Containers` to transparently spin up database containers.
 - **Parameters:** -Stop, -ComposeProjectPath, -ComposeFilePath, -PassThru
 - **Usage:** `DockerWizard`, `DockerWizard -Stop`, `DockerWizard -ComposeProjectPath "<DevRoot>\MyProject"`, `DockerWizard -ComposeFilePath "C:\WinuX\Docker\docker-compose.postgresql.yml"`
 
 `DockerWizard` treats Docker Desktop as more than a single Windows process. It also checks for Docker-owned `wsl.exe` helper processes and terminates `docker-desktop` WSL distros when Docker is stuck in a partial `starting` state. On start it polls for daemon readiness; on stop it requests a graceful shutdown and only escalates to force-cleanup if the shutdown stalls. The polling budgets come from `Configuration.DockerTimeouts` (`StartSeconds`/`StopSeconds`/`CleanupSeconds`, defaulting to 180/60/30) so slower machines can raise them.
 
-Compose startup runs `docker compose up -d` unconditionally - `up -d` is idempotent, so a half-stopped stack is reconciled to the compose file instead of being skipped because one container still runs. A compose path that does not exist is reported with a warning instead of being silently ignored.
+The project-directory probe follows the Compose spec's own precedence, so a project that carries several compose files starts the same file `docker compose` would pick, and a project whose only compose file is the spec-preferred `compose.yaml` is no longer reported as having none. Compose startup runs `docker compose up -d` unconditionally - `up -d` is idempotent, so a half-stopped stack is reconciled to the compose file instead of being skipped because one container still runs. A compose path that does not exist is reported with a warning instead of being silently ignored.
 
 | Parameter             | Description                                                                                                                                 |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
 | `-Stop`               | Stops Docker Desktop: requests a graceful shutdown, then force-cleans Docker-owned WSL distros and helper processes if the shutdown stalls. |
-| `-ComposeProjectPath` | Project directory to start Compose services from; looks for `docker-compose.yml` or `compose.yml` inside it.                                |
+| `-ComposeProjectPath` | Project directory to start Compose services from; probes `compose.yaml`, `compose.yml`, `docker-compose.yaml`, `docker-compose.yml` in that order and takes the first that exists. |
 | `-ComposeFilePath`    | Explicit Docker Compose file path; used directly, taking precedence over `-ComposeProjectPath`.                                             |
 | `-PassThru`           | Returns `[PSCustomObject]@{ Success; ComposeFilePath }` so callers can branch on the outcome instead of reading module-scoped state.        |
 
@@ -821,13 +821,37 @@ Set-LogLevel Verbose { w MyWorkspace }
 
 **See also:** [Get-WorkspaceOpenMeasurement](#get-workspaceopenmeasurement), [ConvertTo-WorkspaceOpenSummary](#convertto-workspaceopensummary), [Measure-WorkspaceOpen](#measure-workspaceopen), [Read-WorkspaceBenchmark](#read-workspacebenchmark)
 
+## [Resolve-DockerComposeStackPath](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Workflow/Functions/Resolve-DockerComposeStackPath.ps1)
+
+- **Description:** The one place a `Configuration.DockerComposeFiles` entry becomes a file path: a rooted value is used as-is, a relative one is joined under `MachineSpecificPaths.DockerDirectory`. Returns `$null` for a name that is not a configured stack, so callers can branch without reading the map themselves, and it deliberately does not check that the file exists - [Start-Containers](#start-containers) warns per stack and [DockerWizard](#dockerwizard) turns a missing file into a failed start, and those two messages are not interchangeable.
+- **Parameters:** -Name
+- **Usage:** `Resolve-DockerComposeStackPath -Name "PostgreSQL"`, `Resolve-DockerComposeStackPath MyStack`
+
+The rooted/relative split is what lets a stack live anywhere - a centralized compose file shipped in the repository's `Docker` directory, or a project's own compose file elsewhere on disk. It used to exist twice: correctly inside a private scriptblock in [Start-Containers](#start-containers), and not at all in [Resolve-ProjectDockerCompose](#resolve-projectdockercompose), which joined unconditionally and so turned every absolute entry into `<DockerDirectory>\<absolute path>`. Both callers now resolve through this function, so a stack registered by absolute path works identically whether it is started on its own or pulled in by [Run-Project](helper.md#run-project).
+
+| Parameter | Description |
+| --------- | ----------- |
+| `-Name`   | Stack name to resolve - a key of `Configuration.DockerComposeFiles`. Mandatory, positional. |
+
+```powershell
+Resolve-DockerComposeStackPath -Name "PostgreSQL"   # <RepoRoot>\Docker\docker-compose.postgresql.yml
+Resolve-DockerComposeStackPath MyStack              # D:\Stacks\compose.yml (absolute entry, used as-is)
+
+$composeFile = Resolve-DockerComposeStackPath -Name $stackName
+if (-not $composeFile) { Write-LogWarning "No such stack!" }
+```
+
+**See also:** [Start-Containers](#start-containers), [Resolve-ProjectDockerCompose](#resolve-projectdockercompose), [DockerWizard](#dockerwizard)
+
 ## [Resolve-ProjectDockerCompose](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Workflow/Functions/Resolve-ProjectDockerCompose.ps1)
 
-- **Description:** The single place that knows which Docker Compose source a runnable project's database containers come from. Looks up the project's `RunnableProjectMappings` entry, resolves the database provider (prompting via `Resolve-Selection` when several are configured), and decides whether Docker is required: the mapping sets `UsesDocker`, or the provider maps to a centralized compose file in `Configuration.DockerComposeFiles`, or the provider is Oracle (project-local compose file). Returns `$null` when the project needs no Docker.
+- **Description:** The single place that knows which Docker Compose source a runnable project's database containers come from. Looks up the project's `RunnableProjectMappings` entry, resolves the database provider (prompting via `Resolve-Selection` when several are configured), and decides whether Docker is required: the mapping sets `UsesDocker`, or the provider names a stack in `Configuration.DockerComposeFiles`, or the provider is Oracle (project-local compose file). Returns `$null` when the project needs no Docker.
 - **Parameters:** -ProjectName, -DatabaseProvider
 - **Usage:** `Resolve-ProjectDockerCompose -ProjectName "MyProject"`, `Resolve-ProjectDockerCompose -ProjectName "MyProject" -DatabaseProvider "PostgreSQL"`
 
-Extracted from `Run-Project`, which used to inline this resolution between its project menu and its terminal-tab logic. `Run-Project` calls it behind its optional Docker step (see [Resolve-RunProjectSteps](helper.md#resolve-runprojectsteps)); `Start-Containers` does not need it - it works directly on the `DockerComposeFiles` entries.
+Extracted from `Run-Project`, which used to inline this resolution between its project menu and its terminal-tab logic. `Run-Project` calls it behind its optional Docker step (see [Resolve-RunProjectSteps](helper.md#resolve-runprojectsteps)); `Start-Containers` does not need it - it works directly on the `DockerComposeFiles` entries. The stack path itself comes from [Resolve-DockerComposeStackPath](#resolve-dockercomposestackpath), so an absolute entry is honored here exactly as it is in `Start-Containers`.
+
+A mapping that sets `UsesDocker` without naming a provider always takes the project-local branch: the project owns its whole stack, its compose file lives at its own root, and a same-named `DockerComposeFiles` entry (if any) exists only so `Start-Containers` can offer that stack on its own.
 
 The result carries the resolved provider and exactly one of the two compose shapes `DockerWizard` accepts:
 
@@ -852,7 +876,7 @@ Resolve-ProjectDockerCompose -ProjectName "MyProject"
 Resolve-ProjectDockerCompose -ProjectName "MyProject" -DatabaseProvider "PostgreSQL"
 ```
 
-**See also:** [Start-Containers](#start-containers), [DockerWizard](#dockerwizard), [Run-Project](helper.md#run-project)
+**See also:** [Start-Containers](#start-containers), [DockerWizard](#dockerwizard), [Resolve-DockerComposeStackPath](#resolve-dockercomposestackpath), [Run-Project](helper.md#run-project)
 
 ## [Resolve-SwaggerBrowserGroup](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Workflow/Functions/Resolve-SwaggerBrowserGroup.ps1)
 
@@ -976,7 +1000,7 @@ Save-WorkspaceState -Entry @()
 - **Parameters:** -Name, -Stop, -Down
 - **Usage:** `Start-Containers`, `Start-Containers PostgreSQL`, `Start-Containers -Stop`, `Start-Containers -Stop -Down`
 
-Stack values resolve relative to `MachineSpecificPaths.DockerDirectory`; absolute paths are used as-is, so any compose file on disk can be registered (`Redis = "docker-compose.redis.yml"`, `MyStack = "D:\Stacks\compose.yml"`) - the mechanism is not database-specific. `-Stop` runs `docker compose stop` (containers kept, fast to resume); adding `-Down` runs `docker compose down` instead (containers and network removed, volumes kept). Docker Desktop itself stays running either way - that is [DockerWizard](#dockerwizard) `-Stop`'s job.
+Stack values are resolved by [Resolve-DockerComposeStackPath](#resolve-dockercomposestackpath): relative to `MachineSpecificPaths.DockerDirectory`, absolute paths used as-is, so any compose file on disk can be registered (`Redis = "docker-compose.redis.yml"`, `MyStack = "D:\Stacks\compose.yml"`) - the mechanism is not database-specific. `-Stop` runs `docker compose stop` (containers kept, fast to resume); adding `-Down` runs `docker compose down` instead (containers and network removed, volumes kept). Docker Desktop itself stays running either way - that is [DockerWizard](#dockerwizard) `-Stop`'s job.
 
 It also works as a workspace/project action, e.g. `@{ Action = "Start-Containers" }`, for workspaces that want the database up without the servers.
 
@@ -1000,7 +1024,7 @@ Start-Containers -Stop
 Start-Containers -Stop -Down
 ```
 
-**See also:** [DockerWizard](#dockerwizard), [Docker-Cleanup](#docker-cleanup), [Resolve-ProjectDockerCompose](#resolve-projectdockercompose), [Run-Project](helper.md#run-project)
+**See also:** [DockerWizard](#dockerwizard), [Docker-Cleanup](#docker-cleanup), [Resolve-DockerComposeStackPath](#resolve-dockercomposestackpath), [Resolve-ProjectDockerCompose](#resolve-projectdockercompose), [Run-Project](helper.md#run-project)
 
 ## [Test-TerminalTabsAlreadyOpen](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Workflow/Functions/Test-TerminalTabsAlreadyOpen.ps1)
 

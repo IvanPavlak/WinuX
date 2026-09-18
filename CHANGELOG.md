@@ -8,6 +8,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.72] - 2026-09-18
+
+### Added
+
+- **`Resolve-DockerComposeStackPath` is the one place a `DockerComposeFiles` entry becomes a file path.** The rule - an absolute value used as-is, a relative one joined under `MachineSpecificPaths.DockerDirectory` - existed twice: correctly, in a private scriptblock inside `Start-Containers`, and not at all in `Resolve-ProjectDockerCompose`, which joined unconditionally and so turned every absolute entry into `<DockerDirectory>\<absolute path>` and sent `Run-Project` after a compose file that was never there. Both callers now resolve by stack name through the new exported function, which returns `$null` for a name that is not a configured stack and deliberately never checks that the file exists, because `Start-Containers` reports a missing file per stack and `DockerWizard` turns one into a failed start and those two messages are not interchangeable. `DockerComposeFiles` and `DockerTimeouts` also got the configuration-reference sections their guides had been linking to through a dangling anchor. Tests: `Resolve-DockerComposeStackPath.Tests.ps1` (relative joined, absolute as-is, unknown name, blank value, absent `DockerComposeFiles`, no existence check), `Start-Containers.Tests.ps1` (every stack resolves through the helper), `Resolve-ProjectDockerCompose.Tests.ps1` (an absolute entry is used as-is).
+
+### Fixed
+
+- **`DockerWizard -ComposeProjectPath` finds every Compose-spec file name, so `Run-Project` can start a project that owns its whole stack.** The probe looked for `docker-compose.yml` and then `compose.yml`, so a project whose compose file is the spec's preferred `compose.yaml` - what `docker init` and current generators write - was reported as having no compose file at all: `-PassThru` returned `Success = $false`, and `Run-Project` logged "Docker is required but could not be started" and skipped the project without opening a single tab. The probe is now a candidate loop over `compose.yaml`, `compose.yml`, `docker-compose.yaml` and `docker-compose.yml` in `docker compose`'s own precedence, first match wins, with the warning unchanged when none of them exists. A `RunnableProjectMappings` entry with `UsesDocker = $true` and no `DatabaseProviders` is the documented shape for such a project - the app runs in its containers, so its `Commands` follow them (`docker compose logs -f web`) instead of starting a server on the host. Tests: `DockerWizard.Tests.ps1` (`compose.yaml`, `docker-compose.yaml`, legacy `docker-compose.yml`, and `compose.yaml` winning when a project carries both), `Resolve-ProjectDockerCompose.Tests.ps1` (`UsesDocker` takes the project-local branch even when a stack shares the project name).
+
 ## [0.1.71] - 2026-09-18
 
 ### Fixed
@@ -1241,7 +1251,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.71...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.72...HEAD
+[0.1.72]: https://github.com/IvanPavlak/WinuX/compare/v0.1.71...v0.1.72
 [0.1.71]: https://github.com/IvanPavlak/WinuX/compare/v0.1.70...v0.1.71
 [0.1.70]: https://github.com/IvanPavlak/WinuX/compare/v0.1.69...v0.1.70
 [0.1.69]: https://github.com/IvanPavlak/WinuX/compare/v0.1.68...v0.1.69

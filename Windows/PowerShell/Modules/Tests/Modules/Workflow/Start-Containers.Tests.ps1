@@ -5,6 +5,7 @@ BeforeAll {
 	$FunctionsPath = Join-Path $ModuleRoot "Workflow\Functions"
 
 	. "$FunctionsPath\Start-Containers.ps1"
+	. "$FunctionsPath\Resolve-DockerComposeStackPath.ps1"
 
 	function DockerWizard {
 		param(
@@ -92,6 +93,16 @@ Describe "Start-Containers" {
 
 		Should -Invoke Resolve-Selection -Times 1 -ParameterFilter { $InputObject -eq "PostgreSQL" }
 		Should -Invoke DockerWizard -Times 1 -Exactly
+	}
+
+	It "resolves every stack through Resolve-DockerComposeStackPath" {
+		# The rooted/relative rule lives in one place now - this pins the seam so it cannot
+		# quietly grow a second copy here again
+		Mock Resolve-DockerComposeStackPath { "C:\Repo\Docker\docker-compose.postgresql.yml" }
+
+		Start-Containers
+
+		Should -Invoke Resolve-DockerComposeStackPath -Times 1 -Exactly -ParameterFilter { $Name -eq "PostgreSQL" }
 	}
 
 	It "uses an absolute compose path as-is instead of joining DockerDirectory" {
