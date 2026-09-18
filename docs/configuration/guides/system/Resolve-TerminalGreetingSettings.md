@@ -9,7 +9,7 @@ Resolves the settings `Show-TerminalGreeting` and its three steps run with: per 
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`TerminalGreeting`](../../configuration-reference.md#terminal-greeting-startup-and-the-c-alias) | hashtable, 3 branches | `Clear` on, `Fastfetch` on (auto-fit on, `10` / `10` / `1`), `Onefetch` off | The section this function reads by default. A `$null` or missing key means "use the built-in default" silently; a value out of range (`MaxShrinkSteps` 0-50, `ReflowTimeoutMilliseconds` any positive integer, `PromptReserve` 0-20) or not an integer warns and uses the default. A missing section behaves exactly like the shipped values. |
+| [`TerminalGreeting`](../../configuration-reference.md#terminal-greeting-startup-and-the-c-alias) | hashtable, 3 branches | `Clear` on, `Fastfetch` on (auto-fit on, `10` / `10` / `1`), `Onefetch` off (and its `Style` off) | The section this function reads by default. A `$null` or missing key means "use the built-in default" silently; a value out of range (`MaxShrinkSteps` 0-50, `ReflowTimeoutMilliseconds` any positive integer, `PromptReserve` 0-20) or not an integer warns and uses the default. A missing section behaves exactly like the shipped values. |
 
 The decisions themselves - which steps run, how far to shrink, how long to wait, how many rows to reserve, what onefetch gets - are walked in the [`Show-TerminalGreeting` guide](Show-TerminalGreeting.md). This function is the resolver behind them; you call it directly to see what `c` would run with under the current configuration.
 
@@ -90,6 +90,11 @@ The verbose form names the layer each key came from (`default`, `configuration` 
         Onefetch  = @{
             Enabled   = $true
             Arguments = @("--no-art")
+            Style     = @{
+                Enabled   = $true
+                Separator = " -> "
+                Colors    = @{ "12" = "38;2;30;144;255" }
+            }
         }
     }
 }
@@ -100,6 +105,7 @@ The verbose form names the layer each key came from (`default`, `configuration` 
 - [`Resolve-TerminalGreetingSettings` in the System module reference](../../../modules/system.md#resolve-terminalgreetingsettings) - parameters, the resolved tree, layering and behaviour
 - [`Show-TerminalGreeting`](Show-TerminalGreeting.md) - the caller, and the decisions behind each key
 - [`Invoke-Clear`](Invoke-Clear.md), [`Invoke-Fastfetch`](Invoke-Fastfetch.md), [`Invoke-Onefetch`](Invoke-Onefetch.md) - the three steps it settles the values for
+- [`Format-OnefetchPanel`](Format-OnefetchPanel.md) - the consumer of the `Onefetch.Style` branch it resolves
 - [System configuration guides](README.md) - every guide for this module
 - [WinuXConfigurator](../../winux-configurator.md) - have an AI assistant walk these decisions with you
 - [Configuration reference](../../configuration-reference.md) - every key, section by section

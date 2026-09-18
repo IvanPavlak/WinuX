@@ -149,6 +149,15 @@ Describe "Vanilla Configuration (empty-by-default contract)" {
 			$greeting.Onefetch.IncludeInAutoFit | Should -BeTrue
 			$greeting.Onefetch.InProjectTerminals | Should -BeTrue
 			$greeting.Onefetch.Arguments | Should -BeNullOrEmpty
+			$greeting.Onefetch.Style.Separator | Should -BeNullOrEmpty
+			$greeting.Onefetch.Style.Colors.Count | Should -Be 0
+		}
+
+		It "Should ship the onefetch panel restyling disabled" {
+			# Opt-in upstream, twice over: it needs the all-hosts profile linked and a terminal
+			# that renders a true colour, and it changes how the panel looks. A vanilla install
+			# gets onefetch's own output, untouched.
+			$script:BaseConfig.TerminalGreeting.Onefetch.Style.Enabled | Should -BeFalse
 		}
 
 		It "Should ship the onefetch greeting step disabled" {

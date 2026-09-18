@@ -188,6 +188,63 @@ Describe "Resolve-TerminalGreetingSettings" {
 		}
 	}
 
+	Context "the Onefetch.Style branch" {
+		It "ships off, with nothing to rewrite" {
+			$style = (Resolve-TerminalGreetingSettings -Settings @{}).Onefetch.Style
+
+			$style.Enabled | Should -BeFalse
+			$style.Separator | Should -BeNullOrEmpty
+			$style.Colors.Count | Should -Be 0
+		}
+
+		It "resolves the separator and the color map from configuration" {
+			$settings = Resolve-TerminalGreetingSettings -Settings @{
+				Onefetch = @{
+					Style = @{
+						Enabled   = $true
+						Separator = " -> "
+						Colors    = @{ "12" = "38;2;30;144;255" }
+					}
+				}
+			}
+
+			$settings.Onefetch.Style.Enabled | Should -BeTrue
+			$settings.Onefetch.Style.Separator | Should -BeExactly " -> "
+			$settings.Onefetch.Style.Colors["12"] | Should -BeExactly "38;2;30;144;255"
+		}
+
+		It "keeps a separator of nothing but spaces - it is a separator, not a value" {
+			$settings = Resolve-TerminalGreetingSettings -Settings @{ Onefetch = @{ Style = @{ Separator = "  " } } }
+
+			$settings.Onefetch.Style.Separator | Should -BeExactly "  "
+		}
+
+		It "falls back to the defaults when Style is not a hashtable" {
+			# Same degradation as every other branch: a malformed section is not an error at the
+			# prompt.
+			$style = (Resolve-TerminalGreetingSettings -Settings @{ Onefetch = @{ Style = "on" } }).Onefetch.Style
+
+			$style.Enabled | Should -BeFalse
+			$style.Separator | Should -BeNullOrEmpty
+			$style.Colors.Count | Should -Be 0
+		}
+
+		It "ignores a Colors written as something other than a hashtable" {
+			$style = (Resolve-TerminalGreetingSettings -Settings @{ Onefetch = @{ Style = @{ Colors = @("12") } } }).Onefetch.Style
+
+			$style.Colors.Count | Should -Be 0
+		}
+
+		It "leaves an out-of-range index to Format-OnefetchPanel rather than warning here" {
+			# The map is free-form on purpose - the consumer skips what it cannot use and says so
+			# at debug level, which is the right place for a hand-written psd1.
+			$settings = Resolve-TerminalGreetingSettings -Settings @{ Onefetch = @{ Style = @{ Colors = @{ "33" = "38;2;1;2;3" } } } }
+
+			$settings.Onefetch.Style.Colors["33"] | Should -BeExactly "38;2;1;2;3"
+			Should -Invoke Write-LogWarning -Times 0 -Exactly
+		}
+	}
+
 	Context "values out of range" {
 		It "warns and uses the default for a non-integer MaxShrinkSteps" {
 			$settings = Resolve-TerminalGreetingSettings -Settings @{ Fastfetch = @{ AutoFit = @{ MaxShrinkSteps = "many" } } }

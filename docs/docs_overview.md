@@ -93,7 +93,7 @@ decisions behind them, and where the values go. Each module's `README.md` indexe
 | `CenterTerminalSizing`                             | `Center-Terminal` (via `Resolve-CenterTerminalSizing`) |
 | `ResizeWindowsPercent`                             | `Resize-Windows` (via `Resolve-ResizeWindowsPercent`) |
 | `SnapInsetPercent`                                 | `Get-WindowInsetPercent` (for the five pre-snap placement paths) |
-| `TerminalGreeting`                                 | `Show-TerminalGreeting` (alias `c`, and shell startup), `Invoke-Clear`, `Invoke-Fastfetch`, `Invoke-Onefetch` (via `Resolve-TerminalGreetingSettings`); `Onefetch.InProjectTerminals` also drives `Open-ProjectTerminals` |
+| `TerminalGreeting`                                 | `Show-TerminalGreeting` (alias `c`, and shell startup), `Invoke-Clear`, `Invoke-Fastfetch`, `Invoke-Onefetch`, `Format-OnefetchPanel` (via `Resolve-TerminalGreetingSettings`); `Onefetch.InProjectTerminals` also drives `Open-ProjectTerminals` |
 | `KillAll.Steps`                                    | `Kill-All`, `Resolve-KillAllSteps`                 |
 | `BootstrapConfig.Steps`                            | `Bootstrap`, `Resolve-BootstrapSteps` (incl. the opt-in `CoreAiRules` step → `Deploy-CoreAiRules` and `AiSkills` step → `Deploy-AiSkills`) |
 | `AiSkills`                                         | `Deploy-AiSkills`, `Update-AiSkills`, `List-Skills`, `Get-AiSkillRoster` (via `Resolve-AiSkillsConfig`) |

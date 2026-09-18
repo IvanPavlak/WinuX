@@ -499,7 +499,39 @@
 	#                              repository - so the append is the only way they
 	#                              get the panel. -InvokeOnefetch wins per call.
 	#   Onefetch.Arguments         Extra arguments for the onefetch binary, for
-	#                              example @("--no-art") or @("--no-merges").
+	#                              example @("--no-art") or @("--no-merges"). This
+	#                              is onefetch's ONLY configuration surface: it
+	#                              has no config file, so unlike fastfetch there
+	#                              is nothing to symlink and this array is where
+	#                              its whole appearance lives.
+	#   Onefetch.Style             What the command line cannot say, rewritten in
+	#                              onefetch's output afterwards by
+	#                              Format-OnefetchPanel. Ships off, so the panel
+	#                              is onefetch's own unless a fork asks otherwise.
+	#     Style.Enabled            Whether the panel is restyled at all.
+	#     Style.Separator          Replaces the hardcoded ":" after each field
+	#                              name, which no onefetch flag can - in
+	#                              --text-colors "colon" is a COLOR slot, not a
+	#                              string. " -> " reads like a fastfetch
+	#                              separator. "" keeps the colon.
+	#     Style.Colors             Maps an ANSI index onefetch was told to use
+	#                              onto the SGR parameters to paint it with
+	#                              instead. The only route to a true color:
+	#                              --text-colors takes 0-15 and rejects anything
+	#                              above, so "38;2;30;144;255" cannot be passed
+	#                              to the binary at all. For example, to turn the
+	#                              bright blue of `--text-colors 12 ...` into
+	#                              exact dodger blue and its red into neon red:
+	#                                Colors = @{
+	#                                    "12" = "38;2;30;144;255"
+	#                                    "9"  = "38;2;255;0;0"
+	#                                }
+	#                              Applied by the global `onefetch` wrapper in
+	#                              the all-hosts profile, so it needs
+	#                              PathTemplates.SymbolicLinks.PowerShell.AllHostsProfile
+	#                              linked - and a terminal that renders a true
+	#                              color, which is the same guard the fastfetch
+	#                              image logo sits behind.
 	#
 	# Fastfetch.AutoFit is how the panel is fitted into the Windows Terminal
 	# window. The function resets the font to the profile default, then presses
@@ -550,6 +582,11 @@
 			IncludeInAutoFit   = $true
 			InProjectTerminals = $true
 			Arguments          = @()
+			Style              = @{
+				Enabled   = $false
+				Separator = ""
+				Colors    = @{}
+			}
 		}
 	}
 
