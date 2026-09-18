@@ -65,7 +65,7 @@ function Focus-TerminalTab {
 		}
 
 		if (-not $focusAcquired) {
-			[void][WindowModule.Native]::SetForegroundWindow($WindowHandle)
+			[void](Set-WindowForeground -Handle $WindowHandle)
 		}
 	}
 	else {
@@ -84,7 +84,7 @@ function Focus-TerminalTab {
 			# Process may have exited or lacks a visible window - fall back to window handle
 			$wtWindow = Get-WindowHandle -ProcessName "WindowsTerminal" -ErrorAction SilentlyContinue | Select-Object -First 1
 			if ($wtWindow) {
-				[void][WindowModule.Native]::SetForegroundWindow($wtWindow.Handle)
+				[void](Set-WindowForeground -Handle $wtWindow.Handle)
 			}
 			else {
 				Write-LogDebug " Could not activate Windows Terminal window" -Style Warning

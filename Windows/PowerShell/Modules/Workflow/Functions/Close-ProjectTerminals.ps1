@@ -50,7 +50,7 @@ function Close-ProjectTerminals {
 		$initialWindow = Get-TargetTerminalWindow -TerminalWindowHandle $TerminalWindowHandle
 
 		if ($initialWindow -and $initialWindow.Handle -ne [System.IntPtr]::Zero) {
-			[void][WindowModule.Native]::SetForegroundWindow($initialWindow.Handle)
+			[void](Set-WindowForeground -Handle $initialWindow.Handle)
 		}
 		else {
 			[Microsoft.VisualBasic.Interaction]::AppActivate($wtProcess.Id)
@@ -123,7 +123,7 @@ function Close-ProjectTerminals {
 			$targetWindow = Get-TargetTerminalWindow -TerminalWindowHandle $TerminalWindowHandle
 
 			if ($targetWindow -and $targetWindow.Handle -ne [System.IntPtr]::Zero) {
-				[void][WindowModule.Native]::SetForegroundWindow($targetWindow.Handle)
+				[void](Set-WindowForeground -Handle $targetWindow.Handle)
 				Start-Sleep -Milliseconds 25
 
 				for ($i = 0; $i -lt $maxTabs; $i++) {

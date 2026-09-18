@@ -19,9 +19,11 @@ function Ensure-DesktopVisible {
 		that index straight back in. A return of $null means nothing needs restoring: either the
 		desktop was already the visible one, or the switch could not be made.
 
-		The switch is confirmed with Wait-DesktopSwitch and retried through a Reset-VirtualDesktopState
-		recovery pass, mirroring Focus-VirtualDesktop - a long-running shell can hold a stale
-		VirtualDesktop COM proxy whose Switch-Desktop silently no-ops.
+		The current desktop and the window's desktop are read through Get-CurrentVirtualDesktopIndex
+		and Get-WindowDesktopIndex, and the switch is Switch-VirtualDesktop, which confirms the
+		desktop is showing, retries, falls back to a session reset (a long-running shell can hold a
+		stale VirtualDesktop COM proxy whose switch silently no-ops) and clears the window cache once
+		the switch lands. This function carries no retry or recovery of its own; it reports the outcome.
 
 	.PARAMETER WindowHandle
 		Bring up whichever desktop this window lives on.
@@ -48,27 +50,18 @@ function Ensure-DesktopVisible {
 		[int]$DesktopIndex
 	)
 
-	if (-not (Get-Command Switch-Desktop -ErrorAction SilentlyContinue)) {
-		if (Get-Command Import-VirtualDesktopModule -ErrorAction SilentlyContinue) {
-			[void](Import-VirtualDesktopModule -Silent)
-		}
-	}
-
-	if (-not (Get-Command Switch-Desktop -ErrorAction SilentlyContinue)) {
+	if (-not (Import-VirtualDesktopModule -Silent)) {
 		Write-LogDebug " [Ensure-DesktopVisible] VirtualDesktop module unavailable - cannot change the visible desktop" -Style Warning
 		return $null
 	}
 
 	try {
-		$currentIndex = Get-DesktopIndex -Desktop (Get-CurrentDesktop)
-
+		$currentIndex = Get-CurrentVirtualDesktopIndex
 		$targetIndex = if ($PSCmdlet.ParameterSetName -eq 'Index') {
 			$DesktopIndex
 		}
 		else {
-			$windowDesktop = Get-DesktopFromWindow -Hwnd $WindowHandle
-			if (-not $windowDesktop) { return $null }
-			Get-DesktopIndex -Desktop $windowDesktop
+			Get-WindowDesktopIndex -WindowHandle $WindowHandle
 		}
 	}
 	catch {
@@ -83,39 +76,18 @@ function Ensure-DesktopVisible {
 	if ($targetIndex -eq $currentIndex) { return $null }
 
 	$switched = $false
-	for ($attempt = 1; $attempt -le 3; $attempt++) {
-		try {
-			$null = Switch-Desktop -Desktop $targetIndex -ErrorAction Stop
-			if (Wait-DesktopSwitch -TargetDesktopIndex $targetIndex) {
-				$switched = $true
-				break
-			}
-		}
-		catch {
-			Write-LogDebug " [Ensure-DesktopVisible] Switch to desktop index $targetIndex failed (attempt $attempt/3) => $($_.Exception.Message)" -Style Warning
-		}
+	try {
+		# Switch-VirtualDesktop confirms the switch, recovers a stale session, and clears the window
+		# cache once the desktop is showing (handles enumerated before describe the old desktop).
+		$switched = [bool](Switch-VirtualDesktop -Index $targetIndex)
 	}
-
-	if (-not $switched -and (Get-Command Reset-VirtualDesktopState -ErrorAction SilentlyContinue)) {
-		if (Reset-VirtualDesktopState) {
-			try {
-				$null = Switch-Desktop -Desktop $targetIndex -ErrorAction Stop
-				$switched = Wait-DesktopSwitch -TargetDesktopIndex $targetIndex
-			}
-			catch {
-				$switched = $false
-			}
-		}
+	catch {
+		Write-LogDebug " [Ensure-DesktopVisible] Switch to desktop index $targetIndex failed => $($_.Exception.Message)" -Style Warning
 	}
 
 	if (-not $switched) {
 		Write-LogDebug " [Ensure-DesktopVisible] Could not bring desktop index $targetIndex on screen" -Style Warning
 		return $null
-	}
-
-	# Handles enumerated before the switch describe the previous desktop's composition.
-	if (Get-Command Clear-WindowCache -ErrorAction SilentlyContinue) {
-		Clear-WindowCache
 	}
 
 	return $currentIndex

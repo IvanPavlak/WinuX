@@ -79,7 +79,7 @@ function Test-TerminalTabsAlreadyOpen {
 
 			# Legacy fallback (UIA unavailable): activate the window and cycle tabs with
 			# Ctrl+Tab, matching titles as they become active.
-			[void][WindowModule.Native]::SetForegroundWindow($wtWindow.Handle)
+			[void](Set-WindowForeground -Handle $wtWindow.Handle)
 			Start-Sleep -Milliseconds 50
 
 			# Re-read title after activation (may have changed)

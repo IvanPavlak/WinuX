@@ -330,14 +330,10 @@ function Confirm-WorkspaceWindowPositions {
 					$handleKey = $candidate.Handle.ToInt64().ToString()
 
 					if (-not $desktopIndexCache.ContainsKey($handleKey)) {
-						$windowDesktopIndex = $null
-						try {
-							$windowDesktop = Get-DesktopFromWindow -Hwnd $candidate.Handle.ToInt64()
-							$windowDesktopIndex = Get-DesktopIndex $windowDesktop
-						}
-						catch {
-							$windowDesktopIndex = $null
-						}
+						# -1 means the desktop could not be resolved; cache $null so the fallback below
+						# keeps treating such a window as "unknown desktop".
+						$windowDesktopIndex = Get-WindowDesktopIndex -WindowHandle $candidate.Handle
+						if ($windowDesktopIndex -lt 0) { $windowDesktopIndex = $null }
 						$desktopIndexCache[$handleKey] = $windowDesktopIndex
 					}
 

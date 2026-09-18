@@ -175,7 +175,7 @@ function Snap-AllWindows {
 			elseif ($CurrentDesktopOnly) {
 				$currentDesktopIndex = $null
 				try {
-					$currentDesktopIndex = Get-DesktopIndex (Get-CurrentDesktop)
+					$currentDesktopIndex = Get-CurrentVirtualDesktopIndex
 				}
 				catch {
 					$currentDesktopIndex = $null
@@ -183,13 +183,9 @@ function Snap-AllWindows {
 
 				if ($null -ne $currentDesktopIndex) {
 					$allWindows = @($allWindows | Where-Object {
-							try {
-								(Get-DesktopIndex (Get-DesktopFromWindow -Hwnd $_.Handle.ToInt64())) -eq $currentDesktopIndex
-							}
-							catch {
-								# Unresolvable desktop (e.g. pinned/system window) - snap it rather than drop it.
-								$true
-							}
+							$windowDesktopIndex = Get-WindowDesktopIndex -WindowHandle $_.Handle
+							# Unresolvable desktop (-1: e.g. pinned/system window) - snap it rather than drop it.
+							($windowDesktopIndex -lt 0) -or ($windowDesktopIndex -eq $currentDesktopIndex)
 						})
 
 					Write-LogDebug "  Restricting to [$($allWindows.Count)] window(s) on current desktop [$($currentDesktopIndex + 1)]"
@@ -311,8 +307,7 @@ function Snap-AllWindows {
 			# re-apply ends elsewhere), and the snap needs the window's desktop visible.
 			$backOnDesktop = $false
 			try {
-				$null = Switch-Desktop -Desktop $InternalDesktopIndex -ErrorAction Stop
-				$backOnDesktop = [bool](Wait-DesktopSwitch -TargetDesktopIndex $InternalDesktopIndex)
+				$backOnDesktop = [bool](Switch-VirtualDesktop -Index $InternalDesktopIndex)
 			}
 			catch {
 				$backOnDesktop = $false
@@ -383,45 +378,21 @@ function Snap-AllWindows {
 				Write-LogDebug " Switching to Desktop [$desktopNum]..."
 			}
 
+			# Switch-VirtualDesktop switches, confirms the desktop is showing, retries and falls
+			# back to a VirtualDesktop session reset on its own.
 			$desktopSwitched = $false
-			$maxDesktopSwitchRetries = 3
-			for ($desktopSwitchAttempt = 1; $desktopSwitchAttempt -le $maxDesktopSwitchRetries; $desktopSwitchAttempt++) {
-				try {
-					$null = Switch-Desktop -Desktop $internalDesktopIndex -ErrorAction Stop
-					if (Wait-DesktopSwitch -TargetDesktopIndex $internalDesktopIndex) {
-						$desktopSwitched = $true
-						break
-					}
-				}
-				catch {
-					Write-LogDebug "  ⚠ Failed to switch to desktop $desktopNum (attempt $desktopSwitchAttempt/$maxDesktopSwitchRetries): $_" -Style Warning
-				}
+			try {
+				$desktopSwitched = [bool](Switch-VirtualDesktop -Index $internalDesktopIndex)
+			}
+			catch {
+				Write-LogDebug "  ⚠ Failed to switch to desktop $desktopNum => $_" -Style Warning
 			}
 
 			if (-not $desktopSwitched) {
-				$moduleReloaded = Reset-VirtualDesktopState
-				if ($moduleReloaded) {
-					try {
-						$null = Switch-Desktop -Desktop $internalDesktopIndex -ErrorAction Stop
-						$desktopSwitched = Wait-DesktopSwitch -TargetDesktopIndex $internalDesktopIndex
-					}
-					catch {
-						$desktopSwitched = $false
-					}
-				}
-
 				if (Test-LogVerbose) {
-					if ($desktopSwitched) {
-						Write-LogDebug "  ⚠ Desktop [$desktopNum] recovered after VirtualDesktop module reset" -Style Warning
-					}
-					else {
-						Write-LogDebug "  ✗ Aborting desktop [$desktopNum] - unable to switch after retries" -Style Error
-					}
+					Write-LogDebug "  ✗ Aborting desktop [$desktopNum] - unable to switch after retries" -Style Error
 				}
-
-				if (-not $desktopSwitched) {
-					continue
-				}
+				continue
 			}
 
 			# Refresh cached state after desktop transitions to avoid stale handle/process snapshots.
@@ -525,9 +496,12 @@ function Snap-AllWindows {
 				# Ensure window is still assigned to the desktop being processed.
 				$windowOnTargetDesktop = $true
 				try {
-					$currentDesktop = Get-DesktopFromWindow -Hwnd $handle.ToInt64()
-					$currentDesktopIndex = Get-DesktopIndex $currentDesktop
-					if ($currentDesktopIndex -ne $internalDesktopIndex) {
+					$currentDesktopIndex = Get-WindowDesktopIndex -WindowHandle $handle
+					if ($currentDesktopIndex -lt 0) {
+						# Unresolvable desktop (window gone, pinned/system window) - cannot align it.
+						$windowOnTargetDesktop = $false
+					}
+					elseif ($currentDesktopIndex -ne $internalDesktopIndex) {
 						$windowOnTargetDesktop = $false
 						$maxMoveRetries = 3
 						for ($moveAttempt = 1; $moveAttempt -le $maxMoveRetries; $moveAttempt++) {

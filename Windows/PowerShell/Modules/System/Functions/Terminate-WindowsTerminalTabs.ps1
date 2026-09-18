@@ -301,7 +301,7 @@ function Terminate-WindowsTerminalTabs {
 					}
 
 					# Legacy fallback: focus the window and close tabs with Ctrl+W.
-					[void][WindowModule.Native]::SetForegroundWindow($otherWin.Handle)
+					[void](Set-WindowForeground -Handle $otherWin.Handle)
 					Start-Sleep -Milliseconds 25
 
 					# Close all tabs in this window by repeatedly sending Ctrl+W
@@ -394,7 +394,7 @@ function Terminate-WindowsTerminalTabs {
 
 			foreach ($remainingWin in $remainingOtherWindows) {
 				try {
-					[void][WindowModule.Native]::SetForegroundWindow($remainingWin.Handle)
+					[void](Set-WindowForeground -Handle $remainingWin.Handle)
 					Start-Sleep -Milliseconds $retryDelayMs
 
 					for ($c = 0; $c -lt 30; $c++) {

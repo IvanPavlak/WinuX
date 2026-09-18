@@ -200,7 +200,7 @@ function Open-ProjectTerminals {
 					# Legacy fallback (UIA unavailable): cycle tabs with Ctrl+Tab and
 					# navigate back to the starting tab afterwards.
 					Add-Type -AssemblyName System.Windows.Forms
-					[void][WindowModule.Native]::SetForegroundWindow($wtHandle)
+					[void](Set-WindowForeground -Handle $wtHandle)
 					Start-Sleep -Milliseconds 50
 
 					$startWindow = Get-WindowHandle -ProcessName "WindowsTerminal" -ErrorAction SilentlyContinue |
@@ -541,7 +541,7 @@ function Open-ProjectTerminals {
 						# Process may have exited or lacks a visible window - fall back to window handle
 						$wtWindow = Get-WindowHandle -ProcessName "WindowsTerminal" -ErrorAction SilentlyContinue | Select-Object -First 1
 						if ($wtWindow) {
-							[void][WindowModule.Native]::SetForegroundWindow($wtWindow.Handle)
+							[void](Set-WindowForeground -Handle $wtWindow.Handle)
 						}
 					}
 

@@ -151,14 +151,14 @@ function Get-WorkspaceOpenDelta {
 		}
 	}
 
-	# The processes adoption must not reach for. Read from configuration rather than hard-coded so
-	# there is one answer in the repository to "which windows does a teardown leave alone", the
-	# same one Terminate-AllProcessesWithVisibleWindows uses. Matched on the exact process name,
-	# case-insensitively, exactly as that function does.
+	# The processes adoption must not reach for: the configured exclusions, so there is one answer
+	# in the repository to "which windows does a teardown leave alone" (the same list
+	# Terminate-AllProcessesWithVisibleWindows uses), plus the shell hosts Get-ShellProcessName
+	# names - a notification popup or the Start menu that happened to be on screen is never a
+	# workspace's to close. Matched on the exact process name, case-insensitively.
 	$adoptionExclusions = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-	$visibleWindowExclusions = @(Get-ConfigSetting -Path 'Universal.VisibleWindowExclusions' -Default @())
-	if ($AdoptUnclaimed -and $visibleWindowExclusions) {
-		foreach ($exclusion in @($visibleWindowExclusions)) {
+	if ($AdoptUnclaimed) {
+		foreach ($exclusion in @(Get-ConfigSetting -Path 'Universal.VisibleWindowExclusions' -Default @()) + @(Get-ShellProcessName)) {
 			if (-not [string]::IsNullOrWhiteSpace($exclusion)) { [void]$adoptionExclusions.Add([string]$exclusion) }
 		}
 	}

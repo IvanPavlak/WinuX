@@ -386,7 +386,8 @@ function Open-Workspace {
 			# Calculate desktop offset if -Alongside flag is used
 			$desktopOffset = 0
 			if ($Alongside) {
-				$desktopOffset = Get-NextAvailableDesktopIndex
+				# Desktops are 0-based, so the count is the first index that does not exist yet.
+				$desktopOffset = try { Get-VirtualDesktopCount } catch { $null }
 				if ($null -eq $desktopOffset) {
 					# Desktop enumeration failed - proceeding with offset 0 would open this
 					# workspace ON TOP of the existing one, the exact thing -Alongside prevents.

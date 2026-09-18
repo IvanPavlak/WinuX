@@ -68,7 +68,7 @@ BeforeAll {
 	# every plain open in these tests would run the REAL Get-WorkspaceOpenProtection against the
 	# machine's actual tracker file.
 	function Get-WorkspaceOpenProtection { param([string[]]$Opening, [string]$StatePath) $null }
-	function Get-NextAvailableDesktopIndex { 0 }
+	function Get-VirtualDesktopCount { 0 }
 	function Reset-KeyboardModifiers { param([switch]$IncludeMouseButton) @() }
 	function Test-BrowserGroupAlreadyOpen { $false }
 	function Open-Browser { param($Groups, $Browser, $Instances) }
@@ -215,7 +215,7 @@ Describe "Open-Workspace" {
 			}
 			return $filtered
 		}
-		Mock Get-NextAvailableDesktopIndex { 3 }
+		Mock Get-VirtualDesktopCount { 3 }
 		Mock Open-Project { param($Project) $Project }
 		Mock Open-Browser {
 			param($Groups, $Browser, $Instances)
@@ -737,7 +737,7 @@ Describe "Open-Workspace" {
 		Open-Workspace -Workspace 'TestWorkspace' -Alongside
 
 		$script:invokedActions.Count | Should -Be 0
-		Should -Invoke Get-NextAvailableDesktopIndex -Times 0 -Exactly
+		Should -Invoke Get-VirtualDesktopCount -Times 0 -Exactly
 		$script:openTerminalCalls.Count | Should -Be 1
 		$command = $script:openTerminalCalls[0].Command
 		$command | Should -BeLike "*`$env:WT_PROJECT_TAB = `$null;*"
@@ -783,7 +783,7 @@ Describe "Open-Workspace" {
 		$script:openTerminalCalls.Count | Should -Be 0
 		$script:terminateCalls.Count | Should -Be 1
 		$script:terminateCalls[0].OnlyCurrent | Should -BeTrue
-		Should -Invoke Get-NextAvailableDesktopIndex -Times 1 -Exactly
+		Should -Invoke Get-VirtualDesktopCount -Times 1 -Exactly
 	}
 
 	It "skips the alongside open when the next desktop index cannot be determined" {
@@ -794,7 +794,7 @@ Describe "Open-Workspace" {
 		# Desktop enumeration failed (stale RPC): the offset is unknown. Proceeding with
 		# offset 0 would open this workspace ON TOP of the existing one - the exact thing
 		# -Alongside exists to prevent - so the workspace must be skipped entirely.
-		Mock Get-NextAvailableDesktopIndex { $null }
+		Mock Get-VirtualDesktopCount { throw "The RPC server is unavailable. (0x800706BA)" }
 
 		Open-Workspace -Workspace 'TestWorkspace' -Alongside
 
@@ -1174,7 +1174,7 @@ Describe "Open-Workspace" {
 		)
 
 		$script:nextDesktopValues = @(4, 7)
-		Mock Get-NextAvailableDesktopIndex {
+		Mock Get-VirtualDesktopCount {
 			$next = $script:nextDesktopValues[0]
 			$script:nextDesktopValues = @($script:nextDesktopValues | Select-Object -Skip 1)
 			$next
@@ -1182,7 +1182,7 @@ Describe "Open-Workspace" {
 
 		Open-Workspace -Workspace @('WorkspaceA', 'WorkspaceB') -Alongside
 
-		Should -Invoke Get-NextAvailableDesktopIndex -Times 2 -Exactly
+		Should -Invoke Get-VirtualDesktopCount -Times 2 -Exactly
 		$script:setLayoutCalls.Count | Should -Be 2
 		$script:setLayoutCalls[0].WorkspaceName | Should -Be 'WorkspaceA'
 		$script:setLayoutCalls[0].DesktopOffset | Should -Be 4

@@ -39,12 +39,11 @@ BeforeAll {
 	# validator has its own suite (Test-FancyZonesConfiguration.Tests.ps1).
 	function Test-FancyZonesConfiguration { [PSCustomObject]@{ Valid = $true; Errors = @(); Warnings = @() } }
 
-	# VirtualDesktop cmdlets come from an optional external module absent on CI runners.
-	# Stub the ones these tests mock so Mock can attach (no-op where the real module exists).
-	if (-not (Get-Command Get-DesktopList -ErrorAction SilentlyContinue)) {
-		function Get-DesktopList { [CmdletBinding()] param() }
-		function Switch-Desktop { [CmdletBinding()] param($Desktop) }
-	}
+	# The Window module's virtual-desktop adapter, stubbed so Mock attaches in this script scope
+	# instead of the module (the desktop-manager calls the layout makes all go through it).
+	function Get-VirtualDesktopCount { 1 }
+	function Switch-VirtualDesktop { param([int]$Index, [int]$TimeoutMs, [int]$MaxAttempts) $true }
+	function Invoke-VirtualDesktopOperation { param([scriptblock]$Operation, [string]$Label, [int]$MaxAttempts, [int]$InitialDelayMs, [switch]$Probe) & $Operation }
 }
 
 Describe "Set-WorkspaceWindowLayout" {
@@ -81,7 +80,9 @@ Describe "Set-WorkspaceWindowLayout" {
 		Mock Remove-PositionedWindowHandles { }
 		Mock Stop-Process { }
 		Mock Visualize-Layouts { }
-		Mock Switch-Desktop { }
+		Mock Switch-VirtualDesktop { $true }
+		# Skips the RPC preflight, as the Get-Command mock below used to.
+		Mock Import-VirtualDesktopModule { $false }
 		Mock Get-MonitorSpecs { @{} }
 		Mock Set-Location { }
 		Mock Get-Command { $null }
@@ -262,7 +263,7 @@ Describe "Set-WorkspaceWindowLayout" {
 				}
 			}
 		}
-		Mock Get-DesktopList { @(0, 1) }
+		Mock Get-VirtualDesktopCount { 2 }
 		Mock Wait-ForWorkspaceWindows { @() }
 		Mock Verify-WindowPlacement { $true }
 
@@ -285,7 +286,7 @@ Describe "Set-WorkspaceWindowLayout" {
 				}
 			}
 		}
-		Mock Get-DesktopList { @(0) }
+		Mock Get-VirtualDesktopCount { 1 }
 		Mock Wait-ForWorkspaceWindows { @() }
 		$script:LastWorkspaceLayoutTimings = $null
 
@@ -333,7 +334,7 @@ Describe "Set-WorkspaceWindowLayout" {
 				}
 			}
 		}
-		Mock Get-DesktopList { @(0) }
+		Mock Get-VirtualDesktopCount { 1 }
 		Mock Wait-ForWorkspaceWindows { @() }
 		Mock Verify-WindowPlacement { $true }
 
@@ -361,7 +362,7 @@ Describe "Set-WorkspaceWindowLayout" {
 				}
 			}
 		}
-		Mock Get-DesktopList { @(0) }
+		Mock Get-VirtualDesktopCount { 1 }
 		# Only the first entry found a window this open created - the second was starved.
 		Mock Set-WindowLayouts {
 			@(
@@ -400,7 +401,7 @@ Describe "Set-WorkspaceWindowLayout" {
 				Monitors = @{ MonitorA = @{ VirtualDesktopLayouts = @{ 1 = 'One' } } }
 			}
 		}
-		Mock Get-DesktopList { @(0) }
+		Mock Get-VirtualDesktopCount { 1 }
 		Mock Set-WindowLayouts { @([PSCustomObject]@{ Status = 'Not Found' }) }
 		Mock Write-LogWarning { }
 
@@ -428,7 +429,7 @@ Describe "Set-WorkspaceWindowLayout" {
 				}
 			}
 		}
-		Mock Get-DesktopList { @(0) }
+		Mock Get-VirtualDesktopCount { 1 }
 		Mock Wait-ForWorkspaceWindows {
 			param($LayoutConfig, $TimeoutSeconds, $OnWindowStable)
 
@@ -464,7 +465,7 @@ Describe "Set-WorkspaceWindowLayout" {
 				}
 			}
 		}
-		Mock Get-DesktopList { @(0) }
+		Mock Get-VirtualDesktopCount { 1 }
 		Mock Set-WindowLayouts {
 			@(
 				[PSCustomObject]@{ Status = 'Configured' }
@@ -517,7 +518,7 @@ Describe "Set-WorkspaceWindowLayout" {
 				}
 			}
 		}
-		Mock Get-DesktopList { @(0) }
+		Mock Get-VirtualDesktopCount { 1 }
 		Mock Set-WindowLayouts {
 			@(
 				[PSCustomObject]@{ Status = 'Configured' }
@@ -572,7 +573,7 @@ Describe "Set-WorkspaceWindowLayout" {
 				}
 			}
 		}
-		Mock Get-DesktopList { @(0) }
+		Mock Get-VirtualDesktopCount { 1 }
 		Mock Set-WindowLayouts { throw 'layout failure' }
 
 		Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace' -Alongside
@@ -606,7 +607,7 @@ Describe "Set-WorkspaceWindowLayout" {
 					}
 				}
 			}
-			Mock Get-DesktopList { @(0) }
+			Mock Get-VirtualDesktopCount { 1 }
 			Mock Set-WindowLayouts {
 				@(
 					[PSCustomObject]@{ Status = 'Configured' }
@@ -723,7 +724,7 @@ Describe "Set-WorkspaceWindowLayout" {
 				}
 			}
 		}
-		Mock Get-DesktopList { @(0, 1, 2) }
+		Mock Get-VirtualDesktopCount { 3 }
 
 		Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace' -DesktopOffset 5 -SnapDelayMs 25
 
@@ -754,7 +755,7 @@ Describe "Set-WorkspaceWindowLayout" {
 				}
 			}
 		}
-		Mock Get-DesktopList { @(0) }
+		Mock Get-VirtualDesktopCount { 1 }
 		# Clean snap result so the standard success path is reached (the global mock leaves
 		# $script:LastSnapAllWindowsResult untouched, which can leak a failed result from a
 		# prior test; the real Snap-AllWindows always resets it at its start).
@@ -791,7 +792,7 @@ Describe "Set-WorkspaceWindowLayout" {
 				}
 			}
 		}
-		Mock Get-DesktopList { @(0) }
+		Mock Get-VirtualDesktopCount { 1 }
 		Mock Set-WindowLayouts { @([PSCustomObject]@{ Status = 'Configured' }) }
 		# Clean snap result so the flow reaches verification (rather than the snap-failure branch).
 		Mock Snap-AllWindows { $script:LastSnapAllWindowsResult = [PSCustomObject]@{ SnappedCount = 1; FailedWindows = @() } }
@@ -827,7 +828,7 @@ Describe "Set-WorkspaceWindowLayout" {
 				}
 			}
 		}
-		Mock Get-DesktopList { @(0) }
+		Mock Get-VirtualDesktopCount { 1 }
 		Mock Get-WindowHandle {
 			@([PSCustomObject]@{ Handle = [IntPtr]101; Title = 'Code'; ProcessId = 1234 })
 		}
@@ -854,7 +855,7 @@ Describe "Set-WorkspaceWindowLayout" {
 				}
 			}
 		}
-		Mock Get-DesktopList { @(0) }
+		Mock Get-VirtualDesktopCount { 1 }
 		Mock Snap-AllWindows { $script:LastSnapAllWindowsResult = [PSCustomObject]@{ SnappedCount = 1; FailedWindows = @() } }
 
 		Set-WorkspaceWindowLayout -WorkspaceName 'Dotfiles'
@@ -881,7 +882,7 @@ Describe "Set-WorkspaceWindowLayout" {
 				}
 			}
 		}
-		Mock Get-DesktopList { @(0) }
+		Mock Get-VirtualDesktopCount { 1 }
 		Mock Snap-AllWindows { $script:LastSnapAllWindowsResult = [PSCustomObject]@{ SnappedCount = 1; FailedWindows = @() } }
 
 		Set-WorkspaceWindowLayout -WorkspaceName 'Dotfiles'
@@ -908,7 +909,7 @@ Describe "Set-WorkspaceWindowLayout" {
 				}
 			}
 		}
-		Mock Get-DesktopList { @(0) }
+		Mock Get-VirtualDesktopCount { 1 }
 		Mock Snap-AllWindows { $script:LastSnapAllWindowsResult = [PSCustomObject]@{ SnappedCount = 1; FailedWindows = @() } }
 
 		Set-WorkspaceWindowLayout -WorkspaceName 'Dotfiles'
@@ -957,14 +958,14 @@ Describe "Set-WorkspaceWindowLayout" {
 					}
 				}
 			}
-			Mock Get-DesktopList { @(0) }
+			Mock Get-VirtualDesktopCount { 1 }
 			Mock Snap-AllWindows { $script:LastSnapAllWindowsResult = [PSCustomObject]@{ SnappedCount = 1; FailedWindows = @() } }
 		}
 
 		It "never shrinks below the desktops the protected windows stand on" {
 			# A (1 desktop) reruns while B holds desktops 2-3: current 3, layout needs 1, B's
 			# highest window is on index 2 => the floor is 3 and nothing may be removed.
-			Mock Get-DesktopList { @(0, 1, 2) }
+			Mock Get-VirtualDesktopCount { 3 }
 			Mock Get-WindowDesktopIndex { 2 }
 
 			Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace' -ProtectedWindowHandles (New-ProtectedHandleSet 60)
@@ -982,7 +983,7 @@ Describe "Set-WorkspaceWindowLayout" {
 					}
 				}
 			}
-			Mock Get-DesktopList { @(0, 1, 2) }
+			Mock Get-VirtualDesktopCount { 3 }
 			Mock Get-WindowDesktopIndex { 2 }
 
 			Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace' -ProtectedWindowHandles (New-ProtectedHandleSet 60)
@@ -993,7 +994,7 @@ Describe "Set-WorkspaceWindowLayout" {
 		It "never shrinks when the protected windows' desktops cannot be resolved" {
 			# Protected windows exist but every lookup returned -1 (enumeration hiccup). Shrinking
 			# on unknown occupancy could delete the alongside workspace - keep the current count.
-			Mock Get-DesktopList { @(0, 1, 2, 3, 4) }
+			Mock Get-VirtualDesktopCount { 5 }
 			Mock Get-WindowDesktopIndex { -1 }
 
 			Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace' -ProtectedWindowHandles (New-ProtectedHandleSet 60)
@@ -1002,7 +1003,7 @@ Describe "Set-WorkspaceWindowLayout" {
 		}
 
 		It "warns when a protected window sits inside this layout's own desktop range" {
-			Mock Get-DesktopList { @(0) }
+			Mock Get-VirtualDesktopCount { 1 }
 			Mock Get-WindowDesktopIndex { 0 }
 
 			Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace' -ProtectedWindowHandles (New-ProtectedHandleSet 60)
@@ -1011,7 +1012,7 @@ Describe "Set-WorkspaceWindowLayout" {
 		}
 
 		It "threads the protected handles into the layout pass, the verification, and the snapshot merge" {
-			Mock Get-DesktopList { @(0, 1, 2) }
+			Mock Get-VirtualDesktopCount { 3 }
 			Mock Get-WindowDesktopIndex { 2 }
 			Mock Set-WindowLayouts { @([PSCustomObject]@{ Status = 'Configured' }) }
 
@@ -1036,7 +1037,7 @@ Describe "Set-WorkspaceWindowLayout" {
 		}
 
 		It "skips protected windows during the early move callback" {
-			Mock Get-DesktopList { @(0, 1, 2) }
+			Mock Get-VirtualDesktopCount { 3 }
 			Mock Get-WindowDesktopIndex { 2 }
 			Mock Wait-ForWorkspaceWindows {
 				param($LayoutConfig, $TimeoutSeconds, $OnWindowStable)
@@ -1064,7 +1065,7 @@ Describe "Set-WorkspaceWindowLayout" {
 					WindowHandles = (New-ProtectedHandleSet 60)
 				}
 			}
-			Mock Get-DesktopList { @(0, 1, 2) }
+			Mock Get-VirtualDesktopCount { 3 }
 			Mock Get-WindowDesktopIndex { 2 }
 			Mock Set-WindowLayouts { @([PSCustomObject]@{ Status = 'Configured' }) }
 
@@ -1079,7 +1080,7 @@ Describe "Set-WorkspaceWindowLayout" {
 		It "never self-derives for an alongside open" {
 			Mock Get-Command { $true } -ParameterFilter { $Name -eq 'Get-WorkspaceOpenProtection' }
 			Mock Get-WorkspaceOpenProtection { throw 'must not be called' }
-			Mock Get-DesktopList { @(0) }
+			Mock Get-VirtualDesktopCount { 1 }
 
 			Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace' -Alongside
 
@@ -1203,7 +1204,7 @@ Describe "Set-WorkspaceWindowLayout" {
 					}
 				}
 			}
-			Mock Get-DesktopList { @(0) }
+			Mock Get-VirtualDesktopCount { 1 }
 		}
 
 		It "recovers in-process when FancyZones holds a stale zone grid that idempotency would skip" {
@@ -1280,7 +1281,7 @@ Describe "Set-WorkspaceWindowLayout" {
 					}
 				}
 			}
-			Mock Get-DesktopList { @(0, 1) }
+			Mock Get-VirtualDesktopCount { 2 }
 
 			# Entries the per-desktop pass must report as Not Found (by desktop number) - the case
 			# behind the 2026-09-03 regression, where such an entry was skipped after the wait.
@@ -1421,7 +1422,7 @@ Describe "Set-WorkspaceWindowLayout" {
 					Monitors = @{ MonitorA = @{ VirtualDesktopLayouts = @{ 1 = 'One' } } }
 				}
 			}
-			Mock Get-DesktopList { @(0) }
+			Mock Get-VirtualDesktopCount { 1 }
 
 			Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace'
 
@@ -1557,7 +1558,7 @@ Describe "Set-WorkspaceWindowLayout" {
 					}
 				}
 			}
-			Mock Get-DesktopList { @(0, 1, 2) }
+			Mock Get-VirtualDesktopCount { 3 }
 			Mock Get-WindowHandle {
 				if ($ProcessName -eq 'WindowsTerminal') {
 					return @(
@@ -1600,7 +1601,7 @@ Describe "Set-WorkspaceWindowLayout" {
 					}
 				}
 			}
-			Mock Get-DesktopList { @(0, 1, 2) }
+			Mock Get-VirtualDesktopCount { 3 }
 			Mock Get-WindowHandle {
 				if ($ProcessName -eq 'WindowsTerminal') {
 					return @(
@@ -1630,7 +1631,7 @@ Describe "Set-WorkspaceWindowLayout" {
 					Monitors = @{ MonitorA = @{ VirtualDesktopLayouts = @{ 1 = 'One' } } }
 				}
 			}
-			Mock Get-DesktopList { @(0) }
+			Mock Get-VirtualDesktopCount { 1 }
 			Mock Set-WindowLayouts { @([PSCustomObject]@{ Status = 'Configured' }) }
 			Mock Snap-AllWindows {
 				$script:LastSnapAllWindowsResult = [PSCustomObject]@{
@@ -1679,7 +1680,7 @@ Describe "Set-WorkspaceWindowLayout" {
 					Monitors = @{ MonitorA = @{ VirtualDesktopLayouts = @{ 1 = 'One' } } }
 				}
 			}
-			Mock Get-DesktopList { @(0) }
+			Mock Get-VirtualDesktopCount { 1 }
 			Mock Get-WindowDesktopIndex { -1 }
 			Mock Set-WindowLayouts { @([PSCustomObject]@{ Status = 'Configured' }) }
 			$script:waitCall = $null
@@ -1754,7 +1755,7 @@ Describe "Set-WorkspaceWindowLayout" {
 					Monitors = @{ MonitorA = @{ VirtualDesktopLayouts = @{ 1 = 'One'; 2 = 'Two' } } }
 				}
 			}
-			Mock Get-DesktopList { @(0) }
+			Mock Get-VirtualDesktopCount { 1 }
 		}
 
 		It "resizes the desktops and applies the zone layouts, then stops before the wait" {

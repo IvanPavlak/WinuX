@@ -2,21 +2,10 @@
 
 BeforeAll {
 	$ModuleRoot = (Get-RepositoryPath).Modules
-	$FunctionsPath = Join-Path $ModuleRoot "Window\Functions"
 
-	. "$FunctionsPath\Move-WindowToVirtualDesktop.ps1"
-
-	# VirtualDesktop cmdlets come from an optional external module absent on CI runners.
-	# Stub the ones these tests mock so Mock can attach (no-op where the real module exists).
-	if (-not (Get-Command Get-DesktopCount -ErrorAction SilentlyContinue)) {
-		function Get-DesktopCount { [CmdletBinding()] param() }
-		function Get-Desktop { [CmdletBinding()] param($Index) }
-		# The real Move-Window RETURNS the Desktop object - the stub must too, or tests
-		# cannot catch output leaking into Move-WindowToVirtualDesktop's boolean result.
-		function Move-Window { [CmdletBinding()] param($Desktop, $Hwnd) $Desktop }
-		function Get-DesktopFromWindow { [CmdletBinding()] param($Hwnd) }
-		function Get-DesktopIndex { [CmdletBinding()] param([Parameter(Position = 0)]$Desktop) }
-	}
+	. (Join-Path $ModuleRoot "Window\Functions\Move-WindowToVirtualDesktop.ps1")
+	. (Join-Path $ModuleRoot "Window\Functions\Invoke-VirtualDesktopOperation.ps1")
+	. (Join-Path $ModuleRoot "Tests\Modules\Support\FakeVirtualDesktop.ps1")
 }
 
 Describe "Move-WindowToVirtualDesktop" {
@@ -25,69 +14,49 @@ Describe "Move-WindowToVirtualDesktop" {
 		Mock Write-Verbose { }
 		Mock Write-Warning { }
 		Mock Write-Error { }
+		Mock Write-LogDebug { }
 		Mock Start-Sleep { }
+		Mock Test-LogVerbose { $false }
 
-		Mock Import-VirtualDesktopModule { $true }
-		Mock Get-DesktopCount { 3 }
-		Mock Get-Desktop { [PSCustomObject]@{ Index = $Index } }
-		# Mimics the real cmdlet, which returns the Desktop object (see stub note above).
-		Mock Move-Window { $Desktop }
-		Mock Get-DesktopFromWindow { [PSCustomObject]@{ Index = 1 } }
-		Mock Get-DesktopIndex { param($Desktop) $Desktop.Index }
-
+		# Three desktops; window 1234 sits on desktop 1.
+		$null = New-FakeVirtualDesktopSession -DesktopCount 3 -CurrentIndex 0 -WindowDesktops @{ 1234 = 1 }
 		$script:WindowModuleDelays = @{ VirtualDesktopMs = 0 }
 	}
 
 	It "returns true without any move when the window is already on the target desktop (fast path)" {
-		# BeforeEach mocks report the window on desktop 1 - the common double-move case
-		# (early-stable callback + layout pass) must cost no COM move and no settle delay.
+		# The common double-move case (early-stable callback + layout pass) must cost no COM move
+		# and no settle delay.
 		$result = Move-WindowToVirtualDesktop -WindowHandle ([IntPtr]1234) -DesktopNumber 1
 
 		$result | Should -BeTrue
-		Should -Invoke Get-Desktop -Times 0
-		Should -Invoke Move-Window -Times 0
+		$global:FakeVirtualDesktop.MoveLog.Count | Should -Be 0
+		Should -Invoke Start-Sleep -Times 0
 	}
 
-	It "uses the provided 0-based desktop index for desktop lookup and move verification" {
-		# First lookup (fast-path check) reports a DIFFERENT desktop so the move runs;
-		# subsequent lookups report the target so the poll verification succeeds.
-		$script:desktopLookupCount = 0
-		Mock Get-DesktopFromWindow {
-			$script:desktopLookupCount++
-			if ($script:desktopLookupCount -eq 1) { [PSCustomObject]@{ Index = 0 } }
-			else { [PSCustomObject]@{ Index = 1 } }
-		}
-
-		$result = Move-WindowToVirtualDesktop -WindowHandle ([IntPtr]1234) -DesktopNumber 1
+	It "moves the window to the 0-based desktop index and verifies it landed" {
+		$result = Move-WindowToVirtualDesktop -WindowHandle ([IntPtr]1234) -DesktopNumber 2
 
 		$result | Should -BeTrue
-		Should -Invoke Get-Desktop -Times 1 -Exactly -ParameterFilter { $Index -eq 1 }
-		Should -Invoke Move-Window -Times 1 -Exactly -ParameterFilter {
-			$Desktop.Index -eq 1 -and $Hwnd -eq 1234
-		}
+		$global:FakeVirtualDesktop.MoveLog.Count | Should -Be 1
+		$global:FakeVirtualDesktop.MoveLog[0].Hwnd | Should -Be 1234
+		$global:FakeVirtualDesktop.MoveLog[0].Index | Should -Be 2
+		$global:FakeVirtualDesktop.WindowDesktops[[int64]1234] | Should -Be 2
 	}
 
 	It "emits exactly one boolean on a successful move (Move-Window's Desktop output must not leak)" {
-		$script:desktopLookupCount = 0
-		Mock Get-DesktopFromWindow {
-			$script:desktopLookupCount++
-			if ($script:desktopLookupCount -eq 1) { [PSCustomObject]@{ Index = 0 } }
-			else { [PSCustomObject]@{ Index = 1 } }
-		}
-
-		$result = Move-WindowToVirtualDesktop -WindowHandle ([IntPtr]1234) -DesktopNumber 1
+		$result = Move-WindowToVirtualDesktop -WindowHandle ([IntPtr]1234) -DesktopNumber 2
 
 		@($result).Count | Should -Be 1
 		$result | Should -BeTrue
 	}
 
 	It "emits exactly one `$false when the move never lands - a leaked Desktop object would make the array truthy" {
-		# Window sits on desktop 0 and stays there: fast-path check fails, Move-Window
-		# runs (returning its Desktop object), and every verification poll still reports 0.
+		# Move-Window returns its Desktop object but the window stays where it was, so every
+		# verification poll still reports desktop 1.
 		# Regression: @(Desktop, $false) is truthy, so callers counted this failure as moved.
-		Mock Get-DesktopFromWindow { [PSCustomObject]@{ Index = 0 } }
+		Mock Move-Window { param($Desktop, $Hwnd) $Desktop }
 
-		$result = Move-WindowToVirtualDesktop -WindowHandle ([IntPtr]1234) -DesktopNumber 1
+		$result = Move-WindowToVirtualDesktop -WindowHandle ([IntPtr]1234) -DesktopNumber 2
 
 		Should -Invoke Move-Window -Times 1 -Exactly
 		@($result).Count | Should -Be 1
@@ -95,31 +64,28 @@ Describe "Move-WindowToVirtualDesktop" {
 	}
 
 	It "reports Moved in the script-scoped result only for a real move" {
-		# Fast path: no move performed.
 		$null = Move-WindowToVirtualDesktop -WindowHandle ([IntPtr]1234) -DesktopNumber 1
 		$script:LastMoveWindowToVirtualDesktopResult.Moved | Should -BeFalse
 
-		# Real move: first lookup differs, post-move lookups verify the target.
-		$script:desktopLookupCount = 0
-		Mock Get-DesktopFromWindow {
-			$script:desktopLookupCount++
-			if ($script:desktopLookupCount -eq 1) { [PSCustomObject]@{ Index = 2 } }
-			else { [PSCustomObject]@{ Index = 1 } }
-		}
-
-		$null = Move-WindowToVirtualDesktop -WindowHandle ([IntPtr]1234) -DesktopNumber 1
+		$null = Move-WindowToVirtualDesktop -WindowHandle ([IntPtr]1234) -DesktopNumber 2
 		$script:LastMoveWindowToVirtualDesktopResult.Moved | Should -BeTrue
 	}
 
-	It "returns false and stops before move when desktop number equals desktop count (upper bound out of range)" {
-		Mock Get-DesktopCount { 2 }
+	It "moves a window whose current desktop cannot be resolved instead of giving up" {
+		# A pinned or freshly created window answers no desktop; the fast path is skipped and the
+		# move goes ahead.
+		$result = Move-WindowToVirtualDesktop -WindowHandle ([IntPtr]5555) -DesktopNumber 2
 
-		$result = Move-WindowToVirtualDesktop -WindowHandle ([IntPtr]1234) -DesktopNumber 2
+		$result | Should -BeTrue
+		$global:FakeVirtualDesktop.WindowDesktops[[int64]5555] | Should -Be 2
+	}
+
+	It "returns false and stops before move when desktop number equals desktop count (upper bound out of range)" {
+		$result = Move-WindowToVirtualDesktop -WindowHandle ([IntPtr]1234) -DesktopNumber 3
 
 		$result | Should -BeFalse
 		Should -Invoke Write-Error -Times 1 -Exactly -ParameterFilter { $Message -like "*out of range*" }
-		Should -Invoke Get-Desktop -Times 0
-		Should -Invoke Move-Window -Times 0
+		$global:FakeVirtualDesktop.MoveLog.Count | Should -Be 0
 	}
 
 	It "returns false and stops before move when desktop number is negative" {
@@ -127,7 +93,49 @@ Describe "Move-WindowToVirtualDesktop" {
 
 		$result | Should -BeFalse
 		Should -Invoke Write-Error -Times 1 -Exactly -ParameterFilter { $Message -like "*out of range*" }
-		Should -Invoke Get-Desktop -Times 0
-		Should -Invoke Move-Window -Times 0
+		$global:FakeVirtualDesktop.MoveLog.Count | Should -Be 0
+	}
+
+	It "returns false with an install hint when the VirtualDesktop module is not available" {
+		$null = New-FakeVirtualDesktopSession -DesktopCount 3 -WindowDesktops @{ 1234 = 1 } -ModuleUnavailable
+
+		$result = Move-WindowToVirtualDesktop -WindowHandle ([IntPtr]1234) -DesktopNumber 2
+
+		$result | Should -BeFalse
+		Should -Invoke Write-Warning -ParameterFilter { $Message -like "*Install-Module -Name VirtualDesktop*" }
+		$global:FakeVirtualDesktop.MoveLog.Count | Should -Be 0
+	}
+
+	It "reconnects a stale session instead of reading a stale desktop count" {
+		# A stale count of one desktop once made every window move report "out of range" on a
+		# screen showing three. The seam resets the session and re-reads the count.
+		Set-FakeVirtualDesktopFailure -Cmdlet Get-DesktopCount -Times 1
+
+		$result = Move-WindowToVirtualDesktop -WindowHandle ([IntPtr]1234) -DesktopNumber 2
+
+		$result | Should -BeTrue
+		$global:FakeVirtualDesktop.ResetCount | Should -Be 1
+		Should -Invoke Write-Error -Times 0
+	}
+
+	It "recovers an RPC failure in the move itself" {
+		Set-FakeVirtualDesktopFailure -Cmdlet Move-Window -Times 1
+
+		$result = Move-WindowToVirtualDesktop -WindowHandle ([IntPtr]1234) -DesktopNumber 2
+
+		$result | Should -BeTrue
+		$global:FakeVirtualDesktop.ResetCount | Should -Be 1
+		$global:FakeVirtualDesktop.WindowDesktops[[int64]1234] | Should -Be 2
+	}
+
+	It "returns false when the desktop manager stays unreachable after recovery" {
+		Mock Get-DesktopFromWindow { throw 'The RPC server is unavailable. (Exception from HRESULT: 0x800706BA)' }
+
+		$result = Move-WindowToVirtualDesktop -WindowHandle ([IntPtr]1234) -DesktopNumber 2
+
+		@($result).Count | Should -Be 1
+		$result | Should -BeFalse
+		$global:FakeVirtualDesktop.MoveLog.Count | Should -Be 0
+		$global:FakeVirtualDesktop.ResetCount | Should -BeGreaterThan 0
 	}
 }

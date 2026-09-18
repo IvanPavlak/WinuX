@@ -645,6 +645,13 @@ $rpcInitialDelayMs = $rpcPolicy.InitialDelayMs
 $rpcPolicy = Get-RpcRetryPolicy -Probe
 ```
 
+## [Get-ShellProcessName](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Get-ShellProcessName.ps1)
+
+- **Description:** Names the processes that are the Windows shell itself or that host other applications' windows - `explorer`, `ApplicationFrameHost`, `TextInputHost`, `ShellExperienceHost`, `StartMenuExperienceHost`, `SearchHost`, `SearchApp`, `LockApp`, `sihost`, `dwm`. The one list no cleanup, teardown or ownership claim may reach for: `Get-VisibleWindowProcess` never reports them and a plain `Open-Workspace` never adopts their windows. Both read it from here rather than carrying a copy.
+- **Usage:** `Get-ShellProcessName`
+
+**See also:** [Get-VisibleWindowProcess](system.md#get-visiblewindowprocess), [Get-WorkspaceOpenDelta](workflow.md#get-workspaceopendelta)
+
 ## [Get-TargetTerminalWindow](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Get-TargetTerminalWindow.ps1)
 
 - **Description:** Locates a specific Windows Terminal window from an optional `IntPtr` handle, or returns the first available Windows Terminal window when no handle is given (or no window matches the supplied handle).

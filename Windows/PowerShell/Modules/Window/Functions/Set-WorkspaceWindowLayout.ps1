@@ -325,12 +325,17 @@ function Set-WorkspaceWindowLayout {
 		}
 		$hasProtectedWindows = ($null -ne $ProtectedWindowHandles -and $ProtectedWindowHandles.Count -gt 0)
 
-		# Pre-flight RPC health check using the shared helper. The live probe runs
+		# Pre-flight RPC health check through the operation seam (-Probe). The live probe runs
 		# in-process against this session's VirtualDesktop COM state (cheap when
 		# healthy), so a stale session - Explorer restarted since the module loaded -
 		# is detected and repaired here, before any desktop reconfiguration begins.
-		if (Get-Command Get-RpcRetryPolicy -ErrorAction SilentlyContinue) {
-			[void](Get-RpcRetryPolicy -OperationLabel "applying layout" -Probe)
+		if (Import-VirtualDesktopModule -Silent) {
+			try {
+				[void](Invoke-VirtualDesktopOperation -Operation { Get-DesktopCount } -Label "applying layout" -Probe)
+			}
+			catch {
+				Write-LogDebug "RPC preflight did not succeed => [$($_.Exception.Message)]" -Style Warning
+			}
 		}
 
 		$cachedMonitorInfo = Get-MonitorInfo
@@ -507,8 +512,7 @@ function Set-WorkspaceWindowLayout {
 				# Simple layouts typically only define VirtualDesktopLayouts for desktop 1.
 				# Expand VirtualDesktopLayouts to cover ALL existing virtual desktops so
 				# Apply-FancyZones applies the layout everywhere, not just on desktop 1.
-				$existingDesktops = Get-DesktopList
-				$existingDesktopCount = ($existingDesktops | Measure-Object).Count
+				$existingDesktopCount = Get-VirtualDesktopCount
 
 				if ($existingDesktopCount -gt 1) {
 					foreach ($monitorKey in @($config.Monitors.Keys)) {
@@ -693,19 +697,12 @@ function Set-WorkspaceWindowLayout {
 					# never reaches here). Snapping needs the window focusable on the active
 					# desktop, hence the switch per desktop; windows whose desktop cannot be
 					# resolved go in the -1 bucket and are offered on every pass.
-					$allDesktops = Get-DesktopList
-					$desktopCount = ($allDesktops | Measure-Object).Count
+					$desktopCount = Get-VirtualDesktopCount
 
 					if ($desktopCount -gt 1) {
 						$windowsByDesktopIndex = @{}
 						foreach ($win in @(Get-WindowHandle -ErrorAction SilentlyContinue)) {
-							$winDesktopIndex = -1
-							try {
-								$winDesktopIndex = Get-DesktopIndex (Get-DesktopFromWindow -Hwnd $win.Handle.ToInt64())
-							}
-							catch {
-								$winDesktopIndex = -1
-							}
+							$winDesktopIndex = Get-WindowDesktopIndex -WindowHandle $win.Handle
 							if (-not $windowsByDesktopIndex.ContainsKey($winDesktopIndex)) {
 								$windowsByDesktopIndex[$winDesktopIndex] = [System.Collections.Generic.List[IntPtr]]::new()
 							}
@@ -727,14 +724,13 @@ function Set-WorkspaceWindowLayout {
 							}
 
 							Write-LogDebug " Switching to Desktop [$($d + 1)] for snapping..."
-							$null = Switch-Desktop -Desktop $d
-							if (-not (Wait-DesktopSwitch -TargetDesktopIndex $d)) {
+							if (-not (Switch-VirtualDesktop -Index $d)) {
 								Start-Sleep -Milliseconds 25
 							}
 							$null = Snap-AllWindows -All -WindowHandles $desktopHandles.ToArray() -SnapDelayMs $SnapDelayMs
 						}
 						# Return to desktop 1
-						$null = Switch-Desktop -Desktop 0
+						[void](Switch-VirtualDesktop -Index 0)
 					}
 					else {
 						$null = Snap-AllWindows -All -SnapDelayMs $SnapDelayMs
@@ -806,8 +802,7 @@ function Set-WorkspaceWindowLayout {
 			$totalRequiredDesktops = $requiredVirtualDesktops + $DesktopOffset
 
 			# Check current virtual desktop count and only reset if necessary
-			$currentDesktops = Get-DesktopList
-			$currentDesktopCount = ($currentDesktops | Measure-Object).Count
+			$currentDesktopCount = Get-VirtualDesktopCount
 
 			if ($Alongside) {
 				# Alongside mode: Don't remove existing desktops, only add more if needed

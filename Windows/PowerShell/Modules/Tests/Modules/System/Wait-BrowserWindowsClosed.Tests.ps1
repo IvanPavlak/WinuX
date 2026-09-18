@@ -5,9 +5,9 @@ BeforeAll {
 	$FunctionsPath = Join-Path $ModuleRoot "System\Functions"
 
 	. "$FunctionsPath\Wait-BrowserWindowsClosed.ps1"
-	# The liveness probe is its own function precisely so this loop can be tested without the
-	# compiled user32 wrapper; load it so Mock can attach.
-	. "$FunctionsPath\Test-BrowserWindowOpen.ps1"
+	# The liveness probe is the Window module's Test-WindowVisible; stubbed so Mock can attach
+	# without the compiled user32 wrapper and no real handle is ever probed.
+	function Test-WindowVisible { param([IntPtr]$Handle) $false }
 
 	function New-TestWindow {
 		param([int]$Handle, [string]$Title)
@@ -20,13 +20,13 @@ Describe "Wait-BrowserWindowsClosed" {
 		Mock Start-Sleep { }
 		# Which handles are still alive; each case scripts it.
 		$script:openHandles = @()
-		Mock Test-BrowserWindowOpen { $script:openHandles -contains [long]$Handle }
+		Mock Test-WindowVisible { $script:openHandles -contains [long]$Handle }
 	}
 
 	It "returns nothing when given nothing" {
 		@(Wait-BrowserWindowsClosed -Windows @()).Count | Should -Be 0
 		@(Wait-BrowserWindowsClosed).Count | Should -Be 0
-		Should -Invoke Test-BrowserWindowOpen -Times 0
+		Should -Invoke Test-WindowVisible -Times 0
 	}
 
 	It "returns immediately when every window is already gone" {
@@ -35,7 +35,7 @@ Describe "Wait-BrowserWindowsClosed" {
 		$result = @(Wait-BrowserWindowsClosed -Windows $windows -TimeoutMs 1000)
 
 		$result.Count | Should -Be 0
-		Should -Invoke Test-BrowserWindowOpen -Times 2 -Exactly
+		Should -Invoke Test-WindowVisible -Times 2 -Exactly
 		Should -Invoke Start-Sleep -Times 0
 	}
 
@@ -66,7 +66,7 @@ Describe "Wait-BrowserWindowsClosed" {
 
 		$result.Count | Should -Be 0
 		# First poll probes both, the second only the survivor.
-		Should -Invoke Test-BrowserWindowOpen -Times 3 -Exactly
+		Should -Invoke Test-WindowVisible -Times 3 -Exactly
 	}
 
 	It "returns the windows still standing when the timeout expires" {

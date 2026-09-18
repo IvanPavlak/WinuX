@@ -12,14 +12,9 @@ BeforeAll {
 	# intercepts its internal calls, mirroring the rest of this file.
 	. "$FunctionsPath\Confirm-WorkspaceWindowPositions.ps1"
 
-	# VirtualDesktop cmdlets come from an optional external module absent on CI runners.
-	# Stub the ones the desktop check calls so Mock can attach (no-op where the module exists).
-	if (-not (Get-Command Get-DesktopFromWindow -ErrorAction SilentlyContinue)) {
-		function Get-DesktopFromWindow { [CmdletBinding()] param($Hwnd) }
-	}
-	if (-not (Get-Command Get-DesktopIndex -ErrorAction SilentlyContinue)) {
-		function Get-DesktopIndex { [CmdletBinding()] param([Parameter(Position = 0)]$Desktop) }
-	}
+	# The desktop check reads a window's desktop through the Window module's adapter; stub it so
+	# Mock attaches in this script scope instead of the module.
+	function Get-WindowDesktopIndex { param([IntPtr]$WindowHandle) -1 }
 }
 
 Describe "Confirm-WorkspaceWindowPositions" {
@@ -182,11 +177,10 @@ Describe "Confirm-WorkspaceWindowPositions" {
 			Mock Get-WindowHandle -ParameterFilter { $ProcessName -and -not $WindowTitle } {
 				@([PSCustomObject]@{ Handle = [IntPtr]0x9D001; Title = 'asseto - Visual Studio Code' })
 			}
-			Mock Get-DesktopFromWindow { 'desktop' }
 		}
 
 		It "fails an entry whose only window sits on another desktop, naming both desktops" {
-			Mock Get-DesktopIndex { 3 }
+			Mock Get-WindowDesktopIndex { 3 }
 
 			$result = Confirm-WorkspaceWindowPositions -LayoutConfig $codeLayout
 
@@ -199,7 +193,7 @@ Describe "Confirm-WorkspaceWindowPositions" {
 		}
 
 		It "accepts the window when it is on the expected desktop" {
-			Mock Get-DesktopIndex { 2 }
+			Mock Get-WindowDesktopIndex { 2 }
 
 			$result = Confirm-WorkspaceWindowPositions -LayoutConfig $codeLayout
 
@@ -208,7 +202,7 @@ Describe "Confirm-WorkspaceWindowPositions" {
 		}
 
 		It "applies the desktop offset of an alongside open" {
-			Mock Get-DesktopIndex { 5 }
+			Mock Get-WindowDesktopIndex { 5 }
 
 			$result = Confirm-WorkspaceWindowPositions -LayoutConfig $codeLayout -DesktopOffset 3
 
@@ -216,7 +210,8 @@ Describe "Confirm-WorkspaceWindowPositions" {
 		}
 
 		It "keeps a window whose desktop cannot be resolved as a fallback" {
-			Mock Get-DesktopFromWindow { throw 'RPC unavailable' }
+			# Get-WindowDesktopIndex answers -1 for every window it cannot place.
+			Mock Get-WindowDesktopIndex { -1 }
 
 			$result = Confirm-WorkspaceWindowPositions -LayoutConfig $codeLayout
 

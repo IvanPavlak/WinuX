@@ -77,7 +77,6 @@
 		'Terminate-AllProcessesByName',
 		'Terminate-AllProcessesWithVisibleWindows',
 		'Terminate-WindowsTerminalTabs',
-		'Test-BrowserWindowOpen',
 		'Test-FastfetchPanelOverflow',
 		'Test-MachineOnline',
 		'Test-PowerPlan',

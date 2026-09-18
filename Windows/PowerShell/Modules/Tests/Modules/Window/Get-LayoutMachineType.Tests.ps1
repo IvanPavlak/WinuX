@@ -16,8 +16,8 @@ Describe "Get-LayoutMachineType" {
 		Mock DetermineMachineType { 'PC' }
 		Mock Get-MonitorInfo { @([PSCustomObject]@{ IsPrimary = $true; Width = 3440; Height = 1440 }) }
 
-		# The function reads its two keys through the unqualified $Configuration, which resolves to
-		# this file's script scope - reset it per test so nothing leaks between cases.
+		# The function reads its two keys through Get-ConfigSetting, which reads the global
+		# configuration - reset it per test so nothing leaks between cases.
 		$global:Configuration = @{}
 	}
 

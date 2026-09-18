@@ -180,6 +180,23 @@ Describe "Get-WorkspaceOpenDelta" {
 			@($delta.Windows).Count | Should -Be 3
 		}
 
+		It "never adopts a shell host window, whatever the exclusion list says" {
+			# The Start menu, Search and the notification host are on screen for their own reasons;
+			# a plain open claiming them would have Close-Workspace asking them to close.
+			$global:Configuration.Universal.VisibleWindowExclusions = @()
+			Mock Get-WindowHandle {
+				@(
+					(New-TestWindow -Handle 1 -ProcessId 10 -ProcessName 'ShellExperienceHost' -Title 'Windows Shell Experience Host'),
+					(New-TestWindow -Handle 2 -ProcessId 20 -ProcessName 'explorer' -Title 'Downloads'),
+					(New-TestWindow -Handle 3 -ProcessId 30 -ProcessName 'firefox' -Title 'YouTube - Mozilla Firefox')
+				)
+			}
+
+			$delta = Get-WorkspaceOpenDelta -Workspace 'Server' -ExistingWindowHandles (New-HandleSet 1, 2, 3) -AdoptUnclaimed
+
+			@($delta.Windows | ForEach-Object { $_.ProcessName }) | Should -Be @('firefox')
+		}
+
 		It "adopts everything when no exclusions are configured at all" {
 			$global:Configuration = @{}
 

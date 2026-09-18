@@ -52,7 +52,7 @@ function Wait-BrowserWindowsClosed {
 
 	$stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
 	while ($true) {
-		$remaining = @($remaining | Where-Object { Test-BrowserWindowOpen -Handle $_.Handle })
+		$remaining = @($remaining | Where-Object { Test-WindowVisible -Handle $_.Handle })
 
 		if ($remaining.Count -eq 0 -or $stopwatch.ElapsedMilliseconds -ge $TimeoutMs) {
 			break

@@ -39,6 +39,7 @@
 		'Get-PowerShellFunctionDependencies',
 		'Get-RepositoryName',
 		'Get-RepositoryPath',
+		'Get-ShellProcessName',
 		'Get-WindowTitleCandidates',
 		'Get-WindowsTerminalTabTitles',
 		'Get-RpcRetryPolicy',
