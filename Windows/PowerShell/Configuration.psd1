@@ -1684,7 +1684,10 @@
 	# - "DEFAULT": Opens a plain terminal tab at the default starting directory.
 	#   No path definition needed in PathTemplates. Useful for projects that
 	#   just need a shell without a specific working directory.
-	# - "WSL": Opens a WSL tab using DefaultWSLDistribution.
+	# - "WSL": Opens a WSL tab using DefaultWSLDistribution, at its home directory.
+	# - @{ Key = "WSL"; Path = "/mnt/c/path" }: The same WSL tab, started in that
+	#   directory. Write the path as WSL sees it - "/mnt/c/..." for a Windows-mounted
+	#   project, "/home/..." for a native clone.
 	# - @{ Key = "Name"; Path = "C:\path" }: Opens a tab at a custom explicit path
 	#   without requiring a matching entry in PathTemplates.
 	# - @{ Key = "Name" }: Opens a plain tab (like DEFAULT) with a custom name.

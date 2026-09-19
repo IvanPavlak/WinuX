@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.73] - 2026-09-19
+
+### Added
+
+- **A `ProjectTerminals` WSL tab can start inside the project.** `"WSL"` in a project's `Paths` spawned `wt new-tab -p <DefaultWSLDistribution>` with no starting directory, so the tab always landed in the distribution's home and every session began with the same manual `cd`. Nothing in the configuration could fix it: the custom-path shape `@{ Key = "Name"; Path = "..." }` queues a `pwsh` tab running `Set-Location` and never reaches a WSL profile tab, and the Windows Terminal profile's own `--cd` is machine-wide, so pointing it at one project would move every WSL tab on the machine. The WSL branch now honours that same hashtable shape: `@{ Key = "WSL"; Path = "/mnt/c/Users/Me/Repo" }` runs `wsl.exe -d <distro> --cd <path>` as the tab's commandline in place of the profile's own. `wt -d` is not the mechanism and cannot be - it sets the Win32 working directory of the profile process, so a WSL path is refused with "Could not access starting directory" and a Windows path would still lose to the profile's `--cd ~`. A commandline given to `new-tab` overrides the profile's commandline while every other profile setting still applies, and `wsl --cd` takes the path as WSL sees it (`/mnt/c/...` for a Windows-mounted project, `/home/...` for a native clone), which is why it is written that way and passed through untranslated. A plain `"WSL"` string is unchanged and still opens at the home directory; tab naming (`Project.WSL`) and the idempotency check already read `Key`, so neither moved. Tests: `Open-ProjectTerminals.Tests.ps1` (the hashtable shape puts `wsl.exe -d <distro> --cd <path>` on the `new-tab` invocation, the plain string leaves the bare profile tab untouched).
+
 ## [0.1.72] - 2026-09-18
 
 ### Added
@@ -1251,7 +1257,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.72...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.73...HEAD
+[0.1.73]: https://github.com/IvanPavlak/WinuX/compare/v0.1.72...v0.1.73
 [0.1.72]: https://github.com/IvanPavlak/WinuX/compare/v0.1.71...v0.1.72
 [0.1.71]: https://github.com/IvanPavlak/WinuX/compare/v0.1.70...v0.1.71
 [0.1.70]: https://github.com/IvanPavlak/WinuX/compare/v0.1.69...v0.1.70

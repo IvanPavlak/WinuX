@@ -30,7 +30,12 @@ function Open-ProjectTerminals {
 		Special path types in Paths array:
 		- "DEFAULT": Opens a plain terminal tab at the default starting directory (no Set-Location).
 		  Useful for projects that just need a shell without a specific path (e.g., Server).
-		- "WSL": Opens a WSL tab using the configured DefaultWSLDistribution.
+		- "WSL": Opens a WSL tab using the configured DefaultWSLDistribution, at the
+		  distribution's home directory.
+		- @{ Key = "WSL"; Path = "/mnt/c/path" }: The same WSL tab, started in that
+		  directory. The path is a path as WSL sees it ("/mnt/c/..." for a Windows-mounted
+		  project, "/home/..." for a native clone), and the tab runs
+		  "wsl.exe -d <distro> --cd <path>" in place of the profile's own commandline.
 		- @{ Key = "Name"; Path = "C:\custom\path" }: Opens a tab at an explicit custom path
 		  without requiring a matching entry in PathTemplates.
 		- @{ Key = "Name" }: Opens a plain tab (like DEFAULT) with a custom tab name.
@@ -406,7 +411,8 @@ function Open-ProjectTerminals {
 				# Supported formats:
 				#   "PathKey"                              - Resolves from PathTemplates
 				#   "DEFAULT"                              - Plain tab at default directory
-				#   "WSL"                                  - WSL tab
+				#   "WSL"                                  - WSL tab at the distro home directory
+				#   @{ Key = "WSL"; Path = "/mnt/c/x" }     - WSL tab started in that directory
 				#   @{ Key = "Name"; Path = "C:\path" }    - Custom explicit path
 				#   @{ Key = "Name" }                       - Plain tab with custom name
 				if ($pathEntry -is [hashtable]) {
@@ -442,7 +448,22 @@ function Open-ProjectTerminals {
 						& $flushPendingTabs
 
 						$wslWindowId = if ($projectWindowId) { $projectWindowId } else { [guid]::NewGuid().ToString() }
-						Start-Process wt -ArgumentList @("-w", $wslWindowId, "new-tab", "-p", $distro, "--title", $tabName) -WindowStyle Hidden
+						$wslArguments = @("-w", $wslWindowId, "new-tab", "-p", $distro, "--title", $tabName)
+
+						# @{ Key = "WSL"; Path = "<path>" } starts the tab inside a directory instead of
+						# the distribution's home, by replacing the tab's commandline rather than setting
+						# a starting directory. `wt -d` cannot do it: it sets the Win32 working directory
+						# of the profile process, so a WSL path is rejected outright ("Could not access
+						# starting directory"), and even a Windows path would then lose to the profile's
+						# own `--cd ~`. A commandline given to `new-tab` overrides that profile
+						# commandline while every other profile setting still applies, and `wsl --cd`
+						# takes the path as WSL sees it - which is why it is written that way and passed
+						# through untranslated.
+						if (Test-ConfigValue $customPath) {
+							$wslArguments += @("wsl.exe", "-d", $distro, "--cd", $customPath)
+						}
+
+						Start-Process wt -ArgumentList $wslArguments -WindowStyle Hidden
 
 						# Wait briefly for Windows Terminal to process the new-tab command
 						# This prevents race conditions when opening multiple tabs in succession
