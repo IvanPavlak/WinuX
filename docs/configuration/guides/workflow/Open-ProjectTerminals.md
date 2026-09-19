@@ -19,7 +19,7 @@ Opens project-specific Windows Terminal tabs based on `Configuration.ProjectTerm
     - Default: Empty - every WSL path no-ops.
     - More detail: [`DefaultWSLDistribution`](../../configuration-reference.md#wsl-configuration)
 2. Which terminal tabs should open for this project?
-    - Options: One entry per project with its tab list. Each tab can set a title and a starting directory, and can run in WSL.
+    - Options: One entry per project with its tab list. Each tab can set a title and a starting directory, and can run in WSL - a WSL tab written as `@{ Key = "WSL"; Path = "/mnt/c/Users/Me/Repo" }` starts in that directory instead of the distribution's home, with the path written as WSL sees it.
     - Default: The shipped three entries.
     - More detail: [`ProjectTerminals`](../../configuration-reference.md#project-terminals)
 

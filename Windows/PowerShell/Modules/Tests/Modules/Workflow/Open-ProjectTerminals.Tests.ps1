@@ -11,6 +11,22 @@ BeforeAll {
 	function Resolve-ProjectPath { param($ProjectName, $PathKey) "C:\Fake\$ProjectName\$PathKey" }
 	function Test-TerminalTabsAlreadyOpen { param($ExpectedTabNames, $ProjectName) [PSCustomObject]@{ AllOpen = $false; FoundTabs = @() } }
 	function Open-Terminal { param($Command, [switch]$InSameShell, $WindowId, $TabTitles) }
+
+	# Open-ProjectTerminals calls Start-Process more than once per project - the WSL tab,
+	# then the focus-tab pass that runs after every project - so a capture that keeps only
+	# the last call reads the focus arguments and never sees the tab at all.
+	function Get-WslNewTabArguments {
+		param([Parameter(Mandatory)][string]$Project)
+
+		$script:wslProcessCalls = [System.Collections.ArrayList]@()
+		Mock Start-Process { [void]$script:wslProcessCalls.Add(@($ArgumentList)) }
+
+		Open-ProjectTerminals -Project $Project -InSameShell
+
+		$newTabCalls = @($script:wslProcessCalls | Where-Object { $_ -contains "new-tab" })
+		$newTabCalls.Count | Should -Be 1
+		, $newTabCalls[0]
+	}
 }
 
 Describe "Open-ProjectTerminals" {
@@ -34,6 +50,7 @@ Describe "Open-ProjectTerminals" {
 				@{ Name = "CustomProject"; BasePath = "Projects.CustomProject"; Paths = @(@{ Key = "Logs"; Path = "C:\CustomLogs" }, "Api") }
 				@{ Name = "MixedProject"; BasePath = "Projects.MixedProject"; Paths = @("DEFAULT", @{ Key = "Docs"; Path = "C:\Docs" }, "Api") }
 				@{ Name = "PlainCustom"; BasePath = "Projects.PlainCustom"; Paths = @(@{ Key = "Shell" }) }
+				@{ Name = "WslPathProject"; BasePath = "Projects.WslPathProject"; Paths = @(@{ Key = "WSL"; Path = "/mnt/c/x" }) }
 			)
 			DefaultWSLDistribution = "Ubuntu"
 			# The append is on, which is what upstream ships - so the existing expectations,
@@ -331,6 +348,31 @@ Describe "Open-ProjectTerminals" {
 			$script:capturedCmds.Count | Should -BeGreaterOrEqual 1
 			$script:capturedCmds[0] | Should -Be ""
 			$script:capturedTitles[0] | Should -Be "DefaultProject.DEFAULT"
+		}
+
+		It "Should start a WSL tab in the configured path when the entry carries one" {
+			# @{ Key = "WSL"; Path = "<path>" } is the only way to land a WSL tab inside the
+			# project: `wt -d` sets the Win32 working directory of the profile process, so a
+			# WSL path is refused and a Windows one still loses to the profile's own `--cd ~`,
+			# and the pwsh Set-Location path never reaches a WSL profile tab at all. Overriding
+			# the tab's commandline is what is left.
+			$newTabArgs = Get-WslNewTabArguments -Project "WslPathProject"
+
+			$cdIndex = [Array]::IndexOf($newTabArgs, "--cd")
+			$cdIndex | Should -BeGreaterThan -1
+			$newTabArgs[$cdIndex + 1] | Should -Be "/mnt/c/x"
+			$newTabArgs | Should -Contain "wsl.exe"
+			$newTabArgs | Should -Contain "WslPathProject.WSL"
+		}
+
+		It "Should keep the plain WSL string entry on the bare profile tab" {
+			# No commandline override, so the profile's own `--cd ~` still applies and the tab
+			# opens at the distribution's home exactly as it always did.
+			$newTabArgs = Get-WslNewTabArguments -Project "DefaultProject"
+
+			$newTabArgs | Should -Not -Contain "--cd"
+			$newTabArgs | Should -Not -Contain "wsl.exe"
+			$newTabArgs | Should -Be @("-w", "0", "new-tab", "-p", "Ubuntu", "--title", "DefaultProject.WSL")
 		}
 
 		It "Should open both DEFAULT and WSL tabs" {
