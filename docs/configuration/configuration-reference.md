@@ -346,7 +346,25 @@ Terminal tab configurations for each project. Defines terminal names and their w
 }
 ```
 
-**Consumer functions:** `Open-ProjectTerminals`, `Close-ProjectTerminals`, `Focus-TerminalTab`
+**Path entry shapes:** every entry in `Paths` is read by `Resolve-ProjectTerminalTab`, the one reader
+both `Open-ProjectTerminals` and `Run-Project` use, so `op` and `rp` open the same set of tabs.
+
+| Entry                                 | Tab                                                                                |
+| ------------------------------------- | ---------------------------------------------------------------------------------- |
+| `"PathKey"`                           | A tab at that subpath under `BasePath`, resolved through `Resolve-ProjectPath`.    |
+| `"ROOT"`                              | A tab at the project root.                                                          |
+| `"DEFAULT"`                           | A plain tab wherever the shell starts, with no `Set-Location` in front of it.       |
+| `"WSL"`                               | A tab on `DefaultWSLDistribution`, at the distribution's home directory.            |
+| `@{ Key = "WSL"; Path = "/mnt/c/x" }` | The same WSL tab, started in that directory - written as WSL sees it, `/mnt/c/...` for a Windows-mounted repository and `/home/...` for a native clone. |
+| `@{ Key = "Name"; Path = "C:\path" }` | A tab at an explicit Windows path, with no matching entry needed in `PathTemplates`. |
+| `@{ Key = "Name" }`                   | A plain tab with a custom title.                                                    |
+
+A WSL tab runs the distribution's shell, not PowerShell, so `Run-Project` opens it and leaves it
+alone: a command configured against a `WSL` key in `RunnableProjectMappings` is reported and skipped
+rather than typed into a shell that cannot run it. Both functions skip WSL tabs entirely while
+`DefaultWSLDistribution` is unset.
+
+**Consumer functions:** `Open-ProjectTerminals`, `Run-Project`, `Close-ProjectTerminals`, `Focus-TerminalTab`, `Resolve-ProjectTerminalTab`, `Resolve-ProjectPath`
 
 ### Runnable Project Mappings
 

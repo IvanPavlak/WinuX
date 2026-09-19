@@ -27,6 +27,10 @@ function Open-ProjectTerminals {
 		  - not InSameShell + InSameGroup: All projects grouped in one new window
 		  - not InSameShell + not InSameGroup: Every tab in its own new window
 
+		The entries in Paths are read by Resolve-ProjectTerminalTab, shared with Run-Project so that
+		`op` and `rp` always agree on what a project's tabs are, and WSL tabs are spawned through
+		Open-WSLTab.
+
 		Special path types in Paths array:
 		- "DEFAULT": Opens a plain terminal tab at the default starting directory (no Set-Location).
 		  Useful for projects that just need a shell without a specific path (e.g., Server).
@@ -337,15 +341,10 @@ function Open-ProjectTerminals {
 				continue
 			}
 
-			$expectedTabNames = @()
-			foreach ($pathEntry in $mapping.Paths) {
-				if ($pathEntry -is [hashtable]) {
-					$expectedTabNames += "$terminal.$($pathEntry.Key)"
-				}
-				else {
-					$expectedTabNames += "$terminal.$pathEntry"
-				}
-			}
+			# Resolve-ProjectTerminalTab is the single reader of the entry shapes Paths accepts,
+			# shared with Run-Project so the two flows can never disagree about what a tab is.
+			$tabs = @($mapping.Paths | ForEach-Object { Resolve-ProjectTerminalTab -ProjectName $terminal -PathEntry $_ })
+			$expectedTabNames = @($tabs.Title)
 
 			Write-LogStep "Opening [$terminal] project terminals..."
 
@@ -405,28 +404,11 @@ function Open-ProjectTerminals {
 				if (-not $projectWindowId) { & $flushPendingTabs }
 			}
 
-			# Iterate through each path entry and open tabs sequentially to preserve order
-			foreach ($pathEntry in $mapping.Paths) {
-				# Determine tab name and path type based on entry format
-				# Supported formats:
-				#   "PathKey"                              - Resolves from PathTemplates
-				#   "DEFAULT"                              - Plain tab at default directory
-				#   "WSL"                                  - WSL tab at the distro home directory
-				#   @{ Key = "WSL"; Path = "/mnt/c/x" }     - WSL tab started in that directory
-				#   @{ Key = "Name"; Path = "C:\path" }    - Custom explicit path
-				#   @{ Key = "Name" }                       - Plain tab with custom name
-				if ($pathEntry -is [hashtable]) {
-					$pathKey = $pathEntry.Key
-					$customPath = $pathEntry.Path
-					$isCustomEntry = $true
-				}
-				else {
-					$pathKey = $pathEntry
-					$customPath = $null
-					$isCustomEntry = $false
-				}
-
-				$tabName = "$terminal.$pathKey"
+			# Iterate through each tab and open it sequentially to preserve order. The entry
+			# shapes Paths accepts are read once, above, by Resolve-ProjectTerminalTab - what
+			# is left here is what to DO with each kind of tab.
+			foreach ($tab in $tabs) {
+				$tabName = $tab.Title
 
 				# Skip tabs that are already open (unless Force is specified)
 				if ($Force -eq $false -and $alreadyOpenTabs -contains $tabName) {
@@ -434,10 +416,10 @@ function Open-ProjectTerminals {
 					continue
 				}
 
-				# Handle WSL as a special case
-				if ($pathKey -eq "WSL") {
-					$distro = Get-ConfigSetting -Path 'DefaultWSLDistribution'
-					if (-not (Test-ConfigValue $distro)) {
+				# A WSL tab runs on the distribution's own Windows Terminal profile, so it cannot
+				# ride the pwsh batch - it is spawned on its own by Open-WSLTab.
+				if ($tab.Kind -eq "WSL") {
+					if (-not $tab.Distribution) {
 						Write-LogWarning "  Skipping [$tabName] (DefaultWSLDistribution not configured)" -NoLeadingNewline
 						continue
 					}
@@ -448,26 +430,7 @@ function Open-ProjectTerminals {
 						& $flushPendingTabs
 
 						$wslWindowId = if ($projectWindowId) { $projectWindowId } else { [guid]::NewGuid().ToString() }
-						$wslArguments = @("-w", $wslWindowId, "new-tab", "-p", $distro, "--title", $tabName)
-
-						# @{ Key = "WSL"; Path = "<path>" } starts the tab inside a directory instead of
-						# the distribution's home, by replacing the tab's commandline rather than setting
-						# a starting directory. `wt -d` cannot do it: it sets the Win32 working directory
-						# of the profile process, so a WSL path is rejected outright ("Could not access
-						# starting directory"), and even a Windows path would then lose to the profile's
-						# own `--cd ~`. A commandline given to `new-tab` overrides that profile
-						# commandline while every other profile setting still applies, and `wsl --cd`
-						# takes the path as WSL sees it - which is why it is written that way and passed
-						# through untranslated.
-						if (Test-ConfigValue $customPath) {
-							$wslArguments += @("wsl.exe", "-d", $distro, "--cd", $customPath)
-						}
-
-						Start-Process wt -ArgumentList $wslArguments -WindowStyle Hidden
-
-						# Wait briefly for Windows Terminal to process the new-tab command
-						# This prevents race conditions when opening multiple tabs in succession
-						Start-Sleep -Milliseconds 25
+						Open-WSLTab -Distribution $tab.Distribution -Path $tab.Path -TabTitle $tabName -WindowId $wslWindowId -Quiet
 
 						# Track tab names in order
 						$tabNamesList += $tabName
@@ -476,24 +439,18 @@ function Open-ProjectTerminals {
 					catch {
 						Write-LogError "Error opening WSL tab: [$_]" -NoLeadingNewline
 					}
-				}
-				# Handle DEFAULT - opens a plain tab at the terminal's default starting directory
-				elseif ($pathKey -eq "DEFAULT" -or ($isCustomEntry -and -not $customPath)) {
-					try {
-						& $queueTab "" $tabName
 
-						# Track tab names in order
-						$tabNamesList += $tabName
-						$totalTabsCreated++
-					}
-					catch {
-						Write-LogError "Error opening DEFAULT tab: [$_]" -NoLeadingNewline
-					}
+					continue
 				}
-				# Handle custom path entries (hashtable with Key and Path)
-				elseif ($isCustomEntry -and $customPath) {
-					$cmd = "Set-Location -Path '$customPath'"
-					if ($appendOnefetch) { $cmd += "; Invoke-Onefetch" }
+
+				try {
+					# A "Default" tab is queued with an empty command, which lands it in the
+					# shell's own starting directory with no Set-Location in front of it.
+					$cmd = ""
+					if ($tab.Kind -eq "Path") {
+						$cmd = "Set-Location -Path '$($tab.Path)'"
+						if ($appendOnefetch) { $cmd += "; Invoke-Onefetch" }
+					}
 
 					& $queueTab $cmd $tabName
 
@@ -501,18 +458,8 @@ function Open-ProjectTerminals {
 					$tabNamesList += $tabName
 					$totalTabsCreated++
 				}
-				else {
-					# Handle regular path - resolve from PathTemplates
-					$path = Resolve-ProjectPath -ProjectName $terminal -PathKey $pathKey
-
-					$cmd = "Set-Location -Path '$path'"
-					if ($appendOnefetch) { $cmd += "; Invoke-Onefetch" }
-
-					& $queueTab $cmd $tabName
-
-					# Track tab names in order
-					$tabNamesList += $tabName
-					$totalTabsCreated++
+				catch {
+					Write-LogError "Error opening [$tabName] tab: [$_]" -NoLeadingNewline
 				}
 			}
 

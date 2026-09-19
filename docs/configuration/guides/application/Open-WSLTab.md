@@ -1,6 +1,6 @@
 # Open-WSLTab
 
-Opens a new WSL tab in the currently focused Windows Terminal window using `wt.exe -w 0 new-tab`.
+Opens a WSL tab in Windows Terminal - by default in the caller's window, at the distribution's home directory. It is also the one place the project terminal flows (`Open-ProjectTerminals` and `Run-Project`) open their WSL tabs from.
 
 > [!NOTE]
 > Every value on this page belongs in `Configuration.local.psd1`, never in the base `Configuration.psd1`. The base file is upstream's, it ships empty-by-default, and it is deep-merged with your local file at load time by `Load-PathConfiguration`. See [Fork Model](../../../contributing/fork-model.md).

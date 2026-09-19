@@ -63,6 +63,7 @@
 		'ReRun-LastCommand',
 		'Resolve-HostingTerminalTab',
 		'Resolve-ProjectPath',
+		'Resolve-ProjectTerminalTab',
 		'Resolve-RunProjectSteps',
 		'Resolve-Selection',
 		'Run-Project',
