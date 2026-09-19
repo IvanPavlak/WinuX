@@ -22,6 +22,7 @@ The [Helper module reference](../../../modules/helper.md) is the authority on wh
 | `Loading-Spinner` | `DefaultSpinner`, `LoadingSpinners` | [Loading-Spinner](Loading-Spinner.md) |
 | `Preview-LoadingSpinners` | `LoadingSpinners` | [Preview-LoadingSpinners](Preview-LoadingSpinners.md) |
 | `Resolve-ProjectPath` | `ProjectTerminals`, `RepositoryGroups`, `Universal` | [Resolve-ProjectPath](Resolve-ProjectPath.md) |
+| `Resolve-ProjectTerminalTab` | `ProjectTerminals`, `DefaultWSLDistribution` | [Resolve-ProjectTerminalTab](Resolve-ProjectTerminalTab.md) |
 | `Resolve-RunProjectSteps` | `RunProject` | [Resolve-RunProjectSteps](Resolve-RunProjectSteps.md) |
 | `Run-Project` | `ProjectTerminals`, `RunnableProjectMappings` | [Run-Project](Run-Project.md) |
 | `Show-FunctionDetails` | `ShowFunctionDetailsColors` | [Show-FunctionDetails](Show-FunctionDetails.md) |

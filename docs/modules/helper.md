@@ -1161,6 +1161,27 @@ Resolve-ProjectPath -ProjectName MyProject
 $repo = Resolve-ProjectPath -ProjectName MyRepo -ForRepository
 ```
 
+## [Resolve-ProjectTerminalTab](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Resolve-ProjectTerminalTab.ps1)
+
+- **Description:** Reads one `ProjectTerminals` path entry into the tab it describes. A tab is written in any of six shapes - a path key, the `DEFAULT` and `WSL` keywords, and three hashtable forms - and this is the single reader of all six, shared by [Open-ProjectTerminals](workflow.md#open-projectterminals) and [Run-Project](#run-project) so `op` and `rp` can never disagree about what a project's tabs are. Returns `Key`, `Title` (`<Project>.<Key>`), `Kind` (`Path`, `Default` or `WSL`), `Path` and `Distribution`.
+- **Parameters:** -ProjectName, -PathEntry
+- **Usage:** `Resolve-ProjectTerminalTab -ProjectName "MyProject" -PathEntry "Api"`, `Resolve-ProjectTerminalTab -ProjectName "MyProject" -PathEntry @{ Key = "WSL"; Path = "/mnt/c/Dev/MyProject" }`
+
+| Entry                                 | Kind      | Path                                        |
+| ------------------------------------- | --------- | ------------------------------------------- |
+| `"PathKey"`                           | `Path`    | Resolved through [Resolve-ProjectPath](#resolve-projectpath) |
+| `"DEFAULT"`                           | `Default` | None - the shell's own starting directory   |
+| `"WSL"`                               | `WSL`     | None - the distribution's home directory    |
+| `@{ Key = "WSL"; Path = "/mnt/c/x" }` | `WSL`     | That path, as WSL sees it                   |
+| `@{ Key = "Name"; Path = "C:\path" }` | `Path`    | That path, verbatim                         |
+| `@{ Key = "Name" }`                   | `Default` | None - a plain tab with a custom title      |
+
+`Kind` is deliberately not "does it have a path": a WSL path and a Windows path are both paths, but they reach a tab through entirely different machinery - `wsl.exe --cd` against the tab's commandline versus `Set-Location` inside pwsh - so the two must never fall into the same branch. That is exactly the bug the function was extracted for: `Run-Project` read `@{ Key = "WSL"; Path = "/mnt/c/..." }` as an ordinary explicit path and ran `Set-Location -Path '/mnt/c/...'`, which PowerShell resolves against the current drive, sending the tab to `C:\mnt\c\...`.
+
+A `WSL` tab carries the configured `DefaultWSLDistribution`, and `$null` when it is unset - which callers read as "skip this tab", the same no-op every other WSL feature performs without it.
+
+**See also:** [Open-ProjectTerminals](workflow.md#open-projectterminals), [Run-Project](#run-project), [Open-WSLTab](application.md#open-wsltab), [Resolve-ProjectPath](#resolve-projectpath)
+
 ## [Resolve-RunProjectSteps](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Resolve-RunProjectSteps.ps1)
 
 - **Description:** Resolves which optional `Run-Project` steps should run - a thin wrapper over [Resolve-Steps](#resolve-steps), the same shape as `Resolve-KillAllSteps`. Per step, `-Skip` beats `-Include` beats config (`RunProject.Steps.<Name>` - a plain boolean or a per-machine-type hashtable with a `Default` fallback) beats the built-in defaults. `Docker` is the one step so far, on by default.
@@ -1239,6 +1260,8 @@ if ((Resolve-Selection -ConfirmationMessage "Are you sure you want to delete all
 - **Alias:** rp
 
 Reads `Configuration.RunnableProjectMappings` for both the menu and each project's run commands. `Commands` is keyed by the `ProjectTerminals` path key (e.g. `Api`, `Ui`), so each path runs its own command in its own tab titled `<Project>.<PathKey>`, and a path with no command listed just gets its tab. A mapping with `UsesDocker = $true` and no `DatabaseProviders` starts the project's own compose file (`compose.yaml`, `compose.yml`, `docker-compose.yaml` or `docker-compose.yml` at the project's `ProjectTerminals` root) - the shape for an app that owns its whole stack rather than borrowing a shared database container, so its `Commands` follow the containers (`docker compose logs -f web`) instead of starting a server on the host. The Docker resolution lives in [Resolve-ProjectDockerCompose](workflow.md#resolve-projectdockercompose), and `DockerWizard` is called with `-PassThru`: when the daemon never becomes ready the project is skipped instead of opening tabs against a database that is not there. When the starting tab already matches a project tab it is reused instead of opening a duplicate, and focus is returned to the starting tab after all projects have been opened.
+
+A project's tabs are read out of `ProjectTerminals` by [Resolve-ProjectTerminalTab](#resolve-projectterminaltab), the same reader `Open-ProjectTerminals` uses, so `rp` opens the same set of tabs as `op` - including WSL tabs, which go to [Open-WSLTab](application.md#open-wsltab) on the distribution's own Windows Terminal profile instead of a PowerShell tab. A WSL tab does not take the project's commands: they are PowerShell commands and that tab is not PowerShell, so a command configured against a `WSL` key is reported and skipped while the tab itself still opens in the project directory. WSL tabs are spawned after the PowerShell tabs, so they appear last in the window whatever position they hold in `Paths`.
 
 Docker is an optional step, resolved Kill-All-style through [Resolve-RunProjectSteps](#resolve-runprojectsteps): `RunProject.Steps.Docker` in configuration (plain boolean or per-machine-type hashtable with a `Default` fallback) decides persistently, and `-Skip Docker` / `-Include Docker` override per invocation. It defaults to on - inert unless a project mapping declares `DatabaseProviders` or `UsesDocker` - and a setup that runs its databases locally disables it once, after which `Run-Project` never touches Docker, not even the provider prompt.
 

@@ -8,6 +8,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.74] - 2026-09-19
+
+### Added
+
+- **`Resolve-ProjectTerminalTab` is the one reader of a `ProjectTerminals` path entry.** A tab is written in any of six shapes - a path key, `ROOT`, `DEFAULT`, `WSL`, and the three hashtable forms - and every consumer of the list has to read all six the same way. Two consumers read them separately instead: `Open-ProjectTerminals` knew all six, `Run-Project` knew two, and the four it did not know it mistook for something else. The reader returns `Key`, `Title` (`<Project>.<Key>`), `Kind` (`Path`, `Default` or `WSL`), `Path` and, for a WSL tab, the configured `DefaultWSLDistribution` - `$null` when it is unset, which both callers read as "skip this tab", the same no-op every other WSL feature performs without it. `Kind` is deliberately not "does it have a path": a WSL path and a Windows path are both paths but reach a tab through entirely different machinery - `wsl.exe --cd` against the tab's commandline versus `Set-Location` inside pwsh - so the two cannot fall into the same branch again. Tests: `Resolve-ProjectTerminalTab.Tests.ps1` (each of the six shapes, the title, an explicit path never resolved through `PathTemplates`, a WSL path kept verbatim, no distribution when the key is unset) and the `Open-ProjectTerminals` and `Run-Project` suites, which dot-source the real reader rather than stub it.
+
+### Changed
+
+- **`Open-WSLTab` is the one place a WSL tab is spawned, and takes the project tabs' parameters.** `Open-ProjectTerminals` built its own `wt new-tab -p <distro>` invocation beside the bare `wsl-tab` one; `Run-Project` had none and needed one. The function now takes `-Distribution`, `-Path`, `-TabTitle`, `-WindowId` and `-Quiet`, and both project flows open their WSL tabs through it - titled, inside the project directory, in the project's own Windows Terminal window, without the title and success lines a batch of tabs does not want. The mechanics did not change: `-Path` still replaces the tab's commandline with `wsl.exe -d <distro> --cd <path>` rather than setting a starting directory (`wt -d` sets the Win32 working directory of the profile process, so a WSL path is refused outright and a Windows one still loses to the profile's `--cd ~`), and the path is still passed through untranslated because `wsl --cd` takes it as WSL sees it. A bare `Open-WSLTab` behaves as before, except that it now prefers the caller's own window (`WT_WINDOW_ID`) over window `0`, which targets the most recently used window rather than necessarily this one. Tests: `Open-WSLTab.Tests.ps1` (the bare tab's arguments, an explicit distribution, the title, the commandline override, the path untranslated, an explicit window, quiet, and no tab at all while `DefaultWSLDistribution` is unset).
+
+### Fixed
+
+- **`Run-Project` opens a project's WSL tab instead of sending a PowerShell tab to `C:\mnt\c\...`.** `rp` and `op` read the same `ProjectTerminals` list, but only `op` understood what was in it. `Run-Project` read every hashtable entry as an explicit Windows path, so a WSL tab - `@{ Key = "WSL"; Path = "/mnt/c/Users/Me/Repo" }`, the shape 0.1.73 added - became `Set-Location -Path '/mnt/c/Users/Me/Repo'` in a pwsh tab, and PowerShell resolves a rooted path against the CURRENT DRIVE: the tab failed with "Cannot find path 'C:\mnt\c\Users\Me\Repo' because it does not exist". The plain `"WSL"` and `"DEFAULT"` keywords were no better off - both were handed to `Resolve-ProjectPath` as ordinary path keys. Both functions now read their tabs through `Resolve-ProjectTerminalTab` and spawn WSL tabs through `Open-WSLTab`, so `rp` opens the same tabs as `op`. A WSL tab does not take the project's commands - they are PowerShell commands and that tab is not PowerShell - so a command configured against a `WSL` key in `RunnableProjectMappings` is reported and skipped while the tab still opens in the project directory, and WSL tabs are spawned after the PowerShell batch, which puts them last in the window whatever position they hold in `Paths`. When the tabs go to a new window, `Run-Project` now mints that window's ID itself and hands it to both `Open-Terminal` and `Open-WSLTab`, because a separately spawned WSL tab could never join a window ID `Open-Terminal` minted privately. Tests: `Run-Project.Tests.ps1` (a WSL entry opens through `Open-WSLTab` with the path untranslated and never reaches `Set-Location`, a command configured for a WSL key is reported and not run, and a WSL tab is skipped while no distribution is configured).
+
 ## [0.1.73] - 2026-09-19
 
 ### Added
@@ -1257,7 +1271,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.73...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.74...HEAD
+[0.1.74]: https://github.com/IvanPavlak/WinuX/compare/v0.1.73...v0.1.74
 [0.1.73]: https://github.com/IvanPavlak/WinuX/compare/v0.1.72...v0.1.73
 [0.1.72]: https://github.com/IvanPavlak/WinuX/compare/v0.1.71...v0.1.72
 [0.1.71]: https://github.com/IvanPavlak/WinuX/compare/v0.1.70...v0.1.71

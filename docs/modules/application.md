@@ -621,8 +621,21 @@ When a WhatsApp notification arrives while the app is closed, Windows COM-activa
 
 ## [Open-WSLTab](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Open-WSLTab.ps1)
 
-- **Description:** Opens a new WSL tab in the currently focused Windows Terminal window using `wt.exe -w 0 new-tab`. The WSL distribution is read from the `DefaultWSLDistribution` key in `Configuration.psd1`; the base ships it empty, so the function warns and no-ops until one is set in `Configuration.local.psd1`.
-- **Usage:** `Open-WSLTab`
+- **Description:** Opens a WSL tab in Windows Terminal - by default on the configured distribution, in the caller's window, at the distribution's home directory. The distribution is read from the `DefaultWSLDistribution` key in `Configuration.psd1`; the base ships it empty, so the function warns and no-ops until one is set in `Configuration.local.psd1`. The parameters serve the project terminal flows: `Open-ProjectTerminals` and `Run-Project` both open their WSL tabs through this one function, titled, inside the project directory and in the project's own Windows Terminal window.
+- **Parameters:** -Distribution, -Path, -TabTitle, -WindowId, -Quiet
+- **Usage:** `Open-WSLTab`, `Open-WSLTab -Distribution "Debian"`, `Open-WSLTab -Path "/mnt/c/Users/Me/Development/MyProject" -TabTitle "MyProject.WSL" -Quiet`
+
+`-Path` starts the tab inside a directory by replacing the tab's commandline (`wsl.exe -d <distro> --cd <path>`) rather than by setting a starting directory: `wt -d` sets the Win32 working directory of the profile process, so a WSL path is rejected outright ("Could not access starting directory") and even a Windows path then loses to the profile's own `--cd ~`. The path is passed through untranslated because `wsl --cd` takes it as WSL sees it - `/mnt/c/...` for a Windows-mounted repository, `/home/...` for a native clone.
+
+| Parameter        | Description                                                                                                        |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `-Distribution`  | Distribution to open. Defaults to `Configuration.DefaultWSLDistribution`.                                          |
+| `-Path`          | Directory to start the tab in, written as WSL sees it. Omit for the distribution's home directory.                 |
+| `-TabTitle`      | Tab title. Omit to let Windows Terminal name the tab.                                                              |
+| `-WindowId`      | Windows Terminal window to open the tab in. Omit for the caller's window (`WT_WINDOW_ID`, otherwise window `0`).   |
+| `-Quiet`         | Suppresses the title, success and not-configured lines, for callers that log around a batch of tabs.               |
+
+**See also:** [Open-ProjectTerminals](workflow.md#open-projectterminals), [Run-Project](helper.md#run-project), [Resolve-ProjectTerminalTab](helper.md#resolve-projectterminaltab)
 
 ## [Start-Application](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Start-Application.ps1)
 

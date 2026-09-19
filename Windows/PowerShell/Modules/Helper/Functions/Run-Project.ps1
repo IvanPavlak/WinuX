@@ -15,6 +15,14 @@ function Run-Project {
 		instead of lining up with it by position. A path with no command listed gets its
 		terminal tab and nothing run in it.
 
+		The project's tabs are read out of ProjectTerminals by Resolve-ProjectTerminalTab, the
+		same reader Open-ProjectTerminals uses, so `rp` and `op` open the same set of tabs -
+		including WSL tabs, which go to Open-WSLTab on the distribution's own Windows Terminal
+		profile. A WSL tab does not take the project's commands: they are PowerShell commands and
+		that tab is not PowerShell, so a command configured for a WSL key is reported and skipped
+		while the tab itself still opens in the project directory. WSL tabs are spawned after the
+		PowerShell tabs, so they appear last in the window whatever position they hold in `Paths`.
+
 		The Docker step (resolving a project's compose source and starting containers)
 		is optional, resolved Kill-All-style via Resolve-RunProjectSteps: configure it
 		persistently with RunProject.Steps.Docker in Configuration.psd1 /
@@ -150,47 +158,60 @@ function Run-Project {
 
 			$commandsToRun = @()
 			$tabTitles = @()
+			$wslTabs = @()
 
 			$pathEntries = @($pathMapping.Paths)
 			$projectCommands = $runnableMapping.Commands
 			Write-LogDebug "Path entries count: $($pathEntries.Count), Commands count: $($projectCommands.Count)" -Style Step -NoLeadingNewline
 
-			foreach ($pathEntry in $pathEntries) {
-				# Path entry shapes, the same ones Open-ProjectTerminals accepts:
-				#   "PathKey"                           - resolves from PathTemplates
-				#   @{ Key = "Name"; Path = "C:\path" }  - custom explicit path
-				#   @{ Key = "Name" }                   - plain tab with a custom name
-				$explicitPath = $null
-				if ($pathEntry -is [System.Collections.IDictionary]) {
-					$pathKey = $pathEntry.Key
-					$explicitPath = $pathEntry.Path
-				}
-				else {
-					$pathKey = $pathEntry
-				}
+			# One window for the whole project whenever the tabs do not go into this shell's own
+			# window: Open-Terminal would otherwise mint a window ID of its own, and a WSL tab -
+			# spawned separately, on the distribution's Windows Terminal profile - could never join it.
+			$projectWindowId = if ($InSameShell) { $null } else { [guid]::NewGuid().ToString() }
 
-				# Resolve the full path using the project name and path key
-				$path = if ($explicitPath) { $explicitPath } else { Resolve-ProjectPath -ProjectName $Name -PathKey $pathKey }
+			foreach ($pathEntry in $pathEntries) {
+				# Resolve-ProjectTerminalTab is the one reader of the entry shapes ProjectTerminals
+				# accepts, shared with Open-ProjectTerminals - including the WSL shapes, which this
+				# function used to take for Windows paths and hand straight to Set-Location.
+				$tab = Resolve-ProjectTerminalTab -ProjectName $Name -PathEntry $pathEntry
 
 				# The command for this path, looked up by path key. A path with no command
 				# just gets its tab; the legacy positional array is still read by index.
 				$command = if ($projectCommands -is [System.Collections.IDictionary]) {
-					$projectCommands[$pathKey]
+					$projectCommands[$tab.Key]
 				}
 				else {
 					$index = [Array]::IndexOf($pathEntries, $pathEntry)
 					if ($index -lt @($projectCommands).Count) { @($projectCommands)[$index] } else { $null }
 				}
 
-				# Construct the command
-				$commandScript = "Set-Location -Path '$path'"
+				if ($tab.Kind -eq "WSL") {
+					if (-not $tab.Distribution) {
+						Write-LogWarning "Skipping [$($tab.Title)] (DefaultWSLDistribution not configured)" -NoLeadingNewline
+						continue
+					}
+
+					# The tab runs the distribution's shell, not pwsh, so a configured command
+					# would be a PowerShell command handed to a shell that cannot run it. The tab
+					# is opened in the project directory and the command is left to the user.
+					if (-not [string]::IsNullOrWhiteSpace($command)) {
+						Write-LogWarning "Command for [$($tab.Title)] is not run - a WSL tab does not take the project's PowerShell commands!" -NoLeadingNewline
+					}
+
+					$wslTabs += $tab
+					continue
+				}
+
+				# A "Default" tab is a plain shell wherever Windows Terminal starts it, so it gets
+				# no Set-Location in front of its command.
+				$commandScript = if ($tab.Kind -eq "Path") { "Set-Location -Path '$($tab.Path)'" } else { "" }
 				if (-not [string]::IsNullOrWhiteSpace($command)) {
-					$commandScript += "; $command"
+					if ($commandScript) { $commandScript += "; " }
+					$commandScript += $command
 				}
 				$commandsToRun += $commandScript
 
-				# Generate the tab title using the project name and the path key
-				$tabTitles += "$Name.$pathKey"
+				$tabTitles += $tab.Title
 			}
 
 			# If the starting tab matches a project tab, reuse it instead of opening a duplicate
@@ -216,7 +237,33 @@ function Run-Project {
 
 			# Open only new tabs for the other project components
 			if ($newTabCommands.Count -gt 0) {
-				Open-Terminal -Command $newTabCommands -InSameShell:$InSameShell -TabTitles $newTabTitles
+				$terminalParams = @{
+					Command     = $newTabCommands
+					InSameShell = $InSameShell
+					TabTitles   = $newTabTitles
+				}
+
+				if ($projectWindowId) { $terminalParams["WindowId"] = $projectWindowId }
+
+				Open-Terminal @terminalParams
+			}
+
+			# WSL tabs come after the PowerShell batch. They are spawned one per wt invocation on
+			# the distribution's own profile, so they cannot be chained into the batch above, and
+			# they land last in the window whatever position they hold in Paths.
+			foreach ($wslTab in $wslTabs) {
+				Write-LogDebug "Opening WSL tab => [$($wslTab.Title)] in [$($wslTab.Path)]" -Style Step -NoLeadingNewline
+
+				$wslParams = @{
+					Distribution = $wslTab.Distribution
+					TabTitle     = $wslTab.Title
+					Quiet        = $true
+				}
+
+				if ($wslTab.Path) { $wslParams["Path"] = $wslTab.Path }
+				if ($projectWindowId) { $wslParams["WindowId"] = $projectWindowId }
+
+				Open-WSLTab @wslParams
 			}
 
 			Write-LogSuccess "Project $Name started successfully!"

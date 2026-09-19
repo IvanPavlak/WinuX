@@ -15,7 +15,7 @@ Opens Windows Terminal tabs for one or more configured runnable projects. Alias:
 ## Decisions
 
 1. Which terminal tabs should open for this project?
-    - Options: One entry per project with its tab list. Each tab can set a title and a starting directory, and can run in WSL.
+    - Options: One entry per project with its tab list. Each tab can set a title and a starting directory, and can run in WSL - a WSL tab written as `@{ Key = "WSL"; Path = "/mnt/c/Users/Me/Repo" }` starts in that directory, with the path written as WSL sees it.
     - Default: The shipped three entries.
     - More detail: [`ProjectTerminals`](../../configuration-reference.md#project-terminals)
 2. Which projects should `Run-Project` offer, in what order, and how does each one run?
@@ -44,13 +44,15 @@ On this page that bites on `ProjectTerminals` and `RunnableProjectMappings` - th
 
 ## Step 1: Set `ProjectTerminals`
 
-Which Windows Terminal tabs `Open-ProjectTerminals` creates for a project, and where each one starts. `Paths` names keys under the project's `PathTemplates` entry; `ROOT` is the project root.
+Which Windows Terminal tabs `Open-ProjectTerminals` creates for a project, and where each one starts. `Paths` names keys under the project's `PathTemplates` entry; `ROOT` is the project root. `Run-Project` opens the same tabs from the same list, so a tab configured here is a tab both `op` and `rp` give you.
 
 ```powershell
 ProjectTerminals = @(
     @{ Name = "MyProject"; BasePath = "Projects.MyProject"; Paths = @("API", "UI") }
 )
 ```
+
+A tab can also be a WSL tab, written as `@{ Key = "WSL"; Path = "/mnt/c/Users/Me/Development/MyProject" }` - the path as WSL sees it, so the tab starts in the project instead of the distribution's home. That tab runs the distribution's shell, not PowerShell: `Run-Project` opens it and runs nothing in it, and a command written against a `WSL` key in `RunnableProjectMappings` is reported and skipped. Every entry shape `Paths` accepts is listed under [`ProjectTerminals`](../../configuration-reference.md#project-terminals).
 
 ## Step 2: Set `RunnableProjectMappings`
 

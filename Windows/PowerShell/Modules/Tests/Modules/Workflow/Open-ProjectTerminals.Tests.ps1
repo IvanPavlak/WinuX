@@ -6,26 +6,36 @@ BeforeAll {
 
 	. "$FunctionsPath\Open-ProjectTerminals.ps1"
 
+	# The real entry reader, dot-sourced so it resolves against the stubs below exactly as the
+	# function under test does - which tab shape means what is its contract, not this function's.
+	. (Join-Path $ModuleRoot "Helper\Functions\Resolve-ProjectTerminalTab.ps1")
+
 	# Stub dependent functions
 	function Resolve-Selection { param($InputObject, $OptionList, $MenuTitle, [switch]$AllowMultipleSelections) $InputObject }
 	function Resolve-ProjectPath { param($ProjectName, $PathKey) "C:\Fake\$ProjectName\$PathKey" }
 	function Test-TerminalTabsAlreadyOpen { param($ExpectedTabNames, $ProjectName) [PSCustomObject]@{ AllOpen = $false; FoundTabs = @() } }
 	function Open-Terminal { param($Command, [switch]$InSameShell, $WindowId, $TabTitles) }
+	function Open-WSLTab { param($Distribution, $Path, $TabTitle, $WindowId, [switch]$Quiet) }
 
-	# Open-ProjectTerminals calls Start-Process more than once per project - the WSL tab,
-	# then the focus-tab pass that runs after every project - so a capture that keeps only
-	# the last call reads the focus arguments and never sees the tab at all.
-	function Get-WslNewTabArguments {
+	# HOW a WSL tab is spawned belongs to Open-WSLTab and its own tests; what this function owns
+	# is WHICH tab it asks for, so the WSL cases assert the parameters it hands over.
+	function Get-WslTabParameters {
 		param([Parameter(Mandatory)][string]$Project)
 
-		$script:wslProcessCalls = [System.Collections.ArrayList]@()
-		Mock Start-Process { [void]$script:wslProcessCalls.Add(@($ArgumentList)) }
+		$script:wslTabCalls = [System.Collections.ArrayList]@()
+		Mock Open-WSLTab {
+			[void]$script:wslTabCalls.Add([PSCustomObject]@{
+					Distribution = $Distribution
+					Path         = $Path
+					TabTitle     = $TabTitle
+					WindowId     = $WindowId
+				})
+		}
 
 		Open-ProjectTerminals -Project $Project -InSameShell
 
-		$newTabCalls = @($script:wslProcessCalls | Where-Object { $_ -contains "new-tab" })
-		$newTabCalls.Count | Should -Be 1
-		, $newTabCalls[0]
+		$script:wslTabCalls.Count | Should -Be 1
+		$script:wslTabCalls[0]
 	}
 }
 
@@ -352,27 +362,37 @@ Describe "Open-ProjectTerminals" {
 
 		It "Should start a WSL tab in the configured path when the entry carries one" {
 			# @{ Key = "WSL"; Path = "<path>" } is the only way to land a WSL tab inside the
-			# project: `wt -d` sets the Win32 working directory of the profile process, so a
-			# WSL path is refused and a Windows one still loses to the profile's own `--cd ~`,
-			# and the pwsh Set-Location path never reaches a WSL profile tab at all. Overriding
-			# the tab's commandline is what is left.
-			$newTabArgs = Get-WslNewTabArguments -Project "WslPathProject"
+			# project, and the path is handed over as WSL sees it - the pwsh Set-Location path
+			# never reaches a WSL profile tab at all.
+			$wslTab = Get-WslTabParameters -Project "WslPathProject"
 
-			$cdIndex = [Array]::IndexOf($newTabArgs, "--cd")
-			$cdIndex | Should -BeGreaterThan -1
-			$newTabArgs[$cdIndex + 1] | Should -Be "/mnt/c/x"
-			$newTabArgs | Should -Contain "wsl.exe"
-			$newTabArgs | Should -Contain "WslPathProject.WSL"
+			$wslTab.Path | Should -Be "/mnt/c/x"
+			$wslTab.TabTitle | Should -Be "WslPathProject.WSL"
+			$wslTab.Distribution | Should -Be "Ubuntu"
 		}
 
 		It "Should keep the plain WSL string entry on the bare profile tab" {
-			# No commandline override, so the profile's own `--cd ~` still applies and the tab
-			# opens at the distribution's home exactly as it always did.
-			$newTabArgs = Get-WslNewTabArguments -Project "DefaultProject"
+			# No path, so the profile's own `--cd ~` still applies and the tab opens at the
+			# distribution's home exactly as it always did.
+			$wslTab = Get-WslTabParameters -Project "DefaultProject"
 
-			$newTabArgs | Should -Not -Contain "--cd"
-			$newTabArgs | Should -Not -Contain "wsl.exe"
-			$newTabArgs | Should -Be @("-w", "0", "new-tab", "-p", "Ubuntu", "--title", "DefaultProject.WSL")
+			$wslTab.Path | Should -BeNullOrEmpty
+			$wslTab.TabTitle | Should -Be "DefaultProject.WSL"
+		}
+
+		It "Should put the WSL tab in the same window as the project's other tabs" {
+			$wslTab = Get-WslTabParameters -Project "DefaultProject"
+
+			$wslTab.WindowId | Should -Be "0"
+		}
+
+		It "Should skip the WSL tab when no distribution is configured" {
+			$global:Configuration.DefaultWSLDistribution = ""
+			Mock Open-WSLTab { }
+
+			Open-ProjectTerminals -Project "DefaultProject" -InSameShell
+
+			Should -Invoke Open-WSLTab -Times 0
 		}
 
 		It "Should open both DEFAULT and WSL tabs" {
@@ -380,14 +400,14 @@ Describe "Open-ProjectTerminals" {
 			Mock Open-Terminal {
 				[void]$script:capturedTitles.Add($TabTitles)
 			}
+			Mock Open-WSLTab { }
 
 			Open-ProjectTerminals -Project "DefaultProject" -InSameShell
 
-			# DEFAULT tab via Open-Terminal, WSL tab via wt.exe
+			# DEFAULT tab via Open-Terminal, WSL tab via Open-WSLTab
 			$script:capturedTitles.Count | Should -Be 1
 			$script:capturedTitles[0] | Should -Be "DefaultProject.DEFAULT"
-			# WSL is handled via wt.exe direct call, not Open-Terminal
-			Should -Invoke Start-Process -Times 1
+			Should -Invoke Open-WSLTab -Times 1
 		}
 	}
 

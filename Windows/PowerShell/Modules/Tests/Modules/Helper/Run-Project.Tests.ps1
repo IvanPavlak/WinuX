@@ -6,6 +6,20 @@ BeforeAll {
 
 	. "$FunctionsPath\Run-Project.ps1"
 
+	# The real entry reader, dot-sourced so it resolves against this file's mocks the way the
+	# function under test does - `rp` and `op` read a project's tabs through this one function.
+	. "$FunctionsPath\Resolve-ProjectTerminalTab.ps1"
+
+	function Open-WSLTab {
+		param(
+			[string]$Distribution,
+			[string]$Path,
+			[string]$TabTitle,
+			[string]$WindowId,
+			[switch]$Quiet
+		)
+	}
+
 	function Resolve-ProjectDockerCompose {
 		param(
 			[string]$ProjectName,
@@ -50,6 +64,8 @@ Describe "Run-Project" {
 		Mock DockerWizard { [PSCustomObject]@{ Success = $true; ComposeFilePath = $null } }
 		Mock Close-ProjectTerminals { 0 }
 		Mock Open-Terminal { }
+		Mock Open-WSLTab { }
+		Mock Write-LogWarning { }
 		Mock Resolve-ProjectPath { "C:\Dev\Demo" }
 	}
 
@@ -140,6 +156,65 @@ Describe "Run-Project" {
 		Should -Invoke Write-LogError -Times 0
 		@($script:openedCommands)[0] | Should -Not -Match 'nir'
 		@($script:openedCommands)[1] | Should -Match 'nir$'
+	}
+
+	It "opens a WSL entry as a WSL tab instead of handing its path to Set-Location" {
+		# The regression: a WSL path read as an ordinary explicit path reached
+		# "Set-Location -Path '/mnt/c/...'", and PowerShell resolves a rooted path against the
+		# CURRENT DRIVE - so the tab went to C:\mnt\c\... and the project never opened.
+		$global:Configuration = [PSCustomObject]@{
+			RunnableProjectMappings = @(@{ Name = "Demo"; Commands = @{ ROOT = "docker compose logs -f web" } })
+			ProjectTerminals        = @(@{ Name = "Demo"; Paths = @("ROOT", @{ Key = "WSL"; Path = "/mnt/c/Dev/Demo" }) })
+			DockerComposeFiles      = @{}
+			DefaultWSLDistribution  = "Ubuntu"
+		}
+		$script:openedCommands = $null
+		$script:openedTitles = $null
+		Mock Open-Terminal {
+			$script:openedCommands = $Command
+			$script:openedTitles = $TabTitles
+		}
+
+		Run-Project
+
+		@($script:openedCommands).Count | Should -Be 1
+		@($script:openedCommands)[0] | Should -Not -Match 'mnt'
+		@($script:openedTitles) | Should -Be @("Demo.ROOT")
+		Should -Invoke Open-WSLTab -Times 1 -ParameterFilter {
+			$Path -eq "/mnt/c/Dev/Demo" -and $TabTitle -eq "Demo.WSL" -and $Distribution -eq "Ubuntu"
+		}
+	}
+
+	It "reports a command configured for a WSL tab instead of running it in PowerShell" {
+		# The tab runs the distribution's shell, so a PowerShell command configured against that
+		# key has nowhere to run - the tab still opens in the project.
+		$global:Configuration = [PSCustomObject]@{
+			RunnableProjectMappings = @(@{ Name = "Demo"; Commands = @{ WSL = "bin/dev" } })
+			ProjectTerminals        = @(@{ Name = "Demo"; Paths = @(@{ Key = "WSL"; Path = "/mnt/c/Dev/Demo" }) })
+			DockerComposeFiles      = @{}
+			DefaultWSLDistribution  = "Ubuntu"
+		}
+
+		Run-Project
+
+		Should -Invoke Write-LogWarning -Times 1 -ParameterFilter { $Message -match 'is not run' }
+		Should -Invoke Open-WSLTab -Times 1
+		Should -Invoke Open-Terminal -Times 0
+	}
+
+	It "skips a WSL tab when no distribution is configured" {
+		$global:Configuration = [PSCustomObject]@{
+			RunnableProjectMappings = @(@{ Name = "Demo"; Commands = @{} })
+			ProjectTerminals        = @(@{ Name = "Demo"; Paths = @("ROOT", "WSL") })
+			DockerComposeFiles      = @{}
+			DefaultWSLDistribution  = ""
+		}
+
+		Run-Project
+
+		Should -Invoke Open-WSLTab -Times 0
+		Should -Invoke Open-Terminal -Times 1
+		Should -Invoke Write-LogError -Times 0
 	}
 
 	It "never touches Docker or the provider prompt when the Docker step is disabled" {
