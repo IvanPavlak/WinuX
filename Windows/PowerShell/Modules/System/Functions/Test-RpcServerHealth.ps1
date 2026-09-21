@@ -16,7 +16,7 @@ function Test-RpcServerHealth {
 		With -Probe, also performs a live VirtualDesktop COM roundtrip against THIS
 		session's COM state (via Test-VirtualDesktopComHealth: a background runspace
 		in the current process, under a hard timeout). Successful probe results are
-		cached briefly (8s) so the several preflights of one workspace open pay for a
+		cached briefly (30 s) so the several preflights of one workspace open pay for a
 		single probe; failures are never cached, so recovery paths always re-verify.
 		The live probe catches both failure modes that a service-status check cannot see:
 
@@ -72,7 +72,12 @@ function Test-RpcServerHealth {
 	if (-not $script:RpcProbeHealthyCache) {
 		$script:RpcProbeHealthyCache = @{
 			VerifiedAt = [datetime]::MinValue
-			TtlSeconds = 8
+			# 30 s spans the two layout calls of one open (the prepare step before the launch
+			# actions and the full call after them, typically 8 to 12 s apart under load), which
+			# the previous 8 s did not, so the second probe repeated the first's runspace spin-up.
+			# Every desktop call still goes through Invoke-VirtualDesktopOperation, which repairs
+			# a failed RPC session on its own, so a longer cache only delays a diagnosis line.
+			TtlSeconds = 30
 		}
 	}
 

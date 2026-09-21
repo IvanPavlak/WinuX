@@ -346,14 +346,35 @@ Describe "Open-Obsidian" {
 			$script:cliCalls.Count | Should -Be 0
 		}
 
-		It "drains the queued cold start, polling the CLI first and then loading" {
+		It "drains the queued cold start with the load itself, no readiness poll" {
 			Open-Obsidian -Workspace Server -Deferred
 
 			Complete-DeferredActions | Should -Be 1
 
-			Should -Invoke Wait-ObsidianCli -Times 1 -Exactly -ParameterFilter { $Vault -eq 'Obsidian' }
+			# By drain time Obsidian has normally been up for seconds; the poll is paid only when
+			# the load comes back "not yet up".
+			Should -Invoke Wait-ObsidianCli -Times 0
 			$script:cliCalls.Count | Should -Be 1
 			$script:cliCalls[0] | Should -Be @('vault=Obsidian', 'workspace:load', 'name=Server')
+		}
+
+		It "polls and loads again when the drained cold start finds Obsidian not yet up" {
+			$script:answers = @(@('The CLI is unable to find Obsidian'), @('Loaded workspace: Server'))
+			$script:answerIndex = 0
+			Mock Invoke-ObsidianCli {
+				$script:cliCalls += , @($Arguments)
+				$answer = $script:answers[[math]::Min($script:answerIndex, $script:answers.Count - 1)]
+				$script:answerIndex++
+				$answer
+			}
+
+			Open-Obsidian -Workspace Server -Deferred
+			Complete-DeferredActions | Should -Be 1
+
+			Should -Invoke Wait-ObsidianCli -Times 1 -Exactly -ParameterFilter { $Vault -eq 'Obsidian' }
+			$script:cliCalls.Count | Should -Be 2
+			Should -Invoke Write-LogWarning -Times 0
+			Should -Invoke Write-LogSuccess -Times 1 -Exactly -ParameterFilter { $Message -match 'in workspace' }
 		}
 
 		It "does not poll the CLI when the queued load was against an already-running Obsidian" {
@@ -390,14 +411,17 @@ Describe "Open-Obsidian" {
 			Should -Invoke Write-LogSuccess -Times 0 -ParameterFilter { $Message -match 'in workspace' }
 		}
 
-		It "warns and loads nothing when the CLI never answers for a queued cold start" {
+		It "warns and gives up when the CLI never answers after a not-yet-up first attempt" {
+			$script:cliAnswer = @('The CLI is unable to find Obsidian')
 			Mock Wait-ObsidianCli { $false }
 
 			Open-Obsidian -Workspace Server -Deferred
 			Complete-DeferredActions | Should -Be 1
 
-			$script:cliCalls.Count | Should -Be 0
+			# One silent attempt, then the poll, then nothing more.
+			$script:cliCalls.Count | Should -Be 1
 			Should -Invoke Write-LogWarning -Times 1 -Exactly -ParameterFilter { $Message -match 'did not answer' }
+			Should -Invoke Write-LogSuccess -Times 0 -ParameterFilter { $Message -match 'in workspace' }
 		}
 
 		It "queues nothing when there is no workspace to load, so the drain is a no-op" {

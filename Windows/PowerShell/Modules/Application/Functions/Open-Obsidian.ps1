@@ -182,7 +182,7 @@ function Open-Obsidian {
 			return
 		}
 		Write-LogStep "Loading Obsidian workspace [$targetWorkspace]..."
-		if (Invoke-ObsidianWorkspaceLoad -CliPath $cli -Vault $vault -Name $targetWorkspace) {
+		if ((Invoke-ObsidianWorkspaceLoad -CliPath $cli -Vault $vault -Name $targetWorkspace).Loaded) {
 			Write-LogSuccess "Obsidian workspace [$targetWorkspace] loaded!"
 		}
 		return
@@ -218,7 +218,7 @@ function Open-Obsidian {
 	}
 
 	if (Wait-ObsidianCli -CliPath $cli -Vault $vault -TimeoutSeconds 10) {
-		if (Invoke-ObsidianWorkspaceLoad -CliPath $cli -Vault $vault -Name $targetWorkspace) {
+		if ((Invoke-ObsidianWorkspaceLoad -CliPath $cli -Vault $vault -Name $targetWorkspace).Loaded) {
 			Write-LogSuccess "Obsidian opened in workspace [$targetWorkspace]!"
 		}
 		else {

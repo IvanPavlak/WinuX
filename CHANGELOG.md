@@ -8,6 +8,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.76] - 2026-09-21
+
+### Added
+
+- **`Wait-ForWorkspaceWindows` says which window it was waiting for.** The wait is the largest phase of a large workspace open and, at the normal log level, the most opaque: it reported per-entry progress only under Verbose, so a slow open left no trace of whether the code or an application was slow. When the wait ends, whichever way, it now writes one debug line per entry into the session log - found at +Xs, stable at +Ys or never stable, the slowest marked. Each entry's record gains the two timestamps behind that (first sighting, start of the stretch that held; the latter is cleared on every title or size change, so it names the moment the wait stopped caring). That is the data a configuration decision needs - which browser group loads slowest, whether a many-tab group should open later, whether a workspace has a window it does not need on open - and none of it changes what the wait does. Tests: `Wait-ForWorkspaceWindows.Tests.ps1` (a fast and a late window summarized with the late one marked slowest; a window that never holds still reported as such on a timeout).
+
+### Changed
+
+- **`Complete-ObsidianWorkspaceLoad` loads first and polls only when told to wait.** The deferred tail ran the readiness poll before every cold-start load, but by the time the flow drains, Obsidian has normally been up for seconds and the poll - itself an `Obsidian.com` process launch - only repeated what the load would report (measured at 0.4 to 0.9 s per open). The load is now attempted first; on a cold start, the one refusal that means "not yet" rather than "no" (`unable to find Obsidian`) is followed by the poll and one more attempt, while any other refusal is final and is reported once, without a poll. That first cold-start attempt runs silent so an expected premature answer never alarms, which is what `Invoke-ObsidianWorkspaceLoad` now returns an object for: `Loaded`, `Refusal` (the CLI line) and `Message` (the warning text with its fix), with `-Silent` leaving the warning to the caller. `Open-Obsidian`'s two immediate load sites read `.Loaded`. Tests: `Invoke-ObsidianWorkspaceLoad.Tests.ps1` (the result shape on success and on each refusal, `-Silent` handing back the message instead of writing it), `Complete-ObsidianWorkspaceLoad.Tests.ps1` rewritten around the new order (load first with no poll, the first cold-start attempt silent, an already-running refusal reported by the load itself, poll-then-retry only after not-yet-up, the caller's budget on that poll, the CLI never answering, a final cold-start refusal reported once without a poll, a refused retry claiming nothing) and two `Open-Obsidian.Tests.ps1` cases updated for the drained cold start.
+
+- **`Test-RpcServerHealth` caches a healthy live probe for 30 seconds instead of 8.** One workspace open runs the layout function twice - the prepare step before the launch actions and the full call after them - typically 8 to 12 s apart under the load of the launching applications, so the second probe missed the cache and repeated the first's runspace spin-up (0.2 s idle, 0.75 s measured under load). Every desktop call still goes through `Invoke-VirtualDesktopOperation`, which classifies and repairs a failed RPC session on its own, so the longer cache delays a diagnosis line rather than a repair; failures are still never cached.
+
 ## [0.1.75] - 2026-09-21
 
 ### Added

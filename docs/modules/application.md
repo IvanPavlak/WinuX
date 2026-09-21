@@ -4,7 +4,7 @@ The Application module handles **software installation**, **application launchin
 
 ## [Complete-ObsidianWorkspaceLoad](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Complete-ObsidianWorkspaceLoad.ps1)
 
-- **Description:** Finishes an Obsidian workspace load that `Open-Obsidian -Deferred` handed back to the flow: polls the CLI if Obsidian was only just launched, runs the checked load, prints the success line the opener itself would have printed. Returns `$true` when the CLI accepted the load, `$false` when it never answered or refused.
+- **Description:** Finishes an Obsidian workspace load that `Open-Obsidian -Deferred` handed back to the flow: runs the checked load first, and on a cold start polls the CLI and tries once more only when that first attempt came back "unable to find Obsidian" - the one refusal that means not yet rather than no. Prints the success line the opener itself would have printed. Returns `$true` when the CLI accepted the load, `$false` when it never answered or refused.
 - **Parameters:** -CliPath, -Vault, -Name, -ColdStart, -TimeoutSeconds
 - **Usage:** `Complete-ObsidianWorkspaceLoad -CliPath (Get-ObsidianCliPath) -Vault Obsidian -Name Server -ColdStart`
 
@@ -17,8 +17,8 @@ It must run **before** the layout starts waiting on windows, never during it: [W
 | `-CliPath`        | Path to `Obsidian.com`.                                                                                                                                  |
 | `-Vault`          | The vault the CLI addresses.                                                                                                                             |
 | `-Name`           | The saved Obsidian workspace to load.                                                                                                                    |
-| `-ColdStart`      | Obsidian was launched by the deferring call and may still be starting: poll the CLI ([Wait-ObsidianCli](#wait-obsidiancli)) first. Omit for an already-running Obsidian. |
-| `-TimeoutSeconds` | Budget for that poll. Default `10`.                                                                                                                      |
+| `-ColdStart`      | Obsidian was launched by the deferring call and may still be starting: a not-yet-up refusal on the first attempt is followed by the readiness poll ([Wait-ObsidianCli](#wait-obsidiancli)) and one more attempt. Omit for an already-running Obsidian, where that refusal is final. |
+| `-TimeoutSeconds` | Budget for that poll. Default `10`. By drain time Obsidian has normally been up for seconds, so the common path pays no poll at all.                     |
 
 ```powershell
 Complete-ObsidianWorkspaceLoad -CliPath (Get-ObsidianCliPath) -Vault Obsidian -Name Server -ColdStart
@@ -303,9 +303,9 @@ Invoke-ObsidianCli -CliPath (Get-ObsidianCliPath) -Arguments @("vault=Obsidian",
 
 ## [Invoke-ObsidianWorkspaceLoad](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Invoke-ObsidianWorkspaceLoad.ps1)
 
-- **Description:** Loads a saved Obsidian workspace through the CLI and reports a refusal instead of claiming success. Returns `$true` when the CLI accepted the load, `$false` when it refused it.
-- **Parameters:** -CliPath, -Vault, -Name
-- **Usage:** `Invoke-ObsidianWorkspaceLoad -CliPath (Get-ObsidianCliPath) -Vault Obsidian -Name Server`
+- **Description:** Loads a saved Obsidian workspace through the CLI and reports a refusal instead of claiming success. Returns an object: `Loaded` (`$true` when the CLI accepted the load), `Refusal` (the CLI line that refused it, else `$null`) and `Message` (the warning text for that refusal, fix included), so a caller can tell a transient "not yet up" from a permanent "not enabled".
+- **Parameters:** -CliPath, -Vault, -Name, -Silent
+- **Usage:** `if ((Invoke-ObsidianWorkspaceLoad -CliPath (Get-ObsidianCliPath) -Vault Obsidian -Name Server).Loaded) { "loaded" }`
 
 The one checked `workspace:load` call, shared by `Open-Obsidian`'s immediate path and by [Complete-ObsidianWorkspaceLoad](#complete-obsidianworkspaceload) when the load was deferred. The CLI answers some requests instead of doing the work - the per-machine toggle being off (`Command line interface is not enabled`), Obsidian gone between the readiness poll and the load (`The CLI is unable to find Obsidian`), and the `CLI call failed` line [Invoke-ObsidianCli](#invoke-obsidiancli) synthesises for a launch failure - and all three are reported as `Obsidian workspace [Name] not loaded => <the CLI's line>` together with the fix, never as a success.
 
@@ -314,9 +314,11 @@ The one checked `workspace:load` call, shared by `Open-Obsidian`'s immediate pat
 | `-CliPath` | Path to `Obsidian.com`.                        |
 | `-Vault`   | The vault the CLI addresses.                   |
 | `-Name`    | The saved Obsidian workspace to load.          |
+| `-Silent`  | Do not write the refusal warning; the caller reads it from `Message`. For an attempt the caller expects may be premature. |
 
 ```powershell
-if (Invoke-ObsidianWorkspaceLoad -CliPath (Get-ObsidianCliPath) -Vault Obsidian -Name Server) { "loaded" }
+$load = Invoke-ObsidianWorkspaceLoad -CliPath (Get-ObsidianCliPath) -Vault Obsidian -Name Server
+if (-not $load.Loaded) { $load.Refusal }
 ```
 
 
