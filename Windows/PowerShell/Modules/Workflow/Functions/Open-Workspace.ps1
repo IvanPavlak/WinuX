@@ -747,6 +747,17 @@ function Open-Workspace {
 					$actionParams["CurrentWorkspace"] = $workspaceName
 				}
 
+				# Same handoff, for the openers that can hand their slow tail back to the flow: an action
+				# declaring -Deferred launches its application, queues the rest through
+				# Register-DeferredAction and returns at once; the flow runs every queued tail below,
+				# before the layout (Complete-DeferredActions). Open-Obsidian is the one that ships: its
+				# CLI cannot answer until Obsidian has finished starting, and every opener after it used
+				# to stand in that queue. A configured Parameters value of the same name wins, so an
+				# action can opt out.
+				if (-not $actionParams.ContainsKey("Deferred")) {
+					$actionParams["Deferred"] = $true
+				}
+
 				# Generic project-context handoff: a parameter whose FULL value is the literal
 				# "{SelectedProjects}" resolves at runtime to (1) the explicit -Project argument,
 				# else (2) the projects returned by this workspace's Open-Project action. With
@@ -803,6 +814,14 @@ function Open-Workspace {
 
 				# Pass pre-captured existing windows and desktop offset to Set-WorkspaceWindowLayout
 				if ($action -eq "Set-WorkspaceWindowLayout") {
+					# Last moment a deferred tail can still land safely. The layout holds a window
+					# stable only while its TITLE and dimensions stop changing, and a tail may retitle
+					# a window (an Obsidian workspace load does) - arriving mid-wait it would reset that
+					# window's stability and could hand the layout a title it no longer has.
+					if (Get-Command Complete-DeferredActions -ErrorAction SilentlyContinue) {
+						$null = Complete-DeferredActions
+					}
+
 					$actionParams["PreCapturedExistingWindows"] = $existingHandlesBeforeOpen
 					if ($desktopOffset -gt 0) {
 						$actionParams["DesktopOffset"] = $desktopOffset
@@ -891,6 +910,12 @@ function Open-Workspace {
 					Write-LogError "Error executing action [$action] for workspace [$workspaceName]: $_" -NoLeadingNewline
 				}
 				$actionTimings.Add([PSCustomObject]@{ Action = $action; Seconds = [math]::Round($actionClock.Elapsed.TotalSeconds, 2) })
+			}
+
+			# An action list without a Set-WorkspaceWindowLayout action never reached the drain
+			# above, and a deferred tail must never outlive the open that queued it.
+			if (Get-Command Complete-DeferredActions -ErrorAction SilentlyContinue) {
+				$null = Complete-DeferredActions
 			}
 
 			# Every action has run, so whatever is on screen beyond the pre-open capture is this

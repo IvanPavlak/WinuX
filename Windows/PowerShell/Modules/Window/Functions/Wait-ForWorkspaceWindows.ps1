@@ -324,6 +324,36 @@ function Wait-ForWorkspaceWindows {
 	}
 
 	$startTime = $Clock.Now()
+
+	# One line per entry at the end of the wait, at the normal debug level, so the session log
+	# says which window the wait was waiting for without a Verbose rerun: found at +Xs (first
+	# sighting), stable at +Ys (the start of the stretch that held), the slowest marked. This is
+	# what decides whether a slow open is a code problem or an application taking its time.
+	$writeWaitSummary = {
+		param([string]$Outcome)
+		$rows = @()
+		foreach ($entry in $expectedWindows) {
+			$key = if ($entry.IsDuplicateKey) { "$($entry.ProcessName)_$($entry.WindowTitle)_#$($entry.EntryIndex)" } else { "$($entry.ProcessName)_$($entry.WindowTitle)" }
+			$state = if ($windowTitleHistory.ContainsKey($key)) { $windowTitleHistory[$key] } else { $null }
+			$rows += [PSCustomObject]@{
+				Key      = $entry.Description
+				FoundAt  = if ($state -and $null -ne $state.FirstSeen) { [math]::Round(($state.FirstSeen - $startTime).TotalSeconds, 1) } else { $null }
+				StableAt = if ($state -and $null -ne $state.StableAt) { [math]::Round(($state.StableAt - $startTime).TotalSeconds, 1) } else { $null }
+				Title    = if ($state) { $state.Title } else { $null }
+				Generic  = [bool]($state -and $state.GenericTitle -and $null -eq $state.StableAt)
+			}
+		}
+		if ($rows.Count -eq 0) { return }
+		$slowest = $rows | Where-Object { $null -ne $_.StableAt } | Sort-Object StableAt -Descending | Select-Object -First 1
+		Write-LogDebug "Wait summary ($Outcome after $([math]::Round(($Clock.Now() - $startTime).TotalSeconds, 1))s):"
+		foreach ($row in ($rows | Sort-Object { if ($null -eq $_.StableAt) { [double]::MaxValue } else { $_.StableAt } }, { if ($null -eq $_.FoundAt) { [double]::MaxValue } else { $_.FoundAt } })) {
+			$foundLabel = if ($null -ne $row.FoundAt) { "found at +$($row.FoundAt)s" } else { "never found" }
+			$stableLabel = if ($null -ne $row.StableAt) { "stable at +$($row.StableAt)s" } elseif ($row.Generic) { "title never left its generic form" } elseif ($null -ne $row.FoundAt) { "never stable" } else { "" }
+			$titleLabel = if ($row.Title) { " [$($row.Title)]" } else { "" }
+			$marker = if ($slowest -and $row.Key -eq $slowest.Key) { "  <= slowest" } else { "" }
+			Write-LogDebug "  [$($row.Key)] $foundLabel$(if ($stableLabel) { ", $stableLabel" })$titleLabel$marker"
+		}
+	}
 	$allWindowsFound = $false
 	$iteration = 0
 
@@ -519,6 +549,9 @@ function Wait-ForWorkspaceWindows {
 											Title              = $windowTitle
 											ConsecutiveMatches = 0
 											LastSeen           = $Clock.Now()
+											FirstSeen          = $Clock.Now()
+											StableAt           = $null
+											GenericTitle       = $true
 										}
 									}
 									# Don't count this as found
@@ -562,6 +595,11 @@ function Wait-ForWorkspaceWindows {
 								ConsecutiveMatches = $(if ($creditReason) { 2 } else { 1 })
 								FirstStableTime    = $firstStableTime
 								LastSeen           = $currentTime
+								# For the end-of-wait summary: when the entry first had a window, and when
+								# that window first held still long enough. StableAt is cleared on every
+								# change, so it ends up naming the moment the wait stopped caring.
+								FirstSeen          = $currentTime
+								StableAt           = $null
 							}
 							# Update reverse lookup
 							$handleToKey[$window.Handle] = $windowKey
@@ -601,6 +639,7 @@ function Wait-ForWorkspaceWindows {
 								$history.ConsecutiveMatches = 2
 								$history.FirstStableTime = $currentTime
 								$history.LastSeen = $currentTime
+								$history.StableAt = $null
 
 								# Update reverse lookup for handle changes
 								$handleToKey[$window.Handle] = $windowKey
@@ -638,6 +677,9 @@ function Wait-ForWorkspaceWindows {
 						if ($isStable) {
 							$windowFound = $true
 							$foundCount++
+							if ($null -eq $windowTitleHistory[$windowKey].StableAt) {
+								$windowTitleHistory[$windowKey].StableAt = $currentTime
+							}
 							# The desktop hand-over counts a titled entry only on a window whose title
 							# matches ITS pattern. Found-by-process is enough for the wait itself (the
 							# layout pass sorts the browser windows out afterwards), but a desktop
@@ -832,6 +874,8 @@ function Wait-ForWorkspaceWindows {
 						}
 					}
 
+					& $writeWaitSummary 'all stable'
+
 					return @{
 						Success          = ($abandonedEntries.Count -eq 0)
 						WindowStates     = $windowStates
@@ -986,6 +1030,8 @@ function Wait-ForWorkspaceWindows {
 
 			Write-LogDebug "Proceeding with layout setup..." -Style Warning
 		}
+
+		& $writeWaitSummary 'timed out'
 
 		# Return failure with empty window states
 		return @{

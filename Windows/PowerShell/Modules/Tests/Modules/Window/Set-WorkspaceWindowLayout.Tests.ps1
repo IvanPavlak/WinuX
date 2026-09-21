@@ -40,6 +40,9 @@ BeforeAll {
 	. "$FunctionsPath\Invoke-ReadyDesktopPass.ps1"
 
 	function Remove-PositionedWindowHandles { }
+	# The positioned-window tracking reset (Window module state). Stubbed so Mock attaches in
+	# this script scope, where the dot-sourced Set-WorkspaceWindowLayout resolves it.
+	function Initialize-PositionedWindowTracking { }
 	function Verify-WindowPlacement { $true }
 	# The rerun-command store (Window module state); stubbed so the escalation tests control it.
 	function Get-WorkspaceRerunCommand { }
@@ -1295,7 +1298,12 @@ Describe "Set-WorkspaceWindowLayout" {
 			# behind the 2026-09-03 regression, where such an entry was skipped after the wait.
 			$script:notFoundInDesktopPass = @()
 			$script:layoutCalls = @()
+			# The order the open resets the tracking in relative to its layout passes: the reset
+			# belongs to the OPEN and must come before the first pass, which is inside the wait.
+			$script:callOrder = @()
+			Mock Initialize-PositionedWindowTracking { $script:callOrder += 'Init' }
 			Mock Set-WindowLayouts {
+				$script:callOrder += 'Layout'
 				$script:layoutCalls += [PSCustomObject]@{
 					Entries    = @($LayoutConfig)
 					Desktops   = $DesktopNumbers
@@ -1408,6 +1416,21 @@ Describe "Set-WorkspaceWindowLayout" {
 			Should -Invoke Start-FancyZones -Times 0 -Exactly -ParameterFilter { $ForceRestart }
 			# Both entries reach the snapshot exactly once.
 			Should -Invoke Save-CurrentLayout -Times 1 -Exactly -ParameterFilter { @($WindowStates).Count -eq 2 }
+		}
+
+		It "resets the positioned-window tracking once before the wait, so a pipelined open never snaps the previous open's windows" {
+			# Every layout pass of a pipelined open appends (-KeepPositionedWindows), so none of them
+			# resets the tracking: without the open's own reset, the windows the PREVIOUS open in this
+			# process tracked are still in the set and Snap-AllWindows snaps them - against this
+			# workspace's zone grid, at the other workspace's coordinates, six attempts and a
+			# FancyZones restart each.
+			Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace'
+
+			Should -Invoke Initialize-PositionedWindowTracking -Times 1 -Exactly
+			$script:callOrder[0] | Should -Be 'Init'
+			# The reset is the open's, not a pass's: every pass still appends.
+			$script:layoutCalls.Count | Should -Be 2
+			$script:layoutCalls | ForEach-Object { $_.Keep | Should -BeTrue }
 		}
 
 		It "runs the plain sequential order when WorkspaceLayoutPipelining is false" {

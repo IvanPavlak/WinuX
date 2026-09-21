@@ -20,6 +20,48 @@ Describe "Wait-ForWorkspaceWindows" {
 		Should -Invoke Clear-WindowCache -Times 0
 	}
 
+	Context "End-of-wait summary" {
+		BeforeEach {
+			Mock Write-LogDebug { }
+			$script:quickWindow = [PSCustomObject]@{ Handle = [IntPtr]100; Title = "Quick"; ProcessName = "Quick"; Left = 0; Top = 0; Width = 800; Height = 600 }
+			$script:slowWindow = [PSCustomObject]@{ Handle = [IntPtr]200; Title = "Slow"; ProcessName = "Slow"; Left = 0; Top = 0; Width = 800; Height = 600 }
+			# The slow window appears only after the wait has polled a few times.
+			$script:polls = 0
+			Mock Get-WindowHandle {
+				if ($ProcessName -eq 'Quick') { return @($script:quickWindow) }
+				if ($ProcessName -eq 'Slow') { $script:polls++; if ($script:polls -ge 4) { return @($script:slowWindow) } }
+				@()
+			}
+		}
+
+		It "writes one line per entry with when it was found and when it held still, marking the slowest" {
+			$result = Wait-ForWorkspaceWindows -LayoutConfig @(@{ ProcessName = 'Quick' }, @{ ProcessName = 'Slow' }) -TimeoutSeconds 10 -MinimumStableDurationSeconds 0 -PollIntervalSeconds 0.02 -FocusWindows:$false
+
+			$result.Success | Should -BeTrue
+			Should -Invoke Write-LogDebug -Times 1 -Exactly -ParameterFilter { $Message -like 'Wait summary (all stable after *' }
+			Should -Invoke Write-LogDebug -Times 1 -Exactly -ParameterFilter { $Message -like '*[[]Quick[]] found at +*stable at +*[[]Quick[]]*' -and $Message -notlike '*slowest*' }
+			Should -Invoke Write-LogDebug -Times 1 -Exactly -ParameterFilter { $Message -like '*[[]Slow[]] found at +*stable at +*[[]Slow[]]*<= slowest' }
+		}
+
+		It "reports an entry that never held still as such when the wait times out" {
+			Mock Get-WindowHandle {
+				if ($ProcessName -eq 'Quick') { return @($script:quickWindow) }
+				if ($ProcessName -eq 'Slow') {
+					# Present, but retitled on every poll, so never stable.
+					$script:polls++
+					return @([PSCustomObject]@{ Handle = [IntPtr]200; Title = "Slow $($script:polls)"; ProcessName = "Slow"; Left = 0; Top = 0; Width = 800; Height = 600 })
+				}
+				@()
+			}
+
+			$result = Wait-ForWorkspaceWindows -LayoutConfig @(@{ ProcessName = 'Quick' }, @{ ProcessName = 'Slow' }) -TimeoutSeconds 1 -MinimumStableDurationSeconds 0.3 -PollIntervalSeconds 0.05 -FocusWindows:$false
+
+			$result.Success | Should -BeFalse
+			Should -Invoke Write-LogDebug -Times 1 -Exactly -ParameterFilter { $Message -like 'Wait summary (timed out after *' }
+			Should -Invoke Write-LogDebug -Times 1 -Exactly -ParameterFilter { $Message -like '*[[]Slow[]] found at +*never stable*' }
+		}
+	}
+
 	Context "Stability floor and fail-fast" {
 		BeforeEach {
 			$script:stableAppWindow = [PSCustomObject]@{

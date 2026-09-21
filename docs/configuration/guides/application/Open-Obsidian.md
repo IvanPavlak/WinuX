@@ -169,8 +169,9 @@ Before 0.1.61 `Open-Obsidian` ran `ObsidianStartupScript.pyw` through `pythonw`,
 
 - [`Open-Obsidian` in the Application module reference](../../../modules/application.md#open-obsidian) - parameters, usage and behaviour
 - [Application configuration guides](README.md) - every guide for this module
-- [`Get-ObsidianCliPath`](Get-ObsidianCliPath.md), [`Get-ObsidianExecutablePath`](Get-ObsidianExecutablePath.md), [`Get-ObsidianWorkspaceNames`](Get-ObsidianWorkspaceNames.md), [`Invoke-ObsidianCli`](Invoke-ObsidianCli.md), [`Start-ObsidianDetached`](Start-ObsidianDetached.md), [`Wait-ObsidianCli`](Wait-ObsidianCli.md) - the helpers this function is built from
-- [`Open-Workspace`](../workflow/Open-Workspace.md) - injects `CurrentWorkspace` into every action
+- [`Get-ObsidianCliPath`](Get-ObsidianCliPath.md), [`Get-ObsidianExecutablePath`](Get-ObsidianExecutablePath.md), [`Get-ObsidianWorkspaceNames`](Get-ObsidianWorkspaceNames.md), [`Invoke-ObsidianCli`](Invoke-ObsidianCli.md), [`Invoke-ObsidianWorkspaceLoad`](Invoke-ObsidianWorkspaceLoad.md), [`Start-ObsidianDetached`](Start-ObsidianDetached.md), [`Wait-ObsidianCli`](Wait-ObsidianCli.md) - the helpers this function is built from
+- [`Complete-ObsidianWorkspaceLoad`](Complete-ObsidianWorkspaceLoad.md) - the tail this function queues inside a workspace open, through [`Register-DeferredAction`](../helper/Register-DeferredAction.md)
+- [`Open-Workspace`](../workflow/Open-Workspace.md) - injects `CurrentWorkspace` and `Deferred` into every action, and drains the deferred load before the layout
 - [`Set-EnvironmentVariables`](../system/Set-EnvironmentVariables.md) - persists `AutoPathAdditions`
 - [`Git-Obsidian`](../git/Git-Obsidian.md) - reads the same `ObsidianDirectory`
 - [WinuXConfigurator](../../winux-configurator.md) - have an AI assistant walk these decisions with you

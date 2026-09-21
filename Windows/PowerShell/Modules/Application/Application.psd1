@@ -29,6 +29,8 @@
 		'Get-ObsidianExecutablePath',
 		'Get-ObsidianWorkspaceNames',
 		'Invoke-ObsidianCli',
+		'Invoke-ObsidianWorkspaceLoad',
+		'Complete-ObsidianWorkspaceLoad',
 		'Start-ObsidianDetached',
 		'Wait-ObsidianCli',
 		'Open-Outlook',

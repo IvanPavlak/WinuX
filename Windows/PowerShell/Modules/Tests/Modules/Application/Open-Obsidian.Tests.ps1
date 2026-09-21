@@ -9,6 +9,15 @@ BeforeAll {
 	. "$AppFunctionsPath\Get-ObsidianCliPath.ps1"
 	. "$AppFunctionsPath\Get-ObsidianWorkspaceNames.ps1"
 	. "$AppFunctionsPath\Invoke-ObsidianCli.ps1"
+	# The checked load Open-Obsidian now shares with the deferred path, and the drain itself -
+	# real, not mocked: what they do with the CLI answer is part of this behaviour.
+	. "$AppFunctionsPath\Invoke-ObsidianWorkspaceLoad.ps1"
+	. "$AppFunctionsPath\Complete-ObsidianWorkspaceLoad.ps1"
+	# The deferral registry the opener queues into and the flow drains - real too, so the tests
+	# run the queued tail exactly as Open-Workspace would.
+	$HelperFunctionsPath = Join-Path (Get-RepositoryPath).Modules "Helper\Functions"
+	. "$HelperFunctionsPath\Register-DeferredAction.ps1"
+	. "$HelperFunctionsPath\Complete-DeferredActions.ps1"
 	. "$AppFunctionsPath\Start-ObsidianDetached.ps1"
 	. "$AppFunctionsPath\Wait-ObsidianCli.ps1"
 
@@ -39,6 +48,8 @@ Describe "Open-Obsidian" {
 		$script:obsidianRunning = $false
 
 		$script:cliAnswer = @()
+		# Registry state: a tail queued by one test must never run in the next.
+		$script:DeferredActions = $null
 
 		Mock Invoke-ObsidianCli { $script:cliCalls += , @($Arguments); $script:cliAnswer }
 		Mock Get-ObsidianCliPath { 'C:\Apps\Obsidian\Obsidian.com' }
@@ -321,6 +332,103 @@ Describe "Open-Obsidian" {
 
 			Should -Invoke Write-LogWarning -Times 1 -Exactly -ParameterFilter { $Message -like '*[[]DSA[]] not loaded*unable to find Obsidian*' }
 			Should -Invoke Write-LogSuccess -Times 0
+		}
+	}
+
+	Context "deferred load (-Deferred, queued for Complete-DeferredActions)" {
+		It "queues a cold start instead of waiting for the CLI, and launches Obsidian anyway" {
+			Open-Obsidian -Workspace Server -Deferred
+
+			Should -Invoke Start-ObsidianDetached -Times 1 -Exactly -ParameterFilter { $Vault -eq 'Obsidian' }
+			# The whole point: neither the readiness poll nor the load runs while the action is on the
+			# clock, so every opener queued behind it starts immediately.
+			Should -Invoke Wait-ObsidianCli -Times 0
+			$script:cliCalls.Count | Should -Be 0
+		}
+
+		It "drains the queued cold start with the load itself, no readiness poll" {
+			Open-Obsidian -Workspace Server -Deferred
+
+			Complete-DeferredActions | Should -Be 1
+
+			# By drain time Obsidian has normally been up for seconds; the poll is paid only when
+			# the load comes back "not yet up".
+			Should -Invoke Wait-ObsidianCli -Times 0
+			$script:cliCalls.Count | Should -Be 1
+			$script:cliCalls[0] | Should -Be @('vault=Obsidian', 'workspace:load', 'name=Server')
+		}
+
+		It "polls and loads again when the drained cold start finds Obsidian not yet up" {
+			$script:answers = @(@('The CLI is unable to find Obsidian'), @('Loaded workspace: Server'))
+			$script:answerIndex = 0
+			Mock Invoke-ObsidianCli {
+				$script:cliCalls += , @($Arguments)
+				$answer = $script:answers[[math]::Min($script:answerIndex, $script:answers.Count - 1)]
+				$script:answerIndex++
+				$answer
+			}
+
+			Open-Obsidian -Workspace Server -Deferred
+			Complete-DeferredActions | Should -Be 1
+
+			Should -Invoke Wait-ObsidianCli -Times 1 -Exactly -ParameterFilter { $Vault -eq 'Obsidian' }
+			$script:cliCalls.Count | Should -Be 2
+			Should -Invoke Write-LogWarning -Times 0
+			Should -Invoke Write-LogSuccess -Times 1 -Exactly -ParameterFilter { $Message -match 'in workspace' }
+		}
+
+		It "does not poll the CLI when the queued load was against an already-running Obsidian" {
+			$script:obsidianRunning = $true
+
+			Open-Obsidian -Workspace DSA -Deferred
+			$script:cliCalls.Count | Should -Be 0
+
+			Complete-DeferredActions | Should -Be 1
+
+			# It answered before the open began; a poll would be a wasted process launch.
+			Should -Invoke Wait-ObsidianCli -Times 0
+			$script:cliCalls[0] | Should -Be @('vault=Obsidian', 'workspace:load', 'name=DSA')
+		}
+
+		It "queues the load once, so a second drain in the same open loads nothing" {
+			Open-Obsidian -Workspace Server -Deferred
+
+			Complete-DeferredActions | Should -Be 1
+			Complete-DeferredActions | Should -Be 0
+
+			$script:cliCalls.Count | Should -Be 1
+		}
+
+		It "reports a refused deferred load instead of claiming the workspace opened" {
+			$script:cliAnswer = @('Command line interface is not enabled')
+
+			Open-Obsidian -Workspace Server -Deferred
+			Complete-DeferredActions | Should -Be 1
+
+			Should -Invoke Write-LogWarning -Times 1 -Exactly -ParameterFilter { $Message -match 'not loaded' }
+			# Obsidian did open, so that line stands; the claim that the WORKSPACE loaded must not.
+			Should -Invoke Write-LogSuccess -Times 1 -Exactly -ParameterFilter { $Message -eq 'Obsidian opened!' }
+			Should -Invoke Write-LogSuccess -Times 0 -ParameterFilter { $Message -match 'in workspace' }
+		}
+
+		It "warns and gives up when the CLI never answers after a not-yet-up first attempt" {
+			$script:cliAnswer = @('The CLI is unable to find Obsidian')
+			Mock Wait-ObsidianCli { $false }
+
+			Open-Obsidian -Workspace Server -Deferred
+			Complete-DeferredActions | Should -Be 1
+
+			# One silent attempt, then the poll, then nothing more.
+			$script:cliCalls.Count | Should -Be 1
+			Should -Invoke Write-LogWarning -Times 1 -Exactly -ParameterFilter { $Message -match 'did not answer' }
+			Should -Invoke Write-LogSuccess -Times 0 -ParameterFilter { $Message -match 'in workspace' }
+		}
+
+		It "queues nothing when there is no workspace to load, so the drain is a no-op" {
+			Open-Obsidian -Default -Deferred
+
+			Complete-DeferredActions | Should -Be 0
+			$script:cliCalls.Count | Should -Be 0
 		}
 	}
 }

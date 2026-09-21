@@ -1,4 +1,4 @@
-function Set-WorkspaceWindowLayout {
+﻿function Set-WorkspaceWindowLayout {
 	<#
 	.SYNOPSIS
 		Applies a workspace-specific window layout configuration.
@@ -1057,6 +1057,15 @@ function Set-WorkspaceWindowLayout {
 		# phase clock were all resolved before the pre-open capture above.
 		$pipeline = New-WorkspaceLayoutPipelineState -LayoutConfig $layoutConfigToApply -Claims $claims -MonitorInfo $cachedMonitorInfo -MonitorConfig $config.Monitors `
 			-DesktopOffset $DesktopOffset -DesktopCount $requiredVirtualDesktops -Alongside:$Alongside -ZoneReset $resetFancyZonesState -RecordPhase $recordPhase -SpinnerActive:([bool]$spinner)
+
+		# One open, one tracking set. Every layout pass of this open appends to it
+		# (-KeepPositionedWindows) - the per-desktop passes fire from inside the wait, at a moment
+		# no single pass can call "the first" - so the reset belongs here, to the open, and runs
+		# before any of them. Without it the set still holds what the PREVIOUS open in this process
+		# tracked: Snap-AllWindows re-resolves those dead handles by title and snaps this
+		# workspace's windows to the other workspace's coordinates against the wrong zone grid,
+		# burning six attempts and a FancyZones restart each before recording a failure.
+		Initialize-PositionedWindowTracking
 
 		# Callback fired by Wait-ForWorkspaceWindows as each window first becomes individually stable.
 		# Immediately moves the window to its configured virtual desktop so desktop relocation
