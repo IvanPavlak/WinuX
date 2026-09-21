@@ -1,4 +1,4 @@
-function Set-WindowLayouts {
+﻿function Set-WindowLayouts {
 	<#
 	.SYNOPSIS
 		Applies a predefined window layout configuration.
@@ -108,8 +108,10 @@ function Set-WindowLayouts {
 	.PARAMETER KeepPositionedWindows
 		Appends to the positioned-window tracking instead of resetting it first. Every call
 		resets the tracking by default so Snap-AllWindows sees exactly the windows of that
-		call; the per-desktop passes of one workspace open share a single tracking set and
-		therefore pass this on every call but the first.
+		call. The passes of one workspace open share a single tracking set and therefore pass
+		this on EVERY call: Set-WorkspaceWindowLayout resets the set once for the whole open,
+		before the wait, because its per-desktop passes fire from inside the wait and no one of
+		them is "the first".
 
 	.PARAMETER AbandonedEntries
 		Layout entries the wait phase abandoned (Wait-ForWorkspaceWindows' AbandonedEntries: no

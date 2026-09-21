@@ -109,6 +109,21 @@ $result.Subgroups
 
 **See also:** [Open-Browser](../modules/application.md), [Add Browser Group](../configuration/guides/application/add-browser-group.md)
 
+## [Complete-DeferredActions](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Complete-DeferredActions.ps1)
+
+- **Description:** Runs every tail [Register-DeferredAction](#register-deferredaction) queued, in registration order, and empties the queue. The drain half of the deferral seam: the flow calls it at the point where deferred work must have landed. The queue is taken and cleared before the first tail runs, so a tail that throws neither strands the ones behind it nor survives into the next flow; each tail runs in its own try/catch and a throw is reported as a warning under the tail's label. A no-op returning `0` when nothing is queued, so every caller can call it unconditionally. Returns how many tails ran.
+- **Parameters:** none
+- **Usage:** `$null = Complete-DeferredActions`
+
+[Open-Workspace](workflow.md#open-workspace) drains immediately before the `Set-WorkspaceWindowLayout` action - the layout holds a window stable only while its title and dimensions stop changing, and a tail may retitle a window (an Obsidian workspace load does) - and again when an action list ends without a layout action, so a tail never outlives the open that queued it. A tail registered while draining is queued for the next drain, never run in the current walk.
+
+```powershell
+if ((Complete-DeferredActions) -gt 0) { "the openers left work behind, and it has now run" }
+```
+
+**See also:** [Register-DeferredAction](#register-deferredaction)
+
+
 ## [Confirm-ConfigValue](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Confirm-ConfigValue.ps1)
 
 - **Description:** The standard unconfigured-section guard for the empty-by-default configuration: `Test-ConfigValue` plus the "not configured" warning in one call. Returns `$true` when the value is configured; otherwise writes the given warning via `Write-LogWarning` (unless `-Quiet`) and returns `$false`. PowerShell cannot return across scopes, so the early `return` stays at the call site. Use plain `Test-ConfigValue` when no warning should be emitted (pure checks, Debug-level paths, or custom log formatting).
@@ -1055,6 +1070,23 @@ Set-LogLevel Verbose { Refresh-BrowserTabs }
 ```
 
 **See also:** [Set-SystemTheme](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Set-SystemTheme.ps1)
+
+## [Register-DeferredAction](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Register-DeferredAction.ps1)
+
+- **Description:** Queues work an opener hands back to the flow that called it, to run when the flow drains the queue with [Complete-DeferredActions](#complete-deferredactions). A launch action often has a slow tail that is pure waiting on its own application, and every action queued behind it used to pay that wait; an action that declares `-Deferred` (which `Open-Workspace` injects the way it injects `-CurrentWorkspace`) launches, registers the remainder here with the arguments it needs, and returns at once. Nothing here is specific to any application: the registry holds a label, a scriptblock and the hashtable to splat into it. The scriptblock keeps the session state it was created in, so a function defined in the registering module resolves when the flow runs it from another. The parameters are copied at registration.
+- **Parameters:** -Label, -Action, -Parameters
+- **Usage:** `Register-DeferredAction -Label "Obsidian workspace [$Name]" -Parameters @{ CliPath = $cli; Vault = $vault; Name = $Name; ColdStart = $true } -Action { param([string]$CliPath, [string]$Vault, [string]$Name, [bool]$ColdStart) Complete-ObsidianWorkspaceLoad -CliPath $CliPath -Vault $Vault -Name $Name -ColdStart:$ColdStart }`
+
+The queue is module state of the Helper module and lives for the process, so a flow that lets openers register must also drain, or a tail queued by one open would run inside the next. [Open-Obsidian](application.md#open-obsidian) is the opener that ships with a deferred tail.
+
+| Parameter     | Type        | Default | Description                                                                                          |
+| ------------- | ----------- | ------- | ---------------------------------------------------------------------------------------------------- |
+| `-Label`      | string      | -       | Mandatory. What the tail does, for the warning the drain writes when it throws.                     |
+| `-Action`     | scriptblock | -       | Mandatory. The tail. Declares a `param` block matching the keys of `-Parameters`, or takes none.     |
+| `-Parameters` | hashtable   | `@{}`   | Splatted into `-Action` when it runs. Copied now, so the caller's locals may go out of scope.       |
+
+**See also:** [Complete-DeferredActions](#complete-deferredactions)
+
 
 ## [Rerun-LastCommand](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Rerun-LastCommand.ps1)
 

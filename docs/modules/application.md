@@ -2,6 +2,29 @@
 
 The Application module handles **software installation**, **application launching**, and **browser management**.
 
+## [Complete-ObsidianWorkspaceLoad](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Complete-ObsidianWorkspaceLoad.ps1)
+
+- **Description:** Finishes an Obsidian workspace load that `Open-Obsidian -Deferred` handed back to the flow: polls the CLI if Obsidian was only just launched, runs the checked load, prints the success line the opener itself would have printed. Returns `$true` when the CLI accepted the load, `$false` when it never answered or refused.
+- **Parameters:** -CliPath, -Vault, -Name, -ColdStart, -TimeoutSeconds
+- **Usage:** `Complete-ObsidianWorkspaceLoad -CliPath (Get-ObsidianCliPath) -Vault Obsidian -Name Server -ColdStart`
+
+The second half of the deferred load, and the tail `Open-Obsidian -Deferred` registers through [Register-DeferredAction](helper.md#register-deferredaction) with these arguments; `Open-Obsidian` returns as soon as Obsidian is launched and [Complete-DeferredActions](helper.md#complete-deferredactions) runs this later. Deferring pays because on a cold start the CLI cannot answer until Obsidian has finished starting - measured at 2.7 s for the readiness probe plus 1.0 s for the load - and `Open-Obsidian` used to stand still for all of it while every opener behind it waited its turn. Called once the remaining openers have run, Obsidian has booted in the meantime and only the load is left.
+
+It must run **before** the layout starts waiting on windows, never during it: [Wait-ForWorkspaceWindows](window.md#wait-forworkspacewindows) holds a window stable only while its title and dimensions stop changing, and loading a workspace retitles Obsidian's window. [Open-Workspace](workflow.md#open-workspace) drains the queue immediately before the `Set-WorkspaceWindowLayout` action, and again when an action list ends without one.
+
+| Parameter         | Description                                                                                                                                              |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `-CliPath`        | Path to `Obsidian.com`.                                                                                                                                  |
+| `-Vault`          | The vault the CLI addresses.                                                                                                                             |
+| `-Name`           | The saved Obsidian workspace to load.                                                                                                                    |
+| `-ColdStart`      | Obsidian was launched by the deferring call and may still be starting: poll the CLI ([Wait-ObsidianCli](#wait-obsidiancli)) first. Omit for an already-running Obsidian. |
+| `-TimeoutSeconds` | Budget for that poll. Default `10`.                                                                                                                      |
+
+```powershell
+Complete-ObsidianWorkspaceLoad -CliPath (Get-ObsidianCliPath) -Vault Obsidian -Name Server -ColdStart
+```
+
+
 ## [Create-CondaEnvironments](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Create-CondaEnvironments.ps1)
 
 - **Description:** Updates Conda and idempotently creates Conda environments from the YAML files in the WinuX `Conda/Environments` folder. Each environment is checked against the existing environment list and only created if it is missing. Requires Miniconda3 to be installed and the `Conda` environment variable to be set.
@@ -278,6 +301,25 @@ The one place every CLI call from `Open-Obsidian` and `Wait-ObsidianCli` goes th
 Invoke-ObsidianCli -CliPath (Get-ObsidianCliPath) -Arguments @("vault=Obsidian", "workspaces")
 ```
 
+## [Invoke-ObsidianWorkspaceLoad](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Invoke-ObsidianWorkspaceLoad.ps1)
+
+- **Description:** Loads a saved Obsidian workspace through the CLI and reports a refusal instead of claiming success. Returns `$true` when the CLI accepted the load, `$false` when it refused it.
+- **Parameters:** -CliPath, -Vault, -Name
+- **Usage:** `Invoke-ObsidianWorkspaceLoad -CliPath (Get-ObsidianCliPath) -Vault Obsidian -Name Server`
+
+The one checked `workspace:load` call, shared by `Open-Obsidian`'s immediate path and by [Complete-ObsidianWorkspaceLoad](#complete-obsidianworkspaceload) when the load was deferred. The CLI answers some requests instead of doing the work - the per-machine toggle being off (`Command line interface is not enabled`), Obsidian gone between the readiness poll and the load (`The CLI is unable to find Obsidian`), and the `CLI call failed` line [Invoke-ObsidianCli](#invoke-obsidiancli) synthesises for a launch failure - and all three are reported as `Obsidian workspace [Name] not loaded => <the CLI's line>` together with the fix, never as a success.
+
+| Parameter  | Description                                    |
+| ---------- | ---------------------------------------------- |
+| `-CliPath` | Path to `Obsidian.com`.                        |
+| `-Vault`   | The vault the CLI addresses.                   |
+| `-Name`    | The saved Obsidian workspace to load.          |
+
+```powershell
+if (Invoke-ObsidianWorkspaceLoad -CliPath (Get-ObsidianCliPath) -Vault Obsidian -Name Server) { "loaded" }
+```
+
+
 ## [Open-Acrobat](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Open-Acrobat.ps1)
 
 - **Description:** Opens Adobe Acrobat with one or more PDF groups defined in `AcrobatPdfGroups` in `Configuration.psd1`. When a PDF key (or keys) is given it opens the corresponding file(s) directly; called with no arguments it just launches Acrobat (or reports it is already running), and with an empty `-Pdf` it shows an interactive menu of configured groups plus up to 10 recently opened PDFs.
@@ -418,16 +460,17 @@ Open-NotepadPlusPlus -File "C:\Users\<User>\config.json"
 ## [Open-Obsidian](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Open-Obsidian.ps1)
 
 - **Description:** Opens Obsidian for the configured vault and, when a workspace resolves, loads that Obsidian workspace through the official Obsidian command line interface (`obsidian vault=<Vault> workspace:load name=<Name>`). With Obsidian already running the workspace is switched in place - no second window; without a workspace an already-running Obsidian is left alone. The workspace comes from `-Workspace`, else from the `-CurrentWorkspace` name `Open-Workspace` injects when the vault has an Obsidian workspace of the same name, else - on a bare interactive call without `-Default` - from a `Resolve-Selection` menu of the saved workspaces, else from `Configuration.Obsidian.DefaultWorkspace` on a cold start only. A cold start launches `Obsidian.exe` detached through WMI so closing the terminal never closes Obsidian, then polls the CLI (10 s at most) before loading. The CLI's answer to the load is checked: a refusal (the per-machine CLI toggle off, `Command line interface is not enabled`) is reported with the fix, never claimed as a loaded workspace.
-- **Parameters:** -Workspace, -Default, -CurrentWorkspace
+- **Parameters:** -Workspace, -Default, -CurrentWorkspace, -Deferred
 - **Usage:** `Open-Obsidian`, `Open-Obsidian -Workspace Server`, `Open-Obsidian -Default`
 
-The Obsidian side of a WinuX workspace. Saved Obsidian workspaces (the core Workspaces plugin) live in `<ObsidianDirectory>\.obsidian\workspaces.json`; `Get-ObsidianWorkspaceNames` reads that file for the implicit match, for the menu and for the warning an unknown `-Workspace` name gets (the load is still attempted). Inside `Open-Workspace` a bare `@{ Action = "Open-Obsidian" }` is enough: `w Server` lands Obsidian on its `Server` workspace as soon as the vault has one, and `Parameters = @{ Workspace = "Name" }` overrides that; the injected `CurrentWorkspace` also suppresses the menu, so a workspace open never prompts. By hand, a bare `Open-Obsidian` shows the menu of saved workspaces exactly like `Open-VSCode` or `Open-VisualStudio` show theirs, `[Enter]` skips it, and `-Default` skips it up front (an action list without the injection, such as `ProjectActions`, must pass `Parameters = @{ Default = $true }` or a `Workspace`). Inside a workspace action `Default = $true` is optional (the injected `CurrentWorkspace` already suppresses the menu) and it never disables the same-named match - it only removes the prompt, so it is safe belt-and-braces for any unattended open. The vault name defaults to the leaf folder of `PathTemplates.ObsidianDirectory` (`Configuration.Obsidian.Vault` overrides it). The CLI ships with Obsidian 1.12.4+ and is enabled once per machine, under Settings > General > Advanced > Command line interface or with `Enable-ObsidianCli` (the flag is Obsidian app state in `%APPDATA%\obsidian\obsidian.json`, so a synced vault does not carry it); `Get-ObsidianCliPath` finds `Obsidian.com` on PATH or beside `Obsidian.exe`, and without it Obsidian still opens while a requested workspace is reported with the registration steps. `Obsidian.com` exists even with the toggle off, which is why the load's answer is checked rather than the path. The launch itself is `Start-ObsidianDetached` (the CLI cannot start Obsidian), the readiness poll is `Wait-ObsidianCli` and every CLI call goes through `Invoke-ObsidianCli`, which runs `Obsidian.com` in a hidden console so its chatter never reaches the shell.
+The Obsidian side of a WinuX workspace. Saved Obsidian workspaces (the core Workspaces plugin) live in `<ObsidianDirectory>\.obsidian\workspaces.json`; `Get-ObsidianWorkspaceNames` reads that file for the implicit match, for the menu and for the warning an unknown `-Workspace` name gets (the load is still attempted). Inside `Open-Workspace` a bare `@{ Action = "Open-Obsidian" }` is enough: `w Server` lands Obsidian on its `Server` workspace as soon as the vault has one, and `Parameters = @{ Workspace = "Name" }` overrides that; the injected `CurrentWorkspace` also suppresses the menu, so a workspace open never prompts. By hand, a bare `Open-Obsidian` shows the menu of saved workspaces exactly like `Open-VSCode` or `Open-VisualStudio` show theirs, `[Enter]` skips it, and `-Default` skips it up front (an action list without the injection, such as `ProjectActions`, must pass `Parameters = @{ Default = $true }` or a `Workspace`). Inside a workspace action `Default = $true` is optional (the injected `CurrentWorkspace` already suppresses the menu) and it never disables the same-named match - it only removes the prompt, so it is safe belt-and-braces for any unattended open. The vault name defaults to the leaf folder of `PathTemplates.ObsidianDirectory` (`Configuration.Obsidian.Vault` overrides it). The CLI ships with Obsidian 1.12.4+ and is enabled once per machine, under Settings > General > Advanced > Command line interface or with `Enable-ObsidianCli` (the flag is Obsidian app state in `%APPDATA%\obsidian\obsidian.json`, so a synced vault does not carry it); `Get-ObsidianCliPath` finds `Obsidian.com` on PATH or beside `Obsidian.exe`, and without it Obsidian still opens while a requested workspace is reported with the registration steps. `Obsidian.com` exists even with the toggle off, which is why the load's answer is checked rather than the path. The launch itself is `Start-ObsidianDetached` (the CLI cannot start Obsidian), the readiness poll is `Wait-ObsidianCli`, the checked `workspace:load` is [Invoke-ObsidianWorkspaceLoad](#invoke-obsidianworkspaceload) and every CLI call goes through `Invoke-ObsidianCli`, which runs `Obsidian.com` in a hidden console so its chatter never reaches the shell. Inside a workspace open the CLI work is deferred: `Open-Workspace` injects `-Deferred`, this function registers a [Complete-ObsidianWorkspaceLoad](#complete-obsidianworkspaceload) call through [Register-DeferredAction](helper.md#register-deferredaction) and returns as soon as Obsidian is launched, and the flow runs every registered tail ([Complete-DeferredActions](helper.md#complete-deferredactions)) once the remaining openers have run and before the layout starts waiting on window titles. On a cold start the CLI cannot answer until Obsidian has finished starting, so those seconds used to be paid by every opener queued behind this one.
 
 | Parameter           | Description                                                                                                      |
 | ------------------- | ---------------------------------------------------------------------------------------------------------------- |
 | `-Workspace`        | The Obsidian workspace to load. Wins over `-CurrentWorkspace` and the configured default.                        |
 | `-Default`          | Skip the menu: open Obsidian (into `Obsidian.DefaultWorkspace` on a cold start) or leave the running one alone. Removes only the prompt; `-Workspace` and the same-named match still apply. |
 | `-CurrentWorkspace` | The WinuX workspace being opened - injected by `Open-Workspace`, used only when a same-named Obsidian one exists. |
+| `-Deferred`         | Queue the workspace load ([Register-DeferredAction](helper.md#register-deferredaction)) and return as soon as Obsidian is launched, leaving the CLI round trip to the flow's drain. Injected by `Open-Workspace`; a bare `Open-Obsidian` loads before it returns, as always. |
 
 ```powershell
 # Choose from the vault's saved workspaces ([Enter] skips)

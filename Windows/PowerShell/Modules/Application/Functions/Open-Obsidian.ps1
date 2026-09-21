@@ -58,6 +58,15 @@ function Open-Obsidian {
 		prompt is removed - an explicit -Workspace and the same-named CurrentWorkspace match still
 		apply, so `Parameters = @{ Default = $true }` on a workspace action is safe belt-and-braces.
 
+	.PARAMETER Deferred
+		Record the workspace load instead of performing it, and return as soon as Obsidian is
+		launched. Injected by Open-Workspace: the load is registered through
+		Register-DeferredAction as a Complete-ObsidianWorkspaceLoad call, and the flow runs every
+		registered tail (Complete-DeferredActions) once the remaining openers have run and before
+		the layout starts waiting on window titles. The CLI round trip is seconds of waiting on Obsidian's own
+		startup, and every action queued behind this one used to pay them. Not meant to be passed by
+		hand: a bare Open-Obsidian loads the workspace before it returns, as always.
+
 	.PARAMETER CurrentWorkspace
 		The WinuX workspace being opened. Injected by Open-Workspace; only used when the vault has
 		an Obsidian workspace of the same name. Not meant to be passed by hand.
@@ -88,7 +97,10 @@ function Open-Obsidian {
 		[switch]$Default,
 
 		[Parameter()]
-		[string]$CurrentWorkspace
+		[string]$CurrentWorkspace,
+
+		[Parameter()]
+		[switch]$Deferred
 	)
 
 	$obsidian = Get-ConfigSetting -Path 'Obsidian'
@@ -141,20 +153,18 @@ function Open-Obsidian {
 	$cli = Get-ObsidianCliPath
 	$cliMissingWarning = "Obsidian CLI not found - cannot load a workspace. Enable it in Obsidian under Settings > General > Advanced > Command line interface, then put its folder on PATH (AutoPathAdditions: `"%LOCALAPPDATA%\Programs\obsidian`") and open a new shell."
 
-	# Lines the CLI answers instead of doing the work. "not enabled" is the per-machine toggle
-	# being off (Obsidian.com exists and runs, so Get-ObsidianCliPath cannot tell); the other two
-	# are Obsidian gone between the readiness poll and the load, and a launch failure reported by
-	# Invoke-ObsidianCli.
-	$cliRefusal = 'not enabled|unable to find Obsidian|^CLI call failed'
-	$loadWorkspace = {
-		param([string]$Name)
-		$answer = @(Invoke-ObsidianCli -CliPath $cli -Arguments @("vault=$vault", 'workspace:load', "name=$Name"))
-		$refusal = @($answer | Where-Object { $_ -match $cliRefusal }) | Select-Object -First 1
-		if ($refusal) {
-			Write-LogWarning "Obsidian workspace [$Name] not loaded => $refusal Run [Enable-ObsidianCli] with Obsidian closed, or enable it under Settings > General > Advanced > Command line interface."
-			return $false
+	# Deferring only moves the CLI work: the registered tail is Complete-ObsidianWorkspaceLoad,
+	# which does exactly what the two branches below would have done, through the same checked
+	# load. Open-Workspace runs it (Complete-DeferredActions) before the layout.
+	$deferLoad = {
+		param([string]$Name, [bool]$IsColdStart)
+		Register-DeferredAction -Label "Obsidian workspace [$Name]" `
+			-Parameters @{ CliPath = $cli; Vault = $vault; Name = $Name; ColdStart = $IsColdStart } `
+			-Action {
+			param([string]$CliPath, [string]$Vault, [string]$Name, [bool]$ColdStart)
+			Complete-ObsidianWorkspaceLoad -CliPath $CliPath -Vault $Vault -Name $Name -ColdStart:$ColdStart
 		}
-		return $true
+		Write-LogDebug " [Open-Obsidian] Workspace [$Name] queued - loading after the remaining openers"
 	}
 
 	# --- Already running -------------------------------------------------------------------------
@@ -167,8 +177,12 @@ function Open-Obsidian {
 			Write-LogWarning $cliMissingWarning
 			return
 		}
+		if ($Deferred) {
+			& $deferLoad $targetWorkspace $false
+			return
+		}
 		Write-LogStep "Loading Obsidian workspace [$targetWorkspace]..."
-		if (& $loadWorkspace $targetWorkspace) {
+		if (Invoke-ObsidianWorkspaceLoad -CliPath $cli -Vault $vault -Name $targetWorkspace) {
 			Write-LogSuccess "Obsidian workspace [$targetWorkspace] loaded!"
 		}
 		return
@@ -195,8 +209,16 @@ function Open-Obsidian {
 	# The CLI starts answering roughly a second after launch (measured: window at 0.4 s, CLI at
 	# 1.0 s), after the Homepage plugin has done its startup load - so this load is the one that
 	# sticks.
+	# Deferred: Obsidian is launching, and the CLI cannot answer until it has finished starting.
+	# That wait is what the remaining openers can absorb, so the record is redeemed later.
+	if ($Deferred) {
+		& $deferLoad $targetWorkspace $true
+		Write-LogSuccess "Obsidian opened!"
+		return
+	}
+
 	if (Wait-ObsidianCli -CliPath $cli -Vault $vault -TimeoutSeconds 10) {
-		if (& $loadWorkspace $targetWorkspace) {
+		if (Invoke-ObsidianWorkspaceLoad -CliPath $cli -Vault $vault -Name $targetWorkspace) {
 			Write-LogSuccess "Obsidian opened in workspace [$targetWorkspace]!"
 		}
 		else {
