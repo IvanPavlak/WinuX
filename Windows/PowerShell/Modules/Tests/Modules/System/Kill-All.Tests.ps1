@@ -61,6 +61,9 @@ Describe "Kill-All" {
 		Mock Focus-TerminalTab { }
 		Mock Save-WorkspaceState { }
 		Mock Report-KillAllSurvivors { @() }
+		# Kill-All pauses half a second for terminated processes to close; nothing here needs the
+		# real pause, which was most of this file's run time.
+		Mock Start-Sleep { }
 	}
 
 	BeforeEach {

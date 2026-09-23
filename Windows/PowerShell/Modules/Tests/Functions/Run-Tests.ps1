@@ -27,7 +27,7 @@ function Run-Tests {
         Optional path to test files. Defaults to the Tests directory.
 
     .PARAMETER Workers
-        Number of parallel worker processes. Defaults to min(CPU count, 8, test file count).
+        Number of parallel worker processes. Defaults to min(CPU count, 12, test file count).
 
     .PARAMETER Detailed
         Echo the whole run log, including every worker transcript, after the run

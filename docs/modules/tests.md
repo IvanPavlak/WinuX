@@ -17,7 +17,7 @@ Recursively discovers `*.Tests.ps1` files under the Tests directory and, when pr
 | ----------- | --------------------------------------------------------------------------------- |
 | `-TestName` | Filter to run only tests whose file name matches a pattern; several patterns run the union of their matches, each file once. |
 | `-Path`     | Custom path to test files. Defaults to the Tests directory.                       |
-| `-Workers`  | Number of parallel worker processes. Defaults to `min(CPU count, 8, file count)`. |
+| `-Workers`  | Number of parallel worker processes. Defaults to `min(CPU count, 12, file count)`. |
 | `-Detailed` | Echo the whole run log, including every worker transcript, after the run.         |
 | `-PassThru` | Return the aggregate result object instead of just printing the summary.           |
 

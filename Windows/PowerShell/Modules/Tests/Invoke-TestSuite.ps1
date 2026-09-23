@@ -36,7 +36,7 @@
 	sweeps the fork-owned Custom area (Modules\Custom\<Module>\Tests) when no -Path is given.
 
 .PARAMETER Workers
-	Number of parallel worker processes. 0 (default) picks min(CPU count, 8, file count).
+	Number of parallel worker processes. 0 (default) picks min(CPU count, 12, file count).
 
 .PARAMETER Detailed
 	Echo the whole run log - including every worker transcript - to the console after the run.
@@ -472,7 +472,7 @@ $weighted = @($weighted)
 
 $workerCount = $Workers
 if ($workerCount -le 0) {
-	$workerCount = [Math]::Min([Environment]::ProcessorCount, 8)
+	$workerCount = [Math]::Min([Environment]::ProcessorCount, 12)
 }
 $workerCount = [Math]::Max(1, [Math]::Min($workerCount, $testFiles.Count))
 

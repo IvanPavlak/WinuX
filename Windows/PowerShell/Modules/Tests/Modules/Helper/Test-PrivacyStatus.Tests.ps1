@@ -5,6 +5,11 @@ BeforeAll {
 	$FunctionsPath = Join-Path $ModuleRoot "Helper\Functions"
 
 	. "$FunctionsPath\Test-PrivacyStatus.ps1"
+
+	# Stubbed so Mock attaches here instead of autoloading the CIM-based NetAdapter and NetTCPIP
+	# modules, whose import alone cost several seconds per run. The real cmdlets are never wanted.
+	function Get-NetAdapter { [CmdletBinding()] param() }
+	function Get-NetRoute { [CmdletBinding()] param($DestinationPrefix) }
 }
 
 Describe "Test-PrivacyStatus" {
