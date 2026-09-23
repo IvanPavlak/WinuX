@@ -36,6 +36,7 @@
 		'Resolve-DockerComposeStackPath',
 		'Resolve-ProjectDockerCompose',
 		'Resolve-SwaggerBrowserGroup',
+		'Resolve-TrackedWorkspaceWindow',
 		'Resolve-WorkspaceActions',
 		'Save-WorkspaceState',
 		'Start-Containers',

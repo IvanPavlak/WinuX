@@ -10,6 +10,7 @@ BeforeAll {
 	. "$FunctionsPath\Get-WorkspaceState.ps1"
 	. "$FunctionsPath\Save-WorkspaceState.ps1"
 	. "$FunctionsPath\Close-Workspace.ps1"
+	. "$FunctionsPath\Resolve-TrackedWorkspaceWindow.ps1"
 
 	$script:TestStateDir = Join-Path $env:TEMP ("CloseWorkspaceTests_" + $PID)
 	$script:TestStatePath = Join-Path $script:TestStateDir "OpenWorkspaces.txt"

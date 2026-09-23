@@ -7,6 +7,7 @@ BeforeAll {
 	. "$FunctionsPath\Format-WorkspaceStateContent.ps1"
 	. "$FunctionsPath\Get-WorkspaceState.ps1"
 	. "$FunctionsPath\Get-WorkspaceOpenProtection.ps1"
+	. "$FunctionsPath\Resolve-TrackedWorkspaceWindow.ps1"
 
 	$script:TestStateDir = Join-Path $env:TEMP ("WorkspaceOpenProtectionTests_" + $PID)
 	$script:TestStatePath = Join-Path $script:TestStateDir "OpenWorkspaces.txt"
@@ -217,6 +218,53 @@ Describe "Get-WorkspaceOpenProtection" {
 			$protection = Get-WorkspaceOpenProtection -StatePath $script:TestStatePath
 
 			$protection.WindowHandles.Contains([IntPtr]888) | Should -BeTrue
+		}
+
+		It "does not protect the plain session's terminal through a dead alongside terminal record" {
+			# Every Windows Terminal window lives in ONE process under a generic title, so a dead
+			# alongside terminal record re-resolved by process or title lands on whatever terminal
+			# is left - the plain session's own - and the layout then cannot find it.
+			Mock Get-WindowHandle {
+				@(
+					(New-TestWindow -Handle 60 -ProcessId 6 -ProcessName 'firefox' -Title 'Alongside browser'),
+					(New-TestWindow -Handle 500 -ProcessId 50 -ProcessName 'WindowsTerminal' -Title 'PowerShell')
+				)
+			}
+			Write-TestState -Entry @(
+				(New-TestEntry -Workspace 'WinuX' -Alongside -DesktopOffset 3 -Windows @(
+					(New-TestRecord -Handle 60 -ProcessId 6 -ProcessName 'firefox' -Title 'Alongside browser'),
+					(New-TestRecord -Handle 400 -ProcessId 50 -ProcessName 'WindowsTerminal' -Title 'PowerShell')
+				))
+			)
+
+			$protection = Get-WorkspaceOpenProtection -StatePath $script:TestStatePath
+
+			$protection.WindowHandles.Count | Should -Be 1
+			$protection.WindowHandles.Contains([IntPtr]60) | Should -BeTrue
+			$protection.WindowHandles.Contains([IntPtr]500) | Should -BeFalse
+		}
+
+		It "does not re-resolve by process id when the process hosts several windows" {
+			# A browser holds many windows in one process; picking the first would protect a window
+			# the alongside workspace never owned.
+			Mock Get-WindowHandle {
+				@(
+					(New-TestWindow -Handle 61 -ProcessId 6 -ProcessName 'firefox' -Title 'Plain mail'),
+					(New-TestWindow -Handle 62 -ProcessId 6 -ProcessName 'firefox' -Title 'Plain calendar'),
+					(New-TestWindow -Handle 70 -ProcessId 7 -ProcessName 'Code' -Title 'Alongside editor')
+				)
+			}
+			Write-TestState -Entry @(
+				(New-TestEntry -Workspace 'WinuX' -Alongside -Windows @(
+					(New-TestRecord -Handle 60 -ProcessId 6 -ProcessName 'firefox' -Title 'Closed tab'),
+					(New-TestRecord -Handle 70 -ProcessId 7 -ProcessName 'Code' -Title 'Alongside editor')
+				))
+			)
+
+			$protection = Get-WorkspaceOpenProtection -StatePath $script:TestStatePath
+
+			$protection.WindowHandles.Count | Should -Be 1
+			$protection.WindowHandles.Contains([IntPtr]70) | Should -BeTrue
 		}
 
 		It "preserves every live alongside entry, and only those" {

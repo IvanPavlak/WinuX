@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.77] - 2026-09-23
+
+### Fixed
+
+- **A plain workspace open no longer loses its terminal to a dead alongside record.** When a tracked `-Alongside` workspace still had one live window but its terminal window had closed, `Get-WorkspaceOpenProtection` re-resolved the dead terminal record by process id (every Windows Terminal window shares one process) or by its generic `PowerShell` title, landed on the plain session's own terminal and protected it. The plain layout never claims a protected window, so every pass and retry reported the terminal as `Window not found`. The ladder is now one function, `Resolve-TrackedWorkspaceWindow`, shared by `Get-WorkspaceOpenProtection` and `Close-Workspace`: Windows Terminal records resolve by handle only, and the process-id step applies only when that process has exactly one live window (the Electron recreate case it exists for), so a multi-window browser record can no longer claim the first browser window either. Tests: `Resolve-TrackedWorkspaceWindow.Tests.ps1` (each ladder step, the single-window rule, terminal handle-only, no-process records), `Get-WorkspaceOpenProtection.Tests.ps1` (a dead alongside terminal record leaves the live terminal unprotected; a multi-window process is not re-resolved by id).
+
 ## [0.1.76] - 2026-09-21
 
 ### Added

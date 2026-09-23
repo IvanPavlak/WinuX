@@ -498,6 +498,14 @@ Look for `Layout short by N window(s) - placed X of Y entries!`. If it still app
 
 Three changes fix it: `-Alongside` is forwarded to every action that declares it (so `-Instances N` opens N **new** windows), alongside verification is scoped rather than skipped (only the entries this pass placed, matched only against this open's windows), and a genuine shortfall is reported once with both counts instead of a verbose-only per-entry line.
 
+### Plain Workspace Open Reports The Terminal As "Window not found" While An Alongside Workspace Is Tracked
+
+**Problem:** A plain `w <workspace>` places every window except Windows Terminal, reporting `Layout short by 1 window(s)` and `[WindowsTerminal] ... Actual => Window not found` on every retry, although the terminal is plainly open. The session log shows `Preserving live alongside workspace(s) => [<other>]` near the top.
+
+**Solution:** Update to a build where tracker records are resolved by [Resolve-TrackedWorkspaceWindow](../modules/workflow.md#resolve-trackedworkspacewindow). On an older build, reopening the alongside workspace (`w <other> -Alongside`) rewrites its record with a live handle.
+
+**Why:** The alongside workspace's terminal window had since closed, but its tracker record survived because another of its windows was still alive. Every Windows Terminal window lives in one process under a generic title (`PowerShell`), so re-resolving that dead record by process id or title landed on the one terminal left - the plain session's own - and marked it protected. The plain layout never claims a protected window, so it reported the terminal as missing. Terminal records now resolve by handle only, and the process-id step applies only to a process with a single live window.
+
 ### A Many-Window Browser Workspace Doubles Up The First Desktops And Starves The Last Ones On Its First Pass
 
 **Problem:** A workspace whose layout repeats the `Browser` entry across many desktops (the shipped `Example` with 33 Chrome windows, say) reports `Layout short by N window(s) - placed X of Y entries!` with `Y` larger than the layout, then a verification block listing every window of the last desktops as `Window not found` or `On desktop <earlier one>`, and only the in-process retry ends with `Workspace layout applied successfully!`. The open takes two to three times as long as a clean one. The browser launched exactly as many windows as the layout has zones.
