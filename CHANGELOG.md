@@ -8,6 +8,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.77] - 2026-09-23
+
+### Changed
+
+- **`Set-WorkspaceWindowLayout.Tests.ps1` builds its baseline mocks once instead of before every test.** The file's slowest cost was setup, not the tests: its top-level `BeforeEach` recreated 37 mocks before each of its 67 tests, and as the suite's longest file it set the finish time of the whole parallel run. The mocks read no per-test state, so they now live in a Describe-level `BeforeAll`; tests that need different behavior still re-mock in their own scope, and `Should -Invoke` still counts per test. The per-test resets (configuration, rerun environment variables, the last snap result) stay in `BeforeEach`. Test-only change.
+
+- **The test suite stops writing real session logs, and the remaining heavy files build their mocks once.** The harness meant to run every worker with file logging off, but the state that switch lives in was built lazily: the Logging tests deleted `$global:LoggingState` in their `AfterAll`, and the next `Write-Log` call - in whatever test came next, under whatever configuration it had swapped in - rebuilt it with file logging back on. From then on each log line cost a call-stack walk plus a session-log append (thousands per run), and test output landed in the real Logs folder. `Invoke-TestSuite.ps1` now builds the logging state right after its imports, while the configuration still has file logging off, and the eight Logging test files restore the state they found instead of deleting it. `Resolve-TerminalGreetingSettings.Tests.ps1` also mocks `Write-LogDebug`, which it had left to the real function. `Open-Workspace.Tests.ps1`, `Close-Workspace.Tests.ps1` and `Kill-All.Tests.ps1` move their baseline mocks (23, 19 and 13) from `BeforeEach` into a Describe-level `BeforeAll`, as `Set-WorkspaceWindowLayout.Tests.ps1` does; the per-test state those mocks read is still reset in `BeforeEach`. Test-only change.
+
+- **`Run-Tests` defaults to up to 12 workers instead of 8, and two tests stop paying for real system work.** Measured on a 22-core machine: 8 workers 71.3 s, 12 workers 62.2 s, 16 workers 78.4 s - past 12 the workers contend enough that the summed test time grows faster than the parallelism gains (430.6 s, 546.0 s, 790.9 s). The default is still capped by the CPU count, so smaller machines and CI runners are unchanged. `Kill-All.Tests.ps1` mocks the half-second `Start-Sleep` every `Kill-All` call makes (about 15 s per run), and `Test-PrivacyStatus.Tests.ps1` stubs `Get-NetAdapter` and `Get-NetRoute` so mocking them no longer autoloads the CIM-based NetAdapter and NetTCPIP modules (about 5 s). Documented in `docs/modules/tests.md`.
+
+
+### Fixed
+
+- **A plain workspace open no longer loses its terminal to a dead alongside record.** When a tracked `-Alongside` workspace still had one live window but its terminal window had closed, `Get-WorkspaceOpenProtection` re-resolved the dead terminal record by process id (every Windows Terminal window shares one process) or by its generic `PowerShell` title, landed on the plain session's own terminal and protected it. The plain layout never claims a protected window, so every pass and retry reported the terminal as `Window not found`. The ladder is now one function, `Resolve-TrackedWorkspaceWindow`, shared by `Get-WorkspaceOpenProtection` and `Close-Workspace`: Windows Terminal records resolve by handle only, and the process-id step applies only when that process has exactly one live window (the Electron recreate case it exists for), so a multi-window browser record can no longer claim the first browser window either. Tests: `Resolve-TrackedWorkspaceWindow.Tests.ps1` (each ladder step, the single-window rule, terminal handle-only, no-process records), `Get-WorkspaceOpenProtection.Tests.ps1` (a dead alongside terminal record leaves the live terminal unprotected; a multi-window process is not re-resolved by id).
+
+- **The `Wait-ForWorkspaceWindows` hand-over tests no longer fail under a loaded full-suite run.** Four per-desktop readiness tests delayed their slow window by a fixed 400, 600 or 1800 ms and relied on the fast desktop being handed over first. When the parallel suite loaded the machine, the first poll could land after that deadline: every desktop then completed in the same poll, and the hand-over test timed out locally while passing alone and on CI. The slow window now appears only once a desktop has been handed over (optionally after a set number of empty polls), which fixes the order deterministically and drops the fixed delays. Test-only change: `Wait-ForWorkspaceWindows.Tests.ps1`.
+
+
 ## [0.1.76] - 2026-09-21
 
 ### Added

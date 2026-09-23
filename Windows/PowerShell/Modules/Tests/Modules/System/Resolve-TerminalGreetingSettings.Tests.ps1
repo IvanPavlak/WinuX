@@ -16,9 +16,16 @@ BeforeAll {
 }
 
 Describe "Resolve-TerminalGreetingSettings" {
-	BeforeEach {
+	# Created once for the whole Describe. Write-LogDebug is mocked too: in a suite worker the
+	# Logging module is loaded, so the real one ran - a call-stack walk and a session-log append
+	# for each of the dozen debug lines every resolve writes, which was most of this file's run
+	# time and left test output in the developer's session log. Should -Invoke still counts per It.
+	BeforeAll {
 		Mock Write-LogWarning { }
+		Mock Write-LogDebug { }
+	}
 
+	BeforeEach {
 		$script:SavedConfiguration = $global:Configuration
 		$global:Configuration = @{}
 	}

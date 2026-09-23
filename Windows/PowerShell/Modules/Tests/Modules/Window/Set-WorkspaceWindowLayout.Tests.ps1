@@ -58,7 +58,11 @@ BeforeAll {
 }
 
 Describe "Set-WorkspaceWindowLayout" {
-	BeforeEach {
+	# The baseline mocks are created ONCE for the whole Describe instead of before every test:
+	# none of them reads per-test state, a test that needs different behavior re-mocks the
+	# command in its own scope (which wins), and Should -Invoke still counts calls per It.
+	# Rebuilding these 37 mocks before each of the file's tests was most of its run time.
+	BeforeAll {
 		Mock Write-Host { }
 		Mock Loading-Spinner { }
 		Mock Get-MonitorInfo { @() }
@@ -99,7 +103,9 @@ Describe "Set-WorkspaceWindowLayout" {
 		Mock Get-Command { $null }
 		Mock Start-Sleep { }
 		Mock Test-FancyZonesConfiguration { [PSCustomObject]@{ Valid = $true; Errors = @(); Warnings = @() } }
+	}
 
+	BeforeEach {
 		$script:MachineSpecificPaths = @{
 			Projects = @{
 				Self = @{

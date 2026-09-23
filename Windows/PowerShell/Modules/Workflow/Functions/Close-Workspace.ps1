@@ -41,8 +41,9 @@ function Close-Workspace {
 
 		What happens, per selected workspace:
 
-		- Windows are matched by handle, then re-resolved by process and by exact process name plus
-		  title when the handle has gone stale (Electron applications recreate their windows). A window
+		- Windows are matched by handle, then re-resolved (Resolve-TrackedWorkspaceWindow) by process -
+		  only when that process has a single live window - and by exact process name plus title when
+		  the handle has gone stale (Electron applications recreate their windows). A window
 		  matched by its own live handle is unambiguously this workspace's; only a re-resolved one is
 		  held back when a workspace that stays open claims that process-and-title identity, because
 		  two workspaces routinely have identically titled windows (open two of them and each has a
@@ -301,41 +302,6 @@ function Close-Workspace {
 		}
 	}
 
-	# Reports HOW a record was matched as well as what it matched, because that decides whether the
-	# survivor guard above applies. An exact handle match needs no guard at all; a re-resolution does.
-	$resolveTrackedWindow = {
-		param($Record, $LiveWindows)
-
-		$recordedHandle = [int64]$Record.Handle
-
-		# The handle is unambiguous for as long as the window lives.
-		$byHandle = @($LiveWindows | Where-Object { [int64]$_.Handle -eq $recordedHandle })[0]
-		if ($byHandle) { return [pscustomobject]@{ Window = $byHandle; Exact = $true } }
-
-		# Past this point the recorded handle is gone and the window has to be recognised again.
-		# Only a record that named a process can be: a title alone is not evidence of ownership.
-		if ([string]::IsNullOrWhiteSpace($Record.ProcessName)) { return $null }
-
-		# Same process, new window - Electron applications recreate a window without restarting.
-		if ([int64]$Record.ProcessId -gt 0) {
-			$byProcess = @($LiveWindows | Where-Object {
-					[int64]$_.ProcessId -eq [int64]$Record.ProcessId -and [string]$_.ProcessName -eq [string]$Record.ProcessName
-				})[0]
-			if ($byProcess) { return [pscustomobject]@{ Window = $byProcess; Exact = $false } }
-		}
-
-		# Same process name and the exact same title - the application restarted outright. Exact,
-		# because a loose match here would close a window this workspace never opened.
-		if (-not [string]::IsNullOrWhiteSpace($Record.Title)) {
-			$byTitle = @($LiveWindows | Where-Object {
-					[string]$_.ProcessName -eq [string]$Record.ProcessName -and [string]$_.Title -eq [string]$Record.Title
-				})[0]
-			if ($byTitle) { return [pscustomobject]@{ Window = $byTitle; Exact = $false } }
-		}
-
-		return $null
-	}
-
 	if (Get-Command Clear-WindowCache -ErrorAction SilentlyContinue) { Clear-WindowCache }
 	$liveWindows = @(Get-WindowHandle -ErrorAction SilentlyContinue)
 
@@ -399,7 +365,9 @@ function Close-Workspace {
 			# fallback after it, so a terminal window can never be silently left behind.
 			if ([string]$record.ProcessName -eq 'WindowsTerminal') { continue }
 
-			$resolved = & $resolveTrackedWindow $record $liveWindows
+			# Reports HOW the record was matched as well as what it matched, because that decides
+			# whether the survivor guard above applies: an exact handle match needs none.
+			$resolved = Resolve-TrackedWorkspaceWindow -Record $record -LiveWindows $liveWindows
 
 			if (-not $resolved) {
 				$alreadyGoneCount++

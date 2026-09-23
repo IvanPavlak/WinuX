@@ -132,20 +132,11 @@ AfterAll {
 }
 
 Describe "Open-Workspace" {
-	BeforeEach {
-		$script:invokedActions = @()
-		$script:terminateCalls = @()
-		$script:browserCalls = @()
-		$script:swaggerCalls = @()
-		$script:setLayoutCalls = @()
-		$script:prepareLayoutCalls = @()
-		$script:openTerminalCalls = @()
-
-		$script:resolveSelectionCalls = @()
-		$script:workspaceStateCalls = @()
-		$script:benchmarkCalls = @()
-		$script:rerunCommandCalls = @()
-		$script:envDuringOpen = $null
+	# The baseline mocks are created ONCE for the whole Describe instead of before every test:
+	# they only return constants or append to the $script: call lists, which BeforeEach still
+	# resets per test. A test that needs different behavior re-mocks in its own scope (which
+	# wins), and Should -Invoke still counts calls per It.
+	BeforeAll {
 		Mock Set-WorkspaceRerunCommand {
 			$script:rerunCommandCalls += [PSCustomObject]@{ Command = $Command; Clear = [bool]$Clear }
 		}
@@ -258,6 +249,22 @@ Describe "Open-Workspace" {
 		Mock Test-ActionTwo { param($Beta) $script:invokedActions += [PSCustomObject]@{ Name = 'Test-ActionTwo'; Beta = $Beta } }
 		Mock Test-ShellAwareAction { param($Alpha, [switch]$InSameShell) $script:invokedActions += [PSCustomObject]@{ Name = 'Test-ShellAwareAction'; Alpha = $Alpha; InSameShell = [bool]$InSameShell } }
 		Mock Test-ThrowingAction { throw 'intentional action failure' }
+	}
+
+	BeforeEach {
+		$script:invokedActions = @()
+		$script:terminateCalls = @()
+		$script:browserCalls = @()
+		$script:swaggerCalls = @()
+		$script:setLayoutCalls = @()
+		$script:prepareLayoutCalls = @()
+		$script:openTerminalCalls = @()
+
+		$script:resolveSelectionCalls = @()
+		$script:workspaceStateCalls = @()
+		$script:benchmarkCalls = @()
+		$script:rerunCommandCalls = @()
+		$script:envDuringOpen = $null
 
 		$global:Configuration = @{
 			DefaultWorkspace           = ''

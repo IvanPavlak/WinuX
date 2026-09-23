@@ -157,20 +157,27 @@ Describe "Wait-ForWorkspaceWindows" {
 		BeforeEach {
 			$script:appWindow = [PSCustomObject]@{ Handle = [IntPtr]100; Title = 'App Main Window'; ProcessName = 'App'; Left = 10; Top = 10; Width = 800; Height = 600 }
 			$script:slowWindow = [PSCustomObject]@{ Handle = [IntPtr]200; Title = 'Slow Main Window'; ProcessName = 'Slow'; Left = 20; Top = 20; Width = 800; Height = 600 }
-			$script:clock = [System.Diagnostics.Stopwatch]::StartNew()
-			# The slow window appears after this many milliseconds; $null means right away.
-			$script:slowAppearsAfterMs = 400
-			# When set, the App window disappears from enumeration after this many milliseconds.
-			$script:appVanishesAfterMs = $null
+			# Ordering is driven by the hand-over itself, never by the wall clock: a millisecond
+			# deadline races the first poll under a loaded parallel suite run, and a first poll
+			# landing after it completes every desktop at once. By default the slow window
+			# appears only after a desktop has been handed over; $true makes it appear right away.
+			$script:slowAppearsImmediately = $false
+			# Slow polls answered empty after the hand-over before the slow window appears.
+			$script:slowPollsAfterHandover = 0
+			# When set, the App window disappears from enumeration once it has been handed over.
+			$script:appVanishesAfterHandover = $false
 
 			Mock Get-WindowHandle {
+				$handedOver = @($script:readyFired).Count -gt 0
 				if ($ProcessName -eq 'App') {
-					if ($null -ne $script:appVanishesAfterMs -and $script:clock.ElapsedMilliseconds -gt $script:appVanishesAfterMs) { return @() }
+					if ($script:appVanishesAfterHandover -and $handedOver) { return @() }
 					return @($script:appWindow)
 				}
 				if ($ProcessName -eq 'Slow') {
-					if ($null -eq $script:slowAppearsAfterMs -or $script:clock.ElapsedMilliseconds -gt $script:slowAppearsAfterMs) { return @($script:slowWindow) }
-					return @()
+					if ($script:slowAppearsImmediately) { return @($script:slowWindow) }
+					if (-not $handedOver) { return @() }
+					if ($script:slowPollsAfterHandover -gt 0) { $script:slowPollsAfterHandover--; return @() }
+					return @($script:slowWindow)
 				}
 				@()
 			}
@@ -204,7 +211,7 @@ Describe "Wait-ForWorkspaceWindows" {
 		}
 
 		It "does not fire when every desktop completes in the same poll" {
-			$script:slowAppearsAfterMs = $null
+			$script:slowAppearsImmediately = $true
 
 			$result = Wait-ForWorkspaceWindows -LayoutConfig $script:layout -TimeoutSeconds 10 -MinimumStableDurationSeconds 0 -PollIntervalSeconds 0.05 -OnDesktopReady $script:onDesktopReady
 
@@ -216,14 +223,15 @@ Describe "Wait-ForWorkspaceWindows" {
 		It "treats a handed-over entry as ready for the rest of the wait, whatever its window does next" {
 			# The caller moves and snaps the handed-over window, so it may look changed or even be
 			# gone from a later enumeration; the wait must complete on the OTHER desktop alone.
-			$script:appVanishesAfterMs = 150
-			$script:slowAppearsAfterMs = 600
+			# Several polls see App gone and Slow still missing before Slow completes the wait.
+			$script:appVanishesAfterHandover = $true
+			$script:slowPollsAfterHandover = 3
 
 			$result = Wait-ForWorkspaceWindows -LayoutConfig $script:layout -TimeoutSeconds 3 -MinimumStableDurationSeconds 0 -PollIntervalSeconds 0.05 -OnDesktopReady $script:onDesktopReady
 
+			# Success means the wait completed before its timeout - it did not stall on App.
 			$result.Success | Should -BeTrue
 			$script:readyFired.Count | Should -Be 1
-			$script:clock.Elapsed.TotalSeconds | Should -BeLessThan 2.5
 		}
 
 		It "lets an abandoned entry on the desktop count as done for the desktop's readiness" {
@@ -232,8 +240,6 @@ Describe "Wait-ForWorkspaceWindows" {
 				@{ ProcessName = 'Ghost'; DesktopNumber = 1 }
 				@{ ProcessName = 'Slow'; DesktopNumber = 2 }
 			)
-			$script:slowAppearsAfterMs = 1800
-
 			$result = Wait-ForWorkspaceWindows -LayoutConfig $script:layout -TimeoutSeconds 6 -MinimumStableDurationSeconds 0 -PollIntervalSeconds 0.05 -ProcessAbsentGraceSeconds 1 -OnDesktopReady $script:onDesktopReady
 
 			# Ghost is abandoned after the grace period; desktop 1 is then ready with App alone.
@@ -381,11 +387,10 @@ Describe "Wait-ForWorkspaceWindows" {
 			# Desktop 5: a titled browser entry stable on a browser window whose title does not
 			# match it yet. Desktop 1: the Code entry. The Slow entry keeps the wait going.
 			$script:browserWindows = @([PSCustomObject]@{ Handle = [IntPtr]301; Title = 'Problem loading page - Mozilla Firefox'; ProcessName = 'firefox'; Left = 0; Top = 0; Width = 800; Height = 600 })
-			$script:clock = [System.Diagnostics.Stopwatch]::StartNew()
 			Mock Get-WindowHandle {
 				if ($ProcessName -match 'firefox') { return @(@($script:codeWindow) + @($script:browserWindows)) }
 				if ($ProcessName -eq 'Code') { return @($script:codeWindow) }
-				if ($ProcessName -eq 'Slow' -and $script:clock.ElapsedMilliseconds -gt 600) { return @([PSCustomObject]@{ Handle = [IntPtr]302; Title = 'Slow'; ProcessName = 'Slow'; Left = 0; Top = 0; Width = 800; Height = 600 }) }
+				if ($ProcessName -eq 'Slow' -and @($script:readyFired).Count -gt 0) { return @([PSCustomObject]@{ Handle = [IntPtr]302; Title = 'Slow'; ProcessName = 'Slow'; Left = 0; Top = 0; Width = 800; Height = 600 }) }
 				@()
 			}
 			Mock Get-Process { @([PSCustomObject]@{ ProcessName = 'firefox' }, [PSCustomObject]@{ ProcessName = 'Code' }, [PSCustomObject]@{ ProcessName = 'Slow' }) }
@@ -406,10 +411,9 @@ Describe "Wait-ForWorkspaceWindows" {
 
 		It "hands the desktop over once the titled entry's window carries the title" {
 			$script:browserWindows = @([PSCustomObject]@{ Handle = [IntPtr]301; Title = 'futurama - Slack - Mozilla Firefox'; ProcessName = 'firefox'; Left = 0; Top = 0; Width = 800; Height = 600 })
-			$script:clock = [System.Diagnostics.Stopwatch]::StartNew()
 			Mock Get-WindowHandle {
 				if ($ProcessName -match 'firefox') { return @(@($script:codeWindow) + @($script:browserWindows)) }
-				if ($ProcessName -eq 'Slow' -and $script:clock.ElapsedMilliseconds -gt 600) { return @([PSCustomObject]@{ Handle = [IntPtr]302; Title = 'Slow'; ProcessName = 'Slow'; Left = 0; Top = 0; Width = 800; Height = 600 }) }
+				if ($ProcessName -eq 'Slow' -and @($script:readyFired).Count -gt 0) { return @([PSCustomObject]@{ Handle = [IntPtr]302; Title = 'Slow'; ProcessName = 'Slow'; Left = 0; Top = 0; Width = 800; Height = 600 }) }
 				@()
 			}
 			Mock Get-Process { @([PSCustomObject]@{ ProcessName = 'firefox' }, [PSCustomObject]@{ ProcessName = 'Slow' }) }

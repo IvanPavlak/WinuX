@@ -26,12 +26,15 @@ function Get-WorkspaceOpenProtection {
 		hide its windows from every "already open" check, launch duplicates of all of them, and
 		carry a tracker entry forward that now describes windows the plain session owns.
 
-		Records are resolved with the same ladder Close-Workspace uses: exact handle first, then
-		same ProcessId + ProcessName (Electron applications recreate their window without
-		restarting), then same ProcessName + exact Title (the application restarted outright).
-		The third step shares Close-Workspace's accepted false-positive risk: two workspaces can
-		have identically titled windows of the same process, and a re-resolution by title may
-		claim the wrong one. A live recorded handle needs no such guard and cannot be wrong.
+		Records are resolved with Resolve-TrackedWorkspaceWindow, the ladder Close-Workspace uses:
+		exact handle first, then same ProcessId + ProcessName when that process has exactly one
+		live window (Electron applications recreate their window without restarting), then same
+		ProcessName + exact Title (the application restarted outright). Windows Terminal records
+		resolve by handle only - every terminal window shares one process and a generic title, so
+		a dead terminal record re-resolved by process or title would protect the plain session's
+		own terminal and leave it unplaced. The title step shares Close-Workspace's accepted
+		false-positive risk: two workspaces can have identically titled windows of the same
+		process. A live recorded handle needs no such guard and cannot be wrong.
 
 		The common case - no alongside workspace open - pays one tracker file parse and nothing
 		else: the function short-circuits to $null before any window enumeration.
@@ -91,38 +94,6 @@ function Get-WorkspaceOpenProtection {
 	if (Get-Command Clear-WindowCache -ErrorAction SilentlyContinue) { Clear-WindowCache }
 	$liveWindows = @(Get-WindowHandle -ErrorAction SilentlyContinue)
 
-	# Close-Workspace's resolution ladder, applied to the records of a workspace that must
-	# SURVIVE this open instead of one being torn down. Step 3 (same process name + exact
-	# title) carries the same accepted false-positive risk as there: two workspaces routinely
-	# hold identically titled windows, so a title re-resolution can claim the plain session's
-	# own window. A live recorded handle is unambiguous and taken as-is.
-	$resolveTrackedWindow = {
-		param($Record, $LiveWindows)
-
-		$recordedHandle = [int64]$Record.Handle
-
-		$byHandle = @($LiveWindows | Where-Object { [int64]$_.Handle -eq $recordedHandle })[0]
-		if ($byHandle) { return $byHandle }
-
-		if ([string]::IsNullOrWhiteSpace($Record.ProcessName)) { return $null }
-
-		if ([int64]$Record.ProcessId -gt 0) {
-			$byProcess = @($LiveWindows | Where-Object {
-					[int64]$_.ProcessId -eq [int64]$Record.ProcessId -and [string]$_.ProcessName -eq [string]$Record.ProcessName
-				})[0]
-			if ($byProcess) { return $byProcess }
-		}
-
-		if (-not [string]::IsNullOrWhiteSpace($Record.Title)) {
-			$byTitle = @($LiveWindows | Where-Object {
-					[string]$_.ProcessName -eq [string]$Record.ProcessName -and [string]$_.Title -eq [string]$Record.Title
-				})[0]
-			if ($byTitle) { return $byTitle }
-		}
-
-		return $null
-	}
-
 	$preservedEntries = [System.Collections.Generic.List[object]]::new()
 	# IntPtr is the currency every consumer compares in (Get-WindowHandle returns IntPtr
 	# handles); tracker records hold int64 and are cast per resolution below.
@@ -134,9 +105,12 @@ function Get-WorkspaceOpenProtection {
 		foreach ($record in @($entry.Windows)) {
 			if (-not $record) { continue }
 
-			$resolvedWindow = & $resolveTrackedWindow $record $liveWindows
-			if ($resolvedWindow) {
-				$resolvedHandles.Add([IntPtr][int64]$resolvedWindow.Handle)
+			# Close-Workspace's resolution ladder, applied to the records of a workspace that
+			# must SURVIVE this open. A stale record re-resolved onto the wrong window would hide
+			# that window from the plain layout for the whole open.
+			$resolved = Resolve-TrackedWorkspaceWindow -Record $record -LiveWindows $liveWindows
+			if ($resolved) {
+				$resolvedHandles.Add([IntPtr][int64]$resolved.Window.Handle)
 			}
 		}
 

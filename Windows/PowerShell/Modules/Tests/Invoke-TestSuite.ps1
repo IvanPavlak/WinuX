@@ -36,7 +36,7 @@
 	sweeps the fork-owned Custom area (Modules\Custom\<Module>\Tests) when no -Path is given.
 
 .PARAMETER Workers
-	Number of parallel worker processes. 0 (default) picks min(CPU count, 8, file count).
+	Number of parallel worker processes. 0 (default) picks min(CPU count, 12, file count).
 
 .PARAMETER Detailed
 	Echo the whole run log - including every worker transcript - to the console after the run.
@@ -228,6 +228,15 @@ if ($PSCmdlet.ParameterSetName -eq 'Worker') {
 		}
 		if (-not (Get-Command -Name 'Get-RepositoryPath' -ErrorAction SilentlyContinue)) {
 			throw "session bootstrap failed - Get-RepositoryPath is missing after importing $($script:BootstrapModules -join ', ')."
+		}
+
+		# Build the logging state NOW, while the configuration above still says file logging is
+		# off. Left to the first Write-Log call, it was built from whatever configuration the test
+		# making that call had swapped in - usually one with no Logging section, where file logging
+		# defaults to on - and the worker then paid a session-log append per line for the rest of
+		# its bucket.
+		if (Get-Command -Name 'Initialize-LoggingState' -ErrorAction SilentlyContinue) {
+			Initialize-LoggingState -Force | Out-Null
 		}
 
 		try {
@@ -463,7 +472,7 @@ $weighted = @($weighted)
 
 $workerCount = $Workers
 if ($workerCount -le 0) {
-	$workerCount = [Math]::Min([Environment]::ProcessorCount, 8)
+	$workerCount = [Math]::Min([Environment]::ProcessorCount, 12)
 }
 $workerCount = [Math]::Max(1, [Math]::Min($workerCount, $testFiles.Count))
 
