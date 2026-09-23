@@ -8,6 +8,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.78] - 2026-09-23
+
+### Fixed
+
+- **A workspace open no longer hangs on the Obsidian workspace load.** `Invoke-ObsidianCli` waited for `Obsidian.com` with no limit, so a load that Obsidian never answered stopped the whole flow before the window layout (observed: a workspace open stuck for 13.5 minutes after `Firefox opened!`). Every CLI call now has a timeout (`-TimeoutSeconds`, default 5 s). Every answer from a running Obsidian arrived in under 1 s in QA. A call that runs past the timeout is killed with its process tree and answered with a `CLI call timed out` line. `Invoke-ObsidianWorkspaceLoad` passes its own `-TimeoutSeconds` through. After a timeout it reads the workspace list once (2 s budget) and counts `Name (active)` as loaded; otherwise it reports the timeout and the open carries on. Obsidian still applies a load it has received once it catches up. `Wait-ObsidianCli` treats a timed-out or failed probe as "not yet" and never lets one probe run past its deadline. Reproduced by suspending Obsidian mid-load: the call now returns in about 7.4 s with a warning, where it used to hang with no end.
+
+- **Two CLI answers are no longer reported as a loaded workspace.** `workspace:load` for a name the vault does not have answers `Error: Workspace "Name" not found.` with exit code 0. That answer, and a call that returned nothing at all, both passed as success because only the three known refusal lines were checked. Both are now refusals with their own fix text. The fix for a timeout or for "unable to find Obsidian" no longer points at `Enable-ObsidianCli`.
+
+Tests: `Invoke-ObsidianCli.Tests.ps1` (a call past the timeout is killed and answered with the timed-out line; a call within it is returned untouched), `Invoke-ObsidianWorkspaceLoad.Tests.ps1` (unknown name, no answer, timeout handed through, timeout confirmed or reported through the workspace list), `Wait-ObsidianCli.Tests.ps1` (a timed-out probe keeps the poll going) and `Open-Obsidian.Tests.ps1` (an empty answer claims nothing). Documented in `docs/modules/application.md` and `docs/reference/troubleshooting.md`.
+
 ## [0.1.77] - 2026-09-23
 
 ### Changed
