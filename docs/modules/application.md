@@ -285,8 +285,8 @@ Invoke-Browser
 
 ## [Invoke-ObsidianCli](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Invoke-ObsidianCli.ps1)
 
-- **Description:** Runs one Obsidian CLI command and returns its output lines (stdout then stderr, blank lines dropped). `Obsidian.com` writes its chatter (argument echo, callback URL, update check) straight to the console it is attached to, past any stream redirection, so the command runs in a hidden console of its own with both streams redirected to temporary files that are read back and removed. A launch failure is returned as a single `CLI call failed: ...` line rather than thrown.
-- **Parameters:** -CliPath, -Arguments
+- **Description:** Runs one Obsidian CLI command and returns its output lines (stdout then stderr, blank lines dropped). `Obsidian.com` writes its chatter (argument echo, callback URL, update check) straight to the console it is attached to, past any stream redirection, so the command runs in a hidden console of its own with both streams redirected to temporary files that are read back and removed. A launch failure is returned as a single `CLI call failed: ...` line rather than thrown. A call that has not exited within `-TimeoutSeconds` (default 5) is killed together with its process tree and answered with a leading `CLI call timed out after N s` line, so a CLI that never hears back from Obsidian can no longer stall the caller (and a whole workspace open) indefinitely. A healthy call is never delayed by the timeout.
+- **Parameters:** -CliPath, -Arguments, -TimeoutSeconds
 - **Usage:** `Invoke-ObsidianCli -CliPath (Get-ObsidianCliPath) -Arguments @("vault=Obsidian", "workspaces")`
 
 The one place every CLI call from `Open-Obsidian` and `Wait-ObsidianCli` goes through, and the seam the tests mock. Arguments follow the CLI's own `parameter=value` shape; put `vault=<name>` first.
@@ -304,10 +304,10 @@ Invoke-ObsidianCli -CliPath (Get-ObsidianCliPath) -Arguments @("vault=Obsidian",
 ## [Invoke-ObsidianWorkspaceLoad](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Invoke-ObsidianWorkspaceLoad.ps1)
 
 - **Description:** Loads a saved Obsidian workspace through the CLI and reports a refusal instead of claiming success. Returns an object: `Loaded` (`$true` when the CLI accepted the load), `Refusal` (the CLI line that refused it, else `$null`) and `Message` (the warning text for that refusal, fix included), so a caller can tell a transient "not yet up" from a permanent "not enabled".
-- **Parameters:** -CliPath, -Vault, -Name, -Silent
+- **Parameters:** -CliPath, -Vault, -Name, -Silent, -TimeoutSeconds
 - **Usage:** `if ((Invoke-ObsidianWorkspaceLoad -CliPath (Get-ObsidianCliPath) -Vault Obsidian -Name Server).Loaded) { "loaded" }`
 
-The one checked `workspace:load` call, shared by `Open-Obsidian`'s immediate path and by [Complete-ObsidianWorkspaceLoad](#complete-obsidianworkspaceload) when the load was deferred. The CLI answers some requests instead of doing the work - the per-machine toggle being off (`Command line interface is not enabled`), Obsidian gone between the readiness poll and the load (`The CLI is unable to find Obsidian`), and the `CLI call failed` line [Invoke-ObsidianCli](#invoke-obsidiancli) synthesises for a launch failure - and all three are reported as `Obsidian workspace [Name] not loaded => <the CLI's line>` together with the fix, never as a success.
+The one checked `workspace:load` call, shared by `Open-Obsidian`'s immediate path and by [Complete-ObsidianWorkspaceLoad](#complete-obsidianworkspaceload) when the load was deferred. The CLI answers some requests instead of doing the work - the per-machine toggle being off (`Command line interface is not enabled`), Obsidian gone between the readiness poll and the load (`The CLI is unable to find Obsidian`), and the `CLI call failed` line [Invoke-ObsidianCli](#invoke-obsidiancli) synthesises for a launch failure - and all three are reported as `Obsidian workspace [Name] not loaded => <the CLI's line>` together with the fix, never as a success. The same holds for a name the vault does not have (`Error: Workspace "Name" not found.`, which the CLI answers with exit code 0), for a call that gave no answer at all, and for a call that timed out (`-TimeoutSeconds`, default 5). A timed-out load is double-checked first: the vault's workspace list (`workspaces`) is read once (2 s budget), and when it marks `Name (active)` the load counts as landed.
 
 | Parameter  | Description                                    |
 | ---------- | ---------------------------------------------- |
@@ -971,7 +971,7 @@ Wait-BrowserWindowReady -ProcessName "msedge" -TitlePattern "Microsoft.{0,2}Edge
 
 ## [Wait-ObsidianCli](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Wait-ObsidianCli.ps1)
 
-- **Description:** Polls the Obsidian CLI (`obsidian vault=<Vault> workspaces`) until it reaches the running vault or the timeout elapses. While Obsidian is still starting the CLI answers `The CLI is unable to find Obsidian`; the first answer without that line means commands will be executed. Returns `$true` or `$false`.
+- **Description:** Polls the Obsidian CLI (`obsidian vault=<Vault> workspaces`) until it reaches the running vault or the timeout elapses. While Obsidian is still starting the CLI answers `The CLI is unable to find Obsidian`; the first answer without that line means commands will be executed. A probe that timed out or failed to launch counts as "not yet", and no single probe waits past the overall deadline. Returns `$true` or `$false`.
 - **Parameters:** -CliPath, -Vault, -TimeoutSeconds, -PollMilliseconds
 - **Usage:** `Wait-ObsidianCli -CliPath (Get-ObsidianCliPath) -Vault Obsidian -TimeoutSeconds 10`
 

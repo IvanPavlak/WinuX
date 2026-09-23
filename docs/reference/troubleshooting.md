@@ -246,6 +246,18 @@ Get-CimInstance Win32_Process -Filter "Name = 'WhatsApp.Root.exe'" | Select-Obje
 
 The same `-RequireMainWindow` switch applies to any app that keeps a windowless helper alive under its own process name.
 
+### Workspace Open Stops After The Last Opener, Waiting On The Obsidian Workspace Load
+
+**Problem:** A workspace with `Open-Obsidian` prints every opener's line (the last one is often `Firefox opened!`) and then sits there. The window layout never starts. The session log's last line is `[Invoke-ObsidianCli] ... obsidian vault=<Vault> workspace:load name=<Name>`, and an `Obsidian.com ... workspace:load` process is still running.
+
+**Why it happens:** The deferred workspace load is one `Obsidian.com` call, and the CLI waits for the running Obsidian to answer. Obsidian normally answers within 0.1 - 1 s, or within a few seconds while it is still booting during a busy workspace open. Very rarely it never answers.
+
+**Solution:** This is handled. Every CLI call has a timeout (`Invoke-ObsidianCli -TimeoutSeconds`, default 5 s - a running Obsidian answers in under 1 s). After that the call is killed, the vault's workspace list is checked in case the load landed anyway, and otherwise `Obsidian workspace [Name] not loaded => CLI call timed out ...` is reported and the workspace open carries on. Obsidian usually still applies a load it has received once it catches up; if it does not, run `Open-Obsidian -Workspace <Name>`. On an older checkout, stopping the stuck process unblocks the open:
+
+```powershell
+Get-CimInstance Win32_Process -Filter "Name = 'Obsidian.com'" | ForEach-Object { Stop-Process -Id $_.ProcessId }
+```
+
 ## Window Layout Issues
 
 ### Windows Not Positioning

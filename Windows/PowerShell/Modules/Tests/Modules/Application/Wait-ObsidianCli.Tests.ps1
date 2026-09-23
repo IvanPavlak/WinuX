@@ -26,6 +26,17 @@ Describe "Wait-ObsidianCli" {
 		$script:cliCalls | ForEach-Object { $_ | Should -Be @('vault=Obsidian', 'workspaces') }
 	}
 
+	It "keeps polling past a probe that timed out instead of taking it as ready" {
+		$script:answers = [System.Collections.Generic.Queue[object]]::new()
+		$script:answers.Enqueue(@('CLI call timed out after 1 s'))
+		$script:answers.Enqueue(@('Empty (active)', 'Server'))
+		Mock Invoke-ObsidianCli { $script:cliCalls += , @($Arguments); $script:answers.Dequeue() }
+
+		Wait-ObsidianCli -CliPath 'C:\Apps\Obsidian\Obsidian.com' -Vault 'Obsidian' -TimeoutSeconds 5 -PollMilliseconds 1 | Should -BeTrue
+
+		$script:cliCalls.Count | Should -Be 2
+	}
+
 	It "probes the vault it was given" {
 		Mock Invoke-ObsidianCli { $script:cliCalls += , @($Arguments); @('Empty (active)') }
 

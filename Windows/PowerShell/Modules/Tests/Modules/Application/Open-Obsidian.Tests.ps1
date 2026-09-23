@@ -47,7 +47,7 @@ Describe "Open-Obsidian" {
 		$script:cliCalls = @()
 		$script:obsidianRunning = $false
 
-		$script:cliAnswer = @()
+		$script:cliAnswer = @('Loaded workspace: Server')
 		# Registry state: a tail queued by one test must never run in the next.
 		$script:DeferredActions = $null
 
@@ -183,12 +183,21 @@ Describe "Open-Obsidian" {
 		}
 
 		It "claims the workspace only when the CLI answered the load cleanly" {
-			$script:cliAnswer = @()
+			$script:cliAnswer = @('Loaded workspace: Server')
 
 			Open-Obsidian -Workspace Server
 
 			Should -Invoke Write-LogWarning -Times 0
 			Should -Invoke Write-LogSuccess -Times 1 -Exactly -ParameterFilter { $Message -like '*opened in workspace [[]Server[]]*' }
+		}
+
+		It "does not claim the workspace when the CLI gave no answer" {
+			$script:cliAnswer = @()
+
+			Open-Obsidian -Workspace Server
+
+			Should -Invoke Write-LogWarning -Times 1 -Exactly -ParameterFilter { $Message -like '*[[]Server[]] not loaded*' }
+			Should -Invoke Write-LogSuccess -Times 0 -ParameterFilter { $Message -like '*opened in workspace*' }
 		}
 
 		It "offers the saved workspaces as a menu on a bare call, like the other openers" {

@@ -9,7 +9,7 @@ BeforeAll {
 Describe "Invoke-ObsidianWorkspaceLoad" {
 	BeforeEach {
 		$script:cliCalls = @()
-		$script:cliAnswer = @()
+		$script:cliAnswer = @('Loaded workspace: Server')
 		Mock Invoke-ObsidianCli { $script:cliCalls += , @($Arguments); $script:cliAnswer }
 		Mock Write-LogWarning { }
 	}
@@ -85,6 +85,61 @@ Describe "Invoke-ObsidianWorkspaceLoad" {
 		$result.Loaded | Should -BeFalse
 		$result.Message | Should -Match 'not loaded'
 		Should -Invoke Write-LogWarning -Times 0
+	}
+
+	It "refuses a workspace name the vault does not have, although the CLI exits cleanly" {
+		$script:cliAnswer = @('Error: Workspace "Nope" not found.')
+
+		$result = Invoke-ObsidianWorkspaceLoad -CliPath 'C:\Obsidian.com' -Vault 'V' -Name 'Nope'
+
+		$result.Loaded | Should -BeFalse
+		$result.Refusal | Should -Match 'not found'
+		$result.Message | Should -Not -Match 'Enable-ObsidianCli'
+	}
+
+	It "does not claim a load the CLI never answered" {
+		$script:cliAnswer = @()
+
+		$result = Invoke-ObsidianWorkspaceLoad -CliPath 'C:\Obsidian.com' -Vault 'V' -Name 'Server'
+
+		$result.Loaded | Should -BeFalse
+		Should -Invoke Write-LogWarning -Times 1 -Exactly
+	}
+
+	It "hands its timeout to the load call" {
+		Invoke-ObsidianWorkspaceLoad -CliPath 'C:\Obsidian.com' -Vault 'V' -Name 'Server' -TimeoutSeconds 7 | Out-Null
+
+		Should -Invoke Invoke-ObsidianCli -Times 1 -Exactly -ParameterFilter { $TimeoutSeconds -eq 7 }
+	}
+
+	Context "after the load call timed out" {
+		BeforeEach {
+			$script:activeList = @()
+			Mock Invoke-ObsidianCli {
+				$script:cliCalls += , @($Arguments)
+				if ($Arguments -contains 'workspaces') { $script:activeList } else { @('CLI call timed out after 20 s') }
+			}
+		}
+
+		It "counts the load as landed when the workspace list shows it active" {
+			$script:activeList = @('Empty', 'Server (active)', 'DSA')
+
+			$result = Invoke-ObsidianWorkspaceLoad -CliPath 'C:\Obsidian.com' -Vault 'V' -Name 'Server'
+
+			$result.Loaded | Should -BeTrue
+			$script:cliCalls[1] | Should -Be @('vault=V', 'workspaces')
+			Should -Invoke Write-LogWarning -Times 0
+		}
+
+		It "reports the timeout when another workspace is still active" {
+			$script:activeList = @('Empty (active)', 'Server')
+
+			$result = Invoke-ObsidianWorkspaceLoad -CliPath 'C:\Obsidian.com' -Vault 'V' -Name 'Server'
+
+			$result.Loaded | Should -BeFalse
+			$result.Refusal | Should -Match 'timed out'
+			Should -Invoke Write-LogWarning -Times 1 -Exactly -ParameterFilter { $Message -like '*Open-Obsidian -Workspace Server*' }
+		}
 	}
 
 	It "reads the refusal out of any line of a multi-line answer" {
