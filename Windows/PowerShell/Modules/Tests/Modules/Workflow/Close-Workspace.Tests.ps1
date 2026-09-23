@@ -77,23 +77,11 @@ BeforeAll {
 }
 
 Describe "Close-Workspace" {
-	BeforeEach {
-		$script:postedWindows = @()
-		$script:closedTabs = @()
-
-		# Windows Terminal is modelled rather than stubbed flat: a tab leaves the strip when it is
-		# closed, and the window itself disappears with its last tab. Close-Workspace relies on
-		# both, so a stub that never changed would let a regression pass.
-		$script:liveTabTitles = @('pwsh', 'Server.Api', 'Server.Ui')
-		$script:liveTerminalWindows = @((New-TestWindow -Handle 407 -ProcessId 44 -ProcessName 'WindowsTerminal' -Title 'Server.Api'))
-		$script:tabsUnreadable = $false
-
-		# Windows Terminal only composes its tab strip while its virtual desktop is on screen, so
-		# "unreadable until the desktop is made visible" is a first-class state here.
-		$script:tabsNeedDesktop = $false
-		$script:desktopVisible = $false
-		$script:desktopSwitches = @()
-
+	# The baseline mocks are created ONCE for the whole Describe instead of before every test:
+	# they only return constants or read and write the $script: state BeforeEach still resets per
+	# test. A test that needs different behavior re-mocks in its own scope (which wins), and
+	# Should -Invoke still counts calls per It.
+	BeforeAll {
 		Mock Write-Host { }
 		Mock Write-LogTitle { }
 		Mock Write-LogStep { }
@@ -131,11 +119,6 @@ Describe "Close-Workspace" {
 			$true
 		}
 		Mock Resolve-HostingTerminalTab { $null }
-		# -1 everywhere by default: no window has a known desktop, so the desktop-membership claim and
-		# the desktop removal both no-op and every test that is not about them is unaffected. String
-		# keys on purpose - a hashtable with Int32 keys never matches an Int64 lookup in .NET.
-		$script:desktopOfHandle = @{}
-		$script:removedDesktopIndexes = @()
 		Mock Get-WindowDesktopIndex {
 			param([IntPtr]$WindowHandle)
 			$known = $script:desktopOfHandle["$([int64]$WindowHandle)"]
@@ -169,6 +152,30 @@ Describe "Close-Workspace" {
 				(New-TestWindow -Handle 305 -ProcessId 33 -ProcessName 'Obsidian' -Title 'Vault - Obsidian')
 			) + @($script:liveTerminalWindows)
 		}
+	}
+
+	BeforeEach {
+		$script:postedWindows = @()
+		$script:closedTabs = @()
+
+		# Windows Terminal is modelled rather than stubbed flat: a tab leaves the strip when it is
+		# closed, and the window itself disappears with its last tab. Close-Workspace relies on
+		# both, so a stub that never changed would let a regression pass.
+		$script:liveTabTitles = @('pwsh', 'Server.Api', 'Server.Ui')
+		$script:liveTerminalWindows = @((New-TestWindow -Handle 407 -ProcessId 44 -ProcessName 'WindowsTerminal' -Title 'Server.Api'))
+		$script:tabsUnreadable = $false
+
+		# Windows Terminal only composes its tab strip while its virtual desktop is on screen, so
+		# "unreadable until the desktop is made visible" is a first-class state here.
+		$script:tabsNeedDesktop = $false
+		$script:desktopVisible = $false
+		$script:desktopSwitches = @()
+
+		# -1 everywhere by default: no window has a known desktop, so the desktop-membership claim and
+		# the desktop removal both no-op and every test that is not about them is unaffected. String
+		# keys on purpose - a hashtable with Int32 keys never matches an Int64 lookup in .NET.
+		$script:desktopOfHandle = @{}
+		$script:removedDesktopIndexes = @()
 
 		if (Test-Path $script:TestStateDir) { Remove-Item $script:TestStateDir -Recurse -Force }
 		New-Item -ItemType Directory -Path $script:TestStateDir -Force | Out-Null

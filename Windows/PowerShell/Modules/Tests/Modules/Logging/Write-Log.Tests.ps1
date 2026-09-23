@@ -1,6 +1,11 @@
 #Requires -Modules Pester
 
 BeforeAll {
+	# Put back exactly the logging state this file found. Deleting it instead made the next
+	# file's first Write-Log rebuild the state from whatever test configuration was current -
+	# file logging on by default - so the rest of the worker paid a call-stack walk and a
+	# session-log append per log line and wrote test output into the real Logs folder.
+	$script:SavedLoggingState = $global:LoggingState
 	$ModulePath = Join-Path (Get-RepositoryPath).Modules "Logging\Logging.psd1"
 	Import-Module $ModulePath -Force
 
@@ -23,7 +28,7 @@ BeforeAll {
 
 AfterAll {
 	$global:Configuration = $script:PrevConfig
-	Remove-Variable -Name LoggingState -Scope Global -ErrorAction SilentlyContinue
+	$global:LoggingState = $script:SavedLoggingState
 	Remove-Module Logging -Force -ErrorAction SilentlyContinue
 }
 

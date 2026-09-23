@@ -44,12 +44,10 @@ AfterAll {
 }
 
 Describe "Kill-All" {
-	BeforeEach {
-		# Fresh baseline with no KillAll section - built-in defaults apply unless a
-		# test opts a step out/in. Originals are restored in AfterAll.
-		$global:Configuration = @{}
-		$global:MachineType = "Test"
-
+	# The baseline mocks are created ONCE for the whole Describe instead of before every test:
+	# every one is a constant stub. A test that needs different behavior re-mocks in its own
+	# scope (which wins), and Should -Invoke still counts calls per It.
+	BeforeAll {
 		Mock Write-Host { }
 		Mock Write-LogWarning { }
 		Mock Remove-VirtualDesktops { }
@@ -63,6 +61,13 @@ Describe "Kill-All" {
 		Mock Focus-TerminalTab { }
 		Mock Save-WorkspaceState { }
 		Mock Report-KillAllSurvivors { @() }
+	}
+
+	BeforeEach {
+		# Fresh baseline with no KillAll section - built-in defaults apply unless a
+		# test opts a step out/in. Originals are restored in AfterAll.
+		$global:Configuration = @{}
+		$global:MachineType = "Test"
 	}
 
 	Context "Open-workspace tracker" {

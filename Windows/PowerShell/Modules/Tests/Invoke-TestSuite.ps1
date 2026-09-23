@@ -230,6 +230,15 @@ if ($PSCmdlet.ParameterSetName -eq 'Worker') {
 			throw "session bootstrap failed - Get-RepositoryPath is missing after importing $($script:BootstrapModules -join ', ')."
 		}
 
+		# Build the logging state NOW, while the configuration above still says file logging is
+		# off. Left to the first Write-Log call, it was built from whatever configuration the test
+		# making that call had swapped in - usually one with no Logging section, where file logging
+		# defaults to on - and the worker then paid a session-log append per line for the rest of
+		# its bucket.
+		if (Get-Command -Name 'Initialize-LoggingState' -ErrorAction SilentlyContinue) {
+			Initialize-LoggingState -Force | Out-Null
+		}
+
 		try {
 			# Pinned repo-wide: RequiredPesterVersion.txt is the single source of truth this
 			# harness, Install-PowerShellModules, and CI all read. -RequiredVersion (exact), not
