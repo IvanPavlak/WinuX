@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.79] - 2026-09-24
+
+### Fixed
+
+- **`Install-ChocolateyApps` installs `Latest` rows instead of silently failing them.** A `Version` of `latest` was passed as `--version=latest`, which choco rejects with `'latest' is not a valid version string`, and the output was discarded with `Out-Null`, so the app was never installed and nothing said so. `Latest` (any case) and an empty `Version` now add no `--version` pin, matching `Install-WinGetApps`. The argument list is built without the empty strings the old version passed for unset columns. Each install's exit code is now checked: 0 and the reboot-required codes 1641 and 3010 count as success, anything else is logged per app, and the run ends with a failure summary or a success line.
+
+Tests: `Install-ChocolateyApps.Tests.ps1` (a `latest` row gets no `--version` and no empty arguments; a pinned row passes its version). Documented in `docs/modules/application.md`.
+
 ## [0.1.78] - 2026-09-23
 
 ### Fixed

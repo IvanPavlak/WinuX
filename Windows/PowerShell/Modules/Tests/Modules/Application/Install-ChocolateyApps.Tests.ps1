@@ -42,4 +42,20 @@ paint,PC,,,
 
 		Should -Invoke choco -Times 2 -Exactly
 	}
+
+	It "passes no --version for Latest and no empty arguments" {
+		$csv = @'
+App,Version,Params,Force,Machine
+rustdesk,latest,,false,All
+git,2.45.0,,,All
+'@
+		Set-Content -Path (Join-Path $TestDrive 'choco.csv') -Value $csv
+
+		Install-ChocolateyApps
+
+		Should -Invoke choco -Times 1 -Exactly -ParameterFilter {
+			$args -contains 'rustdesk' -and -not ($args -match '^--version') -and -not ($args -contains '')
+		}
+		Should -Invoke choco -Times 1 -Exactly -ParameterFilter { $args -contains '--version=2.45.0' }
+	}
 }

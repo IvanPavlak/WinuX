@@ -25,6 +25,7 @@ function Install-ChocolateyApps {
 	# Import-AppCsv layers the machine-local ChocolateyApps.local.csv over the committed list, so a
 	# fork's own app choices apply without the tracked CSV ever being edited.
 	$chocoApps = @(Import-AppCsv -DataFileKey ChocolateyApps)
+	$failedApps = @()
 
 	foreach ($app in $chocoApps) {
 		if (-not (Test-MachineTypeScope -Scope "$($app.Machine)" -MachineType $MachineType -Context "ChocolateyApps.csv [$($app.App)]")) { continue }
@@ -32,10 +33,31 @@ function Install-ChocolateyApps {
 		$appName = $app.App
 		Write-LogTitle "$appName"
 
-		$params = if ($app.Params) { "--params=`"$($app.Params)`"" } else { "" }
-		$version = if ($app.Version) { "--version=$($app.Version)" } else { "" }
-		$force = if ($app.Force -eq "true") { "--force" } else { "" }
+		# Build the argument list without empty strings, and treat "Latest" (any case) as no pin:
+		# choco rejects --version=latest outright ("'latest' is not a valid version string").
+		$chocoArgs = @("install", $appName, "-y")
+		if ($app.Version -and $app.Version -ne "Latest") { $chocoArgs += "--version=$($app.Version)" }
+		if ($app.Params) { $chocoArgs += "--params=`"$($app.Params)`"" }
+		if ($app.Force -eq "true") { $chocoArgs += "--force" }
 
-		& choco install $appName $version $params $force -y | Out-Null
+		& choco @chocoArgs | Out-Null
+		$installExitCode = $LASTEXITCODE
+
+		# 1641 and 3010 are choco's "succeeded, reboot required" codes.
+		if ($installExitCode -notin 0, 1641, 3010) {
+			Write-LogError "Install FAILED for [$appName] (choco exit code => $installExitCode)"
+			$failedApps += [PSCustomObject]@{ App = $appName; ExitCode = $installExitCode }
+		}
+	}
+
+	if ($failedApps.Count -gt 0) {
+		Write-LogError "Chocolatey finished with [$($failedApps.Count)] failed install(s):"
+		foreach ($failure in $failedApps) {
+			Write-LogError "   $($failure.App) (exit code $($failure.ExitCode))" -NoLeadingNewline
+		}
+		Write-LogWarning "Re-run [Install-ChocolateyApps], or install manually => choco install <AppId> -y"
+	}
+	else {
+		Write-LogSuccess "All Chocolatey apps for [$MachineType] installed successfully!"
 	}
 }
