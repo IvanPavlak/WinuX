@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-## [0.1.79] - 2026-09-24
+## [0.1.78] - 2026-09-24
 
 ### Fixed
 
@@ -16,7 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 Tests: `Install-ChocolateyApps.Tests.ps1` (a `latest` row gets no `--version` and no empty arguments; a pinned row passes its version). Documented in `docs/modules/application.md`.
 
-## [0.1.78] - 2026-09-23
+## [0.1.77] - 2026-09-23
 
 ### Fixed
 
@@ -26,7 +26,7 @@ Tests: `Install-ChocolateyApps.Tests.ps1` (a `latest` row gets no `--version` an
 
 Tests: `Invoke-ObsidianCli.Tests.ps1` (a call past the timeout is killed and answered with the timed-out line; a call within it is returned untouched), `Invoke-ObsidianWorkspaceLoad.Tests.ps1` (unknown name, no answer, timeout handed through, timeout confirmed or reported through the workspace list), `Wait-ObsidianCli.Tests.ps1` (a timed-out probe keeps the poll going) and `Open-Obsidian.Tests.ps1` (an empty answer claims nothing). Documented in `docs/modules/application.md` and `docs/reference/troubleshooting.md`.
 
-## [0.1.77] - 2026-09-23
+## [0.1.76] - 2026-09-23
 
 ### Changed
 
@@ -44,7 +44,7 @@ Tests: `Invoke-ObsidianCli.Tests.ps1` (a call past the timeout is killed and ans
 - **The `Wait-ForWorkspaceWindows` hand-over tests no longer fail under a loaded full-suite run.** Four per-desktop readiness tests delayed their slow window by a fixed 400, 600 or 1800 ms and relied on the fast desktop being handed over first. When the parallel suite loaded the machine, the first poll could land after that deadline: every desktop then completed in the same poll, and the hand-over test timed out locally while passing alone and on CI. The slow window now appears only once a desktop has been handed over (optionally after a set number of empty polls), which fixes the order deterministically and drops the fixed delays. Test-only change: `Wait-ForWorkspaceWindows.Tests.ps1`.
 
 
-## [0.1.76] - 2026-09-21
+## [0.1.75] - 2026-09-21
 
 ### Added
 
@@ -1329,11 +1329,11 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.79...HEAD
-[0.1.79]: https://github.com/IvanPavlak/WinuX/compare/v0.1.78...v0.1.79
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.78...HEAD
 [0.1.78]: https://github.com/IvanPavlak/WinuX/compare/v0.1.77...v0.1.78
 [0.1.77]: https://github.com/IvanPavlak/WinuX/compare/v0.1.76...v0.1.77
-[0.1.76]: https://github.com/IvanPavlak/WinuX/compare/v0.1.74...v0.1.76
+[0.1.76]: https://github.com/IvanPavlak/WinuX/compare/v0.1.75...v0.1.76
+[0.1.75]: https://github.com/IvanPavlak/WinuX/compare/v0.1.74...v0.1.75
 [0.1.74]: https://github.com/IvanPavlak/WinuX/compare/v0.1.73...v0.1.74
 [0.1.73]: https://github.com/IvanPavlak/WinuX/compare/v0.1.72...v0.1.73
 [0.1.72]: https://github.com/IvanPavlak/WinuX/compare/v0.1.71...v0.1.72
