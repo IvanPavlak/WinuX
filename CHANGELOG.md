@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.79] - 2026-09-28
+
+### Fixed
+
+- **The `Install-Git` and `Install-WinGetPackageManager` tests no longer fail on CI runners.** The first `Install-Git` test ran the function's real session `PATH` refresh, which rebuilds `$env:Path` from the registry and drops entries that exist only in the process environment. On a runner whose registry `PATH` does not include winget's folder, `winget` could no longer be resolved, so every later `Mock winget` in the same worker failed with `Could not find Command winget` (three tests, depending on which worker the files landed in). Both files now define a `winget` stub before mocking it, and `Install-Git.Tests.ps1` restores `$env:Path` after every test. Test-only change.
+
 ## [0.1.78] - 2026-09-24
 
 ### Fixed
@@ -1329,7 +1335,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.78...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.79...HEAD
+[0.1.79]: https://github.com/IvanPavlak/WinuX/compare/v0.1.78...v0.1.79
 [0.1.78]: https://github.com/IvanPavlak/WinuX/compare/v0.1.77...v0.1.78
 [0.1.77]: https://github.com/IvanPavlak/WinuX/compare/v0.1.76...v0.1.77
 [0.1.76]: https://github.com/IvanPavlak/WinuX/compare/v0.1.75...v0.1.76

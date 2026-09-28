@@ -6,6 +6,9 @@ BeforeAll {
 
 	# Stub the PowerShell Gallery script command so it exists and can be mocked/asserted.
 	function winget-install { }
+
+	# Stub winget so it exists and can be mocked on machines (CI runners) that lack it.
+	function winget { }
 }
 
 Describe "Install-WinGetPackageManager" {
