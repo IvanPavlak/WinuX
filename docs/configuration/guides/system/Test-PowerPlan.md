@@ -57,8 +57,11 @@ Read-only checks. None of these change anything.
 Reload-PowerShellProfile
 $global:Configuration.LaptopChassisTypes
 Test-PowerPlan
+Get-ChassisType
 Get-CimInstance Win32_SystemEnclosure | Select-Object ChassisTypes
 ```
+
+The chassis type is read from the hardware once and cached at `%LOCALAPPDATA%\WinuX\ChassisTypes.txt` by [`Get-ChassisType`](Get-ChassisType.md); `Test-PowerPlan -Refresh` re-reads it, for example after the cache was copied from another machine.
 
 If a value reads back as empty, the two usual causes are a parse error in `Configuration.local.psd1` (run `Test-ConfigurationSchema`) and a key placed at the wrong nesting level.
 
@@ -76,6 +79,7 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 ## Related
 
 - [`Test-PowerPlan` in the System module reference](../../../modules/system.md#test-powerplan) - parameters, usage and behaviour
+- [`Get-ChassisType`](Get-ChassisType.md) - the cached chassis type this check reads
 - [System configuration guides](README.md) - every guide for this module
 - [Add Symbolic Link](add-symbolic-link.md) - link shapes, placeholders and the WSL cases
 - [WinuXConfigurator](../../winux-configurator.md) - have an AI assistant walk these decisions with you

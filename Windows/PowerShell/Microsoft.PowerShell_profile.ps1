@@ -1,17 +1,10 @@
 ﻿# | ------------------------------ < Minimal Bootstrap > ------------------------------ | #
 
-# Load configuration (passed to Load-PathConfiguration below to avoid a second parse)
+# The configuration file (parsed below, inside the Core stage, and passed to Load-PathConfiguration
+# to avoid a second parse)
 $ConfigFile = Join-Path $PSScriptRoot "Configuration.psd1"
 if (-not (Test-Path -Path $ConfigFile)) {
 	Write-Host -ForegroundColor Red "`n=> Configuration file not found: $ConfigFile"
-	return
-}
-
-try {
-	$global:Configuration = Import-PowerShellDataFile -Path $ConfigFile
-}
-catch {
-	Write-Host -ForegroundColor Red "`n=> Failed to load Configuration file => $_"
 	return
 }
 
@@ -35,6 +28,33 @@ $RepoRoot = $RepoPaths.Repo
 
 if (-not (Test-Path $ModulesPath)) {
 	Write-Host -ForegroundColor Red "`n=> Modules path not found [$ModulesPath]"
+	return
+}
+
+# Every startup stage below is wrapped in a guard pair so it can be timed and, for one shell start,
+# left out: `if (Test-StartupStage X) { ...; Complete-StartupStage }`. WINUX_STARTUP_SKIP names the
+# stages to skip (or All), WINUX_STARTUP_TRACE a file the per-stage times are appended to, and
+# $WinuXStartupTimings holds them for the running shell. Measure-ShellStartup drives both to build
+# the strip-everything-then-add-one-stage-at-a-time table. Dot-sourced like Get-RepositoryPath
+# because no module is imported yet. Core - the configuration parse and the imports everything else
+# reads - is Required: it runs whatever the skip list says, but is still timed.
+#
+# Get-ConfigSetting and Test-ConfigValue ride along for a different reason: they are the only two
+# Helper functions anything before the first prompt calls, and calling either through autoload would
+# import the whole Helper module (80+ files, measured at 330-500 ms) plus PowerShell's module
+# discovery on top. Dot-sourced, the shell reaches its prompt without importing Helper at all; the
+# first Helper command typed afterwards autoloads the module as before, and the module's copies
+# simply replace these.
+foreach ($stageFunction in "Test-StartupStage", "Complete-StartupStage", "Get-ConfigSetting", "Test-ConfigValue") {
+	. (Join-Path $ModulesPath "Helper\Functions\$stageFunction.ps1")
+}
+$null = Test-StartupStage -Name "Core" -Required
+
+try {
+	$global:Configuration = Import-PowerShellDataFile -Path $ConfigFile
+}
+catch {
+	Write-Host -ForegroundColor Red "`n=> Failed to load Configuration file => $_"
 	return
 }
 
@@ -67,11 +87,19 @@ if (-not (Load-PathConfiguration -RepoRoot $RepoRoot -Configuration $global:Conf
 	Write-Host -ForegroundColor Red "`n=> Failed to load path configuration!"
 	return
 }
+Complete-StartupStage
 
 # Validate the loaded configuration against the required-key schema (warning-only, so a degraded
 # config still starts the shell). -WarningAction Continue surfaces issues even though startup
-# warnings are muted during the Bootstrap import above.
-Test-ConfigurationSchema -WarningAction Continue
+# warnings are muted during the Bootstrap import above. Dot-sourced with its one helper so the
+# check does not autoload the Configuration module before the prompt.
+if (Test-StartupStage -Name "Schema") {
+	foreach ($schemaFunction in "Test-ConfigurationKeyPath", "Test-ConfigurationSchema") {
+		. (Join-Path $ModulesPath "Configuration\Functions\$schemaFunction.ps1")
+	}
+	Test-ConfigurationSchema -WarningAction Continue
+	Complete-StartupStage
+}
 
 # | ------------------------------ < Enhance Console Experience > ------------------------------ | #
 
@@ -84,26 +112,49 @@ Test-ConfigurationSchema -WarningAction Continue
 # Ctrl+Minus round trips would only delay the first prompt. `c` (Show-TerminalGreeting) does fit.
 #
 # Dot-sourced like Initialize-PSReadLine below, because this runs before the System and Git modules
-# are imported. Seven files: the orchestrator, its three steps, the settings resolver, the onefetch
-# restyler the all-hosts profile's wrapper calls, and the repository test the onefetch step is
-# gated on.
-foreach ($greetingFunction in "Resolve-TerminalGreetingSettings", "Invoke-Clear", "Invoke-Fastfetch", "Invoke-Onefetch", "Format-OnefetchPanel", "Show-TerminalGreeting") {
-	. (Join-Path $ModulesPath "System\Functions\$greetingFunction.ps1")
+# are imported. Ten files: the orchestrator, its three steps, the settings resolver, the onefetch
+# restyler the all-hosts profile's wrapper calls, the three the all-hosts profile's fastfetch
+# wrapper calls for the image logo (which would otherwise autoload the whole System module - 80+
+# files, 350-500 ms - before the first prompt), and the repository test the onefetch step is gated
+# on.
+if (Test-StartupStage -Name "Greeting") {
+	foreach ($greetingFunction in "Resolve-TerminalGreetingSettings", "Invoke-Clear", "Invoke-Fastfetch", "Invoke-Onefetch", "Format-OnefetchPanel", "Show-TerminalGreeting", "Get-FastfetchLogoArgument", "Get-TerminalCellSize", "New-SixelImage") {
+		. (Join-Path $ModulesPath "System\Functions\$greetingFunction.ps1")
+	}
+	. (Join-Path $ModulesPath "Git\Functions\Test-GitRepository.ps1")
+	Show-TerminalGreeting -NoResize
+	Complete-StartupStage
 }
-. (Join-Path $ModulesPath "Git\Functions\Test-GitRepository.ps1")
-Show-TerminalGreeting -NoResize
 
 # Import the PSReadLine module for enhanced command-line features if we're in the console host
-if ($host.Name -eq "ConsoleHost") {
-	Import-Module PSReadLine
+if (Test-StartupStage -Name "PSReadLine") {
+	if ($host.Name -eq "ConsoleHost") {
+		Import-Module PSReadLine
+	}
+	Complete-StartupStage
 }
 
 # Spectre.Console - Configuring the Windows Terminal For Unicode and Emoji Support
 [console]::InputEncoding = [console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
 
-# Import the Terminal-Icons module (if installed) for displaying icons in the console
-if (Get-Module -ListAvailable -Name Terminal-Icons) {
-	Import-Module -Name Terminal-Icons
+# Work that has to happen in this session but not before the first prompt is queued here and run by
+# the single PowerShell.OnIdle subscription registered at the end of this file, which fires once the
+# prompt is rendered and the shell has been idle ~300 ms. Each entry is a scriptblock; the
+# subscription runs them in order, each in its own try/catch, so one failing never stops the next.
+$deferredStartup = [System.Collections.Generic.List[scriptblock]]::new()
+
+# Import the Terminal-Icons module (if installed) for displaying icons in the console. Deferred:
+# the import was measured at 165-400 ms and the icons are only needed once something is listed, so
+# it runs after the prompt - -Global, because the OnIdle action is a scope of its own. The one
+# observable difference is a listing typed within the first ~300 ms of a new shell, which prints
+# without icons; every later one has them.
+if (Test-StartupStage -Name "Terminal-Icons") {
+	$deferredStartup.Add({
+			if (Get-Module -ListAvailable -Name Terminal-Icons) {
+				Import-Module -Name Terminal-Icons -Global
+			}
+		})
+	Complete-StartupStage
 }
 
 # PSReadLine interactive options (edit mode, key handlers, history limits, predictions) come from
@@ -112,8 +163,11 @@ if (Get-Module -ListAvailable -Name Terminal-Icons) {
 # since they throw on consoles without virtual-terminal support). Forks tune them in
 # Configuration.local.psd1, not here. Dot-sourced like Initialize-OhMyPosh below so it is available
 # before the System module is imported.
-. (Join-Path $ModulesPath "System\Functions\Initialize-PSReadLine.ps1")
-Initialize-PSReadLine
+if (Test-StartupStage -Name "PSReadLineOptions") {
+	. (Join-Path $ModulesPath "System\Functions\Initialize-PSReadLine.ps1")
+	Initialize-PSReadLine
+	Complete-StartupStage
+}
 
 # Oh-My-Posh - binary resolution + init live in Initialize-OhMyPosh. Dot-invoked so the
 # prompt it defines lands in this scope. On provisioned machines (AutoPathAdditions puts
@@ -122,71 +176,96 @@ Initialize-PSReadLine
 # MUST stay below the PSReadLine block. A theme carrying a `transient_prompt` object makes the
 # init script bind Enter to OhMyPoshEnterKeyHandler; an -EditMode call after it resets Enter to
 # AcceptLine and the transient prompt then silently never fires.
-. (Join-Path $ModulesPath "System\Functions\Initialize-OhMyPosh.ps1")
-. Initialize-OhMyPosh
+if (Test-StartupStage -Name "OhMyPosh") {
+	. (Join-Path $ModulesPath "System\Functions\Initialize-OhMyPosh.ps1")
+	. Initialize-OhMyPosh
+	Complete-StartupStage
+}
 
 # | ------------------------------ < Aliases > ------------------------------ | #
 
-# | --------------- < Git Aliases > --------------- | #
+if (Test-StartupStage -Name "Aliases") {
 
-New-Alias -Name gb -Value GitBranch -Force -Option AllScope
+	# | --------------- < Git Aliases > --------------- | #
 
-New-Alias -Name gbd -Value GitBranchDeleteAndPrune -Force -Option AllScope
+	New-Alias -Name gb -Value GitBranch -Force -Option AllScope
 
-New-Alias -Name gsw -Value GitSwitch -Force -Option AllScope
+	New-Alias -Name gbd -Value GitBranchDeleteAndPrune -Force -Option AllScope
 
-New-Alias -Name gp -Value GitPull -Force -Option AllScope
+	New-Alias -Name gsw -Value GitSwitch -Force -Option AllScope
 
-New-Alias -Name gmm -Value GitMergeM -Force -Option AllScope
+	New-Alias -Name gp -Value GitPull -Force -Option AllScope
 
-New-Alias -Name gs -Value GitStatus -Force -Option AllScope
+	New-Alias -Name gmm -Value GitMergeM -Force -Option AllScope
 
-# | --------------- < Miscellaneous Aliases > --------------- | #
+	New-Alias -Name gs -Value GitStatus -Force -Option AllScope
 
-New-Alias -Name w -Value Open-Workspace -Force
+	# | --------------- < Miscellaneous Aliases > --------------- | #
 
-New-Alias -Name cw -Value Close-Workspace -Force
+	New-Alias -Name w -Value Open-Workspace -Force
 
-New-Alias -Name c -Value Show-TerminalGreeting -Force
+	New-Alias -Name cw -Value Close-Workspace -Force
 
-New-Alias -Name l -Value ls -Force
+	New-Alias -Name c -Value Show-TerminalGreeting -Force
 
-New-Alias -Name dnr -Value DotnetRun -Force -Option AllScope
+	New-Alias -Name l -Value ls -Force
 
-New-Alias -Name dnbr -Value DotnetBuildAndRun -Force -Option AllScope
+	New-Alias -Name dnr -Value DotnetRun -Force -Option AllScope
 
-New-Alias -Name dnp -Value DotnetPublish -Force -Option AllScope
+	New-Alias -Name dnbr -Value DotnetBuildAndRun -Force -Option AllScope
 
-New-Alias -Name nir -Value NpmInstallAndStart -Force -Option AllScope
+	New-Alias -Name dnp -Value DotnetPublish -Force -Option AllScope
 
-New-Alias -Name efm -Value EfCoreMigrationWizard -Force -Option AllScope
+	New-Alias -Name nir -Value NpmInstallAndStart -Force -Option AllScope
 
-New-Alias -Name rp -Value Run-Project -Force -Option AllScope
+	New-Alias -Name efm -Value EfCoreMigrationWizard -Force -Option AllScope
 
-New-Alias -Name t -Value Open-Terminal -Force
+	New-Alias -Name rp -Value Run-Project -Force -Option AllScope
 
-New-Alias -Name gdf -Value Git-Diff -Force
+	New-Alias -Name t -Value Open-Terminal -Force
 
-New-Alias -Name b -Value Invoke-Browser -Force
+	New-Alias -Name gdf -Value Git-Diff -Force
 
-New-Alias -Name translate -Value Invoke-GoogleTranslate -Force
+	New-Alias -Name b -Value Invoke-Browser -Force
+
+	New-Alias -Name translate -Value Invoke-GoogleTranslate -Force
+
+	Complete-StartupStage
+}
 
 # | ------------------------------ < Startup Checks > ------------------------------ | #
 
-. (Join-Path $ModulesPath "System\Functions\Test-PowerPlan.ps1")
-Test-PowerPlan
+if (Test-StartupStage -Name "PowerPlan") {
+	foreach ($powerPlanFunction in "Get-ChassisType", "Test-PowerPlan") {
+		. (Join-Path $ModulesPath "System\Functions\$powerPlanFunction.ps1")
+	}
+	Test-PowerPlan
+	Complete-StartupStage
+}
 
 # Background log maintenance - prunes session logs and stale test-run artifacts at most once per
-# Configuration.Logging.Maintenance.IntervalHours. Registering the engine event costs well under a
-# millisecond, and the action fires only AFTER the prompt is rendered and the shell has been idle
-# ~300ms - so shell launch pays nothing. The action is silent by construction (its output goes to
-# the event system, never the console) and unregisters itself so it fires at most once per session;
+# Configuration.Logging.Maintenance.IntervalHours. Deferred like Terminal-Icons above. On
+# already-swept days the fired action hits the stamp-file check inside Invoke-LogMaintenance and
+# returns in ~1ms.
+if (Test-StartupStage -Name "LogMaintenance") {
+	$deferredStartup.Add({ Invoke-LogMaintenance })
+	Complete-StartupStage
+}
+
+# The one PowerShell.OnIdle subscription that runs the deferred work. Registering the engine event
+# costs well under a millisecond, and the action fires only AFTER the prompt is rendered and the
+# shell has been idle ~300ms - so shell launch pays nothing. The queue travels as -MessageData
+# because the action runs in a scope of its own. The action's pipeline output goes to the event
+# system, never the console, and it unregisters itself so it fires at most once per session;
 # -SupportEvent keeps the subscription and its event job out of Get-Job / Get-EventSubscriber
-# (which is also why unregistering needs -Force). On already-swept days the fired action hits the
-# stamp-file check inside Invoke-LogMaintenance and returns in ~1ms.
-Register-EngineEvent -SourceIdentifier PowerShell.OnIdle -SupportEvent -Action {
-	try { Invoke-LogMaintenance } catch { }
-	Unregister-Event -SourceIdentifier PowerShell.OnIdle -Force -ErrorAction SilentlyContinue
+# (which is also why unregistering needs -Force).
+if ($deferredStartup.Count -gt 0) {
+	Register-EngineEvent -SourceIdentifier PowerShell.OnIdle -SupportEvent -MessageData $deferredStartup -Action {
+		foreach ($deferredAction in $Event.MessageData) {
+			try { & $deferredAction } catch { }
+		}
+		Unregister-Event -SourceIdentifier PowerShell.OnIdle -Force -ErrorAction SilentlyContinue
+	}
 }
 
 # Integrity checks are intentionally NOT run at startup (they add ~200ms+ and shell launch

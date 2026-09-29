@@ -25,6 +25,11 @@ Windows/
 │       ├── Workflow/                          # + State/ (what each workspace open produced)
 │       └── Tests/                             # Pester test files
 └── docs/                                      # Docsify documentation site
+Unix/                                         # the Unix half in bash (docs/unix/README.md)
+├── modules/<Module>/                         # module.conf manifest, bin/ commands, functions.sh
+├── lib/                                      # sourced libraries, drivers/ (AeroSpace, WezTerm)
+├── config/                                   # per-domain config files
+└── aerospace/aerospace.toml                  # Repo-managed AeroSpace config (gaps = 0)
 ```
 
 ---
@@ -106,31 +111,36 @@ decisions behind them, and where the values go. Each module's `README.md` indexe
 
 ## Profile Startup Sequence
 
-The profile (`Microsoft.PowerShell_profile.ps1`) executes this exact sequence:
+The profile (`Microsoft.PowerShell_profile.ps1`) executes this exact sequence. Every numbered step from 4 on is a **startup stage**, wrapped in `if (Test-StartupStage -Name "<Stage>") { ...; Complete-StartupStage }` (Helper module), so it is timed on every start (`$WinuXStartupTimings`) and can be left out of one start through `WINUX_STARTUP_SKIP`; `Measure-ShellStartup` (System module) drives the stages to build the strip-then-add-one-at-a-time table (see [Slow Profile Load](reference/troubleshooting.md#slow-profile-load)).
 
 ```
-1. Import Configuration.psd1 → $global:Configuration
-2. Determine machine type from $env:COMPUTERNAME → HostnameToMachineType (fallback: DefaultMachineType)
-3. Build modules path, add to $env:PSModulePath
-4. Import-Module Logging → Import-Module Bootstrap
-5. Load-PathConfiguration -RepoRoot <path> -Configuration $global:Configuration -Quiet
-   ├─ Reuses pre-loaded config (no second file read)
-   ├─ Registers Modules/ in PSModulePath for autoload
-   ├─ Expands placeholders → $global:MachineSpecificPaths
-   └─ Sets $global:MachineType (all other modules deferred to autoload)
-6. Oh-My-Posh init (WinuX.omp.json - symlinked to WinuX_{MachineType}.omp.json in the repo)
-7. Dot-source the five System greeting files + Git\Functions\Test-GitRepository.ps1, then call Show-TerminalGreeting -NoResize
-8. PSReadLine (history, predictions, key bindings)
-9. Terminal-Icons
-10. Register aliases
-11. Dot-source System\Functions\Test-PowerPlan.ps1, then call Test-PowerPlan
-    (avoids loading the entire System module for one startup check)
+1. Locate Configuration.psd1, resolve the repo from its real path (Get-RepositoryPath), add Modules/ to $env:PSModulePath
+2. Dot-source Helper\Functions\{Test-StartupStage, Complete-StartupStage, Get-ConfigSetting, Test-ConfigValue}.ps1
+   (the only Helper functions used before the prompt - dot-sourced so the 80+-file Helper module is NOT autoloaded at startup)
+3. Stage Core (Required - always runs, always timed)
+   ├─ Import Configuration.psd1 → $global:Configuration
+   ├─ Import-Module Logging → Import-Module Bootstrap
+   └─ Load-PathConfiguration -RepoRoot <path> -Configuration $global:Configuration -Quiet
+      ├─ Merges Configuration.local.psd1, reuses the pre-loaded base config (no second file read)
+      ├─ Registers Modules/ (and Modules/Custom) in PSModulePath for autoload
+      ├─ Expands placeholders → $global:MachineSpecificPaths
+      └─ Sets $global:MachineType (all other modules deferred to autoload)
+4. Stage Schema - dot-source Configuration\Functions\{Test-ConfigurationKeyPath, Test-ConfigurationSchema}.ps1, then Test-ConfigurationSchema (warning-only)
+5. Stage Greeting - dot-source the System greeting files (orchestrator, three steps, settings resolver, onefetch restyler,
+   and the three image-logo functions the all-hosts fastfetch wrapper calls) + Git\Functions\Test-GitRepository.ps1, then Show-TerminalGreeting -NoResize
+6. Stage PSReadLine - Import-Module PSReadLine (console host only)
+7. Stage Terminal-Icons - QUEUED for after the first prompt (see step 12)
+8. Stage PSReadLineOptions - Initialize-PSReadLine (edit mode, key handlers, history, predictions from Configuration.PSReadLine)
+9. Stage OhMyPosh - . Initialize-OhMyPosh (must stay AFTER PSReadLine: a transient-prompt theme binds Enter, and -EditMode would reset it)
+10. Stage Aliases - register aliases
+11. Stage PowerPlan - dot-source System\Functions\{Get-ChassisType, Test-PowerPlan}.ps1, then Test-PowerPlan (chassis type from a per-machine cache)
+12. Stage LogMaintenance - QUEUED; one PowerShell.OnIdle subscription then runs the queue once the prompt is rendered and the shell
+    has been idle ~300 ms: Import-Module Terminal-Icons -Global, Invoke-LogMaintenance
 ```
 
-> **Module autoload:** All WinuX modules declare `FunctionsToExport` in their `.psd1` manifests. PowerShell builds an autoload index at startup (no code executed) and imports a module automatically the first time one of its exported functions is called. `Logging` and `Bootstrap` are imported eagerly by the profile (in that order, so Bootstrap and all other modules can log from the start); `Helper` is the first to autoload (during path-expansion in step 5); the fork-owned `Custom` module autoloads the same way via its `FunctionsToExport` (which the fork maintains, one entry per Custom function; empty on a pure-upstream setup). `Start-Logging`/`Stop-Logging` live in the `Logging` module (moved out of `Helper`).
+> **Module autoload:** All WinuX modules declare `FunctionsToExport` in their `.psd1` manifests. PowerShell builds an autoload index at startup (no code executed) and imports a module automatically the first time one of its exported functions is called. `Logging` and `Bootstrap` are imported eagerly by the profile (in that order, so Bootstrap and all other modules can log from the start); nothing else is imported before the first prompt - the handful of Helper, Configuration, System and Git functions the profile needs are dot-sourced from their files, because importing a module costs 4-6 ms per function file (Helper and System were measured at 330-500 ms each) and the first autoload adds PowerShell's module discovery on top. The fork-owned `Custom` module autoloads the same way via its `FunctionsToExport` (which the fork maintains, one entry per Custom function; empty on a pure-upstream setup). `Start-Logging`/`Stop-Logging` live in the `Logging` module (moved out of `Helper`).
 
 ---
-
 ## Bootstrap Execution Flow
 
 `Bootstrap -WithInitialSetup` runs these phases in order:
@@ -239,6 +249,17 @@ docs/
 │   ├── agent-system.md                     # Custom agents, prompts, instructions
 │   ├── coreairules.md                        # Machine-global AI agent guardrails (opt-in)
 │   └── skills.md                           # Machine-global Agent Skills (opt-in)
+│
+├── adr/
+│   ├── README.md                           # Architecture decision records index
+│   └── 0001-imperative-only-aerospace-placement.md  # Unix placement: CLI-driven, no on-window-detected rules
+│
+├── unix/
+│   ├── README.md                           # Unix half overview: getting started on a Mac, TCC, layout
+│   ├── commands.md                         # Unix command conventions and the module index
+│   ├── modules/<Module>.md                 # Man-style reference per Unix module (11 pages)
+│   ├── configuration.md                    # Unix/config file formats
+│   └── macos-workspaces.md                 # w / cw on macOS (AeroSpace + WezTerm, bash)
 │
 ├── contributing/
 │   └── fork-model.md                       # Fork model, config + app-list overrides, merge=ours

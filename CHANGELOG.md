@@ -8,6 +8,81 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.80] - 2026-09-29
+
+### Added
+
+- **`Measure-ShellStartup` measures a shell start stage by stage, and the profile is built to be measured.** Every startup stage in `Microsoft.PowerShell_profile.ps1` is now wrapped in a guard pair, `Test-StartupStage` / `Complete-StartupStage` (Helper module): each stage is timed on every start (`$WinuXStartupTimings | Format-Table`) and can be left out of one start through `WINUX_STARTUP_SKIP` (comma-separated stage names, or `All`; `Core` always runs). `Measure-ShellStartup` (System module, with `Invoke-ShellStartupSample` and `Read-ShellStartupTrace`) starts child shells in the current console - a bare `pwsh -NoProfile` first, then `Core`, then one stage added at a time (`-Mode Cumulative`), or the full start minus one stage at a time (`-Mode Isolated`) - five times each by default, and prints min / median / max per configuration with the delta to the previous row and the stage's own in-shell time. The all-hosts profile honors two extra stage names, `FastfetchImageLogo` and `OnefetchStyle`, so the image logo and the onefetch restyle are measurable apart from the panel. A guard pair rather than a wrapper, because `Import-Module`, the oh-my-posh prompt function and `New-Alias` bind into the executing scope. Tests: `Test-StartupStage.Tests.ps1`, `Complete-StartupStage.Tests.ps1`, `Measure-ShellStartup.Tests.ps1`, `Invoke-ShellStartupSample.Tests.ps1`, `Read-ShellStartupTrace.Tests.ps1`. Documented in `docs/modules/system.md`, `docs/modules/helper.md`, `docs/docs_overview.md` (Profile Startup Sequence), `docs/getting-started/subsequent-runs.md` and `docs/reference/troubleshooting.md` (Slow Profile Load).
+
+- **`Get-ChassisType` caches the machine's chassis type.** `Test-PowerPlan` read `Win32_SystemEnclosure` through CIM on every shell start - loading CimCmdlets for a value that never changes on a given machine. The chassis codes are now read once and cached at `%LOCALAPPDATA%\WinuX\ChassisTypes.txt`; `Test-PowerPlan -Refresh` (and `Get-ChassisType -Refresh`) re-read the hardware, and a cache that is missing, unreadable or unwritable falls back to the query. Tests: `Get-ChassisType.Tests.ps1`, `Test-PowerPlan.Tests.ps1`.
+
+### Changed
+
+- **A new shell reaches its first prompt in less than half the time, with the same greeting, prompt, icons and checks.** Measured with `Measure-ShellStartup` on the reference machine (PowerShell 7.6.6, outside Windows Terminal, repository directory): the full start went from a median of about 3.9 s to about 1.7 s over a 0.26 s bare-shell floor; the same start with every stage skipped except `Core` is about 0.9 s. Three things paid for most of it, none of them the work the greeting exists to do - fastfetch itself costs about 30 ms:
+  - **No module is autoloaded before the first prompt.** `Test-ConfigurationSchema` autoloaded the Configuration module and, through `Test-ConfigValue`, the 80-plus-file Helper module; the all-hosts profile's fastfetch wrapper autoloaded the 80-plus-file System module for `Get-FastfetchLogoArgument`. Importing a module costs 4-6 ms per function file (Helper and System measured at 330-500 ms each), and the first autoload adds PowerShell's module discovery on top - the `Schema` stage alone measured at about 1 s in-shell. The profile now dot-sources the handful of functions it calls before the prompt (`Get-ConfigSetting`, `Test-ConfigValue`, `Test-ConfigurationKeyPath`, `Test-ConfigurationSchema`, `Get-FastfetchLogoArgument`, `Get-TerminalCellSize`, `New-SixelImage`, `Get-ChassisType`), the way it already dot-sourced the greeting; the module's own copy replaces each one the first time the module autoloads. `Schema` went from about 930 ms to about 30 ms in-shell.
+  - **`Terminal-Icons` and the log maintenance run after the first prompt.** Both are queued and run by the one `PowerShell.OnIdle` subscription the profile registers, once the prompt is rendered and the shell has been idle about 300 ms (`Import-Module Terminal-Icons -Global`; the import measured at 165-400 ms). The only visible difference is a directory listing typed within those first 300 ms, which prints without icons.
+  - **`Write-Log` appends the session log through the .NET file API.** `Add-Content` opened the file, sniffed its encoding and bound parameters on every call - about 5 ms per line, paid some 35 times before the prompt, most of them for suppressed Debug lines. The bytes written are unchanged (UTF-8 without byte-order mark, platform newline). `Resolve-TerminalGreetingSettings`, which emits about 20 Debug lines per greeting, went from about 200 ms to under 10 ms.
+
+  In a Windows Terminal tab opened on the Desktop - the reference start, image logo and cell-size query included - the full start now measures 1437 ms over a 209 ms bare-shell floor (medians of 5): Core 300 ms in-shell, Greeting 261 ms (of which the image logo about 34 ms), oh-my-posh 204 ms, every other stage under 60 ms.
+
+  Reference measurements, Windows Terminal, PowerShell 7.6.6, medians of 5 child starts in milliseconds (`Measure-ShellStartup`; Delta in cumulative mode is the wall time the added stage costs, in isolated mode what skipping the stage alone saves; InShell is the stage's own time as the profile measured it). Kept here so a later regression has a baseline to compare against.
+
+  Cumulative, new tab on the Desktop (no repository, so onefetch is skipped):
+
+  | Configuration | Min | Median | Max | Delta | InShell |
+  | --- | --- | --- | --- | --- | --- |
+  | bare (-NoProfile) | 204 | 209 | 223 | | |
+  | Core | 682 | 698 | 761 | +489 | 300 |
+  | + Schema | 719 | 734 | 756 | +36 | 27 |
+  | + Greeting | 990 | 1017 | 1099 | +284 | 261 |
+  | + FastfetchImageLogo | 1004 | 1051 | 1102 | +34 | |
+  | + OnefetchStyle | 1000 | 1022 | 1037 | -29 | |
+  | + PSReadLine | 1061 | 1066 | 1073 | +44 | 57 |
+  | + Terminal-Icons | 1080 | 1090 | 1103 | +24 | 1 |
+  | + PSReadLineOptions | 1155 | 1165 | 1183 | +76 | 56 |
+  | + OhMyPosh | 1362 | 1392 | 1400 | +227 | 204 |
+  | + Aliases | 1350 | 1387 | 1453 | -5 | 3 |
+  | + PowerPlan | 1399 | 1414 | 1443 | +27 | 38 |
+  | + LogMaintenance | 1397 | 1437 | 1473 | +23 | 0 |
+
+  Cumulative, new tab inside a repository (onefetch and its restyle run in the greeting):
+
+  | Configuration | Min | Median | Max | Delta | InShell |
+  | --- | --- | --- | --- | --- | --- |
+  | bare (-NoProfile) | 206 | 209 | 213 | | |
+  | Core | 719 | 722 | 755 | +513 | 316 |
+  | + Schema | 742 | 750 | 762 | +27 | 28 |
+  | + Greeting | 1329 | 1364 | 1428 | +614 | 588 |
+  | + FastfetchImageLogo | 1378 | 1379 | 1424 | +16 | |
+  | + OnefetchStyle | 1411 | 1470 | 1540 | +90 | |
+  | + PSReadLine | 1512 | 1539 | 1544 | +69 | 64 |
+  | + Terminal-Icons | 1372 | 1544 | 1562 | +5 | 2 |
+  | + PSReadLineOptions | 1425 | 1444 | 1495 | -100 | 54 |
+  | + OhMyPosh | 1585 | 1638 | 1696 | +194 | 186 |
+  | + Aliases | 1592 | 1625 | 1646 | -14 | 3 |
+  | + PowerPlan | 1645 | 1720 | 1739 | +95 | 40 |
+  | + LogMaintenance | 1751 | 1803 | 1916 | +83 | 0 |
+
+  Isolated, new tab on the Desktop (full start, then the full start minus one stage each):
+
+  | Configuration | Min | Median | Max | Delta | InShell |
+  | --- | --- | --- | --- | --- | --- |
+  | full | 1359 | 1382 | 1423 | | |
+  | - Schema | 1395 | 1460 | 1612 | +78 | 28 |
+  | - Greeting | 1147 | 1162 | 1198 | -220 | 262 |
+  | - FastfetchImageLogo | 1383 | 1399 | 1409 | +18 | |
+  | - OnefetchStyle | 1389 | 1397 | 1414 | +16 | |
+  | - PSReadLine | 1375 | 1400 | 1426 | +18 | 58 |
+  | - Terminal-Icons | 1385 | 1408 | 1416 | +26 | 1 |
+  | - PSReadLineOptions | 1332 | 1342 | 1363 | -40 | 55 |
+  | - OhMyPosh | 1217 | 1219 | 1236 | -163 | 204 |
+  | - Aliases | 1405 | 1412 | 1438 | +30 | 3 |
+  | - PowerPlan | 1371 | 1387 | 1397 | +5 | 37 |
+  | - LogMaintenance | 1410 | 1411 | 1415 | +29 | 0 |
+
+  Reading: only the greeting (220 ms; inside a repository about 330 ms more for onefetch and its restyle), the prompt theme (163 ms) and the PSReadLine options (40 ms) save anything measurable when skipped alone; every other row, the image logo included, is inside the run-to-run noise of about plus or minus 30 ms. What is left is either a feature or the fixed Core cost.
+  What stays as it is, and why: fastfetch (about 30 ms) and onefetch (about 230 ms, only inside a repository) are the binaries doing their job; oh-my-posh's init is about 90 ms of process spawn plus its own cached script; the `Logging` and `Bootstrap` imports (about 150 ms together) and `Load-PathConfiguration` (60-90 ms) are the price of the one-file-per-function module layout and are paid once.
+
 ## [0.1.79] - 2026-09-28
 
 ### Fixed
@@ -1335,7 +1410,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.79...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.80...HEAD
+[0.1.80]: https://github.com/IvanPavlak/WinuX/compare/v0.1.79...v0.1.80
 [0.1.79]: https://github.com/IvanPavlak/WinuX/compare/v0.1.78...v0.1.79
 [0.1.78]: https://github.com/IvanPavlak/WinuX/compare/v0.1.77...v0.1.78
 [0.1.77]: https://github.com/IvanPavlak/WinuX/compare/v0.1.76...v0.1.77

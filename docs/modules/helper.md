@@ -124,6 +124,15 @@ if ((Complete-DeferredActions) -gt 0) { "the openers left work behind, and it ha
 **See also:** [Register-DeferredAction](#register-deferredaction)
 
 
+## [Complete-StartupStage](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Complete-StartupStage.ps1)
+
+- **Description:** The second half of the profile's stage guard (see [Test-StartupStage](#test-startupstage)). Stops the running stage clock and appends a record - the stage name and its elapsed milliseconds, one decimal - to `$global:WinuXStartupTimings`, which is how a running shell answers what its startup spent its time on (`$WinuXStartupTimings | Format-Table`). When the `WINUX_STARTUP_TRACE` environment variable names a file, the same record is appended to it as one tab-separated line, which is how the per-stage times of a shell that has already exited reach [Measure-ShellStartup](system.md#measure-shellstartup). Does nothing when no stage clock is running; a trace file that cannot be written is ignored, because measurement must never break a shell start.
+- **Parameters:** `[-TracePath]`
+- **Usage:** `Complete-StartupStage`, `$WinuXStartupTimings | Sort-Object Milliseconds -Descending | Format-Table`
+
+**See also:** [Test-StartupStage](#test-startupstage), [Read-ShellStartupTrace](system.md#read-shellstartuptrace)
+
+
 ## [Confirm-ConfigValue](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Confirm-ConfigValue.ps1)
 
 - **Description:** The standard unconfigured-section guard for the empty-by-default configuration: `Test-ConfigValue` plus the "not configured" warning in one call. Returns `$true` when the value is configured; otherwise writes the given warning via `Write-LogWarning` (unless `-Quiet`) and returns `$false`. PowerShell cannot return across scopes, so the early `return` stays at the call site. Use plain `Test-ConfigValue` when no warning should be emitted (pure checks, Debug-level paths, or custom log formatting).
@@ -1464,6 +1473,15 @@ try { New-Desktop } catch { if (Test-RpcUnavailableError $_) { [void](Reset-Virt
 ```
 
 **See also:** [Reset-VirtualDesktopState](window.md#reset-virtualdesktopstate), [Test-RpcServerHealth](system.md#test-rpcserverhealth)
+
+## [Test-StartupStage](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Test-StartupStage.ps1)
+
+- **Description:** The first half of the guard pair the profile wraps every startup stage in - `if (Test-StartupStage -Name "X") { ...; Complete-StartupStage }` - so each stage can be timed on its own and left out for one shell start without editing the profile. Returns `$false` and starts nothing when the stage's name, or `All`, is listed in the `WINUX_STARTUP_SKIP` environment variable (comma or semicolon separated, case-insensitive); otherwise starts a Stopwatch for the stage and returns `$true`. A guard pair rather than a scriptblock wrapper on purpose: `Import-Module`, the prompt function oh-my-posh defines and `New-Alias` bind into the scope that executes them, and a wrapper function would swallow them. `-Required` marks a stage that runs whatever the list says (the profile's `Core`), still timed. With the variable unset it costs one Stopwatch per stage. [Measure-ShellStartup](system.md#measure-shellstartup) drives it.
+- **Parameters:** `-Name` `[-Required]` `[-Skip]`
+- **Usage:** `if (Test-StartupStage -Name "OhMyPosh") { . Initialize-OhMyPosh; Complete-StartupStage }`
+
+**See also:** [Complete-StartupStage](#complete-startupstage), [Measure-ShellStartup](system.md#measure-shellstartup)
+
 
 ## [Test-TcpPortReachable](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Test-TcpPortReachable.ps1)
 
