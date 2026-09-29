@@ -285,6 +285,15 @@ Get-BrowserWindowsByTarget -TargetPids @(1234) -TitlePattern "Google Chrome"
 
 **See also:** [Close-BrowserWindows](../modules/system.md)
 
+## [Get-ChassisType](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Get-ChassisType.ps1)
+
+- **Description:** Returns the machine's SMBIOS chassis type codes (`Win32_SystemEnclosure.ChassisTypes` - 3 for a desktop, 9 or 10 for a laptop), from the hardware on the first call and from a per-machine cache file (`%LOCALAPPDATA%\WinuX\ChassisTypes.txt`, one code per line) on every later one. The CIM query loads the CimCmdlets module and was the largest part of [Test-PowerPlan](#test-powerplan)'s cost on every shell start, for a value that never changes on a given machine. `-Refresh` queries the hardware again and rewrites the cache; a cache that is missing, empty or not integers is ignored and re-created, and one that cannot be written just means the hardware is queried every time. Returns an empty list when neither answered.
+- **Parameters:** `[-Refresh]` `[-CachePath]`
+- **Usage:** `Get-ChassisType`, `Get-ChassisType -Refresh`
+
+**See also:** [Test-PowerPlan](#test-powerplan)
+
+
 ## [Get-ConsoleWindowSize](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Get-ConsoleWindowSize.ps1)
 
 - **Description:** Reads the console window size in character cells - an object with `Width` and `Height` taken from `[Console]::WindowWidth` / `WindowHeight`, the number of columns and rows the terminal shows at its current font size. Throws in hosts that have no console window (automation, some IDE hosts), which is the signal `Invoke-Fastfetch` uses to skip its font auto-fit; the read is deliberately not wrapped so a caller can choose between degrading gracefully and seeing the failure.
@@ -587,6 +596,15 @@ Set-LogLevel Verbose { Invoke-Onefetch }
 
 **See also:** [Show-TerminalGreeting](#show-terminalgreeting), [Invoke-Fastfetch](#invoke-fastfetch), [Format-OnefetchPanel](#format-onefetchpanel), [Test-GitRepository](git.md#test-gitrepository), [Invoke-Onefetch configuration guide](../configuration/guides/system/Invoke-Onefetch.md)
 
+## [Invoke-ShellStartupSample](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Invoke-ShellStartupSample.ps1)
+
+- **Description:** Starts one child PowerShell in the current console - a plain call, not `Start-Process`, so the child inherits `WT_SESSION`, the interactive console and the terminal that answers the cell-size query, and the image logo and sixel path are measured for real - with the given skip list in `WINUX_STARTUP_SKIP` and a fresh trace file in `WINUX_STARTUP_TRACE`, times it from launch to exit, reads the trace back through [Read-ShellStartupTrace](#read-shellstartuptrace) and returns an object with `Milliseconds` (wall time) and `Stages` (stage name to milliseconds). `-Bare` launches with `-NoProfile` instead: the floor no profile can go under. Both environment variables are restored afterwards and the trace file is deleted. One sample for [Measure-ShellStartup](#measure-shellstartup).
+- **Parameters:** `[-Skip]` `[-Bare]` `[-Executable]`
+- **Usage:** `Invoke-ShellStartupSample`, `Invoke-ShellStartupSample -Skip "Greeting,Terminal-Icons"`, `Invoke-ShellStartupSample -Bare`
+
+**See also:** [Measure-ShellStartup](#measure-shellstartup), [Read-ShellStartupTrace](#read-shellstartuptrace)
+
+
 ## [Invoke-TerminateWindowsTerminalTabsExit](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Invoke-TerminateWindowsTerminalTabsExit.ps1)
 
 - **Description:** Executes the scriptable exit seam used by `Terminate-WindowsTerminalTabs` during `-IncludeCurrent` cleanup. Invokes the configured script-scoped exit action when a test seam is present, otherwise releases stuck keyboard modifiers (via `Reset-KeyboardModifiers`, when available) and exits the current process cleanly with code `0`.
@@ -665,6 +683,33 @@ Kill-All -ReloadPowerShellProfile
 - **Description:** Lists all FileSystem PSDrives (mounted drives). A thin alias for `Get-PSDrive -PSProvider FileSystem`, showing all mounted drives including local disks, network drives, and removable media along with their Name, Used (GB), Free (GB), Provider, and Root.
 - **Usage:** `List-Drives`
 
+## [Measure-ShellStartup](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Measure-ShellStartup.ps1)
+
+- **Description:** Measures how long a shell takes to reach its first prompt, stage by stage. The profile guards every startup stage with [Test-StartupStage](helper.md#test-startupstage) / [Complete-StartupStage](helper.md#complete-startupstage), so a child shell can be told which stages to leave out (`WINUX_STARTUP_SKIP`) and reports what each stage cost inside the shell (`WINUX_STARTUP_TRACE`). `-Mode Cumulative` (default) starts from a bare `pwsh -NoProfile`, then Core alone, then adds one stage at a time in profile order - the Delta column is the wall time the added stage costs, InShell what the stage measured for itself. `-Mode Isolated` starts from the full start and drops one stage at a time, so Delta is what skipping that stage alone would save. Every configuration runs `-Runs` times (default 5) and is reported as min / median / max; deltas are computed from medians so one slow run never decides a stage's cost. The children share the console, so run it from the terminal whose start you want to measure and expect the screen to be redrawn once per child; the table is printed at the end. Warns outside Windows Terminal, where the image logo and the cell-size query are not part of what is measured. Stages: `Schema`, `Greeting`, `FastfetchImageLogo`, `OnefetchStyle`, `PSReadLine`, `Terminal-Icons`, `PSReadLineOptions`, `OhMyPosh`, `Aliases`, `PowerPlan`, `LogMaintenance`; `Core` is always present.
+- **Parameters:** `[-Runs]` `[-Mode]` `[-Stages]` `[-PassThru]`
+- **Usage:** `Measure-ShellStartup`, `Measure-ShellStartup -Mode Isolated -Runs 3`, `Measure-ShellStartup -Stages Greeting, FastfetchImageLogo -PassThru`
+
+| Column | Meaning |
+| --- | --- |
+| `Configuration` | `bare (-NoProfile)`, `Core`, then `+ Stage` (Cumulative) or `full`, then `- Stage` (Isolated) |
+| `Min` / `Median` / `Max` | wall time of the child shell, launch to exit, in ms |
+| `Delta` | Cumulative: median minus the previous row. Isolated: median minus the full start (negative is a saving) |
+| `InShell` | the stage's own median as the profile measured it - the difference to Delta is the harness overhead and whatever the stage pulled in for later stages |
+
+```powershell
+# The whole ladder, five runs per configuration, from a Windows Terminal tab on the Desktop
+Measure-ShellStartup
+
+# What would skipping each stage save on its own?
+Measure-ShellStartup -Mode Isolated
+
+# Only the greeting and the image logo, as objects
+Measure-ShellStartup -Stages Greeting, FastfetchImageLogo -PassThru | Format-Table
+```
+
+**See also:** [Invoke-ShellStartupSample](#invoke-shellstartupsample), [Read-ShellStartupTrace](#read-shellstartuptrace), [Test-StartupStage](helper.md#test-startupstage), [Slow profile load](../reference/troubleshooting.md#slow-profile-load)
+
+
 ## [New-SixelImage](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/New-SixelImage.ps1)
 
 - **Description:** Encodes an image as a cached DEC sixel file - the one inline-image protocol Windows Terminal renders - scaled to fit a pixel box with its aspect ratio preserved, never stretched and never cropped, so a caller can reserve a fixed block of character cells and know the image cannot spill out of it. Transparency survives: the encoder writes the sixel background-select parameter, so a logo with an alpha channel does not arrive on a black rectangle. Caching is keyed on the box AND on the source file's length and last-write time, so editing or replacing the source invalidates the cache with no bookkeeping; ImageMagick is looked for only on a miss, so a warm cache keeps working on a machine that does not have it. Returns `$null` - never throws - when ImageMagick is absent, the source is missing, or the conversion produces nothing.
@@ -711,6 +756,15 @@ New-SixelImage -Path $logo -MaxPixelWidth (36 * 10) -MaxPixelHeight (16 * 20)
 `-DisplayName` is the label used in log messages **and** the backup subfolder name (`SymbolicLinkMaker` passes the entry's dotted key); it defaults to `Path`, with the characters a path carries but a folder name cannot hold replaced by `_`. `-BackupRoot` overrides the sink root replaced items are copied into and defaults to `<Repo>\Backups\Windows`; it is a **Windows** path, translated into the distribution with `wslpath -a` so the in-distro `cp -a` can write to it. A backup that cannot be translated or copied skips the entry rather than removing a file it could not save. Creation failures are logged, never thrown.
 
 **See also:** [SymbolicLinkMaker](#symboliclinkmaker), [New-WindowsSymbolicLink](#new-windowssymboliclink), [Get-SymbolicLinkEntries](#get-symboliclinkentries)
+
+## [Read-ShellStartupTrace](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Read-ShellStartupTrace.ps1)
+
+- **Description:** Reads the file a shell start wrote through `WINUX_STARTUP_TRACE` - one tab-separated line per stage, name and milliseconds, appended by [Complete-StartupStage](helper.md#complete-startupstage) - into a hashtable of stage name to milliseconds ([double]). A missing or empty file is an empty table, a line that does not parse is dropped, and a stage that appears twice keeps its last value (a profile re-run in the same shell appends a second set of lines). Parses with an invariant decimal point.
+- **Parameters:** `-Path`
+- **Usage:** `Read-ShellStartupTrace -Path "$env:TEMP\startup.trace"`
+
+**See also:** [Invoke-ShellStartupSample](#invoke-shellstartupsample), [Complete-StartupStage](helper.md#complete-startupstage)
+
 
 ## [Rebuild-IconCache](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Rebuild-IconCache.ps1)
 
@@ -1232,7 +1286,7 @@ Set-PowerButtonActions -Auto -LidCloseOnBattery Hibernate
 Set-PowerButtonActions -PowerButtonPluggedIn "ShutDown" -PowerButtonOnBattery "Sleep"
 ```
 
-**See also:** [Set-PowerPlan](system.md#set-powerplan)
+**See also:** [Set-PowerPlan](system.md#set-powerplan), [Get-ChassisType](#get-chassistype)
 
 ## [Set-PowerPlan](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Set-PowerPlan.ps1)
 
@@ -1732,7 +1786,7 @@ if (Test-MachineOnline -Machine "MyMachine" -Quiet) { "MyMachine is up" }
 
 ## [Test-PowerPlan](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Test-PowerPlan.ps1)
 
-- **Description:** Checks whether the active power plan is set to the optimal performance mode for the current machine type. Uses WMI chassis type detection (`Win32_SystemEnclosure`) to determine if the machine is a laptop or desktop, then verifies High Performance for laptops/portables or Ultimate Performance for desktops, and warns if not optimally configured. Chassis types are defined in `Configuration.LaptopChassisTypes`.
+- **Description:** Checks whether the active power plan is set to the optimal performance mode for the current machine type. Reads the chassis type through [Get-ChassisType](#get-chassistype) - the hardware once, a per-machine cache on every later start - to determine if the machine is a laptop or desktop, then verifies High Performance for laptops/portables or Ultimate Performance for desktops, and warns if not optimally configured. Chassis types are defined in `Configuration.LaptopChassisTypes`. `-Refresh` re-reads the chassis from the hardware.
 - **Usage:** `Test-PowerPlan`
 
 Reads the active scheme via `powercfg /getactivescheme` and compares it against the expected plan for the detected machine type. If the active plan is wrong, it prints a yellow warning suggesting `Set-PowerPlan -Auto` to fix it. Any failure during the check is reported as a red error. Commonly run at shell startup from the PowerShell profile.
@@ -1742,7 +1796,7 @@ Reads the active scheme via `powercfg /getactivescheme` and compares it against 
 Test-PowerPlan
 ```
 
-**See also:** [Set-PowerPlan](system.md#set-powerplan)
+**See also:** [Set-PowerPlan](system.md#set-powerplan), [Get-ChassisType](#get-chassistype)
 
 ## [Test-RpcServerHealth](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Test-RpcServerHealth.ps1)
 

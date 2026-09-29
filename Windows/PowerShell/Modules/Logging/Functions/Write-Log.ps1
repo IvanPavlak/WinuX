@@ -144,11 +144,15 @@ function Write-Log {
 	}
 
 	# --- Mirror to the structured file log (always, full detail) ---
+	# Appended through the .NET file API rather than Add-Content: the cmdlet opens the file, sniffs
+	# its encoding and binds parameters on every call, which measured at about 5 ms per line - some
+	# 35 lines are written before a shell's first prompt, most of them suppressed Debug lines. The
+	# bytes are the same: UTF-8 without a byte-order mark, one line, the platform newline.
 	if ($state.FileLogging -and $state.SessionFile) {
 		try {
 			$stamp = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss.fff")
 			$fileLine = "[$stamp] [$($Level.ToUpper())] [$caller] $Message"
-			Add-Content -Path $state.SessionFile -Value $fileLine -Encoding UTF8 -ErrorAction Stop
+			[System.IO.File]::AppendAllText($state.SessionFile, $fileLine + [System.Environment]::NewLine, [System.Text.UTF8Encoding]::new($false))
 
 			if ($Level -eq "Error") {
 				$errorLines = @($fileLine)
@@ -170,7 +174,7 @@ function Write-Log {
 						}
 					}
 				}
-				Add-Content -Path $state.ErrorFile -Value $errorLines -Encoding UTF8 -ErrorAction Stop
+				[System.IO.File]::AppendAllText($state.ErrorFile, (($errorLines -join [System.Environment]::NewLine) + [System.Environment]::NewLine), [System.Text.UTF8Encoding]::new($false))
 			}
 		}
 		catch { }

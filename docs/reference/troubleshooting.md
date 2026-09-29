@@ -946,18 +946,36 @@ Private = @{
 
 **Problem:** New terminal takes long to start.
 
-**Solutions:**
-
-1. Check for slow modules:
+**Diagnosis:** measure it stage by stage instead of guessing. From a Windows Terminal tab, in the directory a new tab opens in:
 
 ```powershell
-Measure-Command { . $PROFILE }
+Measure-ShellStartup
 ```
 
-2. Lazy load non-essential functions.
+It starts child shells - a bare `pwsh -NoProfile` first (the floor), then `Core` alone, then every profile stage added one at a time - five times each, and prints min / median / max per configuration with the delta to the previous row (what the added stage costs) and the stage's own in-shell time. `Measure-ShellStartup -Mode Isolated` answers the other question: what skipping each stage alone would save. Expect the screen to be redrawn once per child; the table comes at the end.
 
-3. Check for slow network operations during load.
+A single start's breakdown is always at hand:
 
+```powershell
+$WinuXStartupTimings | Sort-Object Milliseconds -Descending | Format-Table
+```
+
+To start one shell without a stage (for example to see whether the greeting is what you are waiting on):
+
+```powershell
+$env:WINUX_STARTUP_SKIP = "Greeting"; pwsh
+```
+
+Stage names: `Schema`, `Greeting`, `FastfetchImageLogo`, `OnefetchStyle`, `PSReadLine`, `Terminal-Icons`, `PSReadLineOptions`, `OhMyPosh`, `Aliases`, `PowerPlan`, `LogMaintenance` (or `All`; `Core` always runs).
+
+**What the numbers usually mean:**
+
+1. `Core` far above ~400 ms - the two `Import-Module` calls (Logging, Bootstrap) and `Load-PathConfiguration`; a very large `Configuration.local.psd1` shows up here.
+2. `Greeting` far above the fastfetch binary's own time (about 30 ms) - inside a repository it includes onefetch (about 230 ms, inherent to the binary); in Windows Terminal it includes the cell-size query and the sixel logo. `Set-LogLevel Verbose { Show-TerminalGreeting -NoResize }` says which step.
+3. Any stage that suddenly costs 300-500 ms more than its `InShell` column - a function called before the prompt autoloaded a whole module. The profile dot-sources the functions it needs precisely to avoid this; a new call added to the startup path should do the same.
+4. `OhMyPosh` around 150-200 ms - oh-my-posh's own process spawn plus its cached init script; this is the tool's design.
+
+**If a stage is not needed at all on a machine**, turn it off in configuration (`TerminalGreeting.*` for the greeting steps, `Logging.Maintenance.Enabled` for the sweep) rather than in the profile.
 ### High Memory Usage
 
 **Problem:** PowerShell using too much RAM.

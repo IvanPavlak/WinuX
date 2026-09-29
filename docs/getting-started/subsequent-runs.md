@@ -97,47 +97,57 @@ Reload-PowerShellProfile
 
 ## Profile Initialization
 
-Every time you open PowerShell, the profile (`Microsoft.PowerShell_profile.ps1`) runs:
+Every time you open PowerShell, the profile (`Microsoft.PowerShell_profile.ps1`) runs. Each block after the first is a **startup stage** - timed on every start (`$WinuXStartupTimings | Format-Table`), skippable for one start through `$env:WINUX_STARTUP_SKIP`, and measured one by one with `Measure-ShellStartup`:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │  PowerShell Profile Initialization                              │
 ├─────────────────────────────────────────────────────────────────┤
 │  1. Minimal Bootstrap                                           │
-│     ├─→ Import Configuration.psd1                               │
-│     ├─→ Determine MachineType from hostname                     │
+│     ├─→ Locate Configuration.psd1, resolve the repo root        │
 │     ├─→ Build modules path, add to $env:PSModulePath            │
-│     └─→ Import Bootstrap module                                 │
+│     └─→ Dot-source the stage guards + Get-ConfigSetting,        │
+│         Test-ConfigValue (no Helper module import)              │
 │                                                                 │
-│  2. Load-PathConfiguration -Configuration $global:Configuration │
-│     ├─→ Reuses pre-loaded config (no second file read)          │
-│     ├─→ Registers Modules/ in PSModulePath for autoload         │
-│     ├─→ Expands placeholders → $global:MachineSpecificPaths     │
-│     └─→ Sets $global:Configuration, $global:MachineType         │
+│  2. Stage Core (always runs)                                    │
+│     ├─→ Import Configuration.psd1                               │
+│     ├─→ Import Logging and Bootstrap modules                    │
+│     └─→ Load-PathConfiguration -Configuration $global:Config... │
+│         ├─→ Merges Configuration.local.psd1 over the base       │
+│         ├─→ Registers Modules/ in PSModulePath for autoload     │
+│         ├─→ Expands placeholders → $global:MachineSpecificPaths │
+│         └─→ Sets $global:MachineType                            │
 │                                                                 │
-│  3. Console Enhancement                                         │
-│     ├─→ Oh-My-Posh (WinuX_{MachineType}.omp.json theme)         │
-│     ├─→ FastFetch (system info display)                         │
-│     ├─→ PSReadLine (history, predictions, key bindings)         │
-│     └─→ Terminal-Icons (file/folder icons)                      │
-│                                                                 │
-│  4. Register Aliases                                            │
+│  3. Stage Schema     → Test-ConfigurationSchema (warning-only)  │
+│  4. Stage Greeting   → Clear, fastfetch (image logo in WT /     │
+│                        WezTerm), onefetch inside a repository   │
+│  5. Stage PSReadLine → Import-Module PSReadLine                 │
+│  6. Stage Terminal-Icons → queued for after the first prompt    │
+│  7. Stage PSReadLineOptions → history, predictions, key binds   │
+│  8. Stage OhMyPosh   → Initialize-OhMyPosh (prompt theme)       │
+│  9. Stage Aliases                                               │
 │     ├─→ Git: gb, gbd, gsw, gp, gmm, gs, gdf                     │
-│     ├─→ Workflow: w, b, efm, rp, t                              │
+│     ├─→ Workflow: w, cw, b, efm, rp, t                          │
 │     ├─→ Dev tools: dnr, dnbr, dnp, nir, c, l                    │
 │     └─→ Misc: translate                                         │
+│  10. Stage PowerPlan → Test-PowerPlan (chassis type cached)     │
+│  11. Stage LogMaintenance → queued                              │
 │                                                                 │
-│  5. Startup Checks                                              │
-│     └─→ Test-PowerPlan (dot-sourced directly, no module import) │
+│  ── first prompt ──                                             │
+│  12. PowerShell.OnIdle (once, ~300 ms after the prompt)         │
+│     ├─→ Import-Module Terminal-Icons -Global                    │
+│     └─→ Invoke-LogMaintenance                                   │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
 > [!NOTE]
-> WinuX modules are **not imported at startup**. Each `.psd1` manifest declares `FunctionsToExport`, enabling PowerShell autoload. A module loads automatically - and silently - the first time one of its exported functions is called; this includes the fork-owned `Custom` module, whose `FunctionsToExport` the fork maintains (empty on a pure-upstream setup). Only `Logging` and `Bootstrap` (imported explicitly by the profile, in that order) and `Helper` (autoloaded during path-expansion) are guaranteed to be in memory at startup.
+> WinuX modules are **not imported at startup**. Each `.psd1` manifest declares `FunctionsToExport`, enabling PowerShell autoload. A module loads automatically - and silently - the first time one of its exported functions is called; this includes the fork-owned `Custom` module, whose `FunctionsToExport` the fork maintains (empty on a pure-upstream setup). Only `Logging` and `Bootstrap` (imported explicitly by the profile, in that order) are in memory at the first prompt. The few Helper, Configuration, System and Git functions the profile itself needs are dot-sourced from their files, because importing a whole module costs 4-6 ms per function file (Helper and System were measured at 330-500 ms each); the module's own copy replaces the dot-sourced one the first time the module autoloads.
 
 > [!NOTE]
-> `Test-PowerPlan` is dot-sourced directly from its `.ps1` file rather than importing the entire `System` module at startup. This avoids loading ~46 system functions just for one startup check.
+> `Terminal-Icons` and the log maintenance run after the first prompt, from a one-shot `PowerShell.OnIdle` event. The only visible difference is a directory listing typed within the first ~300 ms of a new shell, which prints without icons.
 
+> [!TIP]
+> A slow start is measured, not guessed: `Measure-ShellStartup` starts child shells with one stage added at a time and prints min / median / max per configuration. See [Slow Profile Load](../reference/troubleshooting.md#slow-profile-load).
 ## Checking Current State
 
 ```powershell

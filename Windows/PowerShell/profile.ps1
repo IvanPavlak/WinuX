@@ -79,12 +79,19 @@ try {
 			$logoArgs = @()
 
 			# A cosmetic override must never break the panel: any failure here falls through to
-			# fastfetch's own configuration, which still carries the text logo.
-			try {
-				$logoArgs = @(Get-FastfetchLogoArgument)
-			}
-			catch {
-				Write-Debug "fastfetch image logo unavailable => $($_.Exception.Message)"
+			# fastfetch's own configuration, which still carries the text logo. The same fallback
+			# is taken when WINUX_STARTUP_SKIP lists FastfetchImageLogo (or All) - the stage name
+			# Measure-ShellStartup uses to measure the image logo apart from the panel. Parsed here
+			# rather than through Test-StartupStage because this file runs before that helper is
+			# dot-sourced.
+			$skipped = @("$env:WINUX_STARTUP_SKIP" -split '[,;]' | ForEach-Object { $_.Trim() })
+			if ($skipped -notcontains "FastfetchImageLogo" -and $skipped -notcontains "All") {
+				try {
+					$logoArgs = @(Get-FastfetchLogoArgument)
+				}
+				catch {
+					Write-Debug "fastfetch image logo unavailable => $($_.Exception.Message)"
+				}
 			}
 
 			& $global:WinuXFastfetchExe @logoArgs @args
@@ -101,12 +108,17 @@ try {
 			$settings = $null
 
 			# Resolved per call, not once here: this file runs before any module is imported, so
-			# neither the configuration nor Format-OnefetchPanel is loadable yet.
-			try {
-				$settings = (Resolve-TerminalGreetingSettings).Onefetch
-			}
-			catch {
-				Write-Debug "onefetch styling unavailable => $($_.Exception.Message)"
+			# neither the configuration nor Format-OnefetchPanel is loadable yet. Left unresolved -
+			# plain onefetch - when WINUX_STARTUP_SKIP lists OnefetchStyle (or All), the stage name
+			# Measure-ShellStartup uses to measure the restyle apart from the panel.
+			$skipped = @("$env:WINUX_STARTUP_SKIP" -split '[,;]' | ForEach-Object { $_.Trim() })
+			if ($skipped -notcontains "OnefetchStyle" -and $skipped -notcontains "All") {
+				try {
+					$settings = (Resolve-TerminalGreetingSettings).Onefetch
+				}
+				catch {
+					Write-Debug "onefetch styling unavailable => $($_.Exception.Message)"
+				}
 			}
 
 			if (-not $settings -or -not $settings.Style.Enabled) {
