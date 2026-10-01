@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.81] - 2026-10-01
+
+### Fixed
+
+- **`Terminal-Icons` and the log maintenance run after the first prompt again.** Since 0.1.80 the profile handed its deferred-work queue to the `PowerShell.OnIdle` subscription through `Register-EngineEvent -MessageData`, but `Register-EngineEvent` with `-Action` silently drops `-MessageData` (`$Event.MessageData` arrives `$null`, and `Get-EventSubscriber` shows it empty). The action fired, looped over nothing and unregistered itself, so a new shell never imported `Terminal-Icons` - directory listings printed without icons - and never ran `Invoke-LogMaintenance`. The queue now travels as `$global:WinuXDeferredStartup`, which the action runs and then removes. Verified in an interactive shell: `Terminal-Icons` is loaded and listings carry icon glyphs once the prompt has been idle about 300 ms. Shells already open on 0.1.80 get their icons with `Import-Module Terminal-Icons`.
+
 ## [0.1.80] - 2026-09-29
 
 ### Added
@@ -1410,7 +1416,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.80...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.81...HEAD
+[0.1.81]: https://github.com/IvanPavlak/WinuX/compare/v0.1.80...v0.1.81
 [0.1.80]: https://github.com/IvanPavlak/WinuX/compare/v0.1.79...v0.1.80
 [0.1.79]: https://github.com/IvanPavlak/WinuX/compare/v0.1.78...v0.1.79
 [0.1.78]: https://github.com/IvanPavlak/WinuX/compare/v0.1.77...v0.1.78

@@ -254,16 +254,20 @@ if (Test-StartupStage -Name "LogMaintenance") {
 
 # The one PowerShell.OnIdle subscription that runs the deferred work. Registering the engine event
 # costs well under a millisecond, and the action fires only AFTER the prompt is rendered and the
-# shell has been idle ~300ms - so shell launch pays nothing. The queue travels as -MessageData
-# because the action runs in a scope of its own. The action's pipeline output goes to the event
-# system, never the console, and it unregisters itself so it fires at most once per session;
+# shell has been idle ~300ms - so shell launch pays nothing. The queue travels as a global variable
+# because the action runs in a scope of its own - NOT as -MessageData: Register-EngineEvent with
+# -Action silently drops it ($Event.MessageData arrives $null), so the loop would run over nothing
+# and every deferred entry would quietly never happen. The action's pipeline output goes to the
+# event system, never the console, and it unregisters itself so it fires at most once per session;
 # -SupportEvent keeps the subscription and its event job out of Get-Job / Get-EventSubscriber
 # (which is also why unregistering needs -Force).
 if ($deferredStartup.Count -gt 0) {
-	Register-EngineEvent -SourceIdentifier PowerShell.OnIdle -SupportEvent -MessageData $deferredStartup -Action {
-		foreach ($deferredAction in $Event.MessageData) {
+	$global:WinuXDeferredStartup = $deferredStartup
+	Register-EngineEvent -SourceIdentifier PowerShell.OnIdle -SupportEvent -Action {
+		foreach ($deferredAction in $global:WinuXDeferredStartup) {
 			try { & $deferredAction } catch { }
 		}
+		Remove-Variable -Name WinuXDeferredStartup -Scope Global -ErrorAction SilentlyContinue
 		Unregister-Event -SourceIdentifier PowerShell.OnIdle -Force -ErrorAction SilentlyContinue
 	}
 }
