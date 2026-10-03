@@ -130,7 +130,7 @@ Describe "Deploy-AiMods" {
 		$remaining | Should -Contain "elsewhere"
 		$remaining | Should -Contain "not-a-mod"
 		Should -Invoke Write-LogStep -Times 1 -Exactly -ParameterFilter { $Message -like "*Removed dangling link*" }
-		Should -Invoke Write-LogStep -Times 1 -ParameterFilter { $Message -like "*Removed dangling link => `[gone`]*" }
+		Should -Invoke Write-LogStep -Times 1 -ParameterFilter { $Message -like '*Removed dangling link => `[gone`]*' }
 	}
 
 	It "points Claude Code only at the first harness when several are configured" {
