@@ -106,6 +106,7 @@ decisions behind them, and where the values go. Each module's `README.md` indexe
 | `Locales`, `DefaultLocale`                         | `Set-Locale`                                       |
 | `DisplayLanguages`                                 | `Set-DisplayLanguage`                              |
 | `KeyboardLayouts`, `DefaultKeyboardLayoutSet`      | `Set-KeyboardLayouts`                              |
+| `AutoElevate`                                      | `Test-AdminPrivileges`                             |
 
 ---
 

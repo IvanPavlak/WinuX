@@ -138,6 +138,21 @@ Run-Tests
 # - Invalid escape sequences
 ```
 
+### UAC Prompt Still Appears With `AutoElevate = $true`
+
+**Problem:** `AutoElevate = $true` is set in `Configuration.local.psd1`, yet running an admin-only function (for example `Install-WingetApps`) from a non-elevated shell still shows the Windows "Do you want to allow this app to make changes to your device?" dialog.
+
+**Why it happened:** This is by design. `AutoElevate` removes only the WinuX question "Do you want to open the Administrator PowerShell and rerun the command?". The relaunch itself starts Windows Terminal elevated, and Windows always asks for consent before a non-elevated process may start an elevated one. PowerShell cannot answer or suppress that dialog; the only ways around it lower the security of the whole machine, so WinuX does not use them.
+
+**Solution:** Nothing to fix. Confirm the dialog and the command reruns in the elevated tab from the same directory. If the WinuX question still appears as well, the key did not land: reload and check it.
+
+```powershell
+Reload-PowerShellProfile
+$global:Configuration.AutoElevate   # should print True
+```
+
+A call that passes `-AutoElevate:$false` explicitly keeps the question even when the key is `$true`.
+
 ## Symbolic Link Issues
 
 ### WinuX Replaced My PowerShell Profile Or FancyZones Settings

@@ -1358,24 +1358,30 @@ Show-FunctionDetails -FunctionName "Open-Browser" -FunctionInfo $info
 
 ## [Test-AdminPrivileges](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Test-AdminPrivileges.ps1)
 
-- **Description:** Verifies or requests Administrator privileges. With `-CheckOnly` it simply returns a boolean indicating whether the current session is elevated. Without `-CheckOnly`, when not running as admin it warns the user, prompts to open an Administrator PowerShell, and reruns the triggering command (from the current directory) in that elevated shell.
-- **Parameters:** -CheckOnly
-- **Usage:** `Test-AdminPrivileges`, `if (Test-AdminPrivileges -CheckOnly) { ... }`
+- **Description:** Verifies or requests Administrator privileges. With `-CheckOnly` it simply returns a boolean indicating whether the current session is elevated. Without `-CheckOnly`, when not running as admin it warns the user, prompts to open an Administrator PowerShell, and reruns the triggering command (from the current directory) in that elevated shell. With `-AutoElevate`, or `AutoElevate = $true` in `Configuration.local.psd1`, the prompt is skipped and the relaunch happens straight away; the Windows UAC consent dialog still appears.
+- **Parameters:** -CheckOnly, -AutoElevate
+- **Usage:** `Test-AdminPrivileges`, `Test-AdminPrivileges -AutoElevate`, `if (Test-AdminPrivileges -CheckOnly) { ... }`
 
-When invoked without `-CheckOnly` and the session is not elevated, it captures the current directory and the originally typed command - the outermost call-stack frame, falling back to the immediate caller when the host records no line (inner frames would replay engine source lines like `& $stepName` that do not exist in a fresh shell) - then offers (via `Resolve-Selection`) to relaunch in an Administrator shell that re-runs the original command in place. It throws a `PipelineStoppedException` to halt the non-elevated pipeline. Use `-CheckOnly` as a lightweight, non-interactive guard that returns `$true`/`$false` without prompting or elevating.
+When invoked without `-CheckOnly` and the session is not elevated, it captures the current directory and the originally typed command - the outermost call-stack frame, falling back to the immediate caller when the host records no line (inner frames would replay engine source lines like `& $stepName` that do not exist in a fresh shell) - then offers (via `Resolve-Selection`) to relaunch in an Administrator shell (via `Open-Terminal -Administrator`) that re-runs the original command in place, logs the relaunch, and throws a `PipelineStoppedException` to halt the non-elevated pipeline. Declining the prompt still throws, without relaunching. When `AutoElevate` is in effect the offer is skipped and the relaunch is unconditional. An explicitly passed `-AutoElevate` or `-AutoElevate:$false` wins over the `AutoElevate` configuration key; the key is read only in a non-elevated session. Use `-CheckOnly` as a lightweight, non-interactive guard that returns `$true`/`$false` without prompting, elevating, or reading configuration.
 
-| Parameter    | Description                                                                                              |
-| ------------ | -------------------------------------------------------------------------------------------------------- |
-| `-CheckOnly` | Switch. Return a boolean for whether the session is elevated, without prompting or attempting elevation. |
+| Parameter      | Description                                                                                                                                                  |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `-CheckOnly`   | Switch. Return a boolean for whether the session is elevated, without prompting or attempting elevation.                                                     |
+| `-AutoElevate` | Switch. Relaunch elevated without the confirmation question. When not passed, the `AutoElevate` configuration key decides (`$false` by default). UAC still appears. |
 
 ```powershell
 # Guard a function body: stop and offer to re-run elevated if not admin
 Test-AdminPrivileges
 # Admin-only operations follow...
 
+# Same guard, but relaunch elevated without asking
+Test-AdminPrivileges -AutoElevate
+
 # Non-interactive check returning a boolean
 if (Test-AdminPrivileges -CheckOnly) { Write-Host "Running as admin" }
 ```
+
+**See also:** [Test-AdminPrivileges configuration guide](../configuration/guides/helper/Test-AdminPrivileges.md), [Auto Elevate reference](../configuration/configuration-reference.md#auto-elevate)
 
 ## [Test-AppNotInstalled](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Test-AppNotInstalled.ps1)
 
