@@ -19,7 +19,8 @@ function Resolve-BootstrapSteps {
 		DeveloperMode, NuGetConfig (prompts for a GitHub PAT), UpgradeAll
 		(upgrades every package already on the machine, not just WinuX's own),
 		CoreAiRules (machine-global AI agent policy), AiSkills (machine-global
-		Agent Skills links), ObsidianCli (turns the Obsidian command line
+		Agent Skills links), AiMods (machine-global Claude Code mods links and
+		the CLAUDE_CODE_PLUGIN_DIRS settings key), ObsidianCli (turns the Obsidian command line
 		interface on in Obsidian's per-machine app settings), and
 		LockedStartLayout.
 
@@ -92,6 +93,7 @@ function Resolve-BootstrapSteps {
 		SymbolicLinks              = $true
 		CoreAiRules                = $false
 		AiSkills                   = $false
+		AiMods                     = $false
 		ObsidianCli                = $false
 		LockedStartLayout          = $false
 	}

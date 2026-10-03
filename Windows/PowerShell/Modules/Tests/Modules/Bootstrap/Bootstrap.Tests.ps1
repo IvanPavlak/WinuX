@@ -23,6 +23,9 @@ BeforeAll {
 	. "$BootstrapFunctionsPath\Resolve-RepositoryUpdateScope.ps1"
 	# The opt-in Obsidian CLI step; dot-sourced so it exists to Mock in every session.
 	. "$ModuleRoot\Application\Functions\Enable-ObsidianCli.ps1"
+	# The opt-in AI mods step; dot-sourced so it exists to Mock even in sessions whose imported
+	# AI module predates the export.
+	. "$ModuleRoot\AI\Functions\Deploy-AiMods.ps1"
 }
 
 AfterAll {
@@ -91,6 +94,7 @@ Describe "Bootstrap" {
 		Mock Set-ItemProperty { }
 		Mock Restart-Machine { }
 		Mock Enable-ObsidianCli { }
+		Mock Deploy-AiMods { }
 	}
 
 	It "runs initial-setup steps and leaves the repository update off until it is opted into" {
@@ -123,7 +127,7 @@ Describe "Bootstrap" {
 		Should -Invoke Start-Win11Debloat -Times 1 -Exactly
 	}
 
-	It "keeps the other opt-in steps off by default (DeveloperMode, NuGetConfig, ObsidianCli, LockedStartLayout)" {
+	It "keeps the other opt-in steps off by default (DeveloperMode, NuGetConfig, AiMods, ObsidianCli, LockedStartLayout)" {
 		$global:MachineType = 'Laptop'
 
 		Bootstrap
@@ -131,18 +135,21 @@ Describe "Bootstrap" {
 		Should -Invoke Enable-DeveloperMode -Times 0
 		Should -Invoke Configure-NuGetConfig -Times 0
 		Should -Invoke Enable-ObsidianCli -Times 0
+		Should -Invoke Deploy-AiMods -Times 0
+		Should -Invoke Write-LogWarning -ParameterFilter { $Message -eq "AI mods skipped - opt in via BootstrapConfig.Steps.AiMods" }
 		Should -Invoke Set-ItemProperty -Times 0 -ParameterFilter { $Name -eq 'LockedStartLayout' }
 	}
 
 	It "runs the opt-in steps when BootstrapConfig.Steps enables them" {
 		$global:MachineType = 'Laptop'
-		$global:Configuration.BootstrapConfig = @{ Steps = @{ DeveloperMode = $true; NuGetConfig = $true; ObsidianCli = $true; LockedStartLayout = $true } }
+		$global:Configuration.BootstrapConfig = @{ Steps = @{ DeveloperMode = $true; NuGetConfig = $true; AiMods = $true; ObsidianCli = $true; LockedStartLayout = $true } }
 
 		Bootstrap
 
 		Should -Invoke Enable-DeveloperMode -Times 1 -Exactly
 		Should -Invoke Configure-NuGetConfig -Times 1 -Exactly
 		Should -Invoke Enable-ObsidianCli -Times 1 -Exactly -ParameterFilter { $CreateIfMissing }
+		Should -Invoke Deploy-AiMods -Times 1 -Exactly
 		Should -Invoke Set-ItemProperty -Times 1 -Exactly -ParameterFilter { $Name -eq 'LockedStartLayout' }
 	}
 

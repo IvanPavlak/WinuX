@@ -50,6 +50,7 @@
     - [Agent System](/ai/agent-system.md)
     - [CoreAiRules](/ai/coreairules.md)
     - [AI Skills](/ai/skills.md)
+    - [AI Mods](/ai/mods.md)
 
 - **Contributing**
     - [Fork Model](/contributing/fork-model.md)
