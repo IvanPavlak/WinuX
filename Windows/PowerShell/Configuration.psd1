@@ -3196,9 +3196,9 @@
 			"Right"        = 3
 		}
 		"Four"  = @{
-			"Top-Left"    = 0
-			"Bottom-Left" = 1
-			"Top-Right"   = 2
+			"Top-Left"     = 0
+			"Bottom-Left"  = 1
+			"Top-Right"    = 2
 			"Bottom-Right" = 3
 		}
 		"Five"  = @{

@@ -46,10 +46,10 @@ function Set-ClaudeSettingsEnv {
 	[CmdletBinding(SupportsShouldProcess = $true)]
 	[OutputType([bool])]
 	param(
-		[Parameter(Mandatory)]
+		[Parameter(Mandatory = $true)]
 		[string]$Name,
 
-		[Parameter(Mandatory)]
+		[Parameter(Mandatory = $true)]
 		[AllowEmptyString()]
 		[string]$Value,
 

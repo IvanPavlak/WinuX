@@ -47,10 +47,10 @@ function Resolve-AiModsPluginDirs {
 		[AllowEmptyCollection()]
 		[string[]]$Deployed = @(),
 
-		[Parameter(Mandatory)]
+		[Parameter(Mandatory = $true)]
 		[string]$Harness,
 
-		[Parameter(Mandatory)]
+		[Parameter(Mandatory = $true)]
 		[char]$Separator
 	)
 

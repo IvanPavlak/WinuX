@@ -119,11 +119,16 @@ function Deploy-AiMods {
 		}
 
 		# Prune dangling links that point into the mods root (removed or excluded mods).
+		# The separator check keeps a sibling folder such as "<root>Backup" out of the prune.
+		$rootTrimmed = $root.TrimEnd('\', '/')
 		foreach ($child in Get-ChildItem -Path $harness -Force -ErrorAction SilentlyContinue) {
 			if (-not ($child.Attributes -band [IO.FileAttributes]::ReparsePoint)) { continue }
 			$target = [string]$child.LinkTarget
 			if (-not $target) { $target = [string](@($child.Target)[0]) }
-			if ($target -and $target.StartsWith($root, [StringComparison]::OrdinalIgnoreCase) -and -not (Test-Path -Path $target)) {
+			$isUnderRoot = $target -and (
+				$target.StartsWith("$rootTrimmed\", [StringComparison]::OrdinalIgnoreCase) -or
+				$target.StartsWith("$rootTrimmed/", [StringComparison]::OrdinalIgnoreCase))
+			if ($isUnderRoot -and -not (Test-Path -Path $target)) {
 				$child.Delete()
 				Write-LogStep "Removed dangling link => [$($child.Name)]"
 			}

@@ -104,6 +104,35 @@ Describe "Deploy-AiMods" {
 		Should -Invoke Set-ClaudeSettingsEnv -Times 1 -ParameterFilter { $Value -like "*\charlie;D:\Plugins\other" -and $Value -notlike "*gone*" }
 	}
 
+	It "prunes only dangling links that point inside the mods root, never a sibling folder or a live link" {
+		# Junctions are real reparse points that need no admin rights, so the prune walk runs for real.
+		New-Item -ItemType Directory -Path $script:Harness -Force | Out-Null
+		$goneTarget = Join-Path $script:Root "neon\gone"
+		$siblingTarget = Join-Path $script:Repo "AI\ModsBackup\x"
+		$elsewhereTarget = Join-Path $TestDrive "other\y"
+		foreach ($pair in @(
+				@{ Name = "gone"; Target = $goneTarget },
+				@{ Name = "sibling"; Target = $siblingTarget },
+				@{ Name = "elsewhere"; Target = $elsewhereTarget },
+				@{ Name = "not-a-mod"; Target = (Join-Path $script:Root "neon\not-a-mod") })) {
+			New-Item -ItemType Directory -Path $pair.Target -Force | Out-Null
+			New-Item -ItemType Junction -Path (Join-Path $script:Harness $pair.Name) -Target $pair.Target | Out-Null
+		}
+		# Three targets vanish, leaving dangling links; only the one under the mods root may go.
+		Remove-Item -Path $goneTarget, $siblingTarget, $elsewhereTarget -Recurse -Force
+
+		Deploy-AiMods
+
+		# A listing, not Test-Path: Test-Path answers differently for a dangling link across PowerShell versions.
+		$remaining = @(Get-ChildItem -Path $script:Harness -Force | Select-Object -ExpandProperty Name)
+		$remaining | Should -Not -Contain "gone"
+		$remaining | Should -Contain "sibling"
+		$remaining | Should -Contain "elsewhere"
+		$remaining | Should -Contain "not-a-mod"
+		Should -Invoke Write-LogStep -Times 1 -Exactly -ParameterFilter { $Message -like "*Removed dangling link*" }
+		Should -Invoke Write-LogStep -Times 1 -ParameterFilter { $Message -like "*Removed dangling link => `[gone`]*" }
+	}
+
 	It "points Claude Code only at the first harness when several are configured" {
 		$second = Join-Path $TestDrive "home\other\mods"
 		$script:Harnesses = @($script:Harness, $second)
