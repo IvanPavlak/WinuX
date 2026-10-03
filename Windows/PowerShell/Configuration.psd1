@@ -28,7 +28,7 @@
 # Individual bootstrap steps are toggleable
 # via BootstrapConfig.Steps (see that section); invasive steps such as
 # MicrosoftActivationScripts, Win11Debloat, DeveloperMode, NuGetConfig,
-# UpgradeAll, CoreAiRules, AiSkills, ObsidianCli and LockedStartLayout are OFF
+# UpgradeAll, CoreAiRules, AiSkills, AiMods, ObsidianCli and LockedStartLayout are OFF
 # until you opt in. A vanilla run
 # therefore installs the framework apps but upgrades nothing else already
 # on the machine.
@@ -893,6 +893,36 @@
 	}
 
 	# ==========================================================================
+	# AI Mods (see docs/ai/mods.md)
+	# ==========================================================================
+	# Claude Code mods - function-hook plugins (a folder holding .claude-plugin\plugin.json
+	# and a hooks module) that draw bands, panes and status entries and hook engine events -
+	# kept in the repository and deployed by Deploy-AiMods (opt in via
+	# BootstrapConfig.Steps.AiMods): every mod is linked into the Harnesses directories
+	# (default ~\.claude\mods), and the single key env.CLAUDE_CODE_PLUGIN_DIRS of the user's
+	# ~\.claude\settings.json is set to list the links of the first harness, keeping every
+	# other setting and every plugin entry added by hand. Root holds one subfolder per
+	# source: vendored upstreams filled by Update-AiMods from Sources (pinned to a commit,
+	# with UPSTREAM.md), plus `own` for hand-written mods. WSL twins of the harnesses are
+	# derived from the {User} entries and DefaultWSLUsername. Only {RepoRoot}, {User} and
+	# {AppData} expand here. Ships with no mods and no sources - Update-AiMods and
+	# Deploy-AiMods no-op until a fork adds one in Configuration.local.psd1, e.g.:
+	#   Sources = @{
+	#       "my-mod" = @{
+	#           Repository = "MyOrg/MyMod"     # owner/name on GitHub
+	#           Ref        = "v1.0.0"          # branch, tag or commit
+	#           Folders    = @(".")            # "." = the repository root is the mod
+	#           Exclude    = @()               # mod names to leave out
+	#           SkipPaths  = @(".git", ".github", "tests", "design", "docs")  # not vendored
+	#       }
+	#   }
+	AiMods                        = @{
+		Root      = "{RepoRoot}\AI\Mods"
+		Harnesses = @("{User}\.claude\mods")
+		Sources   = @{}
+	}
+
+	# ==========================================================================
 	# Machine-Specific Overrides (Only Store Differences!)
 	# ==========================================================================
 	# Contains paths or settings that differ between machines and cannot be
@@ -976,7 +1006,7 @@
 	# - Upgrade-All, fork-defined PersonalSteps, Install-DotnetEF
 	# - Set-EnvironmentVariables, Create-CondaEnvironments, Configure-NuGetConfig
 	# - Configure-Taskbar, Initialize-WSLEnvironment, SymbolicLinkMaker, Deploy-CoreAiRules (opt-in),
-	#   Deploy-AiSkills (opt-in), Enable-ObsidianCli (opt-in)
+	#   Deploy-AiSkills (opt-in), Deploy-AiMods (opt-in), Enable-ObsidianCli (opt-in)
 	# - Configure-WSLSSH, Lock taskbar layout, Restart-Machine
 	#
 	# HOW TO ADD NEW APPLICATIONS:
@@ -1019,8 +1049,9 @@
 		# MicrosoftActivationScripts, Win11Debloat, DeveloperMode, NuGetConfig
 		# (prompts for a GitHub PAT), UpgradeAll (upgrades every package already
 		# on the machine, not just WinuX's own), CoreAiRules (machine-global AI
-		# agent policy), AiSkills (machine-global Agent Skills), ObsidianCli (edits
-		# Obsidian's per-machine app settings), LockedStartLayout.
+		# agent policy), AiSkills (machine-global Agent Skills), AiMods (machine-global
+		# Claude Code mods and the CLAUDE_CODE_PLUGIN_DIRS settings key), ObsidianCli
+		# (edits Obsidian's per-machine app settings), LockedStartLayout.
 		#
 		# Per invocation, Bootstrap -Skip <steps> forces steps off and
 		# Bootstrap -Include <steps> forces them on, both overriding this config.
@@ -1064,6 +1095,9 @@
 		#                                agent policy, see docs/ai/coreairules.md)
 		# - AiSkills                   : Deploy-AiSkills (OFF by default - links the skills under
 		#                                AiSkills.Root into every AI harness, see docs/ai/skills.md)
+		# - AiMods                     : Deploy-AiMods (OFF by default - links the Claude Code mods
+		#                                under AiMods.Root into ~/.claude/mods and lists them in
+		#                                env.CLAUDE_CODE_PLUGIN_DIRS, see docs/ai/mods.md)
 		# - ObsidianCli                : Enable-ObsidianCli -CreateIfMissing (OFF by default - sets
 		#                                "cli": true in %APPDATA%\obsidian\obsidian.json, Obsidian's
 		#                                per-machine app settings a synced vault never carries, so
@@ -1804,7 +1838,7 @@
 		# 	@{ Action = "Open-Obsidian"; Parameters = @{ Default = $true } }  # no CurrentWorkspace here, so skip the menu
 		# 	@{ Action = "Open-Browser"; Parameters = @{ Groups = @("Google") } }
 		# )
-		@{ WinuX          = @(
+		@{ WinuX = @(
 				@{ Action = "Open-VSCode"; Parameters = @{ Folder = "{ProjectName}" } }
 				@{ Action = "Open-ProjectTerminals-Or-RunProject"; Parameters = @{ Project = "{ProjectName}" } }
 			)
@@ -1819,7 +1853,7 @@
 			)
 		}
 
-		@{ Server         = @(
+		@{ Server = @(
 				@{ Action = "Open-ProjectTerminals-Or-RunProject"; Parameters = @{ Project = "{ProjectName}" } }
 			)
 		}
@@ -1893,15 +1927,15 @@
 	#                         explicit "Yes" on a red confirmation prompt (Enter cancels)
 	# Override this list wholesale in Configuration.local.psd1 to add your own actions.
 	DockerCleanupActions          = @(
-		@{ Name                = "Stop all containers";
+		@{ Name              = "Stop all containers";
 			Command             = 'docker ps -q | ForEach-Object { docker stop $_ }';
 			ConfirmationMessage = "Are you sure you want to stop all running containers?"
 		}
-		@{ Name                = "Delete all containers, images and volumes";
+		@{ Name              = "Delete all containers, images and volumes";
 			Command             = 'docker system prune -a --volumes -f';
 			ConfirmationMessage = "Are you sure you want to delete ALL containers, images and volumes?"
 		}
-		@{ Name                = "Delete all volumes";
+		@{ Name              = "Delete all volumes";
 			Command             = 'docker volume ls -q | ForEach-Object { docker volume rm $_ }';
 			ConfirmationMessage = "Are you sure you want to delete ALL volumes?"
 		}
@@ -1913,10 +1947,10 @@
 	#
 	# Both DotnetRun (dnr) and DotnetBuildAndRun (dnbr) are supported
 	RunnableProjectMappings       = @(
-		@{ Name     = "WinuX";
+		@{ Name   = "WinuX";
 			Commands = @{ DOCS = "npx docsify-cli serve" }
 		}
-		@{ Name              = "ExampleProject";
+		@{ Name            = "ExampleProject";
 			Commands          = @{ API = "dnr"; UI = "nir" };
 			DatabaseProviders = @("PostgreSQL");
 		}
@@ -2113,7 +2147,7 @@
 	# ==========================================================================
 	# TODO: Add support for a "universal" param which will then be sent to every action
 	WorkspaceActions              = @(
-		@{ Default    = @(
+		@{ Default = @(
 				@{ Action = "Open-Browser"; Parameters = @{ Groups = @("Google", "YouTube") } }
 				@{ Action = "Set-WorkspaceWindowLayout"; Parameters = @{ WorkspaceName = "Default" } }
 				@{ Action = "Focus-VirtualDesktop"; Parameters = @{ DesktopNumber = 1 } }
@@ -2121,7 +2155,7 @@
 			)
 		}
 
-		@{ Example    = @(
+		@{ Example = @(
 				@{ Action = "Open-Browser"; Parameters = @{ NoMenu = $true ; Instances = 33 } }
 				@{ Action = "Set-WorkspaceWindowLayout"; Parameters = @{ WorkspaceName = "Example" } }
 				@{ Action = "Focus-VirtualDesktop"; Parameters = @{ DesktopNumber = 1 } }
@@ -2134,7 +2168,7 @@
 			)
 		}
 
-		@{ Empty      = @(
+		@{ Empty = @(
 				@{ Action = "Set-WorkspaceWindowLayout"; Parameters = @{ WorkspaceName = "Empty" } }
 				@{ Action = "Focus-VirtualDesktop"; Parameters = @{ DesktopNumber = 1 } }
 			)
@@ -2143,7 +2177,7 @@
 		# WinuX development: the repository's GitHub page on the left, VS Code on the right
 		# (FancyZones layout "One") on virtual desktop 1. The terminal tab that launched the
 		# workspace is closed last (OnlyCurrent leaves every other tab alive).
-		@{ WinuX      = @(
+		@{ WinuX = @(
 				@{ Action = "Open-Browser"; Parameters = @{ Groups = @("WinuX") } }
 				@{ Action = "Open-VSCode"; Parameters = @{ Folder = "WinuX" } }
 				@{ Action = "Set-WorkspaceWindowLayout"; Parameters = @{ WorkspaceName = "WinuX" } }
@@ -3162,9 +3196,9 @@
 			"Right"        = 3
 		}
 		"Four"  = @{
-			"Top-Left"     = 0
-			"Bottom-Left"  = 1
-			"Top-Right"    = 2
+			"Top-Left"    = 0
+			"Bottom-Left" = 1
+			"Top-Right"   = 2
 			"Bottom-Right" = 3
 		}
 		"Five"  = @{

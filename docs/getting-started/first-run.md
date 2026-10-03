@@ -93,6 +93,8 @@ Every step is individually toggleable via `BootstrapConfig.Steps` (or per invoca
 │  │   └─ CoreAiRules managed settings inside WSL (/etc/claude-code)          │
 │  ├─→ Deploy-AiSkills (opt-in via Steps.AiSkills)                            │
 │  │   └─ Links AI/Skills/<source>/<skill> into every harness's skills dir    │
+│  ├─→ Deploy-AiMods (opt-in via Steps.AiMods)                                │
+│  │   └─ Links AI/Mods/<source>/<mod> into ~/.claude/mods + plugin list      │
 │  └─→ Configure-WSLSSH                                                       │
 │      └─ Sets up SSH keys in WSL                                             │
 │                                                                             │
@@ -129,6 +131,7 @@ Steps that run on **every** Bootstrap but ship off, because they act the moment 
 | `NuGetConfig`        | Writes a NuGet config (prompts for a GitHub PAT)                | Off - opt in via `BootstrapConfig.Steps`      |
 | `CoreAiRules`        | Machine-global AI agent policy                                  | Off - opt in via `BootstrapConfig.Steps`      |
 | `AiSkills`           | Machine-global Agent Skills linked into every AI harness        | Off - opt in via `BootstrapConfig.Steps`      |
+| `AiMods`             | Machine-global Claude Code mods and the plugin list setting     | Off - opt in via `BootstrapConfig.Steps`      |
 | `ObsidianCli`        | Turns the Obsidian command line interface on (per-machine Obsidian app setting) | Off - opt in via `BootstrapConfig.Steps` |
 | `LockedStartLayout`  | Locks the taskbar layout via registry policy                    | Off - opt in via `BootstrapConfig.Steps`      |
 
