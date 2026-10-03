@@ -1248,6 +1248,24 @@ A limit set to `0` is disabled. Whatever the limits, **the newest backup of ever
 
 ---
 
+## Administrator Elevation
+
+### Auto Elevate
+
+Whether functions that need Administrator privileges relaunch in the Administrator PowerShell without asking first. In a non-elevated shell, `Test-AdminPrivileges` normally asks "Do you want to open the Administrator PowerShell and rerun the command?" and, on Yes, reruns the typed command elevated from the same directory. With `AutoElevate = $true` the question is skipped and the relaunch happens straight away.
+
+**Key:** `AutoElevate` → `$true` or `$false` (`$false` out of the box)
+
+**Consumer function:** `Test-AdminPrivileges`
+
+The Windows UAC consent dialog still appears either way: it is raised by Windows for the elevated relaunch and cannot be suppressed from PowerShell. An explicit `-AutoElevate` or `-AutoElevate:$false` passed to `Test-AdminPrivileges` wins over the key. `Test-AdminPrivileges -CheckOnly` never reads it. Set it in `Configuration.local.psd1`:
+
+```powershell
+AutoElevate = $true
+```
+
+---
+
 ## More Sections (quick reference)
 
 Sections not detailed above, with their real shapes and consumers:

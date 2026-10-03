@@ -243,6 +243,14 @@ Describe "Vanilla Configuration (empty-by-default contract)" {
 		}
 	}
 
+	Context "Administrator elevation" {
+		# Relaunching elevated without the confirmation question is a per-fork opt-in.
+		It "Should ship AutoElevate disabled" {
+			$script:BaseConfig.ContainsKey('AutoElevate') | Should -BeTrue
+			$script:BaseConfig.AutoElevate | Should -BeFalse
+		}
+	}
+
 	Context "Schema validation of the untouched base" {
 		# The vanilla base must be a VALID configuration, not a broken one: the schema
 		# validator may only require framework keys. The two GitConfig entries are the

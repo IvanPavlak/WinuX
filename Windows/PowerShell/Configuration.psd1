@@ -2808,6 +2808,22 @@
 	}
 
 	# ==========================================================================
+	# Test-AdminPrivileges Configuration
+	# ==========================================================================
+	# Functions that need Administrator privileges call Test-AdminPrivileges first. In a
+	# non-elevated shell it asks "Do you want to open the Administrator PowerShell and rerun the
+	# command?" and, on Yes, reruns the typed command elevated from the same directory.
+	# Set AutoElevate to $true to skip that question and relaunch straight away. The Windows UAC
+	# consent dialog still appears - it is raised by Windows and cannot be suppressed from here.
+	# An explicit -AutoElevate / -AutoElevate:$false at a call site wins over this key.
+	# → Consumer: Test-AdminPrivileges
+	#
+	# Example (Configuration.local.psd1):
+	#   AutoElevate = $true
+	# ==========================================================================
+	AutoElevate                   = $false
+
+	# ==========================================================================
 	# Window Module Configuration
 	# ==========================================================================
 	# Configuration for the Window module which provides "Tiling Window Manager"

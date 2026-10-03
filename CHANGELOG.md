@@ -8,6 +8,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.82] - 2026-10-03
+
+### Added
+
+- **`AutoElevate` relaunches admin-only commands elevated without asking first.** In a non-elevated shell, every function guarded by `Test-AdminPrivileges` asked "Do you want to open the Administrator PowerShell and rerun the command?" before relaunching. The new top-level `AutoElevate` key (ships `$false`; set `AutoElevate = $true` in `Configuration.local.psd1`) and the matching `Test-AdminPrivileges -AutoElevate` switch skip that question and relaunch straight away, from the same directory. An explicit `-AutoElevate` or `-AutoElevate:$false` at a call site wins over the key, and `-CheckOnly` never reads it. The Windows UAC consent dialog still appears: it is raised by Windows for the elevated relaunch and cannot be suppressed without lowering the security of the whole machine. Tests: `Test-AdminPrivileges.Tests.ps1` (prompt, auto-relaunch, parameter-over-key precedence, declined prompt, empty answer, typed-command replay; the elevated and non-elevated halves each run in the matching shell and skip with a reason in the other), `VanillaConfiguration.Tests.ps1` (ships disabled). Documented in `docs/modules/helper.md`, the `Test-AdminPrivileges` configuration guide (now the full template), `docs/configuration/configuration-reference.md` (Administrator Elevation), `docs/docs_overview.md` and `docs/reference/troubleshooting.md`.
+
+### Fixed
+
+- **`Test-AdminPrivileges` prints its "Rerunning [...] in the Administrator PowerShell!" message.** The message sat after the `throw` that stops the non-elevated pipeline and never ran; it is now logged right after the relaunch, before the throw.
+- **`Test-AdminPrivileges` no longer depends on the profile alias `t`.** The relaunch called `t -Administrator`, an alias defined only in `Microsoft.PowerShell_profile.ps1`; it now calls `Open-Terminal -Administrator -Command` directly, so the Helper module works in a session without the profile and the relaunch can be mocked in tests.
+
 ## [0.1.81] - 2026-10-01
 
 ### Fixed
@@ -1416,7 +1427,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.81...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.82...HEAD
+[0.1.82]: https://github.com/IvanPavlak/WinuX/compare/v0.1.81...v0.1.82
 [0.1.81]: https://github.com/IvanPavlak/WinuX/compare/v0.1.80...v0.1.81
 [0.1.80]: https://github.com/IvanPavlak/WinuX/compare/v0.1.79...v0.1.80
 [0.1.79]: https://github.com/IvanPavlak/WinuX/compare/v0.1.78...v0.1.79
