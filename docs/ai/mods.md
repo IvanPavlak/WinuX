@@ -40,7 +40,7 @@ The changelog of Claude Code does not name the first build with the hooks-module
 
 ### Vendoring
 
-[Update-AiMods](../modules/ai.md#update-aimods) fills the vendored source folders from GitHub, the same way [Update-AiSkills](../modules/ai.md#update-aiskills) does for skills: it resolves the configured ref to an exact commit, downloads that commit's archive, and records provenance in `AI/Mods/<source>/UPSTREAM.md` (pinned commit, folders, exclusions, skipped paths, a table of every mod with its description) next to a copy of the upstream license.
+[Update-AiMods](../modules/ai.md#update-aimods) fills the vendored source folders from GitHub, the same way [Update-AiSkills](../modules/ai.md#update-aiskills) does for skills: it resolves the configured ref to an exact commit, downloads that commit's archive, and records provenance in `AI/Mods/<source>/UPSTREAM.md` (pinned commit, folders, exclusions, skipped paths, a table of every mod with its description) next to a copy of the upstream license. A source may be a private repository: with a GitHub token (`GITHUB_TOKEN`, `GH_TOKEN`, or a signed-in GitHub CLI) both requests authenticate, so a mod you keep private until it is ready vendors like a public one.
 
 - A configured folder (default `.`, the repository root) that itself holds `.claude-plugin/plugin.json` is one mod - the usual shape of a mod developed in its own repository. Otherwise each of its subfolders that holds the manifest is a mod.
 - Each mod is named by its `plugin.json` `name`.

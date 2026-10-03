@@ -40,11 +40,28 @@ Describe "Update-AiMods" {
 		}
 		Mock Resolve-AiModsConfig { @{ Root = $script:Root; Harnesses = @(); WSLHarnesses = @(); Sources = $script:Sources } }
 
+		# Every test starts anonymous: no token variables and no GitHub CLI, so the machine running
+		# the suite never leaks its own credential into a request.
+		$script:SavedTokens = @{ GITHUB_TOKEN = $env:GITHUB_TOKEN; GH_TOKEN = $env:GH_TOKEN }
+		Remove-Item -Path Env:GITHUB_TOKEN, Env:GH_TOKEN -ErrorAction SilentlyContinue
+		Mock Get-Command { $null } -ParameterFilter { $Name -eq 'gh' }
+
 		Mock Invoke-RestMethod { [pscustomobject]@{ sha = "abc123def456" } }
 		Mock Invoke-WebRequest { }
 		Mock Expand-Archive {
 			New-Item -ItemType Directory -Path $DestinationPath -Force | Out-Null
 			Copy-Item -Path $script:Fixture -Destination $DestinationPath -Recurse -Force
+		}
+	}
+
+	AfterEach {
+		foreach ($key in $script:SavedTokens.Keys) {
+			if ($null -eq $script:SavedTokens[$key]) {
+				Remove-Item -Path "Env:$key" -ErrorAction SilentlyContinue
+			}
+			else {
+				Set-Item -Path "Env:$key" -Value $script:SavedTokens[$key]
+			}
 		}
 	}
 
@@ -78,11 +95,55 @@ Describe "Update-AiMods" {
 		Get-Content -Path (Join-Path $script:Root "demo\UPSTREAM.md") -Raw | Should -Match '\*\*Skipped paths:\*\* none'
 	}
 
-	It "resolves the ref through the commits API and downloads that exact commit" {
+	It "resolves the ref through the commits API and downloads that exact commit, anonymously without a token" {
 		Update-AiMods
 
-		Should -Invoke Invoke-RestMethod -Times 1 -ParameterFilter { $Uri -eq "https://api.github.com/repos/MyOrg/MyMod/commits/v1.0.0" }
-		Should -Invoke Invoke-WebRequest -Times 1 -ParameterFilter { $Uri -eq "https://github.com/MyOrg/MyMod/archive/abc123def456.zip" }
+		Should -Invoke Invoke-RestMethod -Times 1 -ParameterFilter { $Uri -eq "https://api.github.com/repos/MyOrg/MyMod/commits/v1.0.0" -and $Headers.Count -eq 0 }
+		Should -Invoke Invoke-WebRequest -Times 1 -ParameterFilter { $Uri -eq "https://github.com/MyOrg/MyMod/archive/abc123def456.zip" -and $Headers.Count -eq 0 }
+	}
+
+	It "authenticates both requests with GITHUB_TOKEN and downloads the API zipball" {
+		$env:GITHUB_TOKEN = "env-token"
+
+		Update-AiMods
+
+		Should -Invoke Invoke-RestMethod -Times 1 -ParameterFilter { $Uri -eq "https://api.github.com/repos/MyOrg/MyMod/commits/v1.0.0" -and $Headers.Authorization -eq "Bearer env-token" }
+		Should -Invoke Invoke-WebRequest -Times 1 -ParameterFilter { $Uri -eq "https://api.github.com/repos/MyOrg/MyMod/zipball/abc123def456" -and $Headers.Authorization -eq "Bearer env-token" }
+		Test-Path (Join-Path $script:Root "demo\my-mod\.claude-plugin\plugin.json") | Should -BeTrue
+	}
+
+	It "falls back to GH_TOKEN, then to the GitHub CLI's token" {
+		$env:GH_TOKEN = "gh-env-token"
+		Update-AiMods
+		Should -Invoke Invoke-RestMethod -Times 1 -Exactly -ParameterFilter { $Headers.Authorization -eq "Bearer gh-env-token" }
+
+		Remove-Item -Path Env:GH_TOKEN
+		Mock Get-Command { [pscustomobject]@{ Name = 'gh' } } -ParameterFilter { $Name -eq 'gh' }
+		function gh { $global:LASTEXITCODE = 0; "cli-token" }
+		Update-AiMods
+		Should -Invoke Invoke-RestMethod -Times 1 -Exactly -ParameterFilter { $Headers.Authorization -eq "Bearer cli-token" }
+	}
+
+	It "stays anonymous when the GitHub CLI is installed but signed out" {
+		Mock Get-Command { [pscustomobject]@{ Name = 'gh' } } -ParameterFilter { $Name -eq 'gh' }
+		function gh { $global:LASTEXITCODE = 1 }
+
+		Update-AiMods
+
+		Should -Invoke Invoke-RestMethod -Times 1 -ParameterFilter { $Headers.Count -eq 0 }
+		Should -Invoke Invoke-WebRequest -Times 1 -ParameterFilter { $Uri -like "https://github.com/*" }
+	}
+
+	It "hints at a private repository when an anonymous request answers 404, and never logs the token" {
+		Mock Invoke-RestMethod { throw "Response status code does not indicate success: 404 (Not Found)." }
+		Update-AiMods
+		Should -Invoke Write-LogError -Times 1 -ParameterFilter { $Message -like "*404*private*GITHUB_TOKEN*gh auth login*" }
+
+		$env:GITHUB_TOKEN = "secret-value"
+		Update-AiMods
+		Should -Invoke Write-LogError -Times 1 -ParameterFilter { $Message -like "*404*" -and $Message -notlike "*private*" }
+		Should -Invoke Write-LogError -Times 0 -ParameterFilter { $Message -like "*secret-value*" }
+		Should -Invoke Write-LogStep -Times 0 -ParameterFilter { $Message -like "*secret-value*" }
 	}
 
 	It "writes UPSTREAM.md in the Update-AiSkills format that Get-AiSkillManifest reads, and copies the license" {

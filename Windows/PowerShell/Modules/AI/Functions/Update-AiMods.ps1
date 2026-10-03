@@ -38,6 +38,13 @@ function Update-AiMods {
 		-Check compares each manifest's pinned commit with the current upstream head of Ref and
 		reports whether the vendored copy is behind, without downloading or writing anything.
 
+		Private repositories: when a GitHub token is available, both requests authenticate with
+		it and the archive is fetched through the API's zipball endpoint, which accepts a token.
+		The token is the GITHUB_TOKEN environment variable, else GH_TOKEN, else the output of
+		`gh auth token` when the GitHub CLI is installed and signed in; it is sent only to
+		api.github.com and never logged. Without one, both requests are anonymous, as before,
+		and a private repository answers 404, which is reported with this hint.
+
 		Not a Bootstrap step: the vendored tree is committed, so a fresh machine only needs
 		Deploy-AiMods. A network failure is reported per source and leaves that source's
 		vendored copy untouched. The base configuration ships no sources, so this no-ops until
@@ -56,6 +63,10 @@ function Update-AiMods {
 	.EXAMPLE
 		Update-AiMods -Source my-mod
 		Refreshes one source.
+
+	.EXAMPLE
+		$env:GITHUB_TOKEN = "<token with read access>"; Update-AiMods -Source my-private-mod
+		Vendors from a private repository; with the GitHub CLI signed in, no variable is needed.
 
 	.EXAMPLE
 		Update-AiMods -Check
@@ -82,6 +93,17 @@ function Update-AiMods {
 
 	$names = if ($Source) { @($Source) } else { @($sources.Keys | Sort-Object) }
 	$failures = 0
+
+	# One token for every source, so a private upstream resolves and downloads; never logged.
+	$token = if ($env:GITHUB_TOKEN) { $env:GITHUB_TOKEN } elseif ($env:GH_TOKEN) { $env:GH_TOKEN } else { $null }
+	if (-not $token -and (Get-Command -Name gh -CommandType Application -ErrorAction SilentlyContinue)) {
+		$token = [string](& gh auth token 2>$null | Select-Object -First 1)
+		if ($LASTEXITCODE -ne 0 -or -not $token.Trim()) { $token = $null }
+	}
+	$headers = @{}
+	if ($token) {
+		$headers['Authorization'] = "Bearer $(([string]$token).Trim())"
+	}
 
 	foreach ($name in $names) {
 		if (-not $sources.ContainsKey($name)) {
@@ -114,7 +136,7 @@ function Update-AiMods {
 		try {
 			# Resolve the ref to an exact commit first, so UPSTREAM.md always pins a sha and the
 			# archive URL below is stable even when the ref is a moving branch.
-			$commit = Invoke-RestMethod -Uri "https://api.github.com/repos/$repository/commits/$ref"
+			$commit = Invoke-RestMethod -Uri "https://api.github.com/repos/$repository/commits/$ref" -Headers $headers
 			$sha = [string]$commit.sha
 			if (-not $sha) {
 				Write-LogError "[$name] Could not resolve [$ref] to a commit in [$repository]!"
@@ -142,7 +164,10 @@ function Update-AiMods {
 			}
 			New-Item -ItemType Directory -Path $extractPath -Force | Out-Null
 
-			Invoke-WebRequest -Uri "https://github.com/$repository/archive/$sha.zip" -OutFile $zipPath
+			# Anonymous: the public archive URL. Authenticated: the API's zipball, which takes the
+			# token and redirects to a signed download URL, so a private repository downloads too.
+			$archiveUri = if ($token) { "https://api.github.com/repos/$repository/zipball/$sha" } else { "https://github.com/$repository/archive/$sha.zip" }
+			Invoke-WebRequest -Uri $archiveUri -Headers $headers -OutFile $zipPath
 			Expand-Archive -Path $zipPath -DestinationPath $extractPath -Force
 
 			# GitHub archives unpack into a single <name>-<sha> folder.
@@ -266,7 +291,11 @@ function Update-AiMods {
 			Write-LogSuccess "[$name] Vendored $($incoming.Count) mods from [$repository@$($sha.Substring(0, 7))]"
 		}
 		catch {
-			Write-LogError "[$name] Updating AI mods failed => $($_.Exception.Message)"
+			$message = $_.Exception.Message
+			if (-not $token -and $message -match '404') {
+				$message += " - if [$repository] is private, set GITHUB_TOKEN or sign in with 'gh auth login'"
+			}
+			Write-LogError "[$name] Updating AI mods failed => $message"
 			$failures++
 		}
 		finally {

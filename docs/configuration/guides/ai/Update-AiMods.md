@@ -80,6 +80,17 @@ Get-Content "C:\Users\You\Development\MyRepo\AI\Mods\my-mod\UPSTREAM.md"
 
 `-Check` reports each source as up to date, behind its upstream ref, or not vendored yet. Run `Update-AiMods` (or `Update-AiMods -Source my-mod`) to refresh, review the diff, then `Deploy-AiMods` to link.
 
+## Private Repositories
+
+A source can be a private repository. `Update-AiMods` looks for a GitHub token in `GITHUB_TOKEN`, then `GH_TOKEN`, then `gh auth token` when the GitHub CLI is installed and signed in, and with one it authenticates both the commit lookup and the download (through the API's zipball endpoint). The token is sent only to `api.github.com` and never logged; nothing about it goes into `Configuration.local.psd1`. With the GitHub CLI signed in to an account that can read the repository, nothing else is needed:
+
+```powershell
+gh auth status
+Update-AiMods -Check
+```
+
+Without a token a private repository answers 404, and the error names both ways to authenticate. A token for this needs read access to the repository's contents (the classic `repo` scope, or a fine-grained token with Contents: read).
+
 ## Complete Example
 
 A `Configuration.local.psd1` that configures everything on this page. Values are illustrative - substitute your own.
