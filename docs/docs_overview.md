@@ -13,7 +13,7 @@ Windows/
 │   ├── Configuration.psd1                     # Central config hub
 │   ├── Microsoft.PowerShell_profile.ps1       # Profile
 │   └── Modules/
-│       ├── AI/                                # CoreAiRules enforcement + Agent Skills deployment
+│       ├── AI/                                # CoreAiRules enforcement + Agent Skills + Claude Code mods deployment
 │       ├── Bootstrap/                         # Install-Bootstrap.ps1 + CSV data files
 │       ├── Helper/
 │       ├── Application/
@@ -100,8 +100,9 @@ decisions behind them, and where the values go. Each module's `README.md` indexe
 | `SnapInsetPercent`                                 | `Get-WindowInsetPercent` (for the five pre-snap placement paths) |
 | `TerminalGreeting`                                 | `Show-TerminalGreeting` (alias `c`, and shell startup), `Invoke-Clear`, `Invoke-Fastfetch`, `Invoke-Onefetch`, `Format-OnefetchPanel` (via `Resolve-TerminalGreetingSettings`); `Onefetch.InProjectTerminals` also drives `Open-ProjectTerminals` |
 | `KillAll.Steps`                                    | `Kill-All`, `Resolve-KillAllSteps`                 |
-| `BootstrapConfig.Steps`                            | `Bootstrap`, `Resolve-BootstrapSteps` (incl. the opt-in `CoreAiRules` step → `Deploy-CoreAiRules` and `AiSkills` step → `Deploy-AiSkills`) |
+| `BootstrapConfig.Steps`                            | `Bootstrap`, `Resolve-BootstrapSteps` (incl. the opt-in `CoreAiRules` step → `Deploy-CoreAiRules`, `AiSkills` step → `Deploy-AiSkills` and `AiMods` step → `Deploy-AiMods`) |
 | `AiSkills`                                         | `Deploy-AiSkills`, `Update-AiSkills`, `List-Skills`, `Get-AiSkillRoster` (via `Resolve-AiSkillsConfig`) |
+| `AiMods`                                           | `Deploy-AiMods`, `Update-AiMods`, `Get-AiModRoster` (via `Resolve-AiModsConfig`); `Deploy-AiMods` also writes `env.CLAUDE_CODE_PLUGIN_DIRS` of `~\.claude\settings.json` through `Resolve-AiModsPluginDirs` and `Set-ClaudeSettingsEnv`, and checks the CLI with `Test-AiModsCli` |
 | `AutoEnvironmentVariables`                         | `Set-EnvironmentVariables`                         |
 | `Locales`, `DefaultLocale`                         | `Set-Locale`                                       |
 | `DisplayLanguages`                                 | `Set-DisplayLanguage`                              |
@@ -169,6 +170,7 @@ Phase 7 (Taskbar):               Configure-Taskbar -FromBootstrap → Set-Taskba
 Phase 8 (WSL & Symlinks):        Initialize-WSLEnvironment → SymbolicLinkMaker
                                  → Deploy-CoreAiRules (opt-in via BootstrapConfig.Steps.CoreAiRules)
                                  → Deploy-AiSkills (opt-in via BootstrapConfig.Steps.AiSkills)
+                                 → Deploy-AiMods (opt-in via BootstrapConfig.Steps.AiMods)
                                  → Configure-WSLSSH (WSL steps config-gated)
 Phase 9 (Finalize):              Lock taskbar → Restart-Explorer → Restart-Machine
 ```
@@ -249,7 +251,8 @@ docs/
 │   ├── overview.md                         # Layered AI context system, slash commands
 │   ├── agent-system.md                     # Custom agents, prompts, instructions
 │   ├── coreairules.md                        # Machine-global AI agent guardrails (opt-in)
-│   └── skills.md                           # Machine-global Agent Skills (opt-in)
+│   ├── skills.md                           # Machine-global Agent Skills (opt-in)
+│   └── mods.md                             # Machine-global Claude Code mods (opt-in)
 │
 ├── adr/
 │   ├── README.md                           # Architecture decision records index

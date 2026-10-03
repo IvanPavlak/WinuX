@@ -241,6 +241,43 @@ Test-Path "WinuX\Server\.ssh\config"
 wsl mkdir -p /home/you/.ssh
 ```
 
+## AI Mods Issues
+
+### A Mod Does Not Appear In Claude Code
+
+**Problem:** `Deploy-AiMods` ran, but a new Claude Code session shows no band, pane or status entry from the mod.
+
+**Solution:**
+
+1. Confirm the link and the settings key, and that the CLI accepts the mod:
+
+```powershell
+Get-ChildItem "$env:USERPROFILE\.claude\mods" | Select-Object Name, LinkTarget
+(Get-Content "$env:USERPROFILE\.claude\settings.json" -Raw | ConvertFrom-Json).env.CLAUDE_CODE_PLUGIN_DIRS
+claude plugin validate "$env:USERPROFILE\.claude\mods\my-mod"
+```
+
+2. Claude Code reads `CLAUDE_CODE_PLUGIN_DIRS` when a session starts, so close and reopen the session (and restart the desktop app for the Code tab).
+3. If the key is missing although `Deploy-AiMods` set it, something rewrote `settings.json` without it (a manual edit or another tool). Re-run `Deploy-AiMods`; it only ever rewrites that one key.
+
+### "Claude Code CLI (claude) not found on PATH" Or "claude plugin validate failed"
+
+**Problem:** `Deploy-AiMods` warns that mods are deployed but cannot be used yet.
+
+**Solution:** The links and the settings key are already in place - the warning is about the CLI only. Install the Claude Code CLI (`winget install Anthropic.ClaudeCode`, or `brew install --cask claude-code` on macOS) or update it: an older CLI that predates the mod API rejects a mod it cannot load. When the CLI is current and validation still fails, run `claude plugin validate <mod folder>` to see what the engine refuses, and fix the mod upstream.
+
+### The WSL Settings Were Not Updated
+
+**Problem:** `Deploy-AiMods` warns that the `\wsl.localhost\<distro>` share is not reachable.
+
+**Solution:** The WSL links were created; only the WSL user's `~/.claude/settings.json` was skipped. Start the distribution once (`wsl -d Ubuntu`) so the share comes up, confirm `Test-Path \wsl.localhost\Ubuntu\home\you` is true, and re-run `Deploy-AiMods`.
+
+### settings.json Could Not Be Parsed
+
+**Problem:** `Deploy-AiMods` (or `Set-ClaudeSettingsEnv`) reports that `settings.json` could not be parsed and left it untouched.
+
+**Solution:** The file is not valid JSON - usually a trailing comma or a comment added by hand. Fix it (Claude Code itself refuses an invalid settings file too), then re-run `Deploy-AiMods`. The function never overwrites a file it cannot read, so nothing was lost.
+
 ## Application Launch Issues
 
 ### "WhatsApp is already running!" With No WhatsApp Window

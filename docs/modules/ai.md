@@ -1,6 +1,15 @@
 # AI Module
 
-The AI module handles **machine-global AI coding agent setup**: the CoreAiRules enforcement layer and Agent Skills deployment across Claude Code, Codex CLI and Gemini CLI. Both are opt-in (`BootstrapConfig.Steps.CoreAiRules`, `BootstrapConfig.Steps.AiSkills`) - a vanilla bootstrap imposes no AI policy and links no skills. Design pages: [CoreAiRules](../ai/coreairules.md) and [AI Skills](../ai/skills.md).
+The AI module handles **machine-global AI coding agent setup**: the CoreAiRules enforcement layer, Agent Skills deployment across Claude Code, Codex CLI and Gemini CLI, and Claude Code mods vendoring and deployment. All three are opt-in (`BootstrapConfig.Steps.CoreAiRules`, `BootstrapConfig.Steps.AiSkills`, `BootstrapConfig.Steps.AiMods`) - a vanilla bootstrap imposes no AI policy, links no skills and deploys no mods. Design pages: [CoreAiRules](../ai/coreairules.md), [AI Skills](../ai/skills.md) and [AI Mods](../ai/mods.md).
+
+## [Deploy-AiMods](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/AI/Functions/Deploy-AiMods.ps1)
+
+- **Description:** Links every Claude Code mod under the mods root (`AiMods.Root`, default `AI/Mods`, one subfolder per source; a mod is a folder holding `.claude-plugin\plugin.json`) into each directory of `AiMods.Harnesses` (default `~\.claude\mods`), one symbolic link per mod, then points Claude Code at them by setting the single key `env.CLAUDE_CODE_PLUGIN_DIRS` of `~\.claude\settings.json` - the links of the first harness, then every entry added by hand, with entries under that harness that no longer have a mod dropped (merge by [Resolve-AiModsPluginDirs](#resolve-aimodsplugindirs), write by [Set-ClaudeSettingsEnv](#set-claudesettingsenv), every other setting kept). Does the same inside WSL (`/home/<DefaultWSLUsername>/.claude/mods`, links to the `/mnt/<drive>` mount, the WSL settings file edited through `\\wsl.localhost\<distro>` with `:` as the separator). Finally runs [Test-AiModsCli](#test-aimodscli) and only warns when the `claude` CLI is missing or rejects a mod - links and settings are always deployed. Reads the roster through [Get-AiModRoster](#get-aimodroster) (first source by name wins a name clash) and links through [New-WindowsSymbolicLink](system.md#new-windowssymboliclink). Requires administrator privileges. Called by Bootstrap when the opt-in `BootstrapConfig.Steps.AiMods` toggle is enabled (OFF by default).
+- **Usage:** `Deploy-AiMods`
+
+Claude Code loads mods (function-hook plugins) from the folders named in `CLAUDE_CODE_PLUGIN_DIRS`, which it reads from the process environment or the `env` block of the user settings file - never from a project's settings - so one link per mod plus that one key reaches every session on the machine. The harness rules match [Deploy-AiSkills](#deploy-aiskills): a whole-directory link into the repository at the harness path is replaced by a real directory, dangling links into the mods root are pruned, links to anything else are never touched. The WSL settings update is skipped with a warning when the share is unreachable. Idempotent - re-runs self-heal.
+
+**See also:** [Update-AiMods](#update-aimods), [Resolve-AiModsConfig](#resolve-aimodsconfig), [AI Mods](../ai/mods.md)
 
 ## [Deploy-AiSkills](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/AI/Functions/Deploy-AiSkills.ps1)
 
@@ -24,6 +33,14 @@ Idempotent (`ln -sfn`): reruns self-heal the link, so it is safe to run any time
 
 **See also:** [SymbolicLinkMaker](system.md#symboliclinkmaker), [Configure-WSL](system.md#configure-wsl)
 
+## [Get-AiModRoster](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/AI/Functions/Get-AiModRoster.ps1)
+
+- **Description:** Enumerates every Claude Code mod under the mods root (`<Root>\<source>\<mod>\.claude-plugin\plugin.json`) and returns it flattened by mod name as `@{ Root; Mods; Duplicates }`: `Mods` is an ordered map of name to `@{ Name; Path; Source }` (sources walked in name order, the first source wins a name clash), `Duplicates` lists the losing entries with the source they lost to. A folder without the manifest is not a mod; a missing root yields an empty roster. The single reading [Deploy-AiMods](#deploy-aimods) links from.
+- **Parameters:** -Root
+- **Usage:** `Get-AiModRoster`, `(Get-AiModRoster).Mods.Keys`, `Get-AiModRoster -Root "C:\Repo\AI\Mods"`
+
+**See also:** [Get-AiSkillRoster](#get-aiskillroster)
+
 ## [Get-AiSkillDescription](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/AI/Functions/Get-AiSkillDescription.ps1)
 
 - **Description:** Extracts the `description:` from a `SKILL.md` YAML frontmatter as one line of Markdown table text: single-line, quoted (inner escaped quotes unescaped) and folded or literal block values are all flattened, and pipes are escaped. Returns an empty string when the file has no frontmatter or no description. Used by `Update-AiSkills` for the skill table in `UPSTREAM.md`.
@@ -32,7 +49,7 @@ Idempotent (`ln -sfn`): reruns self-heal the link, so it is safe to run any time
 
 ## [Get-AiSkillManifest](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/AI/Functions/Get-AiSkillManifest.ps1)
 
-- **Description:** Reads the `UPSTREAM.md` manifest that `Update-AiSkills` writes into a vendored source folder and returns a hashtable with `Commit` (the pinned upstream sha) and `Skills` (every vendored skill name). A missing manifest yields an empty commit and no skills. `Update-AiSkills` uses the names to know which folders it owns and the commit for `-Check`.
+- **Description:** Reads the `UPSTREAM.md` manifest that `Update-AiSkills` writes into a vendored source folder and returns a hashtable with `Commit` (the pinned upstream sha) and `Skills` (every vendored skill name). A missing manifest yields an empty commit and no skills. `Update-AiSkills` uses the names to know which folders it owns and the commit for `-Check`; [Update-AiMods](#update-aimods) writes the same format and reads it back the same way, the `Skills` list then holding mod names.
 - **Parameters:** -Path
 - **Usage:** `(Get-AiSkillManifest -Path "C:\Repo\AI\Skills\mattpocock\UPSTREAM.md").Skills`
 
@@ -48,11 +65,45 @@ Idempotent (`ln -sfn`): reruns self-heal the link, so it is safe to run any time
 - **Parameters:** -Source, -Skill, -ListDiscrepancies, -Quiet
 - **Usage:** `List-Skills`, `List-Skills -Source own`, `List-Skills -ListDiscrepancies`
 
+## [Resolve-AiModsConfig](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/AI/Functions/Resolve-AiModsConfig.ps1)
+
+- **Description:** Resolves the `AiMods` configuration section into one hashtable every AI mods function shares: `Root` (default `{RepoRoot}\AI\Mods`) and `Harnesses` (default `{User}\.claude\mods`) with `{RepoRoot}`, `{User}` and `{AppData}` expanded, `WSLHarnesses` derived from the `{User}` entries and `DefaultWSLUsername`, `Sources` untouched, and the derived (not configurable) Claude Code settings files `SettingsPath` (`~\.claude\settings.json`) and `WSLSettingsPath` (`/home/<DefaultWSLUsername>/.claude/settings.json`, empty without a WSL username). Every key falls back to its default, so the empty base configuration resolves to a usable, empty setup.
+- **Parameters:** -Configuration, -RepoRoot
+- **Usage:** `Resolve-AiModsConfig`, `(Resolve-AiModsConfig).Root`
+
+**See also:** [Resolve-AiSkillsConfig](#resolve-aiskillsconfig)
+
+## [Resolve-AiModsPluginDirs](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/AI/Functions/Resolve-AiModsPluginDirs.ps1)
+
+- **Description:** Computes the new `CLAUDE_CODE_PLUGIN_DIRS` value without reading or writing anything: every deployed link first, in the order given, then every existing entry NOT under the harness directory verbatim and in its original order (plugins added by hand, `~`-prefixed ones included); existing entries under the harness that were not deployed are stale and dropped, empty entries are dropped and duplicates collapse to their first occurrence. With `;` (Windows) paths compare case-insensitively, with any other separator exactly. Used by [Deploy-AiMods](#deploy-aimods) for both the Windows and the WSL settings file.
+- **Parameters:** -Existing, -Deployed, -Harness, -Separator
+- **Usage:** `Resolve-AiModsPluginDirs -Existing $current -Deployed $links -Harness "$env:USERPROFILE\.claude\mods" -Separator ';'`
+
 ## [Resolve-AiSkillsConfig](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/AI/Functions/Resolve-AiSkillsConfig.ps1)
 
 - **Description:** Resolves the `AiSkills` configuration section into one hashtable the AI skills functions share: `Root` (skills root, default `{RepoRoot}\AI\Skills`), `Harnesses` (Windows skills directories, default `{User}\.claude\skills` and `{User}\.agents\skills`), `WSLHarnesses` (the `{User}` entries mapped onto `/home/<DefaultWSLUsername>/`, empty when no WSL username is configured) and `Sources` (the configured upstreams, untouched). Expands `{RepoRoot}`, `{User}` and `{AppData}` only - the section is machine-type independent. Every key falls back to its default when missing, so the empty base configuration resolves to a usable setup.
 - **Parameters:** -Configuration, -RepoRoot
 - **Usage:** `(Resolve-AiSkillsConfig).Root`, `(Resolve-AiSkillsConfig).WSLHarnesses`
+
+## [Set-ClaudeSettingsEnv](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/AI/Functions/Set-ClaudeSettingsEnv.ps1)
+
+- **Description:** Sets one variable in the `env` block of a Claude Code `settings.json` (default `~\.claude\settings.json`; a `\\wsl.localhost` path edits a WSL user's file) by reading the whole document, setting exactly that key and writing the whole document back, so every other top-level key, nested object and `env` variable survives. A missing file is created with only the key; a file without `env` gains one; an unchanged value writes nothing. Unparseable JSON, a non-object top level or a non-object `env` is logged as an error, left untouched, and returns `$false`. Writes UTF-8 without a BOM, two-space indented with LF line endings, and keeps date-like strings verbatim. Supports `-WhatIf`. Used by [Deploy-AiMods](#deploy-aimods).
+- **Parameters:** -Name, -Value, -SettingsPath, -WhatIf
+- **Usage:** `Set-ClaudeSettingsEnv -Name CLAUDE_CODE_PLUGIN_DIRS -Value "C:\Users\You\.claude\mods\my-mod"`, `Set-ClaudeSettingsEnv -Name CLAUDE_CODE_PLUGIN_DIRS -Value "" -WhatIf`
+
+## [Test-AiModsCli](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/AI/Functions/Test-AiModsCli.ps1)
+
+- **Description:** Checks that the Claude Code CLI resolves on PATH and runs `claude plugin validate <path>` on every given mod, returning `@{ Installed; Invalid }` - `Invalid` holds the mod paths whose validation exited non-zero or threw, and is empty when the CLI is missing (nothing could be checked). The CLI's validator is the practical gate for the mod API, since an older CLI rejects a mod it cannot load. [Deploy-AiMods](#deploy-aimods) only warns on the result.
+- **Parameters:** -ModPath, -Command
+- **Usage:** `Test-AiModsCli -ModPath "$env:USERPROFILE\.claude\mods\my-mod"`, `(Test-AiModsCli -ModPath $links).Invalid`
+
+## [Update-AiMods](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/AI/Functions/Update-AiMods.ps1)
+
+- **Description:** Vendors Claude Code mods from the upstream repositories in `AiMods.Sources` (`Repository`, `Ref`, `Folders`, `Exclude`, `SkipPaths`) into `<Root>\<source>\<mod>\`, pinned: resolves `Ref` to an exact commit through the GitHub API, downloads that commit's archive, and takes each configured folder (default `.`, the repository root) as one mod when it holds `.claude-plugin\plugin.json`, otherwise each subfolder that does. Each mod is named by its `plugin.json` `name` (else the folder name, or the repository name for a root mod) and copied without the top-level entries in `SkipPaths` (default `.git`, `.github`, `tests`, `design`, `docs`). Writes `UPSTREAM.md` in the exact `Update-AiSkills` format (read back by [Get-AiSkillManifest](#get-aiskillmanifest)) and copies the upstream license. Only mods listed in the previous manifest are replaced, so hand-made folders survive; a network failure leaves the vendored copy untouched. `-Check` compares each pinned commit with the upstream head and changes nothing. Private repositories work when a GitHub token is available: `GITHUB_TOKEN`, else `GH_TOKEN`, else `gh auth token` from a signed-in GitHub CLI; both requests then authenticate and the archive comes from the API's zipball endpoint. The token goes only to `api.github.com` and is never logged. Without one, a private repository answers 404 and the error says how to authenticate. Not a Bootstrap step: the vendored tree is committed, and [Deploy-AiMods](#deploy-aimods) links it.
+- **Parameters:** -Source, -Check
+- **Usage:** `Update-AiMods`, `Update-AiMods -Source my-mod`, `Update-AiMods -Check`, `$env:GITHUB_TOKEN = "<token>"; Update-AiMods -Source my-private-mod`
+
+**See also:** [Update-AiSkills](#update-aiskills), [AI Mods](../ai/mods.md)
 
 ## [Update-AiSkills](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/AI/Functions/Update-AiSkills.ps1)
 

@@ -1085,7 +1085,9 @@ Anything other than the three valid values is reported as unknown rather than si
   `$false` rather than leaving it to the default), `CoreAiRules` (machine-global AI
   agent policy applied via `Deploy-CoreAiRules` and the opt-in `SymbolicLinks` entries - see
   [CoreAiRules](../ai/coreairules.md)), `AiSkills` (machine-global Agent Skills linked into every
-  AI harness via `Deploy-AiSkills` - see [AI Skills](../ai/skills.md)), `ObsidianCli` (`Enable-ObsidianCli -CreateIfMissing`
+  AI harness via `Deploy-AiSkills` - see [AI Skills](../ai/skills.md)), `AiMods` (machine-global Claude Code
+  mods linked into `~\.claude\mods` and listed in `env.CLAUDE_CODE_PLUGIN_DIRS` of the user's Claude Code settings via
+  `Deploy-AiMods` - see [AI Mods](../ai/mods.md)), `ObsidianCli` (`Enable-ObsidianCli -CreateIfMissing`
   writes `"cli": true` into Obsidian's per-machine `%APPDATA%\obsidian\obsidian.json`, which a synced vault never carries,
   so `Open-Obsidian` can load workspaces - see [Enable-ObsidianCli](guides/application/Enable-ObsidianCli.md)),
   `RepositoryUpdate` (clones and pulls every repository the machine's `RepositoryUpdateScope`
@@ -1227,6 +1229,40 @@ AiSkills = @{
             Ref        = "main"
             Folders    = @("skills/engineering", "skills/productivity")
             Exclude    = @()
+        }
+    }
+}
+```
+
+---
+
+## AI Mods
+
+**Key:** `AiMods` → Hashtable: where Claude Code mods live, where they are linked, and which upstream repositories they are vendored from
+
+**Consumer functions:** [`Deploy-AiMods`](../modules/ai.md#deploy-aimods), [`Update-AiMods`](../modules/ai.md#update-aimods), [`Get-AiModRoster`](../modules/ai.md#get-aimodroster), all through [`Resolve-AiModsConfig`](../modules/ai.md#resolve-aimodsconfig)
+
+A mod is a Claude Code function-hook plugin: a folder holding `.claude-plugin\plugin.json` and a hooks module.
+
+- `Root` - The mods root (default `{RepoRoot}\AI\Mods`): one subfolder per source, each holding `<mod>\` folders. Vendored upstreams live in `<Root>\<source>\` and are filled by `Update-AiMods`; hand-written mods go in `<Root>\own\`, which no refresh touches.
+- `Harnesses` - The Windows directories `Deploy-AiMods` links every mod into, one symbolic link per mod (default `{User}\.claude\mods`). The links of the FIRST directory are what `CLAUDE_CODE_PLUGIN_DIRS` lists. The `{User}` entries also yield the WSL twins under `/home/<DefaultWSLUsername>/`. An array - it replaces wholesale on merge.
+- `Sources` - Upstream mod repositories vendored by `Update-AiMods`, keyed by the folder name under `Root`. Each entry: `Repository` (`owner/name`), `Ref` (branch, tag or commit; default `main`; `UPSTREAM.md` records the exact commit it resolved to), `Folders` (upstream folders holding mods; `.` is the repository root, the default), `Exclude` (mod names to leave out), `SkipPaths` (top-level entries of a mod not to copy; default `.git`, `.github`, `tests`, `design`, `docs`). Ships empty.
+
+**Side effect:** `Deploy-AiMods` writes exactly one key outside the repository, `env.CLAUDE_CODE_PLUGIN_DIRS` of the user's `~\.claude\settings.json` (and of `/home/<DefaultWSLUsername>/.claude/settings.json` in WSL): the mod links first, then every entry added by hand; entries under the first harness without a mod are dropped, and every other setting in the file is kept. That file is not configurable - it is the only user settings file Claude Code reads the variable from.
+
+Only `{RepoRoot}`, `{User}` and `{AppData}` are expanded in this section - it is machine-type independent and does not go through `PathTemplates`. Deployment is opt-in via `BootstrapConfig.Steps.AiMods`. Design: [AI Mods](../ai/mods.md).
+
+```powershell
+AiMods = @{
+    Root      = "{RepoRoot}\AI\Mods"
+    Harnesses = @("{User}\.claude\mods")
+    Sources   = @{
+        "my-mod" = @{
+            Repository = "MyOrg/MyMod"
+            Ref        = "v1.0.0"
+            Folders    = @(".")
+            Exclude    = @()
+            SkipPaths  = @(".git", ".github", "tests", "design", "docs")
         }
     }
 }
