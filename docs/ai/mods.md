@@ -50,6 +50,16 @@ The changelog of Claude Code does not name the first build with the hooks-module
 
 It is a manual command, not a Bootstrap step: the vendored tree is committed, so a fresh machine only needs `Deploy-AiMods`. Pin `Ref` to a release tag for a known-good version and bump it to upgrade.
 
+### Marketplaces
+
+A plugin published through a Claude Code plugin marketplace (a repository carrying `.claude-plugin/marketplace.json`) does not need vendoring at all: Claude Code installs it with `claude plugin install <plugin>@<marketplace>` and keeps it updated. [Deploy-AiMarketplaces](../modules/ai.md#deploy-aimarketplaces) makes that part of Bootstrap, from the `AiMarketplaces` section:
+
+1. **Register.** Every marketplace under `AiMarketplaces.Marketplaces` is written to `extraKnownMarketplaces.<name>` of the user settings file through [Set-ClaudeSettingsKey](../modules/ai.md#set-claudesettingskey), the generic sibling of `Set-ClaudeSettingsEnv`. Claude Code adds the marketplace on its next start. Inside WSL the same keys go to the WSL user's settings file through the `\\wsl.localhost` share.
+2. **Seed options.** Every entry of `AiMarketplaces.PluginConfigs` is written beneath `pluginConfigs.<plugin>`, one child key at a time, so an option set through `/plugin` that the repository does not name survives.
+3. **Install.** With the `claude` CLI on PATH, every plugin an entry lists is installed as `<plugin>@<name>` unless `claude plugin list --json` already shows it; a missing CLI only warns. Updates stay with `claude plugin update`, or the marketplace's auto-update in `/plugin`.
+
+Vendoring and marketplaces are two ways to load one plugin: give each plugin one of them. A folder-loaded mod and a marketplace install of the same plugin would draw twice. Vendoring keeps a pinned copy that works offline and carries hand-written mods; a marketplace keeps you on the published release with no refresh step.
+
 ## Configuration
 
 ```powershell
@@ -72,9 +82,22 @@ It is a manual command, not a Bootstrap step: the vendored tree is committed, so
             }
         }
     }
+    # Plugins installed from a marketplace instead (Deploy-AiMarketplaces).
+    AiMarketplaces = @{
+        Marketplaces  = @{
+            "my-marketplace" = @{
+                Repository = "MyOrg/MyMarketplace"   # owner/name; the marketplace is named by the key
+                Plugins    = @("my-plugin")          # installed as <plugin>@<key>
+            }
+        }
+        PluginConfigs = @{
+            "my-plugin" = @{ options = @{ theme = "dark" } }   # beneath pluginConfigs.my-plugin
+        }
+    }
     BootstrapConfig = @{
         Steps = @{
-            AiMods = $true
+            AiMods         = $true
+            AiMarketplaces = $true
         }
     }
 }
@@ -92,8 +115,9 @@ It is a manual command, not a Bootstrap step: the vendored tree is committed, so
 
 ## Related
 
-- [AI module reference](../modules/ai.md) - `Deploy-AiMods`, `Update-AiMods`, `Get-AiModRoster`, `Resolve-AiModsConfig`, `Resolve-AiModsPluginDirs`, `Set-ClaudeSettingsEnv`, `Test-AiModsCli`
+- [AI module reference](../modules/ai.md) - `Deploy-AiMods`, `Deploy-AiMarketplaces`, `Update-AiMods`, `Get-AiModRoster`, `Resolve-AiModsConfig`, `Resolve-AiModsPluginDirs`, `Set-ClaudeSettingsEnv`, `Set-ClaudeSettingsKey`, `Test-AiModsCli`
 - [Deploy-AiMods configuration guide](../configuration/guides/ai/Deploy-AiMods.md) - the `AiMods` keys, decision by decision
+- [Deploy-AiMarketplaces configuration guide](../configuration/guides/ai/Deploy-AiMarketplaces.md) - the `AiMarketplaces` keys
 - [Update-AiMods configuration guide](../configuration/guides/ai/Update-AiMods.md) - the `AiMods.Sources` keys
 - [AI Skills](skills.md) - the same deployment model for Agent Skills
 - [Troubleshooting - AI Mods Issues](../reference/troubleshooting.md#ai-mods-issues)

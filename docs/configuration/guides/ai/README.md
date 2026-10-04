@@ -1,6 +1,6 @@
 # AI Module Configuration Guides
 
-One configuration guide per exported function of the `AI` module, which covers machine-global AI coding agent setup: the CoreAiRules enforcement layer, Agent Skills deployment across Claude Code, Codex CLI and Gemini CLI, and Claude Code mods vendoring and deployment.
+One configuration guide per exported function of the `AI` module, which covers machine-global AI coding agent setup: the CoreAiRules enforcement layer, Agent Skills deployment across Claude Code, Codex CLI and Gemini CLI, and Claude Code mods vendoring and deployment, plus plugin marketplace registration.
 
 The [AI module reference](../../../modules/ai.md) is the authority on what each function *does*. These guides cover what to *configure* for it.
 
@@ -11,6 +11,7 @@ The [AI module reference](../../../modules/ai.md) is the authority on what each 
 
 | Function | Configuration keys | Guide |
 | -------- | ------------------ | ----- |
+| `Deploy-AiMarketplaces` | `AiMarketplaces`, `BootstrapConfig.Steps.AiMarketplaces`, `DefaultWSLDistribution`, `DefaultWSLUsername` | [Deploy-AiMarketplaces](Deploy-AiMarketplaces.md) |
 | `Deploy-AiMods` | `AiMods`, `BootstrapConfig.Steps.AiMods`, `DefaultWSLDistribution`, `DefaultWSLUsername` | [Deploy-AiMods](Deploy-AiMods.md) |
 | `Deploy-AiSkills` | `AiSkills`, `DefaultWSLDistribution`, `DefaultWSLUsername` | [Deploy-AiSkills](Deploy-AiSkills.md) |
 | `Deploy-CoreAiRules` | `DefaultWSLDistribution` | [Deploy-CoreAiRules](Deploy-CoreAiRules.md) |
@@ -26,7 +27,7 @@ The [AI module reference](../../../modules/ai.md) is the authority on what each 
 
 These read no `Configuration.psd1` keys. Their guides record that fact and show how to call them.
 
-[Get-AiSkillDescription](Get-AiSkillDescription.md), [Get-AiSkillManifest](Get-AiSkillManifest.md), [Resolve-AiModsPluginDirs](Resolve-AiModsPluginDirs.md), [Set-ClaudeSettingsEnv](Set-ClaudeSettingsEnv.md), [Test-AiModsCli](Test-AiModsCli.md)
+[Get-AiSkillDescription](Get-AiSkillDescription.md), [Get-AiSkillManifest](Get-AiSkillManifest.md), [Resolve-AiModsPluginDirs](Resolve-AiModsPluginDirs.md), [Set-ClaudeSettingsEnv](Set-ClaudeSettingsEnv.md), [Set-ClaudeSettingsKey](Set-ClaudeSettingsKey.md), [Test-AiModsCli](Test-AiModsCli.md)
 
 ## Related
 
