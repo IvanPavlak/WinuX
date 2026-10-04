@@ -1439,7 +1439,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.83...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.84...HEAD
+[0.1.84]: https://github.com/IvanPavlak/WinuX/compare/v0.1.83...v0.1.84
 [0.1.83]: https://github.com/IvanPavlak/WinuX/compare/v0.1.82...v0.1.83
 [0.1.82]: https://github.com/IvanPavlak/WinuX/compare/v0.1.81...v0.1.82
 [0.1.81]: https://github.com/IvanPavlak/WinuX/compare/v0.1.80...v0.1.81
