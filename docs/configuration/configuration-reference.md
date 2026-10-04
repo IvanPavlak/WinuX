@@ -1281,9 +1281,9 @@ AiMods = @{
 A plugin marketplace is a repository carrying `.claude-plugin\marketplace.json`; Claude Code installs its plugins as `<plugin>@<marketplace>` and keeps them updated.
 
 - `Marketplaces` - The marketplaces to register, keyed by the name Claude Code knows them by (the `name` in the marketplace manifest). Each entry: `Repository` (`owner/name` on GitHub) and `Plugins` (the plugin names to install from it; optional). Ships empty.
-- `PluginConfigs` - Options written beneath `pluginConfigs.<plugin>` of the settings file, keyed by plugin. The shape beneath the plugin is the plugin's own (a plugin that reads `options`: `options = @{ ... }`); each child key replaces the same key in the file and leaves the other children alone. Ships empty.
+- `PluginConfigs` - Options written beneath the plugin's `pluginConfigs` entry of the settings file, keyed by plugin name. A plugin a configured marketplace lists is written as Claude Code keys an installed plugin, `pluginConfigs.<plugin>@<marketplace>`; any other name as given. The shape beneath the plugin is the plugin's own (a plugin that reads `options`: `options = @{ ... }`); each child key replaces the same key in the file and leaves the other children alone. Ships empty.
 
-**Side effect:** `Deploy-AiMarketplaces` writes `extraKnownMarketplaces.<name>` and `pluginConfigs.<plugin>.<key>` of the user's `~\.claude\settings.json` (and of `/home/<DefaultWSLUsername>/.claude/settings.json` in WSL), every other setting kept, and runs `claude plugin install <plugin>@<name>` for plugins the CLI does not list yet.
+**Side effect:** `Deploy-AiMarketplaces` writes `extraKnownMarketplaces.<name>` and `pluginConfigs.<plugin>@<name>.<key>` of the user's `~\.claude\settings.json` (and of `/home/<DefaultWSLUsername>/.claude/settings.json` in WSL), every other setting kept, and runs `claude plugin marketplace add <owner/name>` for marketplaces the CLI does not list yet and `claude plugin install <plugin>@<name>` for plugins it does not list yet.
 
 Deployment is opt-in via `BootstrapConfig.Steps.AiMarketplaces`. A plugin loaded from a folder (`AiMods`) and installed from a marketplace would run twice: give each plugin one path. Design: [AI Mods - Marketplaces](../ai/mods.md#marketplaces).
 

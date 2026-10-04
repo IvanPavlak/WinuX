@@ -54,9 +54,9 @@ It is a manual command, not a Bootstrap step: the vendored tree is committed, so
 
 A plugin published through a Claude Code plugin marketplace (a repository carrying `.claude-plugin/marketplace.json`) does not need vendoring at all: Claude Code installs it with `claude plugin install <plugin>@<marketplace>` and keeps it updated. [Deploy-AiMarketplaces](../modules/ai.md#deploy-aimarketplaces) makes that part of Bootstrap, from the `AiMarketplaces` section:
 
-1. **Register.** Every marketplace under `AiMarketplaces.Marketplaces` is written to `extraKnownMarketplaces.<name>` of the user settings file through [Set-ClaudeSettingsKey](../modules/ai.md#set-claudesettingskey), the generic sibling of `Set-ClaudeSettingsEnv`. Claude Code adds the marketplace on its next start. Inside WSL the same keys go to the WSL user's settings file through the `\\wsl.localhost` share.
-2. **Seed options.** Every entry of `AiMarketplaces.PluginConfigs` is written beneath `pluginConfigs.<plugin>`, one child key at a time, so an option set through `/plugin` that the repository does not name survives.
-3. **Install.** With the `claude` CLI on PATH, every plugin an entry lists is installed as `<plugin>@<name>` unless `claude plugin list --json` already shows it; a missing CLI only warns. Updates stay with `claude plugin update`, or the marketplace's auto-update in `/plugin`.
+1. **Register.** Every marketplace under `AiMarketplaces.Marketplaces` is written to `extraKnownMarketplaces.<name>` of the user settings file through [Set-ClaudeSettingsKey](../modules/ai.md#set-claudesettingskey), the generic sibling of `Set-ClaudeSettingsEnv`, so Claude Code knows it on every start. Inside WSL the same keys go to the WSL user's settings file through the `\\wsl.localhost` share.
+2. **Seed options.** Every entry of `AiMarketplaces.PluginConfigs` is written beneath the plugin's `pluginConfigs` entry, one child key at a time, so an option set through `/plugin` that the repository does not name survives. A plugin a configured marketplace lists is keyed the way Claude Code keys an installed plugin, `pluginConfigs.<plugin>@<marketplace>`; any other name is written as given, the shape of a folder-loaded plugin.
+3. **Add and install.** With the `claude` CLI on PATH, every configured marketplace that `claude plugin marketplace list --json` does not show is added with `claude plugin marketplace add <owner/name>` (the settings key alone takes effect only on the engine's next start), and every plugin an entry lists is installed as `<plugin>@<name>` unless `claude plugin list --json` already shows it; a missing CLI only warns. Updates stay with `claude plugin update`, or the marketplace's auto-update in `/plugin`.
 
 Vendoring and marketplaces are two ways to load one plugin: give each plugin one of them. A folder-loaded mod and a marketplace install of the same plugin would draw twice. Vendoring keeps a pinned copy that works offline and carries hand-written mods; a marketplace keeps you on the published release with no refresh step.
 
@@ -91,7 +91,7 @@ Vendoring and marketplaces are two ways to load one plugin: give each plugin one
             }
         }
         PluginConfigs = @{
-            "my-plugin" = @{ options = @{ theme = "dark" } }   # beneath pluginConfigs.my-plugin
+            "my-plugin" = @{ options = @{ theme = "dark" } }   # beneath pluginConfigs.my-plugin@my-marketplace
         }
     }
     BootstrapConfig = @{

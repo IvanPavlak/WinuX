@@ -103,7 +103,7 @@ decisions behind them, and where the values go. Each module's `README.md` indexe
 | `BootstrapConfig.Steps`                            | `Bootstrap`, `Resolve-BootstrapSteps` (incl. the opt-in `CoreAiRules` step → `Deploy-CoreAiRules`, `AiSkills` step → `Deploy-AiSkills`, `AiMods` step → `Deploy-AiMods` and `AiMarketplaces` step → `Deploy-AiMarketplaces`) |
 | `AiSkills`                                         | `Deploy-AiSkills`, `Update-AiSkills`, `List-Skills`, `Get-AiSkillRoster` (via `Resolve-AiSkillsConfig`) |
 | `AiMods`                                           | `Deploy-AiMods`, `Update-AiMods`, `Get-AiModRoster` (via `Resolve-AiModsConfig`); `Deploy-AiMods` also writes `env.CLAUDE_CODE_PLUGIN_DIRS` of `~\.claude\settings.json` through `Resolve-AiModsPluginDirs` and `Set-ClaudeSettingsEnv`, and checks the CLI with `Test-AiModsCli` |
-| `AiMarketplaces`                                   | `Deploy-AiMarketplaces`; writes `extraKnownMarketplaces` and `pluginConfigs` of `~\.claude\settings.json` through `Set-ClaudeSettingsKey` and installs the plugins through the Claude Code CLI |
+| `AiMarketplaces`                                   | `Deploy-AiMarketplaces`; writes `extraKnownMarketplaces` and `pluginConfigs` of `~\.claude\settings.json` through `Set-ClaudeSettingsKey`, then adds the marketplaces and installs the plugins through the Claude Code CLI |
 | `AutoEnvironmentVariables`                         | `Set-EnvironmentVariables`                         |
 | `Locales`, `DefaultLocale`                         | `Set-Locale`                                       |
 | `DisplayLanguages`                                 | `Set-DisplayLanguage`                              |
