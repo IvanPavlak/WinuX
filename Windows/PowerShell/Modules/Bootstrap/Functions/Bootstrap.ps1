@@ -12,7 +12,7 @@ function Bootstrap {
 		no-op on their own when their configuration section is empty, so an enabled step on
 		the empty base config applies nothing. Opt-in steps that act the moment they run
 		default off: MicrosoftActivationScripts, Win11Debloat, RepositoryUpdate, DeveloperMode,
-		NuGetConfig, UpgradeAll, CoreAiRules, AiSkills, AiMods, ObsidianCli, LockedStartLayout.
+		NuGetConfig, UpgradeAll, CoreAiRules, AiSkills, AiMods, AiMarketplaces, ObsidianCli, LockedStartLayout.
 
 		Execution sequence:
 		1. (WithInitialSetup only) Rename-Machine, Start-MicrosoftActivationScripts, Start-Win11Debloat
@@ -28,7 +28,8 @@ function Bootstrap {
 		9. Environment variables, Conda environments, NuGet config, taskbar pins
 		10. WSL environment initialization, symbolic links, CoreAiRules enforcement layer (opt-in via
 		    Steps.CoreAiRules), AI skills links (opt-in via Steps.AiSkills), AI mods links and the
-		    Claude Code plugin list (opt-in via Steps.AiMods), Obsidian CLI flag (opt-in via
+		    Claude Code plugin list (opt-in via Steps.AiMods), Claude Code plugin marketplaces
+		    and their plugins (opt-in via Steps.AiMarketplaces), Obsidian CLI flag (opt-in via
 		    Steps.ObsidianCli), WSL SSH setup (WSL steps use the same gate)
 		11. Lock taskbar layout, restart Explorer, restart machine
 
@@ -273,6 +274,11 @@ function Bootstrap {
 		# Machine-global Claude Code mods (docs/ai/mods.md) - links every mod under AiMods.Root into
 		# ~/.claude/mods and lists them in env.CLAUDE_CODE_PLUGIN_DIRS. The base ships no mods, so this is opt-in as well.
 		if ($steps.AiMods) { Deploy-AiMods } else { Write-LogWarning "AI mods skipped - opt in via BootstrapConfig.Steps.AiMods" }
+
+		# Claude Code plugin marketplaces (docs/ai/mods.md) - registers every marketplace under
+		# AiMarketplaces.Marketplaces in the user settings, seeds the plugins' options and installs the
+		# plugins through the CLI. The base names no marketplaces, so this is opt-in as well.
+		if ($steps.AiMarketplaces) { Deploy-AiMarketplaces } else { Write-LogWarning "AI marketplaces skipped - opt in via BootstrapConfig.Steps.AiMarketplaces" }
 
 		# Obsidian's command line interface toggle is per-machine app state ("cli": true in
 		# %APPDATA%\obsidian\obsidian.json), never carried by a synced vault - Open-Obsidian cannot

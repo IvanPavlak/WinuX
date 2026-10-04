@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.84] - 2026-10-04
+
+### Added
+
+- **Claude Code plugin marketplaces are registered and their plugins installed by Bootstrap.** A plugin published through a Claude Code plugin marketplace (a repository carrying `.claude-plugin\marketplace.json`) needs no vendoring: Claude Code installs it with `claude plugin install <plugin>@<marketplace>` and keeps it updated. The new opt-in step `BootstrapConfig.Steps.AiMarketplaces` runs `Deploy-AiMarketplaces`, which registers every marketplace under the new `AiMarketplaces.Marketplaces` section in the user's `~\.claude\settings.json` (`extraKnownMarketplaces.<name>`, every other setting kept), writes the plugins' options from `AiMarketplaces.PluginConfigs` beneath `pluginConfigs.<plugin>@<marketplace>` (the key of an installed plugin) one child key at a time, and, with the CLI on PATH, adds every marketplace `claude plugin marketplace list --json` does not show and installs every listed plugin unless `claude plugin list --json` already shows it; a missing CLI only warns. In WSL the marketplaces and options reach the WSL user's settings file too. The settings edits go through the new `Set-ClaudeSettingsKey`, which sets one key at any depth of a Claude Code `settings.json` by its dotted path, the generic sibling of `Set-ClaudeSettingsEnv`. The base ships no marketplaces and the step OFF; vendoring (`AiMods`) and marketplaces are two ways to load one plugin, so each plugin gets one. Tests: `Deploy-AiMarketplaces.Tests.ps1`, `Set-ClaudeSettingsKey.Tests.ps1`, the Bootstrap and `Resolve-BootstrapSteps` suites. Documented in `docs/ai/mods.md` (Marketplaces), the AI module reference, the configuration reference and the guides.
+
 ## [0.1.83] - 2026-10-04
 
 ### Added

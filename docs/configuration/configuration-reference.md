@@ -1087,7 +1087,9 @@ Anything other than the three valid values is reported as unknown rather than si
   [CoreAiRules](../ai/coreairules.md)), `AiSkills` (machine-global Agent Skills linked into every
   AI harness via `Deploy-AiSkills` - see [AI Skills](../ai/skills.md)), `AiMods` (machine-global Claude Code
   mods linked into `~\.claude\mods` and listed in `env.CLAUDE_CODE_PLUGIN_DIRS` of the user's Claude Code settings via
-  `Deploy-AiMods` - see [AI Mods](../ai/mods.md)), `ObsidianCli` (`Enable-ObsidianCli -CreateIfMissing`
+  `Deploy-AiMods` - see [AI Mods](../ai/mods.md)), `AiMarketplaces` (Claude Code plugin marketplaces registered in the user's
+  Claude Code settings and their plugins installed through the CLI via `Deploy-AiMarketplaces` - see [AI Mods - Marketplaces](../ai/mods.md#marketplaces)),
+  `ObsidianCli` (`Enable-ObsidianCli -CreateIfMissing`
   writes `"cli": true` into Obsidian's per-machine `%APPDATA%\obsidian\obsidian.json`, which a synced vault never carries,
   so `Open-Obsidian` can load workspaces - see [Enable-ObsidianCli](guides/application/Enable-ObsidianCli.md)),
   `RepositoryUpdate` (clones and pulls every repository the machine's `RepositoryUpdateScope`
@@ -1264,6 +1266,37 @@ AiMods = @{
             Exclude    = @()
             SkipPaths  = @(".git", ".github", "tests", "design", "docs")
         }
+    }
+}
+```
+
+---
+
+## AI Marketplaces
+
+**Key:** `AiMarketplaces` → Hashtable: the Claude Code plugin marketplaces every machine registers, the plugins installed from them, and the options seeded for those plugins
+
+**Consumer functions:** [`Deploy-AiMarketplaces`](../modules/ai.md#deploy-aimarketplaces)
+
+A plugin marketplace is a repository carrying `.claude-plugin\marketplace.json`; Claude Code installs its plugins as `<plugin>@<marketplace>` and keeps them updated.
+
+- `Marketplaces` - The marketplaces to register, keyed by the name Claude Code knows them by (the `name` in the marketplace manifest). Each entry: `Repository` (`owner/name` on GitHub) and `Plugins` (the plugin names to install from it; optional). Ships empty.
+- `PluginConfigs` - Options written beneath the plugin's `pluginConfigs` entry of the settings file, keyed by plugin name. A plugin a configured marketplace lists is written as Claude Code keys an installed plugin, `pluginConfigs.<plugin>@<marketplace>`; any other name as given. The shape beneath the plugin is the plugin's own (a plugin that reads `options`: `options = @{ ... }`); each child key replaces the same key in the file and leaves the other children alone. Ships empty.
+
+**Side effect:** `Deploy-AiMarketplaces` writes `extraKnownMarketplaces.<name>` and `pluginConfigs.<plugin>@<name>.<key>` of the user's `~\.claude\settings.json` (and of `/home/<DefaultWSLUsername>/.claude/settings.json` in WSL), every other setting kept, and runs `claude plugin marketplace add <owner/name>` for marketplaces the CLI does not list yet and `claude plugin install <plugin>@<name>` for plugins it does not list yet.
+
+Deployment is opt-in via `BootstrapConfig.Steps.AiMarketplaces`. A plugin loaded from a folder (`AiMods`) and installed from a marketplace would run twice: give each plugin one path. Design: [AI Mods - Marketplaces](../ai/mods.md#marketplaces).
+
+```powershell
+AiMarketplaces = @{
+    Marketplaces  = @{
+        "my-marketplace" = @{
+            Repository = "MyOrg/MyMarketplace"
+            Plugins    = @("my-plugin")
+        }
+    }
+    PluginConfigs = @{
+        "my-plugin" = @{ options = @{ theme = "dark" } }
     }
 }
 ```

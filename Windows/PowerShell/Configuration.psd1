@@ -28,7 +28,7 @@
 # Individual bootstrap steps are toggleable
 # via BootstrapConfig.Steps (see that section); invasive steps such as
 # MicrosoftActivationScripts, Win11Debloat, DeveloperMode, NuGetConfig,
-# UpgradeAll, CoreAiRules, AiSkills, AiMods, ObsidianCli and LockedStartLayout are OFF
+# UpgradeAll, CoreAiRules, AiSkills, AiMods, AiMarketplaces, ObsidianCli and LockedStartLayout are OFF
 # until you opt in. A vanilla run
 # therefore installs the framework apps but upgrades nothing else already
 # on the machine.
@@ -921,6 +921,31 @@
 		Harnesses = @("{User}\.claude\mods")
 		Sources   = @{}
 	}
+	# ==========================================================================
+	# AI Marketplaces (see docs/ai/mods.md)
+	# ==========================================================================
+	# Claude Code plugins published through a plugin marketplace (a repository carrying
+	# .claude-plugin\marketplace.json) are installed per machine with `claude plugin install
+	# <plugin>@<marketplace>` and kept updated by Claude Code itself. Deploy-AiMarketplaces (opt
+	# in via BootstrapConfig.Steps.AiMarketplaces) registers every marketplace named here in the
+	# user's ~\.claude\settings.json (extraKnownMarketplaces, every other setting kept), writes
+	# the plugins' options beneath pluginConfigs.<plugin>@<marketplace>, and, when the CLI is on
+	# PATH, adds the marketplaces it does not know yet and installs the listed plugins. The same plugin loaded from a folder (AiMods) and installed from a
+	# marketplace would run twice: give each plugin one path. Ships with no marketplaces -
+	# Deploy-AiMarketplaces no-ops until a fork adds one in Configuration.local.psd1, e.g.:
+	#   Marketplaces = @{
+	#       "my-marketplace" = @{
+	#           Repository = "MyOrg/MyMarketplace"   # owner/name on GitHub; the marketplace is named by the key
+	#           Plugins    = @("my-plugin")          # installed as <plugin>@<key>
+	#       }
+	#   }
+	#   PluginConfigs = @{
+	#       "my-plugin" = @{ options = @{ theme = "dark" } }   # written beneath pluginConfigs.my-plugin@my-marketplace
+	#   }
+	AiMarketplaces                = @{
+		Marketplaces  = @{}
+		PluginConfigs = @{}
+	}
 
 	# ==========================================================================
 	# Machine-Specific Overrides (Only Store Differences!)
@@ -1006,7 +1031,7 @@
 	# - Upgrade-All, fork-defined PersonalSteps, Install-DotnetEF
 	# - Set-EnvironmentVariables, Create-CondaEnvironments, Configure-NuGetConfig
 	# - Configure-Taskbar, Initialize-WSLEnvironment, SymbolicLinkMaker, Deploy-CoreAiRules (opt-in),
-	#   Deploy-AiSkills (opt-in), Deploy-AiMods (opt-in), Enable-ObsidianCli (opt-in)
+	#   Deploy-AiSkills (opt-in), Deploy-AiMods (opt-in), Deploy-AiMarketplaces (opt-in), Enable-ObsidianCli (opt-in)
 	# - Configure-WSLSSH, Lock taskbar layout, Restart-Machine
 	#
 	# HOW TO ADD NEW APPLICATIONS:
@@ -1050,7 +1075,8 @@
 		# (prompts for a GitHub PAT), UpgradeAll (upgrades every package already
 		# on the machine, not just WinuX's own), CoreAiRules (machine-global AI
 		# agent policy), AiSkills (machine-global Agent Skills), AiMods (machine-global
-		# Claude Code mods and the CLAUDE_CODE_PLUGIN_DIRS settings key), ObsidianCli
+		# Claude Code mods and the CLAUDE_CODE_PLUGIN_DIRS settings key), AiMarketplaces
+		# (Claude Code plugin marketplaces in the user settings and `claude plugin install`), ObsidianCli
 		# (edits Obsidian's per-machine app settings), LockedStartLayout.
 		#
 		# Per invocation, Bootstrap -Skip <steps> forces steps off and
@@ -1098,6 +1124,9 @@
 		# - AiMods                     : Deploy-AiMods (OFF by default - links the Claude Code mods
 		#                                under AiMods.Root into ~/.claude/mods and lists them in
 		#                                env.CLAUDE_CODE_PLUGIN_DIRS, see docs/ai/mods.md)
+		# - AiMarketplaces             : Deploy-AiMarketplaces (OFF by default - registers the Claude Code
+		#                                plugin marketplaces under AiMarketplaces in the user settings and
+		#                                installs their plugins through the CLI, see docs/ai/mods.md)
 		# - ObsidianCli                : Enable-ObsidianCli -CreateIfMissing (OFF by default - sets
 		#                                "cli": true in %APPDATA%\obsidian\obsidian.json, Obsidian's
 		#                                per-machine app settings a synced vault never carries, so

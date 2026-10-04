@@ -20,7 +20,8 @@ function Resolve-BootstrapSteps {
 		(upgrades every package already on the machine, not just WinuX's own),
 		CoreAiRules (machine-global AI agent policy), AiSkills (machine-global
 		Agent Skills links), AiMods (machine-global Claude Code mods links and
-		the CLAUDE_CODE_PLUGIN_DIRS settings key), ObsidianCli (turns the Obsidian command line
+		the CLAUDE_CODE_PLUGIN_DIRS settings key), AiMarketplaces (Claude Code plugin
+		marketplaces in the user settings and `claude plugin install`), ObsidianCli (turns the Obsidian command line
 		interface on in Obsidian's per-machine app settings), and
 		LockedStartLayout.
 
@@ -94,6 +95,7 @@ function Resolve-BootstrapSteps {
 		CoreAiRules                = $false
 		AiSkills                   = $false
 		AiMods                     = $false
+		AiMarketplaces             = $false
 		ObsidianCli                = $false
 		LockedStartLayout          = $false
 	}
