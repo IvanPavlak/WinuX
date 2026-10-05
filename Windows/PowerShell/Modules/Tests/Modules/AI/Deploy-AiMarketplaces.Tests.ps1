@@ -3,8 +3,9 @@
 BeforeAll {
 	$FunctionsPath = Join-Path (Get-RepositoryPath).Modules "AI\Functions"
 	. "$FunctionsPath\Deploy-AiMarketplaces.ps1"
-	# The settings writer is dot-sourced so these tests exercise the real file edit.
+	# The settings writers are dot-sourced so these tests exercise the real file edits.
 	. "$FunctionsPath\Set-ClaudeSettingsKey.ps1"
+	. "$FunctionsPath\Set-ClaudeSettingsEnv.ps1"
 }
 
 Describe "Deploy-AiMarketplaces" {
@@ -24,6 +25,7 @@ Describe "Deploy-AiMarketplaces" {
 				"my-marketplace" = @{
 					Repository = "MyOrg/MyMarketplace"
 					Plugins    = @("my-plugin")
+					Env        = @{ CLAUDE_CODE_ENABLE_FUNCTION_HOOKS = "1" }
 				}
 			}
 			PluginConfigs = @{
@@ -68,6 +70,43 @@ Describe "Deploy-AiMarketplaces" {
 		$document = Get-Content -Path $script:Settings -Raw | ConvertFrom-Json
 		$document.extraKnownMarketplaces.'my-marketplace'.source.source | Should -Be "github"
 		$document.extraKnownMarketplaces.'my-marketplace'.source.repo | Should -Be "MyOrg/MyMarketplace"
+	}
+
+	It "writes the variables the marketplace's plugins need into the env block, keeping the other variables" {
+		New-Item -ItemType Directory -Path (Split-Path -Parent $script:Settings) -Force | Out-Null
+		Set-Content -Path $script:Settings -Value '{"env":{"CLAUDE_CODE_PLUGIN_DIRS":"C:\\mods\\x"},"tui":"fullscreen"}'
+
+		Deploy-AiMarketplaces -Command $script:Stub
+
+		$document = Get-Content -Path $script:Settings -Raw | ConvertFrom-Json
+		$document.env.CLAUDE_CODE_ENABLE_FUNCTION_HOOKS | Should -Be "1"
+		$document.env.CLAUDE_CODE_PLUGIN_DIRS | Should -Be "C:\mods\x" -Because "the variable Deploy-AiMods writes is a sibling, not ours"
+		$document.tui | Should -Be "fullscreen"
+	}
+
+	It "writes a variable's value as a string and the last marketplace by name wins a clash" {
+		$script:Section.Marketplaces.'my-marketplace'.Env = @{ WINUX_TEST_SHARED = 1 }
+		$script:Section.Marketplaces.'other-marketplace' = @{ Repository = "MyOrg/Other"; Env = @{ WINUX_TEST_SHARED = "two" } }
+
+		Deploy-AiMarketplaces -Command $script:Stub
+
+		$document = Get-Content -Path $script:Settings -Raw | ConvertFrom-Json
+		$document.env.WINUX_TEST_SHARED | Should -BeOfType [string]
+		$document.env.WINUX_TEST_SHARED | Should -Be "two"
+	}
+
+	It "skips an invalid variable name and an Env that is not a hashtable, writing the rest" {
+		$script:Section.Marketplaces.'my-marketplace'.Env = @{ "NOT VALID" = "x"; CLAUDE_CODE_ENABLE_FUNCTION_HOOKS = "1" }
+		$script:Section.Marketplaces.'other-marketplace' = @{ Repository = "MyOrg/Other"; Env = "CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1" }
+
+		Deploy-AiMarketplaces -Command $script:Stub
+
+		$document = Get-Content -Path $script:Settings -Raw | ConvertFrom-Json
+		$document.env.CLAUDE_CODE_ENABLE_FUNCTION_HOOKS | Should -Be "1"
+		$document.env.PSObject.Properties['NOT VALID'] | Should -BeNullOrEmpty
+		$document.extraKnownMarketplaces.'other-marketplace'.source.repo | Should -Be "MyOrg/Other" -Because "a bad Env does not skip the marketplace itself"
+		Should -Invoke Write-LogError -ParameterFilter { $Message -like "Marketplace [[]my-marketplace] names an invalid environment variable [[]NOT VALID]*" }
+		Should -Invoke Write-LogError -ParameterFilter { $Message -like "Marketplace [[]other-marketplace] has an Env that is not a hashtable*" }
 	}
 
 	It "seeds the options under the installed plugin's id, one child key at a time, keeping what the user set" {

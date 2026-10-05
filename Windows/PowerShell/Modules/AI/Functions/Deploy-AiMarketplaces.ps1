@@ -1,7 +1,7 @@
 function Deploy-AiMarketplaces {
 	<#
 	.SYNOPSIS
-		Registers the configured Claude Code plugin marketplaces, installs their plugins through the Claude Code CLI, and seeds the plugins' options in the user settings.
+		Registers the configured Claude Code plugin marketplaces, writes the variables and options their plugins need into the user settings, and installs the plugins through the Claude Code CLI.
 
 	.DESCRIPTION
 		Claude Code plugins published through a marketplace (a repository carrying
@@ -13,13 +13,22 @@ function Deploy-AiMarketplaces {
 		   `extraKnownMarketplaces.<name>` of the user's ~\.claude\settings.json to the GitHub
 		   source of the repository (through Set-ClaudeSettingsKey, every other setting kept),
 		   so Claude Code knows the marketplace on every start.
-		2. Options: every entry of AiMarketplaces.PluginConfigs is written beneath the plugin's
+		2. Variables: every entry of a marketplace's Env is written to the `env` block of the
+		   same file (through Set-ClaudeSettingsEnv, every other variable kept), because Claude
+		   Code reads its own environment from there in every session, the desktop app's
+		   included. That is where a switch the plugins need goes, such as
+		   CLAUDE_CODE_ENABLE_FUNCTION_HOOKS = "1", which Claude Code 2.1.286 needs before it
+		   loads any hooks module; a plugin cannot set it, since none of its code runs until
+		   the switch is on. Values are strings; a name must be a valid variable name.
+		   Marketplaces are written in name order, so a variable two of them name ends with
+		   the value of the last.
+		3. Options: every entry of AiMarketplaces.PluginConfigs is written beneath the plugin's
 		   `pluginConfigs` entry, one child key at a time, so an option the user set through
 		   /plugin and the repository does not name survives while the repository's values win
 		   for the keys it names. A plugin a configured marketplace lists is keyed the way an
 		   installed plugin is, `pluginConfigs.<plugin>@<marketplace>`; any other name is
 		   written as given (`pluginConfigs.<name>`, the shape of a folder-loaded plugin).
-		3. The CLI: when the Claude Code CLI is on PATH, every configured marketplace that
+		4. The CLI: when the Claude Code CLI is on PATH, every configured marketplace that
 		   `claude plugin marketplace list --json` does not show is added with
 		   `claude plugin marketplace add <owner/name>` (the settings key alone takes effect
 		   only on the engine's next start), and every plugin an entry's Plugins lists is
@@ -28,7 +37,7 @@ function Deploy-AiMarketplaces {
 		   regardless, so installing the CLI and running Bootstrap again finishes the job.
 		   Already installed plugins are left to `claude plugin update`.
 
-		Inside WSL the same marketplaces and options are written to the WSL user's settings file
+		Inside WSL the same marketplaces, variables and options are written to the WSL user's settings file
 		(/home/<DefaultWSLUsername>/.claude/settings.json through the \\wsl.localhost\<distro>
 		share) when a WSL distribution and user are configured; the CLI steps have to be run
 		inside WSL, which a warning says.
@@ -46,7 +55,7 @@ function Deploy-AiMarketplaces {
 
 	.EXAMPLE
 		Deploy-AiMarketplaces
-		Registers every configured marketplace, seeds the options and installs the plugins.
+		Registers every configured marketplace, writes the variables and options and installs the plugins.
 	#>
 	[CmdletBinding()]
 	param(
@@ -82,7 +91,8 @@ function Deploy-AiMarketplaces {
 		}
 	}
 
-	# Validated once: a marketplace entry is a GitHub repository and an optional plugin list.
+	# Validated once: a marketplace entry is a GitHub repository, an optional plugin list and the
+	# optional variables its plugins need Claude Code to read from the settings file.
 	$valid = [ordered]@{}
 	foreach ($name in ($marketplaces.Keys | Sort-Object)) {
 		$entry = $marketplaces[$name]
@@ -92,7 +102,20 @@ function Deploy-AiMarketplaces {
 			continue
 		}
 		$plugins = if ($entry.Plugins) { @($entry.Plugins | ForEach-Object { [string]$_ } | Where-Object { $_ }) } else { @() }
-		$valid[$name] = @{ Repository = $repository; Plugins = $plugins }
+		$variables = [ordered]@{}
+		if ($entry.Env -is [hashtable]) {
+			foreach ($variable in ($entry.Env.Keys | ForEach-Object { [string]$_ } | Sort-Object)) {
+				if ($variable -notmatch '^[A-Za-z_][A-Za-z0-9_]*$') {
+					Write-LogError "Marketplace [$name] names an invalid environment variable [$variable] - skipped!"
+					continue
+				}
+				$variables[$variable] = [string]$entry.Env[$variable]
+			}
+		}
+		elseif ($null -ne $entry.Env) {
+			Write-LogError "Marketplace [$name] has an Env that is not a hashtable - its variables were skipped!"
+		}
+		$valid[$name] = @{ Repository = $repository; Plugins = $plugins; Env = $variables }
 	}
 
 	# A plugin a configured marketplace lists is keyed <plugin>@<marketplace> in pluginConfigs,
@@ -113,6 +136,13 @@ function Deploy-AiMarketplaces {
 				Write-LogStep "Marketplace [$name] => $($valid[$name].Repository)"
 			}
 		}
+		foreach ($name in $valid.Keys) {
+			foreach ($variable in $valid[$name].Env.Keys) {
+				if (Set-ClaudeSettingsEnv -Name $variable -Value $valid[$name].Env[$variable] -SettingsPath $target.Path) {
+					Write-LogStep "Variable [$variable] => $($valid[$name].Env[$variable]) (marketplace [$name])"
+				}
+			}
+		}
 		foreach ($plugin in ($pluginConfigs.Keys | Sort-Object)) {
 			$options = $pluginConfigs[$plugin]
 			if ($options -isnot [hashtable]) {
@@ -126,7 +156,7 @@ function Deploy-AiMarketplaces {
 		}
 	}
 	if ($targets.Count -gt 1) {
-		Write-LogWarning "WSL settings carry the marketplaces and options; run `claude plugin marketplace add` and `claude plugin install <plugin>@<marketplace>` inside WSL to install the plugins there."
+		Write-LogWarning "WSL settings carry the marketplaces, variables and options; run `claude plugin marketplace add` and `claude plugin install <plugin>@<marketplace>` inside WSL to install the plugins there."
 	}
 
 	if (-not (Get-Command -Name $Command -ErrorAction SilentlyContinue)) {

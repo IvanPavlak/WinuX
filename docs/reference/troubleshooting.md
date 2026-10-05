@@ -260,6 +260,35 @@ claude plugin validate "$env:USERPROFILE\.claude\mods\my-mod"
 2. Claude Code reads `CLAUDE_CODE_PLUGIN_DIRS` when a session starts, so close and reopen the session (and restart the desktop app for the Code tab).
 3. If the key is missing although `Deploy-AiMods` set it, something rewrote `settings.json` without it (a manual edit or another tool). Re-run `Deploy-AiMods`; it only ever rewrites that one key.
 
+### A Marketplace Plugin Is Installed But Draws Nothing
+
+**Problem:** `claude plugin install <plugin>@<marketplace>` reports the plugin installed and enabled (and `Deploy-AiMarketplaces` reports it already installed), yet a new Claude Code session, in the terminal or the desktop app's Code tab, shows no band, pane or status entry from it.
+
+**Solution:** Claude Code 2.1.286 (the `winget` CLI and the copy the desktop app bundles under `%APPDATA%\Claude\claude-code\<version>`) loads hooks modules only when `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS` is `1`, and reads that variable from the `env` block of `~\.claude\settings.json`. A plugin cannot set it for itself: none of its code runs until it is on. The install succeeds because the files are cached and the plugin is enabled; it just has no runtime to run in.
+
+1. Confirm the version and the variable:
+
+```powershell
+claude --version
+(Get-Content "$env:USERPROFILE\.claude\settings.json" -Raw | ConvertFrom-Json).env
+```
+
+2. Name the variable under the marketplace's `Env` in `Configuration.local.psd1` and re-run `Deploy-AiMarketplaces` (or Bootstrap with `Steps.AiMarketplaces` on); on macOS and Linux, add `env CLAUDE_CODE_ENABLE_FUNCTION_HOOKS 1` to the marketplace's section of `Unix/config/ai-marketplaces.conf` and re-run `deploy-aimarketplaces`. The WSL settings file receives it in the same run.
+
+```powershell
+Marketplaces = @{
+    "my-marketplace" = @{
+        Repository = "MyOrg/MyMarketplace"
+        Plugins    = @("my-plugin")
+        Env        = @{ CLAUDE_CODE_ENABLE_FUNCTION_HOOKS = "1" }
+    }
+}
+```
+
+3. Start a new session, or run `/reload-plugins` in an open one. Claude Code 2.1.287 and later ignore the variable, so the entry can go once every copy on the machine is that new.
+
+A plugin that loads but ignores one of its options has the same shape of cause one level down: `PluginConfigs` values keep their type, so a boolean option set as the string `"true"` is dropped by the plugin as invalid. Write it as `$true`.
+
 ### "Claude Code CLI (claude) not found on PATH" Or "claude plugin validate failed"
 
 **Problem:** `Deploy-AiMods` warns that mods are deployed but cannot be used yet.

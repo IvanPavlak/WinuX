@@ -929,14 +929,18 @@
 	# <plugin>@<marketplace>` and kept updated by Claude Code itself. Deploy-AiMarketplaces (opt
 	# in via BootstrapConfig.Steps.AiMarketplaces) registers every marketplace named here in the
 	# user's ~\.claude\settings.json (extraKnownMarketplaces, every other setting kept), writes
-	# the plugins' options beneath pluginConfigs.<plugin>@<marketplace>, and, when the CLI is on
-	# PATH, adds the marketplaces it does not know yet and installs the listed plugins. The same plugin loaded from a folder (AiMods) and installed from a
-	# marketplace would run twice: give each plugin one path. Ships with no marketplaces -
-	# Deploy-AiMarketplaces no-ops until a fork adds one in Configuration.local.psd1, e.g.:
+	# the variables its plugins need into that file's env block (Claude Code reads its own
+	# environment from there in every session), writes the plugins' options beneath
+	# pluginConfigs.<plugin>@<marketplace>, and, when the CLI is on PATH, adds the marketplaces
+	# it does not know yet and installs the listed plugins. The same plugin loaded from a folder
+	# (AiMods) and installed from a marketplace would run twice: give each plugin one path.
+	# Ships with no marketplaces - Deploy-AiMarketplaces no-ops until a fork adds one in
+	# Configuration.local.psd1, e.g.:
 	#   Marketplaces = @{
 	#       "my-marketplace" = @{
 	#           Repository = "MyOrg/MyMarketplace"   # owner/name on GitHub; the marketplace is named by the key
 	#           Plugins    = @("my-plugin")          # installed as <plugin>@<key>
+	#           Env        = @{ CLAUDE_CODE_ENABLE_FUNCTION_HOOKS = "1" }   # written to env.<name>; strings
 	#       }
 	#   }
 	#   PluginConfigs = @{

@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.85] - 2026-10-05
+
+### Added
+
+- **A marketplace entry can carry the environment variables its plugins need.** Claude Code reads its own environment from the `env` block of the user's `~\.claude\settings.json` in every session, the desktop app's included, and some switches a plugin needs can only live there, because none of the plugin's code runs until the switch is on: Claude Code 2.1.286 (the CLI and the copy the desktop app bundles) loads hooks modules only with `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS` set to `1`, so a marketplace-installed mod was reported installed and enabled yet drew nothing. The new optional `Env` hashtable of every `AiMarketplaces.Marketplaces.<name>` entry is written by `Deploy-AiMarketplaces` to `env.<variable>` of the settings file through `Set-ClaudeSettingsEnv`, as strings, every other variable kept (`CLAUDE_CODE_PLUGIN_DIRS`, which `Deploy-AiMods` owns, included), on Windows and in WSL; marketplaces are written in name order, so a variable two of them name ends with the value of the last; an invalid name or a non-hashtable `Env` is reported and skipped without skipping the marketplace. The Unix twin reads `env NAME VALUE` lines in each section of `ai-marketplaces.conf`. Tests: `Deploy-AiMarketplaces.Tests.ps1`, `aimarketplaces.bats`. Docs: the configuration reference, the `Deploy-AiMarketplaces` guide, the AI module reference, `docs/ai/mods.md`, the Unix AI module page and a new troubleshooting entry for a marketplace plugin that is installed but draws nothing.
+
 ## [0.1.84] - 2026-10-04
 
 ### Added
@@ -1439,7 +1445,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.84...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.85...HEAD
+[0.1.85]: https://github.com/IvanPavlak/WinuX/compare/v0.1.84...v0.1.85
 [0.1.84]: https://github.com/IvanPavlak/WinuX/compare/v0.1.83...v0.1.84
 [0.1.83]: https://github.com/IvanPavlak/WinuX/compare/v0.1.82...v0.1.83
 [0.1.82]: https://github.com/IvanPavlak/WinuX/compare/v0.1.81...v0.1.82
