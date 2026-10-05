@@ -1274,16 +1274,16 @@ AiMods = @{
 
 ## AI Marketplaces
 
-**Key:** `AiMarketplaces` → Hashtable: the Claude Code plugin marketplaces every machine registers, the plugins installed from them, and the options seeded for those plugins
+**Key:** `AiMarketplaces` → Hashtable: the Claude Code plugin marketplaces every machine registers, the plugins installed from them, the variables those plugins need Claude Code to read from its settings, and the options seeded for those plugins
 
 **Consumer functions:** [`Deploy-AiMarketplaces`](../modules/ai.md#deploy-aimarketplaces)
 
 A plugin marketplace is a repository carrying `.claude-plugin\marketplace.json`; Claude Code installs its plugins as `<plugin>@<marketplace>` and keeps them updated.
 
-- `Marketplaces` - The marketplaces to register, keyed by the name Claude Code knows them by (the `name` in the marketplace manifest). Each entry: `Repository` (`owner/name` on GitHub) and `Plugins` (the plugin names to install from it; optional). Ships empty.
-- `PluginConfigs` - Options written beneath the plugin's `pluginConfigs` entry of the settings file, keyed by plugin name. A plugin a configured marketplace lists is written as Claude Code keys an installed plugin, `pluginConfigs.<plugin>@<marketplace>`; any other name as given. The shape beneath the plugin is the plugin's own (a plugin that reads `options`: `options = @{ ... }`); each child key replaces the same key in the file and leaves the other children alone. Ships empty.
+- `Marketplaces` - The marketplaces to register, keyed by the name Claude Code knows them by (the `name` in the marketplace manifest). Each entry: `Repository` (`owner/name` on GitHub), `Plugins` (the plugin names to install from it; optional) and `Env` (optional; a hashtable of environment variables the plugins need Claude Code to read from the `env` block of its settings file, written as strings under `env.<name>`, every other variable kept; a name must be a valid variable name; marketplaces are written in name order, so a variable two of them name ends with the value of the last). `Env` is for a switch a plugin cannot set for itself: Claude Code 2.1.286 loads hooks modules only with `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS = "1"`, and 2.1.287 and later ignore it. Ships empty.
+- `PluginConfigs` - Options written beneath the plugin's `pluginConfigs` entry of the settings file, keyed by plugin name. A plugin a configured marketplace lists is written as Claude Code keys an installed plugin, `pluginConfigs.<plugin>@<marketplace>`; any other name as given. The shape beneath the plugin is the plugin's own (a plugin that reads `options`: `options = @{ ... }`); each child key replaces the same key in the file and leaves the other children alone. Values keep their type (`$true` stays a JSON boolean; the string `"true"` stays a string, which a plugin with a boolean option drops as invalid). Ships empty.
 
-**Side effect:** `Deploy-AiMarketplaces` writes `extraKnownMarketplaces.<name>` and `pluginConfigs.<plugin>@<name>.<key>` of the user's `~\.claude\settings.json` (and of `/home/<DefaultWSLUsername>/.claude/settings.json` in WSL), every other setting kept, and runs `claude plugin marketplace add <owner/name>` for marketplaces the CLI does not list yet and `claude plugin install <plugin>@<name>` for plugins it does not list yet.
+**Side effect:** `Deploy-AiMarketplaces` writes `extraKnownMarketplaces.<name>`, `env.<variable>` and `pluginConfigs.<plugin>@<name>.<key>` of the user's `~\.claude\settings.json` (and of `/home/<DefaultWSLUsername>/.claude/settings.json` in WSL), every other setting kept, and runs `claude plugin marketplace add <owner/name>` for marketplaces the CLI does not list yet and `claude plugin install <plugin>@<name>` for plugins it does not list yet.
 
 Deployment is opt-in via `BootstrapConfig.Steps.AiMarketplaces`. A plugin loaded from a folder (`AiMods`) and installed from a marketplace would run twice: give each plugin one path. Design: [AI Mods - Marketplaces](../ai/mods.md#marketplaces).
 
@@ -1293,10 +1293,11 @@ AiMarketplaces = @{
         "my-marketplace" = @{
             Repository = "MyOrg/MyMarketplace"
             Plugins    = @("my-plugin")
+            Env        = @{ CLAUDE_CODE_ENABLE_FUNCTION_HOOKS = "1" }
         }
     }
     PluginConfigs = @{
-        "my-plugin" = @{ options = @{ theme = "dark" } }
+        "my-plugin" = @{ options = @{ theme = "dark"; pulse = $true } }
     }
 }
 ```
