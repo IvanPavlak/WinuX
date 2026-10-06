@@ -5,7 +5,10 @@ function Initialize-Repository {
 
 	.DESCRIPTION
 		If the target path does not exist, clones the repository from `RepositoryUrl`.
-		If the target path already exists, runs `git pull` to fetch the latest changes.
+		If the target path already exists, updates it with Update-Repository: local changes are
+		stashed and restored, the branch is fast-forwarded only, and nothing that cannot be done
+		without loss is attempted. (It used to run a plain `git pull`, which merges and silently
+		overwrites ignored local files at paths upstream starts tracking.)
 
 		When a `Token` is provided, injects it into the HTTPS clone URL as
 		`https://<token>@github.com/...` for authenticated access to private repositories.
@@ -87,9 +90,10 @@ function Initialize-Repository {
 	else {
 		Write-LogTitle "Updating [$RepositoryName] repository"
 		Write-LogWarning "Repository [$RepositoryName] already exists at [$LocalPath]"
-		Write-LogStep "Pulling latest changes..."
-		Push-Location $LocalPath
-		git pull
-		Pop-Location
+		# Not a plain `git pull`: that merges whatever it fetched and silently overwrites an ignored
+		# local file at a path upstream starts tracking. Update-Repository stashes and restores
+		# local work, fast-forwards only, and refuses anything it cannot do without loss.
+		$name = if ([string]::IsNullOrWhiteSpace($RepositoryName)) { Split-Path $LocalPath -Leaf } else { $RepositoryName }
+		Update-Repository -Name $name -LocalPath $LocalPath | Out-Null
 	}
 }

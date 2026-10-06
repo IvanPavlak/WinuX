@@ -132,11 +132,13 @@ Every time you open PowerShell, the profile (`Microsoft.PowerShell_profile.ps1`)
 │     └─→ Misc: translate                                         │
 │  10. Stage PowerPlan → Test-PowerPlan (chassis type cached)     │
 │  11. Stage LogMaintenance → queued                              │
+│  12. Stage RepositoryUpdate → queued                            │
 │                                                                 │
 │  ── first prompt ──                                             │
-│  12. PowerShell.OnIdle (once, ~300 ms after the prompt)         │
+│  13. PowerShell.OnIdle (once, ~300 ms after the prompt)         │
 │     ├─→ Import-Module Terminal-Icons -Global                    │
-│     └─→ Invoke-LogMaintenance                                   │
+│     ├─→ Invoke-LogMaintenance                                   │
+│     └─→ Invoke-StartupRepositoryUpdate (opt-in, once a day)     │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -144,7 +146,7 @@ Every time you open PowerShell, the profile (`Microsoft.PowerShell_profile.ps1`)
 > WinuX modules are **not imported at startup**. Each `.psd1` manifest declares `FunctionsToExport`, enabling PowerShell autoload. A module loads automatically - and silently - the first time one of its exported functions is called; this includes the fork-owned `Custom` module, whose `FunctionsToExport` the fork maintains (empty on a pure-upstream setup). Only `Logging` and `Bootstrap` (imported explicitly by the profile, in that order) are in memory at the first prompt. The few Helper, Configuration, System and Git functions the profile itself needs are dot-sourced from their files, because importing a whole module costs 4-6 ms per function file (Helper and System were measured at 330-500 ms each); the module's own copy replaces the dot-sourced one the first time the module autoloads.
 
 > [!NOTE]
-> `Terminal-Icons` and the log maintenance run after the first prompt, from a one-shot `PowerShell.OnIdle` event. The only visible difference is a directory listing typed within the first ~300 ms of a new shell, which prints without icons.
+> `Terminal-Icons`, the log maintenance and the opt-in repository update run after the first prompt, from a one-shot `PowerShell.OnIdle` event. The only visible difference is a directory listing typed within the first ~300 ms of a new shell, which prints without icons - and, on the one shell per interval where the repository update runs (`RepositoryUpdate.Startup`, off by default), its compact summary printed below the prompt, with typing held until the fetches finish.
 
 > [!TIP]
 > A slow start is measured, not guessed: `Measure-ShellStartup` starts child shells with one stage added at a time and prints min / median / max per configuration. See [Slow Profile Load](../reference/troubleshooting.md#slow-profile-load).

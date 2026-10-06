@@ -1049,9 +1049,6 @@
 		LogFileLocation       = "Desktop"  # Relative to user profile or full path
 		LogFilePrefix         = "BootstrapLog"
 
-		# Default branch for repository
-		DefaultBranch         = "master"
-
 		# Which repositories Bootstrap clones/updates, by machine type (consumed by Bootstrap ->
 		# Update-Repositories). Values: "All" | "<group>" | "<group>, <group>" | @("<group>", ...),
 		# where <group> is any key from RepositoryGroups below. "Default" covers any machine type
@@ -1826,6 +1823,59 @@
 		#     )
 		# }
 	)
+
+	# ==========================================================================
+	# Repository Update Configuration
+	# ==========================================================================
+	# HOW the repositories in RepositoryGroups are updated, and whether the shell refreshes them
+	# on its own. RepositoryGroups says WHICH repositories exist; this section changes no list.
+	# Everything ships OFF - opt in from Configuration.local.psd1 (hashtables deep-merge, so a
+	# single key there is enough).
+	# → Consumer: Update-Repositories (IncludeDefaultBranch), Resolve-RepositoryDefaultBranch
+	#   (DefaultBranch), Invoke-StartupRepositoryUpdate (Startup)
+	#
+	# KEYS:
+	# - IncludeDefaultBranch : Also fast-forward the repository's default branch when another
+	#                          branch is checked out. Runs `git fetch origin <default>:<default>`,
+	#                          which git refuses unless it is a fast-forward and which never
+	#                          touches the working tree or the stash. A default branch that was
+	#                          never checked out locally is skipped, never created.
+	#                          `Update-Repositories -IncludeDefaultBranch[:$false]` overrides it
+	#                          for one call. Also applies to the Bootstrap repository step.
+	# - DefaultBranch        : The default branch's name. Empty => what the remote reports
+	#                          (refs/remotes/origin/HEAD), then skipped with a warning. Leave it
+	#                          empty when your repositories do not share one default branch.
+	#                          (Replaces BootstrapConfig.DefaultBranch, removed in 0.1.86.)
+	# - Startup.Enabled      : Update repositories automatically once the first prompt of a shell
+	#                          is drawn (profile stage "RepositoryUpdate", deferred until the shell
+	#                          is idle). Never clones a missing repository and never asks for
+	#                          Administrator; prints one line per repository plus a totals line.
+	# - Startup.IntervalHours: Minimum hours between two automatic runs (stamp file:
+	#                          Logs\.last-repository-update). The stamp records the last run, so a
+	#                          machine that was off for days updates on its first shell back.
+	# - Startup.Scope        : Which groups the automatic run updates, per machine type - the same
+	#                          shape as BootstrapConfig.RepositoryUpdateScope. Absent => that key,
+	#                          then "All".
+	#
+	# Example:
+	#   RepositoryUpdate = @{
+	#       IncludeDefaultBranch = $true
+	#       DefaultBranch        = "master"
+	#       Startup              = @{
+	#           Enabled       = $true
+	#           IntervalHours = 24
+	#           Scope         = @{ Default = "All"; Test = "Private" }
+	#       }
+	#   }
+	# ==========================================================================
+	RepositoryUpdate              = @{
+		IncludeDefaultBranch = $false
+		DefaultBranch        = ""
+		Startup              = @{
+			Enabled       = $false
+			IntervalHours = 24
+		}
+	}
 
 	# ==========================================================================
 	# Open-Project Configuration

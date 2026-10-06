@@ -1021,6 +1021,47 @@ Private = @{
 
 2. For private repos, ensure you have access.
 
+### The Default Branch Was Not Updated
+
+**Problem:** `RepositoryUpdate.IncludeDefaultBranch` is on (or `-IncludeDefaultBranch` was passed), but `master` is still behind origin.
+
+**Cause and solution**, by what the run reported for the default branch:
+
+- **"has local commits origin does not" / "left untouched"** - the local default branch diverged. Git refuses anything but a fast-forward, on purpose, so nothing of yours is overwritten. Check it out and reconcile it by hand (`git switch master`, then rebase, merge or reset as appropriate).
+- **"could not be fetched"** - offline, origin has no branch of that name, or the branch is checked out in another worktree (git refuses to fetch into a branch any worktree has checked out). Update it from that worktree.
+- **"could not be determined" / "default branch unknown"** - the repository has no `origin/HEAD`, `RepositoryUpdate.DefaultBranch` is empty, and asking origin (`git remote set-head origin --auto`, which the update runs once on its own) failed too - usually because origin was unreachable. The next run asks again; or set the name in configuration.
+- **"no local master"** - the default branch was never checked out in this clone. It is skipped, never created.
+- **Only one branch is named** - the default branch is the checked-out branch, so the normal pull covered it.
+
+### No Prompt After The Startup Repository Update
+
+**Problem:** A new shell prints the repository summary and then shows no prompt; pressing Enter brings it back.
+
+**Cause:** The update runs after the prompt is already drawn, so its output pushes the prompt away while PSReadLine keeps waiting for input. The profile's `RepositoryUpdate` stage calls `Invoke-StartupRepositoryUpdate -RedrawPrompt`, which draws the prompt again; a profile from before that switch existed does not.
+
+**Solution:** Update the profile (the stage must pass `-RedrawPrompt`), then open a new tab. To check the redraw without waiting for the interval, run `Invoke-StartupRepositoryUpdate -Force -RedrawPrompt`.
+
+### Update-Repositories Asks For Administrator
+
+**Problem:** `Update-Repositories` prompts to reopen an Administrator PowerShell.
+
+**Cause:** One of the selected repositories is missing locally (or `-Archive` was given), and cloning takes ownership of the new folder, which needs Administrator. Updating repositories that already exist never asks.
+
+**Solution:** Accept the prompt to clone, or pass `-NoClone` to update only what is already on disk and list the missing ones as skipped.
+
+### Update-Repositories Left A Repository Alone Or Kept A Stash
+
+**Problem:** A repository's summary line (or the normal-mode log) says it touched nothing, or that local changes are kept in a stash.
+
+**Cause:** `Update-Repository` never risks local work. When an update could lose or misplace something, it refuses and says why. In every case below, nothing in the repository was changed, or your changes are in a named stash.
+
+- **"operation in progress, nothing touched"** - a merge, rebase, cherry-pick, revert or bisect is in progress, or there are unresolved conflicts. Finish or abort it yourself (`git merge --continue`, `git rebase --abort`, `git bisect reset`, ...), then update again.
+- **"not the top of a git repository, nothing touched"** - the configured `LocalPath` is a plain folder, or a folder inside another repository. Fix the path in `RepositoryGroups` / the machine-specific paths. The enclosing repository is deliberately never touched.
+- **"detached HEAD, nothing to pull"** - a tag or a commit is checked out (often a bisect or a release check). Switch back to a branch when you are done; the update never moves a detached HEAD.
+- **"could not fast-forward, nothing changed"** - either the branch has local commits that origin does not (rebase or merge them yourself), or the fast-forward would overwrite an ignored local file at a path upstream now tracks. In the second case, `git status --ignored` shows the file. Move it aside, update, and put your version back if you still need it.
+- **"local changes could not be restored cleanly and are kept in stash [name]"** - an upstream change overlaps your local edit. The working tree holds conflict markers, and the stash still holds your original changes. Resolve the markers, or reset the files and `git stash apply` the named stash. Until then, the next update reports the repository as busy and leaves it alone.
+- **"its stash was taken by another git command"** - another git command applied or dropped the update's stash while it ran. Check `git status` and `git stash list`; the changes are wherever that command put them.
+
 ## Performance Issues
 
 ### Slow Profile Load
@@ -1047,7 +1088,7 @@ To start one shell without a stage (for example to see whether the greeting is w
 $env:WINUX_STARTUP_SKIP = "Greeting"; pwsh
 ```
 
-Stage names: `Schema`, `Greeting`, `FastfetchImageLogo`, `OnefetchStyle`, `PSReadLine`, `Terminal-Icons`, `PSReadLineOptions`, `OhMyPosh`, `Aliases`, `PowerPlan`, `LogMaintenance` (or `All`; `Core` always runs).
+Stage names: `Schema`, `Greeting`, `FastfetchImageLogo`, `OnefetchStyle`, `PSReadLine`, `Terminal-Icons`, `PSReadLineOptions`, `OhMyPosh`, `Aliases`, `PowerPlan`, `LogMaintenance`, `RepositoryUpdate` (or `All`; `Core` always runs).
 
 **What the numbers usually mean:**
 

@@ -8,6 +8,8 @@ BeforeAll {
 	# The selection resolver Update-Repositories delegates every mode to; dot-sourced so it
 	# exists to Mock even in sessions whose imported Git module predates the export.
 	. "$FunctionsPath\Resolve-RepositoryTargets.ps1"
+	. "$FunctionsPath\Update-Repository.ps1"
+	. "$FunctionsPath\Format-RepositoryUpdateResult.ps1"
 }
 
 Describe "Update-Repositories" {
@@ -175,6 +177,198 @@ Describe "Update-Repositories" {
 
 			Should -Invoke git -Times 0
 			Should -Invoke Write-LogWarning -Times 1 -Exactly -ParameterFilter { $Message -match 'Already exists' }
+		}
+	}
+
+	Context "Administrator only to clone" {
+		BeforeEach {
+			Mock Update-Repository { [pscustomobject]@{ Name = $Name; Branch = "master"; Outcome = "UpToDate"; DefaultBranch = $null; DefaultBranchOutcome = $null; StashName = $null } }
+			Mock Resolve-RepositoryTargets {
+				, @(
+					[PSCustomObject]@{ Name = "Mike"; Group = "Beta"; RepositoryUrl = "https://github.com/acme/Mike"; LocalPath = "C:\Repos\Mike" }
+					[PSCustomObject]@{ Name = "Zulu"; Group = "Beta"; RepositoryUrl = "https://github.com/acme/Zulu"; LocalPath = "C:\Repos\Zulu" }
+				)
+			}
+		}
+
+		It "never asks for Administrator when every repository is already on disk" {
+			Mock Test-Path { $true }
+
+			Update-Repositories -All
+
+			Should -Invoke Test-AdminPrivileges -Times 0 -Exactly
+			Should -Invoke Update-Repository -Times 2 -Exactly
+		}
+
+		It "asks once when any repository has to be cloned" {
+			Mock Test-Path { $LiteralPath -ne "C:\Repos\Zulu" -and $Path -ne "C:\Repos\Zulu" }
+
+			Update-Repositories -All
+
+			Should -Invoke Test-AdminPrivileges -Times 1 -Exactly
+			Should -Invoke Initialize-Repository -Times 1 -Exactly -ParameterFilter { $LocalPath -eq "C:\Repos\Zulu" }
+			Should -Invoke Update-Repository -Times 1 -Exactly -ParameterFilter { $LocalPath -eq "C:\Repos\Mike" }
+		}
+
+		It "with -NoClone skips missing repositories without cloning or asking" {
+			Update-Repositories -All -NoClone
+
+			Should -Invoke Test-AdminPrivileges -Times 0 -Exactly
+			Should -Invoke Initialize-Repository -Times 0 -Exactly
+			Should -Invoke Update-Repository -Times 0 -Exactly
+		}
+
+		It "still asks in archive mode, which only clones" {
+			Mock Test-Path { $true }
+
+			Update-Repositories -All -Archive
+
+			Should -Invoke Test-AdminPrivileges -Times 1 -Exactly
+		}
+	}
+
+	Context "Default branch switch" {
+		BeforeEach {
+			Mock Test-Path { $true }
+			Mock Update-Repository { [pscustomobject]@{ Name = $Name; Branch = "feature"; Outcome = "UpToDate"; DefaultBranch = $null; DefaultBranchOutcome = $null; StashName = $null } }
+			Mock Resolve-RepositoryTargets {
+				, @([PSCustomObject]@{ Name = "Mike"; Group = "Beta"; RepositoryUrl = "https://github.com/acme/Mike"; LocalPath = "C:\Repos\Mike" })
+			}
+		}
+
+		It "follows RepositoryUpdate.IncludeDefaultBranch when the switch is not given (<Configured>)" -ForEach @(
+			@{ Configured = $true }
+			@{ Configured = $false }
+		) {
+			$global:Configuration = @{ RepositoryGroups = @(); RepositoryUpdate = @{ IncludeDefaultBranch = $Configured } }
+
+			Update-Repositories -All
+
+			Should -Invoke Update-Repository -Times 1 -Exactly -ParameterFilter { [bool]$IncludeDefaultBranch -eq $Configured }
+		}
+
+		It "is off when configuration says nothing" {
+			Update-Repositories -All
+
+			Should -Invoke Update-Repository -Times 1 -Exactly -ParameterFilter { -not $IncludeDefaultBranch }
+		}
+
+		It "-IncludeDefaultBranch turns it on over configuration" {
+			$global:Configuration = @{ RepositoryGroups = @(); RepositoryUpdate = @{ IncludeDefaultBranch = $false } }
+
+			Update-Repositories -All -IncludeDefaultBranch
+
+			Should -Invoke Update-Repository -Times 1 -Exactly -ParameterFilter { $IncludeDefaultBranch }
+		}
+
+		It "-IncludeDefaultBranch:`$false turns it off over configuration" {
+			$global:Configuration = @{ RepositoryGroups = @(); RepositoryUpdate = @{ IncludeDefaultBranch = $true } }
+
+			Update-Repositories -All -IncludeDefaultBranch:$false
+
+			Should -Invoke Update-Repository -Times 1 -Exactly -ParameterFilter { -not $IncludeDefaultBranch }
+		}
+	}
+
+	Context "Quiet summary" {
+		BeforeEach {
+			Mock Resolve-RepositoryTargets {
+				, @(
+					[PSCustomObject]@{ Name = "Mike"; Group = "Beta"; RepositoryUrl = "https://github.com/acme/Mike"; LocalPath = "C:\Repos\Mike" }
+					[PSCustomObject]@{ Name = "Zulu"; Group = "Beta"; RepositoryUrl = "https://github.com/acme/Zulu"; LocalPath = "C:\Repos\Zulu" }
+					[PSCustomObject]@{ Name = "Kilo"; Group = "Beta"; RepositoryUrl = "https://github.com/acme/Kilo"; LocalPath = "C:\Repos\Kilo" }
+				)
+			}
+			Mock Get-RepositoryName { Split-Path $RepositoryUrl -Leaf }
+			Mock Test-Path { $LiteralPath -ne "C:\Repos\Kilo" -and $Path -ne "C:\Repos\Kilo" }
+			Mock Update-Repository {
+				$outcome = if ($Name -eq "Mike") { "Updated" } else { "Conflict" }
+				[pscustomobject]@{ Name = $Name; Branch = "master"; Outcome = $outcome; DefaultBranch = $null; DefaultBranchOutcome = $null; StashName = $null }
+			}
+		}
+
+		It "hands -Quiet down to every repository update" {
+			Update-Repositories -All -Quiet -NoClone
+
+			Should -Invoke Update-Repository -Times 2 -Exactly -ParameterFilter { $Quiet }
+		}
+
+		It "prints one line per repository and the totals, at the level each one needs" {
+			Update-Repositories -All -Quiet -NoClone
+
+			# Mike updated (success), Zulu conflict (warning), Kilo not cloned (success), then the
+			# totals as a warning because one repository needs attention.
+			Should -Invoke Write-LogSuccess -Times 2 -Exactly
+			Should -Invoke Write-LogWarning -Times 2 -Exactly
+			Should -Invoke Write-LogWarning -Times 1 -Exactly -ParameterFilter {
+				$Message -match "1 updated" -and $Message -match "1 need attention" -and $Message -match "1 skipped"
+			}
+		}
+
+		It "prints no summary without -Quiet" {
+			Update-Repositories -All -NoClone
+
+			Should -Invoke Write-LogSuccess -Times 0 -Exactly -ParameterFilter { $Message -match "^Repositories =>" }
+			Should -Invoke Write-LogWarning -Times 0 -Exactly -ParameterFilter { $Message -match "^Repositories =>" }
+		}
+
+		It "returns nothing to the pipeline" {
+			$output = @(Update-Repositories -All -Quiet -NoClone)
+
+			$output.Count | Should -Be 0
+		}
+	}
+
+	Context "Group headings" {
+		BeforeEach {
+			Mock Test-Path { $true }
+			Mock Get-RepositoryName { Split-Path $RepositoryUrl -Leaf }
+			Mock Update-Repository { [pscustomobject]@{ Name = $Name; Branch = "master"; Outcome = "UpToDate"; DefaultBranch = $null; DefaultBranchOutcome = $null; StashName = $null } }
+		}
+
+		It "prints one heading per group, in resolution order, when a run spans several groups" {
+			Mock Resolve-RepositoryTargets {
+				, @(
+					[PSCustomObject]@{ Name = "Mike"; Group = "Beta"; RepositoryUrl = "https://github.com/acme/Mike"; LocalPath = "C:\Repos\Mike" }
+					[PSCustomObject]@{ Name = "Kilo"; Group = "Beta"; RepositoryUrl = "https://github.com/acme/Kilo"; LocalPath = "C:\Repos\Kilo" }
+					[PSCustomObject]@{ Name = "Zulu"; Group = "Alpha"; RepositoryUrl = "https://github.com/acme/Zulu"; LocalPath = "C:\Repos\Zulu" }
+				)
+			}
+			$script:Titles = [System.Collections.Generic.List[string]]::new()
+			Mock Write-LogTitle { $script:Titles.Add($Message) }
+
+			Update-Repositories -All -Quiet
+
+			$script:Titles -join "|" | Should -Be "Updating All Repositories|Beta|Alpha"
+		}
+
+		It "separates a heading from its first line only, with a blank line" {
+			Mock Resolve-RepositoryTargets {
+				, @(
+					[PSCustomObject]@{ Name = "Mike"; Group = "Beta"; RepositoryUrl = "https://github.com/acme/Mike"; LocalPath = "C:\Repos\Mike" }
+					[PSCustomObject]@{ Name = "Kilo"; Group = "Beta"; RepositoryUrl = "https://github.com/acme/Kilo"; LocalPath = "C:\Repos\Kilo" }
+					[PSCustomObject]@{ Name = "Zulu"; Group = "Alpha"; RepositoryUrl = "https://github.com/acme/Zulu"; LocalPath = "C:\Repos\Zulu" }
+				)
+			}
+
+			Update-Repositories -All -Quiet
+
+			Should -Invoke Write-LogSuccess -Times 2 -Exactly -ParameterFilter { $Message -match "^\[(Mike|Zulu)\]" -and -not $NoLeadingNewline }
+			Should -Invoke Write-LogSuccess -Times 1 -Exactly -ParameterFilter { $Message -match "^\[Kilo\]" -and $NoLeadingNewline }
+		}
+
+		It "prints no group heading when the run covers one group" {
+			Mock Resolve-RepositoryTargets {
+				, @(
+					[PSCustomObject]@{ Name = "Mike"; Group = "Beta"; RepositoryUrl = "https://github.com/acme/Mike"; LocalPath = "C:\Repos\Mike" }
+					[PSCustomObject]@{ Name = "Kilo"; Group = "Beta"; RepositoryUrl = "https://github.com/acme/Kilo"; LocalPath = "C:\Repos\Kilo" }
+				)
+			}
+
+			Update-Repositories -All -Quiet
+
+			Should -Invoke Write-LogTitle -Times 1 -Exactly
+			Should -Invoke Write-LogSuccess -Times 2 -Exactly -ParameterFilter { $Message -match "^\[(Mike|Kilo)\]" -and $NoLeadingNewline }
 		}
 	}
 

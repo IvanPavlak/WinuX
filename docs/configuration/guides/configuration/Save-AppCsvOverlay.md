@@ -11,7 +11,7 @@ Writes the machine-local app list overlay, validating before it replaces anythin
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`BootstrapConfig`](../../configuration-reference.md#bootstrapconfig) | hashtable, 9 keys | hashtable, 9 keys | Everything about how `Bootstrap` runs: the `Steps` toggles that decide which provisioning steps execute, `DataFiles` (relative paths to the three app-list CSVs), `LocalScripts` / `ExternalScripts`, `PersonalSteps`, `RepositoryUpdateScope`, `DefaultBranch`, and where the bootstrap log lands. |
+| [`BootstrapConfig`](../../configuration-reference.md#bootstrapconfig) | hashtable, 8 keys | hashtable, 8 keys | Everything about how `Bootstrap` runs: the `Steps` toggles that decide which provisioning steps execute, `DataFiles` (relative paths to the three app-list CSVs), `LocalScripts` / `ExternalScripts`, `PersonalSteps`, `RepositoryUpdateScope`, and where the bootstrap log lands. |
 | [`ValidMachineTypes`](../../configuration-reference.md#valid-machine-types) | array of strings | `@("Test")` | The machine types WinuX accepts. `DetermineMachineType` refuses anything not listed, and `Test-MachineTypeScope` uses it to decide whether a CSV row or a step applies. |
 
 This is the writer for the `*.local.csv` overlays. It never modifies the committed CSV - it writes the sibling overlay that `Import-AppCsv` layers on top, keeping a timestamped copy of the previous overlay in the [backup sink](../../../reference/backups.md) first.
@@ -52,7 +52,7 @@ On this page that bites on `ValidMachineTypes` - that key is an array, so whatev
 
 ## Step 1: Set `BootstrapConfig`
 
-Everything about how `Bootstrap` runs: the `Steps` toggles that decide which provisioning steps execute, `DataFiles` (relative paths to the three app-list CSVs), `LocalScripts` / `ExternalScripts`, `PersonalSteps`, `RepositoryUpdateScope`, `DefaultBranch`, and where the bootstrap log lands.
+Everything about how `Bootstrap` runs: the `Steps` toggles that decide which provisioning steps execute, `DataFiles` (relative paths to the three app-list CSVs), `LocalScripts` / `ExternalScripts`, `PersonalSteps`, `RepositoryUpdateScope`, and where the bootstrap log lands.
 
 ```powershell
 BootstrapConfig = @{

@@ -12,8 +12,10 @@ The [Git module reference](../../../modules/git.md) is the authority on what eac
 | Function | Configuration keys | Guide |
 | -------- | ------------------ | ----- |
 | `Install-Git` | `GitConfig` | [Install-Git](Install-Git.md) |
+| `Invoke-StartupRepositoryUpdate` | `RepositoryUpdate` | [Invoke-StartupRepositoryUpdate](Invoke-StartupRepositoryUpdate.md) |
+| `Resolve-RepositoryDefaultBranch` | `RepositoryUpdate` | [Resolve-RepositoryDefaultBranch](Resolve-RepositoryDefaultBranch.md) |
 | `Resolve-RepositoryTargets` | `RepositoryGroups` | [Resolve-RepositoryTargets](Resolve-RepositoryTargets.md) |
-| `Update-Repositories` | `RepositoryGroups` | [Update-Repositories](Update-Repositories.md) |
+| `Update-Repositories` | `RepositoryGroups`, `RepositoryUpdate` | [Update-Repositories](Update-Repositories.md) |
 
 ## Task Guides
 
@@ -25,7 +27,7 @@ Longer walkthroughs that cut across several functions and keys.
 
 These read no `Configuration.psd1` keys. Their guides record that fact and show how to call them.
 
-[Git-Diff](Git-Diff.md), [Git-Obsidian](Git-Obsidian.md), [GitBranch](GitBranch.md), [GitBranchDeleteAndPrune](GitBranchDeleteAndPrune.md), [GitMergeM](GitMergeM.md), [GitPull](GitPull.md), [GitStatus](GitStatus.md), [GitSwitch](GitSwitch.md), [Initialize-Repository](Initialize-Repository.md), [Test-GitRepository](Test-GitRepository.md)
+[Format-RepositoryUpdateResult](Format-RepositoryUpdateResult.md), [Git-Diff](Git-Diff.md), [Git-Obsidian](Git-Obsidian.md), [GitBranch](GitBranch.md), [GitBranchDeleteAndPrune](GitBranchDeleteAndPrune.md), [GitMergeM](GitMergeM.md), [GitPull](GitPull.md), [GitStatus](GitStatus.md), [GitSwitch](GitSwitch.md), [Initialize-Repository](Initialize-Repository.md), [Restore-RepositoryStash](Restore-RepositoryStash.md), [Test-GitRepository](Test-GitRepository.md), [Test-RepositoryUpdateStampFresh](Test-RepositoryUpdateStampFresh.md), [Update-Repository](Update-Repository.md), [Update-RepositoryDefaultBranch](Update-RepositoryDefaultBranch.md)
 
 ## Related
 

@@ -9,7 +9,7 @@ The main orchestration function and heart of WinuX.
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`BootstrapConfig`](../../configuration-reference.md#bootstrapconfig) | hashtable, 9 keys | hashtable, 9 keys | Everything about how `Bootstrap` runs: the `Steps` toggles that decide which provisioning steps execute, `DataFiles` (relative paths to the three app-list CSVs), `LocalScripts` / `ExternalScripts`, `PersonalSteps`, `RepositoryUpdateScope`, `DefaultBranch`, and where the bootstrap log lands. |
+| [`BootstrapConfig`](../../configuration-reference.md#bootstrapconfig) | hashtable, 8 keys | hashtable, 8 keys | Everything about how `Bootstrap` runs: the `Steps` toggles that decide which provisioning steps execute, `DataFiles` (relative paths to the three app-list CSVs), `LocalScripts` / `ExternalScripts`, `PersonalSteps`, `RepositoryUpdateScope`, and where the bootstrap log lands. |
 | [`DefaultDisplayLanguage`](../../configuration-reference.md#locale--language) | string | empty string | The Windows display language `Set-DisplayLanguage` applies when called with no argument. Ships empty, so the function no-ops until you set it. |
 | [`DefaultKeyboardLayoutSet`](../../configuration-reference.md#keyboard-layouts) | string | empty string | Which named set from `KeyboardLayoutSets` `Set-KeyboardLayouts` applies by default. Ships empty, so the function no-ops. |
 | [`DefaultLocale`](../../configuration-reference.md#locale--language) | string | empty string | The locale `Set-Locale` applies by default. Ships empty, so the function no-ops. |
@@ -86,7 +86,7 @@ All of it goes in `Configuration.local.psd1`, at the repository's `Windows/Power
 
 ## Step 1: Set `BootstrapConfig`
 
-Everything about how `Bootstrap` runs: the `Steps` toggles that decide which provisioning steps execute, `DataFiles` (relative paths to the three app-list CSVs), `LocalScripts` / `ExternalScripts`, `PersonalSteps`, `RepositoryUpdateScope`, `DefaultBranch`, and where the bootstrap log lands.
+Everything about how `Bootstrap` runs: the `Steps` toggles that decide which provisioning steps execute, `DataFiles` (relative paths to the three app-list CSVs), `LocalScripts` / `ExternalScripts`, `PersonalSteps`, `RepositoryUpdateScope`, and where the bootstrap log lands.
 
 ```powershell
 BootstrapConfig = @{

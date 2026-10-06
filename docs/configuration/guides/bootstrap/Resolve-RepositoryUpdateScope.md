@@ -9,7 +9,8 @@ Resolves which repository groups Bootstrap clones and updates on this machine.
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`BootstrapConfig`](../../configuration-reference.md#bootstrapconfig) | hashtable, 9 keys | hashtable, 9 keys | Two keys matter here: `RepositoryUpdateScope` says **which** repository groups this machine type pulls, and `Steps.RepositoryUpdate` says **whether** the repository step runs at all. |
+| [`BootstrapConfig`](../../configuration-reference.md#bootstrapconfig) | hashtable, 8 keys | hashtable, 8 keys | Two keys matter here: `RepositoryUpdateScope` says **which** repository groups this machine type pulls, and `Steps.RepositoryUpdate` says **whether** the repository step runs at all. |
+| [`RepositoryUpdate.Startup.Scope`](../../configuration-reference.md#repository-update) | hashtable | absent | Read instead when `-Path 'RepositoryUpdate.Startup.Scope'` is passed, which the startup update ([`Invoke-StartupRepositoryUpdate`](../git/Invoke-StartupRepositoryUpdate.md)) does when the key is set. Same shape and fallbacks. |
 
 ## Decisions
 
