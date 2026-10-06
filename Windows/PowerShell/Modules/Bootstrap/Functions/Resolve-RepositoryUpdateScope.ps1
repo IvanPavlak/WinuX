@@ -19,6 +19,13 @@ function Resolve-RepositoryUpdateScope {
 		`BootstrapConfig.Steps.RepositoryUpdate` (opt-in, default off) like every other
 		Bootstrap step.
 
+		-Path reads a scope of the same shape from another key - the startup update passes
+		`RepositoryUpdate.Startup.Scope`. The fallbacks are the same.
+
+	.PARAMETER Path
+		The configuration key holding the per-machine-type scope. Defaults to
+		`BootstrapConfig.RepositoryUpdateScope`.
+
 	.OUTPUTS
 		Hashtable: All (bool), Groups (string[]). Groups is empty when All is true.
 
@@ -29,12 +36,20 @@ function Resolve-RepositoryUpdateScope {
 	.EXAMPLE
 		Resolve-RepositoryUpdateScope
 		@{ All = $false; Groups = @("Work", "Private") } when the machine's scope is "Work, Private".
+
+	.EXAMPLE
+		Resolve-RepositoryUpdateScope -Path 'RepositoryUpdate.Startup.Scope'
+		The scope the startup update uses on this machine.
 	#>
 	[CmdletBinding()]
 	[OutputType([hashtable])]
-	param()
+	param(
+		[Parameter(Mandatory = $false)]
+		[ValidateNotNullOrEmpty()]
+		[string]$Path = 'BootstrapConfig.RepositoryUpdateScope'
+	)
 
-	$scopeMap = Get-ConfigSetting -Path 'BootstrapConfig.RepositoryUpdateScope'
+	$scopeMap = Get-ConfigSetting -Path $Path
 
 	$scopeValue = if ($scopeMap -and $scopeMap[$global:MachineType]) {
 		$scopeMap[$global:MachineType]

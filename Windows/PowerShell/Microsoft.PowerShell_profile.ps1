@@ -252,6 +252,17 @@ if (Test-StartupStage -Name "LogMaintenance") {
 	Complete-StartupStage
 }
 
+# Automatic repository update - pulls the configured repositories at most once per
+# Configuration.RepositoryUpdate.Startup.IntervalHours, off unless Startup.Enabled is $true. Deferred
+# like LogMaintenance, and queued after it, so the prompt is already drawn when it runs; its compact
+# summary prints below the prompt, typing waits until the fetches finish, and -RedrawPrompt draws
+# the prompt again under the summary (without it PSReadLine waits on a blank line). Disabled or
+# inside the interval, the fired action returns in about a millisecond and redraws nothing.
+if (Test-StartupStage -Name "RepositoryUpdate") {
+	$deferredStartup.Add({ Invoke-StartupRepositoryUpdate -RedrawPrompt })
+	Complete-StartupStage
+}
+
 # The one PowerShell.OnIdle subscription that runs the deferred work. Registering the engine event
 # costs well under a millisecond, and the action fires only AFTER the prompt is rendered and the
 # shell has been idle ~300ms - so shell launch pays nothing. The queue travels as a global variable

@@ -16,10 +16,20 @@ function Update-Repositories {
 		Repositories are updated in the order the configuration lists them, and a repository
 		that appears in more than one selected group is still updated only once.
 
+		Each existing repository is updated by Update-Repository: local changes are stashed, the
+		checked-out branch is fast-forwarded, and the stash is popped. With
+		-IncludeDefaultBranch (or RepositoryUpdate.IncludeDefaultBranch in configuration) the
+		default branch is fast-forwarded too, without checking it out.
+
+		A repository missing locally is cloned via Initialize-Repository, unless -NoClone is
+		given, in which case it is reported and skipped.
+
 		Archive mode: downloads repository contents without the `.git` directory, via
 		`git clone --depth 1` followed by `.git` directory removal.
 
-		Requires administrator privileges.
+		Administrator privileges are required only to clone: in archive mode, and when a
+		selected repository is missing locally and -NoClone is not given. Updating repositories
+		that already exist works in any shell.
 
 	.PARAMETER Repositories
 		One or more repository names to update by name, as defined in RepositoryGroups.
@@ -45,6 +55,19 @@ function Update-Repositories {
 		Downloads repository contents without git history. Targets the Desktop by default;
 		combine with -InCurrentDirectory to use the current folder.
 
+	.PARAMETER IncludeDefaultBranch
+		Also fast-forward each repository's default branch when another branch is checked out.
+		When not passed, RepositoryUpdate.IncludeDefaultBranch decides (default $false);
+		-IncludeDefaultBranch:$false turns it off for one call even when configuration has it on.
+
+	.PARAMETER NoClone
+		Report and skip repositories that are missing locally instead of cloning them, so the
+		call never needs Administrator.
+
+	.PARAMETER Quiet
+		One line per repository plus a totals line, and git silenced - the compact form the
+		startup update prints. A run spanning several groups shows a heading per group.
+
 	.EXAMPLE
 		Update-Repositories
 		Opens the interactive repository selection menu.
@@ -64,6 +87,14 @@ function Update-Repositories {
 	.EXAMPLE
 		Update-Repositories -Group Work, OpenSource -Archive -InCurrentDirectory
 		Downloads both groups without git history into the current directory.
+
+	.EXAMPLE
+		Update-Repositories -All -IncludeDefaultBranch
+		Updates every repository and also fast-forwards each one's default branch.
+
+	.EXAMPLE
+		Update-Repositories -All -NoClone -Quiet
+		Updates every repository already on disk, one line each, without asking for Administrator.
 	#>
 	[CmdletBinding(DefaultParameterSetName = 'Interactive')]
 	param(
@@ -86,10 +117,25 @@ function Update-Repositories {
 		[switch]$InCurrentDirectory,
 
 		[Parameter(Mandatory = $false)]
-		[switch]$Archive
+		[switch]$Archive,
+
+		[Parameter(Mandatory = $false)]
+		[switch]$IncludeDefaultBranch,
+
+		[Parameter(Mandatory = $false)]
+		[switch]$NoClone,
+
+		[Parameter(Mandatory = $false)]
+		[switch]$Quiet
 	)
 
-	Test-AdminPrivileges
+	# An explicitly bound switch (including -IncludeDefaultBranch:$false) wins over configuration.
+	$includeDefaultBranch = if ($PSBoundParameters.ContainsKey('IncludeDefaultBranch')) {
+		[bool]$IncludeDefaultBranch
+	}
+	else {
+		[bool](Get-ConfigSetting -Path 'RepositoryUpdate.IncludeDefaultBranch' -Default $false)
+	}
 
 	$repositoriesToUpdate = @()
 
@@ -224,6 +270,9 @@ function Update-Repositories {
 	}
 
 	if ($Archive) {
+		# Archive mode only ever clones.
+		Test-AdminPrivileges
+
 		foreach ($repo in $repositoriesToUpdate) {
 			$RepositoryName = Get-RepositoryName -RepositoryUrl $repo.RepositoryUrl
 			$targetPath = $repo.LocalPath
@@ -270,98 +319,70 @@ function Update-Repositories {
 		return
 	}
 
+	# Administrator is needed to clone (Initialize-Repository takes ownership of the new folder),
+	# never to update a repository that is already on disk - so ask once, and only when this run
+	# is actually going to clone something.
+	if (-not $NoClone) {
+		foreach ($repo in $repositoriesToUpdate) {
+			if (-not [string]::IsNullOrWhiteSpace($repo.LocalPath) -and -not (Test-Path $repo.LocalPath)) {
+				Test-AdminPrivileges
+				break
+			}
+		}
+	}
+
+	# A run that spans several groups is printed under one heading per group, in the order the
+	# targets were resolved (configuration order). A single-group run already names its group in
+	# the title, and a custom URL/path target has no group at all.
+	$distinctGroups = @($repositoriesToUpdate | ForEach-Object { $_.Group } | Where-Object { $_ } | Select-Object -Unique)
+	$showGroups = $distinctGroups.Count -gt 1
+	$currentGroup = $null
+	$firstLineAfterHeading = $false
+
+	$counts = [ordered]@{ Updated = 0; UpToDate = 0; Attention = 0; Skipped = 0 }
 	foreach ($repo in $repositoriesToUpdate) {
 		$RepositoryName = Get-RepositoryName -RepositoryUrl $repo.RepositoryUrl
 
+		if ($showGroups -and $repo.Group -and $repo.Group -ne $currentGroup) {
+			$currentGroup = $repo.Group
+			Write-LogTitle $currentGroup
+			$firstLineAfterHeading = $true
+		}
+
 		if ([string]::IsNullOrWhiteSpace($repo.LocalPath)) {
-			Write-LogWarning "Skipping [$RepositoryName] => LocalPath not configured for this machine!"
-			continue
+			if (-not $Quiet) { Write-LogWarning "Skipping [$RepositoryName] => LocalPath not configured for this machine!" }
+			$result = [pscustomobject]@{ Name = $RepositoryName; LocalPath = $null; Branch = $null; Outcome = "NotConfigured"; DefaultBranch = $null; DefaultBranchOutcome = $null; StashName = $null }
 		}
-
-		if (-not (Test-Path $repo.LocalPath)) {
-			Write-LogWarning "Repository [$RepositoryName] not found at [$($repo.LocalPath)]"
-			Initialize-Repository -RepositoryUrl $repo.RepositoryUrl -LocalPath $repo.LocalPath -Token $global:GithubPat
-			continue
-		}
-
-		Push-Location $repo.LocalPath
-		try {
-			Write-LogStep " Checking status of [$RepositoryName]"
-
-			$currentBranch = git rev-parse --abbrev-ref HEAD
-			Write-LogStep " Current branch => [$currentBranch]"
-
-			$status = git status --porcelain
-			$stashName = $null
-			if ($status) {
-				Write-LogWarning "Local changes detected. Creating stash..."
-
-				$timestamp = Get-Date -Format "yyyy-MM-dd_HH-mm-ss"
-				$stashName = "${currentBranch}_$timestamp"
-
-				# git stash creates commit objects, which git refuses without an author identity
-				# ("fatal: empty ident name"). Supply an ephemeral identity for this command only,
-				# so stashing works even before the machine's global identity is configured -
-				# stash authorship is throwaway metadata and never lands in history.
-				git -c user.name="WinuX" -c user.email="winux@localhost" stash push --include-untracked -m $stashName
-				if ($LASTEXITCODE -ne 0) {
-					Write-LogError "Failed to stash changes in [$RepositoryName]. Skipping update."
-					continue
-				}
-				Write-LogSuccess "Changes stashed as [$stashName]"
-			}
-
-			Write-LogStep " Updating [$RepositoryName] on branch [$currentBranch]"
-
-			Write-LogWarning "Fetching latest changes..."
-			git fetch origin $currentBranch
-
-			$behind = git rev-list HEAD..origin/$currentBranch --count
-			if ($behind -eq 0) {
-				Write-LogSuccess "Repository is already up to date!"
+		elseif (-not (Test-Path $repo.LocalPath)) {
+			if ($NoClone) {
+				if (-not $Quiet) { Write-LogWarning "Repository [$RepositoryName] not found at [$($repo.LocalPath)] - not cloned (-NoClone)" }
+				$result = [pscustomobject]@{ Name = $RepositoryName; LocalPath = $repo.LocalPath; Branch = $null; Outcome = "NotCloned"; DefaultBranch = $null; DefaultBranchOutcome = $null; StashName = $null }
 			}
 			else {
-				Write-LogWarning "Pulling latest changes..."
-
-				git pull origin $currentBranch --ff-only
-				if ($LASTEXITCODE -ne 0) {
-					Write-LogError "Merge conflicts detected. Aborting!"
-					git merge --abort
-
-					if ($stashName) {
-						Write-LogWarning "Restoring stashed changes..."
-						git stash pop
-						if ($LASTEXITCODE -ne 0) {
-							Write-LogError "Failed to restore stashed changes!"
-							Write-LogWarning "Changes are preserved in stash => [$stashName]"
-							Write-LogWarning "Restore manually with => [git stash pop]" -NoLeadingNewline
-						}
-					}
-
-					Write-LogWarning "Please resolve conflicts manually and try again"
-					continue
-				}
-
-				Write-LogSuccess "Updated repository"
-			}
-
-			if ($stashName) {
-				Write-LogWarning "Attempting to restore stashed changes..."
-				git stash pop
-				if ($LASTEXITCODE -ne 0) {
-					Write-LogError "Conflicts occurred while restoring stashed changes in [$RepositoryName]"
-					Write-LogWarning "Changes are preserved in stash: $stashName"
-					Write-LogWarning "Please resolve conflicts manually with [git stash pop]" -NoLeadingNewline
-					continue
-				}
-				Write-LogSuccess "Restored stashed changes!"
+				Write-LogWarning "Repository [$RepositoryName] not found at [$($repo.LocalPath)]"
+				Initialize-Repository -RepositoryUrl $repo.RepositoryUrl -LocalPath $repo.LocalPath -Token $global:GithubPat
+				$result = [pscustomobject]@{ Name = $RepositoryName; LocalPath = $repo.LocalPath; Branch = $null; Outcome = "Cloned"; DefaultBranch = $null; DefaultBranchOutcome = $null; StashName = $null }
 			}
 		}
-		catch {
-			Write-LogError "An error occurred while updating [$RepositoryName]: $_"
+		else {
+			$result = Update-Repository -Name $RepositoryName -LocalPath $repo.LocalPath -IncludeDefaultBranch:$includeDefaultBranch -Quiet:$Quiet
 		}
-		finally {
-			Pop-Location
+
+		$line = Format-RepositoryUpdateResult -Result $result
+		$counts[$line.Category]++
+		if ($Quiet) {
+			# A blank line separates a group heading from its first repository; the rest of the
+			# group's lines follow without one.
+			$noLead = -not $firstLineAfterHeading
+			if ($line.Level -eq "Success") { Write-LogSuccess $line.Message -NoLeadingNewline:$noLead }
+			else { Write-LogWarning $line.Message -NoLeadingNewline:$noLead }
 		}
+		$firstLineAfterHeading = $false
+	}
+
+	if ($Quiet) {
+		$totals = "Repositories => $($counts.Updated) updated, $($counts.UpToDate) up to date, $($counts.Attention) need attention, $($counts.Skipped) skipped"
+		if ($counts.Attention -gt 0) { Write-LogWarning $totals }
+		else { Write-LogSuccess $totals }
 	}
 }

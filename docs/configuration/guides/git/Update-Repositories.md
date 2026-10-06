@@ -10,6 +10,7 @@ Clones or updates one or more git repositories defined in `RepositoryGroups` in 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
 | [`RepositoryGroups`](../../configuration-reference.md#repository-groups) | array of single-key hashtables | array of 1 | The repository groups `Update-Repositories` walks and `Initialize-Repository` can clone into. Group name to an array of repository entries. |
+| [`RepositoryUpdate.IncludeDefaultBranch`](../../configuration-reference.md#repository-update) | bool | `$false` | Also fast-forward each repository's default branch (for example `master`) when another branch is checked out, without checking it out. `-IncludeDefaultBranch` / `-IncludeDefaultBranch:$false` overrides it for one call. |
 
 ## Decisions
 
@@ -25,6 +26,10 @@ Clones or updates one or more git repositories defined in `RepositoryGroups` in 
     - Options: Whatever order you write them in - the list is walked as configured and never sorted. A repository listed in two groups is still updated only once.
     - Default: The shipped order.
     - More detail: [`RepositoryGroups`](../../configuration-reference.md#repository-groups)
+4. Should the default branch be kept current while you work on another branch?
+    - Options: `$true` fast-forwards each repository's default branch after the checked-out branch, with `git fetch origin <default>:<default>` - git refuses anything but a fast-forward, the working tree and the stash are never touched, a default branch with local commits is left alone, and one never checked out locally is skipped. `$false` updates only the checked-out branch, as before. Which branch counts as the default is [`Resolve-RepositoryDefaultBranch`](Resolve-RepositoryDefaultBranch.md)'s decision.
+    - Default: `$false`.
+    - More detail: [`RepositoryUpdate`](../../configuration-reference.md#repository-update)
 
 ## Where to Put Values
 
@@ -33,12 +38,13 @@ All of it goes in `Configuration.local.psd1`, at the repository's `Windows/Power
 > [!WARNING]
 > The merge is not uniform. **Hashtables deep-merge per key**, so adding one entry to a hashtable leaves every other entry alone. **Arrays and scalars replace wholesale**, so supplying an array key in your local file discards the entire base array. When you want to *add* to a shipped array, copy the whole base array out of `Configuration.psd1` first and add your entry to the copy.
 
-On this page that bites on `RepositoryGroups` - that key is an array, so whatever you write is the complete value.
+On this page that bites on `RepositoryGroups` - that key is an array, so whatever you write is the complete value. `RepositoryUpdate` is a hashtable, so a single key there is enough.
 
 ## Steps Overview
 
 1. Set `RepositoryGroups`
-2. Reload and confirm the merge landed
+2. Set `RepositoryUpdate.IncludeDefaultBranch`
+3. Reload and confirm the merge landed
 
 ## Step 1: Set `RepositoryGroups`
 
@@ -53,13 +59,24 @@ RepositoryGroups = @(
 )
 ```
 
-## Step 2: Reload and confirm the merge landed
+## Step 2: Set `RepositoryUpdate.IncludeDefaultBranch`
+
+Turn on the default-branch fast-forward for every call, the Bootstrap repository step included.
+
+```powershell
+RepositoryUpdate = @{
+    IncludeDefaultBranch = $true
+}
+```
+
+## Step 3: Reload and confirm the merge landed
 
 Reload the profile, then read the merged value back. `$global:Configuration` after a reload is the ground truth - if what you set is not there, the local file did not parse or the key is nested one level away from where you put it.
 
 ```powershell
 Reload-PowerShellProfile
 $global:Configuration.RepositoryGroups
+$global:Configuration.RepositoryUpdate.IncludeDefaultBranch
 ```
 
 ## Verification
@@ -100,16 +117,22 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
             )
         }
     )
+
+    RepositoryUpdate = @{
+        IncludeDefaultBranch = $true
+    }
 }
 ```
 
 With that in place:
 
 ```powershell
-Update-Repositories -Group Personal    # the whole group, in configuration order
-Update-Repositories MyRepo             # one repository by name
-Update-Repositories -All               # every group
-Update-Repositories                    # interactive menu
+Update-Repositories -Group Personal              # the whole group, in configuration order, master too
+Update-Repositories MyRepo                       # one repository by name
+Update-Repositories -All                         # every group
+Update-Repositories                              # interactive menu
+Update-Repositories -All -IncludeDefaultBranch:$false   # this once, the checked-out branch only
+Update-Repositories -All -NoClone -Quiet         # what is on disk, one line each, no Administrator
 ```
 
 ## Related
@@ -118,6 +141,8 @@ Update-Repositories                    # interactive menu
 - [Git configuration guides](README.md) - every guide for this module
 - [Add New Repository](add-new-repository.md) - repository groups and what `Update-Repositories` walks
 - [`Resolve-RepositoryTargets`](Resolve-RepositoryTargets.md) - expands every selection mode this function offers
+- [`Update-Repository`](Update-Repository.md) - updates each repository
+- [`Resolve-RepositoryDefaultBranch`](Resolve-RepositoryDefaultBranch.md) - which branch counts as the default
 - [`Resolve-ProjectPath`](../helper/Resolve-ProjectPath.md) - reads the same configuration
 - [`Resolve-RepositoryUpdateScope`](../bootstrap/Resolve-RepositoryUpdateScope.md) - which groups Bootstrap pulls
 - [WinuXConfigurator](../../winux-configurator.md) - have an AI assistant walk these decisions with you

@@ -17,7 +17,7 @@ The three package-manager steps are additionally gated by [Resolve-PackageManage
 Execution sequence:
 
 1. (`-WithInitialSetup` only) `Rename-Machine`, `Start-MicrosoftActivationScripts`, `Start-Win11Debloat` (the latter two opt-in via `Steps`)
-2. `Update-Repositories` - pulls the configured repositories (opt-in via `Steps.RepositoryUpdate`); which groups it pulls is governed by `BootstrapConfig.RepositoryUpdateScope`
+2. `Update-Repositories` - pulls the configured repositories (opt-in via `Steps.RepositoryUpdate`); which groups it pulls is governed by `BootstrapConfig.RepositoryUpdateScope`, and whether each repository's default branch is fast-forwarded too by `RepositoryUpdate.IncludeDefaultBranch`
 3. Execution policy, Developer Mode, power plan, power button actions
 4. System theme, locale, display language, keyboard layouts
 5. Nerd Font, PowerShell modules, special folder redirections
@@ -363,9 +363,9 @@ Resolve-PackageManagers
 
 ## [Resolve-RepositoryUpdateScope](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Bootstrap/Functions/Resolve-RepositoryUpdateScope.ps1)
 
-- **Description:** Resolves which repository groups Bootstrap updates on this machine, from `BootstrapConfig.RepositoryUpdateScope`. The machine type's own value wins, falling back to `Default`, falling back to `"All"` when the key is absent entirely - so a fork that configures nothing pulls every repository it defines. Returns `@{ All = <bool>; Groups = <string[]> }`, which [`Bootstrap`](#bootstrap) turns into `Update-Repositories -All` or `Update-Repositories -Group`.
-- **Parameters:** none
-- **Usage:** `Resolve-RepositoryUpdateScope`
+- **Description:** Resolves which repository groups Bootstrap updates on this machine, from `BootstrapConfig.RepositoryUpdateScope`. The machine type's own value wins, falling back to `Default`, falling back to `"All"` when the key is absent entirely - so a fork that configures nothing pulls every repository it defines. Returns `@{ All = <bool>; Groups = <string[]> }`, which [`Bootstrap`](#bootstrap) turns into `Update-Repositories -All` or `Update-Repositories -Group`. `-Path` reads a scope of the same shape from another key, with the same fallbacks - the startup update ([`Invoke-StartupRepositoryUpdate`](git.md#invoke-startuprepositoryupdate)) passes `RepositoryUpdate.Startup.Scope`.
+- **Parameters:** -Path
+- **Usage:** `Resolve-RepositoryUpdateScope`, `Resolve-RepositoryUpdateScope -Path 'RepositoryUpdate.Startup.Scope'`
 
 The configured value is either `"All"` (matched case-insensitively) or one or more group names from `RepositoryGroups`, written either as a comma-separated string (`"Work, Private"`) or as an array (`@("Work", "Private")`). Names are trimmed and kept in the order given. `"All"` only means "every repository" when it stands alone, so a fork is free to define a group whose name happens to be `All` and list it alongside others. A value that names nothing at all is treated like the absent key.
 
@@ -378,7 +378,14 @@ Whether the step runs at all is the separate `Steps.RepositoryUpdate` toggle (op
 Resolve-RepositoryUpdateScope
 
 # Base configuration => @{ All = $true; Groups = @() }
+
+# What would the startup update pull on this machine? (absent key => All)
+Resolve-RepositoryUpdateScope -Path 'RepositoryUpdate.Startup.Scope'
 ```
+
+| Parameter | Type     | Default                                 | Description                                         |
+| --------- | -------- | --------------------------------------- | --------------------------------------------------- |
+| `-Path`   | `string` | `'BootstrapConfig.RepositoryUpdateScope'` | The configuration key holding the per-machine-type scope. |
 
 **See also:** [Bootstrap](#bootstrap), [Resolve-BootstrapSteps](#resolve-bootstrapsteps), [Update-Repositories](git.md#update-repositories), [Configuration Reference: BootstrapConfig](../configuration/configuration-reference.md#bootstrapconfig)
 

@@ -35,7 +35,8 @@ function Measure-ShellStartup {
 
 		The stage names are the ones the profile guards with Test-StartupStage:
 		Schema, Greeting, FastfetchImageLogo, OnefetchStyle, PSReadLine, Terminal-Icons,
-		PSReadLineOptions, OhMyPosh, Aliases, PowerPlan, LogMaintenance. Core is always present.
+		PSReadLineOptions, OhMyPosh, Aliases, PowerPlan, LogMaintenance, RepositoryUpdate. Core is
+		always present.
 		FastfetchImageLogo and OnefetchStyle are the two opt-in decorations the all-hosts profile
 		adds inside the greeting; listing them as stages of their own is what makes the image
 		logo's cost visible separately from the panel's.
@@ -83,7 +84,7 @@ function Measure-ShellStartup {
 		[ValidateNotNullOrEmpty()]
 		[string[]]$Stages = @(
 			"Schema", "Greeting", "FastfetchImageLogo", "OnefetchStyle", "PSReadLine", "Terminal-Icons",
-			"PSReadLineOptions", "OhMyPosh", "Aliases", "PowerPlan", "LogMaintenance"
+			"PSReadLineOptions", "OhMyPosh", "Aliases", "PowerPlan", "LogMaintenance", "RepositoryUpdate"
 		),
 
 		[Parameter()]

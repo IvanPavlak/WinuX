@@ -1021,6 +1021,34 @@ Private = @{
 
 2. For private repos, ensure you have access.
 
+### The Default Branch Was Not Updated
+
+**Problem:** `RepositoryUpdate.IncludeDefaultBranch` is on (or `-IncludeDefaultBranch` was passed), but `master` is still behind origin.
+
+**Cause and solution**, by what the run reported for the default branch:
+
+- **"has local commits origin does not" / "left untouched"** - the local default branch diverged. Git refuses anything but a fast-forward, on purpose, so nothing of yours is overwritten. Check it out and reconcile it by hand (`git switch master`, then rebase, merge or reset as appropriate).
+- **"could not be fetched"** - offline, origin has no branch of that name, or the branch is checked out in another worktree (git refuses to fetch into a branch any worktree has checked out). Update it from that worktree.
+- **"could not be determined" / "default branch unknown"** - the repository has no `origin/HEAD`, `RepositoryUpdate.DefaultBranch` is empty, and asking origin (`git remote set-head origin --auto`, which the update runs once on its own) failed too - usually because origin was unreachable. The next run asks again; or set the name in configuration.
+- **"no local master"** - the default branch was never checked out in this clone. It is skipped, never created.
+- **Only one branch is named** - the default branch is the checked-out branch, so the normal pull covered it.
+
+### No Prompt After The Startup Repository Update
+
+**Problem:** A new shell prints the repository summary and then shows no prompt; pressing Enter brings it back.
+
+**Cause:** The update runs after the prompt is already drawn, so its output pushes the prompt away while PSReadLine keeps waiting for input. The profile's `RepositoryUpdate` stage calls `Invoke-StartupRepositoryUpdate -RedrawPrompt`, which draws the prompt again; a profile from before that switch existed does not.
+
+**Solution:** Update the profile (the stage must pass `-RedrawPrompt`), then open a new tab. To check the redraw without waiting for the interval, run `Invoke-StartupRepositoryUpdate -Force -RedrawPrompt`.
+
+### Update-Repositories Asks For Administrator
+
+**Problem:** `Update-Repositories` prompts to reopen an Administrator PowerShell.
+
+**Cause:** One of the selected repositories is missing locally (or `-Archive` was given), and cloning takes ownership of the new folder, which needs Administrator. Updating repositories that already exist never asks.
+
+**Solution:** Accept the prompt to clone, or pass `-NoClone` to update only what is already on disk and list the missing ones as skipped.
+
 ## Performance Issues
 
 ### Slow Profile Load
@@ -1047,7 +1075,7 @@ To start one shell without a stage (for example to see whether the greeting is w
 $env:WINUX_STARTUP_SKIP = "Greeting"; pwsh
 ```
 
-Stage names: `Schema`, `Greeting`, `FastfetchImageLogo`, `OnefetchStyle`, `PSReadLine`, `Terminal-Icons`, `PSReadLineOptions`, `OhMyPosh`, `Aliases`, `PowerPlan`, `LogMaintenance` (or `All`; `Core` always runs).
+Stage names: `Schema`, `Greeting`, `FastfetchImageLogo`, `OnefetchStyle`, `PSReadLine`, `Terminal-Icons`, `PSReadLineOptions`, `OhMyPosh`, `Aliases`, `PowerPlan`, `LogMaintenance`, `RepositoryUpdate` (or `All`; `Core` always runs).
 
 **What the numbers usually mean:**
 

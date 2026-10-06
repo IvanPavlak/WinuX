@@ -1066,7 +1066,6 @@ Anything other than the three valid values is reported as unknown rather than si
 **Subkeys:**
 
 - `LogFileLocation` / `LogFilePrefix` - Where the bootstrap log is written (default: Desktop, `BootstrapLog`).
-- `DefaultBranch` - Branch that clone/update operations target (default `master`).
 - `RepositoryUpdateScope` - **Which** repository groups Bootstrap clones/updates, per machine type.
   Each value is `"All"` or one or more group names from [`RepositoryGroups`](#repository-groups),
   written as a comma-separated string (`"Work, Private"`) or an array (`@("Work", "Private")`).
@@ -1094,7 +1093,8 @@ Anything other than the three valid values is reported as unknown rather than si
   so `Open-Obsidian` can load workspaces - see [Enable-ObsidianCli](guides/application/Enable-ObsidianCli.md)),
   `RepositoryUpdate` (clones and pulls every repository the machine's `RepositoryUpdateScope`
   names, which reaches outside this repository the moment it runs - forks that want the previous
-  always-on behaviour set it `$true`), `LockedStartLayout`. Per invocation,
+  always-on behaviour set it `$true`; how each repository is updated, including whether the default
+  branch is fast-forwarded too, follows [`RepositoryUpdate`](#repository-update)), `LockedStartLayout`. Per invocation,
   `Bootstrap -Skip <steps>` / `-Include <steps>` override this config. The full step list in execution
   order is documented next to the section in `Configuration.psd1`. The deprecated `WSLSetup`
   key (same shape as `Steps.WSL`) is still honored when `Steps` carries no `WSL` entry.
@@ -1408,6 +1408,36 @@ RepositoryGroups = @(
 **Group names are freely configurable and never known to code.** Add, rename or remove groups as you like: `Update-Repositories -Group <name>[, <name>]` takes whatever keys you define (matched case-insensitively), `-All` and the interactive menu follow the whole list, and an unknown name is reported with the configured ones rather than guessed at. Repositories are walked in the order the configuration lists them - inside a group and across several requested groups - and a repository listed in more than one selected group is updated only once.
 
 **Consumer functions:** `Resolve-RepositoryTargets` (expands a selection), `Update-Repositories`, `Initialize-Repository`, `Resolve-ProjectPath -ForRepository` (resolves one entry)
+
+---
+
+## Repository Update
+
+**How** the repositories in [`RepositoryGroups`](#repository-groups) are updated, and whether the shell refreshes them on its own. `RepositoryGroups` says which repositories exist; this section changes no list. Everything ships **off**.
+
+**Key:** `RepositoryUpdate` → Hashtable
+
+```powershell
+RepositoryUpdate = @{
+    IncludeDefaultBranch = $false   # also fast-forward the default branch
+    DefaultBranch        = ""       # "" => origin/HEAD => skipped
+    Startup              = @{
+        Enabled       = $false      # automatic update after the first prompt
+        IntervalHours = 24          # minimum hours between automatic runs
+        # Scope       = @{ Default = "All" }   # absent => BootstrapConfig.RepositoryUpdateScope => "All"
+    }
+}
+```
+
+| Key | Type | Default | What it controls |
+| --- | ---- | ------- | ---------------- |
+| `IncludeDefaultBranch` | bool | `$false` | After the checked-out branch is pulled, also fast-forward the repository's default branch with `git fetch origin <default>:<default>`. Git refuses anything but a fast-forward and the working tree and stash are never touched. A default branch that was never checked out locally is skipped, never created. `Update-Repositories -IncludeDefaultBranch` or `-IncludeDefaultBranch:$false` overrides it for one call. The Bootstrap repository step follows it too. |
+| `DefaultBranch` | string | `""` | The default branch's name. Empty uses what the remote reports (`refs/remotes/origin/HEAD`); when the remote reports nothing the step is skipped with a warning. Leave it empty when your repositories do not share one default branch. Replaces `BootstrapConfig.DefaultBranch`, which was removed in 0.1.86 (it was never read). |
+| `Startup.Enabled` | bool | `$false` | Update repositories automatically once the first prompt of a shell is drawn (profile stage `RepositoryUpdate`, deferred until the shell is idle). Never clones a missing repository and never asks for Administrator. Prints one line per repository plus a totals line. |
+| `Startup.IntervalHours` | int | `24` | Minimum hours between two automatic runs, tracked by the stamp file `Logs\.last-repository-update`. The stamp records the last run, so a machine that was off for days updates on its first shell back. |
+| `Startup.Scope` | hashtable | absent | Which groups the automatic run updates, per machine type, in the same shape as [`BootstrapConfig.RepositoryUpdateScope`](#bootstrapconfig): `"All"`, a group name, a comma-separated string or an array, with a `Default` fallback. Absent falls back to `BootstrapConfig.RepositoryUpdateScope`, then to `"All"`. |
+
+**Consumer functions:** `Update-Repositories` (`IncludeDefaultBranch`), `Resolve-RepositoryDefaultBranch` (`DefaultBranch`), `Invoke-StartupRepositoryUpdate` (`Startup`)
 
 ---
 
