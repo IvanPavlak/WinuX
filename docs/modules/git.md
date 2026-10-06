@@ -392,7 +392,7 @@ What `-Quiet` prints for a run over two groups, with the default branch on (illu
 
 When neither `RepositoryUpdate.DefaultBranch` nor `origin/HEAD` names the default branch (a repository not created by `git clone`), it asks origin once with `git remote set-head origin --auto`, which writes only that local ref, and resolves again - so such a repository heals itself on its first run.
 
-Safety rules, each one covered by a test against real git:
+Safety rules, each one covered by a test against real git in `Windows/PowerShell/Modules/Tests/Modules/Git/Update-Repository.DataSafety.*.Tests.ps1` (run them all with `Run-Tests -TestName "Update-Repository.DataSafety"`) - every case there fingerprints every file, commit, stash and branch before and after a real update and fails on any loss:
 
 | Situation | What happens |
 | --- | --- |
