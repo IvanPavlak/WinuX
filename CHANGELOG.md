@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.87] - 2026-10-06
+
+### Added
+
+- **`Deploy-AiMarketplaces` installs the plugins inside WSL too.** With `DefaultWSLDistribution` and `DefaultWSLUsername` set, the add and install steps now run a second time against the Claude Code CLI installed inside WSL (`wsl -d <distro> -u <user>`, a login shell, so `~/.local/bin` and the profile's PATH count), with the same checks and messages prefixed `[WSL]`, instead of a warning asking you to run them there by hand. A `claude` that WSL resolves under `/mnt/` is the Windows CLI reached through interop, which would install into the Windows profile, so it only warns, as does a WSL without the CLI. New parameter `-WslCommand` (tests pass a stub). Tests: `Deploy-AiMarketplaces.Tests.ps1`. Docs: the AI module reference, `docs/ai/mods.md`, the `Deploy-AiMarketplaces` guide.
+- **One copy of a marketplace plugin.** `Deploy-AiMarketplaces` (Windows and the WSL settings file) warns when a folder listed in `env.CLAUDE_CODE_PLUGIN_DIRS` holds a plugin a configured marketplace installs: Claude Code would load the plugin twice, and the folder copy reads its options from `pluginConfigs.<plugin>`, not `<plugin>@<marketplace>`, so it draws with its defaults. The entry is reported, never removed; a development clone belongs in `claude --plugin-dir <clone>` for one session. Tests: `Deploy-AiMarketplaces.Tests.ps1`. Docs: the AI module reference, `docs/ai/mods.md`, the `Deploy-AiMarketplaces` guide, the configuration reference, troubleshooting ("A Marketplace Plugin Ignores Its Options").
+
 ## [0.1.86] - 2026-10-06
 
 ### Added
@@ -1466,7 +1473,9 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.85...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.87...HEAD
+[0.1.87]: https://github.com/IvanPavlak/WinuX/compare/v0.1.86...v0.1.87
+[0.1.86]: https://github.com/IvanPavlak/WinuX/compare/v0.1.85...v0.1.86
 [0.1.85]: https://github.com/IvanPavlak/WinuX/compare/v0.1.84...v0.1.85
 [0.1.84]: https://github.com/IvanPavlak/WinuX/compare/v0.1.83...v0.1.84
 [0.1.83]: https://github.com/IvanPavlak/WinuX/compare/v0.1.82...v0.1.83

@@ -289,6 +289,11 @@ Marketplaces = @{
 
 A plugin that loads but ignores one of its options has the same shape of cause one level down: `PluginConfigs` values keep their type, so a boolean option set as the string `"true"` is dropped by the plugin as invalid. Write it as `$true`.
 
+### A Marketplace Plugin Ignores Its Options
+
+**Problem:** The options under `pluginConfigs.<plugin>@<marketplace>` in `~\.claude\settings.json` are set (and `Deploy-AiMarketplaces` reports them up to date), yet the plugin draws with its defaults. `Deploy-AiMarketplaces` may also warn that the plugin "is installed from its marketplace and also loaded from" a folder.
+
+**Solution:** A folder that holds the same plugin is listed in `env.CLAUDE_CODE_PLUGIN_DIRS`, usually a development clone added by hand. Claude Code then loads the plugin twice, and the folder copy reads its options from `pluginConfigs.<plugin>`, not `<plugin>@<marketplace>`. Remove that entry from the `env` block (Windows and, inside WSL, `/home/<user>/.claude/settings.json`), start a new session, and load the clone only for development with `claude --plugin-dir <clone>`.
 ### "Claude Code CLI (claude) not found on PATH" Or "claude plugin validate failed"
 
 **Problem:** `Deploy-AiMods` warns that mods are deployed but cannot be used yet.
