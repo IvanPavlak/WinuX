@@ -22,7 +22,7 @@ The run itself is `Update-Repositories -NoClone -Quiet`, so it also follows [`Re
     - Default: `$false`.
     - More detail: [`RepositoryUpdate`](../../configuration-reference.md#repository-update)
 2. How often?
-    - Options: Any number of hours. `24` means the first shell of the day; `8` roughly twice a working day; `0` every shell. The stamp records the last run, so a machine that was off for days updates on its first shell back. A run that failed (offline, for example) is not retried until the interval has passed again - `Invoke-StartupRepositoryUpdate -Force` reruns it by hand.
+    - Options: Any number of hours. `24` means the first shell of the day; `8` roughly twice a working day; `0` every shell. Several shells opened at once still run it only once - the run is claimed with a lock file (`Logs\.repository-update.lock`), and a lock left by a shell that died mid-run is cleared by the next one. The stamp records the last run, so a machine that was off for days updates on its first shell back. A run that failed (offline, for example) is not retried until the interval has passed again - `Invoke-StartupRepositoryUpdate -Force` reruns it by hand.
     - Default: `24`.
     - More detail: [`RepositoryUpdate`](../../configuration-reference.md#repository-update)
 3. Which groups should it update?

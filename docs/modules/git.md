@@ -183,7 +183,9 @@ Install-Git
 - **Parameters:** -Force, -RedrawPrompt
 - **Usage:** `Invoke-StartupRepositoryUpdate`, `Invoke-StartupRepositoryUpdate -Force`
 
-The stamp records when the last run happened, so a machine that was off for days updates on its first shell back - nothing is scheduled, so nothing can be missed. It is written before the update starts: several tabs opened at once run it only once, and a run that failed (offline, for example) is not retried until the interval has passed again. `-Force` runs it now, ignoring `Enabled` and the interval.
+The stamp records when the last run happened, so a machine that was off for days updates on its first shell back - nothing is scheduled, so nothing can be missed. It is written before the update starts, so a run that failed (offline, for example) is not retried until the interval has passed again. `-Force` runs it now, ignoring `Enabled` and the interval.
+
+Several shells opened at once (a workspace opening its terminals) run it exactly once. The run is claimed with a lock file, `Logs\.repository-update.lock`, created atomically and held open for the whole run, and the stamp is checked again once the lock is held ([`Test-RepositoryUpdateStampFresh`](#test-repositoryupdatestampfresh)). A shell that loses the claim returns silently, even with `-Force`. A lock left by a shell that died mid-run can be deleted - a live holder's open handle prevents that on Windows - so the next shell clears it and runs.
 
 The run happens inside the shell after the prompt is already drawn, so its summary pushes the prompt away and typing waits until the fetches finish. The profile passes `-RedrawPrompt`, which draws the prompt again below the summary with PSReadLine's `InvokePrompt` - without it PSReadLine keeps waiting on a blank line. Skip it for one shell with `$env:WINUX_STARTUP_SKIP = "RepositoryUpdate"`.
 
@@ -275,6 +277,19 @@ if (Test-GitRepository) { onefetch }
 ```
 
 **See also:** [Invoke-Onefetch](system.md#invoke-onefetch), [Show-TerminalGreeting](system.md#show-terminalgreeting), [Test-GitRepository configuration guide](../configuration/guides/git/Test-GitRepository.md)
+
+## [Test-RepositoryUpdateStampFresh](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Git/Functions/Test-RepositoryUpdateStampFresh.ps1)
+
+- **Description:** The throttle check of `Invoke-StartupRepositoryUpdate`: returns `$true` when the stamp file exists and was written less than `-IntervalHours` ago. A missing stamp is never fresh, and an interval of 0 or less is never fresh, so the update then runs in every shell. `Invoke-StartupRepositoryUpdate` asks twice - before claiming the run, and again once its lock is held, because another shell may have finished a run in between.
+- **Parameters:** -StampFile, -IntervalHours
+- **Usage:** `Test-RepositoryUpdateStampFresh -StampFile (Join-Path $global:LoggingState.LogsDir ".last-repository-update") -IntervalHours 24`
+
+```powershell
+# Would a new shell skip the startup update right now?
+Test-RepositoryUpdateStampFresh -StampFile (Join-Path $global:LoggingState.LogsDir ".last-repository-update") -IntervalHours 24
+```
+
+**See also:** [Invoke-StartupRepositoryUpdate](#invoke-startuprepositoryupdate)
 
 ## [Update-Repositories](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Git/Functions/Update-Repositories.ps1)
 

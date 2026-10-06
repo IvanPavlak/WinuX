@@ -19,6 +19,7 @@
 		'Resolve-RepositoryDefaultBranch',
 		'Resolve-RepositoryTargets',
 		'Test-GitRepository',
+		'Test-RepositoryUpdateStampFresh',
 		'Update-Repositories',
 		'Update-Repository',
 		'Update-RepositoryDefaultBranch'

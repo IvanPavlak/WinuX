@@ -10,6 +10,7 @@ BeforeAll {
 	$ModuleRoot = (Get-RepositoryPath).Modules
 
 	. "$ModuleRoot\Git\Functions\Invoke-StartupRepositoryUpdate.ps1"
+	. "$ModuleRoot\Git\Functions\Test-RepositoryUpdateStampFresh.ps1"
 	# Dot-sourced so they exist to Mock even in sessions whose imported modules predate them.
 	. "$ModuleRoot\Git\Functions\Update-Repositories.ps1"
 	. "$ModuleRoot\Bootstrap\Functions\Resolve-RepositoryUpdateScope.ps1"
@@ -108,6 +109,70 @@ Describe "Invoke-StartupRepositoryUpdate" {
 
 			$script:StampSeenDuringRun | Should -BeTrue
 			Should -Invoke Update-Repositories -Times 1 -Exactly
+		}
+	}
+
+	Context "one shell at a time" {
+		BeforeEach { $script:LockFile = Join-Path $script:LogsDir ".repository-update.lock" }
+
+		It "does nothing while another shell holds the lock" {
+			# An open handle with no sharing is exactly what a running shell holds.
+			$held = [System.IO.File]::Open($script:LockFile, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
+			try {
+				Invoke-StartupRepositoryUpdate
+			}
+			finally {
+				$held.Dispose()
+			}
+
+			Should -Invoke Update-Repositories -Times 0 -Exactly
+			$script:StampFile | Should -Not -Exist
+		}
+
+		It "does nothing while another shell holds the lock, even with -Force" {
+			$held = [System.IO.File]::Open($script:LockFile, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
+			try {
+				Invoke-StartupRepositoryUpdate -Force
+			}
+			finally {
+				$held.Dispose()
+			}
+
+			Should -Invoke Update-Repositories -Times 0 -Exactly
+		}
+
+		It "clears a lock left by a shell that died mid-run and runs" {
+			Set-Content -Path $script:LockFile -Value ""
+
+			Invoke-StartupRepositoryUpdate
+
+			Should -Invoke Update-Repositories -Times 1 -Exactly
+		}
+
+		It "holds the lock during the run and releases it afterwards" {
+			Mock Update-Repositories { $script:LockSeenDuringRun = Test-Path $script:LockFile }
+
+			Invoke-StartupRepositoryUpdate
+
+			$script:LockSeenDuringRun | Should -BeTrue
+			$script:LockFile | Should -Not -Exist
+		}
+
+		It "releases the lock when the update throws" {
+			Mock Update-Repositories { throw "network down" }
+
+			Invoke-StartupRepositoryUpdate
+
+			$script:LockFile | Should -Not -Exist
+		}
+
+		It "does not take the lock when the stamp is fresh" {
+			Set-Content -Path $script:StampFile -Value "stamp"
+
+			Invoke-StartupRepositoryUpdate
+
+			$script:LockFile | Should -Not -Exist
+			Should -Invoke Update-Repositories -Times 0 -Exactly
 		}
 	}
 

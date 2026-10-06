@@ -12,9 +12,15 @@ function Invoke-StartupRepositoryUpdate {
 		(`Logs\.last-repository-update`): when the last run is younger than
 		`RepositoryUpdate.Startup.IntervalHours` (default 24) the call returns immediately. The
 		stamp records when the last run happened, so a machine that was off for days updates on
-		its first shell back. It is written before the update starts, so several shells opened
-		at once run it only once - and a run that fails is not retried until the interval has
-		passed again (-Force reruns it at any time).
+		its first shell back. It is written before the update starts, so a run that fails is not
+		retried until the interval has passed again (-Force reruns it at any time).
+
+		Several shells opened at once - a workspace opening its terminals - run it exactly once:
+		the run is claimed with a lock file (`Logs\.repository-update.lock`) created atomically
+		and held open for the whole run, and the stamp is checked again once the lock is held. A
+		shell that loses the claim returns silently. A lock left by a shell that died mid-run is
+		recognised because Windows lets it be deleted (a live holder's open handle prevents
+		that) and is cleared by the next shell.
 
 		Which groups: `RepositoryUpdate.Startup.Scope` when it is set, otherwise
 		`BootstrapConfig.RepositoryUpdateScope`, otherwise every group - resolved by
@@ -62,19 +68,41 @@ function Invoke-StartupRepositoryUpdate {
 
 	if (-not $enabled -and -not $Force) { return }
 
+	$lock = $null
+	$lockFile = $null
+	$ran = $false
 	try {
 		if (-not $global:LoggingState) { Initialize-LoggingState | Out-Null }
 		$logsDir = $global:LoggingState.LogsDir
-
-		# Stamp throttle, written up front so concurrent shells (and a run that fails midway) do
-		# not start it again back to back.
-		$stampFile = Join-Path $logsDir ".last-repository-update"
-		if (-not $Force -and (Test-Path -LiteralPath $stampFile)) {
-			$stampAge = (Get-Date) - (Get-Item -LiteralPath $stampFile -Force).LastWriteTime
-			if ($stampAge.TotalHours -lt $intervalHours) { return }
-		}
 		if (-not (Test-Path -LiteralPath $logsDir)) { New-Item -ItemType Directory -Path $logsDir -Force | Out-Null }
+
+		$stampFile = Join-Path $logsDir ".last-repository-update"
+		$lockFile = Join-Path $logsDir ".repository-update.lock"
+
+		# Cheap early exit for the common case: the stamp is fresh, so there is nothing to claim.
+		if (-not $Force -and (Test-RepositoryUpdateStampFresh -StampFile $stampFile -IntervalHours $intervalHours)) { return }
+
+		# Several shells start at once when a workspace opens its terminals, and checking the stamp
+		# then writing it is not atomic - measured: two to four of four simultaneous shells ran.
+		# Exactly one shell wins the lock instead. The winner holds it open with no sharing for the
+		# whole run, so Windows refuses to delete it while that shell lives; a lock that CAN be
+		# deleted was left by a shell that died mid-run, and is cleared here.
+		if (Test-Path -LiteralPath $lockFile) {
+			try { Remove-Item -LiteralPath $lockFile -Force -ErrorAction Stop } catch { return }
+		}
+		try {
+			$lock = [System.IO.File]::Open($lockFile, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
+		}
+		catch [System.IO.IOException] {
+			return
+		}
+
+		# Re-check under the lock: another shell may have finished a run between the early check
+		# and the claim. The stamp is still written before the update, so a run that fails midway
+		# is not retried until the interval has passed (-Force reruns it).
+		if (-not $Force -and (Test-RepositoryUpdateStampFresh -StampFile $stampFile -IntervalHours $intervalHours)) { return }
 		Set-Content -LiteralPath $stampFile -Value (Get-Date -Format 'o') -Encoding UTF8 -Force -ErrorAction Stop
+		$ran = $true
 
 		$scopePath = if ($null -ne (Get-ConfigSetting -Path 'RepositoryUpdate.Startup.Scope')) {
 			'RepositoryUpdate.Startup.Scope'
@@ -94,9 +122,16 @@ function Invoke-StartupRepositoryUpdate {
 	catch {
 		Write-LogError "Startup repository update failed: $_"
 	}
+	finally {
+		if ($lock) {
+			$lock.Dispose()
+			Remove-Item -LiteralPath $lockFile -Force -ErrorAction SilentlyContinue
+		}
+	}
 
-	# Reached only when an update was attempted - the disabled and throttled paths returned above.
-	if ($RedrawPrompt -and ('Microsoft.PowerShell.PSConsoleReadLine' -as [type])) {
+	# Only after an update was attempted - the disabled, throttled and lost-the-lock paths print
+	# nothing, so there is no prompt to restore.
+	if ($ran -and $RedrawPrompt -and ('Microsoft.PowerShell.PSConsoleReadLine' -as [type])) {
 		try {
 			[Console]::Write("`r")
 			[Microsoft.PowerShell.PSConsoleReadLine]::InvokePrompt($null, [Console]::CursorTop)
