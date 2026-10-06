@@ -1,6 +1,6 @@
 # Initialize-Repository
 
-Clones a repository to a local path, or pulls the latest changes if it already exists there.
+Clones a repository to a local path, or, if it already exists there, updates it with [`Update-Repository`](Update-Repository.md), which keeps local work safe.
 
 ## Configuration Keys
 

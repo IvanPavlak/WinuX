@@ -1049,6 +1049,19 @@ Private = @{
 
 **Solution:** Accept the prompt to clone, or pass `-NoClone` to update only what is already on disk and list the missing ones as skipped.
 
+### Update-Repositories Left A Repository Alone Or Kept A Stash
+
+**Problem:** A repository's summary line (or the normal-mode log) says it touched nothing, or that local changes are kept in a stash.
+
+**Cause:** `Update-Repository` never risks local work. When an update could lose or misplace something, it refuses and says why. In every case below, nothing in the repository was changed, or your changes are in a named stash.
+
+- **"operation in progress, nothing touched"** - a merge, rebase, cherry-pick, revert or bisect is in progress, or there are unresolved conflicts. Finish or abort it yourself (`git merge --continue`, `git rebase --abort`, `git bisect reset`, ...), then update again.
+- **"not the top of a git repository, nothing touched"** - the configured `LocalPath` is a plain folder, or a folder inside another repository. Fix the path in `RepositoryGroups` / the machine-specific paths. The enclosing repository is deliberately never touched.
+- **"detached HEAD, nothing to pull"** - a tag or a commit is checked out (often a bisect or a release check). Switch back to a branch when you are done; the update never moves a detached HEAD.
+- **"could not fast-forward, nothing changed"** - either the branch has local commits that origin does not (rebase or merge them yourself), or the fast-forward would overwrite an ignored local file at a path upstream now tracks. In the second case, `git status --ignored` shows the file. Move it aside, update, and put your version back if you still need it.
+- **"local changes could not be restored cleanly and are kept in stash [name]"** - an upstream change overlaps your local edit. The working tree holds conflict markers, and the stash still holds your original changes. Resolve the markers, or reset the files and `git stash apply` the named stash. Until then, the next update reports the repository as busy and leaves it alone.
+- **"its stash was taken by another git command"** - another git command applied or dropped the update's stash while it ran. Check `git status` and `git stash list`; the changes are wherever that command put them.
+
 ## Performance Issues
 
 ### Slow Profile Load

@@ -18,10 +18,12 @@ function Format-RepositoryUpdateResult {
 		  [MyRepo] not cloned on this machine - skipped
 
 		Level is Warning, and Category is Attention, whenever the user has something to do: the
-		fetch failed, the pull could not fast-forward, local changes could not be stashed or
-		restored, an error occurred, or the default branch diverged, could not be fetched or
-		could not be named. A checked-out branch that is not on origin is Skipped - a local
-		branch has nothing to pull.
+		fetch failed, the fast-forward was refused, the repository is busy (an operation in
+		progress) or not its own repository, local changes could not be stashed or restored,
+		their stash was taken by another git command, an error occurred, or the default branch
+		diverged, could not be fetched or could not be named. A checked-out branch that is not
+		on origin, a detached HEAD, and a repository not cloned or not configured on this
+		machine are Skipped - there is nothing to pull.
 		Whenever the default-branch step ran for a branch other than the checked-out one, the
 		line names it and says what happened ("master up to date", "no local master"), so
 		silence never has to be interpreted. A default branch that has no local branch is not a
