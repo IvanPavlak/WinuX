@@ -18,6 +18,7 @@
 		'Invoke-StartupRepositoryUpdate',
 		'Resolve-RepositoryDefaultBranch',
 		'Resolve-RepositoryTargets',
+		'Restore-RepositoryStash',
 		'Test-GitRepository',
 		'Test-RepositoryUpdateStampFresh',
 		'Update-Repositories',

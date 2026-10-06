@@ -351,8 +351,16 @@ function Initialize-Repository {
 		Write-Host -ForegroundColor DarkCyan "`n[Updating [$RepositoryName] repository]"
 		Write-Host -ForegroundColor Yellow "`n Repository [$RepositoryName] already exists at [$LocalPath]"
 		Write-Host -ForegroundColor White "`nPulling latest changes..."
+		# Fast-forward only, never overwriting an ignored local file: a plain `git pull` merges
+		# whatever it fetched and silently replaces an ignored file at a path upstream starts
+		# tracking. A merge that refuses changes nothing; local changes git would have to
+		# overwrite also make it refuse, so local work is never touched here.
 		Push-Location $LocalPath
-		git pull
+		git fetch
+		git merge --ff-only --no-overwrite-ignore "@{upstream}"
+		if ($LASTEXITCODE -ne 0) {
+			Write-Host -ForegroundColor Yellow "`n Could not fast-forward [$RepositoryName] without touching local work - left as it is"
+		}
 		Pop-Location
 	}
 }

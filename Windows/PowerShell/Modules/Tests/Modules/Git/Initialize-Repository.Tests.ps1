@@ -8,6 +8,7 @@ BeforeAll {
 	. "$HelperFunctionsPath\Initialize-Directory.ps1"
 	. "$HelperFunctionsPath\Get-RepositoryName.ps1"
 	. "$FunctionsPath\Initialize-Repository.ps1"
+	. "$FunctionsPath\Update-Repository.ps1"
 }
 
 Describe "Initialize-Repository" {
@@ -78,13 +79,14 @@ Describe "Initialize-Repository" {
 	}
 
 	Context "When repository already exists" {
-		It "Should pull latest changes instead of cloning" {
+		It "Should update through Update-Repository instead of cloning or pulling" {
 			New-Item -ItemType Directory -Path $TestRepoPath -Force | Out-Null
+			Mock Update-Repository { }
 
 			Initialize-Repository -RepositoryUrl "https://github.com/user/TestRepo.git" -LocalPath $TestRepoPath
 
-			Should -Invoke git -ParameterFilter { $args[0] -eq "pull" }
-			Should -Invoke git -Times 0 -ParameterFilter { $args[0] -eq "clone" }
+			Should -Invoke Update-Repository -Times 1 -Exactly -ParameterFilter { $Name -eq "TestRepo" -and $LocalPath -eq $TestRepoPath }
+			Should -Invoke git -Times 0 -ParameterFilter { $args[0] -in @("clone", "pull") }
 		}
 	}
 }

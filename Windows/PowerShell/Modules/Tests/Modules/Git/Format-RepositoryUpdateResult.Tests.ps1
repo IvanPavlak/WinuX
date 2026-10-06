@@ -27,6 +27,10 @@ Describe "Format-RepositoryUpdateResult" {
 			@{ Outcome = "NotConfigured"; Category = "Skipped"; Level = "Success" }
 			@{ Outcome = "NoUpstream"; Category = "Skipped"; Level = "Success" }
 			@{ Outcome = "FetchFailed"; Category = "Attention"; Level = "Warning" }
+			@{ Outcome = "Detached"; Category = "Skipped"; Level = "Success" }
+			@{ Outcome = "Busy"; Category = "Attention"; Level = "Warning" }
+			@{ Outcome = "NotARepository"; Category = "Attention"; Level = "Warning" }
+			@{ Outcome = "StashMissing"; Category = "Attention"; Level = "Warning" }
 			@{ Outcome = "Conflict"; Category = "Attention"; Level = "Warning" }
 			@{ Outcome = "StashFailed"; Category = "Attention"; Level = "Warning" }
 			@{ Outcome = "StashConflict"; Category = "Attention"; Level = "Warning" }

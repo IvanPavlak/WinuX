@@ -51,9 +51,13 @@ function Format-RepositoryUpdateResult {
 		"Cloned" { "cloned" }
 		"NoUpstream" { "not on origin, nothing to pull" }
 		"FetchFailed" { "could not fetch from origin" }
-		"Conflict" { "could not fast-forward, resolve manually" }
+		"Conflict" { "could not fast-forward, nothing changed - resolve manually" }
+		"Detached" { "detached HEAD, nothing to pull" }
+		"Busy" { "operation in progress, nothing touched" }
+		"NotARepository" { "not the top of a git repository, nothing touched" }
 		"StashFailed" { "local changes could not be stashed - skipped" }
-		"StashConflict" { "updated, but local changes are kept in stash [$($Result.StashName)]" }
+		"StashConflict" { "local changes could not be restored cleanly and are kept in stash [$($Result.StashName)]" }
+		"StashMissing" { "its stash was taken by another git command - check the working tree and git stash list" }
 		"NotCloned" { "not cloned on this machine - skipped" }
 		"NotConfigured" { "no local path on this machine - skipped" }
 		default { "failed" }
@@ -62,7 +66,7 @@ function Format-RepositoryUpdateResult {
 	$category = switch ($Result.Outcome) {
 		{ $_ -in @("Updated", "Cloned") } { "Updated"; break }
 		"UpToDate" { "UpToDate"; break }
-		{ $_ -in @("NotCloned", "NotConfigured", "NoUpstream") } { "Skipped"; break }
+		{ $_ -in @("NotCloned", "NotConfigured", "NoUpstream", "Detached") } { "Skipped"; break }
 		default { "Attention" }
 	}
 

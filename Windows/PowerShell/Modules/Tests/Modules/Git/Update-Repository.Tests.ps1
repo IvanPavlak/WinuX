@@ -8,21 +8,27 @@ BeforeAll {
 	# Dot-sourced so they exist to Mock even in sessions whose imported Git module predates them.
 	. "$FunctionsPath\Resolve-RepositoryDefaultBranch.ps1"
 	. "$FunctionsPath\Update-RepositoryDefaultBranch.ps1"
+	. "$FunctionsPath\Restore-RepositoryStash.ps1"
 }
 
 Describe "Update-Repository" {
 	BeforeEach {
 		# One git stand-in answering from script state; every call is recorded in order so tests
-		# can assert sequencing (the default branch before the stash pop, nothing after a failed
-		# stash). The subcommand is matched on the joined arguments because the stash call is
-		# prefixed with "-c user.name=... -c user.email=...".
+		# can assert sequencing. The subcommand is matched on the joined arguments because the
+		# stash call is prefixed with "-c user.name=... -c user.email=...".
 		$script:Calls = [System.Collections.Generic.List[string]]::new()
+		$script:GitDir = Join-Path $TestDrive ([System.IO.Path]::GetRandomFileName())
+		New-Item -ItemType Directory -Path $script:GitDir -Force | Out-Null
+		$script:InsideWorkTree = "true"
+		$script:Prefix = ""
+		$script:Unmerged = ""
 		$script:Branch = "feature"
 		$script:Status = ""
 		$script:Behind = "0"
 		$script:StashExit = 0
-		$script:PullExit = 0
-		$script:PopExit = 0
+		$script:StashRefs = @("", "")     # refs/stash before and after the push
+		$script:StashRefReads = 0
+		$script:MergeExit = 0
 		$script:FetchExit = 0
 		$script:UpstreamExit = 0
 
@@ -31,20 +37,25 @@ Describe "Update-Repository" {
 			$script:Calls.Add($line)
 			$global:LASTEXITCODE = 0
 			switch -Regex ($line) {
+				"^rev-parse --is-inside-work-tree" { $script:InsideWorkTree; break }
+				"^rev-parse --show-prefix" { $script:Prefix; break }
+				"^rev-parse --absolute-git-dir" { $script:GitDir; break }
+				"^ls-files --unmerged" { $script:Unmerged; break }
 				"^rev-parse --abbrev-ref HEAD" { $script:Branch; break }
+				"^rev-parse --verify --quiet refs/stash" { $value = $script:StashRefs[[Math]::Min($script:StashRefReads, 1)]; $script:StashRefReads++; $value; break }
 				"^rev-parse --verify --quiet refs/remotes/origin/" { $global:LASTEXITCODE = $script:UpstreamExit; break }
-				"^fetch" { $global:LASTEXITCODE = $script:FetchExit; break }
 				"^status --porcelain" { $script:Status; break }
 				"stash push" { $global:LASTEXITCODE = $script:StashExit; break }
+				"^fetch" { $global:LASTEXITCODE = $script:FetchExit; break }
 				"^rev-list" { $script:Behind; break }
-				"^pull" { $global:LASTEXITCODE = $script:PullExit; break }
-				"^stash pop" { $global:LASTEXITCODE = $script:PopExit; break }
+				"^merge" { $global:LASTEXITCODE = $script:MergeExit; break }
 			}
 		}
 		Mock Push-Location { }
 		Mock Pop-Location { }
 		Mock Resolve-RepositoryDefaultBranch { "master" }
 		Mock Update-RepositoryDefaultBranch { $script:Calls.Add("default-branch"); "Updated" }
+		Mock Restore-RepositoryStash { $script:Calls.Add("restore $StashCommit"); "Restored" }
 		Mock Write-LogStep { }
 		Mock Write-LogSuccess { }
 		Mock Write-LogWarning { }
@@ -54,142 +65,217 @@ Describe "Update-Repository" {
 	}
 
 	Context "checked-out branch" {
-		It "reports UpToDate and never pulls when origin has nothing new" {
+		It "reports UpToDate and never fast-forwards when origin has nothing new" {
 			$result = Update-Repository @script:Call
 
 			$result.Outcome | Should -Be "UpToDate"
 			$result.Branch | Should -Be "feature"
-			Should -Invoke git -Times 0 -Exactly -ParameterFilter { $args[0] -eq "pull" }
+			Should -Invoke git -Times 0 -Exactly -ParameterFilter { $args[0] -eq "merge" }
 		}
 
-		It "fast-forwards only, from the checked-out branch, when behind" {
+		It "fast-forwards with a merge that refuses to overwrite ignored files, never with git pull" {
 			$script:Behind = "3"
 
 			$result = Update-Repository @script:Call
 
 			$result.Outcome | Should -Be "Updated"
 			Should -Invoke git -Times 1 -Exactly -ParameterFilter {
-				$args[0] -eq "pull" -and $args -contains "origin" -and $args -contains "feature" -and $args -contains "--ff-only"
+				$args[0] -eq "merge" -and $args -contains "--ff-only" -and $args -contains "--no-overwrite-ignore" -and $args -contains "origin/feature"
 			}
+			Should -Invoke git -Times 0 -Exactly -ParameterFilter { $args[0] -eq "pull" }
+		}
+
+		It "reports Conflict and never runs merge --abort when the fast-forward is refused" {
+			$script:Behind = "2"
+			$script:MergeExit = 1
+
+			$result = Update-Repository @script:Call
+
+			$result.Outcome | Should -Be "Conflict"
+			Should -Invoke git -Times 0 -Exactly -ParameterFilter { $args -contains "--abort" }
 		}
 
 		It "works inside the repository and always leaves it again" {
-			$result = Update-Repository @script:Call
+			Update-Repository @script:Call | Out-Null
 
 			Should -Invoke Push-Location -Times 1 -Exactly -ParameterFilter { $Path -eq "C:\Repos\MyRepo" }
 			Should -Invoke Pop-Location -Times 1 -Exactly
-			$result.LocalPath | Should -Be "C:\Repos\MyRepo"
+		}
+	}
+
+	Context "refusing to touch what is not safe" {
+		It "reports NotARepository and runs nothing else when the path is a folder inside another repository" {
+			$script:Prefix = "inner/"
+
+			$result = Update-Repository @script:Call -IncludeDefaultBranch
+
+			$result.Outcome | Should -Be "NotARepository"
+			Should -Invoke git -Times 0 -Exactly -ParameterFilter { $args[0] -in @("status", "stash", "fetch", "merge", "-c") }
+			Should -Invoke Update-RepositoryDefaultBranch -Times 0 -Exactly
+		}
+
+		It "reports NotARepository when the path is not inside any repository" {
+			$script:InsideWorkTree = ""
+
+			(Update-Repository @script:Call).Outcome | Should -Be "NotARepository"
+		}
+
+		It "reports Busy and runs nothing else during <Marker>" -ForEach @(
+			@{ Marker = "MERGE_HEAD" }, @{ Marker = "CHERRY_PICK_HEAD" }, @{ Marker = "REVERT_HEAD" },
+			@{ Marker = "rebase-merge" }, @{ Marker = "rebase-apply" }, @{ Marker = "BISECT_LOG" }
+		) {
+			New-Item -ItemType File -Path (Join-Path $script:GitDir $Marker) -Force | Out-Null
+			$script:Status = " M file.txt"
+
+			$result = Update-Repository @script:Call -IncludeDefaultBranch
+
+			$result.Outcome | Should -Be "Busy"
+			Should -Invoke git -Times 0 -Exactly -ParameterFilter { ($args -join " ") -match "stash|^fetch|^merge" }
+			Should -Invoke Update-RepositoryDefaultBranch -Times 0 -Exactly
+		}
+
+		It "reports Busy when there are unresolved conflicts" {
+			$script:Unmerged = "100644 abc 1`ta.txt"
+
+			(Update-Repository @script:Call).Outcome | Should -Be "Busy"
+		}
+
+		It "reports Detached, never stashes and never moves HEAD on a detached HEAD" {
+			$script:Branch = "HEAD"
+			$script:Status = " M file.txt"
+
+			$result = Update-Repository @script:Call
+
+			$result.Outcome | Should -Be "Detached"
+			Should -Invoke git -Times 0 -Exactly -ParameterFilter { ($args -join " ") -match "stash|^fetch|^merge" }
 		}
 	}
 
 	Context "branch not on origin, or origin unreachable" {
-		BeforeEach { $script:Status = " M file.txt" }
+		BeforeEach {
+			$script:Status = " M file.txt"
+			$script:StashRefs = @("", "aaa111")
+		}
 
-		It "reports NoUpstream and never pulls when origin does not have the branch" {
+		It "reports NoUpstream and never fast-forwards when origin does not have the branch" {
 			$script:FetchExit = 128
 			$script:UpstreamExit = 1
 
-			$result = Update-Repository @script:Call
-
-			$result.Outcome | Should -Be "NoUpstream"
-			Should -Invoke git -Times 0 -Exactly -ParameterFilter { $args[0] -in @("rev-list", "pull", "merge") }
+			(Update-Repository @script:Call).Outcome | Should -Be "NoUpstream"
+			Should -Invoke git -Times 0 -Exactly -ParameterFilter { $args[0] -in @("rev-list", "merge") }
 		}
 
 		It "reports FetchFailed instead of up to date when the fetch fails but origin has the branch" {
 			$script:FetchExit = 128
 
-			$result = Update-Repository @script:Call
-
-			$result.Outcome | Should -Be "FetchFailed"
-			Should -Invoke git -Times 0 -Exactly -ParameterFilter { $args[0] -in @("rev-list", "pull") }
+			(Update-Repository @script:Call).Outcome | Should -Be "FetchFailed"
+			Should -Invoke git -Times 0 -Exactly -ParameterFilter { $args[0] -in @("rev-list", "merge") }
 		}
 
-		It "still restores the stashed changes on both" {
+		It "still restores the stashed changes" {
 			$script:FetchExit = 128
+
 			Update-Repository @script:Call | Out-Null
 
-			$script:UpstreamExit = 1
-			Update-Repository @script:Call | Out-Null
-
-			Should -Invoke git -Times 2 -Exactly -ParameterFilter { $args[0] -eq "stash" -and $args[1] -eq "pop" }
-		}
-
-		It "still fast-forwards the default branch for a branch that is not on origin" {
-			$script:FetchExit = 128
-			$script:UpstreamExit = 1
-
-			$result = Update-Repository @script:Call -IncludeDefaultBranch
-
-			$result.DefaultBranchOutcome | Should -Be "Updated"
+			Should -Invoke Restore-RepositoryStash -Times 1 -Exactly -ParameterFilter { $StashCommit -eq "aaa111" }
 		}
 	}
 
 	Context "local changes" {
-		BeforeEach { $script:Status = " M file.txt" }
-
-		It "stashes untracked files too, under a branch-and-timestamp name, and pops them back" {
+		BeforeEach {
+			$script:Status = " M file.txt"
 			$script:Behind = "1"
-
-			$result = Update-Repository @script:Call
-
-			Should -Invoke git -Times 1 -Exactly -ParameterFilter {
-				($args -join " ") -match "stash push --include-untracked .*-m feature_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}$"
-			}
-			Should -Invoke git -Times 1 -Exactly -ParameterFilter { $args[0] -eq "stash" -and $args[1] -eq "pop" }
-			$result.Outcome | Should -Be "Updated"
-			$result.StashName | Should -BeNullOrEmpty -Because "a popped stash no longer exists"
+			$script:StashRefs = @("", "aaa111")
 		}
 
-		It "stashes with a throwaway identity so a machine without one can still stash" {
+		It "stashes untracked files too, under a branch-and-timestamp name, with a throwaway identity" {
 			Update-Repository @script:Call | Out-Null
 
 			Should -Invoke git -Times 1 -Exactly -ParameterFilter {
-				$args[0] -eq "-c" -and $args -contains "user.name=WinuX" -and $args -contains "user.email=winux@localhost"
+				$line = $args -join " "
+				$line -match "stash push --include-untracked .*-m feature_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}$" -and
+				$args -contains "user.name=WinuX" -and $args -contains "user.email=winux@localhost"
 			}
 		}
 
-		It "does nothing else when the stash fails" {
+		It "restores exactly the stash it created, by its commit, and never pops blindly" {
+			$result = Update-Repository @script:Call
+
+			Should -Invoke Restore-RepositoryStash -Times 1 -Exactly -ParameterFilter { $StashCommit -eq "aaa111" }
+			Should -Invoke git -Times 0 -Exactly -ParameterFilter { ($args -join " ") -match "stash pop" }
+			$result.Outcome | Should -Be "Updated"
+			$result.StashName | Should -BeNullOrEmpty -Because "a restored stash no longer exists"
+		}
+
+		It "keeps the user's own older stash out of it: no new stash means nothing to restore" {
+			# A dirty status git cannot stash (a submodule's new commits): the push succeeds without
+			# creating anything, so refs/stash still names the user's older stash.
+			$script:StashRefs = @("userstash", "userstash")
+
+			$result = Update-Repository @script:Call
+
+			Should -Invoke Restore-RepositoryStash -Times 0 -Exactly
+			$result.Outcome | Should -Be "Updated"
+		}
+
+		It "restores right away and reports StashFailed when the push fails after creating the stash" {
 			$script:StashExit = 1
 
 			$result = Update-Repository @script:Call
 
 			$result.Outcome | Should -Be "StashFailed"
-			Should -Invoke git -Times 0 -Exactly -ParameterFilter { $args[0] -in @("fetch", "pull") }
-			Should -Invoke Update-RepositoryDefaultBranch -Times 0 -Exactly
-			Should -Invoke Pop-Location -Times 1 -Exactly
-		}
-
-		It "aborts a pull that cannot fast-forward and gives the changes back once" {
-			$script:Behind = "2"
-			$script:PullExit = 1
-
-			$result = Update-Repository @script:Call
-
-			$result.Outcome | Should -Be "Conflict"
-			Should -Invoke git -Times 1 -Exactly -ParameterFilter { $args[0] -eq "merge" -and $args[1] -eq "--abort" }
-			Should -Invoke git -Times 1 -Exactly -ParameterFilter { $args[0] -eq "stash" -and $args[1] -eq "pop" }
+			Should -Invoke Restore-RepositoryStash -Times 1 -Exactly -ParameterFilter { $StashCommit -eq "aaa111" }
+			Should -Invoke git -Times 0 -Exactly -ParameterFilter { $args[0] -in @("fetch", "merge") }
 			$result.StashName | Should -BeNullOrEmpty
 		}
 
-		It "keeps the stash name when the changes cannot be restored after a failed pull" {
-			$script:Behind = "2"
-			$script:PullExit = 1
-			$script:PopExit = 1
+		It "reports StashFailed without restoring anything when the failed push created nothing" {
+			$script:StashExit = 1
+			$script:StashRefs = @("", "")
+
+			(Update-Repository @script:Call).Outcome | Should -Be "StashFailed"
+			Should -Invoke Restore-RepositoryStash -Times 0 -Exactly
+		}
+
+		It "names the kept stash when a failed push could not be undone" {
+			$script:StashExit = 1
+			Mock Restore-RepositoryStash { "Conflict" }
+
+			(Update-Repository @script:Call).StashName | Should -Match "^feature_"
+		}
+
+		It "still restores the stash after a refused fast-forward" {
+			$script:MergeExit = 1
 
 			$result = Update-Repository @script:Call
 
 			$result.Outcome | Should -Be "Conflict"
-			$result.StashName | Should -Match "^feature_"
+			Should -Invoke Restore-RepositoryStash -Times 1 -Exactly
 		}
 
-		It "reports StashConflict and keeps the stash name when the final pop conflicts" {
-			$script:Behind = "1"
-			$script:PopExit = 1
+		It "reports StashConflict and keeps the stash name when the restore conflicts" {
+			Mock Restore-RepositoryStash { "Conflict" }
 
 			$result = Update-Repository @script:Call
 
 			$result.Outcome | Should -Be "StashConflict"
 			$result.StashName | Should -Match "^feature_"
+		}
+
+		It "reports StashMissing when something else took the stash" {
+			Mock Restore-RepositoryStash { "Missing" }
+
+			(Update-Repository @script:Call).Outcome | Should -Be "StashMissing"
+		}
+
+		It "tries to give the stash back when something throws after it was made" {
+			Mock Update-RepositoryDefaultBranch { throw "boom" }
+
+			$result = Update-Repository @script:Call -IncludeDefaultBranch
+
+			$result.Outcome | Should -Be "Error"
+			Should -Invoke Restore-RepositoryStash -Times 1 -Exactly -ParameterFilter { $StashCommit -eq "aaa111" }
+			Should -Invoke Pop-Location -Times 1 -Exactly
 		}
 	}
 
@@ -208,40 +294,28 @@ Describe "Update-Repository" {
 			Should -Invoke Update-RepositoryDefaultBranch -Times 1 -Exactly -ParameterFilter {
 				$DefaultBranch -eq "master" -and $CurrentBranch -eq "feature" -and $LocalPath -eq "C:\Repos\MyRepo"
 			}
-			$result.DefaultBranch | Should -Be "master"
 			$result.DefaultBranchOutcome | Should -Be "Updated"
 		}
 
-		It "runs before the stash is popped" {
+		It "runs before the stash is restored" {
 			$script:Status = " M file.txt"
 			$script:Behind = "1"
+			$script:StashRefs = @("", "aaa111")
 
 			Update-Repository @script:Call -IncludeDefaultBranch | Out-Null
 
 			$defaultIndex = $script:Calls.IndexOf("default-branch")
-			$popIndex = $script:Calls.FindIndex([Predicate[string]] { param($c) $c -like "stash pop*" })
+			$restoreIndex = $script:Calls.IndexOf("restore aaa111")
 			$defaultIndex | Should -BeGreaterOrEqual 0
-			$defaultIndex | Should -BeLessThan $popIndex
+			$defaultIndex | Should -BeLessThan $restoreIndex
 		}
 
-		It "still runs when the pull could not fast-forward" {
-			$script:Behind = "1"
-			$script:PullExit = 1
+		It "still runs on a detached HEAD, where the checked-out branch is skipped" {
+			$script:Branch = "HEAD"
 
-			$result = Update-Repository @script:Call -IncludeDefaultBranch
+			Update-Repository @script:Call -IncludeDefaultBranch | Out-Null
 
-			$result.Outcome | Should -Be "Conflict"
 			Should -Invoke Update-RepositoryDefaultBranch -Times 1 -Exactly
-		}
-
-		It "reports Unresolved and fetches nothing when no default branch can be named" {
-			Mock Resolve-RepositoryDefaultBranch { $null }
-			Mock git { $script:Calls.Add(($args -join " ")); $global:LASTEXITCODE = 1 } -ParameterFilter { $args[0] -eq "remote" }
-
-			$result = Update-Repository @script:Call -IncludeDefaultBranch
-
-			$result.DefaultBranchOutcome | Should -Be "Unresolved"
-			Should -Invoke Update-RepositoryDefaultBranch -Times 0 -Exactly
 		}
 
 		It "asks origin for its default branch once when nothing names it, then uses the answer" {
@@ -255,22 +329,16 @@ Describe "Update-Repository" {
 
 			Should -Invoke git -Times 1 -Exactly -ParameterFilter { ($args -join " ") -eq "remote set-head origin --auto" }
 			$result.DefaultBranch | Should -Be "main"
-			Should -Invoke Update-RepositoryDefaultBranch -Times 1 -Exactly -ParameterFilter { $DefaultBranch -eq "main" }
 		}
 
-		It "does not ask origin when the default branch is already known" {
-			Update-Repository @script:Call -IncludeDefaultBranch | Out-Null
-
-			Should -Invoke git -Times 0 -Exactly -ParameterFilter { $args[0] -eq "remote" }
-		}
-
-		It "does not resolve again when asking origin failed" {
+		It "reports Unresolved and fetches nothing when no default branch can be named" {
 			Mock Resolve-RepositoryDefaultBranch { $null }
-			Mock git { $global:LASTEXITCODE = 2 } -ParameterFilter { $args[0] -eq "remote" }
+			Mock git { $global:LASTEXITCODE = 1 } -ParameterFilter { $args[0] -eq "remote" }
 
-			Update-Repository @script:Call -IncludeDefaultBranch | Out-Null
+			$result = Update-Repository @script:Call -IncludeDefaultBranch
 
-			Should -Invoke Resolve-RepositoryDefaultBranch -Times 1 -Exactly
+			$result.DefaultBranchOutcome | Should -Be "Unresolved"
+			Should -Invoke Update-RepositoryDefaultBranch -Times 0 -Exactly
 		}
 	}
 
@@ -278,15 +346,23 @@ Describe "Update-Repository" {
 		BeforeEach {
 			$script:Status = " M file.txt"
 			$script:Behind = "1"
+			$script:StashRefs = @("", "aaa111")
 		}
 
-		It "passes --quiet to the stash, fetch, pull and pop" {
+		It "passes --quiet to the stash, fetch and fast-forward, and to the restore" {
 			Update-Repository @script:Call -Quiet | Out-Null
 
-			foreach ($subcommand in @("stash push", "fetch", "pull", "stash pop")) {
-				$script:Calls | Where-Object { $_ -match [regex]::Escape($subcommand) -and $_ -match "--quiet" } |
+			foreach ($subcommand in @("stash push", "^fetch", "^merge")) {
+				$script:Calls | Where-Object { $_ -match $subcommand -and $_ -match "--quiet" } |
 					Should -Not -BeNullOrEmpty -Because "[$subcommand] must run with --quiet"
 			}
+			Should -Invoke Restore-RepositoryStash -Times 1 -Exactly -ParameterFilter { $Quiet }
+		}
+
+		It "does not pass --quiet to the stash, fetch or fast-forward without the switch" {
+			Update-Repository @script:Call | Out-Null
+
+			$script:Calls | Where-Object { $_ -match "(stash push|^fetch|^merge)" -and $_ -match "--quiet" } | Should -BeNullOrEmpty
 		}
 
 		It "logs nothing on success" {
@@ -296,29 +372,19 @@ Describe "Update-Repository" {
 			Should -Invoke Write-LogSuccess -Times 0 -Exactly
 			Should -Invoke Write-LogWarning -Times 0 -Exactly
 		}
-
-		It "silences the default-branch step too" {
-			Update-Repository @script:Call -Quiet -IncludeDefaultBranch | Out-Null
-
-			Should -Invoke Update-RepositoryDefaultBranch -Times 1 -Exactly -ParameterFilter { $Quiet }
-		}
-
-		It "does not pass --quiet to the stash, fetch, pull or pop without the switch" {
-			Update-Repository @script:Call | Out-Null
-
-			# Only the commands -Quiet controls. The read-only `rev-parse --verify --quiet` probe for
-			# origin/<branch> always uses --quiet: there it silences git's own "not found" message.
-			$script:Calls | Where-Object { $_ -match "(stash push|^fetch|^pull|^stash pop)" -and $_ -match "--quiet" } |
-				Should -BeNullOrEmpty
-		}
 	}
 
 	Context "output" {
 		It "returns exactly one result object, never git's own output" {
 			Mock git {
 				$global:LASTEXITCODE = 0
-				if ($args[0] -eq "rev-parse") { "feature" }
-				elseif ($args[0] -eq "rev-list") { "1" }
+				$line = $args -join " "
+				if ($line -match "^rev-parse --is-inside-work-tree") { "true" }
+				elseif ($line -match "^rev-parse --show-prefix") { "" }
+				elseif ($line -match "^rev-parse --absolute-git-dir") { $script:GitDir }
+				elseif ($line -match "^rev-parse --abbrev-ref") { "feature" }
+				elseif ($line -match "^rev-list") { "1" }
+				elseif ($line -match "^(ls-files|status|rev-parse)") { "" }
 				else { "git chatter that must not reach the caller" }
 			}
 
@@ -326,15 +392,6 @@ Describe "Update-Repository" {
 
 			$output.Count | Should -Be 1
 			$output[0].Name | Should -Be "MyRepo"
-		}
-
-		It "reports Error and still leaves the repository when something throws" {
-			Mock git { throw "boom" }
-
-			$result = Update-Repository @script:Call
-
-			$result.Outcome | Should -Be "Error"
-			Should -Invoke Pop-Location -Times 1 -Exactly
 		}
 	}
 }

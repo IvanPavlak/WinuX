@@ -145,20 +145,23 @@ For each repository:
    ├─→ If NO: Clone using Initialize-Repository
    └─→ If YES: Continue to update
 
-2. Detect uncommitted changes
+2. Refuse what is not safe to touch
+   └─→ Not its own repository, an operation in progress, or a detached HEAD
+
+3. Detect uncommitted changes
    └─→ Create timestamped stash (e.g., "master_2026-01-21_14-30-00")
 
-3. Fetch latest from origin
-   └─→ git fetch origin
+4. Fetch latest from origin
+   └─→ git fetch origin <branch>
 
-4. Pull with fast-forward only
-   └─→ git pull --ff-only
+5. Fast-forward only, never overwriting ignored files
+   └─→ git merge --ff-only --no-overwrite-ignore origin/<branch>
 
-5. Restore stash if created
-   └─→ git stash pop
+6. Restore exactly that stash, staged changes staged again
+   └─→ Restore-RepositoryStash (kept when it conflicts)
 
-6. Report status
-   └─→ Success, already up-to-date, or error message
+7. Report status
+   └─→ Success, already up-to-date, or what needs attention
 ```
 
 ## Complete Example

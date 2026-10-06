@@ -253,6 +253,20 @@ Resolve-RepositoryTargets -All | Format-Table Name, Group, LocalPath
 
 **See also:** [Configuration: Add Repository](../configuration/guides/git/add-new-repository.md)
 
+## [Restore-RepositoryStash](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Git/Functions/Restore-RepositoryStash.ps1)
+
+- **Description:** Gives back exactly one stash, identified by its commit, and drops it only once it is fully restored - the safe counterpart of `git stash pop` that `Update-Repository` uses. A blind pop takes whatever is on top of the stash list, which can be the user's own older stash (when the push created nothing) or someone else's (when another command stashed in between). This looks the commit up in the stash list (`Missing` when absent, nothing done), applies it with `git stash apply --index` so staged changes come back staged (falling back to a plain apply only when git refuses the index without touching anything), and drops that one entry after a clean apply (`Restored`). An apply that conflicts keeps the stash (`Conflict`).
+- **Parameters:** -StashCommit, -Quiet
+- **Usage:** `Restore-RepositoryStash -StashCommit (git rev-parse refs/stash)`
+
+```powershell
+# Inside a repository: restore the stash that was just made, and only that one
+$stash = git rev-parse refs/stash
+Restore-RepositoryStash -StashCommit $stash
+```
+
+**See also:** [Update-Repository](#update-repository)
+
 ## [Test-GitRepository](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Git/Functions/Test-GitRepository.ps1)
 
 - **Description:** Tells whether a path is inside a git repository, by walking up to the root looking for a `.git` entry. Both shapes count: the ordinary `.git` DIRECTORY of a normal clone, and the `.git` FILE a worktree or a submodule carries (a one-line `gitdir: ...` pointer). Neither is opened; the test is `Test-Path` and nothing else. A path that does not exist is not an error - the walk simply finds no `.git` above it and returns `$false` - so a caller can pass a stale `$PWD` without guarding it.
@@ -297,7 +311,7 @@ Test-RepositoryUpdateStampFresh -StampFile (Join-Path $global:LoggingState.LogsD
 - **Parameters:** -Repositories, -RepositoryUrl, -LocalPath, -Group, -All, -InCurrentDirectory, -Archive, -IncludeDefaultBranch, -NoClone, -Quiet
 - **Usage:** `Update-Repositories`, `Update-Repositories MyRepo`, `Update-Repositories -Group Private`, `Update-Repositories -Group Private, Work`, `Update-Repositories -All`, `Update-Repositories -RepositoryUrl "https://github.com/user/MyRepo" -LocalPath "<DevRoot>\MyRepo"`, `Update-Repositories -All -Archive`, `Update-Repositories -All -Archive -InCurrentDirectory`, `Update-Repositories -All -IncludeDefaultBranch`, `Update-Repositories MyRepo -IncludeDefaultBranch:$false`, `Update-Repositories -All -NoClone -Quiet`
 
-Repository URL and local-path mappings are read from `RepositoryGroups` in `Configuration.psd1`, and every selection mode is expanded by [`Resolve-RepositoryTargets`](#resolve-repositorytargets), so repositories are updated in the order the configuration lists them and a repository that appears in more than one selected group is updated only once. In a normal update each repository is checked for uncommitted changes and, if found, a timestamped stash (`<branch>_yyyy-MM-dd_HH-mm-ss`) is created, the branch is fetched from origin and pulled fast-forward-only, and the stash is popped. The stash is created with an ephemeral per-command identity (`-c user.name/-c user.email`), so it works even on machines where no global git identity is configured yet - stash authorship is throwaway metadata (Bootstrap additionally restores the real identity from `GitConfig` before calling this function). Merge conflicts abort the pull and preserve work in the stash.
+Repository URL and local-path mappings are read from `RepositoryGroups` in `Configuration.psd1`, and every selection mode is expanded by [`Resolve-RepositoryTargets`](#resolve-repositorytargets), so repositories are updated in the order the configuration lists them and a repository that appears in more than one selected group is updated only once. In a normal update each repository is checked for uncommitted changes and, if found, a timestamped stash (`<branch>_yyyy-MM-dd_HH-mm-ss`) is created, the branch is fetched from origin and fast-forwarded, and exactly that stash is restored. The stash is created with an ephemeral per-command identity (`-c user.name/-c user.email`), so it works even on machines where no global git identity is configured yet - stash authorship is throwaway metadata (Bootstrap additionally restores the real identity from `GitConfig` before calling this function). What keeps local work safe is listed under [`Update-Repository`](#update-repository).
 
 The default-branch step ([`Resolve-RepositoryDefaultBranch`](#resolve-repositorydefaultbranch), then [`Update-RepositoryDefaultBranch`](#update-repositorydefaultbranch)) runs `git fetch origin <default>:<default>`: git refuses anything but a fast-forward, and the working tree and the stash are never touched. It runs before the stash is popped and also after a pull that could not fast-forward. A default branch with local commits origin does not have is left exactly as it is, and one that was never checked out locally is skipped, never created. The Bootstrap repository step calls this function, so it follows the same configuration.
 
@@ -372,13 +386,28 @@ What `-Quiet` prints for a run over two groups, with the default branch on (illu
 
 ## [Update-Repository](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Git/Functions/Update-Repository.ps1)
 
-- **Description:** Updates one cloned repository, the per-repository step of `Update-Repositories`: stashes local changes (untracked files included, ephemeral identity), fetches and fast-forwards the checked-out branch, optionally fast-forwards the default branch without checking it out, then pops the stash. A pull that cannot fast-forward is aborted and the stash given back; a failed stash leaves the repository alone; a conflicting pop keeps the stash. A checked-out branch origin does not have (never pushed) has nothing to pull, and a fetch that fails while origin has the branch (offline) pulls nothing and is reported as such instead of as up to date. Returns one result object. Without `-Quiet` every step is logged and git's own output reaches the console; with `-Quiet` nothing is logged and git is silenced.
+- **Description:** Updates one cloned repository, the per-repository step of `Update-Repositories`: stashes local changes (untracked files included, ephemeral identity), fetches and fast-forwards the checked-out branch, optionally fast-forwards the default branch without checking it out, then restores exactly its own stash. Losing local work is never an acceptable outcome, so every step either leaves the repository as it was or is undone - see the safety rules below. A checked-out branch origin does not have (never pushed) has nothing to pull, and a fetch that fails while origin has the branch (offline) pulls nothing and is reported as such instead of as up to date. Returns one result object. Without `-Quiet` every step is logged and git's own output reaches the console; with `-Quiet` nothing is logged and git is silenced.
 - **Parameters:** -Name, -LocalPath, -IncludeDefaultBranch, -Quiet
 - **Usage:** `Update-Repository -Name MyRepo -LocalPath "<DevRoot>\MyRepo"`, `Update-Repository -Name MyRepo -LocalPath "<DevRoot>\MyRepo" -IncludeDefaultBranch -Quiet`
 
 When neither `RepositoryUpdate.DefaultBranch` nor `origin/HEAD` names the default branch (a repository not created by `git clone`), it asks origin once with `git remote set-head origin --auto`, which writes only that local ref, and resolves again - so such a repository heals itself on its first run.
 
-The result carries `Name`, `LocalPath`, `Branch`, `Outcome` (`Updated`, `UpToDate`, `NoUpstream`, `FetchFailed`, `Conflict`, `StashFailed`, `StashConflict` or `Error`), `DefaultBranch`, `DefaultBranchOutcome` (`$null` when the step did not run, `Unresolved` when no default branch could be named, otherwise what `Update-RepositoryDefaultBranch` returned) and `StashName` (set only while a stash is still held). The repository must exist; cloning is `Update-Repositories`' job.
+Safety rules, each one covered by a test against real git:
+
+| Situation | What happens |
+| --- | --- |
+| The path is not the top of a working tree (a plain folder, or a folder inside another repository) | `NotARepository` - nothing is run, so the enclosing repository is never touched. |
+| A merge, rebase, cherry-pick, revert or bisect is in progress, or conflicts are unresolved | `Busy` - nothing is stashed or fast-forwarded. `git merge --abort` is never run anywhere. |
+| Detached HEAD (a checked-out tag, a bisect position) | `Detached` - nothing is pulled, so HEAD never moves. |
+| Staged and unstaged changes, untracked files | Stashed together, restored with `git stash apply --index` so what was staged is staged again (plain apply only when git cannot rebuild the index). |
+| Ignored files | Never stashed and never overwritten: the fast-forward is `git merge --ff-only --no-overwrite-ignore`, which refuses (`Conflict`, nothing changed) when upstream starts tracking a path where an ignored local file lives. A plain `git pull` would silently replace it. |
+| A dirty status with nothing git can stash (a submodule's new commits) | No stash is created, so nothing is restored - the user's own older stash is never applied. |
+| Another git command stashes while ours is held | Ours is found by its commit ([`Restore-RepositoryStash`](#restore-repositorystash)), never by position; the other stash is left alone. |
+| The stash push fails after creating the stash (a file Windows keeps locked) | Restored immediately; `StashFailed`. |
+| The restore conflicts (a local edit overlaps an upstream edit) | `StashConflict` - the working tree holds the conflict markers and the stash is kept with the original changes, its name in the result. |
+| Local commits origin does not have | The fast-forward refuses (`Conflict`); commits and changes stay as they were. |
+
+The result carries `Name`, `LocalPath`, `Branch`, `Outcome` (`Updated`, `UpToDate`, `NoUpstream`, `FetchFailed`, `Conflict`, `Detached`, `Busy`, `NotARepository`, `StashFailed`, `StashConflict`, `StashMissing` or `Error`), `DefaultBranch`, `DefaultBranchOutcome` (`$null` when the step did not run, `Unresolved` when no default branch could be named, otherwise what `Update-RepositoryDefaultBranch` returned) and `StashName` (set only while a stash is still held). The repository must exist; cloning is `Update-Repositories`' job.
 
 | Parameter               | Type     | Default    | Description                                                         |
 | ----------------------- | -------- | ---------- | ------------------------------------------------------------------- |

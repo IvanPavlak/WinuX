@@ -342,6 +342,8 @@ function Update-Repositories {
 	$counts = [ordered]@{ Updated = 0; UpToDate = 0; Attention = 0; Skipped = 0 }
 	foreach ($repo in $repositoriesToUpdate) {
 		$RepositoryName = Get-RepositoryName -RepositoryUrl $repo.RepositoryUrl
+		# A URL that yields no name (a local path, a typo) must not stop the whole run.
+		if ([string]::IsNullOrWhiteSpace($RepositoryName)) { $RepositoryName = if ($repo.Name) { $repo.Name } elseif ($repo.LocalPath) { Split-Path $repo.LocalPath -Leaf } else { "(unnamed)" } }
 
 		if ($showGroups -and $repo.Group -and $repo.Group -ne $currentGroup) {
 			$currentGroup = $repo.Group
