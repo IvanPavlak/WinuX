@@ -15,7 +15,7 @@ Registers the configured Claude Code plugin marketplaces in `~\.claude\settings.
 | [`DefaultWSLDistribution`](../../configuration-reference.md#wsl-configuration) | string | empty string | The WSL distribution whose `\\wsl.localhost` share carries the WSL settings file. Empty means Windows only. |
 | [`DefaultWSLUsername`](../../configuration-reference.md#wsl-configuration) | string | empty string | The WSL account whose `~/.claude/settings.json` also receives the marketplaces and options. Empty means Windows only. |
 
-The settings file itself is not a configuration key: it is always the user's `~\.claude\settings.json` (and `/home/<DefaultWSLUsername>/.claude/settings.json` in WSL), the file Claude Code reads `extraKnownMarketplaces`, `env` and `pluginConfigs` from. Only those keys are written, and under `env` only the variables named; every other setting and variable is kept. The CLI steps (`claude plugin marketplace add`, `claude plugin install`) run on Windows only.
+The settings file itself is not a configuration key: it is always the user's `~\.claude\settings.json` (and `/home/<DefaultWSLUsername>/.claude/settings.json` in WSL), the file Claude Code reads `extraKnownMarketplaces`, `env` and `pluginConfigs` from. Only those keys are written, and under `env` only the variables named; every other setting and variable is kept. The CLI steps (`claude plugin marketplace add`, `claude plugin install`) run on Windows and again inside WSL, against the Claude Code CLI installed there; without one (or with only the Windows CLI reached through `/mnt/`) the WSL half only warns.
 
 ## Decisions
 
@@ -91,7 +91,7 @@ AiMarketplaces = @{
 
 ## Step 3: Enable `BootstrapConfig.Steps.AiMarketplaces`
 
-With the step on, Bootstrap runs `Deploy-AiMarketplaces` right after `Deploy-AiMods`. Give each plugin one loading path: a plugin loaded from a folder by `Deploy-AiMods` and installed from a marketplace would run twice.
+With the step on, Bootstrap runs `Deploy-AiMarketplaces` right after `Deploy-AiMods`. Give each plugin one loading path: a plugin loaded from a folder by `Deploy-AiMods` and installed from a marketplace would run twice. A folder in `env.CLAUDE_CODE_PLUGIN_DIRS` that holds a plugin a configured marketplace installs is reported as a warning and left in place: Claude Code would load two copies, and the folder copy reads its options from `pluginConfigs.<plugin>`, not `<plugin>@<marketplace>`, so it draws with its defaults. Load a development clone with `claude --plugin-dir <clone>` for one session instead of listing it in the settings.
 
 ```powershell
 BootstrapConfig = @{

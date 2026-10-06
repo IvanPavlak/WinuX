@@ -1285,7 +1285,7 @@ A plugin marketplace is a repository carrying `.claude-plugin\marketplace.json`;
 
 **Side effect:** `Deploy-AiMarketplaces` writes `extraKnownMarketplaces.<name>`, `env.<variable>` and `pluginConfigs.<plugin>@<name>.<key>` of the user's `~\.claude\settings.json` (and of `/home/<DefaultWSLUsername>/.claude/settings.json` in WSL), every other setting kept, and runs `claude plugin marketplace add <owner/name>` for marketplaces the CLI does not list yet and `claude plugin install <plugin>@<name>` for plugins it does not list yet.
 
-Deployment is opt-in via `BootstrapConfig.Steps.AiMarketplaces`. A plugin loaded from a folder (`AiMods`) and installed from a marketplace would run twice: give each plugin one path. Design: [AI Mods - Marketplaces](../ai/mods.md#marketplaces).
+Deployment is opt-in via `BootstrapConfig.Steps.AiMarketplaces`. A plugin loaded from a folder (`AiMods`) and installed from a marketplace would run twice: give each plugin one path; `Deploy-AiMarketplaces` warns about a `CLAUDE_CODE_PLUGIN_DIRS` folder that duplicates a marketplace plugin. Design: [AI Mods - Marketplaces](../ai/mods.md#marketplaces).
 
 ```powershell
 AiMarketplaces = @{

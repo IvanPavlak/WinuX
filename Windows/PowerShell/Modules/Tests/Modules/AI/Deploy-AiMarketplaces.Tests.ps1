@@ -191,6 +191,88 @@ Describe "Deploy-AiMarketplaces" {
 		Should -Invoke Write-LogError -ParameterFilter { $Message -like "Marketplace [[]bad] has no valid Repository*" }
 	}
 
+	It "warns when a CLAUDE_CODE_PLUGIN_DIRS folder holds a plugin a marketplace installs, and leaves the entry" {
+		$clone = Join-Path $TestDrive "clone"
+		New-Item -ItemType Directory -Path (Join-Path $clone ".claude-plugin") -Force | Out-Null
+		Set-Content -Path (Join-Path $clone ".claude-plugin\plugin.json") -Value '{"name":"my-plugin"}'
+		$other = Join-Path $TestDrive "other-mod"
+		New-Item -ItemType Directory -Path (Join-Path $other ".claude-plugin") -Force | Out-Null
+		Set-Content -Path (Join-Path $other ".claude-plugin\plugin.json") -Value '{"name":"other-mod"}'
+		New-Item -ItemType Directory -Path (Split-Path -Parent $script:Settings) -Force | Out-Null
+		@{ env = @{ CLAUDE_CODE_PLUGIN_DIRS = "$other;$clone" } } | ConvertTo-Json | Set-Content -Path $script:Settings
+
+		Deploy-AiMarketplaces -Command $script:Stub
+
+		Should -Invoke Write-LogWarning -Times 1 -Exactly -ParameterFilter { $Message -like "Plugin [[]my-plugin@my-marketplace] is installed from its marketplace and also loaded from [[]$clone]*" }
+		Should -Invoke Write-LogWarning -Times 0 -Exactly -ParameterFilter { $Message -like "*other-mod*" }
+		(Get-Content -Path $script:Settings -Raw | ConvertFrom-Json).env.CLAUDE_CODE_PLUGIN_DIRS | Should -Be "$other;$clone" -Because "the entry is the user's and only reported"
+	}
+
+	Context "inside WSL" {
+		BeforeEach {
+			Mock Resolve-AiModsConfig { @{ SettingsPath = $script:Settings; WSLSettingsPath = "/home/u/.claude/settings.json" } }
+			Mock Test-WSLDistributionInstalled { $true }
+			Mock Get-ConfigSetting {
+				switch ($Path) {
+					'AiMarketplaces' { $script:Section }
+					'DefaultWSLDistribution' { "WinuXTestDistro-$([guid]::Empty)" }
+					'DefaultWSLUsername' { "u" }
+					default { $null }
+				}
+			}
+			# A stand-in wsl.exe: `command -v claude` answers WINUX_TEST_WSL_CLAUDE; a claude call
+			# (everything after the `claude` that names $0) is recorded and answered like the CLI stub.
+			$script:WslLog = Join-Path $TestDrive "wsl-calls.log"
+			if (Test-Path -Path $script:WslLog) { Remove-Item -Path $script:WslLog -Force }
+			$env:WINUX_TEST_WSL_CLAUDE = "/home/u/.local/bin/claude"
+			$script:WslStub = Join-Path $TestDrive "wsl-stub.ps1"
+			Set-Content -Path $script:WslStub -Value @(
+				"if ((`$args -join ' ') -like '*command -v claude*') { if (`$env:WINUX_TEST_WSL_CLAUDE) { Write-Output `$env:WINUX_TEST_WSL_CLAUDE; exit 0 }; exit 1 }",
+				"`$rest = `$args[([array]::IndexOf(`$args, 'claude') + 1)..(`$args.Count - 1)]",
+				"Add-Content -Path '$script:WslLog' -Value (`$rest -join ' ')",
+				"if (`$rest[1] -eq 'marketplace' -and `$rest[2] -eq 'list') { Write-Output '[]'; exit 0 }",
+				"if (`$rest[1] -eq 'list') { Write-Output '[]'; exit 0 }",
+				"exit 0"
+			)
+		}
+
+		AfterEach {
+			Remove-Item -Path Env:\WINUX_TEST_WSL_CLAUDE -ErrorAction SilentlyContinue
+		}
+
+		It "adds the marketplace and installs the plugin through the CLI inside WSL" {
+			Deploy-AiMarketplaces -Command $script:Stub -WslCommand $script:WslStub
+
+			@(Get-Content -Path $script:WslLog) | Should -Be @(
+				"plugin marketplace list --json",
+				"plugin marketplace add MyOrg/MyMarketplace",
+				"plugin list --json",
+				"plugin install my-plugin@my-marketplace"
+			)
+			Should -Invoke Write-LogSuccess -ParameterFilter { $Message -eq "[WSL] Installed plugin [my-plugin@my-marketplace]" }
+			@(Get-Content -Path $script:Log) | Should -Contain "plugin install my-plugin@my-marketplace" -Because "the Windows CLI is still deployed first"
+		}
+
+		It "treats the Windows CLI reached through interop as missing inside WSL" {
+			$env:WINUX_TEST_WSL_CLAUDE = "/mnt/c/Users/u/AppData/Roaming/npm/claude"
+
+			Deploy-AiMarketplaces -Command $script:Stub -WslCommand $script:WslStub
+
+			Test-Path -Path $script:WslLog | Should -BeFalse
+			Should -Invoke Write-LogWarning -ParameterFilter { $Message -like "WSL [[]*] resolves claude to the Windows CLI [[]/mnt/c/*" }
+		}
+
+		It "only warns when WSL has no Claude Code CLI" {
+			$env:WINUX_TEST_WSL_CLAUDE = ""
+
+			Deploy-AiMarketplaces -Command $script:Stub -WslCommand $script:WslStub
+
+			Test-Path -Path $script:WslLog | Should -BeFalse
+			Should -Invoke Write-LogWarning -ParameterFilter { $Message -like "Claude Code CLI (claude) not found inside WSL*" }
+			Should -Invoke Write-LogSuccess -ParameterFilter { $Message -eq "AI marketplaces deployed!" }
+		}
+	}
+
 	It "does nothing when no marketplace is configured" {
 		$script:Section = @{}
 
