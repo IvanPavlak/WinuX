@@ -12,6 +12,9 @@ The [Application module reference](../../../modules/application.md) is the autho
 | Function | Configuration keys | Guide |
 | -------- | ------------------ | ----- |
 | `Create-CondaEnvironments` | `BootstrapConfig` | [Create-CondaEnvironments](Create-CondaEnvironments.md) |
+| `Deploy-VSCodeProfiles` | `VSCodeProfiles`, `BootstrapConfig.Steps` | [Deploy-VSCodeProfiles](Deploy-VSCodeProfiles.md) |
+| `Export-VSCodeProfile` | `VSCodeProfiles` | [Export-VSCodeProfile](Export-VSCodeProfile.md) |
+| `Get-VSCodeProfileLocation` | `VSCodeProfiles.UserData` | [Get-VSCodeProfileLocation](Get-VSCodeProfileLocation.md) |
 | `Get-VSCodeWorkspaceNames` | `PathTemplates.Projects.Self` | [Get-VSCodeWorkspaceNames](Get-VSCodeWorkspaceNames.md) |
 | `Install-ChocolateyApps` | `BootstrapConfig.DataFiles`, `PackageManagers` | [Install-ChocolateyApps](Install-ChocolateyApps.md) |
 | `Install-DotnetEf` | `DotnetEFVersion` | [Install-DotnetEf](Install-DotnetEf.md) |
@@ -27,6 +30,7 @@ The [Application module reference](../../../modules/application.md) is the autho
 | `Open-VSCode` | `VSCodeProjects` | [Open-VSCode](Open-VSCode.md) |
 | `Open-VSCodeWorkspace` | `PathTemplates.Projects.Self` | [Open-VSCodeWorkspace](Open-VSCodeWorkspace.md) |
 | `Open-WSLTab` | `DefaultWSLDistribution` | [Open-WSLTab](Open-WSLTab.md) |
+| `Resolve-VSCodeProfilesConfig` | `VSCodeProfiles` | [Resolve-VSCodeProfilesConfig](Resolve-VSCodeProfilesConfig.md) |
 | `Start-Application` | `Universal` | [Start-Application](Start-Application.md) |
 | `Start-Win11Debloat` | `BootstrapConfig` | [Start-Win11Debloat](Start-Win11Debloat.md) |
 | `Test-BrowserGroupAlreadyOpen` | `BrowserGroupMatching` | [Test-BrowserGroupAlreadyOpen](Test-BrowserGroupAlreadyOpen.md) |
@@ -42,7 +46,7 @@ Longer walkthroughs that cut across several functions and keys.
 
 These read no `Configuration.psd1` keys. Their guides record that fact and show how to call them.
 
-[Complete-ObsidianWorkspaceLoad](Complete-ObsidianWorkspaceLoad.md), [Enable-ObsidianCli](Enable-ObsidianCli.md), [Get-ObsidianCliPath](Get-ObsidianCliPath.md), [Get-ObsidianExecutablePath](Get-ObsidianExecutablePath.md), [Get-ObsidianWorkspaceNames](Get-ObsidianWorkspaceNames.md), [Install-ChocolateyPackageManager](Install-ChocolateyPackageManager.md), [Install-FromExecutable](Install-FromExecutable.md), [Install-PowerShellModules](Install-PowerShellModules.md), [Install-ScoopPackageManager](Install-ScoopPackageManager.md), [Invoke-Browser](Invoke-Browser.md), [Invoke-ObsidianCli](Invoke-ObsidianCli.md), [Invoke-ObsidianWorkspaceLoad](Invoke-ObsidianWorkspaceLoad.md), [Open-ClaudeDesktop](Open-ClaudeDesktop.md), [Open-DBeaver](Open-DBeaver.md), [Open-Discord](Open-Discord.md), [Open-Docker](Open-Docker.md), [Open-FoundryVTT](Open-FoundryVTT.md), [Open-Outlook](Open-Outlook.md), [Open-RiseupVPN](Open-RiseupVPN.md), [Open-SecureBrowser](Open-SecureBrowser.md), [Open-Slack](Open-Slack.md), [Open-TeamViewer](Open-TeamViewer.md), [Open-Terminal](Open-Terminal.md), [Open-VirtualBox](Open-VirtualBox.md), [Open-WhatsApp](Open-WhatsApp.md), [Start-FancyZones](Start-FancyZones.md), [Start-MicrosoftActivationScripts](Start-MicrosoftActivationScripts.md), [Start-ObsidianDetached](Start-ObsidianDetached.md), [Stop-PowerToysCompletely](Stop-PowerToysCompletely.md), [Test-ProjectAlreadyOpen](Test-ProjectAlreadyOpen.md), [Wait-BrowserWindowReady](Wait-BrowserWindowReady.md), [Wait-ObsidianCli](Wait-ObsidianCli.md)
+[Complete-ObsidianWorkspaceLoad](Complete-ObsidianWorkspaceLoad.md), [ConvertFrom-VSCodeExtensionLine](ConvertFrom-VSCodeExtensionLine.md), [Enable-ObsidianCli](Enable-ObsidianCli.md), [Get-ObsidianCliPath](Get-ObsidianCliPath.md), [Get-ObsidianExecutablePath](Get-ObsidianExecutablePath.md), [Get-ObsidianWorkspaceNames](Get-ObsidianWorkspaceNames.md), [Get-VSCodeCliPath](Get-VSCodeCliPath.md), [Get-VSCodeInstalledExtensions](Get-VSCodeInstalledExtensions.md), [Get-VSCodeProfileItems](Get-VSCodeProfileItems.md), [Install-ChocolateyPackageManager](Install-ChocolateyPackageManager.md), [Install-FromExecutable](Install-FromExecutable.md), [Install-PowerShellModules](Install-PowerShellModules.md), [Install-ScoopPackageManager](Install-ScoopPackageManager.md), [Invoke-Browser](Invoke-Browser.md), [Invoke-ObsidianCli](Invoke-ObsidianCli.md), [Invoke-ObsidianWorkspaceLoad](Invoke-ObsidianWorkspaceLoad.md), [Merge-VSCodeExtensionList](Merge-VSCodeExtensionList.md), [Open-ClaudeDesktop](Open-ClaudeDesktop.md), [Open-DBeaver](Open-DBeaver.md), [Open-Discord](Open-Discord.md), [Open-Docker](Open-Docker.md), [Open-FoundryVTT](Open-FoundryVTT.md), [Open-Outlook](Open-Outlook.md), [Open-RiseupVPN](Open-RiseupVPN.md), [Open-SecureBrowser](Open-SecureBrowser.md), [Open-Slack](Open-Slack.md), [Open-TeamViewer](Open-TeamViewer.md), [Open-Terminal](Open-Terminal.md), [Open-VirtualBox](Open-VirtualBox.md), [Open-WhatsApp](Open-WhatsApp.md), [Start-FancyZones](Start-FancyZones.md), [Start-MicrosoftActivationScripts](Start-MicrosoftActivationScripts.md), [Start-ObsidianDetached](Start-ObsidianDetached.md), [Stop-PowerToysCompletely](Stop-PowerToysCompletely.md), [Test-ProjectAlreadyOpen](Test-ProjectAlreadyOpen.md), [Wait-BrowserWindowReady](Wait-BrowserWindowReady.md), [Wait-ObsidianCli](Wait-ObsidianCli.md)
 
 ## Related
 

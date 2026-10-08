@@ -1035,7 +1035,8 @@
 	# - Upgrade-All, fork-defined PersonalSteps, Install-DotnetEF
 	# - Set-EnvironmentVariables, Create-CondaEnvironments, Configure-NuGetConfig
 	# - Configure-Taskbar, Initialize-WSLEnvironment, SymbolicLinkMaker, Deploy-CoreAiRules (opt-in),
-	#   Deploy-AiSkills (opt-in), Deploy-AiMods (opt-in), Deploy-AiMarketplaces (opt-in), Enable-ObsidianCli (opt-in)
+	#   Deploy-AiSkills (opt-in), Deploy-AiMods (opt-in), Deploy-AiMarketplaces (opt-in), Enable-ObsidianCli (opt-in),
+	#   Deploy-VSCodeProfiles (opt-in)
 	# - Configure-WSLSSH, Lock taskbar layout, Restart-Machine
 	#
 	# HOW TO ADD NEW APPLICATIONS:
@@ -1078,7 +1079,8 @@
 		# agent policy), AiSkills (machine-global Agent Skills), AiMods (machine-global
 		# Claude Code mods and the CLAUDE_CODE_PLUGIN_DIRS settings key), AiMarketplaces
 		# (Claude Code plugin marketplaces in the user settings and `claude plugin install`), ObsidianCli
-		# (edits Obsidian's per-machine app settings), LockedStartLayout.
+		# (edits Obsidian's per-machine app settings), VSCodeProfiles (links VS Code profile files,
+		# registers profiles in VS Code's state and installs extensions), LockedStartLayout.
 		#
 		# Per invocation, Bootstrap -Skip <steps> forces steps off and
 		# Bootstrap -Include <steps> forces them on, both overriding this config.
@@ -1132,6 +1134,9 @@
 		#                                "cli": true in %APPDATA%\obsidian\obsidian.json, Obsidian's
 		#                                per-machine app settings a synced vault never carries, so
 		#                                Open-Obsidian can load workspaces on this machine)
+		# - VSCodeProfiles             : Deploy-VSCodeProfiles (OFF by default - links the profile files
+		#                                of the VSCodeProfiles entries this machine type deploys and
+		#                                installs their extensions through the VS Code command line)
 		# - LockedStartLayout          : lock the taskbar layout via registry policy (OFF by default)
 		#
 		# RepositoryUpdate decides WHETHER the repository step runs; WHICH groups it
@@ -2131,6 +2136,48 @@
 	#   DefaultVSCodeWorkspaces = @{ WinuX = "MyWorkspace" }
 	# ==========================================================================
 	DefaultVSCodeWorkspaces       = @{}
+
+	# ==========================================================================
+	# VS Code Profiles
+	# ==========================================================================
+	# → Consumers: Deploy-VSCodeProfiles, Export-VSCodeProfile (through Resolve-VSCodeProfilesConfig)
+	#
+	# VS Code profiles kept in the repository and deployed by Deploy-VSCodeProfiles (opt in
+	# via BootstrapConfig.Steps.VSCodeProfiles). Root holds one folder per Catalogue entry with
+	# any of settings.json, keybindings.json (keybindings.windows.json wins on Windows when
+	# present), tasks.json, snippets\ and extensions.txt (one extension id per line, `#`
+	# comments, optional @version pin). Deploy links the files into the VS Code profile the
+	# entry deploys onto and installs the listed extensions; Export-VSCodeProfile captures a
+	# live profile back into its folder.
+	#
+	# Root         : the profile folders ({RepoRoot}, {User} and {AppData} expand here)
+	# UserData     : VS Code's user data folder - its root is the Default profile
+	# SettingsSync : $false installs extensions with --do-not-sync, so Settings Sync leaves
+	#                them alone; $true installs them normally and lets Sync carry them too
+	# Prune        : $true uninstalls extensions extensions.txt does not name (-Prune per run)
+	# Catalogue    : ordered entries; Target is the VS Code profile an entry deploys onto
+	#                (defaults to the entry name; "Default" is VS Code's built-in profile)
+	# Deploy       : per machine type, the catalogue entries it deploys; Default covers any
+	#                machine type not listed
+	#
+	# Ships with an empty catalogue - Deploy-VSCodeProfiles no-ops until a fork adds one in
+	# Configuration.local.psd1, e.g.:
+	#   Catalogue = @(
+	#       @{ MyProfile = @{ Target = "Default" } }
+	#       @{ Writing = @{} }
+	#   )
+	#   Deploy = @{ Default = @("MyProfile"); Work = @("MyProfile", "Writing") }
+	# ==========================================================================
+	VSCodeProfiles                = @{
+		Root         = "{RepoRoot}\VSCode\Profiles"
+		UserData     = "{AppData}\Code\User"
+		SettingsSync = $false
+		Prune        = $false
+		Catalogue    = @()
+		Deploy       = @{
+			Default = @()
+		}
+	}
 
 	# ==========================================================================
 	# Workspace Actions Configuration

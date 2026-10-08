@@ -344,6 +344,21 @@ The same `-RequireMainWindow` switch applies to any app that keeps a windowless 
 Get-CimInstance Win32_Process -Filter "Name = 'Obsidian.com'" | ForEach-Object { Stop-Process -Id $_.ProcessId }
 ```
 
+### "VS Code is running - close it so profile [Name] can be registered"
+
+**Problem:** `Deploy-VSCodeProfiles` (or the `VSCodeProfiles` Bootstrap step) skips a profile with this error, and the profile's files and extensions are not deployed.
+
+**Why it happens:** A profile other than `Default` that VS Code does not know yet has to be added to VS Code's own profile list (`User\globalStorage\storage.json`). VS Code keeps that list in memory and writes it back while it runs, so an edit made then would be lost. The `Default` profile and profiles VS Code already knows never need this.
+
+**Solution:** Close every VS Code window and run `Deploy-VSCodeProfiles` again. Registration happens once; later runs find the profile and deploy with VS Code open. The list is backed up under `Backups\Windows\VSCodeProfiles\` before it is rewritten.
+
+### A VS Code Extension Keeps Coming Back Or Disappearing After Deploy-VSCodeProfiles
+
+**Problem:** An extension removed from `extensions.txt` reappears, or one `Deploy-VSCodeProfiles` installed vanishes on another machine.
+
+**Why it happens:** VS Code's Settings Sync also carries extensions. With `VSCodeProfiles.SettingsSync = $true`, the deployed extensions are synced like any other, so Sync can bring back one the list no longer names, or remove one when another machine uninstalls it.
+
+**Solution:** Choose one source. Either set `VSCodeProfiles.SettingsSync = $false` (extensions then install with `--do-not-sync`, which keeps them on this machine only) and turn Sync off in VS Code, or keep Sync and remove the extension in VS Code as well as from `extensions.txt`. `Deploy-VSCodeProfiles -Prune` uninstalls everything the list does not name.
 ## Window Layout Issues
 
 ### Windows Not Positioning

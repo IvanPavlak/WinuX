@@ -133,6 +133,7 @@ Steps that run on **every** Bootstrap but ship off, because they act the moment 
 | `AiSkills`           | Machine-global Agent Skills linked into every AI harness        | Off - opt in via `BootstrapConfig.Steps`      |
 | `AiMods`             | Machine-global Claude Code mods and the plugin list setting     | Off - opt in via `BootstrapConfig.Steps`      |
 | `ObsidianCli`        | Turns the Obsidian command line interface on (per-machine Obsidian app setting) | Off - opt in via `BootstrapConfig.Steps` |
+| `VSCodeProfiles`     | Links VS Code profile files from the repository and installs their extensions | Off - opt in via `BootstrapConfig.Steps` |
 | `LockedStartLayout`  | Locks the taskbar layout via registry policy                    | Off - opt in via `BootstrapConfig.Steps`      |
 
 ## What Gets Installed

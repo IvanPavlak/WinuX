@@ -25,6 +25,12 @@ Complete-ObsidianWorkspaceLoad -CliPath (Get-ObsidianCliPath) -Vault Obsidian -N
 ```
 
 
+## [ConvertFrom-VSCodeExtensionLine](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/ConvertFrom-VSCodeExtensionLine.ps1)
+
+- **Description:** Parses one line of a VS Code profile's `extensions.txt` into `@{ Id; Version }`. An entry is `publisher.name`, optionally pinned as `publisher.name@1.2.3`; `#` starts a comment, on its own line or after an entry. Returns `$null` for a blank or comment-only line, and `Version` is empty when the entry is unpinned. Used by `Deploy-VSCodeProfiles` (which extensions to install) and `Merge-VSCodeExtensionList` (which lines to keep).
+- **Parameters:** -Line (pipeline input)
+- **Usage:** `ConvertFrom-VSCodeExtensionLine "publisher.name@1.2.3"`, `Get-Content extensions.txt | ConvertFrom-VSCodeExtensionLine`
+
 ## [Create-CondaEnvironments](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Create-CondaEnvironments.ps1)
 
 - **Description:** Updates Conda and idempotently creates Conda environments from the YAML files in the WinuX `Conda/Environments` folder. Each environment is checked against the existing environment list and only created if it is missing. Requires Miniconda3 to be installed and the `Conda` environment variable to be set.
@@ -38,6 +44,24 @@ Create-CondaEnvironments
 ```
 
 **See also:** [Modules: Workflow](workflow.md)
+
+## [Deploy-VSCodeProfiles](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Deploy-VSCodeProfiles.ps1)
+
+- **Description:** Brings VS Code to the profiles `VSCodeProfiles.Deploy` selects for the current machine type (or the entries `-Name` gives). For each `VSCodeProfiles.Catalogue` entry it locates the VS Code profile the entry deploys onto (`Target`, the entry name by default) through `Get-VSCodeProfileLocation -Register`: `Default` is VS Code's user data folder, and any other profile is registered in VS Code's profile list when VS Code does not know it yet, which is refused while VS Code is running. It then symlinks every file the entry's folder carries (`settings.json`, `keybindings.json` or `keybindings.windows.json`, `tasks.json`, `snippets\`; see `Get-VSCodeProfileItems`) through `New-WindowsSymbolicLink`, which backs up a real file it replaces (a link already pointing at the repository file is left as it is), and installs every extension `extensions.txt` lists that the profile lacks with `code --install-extension <id> --profile <Target>`. A pinned extension installed at another version is reinstalled at the pin. With `VSCodeProfiles.SettingsSync` off (the default) installs carry `--do-not-sync`. Extensions the list does not name stay installed unless `-Prune` or `VSCodeProfiles.Prune` is set. A name the catalogue does not carry is an error, an entry with no folder yet is skipped with a warning, and a missing VS Code command line (`Get-VSCodeCliPath`) skips only the extensions. Idempotent. Bootstrap runs it when the opt-in `BootstrapConfig.Steps.VSCodeProfiles` is on.
+- **Parameters:** -Name, -Prune, -Command
+- **Usage:** `Deploy-VSCodeProfiles`, `Deploy-VSCodeProfiles -Name MyProfile -Prune`
+
+The repository side of a profile is a folder per catalogue entry under `VSCodeProfiles.Root` (default `{RepoRoot}\VSCode\Profiles`). The UI state of a profile (history, layout, signed-in accounts) is VS Code's own and is never deployed. VS Code's command line cannot persist a disabled state, so `extensions.txt` lists only the extensions to install.
+
+```powershell
+# Deploy the profiles this machine type selects
+Deploy-VSCodeProfiles
+
+# Deploy one entry and remove the extensions its list does not name
+Deploy-VSCodeProfiles -Name MyProfile -Prune
+```
+
+**See also:** [Export-VSCodeProfile](#export-vscodeprofile), [Resolve-VSCodeProfilesConfig](#resolve-vscodeprofilesconfig)
 
 ## [Enable-ObsidianCli](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Enable-ObsidianCli.ps1)
 
@@ -62,6 +86,16 @@ Enable-ObsidianCli -WhatIf
 # Fresh machine, Obsidian not started yet (the Bootstrap step)
 Enable-ObsidianCli -CreateIfMissing
 ```
+
+## [Export-VSCodeProfile](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Export-VSCodeProfile.ps1)
+
+- **Description:** Captures the live VS Code profile a `VSCodeProfiles.Catalogue` entry deploys onto into the entry's folder under `VSCodeProfiles.Root`, creating the folder when missing. The profile is located without registering anything (`Get-VSCodeProfileLocation`); an entry the catalogue does not carry, or a profile VS Code does not have, is an error. A profile file that is already a symbolic link is left alone (a link pointing outside the repository is reported). Every real file is copied into the folder - keybindings land in `keybindings.windows.json` when the folder carries one - and an empty `snippets\` folder is not copied. `extensions.txt` is merged with what the profile has installed through `Merge-VSCodeExtensionList`, so comments and pins survive, uninstalled entries go and new extensions are appended sorted. Disabled extensions are listed like any other, because the command line cannot tell them apart. Run by hand, never by Bootstrap; nothing in VS Code changes.
+- **Parameters:** -Name, -Command
+- **Usage:** `Export-VSCodeProfile -Name MyProfile`
+
+Review the captured folder with `git diff` before committing it.
+
+**See also:** [Deploy-VSCodeProfiles](#deploy-vscodeprofiles)
 
 ## [Get-ObsidianCliPath](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Get-ObsidianCliPath.ps1)
 
@@ -102,6 +136,29 @@ Helper for `Open-Obsidian`: the source of the implicit same-named match against 
 # The names Open-Obsidian can load
 Get-ObsidianWorkspaceNames -VaultDirectory $MachineSpecificPaths.ObsidianDirectory
 ```
+
+## [Get-VSCodeCliPath](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Get-VSCodeCliPath.ps1)
+
+- **Description:** Returns the path of VS Code's command line (`code.cmd`), or `$null` when VS Code is not installed. Prefers `code` on PATH; a session that installed VS Code a moment ago (Bootstrap's WinGet step) does not see the installer's PATH entry yet, so the per-user install (`%LOCALAPPDATA%\Programs\Microsoft VS Code\bin\code.cmd`) and the machine-wide install (`%ProgramFiles%\Microsoft VS Code\bin\code.cmd`) are checked next. Used by `Deploy-VSCodeProfiles` and `Export-VSCodeProfile`.
+- **Usage:** `Get-VSCodeCliPath`
+
+## [Get-VSCodeInstalledExtensions](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Get-VSCodeInstalledExtensions.ps1)
+
+- **Description:** Lists the extensions a VS Code profile has installed as an ordered dictionary of id to version, through `code --list-extensions --show-versions` (plus `--profile <ProfileName>` for any profile but `Default`). Ids match case-insensitively. Returns an empty dictionary when nothing is installed and `$null` when the command fails, for instance for a profile VS Code does not know, so a caller can tell the two apart. Used by `Deploy-VSCodeProfiles` and `Export-VSCodeProfile`.
+- **Parameters:** -Command, -ProfileName
+- **Usage:** `Get-VSCodeInstalledExtensions -Command (Get-VSCodeCliPath) -ProfileName Default`
+
+## [Get-VSCodeProfileItems](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Get-VSCodeProfileItems.ps1)
+
+- **Description:** Maps a profile folder in the repository onto the files of a VS Code profile: `settings.json`, `keybindings.json`, `tasks.json` and the `snippets\` folder, in that order, each as `@{ Name; Repo; Live; IsDirectory; InRepo }`. Keybindings are the one per-platform item: on Windows `keybindings.windows.json` is used when the folder carries it, so a profile shared with the Mac can bind different keys. The one list of what a profile carries, shared by `Deploy-VSCodeProfiles` (links) and `Export-VSCodeProfile` (copies); it creates nothing.
+- **Parameters:** -Source, -Location
+- **Usage:** `Get-VSCodeProfileItems -Source C:\Repo\VSCode\Profiles\MyProfile -Location (Get-VSCodeProfileLocation Default)`
+
+## [Get-VSCodeProfileLocation](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Get-VSCodeProfileLocation.ps1)
+
+- **Description:** Returns the folder of a VS Code profile. `Default` is the user data folder (`VSCodeProfiles.UserData`, default `{AppData}\Code\User`); any other name is looked up, case-insensitively, in the `userDataProfiles` list of `User\globalStorage\storage.json` and resolves to `User\profiles\<location>`. An unregistered name returns `$null`, unless `-Register` is given: the profile is then added to the list as `winux-<name>` and its folder created, so the extension commands find it. Registration refuses while a `Code` process runs, because VS Code rewrites that file from memory; the file is backed up through `Backup-RepositoryItem` before it is rewritten, every other key is kept, and a missing file is created.
+- **Parameters:** -Name, -UserData, -Register
+- **Usage:** `Get-VSCodeProfileLocation Default`, `Get-VSCodeProfileLocation -Name Writing -Register`
 
 ## [Get-VSCodeWorkspaceNames](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Get-VSCodeWorkspaceNames.ps1)
 
@@ -321,6 +378,12 @@ $load = Invoke-ObsidianWorkspaceLoad -CliPath (Get-ObsidianCliPath) -Vault Obsid
 if (-not $load.Loaded) { $load.Refusal }
 ```
 
+
+## [Merge-VSCodeExtensionList](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Merge-VSCodeExtensionList.ps1)
+
+- **Description:** Merges the extensions a profile has installed into the lines of its `extensions.txt`: blank and comment lines stay where they are, entries still installed are kept exactly as written (pin and trailing comment included), entries no longer installed are removed and installed extensions the file does not name are appended, sorted. Ids compare case-insensitively and a duplicate entry keeps its first line. Returns the new lines; nothing is written. The capture side of `extensions.txt`, used by `Export-VSCodeProfile`.
+- **Parameters:** -Lines, -Installed
+- **Usage:** `@(Merge-VSCodeExtensionList -Lines (Get-Content extensions.txt) -Installed (& code --list-extensions))`
 
 ## [Open-Acrobat](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Open-Acrobat.ps1)
 
@@ -681,6 +744,12 @@ When a WhatsApp notification arrives while the app is closed, Windows COM-activa
 | `-Quiet`         | Suppresses the title, success and not-configured lines, for callers that log around a batch of tabs.               |
 
 **See also:** [Open-ProjectTerminals](workflow.md#open-projectterminals), [Run-Project](helper.md#run-project), [Resolve-ProjectTerminalTab](helper.md#resolve-projectterminaltab)
+
+## [Resolve-VSCodeProfilesConfig](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Resolve-VSCodeProfilesConfig.ps1)
+
+- **Description:** Resolves the `VSCodeProfiles` section into the one hashtable `Deploy-VSCodeProfiles` and `Export-VSCodeProfile` share: `Root` and `UserData` with `{RepoRoot}`, `{User}` and `{AppData}` expanded, `SettingsSync`, `Prune`, `Entries` (catalogue name to `@{ Name; Target; Source }`, in catalogue order, `Target` defaulting to the name), `Selected` (the machine type's own `Deploy` list, else `Default`, else none) and `Unknown` (selected names the catalogue does not carry). Every key falls back to its default, so the empty base configuration resolves to an empty catalogue.
+- **Parameters:** -Configuration, -MachineType, -RepoRoot
+- **Usage:** `(Resolve-VSCodeProfilesConfig).Selected`, `Resolve-VSCodeProfilesConfig -MachineType Work`
 
 ## [Start-Application](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Start-Application.ps1)
 

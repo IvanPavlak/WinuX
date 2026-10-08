@@ -28,6 +28,8 @@ BeforeAll {
 	. "$ModuleRoot\AI\Functions\Deploy-AiMods.ps1"
 	# The opt-in AI marketplaces step, likewise.
 	. "$ModuleRoot\AI\Functions\Deploy-AiMarketplaces.ps1"
+	# The opt-in VS Code profiles step, likewise.
+	. "$ModuleRoot\Application\Functions\Deploy-VSCodeProfiles.ps1"
 }
 
 AfterAll {
@@ -98,6 +100,7 @@ Describe "Bootstrap" {
 		Mock Enable-ObsidianCli { }
 		Mock Deploy-AiMods { }
 		Mock Deploy-AiMarketplaces { }
+		Mock Deploy-VSCodeProfiles { }
 	}
 
 	It "runs initial-setup steps and leaves the repository update off until it is opted into" {
@@ -130,7 +133,7 @@ Describe "Bootstrap" {
 		Should -Invoke Start-Win11Debloat -Times 1 -Exactly
 	}
 
-	It "keeps the other opt-in steps off by default (DeveloperMode, NuGetConfig, AiMods, AiMarketplaces, ObsidianCli, LockedStartLayout)" {
+	It "keeps the other opt-in steps off by default (DeveloperMode, NuGetConfig, AiMods, AiMarketplaces, ObsidianCli, VSCodeProfiles, LockedStartLayout)" {
 		$global:MachineType = 'Laptop'
 
 		Bootstrap
@@ -142,12 +145,14 @@ Describe "Bootstrap" {
 		Should -Invoke Write-LogWarning -ParameterFilter { $Message -eq "AI mods skipped - opt in via BootstrapConfig.Steps.AiMods" }
 		Should -Invoke Deploy-AiMarketplaces -Times 0
 		Should -Invoke Write-LogWarning -ParameterFilter { $Message -eq "AI marketplaces skipped - opt in via BootstrapConfig.Steps.AiMarketplaces" }
+		Should -Invoke Deploy-VSCodeProfiles -Times 0
+		Should -Invoke Write-LogWarning -ParameterFilter { $Message -eq "VS Code profiles skipped - opt in via BootstrapConfig.Steps.VSCodeProfiles" }
 		Should -Invoke Set-ItemProperty -Times 0 -ParameterFilter { $Name -eq 'LockedStartLayout' }
 	}
 
 	It "runs the opt-in steps when BootstrapConfig.Steps enables them" {
 		$global:MachineType = 'Laptop'
-		$global:Configuration.BootstrapConfig = @{ Steps = @{ DeveloperMode = $true; NuGetConfig = $true; AiMods = $true; AiMarketplaces = $true; ObsidianCli = $true; LockedStartLayout = $true } }
+		$global:Configuration.BootstrapConfig = @{ Steps = @{ DeveloperMode = $true; NuGetConfig = $true; AiMods = $true; AiMarketplaces = $true; ObsidianCli = $true; VSCodeProfiles = $true; LockedStartLayout = $true } }
 
 		Bootstrap
 
@@ -156,6 +161,7 @@ Describe "Bootstrap" {
 		Should -Invoke Enable-ObsidianCli -Times 1 -Exactly -ParameterFilter { $CreateIfMissing }
 		Should -Invoke Deploy-AiMods -Times 1 -Exactly
 		Should -Invoke Deploy-AiMarketplaces -Times 1 -Exactly
+		Should -Invoke Deploy-VSCodeProfiles -Times 1 -Exactly
 		Should -Invoke Set-ItemProperty -Times 1 -Exactly -ParameterFilter { $Name -eq 'LockedStartLayout' }
 	}
 

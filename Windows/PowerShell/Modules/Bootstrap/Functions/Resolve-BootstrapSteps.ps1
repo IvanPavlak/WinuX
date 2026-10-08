@@ -22,8 +22,9 @@ function Resolve-BootstrapSteps {
 		Agent Skills links), AiMods (machine-global Claude Code mods links and
 		the CLAUDE_CODE_PLUGIN_DIRS settings key), AiMarketplaces (Claude Code plugin
 		marketplaces in the user settings and `claude plugin install`), ObsidianCli (turns the Obsidian command line
-		interface on in Obsidian's per-machine app settings), and
-		LockedStartLayout.
+		interface on in Obsidian's per-machine app settings), VSCodeProfiles
+		(links VS Code profile files, registers profiles in VS Code's state and
+		installs extensions), and LockedStartLayout.
 
 		Legacy alias: when Steps.WSL is absent but the deprecated
 		BootstrapConfig.WSLSetup exists, WSL resolves from WSLSetup, so
@@ -97,6 +98,7 @@ function Resolve-BootstrapSteps {
 		AiMods                     = $false
 		AiMarketplaces             = $false
 		ObsidianCli                = $false
+		VSCodeProfiles             = $false
 		LockedStartLayout          = $false
 	}
 
