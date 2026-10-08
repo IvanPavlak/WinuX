@@ -9,7 +9,7 @@ Initializes (or, with `-Force`, resets) the shared `$global:LoggingState` that t
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`Logging`](../../configuration-reference.md#more-sections-quick-reference) | hashtable, 4 keys | `@{ DefaultLevel = "Normal"; Colors; FileLogging; Maintenance }` | Console verbosity at session start (`Quiet` / `Normal` / `Verbose`), the per-level console colours, file-logging settings, and the automatic idle-time log maintenance. Read by `Initialize-LoggingState` at profile load and by `Invoke-LogMaintenance`. |
+| [`Logging`](../../configuration-reference.md#more-sections-quick-reference) | hashtable, 4 keys | `@{ DefaultLevel = "Normal"; Colors; FileLogging; Maintenance }` | Console verbosity at session start (`Quiet` / `Normal` / `Verbose`), the per-level console colours (plus `Info`, Blue, which belongs to no level), file-logging settings, and the automatic idle-time log maintenance. Read by `Initialize-LoggingState` at profile load and by `Invoke-LogMaintenance`. |
 
 This is the only place the `Logging` key is read at profile load, which is why the other 15 Logging functions have nothing to configure: `Write-Log*` and friends read the module state this function populated. Change `Logging` here, reload, and the whole module follows.
 
@@ -42,7 +42,7 @@ All of it goes in `Configuration.local.psd1`, at the repository's `Windows/Power
 
 ## Step 1: Set `Logging`
 
-Console verbosity at session start (`Quiet` / `Normal` / `Verbose`), the per-level console colours, file-logging settings, and the automatic idle-time log maintenance. Read by `Initialize-LoggingState` at profile load and by `Invoke-LogMaintenance`.
+Console verbosity at session start (`Quiet` / `Normal` / `Verbose`), the per-level console colours (plus `Info`, Blue, which belongs to no level), file-logging settings, and the automatic idle-time log maintenance. Read by `Initialize-LoggingState` at profile load and by `Invoke-LogMaintenance`.
 
 ```powershell
 Logging = @{

@@ -32,6 +32,7 @@ Describe "Update-Repositories" {
 		Mock Write-LogError { }
 		Mock Write-LogStep { }
 		Mock Write-LogSuccess { }
+		Mock Write-LogSegments { }
 		Mock Remove-Item { }
 		Mock git { $global:LASTEXITCODE = 0 }
 	}
@@ -297,19 +298,27 @@ Describe "Update-Repositories" {
 			Update-Repositories -All -Quiet -NoClone
 
 			# Mike updated (success), Zulu conflict (warning), Kilo not cloned (success), then the
-			# totals as a warning because one repository needs attention.
+			# totals line.
 			Should -Invoke Write-LogSuccess -Times 2 -Exactly
-			Should -Invoke Write-LogWarning -Times 2 -Exactly
-			Should -Invoke Write-LogWarning -Times 1 -Exactly -ParameterFilter {
-				$Message -match "1 updated" -and $Message -match "1 need attention" -and $Message -match "1 skipped"
-			}
+			Should -Invoke Write-LogWarning -Times 1 -Exactly
+			Should -Invoke Write-LogSegments -Times 1 -Exactly
+		}
+
+		It "colors each count of the totals line: updated blue, up to date green, need attention red, skipped yellow" {
+			Mock Write-LogSegments { $script:Totals = $Segments }
+
+			Update-Repositories -All -Quiet -NoClone
+
+			$counts = @($script:Totals | Where-Object { $_.Style })
+			($counts | ForEach-Object { "$($_.Text)=$($_.Style)" }) -join "|" |
+				Should -Be "1 updated=Info|0 up to date=Success|1 need attention=Error|1 skipped=Warning"
+			@($script:Totals | Where-Object { -not $_.Style }).Count | Should -Be 4
 		}
 
 		It "prints no summary without -Quiet" {
 			Update-Repositories -All -NoClone
 
-			Should -Invoke Write-LogSuccess -Times 0 -Exactly -ParameterFilter { $Message -match "^Repositories =>" }
-			Should -Invoke Write-LogWarning -Times 0 -Exactly -ParameterFilter { $Message -match "^Repositories =>" }
+			Should -Invoke Write-LogSegments -Times 0 -Exactly
 		}
 
 		It "returns nothing to the pipeline" {

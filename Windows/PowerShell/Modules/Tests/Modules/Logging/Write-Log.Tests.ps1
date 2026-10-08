@@ -89,6 +89,17 @@ Describe "Write-Log engine" {
 			Should -Invoke -ModuleName Logging Write-Host -ParameterFilter { $ForegroundColor -eq $Color }
 		}
 
+		It "renders -Style Info in the extra palette color, Blue" {
+			Write-LogStep "info" -Style Info
+			Should -Invoke -ModuleName Logging Write-Host -ParameterFilter { $ForegroundColor -eq 'Blue' }
+		}
+
+		It "writes only the file log with -NoConsole" {
+			Write-Log -Level Step -Message "file-only-line" -NoConsole
+			Should -Invoke -ModuleName Logging Write-Host -Times 0 -Exactly
+			(Get-Content (Get-LogPath) -Raw) | Should -Match '\[STEP\].*file-only-line'
+		}
+
 		It "renders a Step row in the -Style override color while keeping the plain Step layout and STEP file tag" {
 			Write-LogStep " row => [disabled]" -Style Error
 			# Red color, but the plain Step layout (no "=>" prefix added by the engine)

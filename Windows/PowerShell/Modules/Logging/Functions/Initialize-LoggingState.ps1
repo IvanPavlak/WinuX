@@ -47,6 +47,7 @@ function Initialize-LoggingState {
 		Warning = "Yellow"
 		Error   = "Red"
 		Debug   = "DarkCyan"
+		Info    = "Blue"
 	}
 	if ($cfg -and $cfg.Colors) {
 		foreach ($key in $cfg.Colors.Keys) {

@@ -15,7 +15,7 @@ function Write-LogStep {
 	.PARAMETER Style
 		Render the step in another level's color while keeping the plain Step layout, visibility,
 		and STEP file-log tag (e.g. -Style Success for a green outcome row, -Style Error for a red
-		one). Defaults to the Step color (White).
+		one, -Style Info for a blue one). Defaults to the Step color (White).
 
 	.PARAMETER NoNewLine
 		Suppress the trailing newline (for composing a line across multiple calls).
@@ -39,7 +39,7 @@ function Write-LogStep {
 		[string]$Message,
 
 		[Parameter(Mandatory = $false)]
-		[ValidateSet("Title", "Step", "Success", "Warning", "Error", "Debug")]
+		[ValidateSet("Title", "Step", "Success", "Warning", "Error", "Debug", "Info")]
 		[string]$Style = "Step",
 
 		[Parameter(Mandatory = $false)]

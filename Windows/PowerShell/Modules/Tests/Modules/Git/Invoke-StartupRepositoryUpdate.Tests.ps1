@@ -11,6 +11,8 @@ BeforeAll {
 
 	. "$ModuleRoot\Git\Functions\Invoke-StartupRepositoryUpdate.ps1"
 	. "$ModuleRoot\Git\Functions\Test-RepositoryUpdateStampFresh.ps1"
+	. "$ModuleRoot\Git\Functions\Get-RepositoryUpdateStartupSettings.ps1"
+	. "$ModuleRoot\Git\Functions\Get-RepositoryUpdateDayStart.ps1"
 	# Dot-sourced so they exist to Mock even in sessions whose imported modules predate them.
 	. "$ModuleRoot\Git\Functions\Update-Repositories.ps1"
 	. "$ModuleRoot\Bootstrap\Functions\Resolve-RepositoryUpdateScope.ps1"
@@ -32,7 +34,7 @@ Describe "Invoke-StartupRepositoryUpdate" {
 		$global:MachineType = "Test"
 		$global:Configuration = @{
 			BootstrapConfig  = @{}
-			RepositoryUpdate = @{ Startup = @{ Enabled = $true; IntervalHours = 24 } }
+			RepositoryUpdate = @{ Startup = @{ Enabled = $true } }
 		}
 
 		Mock Update-Repositories { }
@@ -64,7 +66,7 @@ Describe "Invoke-StartupRepositoryUpdate" {
 			$script:StampFile | Should -Exist
 		}
 
-		It "skips while the stamp is younger than the interval" {
+		It "skips when it already ran today" {
 			Set-Content -Path $script:StampFile -Value "stamp"
 
 			Invoke-StartupRepositoryUpdate
@@ -72,7 +74,7 @@ Describe "Invoke-StartupRepositoryUpdate" {
 			Should -Invoke Update-Repositories -Times 0 -Exactly
 		}
 
-		It "runs once the stamp is older than the interval, however long ago that was" {
+		It "runs once the stamp is from an earlier day, however long ago that was" {
 			Set-Content -Path $script:StampFile -Value "stamp"
 			(Get-Item -Path $script:StampFile -Force).LastWriteTime = (Get-Date).AddDays(-5)
 
@@ -81,7 +83,36 @@ Describe "Invoke-StartupRepositoryUpdate" {
 			Should -Invoke Update-Repositories -Times 1 -Exactly
 		}
 
-		It "honours a custom IntervalHours" {
+		It "runs when the last run was before today's day start, even less than 24 hours ago" {
+			Set-Content -Path $script:StampFile -Value "stamp"
+			(Get-Item -Path $script:StampFile -Force).LastWriteTime = (Get-RepositoryUpdateDayStart -DayStartHour 6).AddMinutes(-1)
+
+			Invoke-StartupRepositoryUpdate
+
+			Should -Invoke Update-Repositories -Times 1 -Exactly
+		}
+
+		It "skips when the last run was after today's day start" {
+			Set-Content -Path $script:StampFile -Value "stamp"
+			(Get-Item -Path $script:StampFile -Force).LastWriteTime = (Get-RepositoryUpdateDayStart -DayStartHour 6).AddMinutes(1)
+
+			Invoke-StartupRepositoryUpdate
+
+			Should -Invoke Update-Repositories -Times 0 -Exactly
+		}
+
+		It "honours a custom DayStartHour" {
+			$global:Configuration.RepositoryUpdate.Startup.DayStartHour = 14
+			Set-Content -Path $script:StampFile -Value "stamp"
+			(Get-Item -Path $script:StampFile -Force).LastWriteTime = (Get-RepositoryUpdateDayStart -DayStartHour 14).AddMinutes(-1)
+
+			Invoke-StartupRepositoryUpdate
+
+			Should -Invoke Update-Repositories -Times 1 -Exactly
+		}
+
+		It "honours a custom IntervalHours on the Interval schedule" {
+			$global:Configuration.RepositoryUpdate.Startup.Schedule = "Interval"
 			$global:Configuration.RepositoryUpdate.Startup.IntervalHours = 1
 			Set-Content -Path $script:StampFile -Value "stamp"
 			(Get-Item -Path $script:StampFile -Force).LastWriteTime = (Get-Date).AddHours(-2)
@@ -91,8 +122,8 @@ Describe "Invoke-StartupRepositoryUpdate" {
 			Should -Invoke Update-Repositories -Times 1 -Exactly
 		}
 
-		It "defaults to 24 hours when IntervalHours is absent" {
-			$global:Configuration.RepositoryUpdate.Startup = @{ Enabled = $true }
+		It "defaults to 24 hours on the Interval schedule when IntervalHours is absent" {
+			$global:Configuration.RepositoryUpdate.Startup = @{ Enabled = $true; Schedule = "Interval" }
 			Set-Content -Path $script:StampFile -Value "stamp"
 			(Get-Item -Path $script:StampFile -Force).LastWriteTime = (Get-Date).AddHours(-23)
 

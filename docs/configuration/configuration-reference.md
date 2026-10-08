@@ -1348,7 +1348,7 @@ Sections not detailed above, with their real shapes and consumers:
 | `ExplorerOptions` | array of registry entries (ships empty - Win11Debloat covers the defaults) | File Explorer tweaks applied via the registry | `Set-ExplorerOptions` |
 | `AutoEnvironmentVariables` | name → path (placeholders allowed) | User environment variables written by `Set-EnvironmentVariables -Auto` (ships empty - no-ops until set in `Configuration.local.psd1`) | `Set-EnvironmentVariables` |
 | `AutoPathAdditions` | array of directories | Directories persisted onto the User `PATH`, e.g. Oh My Posh install locations (ships empty - no-ops until set in `Configuration.local.psd1`) | `Set-EnvironmentVariables` |
-| `Logging` | `@{ DefaultLevel; Colors; ... }` | Console verbosity at session start (`Quiet`/`Normal`/`Verbose`), per-level console colors, file-logging settings, and automatic idle-time log maintenance | Logging module (`Write-Log*`, `Set-LogLevel`, `Invoke-LogMaintenance`) |
+| `Logging` | `@{ DefaultLevel; Colors; ... }` | Console verbosity at session start (`Quiet`/`Normal`/`Verbose`), per-level console colors (plus `Info`, Blue, a color that belongs to no level, for `-Style Info` and `Write-LogSegments`), file-logging settings, and automatic idle-time log maintenance | Logging module (`Write-Log*`, `Set-LogLevel`, `Invoke-LogMaintenance`) |
 | `BrowserGroupMatching` | `@{ BrowserProcessNames; KeywordExtraction; ... }` | Maps browser labels to process names and tunes URL-keyword extraction for detecting already-open browser groups | `Test-BrowserGroupAlreadyOpen`, `Collect-BrowserUrls` |
 
 ---
@@ -1423,7 +1423,9 @@ RepositoryUpdate = @{
     DefaultBranch        = ""       # "" => origin/HEAD => skipped
     Startup              = @{
         Enabled       = $false      # automatic update after the first prompt
-        IntervalHours = 24          # minimum hours between automatic runs
+        Schedule      = "Daily"     # "Daily" (once a day) or "Interval"
+        DayStartHour  = 6           # Daily: the hour a new day starts
+        IntervalHours = 24          # Interval: minimum hours between automatic runs
         # Scope       = @{ Default = "All" }   # absent => BootstrapConfig.RepositoryUpdateScope => "All"
     }
 }
@@ -1434,10 +1436,12 @@ RepositoryUpdate = @{
 | `IncludeDefaultBranch` | bool | `$false` | After the checked-out branch is pulled, also fast-forward the repository's default branch with `git fetch origin <default>:<default>`. Git refuses anything but a fast-forward and the working tree and stash are never touched. A default branch that was never checked out locally is skipped, never created. `Update-Repositories -IncludeDefaultBranch` or `-IncludeDefaultBranch:$false` overrides it for one call. The Bootstrap repository step follows it too. |
 | `DefaultBranch` | string | `""` | The default branch's name. Empty uses what the remote reports (`refs/remotes/origin/HEAD`); when the remote reports nothing the step is skipped with a warning. Leave it empty when your repositories do not share one default branch. Replaces `BootstrapConfig.DefaultBranch`, which was removed in 0.1.86 (it was never read). |
 | `Startup.Enabled` | bool | `$false` | Update repositories automatically once the first prompt of a shell is drawn (profile stage `RepositoryUpdate`, deferred until the shell is idle). Never clones a missing repository and never asks for Administrator. Prints one line per repository plus a totals line. |
-| `Startup.IntervalHours` | int | `24` | Minimum hours between two automatic runs, tracked by the stamp file `Logs\.last-repository-update`. The stamp records the last run, so a machine that was off for days updates on its first shell back. |
+| `Startup.Schedule` | string | `"Daily"` | When an automatic run is due, tracked by the stamp file `Logs\.last-repository-update`. `"Daily"`: once per day - the first shell after the day starts runs it, and a shell already open then (a terminal left open overnight, a machine woken from sleep) runs it at its first prompt after the day starts (`Register-RepositoryUpdatePromptCheck`), so it never starts on its own in the middle of the day. `"Interval"`: at most once per `IntervalHours`, counted from the last run and checked only when a shell starts. Anything else reads as `"Daily"`. Either way the stamp records the last run, so a machine that was off for days updates on its first shell back. |
+| `Startup.DayStartHour` | int | `6` | Daily only. The hour (0-23) a new day starts: a shell opened before it still counts as the day before, so late work past midnight never triggers a run. Out of range or not a number reads as `6`. |
+| `Startup.IntervalHours` | int | `24` | Interval only. Minimum hours between two automatic runs; `0` runs it in every shell. |
 | `Startup.Scope` | hashtable | absent | Which groups the automatic run updates, per machine type, in the same shape as [`BootstrapConfig.RepositoryUpdateScope`](#bootstrapconfig): `"All"`, a group name, a comma-separated string or an array, with a `Default` fallback. Absent falls back to `BootstrapConfig.RepositoryUpdateScope`, then to `"All"`. |
 
-**Consumer functions:** `Update-Repositories` (`IncludeDefaultBranch`), `Resolve-RepositoryDefaultBranch` (`DefaultBranch`), `Invoke-StartupRepositoryUpdate` (`Startup`)
+**Consumer functions:** `Update-Repositories` (`IncludeDefaultBranch`), `Resolve-RepositoryDefaultBranch` (`DefaultBranch`), `Get-RepositoryUpdateStartupSettings` (`Startup`, for `Invoke-StartupRepositoryUpdate` and `Register-RepositoryUpdatePromptCheck`), `Invoke-StartupRepositoryUpdate` (`Startup.Scope`)
 
 ---
 

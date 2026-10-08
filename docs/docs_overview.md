@@ -80,7 +80,7 @@ decisions behind them, and where the values go. Each module's `README.md` indexe
 | `BasePaths`, `PathTemplates`                       | `Expand-ConfigPaths`, all path-dependent functions |
 | `SymbolicLinks`                                    | `SymbolicLinkMaker`                                |
 | `RepositoryGroups`                                 | `Update-Repositories`, `Initialize-Repository`     |
-| `RepositoryUpdate`                                 | `Update-Repositories`, `Resolve-RepositoryDefaultBranch`, `Invoke-StartupRepositoryUpdate` |
+| `RepositoryUpdate`                                 | `Update-Repositories`, `Resolve-RepositoryDefaultBranch`, `Get-RepositoryUpdateStartupSettings`, `Invoke-StartupRepositoryUpdate` |
 | `BrowserGroups`                                    | `Open-Browser`, `Collect-BrowserUrls`              |
 | `Projects`, `ProjectActions`                       | `Open-Project`                                     |
 | `Workspaces`, `DefaultWorkspace`, `WorkspaceActions`, `WorkspaceBenchmark` | `Open-Workspace`           |
@@ -141,7 +141,9 @@ The profile (`Microsoft.PowerShell_profile.ps1`) executes this exact sequence. E
 12. Stage LogMaintenance - QUEUED
 13. Stage RepositoryUpdate - QUEUED; one PowerShell.OnIdle subscription then runs the queue once the prompt is rendered and the shell
     has been idle ~300 ms: Import-Module Terminal-Icons -Global, Invoke-LogMaintenance, Invoke-StartupRepositoryUpdate
-    (no-op unless RepositoryUpdate.Startup.Enabled; at most once per Startup.IntervalHours)
+    (no-op unless RepositoryUpdate.Startup.Enabled; once a day from Startup.DayStartHour, or once per
+    Startup.IntervalHours with Schedule "Interval"), then Register-RepositoryUpdatePromptCheck (Daily only:
+    wraps the prompt so a shell still open the next day runs it at its first prompt)
 ```
 
 > **Module autoload:** All WinuX modules declare `FunctionsToExport` in their `.psd1` manifests. PowerShell builds an autoload index at startup (no code executed) and imports a module automatically the first time one of its exported functions is called. `Logging` and `Bootstrap` are imported eagerly by the profile (in that order, so Bootstrap and all other modules can log from the start); nothing else is imported before the first prompt - the handful of Helper, Configuration, System and Git functions the profile needs are dot-sourced from their files, because importing a module costs 4-6 ms per function file (Helper and System were measured at 330-500 ms each) and the first autoload adds PowerShell's module discovery on top. The fork-owned `Custom` module autoloads the same way via its `FunctionsToExport` (which the fork maintains, one entry per Custom function; empty on a pure-upstream setup). `Start-Logging`/`Stop-Logging` live in the `Logging` module (moved out of `Helper`).

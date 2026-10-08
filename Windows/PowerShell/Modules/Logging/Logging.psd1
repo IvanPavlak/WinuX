@@ -17,6 +17,7 @@
 		'Write-LogDebug',
 		'Write-LogError',
 		'Write-LogList',
+		'Write-LogSegments',
 		'Write-LogStep',
 		'Write-LogSuccess',
 		'Write-LogTitle',

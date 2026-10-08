@@ -1,7 +1,7 @@
 function Invoke-StartupRepositoryUpdate {
 	<#
 	.SYNOPSIS
-		Updates the configured repositories once per interval, from the profile's idle-time hook.
+		Updates the configured repositories once a day (or once per interval), from a new or idle shell.
 
 	.DESCRIPTION
 		The automatic repository update. The profile queues it as the startup stage
@@ -9,11 +9,20 @@ function Invoke-StartupRepositoryUpdate {
 		idle for a moment - shell start itself pays nothing.
 
 		Off unless `RepositoryUpdate.Startup.Enabled` is $true. Throttled by a stamp file
-		(`Logs\.last-repository-update`): when the last run is younger than
-		`RepositoryUpdate.Startup.IntervalHours` (default 24) the call returns immediately. The
-		stamp records when the last run happened, so a machine that was off for days updates on
-		its first shell back. It is written before the update starts, so a run that fails is not
-		retried until the interval has passed again (-Force reruns it at any time).
+		(`Logs\.last-repository-update`) and `RepositoryUpdate.Startup.Schedule`
+		(Get-RepositoryUpdateStartupSettings, Test-RepositoryUpdateStampFresh):
+
+		- Daily (default): once per day. The day starts at `Startup.DayStartHour` (default 6), so
+		  the first shell after login runs it, and a shell opened past midnight still counts as
+		  the day before. Shells that were already open (a machine woken from sleep) run it at
+		  their first prompt after the day starts - Register-RepositoryUpdatePromptCheck, which
+		  the profile calls after this, watches for that.
+		- Interval: at most once per `Startup.IntervalHours` (default 24), counted from the last
+		  run, checked only when a shell starts.
+
+		The stamp records when the last run happened, so a machine that was off for days updates
+		on its first shell back. It is written before the update starts, so a run that fails is
+		not retried until the next day (or interval) - -Force reruns it at any time.
 
 		Several shells opened at once - a workspace opening its terminals - run it exactly once:
 		the run is claimed with a lock file (`Logs\.repository-update.lock`) created atomically
@@ -47,7 +56,7 @@ function Invoke-StartupRepositoryUpdate {
 
 	.EXAMPLE
 		Invoke-StartupRepositoryUpdate
-		Updates the repositories if the startup update is enabled and the interval has passed.
+		Updates the repositories if the startup update is enabled and has not run yet today.
 
 	.EXAMPLE
 		Invoke-StartupRepositoryUpdate -Force
@@ -62,11 +71,15 @@ function Invoke-StartupRepositoryUpdate {
 		[switch]$RedrawPrompt
 	)
 
-	$startup = Get-ConfigSetting -Path 'RepositoryUpdate.Startup'
-	$enabled = if ($startup -and $null -ne $startup.Enabled) { [bool]$startup.Enabled } else { $false }
-	$intervalHours = if ($startup -and $null -ne $startup.IntervalHours) { [double]$startup.IntervalHours } else { 24 }
+	$settings = Get-RepositoryUpdateStartupSettings
 
-	if (-not $enabled -and -not $Force) { return }
+	if (-not $settings.Enabled -and -not $Force) { return }
+
+	$freshness = @{
+		Schedule      = $settings.Schedule
+		DayStartHour  = $settings.DayStartHour
+		IntervalHours = $settings.IntervalHours
+	}
 
 	$lock = $null
 	$lockFile = $null
@@ -80,7 +93,7 @@ function Invoke-StartupRepositoryUpdate {
 		$lockFile = Join-Path $logsDir ".repository-update.lock"
 
 		# Cheap early exit for the common case: the stamp is fresh, so there is nothing to claim.
-		if (-not $Force -and (Test-RepositoryUpdateStampFresh -StampFile $stampFile -IntervalHours $intervalHours)) { return }
+		if (-not $Force -and (Test-RepositoryUpdateStampFresh -StampFile $stampFile @freshness)) { return }
 
 		# Several shells start at once when a workspace opens its terminals, and checking the stamp
 		# then writing it is not atomic - measured: two to four of four simultaneous shells ran.
@@ -99,8 +112,8 @@ function Invoke-StartupRepositoryUpdate {
 
 		# Re-check under the lock: another shell may have finished a run between the early check
 		# and the claim. The stamp is still written before the update, so a run that fails midway
-		# is not retried until the interval has passed (-Force reruns it).
-		if (-not $Force -and (Test-RepositoryUpdateStampFresh -StampFile $stampFile -IntervalHours $intervalHours)) { return }
+		# is not retried until the next day or interval (-Force reruns it).
+		if (-not $Force -and (Test-RepositoryUpdateStampFresh -StampFile $stampFile @freshness)) { return }
 		Set-Content -LiteralPath $stampFile -Value (Get-Date -Format 'o') -Encoding UTF8 -Force -ErrorAction Stop
 		$ran = $true
 

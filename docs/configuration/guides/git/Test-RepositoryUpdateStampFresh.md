@@ -1,15 +1,16 @@
 # Test-RepositoryUpdateStampFresh
 
-Tells whether the startup repository update ran recently enough to skip it: `$true` when the stamp file exists and is younger than the interval.
+Tells whether the startup repository update ran recently enough to skip it: `$true` when the stamp file was written since the day began (Daily) or within the interval (Interval).
 
 ## Configuration Keys
 
-This function reads no `Configuration.psd1` keys. There is nothing to configure. The interval it is handed is [`RepositoryUpdate.Startup.IntervalHours`](../../configuration-reference.md#repository-update), which [`Invoke-StartupRepositoryUpdate`](Invoke-StartupRepositoryUpdate.md) reads.
+This function reads no `Configuration.psd1` keys. There is nothing to configure. The schedule, day start hour and interval it is handed are [`RepositoryUpdate.Startup`](../../configuration-reference.md#repository-update), which [`Invoke-StartupRepositoryUpdate`](Invoke-StartupRepositoryUpdate.md) reads.
 
 ## Usage
 
 ```powershell
-Test-RepositoryUpdateStampFresh -StampFile (Join-Path $global:LoggingState.LogsDir ".last-repository-update") -IntervalHours 24
+Test-RepositoryUpdateStampFresh -StampFile (Join-Path $global:LoggingState.LogsDir ".last-repository-update") -DayStartHour 6
+Test-RepositoryUpdateStampFresh -StampFile (Join-Path $global:LoggingState.LogsDir ".last-repository-update") -Schedule Interval -IntervalHours 24
 ```
 
 ## Related
