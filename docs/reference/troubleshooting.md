@@ -1038,13 +1038,21 @@ Private = @{
 - **"no local master"** - the default branch was never checked out in this clone. It is skipped, never created.
 - **Only one branch is named** - the default branch is the checked-out branch, so the normal pull covered it.
 
+### The Repository Update Runs In The Middle Of The Day
+
+**Problem:** The automatic repository update starts in a terminal you open mid-morning, although it already ran when you started work.
+
+**Cause:** `RepositoryUpdate.Startup.Schedule` is `"Interval"`: the next run is due `IntervalHours` after the last one, so with 24 hours a run at 10:15 yesterday makes the first shell after 10:15 today run it again, and the time drifts with every run. Before 0.1.88 this was the only schedule.
+
+**Solution:** Use the `"Daily"` schedule (the default since 0.1.88) - it runs once per day, at the first shell after `Startup.DayStartHour` (default 6), or at the first prompt of a shell already open then. Remove `Schedule = "Interval"` from `Configuration.local.psd1`, or set `Schedule = "Daily"`, then reload. `Get-RepositoryUpdateStartupSettings` shows the schedule in effect.
+
 ### No Prompt After The Startup Repository Update
 
 **Problem:** A new shell prints the repository summary and then shows no prompt; pressing Enter brings it back.
 
 **Cause:** The update runs after the prompt is already drawn, so its output pushes the prompt away while PSReadLine keeps waiting for input. The profile's `RepositoryUpdate` stage calls `Invoke-StartupRepositoryUpdate -RedrawPrompt`, which draws the prompt again; a profile from before that switch existed does not.
 
-**Solution:** Update the profile (the stage must pass `-RedrawPrompt`), then open a new tab. To check the redraw without waiting for the interval, run `Invoke-StartupRepositoryUpdate -Force -RedrawPrompt`.
+**Solution:** Update the profile (the stage must pass `-RedrawPrompt`), then open a new tab. To check the redraw without waiting for the next day, run `Invoke-StartupRepositoryUpdate -Force -RedrawPrompt`.
 
 ### Update-Repositories Asks For Administrator
 

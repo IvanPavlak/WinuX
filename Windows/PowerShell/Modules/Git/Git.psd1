@@ -5,6 +5,8 @@
 	RootModule        = "Git.psm1"
 	FunctionsToExport = @(
 		'Format-RepositoryUpdateResult',
+		'Get-RepositoryUpdateDayStart',
+		'Get-RepositoryUpdateStartupSettings',
 		'Git-Diff',
 		'Git-Obsidian',
 		'GitBranch',
@@ -15,7 +17,9 @@
 		'GitSwitch',
 		'Initialize-Repository',
 		'Install-Git',
+		'Invoke-RepositoryUpdatePromptCheck',
 		'Invoke-StartupRepositoryUpdate',
+		'Register-RepositoryUpdatePromptCheck',
 		'Resolve-RepositoryDefaultBranch',
 		'Resolve-RepositoryTargets',
 		'Restore-RepositoryStash',

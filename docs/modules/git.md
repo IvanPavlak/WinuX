@@ -16,6 +16,26 @@ Format-RepositoryUpdateResult -Result (Update-Repository -Name MyRepo -LocalPath
 
 **See also:** [Update-Repositories](#update-repositories), [Update-Repository](#update-repository)
 
+## [Get-RepositoryUpdateDayStart](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Git/Functions/Get-RepositoryUpdateDayStart.ps1)
+
+- **Description:** The day boundary of the Daily schedule of the automatic repository update: returns the most recent moment at `-DayStartHour`:00 local time that is not later than `-At` - today at that hour, or yesterday at it while it is still earlier, so work past midnight stays on the day before. Add one day for the next boundary.
+- **Parameters:** -DayStartHour, -At
+- **Usage:** `Get-RepositoryUpdateDayStart -DayStartHour 6`
+
+```powershell
+# 05:30 still belongs to the day that began yesterday at 06:00
+Get-RepositoryUpdateDayStart -DayStartHour 6 -At ([datetime]'2026-10-08 05:30')
+```
+
+**See also:** [Test-RepositoryUpdateStampFresh](#test-repositoryupdatestampfresh), [Register-RepositoryUpdatePromptCheck](#register-repositoryupdatepromptcheck)
+
+## [Get-RepositoryUpdateStartupSettings](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Git/Functions/Get-RepositoryUpdateStartupSettings.ps1)
+
+- **Description:** Reads `RepositoryUpdate.Startup` with every default filled in and returns `Enabled` (default `$false`), `Schedule` (`Daily` by default, or `Interval`; anything else is `Daily`), `DayStartHour` (0-23, default 6) and `IntervalHours` (default 24). Values out of range or not a number fall back to their default. The one place that knows these keys, so `Invoke-StartupRepositoryUpdate` and `Register-RepositoryUpdatePromptCheck` never disagree.
+- **Usage:** `Get-RepositoryUpdateStartupSettings`
+
+**See also:** [Invoke-StartupRepositoryUpdate](#invoke-startuprepositoryupdate), [Get-RepositoryUpdateStartupSettings configuration guide](../configuration/guides/git/Get-RepositoryUpdateStartupSettings.md)
+
 ## [Git-Diff](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Git/Functions/Git-Diff.ps1)
 
 - **Description:** Shows the diff between the working tree and the last commit. Runs `git diff HEAD` to display all unstaged and staged changes relative to HEAD.
@@ -177,13 +197,22 @@ If `git` is not already on PATH, installs it using the WinGet package ID from `G
 Install-Git
 ```
 
+## [Invoke-RepositoryUpdatePromptCheck](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Git/Functions/Invoke-RepositoryUpdatePromptCheck.ps1)
+
+- **Description:** The prompt function [`Register-RepositoryUpdatePromptCheck`](#register-repositoryupdatepromptcheck) installs. Runs the original prompt first - as its very first statement, so the original still sees the last command's `$?` (the Oh My Posh error indicator) - and keeps its text. Once the next day boundary recorded in `$global:WinuXRepositoryUpdatePrompt` has passed, it runs `Invoke-StartupRepositoryUpdate` (which checks the stamp and lock itself), puts `$LASTEXITCODE` back so the update's git calls never show up as your last command's exit code, and moves the boundary to the next day. The update's summary prints before the prompt is drawn. Never throws; without a recorded original it returns PowerShell's default prompt text.
+- **Usage:** `Invoke-RepositoryUpdatePromptCheck` - not called by hand; it is the body of the wrapped `prompt` function.
+
+**See also:** [Register-RepositoryUpdatePromptCheck](#register-repositoryupdatepromptcheck), [Invoke-StartupRepositoryUpdate](#invoke-startuprepositoryupdate)
+
 ## [Invoke-StartupRepositoryUpdate](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Git/Functions/Invoke-StartupRepositoryUpdate.ps1)
 
-- **Description:** The automatic repository update, queued by the profile as the startup stage `RepositoryUpdate` so it runs after the first prompt is drawn - shell start pays nothing. Off unless `RepositoryUpdate.Startup.Enabled` is `$true`, and throttled by a stamp file (`Logs\.last-repository-update`) to once per `RepositoryUpdate.Startup.IntervalHours` (default 24). Updates the groups `RepositoryUpdate.Startup.Scope` names (falling back to `BootstrapConfig.RepositoryUpdateScope`, then every group) with `Update-Repositories -NoClone -Quiet`: missing repositories are listed as skipped and never cloned, so it never asks for Administrator, and it prints one line per repository plus a totals line. Never throws.
+- **Description:** The automatic repository update, queued by the profile as the startup stage `RepositoryUpdate` so it runs after the first prompt is drawn - shell start pays nothing. Off unless `RepositoryUpdate.Startup.Enabled` is `$true`, and throttled by a stamp file (`Logs\.last-repository-update`): with `RepositoryUpdate.Startup.Schedule = "Daily"` (the default) to once per day, the day starting at `Startup.DayStartHour` (default 6); with `"Interval"` to once per `Startup.IntervalHours` (default 24). On the Daily schedule the profile then calls [`Register-RepositoryUpdatePromptCheck`](#register-repositoryupdatepromptcheck), so a shell that stays open into the next day runs it at its first prompt after the day starts. Updates the groups `RepositoryUpdate.Startup.Scope` names (falling back to `BootstrapConfig.RepositoryUpdateScope`, then every group) with `Update-Repositories -NoClone -Quiet`: missing repositories are listed as skipped and never cloned, so it never asks for Administrator, and it prints one line per repository plus a totals line. Never throws.
 - **Parameters:** -Force, -RedrawPrompt
 - **Usage:** `Invoke-StartupRepositoryUpdate`, `Invoke-StartupRepositoryUpdate -Force`
 
-The stamp records when the last run happened, so a machine that was off for days updates on its first shell back - nothing is scheduled, so nothing can be missed. It is written before the update starts, so a run that failed (offline, for example) is not retried until the interval has passed again. `-Force` runs it now, ignoring `Enabled` and the interval.
+The Daily schedule is the one to pick for "update when I start working": the first shell after login runs it, a shell opened past midnight still counts as the day before (so late work never triggers it), and an existing shell picks it up at its first prompt after the day starts - a machine woken from sleep updates at the first command you run, never on its own in the middle of the day. The Interval schedule counts from the last run instead, so its runs drift through the day; it is only checked when a shell starts.
+
+The stamp records when the last run happened, so a machine that was off for days updates on its first shell back - nothing is scheduled, so nothing can be missed. It is written before the update starts, so a run that failed (offline, for example) is not retried until the next day (or interval). `-Force` runs it now, ignoring `Enabled` and the schedule.
 
 Several shells opened at once (a workspace opening its terminals) run it exactly once. The run is claimed with a lock file, `Logs\.repository-update.lock`, created atomically and held open for the whole run, and the stamp is checked again once the lock is held ([`Test-RepositoryUpdateStampFresh`](#test-repositoryupdatestampfresh)). A shell that loses the claim returns silently, even with `-Force`. A lock left by a shell that died mid-run can be deleted - a live holder's open handle prevents that on Windows - so the next shell clears it and runs.
 
@@ -191,7 +220,7 @@ The run happens inside the shell after the prompt is already drawn, so its summa
 
 | Parameter       | Type     | Default | Description                                                                                             |
 | --------------- | -------- | ------- | ------------------------------------------------------------------------------------------------------- |
-| `-Force`        | `switch` | off     | Run now, ignoring `Enabled` and the interval.                                                           |
+| `-Force`        | `switch` | off     | Run now, ignoring `Enabled` and the schedule.                                                           |
 | `-RedrawPrompt` | `switch` | off     | After a run, draw the prompt again below the summary. Does nothing when no update ran or outside PSReadLine. |
 
 ```powershell
@@ -203,6 +232,13 @@ Get-Item (Join-Path $global:LoggingState.LogsDir ".last-repository-update") -For
 ```
 
 **See also:** [Update-Repositories](#update-repositories), [Resolve-RepositoryUpdateScope](bootstrap.md#resolve-repositoryupdatescope), [Invoke-StartupRepositoryUpdate configuration guide](../configuration/guides/git/Invoke-StartupRepositoryUpdate.md)
+
+## [Register-RepositoryUpdatePromptCheck](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Git/Functions/Register-RepositoryUpdatePromptCheck.ps1)
+
+- **Description:** Makes a shell that stays open into the next day - a terminal left open overnight, a machine woken from sleep - run the Daily repository update at its first prompt after the day starts. Wraps the current global `prompt` function (the Oh My Posh prompt, or whatever the profile defined) with [`Invoke-RepositoryUpdatePromptCheck`](#invoke-repositoryupdatepromptcheck) and records the original plus the next day boundary in `$global:WinuXRepositoryUpdatePrompt`. Until that moment a prompt costs one time comparison. Does nothing unless `RepositoryUpdate.Startup.Enabled` is `$true` with the `Daily` schedule. Calling it again never wraps twice: an already wrapped prompt only gets its boundary refreshed, and a prompt the profile defined again (a profile reload) is wrapped afresh. The profile calls it from the idle-time hook, right after `Invoke-StartupRepositoryUpdate`.
+- **Usage:** `Register-RepositoryUpdatePromptCheck`
+
+**See also:** [Invoke-StartupRepositoryUpdate](#invoke-startuprepositoryupdate), [Get-RepositoryUpdateDayStart](#get-repositoryupdatedaystart)
 
 ## [Resolve-RepositoryDefaultBranch](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Git/Functions/Resolve-RepositoryDefaultBranch.ps1)
 
@@ -294,16 +330,16 @@ if (Test-GitRepository) { onefetch }
 
 ## [Test-RepositoryUpdateStampFresh](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Git/Functions/Test-RepositoryUpdateStampFresh.ps1)
 
-- **Description:** The throttle check of `Invoke-StartupRepositoryUpdate`: returns `$true` when the stamp file exists and was written less than `-IntervalHours` ago. A missing stamp is never fresh, and an interval of 0 or less is never fresh, so the update then runs in every shell. `Invoke-StartupRepositoryUpdate` asks twice - before claiming the run, and again once its lock is held, because another shell may have finished a run in between.
-- **Parameters:** -StampFile, -IntervalHours
-- **Usage:** `Test-RepositoryUpdateStampFresh -StampFile (Join-Path $global:LoggingState.LogsDir ".last-repository-update") -IntervalHours 24`
+- **Description:** The throttle check of `Invoke-StartupRepositoryUpdate`. A missing stamp is never fresh. With `-Schedule Daily` (the default) the stamp is fresh when it was written since the current day began at `-DayStartHour` (default 6; [`Get-RepositoryUpdateDayStart`](#get-repositoryupdatedaystart)), however late the previous run was. With `-Schedule Interval` it is fresh when it was written less than `-IntervalHours` (default 24) ago, and an interval of 0 or less is never fresh, so the update then runs in every shell. `Invoke-StartupRepositoryUpdate` asks twice - before claiming the run, and again once its lock is held, because another shell may have finished a run in between.
+- **Parameters:** -StampFile, -Schedule, -DayStartHour, -IntervalHours
+- **Usage:** `Test-RepositoryUpdateStampFresh -StampFile (Join-Path $global:LoggingState.LogsDir ".last-repository-update") -DayStartHour 6`, `Test-RepositoryUpdateStampFresh -StampFile (Join-Path $global:LoggingState.LogsDir ".last-repository-update") -Schedule Interval -IntervalHours 24`
 
 ```powershell
 # Would a new shell skip the startup update right now?
-Test-RepositoryUpdateStampFresh -StampFile (Join-Path $global:LoggingState.LogsDir ".last-repository-update") -IntervalHours 24
+Test-RepositoryUpdateStampFresh -StampFile (Join-Path $global:LoggingState.LogsDir ".last-repository-update") -DayStartHour 6
 ```
 
-**See also:** [Invoke-StartupRepositoryUpdate](#invoke-startuprepositoryupdate)
+**See also:** [Invoke-StartupRepositoryUpdate](#invoke-startuprepositoryupdate), [Get-RepositoryUpdateDayStart](#get-repositoryupdatedaystart)
 
 ## [Update-Repositories](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Git/Functions/Update-Repositories.ps1)
 

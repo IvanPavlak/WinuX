@@ -1832,7 +1832,8 @@
 	# Everything ships OFF - opt in from Configuration.local.psd1 (hashtables deep-merge, so a
 	# single key there is enough).
 	# → Consumer: Update-Repositories (IncludeDefaultBranch), Resolve-RepositoryDefaultBranch
-	#   (DefaultBranch), Invoke-StartupRepositoryUpdate (Startup)
+	#   (DefaultBranch), Invoke-StartupRepositoryUpdate and Register-RepositoryUpdatePromptCheck
+	#   (Startup, read through Get-RepositoryUpdateStartupSettings)
 	#
 	# KEYS:
 	# - IncludeDefaultBranch : Also fast-forward the repository's default branch when another
@@ -1850,9 +1851,17 @@
 	#                          is drawn (profile stage "RepositoryUpdate", deferred until the shell
 	#                          is idle). Never clones a missing repository and never asks for
 	#                          Administrator; prints one line per repository plus a totals line.
-	# - Startup.IntervalHours: Minimum hours between two automatic runs (stamp file:
-	#                          Logs\.last-repository-update). The stamp records the last run, so a
-	#                          machine that was off for days updates on its first shell back.
+	# - Startup.Schedule     : When the automatic run is due (stamp file: Logs\.last-repository-update).
+	#                          "Daily" (default) => once per day: the first shell after the day
+	#                          starts runs it, and a shell already open then (a machine woken from
+	#                          sleep, a terminal left open overnight) runs it at its next prompt.
+	#                          "Interval" => at most once per IntervalHours, counted from the last
+	#                          run and checked only when a shell starts. Either way a machine that
+	#                          was off for days updates on its first shell back.
+	# - Startup.DayStartHour : Daily only. The hour (0-23) a new day starts; a shell opened before
+	#                          it still counts as the day before, so late-night work never triggers
+	#                          a run. Default 6.
+	# - Startup.IntervalHours: Interval only. Minimum hours between two automatic runs. Default 24.
 	# - Startup.Scope        : Which groups the automatic run updates, per machine type - the same
 	#                          shape as BootstrapConfig.RepositoryUpdateScope. Absent => that key,
 	#                          then "All".
@@ -1863,7 +1872,8 @@
 	#       DefaultBranch        = "master"
 	#       Startup              = @{
 	#           Enabled       = $true
-	#           IntervalHours = 24
+	#           Schedule      = "Daily"
+	#           DayStartHour  = 6
 	#           Scope         = @{ Default = "All"; Test = "Private" }
 	#       }
 	#   }
@@ -1873,6 +1883,8 @@
 		DefaultBranch        = ""
 		Startup              = @{
 			Enabled       = $false
+			Schedule      = "Daily"
+			DayStartHour  = 6
 			IntervalHours = 24
 		}
 	}

@@ -252,14 +252,20 @@ if (Test-StartupStage -Name "LogMaintenance") {
 	Complete-StartupStage
 }
 
-# Automatic repository update - pulls the configured repositories at most once per
-# Configuration.RepositoryUpdate.Startup.IntervalHours, off unless Startup.Enabled is $true. Deferred
-# like LogMaintenance, and queued after it, so the prompt is already drawn when it runs; its compact
+# Automatic repository update - pulls the configured repositories once a day (the day starts at
+# Configuration.RepositoryUpdate.Startup.DayStartHour) or, with Startup.Schedule = "Interval", at
+# most once per Startup.IntervalHours; off unless Startup.Enabled is $true. Deferred like
+# LogMaintenance, and queued after it, so the prompt is already drawn when it runs; its compact
 # summary prints below the prompt, typing waits until the fetches finish, and -RedrawPrompt draws
 # the prompt again under the summary (without it PSReadLine waits on a blank line). Disabled or
-# inside the interval, the fired action returns in about a millisecond and redraws nothing.
+# already done today, the fired action returns in about a millisecond and redraws nothing.
+# Register-RepositoryUpdatePromptCheck then wraps the prompt (Daily schedule only), so a shell that
+# stays open into the next day - a machine woken from sleep - runs it at its first prompt then.
 if (Test-StartupStage -Name "RepositoryUpdate") {
-	$deferredStartup.Add({ Invoke-StartupRepositoryUpdate -RedrawPrompt })
+	$deferredStartup.Add({
+			Invoke-StartupRepositoryUpdate -RedrawPrompt
+			Register-RepositoryUpdatePromptCheck
+		})
 	Complete-StartupStage
 }
 
