@@ -66,7 +66,9 @@ function Update-Repositories {
 
 	.PARAMETER Quiet
 		One line per repository plus a totals line, and git silenced - the compact form the
-		startup update prints. A run spanning several groups shows a heading per group.
+		startup update prints. A run spanning several groups shows a heading per group. The
+		totals line colors each count (Write-LogSegments): updated blue, up to date green, need
+		attention red, skipped yellow.
 
 	.EXAMPLE
 		Update-Repositories
@@ -383,8 +385,17 @@ function Update-Repositories {
 	}
 
 	if ($Quiet) {
-		$totals = "Repositories => $($counts.Updated) updated, $($counts.UpToDate) up to date, $($counts.Attention) need attention, $($counts.Skipped) skipped"
-		if ($counts.Attention -gt 0) { Write-LogWarning $totals }
-		else { Write-LogSuccess $totals }
+		# Each count in its own color, whatever its value: updated blue, up to date green, need
+		# attention red, skipped yellow.
+		Write-LogSegments @(
+			@{ Text = "=> Repositories => " }
+			@{ Text = "$($counts.Updated) updated"; Style = "Info" }
+			@{ Text = ", " }
+			@{ Text = "$($counts.UpToDate) up to date"; Style = "Success" }
+			@{ Text = ", " }
+			@{ Text = "$($counts.Attention) need attention"; Style = "Error" }
+			@{ Text = ", " }
+			@{ Text = "$($counts.Skipped) skipped"; Style = "Warning" }
+		)
 	}
 }

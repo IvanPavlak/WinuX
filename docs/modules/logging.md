@@ -18,6 +18,9 @@ and error):
 | `Write-LogError`   | Red      | `` `n=> Message`` (also recorded verbosely to the error log) |
 | `Write-LogDebug`   | DarkCyan | `` `n [Caller] Message`` (verbose-gated)                     |
 
+One more palette entry belongs to no level: `Info` (Blue), used through `-Style Info` and by
+`Write-LogSegments`, which draws one line in several colors.
+
 Verbosity is controlled globally with `Set-LogLevel` (cross-module reliable; a global
 `$VerbosePreference = 'Continue'` is also honored). File logging records every level regardless of
 console verbosity, so the on-disk record is always complete.
@@ -85,8 +88,10 @@ nothing - and the sweep itself runs at most once per `Configuration.Logging.Main
 ## [Write-Log](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Logging/Functions/Write-Log.ps1)
 
 - **Description:** Core logging engine that every `Write-Log*` wrapper calls. Renders a styled, leveled message to the console (house style per level) and mirrors it to the structured session log; errors are additionally appended verbosely to the error log. `-Style` overrides the render color for the `Debug` and `Step` levels while keeping the level's own layout, visibility gating, and file-log tag. Prefer the wrappers in normal code; call `Write-Log` directly only when the level must be chosen dynamically. Pass the message text only - the engine adds the leading newline and level decoration. The file mirror is appended through the .NET file API (UTF-8, no byte-order mark, platform newline) rather than `Add-Content`, which cost about 5 ms per line and was paid some 35 times before a shell's first prompt.
-- **Parameters:** `-Message` `[-Level]` `[-Style]` `[-NoNewLine]` `[-NoLeadingNewline]` `[-Exception]` `[-BlankLineAfter]`
+- **Parameters:** `-Message` `[-Level]` `[-Style]` `[-NoNewLine]` `[-NoLeadingNewline]` `[-Exception]` `[-BlankLineAfter]` `[-NoConsole]`
 - **Usage:** `Write-Log -Level Success -Message "Workspace opened!"`
+
+`-Style` takes any level's color plus `Info` (Blue), the palette entry that belongs to no level. `-NoConsole` writes only the file log - `Write-LogSegments` uses it to log a line it has already drawn in several colors as one entry.
 
 ## [Write-LogDebug](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Logging/Functions/Write-LogDebug.ps1)
 
@@ -105,6 +110,12 @@ nothing - and the sweep itself runs at most once per `Configuration.Logging.Main
 - **Description:** Writes a bulleted list of items (`  • <item>`, White) directly beneath a preceding summary line, with no leading blank line so the list sits under it. Empty/whitespace items are skipped. Shared renderer for the "summary + bulleted detail" output used by centered/moved windows, opened browser subgroups, etc.
 - **Parameters:** `[-Items]`
 - **Usage:** `Write-LogSuccess "Centered 2 window(s)!"; Write-LogList @("Windows Terminal", "Firefox")`
+
+## [Write-LogSegments](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Logging/Functions/Write-LogSegments.ps1)
+
+- **Description:** Writes one console line made of differently colored segments - for a line whose parts carry their own meaning, such as a totals line where every count has its own color. Each segment is `@{ Text = "..."; Style = "..." }`, the style any palette entry (`Title`, `Step`, `Success`, `Warning`, `Error`, `Debug`, `Info`); no style or an unknown one draws in the Step color. The house leading newline comes before the first segment, and the whole line is mirrored to the session log once, as a STEP entry. Nothing reaches the console at the Quiet level; the file log still gets the line.
+- **Parameters:** `-Segments` `[-NoLeadingNewline]`
+- **Usage:** `Write-LogSegments @(@{ Text = "=> Totals => " }, @{ Text = "3 passed"; Style = "Success" }, @{ Text = ", " }, @{ Text = "1 failed"; Style = "Error" })`
 
 ## [Write-LogStep](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Logging/Functions/Write-LogStep.ps1)
 

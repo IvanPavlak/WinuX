@@ -23,6 +23,7 @@
 		'Resolve-RepositoryDefaultBranch',
 		'Resolve-RepositoryTargets',
 		'Restore-RepositoryStash',
+		'Set-GitConsoleColor',
 		'Test-GitRepository',
 		'Test-RepositoryUpdateStampFresh',
 		'Update-Repositories',

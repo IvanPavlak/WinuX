@@ -18,7 +18,7 @@ The [Logging module reference](../../../modules/logging.md) is the authority on 
 
 These read no `Configuration.psd1` keys. Their guides record that fact and show how to call them.
 
-[Clear-OldLogs](Clear-OldLogs.md), [Get-LogPath](Get-LogPath.md), [Protect-Log](Protect-Log.md), [Set-LogLevel](Set-LogLevel.md), [Start-Logging](Start-Logging.md), [Stop-Logging](Stop-Logging.md), [Test-LogVerbose](Test-LogVerbose.md), [Write-Log](Write-Log.md), [Write-LogDebug](Write-LogDebug.md), [Write-LogError](Write-LogError.md), [Write-LogList](Write-LogList.md), [Write-LogStep](Write-LogStep.md), [Write-LogSuccess](Write-LogSuccess.md), [Write-LogTitle](Write-LogTitle.md), [Write-LogWarning](Write-LogWarning.md)
+[Clear-OldLogs](Clear-OldLogs.md), [Get-LogPath](Get-LogPath.md), [Protect-Log](Protect-Log.md), [Set-LogLevel](Set-LogLevel.md), [Start-Logging](Start-Logging.md), [Stop-Logging](Stop-Logging.md), [Test-LogVerbose](Test-LogVerbose.md), [Write-Log](Write-Log.md), [Write-LogDebug](Write-LogDebug.md), [Write-LogError](Write-LogError.md), [Write-LogList](Write-LogList.md), [Write-LogSegments](Write-LogSegments.md), [Write-LogStep](Write-LogStep.md), [Write-LogSuccess](Write-LogSuccess.md), [Write-LogTitle](Write-LogTitle.md), [Write-LogWarning](Write-LogWarning.md)
 
 ## Related
 

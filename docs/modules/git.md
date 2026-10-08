@@ -303,6 +303,14 @@ Restore-RepositoryStash -StashCommit $stash
 
 **See also:** [Update-Repository](#update-repository)
 
+## [Set-GitConsoleColor](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Git/Functions/Set-GitConsoleColor.ps1)
+
+- **Description:** Keeps git's colors while its output goes through `Out-Host`. `Update-Repository` sends git's output to the console that way so it never ends up in the function's result, but to git that is a pipe, and it drops its colors - the green and red `+` and `-` of a pull's diffstat among them. This function forces `color.ui=always` through git's environment configuration (`GIT_CONFIG_COUNT`, `GIT_CONFIG_KEY_0`, `GIT_CONFIG_VALUE_0`) for every git call of the process that follows, and returns `$true`. It changes nothing and returns `$false` when the console output is redirected (a file or a pipe would get escape codes) or `GIT_CONFIG_COUNT` is already set (by a caller further up, or by the user). `-Off` removes the three variables; call it only when the matching call returned `$true`, so a nested call never undoes its caller's setting. Porcelain and format output (`status --porcelain`, `rev-parse`, `stash list --format`) is never colored, so nothing a function parses changes.
+- **Parameters:** -Off
+- **Usage:** `$colored = Set-GitConsoleColor; try { git merge --ff-only origin/master | Out-Host } finally { if ($colored) { Set-GitConsoleColor -Off } }`
+
+**See also:** [Update-Repository](#update-repository)
+
 ## [Test-GitRepository](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Git/Functions/Test-GitRepository.ps1)
 
 - **Description:** Tells whether a path is inside a git repository, by walking up to the root looking for a `.git` entry. Both shapes count: the ordinary `.git` DIRECTORY of a normal clone, and the `.git` FILE a worktree or a submodule carries (a one-line `gitdir: ...` pointer). Neither is opened; the test is `Test-Path` and nothing else. A path that does not exist is not an error - the walk simply finds no `.git` above it and returns `$false` - so a caller can pass a stale `$PWD` without guarding it.
@@ -418,11 +426,13 @@ What `-Quiet` prints for a run over two groups, with the default branch on (illu
 => Repositories => 1 updated, 2 up to date, 0 need attention, 0 skipped
 ```
 
+On the console each count of the totals line has its own color, whatever its value (`Write-LogSegments`): updated blue, up to date green, need attention red, skipped yellow; the rest of the line is white.
+
 **See also:** [Configuration: Add Repository](../configuration/guides/git/add-new-repository.md), [Modules: Workflow](workflow.md)
 
 ## [Update-Repository](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Git/Functions/Update-Repository.ps1)
 
-- **Description:** Updates one cloned repository, the per-repository step of `Update-Repositories`: stashes local changes (untracked files included, ephemeral identity), fetches and fast-forwards the checked-out branch, optionally fast-forwards the default branch without checking it out, then restores exactly its own stash. Losing local work is never an acceptable outcome, so every step either leaves the repository as it was or is undone - see the safety rules below. A checked-out branch origin does not have (never pushed) has nothing to pull, and a fetch that fails while origin has the branch (offline) pulls nothing and is reported as such instead of as up to date. Returns one result object. Without `-Quiet` every step is logged and git's own output reaches the console; with `-Quiet` nothing is logged and git is silenced.
+- **Description:** Updates one cloned repository, the per-repository step of `Update-Repositories`: stashes local changes (untracked files included, ephemeral identity), fetches and fast-forwards the checked-out branch, optionally fast-forwards the default branch without checking it out, then restores exactly its own stash. Losing local work is never an acceptable outcome, so every step either leaves the repository as it was or is undone - see the safety rules below. A checked-out branch origin does not have (never pushed) has nothing to pull, and a fetch that fails while origin has the branch (offline) pulls nothing and is reported as such instead of as up to date. Returns one result object. Without `-Quiet` every step is logged and git's own output reaches the console; with `-Quiet` nothing is logged and git is silenced. Without `-Quiet`, git's own output reaches the console in color, the diffstat's `+` and `-` included, although it goes through `Out-Host` ([`Set-GitConsoleColor`](#set-gitconsolecolor)).
 - **Parameters:** -Name, -LocalPath, -IncludeDefaultBranch, -Quiet
 - **Usage:** `Update-Repository -Name MyRepo -LocalPath "<DevRoot>\MyRepo"`, `Update-Repository -Name MyRepo -LocalPath "<DevRoot>\MyRepo" -IncludeDefaultBranch -Quiet`
 

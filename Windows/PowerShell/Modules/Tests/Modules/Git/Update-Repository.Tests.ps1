@@ -9,6 +9,7 @@ BeforeAll {
 	. "$FunctionsPath\Resolve-RepositoryDefaultBranch.ps1"
 	. "$FunctionsPath\Update-RepositoryDefaultBranch.ps1"
 	. "$FunctionsPath\Restore-RepositoryStash.ps1"
+	. "$FunctionsPath\Set-GitConsoleColor.ps1"
 }
 
 Describe "Update-Repository" {
@@ -60,8 +61,40 @@ Describe "Update-Repository" {
 		Mock Write-LogSuccess { }
 		Mock Write-LogWarning { }
 		Mock Write-LogError { }
+		Mock Set-GitConsoleColor { $false }
 
 		$script:Call = @{ Name = "MyRepo"; LocalPath = "C:\Repos\MyRepo" }
+	}
+
+	Context "git colors" {
+		It "keeps git's colors for a console run and turns them off again afterwards" {
+			Mock Set-GitConsoleColor { $true }
+
+			Update-Repository @script:Call | Out-Null
+
+			Should -Invoke Set-GitConsoleColor -Times 1 -Exactly -ParameterFilter { -not $Off }
+			Should -Invoke Set-GitConsoleColor -Times 1 -Exactly -ParameterFilter { $Off }
+		}
+
+		It "leaves the colors alone when it did not turn them on (a caller did, or the output is redirected)" {
+			Update-Repository @script:Call | Out-Null
+
+			Should -Invoke Set-GitConsoleColor -Times 0 -Exactly -ParameterFilter { $Off }
+		}
+
+		It "turns them off even when the update fails" {
+			Mock Set-GitConsoleColor { $true }
+			Mock git { throw "git crashed" }
+
+			(Update-Repository @script:Call).Outcome | Should -Be "Error"
+			Should -Invoke Set-GitConsoleColor -Times 1 -Exactly -ParameterFilter { $Off }
+		}
+
+		It "never colors a quiet run, whose git output is dropped" {
+			Update-Repository @script:Call -Quiet | Out-Null
+
+			Should -Invoke Set-GitConsoleColor -Times 0 -Exactly
+		}
 	}
 
 	Context "checked-out branch" {

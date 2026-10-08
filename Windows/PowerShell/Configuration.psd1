@@ -2864,6 +2864,7 @@
 			Warning = "Yellow"
 			Error   = "Red"
 			Debug   = "DarkCyan"
+			Info    = "Blue"     # A color only, not a level: Write-LogStep -Style Info, Write-LogSegments
 		}
 
 		# Structured, leveled file logging mirrored from every Write-Log* call.

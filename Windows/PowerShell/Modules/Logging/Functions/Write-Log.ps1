@@ -17,6 +17,8 @@ function Write-Log {
 		  Error    => Red        "`n=> Message"
 		  Debug    => DarkCyan    "`n [Caller] Message"   (verbose-gated)
 
+		One more palette entry is a color only, never a level: Info (Blue), for -Style.
+
 		Colors come from $Configuration.Logging.Colors (falling back to the documented defaults),
 		so the palette is data-driven but unchanged out of the box.
 
@@ -40,7 +42,12 @@ function Write-Log {
 	.PARAMETER Style
 		Only meaningful when Level=Debug or Level=Step: render the message in another level's color
 		while keeping the level's own layout, gating, and file-log tag (e.g. -Style Success keeps a
-		green diagnostic, or colors a Step row by outcome). Defaults to the level's own color.
+		green diagnostic, or colors a Step row by outcome). Info is the extra palette color (Blue)
+		that belongs to no level. Defaults to the level's own color.
+
+	.PARAMETER NoConsole
+		Write only to the file log, nothing to the console. Write-LogSegments uses it to log a line
+		it has already drawn in several colors as one entry.
 
 	.PARAMETER NoNewLine
 		Suppress the trailing newline (maps to Write-Host -NoNewline) for composing a line across
@@ -75,8 +82,11 @@ function Write-Log {
 		[string]$Level = "Step",
 
 		[Parameter(Mandatory = $false)]
-		[ValidateSet("Title", "Step", "Success", "Warning", "Error", "Debug")]
+		[ValidateSet("Title", "Step", "Success", "Warning", "Error", "Debug", "Info")]
 		[string]$Style,
+
+		[Parameter(Mandatory = $false)]
+		[switch]$NoConsole,
 
 		[Parameter(Mandatory = $false)]
 		[switch]$NoNewLine,
@@ -105,7 +115,7 @@ function Write-Log {
 	# --- Determine console visibility ---
 	# Set-LogLevel (global state) is the cross-module control; a global $VerbosePreference is also honored.
 	$verboseActive = ($state.Level -eq "Verbose") -or ($VerbosePreference -ne "SilentlyContinue")
-	$showOnConsole = $true
+	$showOnConsole = -not $NoConsole
 	if ($state.Level -eq "Quiet") { $showOnConsole = ($Level -eq "Error" -or $Level -eq "Warning") }
 	if ($Level -eq "Debug") { $showOnConsole = $showOnConsole -and $verboseActive }
 

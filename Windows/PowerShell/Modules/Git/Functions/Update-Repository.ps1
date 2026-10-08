@@ -36,7 +36,8 @@ function Update-Repository {
 
 		The repository must exist; cloning a missing one is Update-Repositories' job.
 
-		Without -Quiet every step is logged and git's own output reaches the console. With
+		Without -Quiet every step is logged and git's own output reaches the console, in color
+		at a console (Set-GitConsoleColor - it goes through Out-Host, a pipe to git). With
 		-Quiet nothing is logged, git runs with --quiet and its stderr dropped, and the caller
 		reports the returned result.
 
@@ -101,6 +102,9 @@ function Update-Repository {
 	$quietFlag = @(if ($Quiet) { "--quiet" })
 
 	Push-Location $LocalPath
+	# git's output reaches the console through Out-Host, a pipe to git, so it would drop its
+	# colors (the diffstat's + and -); Set-GitConsoleColor keeps them for a console run.
+	$gitColor = if ($Quiet) { $false } else { Set-GitConsoleColor }
 	try {
 		if (-not $Quiet) { Write-LogStep " Checking status of [$Name]" }
 
@@ -296,6 +300,7 @@ function Update-Repository {
 	}
 	finally {
 		Pop-Location
+		if ($gitColor) { Set-GitConsoleColor -Off }
 	}
 
 	return $result
