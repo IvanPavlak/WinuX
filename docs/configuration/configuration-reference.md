@@ -709,6 +709,48 @@ DefaultVSCodeWorkspaces = @{
 }
 ```
 
+### VS Code Profiles
+
+VS Code profiles kept in the repository, one folder per catalogue entry, deployed by `Deploy-VSCodeProfiles` (opt in via `BootstrapConfig.Steps.VSCodeProfiles`) and captured back by `Export-VSCodeProfile`. A folder carries any of:
+
+| File | Deployed as |
+| ---- | ----------- |
+| `settings.json` | symlink into the profile |
+| `keybindings.json` | symlink; `keybindings.windows.json` wins on Windows when present |
+| `tasks.json` | symlink |
+| `snippets\` | directory symlink |
+| `extensions.txt` | one extension id per line, `#` comments, optional `@version` pin; installed with `code --install-extension` |
+
+**Key:** `VSCodeProfiles` → Hashtable
+
+| Sub-key | Type | Default (base) | What it controls |
+| ------- | ---- | -------------- | ---------------- |
+| `Root` | string | `{RepoRoot}\VSCode\Profiles` | The profile folders; `{RepoRoot}`, `{User}` and `{AppData}` expand. |
+| `UserData` | string | `{AppData}\Code\User` | VS Code's user data folder; its root is the `Default` profile, other profiles live under `profiles\<location>`. |
+| `SettingsSync` | boolean | `$false` | `$false` installs extensions with `--do-not-sync`, so Settings Sync leaves them alone; `$true` installs them normally. Sync itself is never switched on or off. |
+| `Prune` | boolean | `$false` | `$true` uninstalls extensions `extensions.txt` does not name (`-Prune` does it for one run). |
+| `Catalogue` | ordered array | `@()` (empty) | One single-key hashtable per entry; `Target` is the VS Code profile it deploys onto (defaults to the entry name, `"Default"` is VS Code's built-in profile). |
+| `Deploy` | hashtable | `@{ Default = @() }` | Per machine type, the catalogue entries it deploys; `Default` covers any machine type not listed. |
+
+**Consumer functions:** `Resolve-VSCodeProfilesConfig` (and through it `Deploy-VSCodeProfiles`, `Export-VSCodeProfile`, `Get-VSCodeProfileLocation`)
+
+**Example:**
+
+```powershell
+VSCodeProfiles = @{
+    Catalogue = @(
+        @{ MyProfile = @{ Target = "Default" } }
+        @{ Writing = @{} }
+    )
+    Deploy    = @{
+        Default = @("MyProfile")
+        Work    = @("MyProfile", "Writing")
+    }
+}
+```
+
+See [Deploy-VSCodeProfiles](guides/application/Deploy-VSCodeProfiles.md) for the walkthrough.
+
 ### Workspace Layouts
 
 Window placement configurations. Defined in `Layouts/{MachineType}/{WorkspaceName}_{MachineType}.psd1` files.
@@ -1091,6 +1133,8 @@ Anything other than the three valid values is reported as unknown rather than si
   `ObsidianCli` (`Enable-ObsidianCli -CreateIfMissing`
   writes `"cli": true` into Obsidian's per-machine `%APPDATA%\obsidian\obsidian.json`, which a synced vault never carries,
   so `Open-Obsidian` can load workspaces - see [Enable-ObsidianCli](guides/application/Enable-ObsidianCli.md)),
+  `VSCodeProfiles` (`Deploy-VSCodeProfiles` links the profile files of the [`VSCodeProfiles`](#vs-code-profiles)
+  entries this machine type deploys, registers missing profiles in VS Code's state and installs their extensions),
   `RepositoryUpdate` (clones and pulls every repository the machine's `RepositoryUpdateScope`
   names, which reaches outside this repository the moment it runs - forks that want the previous
   always-on behaviour set it `$true`; how each repository is updated, including whether the default

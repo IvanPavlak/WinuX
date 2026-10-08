@@ -243,7 +243,7 @@ docs/
 │
 ├── modules/
 │   ├── ai.md                               # CoreAiRules enforcement, Agent Skills deployment
-│   ├── application.md                      # install, launch, browser
+│   ├── application.md                      # install, launch, browser, VS Code profiles
 │   ├── bootstrap.md                        # Bootstrap, Load-PathConfiguration, etc.
 │   ├── configuration.md                    # programmatic config modifications
 │   ├── git.md                              # Git ops, repo management

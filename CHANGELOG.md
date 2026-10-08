@@ -8,6 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.89] - 2026-10-08
+
+### Added
+
+- **VS Code profiles are deployed from the repository.** New opt-in Bootstrap step `VSCodeProfiles` and new `Configuration.psd1` section `VSCodeProfiles`: a catalogue of profile folders under `Root` (default `{RepoRoot}\VSCode\Profiles`), each carrying any of `settings.json`, `keybindings.json` (`keybindings.windows.json` wins on Windows), `tasks.json`, `snippets\` and `extensions.txt` (one extension id per line, `#` comments, optional `@version` pin), with `Deploy` choosing the entries per machine type and an optional `Target` deploying an entry onto a differently named VS Code profile (`"Default"` is VS Code's built-in one). The new `Deploy-VSCodeProfiles` links the files into the profile (a real file it replaces is backed up, a link already in place is left alone), registers a profile VS Code does not know yet in its profile list (refused while VS Code runs, the list backed up first), and installs the listed extensions the profile lacks through `code --install-extension`, reinstalling a pinned one at its pin. It is additive: `Prune` or `-Prune` uninstalls the extensions the list does not name. `SettingsSync = $false` (the default) installs with `--do-not-sync`; Settings Sync itself is never toggled. The new `Export-VSCodeProfile` captures a live profile back into its folder: real files are copied, linked ones left alone, and `extensions.txt` is merged so comments and pins survive. UI state is never deployed. Helpers: `Resolve-VSCodeProfilesConfig`, `Get-VSCodeProfileLocation`, `Get-VSCodeProfileItems`, `Get-VSCodeInstalledExtensions`, `Get-VSCodeCliPath` (falls back to the installer's location when `code` is not on PATH yet), `ConvertFrom-VSCodeExtensionLine`, `Merge-VSCodeExtensionList`. The base catalogue is empty and the step is off, so a vanilla run deploys nothing. Tests: one `*.Tests.ps1` per new function, `Bootstrap.Tests.ps1`, `Resolve-BootstrapSteps.Tests.ps1`. Docs: the Application and Bootstrap module references, the configuration reference ("VS Code Profiles"), nine new guides, the `Bootstrap` and `Resolve-BootstrapSteps` guides, `docs/getting-started/first-run.md`, `docs/docs_overview.md`, troubleshooting ("VS Code is running - close it so profile [Name] can be registered", "A VS Code Extension Keeps Coming Back Or Disappearing After Deploy-VSCodeProfiles").
+
+### Fixed
+
+- **The Bootstrap opt-in lists name every opt-in step.** The `Bootstrap` and `Resolve-BootstrapSteps` guides and the Bootstrap module reference left out `AiMarketplaces`; they now list it, with `VSCodeProfiles`, and count thirteen.
 ## [0.1.88] - 2026-10-08
 
 ### Added
@@ -1488,7 +1497,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.88...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.89...HEAD
+[0.1.89]: https://github.com/IvanPavlak/WinuX/compare/v0.1.88...v0.1.89
 [0.1.88]: https://github.com/IvanPavlak/WinuX/compare/v0.1.87...v0.1.88
 [0.1.87]: https://github.com/IvanPavlak/WinuX/compare/v0.1.86...v0.1.87
 [0.1.86]: https://github.com/IvanPavlak/WinuX/compare/v0.1.85...v0.1.86

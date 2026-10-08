@@ -12,7 +12,8 @@ function Bootstrap {
 		no-op on their own when their configuration section is empty, so an enabled step on
 		the empty base config applies nothing. Opt-in steps that act the moment they run
 		default off: MicrosoftActivationScripts, Win11Debloat, RepositoryUpdate, DeveloperMode,
-		NuGetConfig, UpgradeAll, CoreAiRules, AiSkills, AiMods, AiMarketplaces, ObsidianCli, LockedStartLayout.
+		NuGetConfig, UpgradeAll, CoreAiRules, AiSkills, AiMods, AiMarketplaces, ObsidianCli, VSCodeProfiles,
+		LockedStartLayout.
 
 		Execution sequence:
 		1. (WithInitialSetup only) Rename-Machine, Start-MicrosoftActivationScripts, Start-Win11Debloat
@@ -30,7 +31,8 @@ function Bootstrap {
 		    Steps.CoreAiRules), AI skills links (opt-in via Steps.AiSkills), AI mods links and the
 		    Claude Code plugin list (opt-in via Steps.AiMods), Claude Code plugin marketplaces
 		    and their plugins (opt-in via Steps.AiMarketplaces), Obsidian CLI flag (opt-in via
-		    Steps.ObsidianCli), WSL SSH setup (WSL steps use the same gate)
+		    Steps.ObsidianCli), VS Code profiles (opt-in via Steps.VSCodeProfiles), WSL SSH setup
+		    (WSL steps use the same gate)
 		11. Lock taskbar layout, restart Explorer, restart machine
 
 		Logs are written via Start-Logging / Stop-Logging for the duration of the run.
@@ -285,6 +287,12 @@ function Bootstrap {
 		# load workspaces until it is set. -CreateIfMissing readies a machine Obsidian has not
 		# started on yet. Opt-in: it edits another application's settings file.
 		if ($steps.ObsidianCli) { Enable-ObsidianCli -CreateIfMissing } else { Write-LogWarning "Obsidian CLI skipped - opt in via BootstrapConfig.Steps.ObsidianCli" }
+
+		# VS Code profiles (docs/configuration/guides/application/Deploy-VSCodeProfiles.md) - links
+		# the profile files of every catalogue entry VSCodeProfiles.Deploy names for this machine
+		# type and installs their extensions. Runs after the package managers so VS Code is
+		# installed. The base catalogue is empty, so this is opt-in as well.
+		if ($steps.VSCodeProfiles) { Deploy-VSCodeProfiles } else { Write-LogWarning "VS Code profiles skipped - opt in via BootstrapConfig.Steps.VSCodeProfiles" }
 
 		if ($steps.WSL) {
 			Configure-WSLSSH
