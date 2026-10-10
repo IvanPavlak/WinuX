@@ -23,6 +23,16 @@
 	concurrent runs cannot overwrite or misreport each other. Results\ is gitignored, exactly
 	like the Logging module's Logs\.
 
+	Speed comes from removing waste first and running less second. The worker count is learned
+	per machine from earlier green full runs; files with no timing yet are seeded by their test
+	count (an Integration file by a heavy fixed seed); the run log records the machine's
+	conditions and each worker's start-up, so a slow run explains itself. -Quick leaves out the
+	Integration tier and -Changed runs only what the changes can affect - both conveniences, while
+	the bare run and -CI always run everything, and every green full run stamps the tree it proved.
+
+	The helpers live beside this script as plain dot-sourced files (Get-*.ps1, Read-*.ps1, ...)
+	for the same reason this is a script: CI runs it with no WinuX module loaded.
+
 	This script is intentionally NOT in Functions\ - Tests.psm1 dot-sources and exports every
 	file there, and this is a script, not an exported function. It also deliberately uses plain
 	Write-Host rather than Write-Log*: CI runs it before any WinuX module exists in the session.
@@ -36,17 +46,36 @@
 	sweeps the fork-owned Custom area (Modules\Custom\<Module>\Tests) when no -Path is given.
 
 .PARAMETER Workers
-	Number of parallel worker processes. 0 (default) picks min(CPU count, 12, file count).
+	Number of parallel worker processes. An explicit value always wins and is never learned from.
+	0 (default) lets the learner pick (Get-AdaptiveWorkerCount over Results\workers.json); -CI
+	uses the static min(CPU count, 12).
 
 .PARAMETER Detailed
 	Echo the whole run log - including every worker transcript - to the console after the run.
 
 .PARAMETER CI
 	Non-interactive mode: no spinner, plain progress lines, the run summary echoed to stdout,
-	and "no test files found" treated as an infrastructure failure rather than a warning.
+	and "no test files found" treated as an infrastructure failure rather than a warning. CI
+	always runs everything: -Quick and -Changed are ignored, and no history is read or written.
 
 .PARAMETER PassThru
 	Emit the aggregate result object.
+
+.PARAMETER Quick
+	Leave out the Integration tier: files whose tests are all tagged Integration are not
+	dispatched, and the others run with Pester's ExcludeTag. Never the gate.
+
+.PARAMETER Changed
+	Run only the test files the changes since -Since can affect (Get-ChangedPaths, Get-TestImpact),
+	conservatively; the selection and its reasons are printed first. Unions with -TestName/-Path.
+
+.PARAMETER Since
+	The ref -Changed compares against (its merge base with HEAD). Defaults to master. With -CI it
+	does not narrow the run; it adds the selector audit (what -Changed would have run vs. what failed).
+
+.PARAMETER BuildImpactMap
+	Full run that records, per test file, which functions it invoked (Results\impact-map.json),
+	the runtime backstop -Changed unions with its static analysis. About twice as slow.
 
 .PARAMETER Worker
 	Internal. Marks this invocation as a worker child; not for interactive use.
@@ -63,6 +92,13 @@
 .PARAMETER WorkerId
 	Internal. Zero-based index of this worker, used to label its artifacts.
 
+.PARAMETER ExcludeTag
+	Internal. Tags this worker's Pester run excludes (comma-joined).
+
+.PARAMETER ImpactMapPath
+	Internal. Run each file separately under command breakpoints and write which functions it
+	invoked here.
+
 .EXAMPLE
 	.\Invoke-TestSuite.ps1
 	Runs the whole suite on the default worker count.
@@ -78,6 +114,14 @@
 .EXAMPLE
 	.\Invoke-TestSuite.ps1 -CI
 	The CI entry point: no spinner, summary on stdout, infrastructure failures exit 2.
+
+.EXAMPLE
+	.\Invoke-TestSuite.ps1 -Changed -Quick
+	Only the files the branch's changes can affect, without the Integration tier.
+
+.EXAMPLE
+	.\Invoke-TestSuite.ps1 -CI -Since origin/master
+	The full suite, plus the selector audit against the PR's base.
 
 .NOTES
 	Exit codes: 0 = all tests passed, 1 = test failures, 2 = infrastructure failure (bootstrap
@@ -106,6 +150,18 @@ param(
 	[Parameter(ParameterSetName = 'Orchestrate')]
 	[switch]$PassThru,
 
+	[Parameter(ParameterSetName = 'Orchestrate')]
+	[switch]$Quick,
+
+	[Parameter(ParameterSetName = 'Orchestrate')]
+	[switch]$Changed,
+
+	[Parameter(ParameterSetName = 'Orchestrate')]
+	[string]$Since,
+
+	[Parameter(ParameterSetName = 'Orchestrate')]
+	[switch]$BuildImpactMap,
+
 	[Parameter(ParameterSetName = 'Worker', Mandatory = $true)]
 	[switch]$Worker,
 
@@ -119,7 +175,13 @@ param(
 	[string]$SummaryJsonPath,
 
 	[Parameter(ParameterSetName = 'Worker')]
-	[int]$WorkerId = 0
+	[int]$WorkerId = 0,
+
+	[Parameter(ParameterSetName = 'Worker')]
+	[string[]]$ExcludeTag = @(),
+
+	[Parameter(ParameterSetName = 'Worker')]
+	[string]$ImpactMapPath
 )
 
 $ProgressPreference = 'SilentlyContinue'
@@ -178,6 +240,7 @@ if ($PSCmdlet.ParameterSetName -eq 'Worker') {
 		processId      = $PID
 		pesterVersion  = $null
 		startedAt      = $workerStart.ToString('o')
+		testsStartedAt = $null
 		endedAt        = $null
 		durationSec    = 0.0
 		assignedFiles  = 0
@@ -262,31 +325,86 @@ if ($PSCmdlet.ParameterSetName -eq 'Worker') {
 	$assigned = @(Get-Content -LiteralPath $FileListPath | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
 	$summary.assignedFiles = $assigned.Count
 
+	# Arrives as one comma-joined string: pwsh -File does not parse array syntax.
+	$ExcludeTag = @($ExcludeTag | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+
 	# NOTE: this must never be named $Configuration - it would shadow the $global:Configuration
 	# that the functions under test read through the unqualified name, and tests would fail in
 	# ways that point nowhere near here.
-	$pesterConfiguration = New-PesterConfiguration
-	$pesterConfiguration.Run.Path = [string[]]$assigned
-	$pesterConfiguration.Run.PassThru = $true
-	# Detailed on purpose: this stream is redirected to the worker's transcript, never to the
-	# terminal, and its one line per finished test is what the orchestrator counts to drive the
-	# live counter.
-	$pesterConfiguration.Output.Verbosity = 'Detailed'
-	$pesterConfiguration.Output.RenderMode = 'Plaintext'
-	$pesterConfiguration.TestResult.Enabled = $true
-	$pesterConfiguration.TestResult.OutputFormat = 'NUnit3'
-	$pesterConfiguration.TestResult.OutputPath = $ResultXmlPath
+	$newPesterConfiguration = {
+		param([string[]]$RunPath, [bool]$WriteResult)
+		$pesterConfiguration = New-PesterConfiguration
+		$pesterConfiguration.Run.Path = $RunPath
+		$pesterConfiguration.Run.PassThru = $true
+		# Detailed on purpose: this stream is redirected to the worker's transcript, never to the
+		# terminal, and its one line per finished test is what the orchestrator counts to drive the
+		# live counter.
+		$pesterConfiguration.Output.Verbosity = 'Detailed'
+		$pesterConfiguration.Output.RenderMode = 'Plaintext'
+		$pesterConfiguration.TestResult.Enabled = $WriteResult
+		$pesterConfiguration.TestResult.OutputFormat = 'NUnit3'
+		$pesterConfiguration.TestResult.OutputPath = $ResultXmlPath
+		if ($ExcludeTag.Count -gt 0) {
+			$pesterConfiguration.Filter.ExcludeTag = [string[]]$ExcludeTag
+		}
+		$pesterConfiguration
+	}
 
-	$result = Invoke-Pester -Configuration $pesterConfiguration
+	# The end of this worker's start-up: the orchestrator subtracts its spawn time from this to
+	# report how long start-up took, which is what explodes when the machine is contended.
+	# Unix milliseconds rather than a date string: ConvertFrom-Json turns ISO strings back into
+	# dates in whatever kind it likes, and a time-zone slip would read as hours of start-up.
+	$summary.testsStartedAt = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
 
-	$summary.counts.total = [int]$result.TotalCount
-	$summary.counts.passed = [int]$result.PassedCount
-	$summary.counts.failed = [int]$result.FailedCount
-	$summary.counts.skipped = [int]$result.SkippedCount
-	$summary.counts.notRun = [int]$result.NotRunCount
+	$results = [System.Collections.Generic.List[object]]::new()
+	if ($ImpactMapPath) {
+		# -BuildImpactMap: which functions each test file actually invokes. A command breakpoint on
+		# every function (Logging excluded - a Logging change runs everything anyway) adds the name
+		# to a set; the files run one Invoke-Pester at a time so each set belongs to one file. Mocked
+		# functions count as invoked, which can only make the map select more, never less. A function
+		# that reads $? is left out: a breakpoint action runs just before the function and resets $?,
+		# which would change what it sees. Its own tests are still selected by name and reference.
+		$impactNames = @(
+			foreach ($moduleRoot in @($script:ModulesRoot, $script:CustomRoot)) {
+				foreach ($moduleDirectory in @(Get-ChildItem -LiteralPath $moduleRoot -Directory -ErrorAction SilentlyContinue)) {
+					if ($moduleDirectory.Name -in 'Logging', 'Custom') { continue }
+					$functionsDirectory = Join-Path $moduleDirectory.FullName 'Functions'
+					if (-not (Test-Path -LiteralPath $functionsDirectory)) { continue }
+					foreach ($functionFile in @(Get-ChildItem -LiteralPath $functionsDirectory -Filter '*.ps1' -File)) {
+						if (-not ([System.IO.File]::ReadAllText($functionFile.FullName).Contains('$?'))) { $functionFile.BaseName }
+					}
+				}
+			}
+		) | Sort-Object -Unique
+		$global:WinuXImpactHits = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+		$impactBreakpoints = @(Set-PSBreakpoint -Command $impactNames -Action { [void]$global:WinuXImpactHits.Add($_.Command) })
+		$impact = [ordered]@{}
+		try {
+			foreach ($file in $assigned) {
+				$global:WinuXImpactHits.Clear()
+				$results.Add((Invoke-Pester -Configuration (& $newPesterConfiguration @($file) $false)))
+				$impact[$file] = @($global:WinuXImpactHits | Sort-Object)
+			}
+		}
+		finally {
+			$impactBreakpoints | Remove-PSBreakpoint -ErrorAction SilentlyContinue
+		}
+		try { [System.IO.File]::WriteAllText($ImpactMapPath, ($impact | ConvertTo-Json -Depth 4), [System.Text.UTF8Encoding]::new($false)) }
+		catch { Write-Host "Worker ${WorkerId}: failed to write the impact map => $($_.Exception.Message)" }
+	}
+	else {
+		$results.Add((Invoke-Pester -Configuration (& $newPesterConfiguration ([string[]]$assigned) $true)))
+	}
+
+	$containers = @($results | ForEach-Object { $_.Containers })
+	$summary.counts.total = [int](($results | Measure-Object -Property TotalCount -Sum).Sum)
+	$summary.counts.passed = [int](($results | Measure-Object -Property PassedCount -Sum).Sum)
+	$summary.counts.failed = [int](($results | Measure-Object -Property FailedCount -Sum).Sum)
+	$summary.counts.skipped = [int](($results | Measure-Object -Property SkippedCount -Sum).Sum)
+	$summary.counts.notRun = [int](($results | Measure-Object -Property NotRunCount -Sum).Sum)
 
 	$summary.containers = @(
-		foreach ($container in $result.Containers) {
+		foreach ($container in $containers) {
 			[ordered]@{
 				path       = [string]$container.Item
 				durationMs = [int]$container.Duration.TotalMilliseconds
@@ -299,7 +417,7 @@ if ($PSCmdlet.ParameterSetName -eq 'Worker') {
 	)
 
 	$summary.failures = @(
-		foreach ($failure in $result.Failed) {
+		foreach ($failure in @($results | ForEach-Object { $_.Failed })) {
 			$message = if ($failure.ErrorRecord) { [string]$failure.ErrorRecord[0].Exception.Message } else { '' }
 			if ($message.Length -gt 2048) { $message = $message.Substring(0, 2048) + ' ...(truncated)' }
 			[ordered]@{
@@ -317,11 +435,11 @@ if ($PSCmdlet.ParameterSetName -eq 'Worker') {
 
 	# A bucket that ran fewer containers than it was handed means a file was never executed -
 	# a discovery-time parse error, say. That is an infrastructure failure, not a pass.
-	if ($result.Containers.Count -ne $assigned.Count) {
-		Write-Host "Worker ${WorkerId}: ran $($result.Containers.Count) of $($assigned.Count) assigned files."
+	if ($containers.Count -ne $assigned.Count) {
+		Write-Host "Worker ${WorkerId}: ran $($containers.Count) of $($assigned.Count) assigned files."
 		exit 2
 	}
-	if ($result.Result -eq 'Failed') {
+	if (@($results | Where-Object { $_.Result -eq 'Failed' }).Count -gt 0) {
 		Write-Host "Worker ${WorkerId}: Pester reported Failed with no failed tests."
 		exit 2
 	}
@@ -332,6 +450,37 @@ if ($PSCmdlet.ParameterSetName -eq 'Worker') {
 # | ------------------------------ < Orchestrator Role > ------------------------------ | #
 
 $runStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+
+# The orchestrator's helpers are plain scripts beside this one, for the same reason this is a
+# script: CI runs it with zero WinuX modules loaded.
+foreach ($helper in @(
+		'Get-ExpectedTestCount', 'Get-MedianTestDuration', 'Get-TestFileWeight',
+		'Get-AdaptiveWorkerCount', 'Read-WorkerHistory', 'Write-WorkerHistory', 'Test-WorkerSampleRecordable',
+		'Start-RunConditionSampler', 'Stop-RunConditionSampler', 'Get-RunConditionSummary',
+		'Get-ChangedPaths', 'Get-TestReferenceMap', 'Get-TestImpact', 'Read-ImpactMap', 'Get-WorkingTreeFingerprint', 'Get-SelectorMisses')) {
+	. (Join-Path -Path $PSScriptRoot -ChildPath "$helper.ps1")
+}
+
+# Everything the harness remembers between runs lives in Results\ (gitignored) and is optional:
+# a missing or corrupt file only means "nothing known yet".
+$script:WorkerHistoryFile = Join-Path -Path $script:ResultsRoot -ChildPath 'workers.json'
+$script:DependencyMapFile = Join-Path -Path $script:ResultsRoot -ChildPath 'dependency-map.json'
+$script:ImpactMapFile = Join-Path -Path $script:ResultsRoot -ChildPath 'impact-map.json'
+$script:LastSelectionFile = Join-Path -Path $script:ResultsRoot -ChildPath 'last-selection.json'
+$script:LastGreenFile = Join-Path -Path $script:ResultsRoot -ChildPath 'last-green.json'
+$script:RequiredPester = $null
+try { $script:RequiredPester = (Get-Content -LiteralPath (Join-Path $PSScriptRoot 'RequiredPesterVersion.txt') -ErrorAction Stop | Select-Object -First 1).Trim() } catch { }
+
+# -BuildImpactMap and -Changed/-Quick describe different runs: a map can only be built from the
+# full suite, and a selection is pointless when every file runs anyway.
+if ($BuildImpactMap -and ($CI -or $TestName -or $Path -or $Changed -or $Quick)) {
+	Write-Host -ForegroundColor Red "`n=> -BuildImpactMap records what the FULL suite executes; it cannot be combined with -CI, -TestName, -Path, -Changed or -Quick."
+	exit 2
+}
+
+# -Quick leaves out the Integration tier (real git, real processes, real waits). CI ignores it:
+# the gate always runs everything.
+$excludeTags = @(if ($Quick -and -not $CI) { 'Integration' })
 
 # The -f operator formats with the current culture, which would render durations as "3,90s" and
 # millisecond counts as "1.059ms" on a comma-decimal machine. The run log has to read identically
@@ -373,6 +522,74 @@ $testFiles = @(
 	}
 ) | Sort-Object -Unique
 $testFiles = @($testFiles)
+
+# --- -Changed: run only what the changes since the base can affect ---
+
+# The selection is conservative (Get-TestImpact): a test it cannot prove unaffected runs, and a
+# changed path it does not recognize runs everything. In CI, -Since only AUDITS the selection - the
+# full suite always runs there, and a failing file outside what -Changed would have picked is
+# reported as a selector miss.
+$changedRun = [bool]($Changed -and -not $CI)
+$auditRun = [bool]($CI -and $Since)
+$selection = $null
+$selectionBase = $null
+$forcedFiles = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+if ($changedRun -or $auditRun) {
+	$defaultRoots = @($PSScriptRoot)
+	if (Test-Path -LiteralPath $script:CustomRoot) { $defaultRoots += $script:CustomRoot }
+	$allTestFiles = @(Get-ChildItem -Path $defaultRoots -Recurse -Filter '*.Tests.ps1' -File -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName | Sort-Object -Unique)
+
+	$changes = Get-ChangedPaths -RepositoryRoot $script:PowerShellRoot -Since $Since
+	if ($changes.Error) {
+		$selection = [pscustomobject]@{ FullSuite = $true; FullSuiteReasons = @("git could not list the changes ($($changes.Error))"); Files = [ordered]@{}; Notes = @() }
+	}
+	else {
+		$selectionBase = $changes
+		$impactMap = Read-ImpactMap -Path $script:ImpactMapFile -RepositoryRoot $changes.Root -PesterVersion $script:RequiredPester
+		$selection = Get-TestImpact -ChangedPaths $changes.Paths -AddedPaths $changes.Added -DeletedPaths $changes.Deleted `
+			-RepositoryRoot $changes.Root -PowerShellRoot $script:PowerShellRoot -TestFiles $allTestFiles `
+			-CachePath $script:DependencyMapFile -ImpactMap $impactMap.Map
+		if ($impactMap.Note) { $selection.Notes = @($selection.Notes) + $impactMap.Note }
+	}
+
+	if ($changedRun) {
+		$union = [System.Collections.Generic.SortedSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+		if ($patterns.Count -gt 0 -or $Path) { foreach ($file in $testFiles) { [void]$union.Add($file) } }
+		$picked = if ($selection.FullSuite) { $allTestFiles } else { @($selection.Files.Keys) }
+		foreach ($file in $picked) { [void]$union.Add($file) }
+		$testFiles = @($union)
+
+		# A file selected because its own subject changed runs whole, even under -Quick.
+		foreach ($file in $selection.Files.Keys) {
+			if (@($selection.Files[$file] | Where-Object { $_ -eq 'changed' -or $_ -like 'tests *' }).Count -gt 0) { [void]$forcedFiles.Add($file) }
+		}
+
+		$against = if ($selectionBase) { "$($selectionBase.BaseRef) (merge base $($selectionBase.Base.Substring(0, [Math]::Min(10, $selectionBase.Base.Length)))), $(@($selectionBase.Paths).Count) changed path(s)" } else { 'an unknown base' }
+		Write-Host ''
+		if ($selection.FullSuite) {
+			Write-Host -ForegroundColor DarkCyan " -Changed against $against - running the FULL suite:"
+			foreach ($reason in $selection.FullSuiteReasons) { Write-Host -ForegroundColor DarkGray "   $reason" }
+		}
+		else {
+			Write-Host -ForegroundColor DarkCyan " -Changed against $against - $(@($selection.Files.Keys).Count) test file(s) selected:"
+			$shown = 0
+			foreach ($file in $selection.Files.Keys) {
+				if ($shown -ge 40) { Write-Host -ForegroundColor DarkGray "   ... and $(@($selection.Files.Keys).Count - 40) more - the run log lists every file and why."; break }
+				$reasons = @($selection.Files[$file])
+				$shownReasons = ($reasons | Select-Object -First 3) -join '; '
+				if ($reasons.Count -gt 3) { $shownReasons += "; +$($reasons.Count - 3) more" }
+				Write-Host -ForegroundColor DarkGray ("   {0}  <- {1}" -f (Split-Path -Path $file -Leaf), $shownReasons)
+				$shown++
+			}
+		}
+		foreach ($note in @($selection.Notes)) { Write-Host -ForegroundColor DarkGray "   note: $note" }
+
+		if ($testFiles.Count -eq 0) {
+			Write-Host -ForegroundColor Yellow "`n No test file is affected by the changes - nothing to run."
+			exit 0
+		}
+	}
+}
 
 if ($testFiles.Count -eq 0) {
 	$scope = if ($patterns.Count -gt 0) { "matching pattern(s): $($patterns -join ', ')" } else { "in: $($searchRoots -join ', ')" }
@@ -429,9 +646,10 @@ foreach ($abandoned in (Get-ChildItem -Path $workParent -Directory -ErrorAction 
 # --- Bucketing ---
 
 # Weights come from the previous run's measured per-file durations (Results\timings.json, written
-# at the end of every run). On a cold checkout - CI, or a freshly cloned fork - nothing is cached
-# yet and file size stands in: the suite averages roughly 15 bytes of test source per millisecond,
-# plus a fixed per-file discovery cost.
+# at the end of every run). A file with no entry yet is seeded from its statically counted tests
+# (Get-TestFileWeight); an Integration-tagged one gets a fixed heavy seed so a new real-git file
+# is never stacked on other heavy files on its first run. On a cold checkout - CI, or a freshly
+# cloned fork - nothing is cached and file size stands in.
 $relativeKey = {
 	param([string]$FullPath)
 	$key = $FullPath
@@ -452,15 +670,54 @@ if (Test-Path -LiteralPath $script:TimingsFile) {
 	catch { $timings = @{} }
 }
 
+# Tags decide two things before anything is spawned: -Quick drops a file whose every test is
+# Integration-tagged, and an Integration file with no timing gets the heavy seed. Parsing every
+# file costs a second or two, so only the files that mention the tag at all, and the files the
+# median seed needs a count for, are parsed here; the full count for the live counter still
+# happens while the workers bootstrap.
+$medianMsPerTest = Get-MedianTestDuration -Timings $timings
+$integrationPattern = [regex]::new('(?i)-Tags?\b[^\r\n{]*Integration')
+$preCounted = @{}
+$preCountTargets = @(
+	foreach ($file in $testFiles) {
+		$key = & $relativeKey $file
+		$untimed = -not ($timings.ContainsKey($key) -and $timings[$key].ms)
+		$mentionsTag = $false
+		try { $mentionsTag = $integrationPattern.IsMatch([System.IO.File]::ReadAllText($file)) } catch { }
+		if ($mentionsTag -or ($untimed -and $medianMsPerTest -gt 0)) { $file }
+	}
+)
+if ($preCountTargets.Count -gt 0) {
+	foreach ($row in @(Get-ExpectedTestCount -Path $preCountTargets -ExcludeTag $excludeTags)) { $preCounted[$row.Path] = $row }
+}
+
+# -Quick: a file whose tests are all excluded is not dispatched at all - no worker pays its
+# discovery and BeforeAll for nothing. A file with only some excluded tests runs with Pester's
+# ExcludeTag.
+$quickSkipped = [System.Collections.Generic.List[string]]::new()
+if ($excludeTags.Count -gt 0) {
+	$testFiles = @(
+		foreach ($file in $testFiles) {
+			$row = $preCounted[$file]
+			if ($row -and $row.Resolved -and $row.Count -eq 0 -and $row.Excluded -gt 0 -and -not $forcedFiles.Contains($file)) { $quickSkipped.Add($file) } else { $file }
+		}
+	)
+	if ($testFiles.Count -eq 0) {
+		Write-Host -ForegroundColor Yellow "`n Every selected test file is Integration-tagged and -Quick skips them all - nothing to run."
+		try { Remove-Item -LiteralPath $script:WorkRoot -Recurse -Force -ErrorAction Stop } catch { }
+		exit 0
+	}
+}
+
 $weighted = foreach ($file in $testFiles) {
 	$key = & $relativeKey $file
-	$weight = $null
-	if ($timings.ContainsKey($key) -and $timings[$key].ms) {
-		$weight = [double]$timings[$key].ms
-	}
-	if (-not $weight) {
-		$weight = 150.0 + ((Get-Item -LiteralPath $file).Length / 15.0)
-	}
+	$row = $preCounted[$file]
+	$timing = if ($timings.ContainsKey($key)) { $timings[$key] } else { $null }
+	$weight = Get-TestFileWeight -Timing $timing `
+		-ExpectedCount $(if ($row) { $row.Count + $row.Excluded } else { 0 }) `
+		-IsIntegration $([bool]($row -and @($row.Tags) -contains 'Integration')) `
+		-FileBytes (Get-Item -LiteralPath $file).Length `
+		-MedianMsPerTest $medianMsPerTest
 	[pscustomobject]@{
 		FullName   = $file
 		Name       = Split-Path -Path $file -Leaf
@@ -469,12 +726,36 @@ $weighted = foreach ($file in $testFiles) {
 	}
 }
 $weighted = @($weighted)
+$totalWeightMs = [double](($weighted | Measure-Object -Property Weight -Sum).Sum)
 
-$workerCount = $Workers
-if ($workerCount -le 0) {
-	$workerCount = [Math]::Min([Environment]::ProcessorCount, 12)
+# --- Worker count ---
+
+# An explicit -Workers always wins. CI keeps the static default and never reads or writes the
+# history. Everything else asks the learner, which uses what earlier full runs measured on this
+# machine (Results\workers.json); a scoped run also never gets more workers than its work can
+# keep busy past their own start-up.
+$scopedRun = [bool]($patterns.Count -gt 0 -or $Path -or $Quick -or $changedRun -or $BuildImpactMap)
+$processorCount = [Environment]::ProcessorCount
+$workerFingerprint = '{0}|{1}' -f $processorCount, ([int]([math]::Round($testFiles.Count / 50.0, [MidpointRounding]::AwayFromZero) * 50))
+$workerChoice = $null
+if ($Workers -gt 0) {
+	$workerChoice = [pscustomobject]@{ Count = $Workers; Phase = 'Explicit'; Reason = 'explicit -Workers' }
 }
-$workerCount = [Math]::Max(1, [Math]::Min($workerCount, $testFiles.Count))
+elseif ($CI) {
+	$workerChoice = [pscustomobject]@{ Count = [Math]::Min($processorCount, 12); Phase = 'CI'; Reason = 'CI default: min(CPU, 12)' }
+}
+else {
+	$history = if ($scopedRun) {
+		Read-WorkerHistory -Path $script:WorkerHistoryFile -ProcessorCount $processorCount
+	}
+	else {
+		Read-WorkerHistory -Path $script:WorkerHistoryFile -Fingerprint $workerFingerprint
+	}
+	$workerChoice = Get-AdaptiveWorkerCount -Runs $history.Runs -Recorded $history.Recorded -ProcessorCount $processorCount `
+		-FileCount $testFiles.Count -TotalWeightMs $totalWeightMs -Scoped:$scopedRun
+}
+
+$workerCount = [Math]::Max(1, [Math]::Min([int]$workerChoice.Count, $testFiles.Count))
 
 $buckets = @(for ($i = 0; $i -lt $workerCount; $i++) { [pscustomobject]@{ Index = $i; Load = 0.0; Files = [System.Collections.Generic.List[string]]::new() } })
 
@@ -510,23 +791,62 @@ if (-not $pwshPath) {
 
 # --- Spawn ---
 
-. (Join-Path -Path $PSScriptRoot -ChildPath 'Get-ExpectedTestCount.ps1')
+# The tags every worker excludes. Empty unless -Quick - and empty again when -Changed forced an
+# Integration file in because its own subject changed: Pester's filter is per worker, not per file,
+# so the forced file could otherwise lose its tests. Running a partially tagged file whole is the
+# conservative side of that trade.
+$workerExcludeTags = @($excludeTags)
+if ($workerExcludeTags.Count -gt 0 -and @($testFiles | Where-Object { $forcedFiles.Contains($_) -and $preCounted[$_] -and $preCounted[$_].Excluded -gt 0 }).Count -gt 0) {
+	$workerExcludeTags = @()
+}
+
+# Optional: a different temp root for the workers, so TestDrive (and the thousands of small files
+# the real-git tests write) can live on a Dev Drive whose Defender performance mode defers
+# scanning. Unset - the default - changes nothing. Creating that volume is the user's decision.
+$testTempRoot = $null
+if ($env:WINUX_TEST_TEMP) {
+	try {
+		if (-not (Test-Path -LiteralPath $env:WINUX_TEST_TEMP)) { New-Item -ItemType Directory -Path $env:WINUX_TEST_TEMP -Force -ErrorAction Stop | Out-Null }
+		$testTempRoot = (Resolve-Path -LiteralPath $env:WINUX_TEST_TEMP -ErrorAction Stop).Path
+	}
+	catch {
+		Write-Host -ForegroundColor Yellow "`n WINUX_TEST_TEMP [$env:WINUX_TEST_TEMP] is not usable ($($_.Exception.Message)) - workers use the default temp folder."
+		$testTempRoot = $null
+	}
+}
+
+# The tree under test, read before anything runs: the gate stamp of a green full run has to name
+# what was tested, not whatever the tree became while the run was going.
+$treeAtStart = $null
+if (-not $CI -and (-not $scopedRun -or $changedRun -or $Quick -or $BuildImpactMap)) {
+	$treeAtStart = Get-WorkingTreeFingerprint -RepositoryRoot $script:PowerShellRoot
+}
+
+# Run conditions (A1): what the machine was doing during the run, sampled in the background.
+# Local runs only - a CI runner is a fresh VM whose load says nothing about this machine.
+$sampler = $null
+if (-not $CI) {
+	try { $sampler = Start-RunConditionSampler -ExcludePids $PID } catch { $sampler = $null }
+}
 
 $workerStates = @(
 	foreach ($bucket in $buckets) {
 		@{
-			Index     = $bucket.Index
-			Files     = @($bucket.Files)
-			ListPath  = Join-Path $script:WorkRoot ("worker{0}.files.txt" -f $bucket.Index)
-			OutLog    = Join-Path $script:WorkRoot ("worker{0}.out.log" -f $bucket.Index)
-			ErrLog    = Join-Path $script:WorkRoot ("worker{0}.err.log" -f $bucket.Index)
-			XmlPath   = Join-Path $script:ResultsRoot ("pester-results-{0}-worker{1}.xml" -f $script:RunId, $bucket.Index)
-			JsonPath  = Join-Path $script:WorkRoot ("worker{0}.summary.json" -f $bucket.Index)
-			Process   = $null
-			Reader    = $null
-			TestCount = 0
-			Summary   = $null
-			ExitCode  = $null
+			Index      = $bucket.Index
+			Files      = @($bucket.Files)
+			ListPath   = Join-Path $script:WorkRoot ("worker{0}.files.txt" -f $bucket.Index)
+			OutLog     = Join-Path $script:WorkRoot ("worker{0}.out.log" -f $bucket.Index)
+			ErrLog     = Join-Path $script:WorkRoot ("worker{0}.err.log" -f $bucket.Index)
+			XmlPath    = Join-Path $script:ResultsRoot ("pester-results-{0}-worker{1}.xml" -f $script:RunId, $bucket.Index)
+			JsonPath   = Join-Path $script:WorkRoot ("worker{0}.summary.json" -f $bucket.Index)
+			ImpactPath = Join-Path $script:WorkRoot ("worker{0}.impact.json" -f $bucket.Index)
+			Process    = $null
+			Reader     = $null
+			TestCount  = 0
+			Summary    = $null
+			ExitCode   = $null
+			SpawnedAt  = $null
+			StartupSec = $null
 		}
 	}
 )
@@ -610,10 +930,31 @@ try {
 			'-ResultXmlPath', ('"{0}"' -f $state.XmlPath)
 			'-SummaryJsonPath', ('"{0}"' -f $state.JsonPath)
 		)
+		if ($workerExcludeTags.Count -gt 0) {
+			$arguments += '-ExcludeTag'
+			$arguments += ($workerExcludeTags -join ',')
+		}
+		if ($BuildImpactMap) {
+			$arguments += '-ImpactMapPath'
+			$arguments += ('"{0}"' -f $state.ImpactPath)
+		}
 
-		$state.Process = Start-Process -FilePath $pwshPath -ArgumentList $arguments -PassThru -WindowStyle Hidden `
-			-WorkingDirectory $script:PowerShellRoot `
-			-RedirectStandardOutput $state.OutLog -RedirectStandardError $state.ErrLog
+		# The workers inherit this process's environment, so the temp root is swapped in only
+		# around the spawn and put back straight after.
+		$savedTemp = $env:TEMP
+		$savedTmp = $env:TMP
+		try {
+			if ($testTempRoot) { $env:TEMP = $testTempRoot; $env:TMP = $testTempRoot }
+			$state.SpawnedAt = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+			$state.Process = Start-Process -FilePath $pwshPath -ArgumentList $arguments -PassThru -WindowStyle Hidden `
+				-WorkingDirectory $script:PowerShellRoot `
+				-RedirectStandardOutput $state.OutLog -RedirectStandardError $state.ErrLog
+		}
+		finally {
+			$env:TEMP = $savedTemp
+			$env:TMP = $savedTmp
+		}
+		if ($sampler -and $state.Process) { [void]$sampler.State.ExcludePids.TryAdd($state.Process.Id, 0) }
 	}
 
 	# The counter's denominator comes from the files about to run, not from the previous run.
@@ -623,7 +964,7 @@ try {
 	# still bootstrapping. A file whose case list is computed at discovery time cannot be counted
 	# that way and takes the previous run's count for that file instead.
 	$expectedTests = 0
-	foreach ($counted in @(Get-ExpectedTestCount -Path $testFiles)) {
+	foreach ($counted in @(Get-ExpectedTestCount -Path $testFiles -ExcludeTag $workerExcludeTags)) {
 		$key = & $relativeKey $counted.Path
 		if (-not $counted.Resolved -and $timings.ContainsKey($key) -and $timings[$key].tests) {
 			$expectedTests += [int]$timings[$key].tests
@@ -684,6 +1025,9 @@ finally {
 			try { $state.Process.Dispose() } catch { }
 		}
 	}
+
+	$conditionSamples = @()
+	if ($sampler) { try { $conditionSamples = @(Stop-RunConditionSampler -Sampler $sampler) } catch { $conditionSamples = @() } }
 }
 
 $runStopwatch.Stop()
@@ -727,6 +1071,10 @@ foreach ($state in $workerStates) {
 
 	if ($state.Summary.pesterVersion) { $pesterVersion = $state.Summary.pesterVersion }
 
+	if ($state.Summary.testsStartedAt -and $state.SpawnedAt) {
+		try { $state.StartupSec = [math]::Round(([double]$state.Summary.testsStartedAt - [double]$state.SpawnedAt) / 1000.0, 2) } catch { }
+	}
+
 	$totals.total += [int]$state.Summary.counts.total
 	$totals.passed += [int]$state.Summary.counts.passed
 	$totals.failed += [int]$state.Summary.counts.failed
@@ -763,6 +1111,12 @@ if (-not $serialMs) { $serialMs = 0 }
 
 try {
 	foreach ($container in $allContainers) {
+		# A file that ran with some of its tests excluded measured only part of itself; caching
+		# that would make the next full run treat a heavy Integration file as a light one. An
+		# impact-map build runs every file under breakpoints, about twice as slowly.
+		if ($BuildImpactMap) { break }
+		$row = $preCounted[[string]$container.Path]
+		if ($workerExcludeTags.Count -gt 0 -and $row -and $row.Excluded -gt 0) { continue }
 		$key = & $relativeKey $container.Path
 		$timings[$key] = [pscustomobject]@{ ms = $container.DurationMs; tests = $container.Total }
 	}
@@ -772,29 +1126,216 @@ try {
 }
 catch { }
 
+$wallSeconds = $runStopwatch.Elapsed.TotalSeconds
+$runIsGreen = ($totals.failed -eq 0 -and -not $infrastructureError)
+# A -Changed run that fell back to the full suite (and excluded nothing) proved as much as a plain
+# full run, so it stamps the gate the same way. -BuildImpactMap runs the full suite too.
+$provedWholeSuite = (-not $scopedRun) -or $BuildImpactMap -or ($changedRun -and $selection -and $selection.FullSuite -and -not $Quick -and $patterns.Count -eq 0 -and -not $Path)
+$failedFiles = @($allContainers | Where-Object { $_.Failed -gt 0 } | ForEach-Object { & $relativeKey $_.Path } | Sort-Object -Unique)
+$bookkeeping = [System.Collections.Generic.List[string]]::new()
+
+# --- -BuildImpactMap: merge what every worker recorded into Results\impact-map.json ---
+
+if ($BuildImpactMap) {
+	try {
+		$functionFileByName = @{}
+		foreach ($moduleRoot in @($script:ModulesRoot, $script:CustomRoot)) {
+			foreach ($moduleDirectory in @(Get-ChildItem -LiteralPath $moduleRoot -Directory -ErrorAction SilentlyContinue)) {
+				$functionsDirectory = Join-Path $moduleDirectory.FullName 'Functions'
+				if (-not (Test-Path -LiteralPath $functionsDirectory)) { continue }
+				foreach ($file in @(Get-ChildItem -LiteralPath $functionsDirectory -Filter '*.ps1' -File)) { $functionFileByName[$file.BaseName] = & $relativeKey $file.FullName }
+			}
+		}
+		$tests = [ordered]@{}
+		$recordedFiles = 0
+		foreach ($state in $workerStates) {
+			if (-not (Test-Path -LiteralPath $state.ImpactPath)) { continue }
+			$recorded = Get-Content -LiteralPath $state.ImpactPath -Raw | ConvertFrom-Json
+			foreach ($property in $recorded.PSObject.Properties) {
+				$tests[(& $relativeKey $property.Name)] = @(@($property.Value) | Where-Object { $functionFileByName.ContainsKey($_) } | ForEach-Object { $functionFileByName[$_] } | Sort-Object -Unique)
+				$recordedFiles++
+			}
+		}
+		if ($recordedFiles -ne $testFiles.Count) {
+			$bookkeeping.Add("Impact map     : NOT written - recorded $recordedFiles of $($testFiles.Count) test files")
+		}
+		else {
+			$head = @(git -C $script:PowerShellRoot rev-parse HEAD 2>$null)[0]
+			$document = [ordered]@{ commit = "$head".Trim(); pester = $script:RequiredPester; built = (Get-Date).ToString('o'); tests = $tests }
+			[System.IO.File]::WriteAllText($script:ImpactMapFile, ($document | ConvertTo-Json -Depth 5), [System.Text.UTF8Encoding]::new($false))
+			$bookkeeping.Add("Impact map     : written for $recordedFiles test files at $($document.commit) - Results\impact-map.json")
+		}
+	}
+	catch {
+		$bookkeeping.Add("Impact map     : NOT written - $($_.Exception.Message)")
+	}
+}
+
+# --- Gate stamp: every green full run records the tree it proved ---
+
+$lastGreen = $null
+try { if (Test-Path -LiteralPath $script:LastGreenFile) { $lastGreen = Get-Content -LiteralPath $script:LastGreenFile -Raw | ConvertFrom-Json } } catch { $lastGreen = $null }
+if ($provedWholeSuite -and -not $CI -and $runIsGreen -and $treeAtStart) {
+	try {
+		$stamp = [ordered]@{ head = $treeAtStart.Head; tree = $treeAtStart.Fingerprint; pester = $pesterVersion; at = (Get-Date).ToString('o') }
+		[System.IO.File]::WriteAllText($script:LastGreenFile, ($stamp | ConvertTo-Json), [System.Text.UTF8Encoding]::new($false))
+		$lastGreen = [pscustomobject]$stamp
+		$bookkeeping.Add("Gate stamp     : this tree is green on the full suite (Results\last-green.json)")
+	}
+	catch { }
+}
+
+# A selection or a quick run proves less than the gate does. Say so when the tree in front of you
+# has no green full run yet - a reminder, never a block.
+$gateReminder = $null
+if (($changedRun -or $Quick) -and -not $CI -and -not $provedWholeSuite) {
+	if (-not $treeAtStart -or -not $lastGreen -or $lastGreen.tree -ne $treeAtStart.Fingerprint) {
+		$gateReminder = 'Selection only - this tree has no green full run yet; run the full suite (Run-Tests) before merging.'
+	}
+}
+
+# --- Selector audit: did the selection miss a file that failed? ---
+
+$selectorMisses = [System.Collections.Generic.List[string]]::new()
+if ($changedRun -and $selection) {
+	try {
+		$record = [ordered]@{
+			at        = (Get-Date).ToString('o')
+			head      = $(if ($treeAtStart) { $treeAtStart.Head })
+			tree      = $(if ($treeAtStart) { $treeAtStart.Fingerprint })
+			base      = $(if ($selectionBase) { $selectionBase.Base })
+			fullSuite = [bool]$selection.FullSuite
+			files     = @($testFiles | ForEach-Object { & $relativeKey $_ })
+		}
+		[System.IO.File]::WriteAllText($script:LastSelectionFile, ($record | ConvertTo-Json -Depth 4), [System.Text.UTF8Encoding]::new($false))
+	}
+	catch { }
+}
+elseif (-not $scopedRun -and -not $CI -and $failedFiles.Count -gt 0) {
+	# A full run that fails in a file the last -Changed run did not select is a selector miss - the
+	# rule that should have picked it needs fixing.
+	try {
+		if (Test-Path -LiteralPath $script:LastSelectionFile) {
+			$lastSelection = Get-Content -LiteralPath $script:LastSelectionFile -Raw | ConvertFrom-Json
+			foreach ($file in (Get-SelectorMisses -FailedFiles $failedFiles -SelectedFiles @($lastSelection.files) -FullSuite:([bool]$lastSelection.fullSuite))) {
+				$selectorMisses.Add("$file failed, but the last -Changed run ($($lastSelection.at)) did not select it")
+			}
+		}
+	}
+	catch { }
+}
+elseif ($auditRun -and $selection) {
+	if ($selection.FullSuite) {
+		$reasons = @($selection.FullSuiteReasons)
+		$shownReasons = ($reasons | Select-Object -First 3) -join '; '
+		if ($reasons.Count -gt 3) { $shownReasons += "; and $($reasons.Count - 3) more" }
+		$bookkeeping.Add("Selector       : -Changed would have run the full suite ($shownReasons)")
+	}
+	else {
+		$picked = @($selection.Files.Keys | ForEach-Object { & $relativeKey $_ })
+		foreach ($file in (Get-SelectorMisses -FailedFiles $failedFiles -SelectedFiles $picked)) {
+			$selectorMisses.Add("$file failed, but -Changed since $Since would not have selected it")
+		}
+		$bookkeeping.Add("Selector       : -Changed since $Since would have run $($picked.Count) of $($allTestFiles.Count) files; $($failedFiles.Count) file(s) failed, $($selectorMisses.Count) outside the selection")
+	}
+}
+
+# --- Run conditions, and what this run teaches the worker-count learner ---
+
+$conditions = Get-RunConditionSummary -Samples $conditionSamples -ProcessorCount $processorCount `
+	-StartupSeconds @($workerStates | ForEach-Object { $_.StartupSec } | Where-Object { $null -ne $_ })
+$recordable = Test-WorkerSampleRecordable -CI:$CI -ExplicitWorkers:($Workers -gt 0) -Scoped:$scopedRun `
+	-FailedCount $totals.failed -InfrastructureError:$infrastructureError -ForeignLoadPercent $conditions.ForeignLoadPercent
+$historyNote = "not recorded: $($recordable.Reason)"
+if ($recordable.Recordable) {
+	$historySample = [ordered]@{
+		workers        = $workerStates.Count
+		wallSec        = [math]::Round($wallSeconds, 2)
+		at             = (Get-Date).ToString('o')
+		phase          = [string]$workerChoice.Phase
+		foreignLoad    = $conditions.ForeignLoadPercent
+		avgCpu         = $conditions.AvgCpuPercent
+		minPerformance = $conditions.MinPerformancePercent
+		startupAvg     = $conditions.StartupAvg
+	}
+	$historyNote = if (Write-WorkerHistory -Path $script:WorkerHistoryFile -Fingerprint $workerFingerprint -Sample $historySample) {
+		[string]::Format($invariant, 'recorded ({0} workers, {1:N1}s) for machine {2}', $workerStates.Count, $wallSeconds, $workerFingerprint)
+	}
+	else { 'not recorded: the history file could not be written' }
+}
+
 # --- Run log ---
 
 # Named for the run, not for "now": the XMLs already carry $RunId, and pairing them by name is
 # what lets retention tell an orphaned XML from a live one.
 $runLogPath = Join-Path -Path $script:ResultsRoot -ChildPath "TestRun_$($script:RunId).log"
-$wallSeconds = $runStopwatch.Elapsed.TotalSeconds
+
+$machineLine = if ($conditions.SampleCount -gt 0) {
+	$parts = [System.Collections.Generic.List[string]]::new()
+	if ($null -ne $conditions.AvgCpuPercent) { $parts.Add([string]::Format($invariant, 'CPU avg {0:N0}% (max {1:N0}%)', $conditions.AvgCpuPercent, $conditions.MaxCpuPercent)) }
+	if ($null -ne $conditions.MinPerformancePercent) { $parts.Add([string]::Format($invariant, 'clock min {0:N0}% of rated', $conditions.MinPerformancePercent)) }
+	if ($null -ne $conditions.MinAvailableMB) { $parts.Add([string]::Format($invariant, 'memory min {0:N0} MB free', $conditions.MinAvailableMB)) }
+	$parts.Add([string]::Format($invariant, 'foreign load {0:N1}%', $conditions.ForeignLoadPercent))
+	$top = @($conditions.TopConsumers | ForEach-Object { [string]::Format($invariant, '{0} {1:N1}s', $_.Name, $_.CpuSeconds) })
+	if ($top.Count -gt 0) { $parts.Add("top other CPU: $($top -join ', ')") }
+	($parts -join ', ') + [string]::Format($invariant, ' ({0} samples)', $conditions.SampleCount)
+}
+elseif ($CI) { 'not sampled (CI)' }
+else { 'not sampled (the run was too short, or the sampler could not read the machine)' }
+
+$startupLine = if ($null -ne $conditions.StartupAvg) {
+	[string]::Format($invariant, 'min {0:N1}s, avg {1:N1}s, max {2:N1}s per worker (spawn to first test file)', $conditions.StartupMin, $conditions.StartupAvg, $conditions.StartupMax)
+}
+else { 'unknown' }
+
+$modeParts = [System.Collections.Generic.List[string]]::new()
+if ($excludeTags.Count -gt 0) {
+	$modeParts.Add("Quick: tests tagged $($excludeTags -join ', ') excluded, $($quickSkipped.Count) wholly tagged file(s) not dispatched")
+}
+if ($testTempRoot) { $modeParts.Add("worker temp root $testTempRoot (WINUX_TEST_TEMP)") }
 
 $summaryLines = [System.Collections.Generic.List[string]]::new()
 $summaryLines.Add("Pester run - $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')")
 $summaryLines.Add("Repository     : $script:PowerShellRoot")
 $summaryLines.Add("Pester         : $pesterVersion")
 $summaryLines.Add("Test files     : $($testFiles.Count)$(if ($patterns.Count -gt 0) { " (filter: $(($patterns | ForEach-Object { "*$_*" }) -join ', '))" })")
-$summaryLines.Add("Workers        : $($workerStates.Count)")
+if ($modeParts.Count -gt 0) { $summaryLines.Add("Mode           : $($modeParts -join '; ')") }
+$summaryLines.Add("Workers        : $($workerStates.Count) - $($workerChoice.Phase): $($workerChoice.Reason)")
 $summaryLines.Add("Wall clock     : $([math]::Round($wallSeconds, 2))s")
 $summaryLines.Add("Serial time    : $([math]::Round($serialMs / 1000.0, 2))s across all containers")
 $summaryLines.Add("Tests          : $($totals.total) total, $($totals.passed) passed, $($totals.failed) failed, $($totals.skipped) skipped, $($totals.notRun) not run")
+$summaryLines.Add("Machine        : $machineLine")
+$summaryLines.Add("Start-up       : $startupLine")
+$summaryLines.Add("Worker history : $historyNote")
+foreach ($line in $bookkeeping) { $summaryLines.Add($line) }
+if ($gateReminder) { $summaryLines.Add("Gate           : $gateReminder") }
 $summaryLines.Add('')
+
+if ($selectorMisses.Count -gt 0) {
+	$summaryLines.Add("Selector misses ($($selectorMisses.Count)) - a rule in Get-TestImpact should have selected these")
+	foreach ($miss in $selectorMisses) { $summaryLines.Add("  ! $miss") }
+	$summaryLines.Add('')
+}
+
+if ($changedRun -and $selection) {
+	if ($selection.FullSuite) {
+		$summaryLines.Add('Selection - the full suite, because:')
+		foreach ($reason in $selection.FullSuiteReasons) { $summaryLines.Add("  $reason") }
+	}
+	else {
+		$summaryLines.Add("Selection - $(@($selection.Files.Keys).Count) file(s) against $(if ($selectionBase) { "$($selectionBase.BaseRef) ($($selectionBase.Base))" } else { 'an unknown base' })")
+		foreach ($file in $selection.Files.Keys) { $summaryLines.Add("  $(& $relativeKey $file)  <- $(@($selection.Files[$file]) -join '; ')") }
+	}
+	foreach ($note in @($selection.Notes)) { $summaryLines.Add("  note: $note") }
+	$summaryLines.Add('')
+}
 
 $summaryLines.Add('Workers')
 foreach ($state in $workerStates) {
 	if ($state.Summary -and -not $state.Summary.bootstrapError) {
-		$summaryLines.Add([string]::Format($invariant, '  [{0}] {1,4} file(s)  {2,5} test(s)  {3,7:N2}s  exit {4}',
-				$state.Index, $state.Files.Count, [int]$state.Summary.counts.total, [double]$state.Summary.durationSec, $state.ExitCode))
+		$startup = if ($null -ne $state.StartupSec) { [string]::Format($invariant, '{0,5:N1}s', $state.StartupSec) } else { '    ?' }
+		$summaryLines.Add([string]::Format($invariant, '  [{0}] {1,4} file(s)  {2,5} test(s)  {3,7:N2}s  start-up {4}  exit {5}',
+				$state.Index, $state.Files.Count, [int]$state.Summary.counts.total, [double]$state.Summary.durationSec, $startup, $state.ExitCode))
 	}
 	else {
 		$summaryLines.Add([string]::Format($invariant, '  [{0}] {1,4} file(s)  ----- FAILED TO REPORT -----  exit {2}',
@@ -900,21 +1441,41 @@ else {
 Write-Host ''
 Write-Host -ForegroundColor DarkGray "  Log file location => $runLogPath"
 
+if ($selectorMisses.Count -gt 0) {
+	Write-Host ''
+	Write-Host -ForegroundColor Yellow "  Selector miss: $($selectorMisses.Count) failing file(s) that -Changed did not (or would not) select - see the run log."
+	if ($CI) {
+		# GitHub Actions annotations, so a miss shows on the PR next to the file it concerns.
+		$repositoryPrefix = "$(@(git -C $script:PowerShellRoot rev-parse --show-prefix 2>$null)[0])".Trim()
+		foreach ($miss in $selectorMisses) {
+			$file = ($miss -split ' ', 2)[0]
+			Write-Host "::warning file=$repositoryPrefix$file::Selector miss: $miss"
+		}
+	}
+}
+if ($gateReminder) {
+	Write-Host -ForegroundColor DarkYellow "  $gateReminder"
+}
+
 if ($PassThru) {
 	[pscustomobject]@{
-		Result       = if ($exitCode -eq 0) { 'Passed' } else { 'Failed' }
-		TotalCount   = $totals.total
-		PassedCount  = $totals.passed
-		FailedCount  = $totals.failed
-		SkippedCount = $totals.skipped
-		NotRunCount  = $totals.notRun
-		Duration     = $runStopwatch.Elapsed
-		Workers      = $workerStates.Count
-		Containers   = @($allContainers)
-		Failures     = @($allFailures)
-		ResultFiles  = @($workerStates | ForEach-Object { $_.XmlPath } | Where-Object { Test-Path -LiteralPath $_ })
-		RunLog       = $runLogPath
-		ExitCode     = $exitCode
+		Result         = if ($exitCode -eq 0) { 'Passed' } else { 'Failed' }
+		TotalCount     = $totals.total
+		PassedCount    = $totals.passed
+		FailedCount    = $totals.failed
+		SkippedCount   = $totals.skipped
+		NotRunCount    = $totals.notRun
+		Duration       = $runStopwatch.Elapsed
+		Workers        = $workerStates.Count
+		WorkerChoice   = $workerChoice
+		Conditions     = $conditions
+		Selection      = $selection
+		SelectorMisses = @($selectorMisses)
+		Containers     = @($allContainers)
+		Failures       = @($allFailures)
+		ResultFiles    = @($workerStates | ForEach-Object { $_.XmlPath } | Where-Object { Test-Path -LiteralPath $_ })
+		RunLog         = $runLogPath
+		ExitCode       = $exitCode
 	}
 }
 

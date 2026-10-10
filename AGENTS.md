@@ -86,6 +86,7 @@ Skipping required documentation updates is treated the same as leaving the chang
 - Tests use Pester framework in `Modules/Tests/`
 - Every new exported function should include corresponding tests in `Windows/PowerShell/Modules/Tests/Modules/<Module>/`
 - Tests should validate behavior, side effects, branching, and edge cases; do not add tests that only assert output message text
+- A test file whose value is real I/O (real git, real processes, real waits, real network) carries `-Tag 'Integration'` on its top-level `Describe`, so `Run-Tests -Quick` can skip it; a file that is slow only because it is large stays untagged
 
 ## Running Tests (Delegate to the Developer)
 
@@ -94,6 +95,7 @@ Do NOT run the test suite yourself - no `Import-Module` + `Invoke-Pester`, and n
 - **Scoped to what you changed (preferred):** `Run-Tests -TestName "<ChangedFunctionOrPattern>"` - matches `*<pattern>*.Tests.ps1`. Run it once per changed area, e.g. `Run-Tests -TestName "Resize-Windows"`. List every command when several areas changed.
 - **Repository coherence (docs, manifests, guides):** `Run-Tests -TestName "Infrastructure"` - runs the `Infrastructure-*` gate: documentation links, manifest completeness in both directions, the docs/modules function reference (both directions plus alphabetical order), and the per-function configuration guides. Hand the developer this command after any change to exported functions, manifests, or documentation pages.
 - **Whole suite (only for broad/cross-cutting changes):** `Run-Tests`.
+- **Faster modes the developer may use:** `Run-Tests -Changed` runs only the test files the branch's changes can affect (conservatively; it prints why each file was picked, and runs everything for a change it does not recognize), and `-Quick` skips the `Integration` tier. Neither replaces the full `Run-Tests` before merging. Keep handing over `-TestName` commands until the selector audit shows `-Changed` rarely misses.
 - **Diagnosing a failure:** the developer can paste the run log the verdict points at (`Modules/Tests/Results/TestRun_<timestamp>.log`) - it already holds the full per-test output. `-Detailed` echoes the same thing to the console.
 
 State which tests each command covers, then wait for the developer's pass/fail report before treating the change as verified. Only run tests yourself if the developer explicitly asks you to.

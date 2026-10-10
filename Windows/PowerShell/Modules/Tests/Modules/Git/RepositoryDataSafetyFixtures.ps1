@@ -84,7 +84,13 @@ function Restore-RepositoryDataSafety {
 	$global:Configuration = $script:DataSafetySaved.Configuration
 	$global:LoggingState = $script:DataSafetySaved.LoggingState
 	$global:MachineType = $script:DataSafetySaved.MachineType
-	foreach ($name in $script:DataSafetySaved.Env.Keys) { [Environment]::SetEnvironmentVariable($name, $script:DataSafetySaved.Env[$name]) }
+	# A variable that was not set is removed again, not set to "": PowerShell passes $null to a .NET
+	# string parameter as an empty string, and an empty GIT_AUTHOR_NAME overrides every user.name,
+	# which made every later real-git test in the same worker fail to commit.
+	foreach ($name in $script:DataSafetySaved.Env.Keys) {
+		if ($null -eq $script:DataSafetySaved.Env[$name]) { Remove-Item -LiteralPath "Env:$name" -ErrorAction SilentlyContinue }
+		else { [Environment]::SetEnvironmentVariable($name, $script:DataSafetySaved.Env[$name]) }
+	}
 }
 
 function Set-RepositoryDataSafetyDefaults {

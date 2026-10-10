@@ -15,10 +15,15 @@ BeforeAll {
 }
 
 AfterAll {
-	foreach ($name in $script:SavedIdentity.Keys) { [Environment]::SetEnvironmentVariable($name, $script:SavedIdentity[$name]) }
+	# Unset stays unset: [Environment]::SetEnvironmentVariable($name, $null) leaves "" behind in
+	# PowerShell, and an empty GIT_AUTHOR_NAME breaks every later commit in this worker.
+	foreach ($name in $script:SavedIdentity.Keys) {
+		if ($null -eq $script:SavedIdentity[$name]) { Remove-Item -LiteralPath "Env:$name" -ErrorAction SilentlyContinue }
+		else { [Environment]::SetEnvironmentVariable($name, $script:SavedIdentity[$name]) }
+	}
 }
 
-Describe "Restore-RepositoryStash" {
+Describe "Restore-RepositoryStash" -Tag 'Integration' {
 	BeforeEach {
 		$script:Repo = Join-Path $TestDrive ([System.IO.Path]::GetRandomFileName())
 		git -c init.defaultBranch=master init --quiet $script:Repo

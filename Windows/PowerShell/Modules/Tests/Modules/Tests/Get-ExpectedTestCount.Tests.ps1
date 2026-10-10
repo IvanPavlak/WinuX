@@ -171,6 +171,90 @@ Describe "X" {
 		}
 	}
 
+	Context "Tags and -ExcludeTag" {
+		It "reports every literal tag in the file and counts everything when nothing is excluded" {
+			$file = New-FakeTestFile @'
+Describe "X" -Tag 'Integration' {
+	It "a" { }
+	Context "Y" -Tag 'Slow', 'Git' {
+		It "b" -Tag @('Deep') { }
+	}
+}
+'@
+			$result = Get-ExpectedTestCount -Path $file
+			$result.Count | Should -Be 2
+			$result.Excluded | Should -Be 0
+			$result.Resolved | Should -BeTrue
+			@($result.Tags | Sort-Object) | Should -Be @('Deep', 'Git', 'Integration', 'Slow')
+		}
+
+		It "leaves out every test under an excluded Describe tag, reporting them in Excluded" {
+			$file = New-FakeTestFile @'
+Describe "X" -Tag 'Integration' {
+	It "a" { }
+	It "b" -ForEach @{ N = 1 }, @{ N = 2 } { }
+}
+Describe "Y" {
+	It "c" { }
+}
+'@
+			$result = Get-ExpectedTestCount -Path $file -ExcludeTag 'Integration'
+			$result.Count | Should -Be 1
+			$result.Excluded | Should -Be 3
+			$result.Resolved | Should -BeTrue
+		}
+
+		It "leaves out a test whose own tag or whose Context tag is excluded, case-insensitively" {
+			$file = New-FakeTestFile @'
+Describe "X" {
+	It "kept" { }
+	It "own tag" -Tag 'integration' { }
+	Context "C" -Tag 'Integration' {
+		It "context tag" { }
+	}
+}
+'@
+			$result = Get-ExpectedTestCount -Path $file -ExcludeTag 'Integration'
+			$result.Count | Should -Be 1
+			$result.Excluded | Should -Be 2
+		}
+
+		It "honours a wildcard in -ExcludeTag" {
+			$file = New-FakeTestFile @'
+Describe "X" -Tag 'IntegrationGit' {
+	It "a" { }
+}
+Describe "Y" { It "b" { } }
+'@
+			(Get-ExpectedTestCount -Path $file -ExcludeTag 'Integration*').Count | Should -Be 1
+		}
+
+		It "marks the file unresolved when a tag is computed and something is excluded" {
+			$file = New-FakeTestFile @'
+$tags = 'Integration'
+Describe "X" -Tag $tags {
+	It "a" { }
+}
+Describe "Y" { It "b" { } }
+'@
+			$result = Get-ExpectedTestCount -Path $file -ExcludeTag 'Integration'
+			$result.Resolved | Should -BeFalse
+			$result.Count | Should -Be 1
+		}
+
+		It "ignores a computed tag when nothing is excluded" {
+			$file = New-FakeTestFile @'
+$tags = 'Integration'
+Describe "X" -Tag $tags {
+	It "a" { }
+}
+'@
+			$result = Get-ExpectedTestCount -Path $file
+			$result.Resolved | Should -BeTrue
+			$result.Count | Should -Be 1
+		}
+	}
+
 	Context "Several files" {
 		It "returns one row per file, in the order given, carrying the path" {
 			$first = New-FakeTestFile 'Describe "A" { It "a" { } }' -Name "First.Tests.ps1"

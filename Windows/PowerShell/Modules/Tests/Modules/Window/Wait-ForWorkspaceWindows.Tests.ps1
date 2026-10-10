@@ -7,12 +7,18 @@ BeforeAll {
 	. "$FunctionsPath\Wait-ForWorkspaceWindows.ps1"
 	# The claim set the wait derives its pre-existing and excluded sets from.
 	. "$FunctionsPath\New-WindowClaimSet.ps1"
+	. (Join-Path $ModuleRoot "Helper\Functions\New-WaitClock.ps1")
+	. (Join-Path $ModuleRoot "Tests\Modules\Support\FakeWaitClock.ps1")
 }
 
 Describe "Wait-ForWorkspaceWindows" {
 	BeforeEach {
 		Mock Resolve-LayoutTokens { param([hashtable]$LayoutEntry) $LayoutEntry }
 		Mock Clear-WindowCache { }
+		# Virtual time: poll sleeps, the stability floor, the grace period and the timeout all run
+		# on the fake clock, so a test asserts how long the wait took without waiting for it.
+		$script:clock = New-FakeWaitClock
+		Mock New-WaitClock { $script:clock }
 	}
 
 	It "rejects empty layout input" {
@@ -80,41 +86,31 @@ Describe "Wait-ForWorkspaceWindows" {
 		}
 
 		It "returns success without an extra collective settle once windows are individually stable (CollectiveStabilitySeconds defaults to 0)" {
-			$stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
-
 			$result = Wait-ForWorkspaceWindows `
 				-LayoutConfig @(@{ ProcessName = 'App' }) `
 				-TimeoutSeconds 10 `
 				-MinimumStableDurationSeconds 0
 
-			$stopwatch.Stop()
-
 			$result.Success | Should -BeTrue
 			$result.WindowStates.Count | Should -Be 1
 			# Individual stability tracking already resets on any change - the old
 			# sequential collective phase added a guaranteed +1s to every open.
-			$stopwatch.Elapsed.TotalSeconds | Should -BeLessThan 1.5
+			($script:clock.ElapsedMs() / 1000) | Should -BeLessThan 1.5
 		}
 
 		It "honors an explicit CollectiveStabilitySeconds settle when requested" {
-			$stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
-
 			$result = Wait-ForWorkspaceWindows `
 				-LayoutConfig @(@{ ProcessName = 'App' }) `
 				-TimeoutSeconds 10 `
 				-MinimumStableDurationSeconds 0 `
 				-CollectiveStabilitySeconds 0.4
 
-			$stopwatch.Stop()
-
 			$result.Success | Should -BeTrue
-			$stopwatch.Elapsed.TotalSeconds | Should -BeGreaterOrEqual 0.4
+			($script:clock.ElapsedMs() / 1000) | Should -BeGreaterOrEqual 0.4
 		}
 
 		It "abandons an entry whose process never appears instead of burning the whole timeout" {
 			Mock Get-Process { @([PSCustomObject]@{ ProcessName = 'pwsh' }) }
-
-			$stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
 
 			$result = Wait-ForWorkspaceWindows `
 				-LayoutConfig @(
@@ -125,11 +121,9 @@ Describe "Wait-ForWorkspaceWindows" {
 				-MinimumStableDurationSeconds 0 `
 				-ProcessAbsentGraceSeconds 1
 
-			$stopwatch.Stop()
-
 			# The dead entry is abandoned after the grace period and the loop exits as soon
 			# as everything else is stable - nowhere near the 30s timeout.
-			$stopwatch.Elapsed.TotalSeconds | Should -BeLessThan 10
+			($script:clock.ElapsedMs() / 1000) | Should -BeLessThan 10
 			$result.Success | Should -BeFalse
 			@($result.Abandoned) | Should -Contain 'GhostProcessNeverRuns'
 			@($result.AbandonedEntries)[0].ProcessName | Should -Be 'GhostProcessNeverRuns'
@@ -278,7 +272,6 @@ Describe "Wait-ForWorkspaceWindows" {
 			}
 			Mock Get-Process { @([PSCustomObject]@{ ProcessName = 'App' }) }
 			$script:layout = @(@{ ProcessName = 'App'; DesktopNumber = 1 })
-			$script:clock = [System.Diagnostics.Stopwatch]::StartNew()
 		}
 
 		It "counts a pre-existing window as stable on first sight instead of observing it for the stability floor" {
@@ -288,7 +281,7 @@ Describe "Wait-ForWorkspaceWindows" {
 			$result = Wait-ForWorkspaceWindows -LayoutConfig $script:layout -TimeoutSeconds 5 -MinimumStableDurationSeconds 3 -PollIntervalSeconds 0.05 -Claims (New-WindowClaimSet -Existing $preExisting)
 
 			$result.Success | Should -BeTrue
-			$script:clock.Elapsed.TotalSeconds | Should -BeLessThan 2
+			($script:clock.ElapsedMs() / 1000) | Should -BeLessThan 2
 			$result.WindowStates.ContainsKey([IntPtr]100) | Should -BeTrue
 		}
 
@@ -299,7 +292,7 @@ Describe "Wait-ForWorkspaceWindows" {
 			$result = Wait-ForWorkspaceWindows -LayoutConfig $script:layout -TimeoutSeconds 5 -MinimumStableDurationSeconds 1 -PollIntervalSeconds 0.05 -Claims (New-WindowClaimSet -Existing $preExisting)
 
 			$result.Success | Should -BeTrue
-			$script:clock.Elapsed.TotalSeconds | Should -BeGreaterOrEqual 0.9
+			($script:clock.ElapsedMs() / 1000) | Should -BeGreaterOrEqual 0.9
 		}
 
 		It "gives a window the launch actions created no credit for the time it was visible before the wait started" {
@@ -309,7 +302,7 @@ Describe "Wait-ForWorkspaceWindows" {
 			$result = Wait-ForWorkspaceWindows -LayoutConfig $script:layout -TimeoutSeconds 5 -MinimumStableDurationSeconds 1 -PollIntervalSeconds 0.05
 
 			$result.Success | Should -BeTrue
-			$script:clock.Elapsed.TotalSeconds | Should -BeGreaterOrEqual 0.9
+			($script:clock.ElapsedMs() / 1000) | Should -BeGreaterOrEqual 0.9
 		}
 
 		It "never matches an excluded window, and abandons an entry only such windows match after the grace period" {
@@ -324,7 +317,7 @@ Describe "Wait-ForWorkspaceWindows" {
 			@($result.AbandonedEntries)[0].ProcessName | Should -Be 'App'
 			$result.WindowStates.ContainsKey([IntPtr]100) | Should -BeFalse
 			# The grace period, not the timeout.
-			$script:clock.Elapsed.TotalSeconds | Should -BeLessThan 5
+			($script:clock.ElapsedMs() / 1000) | Should -BeLessThan 5
 		}
 
 		It "matches the new window that appears next to an excluded one" {

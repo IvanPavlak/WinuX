@@ -28,6 +28,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          # The selector audit (below) diffs against the PR's base or the pushed range, so it needs
+          # the history. Blobless: commits and trees only, file contents fetched on demand.
+          fetch-depth: 0
+          filter: blob:none
 
       # The pinned version lives in one file the harness and Install-PowerShellModules also
       # read, so CI can never disagree with a local run. Bump it there, deliberately.
@@ -62,10 +67,19 @@ jobs:
       # The harness is the same one Run-Tests uses locally: it bootstraps each worker session
       # itself (PSModulePath, $global:Configuration, module imports), so this step no longer
       # carries an inline copy of that bootstrap that could drift from the local one.
+      # The full suite always runs here. -Since only adds the selector audit: the harness also works
+      # out what Run-Tests -Changed would have selected for this diff and reports every failing file
+      # outside that selection as a selector miss (a warning annotation and a run-log line), so the
+      # selector's miss rate is measured rather than assumed. No base (a manual run, a new branch's
+      # all-zero "before") means no audit.
       - name: Run Pester
         shell: pwsh
+        env:
+          SELECTOR_SINCE: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event.before }}
         run: |
-          & "$env:GITHUB_WORKSPACE/Windows/PowerShell/Modules/Tests/Invoke-TestSuite.ps1" -CI
+          $harness = @{ CI = $true }
+          if ($env:SELECTOR_SINCE -and $env:SELECTOR_SINCE -notmatch '^0+$') { $harness.Since = $env:SELECTOR_SINCE }
+          & "$env:GITHUB_WORKSPACE/Windows/PowerShell/Modules/Tests/Invoke-TestSuite.ps1" @harness
           exit $LASTEXITCODE
 
       - name: Upload test results

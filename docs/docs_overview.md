@@ -21,9 +21,9 @@ Windows/
 │       ├── Git/
 │       ├── Logging/
 │       ├── System/
-│       ├── Window/                            # WindowNative.cs + Layouts/
+│       ├── Window/                            # WindowNative.cs (cached as an assembly by Import-NativeAssembly.ps1) + WindowModuleState.ps1 + Layouts/
 │       ├── Workflow/                          # + State/ (what each workspace open produced)
-│       └── Tests/                             # Pester test files
+│       └── Tests/                             # Pester test files + Invoke-TestSuite.ps1 harness and its helper scripts
 └── docs/                                      # Docsify documentation site
 Unix/                                         # the Unix half in bash (docs/unix/README.md)
 ├── modules/<Module>/                         # module.conf manifest, bin/ commands, functions.sh

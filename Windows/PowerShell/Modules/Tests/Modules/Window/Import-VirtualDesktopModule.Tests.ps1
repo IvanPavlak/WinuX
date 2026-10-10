@@ -1,8 +1,9 @@
 #Requires -Modules Pester
 
 BeforeAll {
-	$ModulePath = Join-Path (Get-RepositoryPath).Modules "Window\Window.psm1"
-	Import-Module $ModulePath -Force
+	# Clean module state without re-importing (and re-dot-sourcing) the whole module.
+	. (Join-Path (Get-RepositoryPath).Modules "Tests\Modules\Support\Reset-WindowModuleState.ps1")
+	Reset-WindowModuleState
 }
 
 Describe "Import-VirtualDesktopModule" {
