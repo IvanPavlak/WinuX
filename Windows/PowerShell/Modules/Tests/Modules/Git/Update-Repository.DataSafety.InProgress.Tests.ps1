@@ -18,7 +18,7 @@ AfterAll {
 	Restore-RepositoryDataSafety
 }
 
-Describe "Repository update data safety (real git): work in progress is never touched" {
+Describe "Repository update data safety (real git): work in progress is never touched" -Tag 'Integration' {
 	BeforeAll {
 		# Inside the Describe so the template lands in this block's TestDrive and outlives every Context.
 		Initialize-RepositoryDataSafety

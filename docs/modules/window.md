@@ -2429,6 +2429,12 @@ The `-Info` object is expected to expose `ProcessName`, `Title`, `Handle`, `Proc
 Write-WindowInfoBlock -Info $windowInfo
 ```
 
+## Native Assembly Cache
+
+The module's Windows API types live in `WindowNative.cs`, compiled when the module loads. Compiling C# costs a few hundred milliseconds in every process that imports the module - every shell and every test worker - so `Window.psm1` hands the file to `Import-NativeAssembly.ps1` (a plain script beside it, not an exported function), which compiles it once into `%LOCALAPPDATA%\WinuX\NativeCache\WindowNative_<hash>.dll` and has every later process only load that assembly, in tens of milliseconds. The hash covers the source and the PowerShell version, so editing `WindowNative.cs` or upgrading PowerShell compiles a fresh assembly on the next import and removes the superseded ones (one still loaded by an open shell stays until a later import). Concurrent first imports cannot clobber each other: each compiles to its own file and moves it into place. Any failure on that path - an unwritable cache folder, a locked or corrupt assembly - falls back to the in-memory compile the module always used, so the cache can only make an import faster, never break it. Deleting the folder is always safe.
+
+The module's state - delays, tolerances and caches - is initialized by `WindowModuleState.ps1`, which `Window.psm1` dot-sources. The test suite runs that same file to reset the module between test files (`Tests/Modules/Support/Reset-WindowModuleState.ps1`) instead of re-importing the whole module.
+
 ## Tested Dependency Versions
 
 The Window module relies on specific external software. The **single source of truth** for the known-working, tested combination is the `TESTED VERSIONS` comment block in `Windows/PowerShell/Modules/Bootstrap/Data/WinGetApps.csv` - the table below mirrors it. Tested on **Windows 11 25H2** (build 26200). Pinning these versions ensures reliable operation and makes it immediately obvious when a breaking update occurs.

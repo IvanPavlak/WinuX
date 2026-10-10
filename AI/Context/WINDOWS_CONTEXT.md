@@ -146,7 +146,8 @@ TerminalTabs = @{
 - **Framework**: Pester
 - **Location**: `Modules/Tests/Modules/`
 - **Coverage**: one `*.Tests.ps1` file per function under `Modules/Tests/Modules/<Module>/`
-- **Run**: `Run-Tests [-TestName] [-Path] [-Detailed] [-PassThru]`
+- **Run**: `Run-Tests [-TestName] [-Path] [-Workers] [-Detailed] [-PassThru] [-Quick] [-Changed [-Since <ref>]] [-BuildImpactMap]` - `-Changed` and `-Quick` are developer conveniences; the full `Run-Tests` stays the gate
+- **Integration tier**: test files doing real I/O (real git, real processes) carry `-Tag 'Integration'` on their top-level `Describe`; `-Quick` skips them
 - **Verifying a change (agents)**: do NOT run the suite yourself - ask the developer to run the scoped command and report failures:
     - Just what changed (preferred): `Run-Tests -TestName "<ChangedFunctionOrPattern>"`
     - Everything (broad changes): `Run-Tests`

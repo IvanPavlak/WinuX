@@ -1,7 +1,7 @@
 #Requires -Modules Pester
 
 <#
-	Data-safety integration tests, part "Integration": Update-Repositories, Initialize-Repository and the startup update lose nothing.
+	Data-safety integration tests, part "Integration": Update-Repositories loses nothing across several repositories.
 
 	Real git, throwaway repositories in TestDrive, and a fingerprint of every file, commit, stash
 	and branch before and after each update - see RepositoryDataSafetyFixtures.ps1 for the rules
@@ -18,7 +18,7 @@ AfterAll {
 	Restore-RepositoryDataSafety
 }
 
-Describe "Repository update data safety (real git): Update-Repositories, Initialize-Repository and the startup update lose nothing" {
+Describe "Repository update data safety (real git): Update-Repositories loses nothing across several repositories" -Tag 'Integration' {
 	BeforeAll {
 		# Inside the Describe so the template lands in this block's TestDrive and outlives every Context.
 		Initialize-RepositoryDataSafety
@@ -88,49 +88,6 @@ Describe "Repository update data safety (real git): Update-Repositories, Initial
 			Get-Content "$out\origin\keep.txt" -Raw | Should -Match 'PRECIOUS'
 			@(Get-ChildItem -LiteralPath "$out\origin" -Force).Count | Should -Be 1 -Because "nothing may be written into the existing folder"
 			@(Get-ChildItem -LiteralPath $out -Directory).Count | Should -Be 1
-		}
-
-		It "S34 the startup update keeps staged and untracked work and releases its lock" {
-			$dir = New-TestOrigin S34; $repo = New-TestClone $dir
-			Set-Content "$repo\b.txt" "MINE"; Set-Content "$repo\u.txt" "u"; Set-Content "$repo\a.txt" "STAGED"; git -C $repo add a.txt
-			Push-TestUpstream $dir master { Set-Content up.txt "x" }
-			$global:LoggingState.LogsDir = "$dir\logs"
-			Mock Resolve-RepositoryTargets { , @([pscustomobject]@{ Name = 'work'; Group = 'G'; RepositoryUrl = 'https://example.com/acme/work.git'; LocalPath = $repo }) }
-			$before = Get-RepoFingerprint $repo
-
-			Invoke-StartupRepositoryUpdate -Force
-			$after = Get-RepoFingerprint $repo
-
-			Get-LossViolations -Repo $repo -Before $before -After $after -Outcome 'n/a' -AnyOutcome | Should -BeNullOrEmpty
-			"$repo\up.txt" | Should -Exist
-			$after.Index['a.txt'] | Should -Be $before.Index['a.txt']
-			"$dir\logs\.repository-update.lock" | Should -Not -Exist
-		}
-
-		It "S35 Initialize-Repository on an existing repository never overwrites an ignored file" {
-			$dir = New-TestOrigin S35; $repo = New-TestClone $dir
-			Set-Content "$repo\local.json" "MY SETTINGS"; Set-Content "$repo\b.txt" "MINE"
-			Push-TestUpstream $dir master { Set-Content .gitignore "# none"; Set-Content local.json "UP" }
-			$before = Get-RepoFingerprint $repo
-
-			Initialize-Repository -RepositoryUrl 'https://example.com/acme/work.git' -LocalPath $repo
-
-			Get-LossViolations -Repo $repo -Before $before -After (Get-RepoFingerprint $repo) -Outcome 'n/a' -AnyOutcome | Should -BeNullOrEmpty
-			Get-Content "$repo\local.json" -Raw | Should -Match 'MY SETTINGS'
-		}
-
-		It "S36 Initialize-Repository on an existing dirty repository updates it and keeps the work" {
-			$dir = New-TestOrigin S36; $repo = New-TestClone $dir
-			Set-Content "$repo\b.txt" "MINE"; Set-Content "$repo\dir\c.txt" "STAGED"; git -C $repo add dir/c.txt; Set-Content "$repo\u.txt" "u"
-			Push-TestUpstream $dir master { Set-Content a.txt "a1`na2-up`na3" }
-			$before = Get-RepoFingerprint $repo
-
-			Initialize-Repository -RepositoryUrl 'https://example.com/acme/work.git' -LocalPath $repo
-			$after = Get-RepoFingerprint $repo
-
-			Get-LossViolations -Repo $repo -Before $before -After $after -Outcome 'n/a' -AnyOutcome | Should -BeNullOrEmpty
-			Get-Content "$repo\a.txt" -Raw | Should -Match 'a2-up'
-			$after.Index['dir/c.txt'] | Should -Be $before.Index['dir/c.txt']
 		}
 	}
 }

@@ -1126,6 +1126,31 @@ Stage names: `Schema`, `Greeting`, `FastfetchImageLogo`, `OnefetchStyle`, `PSRea
 4. `OhMyPosh` around 150-200 ms - oh-my-posh's own process spawn plus its cached init script; this is the tool's design.
 
 **If a stage is not needed at all on a machine**, turn it off in configuration (`TerminalGreeting.*` for the greeting steps, `Logging.Maintenance.Enabled` for the sweep) rather than in the profile.
+
+### A Full Test Run Is Suddenly Slower
+
+**Problem:** `Run-Tests` took much longer than usual, with the same tests.
+
+**Diagnosis:** the run log the verdict points at (`Modules/Tests/Results/TestRun_<run>.log`) says why in its first lines:
+
+1. `Machine` - a high foreign load, or a busy process in `top other CPU` (a browser, an IDE indexing, Docker/WSL, a Defender scan as `MsMpEng`), means the machine was busy, not the suite. `clock min` well below 100% means the CPU ran under its rated speed (power plan, thermal or battery limits).
+2. `Start-up` - worker start-up far above its usual few seconds is contention: every worker pays it before its first test. A run that started while another one was still going pays it twice.
+3. `Workers` - the phase that chose the count. `Explore`, `Confirm` and `Recheck` runs deliberately try a neighbouring count and can be a little slower; that is the learner measuring, and a run on a busy machine is not recorded (`Worker history : not recorded: machine busy`).
+4. `Slowest 20 files` - one file far above its usual time points at that file, not the machine.
+
+Compare with an earlier run under similar `Machine` conditions before concluding the suite itself got slower. To make the learner start over (for example after a hardware change it did not notice), delete `Results/workers.json`; to pin the count meanwhile, pass `-Workers <N>`.
+
+### A Change Was Not Caught By Run-Tests -Changed
+
+**Problem:** `Run-Tests -Changed` was green, but the full suite (or CI) then failed in a file the selection did not run. The run log and the verdict report it as a **selector miss**.
+
+**Why it happened:** `-Changed` selects from what it can see: the changed files' names, the references in the code's tokens (calls, and names written as strings), fixtures by name, and - when one has been built - the runtime impact map. A test that depends on the change some other way (a name built at runtime from pieces, a file read by path, configuration a test fixture reads) is invisible to the static rules.
+
+**Solution:**
+
+1. Rebuild the runtime map, which records what each test file actually ran: `Run-Tests -BuildImpactMap` (about twice a normal run). A map older than 50 commits or built for another Pester version is ignored, and the selection output says so.
+2. If the miss is structural, fix the rule in `Modules/Tests/Get-TestImpact.ps1` and add the case to `Get-TestImpact.Tests.ps1`.
+3. Meanwhile, the full suite stays the gate: a `-Changed` run ends with a reminder whenever the current tree has no green full run yet.
 ### High Memory Usage
 
 **Problem:** PowerShell using too much RAM.

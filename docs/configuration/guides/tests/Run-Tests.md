@@ -13,6 +13,9 @@ Run-Tests
 Run-Tests -TestName "Open-Terminal"
 Run-Tests -TestName "Open-Terminal", "Close-Workspace"
 Run-Tests -Detailed
+Run-Tests -Changed
+Run-Tests -Changed -Quick
+Run-Tests -BuildImpactMap
 ```
 
 ## Related

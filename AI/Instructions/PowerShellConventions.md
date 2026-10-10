@@ -169,8 +169,9 @@ Turn verbose output on globally with `Set-LogLevel Verbose`, or scope it to one 
 - Test files live in `Modules/Tests/Modules/`
 - Naming: `FunctionName.Tests.ps1`
 - Framework: Pester
-- Run via: `Run-Tests [-TestName "FunctionName"] [-Detailed]`
+- Run via: `Run-Tests [-TestName "FunctionName"] [-Detailed]`; `Run-Tests -Changed` runs only the files the branch's changes can affect and `-Quick` skips the `Integration` tier - conveniences for the developer, never a replacement for the full `Run-Tests` before merging
 - **Agents:** do NOT run the suite yourself (no `Import-Module` + `Invoke-Pester`, no bootstrap scripts). After changing code or tests, give the developer the scoped command - `Run-Tests -TestName "<ChangedFunction>"` (or `Run-Tests` for broad changes) - and ask them to report failures
+- Tag a test file `-Tag 'Integration'` on its top-level `Describe` when its value is real I/O (real git, real processes, real waits, real network); a file slow only because it is large stays untagged
 - Mock external dependencies (processes, file system, network)
 - Test configuration-dependent functions with synthetic config hashtables
 - Every new exported function should add corresponding tests in the same change whenever practical

@@ -8,6 +8,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.90] - 2026-10-10
+
+### Added
+
+- **`Run-Tests -Changed` runs only what a change can affect.** It compares the working tree with the merge base of `master` (or `-Since <ref>`) and selects, conservatively: changed test files, every test that uses a changed fixture, the tests of every changed function and of its transitive callers (references read off each file's tokens, including names written as strings; cached in `Results/dependency-map.json`), what the runtime impact map says executed it, and the Infrastructure tests for documentation, manifests and added or removed functions. Configuration, the profile, the harness, loaders, the Logging module, `.cs` sources, module data files, `AI/` and any path it does not recognize run the full suite. The selection and the reason for each file are printed before the run. New harness helpers `Get-ChangedPaths`, `Get-TestReferenceMap`, `Get-TestImpact`. Tests: `Get-TestImpact.Tests.ps1`, `Get-ChangedPaths.Tests.ps1`. Docs: the Tests module reference, troubleshooting ("A Change Was Not Caught By Run-Tests -Changed").
+- **`Run-Tests -BuildImpactMap` records what each test file actually runs.** A full run with one command breakpoint per function writes `Results/impact-map.json`, which `-Changed` unions with its static analysis; a map built for another Pester version or more than 50 commits ago is ignored and the selection says so. New helper `Read-ImpactMap`. Tests: `Read-ImpactMap.Tests.ps1`.
+- **`Run-Tests -Quick` skips the Integration tier.** Test files whose value is real I/O carry `-Tag 'Integration'` (the real-git data-safety files, `Restore-RepositoryStash.Tests.ps1`, and the harness tests that drive real git or processes); `-Quick` does not dispatch a wholly tagged file and excludes the tag elsewhere, and the live counter leaves the excluded tests out (`Get-ExpectedTestCount` gains `-ExcludeTag`, `Excluded` and `Tags`). An Integration file selected by `-Changed` because its own subject changed still runs. Tests: `Get-ExpectedTestCount.Tests.ps1`. Docs: the Tests module reference, `AGENTS.md`, `AI/Instructions/PowerShellConventions.md`, `CONTRIBUTING.md`.
+- **The worker count is learned per machine.** Without `-Workers`, the harness explores the neighbours of the best count (x1.25, then x0.75), settles on the lowest median wall clock over the last five runs (two runs before a count can win), and re-checks a neighbour every 20th run; only full, green runs on a quiet machine teach it (`Results/workers.json`). A scoped run gets no more workers than its files can keep busy. `-CI` keeps `min(CPU, 12)`. New harness helpers `Get-AdaptiveWorkerCount`, `Read-WorkerHistory`, `Write-WorkerHistory`, `Test-WorkerSampleRecordable`. Tests: `Get-AdaptiveWorkerCount.Tests.ps1`, `WorkerHistory.Tests.ps1`.
+- **The run log explains a slow run.** Local runs sample the machine every two seconds in the background - CPU use, processor performance, free memory, and the CPU of the busiest processes outside the run - and the log gains `Machine`, `Start-up` (per worker, spawn to first test file), `Workers` (which phase chose the count, and why) and `Worker history` lines. New harness helpers `Start-RunConditionSampler`, `Stop-RunConditionSampler`, `Get-RunConditionSummary`. Tests: `Get-RunConditionSummary.Tests.ps1`. Docs: the Tests module reference, troubleshooting ("A Full Test Run Is Suddenly Slower").
+- **A gate stamp and a selector audit.** Every green full run records the tree it tested in `Results/last-green.json` (new helper `Get-WorkingTreeFingerprint`), and `-Changed` and `-Quick` end with a reminder when the current tree has no green full run. A full run that fails in a file the last `-Changed` run did not select, and - in CI, where the `Tests` workflow now passes `-Since` with the PR's base - any failing file outside what `-Changed` would have picked, is reported as a selector miss (a GitHub warning annotation in CI). New helper `Get-SelectorMisses`. Tests: `Read-ImpactMap.Tests.ps1`, `Get-ChangedPaths.Tests.ps1`.
+- **`WINUX_TEST_TEMP` moves the workers' temp folder.** Set, the workers' `TEMP`/`TMP` (and so `TestDrive`) live there, for example on a Dev Drive; unset, nothing changes.
+
+### Changed
+
+- **The Window module loads `WindowNative.cs` precompiled.** The new `Window/Import-NativeAssembly.ps1` compiles it once into `%LOCALAPPDATA%\WinuX\NativeCache` (keyed by the source and the PowerShell version) and every later process only loads the assembly, falling back to the in-memory compile on any failure; a shell's Window import drops from about 1 s to about 0.55 s. The module's state now lives in `Window/WindowModuleState.ps1`, and Window test files reset it with the new `Tests/Modules/Support/Reset-WindowModuleState.ps1` instead of re-importing the module. Tests: `Import-NativeAssembly.Tests.ps1`, `Reset-WindowModuleState.Tests.ps1`. Docs: the Window module reference ("Native Assembly Cache").
+- **Files with no timing yet are weighted by their test count.** A new file is seeded from its statically counted tests times the median per test, and a new Integration file from a 60-second seed, so a heavy new file is no longer stacked on other heavy files on its first run (`Get-TestFileWeight`, `Get-MedianTestDuration`). Tests: `Get-TestFileWeight.Tests.ps1`.
+- **`Wait-ForWorkspaceWindows.Tests.ps1` runs on the fake wait clock.** Its timeouts, grace periods and stability floors used to run in real time (about 15 s); the tests now mock `New-WaitClock` with `FakeWaitClock` and assert the same durations in virtual time (under 2 s). No assertion was weakened and the function did not change.
+- **The real-git data-safety scenarios are split over seven files** (`LocalWork`, `Overlap`, `Stash`, `Failure`, `InProgress`, `Integration`, `Startup`), so no single file is the critical path of a full run. No scenario or assertion changed.
+
+### Fixed
+
+- **The real-git tests no longer leave an empty git identity behind.** The data-safety fixture and `Restore-RepositoryStash.Tests.ps1` put back an unset `GIT_AUTHOR_NAME`/`GIT_COMMITTER_NAME` (and the email variables) with `[Environment]::SetEnvironmentVariable($name, $null)`, which PowerShell turns into an empty string; an empty `GIT_AUTHOR_NAME` overrides every `user.name`, so any later test in the same worker that committed failed with "empty ident name not allowed". They now remove a variable that was not set.
+
 ## [0.1.89] - 2026-10-08
 
 ### Added
@@ -1497,7 +1520,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.89...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.90...HEAD
+[0.1.90]: https://github.com/IvanPavlak/WinuX/compare/v0.1.89...v0.1.90
 [0.1.89]: https://github.com/IvanPavlak/WinuX/compare/v0.1.88...v0.1.89
 [0.1.88]: https://github.com/IvanPavlak/WinuX/compare/v0.1.87...v0.1.88
 [0.1.87]: https://github.com/IvanPavlak/WinuX/compare/v0.1.86...v0.1.87

@@ -98,7 +98,11 @@ test command:
 Run-Tests                                  # whole suite
 Run-Tests -TestName "Resize-Windows"       # scoped (matches *<pattern>*.Tests.ps1)
 Run-Tests -TestName "Resize-Windows" -Detailed   # per-test diagnostics
+Run-Tests -Changed                         # only what your branch's changes can affect
+Run-Tests -Changed -Quick                  # the same, without the Integration (real git) tier
 ```
+
+`-Changed` and `-Quick` are for the edit-test loop: `-Changed` prints each file it selected and why, and runs everything when it meets a change it cannot trace. Neither replaces the full `Run-Tests`, which is what CI runs and what must be green before you open a PR.
 
 The suite runs in parallel worker processes, so the terminal only shows a spinner, a live
 test counter and the verdict. The full per-test output of every worker lands in
