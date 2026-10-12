@@ -252,7 +252,7 @@ Invoke-PersonalSteps
 
 ## [Load-PathConfiguration](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Bootstrap/Functions/Load-PathConfiguration.ps1)
 
-- **Description:** Loads `Configuration.psd1`, detects the machine type, expands path placeholders, and registers the custom Modules directory for autoload. Called automatically by the PowerShell profile on every shell start and by Bootstrap during provisioning; not intended for direct invocation in normal use.
+- **Description:** Loads `Configuration.psd1`, detects the machine type, expands path placeholders, and registers the custom Modules directory for autoload. Called automatically by the PowerShell profile on every shell start and by Bootstrap during provisioning; not intended for direct invocation in normal use. `Configuration.local.psd1` is merged over the base through `Merge-Hashtable`, except `WorkspaceTemplates`, which merges template by template: a local template replaces the base template of the same name whole (a deep merge would keep the base template's `Variables` under a local `Actions` list). Right after the merge, [Expand-WorkspaceTemplates](helper.md#expand-workspacetemplates) turns every templated `WorkspaceActions` entry into a plain action list and substitutes `{Workspace}`, so no reader of `WorkspaceActions` has to know about templates; a broken template is reported (unless `-Quiet`), never fatal to the load.
 - **Parameters:** -RepoRoot, -Configuration, -Quiet
 - **Usage:** `Load-PathConfiguration -RepoRoot "C:\Users\<User>\Development\GitHub\WinuX"`, `Load-PathConfiguration -RepoRoot $path -Quiet`
 

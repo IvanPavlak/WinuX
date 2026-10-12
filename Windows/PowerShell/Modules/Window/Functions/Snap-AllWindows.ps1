@@ -348,6 +348,15 @@ function Snap-AllWindows {
 			$windowsByDesktop[$desktopNum].Add($windowState)
 		}
 
+		# Within a desktop, snap in layout order (Add-PositionedWindow -LayoutOrder): every snap
+		# raises its window, so of several layout entries sharing one zone the last one ends on
+		# top. Windows tracked without an order keep their tracking order, after the ordered ones.
+		foreach ($desktopKey in @($windowsByDesktop.Keys)) {
+			$orderedStates = @($windowsByDesktop[$desktopKey] | Sort-Object -Stable -Property @{ Expression = { if ($null -ne $_.LayoutOrder -and [int]$_.LayoutOrder -ge 0) { [int]$_.LayoutOrder } else { [int]::MaxValue } } })
+			$windowsByDesktop[$desktopKey] = [System.Collections.Generic.List[object]]::new()
+			foreach ($orderedState in $orderedStates) { $windowsByDesktop[$desktopKey].Add($orderedState) }
+		}
+
 		# Sort desktop numbers for consistent processing
 		$sortedDesktops = $windowsByDesktop.Keys | Sort-Object
 

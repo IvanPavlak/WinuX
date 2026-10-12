@@ -27,6 +27,10 @@ function Validate-Layout {
 		- IsValid (bool): Whether validation passed
 		- Errors (array): Array of error messages
 		- Warnings (array): Array of warning messages
+
+		A ProjectOverrides block is validated through Merge-LayoutProjectOverrides: every variant's
+		errors (unknown project, entry without DesktopNumber / Monitor, zone missing from the zone
+		layout that desktop and monitor end up with) are added to Errors.
 	#>
 	param (
 		[Parameter(Mandatory = $true)]
@@ -170,6 +174,16 @@ function Validate-Layout {
 		}
 		if ($legacySeen) {
 			$result.Warnings += "Layout uses legacy hardcoded browser-alternation regex for ProcessName/WindowTitle. Consider replacing with the 'Browser' token (e.g. ProcessName = 'Browser') - see docs/modules/window.md."
+		}
+	}
+
+	# Project variants (ProjectOverrides): unknown project tokens, entries without a desktop and
+	# monitor, and zones the variant's zone layout does not have are errors.
+	if ($Config.ContainsKey('ProjectOverrides')) {
+		$projectOverrideCheck = Merge-LayoutProjectOverrides -Config $Config
+		foreach ($overrideError in @($projectOverrideCheck.Errors)) {
+			$result.Errors += $overrideError
+			$result.IsValid = $false
 		}
 	}
 

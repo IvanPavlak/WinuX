@@ -12,6 +12,7 @@ Loads and applies a predefined, machine-specific window layout for a workspace.
 | [`SimpleLayoutWorkspaces`](../../configuration-reference.md#workspace-layouts) | array of workspace names | `@("Fullscreen", "Empty")` | Workspaces that use a single simple layout instead of a per-machine `<Workspace>_<MachineType>.psd1` file. `Set-WorkspaceWindowLayout` and `Add-WindowLayout` both consult it. |
 | [`LayoutMachineTypeOverrides`](../../configuration-reference.md#layout-set-overrides) | hashtable of machine type to layout set name | `@{ Test = "" }` | Lets a machine use another machine layout set - for example a laptop docked to a different monitor arrangement. `Get-LayoutMachineType` resolves it, so layouts and the reset target can never disagree. An override name is not a machine type: it needs no `ValidMachineTypes` entry and no base paths, only `<Workspace>_<Name>.psd1` layout files. |
 | [`WorkspaceLayoutPipelining`](../../configuration-reference.md#layout-numbers--zone-mappings) | bool | `$true` | Whether each virtual desktop is positioned and snapped as soon as every window on it is stable, while the slower windows on other desktops still load. `$false` restores the strictly sequential wait, then position, then snap order. |
+| [`ProjectOverrides`](../../configuration-reference.md#workspace-layouts) (layout file) | hashtable of project scope to `@{ Monitors; Layout }` | none | Lives at the end of a `<Workspace>_<MachineType>.psd1` layout file, not in `Configuration.psd1`. With `-Project` (handed over by `Open-Workspace`) the covered variants replace the base entries of the same desktop and monitor. Project tokens are checked against `ProjectActions`, zones against `ZoneNameMappings` (through `Merge-LayoutProjectOverrides`). |
 
 ## Decisions
 
@@ -27,6 +28,10 @@ Loads and applies a predefined, machine-specific window layout for a workspace.
     - Options: `$true` pipelines each desktop into the wait phase; `$false` waits for the slowest window first.
     - Default: `$true`. Switch it off to compare the two orders with `Get-WorkspaceBenchmark`, or if a layout misbehaves only with pipelining on.
     - More detail: [`WorkspaceLayoutPipelining`](../../configuration-reference.md#layout-numbers--zone-mappings)
+4. Does the layout of a workspace depend on the project it is opened for?
+    - Options: Keep one layout file per workspace and machine type, and add a `ProjectOverrides` block at its end with one variant per project scope (`"MyProject"`, `"MyProject/OtherProject"`) that replaces whole desktop-and-monitor pairs. Several selected projects apply in selection order, the later one wins.
+    - Default: No `ProjectOverrides` - every project gets the base layout.
+    - More detail: [`ProjectOverrides`](../../configuration-reference.md#workspace-layouts)
 
 ## Where to Put Values
 
@@ -42,7 +47,8 @@ On this page that bites on `SimpleLayoutWorkspaces` - that key is an array, so w
 1. Set `SimpleLayoutWorkspaces`
 2. Set `LayoutMachineTypeOverrides`
 3. Set `WorkspaceLayoutPipelining`
-4. Reload and confirm the merge landed
+4. Add `ProjectOverrides` to a layout file
+5. Reload and confirm the merge landed
 
 ## Step 1: Set `SimpleLayoutWorkspaces`
 
@@ -70,7 +76,23 @@ Whether `Set-WorkspaceWindowLayout` positions and snaps each virtual desktop as 
 WorkspaceLayoutPipelining = $false
 ```
 
-## Step 4: Reload and confirm the merge landed
+## Step 4: Add `ProjectOverrides` to a layout file
+
+At the end of `Layouts/<MachineType>/<Workspace>_<MachineType>.psd1`, after the `Layout` array. Each variant names the desktops whose zone layout changes (`Monitors`) and the complete set of entries for every desktop and monitor it touches (`Layout`). Every entry needs `DesktopNumber` and `Monitor`, and its `Zone` must exist in the zone layout that desktop and monitor end up with.
+
+```powershell
+ProjectOverrides = @{
+    "MyProject" = @{
+        Monitors = @{ Primary = @{ VirtualDesktopLayouts = @{ 2 = "One" } } }
+        Layout   = @(
+            @{ ProcessName = "Code"; WindowTitle = "MyProject - Visual Studio Code$"; DesktopNumber = 2; Monitor = "Primary"; Zone = "Left" }
+            @{ ProcessName = "Code"; WindowTitle = "MyProjectApi - Visual Studio Code$"; DesktopNumber = 2; Monitor = "Primary"; Zone = "Right" }
+        )
+    }
+}
+```
+
+## Step 5: Reload and confirm the merge landed
 
 Reload the profile, then read the merged value back. `$global:Configuration` after a reload is the ground truth - if what you set is not there, the local file did not parse or the key is nested one level away from where you put it.
 
@@ -89,7 +111,10 @@ $global:Configuration.SimpleLayoutWorkspaces
 $global:Configuration.LayoutMachineTypeOverrides
 Get-LayoutMachineType
 Visualize-Layouts
+(Merge-LayoutProjectOverrides -Config (Import-PowerShellDataFile "<RepoRoot>\Windows\PowerShell\Modules\Window\Layouts\PC\Client_PC.psd1") -Project MyProject).Errors
 ```
+
+`Visualize-Layouts` draws one `PROJECT VARIANT [<key>]` drawing per variant; the last line lists a variant's errors (unknown project, entry without desktop or monitor, zone missing from the zone layout) without opening anything.
 
 If a value reads back as empty, the two usual causes are a parse error in `Configuration.local.psd1` (run `Test-ConfigurationSchema`) and a key placed at the wrong nesting level.
 
@@ -104,6 +129,8 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
     LayoutMachineTypeOverrides = @{
         Test = "Docked"
     }
+    WorkspaceLayoutPipelining = $true
+    # ProjectOverrides is not a Configuration.local.psd1 key - it goes at the end of the workspace's layout file (Step 4)
 }
 ```
 
@@ -114,5 +141,6 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 - [Configure Window Layout](configure-window-layout.md) - the 3-layer layout system, zones and visualization
 - [`Add-WindowLayout`](../configuration/Add-WindowLayout.md) - reads the same configuration
 - [`Get-LayoutMachineType`](Get-LayoutMachineType.md) - reads the same configuration
+- [`Merge-LayoutProjectOverrides`](Merge-LayoutProjectOverrides.md) - applies and validates the layout file's `ProjectOverrides`
 - [WinuXConfigurator](../../winux-configurator.md) - have an AI assistant walk these decisions with you
 - [Configuration reference](../../configuration-reference.md) - every key, section by section

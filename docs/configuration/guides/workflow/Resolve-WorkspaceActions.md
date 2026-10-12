@@ -1,6 +1,6 @@
 # Resolve-WorkspaceActions
 
-Decides which of a workspace's configured actions run on this machine and with which parameters: an action runs when its `Machine` scope covers the detected machine type and its `LayoutMachine` scope covers the layout set the window layout will be read from, and its `MachineParameters` / `LayoutMachineParameters` rows for this machine are merged over its `Parameters`.
+Decides which of a workspace's configured actions run on this machine and with which parameters: an action runs when its `Machine` scope covers the detected machine type and its `LayoutMachine` scope covers the layout set the window layout will be read from, and its `Project` scope covers one of the selected projects, and its `MachineParameters` / `LayoutMachineParameters` rows for this machine and its `ProjectParameters` rows for the selected projects are merged over its `Parameters`.
 
 > [!NOTE]
 > Every value on this page belongs in `Configuration.local.psd1`, never in the base `Configuration.psd1`. The base file is upstream's, it ships empty-by-default, and it is deep-merged with your local file at load time by `Load-PathConfiguration`. See [Fork Model](../../../contributing/fork-model.md).
@@ -9,7 +9,8 @@ Decides which of a workspace's configured actions run on this machine and with w
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`WorkspaceActions`](../../configuration-reference.md#workspace-actions) | hashtable of workspace name to action array | hashtable, 5 keys | The actions being resolved. Each `@{ Action; Parameters }` entry may carry the scopes `Machine = "PC/Work"` and/or `LayoutMachine = "Laptop/Work"` (an absent or blank key means every machine; the action runs only when both match) and the tables `MachineParameters` / `LayoutMachineParameters = @{ "<scope>" = @{ ... } }`, whose rows for this machine are merged over `Parameters` (`$null` removes a parameter). |
+| [`WorkspaceActions`](../../configuration-reference.md#workspace-actions) | hashtable of workspace name to action array | hashtable, 5 keys | The actions being resolved. Each `@{ Action; Parameters }` entry may carry the scopes `Machine = "PC/Work"` and/or `LayoutMachine = "Laptop/Work"` (an absent or blank key means every machine; the action runs only when both match) and the tables `MachineParameters` / `LayoutMachineParameters = @{ "<scope>" = @{ ... } }`, whose rows for this machine are merged over `Parameters` (`$null` removes a parameter). The project keys work the same way for the selected project(s): `Project = "MyProject/OtherProject"` and `ProjectParameters = @{ "<project scope>" = @{ ... } }`, applied after the machine tables. |
+| [`ProjectActions`](../../configuration-reference.md#project-actions) | ordered list of projects | ordered list | The tokens a `Project` scope or a `ProjectParameters` row key may name. Anything else is reported as an unknown project and never matches. Read only when an entry carries a project key. |
 | [`ValidMachineTypes`](../../configuration-reference.md#valid-machine-types) | array of strings | `@("Test")` | The tokens a `Machine` scope or a `MachineParameters` row key may name. Anything else is reported as an unknown token and never matches. |
 | [`LayoutMachineTypeOverrides`](../../configuration-reference.md#layout-set-overrides) | hashtable of machine type to layout set | `@{ Test = "" }` | Redirects a machine's layouts to another set. Every non-empty value is also a valid `LayoutMachine` token and `LayoutMachineParameters` row key, and a redirected machine matches those as that set, not as itself. |
 | [`SmallDisplayMachineType`](../../configuration-reference.md#layout-set-overrides) | string | `""` | The layout set a small (laptop-class) primary display uses when no override applies. Also a valid `LayoutMachine` token and `LayoutMachineParameters` row key. |
@@ -32,6 +33,10 @@ Decides which of a workspace's configured actions run on this machine and with w
     - Options: `Machine` tokens and `MachineParameters` row keys must be in `ValidMachineTypes`. `LayoutMachine` tokens and `LayoutMachineParameters` row keys may additionally be any non-empty `LayoutMachineTypeOverrides` value or the `SmallDisplayMachineType`. A token that is neither is reported with the workspace, action (and table) named and never matches - so a typo skips the action or row loudly rather than silently. `All` is always valid.
     - Default: The shipped `Test` type.
     - More detail: [`ValidMachineTypes`](../../configuration-reference.md#valid-machine-types)
+5. Does an action depend on the project the workspace is opened for?
+    - Options: `Project = "MyProject/OtherProject"` runs the action only when one of those projects is selected (`All` or absent = always; with no project selected only `All` runs). `ProjectParameters = @{ MyProject = @{ ... } }` varies its parameters per project, merged after the machine tables; with several selected projects the rows apply in selection order and the later project wins. Tokens must be `ProjectActions` names.
+    - Default: No project keys - the action runs for every project with the same parameters.
+    - More detail: [`ProjectActions`](../../configuration-reference.md#project-actions)
 
 ## Where to Put Values
 
@@ -40,13 +45,14 @@ All of it goes in `Configuration.local.psd1`, at the repository's `Windows/Power
 > [!WARNING]
 > The merge is not uniform. **Hashtables deep-merge per key**, so adding one entry to a hashtable leaves every other entry alone. **Arrays and scalars replace wholesale**, so supplying an array key in your local file discards the entire base array. When you want to *add* to a shipped array, copy the whole base array out of `Configuration.psd1` first and add your entry to the copy.
 
-On this page that bites on each workspace's action array: `WorkspaceActions` itself merges per workspace name, but the array under a name is the complete list for that workspace.
+On this page that bites on `WorkspaceActions`: it is an ordered list, so a local `WorkspaceActions` is the complete workspace list and the array under each name is the complete list for that workspace. `ProjectActions` is an ordered list too.
 
 ## Steps Overview
 
 1. Scope or vary the actions in `WorkspaceActions`
 2. Check the layout sets the scopes and rows name
-3. Reload and confirm the merge landed
+3. Scope or vary actions per project
+4. Reload and confirm the merge landed
 
 ## Step 1: Scope or vary the actions in `WorkspaceActions`
 
@@ -74,7 +80,23 @@ LayoutMachineTypeOverrides = @{
 }
 ```
 
-## Step 3: Reload and confirm the merge landed
+## Step 3: Scope or vary actions per project
+
+Add `Project` to an entry that only belongs to some projects and `ProjectParameters` to one whose parameters differ per project. The tokens are `ProjectActions` names. `Open-Workspace` resolves the projects before anything launches (`-Project`, else the project menu, else the fixed `Open-Project` project) and hands them over as `-Project`.
+
+```powershell
+WorkspaceActions = @(
+    @{ Client = @(
+            @{ Action = "Open-Project" }
+            @{ Action = "Open-Browser"; Parameters = @{ Groups = @("AI") }; ProjectParameters = @{ MyProject = @{ Groups = @("AI", "MyProjectDocs") } } }
+            @{ Action = "Open-DBeaver"; Project = "MyProject/OtherProject" }
+            @{ Action = "Set-WorkspaceWindowLayout"; Parameters = @{ WorkspaceName = "{Workspace}" } }
+        )
+    }
+)
+```
+
+## Step 4: Reload and confirm the merge landed
 
 Reload the profile, then read the merged value back. `$global:Configuration` after a reload is the ground truth - if what you set is not there, the local file did not parse or the key is nested one level away from where you put it.
 
@@ -93,6 +115,8 @@ Get-LayoutMachineType
 Resolve-WorkspaceActions -Actions $global:Configuration.WorkspaceActions.Gaming -Workspace "Gaming" | ForEach-Object { "$($_.Action) $(($_.Parameters.Keys | Sort-Object) -join ',')" }
 Resolve-WorkspaceActions -Actions $global:Configuration.WorkspaceActions.Gaming -Workspace "Gaming" -MachineType "Laptop" -LayoutMachineType "Laptop" | ForEach-Object { "$($_.Action) $(($_.Parameters.Keys | Sort-Object) -join ',')" }
 ```
+
+For the project keys, `Resolve-WorkspaceActions -Actions (Get-OrderedEntry $global:Configuration.WorkspaceActions "Client") -Workspace "Client" -Project "MyProject"` shows what an open for `MyProject` runs; an unknown project token shows up as `... unknown project [...] (not a ProjectActions name) - ignored`.
 
 The first call shows what this machine runs and with which parameters; the second what the laptop would run (`Open-Browser` without `Instances`, `Open-Project` without `RunApp`, no `Open-Outlook`). An unknown token shows up here as an `Unknown machine type [...] in [WorkspaceActions.Gaming [Open-Browser]]` error (with `.LayoutMachineParameters` appended for a row key), and a workspace whose every action is scoped elsewhere warns that nothing applies. `Set-LogLevel Verbose { Open-Workspace Gaming }` prints one `Skipping [...]` line per action the scope left out and one `... applied on [...]` line per table row that was merged.
 
@@ -121,7 +145,17 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
             @{ Action = "Open-Outlook"; Machine = "Work" }
             @{ Action = "Set-WorkspaceWindowLayout"; Parameters = @{ WorkspaceName = "Gaming" } }
         )
+        Client = @(
+            @{ Action = "Open-Project" }
+            @{ Action = "Open-Browser"; Parameters = @{ Groups = @("AI") }; ProjectParameters = @{ MyProject = @{ Groups = @("AI", "MyProjectDocs") } } }
+            @{ Action = "Open-DBeaver"; Project = "MyProject/OtherProject" }
+            @{ Action = "Set-WorkspaceWindowLayout"; Parameters = @{ WorkspaceName = "{Workspace}" } }
+        )
     }
+    ProjectActions = @(
+        @{ MyProject = @( @{ Action = "Open-VSCode"; Parameters = @{ Folder = "MyProject" } } ) }
+        @{ OtherProject = @( @{ Action = "Open-VSCode"; Parameters = @{ Folder = "OtherProject" } } ) }
+    )
 }
 ```
 

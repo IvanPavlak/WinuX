@@ -121,7 +121,8 @@
 #
 # Workspace Management:
 # → WorkspaceActions, DefaultWorkspace, WorkspaceBenchmark : Open-Workspace
-# → WorkspaceActions Machine / LayoutMachine scopes and MachineParameters / LayoutMachineParameters tables : Resolve-WorkspaceActions (for Open-Workspace, Measure-WorkspaceOpen)
+# → WorkspaceActions Machine / LayoutMachine / Project scopes and MachineParameters / LayoutMachineParameters / ProjectParameters tables : Resolve-WorkspaceActions (for Open-Workspace, Measure-WorkspaceOpen)
+# → WorkspaceTemplates, templated WorkspaceActions entries : Resolve-WorkspaceTemplate (expanded at load by Expand-WorkspaceTemplates)
 #
 # Application Configuration:
 # → BrowserGroups                   : Open-Browser, Collect-BrowserUrls
@@ -209,6 +210,7 @@
 #
 # 7. Add workspace:
 #    - Configure actions in WorkspaceActions with array of action configs
+#    - Or stamp out a WorkspaceTemplates entry: @{ MyProject = @{ Template = "Project" } }
 #    - Optionally point DefaultWorkspace at it to make it the [Enter] default in the menu
 #    - Each action: @{ Action = "FunctionName"; Parameters = @{ Param1 = "Value" } }
 #    - Create layout file in Layouts/{MachineType}/{WorkspaceName}_{MachineType}.psd1
@@ -2240,8 +2242,24 @@
 	# PROJECT CONTEXT ({SelectedProjects} token):
 	#   A parameter whose FULL value is the literal "{SelectedProjects}" resolves at runtime
 	#   to the explicit -Project argument, else to the projects picked by this workspace's
-	#   Open-Project action. When neither exists the parameter is dropped, so the consuming
-	#   action (e.g. Open-ProjectSwagger) simply no-ops.
+	#   Open-Project action, else to the projects resolved up front. When none exists the
+	#   parameter is dropped, so the consuming action (e.g. Open-ProjectSwagger) simply no-ops.
+	#
+	# WORKSPACE NAME ({Workspace} token):
+	#   "{Workspace}" anywhere in a value is the workspace's own name - in every workspace,
+	#   plain ones included (e.g. WorkspaceName = "{Workspace}" for the layout action).
+	#
+	# PROJECT SCOPE AND PER-PROJECT PARAMETERS (Project / ProjectParameters keys):
+	#   The project(s) of an open are known before anything launches: -Project on the command
+	#   line, else the project menu (shown up front when the workspace's Open-Project action has
+	#   no fixed project), else the fixed Open-Project projects.
+	#   - Project = "A/B"                 : the action runs only when one of those projects is
+	#                                       selected ("All" or absent = always).
+	#   - ProjectParameters = @{ "A/B" = @{ <parameter overrides> } }
+	#                                     : rows merged over Parameters like MachineParameters,
+	#                                       after the machine tables; several selected projects
+	#                                       apply their rows in selection order, the later wins.
+	#   Tokens must be ProjectActions names; unknown tokens are reported and never match.
 	#
 	# MACHINE SCOPE AND PER-MACHINE PARAMETERS (Machine / LayoutMachine / MachineParameters /
 	# LayoutMachineParameters keys, resolved by Resolve-WorkspaceActions):
@@ -2277,6 +2295,32 @@
 	#   - Fullscreen: Applies full-screen FancyZone layout to all windows
 	#   - Default: Actions when no workspace is selected (null/Enter selection)
 	#   - Return action: Stops processing and exits (e.g., Training workspace)
+	#
+	# TEMPLATED ENTRIES (WorkspaceTemplates below):
+	#   Instead of an action list an entry may stamp out a template under its own name - every
+	#   workspace keeps its own name, layout file, tracker entry and Obsidian workspace:
+	#     @{ MyProject = @{ Template = "Project" } }
+	#     @{ MyRepo = @{
+	#             Template  = "Project"
+	#             Variables = @{ Repository = "MyRepoDocs" }
+	#             Overrides = @{ "Open-Browser" = @{ Parameters = @{ Groups = @("{Repository}", "AI") } } }
+	#             Add       = @( @{ Action = "Open-Obsidian"; After = "Open-VSCode" } )
+	#         }
+	#     }
+	#   - Variables : set or replace the template's variables for this workspace.
+	#   - Overrides : keyed by template action Id, else by action name (must be unique). The value
+	#                 merges over that action (Parameters, Machine, LayoutMachine, MachineParameters,
+	#                 LayoutMachineParameters, Project, ProjectParameters): hashtables merge key by
+	#                 key, lists replace, a parameter set to $null is removed; "<Action>" = $null
+	#                 drops the action.
+	#   - Add       : more actions, placed just before the template's first
+	#                 Set-WorkspaceWindowLayout unless they carry Before = "<Id or action>" or
+	#                 After = "<Id or action>".
+	#   A command-line argument named like a template variable sets it for one open and is not
+	#   forwarded: Open-Workspace MyRepo -Repository OtherGroup. Errors (unknown template, missing
+	#   variable, ambiguous override, unknown {placeholder}, variable cycle, bad anchor) are
+	#   logged at load and by Test-ConfigurationSchema; the workspace stays in the menu and opening
+	#   it opens nothing. Add-Workspace -Name MyProject -Template Project writes the one-line form.
 	#
 	# Example:
 	#   "MyWorkspace" = @(
@@ -2316,18 +2360,50 @@
 			)
 		}
 
-		# WinuX development: the repository's GitHub page on the left, VS Code on the right
-		# (FancyZones layout "One") on virtual desktop 1. The terminal tab that launched the
-		# workspace is closed last (OnlyCurrent leaves every other tab alive).
-		@{ WinuX = @(
-				@{ Action = "Open-Browser"; Parameters = @{ Groups = @("WinuX") } }
-				@{ Action = "Open-VSCode"; Parameters = @{ Folder = "WinuX" } }
-				@{ Action = "Set-WorkspaceWindowLayout"; Parameters = @{ WorkspaceName = "WinuX" } }
+		# WinuX development, stamped out of the Project template below: the repository's GitHub
+		# page on the left, VS Code on the right (FancyZones layout "One") on virtual desktop 1.
+		# The terminal tab that launched the workspace is closed last (OnlyCurrent leaves every
+		# other tab alive). Another repository is one more line: @{ MyRepo = @{ Template = "Project" } }
+		# plus its browser group and its layout file.
+		@{ WinuX = @{ Template = "Project" } }
+	)
+
+	# ==========================================================================
+	# Workspace Templates
+	# ==========================================================================
+	# → Consumer: Resolve-WorkspaceTemplate (expanded at load by Expand-WorkspaceTemplates,
+	#   again by Open-Workspace when the command line sets a variable)
+	#
+	# A template is the action list several workspaces share, written once:
+	#   <Name> = @{
+	#       Variables = @{ <variable> = <default> }    # optional
+	#       Actions   = @( <ordinary action entries> )  # each may carry an optional Id
+	#   }
+	# A WorkspaceActions entry @{ MyProject = @{ Template = "<Name>" } } stamps it out under its
+	# own name (see TEMPLATED ENTRIES above for Variables, Overrides and Add).
+	#
+	# Placeholders: "{Variable}" as a whole value receives the variable's value as it is (a list,
+	# a hashtable, $true); inside a longer string it is replaced by the text of a scalar value.
+	# {Workspace} is built in (the entry's name); defaults may reference it and other variables.
+	# Reserved, never variables: Workspace, SelectedProjects, ProjectName, Dev, User, MachineType,
+	# RepoRoot, AppData. Any other unknown {X} in a templated workspace is an error.
+	#
+	# Configuration.local.psd1 merges template by template: a local template replaces the base
+	# template of the same name whole. Templates cannot extend other templates.
+	WorkspaceTemplates            = @{
+		# One repository = its browser group (named like the workspace unless Repository says
+		# otherwise), its VS Code folder, and its layout file <Workspace>_<MachineType>.psd1.
+		Project = @{
+			Variables = @{ Repository = "{Workspace}" }
+			Actions   = @(
+				@{ Action = "Open-Browser"; Parameters = @{ Groups = @("{Repository}") } }
+				@{ Action = "Open-VSCode"; Parameters = @{ Folder = "{Workspace}" } }
+				@{ Action = "Set-WorkspaceWindowLayout"; Parameters = @{ WorkspaceName = "{Workspace}" } }
 				@{ Action = "Focus-VirtualDesktop"; Parameters = @{ DesktopNumber = 1 } }
 				@{ Action = "Terminate-WindowsTerminalTabs"; Parameters = @{ OnlyCurrent = $true } }
 			)
 		}
-	)
+	}
 
 	# ==========================================================================
 	# D&D Configuration

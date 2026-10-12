@@ -59,6 +59,23 @@ function Resolve-WorkspaceActions {
 		not supplied - a workspace without those keys costs nothing beyond the machine-type lookup.
 		Without the Window module the layout set falls back to the detected machine type.
 
+		Two PROJECT keys follow the same pattern for the project(s) the workspace is opened with
+		(-Project: the command line, the up-front project menu, or the workspace's fixed
+		Open-Project project - see Open-Workspace):
+
+		  Project                 - the projects the action runs for, "A/B" or "All". The action runs
+		                            only when one of those projects is selected; with no project
+		                            selected only an "All" scope runs.
+		  ProjectParameters       - @{ "<project scope>" = @{ <parameter overrides> } }, merged over
+		                            Parameters with the same rules as MachineParameters, AFTER the two
+		                            machine tables (a project is the most specific statement about an
+		                            open). The "All" row first, then, for each selected project in
+		                            selection order, the other rows covering it in alphabetical order,
+		                            so with several selected projects the later project wins.
+
+		Project tokens are validated against the ProjectActions names; an unknown token is reported
+		through Write-LogError like an unknown machine token and never matches.
+
 		Entries are returned in their original order, so Open-Workspace runs the resolved list exactly
 		as it would have run the configured one. When a non-empty list resolves to nothing, a warning
 		names the machine type (and layout set) that excluded every action; the callers then skip the
@@ -82,9 +99,13 @@ function Resolve-WorkspaceActions {
 		Omit it to have it resolved through Get-LayoutMachineType when needed; pass it when the caller
 		already resolved it.
 
+	.PARAMETER Project
+		The selected project(s) the Project scopes and ProjectParameters rows are matched against,
+		in selection order. Omit it (or pass nothing) when no project is selected.
+
 	.PARAMETER Configuration
 		The configuration hashtable the layout-set tokens (LayoutMachineTypeOverrides,
-		SmallDisplayMachineType) are read from. Defaults to $global:Configuration;
+		SmallDisplayMachineType) and the project names (ProjectActions) are read from. Defaults to $global:Configuration;
 		Measure-WorkspaceOpen hands over the configuration it was given.
 
 	.OUTPUTS
@@ -99,6 +120,14 @@ function Resolve-WorkspaceActions {
 	.EXAMPLE
 		Resolve-WorkspaceActions -Actions $actions -Workspace 'Server' -MachineType 'Laptop' -LayoutMachineType 'Laptop'
 		# Resolves for an explicit machine type and layout set without touching the live machine.
+
+	.EXAMPLE
+		Resolve-WorkspaceActions -Actions @(
+			@{ Action = "Open-Browser"; Parameters = @{ Groups = @("AI") }; ProjectParameters = @{ MyProject = @{ Groups = @("AI", "MyProjectDocs") } } }
+			@{ Action = "Open-DBeaver"; Project = "MyProject/OtherProject" }
+		) -Workspace 'Client' -Project 'MyProject'
+		# Open-Browser opens AI and MyProjectDocs, Open-DBeaver runs; with -Project 'ThirdProject' only
+		# Open-Browser -Groups AI runs.
 	#>
 	[CmdletBinding()]
 	[OutputType([object[]])]
@@ -119,10 +148,16 @@ function Resolve-WorkspaceActions {
 
 		[Parameter()]
 		[AllowNull()]
+		[AllowEmptyCollection()]
+		[string[]]$Project,
+
+		[Parameter()]
+		[AllowNull()]
 		[hashtable]$Configuration = $global:Configuration
 	)
 
-	$tableKeys = @('MachineParameters', 'LayoutMachineParameters')
+	$tableKeys = @('MachineParameters', 'LayoutMachineParameters', 'ProjectParameters')
+	$selectedProjects = @($Project | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | ForEach-Object { ([string]$_).Trim() })
 
 	# Whether an entry (hashtable from the psd1, or an object) carries a key at all.
 	$hasEntryKey = {
@@ -233,6 +268,95 @@ function Resolve-WorkspaceActions {
 	if (-not [string]::IsNullOrWhiteSpace([string]$smallDisplayType)) { $layoutSetTokens += ([string]$smallDisplayType).Trim() }
 	$layoutSetTokens = @($layoutSetTokens | Select-Object -Unique)
 
+	# Project tokens are the ProjectActions names, read once and only when an entry carries a
+	# project key.
+	$projectState = @{ Names = $null }
+	$knownProjectNames = {
+		if ($null -eq $projectState.Names) {
+			$names = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+			foreach ($projectName in @(Get-OrderedNames (Get-ConfigSetting -Path 'ProjectActions' -Configuration $Configuration))) {
+				[void]$names.Add($projectName)
+			}
+			$projectState.Names = $names
+		}
+		return , $projectState.Names
+	}
+
+	# The tokens of a project scope ("All", "A", "A/B"). Unknown tokens are reported and dropped,
+	# so a typo never matches.
+	$projectScopeTokens = {
+		param([string]$Scope, [string]$Context)
+		$known = & $knownProjectNames
+		$tokens = [System.Collections.Generic.List[string]]::new()
+		foreach ($token in @(($Scope -split '/') | ForEach-Object { $_.Trim() } | Where-Object { $_ })) {
+			if ($token -ieq 'All' -or $known.Contains($token)) { $tokens.Add($token); continue }
+			Write-LogError "$Context - unknown project [$token] (not a ProjectActions name) - ignored"
+		}
+		return , $tokens.ToArray()
+	}
+
+	# Whether a project scope covers one of the selected projects. An empty scope is "All".
+	$testProjectScope = {
+		param([string]$Scope, [string]$Context)
+		if (@(($Scope -split '/') | Where-Object { $_.Trim() }).Count -eq 0) { return $true }
+		$tokens = & $projectScopeTokens $Scope $Context
+		foreach ($token in $tokens) {
+			if ($token -ieq 'All') { return $true }
+			if (@($selectedProjects | Where-Object { $_ -ieq $token }).Count -gt 0) { return $true }
+		}
+		return $false
+	}
+
+	# Applies ProjectParameters: the "All" row first, then for each selected project in selection
+	# order the other rows covering it, alphabetically - a later project wins.
+	$applyProjectTable = {
+		param($Entry, [hashtable]$Working, [string]$ActionName)
+		$table = & $readEntryRaw $Entry 'ProjectParameters'
+		if ($null -eq $table) { return }
+
+		$context = "WorkspaceActions$workspaceLabel [$ActionName].ProjectParameters"
+		if (-not ($table -is [System.Collections.IDictionary])) {
+			Write-LogError "$context must be a hashtable of project scope => parameter overrides (got [$($table.GetType().Name)]) - ignored"
+			return
+		}
+
+		$keys = @($table.Keys | ForEach-Object { [string]$_ })
+		$allRows = @($keys | Where-Object { $_.Trim() -eq 'All' })
+		$otherRows = @($keys | Where-Object { $_.Trim() -ne 'All' })
+		if ($otherRows.Count -gt 1) { [Array]::Sort($otherRows, [System.StringComparer]::OrdinalIgnoreCase) }
+
+		# Every row key is validated once, whether or not a project is selected, so a typo is
+		# reported on every open.
+		$rowTokens = @{}
+		foreach ($rowKey in $otherRows) { $rowTokens[$rowKey] = & $projectScopeTokens $rowKey "$context row [$rowKey]" }
+
+		$ordered = [System.Collections.Generic.List[string]]::new()
+		foreach ($rowKey in $allRows) { $ordered.Add($rowKey) }
+		foreach ($selected in $selectedProjects) {
+			foreach ($rowKey in $otherRows) {
+				if (@($rowTokens[$rowKey] | Where-Object { $_ -ieq $selected -or $_ -ieq 'All' }).Count -gt 0) { $ordered.Add($rowKey) }
+			}
+		}
+
+		# A row covering several selected projects is applied once, at its LAST position, so the
+		# order "later project wins" still holds.
+		$uniqueOrdered = [System.Collections.Generic.List[string]]::new()
+		for ($orderIndex = $ordered.Count - 1; $orderIndex -ge 0; $orderIndex--) {
+			if (-not $uniqueOrdered.Contains($ordered[$orderIndex])) { $uniqueOrdered.Insert(0, $ordered[$orderIndex]) }
+		}
+
+		foreach ($rowKey in $uniqueOrdered) {
+			$row = $table[$rowKey]
+			if (-not ($row -is [System.Collections.IDictionary])) {
+				$rowType = if ($null -eq $row) { 'null' } else { $row.GetType().Name }
+				Write-LogError "$context row [$rowKey] must be a hashtable of parameter overrides (got [$rowType]) - ignored"
+				continue
+			}
+			& $mergeInto $Working $row
+			Write-LogDebug " [Resolve-WorkspaceActions] [$ActionName] for [$Workspace] - ProjectParameters [$rowKey] applied for [$($selectedProjects -join ', ')] => $(@($row.Keys) -join ', ')" -Style Success
+		}
+	}
+
 	# Applies one parameter table to the working copy: "All" row first, then the other matching rows
 	# in alphabetical order. Rows with an unknown key or a non-hashtable value are reported and skipped.
 	$applyTable = {
@@ -318,10 +442,20 @@ function Resolve-WorkspaceActions {
 			}
 		}
 
+		$projectScope = & $readEntryValue $entry 'Project'
+		if (-not [string]::IsNullOrWhiteSpace($projectScope)) {
+			if (-not (& $testProjectScope $projectScope "$context.Project")) {
+				$projectLabel = if ($selectedProjects.Count -gt 0) { "project(s) [$($selectedProjects -join ', ')]" } else { 'no selected project' }
+				Write-LogDebug " [Resolve-WorkspaceActions] Skipping [$actionName] for [$Workspace] - Project [$projectScope] does not cover $projectLabel" -Style Warning
+				continue
+			}
+		}
+
 		# The scope check runs first, so an action that does not run here never reports table errors.
 		$hasMachineTable = & $hasEntryKey $entry 'MachineParameters'
 		$hasLayoutTable = & $hasEntryKey $entry 'LayoutMachineParameters'
-		if (-not ($hasMachineTable -or $hasLayoutTable)) {
+		$hasProjectTable = & $hasEntryKey $entry 'ProjectParameters'
+		if (-not ($hasMachineTable -or $hasLayoutTable -or $hasProjectTable)) {
 			$resolved.Add($entry)
 			continue
 		}
@@ -331,6 +465,7 @@ function Resolve-WorkspaceActions {
 
 		if ($hasMachineTable) { & $applyTable $entry 'MachineParameters' $MachineType @() $working $actionName }
 		if ($hasLayoutTable) { & $applyTable $entry 'LayoutMachineParameters' $layoutSet $layoutSetTokens $working $actionName }
+		if ($hasProjectTable) { & $applyProjectTable $entry $working $actionName }
 
 		# $null from a row means "not on this machine": drop the parameter instead of binding $null.
 		foreach ($key in @($working.Keys)) {
@@ -342,7 +477,7 @@ function Resolve-WorkspaceActions {
 
 	if ($resolved.Count -eq 0) {
 		$layoutSuffix = if ($needsLayoutSet) { " (layout set [$layoutSet])" } else { '' }
-		Write-LogWarning "No actions of workspace [$Workspace] apply on machine type [$MachineType]$layoutSuffix - every action is scoped to another machine"
+		Write-LogWarning "No actions of workspace [$Workspace] apply on machine type [$MachineType]$layoutSuffix - every action is scoped to another machine or project"
 	}
 
 	return $resolved.ToArray()

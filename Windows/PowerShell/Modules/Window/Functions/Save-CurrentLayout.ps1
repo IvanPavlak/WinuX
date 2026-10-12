@@ -207,6 +207,7 @@ function Save-CurrentLayout {
 						Monitor        = [string]$state.Monitor
 						Layout         = [string]$state.Layout
 						Zone           = [string]$state.Zone
+						Slot           = $(if ($state.Slot) { [int]$state.Slot } else { 1 })
 						ExpectedX      = [int]$state.ExpectedX
 						ExpectedY      = [int]$state.ExpectedY
 						ExpectedWidth  = [int]$state.ExpectedWidth

@@ -30,7 +30,14 @@ function Confirm-WorkspaceWindowPositions {
 		correctly would otherwise be reported as missing and trigger a needless retry.
 		The fallback only applies to non-browser processes (browser entries legitimately
 		have many windows) and only when exactly one unclaimed process window remains, so
-		duplicate-keyed entries are never misassigned. Configuring WindowTitle as a
+		duplicate-keyed entries are never misassigned.
+
+		Several entries of one process (Get-LayoutProcessSiblings) are verified against the
+		window each of them actually placed: an untitled catch-all never matches a window a
+		titled sibling's title describes, the title-drift fallback never lands on a window that
+		matches another entry's title, non-browser siblings claim distinct windows like
+		duplicates do, and when several candidates remain the one the positioning pass tracked
+		for this entry's zone and desktop is checked rather than the first match. Configuring WindowTitle as a
 		folder-agnostic pattern (e.g. ".*user@example\.com - Outlook") is the primary
 		fix for caption drift; this fallback is the defensive backstop.
 
@@ -136,6 +143,8 @@ function Confirm-WorkspaceWindowPositions {
 		else { $layoutKeyCount[$key] = 1 }
 	}
 	$claimedHandles = New-Object 'System.Collections.Generic.HashSet[IntPtr]'
+	$confirmSiblings = Get-LayoutProcessSiblings -LayoutConfig $LayoutConfig
+	$entryIndex = -1
 	$hasVirtualDesktopModule = Import-VirtualDesktopModule -Silent
 	$processMatchCache = @{}
 	$titleMatchCache = @{}
@@ -144,6 +153,11 @@ function Confirm-WorkspaceWindowPositions {
 	$desktopFilteredCache = @{}
 
 	foreach ($cfg in $LayoutConfig) {
+		$entryIndex++
+		$relation = @($confirmSiblings)[$entryIndex]
+		$siblingTitles = [string[]]@()
+		if ($relation -and $relation.Shared) { $siblingTitles = [string[]]@($relation.SiblingTitles | Where-Object { $_ }) }
+		$sharedClaim = [bool]($relation -and $relation.Shared -and -not $relation.BrowserLike)
 		$processName = $cfg.ProcessName
 		$windowTitle = $cfg.WindowTitle
 		$label = if ($windowTitle) { "$processName - $windowTitle" } else { $processName }
@@ -292,7 +306,10 @@ function Confirm-WorkspaceWindowPositions {
 					$processCandidates = @(Get-WindowHandle -ProcessName $processName)
 					$processMatchCache[$processName] = $processCandidates
 				}
-				$unclaimed = @($processCandidates | Where-Object { -not $claimedHandles.Contains($_.Handle) })
+				$unclaimed = @($processCandidates | Where-Object {
+						-not $claimedHandles.Contains($_.Handle) -and
+						-not ($siblingTitles.Count -gt 0 -and (Test-WindowTitleMatch -WindowTitle ([string]$_.Title) -Patterns $siblingTitles))
+					})
 				if ($unclaimed.Count -eq 1) {
 					$windows = $unclaimed
 					Write-LogDebug "[$label] title pattern did not match caption - recovered via sole process window $($unclaimed[0].Title)" -Style Warning
@@ -306,6 +323,15 @@ function Confirm-WorkspaceWindowPositions {
 		# entry gives the same answer as filtering the cache would.
 		if ($ExcludeWindowHandles -and $ExcludeWindowHandles.Count -gt 0 -and $windows) {
 			$windows = @($windows | Where-Object { -not $ExcludeWindowHandles.Contains($_.Handle) })
+		}
+
+		# Several entries of one process: the catch-all is checked only against windows no titled
+		# sibling's title describes, and non-browser siblings never share a window.
+		if ($relation -and $relation.CatchAll -and $siblingTitles.Count -gt 0 -and $windows) {
+			$windows = @($windows | Where-Object { -not (Test-WindowTitleMatch -WindowTitle ([string]$_.Title) -Patterns $siblingTitles) })
+		}
+		if ($sharedClaim -and $windows) {
+			$windows = @($windows | Where-Object { -not $claimedHandles.Contains($_.Handle) })
 		}
 
 		# The virtual desktop is part of "in place". Candidates on the expected desktop win; a
@@ -466,8 +492,24 @@ function Confirm-WorkspaceWindowPositions {
 			continue
 		}
 
+		# Several candidates for one (non-duplicate) entry: check the window the positioning pass
+		# placed for THIS entry's zone and desktop, not whichever window EnumWindows lists first.
+		if (-not $isDuplicate -and $windows.Count -gt 1 -and $script:PositionedWindowHandles) {
+			$expectedTrackedDesktop = if ($null -ne $cfg.DesktopNumber) { [int]$cfg.DesktopNumber + $DesktopOffset } else { $null }
+			$trackedForEntry = [System.Collections.Generic.HashSet[IntPtr]]::new()
+			foreach ($trackedState in $script:PositionedWindowHandles) {
+				if ($null -eq $trackedState) { continue }
+				if ([int]$trackedState.ExpectedX -ne [int]$expectedX -or [int]$trackedState.ExpectedY -ne [int]$expectedY -or
+					[int]$trackedState.ExpectedWidth -ne [int]$expectedW -or [int]$trackedState.ExpectedHeight -ne [int]$expectedH) { continue }
+				if ($null -ne $expectedTrackedDesktop -and $null -ne $trackedState.DesktopNumber -and [int]$trackedState.DesktopNumber -ne $expectedTrackedDesktop) { continue }
+				[void]$trackedForEntry.Add([IntPtr]$trackedState.Handle)
+			}
+			$placedCandidate = @($windows | Where-Object { $trackedForEntry.Contains($_.Handle) } | Select-Object -First 1)
+			if ($placedCandidate.Count -gt 0) { $windows = @($placedCandidate[0]) }
+		}
+
 		$window = $windows[0]
-		if ($isDuplicate) { [void]$claimedHandles.Add($window.Handle) }
+		if ($isDuplicate -or $sharedClaim) { [void]$claimedHandles.Add($window.Handle) }
 
 		# Report the window the caller can actually recognize. $label is built from the LAYOUT
 		# ENTRY, whose ProcessName is often a token-expanded regex - a failure once surfaced as

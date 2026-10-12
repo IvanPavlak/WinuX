@@ -12,6 +12,8 @@ WinuX uses a powerful placeholder system that enables **one configuration file t
 | `{RepoRoot}` | WinuX repository root | `C:\Users\You\Development\GitHub\WinuX` |
 | `{AppData}`      | User's AppData\Roaming   | `C:\Users\You\AppData\Roaming`             |
 
+These five are path placeholders, expanded for the whole configuration. `WorkspaceActions` has its own tokens on top, resolved by the workspace engine rather than `Expand-ConfigPaths` - see [Workspace Tokens](#workspace-tokens).
+
 ## How Placeholders Work
 
 ```
@@ -168,6 +170,33 @@ SymbolicLinks = @{
 
 # Result
 "C:\Users\You\AppData\Roaming\Code\User\settings.json"
+```
+
+### Workspace Tokens
+
+These apply inside `WorkspaceActions` and `WorkspaceTemplates` only, and are resolved by the workspace engine, not by `Expand-ConfigPaths`:
+
+| Token | Resolves to | Resolved by |
+| ----- | ----------- | ----------- |
+| `{Workspace}` | The workspace's own name - in every workspace, plain ones included | `Expand-WorkspaceTemplates` / `Resolve-WorkspaceTemplate`, once at load |
+| `{SelectedProjects}` | As the FULL value: the explicit `-Project`, else the projects `Open-Project` returned, else the projects resolved up front; dropped when there are none | `Open-Workspace`, per action |
+| `{<Variable>}` | A variable of the workspace's template (`WorkspaceTemplates.<Name>.Variables`, the entry's `Variables`, or `-<Variable>` on the command line). As the whole value it keeps its type (a list, a hashtable, `$true`); inside a longer string it is replaced by the text of a scalar value | `Resolve-WorkspaceTemplate` |
+
+`Workspace`, `SelectedProjects`, `ProjectName`, `Dev`, `User`, `MachineType`, `RepoRoot` and `AppData` are reserved and cannot be template variables. Inside a templated workspace any other unknown `{X}` is an error, so a typo never reaches an action as literal text. See [Workspace Templates](configuration-reference.md#workspace-templates).
+
+```powershell
+WorkspaceTemplates = @{
+    Project = @{
+        Variables = @{ Repository = "{Workspace}" }
+        Actions   = @(
+            @{ Action = "Open-Browser"; Parameters = @{ Groups = @("{Repository}") } }
+            @{ Action = "Set-WorkspaceWindowLayout"; Parameters = @{ WorkspaceName = "{Workspace}" } }
+        )
+    }
+}
+
+# Result for @{ MyProject = @{ Template = "Project" } }
+# Open-Browser -Groups MyProject, then Set-WorkspaceWindowLayout -WorkspaceName MyProject
 ```
 
 ## Common Usage Patterns

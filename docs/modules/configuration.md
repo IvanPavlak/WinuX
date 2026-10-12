@@ -127,14 +127,15 @@ Add-WindowLayout -WorkspaceName "MyWorkspace" -Simple
 
 ## [Add-Workspace](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Configuration/Functions/Add-Workspace.ps1)
 
-- **Description:** Adds a workspace to `Configuration.psd1`: appends the name to the `Workspaces` array and creates its `WorkspaceActions` entry. If no actions are specified, it creates a default `Set-WorkspaceWindowLayout` action for the workspace.
-- **Parameters:** -Name, -Actions, -ConfigurationFilePath
-- **Usage:** `Add-Workspace -Name "MyWorkspace"`, `Add-Workspace -Name "MyWorkspace" -Actions @(@{ Action = "Open-Project"; Parameters = @{ Project = "MyProject" } })`
+- **Description:** Adds a workspace to `Configuration.psd1` by appending one entry at the end of the `WorkspaceActions` list - the only definition of a workspace, so it shows up last in the `Open-Workspace` menu. The entry is either an action list (`-Actions`; if no actions are specified, a default `Set-WorkspaceWindowLayout` action for the workspace) or, with `-Template`, the one-line templated entry `@{ <Name> = @{ Template = "<Template>" } }` that stamps out a `WorkspaceTemplates` entry under the new name (add `Variables`, `Overrides` or `Add` to it by hand). The template must exist in the loaded configuration; an unknown one is reported with the defined templates listed and nothing is written. `-Template` cannot be combined with `-Actions`.
+- **Parameters:** -Name, -Actions, -Template, -ConfigurationFilePath, -BackupRoot
+- **Usage:** `Add-Workspace -Name "MyWorkspace"`, `Add-Workspace -Name "MyWorkspace" -Actions @(@{ Action = "Open-Project"; Parameters = @{ Project = "MyProject" } })`, `Add-Workspace -Name "MyProject" -Template "Project"`
 
 | Parameter                | Description                                                                                                                                                                           |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `-Name`                  | The workspace name (mandatory, positional). Added to the `Workspaces` array.                                                                                                          |
+| `-Name`                  | The workspace name (mandatory, positional). Becomes the key of the new `WorkspaceActions` entry.                                                                                      |
 | `-Actions`               | Array of action hashtables for `WorkspaceActions`, each `@{ Action = "FunctionName"; Parameters = @{ Key = "Value" } }`. Omit to create a default `Set-WorkspaceWindowLayout` action. |
+| `-Template`              | The name of a `WorkspaceTemplates` entry. Writes the one-line templated entry instead of an action list. Cannot be combined with `-Actions`. |
 | `-ConfigurationFilePath` | Override the `Configuration.psd1` path (used for testing).                                                                                                                            |
 
 ```powershell
@@ -277,7 +278,7 @@ Test-ConfigurationKeyPath -Table $Configuration -Path @("GitConfig", "UserName")
 
 ## [Test-ConfigurationSchema](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Configuration/Functions/Test-ConfigurationSchema.ps1)
 
-- **Description:** Validates that all required keys are present in the loaded configuration. Checks the global `$Configuration` hashtable for the presence and non-null/non-empty values of every key required by core module functions, and reports each missing or empty key. In the default mode it writes warnings without throwing, so the shell can still start with a degraded configuration rather than failing entirely; with `-Strict` it throws a terminating error on the first set of missing keys, suitable for bootstrap or test fail-fast.
+- **Description:** Validates that all required keys are present in the loaded configuration. Checks the global `$Configuration` hashtable for the presence and non-null/non-empty values of every key required by core module functions, and reports each missing or empty key. In the default mode it writes warnings without throwing, so the shell can still start with a degraded configuration rather than failing entirely; with `-Strict` it throws a terminating error on the first set of missing keys, suitable for bootstrap or test fail-fast. It also validates workspace templates: `WorkspaceTemplates` must be a hashtable of templates that each carry `Actions`, the problems `Expand-WorkspaceTemplates` recorded at load (`WorkspaceTemplateErrors`) are reported, and templated entries still present as raw hashtables in `WorkspaceActions` (a configuration that was never expanded) are resolved through `Resolve-WorkspaceTemplate` - an unknown template, a variable without a value, an ambiguous or unmatched override, an unknown placeholder, a variable cycle or a bad `Before` / `After` anchor is reported with the workspace named. Templates already expanded at load are not expanded a second time.
 - **Parameters:** -Configuration, -Strict
 - **Usage:** `Test-ConfigurationSchema`, `Test-ConfigurationSchema -Strict`, `Test-ConfigurationSchema -Configuration $myConfig`
 

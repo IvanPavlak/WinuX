@@ -5,7 +5,7 @@
 - **Location:** `Windows/PowerShell/Configuration.psd1`
 - **Loaded during:** Bootstrap, profile initialization, manual load via `Load-PathConfiguration`
 - **Global variables produced:** `$global:Configuration`, `$global:MachineSpecificPaths`, `$global:MachineType`
-- **Placeholder system:** Enables machine-independent configuration via `{Dev}`, `{User}`, `{MachineType}`, `{RepoRoot}`, `{AppData}` tokens
+- **Placeholder system:** Enables machine-independent configuration via `{Dev}`, `{User}`, `{MachineType}`, `{RepoRoot}`, `{AppData}` tokens; `WorkspaceActions` also takes `{Workspace}`, `{SelectedProjects}` and [workspace template](#workspace-templates) variables
 
 ---
 
@@ -642,19 +642,21 @@ Every workspace the `Open-Workspace` menu offers, and what opening each one does
 workspace name and the value its action list. The menu follows the order written here, and a
 workspace is defined exactly once - there is no separate workspace list.
 
-**Key:** `WorkspaceActions` → Ordered list of `@{ <WorkspaceName> = @( <actions> ) }`
+**Key:** `WorkspaceActions` → Ordered list of `@{ <WorkspaceName> = @( <actions> ) }`, or of templated entries `@{ <WorkspaceName> = @{ Template = "<template>"; Variables = @{...}; Overrides = @{...}; Add = @(...) } }` (see [Workspace Templates](#workspace-templates))
 
 **Format:** Same as `ProjectActions` - array of `@{ Action = "...", Parameters = @{ ... } }` objects
 
 **Special actions:** Same as `ProjectActions` (`Open-ProjectTerminals-Or-RunProject`, `Return`).
 
-**Project context (`{SelectedProjects}`):** A parameter whose FULL value is the literal string `"{SelectedProjects}"` resolves at runtime to the explicit `-Project` argument, otherwise to the projects selected by this workspace's `Open-Project` action; when neither exists the parameter is dropped so the action can no-op or apply its own default. Declare consumers after the `Open-Project` action. The one action that ships using it is `Open-ProjectSwagger`, the opt-in way to open a project's `Swagger` group:
+**Project context (`{SelectedProjects}`):** A parameter whose FULL value is the literal string `"{SelectedProjects}"` resolves at runtime to the explicit `-Project` argument, otherwise to the projects selected by this workspace's `Open-Project` action, otherwise to the projects resolved up front (see the project scope below); when none exists the parameter is dropped so the action can no-op or apply its own default. Declaring consumers after the `Open-Project` action keeps the project that action actually returned in play. The one action that ships using it is `Open-ProjectSwagger`, the opt-in way to open a project's `Swagger` group:
 
 ```powershell
 @{ Action = "Open-ProjectSwagger"; Parameters = @{ Project = "{SelectedProjects}" } }
 ```
 
 Swagger is never added on its own - a workspace that does not declare that action runs no Swagger logic at all.
+
+**Workspace name (`{Workspace}`):** `"{Workspace}"` anywhere in a value is the workspace's own name, in every workspace - plain ones included - so `@{ Action = "Set-WorkspaceWindowLayout"; Parameters = @{ WorkspaceName = "{Workspace}" } }` needs no editing when an entry is copied. It is substituted once at load by `Expand-WorkspaceTemplates`.
 
 **Workspace context (`CurrentWorkspace`):** Every action that declares a `CurrentWorkspace` parameter receives the name of the workspace being opened; `Get-FilteredParams` drops it from actions that do not, and a configured `Parameters` value of that name wins over the injected one. `Open-Obsidian` uses it to load the Obsidian workspace of the same name when the vault has one, so a bare `@{ Action = "Open-Obsidian" }` under `WorkspaceActions.Server` lands Obsidian on its `Server` workspace with no per-entry configuration; `Parameters = @{ Workspace = "Name" }` overrides that.
 
@@ -666,6 +668,23 @@ Swagger is never added on its own - a workspace that does not declare that actio
 The two **scopes** decide whether the action runs: an absent or blank key means every machine, an action runs only when both match, the rest of the list runs unchanged, and a workspace whose every action is scoped to another machine is reported and skipped. The two **tables** vary one action that runs everywhere: `@{ "<scope>" = @{ <parameter overrides> } }`. `Parameters` is the default; every row whose scope covers this machine is deep-merged over a copy of it (nested hashtables merge key by key, everything else is replaced) - the `All` row first, then the other matching rows alphabetically, `MachineParameters` before `LayoutMachineParameters` so the layout set wins - and a parameter a row sets to `$null` is removed. The configured entry is never modified. The list is resolved by `Resolve-WorkspaceActions` before anything runs.
 
 A token that is not a known type (or layout set) is reported with the workspace, action and table named and never matches, so a typo cannot silently skip or keep an action or a row.
+
+**Project scope and per-project parameters (`Project`, `ProjectParameters`):** The project(s) of an open are known before anything launches: `-Project` on the command line, else the project menu (shown up front when the workspace's `Open-Project` action has no fixed project), else the fixed `Open-Project` projects. Two more optional keys follow the machine pattern for them:
+
+- `Project = "MyProject/OtherProject"` - the action runs only when one of those projects is selected; `All` or an absent key means always, and with no project selected only an `All` scope runs.
+- `ProjectParameters = @{ "<project scope>" = @{ <parameter overrides> } }` - rows merged over `Parameters` like `MachineParameters`, after the two machine tables; the `All` row first, then for each selected project in selection order the other rows covering it alphabetically, so with several selected projects the later one wins.
+
+Tokens must be `ProjectActions` names; an unknown token is reported and never matches. The same projects reach `Set-WorkspaceWindowLayout` as `-Project`, which selects the layout file's [`ProjectOverrides`](#workspace-layouts).
+
+```powershell
+@{ Client = @(
+        @{ Action = "Open-Project" }
+        @{ Action = "Open-Browser"; Parameters = @{ Groups = @("AI") }; ProjectParameters = @{ MyProject = @{ Groups = @("AI", "MyProjectDocs") } } }
+        @{ Action = "Open-DBeaver"; Project = "MyProject/OtherProject" }
+        @{ Action = "Set-WorkspaceWindowLayout"; Parameters = @{ WorkspaceName = "{Workspace}" } }
+    )
+}
+```
 
 ```powershell
 # One Google window everywhere (fullscreen on the Laptop and Work layouts, and on the PC while
@@ -691,7 +710,57 @@ WorkspaceActions = @{
 }
 ```
 
-**Consumer functions:** `Open-Workspace`, `Resolve-WorkspaceActions` (the scope filter), `Measure-WorkspaceOpen` (its pre-checks)
+**Consumer functions:** `Open-Workspace`, `Resolve-WorkspaceActions` (the scope filter), `Measure-WorkspaceOpen` (its pre-checks), `Resolve-WorkspaceTemplate` and `Expand-WorkspaceTemplates` (templated entries and `{Workspace}`)
+
+### Workspace Templates
+
+The action list several workspaces share, written once. A `WorkspaceActions` entry `@{ MyProject = @{ Template = "Project" } }` stamps the template out under its own name, so every workspace keeps its own layout file, open/close tracker entry, benchmark rows and Obsidian workspace.
+
+**Key:** `WorkspaceTemplates` → Hashtable of template name → `@{ Variables = @{ <variable> = <default> }; Actions = @( <action entries> ) }` (`Variables` optional; a template action may carry an optional `Id` next to the ordinary keys, a stable name for overrides and anchors). The base ships one generic template, `Project`: the repository's browser group (named like the workspace unless `Repository` says otherwise), its VS Code folder, its layout file, landing on desktop 1 and closing the launching terminal tab. The shipped `WinuX` workspace is `@{ WinuX = @{ Template = "Project" } }`.
+
+**Consumer functions:** `Resolve-WorkspaceTemplate` (expands one entry), `Expand-WorkspaceTemplates` (expands every entry once at load, called by `Load-PathConfiguration`), `Open-Workspace` (expands again when the command line sets a variable), `Test-ConfigurationSchema` (validation), `Add-Workspace -Template`
+
+A templated `WorkspaceActions` entry takes four keys:
+
+| Key | What it does |
+| --- | ------------ |
+| `Template` | The template's name (required). |
+| `Variables` | Sets or replaces the template's variables for this workspace. |
+| `Overrides` | Keyed by template action `Id`, else by action name (which must then be unique in the template - an ambiguous name is an error). The value merges over that action: it takes `Parameters`, `Machine`, `LayoutMachine`, `MachineParameters`, `LayoutMachineParameters`, `Project` and `ProjectParameters`; hashtables merge key by key, lists replace, a parameter or key set to `$null` is removed, and `"<Action>" = $null` drops the action. `Action` and `Id` cannot be overridden. |
+| `Add` | More actions, placed just before the template's first `Set-WorkspaceWindowLayout` (the end of the list when there is none) unless they carry `Before = "<Id or action>"` or `After = "<Id or action>"`. |
+
+**Variables.** `"{Name}"` as the whole value receives the variable's value as it is (a list, a hashtable, `$true`); inside a longer string it is replaced by the text of a scalar value (a list or hashtable there is an error). `{Workspace}` is built in (the entry's name); defaults may reference it and other variables, and a cycle is an error. Values come from the template's `Variables`, overlaid by the entry's `Variables`, overlaid by the command line: `Open-Workspace MyRepo -Repository OtherGroup` sets the variable for one open and is not forwarded to any action. Reserved names, never variables: `Workspace`, `SelectedProjects`, `ProjectName`, `Dev`, `User`, `MachineType`, `RepoRoot`, `AppData`. Any other unknown `{X}` in a templated workspace is an error, so a typo never reaches an action as literal text; a variable used without a value (declared `$null` and never set) is an error too.
+
+**Errors.** An unknown template, a missing variable, an ambiguous or unmatched override, an unknown placeholder, a variable cycle or a bad anchor is logged at load (`... - the workspace opens nothing until this is fixed`) and reported by `Test-ConfigurationSchema`; the workspace stays in the menu and opening it repeats the errors and opens nothing.
+
+**Local overlay.** `Configuration.local.psd1` merges `WorkspaceTemplates` template by template: a local template replaces the base template of the same name whole (no deep merge into it). Templates cannot extend other templates. `Load-PathConfiguration` keeps the raw templated definitions under the runtime key `WorkspaceTemplateEntries` and the load-time problems under `WorkspaceTemplateErrors`; neither is a configuration setting.
+
+**Example:**
+
+```powershell
+WorkspaceTemplates = @{
+    Project = @{
+        Variables = @{ Repository = "{Workspace}" }
+        Actions   = @(
+            @{ Action = "Open-Browser"; Parameters = @{ Groups = @("{Repository}") } }
+            @{ Action = "Open-VSCode"; Parameters = @{ Folder = "{Workspace}" } }
+            @{ Action = "Set-WorkspaceWindowLayout"; Parameters = @{ WorkspaceName = "{Workspace}" } }
+            @{ Action = "Focus-VirtualDesktop"; Parameters = @{ DesktopNumber = 1 } }
+        )
+    }
+}
+
+WorkspaceActions = @(
+    @{ MyProject = @{ Template = "Project" } }
+    @{ MyRepo = @{
+            Template  = "Project"
+            Variables = @{ Repository = "MyRepoDocs" }
+            Overrides = @{ "Open-Browser" = @{ Parameters = @{ Groups = @("{Repository}", "AI") } } }
+            Add       = @( @{ Action = "Open-Obsidian"; After = "Open-VSCode" } )
+        }
+    }
+)
+```
 
 ### Default VS Code Workspaces
 
@@ -759,10 +828,28 @@ Each layout file specifies:
 
 - **Monitors:** Virtual desktop layout mapping
 - **Layout:** Array of window placement rules with ProcessName, WindowTitle, DesktopNumber, Zone, Monitor
+- **ProjectOverrides** (optional, at the end of the file): project variants of the layout, `@{ "<project scope>" = @{ Monitors = @{...}; Layout = @(...) } }`
+
+**Several windows of one process.** A layout may hold several entries of one process - two VS Code folders in two zones, or titled entries next to one untitled catch-all. Every window is claimed by one entry; the catch-all takes only the windows no titled sibling's title matches, wherever it sits in the file, and a titled entry never falls back to a window another entry's title matches. Anchor VS Code titles on the folder name as VS Code ends its caption (`MyProject - Visual Studio Code$`), since a bare name also matches a sibling folder containing it. Several entries in one zone stack in file order with the last on top, on every run (`Set-StackedWindowOrder`). A single untitled `Code` entry keeps taking every VS Code window.
+
+**Project variants (`ProjectOverrides`).** When the workspace is opened for a covered project (see the project scope under [Workspace Actions](#workspace-actions)), `Merge-LayoutProjectOverrides` merges the block over the loaded layout: `Monitors` key by key (only the listed desktops change their zone layout); the override's `Layout` entries replace every base entry on the same desktop and monitor and are added for a desktop and monitor the base does not use. A key may cover several projects (`"MyProject/OtherProject"`); several selected projects apply in selection order and the later wins on the same desktop and monitor. Clearing a desktop and monitor without a replacement is not supported. Every block is validated on every open, selected or not: a project token that is not a `ProjectActions` name, an entry without `DesktopNumber` / `Monitor`, and a `Zone` missing from the zone layout its desktop and monitor end up with are errors, and a block with errors is not applied (the base layout is used). `Validate-Layout` reports the same errors, `Visualize-Layouts` draws one `PROJECT VARIANT [<key>]` drawing per variant, and `Update-LayoutSectionHeaders` leaves the block verbatim.
+
+```powershell
+# Client_PC.psd1 (end of file)
+ProjectOverrides = @{
+    "MyProject" = @{
+        Monitors = @{ Primary = @{ VirtualDesktopLayouts = @{ 2 = "One" } } }
+        Layout   = @(
+            @{ ProcessName = "Code"; WindowTitle = "MyProject - Visual Studio Code$"; DesktopNumber = 2; Monitor = "Primary"; Zone = "Left" }
+            @{ ProcessName = "Code"; WindowTitle = "MyProjectApi - Visual Studio Code$"; DesktopNumber = 2; Monitor = "Primary"; Zone = "Right" }
+        )
+    }
+}
+```
 
 Which subfolder is read can be redirected per machine - see [Layout Set Overrides](#layout-set-overrides).
 
-**Consumer function:** `Set-WorkspaceWindowLayout`
+**Consumer functions:** `Set-WorkspaceWindowLayout`, `Merge-LayoutProjectOverrides` (`ProjectOverrides`)
 
 ---
 

@@ -34,7 +34,7 @@ BeforeAll {
 	function Open-Workspace { param($Workspace, $Project, [switch]$Alongside, [Parameter(ValueFromRemainingArguments = $true)]$ExtraArgs) }
 	# The pre-checks run on the actions that apply on this machine. Pass-through here; the scope
 	# semantics themselves are Resolve-WorkspaceActions.Tests.ps1's business.
-	function Resolve-WorkspaceActions { param($Actions, $Workspace, $MachineType, $LayoutMachineType, $Configuration) $Actions }
+	function Resolve-WorkspaceActions { param($Actions, $Workspace, $MachineType, $LayoutMachineType, $Project, $Configuration) $Actions }
 
 	function New-TestConfiguration {
 		param([hashtable]$Overrides = @{})
@@ -218,7 +218,7 @@ Describe "Measure-WorkspaceOpen" {
 			# The exiting action is scoped to another machine: the resolver drops it, so the
 			# experiment may run.
 			Mock Resolve-WorkspaceActions {
-				param($Actions, $Workspace, $MachineType, $LayoutMachineType, $Configuration)
+				param($Actions, $Workspace, $MachineType, $LayoutMachineType, $Project, $Configuration)
 				@($Actions | Where-Object { $_.Action -ne 'Terminate-WindowsTerminalTabs' })
 			}
 
@@ -227,6 +227,17 @@ Describe "Measure-WorkspaceOpen" {
 			Should -Invoke Write-LogError -Times 0 -Exactly
 			Should -Invoke Resolve-WorkspaceActions -Times 1 -Exactly -ParameterFilter { $Workspace -eq 'Exiter' -and $null -ne $Configuration }
 			Should -Invoke Open-Workspace -Times 1 -Exactly -ParameterFilter { $Workspace -eq 'Exiter' }
+		}
+
+		It "resolves the actions for the project the opens will use" {
+			Mock Resolve-WorkspaceActions {
+				param($Actions, $Workspace, $MachineType, $LayoutMachineType, $Project, $Configuration)
+				$Actions
+			}
+
+			Measure-WorkspaceOpen Picker Asseto -Runs 1 -WarmUp 0 -SettleSeconds 0 -Variant @{ Name = 'Only' } -Configuration $global:Configuration -ResultPath $script:ResultFile | Out-Null
+
+			Should -Invoke Resolve-WorkspaceActions -Times 1 -Exactly -ParameterFilter { (@($Project) -join ',') -eq 'Asseto' }
 		}
 
 		It "refuses a workspace whose every action is scoped to another machine" {

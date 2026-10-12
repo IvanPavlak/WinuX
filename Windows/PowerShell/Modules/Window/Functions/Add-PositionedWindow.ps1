@@ -36,6 +36,12 @@ function Add-PositionedWindow {
 	.PARAMETER ExpectedProcessId
 		Optional process ID fingerprint captured during positioning.
 
+	.PARAMETER LayoutOrder
+		The position of the layout entry that placed the window (Set-WindowLayouts' processing
+		order: desktop, monitor, file order). Snap-AllWindows snaps each desktop's windows in this
+		order, so of several entries in one zone the last one ends on top. -1 (the default) when
+		unknown; such windows snap after the ordered ones, in tracking order.
+
 	.PARAMETER SingleZone
 		Marks the window as belonging to a single-zone FancyZones layout (e.g. "Zero" via
 		Zone = "Fullscreen"). Snap-AllWindows routes such windows through
@@ -77,7 +83,10 @@ function Add-PositionedWindow {
 		[uint32]$ExpectedProcessId = 0,
 
 		[Parameter()]
-		[switch]$SingleZone
+		[switch]$SingleZone,
+
+		[Parameter()]
+		[int]$LayoutOrder = -1
 	)
 
 	if (-not $script:PositionedWindowHandles) {
@@ -109,6 +118,7 @@ function Add-PositionedWindow {
 		ProcessName    = $ExpectedProcessName
 		ProcessId      = $ExpectedProcessId
 		SingleZone     = [bool]$SingleZone
+		LayoutOrder    = $LayoutOrder
 	}
 
 	$script:PositionedWindowHandles.Add($windowState) > $null

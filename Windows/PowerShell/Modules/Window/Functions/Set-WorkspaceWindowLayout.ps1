@@ -17,6 +17,20 @@
 		the entry restores it. The override takes precedence over the small-display detection, and
 		Reset-Windows resolves its own per-machine defaults through the same helper.
 
+		A layout file may end with a ProjectOverrides block - project variants of the workspace's
+		layout in the same file (@{ "<project scope>" = @{ Monitors = @{ ... }; Layout = @( ... ) } }).
+		With -Project (Open-Workspace hands over the projects of the open automatically, the early
+		preparation included) the covered blocks are merged over the loaded layout before anything
+		uses it - Monitors key by key, Layout entries replacing the base entries of the same desktop
+		and monitor - see Merge-LayoutProjectOverrides. Override errors are logged and the base
+		layout is used.
+
+		Several entries of one process may share a zone or split a desktop (two VS Code folders
+		Left and Right, or several titled windows stacked in one fullscreen zone). Every window is
+		claimed by one entry, and after a successful pass Set-StackedWindowOrder raises the windows
+		of a zone shared by several entries in layout order, so the LAST entry ends on top on every
+		run. The remembered-window pins in CurrentLayout.txt are kept per entry.
+
 		Supports layouts with duplicate window entries where the same ProcessName and
 		WindowTitle appear multiple times to place identical windows in different zones.
 		This is used with Open-Browser's Override parameter which opens the same URL
@@ -140,6 +154,11 @@
 		that function is available. Simple layouts (Fullscreen/Empty) stay global gestures and
 		ignore protection by design.
 
+	.PARAMETER Project
+		The project(s) the workspace is opened for, in selection order. Selects the layout file's
+		ProjectOverrides variant(s); several apply in order, the later wins on the same desktop
+		and monitor. Open-Workspace passes it automatically.
+
 	.PARAMETER PrepareOnly
 		Runs only the preamble - RPC probe, layout file, validation, virtual desktop resize and
 		FancyZones zone layouts - and returns with outcome Prepared. Nothing waits, moves or
@@ -162,6 +181,10 @@
 	.EXAMPLE
 		Set-WorkspaceWindowLayout -WorkspaceName "Server" -DisableAutoWait
 		# Applies layout immediately without waiting
+
+	.EXAMPLE
+		Set-WorkspaceWindowLayout -WorkspaceName "Client" -Project "MyProject"
+		# Applies Client_<MachineType>.psd1 with its MyProject ProjectOverrides block merged in
 
 	.EXAMPLE
 		Set-WorkspaceWindowLayout -WorkspaceName "Server" -PrepareOnly
@@ -197,7 +220,11 @@
 		[System.Collections.Generic.HashSet[IntPtr]]$ProtectedWindowHandles,
 
 		[Parameter()]
-		[switch]$PrepareOnly
+		[switch]$PrepareOnly,
+
+		[Parameter()]
+		[AllowEmptyCollection()]
+		[string[]]$Project
 	)
 
 	$offsetLabel = if ($Alongside) { " (alongside" + $(if ($DesktopOffset -gt 0) { ", offset: +$DesktopOffset" }) + ")" } else { "" }
@@ -387,6 +414,20 @@
 		}
 
 		$config = Import-PowerShellDataFile -Path $LayoutPath
+
+		# Project variants of this layout (ProjectOverrides) are merged in before anything reads the
+		# layout - zone layouts, desktops, the wait, positioning and verification all see the
+		# selected project's variant. Errors are reported and the base layout stays in force.
+		if ($config.ContainsKey('ProjectOverrides')) {
+			$projectMerge = Merge-LayoutProjectOverrides -Config $config -Project $Project
+			foreach ($overrideError in @($projectMerge.Errors)) {
+				Write-LogError "$([System.IO.Path]::GetFileName($LayoutPath)) => $overrideError"
+			}
+			if (@($projectMerge.Applied).Count -gt 0) {
+				Write-LogDebug "Layout variant for project(s) [$($Project -join ', ')] => ProjectOverrides [$(@($projectMerge.Applied) -join '], [')]" -Style Success
+			}
+			$config = $projectMerge.Config
+		}
 		$layoutConfigToApply = $config.Layout
 
 		# Cover every attached monitor, not just the ones this layout file defines. Apply-FancyZones
@@ -446,7 +487,10 @@
 				$pinnedHandleMap = @{}
 				foreach ($recordedWindow in $persistedSection.Windows) {
 					if ($null -eq $recordedWindow) { continue }
-					$zoneKey = "$($recordedWindow.Desktop)|$($recordedWindow.Monitor)|$($recordedWindow.Zone)"
+					# One record per layout entry: the slot is the entry's ordinal among the entries of
+					# that desktop, monitor and zone (records written before slots existed are slot 1).
+					$recordedSlot = if ($recordedWindow.Slot) { [int]$recordedWindow.Slot } else { 1 }
+					$zoneKey = "$($recordedWindow.Desktop)|$($recordedWindow.Monitor)|$($recordedWindow.Zone)|$recordedSlot"
 					$pinnedHandleMap[$zoneKey] = @{
 						Handle      = $recordedWindow.Handle
 						ProcessId   = $recordedWindow.ProcessId
@@ -1798,6 +1842,15 @@
 		# Clear rerun counter on success
 		& $writeRerunState 'WORKSPACE_RERUN_COUNT' $null
 
+		# Several entries in one zone stack in layout order, the last one on top - also on a rerun
+		# that found every window in place and snapped nothing. Best-effort.
+		try {
+			$null = Set-StackedWindowOrder -Results @($results)
+		}
+		catch {
+			Write-LogDebug " Stacking order not applied => $($_.Exception.Message)" -Style Warning
+		}
+
 		# Record the applied layout (virtual desktop count, FancyZones per desktop, and every
 		# positioned window with its desktop/monitor/zone) so the next open/reopen/alongside
 		# can pin identically-named windows back to their zones. Best-effort.
@@ -1822,6 +1875,7 @@
 						DesktopNumber  = $_.DesktopDisplay
 						Monitor        = $_.MonitorLabel
 						Zone           = $_.ZoneName
+						Slot           = $_.Slot
 						Layout         = $_.LayoutName
 						ExpectedX      = $_.ExpectedX
 						ExpectedY      = $_.ExpectedY

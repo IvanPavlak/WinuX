@@ -281,6 +281,57 @@ Use wildcards for flexibility:
 
 This keeps the zone filled whether or not the API is running, and across Firefox and all Chromium browsers - `localhost` is locale-independent, while `Problem loading page` is Firefox's English title.
 
+## Several Windows of One Process
+
+A layout may hold several entries for one process - two VS Code folders split `Left` and `Right`, or several titled windows stacked in one zone, or titled entries next to one untitled catch-all:
+
+```powershell
+Layout = @(
+    @{ ProcessName = "Code"; WindowTitle = "MyProject - Visual Studio Code$"; DesktopNumber = 1; Monitor = "Primary"; Zone = "Left" }
+    @{ ProcessName = "Code"; WindowTitle = "MyProjectApi - Visual Studio Code$"; DesktopNumber = 1; Monitor = "Primary"; Zone = "Right" }
+    @{ ProcessName = "Code"; DesktopNumber = 2; Monitor = "Primary"; Zone = "Fullscreen" }   # every other VS Code window
+)
+```
+
+- Every window is claimed by one entry. The untitled catch-all takes only the windows no titled entry's title matches, wherever it sits in the file; a titled entry whose title misses never falls back to a window another entry's title matches.
+- Anchor a VS Code title on the folder name as VS Code ends its caption (`<folder> - Visual Studio Code$`). A bare `MyProject` also matches `MyProjectApi` and a file tab of that name, and the two entries then compete for the same window.
+- Several entries in one zone stack in file order: the last entry's window ends on top, and stays there on reruns that find every window in place (`Set-StackedWindowOrder`).
+- A single untitled `Code` entry keeps today's behaviour: it takes every VS Code window and places them all in its zone.
+
+The wait (`Wait-ForWorkspaceWindows`), the placement (`Set-WindowLayouts`) and the final check (`Confirm-WorkspaceWindowPositions`) read the same entry relations from `Get-LayoutProcessSiblings`, and `CurrentLayout.txt` remembers one window per entry (desktop, monitor, zone and slot), so two entries in one zone each keep their own window across reopens.
+
+## Project Variants of a Layout
+
+A workspace opened for different projects can arrange its windows differently without a second layout file. Add a `ProjectOverrides` block at the end of the layout file, after `Layout`:
+
+```powershell
+@{
+    Monitors         = @{ Primary = @{ VirtualDesktopLayouts = @{ 1 = "One"; 2 = "Zero" } } }
+    Layout           = @(
+        @{ ProcessName = "Browser"; DesktopNumber = 1; Monitor = "Primary"; Zone = "Left" }
+        @{ ProcessName = "Code"; DesktopNumber = 1; Monitor = "Primary"; Zone = "Right" }
+        @{ ProcessName = "Code"; DesktopNumber = 2; Monitor = "Primary"; Zone = "Fullscreen" }
+    )
+    ProjectOverrides = @{
+        "MyProject" = @{
+            Monitors = @{ Primary = @{ VirtualDesktopLayouts = @{ 2 = "One" } } }
+            Layout   = @(
+                @{ ProcessName = "Code"; WindowTitle = "MyProject - Visual Studio Code$"; DesktopNumber = 2; Monitor = "Primary"; Zone = "Left" }
+                @{ ProcessName = "Code"; WindowTitle = "MyProjectApi - Visual Studio Code$"; DesktopNumber = 2; Monitor = "Primary"; Zone = "Right" }
+            )
+        }
+    }
+}
+```
+
+- The key is a project scope: one `ProjectActions` name or several (`"MyProject/OtherProject"`).
+- `Monitors` merges key by key - only the listed desktops change their zone layout.
+- The variant's `Layout` entries replace every base entry on the same desktop and monitor, and are added for a desktop and monitor the base does not use. Every entry needs `DesktopNumber` and `Monitor`. Clearing a pair without replacement is not supported.
+- The projects come from the open (`Open-Workspace Client MyProject`, the up-front project menu, or the workspace's fixed `Open-Project` project); several apply in selection order and the later one wins on the same desktop and monitor.
+- Every variant is validated on every open: an unknown project, an entry without desktop or monitor, or a zone the variant's zone layout does not have is logged with the file name, and that variant is skipped - the base layout is used.
+
+`Visualize-Layouts` draws one `PROJECT VARIANT [<key>]` drawing per variant next to the base layout, `-Update` leaves the block untouched (only the base `Layout` headers are rewritten), and `Validate-Layout` reports the variant errors. See [Merge-LayoutProjectOverrides](Merge-LayoutProjectOverrides.md).
+
 ## Multi-Virtual-Desktop Layouts
 
 ```powershell

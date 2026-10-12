@@ -7,12 +7,30 @@ function Open-Workspace {
 		Opens a workspace by executing a sequence of configured actions such as opening projects,
 		browsers, applications, and applying window layouts across virtual desktops.
 
+		A workspace is either a plain action list or a TEMPLATED entry
+		(@{ Template = "<name>"; Variables = @{ ... }; Overrides = @{ ... }; Add = @( ... ) }) that
+		stamps out a WorkspaceTemplates entry under its own name - see Resolve-WorkspaceTemplate.
+		Templated entries are expanded at load (Expand-WorkspaceTemplates) and again here from their
+		raw definition, so a command-line argument named like one of the template's variables
+		(Open-Workspace MyProject -Repository OtherGroup) sets that variable for this open only and is
+		not forwarded to the actions; every other extra argument is forwarded as before. A templated
+		entry with errors logs them and opens nothing. {Workspace} resolves to the workspace's own
+		name in every workspace, plain ones included.
+
+		The project(s) of an open are known BEFORE anything launches: an explicit -Project, else -
+		when the workspace has an Open-Project action without a fixed project - the project menu
+		Open-Project would show (shown up front, and the choice is handed to that action), else the
+		fixed Open-Project projects. They select the actions' Project scopes and ProjectParameters
+		rows (Resolve-WorkspaceActions), are handed to Set-WorkspaceWindowLayout as -Project (the
+		layout file's ProjectOverrides, also during the early preparation), and feed the
+		{SelectedProjects} token.
+
 		Actions can receive the workspace's project context via the {SelectedProjects} token: a
 		configured parameter whose FULL value is the literal string "{SelectedProjects}" resolves
 		at runtime to the explicit -Project argument, else to the projects returned by this
-		workspace's Open-Project action. When neither exists the parameter is dropped, so the
-		consuming action (e.g. Open-ProjectSwagger) can no-op or apply its own default. Declare
-		consumers AFTER the Open-Project action.
+		workspace's Open-Project action, else to the projects resolved up front. When none exists
+		the parameter is dropped, so the consuming action (e.g. Open-ProjectSwagger) can no-op or
+		apply its own default.
 
 		Every action that declares a CurrentWorkspace parameter receives the name of the workspace
 		being opened (Get-FilteredParams drops it from the rest; a configured Parameters value of
@@ -43,7 +61,9 @@ function Open-Workspace {
 		offers to cancel instead, and [Enter] exits without opening anything.
 
 	.PARAMETER Project
-		Optional project name(s) to pass to Open-Project action within the workspace.
+		Optional project name(s) to pass to Open-Project action within the workspace. Skips the
+		up-front project menu, and selects the Project scopes, ProjectParameters rows and layout
+		ProjectOverrides for these projects (several apply in the order given, the later wins).
 
 	.PARAMETER Alongside
 		Opens the workspace on new virtual desktop(s) alongside existing ones.
@@ -69,6 +89,15 @@ function Open-Workspace {
 	.EXAMPLE
 		Open-Workspace WinuX
 		# Opens WinuX workspace on the first virtual desktop(s)
+
+	.EXAMPLE
+		Open-Workspace MyProject -Repository OtherGroup
+		# Templated workspace: the template variable Repository is OtherGroup for this open only
+
+	.EXAMPLE
+		Open-Workspace Client MyProject
+		# Opens Client for MyProject without the project menu; Project-scoped actions and the
+		# layout's MyProject override apply
 
 	.EXAMPLE
 		Open-Workspace Server -Alongside
@@ -402,19 +431,103 @@ function Open-Workspace {
 
 			$workspaceActions = Get-OrderedEntry $configuredWorkspaces $workspaceName
 
+			# A templated workspace (WorkspaceActions entry @{ Template = ... }) was expanded at load
+			# (Expand-WorkspaceTemplates); it is expanded again here from its raw definition so a
+			# command-line template variable (-Repository OtherGroup) applies to THIS open, and so a
+			# broken entry repeats its error and opens nothing. Consumed variables are not
+			# forwarded to the actions.
+			$consumedTemplateVariables = @()
+			$templateEntries = Get-ConfigSetting -Path 'WorkspaceTemplateEntries'
+			$templateEntry = if ($templateEntries -is [System.Collections.IDictionary]) { Get-OrderedEntry $templateEntries $workspaceName } else { $null }
+			if ($null -ne $templateEntry) {
+				$templateResolution = Resolve-WorkspaceTemplate -Name $workspaceName -Definition $templateEntry -Templates (Get-ConfigSetting -Path 'WorkspaceTemplates') -Variables $extraParams
+				if (@($templateResolution.Errors).Count -gt 0) {
+					foreach ($templateError in $templateResolution.Errors) {
+						Write-LogError $templateError -NoLeadingNewline
+					}
+					Write-LogWarning "Workspace [$workspaceName] not opened - its template entry has $(@($templateResolution.Errors).Count) error(s)"
+					continue
+				}
+				$workspaceActions = $templateResolution.Actions
+				$consumedTemplateVariables = @($templateResolution.AppliedVariables)
+				foreach ($variableName in $consumedTemplateVariables) {
+					$sharedWith = @($workspaceActions | Where-Object {
+							$command = Get-Command ([string]$_.Action) -ErrorAction SilentlyContinue
+							$command -and $command.Parameters -and $command.Parameters.ContainsKey($variableName)
+						} | ForEach-Object { [string]$_.Action } | Select-Object -Unique)
+					$sharedNote = if ($sharedWith.Count -gt 0) { " (not forwarded to the same-named parameter of [$($sharedWith -join ', ')])" } else { '' }
+					Write-LogDebug " [Open-Workspace] -$variableName sets template variable [$variableName] => [$($extraParams[$variableName])]$sharedNote" -Style Success
+				}
+			}
+
 			if (-not $workspaceActions) {
 				Write-LogWarning "No actions configured for workspace [$workspaceName]"
 				continue
 			}
 
-			# Only the actions scoped to this machine (Machine) and to the layout set the layout
-			# action will read from (LayoutMachine) run - see Resolve-WorkspaceActions. Resolved
-			# once, up front, so the early layout preparation, the project-tab names and the action
-			# loop below all see the same list. A workspace whose every action is scoped elsewhere
-			# is skipped like an unconfigured one: recording an open that produced nothing would
-			# hand Close-Workspace a tracker entry with nothing of its own in it (and, for the first
-			# workspace of a plain run, let it adopt windows that belong to nobody).
-			$workspaceActions = @(Resolve-WorkspaceActions -Actions $workspaceActions -Workspace $workspaceName -Configuration $Configuration)
+			# The project(s) this open is for, known BEFORE anything launches so every
+			# project-dependent step sees them from the start: the Project scopes and
+			# ProjectParameters rows (Resolve-WorkspaceActions), {SelectedProjects}, and the layout's
+			# ProjectOverrides (Set-WorkspaceWindowLayout, including the early preparation). An
+			# explicit -Project wins; a workspace whose Open-Project action has no fixed project
+			# shows Open-Project's project menu here, up front, and hands the choice to that action;
+			# otherwise the fixed Open-Project projects are the workspace's projects.
+			$workspaceProjects = @()
+			$projectMenuShown = $false
+			# Machine-scoped Open-Project actions that do not run on this machine type do not count
+			# (checked here on the raw scope string; Resolve-WorkspaceActions reports bad tokens).
+			$openProjectActions = @($workspaceActions | Where-Object {
+					if ($_.Action -ne 'Open-Project') { return $false }
+					$machineScope = if ($_ -is [System.Collections.IDictionary] -and $_.Contains('Machine')) { [string](@($_['Machine']) -join '/') } else { '' }
+					if ([string]::IsNullOrWhiteSpace($machineScope)) { return $true }
+					$scopeTokens = @(($machineScope -split '/') | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+					return ($scopeTokens -contains 'All') -or ($scopeTokens -contains [string]$global:MachineType)
+				})
+			$openProjectNeedsProject = @($openProjectActions | Where-Object {
+					-not ($_.Parameters -is [System.Collections.IDictionary] -and $_.Parameters.Contains('Project') -and -not [string]::IsNullOrWhiteSpace([string](@($_.Parameters['Project']) -join '')))
+				}).Count -gt 0
+			if ($Project) {
+				$workspaceProjects = @($Project | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+			}
+			elseif ($openProjectNeedsProject) {
+				$projectMenuShown = $true
+				$projectMenuParams = @{
+					InputObject              = $null
+					OptionList               = @(Get-OrderedNames (Get-ConfigSetting -Path 'ProjectActions' -Default @()))
+					MenuTitle                = "[Available projects]"
+					PromptMessage            = "Enter project(s) or press Enter to skip"
+					AllowMultipleSelections  = $true
+					AllowEmptyPromptResponse = $true
+				}
+				$workspaceProjects = @(Resolve-Selection @projectMenuParams | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+				if ($workspaceProjects.Count -eq 0) {
+					Write-LogWarning "No project selected!"
+				}
+				else {
+					Write-LogDebug " [Open-Workspace] Project(s) selected up front => [$($workspaceProjects -join ', ')]" -Style Success
+					# A failure-path rerun of this open replays the recorded command; with the pick
+					# recorded as -Project it reopens the same project instead of asking again.
+					if (@($workspaces).Count -eq 1 -and (Get-Command Set-WorkspaceRerunCommand -ErrorAction SilentlyContinue)) {
+						$projectRerunTokens = @($rerunTokens) + '-Project' + ((@($workspaceProjects) | ForEach-Object { & $quoteRerunToken $_ }) -join ', ')
+						Set-WorkspaceRerunCommand -Command ($projectRerunTokens -join ' ')
+					}
+				}
+			}
+			else {
+				$workspaceProjects = @($openProjectActions | ForEach-Object {
+						if ($_.Parameters -is [System.Collections.IDictionary] -and $_.Parameters.Contains('Project')) { @($_.Parameters['Project']) }
+					} | Where-Object { $_ -is [string] -and -not [string]::IsNullOrWhiteSpace($_) -and $_ -notmatch '^\{.*\}$' } | Select-Object -Unique)
+			}
+
+			# Only the actions scoped to this machine (Machine), to the layout set the layout
+			# action will read from (LayoutMachine) and to the selected projects (Project) run -
+			# see Resolve-WorkspaceActions. Resolved once, up front, so the early layout
+			# preparation, the project-tab names and the action loop below all see the same list.
+			# A workspace whose every action is scoped elsewhere is skipped like an unconfigured
+			# one: recording an open that produced nothing would hand Close-Workspace a tracker
+			# entry with nothing of its own in it (and, for the first workspace of a plain run, let
+			# it adopt windows that belong to nobody).
+			$workspaceActions = @(Resolve-WorkspaceActions -Actions $workspaceActions -Workspace $workspaceName -Project $workspaceProjects -Configuration $Configuration)
 			if ($workspaceActions.Count -eq 0) {
 				continue
 			}
@@ -428,7 +541,10 @@ function Open-Workspace {
 			# reroutes its Open-VSCode action to Open-VSCodeWorkspace) and to
 			# Set-WorkspaceWindowLayout (which retitles the inferred VS Code layout entry).
 			$effectiveExtraParams = @{}
-			foreach ($k in $extraParams.Keys) { $effectiveExtraParams[$k] = $extraParams[$k] }
+			foreach ($k in $extraParams.Keys) {
+				if ($consumedTemplateVariables -contains $k) { continue }
+				$effectiveExtraParams[$k] = $extraParams[$k]
+			}
 
 			$vscodeWorkspaceRaw = $extraParams['VSCodeWorkspace']
 			$resolvedVSCodeWorkspace = $null
@@ -635,6 +751,7 @@ function Open-Workspace {
 					if (-not $prepareParams.ContainsKey($key)) { $prepareParams[$key] = $effectiveExtraParams[$key] }
 				}
 				if ($Alongside) { $prepareParams['Alongside'] = $true }
+				if ($workspaceProjects.Count -gt 0 -and -not $prepareParams.ContainsKey('Project')) { $prepareParams['Project'] = $workspaceProjects }
 				if ($openProtection) { $prepareParams['ProtectedWindowHandles'] = $openProtection.WindowHandles }
 				$prepareParams['PreCapturedExistingWindows'] = $existingHandlesBeforeOpen
 				if ($desktopOffset -gt 0) { $prepareParams['DesktopOffset'] = $desktopOffset }
@@ -673,8 +790,8 @@ function Open-Workspace {
 			$workspaceProjectTabNames = @()
 			foreach ($ac in $workspaceActions) {
 				if ($ac.Action -eq "Open-Project") {
-					$projName = if ($ac.Parameters -and $ac.Parameters.Project) { $ac.Parameters.Project } elseif ($Project) { $Project } else { $null }
-					if ($projName) {
+					$projNames = if ($ac.Parameters -and $ac.Parameters.Project) { @($ac.Parameters.Project) } else { @($workspaceProjects) }
+					foreach ($projName in $projNames) {
 						$projMapping = $projectTerminals | Where-Object { $_.Name -eq $projName }
 						if ($projMapping) {
 							$paths = $projMapping.Paths
@@ -760,9 +877,10 @@ function Open-Workspace {
 
 				# Generic project-context handoff: a parameter whose FULL value is the literal
 				# "{SelectedProjects}" resolves at runtime to (1) the explicit -Project argument,
-				# else (2) the projects returned by this workspace's Open-Project action. With
-				# neither available the parameter is dropped so the action can no-op or apply
-				# its own default. Declare consumers (e.g. Open-ProjectSwagger) AFTER Open-Project.
+				# else (2) the projects returned by this workspace's Open-Project action, else (3)
+				# the projects resolved up front (the project menu, or the fixed Open-Project
+				# projects). With none available the parameter is dropped so the action can no-op
+				# or apply its own default.
 				$resolvedSelectedProjects = if ($Project) {
 					@($Project)
 				}
@@ -770,7 +888,7 @@ function Open-Workspace {
 					@($selectedProjects | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
 				}
 				else {
-					@()
+					@($workspaceProjects)
 				}
 
 				foreach ($tokenKey in @($actionParams.Keys)) {
@@ -788,8 +906,14 @@ function Open-Workspace {
 				}
 
 				if ($action -eq "Open-Project") {
-					if (-not $actionParams.ContainsKey("Project") -and $Project) {
-						$actionParams["Project"] = $Project
+					if (-not $actionParams.ContainsKey("Project") -and $workspaceProjects.Count -gt 0) {
+						$actionParams["Project"] = $workspaceProjects
+					}
+					elseif (-not $actionParams.ContainsKey("Project") -and $projectMenuShown) {
+						# The menu was already shown up front and nothing was picked; asking again
+						# inside Open-Project would show the same menu twice.
+						Write-LogDebug " [Open-Workspace] Skipping [$action] - no project selected" -Style Warning
+						continue
 					}
 
 					# Capture the selected projects for {SelectedProjects} substitution in later actions
@@ -825,6 +949,12 @@ function Open-Workspace {
 					$actionParams["PreCapturedExistingWindows"] = $existingHandlesBeforeOpen
 					if ($desktopOffset -gt 0) {
 						$actionParams["DesktopOffset"] = $desktopOffset
+					}
+
+					# The selected project(s) pick the layout file's ProjectOverrides variant - the
+					# same hand-off the early preparation above received. A configured value wins.
+					if ($workspaceProjects.Count -gt 0 -and -not $actionParams.ContainsKey("Project")) {
+						$actionParams["Project"] = $workspaceProjects
 					}
 
 					# Last moment the terminal is guaranteed readable: THIS action is what moves it onto

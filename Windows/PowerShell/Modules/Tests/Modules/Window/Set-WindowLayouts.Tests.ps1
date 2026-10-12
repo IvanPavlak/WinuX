@@ -456,4 +456,257 @@ Describe "Set-WindowLayouts" {
 			Should -Invoke Get-WindowHandle -Times 3 -Exactly
 		}
 	}
+
+	Context "Several entries of one process, layout order and slots" {
+		# Entries without a Zone or coordinates skip positioning, so the result rows are all these
+		# cases observe. The window search honours -ProcessName (a regex, as the real
+		# Get-WindowHandle treats it) and -WindowTitle separately - Set-WindowLayouts never passes both.
+		BeforeAll {
+			function New-TestWindow {
+				param([int64]$Handle, [string]$Title, [string]$Process = 'Code')
+				[PSCustomObject]@{ Handle = [IntPtr]$Handle; Title = $Title; ProcessName = $Process; ProcessId = 4242 }
+			}
+		}
+
+		BeforeEach {
+			Mock Test-LogVerbose { $false }
+			Mock Write-LogDebug { }
+			Mock Clear-WindowCache { }
+			Mock Start-Sleep { }
+			Mock Move-WindowToVirtualDesktop { $true }
+			Mock Get-WindowDesktopIndex { 0 }
+			$script:windowPool = @()
+			Mock Get-WindowHandle {
+				param($ProcessName, $WindowTitle)
+				@($script:windowPool | Where-Object {
+						if ($WindowTitle) { $_.Title -match $WindowTitle } else { $_.ProcessName -match "^(?:$ProcessName)$" }
+					})
+			}
+		}
+
+		It "processes entries by desktop, then file order, and stamps every Configured row with its LayoutOrder and Slot" {
+			$script:windowPool = @(
+				foreach ($index in 1..6) { New-TestWindow -Handle (0xE000 + $index) -Title "App $index" -Process "app$index" }
+			)
+			$layout = @(
+				@{ ProcessName = 'app2'; DesktopNumber = 2 }
+				@{ ProcessName = 'app1'; DesktopNumber = 1 }
+				@{ ProcessName = 'app3'; DesktopNumber = 1 }
+				@{ ProcessName = 'app4'; DesktopNumber = 1 }
+				@{ ProcessName = 'app5'; DesktopNumber = 2 }
+				@{ ProcessName = 'app6'; DesktopNumber = 1 }
+			)
+
+			$results = @(Set-WindowLayouts -LayoutConfig $layout)
+
+			@($results | ForEach-Object { $_.ProcessName }) | Should -Be @('app1', 'app3', 'app4', 'app6', 'app2', 'app5')
+			@($results | ForEach-Object { $_.LayoutOrder }) | Should -Be @(0, 1, 2, 3, 4, 5)
+			# Slot = the ordinal among the entries of the same desktop, monitor and zone.
+			@($results | ForEach-Object { $_.Slot }) | Should -Be @(1, 2, 3, 4, 1, 2)
+		}
+
+		It "never gives a window an earlier entry placed to a later, different entry" {
+			$script:windowPool = @(New-TestWindow -Handle 0xE101 -Title 'Alpha - Visual Studio Code')
+			$layout = @(
+				@{ ProcessName = 'Code'; WindowTitle = 'Alpha' }
+				@{ ProcessName = 'Code'; WindowTitle = '(Alpha|Beta)' }
+			)
+
+			$results = @(Set-WindowLayouts -LayoutConfig $layout)
+
+			$results.Count | Should -Be 2
+			($results | Where-Object { $_.EntryKey -eq '1|||Code|Alpha' }).Handle | Should -Be ([IntPtr]0xE101)
+			($results | Where-Object { $_.EntryKey -eq '1|||Code|(Alpha|Beta)' }).Status | Should -Be 'Not Found'
+		}
+
+		It "keeps the untitled catch-all off every window a titled sibling matches, even when it comes first" {
+			$script:windowPool = @(
+				New-TestWindow -Handle 0xE201 -Title 'Alpha - Visual Studio Code'
+				New-TestWindow -Handle 0xE202 -Title 'Other - Visual Studio Code'
+			)
+			$layout = @(
+				@{ ProcessName = 'Code' }
+				@{ ProcessName = 'Code'; WindowTitle = 'Alpha - Visual Studio Code$' }
+			)
+
+			$results = @(Set-WindowLayouts -LayoutConfig $layout)
+
+			$catchAll = @($results | Where-Object { $_.EntryKey -eq '1|||Code|' })
+			$catchAll.Count | Should -Be 1
+			$catchAll[0].Status | Should -Be 'Configured'
+			$catchAll[0].Handle | Should -Be ([IntPtr]0xE202)
+			($results | Where-Object { $_.EntryKey -eq '1|||Code|Alpha - Visual Studio Code$' }).Handle | Should -Be ([IntPtr]0xE201)
+		}
+
+		It "reports the catch-all Not Found when every window of its process belongs to a titled sibling" {
+			$script:windowPool = @(New-TestWindow -Handle 0xE301 -Title 'Alpha - Visual Studio Code')
+			$layout = @(
+				@{ ProcessName = 'Code' }
+				@{ ProcessName = 'Code'; WindowTitle = 'Alpha - Visual Studio Code$' }
+			)
+
+			$results = @(Set-WindowLayouts -LayoutConfig $layout)
+
+			($results | Where-Object { $_.EntryKey -eq '1|||Code|' }).Status | Should -Be 'Not Found'
+			($results | Where-Object { $_.EntryKey -eq '1|||Code|Alpha - Visual Studio Code$' }).Handle | Should -Be ([IntPtr]0xE301)
+		}
+
+		It "never lets a titled entry whose title misses fall back to a window matching another entry's title" {
+			$script:windowPool = @(New-TestWindow -Handle 0xE401 -Title 'Beta - Visual Studio Code')
+			$layout = @(
+				@{ ProcessName = 'Code'; WindowTitle = 'Alpha' }
+				@{ ProcessName = 'Code'; WindowTitle = 'Beta' }
+			)
+
+			$results = @(Set-WindowLayouts -LayoutConfig $layout)
+
+			($results | Where-Object { $_.EntryKey -eq '1|||Code|Alpha' }).Status | Should -Be 'Not Found'
+			($results | Where-Object { $_.EntryKey -eq '1|||Code|Beta' }).Handle | Should -Be ([IntPtr]0xE401)
+		}
+
+		It "still falls back to the sole window of the process that no other entry's title matches" {
+			$script:windowPool = @(
+				New-TestWindow -Handle 0xE501 -Title 'Beta - Visual Studio Code'
+				New-TestWindow -Handle 0xE502 -Title 'Drifted caption - Visual Studio Code'
+			)
+			$layout = @(
+				@{ ProcessName = 'Code'; WindowTitle = 'Alpha' }
+				@{ ProcessName = 'Code'; WindowTitle = 'Beta' }
+			)
+
+			$results = @(Set-WindowLayouts -LayoutConfig $layout)
+
+			($results | Where-Object { $_.EntryKey -eq '1|||Code|Alpha' }).Handle | Should -Be ([IntPtr]0xE502)
+			($results | Where-Object { $_.EntryKey -eq '1|||Code|Beta' }).Handle | Should -Be ([IntPtr]0xE501)
+		}
+
+		It "never lets the title-miss fallback land on a window an earlier entry already claimed" {
+			# '(Code)' is another process key than 'Code' - not a sibling - but matches the same window.
+			$script:windowPool = @(New-TestWindow -Handle 0xE601 -Title 'Untitled - Visual Studio Code')
+			$layout = @(
+				@{ ProcessName = '(Code)' }
+				@{ ProcessName = 'Code'; WindowTitle = 'Alpha' }
+			)
+
+			$results = @(Set-WindowLayouts -LayoutConfig $layout)
+
+			($results | Where-Object { $_.EntryKey -eq '1|||(Code)|' }).Handle | Should -Be ([IntPtr]0xE601)
+			($results | Where-Object { $_.EntryKey -eq '1|||Code|Alpha' }).Status | Should -Be 'Not Found'
+		}
+
+		It "never recovers a window an earlier entry claimed through the wait's pre-captured handles" {
+			$script:windowPool = @(New-TestWindow -Handle 0xE701 -Title 'Untitled - Visual Studio Code')
+			$expectedState = @{ ([IntPtr]0xE701) = [PSCustomObject]@{ Title = 'Alpha - Visual Studio Code' } }
+			$layout = @(
+				@{ ProcessName = '(Code)' }
+				@{ ProcessName = 'Code'; WindowTitle = 'Alpha' }
+			)
+
+			$results = @(Set-WindowLayouts -LayoutConfig $layout -ExpectedWindowState $expectedState)
+
+			($results | Where-Object { $_.EntryKey -eq '1|||Code|Alpha' }).Status | Should -Be 'Not Found'
+			@($results | Where-Object { $_.Status -eq 'Configured' }).Count | Should -Be 1
+		}
+
+		It "pins a duplicate entry to the window recorded for its desktop|monitor|zone|slot key" {
+			$script:windowPool = @(
+				New-TestWindow -Handle 0xE801 -Title 'Docs - Google Chrome' -Process 'chrome'
+				New-TestWindow -Handle 0xE802 -Title 'Mail - Google Chrome' -Process 'chrome'
+			)
+			$layout = @(
+				@{ ProcessName = 'chrome'; DesktopNumber = 1 }
+				@{ ProcessName = 'chrome'; DesktopNumber = 1 }
+			)
+			$pinned = @{
+				'1|||1' = @{ Handle = [int64]0xE802; ProcessName = 'chrome' }
+				'1|||2' = @{ Handle = [int64]0xE801; ProcessName = 'chrome' }
+			}
+
+			$results = @(Set-WindowLayouts -LayoutConfig $layout -Claims (New-WindowClaimSet -PinnedMap $pinned))
+
+			($results | Where-Object { $_.Slot -eq 1 }).Handle | Should -Be ([IntPtr]0xE802)
+			($results | Where-Object { $_.Slot -eq 2 }).Handle | Should -Be ([IntPtr]0xE801)
+		}
+
+		It "ignores a pin keyed without a slot" {
+			$script:windowPool = @(
+				New-TestWindow -Handle 0xE901 -Title 'Docs - Google Chrome' -Process 'chrome'
+				New-TestWindow -Handle 0xE902 -Title 'Mail - Google Chrome' -Process 'chrome'
+			)
+			$layout = @(
+				@{ ProcessName = 'chrome'; DesktopNumber = 1 }
+				@{ ProcessName = 'chrome'; DesktopNumber = 1 }
+			)
+			$pinned = @{ '1||' = @{ Handle = [int64]0xE902; ProcessName = 'chrome' } }
+
+			$results = @(Set-WindowLayouts -LayoutConfig $layout -Claims (New-WindowClaimSet -PinnedMap $pinned))
+
+			# No valid pin and no zone geometry: the first candidate, as without any pin.
+			($results | Where-Object { $_.Slot -eq 1 }).Handle | Should -Be ([IntPtr]0xE901)
+		}
+	}
+
+	Context "Layout order through zone positioning" {
+		# Same harness as the SingleZone cases: every window already sits at the inset bounds, so
+		# the post-positioning verification passes and Add-PositionedWindow is reached.
+		BeforeEach {
+			Mock Test-LogVerbose { $false }
+			Mock Write-LogDebug { }
+			Mock Clear-WindowCache { }
+			Mock Start-Sleep { }
+			Mock Get-MonitorSpecs {
+				[PSCustomObject]@{
+					Primary = [PSCustomObject]@{ X = 0; Y = 0; WorkX = 0; WorkY = 0; WorkWidth = 2000; WorkHeight = 1000 }
+				}
+			}
+			Mock Move-WindowToVirtualDesktop { $true }
+			Mock Get-InsetWindowBounds {
+				[PSCustomObject]@{ AdjustedX = 100; AdjustedY = 50; AdjustedWidth = 1800; AdjustedHeight = 900; ZoneCenterX = 1000; ZoneCenterY = 500 }
+			}
+			Mock Resize-Windows { $script:LastResizeWindowsResult = [PSCustomObject]@{ ResizedCount = 1 } }
+			Mock Add-PositionedWindow { }
+			Mock Get-FancyZone {
+				[PSCustomObject]@{ X = 0; Y = 0; Width = 2000; Height = 1000; ZoneIndex = 0; ZoneName = $ZoneName; TotalZoneCount = 2 }
+			}
+			$script:zoneWindows = @(
+				[PSCustomObject]@{ Handle = [IntPtr]0xF001; Title = 'Alpha - Visual Studio Code'; ProcessName = 'Code'; ProcessId = 1; Left = 100; Top = 50; Width = 1800; Height = 900 }
+				[PSCustomObject]@{ Handle = [IntPtr]0xF002; Title = 'Beta - Visual Studio Code'; ProcessName = 'Code'; ProcessId = 1; Left = 100; Top = 50; Width = 1800; Height = 900 }
+				[PSCustomObject]@{ Handle = [IntPtr]0xF003; Title = 'Slack'; ProcessName = 'slack'; ProcessId = 2; Left = 100; Top = 50; Width = 1800; Height = 900 }
+			)
+			Mock Get-WindowHandle {
+				param($ProcessName, $WindowTitle)
+				@($script:zoneWindows | Where-Object {
+						if ($WindowTitle) { $_.Title -match $WindowTitle } else { $_.ProcessName -eq $ProcessName }
+					})
+			}
+			$script:LastMoveWindowToVirtualDesktopResult = $null
+			$script:stackedLayout = @(
+				@{ ProcessName = 'slack'; DesktopNumber = 1; Monitor = 'Primary'; Zone = 'Right' }
+				@{ ProcessName = 'Code'; WindowTitle = 'Alpha'; DesktopNumber = 1; Monitor = 'Primary'; Zone = 'Left' }
+				@{ ProcessName = 'Code'; WindowTitle = 'Beta'; DesktopNumber = 1; Monitor = 'Primary'; Zone = 'Left' }
+			)
+			$script:twoZoneMonitorConfig = @{ Primary = @{ VirtualDesktopLayouts = @{ 1 = 'One' } } }
+			$script:dummyMonitorInfo = @([PSCustomObject]@{ DeviceName = '\\.\DISPLAY1' })
+		}
+
+		It "tracks every placed window with its entry's LayoutOrder" {
+			$null = Set-WindowLayouts -LayoutConfig $script:stackedLayout -MonitorInfo $script:dummyMonitorInfo -MonitorConfig $script:twoZoneMonitorConfig
+
+			Should -Invoke Add-PositionedWindow -Times 3 -Exactly
+			Should -Invoke Add-PositionedWindow -Times 1 -Exactly -ParameterFilter { $WindowHandle -eq [IntPtr]0xF003 -and $LayoutOrder -eq 0 }
+			Should -Invoke Add-PositionedWindow -Times 1 -Exactly -ParameterFilter { $WindowHandle -eq [IntPtr]0xF001 -and $LayoutOrder -eq 1 }
+			Should -Invoke Add-PositionedWindow -Times 1 -Exactly -ParameterFilter { $WindowHandle -eq [IntPtr]0xF002 -and $LayoutOrder -eq 2 }
+		}
+
+		It "numbers the slots of entries sharing a zone in file order and starts each zone at 1" {
+			$results = @(Set-WindowLayouts -LayoutConfig $script:stackedLayout -MonitorInfo $script:dummyMonitorInfo -MonitorConfig $script:twoZoneMonitorConfig)
+
+			$configured = @($results | Where-Object { $_.Status -eq 'Configured' })
+			$configured.Count | Should -Be 3
+			($configured | Where-Object { $_.Handle -eq [IntPtr]0xF003 }).Slot | Should -Be 1
+			($configured | Where-Object { $_.Handle -eq [IntPtr]0xF001 }).Slot | Should -Be 1
+			($configured | Where-Object { $_.Handle -eq [IntPtr]0xF002 }).Slot | Should -Be 2
+			($configured | Where-Object { $_.Handle -eq [IntPtr]0xF002 }).ZoneName | Should -Be 'Left'
+		}
+	}
 }

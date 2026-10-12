@@ -9,6 +9,7 @@ BeforeAll {
 	. "$FunctionsPath\Resolve-WorkspaceActions.ps1"
 	. (Join-Path $ModuleRoot "Helper\Functions\Get-OrderedNames.ps1")
 	. (Join-Path $ModuleRoot "Helper\Functions\Get-OrderedEntry.ps1")
+	. (Join-Path $ModuleRoot "Helper\Functions\Resolve-WorkspaceTemplate.ps1")
 	. "$SystemFunctionsPath\Terminate-WindowsTerminalTabs.ps1"
 
 	$script:OriginalMachineType = $global:MachineType
@@ -73,7 +74,7 @@ BeforeAll {
 	function Test-BrowserGroupAlreadyOpen { $false }
 	function Open-Browser { param($Groups, $Browser, $Instances) }
 	function Open-Terminal { param($Command, [switch]$Administrator, [switch]$InSameShell, $WindowId, $TabTitles) }
-	function Set-WorkspaceWindowLayout { param($WorkspaceName, $PreCapturedExistingWindows, $DesktopOffset, [switch]$Alongside, $ProtectedWindowHandles, [switch]$PrepareOnly) }
+	function Set-WorkspaceWindowLayout { param($WorkspaceName, $PreCapturedExistingWindows, $DesktopOffset, [switch]$Alongside, $ProtectedWindowHandles, [switch]$PrepareOnly, [string[]]$Project) }
 	# The benchmark writer and the layout phase getter are real module functions in a
 	# bootstrap-imported session; stub them so no test run appends rows to the machine's
 	# benchmark file or reads a real layout record.
@@ -225,9 +226,11 @@ Describe "Open-Workspace" {
 			$script:swaggerCalls += [PSCustomObject]@{ Project = @($Project); Browser = $Browser }
 		}
 		Mock Set-WorkspaceWindowLayout {
-			param($WorkspaceName, $PreCapturedExistingWindows, $DesktopOffset, [switch]$Alongside, $ProtectedWindowHandles, [switch]$PrepareOnly)
+			param($WorkspaceName, $PreCapturedExistingWindows, $DesktopOffset, [switch]$Alongside, $ProtectedWindowHandles, [switch]$PrepareOnly, [string[]]$Project)
 			$layoutCall = [PSCustomObject]@{
 				WorkspaceName               = $WorkspaceName
+				Project                     = @($Project)
+				ProjectBound                = $PSBoundParameters.ContainsKey('Project')
 				PreCapturedExistingWindows  = $PreCapturedExistingWindows
 				DesktopOffset               = $DesktopOffset
 				Alongside                   = [bool]$Alongside
@@ -1519,6 +1522,214 @@ Describe "Open-Workspace" {
 			$record.Phases['Desktops'] | Should -Be 0.4
 			$record.Phases['FancyZones'] | Should -Be 0.7
 			$record.Phases['Wait'] | Should -Be 8
+		}
+	}
+	Context "templated workspaces" {
+		BeforeEach {
+			Mock Write-LogError { }
+			Mock Write-LogWarning { }
+
+			# What Expand-WorkspaceTemplates leaves behind at load: the expanded list under
+			# WorkspaceActions and the raw definition under WorkspaceTemplateEntries.
+			$global:Configuration.WorkspaceTemplates = @{
+				Repo     = @{
+					Variables = @{ Alpha = '{Workspace}Default' }
+					Actions   = @(
+						@{ Action = 'Test-ActionOne'; Parameters = @{} }
+						@{ Action = 'Test-ActionTwo'; Parameters = @{ Beta = '{Alpha}' } }
+						@{ Action = 'Open-Browser'; Parameters = @{ Groups = @('General') } }
+					)
+				}
+				Required = @{
+					Variables = @{ Token = $null }
+					Actions   = @(@{ Action = 'Test-ActionTwo'; Parameters = @{ Beta = '{Token}' } })
+				}
+			}
+			Set-TestWorkspace 'MyRepo' @(
+				@{ Action = 'Test-ActionOne'; Parameters = @{} }
+				@{ Action = 'Test-ActionTwo'; Parameters = @{ Beta = 'MyRepoDefault' } }
+				@{ Action = 'Open-Browser'; Parameters = @{ Groups = @('General') } }
+			)
+			$global:Configuration.WorkspaceTemplateEntries = [ordered]@{ MyRepo = @{ Template = 'Repo' } }
+		}
+
+		It "runs the template defaults when the command line sets no variable" {
+			Open-Workspace -Workspace 'MyRepo'
+
+			@($script:invokedActions.Name) | Should -Be @('Test-ActionOne', 'Test-ActionTwo')
+			$script:invokedActions[1].Beta | Should -Be 'MyRepoDefault'
+			$script:browserCalls.Count | Should -Be 1
+		}
+
+		It "re-expands the entry with a command-line variable, consumes it and forwards the other extra arguments" {
+			Open-Workspace -Workspace 'MyRepo' -Alpha 'OtherGroup' -Instances 2
+
+			$script:invokedActions[1].Name | Should -Be 'Test-ActionTwo'
+			$script:invokedActions[1].Beta | Should -Be 'OtherGroup'
+			# -Alpha set the template variable, so it is not also handed to Test-ActionOne's -Alpha.
+			$script:invokedActions[0].Name | Should -Be 'Test-ActionOne'
+			$script:invokedActions[0].Alpha | Should -BeNullOrEmpty
+			# -Instances is no template variable and still reaches the action declaring it.
+			$script:browserCalls.Count | Should -Be 1
+			$script:browserCalls[0].Instances | Should -Be 2
+		}
+
+		It "runs nothing and records nothing when the template entry has errors" {
+			$global:Configuration.WorkspaceTemplateEntries = [ordered]@{ MyRepo = @{ Template = 'Missing' } }
+
+			Open-Workspace -Workspace 'MyRepo'
+
+			$script:invokedActions.Count | Should -Be 0
+			$script:browserCalls.Count | Should -Be 0
+			$script:workspaceStateCalls.Count | Should -Be 0
+			Should -Invoke Write-LogError -Times 1
+		}
+
+		It "opens an entry whose variable has no default only once the command line sets it" {
+			Set-TestWorkspace 'Needy' @(@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 'stale' } })
+			$global:Configuration.WorkspaceTemplateEntries = [ordered]@{ Needy = @{ Template = 'Required' } }
+
+			Open-Workspace -Workspace 'Needy'
+
+			$script:invokedActions.Count | Should -Be 0
+			$script:workspaceStateCalls.Count | Should -Be 0
+
+			Open-Workspace -Workspace 'Needy' -Token 'Value'
+
+			@($script:invokedActions.Name) | Should -Be @('Test-ActionTwo')
+			$script:invokedActions[0].Beta | Should -Be 'Value'
+		}
+
+		It "runs a plain workspace as configured when WorkspaceTemplateEntries does not name it" {
+			Set-TestWorkspace 'Plain' @(@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 3 } })
+
+			Open-Workspace -Workspace 'Plain' -Alpha 9
+
+			$script:invokedActions.Count | Should -Be 1
+			$script:invokedActions[0].Alpha | Should -Be 3
+		}
+	}
+
+	Context "projects resolved up front" {
+		BeforeEach {
+			Mock Write-LogError { }
+			Mock Write-LogWarning { }
+
+			$global:Configuration.ProjectActions = @(
+				@{ ProjectA = @(@{ Action = 'Open-Rider' }) }
+				@{ ProjectB = @(@{ Action = 'Open-Rider' }) }
+			)
+
+			$script:projectMenuCalls = @()
+			$script:projectMenuAnswer = @('ProjectB')
+			Mock Resolve-Selection {
+				param(
+					$InputObject,
+					$OptionList,
+					$MenuTitle,
+					$PromptMessage,
+					[switch]$AllowEmptyPromptResponse,
+					[switch]$AllowMultipleSelections
+				)
+				$script:resolveSelectionCalls += [PSCustomObject]@{ InputObject = $InputObject; PromptMessage = $PromptMessage; OptionList = $OptionList }
+				if ($MenuTitle -eq '[Available projects]') {
+					$script:projectMenuCalls += [PSCustomObject]@{
+						OptionList       = @($OptionList)
+						ActionsRunBefore = @($script:invokedActions).Count
+						PreparedBefore   = @($script:prepareLayoutCalls).Count
+					}
+					return $script:projectMenuAnswer
+				}
+				$InputObject
+			}
+
+			Set-TestWorkspace 'TestWorkspace' @(
+				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = '{SelectedProjects}' } },
+				@{ Action = 'Open-Project' },
+				@{ Action = 'Set-WorkspaceWindowLayout'; Parameters = @{ WorkspaceName = 'TestWorkspace' } }
+			)
+		}
+
+		It "shows the project menu once, before the layout preparation and before any action runs" {
+			Open-Workspace -Workspace 'TestWorkspace'
+
+			$script:projectMenuCalls.Count | Should -Be 1
+			$script:projectMenuCalls[0].ActionsRunBefore | Should -Be 0
+			$script:projectMenuCalls[0].PreparedBefore | Should -Be 0
+			$script:projectMenuCalls[0].OptionList | Should -Be @('ProjectA', 'ProjectB')
+		}
+
+		It "hands the menu choice to Open-Project, the layout preparation, the layout action and {SelectedProjects}" {
+			Open-Workspace -Workspace 'TestWorkspace'
+
+			Should -Invoke Open-Project -Times 1 -Exactly -ParameterFilter { @($Project) -contains 'ProjectB' }
+			# Test-ActionOne runs BEFORE Open-Project, so {SelectedProjects} can only come from the menu.
+			@($script:invokedActions[0].Alpha) | Should -Be @('ProjectB')
+			$script:prepareLayoutCalls.Count | Should -Be 1
+			$script:prepareLayoutCalls[0].Project | Should -Be @('ProjectB')
+			$script:setLayoutCalls.Count | Should -Be 1
+			$script:setLayoutCalls[0].Project | Should -Be @('ProjectB')
+		}
+
+		It "skips Open-Project instead of asking again when nothing is picked" {
+			$script:projectMenuAnswer = @()
+
+			Open-Workspace -Workspace 'TestWorkspace'
+
+			$script:projectMenuCalls.Count | Should -Be 1
+			Should -Invoke Open-Project -Times 0
+			$script:invokedActions[0].Alpha | Should -BeNullOrEmpty
+			$script:setLayoutCalls.Count | Should -Be 1
+			$script:setLayoutCalls[0].ProjectBound | Should -BeFalse
+		}
+
+		It "skips the menu for an explicit -Project and uses it everywhere" {
+			Open-Workspace -Workspace 'TestWorkspace' -Project 'ProjectA'
+
+			$script:projectMenuCalls.Count | Should -Be 0
+			Should -Invoke Open-Project -Times 1 -Exactly -ParameterFilter { @($Project) -contains 'ProjectA' }
+			$script:prepareLayoutCalls[0].Project | Should -Be @('ProjectA')
+			$script:setLayoutCalls[0].Project | Should -Be @('ProjectA')
+		}
+
+		It "takes a fixed Open-Project project as the workspace project, without the menu" {
+			Set-TestWorkspace 'TestWorkspace' @(
+				@{ Action = 'Open-Project'; Parameters = @{ Project = 'ProjectA' } },
+				@{ Action = 'Test-ActionOne'; Parameters = @{ Alpha = 1 }; Project = 'ProjectA' },
+				@{ Action = 'Test-ActionTwo'; Parameters = @{ Beta = 2 }; Project = 'ProjectB' },
+				@{ Action = 'Set-WorkspaceWindowLayout'; Parameters = @{ WorkspaceName = 'TestWorkspace' } }
+			)
+
+			Open-Workspace -Workspace 'TestWorkspace'
+
+			$script:projectMenuCalls.Count | Should -Be 0
+			# The Project scopes were resolved for ProjectA.
+			@($script:invokedActions.Name) | Should -Be @('Test-ActionOne')
+			$script:prepareLayoutCalls[0].Project | Should -Be @('ProjectA')
+			$script:setLayoutCalls[0].Project | Should -Be @('ProjectA')
+		}
+
+		It "selects the ProjectParameters row of the menu choice" {
+			Set-TestWorkspace 'TestWorkspace' @(
+				@{ Action = 'Open-Project' },
+				@{ Action = 'Test-ActionTwo'; Parameters = @{ Beta = 'all' }; ProjectParameters = @{ ProjectB = @{ Beta = 'b' } } }
+			)
+
+			Open-Workspace -Workspace 'TestWorkspace'
+
+			$script:invokedActions[0].Beta | Should -Be 'b'
+		}
+
+		It "lets a configured layout Project win over the workspace project" {
+			Set-TestWorkspace 'TestWorkspace' @(
+				@{ Action = 'Open-Project'; Parameters = @{ Project = 'ProjectA' } },
+				@{ Action = 'Set-WorkspaceWindowLayout'; Parameters = @{ WorkspaceName = 'TestWorkspace'; Project = 'ProjectB' } }
+			)
+
+			Open-Workspace -Workspace 'TestWorkspace'
+
+			$script:prepareLayoutCalls[0].Project | Should -Be @('ProjectB')
+			$script:setLayoutCalls[0].Project | Should -Be @('ProjectB')
 		}
 	}
 }

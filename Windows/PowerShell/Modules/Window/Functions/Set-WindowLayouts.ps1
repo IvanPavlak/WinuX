@@ -17,6 +17,23 @@
 		each window is positioned in its own zone. For unique entries, all matching windows
 		are processed together (original behaviour preserved).
 
+		Several entries may also target windows of ONE process under different titles - two VS
+		Code folders in two zones, or a titled VS Code entry next to an untitled catch-all (see
+		Get-LayoutProcessSiblings). Every window is claimed by one entry only: a window an earlier
+		entry of the pass placed is never a candidate again. An untitled catch-all never takes a
+		window whose title matches one of its titled siblings, so it takes whatever the titled
+		entries leave, wherever the entries sit in the file. A titled entry whose title misses
+		never falls back to a window that matches another entry's title. A single untitled entry
+		of a process keeps taking every window of it, as before.
+
+		Entries are processed in a stable order - desktop, then monitor, then file order - and
+		every Configured row carries its LayoutOrder (that position) and Slot (its ordinal among
+		the entries of the same desktop, monitor and zone). The positioned-window tracking carries
+		the LayoutOrder too, so Snap-AllWindows snaps in layout order and, of several entries in one
+		zone, the last one ends on top (Set-StackedWindowOrder keeps it that way on reruns). The
+		remembered-window pins are keyed per entry (desktop|monitor|zone|slot), so two entries in
+		one zone each keep their own record.
+
 	.PARAMETER LayoutConfig
 		A hashtable or array of window configurations. Each configuration should include:
 		- ProcessName: The process name to target
@@ -73,7 +90,8 @@
 		  windows its per-desktop passes already placed before it finishes the remaining desktops.
 		- PinnedMap: optional hashtable from a previous successful run (built by
 		  Set-WorkspaceWindowLayout from CurrentLayout.txt), keyed by
-		  "<DesktopNumber>|<Monitor>|<Zone>" mapping to the window that occupied that slot last
+		  "<DesktopNumber>|<Monitor>|<Zone>|<Slot>" (Slot = the entry's ordinal among the entries of
+		  that desktop, monitor and zone, 1 for the first) mapping to the window that occupied that slot last
 		  time (@{ Handle; ProcessId; ProcessName }). For a duplicate (ProcessName, WindowTitle)
 		  entry it is the AUTHORITATIVE source of which window claims the zone: when the recorded
 		  window is still live and owned by the same process it is reclaimed exactly, so re-runs
@@ -271,9 +289,12 @@
 		$monitorSpecs = Get-MonitorSpecs -MonitorInfo $MonitorInfo
 	}
 
-	# Sort configurations by Desktop, then Monitor Y, then Monitor X
+	# Sort configurations by Desktop, then Monitor Y, then Monitor X, then file order.
 	# This ensures processing order: Desktop 1 Monitor 1, Desktop 1 Monitor 2, Desktop 2 Monitor 1, etc.
-	$sortedLayoutConfig = $LayoutConfig | ForEach-Object {
+	# File order is the explicit last key: Sort-Object is not stable, and the order of entries
+	# sharing a zone is their stacking order.
+	$fileIndex = 0
+	$sortedLayoutConfig = @($LayoutConfig | ForEach-Object {
 		$config = $_
 		$monitorX = 0
 		$monitorY = 0
@@ -303,8 +324,33 @@
 			DesktopNumber = if ($config.DesktopNumber) { $config.DesktopNumber } else { 1 }
 			MonitorY      = $monitorY
 			MonitorX      = $monitorX
+			FileIndex     = $fileIndex
 		}
-	} | Sort-Object DesktopNumber, MonitorY, MonitorX
+		$fileIndex++
+	} | Sort-Object DesktopNumber, MonitorY, MonitorX, FileIndex)
+
+	# Per entry: its position in that order (LayoutOrder), how it relates to the other entries of
+	# its process (Get-LayoutProcessSiblings), and its slot - the ordinal among the entries of the
+	# same desktop, monitor and zone, which keys its remembered-window pin.
+	$processSiblings = Get-LayoutProcessSiblings -LayoutConfig @($sortedLayoutConfig | ForEach-Object { $_.Config })
+	$slotCounter = @{}
+	for ($orderIndex = 0; $orderIndex -lt $sortedLayoutConfig.Count; $orderIndex++) {
+		$sortItem = $sortedLayoutConfig[$orderIndex]
+		$slotConfig = $sortItem.Config
+		$slotZoneKey = "$($sortItem.DesktopNumber)|$($slotConfig.Monitor)|$($slotConfig.Zone)"
+		$slotCounter[$slotZoneKey] = [int]$slotCounter[$slotZoneKey] + 1
+		$sortItem | Add-Member -NotePropertyName LayoutOrder -NotePropertyValue $orderIndex -Force
+		$sortItem | Add-Member -NotePropertyName Siblings -NotePropertyValue @($processSiblings)[$orderIndex] -Force
+		$sortItem | Add-Member -NotePropertyName Slot -NotePropertyValue $slotCounter[$slotZoneKey] -Force
+		$sortItem | Add-Member -NotePropertyName SlotKey -NotePropertyValue "$slotZoneKey|$($slotCounter[$slotZoneKey])" -Force
+	}
+
+	# Whether a window's title matches one of a set of layout title patterns.
+	$matchesAnyTitle = {
+		param($Window, [string[]]$Patterns)
+		if (-not $Patterns -or $Patterns.Count -eq 0) { return $false }
+		return [bool](Test-WindowTitleMatch -WindowTitle ([string]$Window.Title) -Patterns $Patterns)
+	}
 
 	# Pre-scan layout for duplicate (ProcessName, WindowTitle) keys.
 	# When the same key appears multiple times (e.g., two "firefox / Google" entries in different zones),
@@ -322,7 +368,9 @@
 		}
 	}
 
-	# Handles already claimed by an earlier duplicate entry (only used when duplicates exist)
+	# Handles already claimed by an earlier entry of this pass. A window belongs to one entry:
+	# duplicates take one distinct window each, and no other entry can take a window an earlier
+	# entry placed.
 	$claimedHandles = New-Object 'System.Collections.Generic.HashSet[IntPtr]'
 
 	if (Test-LogVerbose) {
@@ -610,7 +658,8 @@
 								-DesktopNumber $trackingDesktopNumber `
 								-ExpectedProcessName $verifyWindow.ProcessName `
 								-ExpectedProcessId ([uint32]$verifyWindow.ProcessId) `
-								-SingleZone:([bool]$Item.SingleZone)
+								-SingleZone:([bool]$Item.SingleZone) `
+								-LayoutOrder $Item.LayoutOrder
 						}
 						else {
 							if (Test-LogVerbose) {
@@ -677,7 +726,8 @@
 											-DesktopNumber $trackingDesktopNumber `
 											-ExpectedProcessName $retryVerifyWindow.ProcessName `
 											-ExpectedProcessId ([uint32]$retryVerifyWindow.ProcessId) `
-											-SingleZone:([bool]$Item.SingleZone)
+											-SingleZone:([bool]$Item.SingleZone) `
+											-LayoutOrder $Item.LayoutOrder
 									}
 									else {
 										if (Test-LogVerbose) {
@@ -768,11 +818,18 @@
 				ExpectedWidth     = $posWidth
 				ExpectedHeight    = $posHeight
 				EntryKey          = $currentEntryKey
+				LayoutOrder       = $Item.LayoutOrder
+				Slot              = $Item.Slot
 			})
 	}
 
 	foreach ($item in $sortedLayoutConfig) {
 		$config = $item.Config
+		$relation = $item.Siblings
+		# Titles of the OTHER titled entries of this process: never a fallback for a titled entry,
+		# never a candidate for an untitled catch-all.
+		$siblingTitles = [string[]]@()
+		if ($relation -and $relation.Shared) { $siblingTitles = [string[]]@($relation.SiblingTitles | Where-Object { $_ }) }
 
 		# Per-desktop pipelining: the whole layout was counted above, so a duplicate key is
 		# known as such even when only one of its entries is on the desktop being processed.
@@ -854,6 +911,12 @@
 
 					if (-not $isBrowserLikeProcess) {
 						$processCandidates = @(Get-WindowHandle -ProcessName $config.ProcessName)
+						# The fallback may only land on a window no other entry wants: not one an
+						# earlier entry already placed, and not one whose title matches another
+						# entry of the same process.
+						$processCandidates = @($processCandidates | Where-Object {
+								-not $claimedHandles.Contains($_.Handle) -and -not (& $matchesAnyTitle $_ $siblingTitles)
+							})
 						if ($processCandidates.Count -gt 0) {
 							$capturedCandidates = @()
 							if ($ExpectedWindowState -and $ExpectedWindowState.Count -gt 0) {
@@ -891,6 +954,7 @@
 				foreach ($entry in $ExpectedWindowState.GetEnumerator()) {
 					$capturedHandle = $entry.Key
 					$capturedState = $entry.Value
+					if ($claimedHandles.Contains([IntPtr]$capturedHandle)) { continue }
 
 					# Check if the title captured during the wait phase matches the expected pattern
 					# Use Test-WindowTitleMatch to support both wildcard (e.g., *Gemini*) and regex (e.g., (.*Calendar.*|.*Week.*)) patterns
@@ -981,6 +1045,25 @@
 			$windows = @($windows | Where-Object { -not $Claims.Excluded.Contains($_.Handle) })
 			if ((Test-LogVerbose) -and $windows.Count -ne $candidateCount) {
 				Write-LogDebug "⊘ Excluded $($candidateCount - $windows.Count) window(s) an earlier per-desktop pass already placed" -Style Warning
+			}
+		}
+
+		# One entry per window: a window an earlier entry of this pass placed is not a candidate.
+		if ($claimedHandles.Count -gt 0 -and $windows) {
+			$candidateCount = @($windows).Count
+			$windows = @($windows | Where-Object { -not $claimedHandles.Contains($_.Handle) })
+			if ((Test-LogVerbose) -and $windows.Count -ne $candidateCount) {
+				Write-LogDebug "⊘ Excluded $($candidateCount - $windows.Count) window(s) an earlier entry already claimed" -Style Warning
+			}
+		}
+
+		# An untitled catch-all takes what its titled siblings leave: never a window whose title
+		# matches one of them, whether or not that sibling has been processed yet.
+		if ($relation -and $relation.CatchAll -and $siblingTitles.Count -gt 0 -and $windows) {
+			$candidateCount = @($windows).Count
+			$windows = @($windows | Where-Object { -not (& $matchesAnyTitle $_ $siblingTitles) })
+			if ((Test-LogVerbose) -and $windows.Count -ne $candidateCount) {
+				Write-LogDebug "⊘ Excluded $($candidateCount - $windows.Count) window(s) a titled entry of [$($config.ProcessName)] matches" -Style Warning
 			}
 		}
 
@@ -1202,7 +1285,7 @@
 				#    a recycled handle from a different/relaunched process fall through to
 				#    geometry instead (e.g. after a reboot the PID differs).
 				if ($Claims.PinnedMap) {
-					$zoneKey = "$($config.DesktopNumber)|$($config.Monitor)|$($config.Zone)"
+					$zoneKey = $item.SlotKey
 					if ($Claims.PinnedMap.ContainsKey($zoneKey)) {
 						$rec = $Claims.PinnedMap[$zoneKey]
 						$recordedHandle = $null
@@ -1349,14 +1432,16 @@
 			# the explicit Layout field) so Add-PositionedWindow can record where the window
 			# belongs for CurrentLayout.txt.
 			$positionWorkItem = [PSCustomObject]@{
-				Window     = $window
-				Config     = $config
-				PosX       = $posX
-				PosY       = $posY
-				PosWidth   = $posWidth
-				PosHeight  = $posHeight
-				Layout     = $layoutName
-				SingleZone = $singleZone
+				Window      = $window
+				Config      = $config
+				PosX        = $posX
+				PosY        = $posY
+				PosWidth    = $posWidth
+				PosHeight   = $posHeight
+				Layout      = $layoutName
+				SingleZone  = $singleZone
+				LayoutOrder = $item.LayoutOrder
+				Slot        = $item.Slot
 			}
 
 			# Settle only when a real desktop move happened this iteration - the fast path
@@ -1369,10 +1454,8 @@
 
 			& $applyPositionWorkItem -Item $positionWorkItem
 
-			# Mark this handle as claimed so the next duplicate entry gets a different window
-			if ($isDuplicateKey) {
-				[void]$claimedHandles.Add($window.Handle)
-			}
+			# Mark this handle as claimed so no later entry (duplicate or not) takes it again
+			[void]$claimedHandles.Add($window.Handle)
 		}
 	}
 

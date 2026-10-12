@@ -54,6 +54,10 @@ This is where the merge you are relying on actually happens: the base `Configura
     - Options: Add an entry with `Exe`, `PrivateArg` and `NewWindowArg`. Because hashtables merge per key, adding one browser does not remove the others.
     - Default: The shipped five.
     - More detail: [`Universal`](../../configuration-reference.md#universal-constants)
+10. Do you redefine a shipped workspace template locally?
+    - Options: A local `WorkspaceTemplates.<Name>` replaces the base template of the same name whole - it is not deep-merged, so it must carry its complete `Actions` and `Variables`. A new name adds a template next to the shipped ones. After the merge every templated `WorkspaceActions` entry is expanded once (`Expand-WorkspaceTemplates`); a broken one is reported, never fatal to the load.
+    - Default: The shipped `Project` template.
+    - More detail: [`WorkspaceTemplates`](../../configuration-reference.md#workspace-templates)
 
 ## Where to Put Values
 
@@ -61,6 +65,8 @@ All of it goes in `Configuration.local.psd1`, at the repository's `Windows/Power
 
 > [!WARNING]
 > The merge is not uniform. **Hashtables deep-merge per key**, so adding one entry to a hashtable leaves every other entry alone. **Arrays and scalars replace wholesale**, so supplying an array key in your local file discards the entire base array. When you want to *add* to a shipped array, copy the whole base array out of `Configuration.psd1` first and add your entry to the copy.
+
+`WorkspaceTemplates` is the one hashtable merged differently: template by template, a local template replacing the base template of the same name whole.
 
 ## Steps Overview
 
@@ -139,7 +145,11 @@ $global:Configuration.Universal
 $global:MachineType
 $global:Configuration.Keys.Count
 $global:MachineSpecificPaths.Projects.Self.Root
+$global:Configuration.WorkspaceTemplateEntries.Keys
+$global:Configuration.WorkspaceTemplateErrors
 ```
+
+The last two lines show which workspaces were expanded from a template at load and any template problem found (both are runtime keys written by `Expand-WorkspaceTemplates`, not settings).
 
 If a value reads back as empty, the two usual causes are a parse error in `Configuration.local.psd1` (run `Test-ConfigurationSchema`) and a key placed at the wrong nesting level.
 
@@ -169,6 +179,15 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
             }
         }
     }
+    WorkspaceTemplates = @{
+        Repo = @{
+            Variables = @{ Repository = "{Workspace}" }
+            Actions   = @(
+                @{ Action = "Open-Browser"; Parameters = @{ Groups = @("{Repository}") } }
+                @{ Action = "Set-WorkspaceWindowLayout"; Parameters = @{ WorkspaceName = "{Workspace}" } }
+            )
+        }
+    }
 }
 ```
 
@@ -181,5 +200,6 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 - [`Set-EnvironmentVariables`](../system/Set-EnvironmentVariables.md) - reads the same configuration
 - [`Set-SpecialFolders`](../system/Set-SpecialFolders.md) - reads the same configuration
 - [`Bootstrap`](Bootstrap.md) - reads the same configuration
+- [`Expand-WorkspaceTemplates`](../helper/Expand-WorkspaceTemplates.md) - expands the templated workspaces right after the merge
 - [WinuXConfigurator](../../winux-configurator.md) - have an AI assistant walk these decisions with you
 - [Configuration reference](../../configuration-reference.md) - every key, section by section

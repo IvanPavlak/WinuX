@@ -79,7 +79,9 @@ decisions behind them, and where the values go. Each module's `README.md` indexe
 | `BrowserGroups`                                    | `Open-Browser`, `Collect-BrowserUrls`              |
 | `Projects`, `ProjectActions`                       | `Open-Project`                                     |
 | `Workspaces`, `DefaultWorkspace`, `WorkspaceActions`, `WorkspaceBenchmark` | `Open-Workspace`           |
-| `WorkspaceActions` entry scopes (`Machine`, `LayoutMachine`) and tables (`MachineParameters`, `LayoutMachineParameters`) | `Resolve-WorkspaceActions` (for `Open-Workspace`, `Measure-WorkspaceOpen`) |
+| `WorkspaceActions` entry scopes (`Machine`, `LayoutMachine`, `Project`) and tables (`MachineParameters`, `LayoutMachineParameters`, `ProjectParameters`) | `Resolve-WorkspaceActions` (for `Open-Workspace`, `Measure-WorkspaceOpen`) |
+| `WorkspaceTemplates`, templated `WorkspaceActions` entries, `{Workspace}` | `Resolve-WorkspaceTemplate` (expanded at load by `Expand-WorkspaceTemplates`, again by `Open-Workspace` for command-line variables), `Test-ConfigurationSchema`, `Add-Workspace -Template` |
+| Layout file `ProjectOverrides` (checked against `ProjectActions`, `ZoneNameMappings`) | `Merge-LayoutProjectOverrides` (for `Set-WorkspaceWindowLayout -Project`, `Validate-Layout`, `Visualize-Layouts`) |
 | `Themes`                                           | `Set-SystemTheme`                                  |
 | `SystemTheme.Steps`                                | `Set-SystemTheme`, `Resolve-SystemThemeSteps`      |
 | `WallpaperDarkSettings`, `WallpaperLightSettings`  | `Set-Wallpaper`                                    |
@@ -114,8 +116,9 @@ The profile (`Microsoft.PowerShell_profile.ps1`) executes this exact sequence. E
 
 ```
 1. Locate Configuration.psd1, resolve the repo from its real path (Get-RepositoryPath), add Modules/ to $env:PSModulePath
-2. Dot-source Helper\Functions\{Test-StartupStage, Complete-StartupStage, Get-ConfigSetting, Test-ConfigValue}.ps1
-   (the only Helper functions used before the prompt - dot-sourced so the 80+-file Helper module is NOT autoloaded at startup)
+2. Dot-source Helper\Functions\{Test-StartupStage, Complete-StartupStage, Get-ConfigSetting, Test-ConfigValue, Resolve-WorkspaceTemplate, Expand-WorkspaceTemplates}.ps1
+   (the only Helper functions used before the prompt - dot-sourced so the 80+-file Helper module is NOT autoloaded at startup;
+   the two workspace-template functions run inside Load-PathConfiguration's template expansion)
 3. Stage Core (Required - always runs, always timed)
    ├─ Import Configuration.psd1 → $global:Configuration
    ├─ Import-Module Logging → Import-Module Bootstrap

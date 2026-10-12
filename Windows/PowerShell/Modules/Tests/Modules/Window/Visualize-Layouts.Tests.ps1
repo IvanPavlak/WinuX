@@ -89,6 +89,8 @@ Describe "Visualize-Layouts" {
 
 		# Set up global Configuration
 		$global:Configuration = @{
+			# Project variants name ProjectActions projects.
+			ProjectActions   = @(@{ MyProject = @() }, @{ OtherProject = @() })
 			ZoneNameMappings = @{
 				"One"  = @{
 					"Left"  = 0
@@ -175,6 +177,59 @@ Describe "Visualize-Layouts" {
 			Visualize-Layouts -LayoutPath (Join-Path $script:TestLayoutsDir "Missing.psd1")
 
 			Should -Invoke Write-LogError -ModuleName Window -ParameterFilter { $Message -match "Layout file not found" }
+		}
+	}
+
+	Context "When the layout file has ProjectOverrides" {
+		# Base: desktop 1 (Code | Firefox) and desktop 2 (Slack). The MyProject variant replaces
+		# desktop 1 Primary with Rider alone and switches it to the one-zone Beta layout.
+		BeforeAll {
+			$variantContent = @'
+@{
+	Monitors = @{
+		Primary = @{
+			VirtualDesktopLayouts = @{
+				1 = "One"
+				2 = "One"
+			}
+		}
+	}
+	Layout = @(
+		@{ ProcessName = "Code"; Zone = "Left"; Monitor = "Primary"; DesktopNumber = 1 }
+		@{ ProcessName = "Firefox"; Zone = "Right"; Monitor = "Primary"; DesktopNumber = 1 }
+		@{ ProcessName = "Slack"; Zone = "Left"; Monitor = "Primary"; DesktopNumber = 2 }
+	)
+	ProjectOverrides = @{
+		"MyProject/OtherProject" = @{
+			Monitors = @{ Primary = @{ VirtualDesktopLayouts = @{ 1 = "Beta" } } }
+			Layout   = @(
+				@{ ProcessName = "Rider"; Zone = "Full"; Monitor = "Primary"; DesktopNumber = 1 }
+			)
+		}
+	}
+}
+'@
+			$script:VariantLayoutPath = Join-Path $script:TestLayoutsDir "VariantLayout.psd1"
+			Set-Content -Path $script:VariantLayoutPath -Value $variantContent
+		}
+
+		It "draws one PROJECT VARIANT block per replaced desktop and monitor, with the variant's windows" {
+			Visualize-Layouts -LayoutPath $script:VariantLayoutPath
+
+			$variantDrawings = @($script:HostLines | Where-Object { $_ -match '^PROJECT VARIANT \[MyProject/OtherProject\]' })
+			$variantDrawings.Count | Should -Be 1
+			$variantDrawings[0] | Should -Match 'Rider'
+			$variantDrawings[0] | Should -Match 'VIRTUAL DESKTOP 1 - Monitor: Primary - Layout: Beta'
+			$variantDrawings[0] | Should -Not -Match 'Code|Firefox|Slack'
+		}
+
+		It "still draws the base layout unchanged" {
+			Visualize-Layouts -LayoutPath $script:VariantLayoutPath
+
+			$baseDrawings = @($script:HostLines | Where-Object { $_ -match '^VIRTUAL DESKTOP' })
+			$baseDrawings.Count | Should -Be 2
+			@($baseDrawings | Where-Object { $_ -match 'Rider' }).Count | Should -Be 0
+			@($baseDrawings | Where-Object { $_ -match 'Layout: One' }).Count | Should -Be 2
 		}
 	}
 

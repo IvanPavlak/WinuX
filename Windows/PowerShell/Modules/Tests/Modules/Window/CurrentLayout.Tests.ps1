@@ -153,4 +153,24 @@ Describe "CurrentLayout persistence" {
 			$snapshot.Workspaces.Contains('WinuX_PC') | Should -BeTrue
 		}
 	}
+
+	Context "Slot of a window record" {
+		# Two layout entries may share one zone; the slot (the entry's ordinal in that zone) keeps
+		# their pins apart on the next open.
+		It "records the slot of each window and defaults a state without one to slot 1" {
+			$stacked = New-TestWindowState -Handle 70 -Process 'Code' -ProcessId 7 -Title 'Beta' -Desktop 1 -Monitor 'Primary' -Zone 'Left' -Layout 'Two' -X 0 -Y 0 -W 1720 -H 1440
+			$stacked.Slot = 2
+			$windows = @(
+				New-TestWindowState -Handle 60 -Process 'Code' -ProcessId 7 -Title 'Alpha' -Desktop 1 -Monitor 'Primary' -Zone 'Left' -Layout 'Two' -X 0 -Y 0 -W 1720 -H 1440
+				$stacked
+			)
+
+			Save-CurrentLayout -Workspace 'Example_PC' -LayoutsDir $script:TestLayoutsDir -MachineType 'PC' `
+				-DesktopCount 1 -MonitorConfig $script:TestMonitorConfig -WindowStates $windows
+
+			$section = Get-CurrentLayout -LayoutsDir $script:TestLayoutsDir -Workspace 'Example_PC'
+			($section.Windows | Where-Object { $_.Handle -eq 60 }).Slot | Should -Be 1
+			($section.Windows | Where-Object { $_.Handle -eq 70 }).Slot | Should -Be 2
+		}
+	}
 }

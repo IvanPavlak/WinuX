@@ -11,7 +11,8 @@ Adds a workspace to `Configuration.psd1` by appending its `WorkspaceActions` ent
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`WorkspaceActions`](../../configuration-reference.md#workspace-actions) | ordered list of workspaces (one single-key hashtable each) | list of 5 | Every workspace `Open-Workspace` offers, in menu order: the workspace name is the key, the value is the ordered array of `@{ Action; Parameters }` entries opening it runs. An entry may carry `Machine` / `LayoutMachine` scopes and `MachineParameters` / `LayoutMachineParameters` tables ([Resolve-WorkspaceActions](../workflow/Resolve-WorkspaceActions.md)); `Add-Workspace` writes them through unchanged. `Close-Workspace` reads what the open actually produced, not this list. |
+| [`WorkspaceActions`](../../configuration-reference.md#workspace-actions) | ordered list of workspaces (one single-key hashtable each) | list of 5 | Every workspace `Open-Workspace` offers, in menu order: the workspace name is the key, the value is the ordered array of `@{ Action; Parameters }` entries opening it runs. An entry may carry `Machine` / `LayoutMachine` scopes and `MachineParameters` / `LayoutMachineParameters` tables ([Resolve-WorkspaceActions](../workflow/Resolve-WorkspaceActions.md)); `Add-Workspace` writes them through unchanged. With `-Template` it writes the one-line templated entry `@{ <Name> = @{ Template = "<Template>" } }` instead of an action list. `Close-Workspace` reads what the open actually produced, not this list. |
+| [`WorkspaceTemplates`](../../configuration-reference.md#workspace-templates) | hashtable of template name to `@{ Variables; Actions }` | `@{ Project = ... }` | Read by `-Template`: the named template must exist in the loaded configuration, otherwise nothing is written and the defined templates are listed. |
 
 ## Decisions
 
@@ -27,6 +28,10 @@ Adds a workspace to `Configuration.psd1` by appending its `WorkspaceActions` ent
     - Options: One entry per workspace, in menu order - see [Add New Workspace](../workflow/add-new-workspace.md) for the whole walk. The list replaces wholesale, so include the shipped entries you still want.
     - Default: The shipped five.
     - More detail: [`WorkspaceActions`](../../configuration-reference.md#workspace-actions)
+4. Is the new workspace an instance of a shared template?
+    - Options: `Add-Workspace -Name MyProject -Template Project` writes `@{ MyProject = @{ Template = "Project" } }`; add `Variables`, `Overrides` or `Add` to it by hand. `-Template` cannot be combined with `-Actions`.
+    - Default: An action list (`-Actions`, or a lone `Set-WorkspaceWindowLayout` when omitted).
+    - More detail: [`WorkspaceTemplates`](../../configuration-reference.md#workspace-templates)
 
 ## Where to Put Values
 
@@ -60,6 +65,13 @@ WorkspaceActions = @(
 )
 ```
 
+With `-Template`, the appended entry is one line:
+
+```powershell
+Add-Workspace -Name "MyProject" -Template "Project"
+# appends: @{ MyProject = @{ Template = "Project" } }
+```
+
 ## Step 2: Reload and confirm the merge landed
 
 Reload the profile, then read the merged value back. `$global:Configuration` after a reload is the ground truth - if what you set is not there, the local file did not parse or the key is nested one level away from where you put it.
@@ -90,13 +102,15 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 ```powershell
 # Configuration.local.psd1
 @{
-    WorkspaceActions = @{
-        MyWorkspace = @(
-            @{ Action = "Open-Project"; Parameters = @{ ProjectName = "MyProject" } }
-            @{ Action = "Open-Browser"; Parameters = @{ Groups = @("Monitoring") } }
-            @{ Action = "Set-WorkspaceWindowLayout" }
-        )
-    }
+    WorkspaceActions = @(
+        @{ MyWorkspace = @(
+                @{ Action = "Open-Project"; Parameters = @{ ProjectName = "MyProject" } }
+                @{ Action = "Open-Browser"; Parameters = @{ Groups = @("Monitoring") } }
+                @{ Action = "Set-WorkspaceWindowLayout" }
+            )
+        }
+        @{ MyProject = @{ Template = "Project" } }
+    )
 }
 ```
 
@@ -105,5 +119,6 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 - [`Add-Workspace` in the Configuration module reference](../../../modules/configuration.md#add-workspace) - parameters, usage and behaviour
 - [Configuration configuration guides](README.md) - every guide for this module
 - [`Open-Workspace`](../workflow/Open-Workspace.md) - reads the same configuration
+- [`Resolve-WorkspaceTemplate`](../helper/Resolve-WorkspaceTemplate.md) - what a templated entry expands to
 - [WinuXConfigurator](../../winux-configurator.md) - have an AI assistant walk these decisions with you
 - [Configuration reference](../../configuration-reference.md) - every key, section by section
