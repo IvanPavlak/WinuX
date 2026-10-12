@@ -263,4 +263,140 @@ Describe "Confirm-WorkspaceWindowPositions" {
 			$result.Failures[0].Actual | Should -Be 'Handle invalid'
 		}
 	}
+
+	Context "Several entries of one process" {
+		# Explicit coordinates, so no zone resolution is needed. The windows carry bogus handles,
+		# so every SELECTED window fails the rect read as "Handle invalid" with its handle on the
+		# failure - which is how these cases see which window each entry was verified against.
+		BeforeAll {
+			$script:entryBounds = @{ X = 2; Y = 2; Width = 1717; Height = 1437 }
+		}
+
+		BeforeEach {
+			$script:codeWindows = @()
+			Mock Get-WindowHandle -ParameterFilter { $ProcessName -and -not $WindowTitle } { @($script:codeWindows) }
+			Mock Get-WindowHandle -ParameterFilter { $WindowTitle } {
+				$pattern = $WindowTitle
+				@($script:codeWindows | Where-Object { $_.Title -match $pattern })
+			}
+			$script:PositionedWindowHandles = $null
+		}
+
+		AfterEach {
+			$script:PositionedWindowHandles = $null
+		}
+
+		It "never verifies the catch-all against a window a titled sibling's title describes" {
+			# The catch-all comes first and the titled window is enumerated first.
+			$script:codeWindows = @(
+				[PSCustomObject]@{ Handle = [IntPtr]0x9A101; Title = 'Alpha - Visual Studio Code' }
+				[PSCustomObject]@{ Handle = [IntPtr]0x9A102; Title = 'Other - Visual Studio Code' }
+			)
+			$layout = @(
+				(@{ ProcessName = 'Code' } + $script:entryBounds)
+				(@{ ProcessName = 'Code'; WindowTitle = 'Alpha - Visual Studio Code$' } + $script:entryBounds)
+			)
+
+			$result = Confirm-WorkspaceWindowPositions -LayoutConfig $layout
+
+			$result.Failures.Count | Should -Be 2
+			($result.Failures | Where-Object { $_.LayoutEntry -eq 'Code' }).Handle | Should -Be ([IntPtr]0x9A102)
+			($result.Failures | Where-Object { $_.LayoutEntry -like 'Code - Alpha*' }).Handle | Should -Be ([IntPtr]0x9A101)
+		}
+
+		It "reports the catch-all not found when only a titled sibling's window exists" {
+			$script:codeWindows = @([PSCustomObject]@{ Handle = [IntPtr]0x9A201; Title = 'Alpha - Visual Studio Code' })
+			$layout = @(
+				(@{ ProcessName = 'Code' } + $script:entryBounds)
+				(@{ ProcessName = 'Code'; WindowTitle = 'Alpha - Visual Studio Code$' } + $script:entryBounds)
+			)
+
+			$result = Confirm-WorkspaceWindowPositions -LayoutConfig $layout
+
+			($result.Failures | Where-Object { $_.LayoutEntry -eq 'Code' }).Actual | Should -Be 'Window not found'
+		}
+
+		It "verifies two titled siblings against two distinct windows" {
+			# Both titles match the first window; the second entry must not verify it again.
+			$script:codeWindows = @(
+				[PSCustomObject]@{ Handle = [IntPtr]0x9A301; Title = 'Alpha Beta - Visual Studio Code' }
+				[PSCustomObject]@{ Handle = [IntPtr]0x9A302; Title = 'Beta - Visual Studio Code' }
+			)
+			$layout = @(
+				(@{ ProcessName = 'Code'; WindowTitle = 'Alpha' } + $script:entryBounds)
+				(@{ ProcessName = 'Code'; WindowTitle = 'Beta' } + $script:entryBounds)
+			)
+
+			$result = Confirm-WorkspaceWindowPositions -LayoutConfig $layout
+
+			($result.Failures | Where-Object { $_.LayoutEntry -eq 'Code - Alpha' }).Handle | Should -Be ([IntPtr]0x9A301)
+			($result.Failures | Where-Object { $_.LayoutEntry -eq 'Code - Beta' }).Handle | Should -Be ([IntPtr]0x9A302)
+		}
+
+		It "never lets the title-drift fallback land on a window matching a sibling's title" {
+			# Alpha's caption drifted away; the only other window is Beta's - Alpha is not found.
+			$script:codeWindows = @([PSCustomObject]@{ Handle = [IntPtr]0x9A401; Title = 'Beta - Visual Studio Code' })
+			$layout = @(
+				(@{ ProcessName = 'Code'; WindowTitle = 'Alpha' } + $script:entryBounds)
+				(@{ ProcessName = 'Code'; WindowTitle = 'Beta' } + $script:entryBounds)
+			)
+
+			$result = Confirm-WorkspaceWindowPositions -LayoutConfig $layout
+
+			($result.Failures | Where-Object { $_.LayoutEntry -eq 'Code - Alpha' }).Actual | Should -Be 'Window not found'
+			($result.Failures | Where-Object { $_.LayoutEntry -eq 'Code - Beta' }).Handle | Should -Be ([IntPtr]0x9A401)
+		}
+
+		It "verifies the window the positioning pass tracked at the entry's bounds when several candidates remain" {
+			$script:codeWindows = @(
+				[PSCustomObject]@{ Handle = [IntPtr]0x9A501; Title = 'One - Visual Studio Code' }
+				[PSCustomObject]@{ Handle = [IntPtr]0x9A502; Title = 'Two - Visual Studio Code' }
+			)
+			$script:PositionedWindowHandles = [System.Collections.ArrayList]::new()
+			$null = $script:PositionedWindowHandles.Add(@{ Handle = [IntPtr]0x9A502; ExpectedX = 2; ExpectedY = 2; ExpectedWidth = 1717; ExpectedHeight = 1437; DesktopNumber = $null })
+
+			$result = Confirm-WorkspaceWindowPositions -LayoutConfig @((@{ ProcessName = 'Code' } + $script:entryBounds))
+
+			$result.Failures[0].Handle | Should -Be ([IntPtr]0x9A502)
+		}
+
+		It "keeps the first candidate when the tracked window was placed at other bounds" {
+			$script:codeWindows = @(
+				[PSCustomObject]@{ Handle = [IntPtr]0x9A601; Title = 'One - Visual Studio Code' }
+				[PSCustomObject]@{ Handle = [IntPtr]0x9A602; Title = 'Two - Visual Studio Code' }
+			)
+			$script:PositionedWindowHandles = [System.Collections.ArrayList]::new()
+			$null = $script:PositionedWindowHandles.Add(@{ Handle = [IntPtr]0x9A602; ExpectedX = 1722; ExpectedY = 2; ExpectedWidth = 1717; ExpectedHeight = 1437; DesktopNumber = $null })
+
+			$result = Confirm-WorkspaceWindowPositions -LayoutConfig @((@{ ProcessName = 'Code' } + $script:entryBounds))
+
+			$result.Failures[0].Handle | Should -Be ([IntPtr]0x9A601)
+		}
+
+		It "keeps the first candidate when the tracked window was placed on another desktop" {
+			$script:codeWindows = @(
+				[PSCustomObject]@{ Handle = [IntPtr]0x9A701; Title = 'One - Visual Studio Code' }
+				[PSCustomObject]@{ Handle = [IntPtr]0x9A702; Title = 'Two - Visual Studio Code' }
+			)
+			$script:PositionedWindowHandles = [System.Collections.ArrayList]::new()
+			$null = $script:PositionedWindowHandles.Add(@{ Handle = [IntPtr]0x9A702; ExpectedX = 2; ExpectedY = 2; ExpectedWidth = 1717; ExpectedHeight = 1437; DesktopNumber = 5 })
+
+			$result = Confirm-WorkspaceWindowPositions -LayoutConfig @((@{ ProcessName = 'Code'; DesktopNumber = 3 } + $script:entryBounds))
+
+			$result.Failures[0].Handle | Should -Be ([IntPtr]0x9A701)
+		}
+
+		It "matches the tracked desktop with the alongside offset applied" {
+			$script:codeWindows = @(
+				[PSCustomObject]@{ Handle = [IntPtr]0x9A801; Title = 'One - Visual Studio Code' }
+				[PSCustomObject]@{ Handle = [IntPtr]0x9A802; Title = 'Two - Visual Studio Code' }
+			)
+			$script:PositionedWindowHandles = [System.Collections.ArrayList]::new()
+			$null = $script:PositionedWindowHandles.Add(@{ Handle = [IntPtr]0x9A802; ExpectedX = 2; ExpectedY = 2; ExpectedWidth = 1717; ExpectedHeight = 1437; DesktopNumber = 5 })
+
+			$result = Confirm-WorkspaceWindowPositions -LayoutConfig @((@{ ProcessName = 'Code'; DesktopNumber = 3 } + $script:entryBounds)) -DesktopOffset 2
+
+			$result.Failures[0].Handle | Should -Be ([IntPtr]0x9A802)
+		}
+	}
 }

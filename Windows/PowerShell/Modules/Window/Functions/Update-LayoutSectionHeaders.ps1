@@ -9,6 +9,9 @@ function Update-LayoutSectionHeaders {
 		Layout array based on the actual DesktopNumber, Monitor, and Layout type
 		values in the configuration. Layout files use 1-based indexing for DesktopNumber.
 
+		Only the base Layout array is rewritten. A ProjectOverrides block after it (project
+		variants of the layout, see Merge-LayoutProjectOverrides) is carried over verbatim.
+
 	.PARAMETER Content
 		The file content without the visualization block.
 
@@ -24,6 +27,16 @@ function Update-LayoutSectionHeaders {
 		[string]$Content,
 		[hashtable]$Config
 	)
+
+	# A ProjectOverrides block follows the base Layout array and holds Layout arrays of its own;
+	# only the text before it is the base layout this function rewrites. The block is split off
+	# here and appended unchanged.
+	$projectOverridesTail = ''
+	$projectOverridesMatch = [regex]::Match($Content, '(?m)^[ \t]*ProjectOverrides\s*=')
+	if ($projectOverridesMatch.Success) {
+		$projectOverridesTail = $Content.Substring($projectOverridesMatch.Index)
+		$Content = $Content.Substring(0, $projectOverridesMatch.Index)
+	}
 
 	$zoneNameMappings = Get-ConfigSetting -Path 'ZoneNameMappings'
 
@@ -191,9 +204,9 @@ function Update-LayoutSectionHeaders {
 		}
 
 		# Combine everything back together
-		return $beforeLayout + $rebuiltLayout + "`t" + $afterLayout
+		return $beforeLayout + $rebuiltLayout + "`t" + $afterLayout + $projectOverridesTail
 	}
 
 	# If we couldn't parse, return original content
-	return $Content
+	return $Content + $projectOverridesTail
 }

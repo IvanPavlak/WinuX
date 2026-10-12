@@ -44,8 +44,10 @@ if (-not (Test-Path $ModulesPath)) {
 # import the whole Helper module (80+ files, measured at 330-500 ms) plus PowerShell's module
 # discovery on top. Dot-sourced, the shell reaches its prompt without importing Helper at all; the
 # first Helper command typed afterwards autoloads the module as before, and the module's copies
-# simply replace these.
-foreach ($stageFunction in "Test-StartupStage", "Complete-StartupStage", "Get-ConfigSetting", "Test-ConfigValue") {
+# simply replace these. Resolve-WorkspaceTemplate and Expand-WorkspaceTemplates ride along for the
+# same reason: Load-PathConfiguration expands the workspace templates (and the Schema stage reads
+# the result) before the first prompt.
+foreach ($stageFunction in "Test-StartupStage", "Complete-StartupStage", "Get-ConfigSetting", "Test-ConfigValue", "Resolve-WorkspaceTemplate", "Expand-WorkspaceTemplates") {
 	. (Join-Path $ModulesPath "Helper\Functions\$stageFunction.ps1")
 }
 $null = Test-StartupStage -Name "Core" -Required

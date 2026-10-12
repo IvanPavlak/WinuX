@@ -107,7 +107,8 @@ Every time you open PowerShell, the profile (`Microsoft.PowerShell_profile.ps1`)
 │     ├─→ Locate Configuration.psd1, resolve the repo root        │
 │     ├─→ Build modules path, add to $env:PSModulePath            │
 │     └─→ Dot-source the stage guards + Get-ConfigSetting,        │
-│         Test-ConfigValue (no Helper module import)              │
+│         Test-ConfigValue, Resolve-WorkspaceTemplate,            │
+│         Expand-WorkspaceTemplates (no Helper module import)     │
 │                                                                 │
 │  2. Stage Core (always runs)                                    │
 │     ├─→ Import Configuration.psd1                               │
@@ -115,6 +116,7 @@ Every time you open PowerShell, the profile (`Microsoft.PowerShell_profile.ps1`)
 │     └─→ Load-PathConfiguration -Configuration $global:Config... │
 │         ├─→ Merges Configuration.local.psd1 over the base       │
 │         ├─→ Registers Modules/ in PSModulePath for autoload     │
+│         ├─→ Expands templated WorkspaceActions entries          │
 │         ├─→ Expands placeholders → $global:MachineSpecificPaths │
 │         └─→ Sets $global:MachineType                            │
 │                                                                 │

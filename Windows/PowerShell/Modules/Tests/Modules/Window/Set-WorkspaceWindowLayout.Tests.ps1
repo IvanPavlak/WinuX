@@ -30,6 +30,10 @@ BeforeAll {
 	. "$FunctionsPath\Resize-PositionedWindows.ps1"
 	. "$FunctionsPath\Snap-AllWindows.ps1"
 	. "$FunctionsPath\Visualize-Layouts.ps1"
+	# The project-variant merge runs for real (its own suite covers it in depth); the stacking
+	# pass is dot-sourced so the mocks below build from its current parameter block.
+	. "$FunctionsPath\Merge-LayoutProjectOverrides.ps1"
+	. "$FunctionsPath\Set-StackedWindowOrder.ps1"
 	# The claim set and pipeline state the function builds, and the two named callbacks the wait
 	# mocks below invoke. Dot-sourced so the callbacks run in THIS scope, where the mocks of
 	# Set-WindowLayouts, Snap-AllWindows, Move-WindowToVirtualDesktop and Loading-Spinner are
@@ -787,8 +791,9 @@ Describe "Set-WorkspaceWindowLayout" {
 
 		Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace'
 
+		# Keyed per layout entry: a record written before slots existed is slot 1.
 		Should -Invoke Set-WindowLayouts -Times 1 -Exactly -ParameterFilter {
-			$null -ne $Claims.PinnedMap -and $Claims.PinnedMap.ContainsKey('1|Primary|Left')
+			$null -ne $Claims.PinnedMap -and $Claims.PinnedMap.ContainsKey('1|Primary|Left|1')
 		}
 		Should -Invoke Save-CurrentLayout -Times 1 -Exactly -ParameterFilter { $Workspace -eq 'MyWorkspace' }
 	}
@@ -1835,6 +1840,152 @@ Describe "Set-WorkspaceWindowLayout" {
 			Should -Invoke Apply-FancyZones -Times 0 -Exactly
 			Should -Invoke Ensure-VirtualDesktops -Times 0 -Exactly
 			$script:LastWorkspaceLayoutTimings.Outcome | Should -Be 'Prepared'
+		}
+	}
+
+	Context "Project variants, slots and the stacking pass" {
+		BeforeEach {
+			Mock Test-Path { $true }
+			Mock Get-VirtualDesktopCount { 1 }
+			Mock Snap-AllWindows { $script:LastSnapAllWindowsResult = [PSCustomObject]@{ SnappedCount = 1; FailedWindows = @() } }
+			Mock Set-StackedWindowOrder { 0 }
+			Mock Write-LogError { }
+			# Override keys must name ProjectActions projects.
+			$global:Configuration.ProjectActions = @(@{ MyProject = @() })
+			# The base layout puts Code on desktop 1 (zone layout One); the MyProject variant swaps
+			# in Rider and switches desktop 1 to Two.
+			$script:variantBlock = @{
+				Monitors = @{ MonitorA = @{ VirtualDesktopLayouts = @{ 1 = 'Two' } } }
+				Layout   = @(@{ ProcessName = 'Rider'; DesktopNumber = 1; Monitor = 'MonitorA'; Zone = 'Left' })
+			}
+			Mock Import-PowerShellDataFile {
+				@{
+					Monitors         = @{ MonitorA = @{ VirtualDesktopLayouts = @{ 1 = 'One' } } }
+					Layout           = @(@{ ProcessName = 'Code'; DesktopNumber = 1; Monitor = 'MonitorA'; Zone = 'Left' })
+					ProjectOverrides = @{ MyProject = $script:variantBlock }
+				}
+			}
+			$script:configuredRow = [PSCustomObject]@{
+				Status            = 'Configured'
+				ProcessName       = 'Code'
+				WindowTitle       = 'Beta - Visual Studio Code'
+				Handle            = [IntPtr]77
+				WindowProcessName = 'Code'
+				ProcessId         = [uint32]7
+				MonitorLabel      = 'MonitorA'
+				ZoneName          = 'Left'
+				LayoutName        = 'One'
+				DesktopNumber     = 1
+				DesktopDisplay    = 1
+				ExpectedX         = 0
+				ExpectedY         = 0
+				ExpectedWidth     = 100
+				ExpectedHeight    = 100
+				LayoutOrder       = 1
+				Slot              = 2
+			}
+		}
+
+		It "merges the selected project's variant over the layout before the layout pass" {
+			Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace' -Project 'MyProject'
+
+			Should -Invoke Set-WindowLayouts -ParameterFilter {
+				@($LayoutConfig | Where-Object { $_.ProcessName -eq 'Rider' }).Count -eq 1 -and
+				@($LayoutConfig | Where-Object { $_.ProcessName -eq 'Code' }).Count -eq 0 -and
+				$MonitorConfig.MonitorA.VirtualDesktopLayouts[1] -eq 'Two'
+			}
+			Should -Invoke Set-WindowLayouts -Times 0 -Exactly -ParameterFilter {
+				@($LayoutConfig | Where-Object { $_.ProcessName -eq 'Code' }).Count -gt 0
+			}
+		}
+
+		It "keeps the base layout when no covered project is selected" {
+			Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace' -Project 'OtherProject'
+
+			Should -Invoke Set-WindowLayouts -ParameterFilter {
+				@($LayoutConfig | Where-Object { $_.ProcessName -eq 'Code' }).Count -eq 1 -and
+				$MonitorConfig.MonitorA.VirtualDesktopLayouts[1] -eq 'One'
+			}
+			Should -Invoke Set-WindowLayouts -Times 0 -Exactly -ParameterFilter {
+				@($LayoutConfig | Where-Object { $_.ProcessName -eq 'Rider' }).Count -gt 0
+			}
+			Should -Invoke Write-LogError -Times 0 -Exactly -ParameterFilter { $Message -match 'ProjectOverrides' }
+		}
+
+		It "keeps the base layout without -Project" {
+			Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace'
+
+			Should -Invoke Set-WindowLayouts -Times 0 -Exactly -ParameterFilter {
+				@($LayoutConfig | Where-Object { $_.ProcessName -eq 'Rider' }).Count -gt 0
+			}
+		}
+
+		It "logs the variant's errors and keeps the base layout" {
+			# An override entry without a Monitor cannot name the desktop and monitor it replaces.
+			$script:variantBlock = @{ Layout = @(@{ ProcessName = 'Rider'; DesktopNumber = 1; Zone = 'Left' }) }
+
+			Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace' -Project 'MyProject'
+
+			Should -Invoke Write-LogError -Times 1 -Exactly -ParameterFilter { $Message -match 'ProjectOverrides' }
+			Should -Invoke Set-WindowLayouts -Times 0 -Exactly -ParameterFilter {
+				@($LayoutConfig | Where-Object { $_.ProcessName -eq 'Rider' }).Count -gt 0
+			}
+		}
+
+		It "keys the pinned map by desktop, monitor, zone and slot, a record without a slot being slot 1" {
+			Mock Get-CurrentLayout {
+				@{
+					Windows = @(
+						@{ Handle = 4242; ProcessId = 10; ProcessName = 'Code'; Desktop = 1; Monitor = 'MonitorA'; Zone = 'Left' }
+						@{ Handle = 4243; ProcessId = 10; ProcessName = 'Code'; Desktop = 1; Monitor = 'MonitorA'; Zone = 'Left'; Slot = 2 }
+					)
+				}
+			}
+
+			Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace'
+
+			Should -Invoke Set-WindowLayouts -ParameterFilter {
+				$null -ne $Claims.PinnedMap -and $Claims.PinnedMap.Count -eq 2 -and
+				$Claims.PinnedMap['1|MonitorA|Left|1'].Handle -eq 4242 -and
+				$Claims.PinnedMap['1|MonitorA|Left|2'].Handle -eq 4243
+			}
+		}
+
+		It "stacks the windows of shared zones after a successful pass and records each window's slot" {
+			Mock Set-WindowLayouts { @($script:configuredRow) }
+
+			Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace'
+
+			Should -Invoke Set-StackedWindowOrder -Times 1 -Exactly -ParameterFilter {
+				@($Results).Count -eq 1 -and @($Results)[0].Handle -eq [IntPtr]77
+			}
+			Should -Invoke Save-CurrentLayout -Times 1 -Exactly -ParameterFilter {
+				@($WindowStates).Count -eq 1 -and @($WindowStates)[0].Slot -eq 2 -and @($WindowStates)[0].Zone -eq 'Left'
+			}
+		}
+
+		It "still records the layout when the stacking pass throws" {
+			Mock Set-WindowLayouts { @($script:configuredRow) }
+			Mock Set-StackedWindowOrder { throw 'stacking failed' }
+
+			Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace'
+
+			Should -Invoke Save-CurrentLayout -Times 1 -Exactly
+		}
+
+		It "does not stack when verification fails" {
+			Mock Set-WindowLayouts { @($script:configuredRow) }
+			Mock Confirm-WorkspaceWindowPositions {
+				@{
+					Success  = $false
+					Total    = 1
+					Failures = @([PSCustomObject]@{ Handle = [IntPtr]77; WindowTitle = 'Code'; Expected = '(0,0) 100x100'; Actual = '(10,10) 90x90' })
+				}
+			}
+
+			Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace'
+
+			Should -Invoke Set-StackedWindowOrder -Times 0 -Exactly
 		}
 	}
 }

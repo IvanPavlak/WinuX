@@ -421,4 +421,116 @@ Describe "Wait-ForWorkspaceWindows" {
 			@($script:readyFired | Where-Object { $_.Desktop -eq 5 }).Count | Should -Be 1
 		}
 	}
+
+	Context "Entries sharing one process under different titles" {
+		# Two VS Code folders, or a titled VS Code entry next to an untitled catch-all: each entry
+		# waits for its OWN window, and no two of them settle on the same one. Get-WindowHandle
+		# answers with every window of the process, as its process-OR-title match does.
+		BeforeAll {
+			function New-CodeWindow {
+				param([int]$Handle, [string]$Title, [string]$Process = 'Code')
+				[PSCustomObject]@{ Handle = [IntPtr]$Handle; Title = $Title; ProcessName = $Process; Left = 0; Top = 0; Width = 800; Height = 600 }
+			}
+		}
+
+		BeforeEach {
+			$script:codeWindows = @()
+			$script:browserWindows = @()
+			Mock Get-WindowHandle {
+				if ($ProcessName -eq 'Code') { return @($script:codeWindows) }
+				if ($ProcessName -eq 'firefox') { return @($script:browserWindows) }
+				@()
+			}
+			Mock Get-Process { @([PSCustomObject]@{ ProcessName = 'Code' }, [PSCustomObject]@{ ProcessName = 'firefox' }) }
+			$script:stableOn = @{}
+			$script:onStable = {
+				param($entry, $window)
+				$entryLabel = if ($entry.WindowTitle) { [string]$entry.WindowTitle } else { '<catch-all>' }
+				$script:stableOn[$entryLabel] = $window.Handle
+			}
+		}
+
+		It "settles a titled entry on its own window and the catch-all on a window no sibling title matches" {
+			# Enumeration lists the titled window first; the catch-all comes first in the layout.
+			$script:codeWindows = @(
+				New-CodeWindow -Handle 401 -Title 'Alpha - Visual Studio Code'
+				New-CodeWindow -Handle 402 -Title 'Other - Visual Studio Code'
+			)
+			$layout = @(
+				@{ ProcessName = 'Code' }
+				@{ ProcessName = 'Code'; WindowTitle = 'Alpha - Visual Studio Code$' }
+			)
+
+			$result = Wait-ForWorkspaceWindows -LayoutConfig $layout -TimeoutSeconds 5 -MinimumStableDurationSeconds 0 -PollIntervalSeconds 0.05 -FocusWindows:$false -OnWindowStable $script:onStable
+
+			$result.Success | Should -BeTrue
+			$script:stableOn['<catch-all>'] | Should -Be ([IntPtr]402)
+			$script:stableOn['Alpha - Visual Studio Code$'] | Should -Be ([IntPtr]401)
+		}
+
+		It "never counts a window of the process whose title is not the titled entry's own" {
+			# Only the catch-all's window exists: the titled entry keeps waiting (and times out).
+			$script:codeWindows = @(New-CodeWindow -Handle 411 -Title 'Other - Visual Studio Code')
+			$layout = @(
+				@{ ProcessName = 'Code'; WindowTitle = 'Alpha - Visual Studio Code$' }
+				@{ ProcessName = 'Code' }
+			)
+
+			$result = Wait-ForWorkspaceWindows -LayoutConfig $layout -TimeoutSeconds 1 -MinimumStableDurationSeconds 0 -PollIntervalSeconds 0.05 -FocusWindows:$false -OnWindowStable $script:onStable
+
+			$result.Success | Should -BeFalse
+			$script:stableOn.ContainsKey('Alpha - Visual Studio Code$') | Should -BeFalse
+			$script:stableOn['<catch-all>'] | Should -Be ([IntPtr]411)
+			# The process is alive, so the titled entry is still pending, never abandoned.
+			@($result.Abandoned).Count | Should -Be 0
+		}
+
+		It "never counts a window a titled sibling's title describes for the catch-all" {
+			$script:codeWindows = @(New-CodeWindow -Handle 421 -Title 'Alpha - Visual Studio Code')
+			$layout = @(
+				@{ ProcessName = 'Code'; WindowTitle = 'Alpha - Visual Studio Code$' }
+				@{ ProcessName = 'Code' }
+			)
+
+			$result = Wait-ForWorkspaceWindows -LayoutConfig $layout -TimeoutSeconds 1 -MinimumStableDurationSeconds 0 -PollIntervalSeconds 0.05 -FocusWindows:$false -OnWindowStable $script:onStable
+
+			$result.Success | Should -BeFalse
+			$script:stableOn['Alpha - Visual Studio Code$'] | Should -Be ([IntPtr]421)
+			$script:stableOn.ContainsKey('<catch-all>') | Should -BeFalse
+		}
+
+		It "gives two titled entries of one process two distinct windows" {
+			# Both titles match the first window ('Alpha' is in 'Alpha Beta'); the second entry
+			# must take the other window instead of sharing it.
+			$script:codeWindows = @(
+				New-CodeWindow -Handle 431 -Title 'Alpha Beta - Visual Studio Code'
+				New-CodeWindow -Handle 432 -Title 'Beta - Visual Studio Code'
+			)
+			$layout = @(
+				@{ ProcessName = 'Code'; WindowTitle = 'Alpha' }
+				@{ ProcessName = 'Code'; WindowTitle = 'Beta' }
+			)
+
+			$result = Wait-ForWorkspaceWindows -LayoutConfig $layout -TimeoutSeconds 5 -MinimumStableDurationSeconds 0 -PollIntervalSeconds 0.05 -FocusWindows:$false -OnWindowStable $script:onStable
+
+			$result.Success | Should -BeTrue
+			$script:stableOn['Alpha'] | Should -Be ([IntPtr]431)
+			$script:stableOn['Beta'] | Should -Be ([IntPtr]432)
+		}
+
+		It "keeps browser entries counting any window of their process, shared or not" {
+			# Browser titles resolve while the page loads; the wait leaves them to the layout pass.
+			$script:browserWindows = @(New-CodeWindow -Handle 441 -Title 'Problem loading page - Mozilla Firefox' -Process 'firefox')
+			$layout = @(
+				@{ ProcessName = 'firefox'; WindowTitle = '.*Slack.*' }
+				@{ ProcessName = 'firefox'; WindowTitle = '.*Mail.*' }
+			)
+
+			$result = Wait-ForWorkspaceWindows -LayoutConfig $layout -TimeoutSeconds 5 -MinimumStableDurationSeconds 0 -PollIntervalSeconds 0.05 -FocusWindows:$false -OnWindowStable $script:onStable
+
+			$result.Success | Should -BeTrue
+			$script:stableOn['.*Slack.*'] | Should -Be ([IntPtr]441)
+			$script:stableOn['.*Mail.*'] | Should -Be ([IntPtr]441)
+		}
+	}
 }

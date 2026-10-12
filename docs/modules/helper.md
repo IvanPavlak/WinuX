@@ -276,6 +276,14 @@ dnp
 - **Usage:** `DotnetRun`
 - **Alias:** dnr
 
+## [Expand-WorkspaceTemplates](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Expand-WorkspaceTemplates.ps1)
+
+- **Description:** Expands every templated `WorkspaceActions` entry of a configuration in place, once per configuration load (`Load-PathConfiguration` calls it right after `Configuration.local.psd1` is merged). Every templated entry (`@{ MyProject = @{ Template = "Project" } }`) is replaced by the plain action list [Resolve-WorkspaceTemplate](#resolve-workspacetemplate) stamps out of its `WorkspaceTemplates` entry, and every plain entry gets its `{Workspace}` token substituted, so every reader of `WorkspaceActions` (`Open-Workspace`, `Close-Workspace`, `Measure-WorkspaceOpen`, `Open-Obsidian`, `Get-OrderedEntry` and the rest) sees plain action lists only. The raw templated definitions are kept under the runtime key `WorkspaceTemplateEntries` and the problems found under `WorkspaceTemplateErrors` (both written by this function only, never configuration settings): `Open-Workspace` expands from `WorkspaceTemplateEntries` again when the command line sets a template variable, and `Test-ConfigurationSchema` reports `WorkspaceTemplateErrors` instead of expanding everything a second time. The profile dot-sources this function and `Resolve-WorkspaceTemplate` before the prompt (like `Get-ConfigSetting`), so the load-time expansion never autoloads the whole Helper module. A templated entry that cannot be expanded is reported through `Write-LogError` naming the workspace and the problem ("the workspace opens nothing until this is fixed") and resolves to an empty action list - it stays in the workspace menu. Returns an object with `Expanded` (the templated names that expanded cleanly) and `Errors`.
+- **Parameters:** -Configuration (defaults to `$global:Configuration`), -Quiet (suppresses the error output; the errors are still returned)
+- **Usage:** `Expand-WorkspaceTemplates -Configuration $global:Configuration`, `Expand-WorkspaceTemplates -Quiet`
+
+**See also:** [Resolve-WorkspaceTemplate](#resolve-workspacetemplate), [Load-PathConfiguration](bootstrap.md#load-pathconfiguration), [Open-Workspace](workflow.md#open-workspace)
+
 ## [Find-EfMigrationProjects](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Find-EfMigrationProjects.ps1)
 
 - **Description:** Discovers EF Core migration projects within a solution using two patterns: dedicated migration projects whose name or directory matches `*Migrations*` (e.g. `Domain.PostgreMigrations`), and the legacy layout where a `Domain` project contains a `Migrations` folder. For each candidate it resolves the database type via `Get-DatabaseTypeFromProject`, locates the `*ModelSnapshot.cs` file, and returns descriptor objects (Name, Path, DbType, snapshot, relative path) consumed by the EfCoreMigrationWizard.
@@ -1291,6 +1299,27 @@ if ((Resolve-Selection -ConfirmationMessage "Are you sure you want to delete all
 - **Usage:** `Resolve-Steps -Defaults ([ordered]@{ Docker = $true }) -ConfigSteps $global:Configuration.KillAll.Steps`, `Resolve-Steps -Defaults $defaults -ConfigSteps $configSteps -Skip Docker, Browsers`
 
 **See also:** [Resolve-KillAllSteps](system.md#resolve-killallsteps), [Resolve-SystemThemeSteps](system.md#resolve-systemthemesteps), [Resolve-BootstrapSteps](bootstrap.md#resolve-bootstrapsteps), [Resolve-RunProjectSteps](#resolve-runprojectsteps)
+
+## [Resolve-WorkspaceTemplate](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Resolve-WorkspaceTemplate.ps1)
+
+- **Description:** Expands one `WorkspaceActions` entry into the plain action list `Open-Workspace` runs. A plain entry (`@{ Name = @( <actions> ) }`) only gets its `{Workspace}` token substituted and comes back as the very same list when it does not use it. A templated entry (`@{ Name = @{ Template = "<template>"; Variables = @{...}; Overrides = @{...}; Add = @(...) } }`) stamps out the actions of its `WorkspaceTemplates` entry under its own name, in this order: (1) the template's actions are copied (a template action may carry an optional `Id`, a stable name for overrides and anchors, dropped from the result); (2) `Overrides`, keyed by `Id` first and then by action name, merge over their target - the value is entry-shaped (`Parameters`, `Machine`, `LayoutMachine`, `MachineParameters`, `LayoutMachineParameters`, `Project`, `ProjectParameters`), nested hashtables merge key by key, lists replace, a parameter or key set to `$null` is removed and an override of `$null` drops the action; an action name that matches several template actions is an error (give them an `Id`); (3) `Add` inserts actions just before the template's first `Set-WorkspaceWindowLayout` (the end of the list when there is none), or at a `Before = "<Id or action>"` / `After = "<Id or action>"` anchor; (4) variables are substituted in every value - `"{Name}"` as the whole value receives the variable's value with its type (a list, a hashtable, `$true`), inside a longer string it is replaced by the text of a scalar value. `{Workspace}` is built in (the entry's name), defaults may reference it and other variables, and a cycle is an error. Variable values come from the template's `Variables`, overlaid by the entry's `Variables`, overlaid by `-Variables` (the command line); `-Variables` only sets declared names and ignores the rest (reported back in `AppliedVariables`). Reserved names cannot be variables (`Workspace`, `SelectedProjects`, `ProjectName`, `Dev`, `User`, `MachineType`, `RepoRoot`, `AppData`), any other unknown `{Name}` in a templated entry is an error, and so is a variable used without a value. Errors are returned, never thrown or logged - the caller (`Expand-WorkspaceTemplates`, `Open-Workspace`, `Test-ConfigurationSchema`) decides where they are reported - and an entry with errors resolves to no actions. Returns an object with `Name`, `IsTemplated`, `Template`, `Actions`, `Changed`, `VariableNames`, `AppliedVariables` and `Errors`.
+- **Parameters:** -Name (the workspace name, the value of `{Workspace}`), -Definition (the entry's value), -Templates (defaults to `WorkspaceTemplates` of the loaded configuration), -Variables (values that win over the template's and the entry's)
+- **Usage:** `Resolve-WorkspaceTemplate -Name MyProject -Definition @{ Template = "Project" }`, `Resolve-WorkspaceTemplate -Name MyRepo -Definition @{ Template = "Project" } -Templates $templates -Variables @{ Repository = "OtherGroup" }`
+
+```powershell
+$templates = @{ Project = @{
+        Variables = @{ Repository = "{Workspace}Docs" }
+        Actions   = @(
+            @{ Action = "Open-Browser"; Parameters = @{ Groups = @("{Repository}", "AI") } }
+            @{ Action = "Open-VSCode"; Parameters = @{ Folder = "{Workspace}" } }
+        )
+    } }
+
+(Resolve-WorkspaceTemplate -Name MyProject -Definition @{ Template = "Project" } -Templates $templates).Actions
+# Open-Browser -Groups MyProjectDocs, AI, then Open-VSCode -Folder MyProject
+```
+
+**See also:** [Expand-WorkspaceTemplates](#expand-workspacetemplates), [Open-Workspace](workflow.md#open-workspace), [Test-ConfigurationSchema](configuration.md#test-configurationschema), [Add a New Workspace](../configuration/guides/workflow/add-new-workspace.md)
 
 ## [Run-Project](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Run-Project.ps1)
 

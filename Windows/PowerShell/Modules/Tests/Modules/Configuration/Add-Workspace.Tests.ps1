@@ -76,6 +76,57 @@ Describe "Add-Workspace" {
 		}
 	}
 
+	Context "Adding a templated workspace" {
+		BeforeEach {
+			Mock Write-LogError { }
+			Mock Get-ConfigSetting { @{ Project = @{ Actions = @(@{ Action = 'Open-Project' }) } } } -ParameterFilter { $Path -eq 'WorkspaceTemplates' }
+		}
+
+		It "writes the one-line templated entry, appended last" {
+			Add-Workspace -Name "MyProject" -Template "Project" -ConfigurationFilePath $testConfig
+
+			$parsed = Import-PowerShellDataFile -Path $testConfig
+			@(Get-OrderedNames $parsed.WorkspaceActions) | Should -Be @("Existing", "MyProject")
+			$entry = Get-OrderedEntry $parsed.WorkspaceActions "MyProject"
+			$entry | Should -BeOfType [hashtable]
+			$entry.Template | Should -Be "Project"
+			@($entry.Keys) | Should -Be @("Template")
+			@(Get-Content -Path $testConfig | Where-Object { $_ -match 'MyProject' }).Count | Should -Be 1
+		}
+
+		It "accepts the template name case-insensitively" {
+			Add-Workspace -Name "MyProject" -Template "project" -ConfigurationFilePath $testConfig
+
+			(Get-OrderedEntry (Import-PowerShellDataFile -Path $testConfig).WorkspaceActions "MyProject").Template | Should -Be "project"
+			Should -Invoke Write-LogError -Times 0
+		}
+
+		It "refuses an unknown template and leaves the file unchanged" {
+			$before = Get-Content -Path $testConfig -Raw
+
+			Add-Workspace -Name "MyProject" -Template "Missing" -ConfigurationFilePath $testConfig
+
+			Get-Content -Path $testConfig -Raw | Should -Be $before
+			Should -Invoke Write-LogError -Times 1 -Exactly
+		}
+
+		It "writes the entry when no WorkspaceTemplates are loaded to check against" {
+			Mock Get-ConfigSetting { $null } -ParameterFilter { $Path -eq 'WorkspaceTemplates' }
+
+			Add-Workspace -Name "MyProject" -Template "Project" -ConfigurationFilePath $testConfig
+
+			(Get-OrderedEntry (Import-PowerShellDataFile -Path $testConfig).WorkspaceActions "MyProject").Template | Should -Be "Project"
+		}
+
+		It "cannot combine -Template with -Actions" {
+			$before = Get-Content -Path $testConfig -Raw
+
+			{ Add-Workspace -Name "MyProject" -Template "Project" -Actions @(@{ Action = "Open-Browser" }) -ConfigurationFilePath $testConfig } | Should -Throw
+
+			Get-Content -Path $testConfig -Raw | Should -Be $before
+		}
+	}
+
 	Context "Backups" {
 		It "Backs the configuration file up into the repository's sink; the copy is the pre-write content" {
 			$before = Get-Content -Path $testConfig -Raw

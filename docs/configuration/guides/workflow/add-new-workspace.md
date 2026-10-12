@@ -74,6 +74,45 @@ MyNewWorkspace = @(
 
 The two-window layout in `Layouts/PC/` and the one-window layouts in `Layouts/Laptop/` and `Layouts/Work/` then each get exactly the windows they describe from one browser entry: `Parameters` is the default, the `PC` row adds `Instances = 2` on the PC's own layout set, and a row value of `$null` removes a parameter (`RunApp` away from the desktop). Unknown tokens are reported, not ignored. See [Resolve-WorkspaceActions](Resolve-WorkspaceActions.md).
 
+### Workspaces Built From a Template
+
+When several workspaces share one action list - one per repository, say - write the list once in `WorkspaceTemplates` and stamp it out per workspace. Every templated workspace keeps its own name, so its layout file (`<Name>_<MachineType>.psd1`), tracker entry and Obsidian workspace stay its own. The base ships a generic `Project` template (browser group named like the workspace, VS Code folder, layout, desktop 1, close the launching tab):
+
+```powershell
+WorkspaceActions = @(
+    @{ MyProject = @{ Template = "Project" } }
+    @{ MyRepo = @{
+            Template  = "Project"
+            Variables = @{ Repository = "MyRepoDocs" }                                                   # browser group name
+            Overrides = @{ "Open-Browser" = @{ Parameters = @{ Groups = @("{Repository}", "AI") } } }    # merge over one template action
+            Add       = @( @{ Action = "Open-Obsidian"; After = "Open-VSCode" } )                         # one more action
+        }
+    }
+)
+```
+
+- `Variables` set the template's `{Name}` placeholders for this workspace; `Open-Workspace MyRepo -Repository OtherGroup` sets one for a single open (it is not forwarded to the actions).
+- `Overrides` are keyed by the template action's `Id`, else its action name; `$null` drops a parameter, or the whole action (`"Open-Browser" = $null`).
+- `Add` inserts before the template's first `Set-WorkspaceWindowLayout` unless `Before` / `After` names an anchor.
+- `{Workspace}` is the workspace's own name, in plain workspaces too.
+
+`Add-Workspace -Name MyProject -Template Project` writes the one-line form. A templated entry that does not expand (unknown template, missing variable, unknown placeholder, ambiguous override, bad anchor) is reported at load and by `Test-ConfigurationSchema`, and opening it opens nothing. See [Workspace Templates](../../configuration-reference.md#workspace-templates) and [Resolve-WorkspaceTemplate](../helper/Resolve-WorkspaceTemplate.md).
+
+### Project-Specific Actions
+
+The project(s) an open is for are known before anything launches - `-Project` on the command line, else the project menu (shown up front when `Open-Project` has no fixed project), else the fixed `Open-Project` project. Actions can depend on them the way they depend on the machine:
+
+```powershell
+MyOrg = @(
+    @{ Action = "Open-Project" }
+    @{ Action = "Open-Browser"; Parameters = @{ Groups = @("AI") }; ProjectParameters = @{ MyProject = @{ Groups = @("AI", "MyProjectDocs") } } }
+    @{ Action = "Open-DBeaver"; Project = "MyProject/OtherProject" }
+    @{ Action = "Set-WorkspaceWindowLayout"; Parameters = @{ WorkspaceName = "{Workspace}" } }
+)
+```
+
+`Project` runs an action only for those projects (`All` or absent = always); `ProjectParameters` rows merge over `Parameters` after the machine tables, and with several selected projects the later one wins. Tokens must be `ProjectActions` names. The same projects pick the layout file's `ProjectOverrides` (see [Configure Window Layout](../window/configure-window-layout.md#project-variants-of-a-layout)).
+
 ### Action Order Matters
 
 Actions execute sequentially. Typically:
@@ -229,7 +268,7 @@ w MyOrg OtherProject -RunApp
 
 ## Advanced: Dynamic Project Selection
 
-For workspaces that prompt for project:
+For workspaces that prompt for project. The project menu is shown before anything launches, so `Project` scopes, `ProjectParameters` rows and the layout's `ProjectOverrides` all follow the choice; pressing Enter without a pick skips `Open-Project` instead of asking again:
 
 ```powershell
 WorkspaceActions = @(

@@ -12,6 +12,11 @@ function Load-PathConfiguration {
 		- `$global:MachineType`          - detected machine type (PC, Laptop, Work, Test)
 		- `$global:MachineSpecificPaths` - all PathTemplate paths expanded for the current machine
 
+		Right after Configuration.local.psd1 is merged (WorkspaceTemplates template by template,
+		everything else through Merge-Hashtable), Expand-WorkspaceTemplates turns every templated
+		WorkspaceActions entry into a plain action list and substitutes {Workspace}, so no reader of
+		WorkspaceActions has to know about templates.
+
 		Also ensures the WinuX Modules directory is present in `$env:PSModulePath` so that all
 		modules are available for autoloading, and registers the `Modules\Custom` fork area as an
 		additional module root so whole fork-owned modules autoload the same way.
@@ -85,6 +90,15 @@ function Load-PathConfiguration {
 		if (Test-Path $LocalConfigFile) {
 			$localConfig = Import-PowerShellDataFile $LocalConfigFile
 			if ($localConfig -is [hashtable]) {
+				# WorkspaceTemplates merge template by template: a local template REPLACES the base
+				# template of the same name instead of deep-merging into it (Merge-Hashtable would
+				# keep the base template's Variables under a local Actions list).
+				if ($localConfig.WorkspaceTemplates -is [hashtable] -and $global:Configuration.WorkspaceTemplates -is [hashtable]) {
+					foreach ($templateName in @($localConfig.WorkspaceTemplates.Keys)) {
+						$global:Configuration.WorkspaceTemplates[$templateName] = $localConfig.WorkspaceTemplates[$templateName]
+					}
+					$localConfig.Remove('WorkspaceTemplates')
+				}
 				Merge-Hashtable -Target $global:Configuration -Overrides $localConfig
 				if (-not $Quiet) {
 					Write-LogSuccess "Merged local overrides from Configuration.local.psd1"
@@ -138,6 +152,19 @@ function Load-PathConfiguration {
 		$CustomPath = Join-Path $ModulesPath "Custom"
 		if ((Test-Path $CustomPath) -and ($CurrentModulePath -notcontains $CustomPath)) {
 			$env:PSModulePath = $env:PSModulePath + ';' + $CustomPath
+		}
+
+		# Workspace templates expand once, after the local merge, so every reader of
+		# WorkspaceActions sees plain action lists (Expand-WorkspaceTemplates keeps the raw
+		# templated definitions under WorkspaceTemplateEntries for Open-Workspace and
+		# Test-ConfigurationSchema). A broken template is reported, never fatal to the load.
+		try {
+			$null = Expand-WorkspaceTemplates -Configuration $global:Configuration -Quiet:$Quiet
+		}
+		catch {
+			if (-not $Quiet) {
+				Write-LogWarning "Workspace templates were not expanded: $($_.Exception.Message)"
+			}
 		}
 
 		# Expand path placeholders - triggers autoload of the Helper module on first call.

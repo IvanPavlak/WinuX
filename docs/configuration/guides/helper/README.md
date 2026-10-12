@@ -14,6 +14,7 @@ The [Helper module reference](../../../modules/helper.md) is the authority on wh
 | `Backup-RepositoryItem` | `Backups.Retention` | [Backup-RepositoryItem](Backup-RepositoryItem.md) |
 | `Clear-OldBackups` | `Backups.Retention` | [Clear-OldBackups](Clear-OldBackups.md) |
 | `Confirm-ConfigValue` | caller-supplied | [Confirm-ConfigValue](Confirm-ConfigValue.md) |
+| `Expand-WorkspaceTemplates` | `WorkspaceActions`, `WorkspaceTemplates` | [Expand-WorkspaceTemplates](Expand-WorkspaceTemplates.md) |
 | `Get-ConfigSetting` | caller-supplied | [Get-ConfigSetting](Get-ConfigSetting.md) |
 | `Get-OrderedEntry` | caller-supplied | [Get-OrderedEntry](Get-OrderedEntry.md) |
 | `Get-OrderedNames` | caller-supplied | [Get-OrderedNames](Get-OrderedNames.md) |
@@ -24,6 +25,7 @@ The [Helper module reference](../../../modules/helper.md) is the authority on wh
 | `Resolve-ProjectPath` | `ProjectTerminals`, `RepositoryGroups`, `Universal` | [Resolve-ProjectPath](Resolve-ProjectPath.md) |
 | `Resolve-ProjectTerminalTab` | `ProjectTerminals`, `DefaultWSLDistribution` | [Resolve-ProjectTerminalTab](Resolve-ProjectTerminalTab.md) |
 | `Resolve-RunProjectSteps` | `RunProject` | [Resolve-RunProjectSteps](Resolve-RunProjectSteps.md) |
+| `Resolve-WorkspaceTemplate` | `WorkspaceTemplates`, `WorkspaceActions` | [Resolve-WorkspaceTemplate](Resolve-WorkspaceTemplate.md) |
 | `Run-Project` | `ProjectTerminals`, `RunnableProjectMappings` | [Run-Project](Run-Project.md) |
 | `Show-FunctionDetails` | `ShowFunctionDetailsColors` | [Show-FunctionDetails](Show-FunctionDetails.md) |
 | `Test-AdminPrivileges` | `AutoElevate` | [Test-AdminPrivileges](Test-AdminPrivileges.md) |

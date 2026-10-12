@@ -99,4 +99,30 @@ Describe "Add-PositionedWindow" {
 		$script:PositionedWindowHandles[0].ProcessName | Should -Be "new"
 		$script:PositionedWindowHandles[0].ProcessId | Should -Be ([uint32]99)
 	}
+
+	It "stores the LayoutOrder when it is passed" {
+		$script:PositionedWindowHandles = [System.Collections.ArrayList]::new()
+
+		Add-PositionedWindow -WindowHandle ([IntPtr]14) -ExpectedX 0 -ExpectedY 0 -ExpectedWidth 100 -ExpectedHeight 100 -WindowTitle "Lo" -LayoutOrder 3
+
+		$script:PositionedWindowHandles[0].LayoutOrder | Should -Be 3
+	}
+
+	It "defaults the LayoutOrder to -1 when omitted" {
+		$script:PositionedWindowHandles = [System.Collections.ArrayList]::new()
+
+		Add-PositionedWindow -WindowHandle ([IntPtr]15) -ExpectedX 0 -ExpectedY 0 -ExpectedWidth 100 -ExpectedHeight 100 -WindowTitle "NoLo"
+
+		$script:PositionedWindowHandles[0].LayoutOrder | Should -Be -1
+	}
+
+	It "replaces the LayoutOrder when the same handle is tracked again" {
+		$script:PositionedWindowHandles = [System.Collections.ArrayList]::new()
+
+		Add-PositionedWindow -WindowHandle ([IntPtr]16) -ExpectedX 0 -ExpectedY 0 -ExpectedWidth 100 -ExpectedHeight 100 -WindowTitle "First" -LayoutOrder 1
+		Add-PositionedWindow -WindowHandle ([IntPtr]16) -ExpectedX 0 -ExpectedY 0 -ExpectedWidth 100 -ExpectedHeight 100 -WindowTitle "Second" -LayoutOrder 4
+
+		$script:PositionedWindowHandles.Count | Should -Be 1
+		$script:PositionedWindowHandles[0].LayoutOrder | Should -Be 4
+	}
 }

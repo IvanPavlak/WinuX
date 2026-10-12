@@ -60,20 +60,24 @@ BeforeAll {
 
 	# One tracked entry for the test form. Several entries may share the handle - the pass
 	# processes entries, and the form passes every pre-snap check each time.
+	# -Title names the entry (the single-zone snap receives it); -LayoutOrder is stored only when
+	# given, so the default entry looks like one tracked before layout orders existed.
 	function Add-TestTrackedWindow {
-		param([int]$Desktop = 1, [switch]$SingleZone)
-		$script:PositionedWindowHandles.Add(@{
-				Handle         = $script:TestHandle
-				ExpectedX      = $script:FormLeft
-				ExpectedY      = $script:FormTop
-				ExpectedWidth  = $script:FormWidth
-				ExpectedHeight = $script:FormHeight
-				WindowTitle    = 'Snap-AllWindows test window'
-				DesktopNumber  = $Desktop
-				ProcessName    = 'pwsh'
-				ProcessId      = [uint32]$PID
-				SingleZone     = [bool]$SingleZone
-			}) > $null
+		param([int]$Desktop = 1, [switch]$SingleZone, [string]$Title = 'Snap-AllWindows test window', $LayoutOrder)
+		$state = @{
+			Handle         = $script:TestHandle
+			ExpectedX      = $script:FormLeft
+			ExpectedY      = $script:FormTop
+			ExpectedWidth  = $script:FormWidth
+			ExpectedHeight = $script:FormHeight
+			WindowTitle    = $Title
+			DesktopNumber  = $Desktop
+			ProcessName    = 'pwsh'
+			ProcessId      = [uint32]$PID
+			SingleZone     = [bool]$SingleZone
+		}
+		if ($PSBoundParameters.ContainsKey('LayoutOrder')) { $state.LayoutOrder = $LayoutOrder }
+		$script:PositionedWindowHandles.Add($state) > $null
 	}
 }
 
@@ -273,6 +277,61 @@ Describe "Snap-AllWindows" {
 
 			Should -Invoke Invoke-MultiZoneWindowSnap -Times 2 -Exactly
 			$script:LastSnapAllWindowsResult.SnappedCount | Should -Be 2
+		}
+	}
+
+	Context "Layout order within a desktop" {
+		# Every snap raises its window, so the order of the snaps is the stacking order of entries
+		# sharing a zone. The single-zone helper receives each entry's title, which records it.
+		BeforeEach {
+			$script:snapOrder = @()
+			Mock Invoke-SingleZoneWindowSnap {
+				$script:snapOrder += $WindowTitle
+				[PSCustomObject]@{ Verified = $true; Registered = $true; Method = 'KeyboardSnap'; Attempts = 1; X = 0; Y = 0; Width = 1; Height = 1 }
+			}
+		}
+
+		It "snaps a desktop's windows in LayoutOrder, whatever order they were tracked in" {
+			Add-TestTrackedWindow -Desktop 1 -SingleZone -Title 'C' -LayoutOrder 2
+			Add-TestTrackedWindow -Desktop 1 -SingleZone -Title 'A' -LayoutOrder 0
+			Add-TestTrackedWindow -Desktop 1 -SingleZone -Title 'B' -LayoutOrder 1
+
+			Snap-AllWindows -DesktopOffset 0
+
+			$script:snapOrder | Should -Be @('A', 'B', 'C')
+		}
+
+		It "snaps windows without a layout order after the ordered ones, in tracking order" {
+			Add-TestTrackedWindow -Desktop 1 -SingleZone -Title 'Unordered1'
+			Add-TestTrackedWindow -Desktop 1 -SingleZone -Title 'Second' -LayoutOrder 5
+			Add-TestTrackedWindow -Desktop 1 -SingleZone -Title 'Unordered2' -LayoutOrder -1
+			Add-TestTrackedWindow -Desktop 1 -SingleZone -Title 'First' -LayoutOrder 0
+			Add-TestTrackedWindow -Desktop 1 -SingleZone -Title 'Unordered3'
+
+			Snap-AllWindows -DesktopOffset 0
+
+			$script:snapOrder | Should -Be @('First', 'Second', 'Unordered1', 'Unordered2', 'Unordered3')
+		}
+
+		It "keeps entries with the same layout order in tracking order" {
+			Add-TestTrackedWindow -Desktop 1 -SingleZone -Title 'Tracked1' -LayoutOrder 3
+			Add-TestTrackedWindow -Desktop 1 -SingleZone -Title 'Tracked2' -LayoutOrder 3
+			Add-TestTrackedWindow -Desktop 1 -SingleZone -Title 'Earlier' -LayoutOrder 1
+
+			Snap-AllWindows -DesktopOffset 0
+
+			$script:snapOrder | Should -Be @('Earlier', 'Tracked1', 'Tracked2')
+		}
+
+		It "orders within each desktop and still processes the desktops in order" {
+			Add-TestTrackedWindow -Desktop 2 -SingleZone -Title 'D2-Late' -LayoutOrder 4
+			Add-TestTrackedWindow -Desktop 2 -SingleZone -Title 'D2-Early' -LayoutOrder 3
+			Add-TestTrackedWindow -Desktop 1 -SingleZone -Title 'D1-Late' -LayoutOrder 1
+			Add-TestTrackedWindow -Desktop 1 -SingleZone -Title 'D1-Early' -LayoutOrder 0
+
+			Snap-AllWindows -DesktopOffset 0
+
+			$script:snapOrder | Should -Be @('D1-Early', 'D1-Late', 'D2-Early', 'D2-Late')
 		}
 	}
 }

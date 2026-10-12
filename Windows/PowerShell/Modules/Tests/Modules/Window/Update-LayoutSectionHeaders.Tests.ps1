@@ -316,6 +316,96 @@ Describe "Update-LayoutSectionHeaders" {
 		}
 	}
 
+	Context "ProjectOverrides block after the Layout array" {
+		BeforeAll {
+			$script:overridesTail = @'
+	ProjectOverrides = @{
+		"MyProject" = @{
+			Monitors = @{ Primary = @{ VirtualDesktopLayouts = @{ 1 = "One" } } }
+			Layout   = @(
+				@{
+					ProcessName = "OverrideApp"
+					DesktopNumber = 1
+					Monitor = "Primary"
+					Zone = "Left"
+				}
+			)
+		}
+	}
+}
+'@
+			$script:baseContent = @'
+@{
+	Monitors = @{
+		Primary = @{ VirtualDesktopLayouts = @{ 1 = "One" } }
+	}
+	Layout = @(
+		@{
+			ProcessName = "App2"
+			DesktopNumber = 1
+			Monitor = "Primary"
+			Zone = "Right"
+		}
+		@{
+			ProcessName = "App1"
+			DesktopNumber = 1
+			Monitor = "Primary"
+			Zone = "Left"
+		}
+	)
+
+'@
+			$script:overridesConfig = @{
+				Monitors         = @{ Primary = @{ VirtualDesktopLayouts = @{ 1 = "One" } } }
+				Layout           = @(
+					@{ ProcessName = "App2"; DesktopNumber = 1; Monitor = "Primary"; Zone = "Right" }
+					@{ ProcessName = "App1"; DesktopNumber = 1; Monitor = "Primary"; Zone = "Left" }
+				)
+				ProjectOverrides = @{
+					MyProject = @{ Layout = @(@{ ProcessName = "OverrideApp"; DesktopNumber = 1; Monitor = "Primary"; Zone = "Left" }) }
+				}
+			}
+		}
+
+		It "carries the ProjectOverrides block over verbatim" {
+			$result = Update-LayoutSectionHeaders -Content ($script:baseContent + $script:overridesTail) -Config $script:overridesConfig
+
+			$result.EndsWith($script:overridesTail) | Should -BeTrue
+		}
+
+		It "never folds the override entries into the base layout" {
+			$result = Update-LayoutSectionHeaders -Content ($script:baseContent + $script:overridesTail) -Config $script:overridesConfig
+
+			[regex]::Matches($result, 'OverrideApp').Count | Should -Be 1
+			$result.IndexOf('OverrideApp') | Should -BeGreaterThan $result.IndexOf('ProjectOverrides')
+			# Section headers belong to the base layout only.
+			$result.LastIndexOf('VIRTUAL DESKTOP') | Should -BeLessThan $result.IndexOf('ProjectOverrides')
+		}
+
+		It "still rewrites the base layout's section headers and zone order" {
+			$result = Update-LayoutSectionHeaders -Content ($script:baseContent + $script:overridesTail) -Config $script:overridesConfig
+
+			$result | Should -Match 'VIRTUAL DESKTOP 1 - Monitor: Primary - Layout: One'
+			$result.IndexOf('"App1"') | Should -BeLessThan $result.IndexOf('"App2"')
+		}
+
+		It "produces a file that still parses" {
+			$result = Update-LayoutSectionHeaders -Content ($script:baseContent + $script:overridesTail) -Config $script:overridesConfig
+
+			$parseErrors = $null
+			$null = [System.Management.Automation.Language.Parser]::ParseInput($result, [ref]$null, [ref]$parseErrors)
+			@($parseErrors).Count | Should -Be 0
+		}
+
+		It "carries the block over unchanged when the base layout cannot be parsed" {
+			$content = "Simple text without Layout array structure`n" + $script:overridesTail
+
+			$result = Update-LayoutSectionHeaders -Content $content -Config @{}
+
+			$result | Should -Be $content
+		}
+	}
+
 	AfterAll {
 		if ($null -ne $script:OriginalConfiguration) {
 			$global:Configuration = $script:OriginalConfiguration

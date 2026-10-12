@@ -153,6 +153,30 @@ $global:Configuration.AutoElevate   # should print True
 
 A call that passes `-AutoElevate:$false` explicitly keeps the question even when the key is `$true`.
 
+### A Templated Workspace Opens Nothing
+
+**Problem:** The profile prints `WorkspaceActions.MyRepo - unknown template [Rpeo] (WorkspaceTemplates defines: Project) - the workspace opens nothing until this is fixed` (or `... variable [Repository] is used but has no value ...`, `... unknown placeholder {Repo} in [Open-Browser] ...`, `... Overrides [Open-Browser] matches several actions of template [...]`, `... variable [X] references itself ...`, `... Add [...] After [...] matches no action of the workspace`), and `Open-Workspace MyRepo` ends with `Workspace [MyRepo] not opened - its template entry has N error(s)`.
+
+**Why it happens:** A templated `WorkspaceActions` entry (`@{ MyRepo = @{ Template = "..." } }`) is expanded once at load by `Expand-WorkspaceTemplates`. An entry that cannot be expanded resolves to no actions on purpose: a typo must never reach an action as literal text, and half a workspace is worse than none. The entry stays in the menu so the error is repeated every time it is opened.
+
+**Solution:** Fix what the message names - the template name (`WorkspaceTemplates` keys), a variable without a value (set it in the entry's `Variables` or on the command line), an unknown `{placeholder}` (declare it in the template's `Variables`; `Workspace`, `SelectedProjects`, `ProjectName`, `Dev`, `User`, `MachineType`, `RepoRoot` and `AppData` are reserved and cannot be variables), an ambiguous override or anchor (give the template actions an `Id` and use it), or a cycle between variable defaults. Reload, then check:
+
+```powershell
+Reload-PowerShellProfile
+$global:Configuration.WorkspaceTemplateErrors
+Test-ConfigurationSchema
+```
+
+See [Workspace Templates](../configuration/configuration-reference.md#workspace-templates).
+
+### "Unknown project [...] (not a ProjectActions name)"
+
+**Problem:** Opening a workspace logs `WorkspaceActions.Client [Open-DBeaver].Project - unknown project [MyProjct] (not a ProjectActions name) - ignored` (or the same for a `ProjectParameters` row), and the action never runs, or the row is never applied, for any project.
+
+**Why it happens:** `Project` scopes and `ProjectParameters` row keys are validated against the `ProjectActions` names. An unknown token is reported and never matches, so a typo cannot silently run or skip an action. Every row key is checked on every open, whether or not that project is selected.
+
+**Solution:** Use the names exactly as `Get-OrderedNames $global:Configuration.ProjectActions` lists them (case does not matter), or add the project to `ProjectActions`. With no project selected at all, only actions scoped `All` (or unscoped) run - pass the project on the command line (`Open-Workspace Client MyProject`) or pick it in the project menu shown before anything launches.
+
 ## Symbolic Link Issues
 
 ### WinuX Replaced My PowerShell Profile Or FancyZones Settings
@@ -814,6 +838,29 @@ $MachineType  # Should match folder name
 **Why it happened:** `Open-Workspace` kept its start time and its resolved invocation in process environment variables (`OPEN_WORKSPACE_START_UTC`, `WORKSPACE_RERUN_COMMAND`) for the whole open. Every application and terminal tab the open spawned inherited them - Windows Terminal hands the `wt.exe` caller's environment to command-line-created panes - so a later open typed into one of those tabs measured from the earlier open's start, and a layout escalation there handed the inherited command to `ReRun-LastCommand`.
 
 **Solution:** Fixed in 0.1.52. The start time is a local of the invocation, and the rerun command is Window-module state (`Set-WorkspaceRerunCommand` / `Get-WorkspaceRerunCommand`) that a child process cannot inherit. The only hand-over left is the alongside bootstrap, which sets `OPEN_WORKSPACE_START_UTC` for the relaunched shell so its summary includes the relaunch; that shell consumes it at entry. A shell started before the fix may still carry the old variables; `Remove-Item Env:OPEN_WORKSPACE_START_UTC, Env:WORKSPACE_RERUN_COMMAND -ErrorAction SilentlyContinue` clears them, and any new tab is clean.
+
+### "ProjectOverrides [...]" Errors When A Layout Is Applied
+
+**Problem:** `Client_PC.psd1 => ProjectOverrides [MyProject] - unknown project [...]`, `... entry [Code - ...] needs DesktopNumber and a Monitor label`, or `... zone [Right] does not exist in layout [Zero] (Monitor [Primary] desktop 2; zones: Full, Fullscreen)`, and the workspace opens with its base layout instead of the project's variant. `Validate-Layout` reports the same errors.
+
+**Why it happens:** Every `ProjectOverrides` block of the layout file is validated on every open, selected or not, and a block with errors is not applied. A variant replaces whole desktop-and-monitor pairs, so each of its entries needs `DesktopNumber` and `Monitor`, and its `Zone` must exist in the zone layout that pair ends up with - the variant's `Monitors` over the base.
+
+**Solution:** Use `ProjectActions` names in the key; give every override entry its `DesktopNumber` and `Monitor`; and when the variant uses zones the base layout of that desktop does not have, change the zone layout in the variant (`Monitors = @{ Primary = @{ VirtualDesktopLayouts = @{ 2 = "One" } } }`). Check without opening anything:
+
+```powershell
+(Merge-LayoutProjectOverrides -Config (Import-PowerShellDataFile <path-to-layout>.psd1) -Project MyProject).Errors
+Visualize-Layouts -Layout Client_PC    # one "PROJECT VARIANT [MyProject]" drawing per variant
+```
+
+A variant cannot clear a desktop and monitor without replacing it; leave the pair out of the variant to keep the base entries.
+
+### Two VS Code Windows Of One Workspace Land In The Same Zone, Or The Catch-All Leaves A Window Behind
+
+**Problem:** A layout splits two VS Code folders across zones (`WindowTitle = "MyProject"` on the left, `WindowTitle = "MyProjectApi"` on the right, or a titled entry next to an untitled `Code` catch-all), and both windows end up in one zone, or the catch-all reports `Not Found` while a VS Code window sits unplaced.
+
+**Why it happens:** A titled entry matches by title pattern, and a bare `MyProject` also matches the `MyProjectApi` window (and any file tab named `MyProject`). Every window is claimed by exactly one entry, and the untitled catch-all only takes windows no titled entry's title matches - so a too-loose title on one entry hands it its sibling's window, or keeps the catch-all away from a window it should take.
+
+**Solution:** Anchor every VS Code title on the folder name as VS Code ends its caption - `<folder> - Visual Studio Code$` (`MyProject - Visual Studio Code$`, `MyProjectApi - Visual Studio Code$`) - so each pattern matches exactly one window. Several entries in one zone stack in file order, last on top. A single untitled `Code` entry is still the simplest choice when all VS Code windows belong in one zone. See [Several Windows of One Process](../configuration/guides/window/configure-window-layout.md#several-windows-of-one-process).
 
 ## fastfetch Logo Issues
 

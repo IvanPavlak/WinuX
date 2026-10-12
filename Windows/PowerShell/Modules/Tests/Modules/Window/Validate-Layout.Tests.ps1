@@ -328,4 +328,91 @@ Describe "Validate-Layout" {
 			$result.IsValid | Should -Be $true
 		}
 	}
+
+	Context "ProjectOverrides" {
+		# Validate-Layout checks the variants against the loaded configuration: the project names
+		# come from ProjectActions, the zone names from ZoneNameMappings.
+		BeforeAll {
+			$script:SavedConfiguration = $global:Configuration
+			$global:Configuration = @{
+				ProjectActions   = @{ MyProject = @{}; OtherProject = @{} }
+				ZoneNameMappings = @{
+					One  = @{ Left = 0; Right = 1 }
+					Zero = @{ Fullscreen = 0 }
+				}
+			}
+
+			function New-OverrideLayout {
+				param([hashtable]$Overrides)
+				@{
+					Monitors         = @{ Primary = @{ VirtualDesktopLayouts = @{ 1 = 'One' } } }
+					Layout           = @(@{ ProcessName = 'App1'; DesktopNumber = 1; Zone = 'Left'; Monitor = 'Primary' })
+					ProjectOverrides = $Overrides
+				}
+			}
+		}
+
+		AfterAll {
+			$global:Configuration = $script:SavedConfiguration
+		}
+
+		It "stays valid with a well-formed variant" {
+			$config = New-OverrideLayout -Overrides @{
+				MyProject = @{ Layout = @(@{ ProcessName = 'App2'; DesktopNumber = 1; Zone = 'Right'; Monitor = 'Primary' }) }
+			}
+
+			$result = Validate-Layout -Config $config
+
+			$result.IsValid | Should -BeTrue
+			$result.Errors.Count | Should -Be 0
+		}
+
+		It "fails on a variant for a project that is not a ProjectActions name" {
+			$config = New-OverrideLayout -Overrides @{
+				'MyProject/Ghost' = @{ Layout = @(@{ ProcessName = 'App2'; DesktopNumber = 1; Zone = 'Right'; Monitor = 'Primary' }) }
+			}
+
+			$result = Validate-Layout -Config $config
+
+			$result.IsValid | Should -BeFalse
+			@($result.Errors | Where-Object { $_ -match 'Ghost' }).Count | Should -Be 1
+		}
+
+		It "fails on a variant entry without a monitor" {
+			$config = New-OverrideLayout -Overrides @{
+				MyProject = @{ Layout = @(@{ ProcessName = 'App2'; DesktopNumber = 1; Zone = 'Right' }) }
+			}
+
+			$result = Validate-Layout -Config $config
+
+			$result.IsValid | Should -BeFalse
+			$result.Errors.Count | Should -Be 1
+		}
+
+		It "fails on a variant zone the variant's zone layout does not have" {
+			$config = New-OverrideLayout -Overrides @{
+				MyProject = @{
+					Monitors = @{ Primary = @{ VirtualDesktopLayouts = @{ 1 = 'Zero' } } }
+					Layout   = @(@{ ProcessName = 'App2'; DesktopNumber = 1; Zone = 'Right'; Monitor = 'Primary' })
+				}
+			}
+
+			$result = Validate-Layout -Config $config
+
+			$result.IsValid | Should -BeFalse
+			$result.Errors.Count | Should -Be 1
+		}
+
+		It "reports the errors of every variant" {
+			$config = New-OverrideLayout -Overrides @{
+				MyProject    = @{ Layout = @(@{ ProcessName = 'App2'; DesktopNumber = 1; Zone = 'Right' }) }
+				OtherProject = @{ Layout = @(@{ ProcessName = 'App3'; Zone = 'Left'; Monitor = 'Primary' }) }
+			}
+
+			$result = Validate-Layout -Config $config
+
+			$result.IsValid | Should -BeFalse
+			$result.Errors.Count | Should -Be 2
+		}
+	}
 }

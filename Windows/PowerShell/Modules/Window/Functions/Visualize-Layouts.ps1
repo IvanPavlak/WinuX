@@ -9,6 +9,11 @@ function Visualize-Layouts {
 		Layout files are organized in machine-specific subfolders (Laptop, PC, Work) within the
 		Layouts directory.
 
+		A layout file with a ProjectOverrides block also gets one drawing per project variant,
+		headed "PROJECT VARIANT [<project scope>]": the desktops and monitors that variant
+		replaces, drawn with the variant's zone layouts (Merge-LayoutProjectOverrides). The block
+		itself is never rewritten by -Update; only the base Layout array's section headers are.
+
 	.PARAMETER Layout
 		The name of a specific layout to visualize (e.g., "WinuX_Test", "Example_Test").
 
@@ -283,50 +288,93 @@ function Visualize-Layouts {
 				continue
 			}
 
-			# Group windows by DesktopNumber first, then by Monitor
-			$desktopGroups = $config.Layout | Group-Object -Property DesktopNumber | Sort-Object { [int]$_.Name }
+			# Draws one layout's desktops and monitors; -Pairs ("<desktop>|<monitor>") limits it to
+			# the pairs a project variant replaces.
+			$renderLayout = {
+				param([hashtable]$LayoutData, [string[]]$Pairs)
+				$rendered = @()
+
+				# Group windows by DesktopNumber first, then by Monitor
+				$desktopGroups = $LayoutData.Layout | Group-Object -Property DesktopNumber | Sort-Object { [int]$_.Name }
+
+				foreach ($desktopGroup in $desktopGroups) {
+					$desktopNumber = [int]$desktopGroup.Name
+					$desktopWindows = $desktopGroup.Group
+					if ($Pairs -and -not @($Pairs | Where-Object { $_ -like "$desktopNumber|*" })) { continue }
+
+					# Group by Monitor within this desktop, ordered Primary, Secondary, Monitor3,
+					# Monitor4, ... The previous inline three-way sort collapsed everything past
+					# Secondary to 2, so Monitor3/4/5 tied and rendered in arbitrary input order.
+					$monitorGroups = $desktopWindows | Group-Object -Property Monitor |
+						Sort-Object @(
+							@{ Expression = { Resolve-MonitorLabel -Label $_.Name }; Ascending = $true }
+							@{ Expression = { $_.Name }; Ascending = $true }
+						)
+
+					foreach ($monitorGroup in $monitorGroups) {
+						$monitorName = $monitorGroup.Name
+						$monitorWindows = $monitorGroup.Group
+						if ($Pairs -and $Pairs -notcontains "$desktopNumber|$monitorName") { continue }
+
+						# Resolve layout type from Monitors section
+						if ($LayoutData.Monitors -and
+							$LayoutData.Monitors.ContainsKey($monitorName) -and
+							$LayoutData.Monitors[$monitorName].VirtualDesktopLayouts -and
+							$LayoutData.Monitors[$monitorName].VirtualDesktopLayouts.ContainsKey($desktopNumber)) {
+							$layoutType = $LayoutData.Monitors[$monitorName].VirtualDesktopLayouts[$desktopNumber]
+						}
+						else {
+							Write-Host -ForegroundColor Yellow "  => Could not resolve layout for Monitor='$monitorName' Desktop=$desktopNumber, skipping..."
+							continue
+						}
+
+						# Generate visualization
+						$visualization = Generate-LayoutVisualization `
+							-LayoutType $layoutType `
+							-Windows $monitorWindows `
+							-DesktopNumber $desktopNumber `
+							-MonitorName $monitorName
+
+						if ($visualization) {
+							$rendered += $visualization
+						}
+					}
+				}
+				return , $rendered
+			}
 
 			# Generate visualizations for each desktop and monitor
-			$visualizations = @()
+			# The renderer returns its array as ONE object; @(...) around the call would wrap it in a
+			# second array, so the result is assigned and cast instead.
+			[object[]]$visualizations = & $renderLayout $config @()
 
-			foreach ($desktopGroup in $desktopGroups) {
-				$desktopNumber = [int]$desktopGroup.Name
-				$desktopWindows = $desktopGroup.Group
-
-				# Group by Monitor within this desktop, ordered Primary, Secondary, Monitor3,
-				# Monitor4, ... The previous inline three-way sort collapsed everything past
-				# Secondary to 2, so Monitor3/4/5 tied and rendered in arbitrary input order.
-				$monitorGroups = $desktopWindows | Group-Object -Property Monitor |
-					Sort-Object @(
-						@{ Expression = { Resolve-MonitorLabel -Label $_.Name }; Ascending = $true }
-						@{ Expression = { $_.Name }; Ascending = $true }
-					)
-
-				foreach ($monitorGroup in $monitorGroups) {
-					$monitorName = $monitorGroup.Name
-					$monitorWindows = $monitorGroup.Group
-
-					# Resolve layout type from Monitors section
-					if ($config.Monitors -and
-						$config.Monitors.ContainsKey($monitorName) -and
-						$config.Monitors[$monitorName].VirtualDesktopLayouts -and
-						$config.Monitors[$monitorName].VirtualDesktopLayouts.ContainsKey($desktopNumber)) {
-						$layoutType = $config.Monitors[$monitorName].VirtualDesktopLayouts[$desktopNumber]
+			# One drawing per project variant, limited to the desktops and monitors it replaces.
+			if ($config.ProjectOverrides -is [System.Collections.IDictionary]) {
+				foreach ($variantKey in @($config.ProjectOverrides.Keys | Sort-Object)) {
+					$variantBlock = $config.ProjectOverrides[$variantKey]
+					$variantProject = @(([string]$variantKey -split '/') | ForEach-Object { $_.Trim() } | Where-Object { $_ })[0]
+					if (-not $variantProject -or -not ($variantBlock -is [System.Collections.IDictionary])) { continue }
+					$singleVariant = @{}
+					foreach ($configKey in $config.Keys) { if ($configKey -ne 'ProjectOverrides') { $singleVariant[$configKey] = $config[$configKey] } }
+					$singleVariant['ProjectOverrides'] = @{ $variantKey = $variantBlock }
+					$variantMerge = Merge-LayoutProjectOverrides -Config $singleVariant -Project $variantProject
+					if (@($variantMerge.Applied).Count -eq 0) { continue }
+					# The pairs the variant changes: its own entries' desktops and monitors, and every
+					# desktop whose zone layout its Monitors section replaces.
+					$variantPairs = @(@($variantBlock.Layout) | Where-Object { $_ } | ForEach-Object { "$([int]$_.DesktopNumber)|$($_.Monitor)" })
+					if ($variantBlock.Monitors -is [System.Collections.IDictionary]) {
+						foreach ($variantMonitor in $variantBlock.Monitors.Keys) {
+							$variantDesktops = $variantBlock.Monitors[$variantMonitor].VirtualDesktopLayouts
+							if ($variantDesktops -is [System.Collections.IDictionary]) {
+								foreach ($variantDesktop in $variantDesktops.Keys) { $variantPairs += "$([int]$variantDesktop)|$variantMonitor" }
+							}
+						}
 					}
-					else {
-						Write-Host -ForegroundColor Yellow "  => Could not resolve layout for Monitor='$monitorName' Desktop=$desktopNumber, skipping..."
-						continue
-					}
-
-					# Generate visualization
-					$visualization = Generate-LayoutVisualization `
-						-LayoutType $layoutType `
-						-Windows $monitorWindows `
-						-DesktopNumber $desktopNumber `
-						-MonitorName $monitorName
-
-					if ($visualization) {
-						$visualizations += $visualization
+					$variantPairs = @($variantPairs | Select-Object -Unique)
+					if ($variantPairs.Count -eq 0) { continue }
+					[object[]]$variantVisualizations = & $renderLayout $variantMerge.Config $variantPairs
+					foreach ($variantVisualization in $variantVisualizations) {
+						$visualizations += "PROJECT VARIANT [$variantKey]`n$variantVisualization"
 					}
 				}
 			}

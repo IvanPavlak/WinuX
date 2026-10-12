@@ -16,6 +16,14 @@ function Wait-ForWorkspaceWindows {
 		preserving handle affinity across poll iterations to prevent stability resets
 		from handle swapping.
 
+		When several entries share one non-browser process under different titles (two VS Code
+		folders, or a titled VS Code entry next to an untitled catch-all - see
+		Get-LayoutProcessSiblings), the wait honours their titles: a titled entry only counts a
+		window whose title matches its own pattern, the catch-all only counts a window no titled
+		sibling's title matches, and each of them claims a distinct window the way duplicates do.
+		Browser entries keep counting any window of their process (their titles resolve while the
+		page loads; the generic-title check and the layout pass sort them out).
+
 	.PARAMETER LayoutConfig
 		The layout configuration array containing window definitions with ProcessName
 		and/or WindowTitle properties. When both are provided for a window, a window of
@@ -242,6 +250,22 @@ function Wait-ForWorkspaceWindows {
 		if ($ew.IsDuplicateKey) {
 			$ew.Description = "$($ew.Description) (#$($ew.EntryIndex))"
 		}
+	}
+
+	# Entries sharing one non-browser process under different titles: a titled entry waits for a
+	# window carrying ITS title (TitleStrict), an untitled catch-all for a window none of its
+	# titled siblings matches (ExcludeTitles), and every one of them claims a distinct window
+	# (ClaimsWindow), exactly like duplicates.
+	$waitSiblings = Get-LayoutProcessSiblings -LayoutConfig @($expectedWindows | ForEach-Object { @{ ProcessName = $_.SearchProcessName; WindowTitle = $_.SearchWindowTitle } })
+	for ($siblingIndex = 0; $siblingIndex -lt $expectedWindows.Count; $siblingIndex++) {
+		$ew = $expectedWindows[$siblingIndex]
+		$relation = @($waitSiblings)[$siblingIndex]
+		$sharedClaim = [bool]($relation -and $relation.Shared -and -not $relation.BrowserLike)
+		$ew.TitleStrict = $sharedClaim -and $relation.Titled
+		# Assigned explicitly: an if-expression yielding @() stores $null, and @($null).Count is 1.
+		$ew.ExcludeTitles = [string[]]@()
+		if ($sharedClaim -and $relation.CatchAll) { $ew.ExcludeTitles = [string[]]@($relation.SiblingTitles | Where-Object { $_ }) }
+		$ew.ClaimsWindow = $ew.IsDuplicateKey -or $sharedClaim
 	}
 
 	if ($expectedWindows.Count -eq 0) {
@@ -473,9 +497,18 @@ function Wait-ForWorkspaceWindows {
 							})
 					}
 
-					# For duplicate keys, filter out handles already claimed by earlier entries
-					# in this poll iteration so each entry tracks a distinct window
-					if ($expectedWindow.IsDuplicateKey -and $windows -and $windows.Count -gt 0) {
+					# Several entries of one non-browser process: only the windows this entry's title
+					# (or, for the catch-all, no sibling's title) describes count.
+					if ($expectedWindow.TitleStrict -and $windows -and @($windows).Count -gt 0) {
+						$windows = @($windows | Where-Object { Test-WindowTitleMatch -WindowTitle ([string]$_.Title) -Patterns @($expectedWindow.SearchWindowTitle) })
+					}
+					if (@($expectedWindow.ExcludeTitles | Where-Object { $_ }).Count -gt 0 -and $windows -and @($windows).Count -gt 0) {
+						$windows = @($windows | Where-Object { -not (Test-WindowTitleMatch -WindowTitle ([string]$_.Title) -Patterns @($expectedWindow.ExcludeTitles)) })
+					}
+
+					# For duplicate keys (and entries sharing a process), filter out handles already
+					# claimed by earlier entries in this poll iteration so each entry tracks a distinct window
+					if ($expectedWindow.ClaimsWindow -and $windows -and $windows.Count -gt 0) {
 						$windows = @($windows | Where-Object { -not $iterationClaimedHandles.Contains($_.Handle) })
 					}
 
@@ -495,7 +528,7 @@ function Wait-ForWorkspaceWindows {
 						# to avoid handle-swapping between poll iterations (which resets stability).
 						# If the previously assigned handle is still in the unclaimed list, use it.
 						$window = $null
-						if ($expectedWindow.IsDuplicateKey -and $windowTitleHistory.ContainsKey($windowKey)) {
+						if ($expectedWindow.ClaimsWindow -and $windowTitleHistory.ContainsKey($windowKey)) {
 							$previousHandle = $windowTitleHistory[$windowKey].Handle
 							$window = $windows | Where-Object { $_.Handle -eq $previousHandle } | Select-Object -First 1
 						}
@@ -516,7 +549,7 @@ function Wait-ForWorkspaceWindows {
 								$notFoundWindows.Add("$($expectedWindow.Description) (window not ready: $($window.Width)x$($window.Height))")
 							}
 							# Still claim the handle for duplicate entries
-							if ($expectedWindow.IsDuplicateKey -and $window.Handle) {
+							if ($expectedWindow.ClaimsWindow -and $window.Handle) {
 								[void]$iterationClaimedHandles.Add($window.Handle)
 							}
 							continue
@@ -558,7 +591,7 @@ function Wait-ForWorkspaceWindows {
 									if (-not $notFoundWindows.Contains($expectedWindow.Description)) {
 										$notFoundWindows.Add("$($expectedWindow.Description) (generic title: '$windowTitle')")
 									}								# Still claim the handle for duplicate entries
-									if ($expectedWindow.IsDuplicateKey -and $window.Handle) {
+									if ($expectedWindow.ClaimsWindow -and $window.Handle) {
 										[void]$iterationClaimedHandles.Add($window.Handle)
 									}									continue
 								}
@@ -695,7 +728,7 @@ function Wait-ForWorkspaceWindows {
 								$foundWindowHandles.Add($window.Handle)
 							}
 							# Claim this handle for duplicate entries
-							if ($expectedWindow.IsDuplicateKey) {
+							if ($expectedWindow.ClaimsWindow) {
 								[void]$iterationClaimedHandles.Add($window.Handle)
 							}
 							# Fire early-stable callback once per entry so the caller can immediately
@@ -711,7 +744,7 @@ function Wait-ForWorkspaceWindows {
 								$unstableBrowserHandles.Add($window.Handle)
 							}
 							# Still claim the handle so the next duplicate entry picks a different window
-							if ($expectedWindow.IsDuplicateKey -and $window.Handle) {
+							if ($expectedWindow.ClaimsWindow -and $window.Handle) {
 								[void]$iterationClaimedHandles.Add($window.Handle)
 							}
 						}

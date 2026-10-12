@@ -11,6 +11,8 @@ Validates that all required keys are present in the loaded configuration.
 
 This validates the shape of a configuration file rather than reading any particular key, so there is nothing to set for it. Run it after hand-editing `Configuration.local.psd1` - it is the fastest way to catch a missing brace or a mistyped section before the profile fails to load.
 
+It also checks workspace templates in whatever configuration it is given: `WorkspaceTemplates` must be a hashtable of templates that each carry `Actions`, the problems `Expand-WorkspaceTemplates` recorded at load (`WorkspaceTemplateErrors`) are reported, and templated `WorkspaceActions` entries that were never expanded are resolved through `Resolve-WorkspaceTemplate` - so an unknown template, a variable without a value, an ambiguous or unmatched override, an unknown `{placeholder}`, a variable cycle or a bad `Before` / `After` anchor is reported with the workspace named. See [Workspace Templates](../../configuration-reference.md#workspace-templates).
+
 ## Decisions
 
 1. Which configuration value are you feeding `Test-ConfigurationSchema`?
@@ -50,6 +52,7 @@ Read-only checks. None of these change anything.
 ```powershell
 Reload-PowerShellProfile
 Test-ConfigurationSchema
+$global:Configuration.WorkspaceTemplateErrors
 ```
 
 If a value reads back as empty, the two usual causes are a parse error in `Configuration.local.psd1` (run `Test-ConfigurationSchema`) and a key placed at the wrong nesting level.

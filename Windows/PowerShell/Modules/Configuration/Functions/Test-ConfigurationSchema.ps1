@@ -22,6 +22,12 @@ function Test-ConfigurationSchema {
 		because Import-PowerShellDataFile loses key order and its menu would be sorted
 		rather than following the file.
 
+		It also validates workspace templates: WorkspaceTemplates must be a hashtable of templates
+		that each carry Actions, and every templated WorkspaceActions entry must expand cleanly
+		through Resolve-WorkspaceTemplate - an unknown template, a variable without a value, an
+		ambiguous or unmatched override, an unknown placeholder, a variable cycle or a bad Before /
+		After anchor is reported with the workspace named.
+
 		Call this function immediately after Load-PathConfiguration during the bootstrap
 		or profile initialization sequence to surface typos and missing entries early.
 
@@ -128,6 +134,50 @@ function Test-ConfigurationSchema {
 		$badEntries = @($value | Where-Object { $_ -isnot [System.Collections.IDictionary] -or $_.Count -ne 1 })
 		if ($badEntries.Count -gt 0) {
 			$failures.Add("$section has $($badEntries.Count) entr(y/ies) that are not single-key hashtables - each entry is @{ Name = <entry> }")
+		}
+	}
+
+	# Workspace templates: the section's shape, then every templated WorkspaceActions entry
+	# (unknown template, missing variable, ambiguous override, unknown placeholder, variable
+	# cycle, bad Before / After anchor - everything Resolve-WorkspaceTemplate reports). Entries
+	# Load-PathConfiguration already expanded (WorkspaceTemplateEntries) are not expanded a second
+	# time: their problems were recorded under WorkspaceTemplateErrors. Templated entries still
+	# present in WorkspaceActions (a configuration that was never expanded) are resolved here.
+	$workspaceTemplates = $Configuration['WorkspaceTemplates']
+	if ($null -ne $workspaceTemplates) {
+		if (-not ($workspaceTemplates -is [System.Collections.IDictionary])) {
+			$failures.Add("WorkspaceTemplates must be a hashtable of template name => @{ Variables = @{ ... }; Actions = @( ... ) }")
+		}
+		else {
+			foreach ($templateName in $workspaceTemplates.Keys) {
+				$template = $workspaceTemplates[$templateName]
+				if (-not ($template -is [System.Collections.IDictionary]) -or -not $template.Contains('Actions')) {
+					$failures.Add("WorkspaceTemplates.$templateName needs Actions = @( <action entries> )")
+				}
+			}
+		}
+	}
+
+	foreach ($message in @($Configuration['WorkspaceTemplateErrors'])) {
+		if (-not [string]::IsNullOrWhiteSpace([string]$message)) { $failures.Add([string]$message) }
+	}
+
+	$templatedEntries = [ordered]@{}
+	$workspaceSection = $Configuration['WorkspaceActions']
+	# An ordered array of single-key hashtables, or a legacy hashtable - one item either way.
+	foreach ($workspaceItem in @($workspaceSection)) {
+		if (-not ($workspaceItem -is [System.Collections.IDictionary])) { continue }
+		foreach ($entryName in $workspaceItem.Keys) {
+			if ($workspaceItem[$entryName] -is [System.Collections.IDictionary]) {
+				$templatedEntries[[string]$entryName] = $workspaceItem[$entryName]
+			}
+		}
+	}
+
+	if ($templatedEntries.Count -gt 0 -and (Get-Command Resolve-WorkspaceTemplate -ErrorAction SilentlyContinue)) {
+		foreach ($entryName in $templatedEntries.Keys) {
+			$resolution = Resolve-WorkspaceTemplate -Name $entryName -Definition $templatedEntries[$entryName] -Templates $workspaceTemplates
+			foreach ($message in @($resolution.Errors)) { $failures.Add($message) }
 		}
 	}
 

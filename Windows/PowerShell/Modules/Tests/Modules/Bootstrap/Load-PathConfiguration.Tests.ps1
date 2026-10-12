@@ -10,6 +10,7 @@ BeforeAll {
 	# Stub dependent functions
 	function Expand-Hashtable { param($Source, $DevPath, $UserPath, $MachineTypeName, $RepoRoot) $Source }
 	function Expand-ConfigPaths { param($Configuration, $MachineType, $RepoRoot) @{} }
+	function Expand-WorkspaceTemplates { param($Configuration, [switch]$Quiet) }
 }
 
 Describe "Load-PathConfiguration" {
@@ -100,6 +101,118 @@ Describe "Load-PathConfiguration" {
 			}
 			finally {
 				Remove-Item -Path (Join-Path $ConfigDir "Configuration.local.psd1") -ErrorAction SilentlyContinue
+			}
+		}
+	}
+
+	Context "Workspace templates" {
+		BeforeAll {
+			$TemplateRepoRoot = Join-Path $TestDrive "TemplateRepo"
+			$TemplateConfigDir = Join-Path $TemplateRepoRoot "Windows\PowerShell"
+			New-Item -ItemType Directory -Path $TemplateConfigDir -Force | Out-Null
+
+			$baseContent = @'
+@{
+    ValidMachineTypes = @("PC", "Laptop", "Work", "Test")
+    DefaultMachineType = "Test"
+    HostnameToMachineType = @{ "MY-PC" = "PC" }
+    BasePaths = @{ Test = @{ Dev = "C:\Dev"; User = "C:\Users\Test" } }
+    Universal = @{ Desktop = "" }
+    WorkspaceTemplates = @{
+        Project = @{
+            Variables = @{ Repository = "{Workspace}Repository"; Instances = 1 }
+            Actions   = @( @{ Action = "Open-Project"; Parameters = @{ Project = "{Workspace}" } } )
+        }
+        Server = @{
+            Actions = @( @{ Action = "Open-Terminal" } )
+        }
+    }
+    WorkspaceActions = @(
+        @{ MyProject = @{ Template = "Project" } }
+    )
+}
+'@
+			Set-Content -Path (Join-Path $TemplateConfigDir "Configuration.psd1") -Value $baseContent
+
+			$script:TemplateLocalContent = @'
+@{
+    WorkspaceTemplates = @{
+        Project = @{
+            Actions = @( @{ Action = "Open-Rider" } )
+        }
+        Local = @{
+            Actions = @( @{ Action = "Open-Obsidian" } )
+        }
+    }
+}
+'@
+			$script:TemplateLocalFile = Join-Path $TemplateConfigDir "Configuration.local.psd1"
+			Set-Content -Path $script:TemplateLocalFile -Value $script:TemplateLocalContent
+		}
+
+		BeforeEach {
+			$script:expandCalls = @()
+			Mock Expand-WorkspaceTemplates {
+				$script:expandCalls += [PSCustomObject]@{
+					SameConfiguration = [object]::ReferenceEquals($Configuration, $global:Configuration)
+					TemplateNames     = @($Configuration.WorkspaceTemplates.Keys | Sort-Object)
+					ProjectActions    = @($Configuration.WorkspaceTemplates.Project.Actions | ForEach-Object { $_.Action })
+					Quiet             = [bool]$Quiet
+				}
+			}
+		}
+
+		It "replaces a base template whole with the local template of the same name" {
+			Load-PathConfiguration -RepoRoot $TemplateRepoRoot -Quiet | Out-Null
+
+			$project = $global:Configuration.WorkspaceTemplates.Project
+			@($project.Actions | ForEach-Object { $_.Action }) | Should -Be @('Open-Rider')
+			# Not deep-merged: the base template's Variables do not survive under the local Actions.
+			$project.ContainsKey('Variables') | Should -BeFalse
+		}
+
+		It "keeps the base templates the local file does not name and adds the local-only ones" {
+			Load-PathConfiguration -RepoRoot $TemplateRepoRoot -Quiet | Out-Null
+
+			@($global:Configuration.WorkspaceTemplates.Keys | Sort-Object) | Should -Be @('Local', 'Project', 'Server')
+		}
+
+		It "expands the templates once, on the configuration the local overrides were already merged into" {
+			Load-PathConfiguration -RepoRoot $TemplateRepoRoot -Quiet | Out-Null
+
+			$script:expandCalls.Count | Should -Be 1
+			$script:expandCalls[0].SameConfiguration | Should -BeTrue
+			$script:expandCalls[0].TemplateNames | Should -Be @('Local', 'Project', 'Server')
+			$script:expandCalls[0].ProjectActions | Should -Be @('Open-Rider')
+		}
+
+		It "hands -Quiet on to the expansion" {
+			Load-PathConfiguration -RepoRoot $TemplateRepoRoot -Quiet | Out-Null
+			Load-PathConfiguration -RepoRoot $TemplateRepoRoot | Out-Null
+
+			$script:expandCalls.Count | Should -Be 2
+			$script:expandCalls[0].Quiet | Should -BeTrue
+			$script:expandCalls[1].Quiet | Should -BeFalse
+		}
+
+		It "still loads when the expansion throws, and warns unless quiet" {
+			Mock Expand-WorkspaceTemplates { throw 'expansion failed' }
+
+			Load-PathConfiguration -RepoRoot $TemplateRepoRoot | Should -BeTrue
+			Should -Invoke Write-LogWarning -Times 1 -Exactly -ParameterFilter { $Message -like '*expansion failed*' }
+		}
+
+		It "expands the base templates as they are without a local file" {
+			Remove-Item -Path $script:TemplateLocalFile
+			try {
+				Load-PathConfiguration -RepoRoot $TemplateRepoRoot -Quiet | Out-Null
+
+				$script:expandCalls.Count | Should -Be 1
+				$script:expandCalls[0].ProjectActions | Should -Be @('Open-Project')
+				$global:Configuration.WorkspaceTemplates.Project.ContainsKey('Variables') | Should -BeTrue
+			}
+			finally {
+				Set-Content -Path $script:TemplateLocalFile -Value $script:TemplateLocalContent
 			}
 		}
 	}

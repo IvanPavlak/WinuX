@@ -447,4 +447,158 @@ Describe "Resolve-WorkspaceActions" {
 			$result.ContainsKey('LayoutMachineParameters') | Should -BeFalse
 		}
 	}
+
+	Context "Project scope and ProjectParameters - the selected project(s)" {
+		BeforeEach {
+			# ProjectActions names are the valid project tokens; menu order, not alphabetical.
+			$global:Configuration.ProjectActions = @(
+				@{ MyProject = @(@{ Action = 'Open-Rider' }) }
+				@{ OtherProject = @(@{ Action = 'Open-Rider' }) }
+				@{ ThirdProject = @(@{ Action = 'Open-Rider' }) }
+			)
+
+			$script:projectScoped = @(
+				@{ Action = 'A' }
+				@{ Action = 'B'; Project = 'MyProject' }
+				@{ Action = 'C'; Project = 'OtherProject/ThirdProject' }
+				@{ Action = 'D'; Project = 'All' }
+			)
+		}
+
+		It "runs a project-scoped action only for a project its scope covers" {
+			$result = @(Resolve-WorkspaceActions -Actions $script:projectScoped -Workspace 'W' -Project 'MyProject')
+
+			@($result | ForEach-Object { $_.Action }) | Should -Be @('A', 'B', 'D')
+			Should -Invoke Write-LogError -Times 0
+		}
+
+		It "matches any token of an A/B scope, case-insensitively" {
+			@(Resolve-WorkspaceActions -Actions $script:projectScoped -Workspace 'W' -Project 'thirdproject' | ForEach-Object { $_.Action }) | Should -Be @('A', 'C', 'D')
+		}
+
+		It "runs every action whose scope covers one of several selected projects" {
+			@(Resolve-WorkspaceActions -Actions $script:projectScoped -Workspace 'W' -Project 'MyProject', 'OtherProject' | ForEach-Object { $_.Action }) | Should -Be @('A', 'B', 'C', 'D')
+		}
+
+		It "skips every specific project scope but keeps All and unscoped actions when no project is selected" {
+			@(Resolve-WorkspaceActions -Actions $script:projectScoped -Workspace 'W' | ForEach-Object { $_.Action }) | Should -Be @('A', 'D')
+			@(Resolve-WorkspaceActions -Actions $script:projectScoped -Workspace 'W' -Project @() | ForEach-Object { $_.Action }) | Should -Be @('A', 'D')
+			@(Resolve-WorkspaceActions -Actions $script:projectScoped -Workspace 'W' -Project '  ' | ForEach-Object { $_.Action }) | Should -Be @('A', 'D')
+		}
+
+		It "reports an unknown project token and never lets it match, even when it is the selected project" {
+			$typo = @(
+				@{ Action = 'A'; Project = 'MyProjcet' }
+				@{ Action = 'B'; Project = 'MyProjcet/OtherProject' }
+			)
+
+			$result = @(Resolve-WorkspaceActions -Actions $typo -Workspace 'W' -Project 'MyProjcet')
+
+			$result.Count | Should -Be 0
+			Should -Invoke Write-LogError -Times 2 -Exactly -ParameterFilter { $Message -like '*[[]MyProjcet]*' }
+		}
+
+		It "keeps an action whose unknown token sits next to a valid, selected one" {
+			$typo = @(@{ Action = 'B'; Project = 'MyProjcet/OtherProject' })
+
+			@(Resolve-WorkspaceActions -Actions $typo -Workspace 'W' -Project 'OtherProject').Count | Should -Be 1
+			Should -Invoke Write-LogError -Times 1 -Exactly
+		}
+
+		It "applies the All row first, then the rows of each selected project in selection order, the later project winning" {
+			$entry = @{
+				Action            = 'Open-Browser'
+				Parameters        = @{ Groups = @('AI'); Base = 'keep' }
+				ProjectParameters = @{
+					All          = @{ Groups = @('All'); FromAll = $true }
+					MyProject    = @{ Groups = @('Mine'); Mine = 1 }
+					OtherProject = @{ Groups = @('Other'); Other = 2 }
+				}
+			}
+
+			$mineLast = @(Resolve-WorkspaceActions -Actions @($entry) -Workspace 'W' -Project 'OtherProject', 'MyProject')[0]
+			$otherLast = @(Resolve-WorkspaceActions -Actions @($entry) -Workspace 'W' -Project 'MyProject', 'OtherProject')[0]
+
+			$mineLast.Parameters.Groups | Should -Be @('Mine')
+			$otherLast.Parameters.Groups | Should -Be @('Other')
+			foreach ($result in @($mineLast, $otherLast)) {
+				$result.Parameters.Base | Should -Be 'keep'
+				$result.Parameters.FromAll | Should -BeTrue
+				$result.Parameters.Mine | Should -Be 1
+				$result.Parameters.Other | Should -Be 2
+			}
+		}
+
+		It "applies only the All row when no project is selected, and only matching rows otherwise" {
+			$entry = @{
+				Action            = 'A'
+				Parameters        = @{ X = 0 }
+				ProjectParameters = @{ All = @{ Y = 'all' }; MyProject = @{ X = 1 }; 'OtherProject/ThirdProject' = @{ X = 2 } }
+			}
+
+			$none = @(Resolve-WorkspaceActions -Actions @($entry) -Workspace 'W')[0]
+			$third = @(Resolve-WorkspaceActions -Actions @($entry) -Workspace 'W' -Project 'ThirdProject')[0]
+
+			$none.Parameters.X | Should -Be 0
+			$none.Parameters.Y | Should -Be 'all'
+			$third.Parameters.X | Should -Be 2
+		}
+
+		It "applies ProjectParameters after MachineParameters and LayoutMachineParameters" {
+			$entry = @{
+				Action                  = 'Open-Browser'
+				Parameters              = @{ Instances = 1 }
+				MachineParameters       = @{ PC = @{ Instances = 2; Machine = 'pc' } }
+				LayoutMachineParameters = @{ PC = @{ Instances = 3; Layout = 'pc' } }
+				ProjectParameters       = @{ MyProject = @{ Instances = 4 } }
+			}
+
+			$result = @(Resolve-WorkspaceActions -Actions @($entry) -Workspace 'W' -Project 'MyProject')[0]
+
+			$result.Parameters.Instances | Should -Be 4
+			$result.Parameters.Machine | Should -Be 'pc'
+			$result.Parameters.Layout | Should -Be 'pc'
+		}
+
+		It "removes a parameter a project row sets to null" {
+			$entry = @{ Action = 'A'; Parameters = @{ X = 1; Y = 2 }; ProjectParameters = @{ MyProject = @{ X = $null } } }
+
+			$result = @(Resolve-WorkspaceActions -Actions @($entry) -Workspace 'W' -Project 'MyProject')[0]
+
+			$result.Parameters.ContainsKey('X') | Should -BeFalse
+			$result.Parameters.Y | Should -Be 2
+			$entry.Parameters.X | Should -Be 1
+		}
+
+		It "reports an unknown row key and ignores the row" {
+			$entry = @{ Action = 'A'; Parameters = @{ X = 0 }; ProjectParameters = @{ MyProjcet = @{ X = 9 }; MyProject = @{ X = 1 } } }
+
+			$result = @(Resolve-WorkspaceActions -Actions @($entry) -Workspace 'W' -Project 'MyProject')[0]
+
+			$result.Parameters.X | Should -Be 1
+			Should -Invoke Write-LogError -Times 1 -Exactly -ParameterFilter { $Message -like '*[[]MyProjcet]*' }
+		}
+
+		It "returns an entry without tables as the same object and strips ProjectParameters from a rebuilt one" {
+			$plain = @{ Action = 'A'; Parameters = @{ X = 1 }; Project = 'MyProject' }
+			$withTable = @{ Action = 'B'; Parameters = @{ X = 1 }; Project = 'MyProject'; ProjectParameters = @{ MyProject = @{ X = 2 } } }
+
+			$result = @(Resolve-WorkspaceActions -Actions @($plain, $withTable) -Workspace 'W' -Project 'MyProject')
+
+			[object]::ReferenceEquals($result[0], $plain) | Should -BeTrue
+			[object]::ReferenceEquals($result[1], $withTable) | Should -BeFalse
+			$result[1].ContainsKey('ProjectParameters') | Should -BeFalse
+			$result[1].Project | Should -Be 'MyProject'
+			$result[1].Parameters.X | Should -Be 2
+			$withTable.Parameters.X | Should -Be 1
+		}
+
+		It "does not read ProjectActions when no entry carries a project key" {
+			Mock Get-ConfigSetting { $null }
+
+			@(Resolve-WorkspaceActions -Actions @(@{ Action = 'A' }) -Workspace 'W' -Project 'MyProject').Count | Should -Be 1
+
+			Should -Invoke Get-ConfigSetting -Times 0 -Exactly -ParameterFilter { $Path -eq 'ProjectActions' }
+		}
+	}
 }
