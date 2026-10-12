@@ -15,3 +15,8 @@
 # from origin/master never tracks it and a plain `git push` cannot land on master by accident.
 [branch]
 	autoSetupMerge = simple
+# Machine-local overrides, read last so they win. A fork or another operating system puts its
+# per-machine values (for example a different credential helper) in ~/.gitconfig.local; git
+# ignores an include whose file does not exist, so a machine without one is unaffected.
+[include]
+	path = ~/.gitconfig.local

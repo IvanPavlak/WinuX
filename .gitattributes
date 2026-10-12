@@ -2,10 +2,13 @@
 #
 # WinuX is meant to be forked. Your fork keeps its own version of the files listed below while still
 # pulling engine, module, and documentation improvements from upstream. The "ours" merge driver makes
-# `git merge upstream/master` keep YOUR copy of each listed file and never overwrite it with WinuX's
-# generic/example one.
+# `git merge upstream/master` keep YOUR copy of a listed file whenever both you and upstream changed it.
+# Git only runs a merge driver when both sides changed the file: a listed file you never edited simply
+# follows upstream (it is still the generic one) until you do, and an upstream deletion of a file you
+# edited is a modify/delete conflict you resolve by hand.
 #
-# The driver is registered per clone by the bootstrap (it runs `git config merge.ours.driver true`).
+# The driver is registered once per machine by the bootstrap (it runs
+# `git config --global merge.ours.driver true`).
 # If you set up without the bootstrap, run that one command yourself, once. Git will not auto-register
 # a merge driver from a cloned repo (a security boundary), so it is always a one-time local step.
 #

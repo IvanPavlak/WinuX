@@ -70,7 +70,7 @@ body:
       attributes:
           label: Windows version
           description: Run `winver` or `[System.Environment]::OSVersion.Version`.
-          placeholder: e.g. Windows 11 Pro 24H2 (10.0.26200)
+          placeholder: e.g. Windows 11 Pro 26H2 (10.0.26300)
       validations:
           required: true
     - type: input

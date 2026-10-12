@@ -2437,16 +2437,16 @@ The module's state - delays, tolerances and caches - is initialized by `WindowMo
 
 ## Tested Dependency Versions
 
-The Window module relies on specific external software. The **single source of truth** for the known-working, tested combination is the `TESTED VERSIONS` comment block in `Windows/PowerShell/Modules/Bootstrap/Data/WinGetApps.csv` - the table below mirrors it. Tested on **Windows 11 25H2** (build 26200). Pinning these versions ensures reliable operation and makes it immediately obvious when a breaking update occurs.
+The Window module relies on specific external software. The **single source of truth** for the known-working, tested combination is the `TESTED VERSIONS` comment block in `Windows/PowerShell/Modules/Bootstrap/Data/WinGetApps.csv` - the table below mirrors it. Tested on **Windows 11 26H2** (build 26300). Pinning these versions ensures reliable operation and makes it immediately obvious when a breaking update occurs.
 
 | Dependency                           | Version      | Install Method                                          | Pinned?                                              | Notes                                                                                             |
 | ------------------------------------ | ------------ | ------------------------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| **Microsoft PowerToys** (FancyZones) | **0.100.2**  | `winget install Microsoft.PowerToys --version 0.100.2`  | Yes (0.100.2 via WinGetApps.csv)                     | Core dependency - provides zone layouts, keyboard shortcuts (`Win+Ctrl+Alt+N`), and snap behavior |
+| **Microsoft PowerToys** (FancyZones) | **0.101.2362.0** | `winget install Microsoft.PowerToys --version 0.101.2362.0` | Yes (via WinGetApps.csv)                       | Core dependency - provides zone layouts, keyboard shortcuts (`Win+Ctrl+Alt+N`), and snap behavior |
 | **VirtualDesktop** PS module         | **1.5.11**   | `Install-Module VirtualDesktop -RequiredVersion 1.5.11` | Yes (`$pinnedModules`, Install-PowerShellModules.ps1) | Virtual desktop creation, window moving, desktop switching. Author: Markus Scholtes (PSGallery)   |
-| **PowerShell**                       | 7.6.4        | `winget install Microsoft.PowerShell`                   | No (Latest)                         | Required for module loading and `Add-Type` compilation                                            |
-| **Windows Terminal**                 | 1.23.x       | `winget install Microsoft.WindowsTerminal`              | No (Latest)                         | Not a direct dependency but the expected execution environment                                    |
-| **.NET System.Windows.Forms**        | 9.0.0        | Built-in (.NET 9 runtime)                               | N/A                                 | Monitor enumeration via `[System.Windows.Forms.Screen]::AllScreens`                               |
-| **Windows 11**                       | 25H2 (26200) | N/A                                                     | N/A                                 | Win32 APIs: `user32.dll`, `kernel32.dll`                                                          |
+| **PowerShell**                       | **7.6.6.0**  | `winget install Microsoft.PowerShell --version 7.6.6.0` | Yes (via WinGetApps.csv)            | Required for module loading and `Add-Type` compilation                                            |
+| **Windows Terminal**                 | **1.25.2733.0** | `winget install Microsoft.WindowsTerminal --version 1.25.2733.0` | Yes (via WinGetApps.csv)     | Not a direct dependency but the expected execution environment                                    |
+| **.NET System.Windows.Forms**        | 10.0.0       | Built-in (.NET 10 runtime of PowerShell 7.6)            | N/A                                 | Monitor enumeration via `[System.Windows.Forms.Screen]::AllScreens`                               |
+| **Windows 11**                       | 26H2 (26300) | N/A                                                     | N/A                                 | Win32 APIs: `user32.dll`, `kernel32.dll`                                                          |
 
 ### Why Pin Versions?
 
@@ -2677,14 +2677,14 @@ combination is tracked in the `TESTED VERSIONS` block in
 `Windows/PowerShell/Modules/Bootstrap/Data/WinGetApps.csv`:
 
 ```powershell
-# Check PowerToys version (pinned: 0.100.2 via WinGetApps.csv)
+# Check PowerToys version (pinned: 0.101.2362.0 via WinGetApps.csv)
 winget list --id Microsoft.PowerToys
 
 # Check VirtualDesktop module version (should be 1.5.11)
 Get-InstalledModule -Name VirtualDesktop | Select-Object Name, Version
 
 # Roll PowerToys back to the pinned version if a manually installed newer release misbehaves
-winget install Microsoft.PowerToys --version 0.100.2 --force
+winget install Microsoft.PowerToys --version 0.101.2362.0 --force
 
 # Downgrade VirtualDesktop if needed
 Install-Module -Name VirtualDesktop -RequiredVersion 1.5.11 -Force -Scope CurrentUser
