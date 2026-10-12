@@ -4,12 +4,17 @@ function Test-ProjectAlreadyOpen {
         Checks whether a project is already open in a given application by matching window titles.
 
     .DESCRIPTION
-        Gets all window handles for the specified process name and checks whether any window
-        title contains the project name. Returns `$true` if a match is found and prints a
-        yellow warning message. Returns `$false` if no match is found.
+        Gets all window handles for the specified process name and checks, through
+        Test-WindowTitleCandidates, whether any window title has the project name as a whole
+        " - " separated segment (case-insensitive), so "MyApp" is not matched by a
+        "myapp-ui - Visual Studio Code" window. A leading VS Code dirty marker is ignored, and for
+        Visual Studio ("devenv") the segment may carry a debugger state such as " (Debugging)".
+        Returns `$true` if a match is found and prints a yellow warning message. Returns `$false`
+        if no match is found.
 
     .PARAMETER ProjectName
-        The project name to search for in window titles.
+        The project name to search for in window titles. It must equal a whole title segment
+        (e.g. the folder name in "file.ps1 - MyApp - Visual Studio Code").
 
     .PARAMETER ProcessName
         The process name of the application to check (e.g. "devenv" for Visual Studio).
@@ -22,6 +27,7 @@ function Test-ProjectAlreadyOpen {
         Returns `$true` and prints a warning if Visual Studio has MyApp open.
     #>
 	[CmdletBinding()]
+	[OutputType([bool])]
 	param(
 		[Parameter(Mandatory)]
 		[string]$ProjectName,
@@ -41,7 +47,7 @@ function Test-ProjectAlreadyOpen {
 		}
 
 		foreach ($window in $windows) {
-			if ($window.Title -match "(?i)$([regex]::Escape($ProjectName))") {
+			if (Test-WindowTitleCandidates -WindowTitle $window.Title -Candidates @($ProjectName) -ProcessName $ProcessName) {
 				Write-LogWarning "$ApplicationName with project [$ProjectName] is already open!"
 				return $true
 			}

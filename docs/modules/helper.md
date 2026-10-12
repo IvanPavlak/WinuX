@@ -1516,23 +1516,31 @@ Test-TcpPortReachable -TargetHost $uri.DnsSafeHost -Port $uri.Port -TimeoutMs 25
 
 ## [Test-WindowTitleCandidates](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Test-WindowTitleCandidates.ps1)
 
-- **Description:** Tests a window title against a list of candidate strings using case-insensitive, regex-escaped matching, returning `$true` on the first match. Used for robust window detection in automation tasks (e.g. by `Close-Project`).
-- **Parameters:** -WindowTitle, -Candidates
-- **Usage:** `Test-WindowTitleCandidates -WindowTitle "MyProject - Visual Studio Code" -Candidates @("MyProject", "MyRepo")`
+- **Description:** Tests a window title against a list of candidate strings, returning `$true` when any candidate is a whole ` - ` separated title segment (case-insensitive, matched literally), so `MyApp` matches `Program.cs - MyApp - Visual Studio Code` but not `myapp-ui - Visual Studio Code`. Used for robust window detection in automation tasks: `Close-Project` uses it to find the windows to close, and `Test-ProjectAlreadyOpen` to find a project that is already open.
+- **Parameters:** -WindowTitle, -Candidates, -ProcessName
+- **Usage:** `Test-WindowTitleCandidates -WindowTitle "Program.cs - MyProject - Visual Studio Code" -Candidates @("MyProject", "MyRepo")`, `Test-WindowTitleCandidates -WindowTitle "MySolution (Debugging) - Microsoft Visual Studio" -Candidates @("MySolution") -ProcessName "devenv"`
 
-Iterates the `-Candidates` array, skipping null/whitespace entries, and matches each against `-WindowTitle` with a case-insensitive (`(?i)`) regex built from `[regex]::Escape()` so candidate values are treated literally. Returns `$true` as soon as any candidate is found in the title, otherwise `$false`.
+Iterates the `-Candidates` array, skipping null/whitespace entries, and matches each against `-WindowTitle` with a case-insensitive (`(?i)`) regex built from `[regex]::Escape()`, so candidate values are treated literally. A candidate must be bounded by the start of the title or ` - ` on the left and by ` - ` or the end of the title on the right. A substring is not enough, and a candidate that only appears inside the application name (`Studio`) never matches. Returns `$true` as soon as any candidate matches, otherwise `$false`.
 
-| Parameter      | Description                                                                          |
-| -------------- | ------------------------------------------------------------------------------------ |
-| `-WindowTitle` | The actual window title string to test.                                              |
-| `-Candidates`  | Array of candidate strings to match against (each is regex-escaped before matching). |
+The rule follows the title formats of the applications its callers check:
+
+- **VS Code** (`Code`): the default title is `[● ][ActiveEditor - ]FolderName[ - ProfileName] - Visual Studio Code`, so a folder (or `<name> (Workspace)`) candidate matches with and without an active editor, behind the dirty marker `●`, and before a profile segment. A folder `MyApp` does not match a `MyApp (Workspace)` window. A custom `window.title` that drops `${rootName}`, or a `window.titleSeparator` other than ` - `, defeats the match.
+- **Visual Studio** (`devenv`): the title is `SolutionName - Microsoft Visual Studio`, and while a debug session runs the solution segment carries a state such as `MySolution (Debugging)`. With `-ProcessName devenv` only, one trailing parenthesized state is accepted after a candidate.
+
+| Parameter      | Description                                                                                       |
+| -------------- | ------------------------------------------------------------------------------------------------- |
+| `-WindowTitle` | The actual window title string to test.                                                           |
+| `-Candidates`  | Candidate strings; each must equal a whole title segment (regex-escaped, so matched literally).   |
+| `-ProcessName` | The window's process. `devenv` accepts a debugger state after a candidate; other values do not.   |
 
 ```powershell
 # Detect an editor window for a given project
-if (Test-WindowTitleCandidates -WindowTitle "MyProject - Visual Studio Code" -Candidates @("MyProject", "MyRepo")) {
+if (Test-WindowTitleCandidates -WindowTitle "Program.cs - MyProject - Visual Studio Code" -Candidates @("MyProject", "MyRepo")) {
     Write-Host "Found window"
 }
 ```
+
+**See also:** [Close-Project](workflow.md#close-project), [Test-ProjectAlreadyOpen](application.md#test-projectalreadyopen)
 
 ## [Test-WSLDistributionInstalled](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Test-WSLDistributionInstalled.ps1)
 

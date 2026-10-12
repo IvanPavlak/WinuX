@@ -971,15 +971,15 @@ Test-BrowserGroupAlreadyOpen -Urls $urls -Browser PreferredBrowser -GroupDisplay
 
 ## [Test-ProjectAlreadyOpen](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Test-ProjectAlreadyOpen.ps1)
 
-- **Description:** Checks whether a project is already open in a given application by matching the project name against the application's window titles. Returns `$true` and prints a yellow warning if a match is found, otherwise returns `$false`.
+- **Description:** Checks whether a project is already open in a given application by matching the project name against the application's window titles. The name must be a whole ` - ` separated title segment (case-insensitive), so a `MyApp` folder is not reported open by a `myapp-ui` window. Returns `$true` and prints a yellow warning if a match is found, otherwise returns `$false`.
 - **Parameters:** -ProjectName, -ProcessName, -ApplicationName
 - **Usage:** `Test-ProjectAlreadyOpen -ProjectName MyProject -ProcessName "devenv" -ApplicationName "Visual Studio"`, `Test-ProjectAlreadyOpen -ProjectName MyProject -ProcessName "Code" -ApplicationName "VS Code"`
 
-Gets all window handles for the specified process via `Get-WindowHandle`, then performs a case-insensitive match of the project name against each window title. A match prints a warning and returns `$true`; no match (or no windows for the process) returns `$false`. Typically used as an idempotency guard before launching a project so it is not opened twice.
+Gets all window handles for the specified process via `Get-WindowHandle`, then checks each window title with [Test-WindowTitleCandidates](helper.md#test-windowtitlecandidates), passing the project name as the only candidate and `-ProcessName` through. The name must be a whole ` - ` separated title segment, so `MyApp` does not match `Program.cs - myapp-ui - Visual Studio Code`. It matches VS Code's folder segment with or without an active editor, the dirty marker or a profile segment around it. For Visual Studio (`devenv`) the solution segment may carry a debugger state such as `MySolution (Debugging)`. The full rule and its limits are described under `Test-WindowTitleCandidates`. A match prints a warning and returns `$true`; no match (or no windows for the process) returns `$false`. Typically used as an idempotency guard before launching a project so it is not opened twice: `Open-VSCode` passes the folder name, `Open-VSCodeWorkspace` passes `<name> (Workspace)` and `Open-VisualStudio` passes the solution file name without its extension.
 
 | Parameter          | Description                                                                                                    |
 | ------------------ | -------------------------------------------------------------------------------------------------------------- |
-| `-ProjectName`     | The project name to search for within window titles. Mandatory.                                                |
+| `-ProjectName`     | The project name; it must equal a whole ` - ` separated window title segment. Mandatory.                       |
 | `-ProcessName`     | The process name of the application to check (e.g. `devenv` for Visual Studio, `Code` for VS Code). Mandatory. |
 | `-ApplicationName` | Human-readable application name used in the warning message. Mandatory.                                        |
 
@@ -990,7 +990,7 @@ if (-not (Test-ProjectAlreadyOpen -ProjectName MyProject -ProcessName "Code" -Ap
 }
 ```
 
-**See also:** [Add New Project](../configuration/guides/workflow/add-new-project.md)
+**See also:** [Test-WindowTitleCandidates](helper.md#test-windowtitlecandidates), [Add New Project](../configuration/guides/workflow/add-new-project.md)
 
 ## [Update-Win11DebloatVendor](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Update-Win11DebloatVendor.ps1)
 
