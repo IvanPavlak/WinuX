@@ -25,11 +25,6 @@ Windows/
 │       ├── Workflow/                          # + State/ (what each workspace open produced)
 │       └── Tests/                             # Pester test files + Invoke-TestSuite.ps1 harness and its helper scripts
 └── docs/                                      # Docsify documentation site
-Unix/                                         # the Unix half in bash (docs/unix/README.md)
-├── modules/<Module>/                         # module.conf manifest, bin/ commands, functions.sh
-├── lib/                                      # sourced libraries, drivers/ (AeroSpace, WezTerm)
-├── config/                                   # per-domain config files
-└── aerospace/aerospace.toml                  # Repo-managed AeroSpace config (gaps = 0)
 ```
 
 ---
@@ -260,17 +255,6 @@ docs/
 │   ├── coreairules.md                        # Machine-global AI agent guardrails (opt-in)
 │   ├── skills.md                           # Machine-global Agent Skills (opt-in)
 │   └── mods.md                             # Machine-global Claude Code mods (opt-in)
-│
-├── adr/
-│   ├── README.md                           # Architecture decision records index
-│   └── 0001-imperative-only-aerospace-placement.md  # Unix placement: CLI-driven, no on-window-detected rules
-│
-├── unix/
-│   ├── README.md                           # Unix half overview: getting started on a Mac, TCC, layout
-│   ├── commands.md                         # Unix command conventions and the module index
-│   ├── modules/<Module>.md                 # Man-style reference per Unix module (11 pages)
-│   ├── configuration.md                    # Unix/config file formats
-│   └── macos-workspaces.md                 # w / cw on macOS (AeroSpace + WezTerm, bash)
 │
 ├── contributing/
 │   └── fork-model.md                       # Fork model, config + app-list overrides, merge=ours

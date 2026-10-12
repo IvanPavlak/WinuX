@@ -10,9 +10,9 @@ App,Version,Scope,Interactive,Source,Machine
 #
 #   App,Version,Scope,Interactive,Source,Machine
 #
-#   Obsidian.Obsidian,Latest,d,n,w,All      # a new App is added after the rows below
-#   Microsoft.PowerShell,7.4.6,d,n,w,All    # an App below is replaced (here to pin a version)
-#   -Microsoft.PowerToys,0.100.2,d,n,w,All  # a leading - opts this machine out of a row below
+#   Obsidian.Obsidian,Latest,d,n,w,All           # a new App is added after the rows below
+#   Microsoft.PowerShell,Latest,d,n,w,All        # an App below is replaced (here to follow Latest)
+#   -Microsoft.PowerToys,0.101.2362.0,d,n,w,All  # a leading - opts this machine out of a row below
 #
 # See docs/reference/software-list.md for the full overlay reference.
 #
@@ -26,21 +26,25 @@ App,Version,Scope,Interactive,Source,Machine
 #
 # ========================== TESTED VERSIONS (single source of truth) ==========================
 # The known-working, tested combination for the Window module (FancyZones layouts, virtual
-# desktops). PowerToys and the VirtualDesktop module wrap undocumented Windows internals that
-# shift between releases, so they are pinned; update this block and the enforcement points
-# together only after re-validating the combination.
+# desktops) and the shell it runs in. PowerToys and the VirtualDesktop module wrap undocumented
+# Windows internals that shift between releases, and PowerShell and Windows Terminal host every
+# WinuX session, so all of them are pinned; update this block and the enforcement points
+# together only after re-validating the combination. To follow Latest instead, replace a row in
+# WinGetApps.local.csv.
 #
-#   Microsoft.PowerToys  0.100.2  -> pinned by the row below (installed with --version;
-#                                    version-specific rows are re-pinned in winget by Upgrade-All)
-#   VirtualDesktop       1.5.11   -> $pinnedModules in Modules\Application\Functions\Install-PowerShellModules.ps1
-#   Pester               pinned   -> repo-wide: Modules\Tests\RequiredPesterVersion.txt (read by
-#                                    the test harness, Install-PowerShellModules, and CI alike)
-#   PowerShell           7.6.4    -> NOT enforced (row below installs Latest; last tested 7.6.4)
-#   Windows 11           25H2     -> NOT enforced (build 26200; environment, not a package)
+#   Microsoft.PowerToys        0.101.2362.0 -> pinned by the row below
+#   Microsoft.PowerShell       7.6.6.0      -> pinned by the row below
+#   Microsoft.WindowsTerminal  1.25.2733.0  -> pinned by the row below
+#                                              (pinned rows install with --version and are
+#                                              re-pinned in winget by Upgrade-All)
+#   VirtualDesktop             1.5.11       -> $pinnedModules in Modules\Application\Functions\Install-PowerShellModules.ps1
+#   Pester                     6.1.0        -> repo-wide: Modules\Tests\RequiredPesterVersion.txt (read by
+#                                              the test harness, Install-PowerShellModules, and CI alike)
+#   Windows 11                 26H2         -> NOT enforced (build 26300; environment, not a package)
 # ===============================================================================================
-Microsoft.PowerShell,Latest,d,n,w,All
-Microsoft.WindowsTerminal,Latest,d,n,w,All
-Microsoft.PowerToys,0.100.2,d,n,w,All
+Microsoft.PowerShell,7.6.6.0,d,n,w,All
+Microsoft.WindowsTerminal,1.25.2733.0,d,n,w,All
+Microsoft.PowerToys,0.101.2362.0,d,n,w,All
 
 # Recommended companions - not required by the framework, so they no longer install by
 # default. Opt in by copying a row into WinGetApps.local.csv (uncommented):

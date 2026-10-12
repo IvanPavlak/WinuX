@@ -238,9 +238,9 @@ Save-AppCsvOverlay -DataFileKey WinGetApps -Row @(
     @{ App = "Obsidian.Obsidian"; Version = "Latest"; Scope = "d"; Interactive = "n"; Source = "w"; Machine = "All" }
 )
 
-# Pin a version for an app the committed list already ships (the matching row is replaced)
+# Follow Latest for an app the committed list ships pinned (the matching row is replaced)
 Save-AppCsvOverlay -DataFileKey WinGetApps -Row @(
-    @{ App = "Microsoft.PowerShell"; Version = "7.4.6"; Scope = "d"; Interactive = "n"; Source = "w"; Machine = "PC/Work" }
+    @{ App = "Microsoft.PowerShell"; Version = "Latest"; Scope = "d"; Interactive = "n"; Source = "w"; Machine = "PC/Work" }
 )
 
 # Opt this machine out of a shipped app

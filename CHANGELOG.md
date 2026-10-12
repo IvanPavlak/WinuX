@@ -8,6 +8,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.92] - 2026-10-12
+
+### Changed
+
+- **The generic `Git/.gitconfig` includes `~/.gitconfig.local` last.** An `[include] path = ~/.gitconfig.local` block at the end of the file is where a fork or another operating system puts machine-local overrides, read last so they win; git ignores an include whose file is missing, so a Windows machine without one is unaffected. Docs: fork model ("Keeping your own payloads").
+- **The tested versions are bumped and PowerShell and Windows Terminal are pinned too.** The `TESTED VERSIONS` block and the rows of `WinGetApps.csv` now pin Microsoft.PowerToys `0.101.2362.0` (was `0.100.2`), Microsoft.PowerShell `7.6.6.0` (was Latest, last tested 7.6.4) and Microsoft.WindowsTerminal `1.25.2733.0` (was Latest), the combination validated on Windows 11 26H2 (build 26300, was 25H2 build 26200). VirtualDesktop `1.5.11` and Pester `6.1.0` are unchanged and now both named with their version in the block. Pinned rows install with `--version` and are re-pinned in winget by `Upgrade-All`; a fork that wants Latest replaces the row in `WinGetApps.local.csv`. The overlay examples now show following Latest instead of pinning. Docs: software list ("Shipped WinGet apps", "Machine-Local Overlay"), the Window module reference ("Tested Dependency Versions", including .NET 10 for System.Windows.Forms), the Bootstrap and Configuration module references, prerequisites, the bug report template's Windows version example, `AI/Context/WINDOWS_CONTEXT.md`.
+- **The fork-model docs state what `merge=ours` really protects.** Git only runs a merge driver when both sides changed the file, so a listed payload you have edited keeps your copy, a payload you never edited follows upstream until you do, and an upstream deletion of an edited payload is a modify/delete conflict resolved by hand. The `.gitattributes` header and the fork-model page ("What it protects, and what it does not", "Trade-off") now say so instead of claiming the file never receives upstream changes.
+
+### Fixed
+
+- **The documentation overview no longer lists folders WinuX does not have.** The `Unix/`, `docs/adr/` and `docs/unix/` trees that came in with the shell start-up measurement release are removed from `docs/docs_overview.md`.
+- **Two wording fixes in the fork docs.** The backups reference names the real sibling namespace for a fork carrying Unix tooling (`Backups\Unix\...`, not `Backups\macOS\...` or `Backups\Linux\...`), and the `.gitattributes` header says the bootstrap registers the `ours` driver once per machine with `git config --global merge.ours.driver true`, as the code and the fork-model page do.
+
 ## [0.1.91] - 2026-10-12
 
 ### Changed
@@ -1531,7 +1544,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.91...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.92...HEAD
+[0.1.92]: https://github.com/IvanPavlak/WinuX/compare/v0.1.91...v0.1.92
 [0.1.91]: https://github.com/IvanPavlak/WinuX/compare/v0.1.90...v0.1.91
 [0.1.90]: https://github.com/IvanPavlak/WinuX/compare/v0.1.89...v0.1.90
 [0.1.89]: https://github.com/IvanPavlak/WinuX/compare/v0.1.88...v0.1.89

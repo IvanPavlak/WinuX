@@ -54,8 +54,8 @@ App,Version,Scope,Interactive,Source,Machine
 # WinGetApps.local.csv - this machine's own app choices.
 # Added: an App the committed list does not have
 Obsidian.Obsidian,Latest,d,n,w,All
-# Override: the same App as a committed row, so it replaces it (here to pin a version)
-Microsoft.PowerShell,7.4.6,d,n,w,All
+# Override: the same App as a committed row, so it replaces it (here to follow Latest instead of the pin)
+Microsoft.PowerShell,Latest,d,n,w,All
 # Removed: a leading - opts this machine out of a shipped app
 -Microsoft.PowerToys,Latest,d,n,w,All
 ```
@@ -63,7 +63,7 @@ Microsoft.PowerShell,7.4.6,d,n,w,All
 - **Add** - a new `App` is appended after the shipped rows, so the committed install order is kept
   and your own apps follow it.
 - **Override** - an `App` matching a committed row replaces that row in place, which is how you pin
-  a version, change the `Scope`, or re-target the `Machine` column without touching the base list.
+  or unpin a version, change the `Scope`, or re-target the `Machine` column without touching the base list.
   Matching is case-insensitive, because package ids are.
 - **Remove** - an `App` written as `-<id>` drops the committed row. This is the only way to opt out
   of a shipped app; commenting the row out in the committed CSV would edit a tracked file.
@@ -91,15 +91,18 @@ gitignored `Backups/` sink, never beside the overlays.
 The minimal set a WinuX install needs to work end-to-end - the framework apps only. All rows are
 `Machine = All`:
 
-| Software         | WinGet ID                   | Version                |
-| ---------------- | --------------------------- | ---------------------- |
-| PowerShell 7     | `Microsoft.PowerShell`      | Latest                 |
-| Windows Terminal | `Microsoft.WindowsTerminal` | Latest                 |
-| PowerToys        | `Microsoft.PowerToys`       | **Pinned to 0.100.2**  |
+| Software         | WinGet ID                   | Version                     |
+| ---------------- | --------------------------- | --------------------------- |
+| PowerShell 7     | `Microsoft.PowerShell`      | **Pinned to 7.6.6.0**       |
+| Windows Terminal | `Microsoft.WindowsTerminal` | **Pinned to 1.25.2733.0**   |
+| PowerToys        | `Microsoft.PowerToys`       | **Pinned to 0.101.2362.0**  |
 
-PowerToys is pinned because FancyZones is the backbone of the window layout system and updates can
-silently break it; the pin - along with every other tested dependency version - is tracked in the
-`TESTED VERSIONS` comment block at the top of `WinGetApps.csv` (the single source of truth).
+All three are pinned to the tested combination: FancyZones is the backbone of the window layout
+system and updates can silently break it, and PowerShell and Windows Terminal host every WinuX
+session. The pins - along with every other tested dependency version - are tracked in the
+`TESTED VERSIONS` comment block at the top of `WinGetApps.csv` (the single source of truth). To
+follow Latest instead, replace the row in `WinGetApps.local.csv`, for example
+`Microsoft.PowerToys,Latest,d,n,w,All`.
 
 ### Recommended companions
 

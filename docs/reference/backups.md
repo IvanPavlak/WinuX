@@ -10,8 +10,8 @@ unified, OS-namespaced backup sink at the repository root:
 One folder per key, one timestamped folder per replacement, so every version ever displaced sits
 side by side with the newest last. The sink is gitignored (only `Backups\.gitkeep` is tracked):
 the copies hold your own machine's data and possibly secrets, so they stay local and are never
-committed. The OS namespace exists so a fork that also carries macOS or Linux tooling can give
-each system its own sibling (`Backups\macOS\...`, `Backups\Linux\...`) without the sinks mixing.
+committed. The OS namespace exists so a fork that also carries Unix tooling can give it its own
+sibling (`Backups\Unix\...`) without the sinks mixing.
 
 All backups are taken by one primitive, [`Backup-RepositoryItem`](../configuration/guides/helper/Backup-RepositoryItem.md),
 and pruned by one retention function, [`Clear-OldBackups`](../configuration/guides/helper/Clear-OldBackups.md).

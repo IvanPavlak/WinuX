@@ -112,20 +112,30 @@ Firefox/user.js                                                merge=ours
 docs/custom/README.md                                          merge=ours
 ```
 
-`merge=ours` means: when `git merge upstream/master` touches one of these files, Git keeps **your** copy
-and ignores the incoming one. Your fork inherits this `.gitattributes` automatically (it is a normal
-tracked file), so you never have to add it yourself.
+`merge=ours` means: when `git merge upstream/master` brings a change to one of these files and your fork
+has changed it too, Git keeps **your** copy and ignores the incoming one. Your fork inherits this
+`.gitattributes` automatically (it is a normal tracked file), so you never have to add it yourself.
 
-**One-time setup per clone.** The `ours` driver must be _registered_ before Git will run it. The bootstrap
+The generic `Git/.gitconfig` ends with an `[include] path = ~/.gitconfig.local` block, read last so its
+values win: that file is where a fork or another operating system puts machine-local overrides. Git
+ignores an include whose file is missing, so a machine without one is unaffected. Keep the include when
+you replace the file with your own.
+
+**One-time setup per machine.** The `ours` driver must be _registered_ before Git will run it. The bootstrap
 does this for you (`git config --global merge.ours.driver true`). If you set a clone up by hand, run that one
 command yourself, once. Git will not auto-register a merge driver from a cloned repo - a deliberate
 security boundary - so this can never be fully automatic; the bootstrap (or that one-liner) is as close as
 it gets. Until it is registered, Git just does a normal merge for those files, so nothing breaks - you only
 lose the "keep mine" behavior.
 
-**Trade-off.** A `merge=ours` file never receives upstream changes; that is the intent for payloads that
-are wholly yours. If WinuX later restructures one and you want the new shape, diff it against upstream and
-port what you want by hand. That trade-off is exactly why the app lists moved off `merge=ours` and onto an
+**What it protects, and what it does not.** Git only runs a merge driver when both sides changed the file.
+A payload you have edited is protected: every later upstream change to it is ignored, which is the intent
+for payloads that are wholly yours. A payload you never edited is not: Git takes upstream's version
+directly, so it keeps following upstream (it is still the generic file) until you edit it. An upstream
+deletion of a payload you edited is a modify/delete conflict the driver does not handle; resolve it by hand.
+
+**Trade-off.** Once you have edited a payload, it no longer receives upstream changes. If WinuX later
+restructures one and you want the new shape, diff it against upstream and port what you want by hand. That trade-off is exactly why the app lists moved off `merge=ours` and onto an
 overlay: there, the base can keep improving upstream while your choices stay yours.
 
 ## The Custom area - your code, upstream's layout
