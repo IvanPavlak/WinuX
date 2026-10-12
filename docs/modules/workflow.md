@@ -30,12 +30,14 @@ Set-LogLevel Verbose { Close-BrowserTabsByPattern -ProcessName "msedge" -TitlePa
 - **Description:** Closes all project-specific resources opened by `Open-Project` (Visual Studio windows, VSCode windows, Windows Terminal tabs, and browser tabs/windows), enabling fast switching between projects by closing only project-specific resources while keeping workspace-level applications running. If no project is given, an interactive selection menu is shown.
 - **Parameters:** -Project
 - **Usage:** `Close-Project`, `Close-Project MyProject`, `Close-Project -Project MyProject, OtherProject`
-- **Implementation Note:** Uses Helper-module support functions to resolve configured solution/folder paths into real window-title candidates before matching Visual Studio and VS Code windows; Swagger tab patterns are delegated to `Get-SwaggerCloseTitlePatterns`.
+- **Implementation Note:** Uses Helper-module support functions to resolve configured solution/folder paths into real window-title candidates (`Get-WindowTitleCandidates`) and to match Visual Studio and VS Code windows against them (`Test-WindowTitleCandidates`, with the window's process name); Swagger tab patterns are delegated to `Get-SwaggerCloseTitlePatterns`.
 
 Projects must be defined in `$Configuration.Projects`; their resources are described by `$Configuration.ProjectActions`. For each selected project the function closes:
 
-- **Visual Studio** windows matched by solution name (resolved via `VisualStudioSolutions`).
+- **Visual Studio** windows matched by solution name (resolved via `VisualStudioSolutions`), including a window in a debug session (`MySolution (Debugging) - Microsoft Visual Studio`).
 - **VSCode** windows matched by folder name (resolved via `VSCodeProjects`).
+
+A Visual Studio or VS Code window is closed only when a candidate is a whole ` - ` separated segment of its title, as [Test-WindowTitleCandidates](helper.md#test-windowtitlecandidates) describes. Closing a project whose folder is `MyApp` therefore leaves a `myapp-ui` window open, and closing `MySolution` leaves `MySolution.Tests` open.
 - **Terminal tabs** named after the project (e.g. `MyProject.Api`, `MyProject.Ui`), delegated to `Close-ProjectTerminals` which sends Ctrl+W to matching tabs.
 - **Browser tabs** in the configured `Universal.DefaultBrowser` whose titles contain the project name. If a `Swagger` entry under `BrowserGroups` matches the project, it also closes tabs titled "Swagger UI" (backend running) or, for localhost URLs, "Problem loading page" (backend not running) - those extra patterns come from [Get-SwaggerCloseTitlePatterns](#get-swaggerclosetitlepatterns) and are empty for a project with no `Swagger` entry. Closing is delegated to `Close-BrowserTabsByPattern`, which cycles through all tabs so it works even when a different tab is focused.
 

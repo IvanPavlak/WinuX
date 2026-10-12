@@ -96,6 +96,51 @@ Describe "Close-Project" {
 		Should -Invoke Write-LogSuccess -Times 5
 	}
 
+	Context "similarly named windows" {
+		BeforeEach {
+			$script:closedHandles = @()
+			Mock Close-Window {
+				param([IntPtr[]]$Handle)
+				$script:closedHandles += $Handle
+				$Handle.Count
+			}
+		}
+
+		It "does not close windows whose solution or folder only contains the project's names" {
+			Mock Get-WindowHandle {
+				@([PSCustomObject]@{ Title = "ExampleProject.Tests - Microsoft Visual Studio"; Handle = [System.IntPtr]4 })
+			} -ParameterFilter { $ProcessName -eq "devenv" }
+			Mock Get-WindowHandle {
+				@([PSCustomObject]@{ Title = "Program.cs - exampleproject-admin - Visual Studio Code"; Handle = [System.IntPtr]5 })
+			} -ParameterFilter { $ProcessName -eq "Code" }
+
+			Close-Project -Project "ExampleProject"
+
+			Should -Invoke Close-Window -Times 0 -Exactly
+		}
+
+		It "closes only the project's own windows when similarly named ones are open" {
+			Mock Get-WindowHandle {
+				@(
+					[PSCustomObject]@{ Title = "ExampleProject (Debugging) - Microsoft Visual Studio"; Handle = [System.IntPtr]1 },
+					[PSCustomObject]@{ Title = "ExampleProject.Tests - Microsoft Visual Studio"; Handle = [System.IntPtr]4 }
+				)
+			} -ParameterFilter { $ProcessName -eq "devenv" }
+			Mock Get-WindowHandle {
+				@(
+					[PSCustomObject]@{ Title = "Program.cs - ExampleProject.Api - Visual Studio Code"; Handle = [System.IntPtr]2 },
+					[PSCustomObject]@{ Title = "Program.cs - exampleproject-admin - Visual Studio Code"; Handle = [System.IntPtr]5 }
+				)
+			} -ParameterFilter { $ProcessName -eq "Code" }
+
+			Close-Project -Project "ExampleProject"
+
+			$script:closedHandles.Count | Should -Be 2
+			$script:closedHandles | Should -Contain ([System.IntPtr]1)
+			$script:closedHandles | Should -Contain ([System.IntPtr]2)
+		}
+	}
+
 	Context "swagger close patterns" {
 		BeforeEach {
 			Mock Get-WindowHandle { @() }

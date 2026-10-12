@@ -359,6 +359,23 @@ Get-CimInstance Win32_Process -Filter "Name = 'Obsidian.com'" | ForEach-Object {
 **Why it happens:** VS Code's Settings Sync also carries extensions. With `VSCodeProfiles.SettingsSync = $true`, the deployed extensions are synced like any other, so Sync can bring back one the list no longer names, or remove one when another machine uninstalls it.
 
 **Solution:** Choose one source. Either set `VSCodeProfiles.SettingsSync = $false` (extensions then install with `--do-not-sync`, which keeps them on this machine only) and turn Sync off in VS Code, or keep Sync and remove the extension in VS Code as well as from `extensions.txt`. `Deploy-VSCodeProfiles -Prune` uninstalls everything the list does not name.
+
+### A Project Is Skipped As "Already Open" Because A Similarly Named One Is Open
+
+**Problem:** `Open-VSCode` (directly, or as a workspace action) prints `VSCode with project [MyApp] is already open!` and opens nothing, while the only VS Code window shows a different folder whose name contains `MyApp`, such as `myapp-ui`. A project with a backend folder `MyApp` and a frontend folder `myapp-ui` never got its backend window once the frontend window was open. `Open-VisualStudio` did the same for a solution whose name contained the requested one (`MySolution` vs `MySolution.Tests`).
+
+**Why it happened:** `Test-ProjectAlreadyOpen` looked for the project name anywhere in the window titles, so `MyApp` matched `Program.cs - myapp-ui - Visual Studio Code`.
+
+**Solution:** Fixed. The project name must now be a whole ` - ` separated title segment (case-insensitive), as described in [Test-WindowTitleCandidates](../modules/helper.md#test-windowtitlecandidates). The check relies on VS Code's default window title: if you set `window.title` without `${rootName}`, or a `window.titleSeparator` other than ` - `, an open folder is no longer detected and `Open-VSCode` launches it again.
+
+### Close-Project Closes Another Project's Window
+
+**Problem:** `Close-Project MyProject` also closes a VS Code or Visual Studio window that belongs to something else, such as the `myapp-ui` window when the project's folder is `MyApp`, or the `MySolution.Tests` solution when the project's solution is `MySolution`.
+
+**Why it happened:** `Close-Project` matched its title candidates (the configured name, the resolved path, its leaf name and that name without extension) anywhere in the window titles, so `MyApp` matched `Program.cs - myapp-ui - Visual Studio Code`.
+
+**Solution:** Fixed. A window is closed only when a candidate is a whole ` - ` separated segment of its title, the same rule `Open-VSCode` uses to detect an open folder (see [Test-WindowTitleCandidates](../modules/helper.md#test-windowtitlecandidates)). Two limits remain. A folder name with a dot (`My.App`) also yields the candidate `My`, which still closes a window whose folder is exactly `My`. A custom VS Code `window.title` that shows neither the folder name nor its full path as a segment of its own leaves the project's own window open.
+
 ## Window Layout Issues
 
 ### Windows Not Positioning

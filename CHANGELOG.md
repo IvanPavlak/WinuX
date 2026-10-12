@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- **A project is no longer skipped as already open because a similarly named one is.** `Test-ProjectAlreadyOpen` matched the project name anywhere in a window title, so `Open-VSCode` treated a folder `MyApp` as open, and never opened it, while a `myapp-ui` window was open; `Open-VisualStudio` did the same for `MySolution` while `MySolution.Tests` was open. The name must now be a whole ` - ` separated title segment, case-insensitive: VS Code's folder segment, with or without an active editor, the dirty marker or a profile segment around it, or Visual Studio's solution segment, which may carry a debugger state such as `(Debugging)`. A name that only appears inside the application name (`Studio`) no longer matches every window, and a folder `MyApp` no longer matches a `MyApp (Workspace)` window. The rule lives in `Test-WindowTitleCandidates` (Helper), which gains `-ProcessName`; `Test-ProjectAlreadyOpen` now calls it. Tests: `Test-ProjectAlreadyOpen.Tests.ps1`, `Test-WindowTitleCandidates.Tests.ps1`. Docs: the Application and Helper module references, the `Test-WindowTitleCandidates` guide, troubleshooting ("A Project Is Skipped As "Already Open" Because A Similarly Named One Is Open").
+- **Close-Project no longer closes another project's window.** It matched its title candidates anywhere in a window title, so closing a project whose folder is `MyApp` also closed an open `myapp-ui` VS Code window, and closing `MySolution` also closed `MySolution.Tests` in Visual Studio. It now closes a window only when a candidate is a whole title segment, through the same `Test-WindowTitleCandidates` rule, and still closes a Visual Studio window in a debug session (`MySolution (Debugging)`). Tests: `Close-Project.Tests.ps1`. Docs: the Workflow module reference, troubleshooting ("Close-Project Closes Another Project's Window").
+
 ## [0.1.90] - 2026-10-10
 
 ### Added

@@ -104,7 +104,7 @@ function Close-Project {
 				Write-LogDebug "  Solution title candidates => $($solutionTitleCandidates -join ', ')" -Style Step
 
 				$vsWindows = Get-WindowHandle -ProcessName "devenv" -ErrorAction SilentlyContinue |
-					Where-Object { Test-WindowTitleCandidates -WindowTitle $_.Title -Candidates $solutionTitleCandidates }
+					Where-Object { Test-WindowTitleCandidates -WindowTitle $_.Title -Candidates $solutionTitleCandidates -ProcessName "devenv" }
 
 				if ($vsWindows) {
 					foreach ($window in $vsWindows) {
@@ -142,7 +142,7 @@ function Close-Project {
 				Write-LogDebug "  VSCode title candidates => $($folderTitleCandidates -join ', ')" -Style Step
 
 				$vscodeWindows = Get-WindowHandle -ProcessName "Code" -ErrorAction SilentlyContinue |
-					Where-Object { Test-WindowTitleCandidates -WindowTitle $_.Title -Candidates $folderTitleCandidates }
+					Where-Object { Test-WindowTitleCandidates -WindowTitle $_.Title -Candidates $folderTitleCandidates -ProcessName "Code" }
 
 				if ($vscodeWindows) {
 					foreach ($window in $vscodeWindows) {
