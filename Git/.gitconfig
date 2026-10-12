@@ -11,3 +11,7 @@
 	smudge = git-lfs smudge -- %f
 [core]
 	longpaths = true
+# Set an upstream automatically only when the remote branch has the same name, so a branch made
+# from origin/master never tracks it and a plain `git push` cannot land on master by accident.
+[branch]
+	autoSetupMerge = simple

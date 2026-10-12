@@ -7,12 +7,26 @@
 			"Bash(git rebase*)",
 			"Bash(git reset --hard*)",
 			"Bash(gh pr merge*)",
+			"Bash(git branch -u*)",
+			"Bash(git branch --set-upstream-to*)",
+			"Bash(git remote add*)",
+			"Bash(git remote set-url*)",
+			"Bash(git remote rename*)",
+			"Bash(git remote remove*)",
+			"Bash(git remote rm*)",
 			"PowerShell(git commit*)",
 			"PowerShell(git push*)",
 			"PowerShell(git tag*)",
 			"PowerShell(git rebase*)",
 			"PowerShell(git reset --hard*)",
-			"PowerShell(gh pr merge*)"
+			"PowerShell(gh pr merge*)",
+			"PowerShell(git branch -u*)",
+			"PowerShell(git branch --set-upstream-to*)",
+			"PowerShell(git remote add*)",
+			"PowerShell(git remote set-url*)",
+			"PowerShell(git remote rename*)",
+			"PowerShell(git remote remove*)",
+			"PowerShell(git remote rm*)"
 		]
 	},
 	"attribution": { "commit": "", "pr": "" },
@@ -24,7 +38,7 @@
 				"hooks": [
 					{
 						"type": "command",
-						"command": "sed -E 's/\\\\\\\\[ntr]/ /g' | grep -qiE '(^|[^a-z])(git([\" ]+[^\" &|;]+)*[\" ]+(commit|push|rebase|tag|reset[\" ]+--hard|branch[\" ]+-D)|gh[\" ]+pr[\" ]+merge|--force(-with-lease)?)' && echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"ask\",\"permissionDecisionReason\":\"CoreAiRules: git history/remote writes require explicit approval\"}}' || true"
+						"command": "in=$(sed -E 's/\\\\[ntr]/ /g'); m() { printf '%s' \"$in\" | grep -qiE \"$1\"; }; G='(^|[^a-z])git([\" ]+[^\" &|;]+)*[\" ]+'; a=; m \"$G\"'(commit|push|rebase|tag|reset[\" ]+--hard|branch[\" ]+-D)([\" &|;]|$)|(^|[^a-z])gh[\" ]+pr[\" ]+merge|--force(-with-lease)?' && a=1; m \"$G\"'(switch[\" ]+(-c|-C|--create|--force-create)|checkout[\" ]+(-b|-B)|branch)[\" ]+[^\" &|;-][^\" &|;]*[\" ]+[^\" &|;-][^\" &|;]*/' && ! m 'no-track' && a=1; m \"$G\"'(switch|checkout|branch)([\" ]+[^\" &|;]+)*[\" ]+(--track|-t)([\" =]|$)' && a=1; m \"$G\"'branch([\" ]+[^\" &|;]+)*[\" ]+(-u|--set-upstream-to)([\" =]|$)' && a=1; m \"$G\"'remote[\" ]+(add|set-url|rename|remove|rm|set-branches|set-head)([\" ]|$)' && a=1; m \"$G\"'config[^&|;]*(branch|remote|push|url)\\.' && ! m \"$G\"'config[^&|;]*(--get|--list|[\" ]-l([\" ]|$)|[\" ](get|list)[\" ])' && a=1; [ -n \"$a\" ] && echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"ask\",\"permissionDecisionReason\":\"CoreAiRules: git history or remote writes, and changes to upstream tracking, remotes or push configuration, require explicit approval\"}}' || true"
 					}
 				]
 			}

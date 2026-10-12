@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.91] - 2026-10-12
+
+### Changed
+
+- **CoreAiRules forbid an agent from setting up a branch that pushes past the pull request.** A branch created with `git switch -c <branch> origin/master` tracks `origin/master`, so a later plain `git push`, or an editor's Push or Sync button, lands straight on the default branch, and an admin role bypasses the ruleset that would stop it. The new section "Never let work bypass the pull request" requires `--no-track` for a branch made from a remote ref, treats changes to upstream tracking, remotes and git configuration like history writes (ask first), requires reporting `git branch -vv` after creating or switching a branch, and requires every handed-over push command to name the remote and branch. The CRITICAL SAFETY block in `AGENTS.md`, `AI/Context/`, `AI/Instructions/` and `.github/instructions/` carries the same rule. The managed-settings PreToolUse hook now also prompts before creating a branch from a remote ref without `--no-track`, `--track` / `-t`, `git branch -u` / `--set-upstream-to`, `git remote add` / `set-url` / `rename` / `remove`, and a `git config` write to a `branch.`, `remote.`, `push.` or `url.` key (reads pass), with matching `permissions.ask` rules; its history keywords gained a right word boundary, so `git config --get push.default` no longer prompts. `Git/.gitconfig` sets `branch.autoSetupMerge = simple`, so git itself only sets an upstream automatically when the remote branch has the same name, which also covers editors and other tools. Docs: CoreAiRules (summary, layer table, managed settings notes, known limitations), AI overview.
+
 ### Fixed
 
 - **A project is no longer skipped as already open because a similarly named one is.** `Test-ProjectAlreadyOpen` matched the project name anywhere in a window title, so `Open-VSCode` treated a folder `MyApp` as open, and never opened it, while a `myapp-ui` window was open; `Open-VisualStudio` did the same for `MySolution` while `MySolution.Tests` was open. The name must now be a whole ` - ` separated title segment, case-insensitive: VS Code's folder segment, with or without an active editor, the dirty marker or a profile segment around it, or Visual Studio's solution segment, which may carry a debugger state such as `(Debugging)`. A name that only appears inside the application name (`Studio`) no longer matches every window, and a folder `MyApp` no longer matches a `MyApp (Workspace)` window. The rule lives in `Test-WindowTitleCandidates` (Helper), which gains `-ProcessName`; `Test-ProjectAlreadyOpen` now calls it. Tests: `Test-ProjectAlreadyOpen.Tests.ps1`, `Test-WindowTitleCandidates.Tests.ps1`. Docs: the Application and Helper module references, the `Test-WindowTitleCandidates` guide, troubleshooting ("A Project Is Skipped As "Already Open" Because A Similarly Named One Is Open").
@@ -1525,7 +1531,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.90...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.91...HEAD
+[0.1.91]: https://github.com/IvanPavlak/WinuX/compare/v0.1.90...v0.1.91
 [0.1.90]: https://github.com/IvanPavlak/WinuX/compare/v0.1.89...v0.1.90
 [0.1.89]: https://github.com/IvanPavlak/WinuX/compare/v0.1.88...v0.1.89
 [0.1.88]: https://github.com/IvanPavlak/WinuX/compare/v0.1.87...v0.1.88
