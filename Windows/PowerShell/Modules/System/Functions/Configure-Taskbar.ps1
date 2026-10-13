@@ -32,13 +32,22 @@ function Configure-Taskbar {
 		the last Explorer-touching operation, with the applied-layout marker reset just before
 		it so the layout is guaranteed to apply on that start.
 
-		With `-FromBootstrap`, skips a 5-second initialization delay (used when called
-		during the bootstrap sequence before all processes are fully settled).
+		Before writing the layout it deletes the `.lnk` files in `Universal.TaskbarPinFolder`.
+		An existing symlink at the layout path is removed; an existing real layout file is
+		first copied into the backup sink (category System, key TaskbarLayout), and the write
+		is skipped if that backup fails.
+
+		With `-FromBootstrap` (used during the bootstrap sequence), the pins are cleared via
+		`Unpin-TaskbarApps -FromBootstrap` with no icon cache rebuild, a 5-second wait lets
+		Explorer finish initializing, and the layout is left unlocked with no Explorer restart -
+		the Bootstrap script locks it after its own Explorer restart.
 
 		Requires administrator privileges.
 
 	.PARAMETER FromBootstrap
-		Skips the 5-second wait for Explorer initialization (used internally during setup).
+		Bootstrap mode (used internally during setup): no icon cache rebuild, a 5-second wait
+		for Explorer to finish initializing, and the layout left unlocked with no Explorer
+		restart, for the Bootstrap sequence to lock later.
 
 	.PARAMETER BackupRoot
 		Root of the unified backup sink an existing real layout file is copied into before it

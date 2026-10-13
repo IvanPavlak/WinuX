@@ -17,9 +17,9 @@ function Get-FilteredParams {
 		Hashtable of parameters to filter.
 
 	.EXAMPLE
-		$all_params = @{ Name = "file.txt"; Size = 100; Invalid = "xyz" }
+		$all_params = @{ Path = "file.txt"; Size = 100; Invalid = "xyz" }
 		$filtered = Get-FilteredParams -CommandName "Get-Item" -Params $all_params
-		Returns only @{ Name = "file.txt" } (parameters accepted by Get-Item).
+		Returns only @{ Path = "file.txt" } (parameters accepted by Get-Item).
 	#>
 	param($CommandName, $Params)
 

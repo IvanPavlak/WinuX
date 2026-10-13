@@ -8,7 +8,8 @@ function Merge-Hashtable {
 		If both target and override keys contain hashtables, they are merged recursively.
 		Otherwise, the override value replaces the target value.
 
-		Used by Expand-ConfigPaths to apply machine-specific configuration overrides.
+		Used by Load-PathConfiguration to merge Configuration.local.psd1 over the base
+		configuration, and by Expand-ConfigPaths to apply machine-specific configuration overrides.
 
 	.PARAMETER Target
 		The target hashtable to modify (by reference).

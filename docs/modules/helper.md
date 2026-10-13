@@ -44,7 +44,7 @@ if (BranchExists -Branch "feature/my-feature") {
 
 ## [Cd-Desktop](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Cd-Desktop.ps1)
 
-- **Description:** Navigates the shell to the user's Desktop directory. Sets the current location to the Desktop folder resolved from environment variables, equivalent to `cd ~/Desktop`.
+- **Description:** Navigates the shell to the user's Desktop directory. Sets the current location to the Desktop folder resolved by `[Environment]::GetFolderPath('Desktop')`, so a redirected Desktop (for example one moved into OneDrive) is honored - usually equivalent to `cd ~/Desktop`.
 - **Usage:** `Cd-Desktop`
 
 ## [Clear-OldBackups](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Clear-OldBackups.ps1)
@@ -87,11 +87,11 @@ if (-not (Close-WindowsTerminalTab -WindowHandle $wtWindow.Handle -TabTitle "MyP
 
 ## [Collect-BrowserUrls](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Collect-BrowserUrls.ps1)
 
-- **Description:** Recursively collects all URLs from nested browser group hashtables, flattening the hierarchical `BrowserGroups` structure (from `Configuration.psd1`) into a flat URL array. Handles nested hashtables with `Name`/`Url` pairs and tracks the opened subgroup names. Helper function for `Open-Browser`.
+- **Description:** Recursively collects all URLs from nested browser group hashtables, flattening a hierarchical `BrowserGroups` value into a flat URL array. Handles nested hashtables with `Name`/`Url` pairs and tracks the opened subgroup names. Helper function for `Open-Browser`, which passes it the group value; it reads no configuration itself.
 - **Parameters:** -Value, -Depth
 - **Usage:** `Collect-BrowserUrls -Value $Configuration.BrowserGroups.GroupName`
 
-Walks the supplied group structure (array, hashtable, or string). For arrays it iterates each item: a hashtable with both `Name` and `Url` keys contributes its URL (and its name to the subgroup list at depth 0), while any other hashtable is recursed into, accumulating both URLs and subgroup names. Returns a hashtable with two keys: `Urls` (the flat list of collected URLs) and `Subgroups` (the top-level subgroup names that were opened). Subgroup names are only tracked at the outermost level (`-Depth 0`); the `-Depth` parameter is incremented internally during recursion and is not intended to be set by callers.
+Walks the supplied group structure (array, hashtable, or string). For arrays it iterates each item: a string contributes itself as a URL, a hashtable with both `Name` and `Url` keys contributes its URL (and its name to the subgroup list at depth 0), while any other hashtable is recursed into key by key, accumulating both URLs and subgroup names (each key is recorded as a subgroup at depth 0). A hashtable passed directly as `-Value` contributes only its own `Url` (it is not recursed into), and a string passed directly contributes itself. Returns a hashtable with two keys: `Urls` (the flat list of collected URLs) and `Subgroups` (the top-level subgroup names that were opened). Subgroup names are only tracked at the outermost level (`-Depth 0`); the `-Depth` parameter is incremented internally during recursion and is not intended to be set by callers.
 
 | Parameter | Description                                                                                                               |
 | --------- | ------------------------------------------------------------------------------------------------------------------------- |
@@ -107,7 +107,7 @@ Write-Host "Found $($result.Urls.Count) URLs"
 $result.Subgroups
 ```
 
-**See also:** [Open-Browser](../modules/application.md), [Add Browser Group](../configuration/guides/application/add-browser-group.md)
+**See also:** [Open-Browser](application.md#open-browser), [Add Browser Group](../configuration/guides/application/add-browser-group.md)
 
 ## [Complete-DeferredActions](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Complete-DeferredActions.ps1)
 
@@ -127,7 +127,7 @@ if ((Complete-DeferredActions) -gt 0) { "the openers left work behind, and it ha
 ## [Complete-StartupStage](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Complete-StartupStage.ps1)
 
 - **Description:** The second half of the profile's stage guard (see [Test-StartupStage](#test-startupstage)). Stops the running stage clock and appends a record - the stage name and its elapsed milliseconds, one decimal - to `$global:WinuXStartupTimings`, which is how a running shell answers what its startup spent its time on (`$WinuXStartupTimings | Format-Table`). When the `WINUX_STARTUP_TRACE` environment variable names a file, the same record is appended to it as one tab-separated line, which is how the per-stage times of a shell that has already exited reach [Measure-ShellStartup](system.md#measure-shellstartup). Does nothing when no stage clock is running; a trace file that cannot be written is ignored, because measurement must never break a shell start.
-- **Parameters:** `[-TracePath]`
+- **Parameters:** -TracePath (defaults to `$env:WINUX_STARTUP_TRACE`; empty means no file)
 - **Usage:** `Complete-StartupStage`, `$WinuXStartupTimings | Sort-Object Milliseconds -Descending | Format-Table`
 
 **See also:** [Test-StartupStage](#test-startupstage), [Read-ShellStartupTrace](system.md#read-shellstartuptrace)
@@ -163,7 +163,7 @@ Convert-GlobalVariablesToParameters -FunctionDefinition $definition -GlobalVaria
 
 ## [Countdown](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Countdown.ps1)
 
-- **Description:** Displays a colored countdown timer from a given number of seconds down to zero, with an optional message shown before it begins. Counts greater than 3 render in dark cyan and 3 or fewer render in red. Typically used to give a brief pause before destructive operations.
+- **Description:** Displays a colored countdown timer, printing one number per second from the given number of seconds down to 1 (zero itself is not printed), with an optional message shown in white before it begins. Counts greater than 3 render in dark cyan and 3 or fewer render in red. Typically used to give a brief pause before destructive operations.
 - **Parameters:** -Seconds, -Message
 - **Usage:** `Countdown -Seconds 5`, `Countdown -Seconds 5 -Message "Restarting in:"`
 
@@ -196,7 +196,7 @@ Create-CenteredBorder -Title "Main Menu" -BorderChar "-"
 - **Parameters:** -FunctionName, -OutputPath, -NoConsole, -RequireAdmin, -IconFile, -Title, -Description, -Company, -Version
 - **Usage:** `Create-Executable -FunctionName MyFunction`, `Create-Executable -FunctionName MyFunction -OutputPath C:\Tools\MyFunction.exe -Title "My Tool"`, `Create-Executable -FunctionName MyFunction -RequireAdmin -NoConsole`
 
-Requires the `ps2exe` module (install with `Install-PowerShellModules` or `Install-Module ps2exe -Scope CurrentUser`). The target function must be loaded in the current session. Dependencies are resolved recursively via `Get-PowerShellFunctionDependencies`, and global variable references in both the main function and its dependencies are rewritten into parameters by `Convert-GlobalVariablesToParameters`. External module dependencies are reported but not bundled, so the target machine must have those modules installed. If `-OutputPath` is omitted, the `.exe` is written to the current directory as `FunctionName.exe`; a missing `.exe` extension is appended automatically.
+Requires the `ps2exe` module (install with `Install-PowerShellModules` or `Install-Module ps2exe -Scope CurrentUser`). The target function must be loaded in the current session. Dependencies are resolved recursively via `Get-PowerShellFunctionDependencies`, and global variable references in both the main function and its dependencies are rewritten into parameters by `Convert-GlobalVariablesToParameters`. External module dependencies are reported but not bundled, so the target machine must have those modules installed. If `-OutputPath` is omitted, the `.exe` is written to the current directory as `FunctionName.exe`; a missing `.exe` extension is appended automatically. The generated script forwards the executable's command-line arguments to the function, exits with code `1` on an unhandled error, and always waits 60 seconds before the console closes. The bundled script is written to a temporary file that is deleted after `ps2exe` runs.
 
 | Parameter       | Description                                                                                   |
 | --------------- | --------------------------------------------------------------------------------------------- |
@@ -204,9 +204,9 @@ Requires the `ps2exe` module (install with `Install-PowerShellModules` or `Insta
 | `-OutputPath`   | Optional output path for the `.exe`. Defaults to `FunctionName.exe` in the current directory. |
 | `-NoConsole`    | Builds a Windows Forms application with no console window.                                    |
 | `-RequireAdmin` | Requires the executable to run with administrator privileges.                                 |
-| `-IconFile`     | Path to a custom `.ico` file for the executable.                                              |
+| `-IconFile`     | Path to a custom `.ico` file for the executable (silently ignored when the file is missing).  |
 | `-Title`        | Title shown in the executable's file properties (defaults to `FunctionName`).                 |
-| `-Description`  | Description shown in the executable's file properties.                                        |
+| `-Description`  | Description in the file properties (defaults to `PowerShell executable for FunctionName`).    |
 | `-Company`      | Company name in the executable metadata (defaults to `WinuX`).                                |
 | `-Version`      | Version number in the metadata (defaults to `1.0.0.0`).                                       |
 
@@ -218,7 +218,7 @@ Create-Executable -FunctionName "Determine-DotnetDependencies"
 Create-Executable -FunctionName "List-Functions" -OutputPath "C:\Tools\ListFunctions.exe" -Title "Function Lister"
 
 # GUI executable that requires administrator privileges
-Create-Executable -FunctionName "Configure-System" -RequireAdmin -NoConsole
+Create-Executable -FunctionName "MyFunction" -RequireAdmin -NoConsole
 ```
 
 ## [Custom-ReadHost](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Custom-ReadHost.ps1)
@@ -233,7 +233,7 @@ Writes the prompt with `Write-Host -NoNewLine` in the chosen foreground color (p
 | ------------------ | --------------------------------------------------------- |
 | `-PromptMessage`   | The message to display (required).                        |
 | `-ForegroundColor` | Console color for the prompt text (default: `White`).     |
-| `-AddNewLine`      | Add a newline before the prompt (default: `$true`).       |
+| `-AddNewLine`      | Add a newline before the prompt (default: `$true`; pass `-AddNewLine:$false` to suppress it). |
 | `-AsSecureString`  | Return the input as a `SecureString`, e.g. for passwords. |
 
 ```powershell
@@ -246,11 +246,11 @@ $password = Custom-ReadHost -PromptMessage "Enter password: " -AsSecureString
 
 ## [DotnetBuildAndRun](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/DotnetBuildAndRun.ps1)
 
-- **Description:** Builds and runs a .NET project in sequence. Invokes `dotnet build` followed by `dotnet run` in the current directory, running in the current shell rather than the background.
+- **Description:** Builds and runs a .NET project in sequence. Invokes `dotnet build` followed by `dotnet run` in the current directory, running in the current shell rather than the background. `dotnet run` is invoked even when the build fails.
 - **Usage:** `DotnetBuildAndRun`
 - **Alias:** dnbr
 
-**See also:** [DotnetRun](helper.md)
+**See also:** [DotnetRun](#dotnetrun)
 
 ## [DotnetPublish](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/DotnetPublish.ps1)
 
@@ -278,7 +278,7 @@ dnp
 
 ## [Expand-WorkspaceTemplates](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Expand-WorkspaceTemplates.ps1)
 
-- **Description:** Expands every templated `WorkspaceActions` entry of a configuration in place, once per configuration load (`Load-PathConfiguration` calls it right after `Configuration.local.psd1` is merged). Every templated entry (`@{ MyProject = @{ Template = "Project" } }`) is replaced by the plain action list [Resolve-WorkspaceTemplate](#resolve-workspacetemplate) stamps out of its `WorkspaceTemplates` entry, and every plain entry gets its `{Workspace}` token substituted, so every reader of `WorkspaceActions` (`Open-Workspace`, `Close-Workspace`, `Measure-WorkspaceOpen`, `Open-Obsidian`, `Get-OrderedEntry` and the rest) sees plain action lists only. The raw templated definitions are kept under the runtime key `WorkspaceTemplateEntries` and the problems found under `WorkspaceTemplateErrors` (both written by this function only, never configuration settings): `Open-Workspace` expands from `WorkspaceTemplateEntries` again when the command line sets a template variable, and `Test-ConfigurationSchema` reports `WorkspaceTemplateErrors` instead of expanding everything a second time. The profile dot-sources this function and `Resolve-WorkspaceTemplate` before the prompt (like `Get-ConfigSetting`), so the load-time expansion never autoloads the whole Helper module. A templated entry that cannot be expanded is reported through `Write-LogError` naming the workspace and the problem ("the workspace opens nothing until this is fixed") and resolves to an empty action list - it stays in the workspace menu. Returns an object with `Expanded` (the templated names that expanded cleanly) and `Errors`.
+- **Description:** Expands every templated `WorkspaceActions` entry of a configuration in place, once per configuration load (`Load-PathConfiguration` calls it right after `Configuration.local.psd1` is merged). Every templated entry (`@{ MyProject = @{ Template = "Project" } }`) is replaced by the plain action list [Resolve-WorkspaceTemplate](#resolve-workspacetemplate) stamps out of its `WorkspaceTemplates` entry, and every plain entry gets its `{Workspace}` token substituted, so every reader of `WorkspaceActions` (`Open-Workspace`, `Close-Workspace`, `Measure-WorkspaceOpen`, `Open-Obsidian`, `Get-OrderedEntry` and the rest) sees plain action lists only. The raw templated definitions are kept under the runtime key `WorkspaceTemplateEntries` and the problems found under `WorkspaceTemplateErrors` (both written by this function only, never configuration settings): `Open-Workspace` expands from `WorkspaceTemplateEntries` again when the command line sets a template variable, and `Test-ConfigurationSchema` reports `WorkspaceTemplateErrors` instead of expanding everything a second time. The profile dot-sources this function and `Resolve-WorkspaceTemplate` before the prompt (like `Get-ConfigSetting`), so the load-time expansion never autoloads the whole Helper module. A templated entry that cannot be expanded is reported through `Write-LogError` naming the workspace and the problem ("the workspace opens nothing until this is fixed") and resolves to an empty action list - it stays in the workspace menu. Returns an object with `Expanded` (the templated names that expanded cleanly) and `Errors`. Running it again on a configuration it already expanded is a no-op that keeps the recorded `WorkspaceTemplateEntries` / `WorkspaceTemplateErrors` and returns an empty summary; a `$null` configuration also returns an empty summary.
 - **Parameters:** -Configuration (defaults to `$global:Configuration`), -Quiet (suppresses the error output; the errors are still returned)
 - **Usage:** `Expand-WorkspaceTemplates -Configuration $global:Configuration`, `Expand-WorkspaceTemplates -Quiet`
 
@@ -286,7 +286,7 @@ dnp
 
 ## [Find-EfMigrationProjects](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Find-EfMigrationProjects.ps1)
 
-- **Description:** Discovers EF Core migration projects within a solution using two patterns: dedicated migration projects whose name or directory matches `*Migrations*` (e.g. `Domain.PostgreMigrations`), and the legacy layout where a `Domain` project contains a `Migrations` folder. For each candidate it resolves the database type via `Get-DatabaseTypeFromProject`, locates the `*ModelSnapshot.cs` file, and returns descriptor objects (Name, Path, DbType, snapshot, relative path) consumed by the EfCoreMigrationWizard.
+- **Description:** Discovers EF Core migration projects within a solution using two patterns: dedicated migration projects whose `.csproj` name or directory name contains `Migration` or `Migrations` (e.g. `Domain.PostgreMigrations`), and the legacy layout where a `Domain` project contains a `Migrations` folder with a `*ModelSnapshot.cs` file. For each candidate it resolves the database type via `Get-DatabaseTypeFromProject`, locates the `*ModelSnapshot.cs` file, and returns descriptor objects (`Name`, `Path`, `ProjectFile`, `DbType`, `HasMigrations`, `SnapshotFile`, `RelativePath`, `MigrationsSubfolder`, `IsDedicatedProject`; legacy entries are named `<Project> (Legacy)`) consumed by the EfCoreMigrationWizard.
 - **Parameters:** -SolutionRoot, -CsprojFiles
 - **Usage:** `$csproj = Get-ChildItem -Path <DevRoot>\MySolution -Recurse -Filter "*.csproj" -File`, `Find-EfMigrationProjects -SolutionRoot <DevRoot>\MySolution -CsprojFiles $csproj`
 
@@ -303,7 +303,7 @@ $csproj = Get-ChildItem -Path <DevRoot>\MySolution -Recurse -Filter "*.csproj" -
 $projects = Find-EfMigrationProjects -SolutionRoot <DevRoot>\MySolution -CsprojFiles $csproj
 ```
 
-**See also:** [Find-EfStartupProject](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Find-EfStartupProject.ps1)
+**See also:** [Find-EfStartupProject](#find-efstartupproject)
 
 ## [Find-EfStartupProject](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Find-EfStartupProject.ps1)
 
@@ -561,7 +561,7 @@ $last = $migrations[-1]
 
 - **Description:** Filters a parameter hashtable to include only the parameters accepted by a target command. Extracts the valid parameter names from the target command and returns the matching subset, enabling safe parameter forwarding (e.g., splatting). Returns the original hashtable unchanged if the target command cannot be found.
 - **Parameters:** -CommandName, -Params
-- **Usage:** `Get-FilteredParams -CommandName "Get-Item" -Params @{ Name = "file.txt"; Size = 100; Invalid = "xyz" }`
+- **Usage:** `Get-FilteredParams -CommandName "Get-Item" -Params @{ Path = "file.txt"; Size = 100; Invalid = "xyz" }`
 
 | Parameter      | Description                                                   |
 | -------------- | ------------------------------------------------------------- |
@@ -570,9 +570,9 @@ $last = $migrations[-1]
 
 ```powershell
 # Build a parameter set that may contain keys the target command doesn't accept
-$all_params = @{ Name = "file.txt"; Size = 100; Invalid = "xyz" }
+$all_params = @{ Path = "file.txt"; Size = 100; Invalid = "xyz" }
 
-# Keep only the keys Get-Item actually accepts -> @{ Name = "file.txt" }
+# Keep only the keys Get-Item actually accepts -> @{ Path = "file.txt" }
 $filtered = Get-FilteredParams -CommandName "Get-Item" -Params $all_params
 
 # Safely splat the filtered set into the target command
@@ -587,7 +587,7 @@ Get-Item @filtered
 
 ## [Get-OrderedNames](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Get-OrderedNames.ps1)
 
-- **Description:** Returns the entry names of an ordered configuration section, in configuration order - the read side of the repository's one ordering rule, "order is where you write it". An ordered section is an array of single-key hashtables where each item's single key is the entry name and its value is the entry; the section cannot be a plain hashtable and keep its order, because `Import-PowerShellDataFile` returns a `System.Collections.Hashtable` and key order is lost at load time. A plain hashtable is still accepted so an unmigrated fork keeps working, and its keys come back sorted. Nothing is warned about here: `Test-ConfigurationSchema` is the one place that reports an ordered section written as a hashtable, once at load, instead of every menu repeating it.
+- **Description:** Returns the entry names of an ordered configuration section, in configuration order - the read side of the repository's one ordering rule, "order is where you write it". An ordered section is an array of single-key hashtables where each item's single key is the entry name and its value is the entry; the section cannot be a plain hashtable and keep its order, because `Import-PowerShellDataFile` returns a `System.Collections.Hashtable` and key order is lost at load time. A plain hashtable is still accepted so an unmigrated fork keeps working, and its keys come back sorted. A bare non-empty string item in the array names itself (an entry with no value); `$null` returns an empty array. Nothing is warned about here: `Test-ConfigurationSchema` is the one place that reports an ordered section written as a hashtable, once at load, instead of every menu repeating it.
 - **Parameters:** -Section (accepts `$null`)
 - **Usage:** `Get-OrderedNames $Configuration.WorkspaceActions`, `OptionList = @(Get-OrderedNames $Configuration.CampaignResources)`
 
@@ -597,7 +597,7 @@ Get-Item @filtered
 - **Parameters:** -FunctionName, -Recursive
 - **Usage:** `Get-PowerShellFunctionDependencies -FunctionName "MyFunction"`, `Get-PowerShellFunctionDependencies -FunctionName "MyFunction" -Recursive`
 
-Resolves each discovered command with `Get-Command` and buckets it by source: empty source means a built-in cmdlet, a source matching one of the repository's custom modules (Application, Bootstrap, Git, Helper, System, Workflow) is treated as a Custom dependency, anything else is an external Module dependency, and commands that fail to resolve land in Unknown. Returns a hashtable with `BuiltIn`, `Module`, `Custom`, `Unknown`, and `GlobalVariables` keys. Already-processed functions are tracked to prevent infinite recursion loops.
+Resolves each discovered command with `Get-Command` and buckets it by source: empty source means a built-in cmdlet, a source matching one of the repository's custom modules (Application, Bootstrap, Git, Helper, System, Workflow) is treated as a Custom dependency, anything else is an external Module dependency, and commands that fail to resolve land in Unknown. Returns a hashtable with `BuiltIn`, `Module`, `Custom`, `Unknown`, and `GlobalVariables` keys; each `Custom` item carries `Command`, `Module`, `Definition` and `ScriptPath`. Returns `$null` (with a warning) when the function cannot be found. Already-processed functions are tracked in a module-scoped list to prevent infinite recursion loops; the list is not reset between calls (only `Create-Executable` resets it), so a repeat call for an already-analysed function returns `$null`.
 
 | Parameter       | Description                                                                   |
 | --------------- | ----------------------------------------------------------------------------- |
@@ -614,7 +614,7 @@ Get-PowerShellFunctionDependencies -FunctionName "MyFunction" -Recursive
 
 ## [Get-RepositoryName](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Get-RepositoryName.ps1)
 
-- **Description:** Extracts the repository name from a Git URL. Parses HTTPS, SSH, and SCP-style Git URLs, stripping any `.git` suffix to return just the repo name. A helper used by `Initialize-Repository`; returns an empty string (with a red error message) on empty input or an unsupported URL format.
+- **Description:** Extracts the repository name from a Git URL. Parses `http(s)://`, `git://`, `git@host:` SSH and other `user@host:` SCP-style Git URLs, stripping any `.git` suffix to return just the repo name (`ssh://` URLs are not recognized). A helper used by `Initialize-Repository` and `Update-Repositories` (the standalone `Install-Bootstrap.ps1` carries its own copy); returns an empty string (with a `Write-LogError` message) on empty input or an unsupported URL format.
 - **Parameters:** -RepositoryUrl
 - **Usage:** `Get-RepositoryName -RepositoryUrl "https://github.com/user/MyRepo.git"`, `Get-RepositoryName -RepositoryUrl "git@github.com:user/MyRepo.git"`
 
@@ -654,7 +654,7 @@ $config = Join-Path -Path $paths.PowerShell -ChildPath "Configuration.psd1"
 
 ## [Get-RpcRetryPolicy](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Get-RpcRetryPolicy.ps1)
 
-- **Description:** Centralizes the RPC safety pattern used by VirtualDesktop-heavy workflows. Returns a hashtable of shared retry defaults (`MaxAttempts`, `InitialDelayMs`) and runs an RPC preflight via `Test-RpcServerHealth` (service-status by default, or a live in-process probe of the session's VirtualDesktop COM state with `-Probe`), triggering `Repair-RpcServer` when unhealthy before callers continue. Used by functions such as Remove-VirtualDesktops, Ensure-VirtualDesktops, Move-Windows, Set-WorkspaceWindowLayout, and Initialize-WorkspaceWindowLayoutRerun to avoid duplicated preflight/recovery boilerplate.
+- **Description:** Centralizes the RPC safety pattern used by VirtualDesktop-heavy workflows. Returns a hashtable of shared retry defaults (`MaxAttempts`, `InitialDelayMs`) and runs an RPC preflight via `Test-RpcServerHealth` (service-status by default, or a live in-process probe of the session's VirtualDesktop COM state with `-Probe`), triggering `Repair-RpcServer` when unhealthy before callers continue. Called directly by `Invoke-VirtualDesktopOperation` (its `-Probe` path, which is how `Remove-VirtualDesktops`, `Ensure-VirtualDesktops` and `Set-WorkspaceWindowLayout` reach it) and by `Initialize-WorkspaceWindowLayoutRerun`, to avoid duplicated preflight/recovery boilerplate.
 - **Parameters:** -OperationLabel (default: "operation"), -MaxAttempts (default: 3), -InitialDelayMs (default: 200), -Probe
 - **Usage:** `$rpcPolicy = Get-RpcRetryPolicy -OperationLabel "desktop cleanup"`, `Get-RpcRetryPolicy -Probe`
 
@@ -686,11 +686,11 @@ $rpcPolicy = Get-RpcRetryPolicy -Probe
 
 ## [Get-TargetTerminalWindow](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Get-TargetTerminalWindow.ps1)
 
-- **Description:** Locates a specific Windows Terminal window from an optional `IntPtr` handle, or returns the first available Windows Terminal window when no handle is given (or no window matches the supplied handle).
+- **Description:** Locates a specific Windows Terminal window from an optional `IntPtr` handle, or returns the first available Windows Terminal window when no handle is given (or no window matches the supplied handle). Returns nothing when no Windows Terminal window is open.
 - **Parameters:** -TerminalWindowHandle
 - **Usage:** `Get-TargetTerminalWindow`, `Get-TargetTerminalWindow -TerminalWindowHandle $handle`
 
-Enumerates `WindowsTerminal` process windows via `Get-WindowHandle`. If `-TerminalWindowHandle` is provided and a window with that handle exists, that window object is returned; otherwise the function falls back to the first Windows Terminal window found. Used internally by `Close-ProjectTerminals` to resolve which terminal to act on.
+Enumerates `WindowsTerminal` process windows via `Get-WindowHandle`. If `-TerminalWindowHandle` is provided and a window with that handle exists, that window object is returned; otherwise the function falls back to the first Windows Terminal window found. No other WinuX function currently calls it; it is exported for interactive and script use.
 
 | Parameter               | Description                                                                                                                                 |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -775,7 +775,7 @@ $candidates = Get-WindowTitleCandidates -Names "<DevRoot>\MyProject\MySolution.s
 
 ## [Initialize-Directory](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Initialize-Directory.ps1)
 
-- **Description:** Creates a directory if it doesn't already exist. Checks whether the path exists and, if missing, creates it along with all parent directories, printing a green success message. Serves as a helper for the Initialize-Repository function.
+- **Description:** Creates a directory if it doesn't already exist. Checks whether the path exists and, if missing, creates it along with all parent directories, logging a success message through `Write-LogSuccess`; an existing path is left untouched and nothing is printed. Used as a helper by `Initialize-Repository`, `New-WindowsSymbolicLink`, `Export-VSCodeProfile` and `Get-VSCodeProfileLocation`.
 - **Parameters:** -Path
 - **Usage:** `Initialize-Directory -Path "C:\Temp\MyApp\Data"`
 
@@ -791,7 +791,7 @@ Initialize-Directory -Path "C:\Temp\MyApp\Data"
 ## [Invoke-GoogleTranslate](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Invoke-GoogleTranslate.ps1)
 
 - **Description:** Translates text between languages using the Google Translate API. The source language is auto-detected unless `-InputLanguage` is provided, and the target language defaults to `Configuration.psd1` → `DefaultTranslateLanguages.OutputLanguage`. Supports both positional (quick) and named parameter usage.
-- **Parameters:** -InputLanguage, -OutputLanguage, -Text
+- **Parameters:** -InputLanguage, -OutputLanguage, -Text, -RemainingWords (hidden; collects the positional and remaining words)
 - **Usage:** `Invoke-GoogleTranslate kako si`, `Invoke-GoogleTranslate -InputLanguage English -OutputLanguage Croatian -Text hello world`, `Invoke-GoogleTranslate -InputLanguage German -OutputLanguage English -Text guten morgen`
 - **Alias:** `translate`
 
@@ -800,8 +800,9 @@ Multi-word input does not need to be quoted: the trailing words are collected an
 | Parameter         | Description                                                                                                                                                                     |
 | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `-InputLanguage`  | Optional source language override (full language name, e.g. `English`). When omitted (or set to `Auto`/`Detect`/`Automatic`), Google Translate auto-detects the input language. |
-| `-OutputLanguage` | Target language for translation. Defaults to `DefaultTranslateLanguages.OutputLanguage` in `Configuration.psd1`.                                                                |
-| `-Text`           | The text to translate. Accepts the remaining positional arguments, so multi-word input does not need to be quoted.                                                              |
+| `-OutputLanguage` | Target language for translation. Defaults to `DefaultTranslateLanguages.OutputLanguage` in `Configuration.psd1` (`English` when that section is absent).                         |
+| `-Text`           | The text to translate, as one named token. Further unquoted words land in `-RemainingWords` and are appended, so multi-word input does not need to be quoted.                   |
+| `-RemainingWords` | Hidden (`DontShow`) catch-all for every positional and remaining argument (`ValueFromRemainingArguments`), joined after `-Text`. Not meant to be passed by name.                 |
 
 ```powershell
 # Quick translation: auto-detect the input language, translate to the configured default output language
@@ -837,7 +838,7 @@ Invoke-PrivacyRequest -Uri "https://api.ipify.org?format=json"
 Invoke-PrivacyRequest -Uri "https://check.torproject.org/api/ip" -UseTor -TimeoutSec 5 -RetryCount 2
 ```
 
-**See also:** [Invoke-TorRequest](helper.md), [Test-PrivacyStatus](helper.md)
+**See also:** [Invoke-TorRequest](#invoke-torrequest), [Test-PrivacyStatus](#test-privacystatus)
 
 ## [Invoke-RerunLastCommandExit](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Invoke-RerunLastCommandExit.ps1)
 
@@ -940,13 +941,13 @@ Invoke-WithRetry -ScriptBlock { Get-DesktopList } -OnRetry {
 - **Parameters:** -Category, -Function, -ListDiscrepancies, -Quiet
 - **Usage:** `List-Functions`, `List-Functions -Category "System"`, `List-Functions -Function "Open-Browser", "Set-Wallpaper"`, `List-Functions -ListDiscrepancies`, `List-Functions -ListDiscrepancies -Quiet`
 
-Reads the man-style `## [FunctionName](url)` entries from the docs pages (located via `MachineSpecificPaths.Projects.Self.Docs`) and parses each entry's contiguous `- **Key:** value` bullet block into module categories; `docs/custom/` pages merge into their mirror module's category, so fork-only functions are listed and checked alongside engine ones (the Custom area's `README.md` landing page is skipped). Only the sovereign pages that declare themselves a function reference are read: the area also holds Agent Skills and prose guides, whose entries use the same heading shape, so each page states its contract in a marker this function reads with [Get-DocsReferenceMarker](#get-docsreferencemarker) and only `<!-- reference: functions windows/Custom -->` pages are parsed. Without that a skill entry was harvested as a function and reported as an undocumented one. The default run prints every category with its functions and a total count. The discrepancy check compares the documented functions against functions actually loaded from the modules under `MachineSpecificPaths.Projects.Self.Modules`, honoring `Configuration.FunctionDiscrepancyExclusions` in both directions, and flags any that are documented but not loaded (or loaded but not documented). A name on the exclusion list is skipped either way, which is what lets a documented standalone script and a profile-defined function both stay legal. A documented function counts as loaded when it resolves at all, not only when its own module reports it - the profile redefines a few functions in global scope, which drops the module attribution the per-module enumeration relies on. Output colors come from `Configuration.ListFunctionsColors`. The parameter sets are mutually exclusive, so only one filter may be used at a time.
+Reads the man-style `## [FunctionName](url)` entries from the docs pages (located via `MachineSpecificPaths.Projects.Self.Docs`) and parses each entry's contiguous `- **Key:** value` bullet block into module categories; `docs/custom/` pages merge into their mirror module's category, so fork-only functions are listed and checked alongside engine ones (the Custom area's `README.md` landing page is skipped). Only the sovereign pages that declare themselves a function reference are read: the area also holds Agent Skills and prose guides, whose entries use the same heading shape, so each page states its contract in a marker this function reads with [Get-DocsReferenceMarker](#get-docsreferencemarker) and only `<!-- reference: functions windows/Custom -->` pages are parsed. Without that a skill entry was harvested as a function and reported as an undocumented one. The default run prints every category with its functions and a total count, followed by the discrepancy report when there is one. The discrepancy check compares the documented functions against functions actually loaded from the modules under `MachineSpecificPaths.Projects.Self.Modules`, honoring `Configuration.FunctionDiscrepancyExclusions` in both directions, and flags any that are documented but not loaded (or loaded but not documented). A name on the exclusion list is skipped either way, which is what lets a documented standalone script and a profile-defined function both stay legal. A documented function counts as loaded when it resolves at all, not only when its own module reports it - the profile redefines a few functions in global scope, which drops the module attribution the per-module enumeration relies on. Output colors come from `Configuration.ListFunctionsColors`. The parameter sets are mutually exclusive, so only one filter may be used at a time.
 
 | Parameter            | Description                                                                                                                                                                |
 | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `-Category`          | One or more module categories to list (e.g. `Application`, `System`); resolved interactively by number or name.                                                            |
 | `-Function`          | One or more specific function names to display; resolved interactively by number or name.                                                                                  |
-| `-ListDiscrepancies` | Switch. Reports functions documented in the README but not loaded, and functions loaded but not documented.                                                                |
+| `-ListDiscrepancies` | Switch. Reports only the discrepancies: functions documented in the docs pages but not loaded, and functions loaded but not documented.                                    |
 | `-Quiet`             | Switch (with `-ListDiscrepancies`). Suppresses the "no discrepancies" success banner so output appears only when a discrepancy exists - used by the profile startup check. |
 
 ```powershell
@@ -959,7 +960,7 @@ List-Functions -Category "System"
 # Show detailed entries for specific functions
 List-Functions -Function "Open-Browser", "Set-Wallpaper"
 
-# Audit the README against the actually-loaded functions
+# Audit the documentation against the actually-loaded functions
 List-Functions -ListDiscrepancies
 ```
 
@@ -972,7 +973,7 @@ List-Functions -ListDiscrepancies
 - **Styles:** BrailleBlocks, Dots, Line, Arrows, Box, Circle, Moon, Clock, Star, Dot, GrowingDots, BlockFill, Pulse, Binary, Triangle, BarBlocks, SquareCorners, Hamburger, Arc
 - **Usage:** `Loading-Spinner -Function { Start-Sleep 3 } -Label "Processing" -Style Dots`, `$spinner = Loading-Spinner -Start -Label "Working"`, `Loading-Spinner -Stop -Spinner $spinner`, `Loading-Spinner -Pause`, `Loading-Spinner -Resume`
 
-Spinner styles are read from `LoadingSpinners` in `Configuration.psd1` (falling back to `DefaultSpinner`); each style defines its symbols and animation delay. The `-Function` (job-based) mode runs the scriptblock in a background job while the main thread animates, then returns the job's output and leaves a green checkmark.
+Spinner styles are read from `LoadingSpinners` in `Configuration.psd1`; each style defines its symbols and animation delay. `-Style` defaults to `Dots`, so `DefaultSpinner` is only consulted when `-Style` is passed as an empty string. An unknown style prints the available style names and returns without spinning, and a nested `-Start` keeps the outermost spinner's style (only its label changes). The `-Function` (job-based) mode runs the scriptblock in a background job while the main thread animates, then returns the job's output and leaves a green checkmark.
 
 The continuous `-Start` spinner is globally coordinated: there is only ever a SINGLE animation timer and a SINGLE spinner line on screen, no matter how many nested `-Start` calls are made. A nested `-Start` does NOT spawn a second timer; it just relabels the existing spinner, and only the outermost `-Stop` tears the timer down. Rendering uses only carriage returns (no absolute cursor positioning), so the spinner is immune to terminal scrolling and survives redirected output. When surrounding code must print its own output while the spinner is live, wrap it in `-Pause`/`-Resume` so the spinner line is erased first and re-drawn afterwards.
 
@@ -995,7 +996,7 @@ The continuous `-Start` spinner is globally coordinated: there is only ever a SI
 Loading-Spinner -Function { Start-Sleep 3 } -Label "Processing" -Style Dots
 
 # Manual mode: start, do work, then stop (leaves a green checkmark for labeled spinners)
-$spinner = Loading-Spinner -Start -Label "Downloading" -Style Bar
+$spinner = Loading-Spinner -Start -Label "Downloading" -Style BarBlocks
 Start-Sleep 5
 Loading-Spinner -Stop -Spinner $spinner
 
@@ -1013,7 +1014,7 @@ Loading-Spinner -Stop -Spinner $spinner -Discard
 Loading-Spinner -Stop -Spinner $spinner -CheckmarkOnly
 ```
 
-**See also:** [Preview-LoadingSpinners](helper.md)
+**See also:** [Preview-LoadingSpinners](#preview-loadingspinners)
 
 ## [New-WaitClock](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/New-WaitClock.ps1)
 
@@ -1035,7 +1036,7 @@ Returns a `PSCustomObject` with `Kind = 'Real'` and the `Now`, `ElapsedMs` and `
 - **Description:** Displays every loading spinner style defined in `Configuration.LoadingSpinners`, animating them all simultaneously for 10 seconds so you can pick a preferred loading animation.
 - **Usage:** `Preview-LoadingSpinners`
 
-Iterates through all spinner styles in `Configuration.LoadingSpinners`, animating each one with its configured frames on its own line. The preview runs for roughly 10 seconds, hides the cursor while animating, and prints `=> Preview complete!` when finished. If no spinner configuration is found in the global configuration, it reports the issue and returns without animating.
+Iterates through all spinner styles in `Configuration.LoadingSpinners` (sorted by name), animating each one with its configured `Symbols` on its own line, on a fixed 100 ms tick (the per-style `Delay` is not used here). The preview runs for roughly 10 seconds, hides the cursor while animating, and prints `=> Preview complete!` when finished. If no spinner configuration is found in the global configuration, it reports the issue and returns without animating.
 
 Available spinner styles (configured under `LoadingSpinners`):
 
@@ -1086,7 +1087,7 @@ Refresh-BrowserTabs
 Set-LogLevel Verbose { Refresh-BrowserTabs }
 ```
 
-**See also:** [Set-SystemTheme](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Set-SystemTheme.ps1)
+**See also:** [Set-SystemTheme](system.md#set-systemtheme)
 
 ## [Register-DeferredAction](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Register-DeferredAction.ps1)
 
@@ -1171,7 +1172,7 @@ $ctx = Resolve-EfMigrationDbContext -MigrationProject $proj -StartupProjectDirec
 
 Answering the question by taking the *first* `WindowsTerminal` process picks the wrong window whenever more than one is running - the normal state after an `-Alongside` workspace open - which is why the parent chain is walked instead (capped at 16 hops, so a cycle cannot spin forever). The tab within that window is named by `WT_PROJECT_TAB` when it is set: `Open-Terminal` writes it into every tab it creates and it survives `--suppressApplicationTitle`, which stops the window title from reflecting anything the shell sets. Otherwise the window title is used, which mirrors whichever tab is *active* - this one, whenever the command was typed rather than run from a background tab.
 
-Returns a `PSCustomObject` with `Handle`, `ProcessId` and `TabTitle`, or `$null` when the shell is not hosted by Windows Terminal at all (a bare console, an IDE terminal, a scheduled task) - which callers should read as "no tab of mine is at risk". Used by [Close-Workspace](workflow.md#close-workspace) to defer its own tab to the process-exit seam.
+Returns a `PSCustomObject` with `Handle`, `ProcessId` and `TabTitle`, or `$null` when the shell is not hosted by Windows Terminal at all (a bare console, an IDE terminal, a scheduled task) - which callers should read as "no tab of mine is at risk". Used by [Close-Workspace](workflow.md#close-workspace) to defer its own tab to the process-exit seam, by [Close-ProjectTerminals](workflow.md#close-projectterminals) to never close the tab it runs in, and by [Close-Project](workflow.md#close-project) and [Open-ProjectTerminals](workflow.md#open-projectterminals) to find the hosting window to return focus to.
 
 ```powershell
 # Close every tab except the one this command is running in
@@ -1188,19 +1189,19 @@ foreach ($tab in $tabs) {
 
 - **Description:** Resolves a project's file paths from the configuration mappings. Looks the project up in `Configuration.ProjectTerminals` (or `Configuration.RepositoryGroups` with `-ForRepository`) and walks the dot-notation reference through `MachineSpecificPaths` to produce the actual path(s). Can return a single named path or the full collection of paths for a project.
 - **Parameters:** -ProjectName, -PathKey, -ForRepository
-- **Usage:** `Resolve-ProjectPath -ProjectName MyProject`, `Resolve-ProjectPath -ProjectName MyProject -PathKey "LocalPath"`, `Resolve-ProjectPath -ProjectName MyRepo -ForRepository`
+- **Usage:** `Resolve-ProjectPath -ProjectName MyProject`, `Resolve-ProjectPath -ProjectName MyProject -PathKey "Api"`, `Resolve-ProjectPath -ProjectName MyRepo -ForRepository`
 
-In project mode (the default), the function finds the matching entry in `Configuration.ProjectTerminals`, resolves its `BasePath` against `MachineSpecificPaths`, then returns either the value of the requested `-PathKey` or every path listed under the project's `Paths`. In repository mode (`-ForRepository`), it instead reads `Configuration.RepositoryGroups`, resolves the `LocalPath` against `MachineSpecificPaths`, builds the remote URL from `Configuration.Universal.GitHub.Base` plus the resolved `UrlPath`, and returns a `PSCustomObject` with `RepositoryUrl` and `LocalPath`. Unknown projects, missing path keys, or unresolvable (null) path segments emit a red error and abort.
+In project mode (the default), the function finds the matching entry in `Configuration.ProjectTerminals`, resolves its `BasePath` against `MachineSpecificPaths`, then returns either the value of the requested `-PathKey` or every path listed under the project's `Paths`. In repository mode (`-ForRepository`), it instead reads `Configuration.RepositoryGroups`, resolves the `LocalPath` against `MachineSpecificPaths`, builds the remote URL from `Configuration.Universal.GitHub.Base` plus the value `UrlPath` resolves to inside `Configuration.Universal.GitHub` (a leading `Universal.GitHub.` in `UrlPath` is stripped first), and returns a `PSCustomObject` with `RepositoryUrl` and `LocalPath`. Unknown projects, missing path keys, or unresolvable (null) path segments log an error through `Write-LogError` and abort with `break`.
 
 | Parameter        | Description                                                                                                                                          |
 | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `-ProjectName`   | Project (or repository) key from configuration. Required.                                                                                            |
-| `-PathKey`       | Optional specific path key to return (e.g. `LocalPath`, `RemotePath`). Omit to return all paths defined for the project. Ignored in repository mode. |
+| `-PathKey`       | Optional single path key to return - one of the project's `ProjectTerminals` `Paths` entries (e.g. `Api`, `Root`). Omit to return all paths defined for the project. Ignored in repository mode. |
 | `-ForRepository` | Switch. Resolve against `RepositoryGroups` and return a `PSCustomObject` with `RepositoryUrl` and `LocalPath` instead of plain project paths.        |
 
 ```powershell
 # Resolve a single named path for a project
-$path = Resolve-ProjectPath -ProjectName MyProject -PathKey "LocalPath"
+$path = Resolve-ProjectPath -ProjectName MyProject -PathKey "Api"
 Write-Host "Project at: $path"
 
 # Return every path configured for the project
@@ -1251,7 +1252,7 @@ Resolve-RunProjectSteps -Skip Docker
 
 ## [Resolve-Selection](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Resolve-Selection.ps1)
 
-- **Description:** The canonical interactive menu selector used throughout the system. Presents a numbered menu and returns the selected option(s) by number or name. Supports a flat mode (simple Yes/No or custom option list) and a hierarchical mode (when `-GroupsConfig` is provided) that navigates nested groups with dot-notation selection ("Parent.ChildGroup"), automatic expansion of parent groups, and parent/child navigation. Honors a default option via `-DefaultOptionIndex` so pressing Enter with no input selects it, and doubles as a destructive-action safeguard via `-ConfirmationMessage`.
+- **Description:** The canonical interactive menu selector used throughout the system. Presents a numbered menu and returns the selected option(s) by number or name. Supports a flat mode (simple Yes/No or custom option list) and a hierarchical mode (when `-GroupsConfig` is provided) that navigates nested groups - each item is selectable by its dot-notation index path (`1.2`) or by its own group/item name - with automatic expansion of parent groups, and returns the matching lookup entries (`GroupName`, `SubgroupName`, `PathNames`, `Path`, `StructureType`, ...) rather than strings. Honors a default option via `-DefaultOptionIndex` so pressing Enter with no input selects it, and doubles as a destructive-action safeguard via `-ConfirmationMessage`.
 - **Parameters:** -OptionList, -InputObject, -MenuTitle, -HideMenuTitle, -HideSelection, -PromptMessage, -HidePromptMessage, -AllowEmptyPromptResponse, -AllowMultipleSelections, -DefaultOptionIndex, -ConfirmationMessage, -GroupsConfig
 - **Usage:** `Resolve-Selection`, `Resolve-Selection -OptionList @("Alpha", "Beta", "Gamma")`, `Resolve-Selection -OptionList @("English", "Espanol", "Francais") -PromptMessage "Select a language"`, `Resolve-Selection -OptionList @("Alpha", "Beta", "Gamma") -DefaultOptionIndex 1`, `Resolve-Selection -GroupsConfig $Configuration.BrowserGroups -AllowMultipleSelections`, `Resolve-Selection -ConfirmationMessage "Are you sure?"`
 
@@ -1265,7 +1266,7 @@ Used by `Open-Browser`, `Open-Project`, `Set-Locale`, `Set-DisplayLanguage`, `Co
 | `-InputObject`              | `string[]` | Pre-selected option(s), also accepted from the pipeline. Skips the interactive menu when supplied.     |
 | `-MenuTitle`                | `string`   | Title shown at the top of the menu (default: `"[Available Options]"`).                                 |
 | `-HideMenuTitle`            | `switch`   | Suppresses the menu title.                                                                             |
-| `-HideSelection`            | `switch`   | Hides the option list / final selection echo.                                                          |
+| `-HideSelection`            | `switch`   | Hides the numbered option list, so only the title and prompt are shown.                                |
 | `-PromptMessage`            | `string`   | Custom prompt text shown before the menu; a generic prompt is used when omitted.                       |
 | `-HidePromptMessage`        | `switch`   | Suppresses the prompt message.                                                                         |
 | `-AllowEmptyPromptResponse` | `switch`   | Returns `$null` on empty input instead of re-prompting (when no default is set).                       |
@@ -1400,7 +1401,7 @@ $info = @{ Description = "Opens browser"; Url = "https://example.com" }
 Show-FunctionDetails -FunctionName "Open-Browser" -FunctionInfo $info
 ```
 
-**See also:** [List-Functions](helper.md)
+**See also:** [List-Functions](#list-functions)
 
 ## [Show-Image](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Show-Image.ps1)
 
@@ -1437,9 +1438,9 @@ if (Test-AdminPrivileges -CheckOnly) { Write-Host "Running as admin" }
 
 ## [Test-AppNotInstalled](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Test-AppNotInstalled.ps1)
 
-- **Description:** Checks if a Windows Store (AppX) package is not installed. Queries installed AppX packages and returns `$true` if the specified app is not found, or `$false` if it is installed.
+- **Description:** Checks if a Windows Store (AppX) package is not installed. Queries installed AppX packages with `Get-AppxPackage -Name` and returns `$true` if the specified app is not found, or `$false` if it is installed. The name must be the full package name (`Microsoft.WindowsTerminal`) or a wildcard pattern (`*WindowsTerminal*`) - a bare partial name matches nothing and reads as not installed.
 - **Parameters:** -appName
-- **Usage:** `Test-AppNotInstalled -appName "WindowsTerminal"`
+- **Usage:** `Test-AppNotInstalled -appName "Microsoft.WindowsTerminal"`, `Test-AppNotInstalled -appName "*WindowsTerminal*"`
 
 ## [Test-ConfigValue](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Test-ConfigValue.ps1)
 
@@ -1462,13 +1463,13 @@ Test-ConfigValue @("x")    # $true
 
 ## [Test-ManifestCompleteness](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Test-ManifestCompleteness.ps1)
 
-- **Description:** Startup integrity check that warns about function files not exported by their module manifest. For every module under the WinuX Modules root that ships a matching `<Name>.psd1` manifest and a `Functions/` directory, it compares the `.ps1` files on disk against the manifest's `FunctionsToExport` and warns about any function present on disk but missing from its module manifest (i.e. a function that "isn't in its corresponding module" manifest). The fork-owned Custom area (`Modules/Custom`) is checked the same way - its mirror-payload functions must appear in `Custom.psd1`, and a whole fork module is checked against its own manifest. It is the runtime counterpart of the "Manifest Completeness" Pester test, resolving the Modules root from `MachineSpecificPaths.Projects.Self.Modules`. Silent when every function is exported, so it suits a profile startup check alongside `Test-PowerPlan`.
+- **Description:** Startup integrity check that warns about function files not exported by their module manifest. For every module under the WinuX Modules root that ships a matching `<Name>.psd1` manifest and a `Functions/` directory, it compares the `.ps1` files on disk against the manifest's `FunctionsToExport` and warns about any function present on disk but missing from its module manifest (i.e. a function that "isn't in its corresponding module" manifest). The fork-owned Custom area (`Modules/Custom`) is checked the same way - its mirror-payload functions must appear in `Custom.psd1`, and a whole fork module is checked against its own manifest. It is the runtime counterpart of the "Manifest Completeness" Pester test, resolving the Modules root from `MachineSpecificPaths.Projects.Self.Modules` (a missing root logs an error and returns). Prints a single `Write-LogSuccess` line naming the number of checked manifests when every function is exported, or a single warning listing each unexported function as `<Module>\<Function>` (`Custom\<Module>\<Function>` for the Custom area) otherwise.
 - **Parameters:** (none)
 - **Usage:** `Test-ManifestCompleteness`
 
 ## [Test-PrivacyStatus](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Test-PrivacyStatus.ps1)
 
-- **Description:** Performs comprehensive privacy verification for VPN connections with optional Tor support. Validates VPN adapter status, VPN routing (OpenVPN split routes `0.0.0.0/1 + 128.0.0.0/1` and standard `0.0.0.0/0` default routes), current IP visibility, DNS leak detection, and IP geolocation. Reports SECURE only when all required checks pass; in VPN mode (default) that means VPN connected, traffic routed through the VPN, IP hidden (or VPN routing active), and DNS secure, while Tor mode (`-UseTor`) additionally verifies Tor exit-node routing. Can run silently to surface output only when issues are detected.
+- **Description:** Performs comprehensive privacy verification for VPN connections with optional Tor support. Validates VPN adapter status, VPN routing (OpenVPN split routes `0.0.0.0/1 + 128.0.0.0/1` and standard `0.0.0.0/0` default routes), current IP visibility, DNS leak detection, and IP geolocation. Reports SECURE only when no check errored and all required checks pass; in VPN mode (default) that means VPN connected, IP hidden or traffic routed through the VPN, and DNS secure, while Tor mode (`-UseTor`) requires VPN connected, Tor exit-node routing confirmed, IP hidden (VPN routing alone is not enough), and DNS secure. The VPN check looks for an active adapter whose name or description matches TAP/OpenVPN/WireGuard/VPN/TUN/Tailscale (a running `riseup-vpn` process without such an adapter is reported as an error). Can run silently to surface output only when issues are detected.
 - **Parameters:** -ISPIPAddress, -UseTor, -Silent
 - **Usage:** `Test-PrivacyStatus`, `Test-PrivacyStatus -UseTor`, `Test-PrivacyStatus -Silent`, `Test-PrivacyStatus -ISPIPAddress 192.0.2.10`
 
@@ -1494,7 +1495,7 @@ Test-PrivacyStatus -Silent
 Test-PrivacyStatus -ISPIPAddress 192.0.2.10
 ```
 
-**See also:** [Invoke-PrivacyRequest](helper.md), [Invoke-TorRequest](helper.md)
+**See also:** [Invoke-PrivacyRequest](#invoke-privacyrequest), [Invoke-TorRequest](#invoke-torrequest)
 
 ## [Test-RegistryValue](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Test-RegistryValue.ps1)
 
@@ -1523,7 +1524,7 @@ if (Test-RegistryValue -Path 'HKCU:\Control Panel\Desktop' -Name 'Wallpaper' -Ex
 - **Parameters:** -InputObject
 - **Usage:** `Test-RpcUnavailableError $_`, `if (Test-RpcUnavailableError $errorRecord) { [void](Reset-VirtualDesktopState) }`
 
-Returns `$true` when the error is an RPC availability failure, otherwise `$false` (including for `$null`). Used by the RPC retry hooks in `Ensure-VirtualDesktops` and `Remove-VirtualDesktops` to decide whether a failed attempt warrants reconnecting the VirtualDesktop session before the next retry, and by `Test-RpcServerHealth` to separate real RPC outages from benign probe failures.
+Returns `$true` when the error is an RPC availability failure, otherwise `$false` (including for `$null`). Used by [Invoke-VirtualDesktopOperation](window.md#invoke-virtualdesktopoperation) (the RPC retry wrapper `Ensure-VirtualDesktops` and other VirtualDesktop callers run through) and by `Remove-VirtualDesktops` to decide whether a failed attempt warrants reconnecting the VirtualDesktop session before the next retry, by [Move-WindowToVirtualDesktop](window.md#move-windowtovirtualdesktop) to let RPC failures propagate to its retry wrapper, and by `Test-RpcServerHealth` to separate real RPC outages from benign probe failures.
 
 ```powershell
 # Only run RPC recovery for RPC failures - let other errors surface normally
@@ -1535,7 +1536,7 @@ try { New-Desktop } catch { if (Test-RpcUnavailableError $_) { [void](Reset-Virt
 ## [Test-StartupStage](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Test-StartupStage.ps1)
 
 - **Description:** The first half of the guard pair the profile wraps every startup stage in - `if (Test-StartupStage -Name "X") { ...; Complete-StartupStage }` - so each stage can be timed on its own and left out for one shell start without editing the profile. Returns `$false` and starts nothing when the stage's name, or `All`, is listed in the `WINUX_STARTUP_SKIP` environment variable (comma or semicolon separated, case-insensitive); otherwise starts a Stopwatch for the stage and returns `$true`. A guard pair rather than a scriptblock wrapper on purpose: `Import-Module`, the prompt function oh-my-posh defines and `New-Alias` bind into the scope that executes them, and a wrapper function would swallow them. `-Required` marks a stage that runs whatever the list says (the profile's `Core`), still timed. With the variable unset it costs one Stopwatch per stage. [Measure-ShellStartup](system.md#measure-shellstartup) drives it.
-- **Parameters:** `-Name` `[-Required]` `[-Skip]`
+- **Parameters:** -Name (position 0), -Required, -Skip (the skip list; defaults to `$env:WINUX_STARTUP_SKIP`)
 - **Usage:** `if (Test-StartupStage -Name "OhMyPosh") { . Initialize-OhMyPosh; Complete-StartupStage }`
 
 **See also:** [Complete-StartupStage](#complete-startupstage), [Measure-ShellStartup](system.md#measure-shellstartup)
@@ -1599,7 +1600,7 @@ if (Test-WindowTitleCandidates -WindowTitle "Program.cs - MyProject - Visual Stu
 - **Description:** Tests whether the configured WSL distribution (the `DefaultWSLDistribution` key in `Configuration.psd1`) is installed on the system. Returns `$true` if the distribution is present, `$false` otherwise.
 - **Usage:** `Test-WSLDistributionInstalled`
 
-Reads `DefaultWSLDistribution` from `Configuration.psd1` and scans the output of `wsl -l`, matching the distribution name with or without the `(Default)` marker. If the key is missing from the configuration, or an error occurs while querying WSL, it reports the problem and returns `$false`.
+Reads `DefaultWSLDistribution` from `Configuration.psd1` and scans the output of `wsl -l`, matching the distribution name with or without the `(Default)` marker. When the key is unset - the base configuration ships it empty - it returns `$false` quietly (a debug-level note only, since callers such as `SymbolicLinkMaker` probe it on every run); an error while querying WSL is logged with `Write-LogError` and also returns `$false`.
 
 ```powershell
 # Returns $true if the configured WSL distribution is installed, $false otherwise

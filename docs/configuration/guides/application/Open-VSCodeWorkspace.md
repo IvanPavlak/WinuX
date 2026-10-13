@@ -1,6 +1,6 @@
 # Open-VSCodeWorkspace
 
-Opens a VS Code multi-root workspace (`*.code-workspace`) from `Projects.Self.VSCodeWorkspaces` (`<repo>\VSCode\Workspaces`).
+Opens a VS Code multi-root workspace (`*.code-workspace`) from `PathTemplates.Projects.Self.VSCodeWorkspaces` (`<repo>\VSCode\Workspaces`).
 
 > [!NOTE]
 > Every value on this page belongs in `Configuration.local.psd1`, never in the base `Configuration.psd1`. The base file is upstream's, it ships empty-by-default, and it is deep-merged with your local file at load time by `Load-PathConfiguration`. See [Fork Model](../../../contributing/fork-model.md).
@@ -9,18 +9,14 @@ Opens a VS Code multi-root workspace (`*.code-workspace`) from `Projects.Self.VS
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`PathTemplates.Projects.Self`](../../configuration-reference.md#path-templates--placeholder-system) | hashtable, path fields | shipped | WinuX own checkout: `Root` (the repository root) and `VSCodeWorkspaces` (where `.code-workspace` files live). Expanded into `$global:MachineSpecificPaths.Projects.Self`. |
+| [`PathTemplates.Projects.Self.VSCodeWorkspaces`](../../configuration-reference.md#vs-code-workspaces-path) | path template | `{RepoRoot}\VSCode\Workspaces` | The folder the `.code-workspace` files are listed from (through `Get-VSCodeWorkspaceNames`) and opened from. Read from its expanded form, `$global:MachineSpecificPaths.Projects.Self.VSCodeWorkspaces`; an empty or missing folder is reported as an error. |
 
 ## Decisions
 
-1. Is the WinuX checkout in the standard place?
-    - Options: A path, normally `{Dev}\WinuX` or `{Dev}\Dotfiles`. `{RepoRoot}` already resolves the running repository, so this rarely needs changing.
-    - Default: The shipped template.
-    - More detail: [`PathTemplates.Projects.Self`](../../configuration-reference.md#path-templates--placeholder-system)
-2. Where do your `.code-workspace` files live?
-    - Options: A directory path under `Projects.Self.VSCodeWorkspaces`.
-    - Default: The shipped template.
-    - More detail: [`PathTemplates.Projects.Self`](../../configuration-reference.md#path-templates--placeholder-system)
+1. Where do your `.code-workspace` files live?
+    - Options: Any directory path; placeholders such as `{RepoRoot}` and `{Dev}` expand. Leave it at the shipped template to keep the workspaces in the repository.
+    - Default: `{RepoRoot}\VSCode\Workspaces`.
+    - More detail: [`PathTemplates.Projects.Self.VSCodeWorkspaces`](../../configuration-reference.md#vs-code-workspaces-path)
 
 ## Where to Put Values
 
@@ -31,18 +27,17 @@ All of it goes in `Configuration.local.psd1`, at the repository's `Windows/Power
 
 ## Steps Overview
 
-1. Set `PathTemplates.Projects.Self`
+1. Set `PathTemplates.Projects.Self.VSCodeWorkspaces`
 2. Reload and confirm the merge landed
 
-## Step 1: Set `PathTemplates.Projects.Self`
+## Step 1: Set `PathTemplates.Projects.Self.VSCodeWorkspaces`
 
-WinuX own checkout: `Root` (the repository root) and `VSCodeWorkspaces` (where `.code-workspace` files live). Expanded into `$global:MachineSpecificPaths.Projects.Self`.
+The folder holding the `.code-workspace` files. Hashtables deep-merge, so setting only this key keeps the other `Projects.Self` paths. Expanded into `$global:MachineSpecificPaths.Projects.Self.VSCodeWorkspaces`.
 
 ```powershell
 PathTemplates = @{
     Projects = @{
         Self = @{
-            Root             = "{RepoRoot}"
             VSCodeWorkspaces = "{RepoRoot}\VSCode\Workspaces"
         }
     }
@@ -81,7 +76,6 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
     PathTemplates = @{
         Projects = @{
             Self = @{
-                Root             = "{RepoRoot}"
                 VSCodeWorkspaces = "{RepoRoot}\VSCode\Workspaces"
             }
         }
@@ -93,9 +87,7 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 
 - [`Open-VSCodeWorkspace` in the Application module reference](../../../modules/application.md#open-vscodeworkspace) - parameters, usage and behaviour
 - [Application configuration guides](README.md) - every guide for this module
-- [Add Browser Group](add-browser-group.md) - browser groups, nesting, unique names, search and per-browser selection
 - [`Get-VSCodeWorkspaceNames`](Get-VSCodeWorkspaceNames.md) - reads the same configuration
-- [`Update-Win11DebloatVendor`](Update-Win11DebloatVendor.md) - reads the same configuration
-- [`Import-AppCsv`](../bootstrap/Import-AppCsv.md) - reads the same configuration
+- [`Open-Workspace`](../workflow/Open-Workspace.md) - reroutes its `Open-VSCode` action here when a `-VSCodeWorkspace` override is active
 - [WinuXConfigurator](../../winux-configurator.md) - have an AI assistant walk these decisions with you
 - [Configuration reference](../../configuration-reference.md) - every key, section by section

@@ -1,6 +1,6 @@
 # Find-EfMigrationProjects
 
-Discovers EF Core migration projects within a solution using two patterns: dedicated migration projects whose name or directory matches `*Migrations*` (e.g.
+Discovers EF Core migration projects within a solution using two patterns: dedicated migration projects whose name or directory contains `Migration` or `Migrations` (e.g. `Domain.PostgreMigrations`), and the legacy layout where a `Domain` project contains a `Migrations` folder.
 
 ## Configuration Keys
 

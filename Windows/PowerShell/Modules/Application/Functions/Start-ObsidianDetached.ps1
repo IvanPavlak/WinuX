@@ -8,6 +8,13 @@ function Start-ObsidianDetached {
 		host - no console to inherit, so closing the terminal that ran Open-Obsidian leaves
 		Obsidian standing. Falls back to the obsidian:// URI through Start-Process when the
 		executable cannot be located or WMI refuses; that path inherits the console.
+
+	.PARAMETER Vault
+		The vault name, URI-encoded into obsidian://open?vault=<Vault>.
+
+	.EXAMPLE
+		Start-ObsidianDetached -Vault Obsidian
+		Starts Obsidian on the vault named Obsidian, detached from this shell.
 	#>
 	[CmdletBinding()]
 	param (

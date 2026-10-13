@@ -9,7 +9,7 @@ Applies the Settings > Personalisation > Taskbar page from the `TaskbarSettings`
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`TaskbarSettings`](../../configuration-reference.md#taskbar-settings) | hashtable of setting name to value | `@{}` (empty) | Taskbar behaviour `Set-TaskbarSettings` writes to the registry - alignment, search box, widgets, task view. Ships empty. |
+| [`TaskbarSettings`](../../configuration-reference.md#taskbar-settings) | hashtable of control name to value | `@{}` (every key commented out) | The Settings > Personalisation > Taskbar controls `Set-TaskbarSettings` writes to the registry - search, task view, tray icons, alignment, auto-hide, multi-display and button combining. Toggles take `$true` / `$false`, dropdowns a named token; unknown keys are skipped with a warning. Ships empty. |
 
 ## Decisions
 
@@ -32,12 +32,12 @@ All of it goes in `Configuration.local.psd1`, at the repository's `Windows/Power
 
 ## Step 1: Set `TaskbarSettings`
 
-Taskbar behaviour `Set-TaskbarSettings` writes to the registry - alignment, search box, widgets, task view. Ships empty.
+The Settings > Personalisation > Taskbar controls `Set-TaskbarSettings` writes to the registry. The accepted keys and tokens are listed in the [module reference](../../../modules/system.md#set-taskbarsettings). Ships empty.
 
 ```powershell
 TaskbarSettings = @{
     TaskbarAlignment = "Left"
-    ShowSearchBox    = $false
+    Search           = "Hide"
 }
 ```
 
@@ -71,7 +71,7 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 @{
     TaskbarSettings = @{
         TaskbarAlignment = "Left"
-        ShowSearchBox    = $false
+        Search           = "Hide"
     }
 }
 ```

@@ -1,6 +1,6 @@
 # Open-DBeaver
 
-Opens the DBeaver database client via the shared `Start-Application` helper.
+Opens the DBeaver database client via the shared `Start-Application` helper, which reads the executable from `Universal.DbeaverExe` (ships empty - set it in `Configuration.local.psd1`, see [Start-Application](Start-Application.md)); this function itself reads nothing.
 
 ## Configuration Keys
 

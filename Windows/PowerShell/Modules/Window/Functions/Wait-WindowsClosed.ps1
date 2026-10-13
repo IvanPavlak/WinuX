@@ -10,7 +10,8 @@ function Wait-WindowsClosed {
 		that never checks cannot report a refusal at all.
 
 		This polls the live window list until every handle is gone or the timeout expires, and returns
-		whatever is still open. An empty result means they all closed. The window cache is invalidated
+		whatever is still open. An empty result means they all closed. The first check runs only after
+		one poll interval, since WM_CLOSE was just posted. The window cache is invalidated
 		before each poll, otherwise the check would keep reading the same pre-close snapshot and every
 		window would look like it refused.
 

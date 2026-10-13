@@ -150,14 +150,16 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
     AutoPathAdditions = @(
         "%LOCALAPPDATA%\Programs\obsidian"
     )
-    WorkspaceActions = @{
-        Server = @(
-            @{ Action = "Open-Obsidian"; Parameters = @{ Default = $true } }     # loads the Obsidian workspace "Server" if the vault has one, never prompts
-        )
-        Research = @(
-            @{ Action = "Open-Obsidian"; Parameters = @{ Workspace = "Papers" } } # always loads "Papers"
-        )
-    }
+    WorkspaceActions = @(
+        @{ Server = @(
+                @{ Action = "Open-Obsidian"; Parameters = @{ Default = $true } }     # loads the Obsidian workspace "Server" if the vault has one, never prompts
+            )
+        }
+        @{ Research = @(
+                @{ Action = "Open-Obsidian"; Parameters = @{ Workspace = "Papers" } } # always loads "Papers"
+            )
+        }
+    )
 }
 ```
 

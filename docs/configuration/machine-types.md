@@ -71,7 +71,7 @@ DefaultMachineType = "Test"
 ```
 
 > [!NOTE]
-> When the hostname is not found in the mapping, `DetermineMachineType` does **not** automatically use `DefaultMachineType`. Instead, it **prompts the user interactively** - listing valid machine types and asking for manual selection.
+> When the hostname is not found in the mapping, `Load-PathConfiguration` (which every profile load and every `Bootstrap` run goes through) warns and falls back to `DefaultMachineType`. `DetermineMachineType`, which the per-machine consumers call, returns that value as long as it is listed in `ValidMachineTypes`. Only when `$global:MachineType` is unset or not a valid type does `DetermineMachineType` **prompt interactively** - listing the valid machine types and asking for a manual selection. Keep `DefaultMachineType` inside `ValidMachineTypes` and that prompt never appears.
 
 ### Laptop Chassis Types
 

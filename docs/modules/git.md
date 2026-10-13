@@ -4,7 +4,7 @@ The Git module provides **repository management**, **Git workflow automation**, 
 
 ## [Format-RepositoryUpdateResult](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Git/Functions/Format-RepositoryUpdateResult.ps1)
 
-- **Description:** Turns one repository update result (what `Update-Repository` returns, or what `Update-Repositories` records for a repository it cloned or skipped) into the one-line summary `Update-Repositories -Quiet` prints. Returns the message, the level to print it at (`Success` or `Warning`) and the totals bucket it counts towards (`Updated`, `UpToDate`, `Attention` or `Skipped`). Pure: it prints nothing. Whenever the default branch differs from the checked-out one, the line says what happened to it (`master up to date`, `master fast-forwarded`, `no local master`), so silence never has to be interpreted. A result needs attention when the fetch failed, the fast-forward was refused, the repository is busy (an operation in progress) or not its own repository, local changes could not be stashed or restored, their stash was taken by another git command, an error occurred, or the default branch diverged, could not be fetched or could not be named. A detached HEAD, a branch that is not on origin, and a repository not cloned on this machine count as skipped.
+- **Description:** Turns one repository update result (what `Update-Repository` returns, or what `Update-Repositories` records for a repository it cloned or skipped) into the one-line summary `Update-Repositories -Quiet` prints. Returns the message, the level to print it at (`Success` or `Warning`) and the totals bucket it counts towards (`Updated`, `UpToDate`, `Attention` or `Skipped`). Pure: it prints nothing. Whenever the default branch differs from the checked-out one, the line says what happened to it (`master up to date`, `master fast-forwarded`, `no local master`), so silence never has to be interpreted. A result needs attention when the fetch failed, the fast-forward was refused, the repository is busy (an operation in progress) or not its own repository, local changes could not be stashed or restored, their stash was taken by another git command, an error occurred, or the default branch diverged, could not be fetched or could not be named. A detached HEAD, a branch that is not on origin, and a repository not cloned or with no local path on this machine count as skipped.
 - **Parameters:** -Result
 - **Usage:** `Format-RepositoryUpdateResult -Result (Update-Repository -Name MyRepo -LocalPath "<DevRoot>\MyRepo" -Quiet)`
 
@@ -31,7 +31,7 @@ Get-RepositoryUpdateDayStart -DayStartHour 6 -At ([datetime]'2026-10-08 05:30')
 
 ## [Get-RepositoryUpdateStartupSettings](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Git/Functions/Get-RepositoryUpdateStartupSettings.ps1)
 
-- **Description:** Reads `RepositoryUpdate.Startup` with every default filled in and returns `Enabled` (default `$false`), `Schedule` (`Daily` by default, or `Interval`; anything else is `Daily`), `DayStartHour` (0-23, default 6) and `IntervalHours` (default 24). Values out of range or not a number fall back to their default. The one place that knows these keys, so `Invoke-StartupRepositoryUpdate` and `Register-RepositoryUpdatePromptCheck` never disagree.
+- **Description:** Reads `RepositoryUpdate.Startup` with every default filled in and returns `Enabled` (default `$false`), `Schedule` (`Daily` by default, or `Interval`; anything else is `Daily`), `DayStartHour` (0-23, default 6) and `IntervalHours` (default 24). A `DayStartHour` out of range or not a number falls back to 6, and an `IntervalHours` that is not a number falls back to 24 (any number is kept; 0 or less makes the update run in every shell). The one place that knows these keys, so `Invoke-StartupRepositoryUpdate` and `Register-RepositoryUpdatePromptCheck` never disagree.
 - **Usage:** `Get-RepositoryUpdateStartupSettings`
 
 **See also:** [Invoke-StartupRepositoryUpdate](#invoke-startuprepositoryupdate), [Get-RepositoryUpdateStartupSettings configuration guide](../configuration/guides/git/Get-RepositoryUpdateStartupSettings.md)
@@ -47,7 +47,7 @@ Get-RepositoryUpdateDayStart -DayStartHour 6 -At ([datetime]'2026-10-08 05:30')
 - **Description:** Commits and pushes all pending changes in the Obsidian vault repository, providing a quick vault backup to GitHub without opening Obsidian.
 - **Usage:** `Git-Obsidian`
 
-Navigates to the Obsidian vault directory (`$MachineSpecificPaths.ObsidianDirectory`) and brings the remote up to date with the vault. If the working tree has changes, it stages everything with `git add .` and creates a commit with the message `"Vault Backup: dd.MM.yyyy | HH:mm"`. It then counts the commits the branch has that its upstream does not (`git rev-list --count @{upstream}..HEAD`) - the commit just made plus anything an earlier run left behind when its push failed - and pushes when that count is not zero. Only when the tree is clean **and** nothing is unpushed does it report `No changes to update!`. The original working directory is always restored on exit.
+Navigates to the Obsidian vault directory (`$MachineSpecificPaths.ObsidianDirectory`) and brings the remote up to date with the vault. If the working tree has changes, it stages everything with `git add .` and creates a commit with the message `"Vault Backup: dd.MM.yyyy | HH:mm"`. It then counts the commits the branch has that its upstream does not (`git rev-list --count @{upstream}..HEAD`) - the commit just made plus anything an earlier run left behind when its push failed - and pushes when that count is not zero. Only when the tree is clean **and** nothing is unpushed does it report `No changes to update!`. On exit it changes to `$currentDirectory`, which the function never sets, so the shell ends up in the home folder rather than where it started. `ObsidianDirectory` must be set: an empty value also lands in the home folder, and the git commands run there.
 
 Success is reported only when `git push` actually exited 0. A failed commit or push is logged as an error together with the state the vault is left in (`Push failed - the vault is committed locally but the remote was not updated!`), and the next run pushes the pending commits (`Found [1] unpushed commit(s) from an earlier run. Pushing...`) instead of looking at the clean tree and reporting that nothing changed. If the branch has no upstream, the function still attempts the push so that git reports the cause rather than the function hiding it behind `No changes`.
 
@@ -80,7 +80,7 @@ GitBranch feature/my-feature
 gb feature/my-feature
 ```
 
-**See also:** [GitSwitch](git.md), [GitBranchDeleteAndPrune](git.md)
+**See also:** [GitSwitch](#gitswitch), [GitBranchDeleteAndPrune](#gitbranchdeleteandprune)
 
 ## [GitBranchDeleteAndPrune](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Git/Functions/GitBranchDeleteAndPrune.ps1)
 
@@ -176,7 +176,7 @@ Initialize-Repository -RepositoryUrl "https://github.com/user/MyRepo" -LocalPath
 Initialize-Repository -RepositoryUrl "https://github.com/user/MyRepo" -LocalPath "<DevRoot>\MyRepo" -Token $pat
 ```
 
-**See also:** [Update-Repositories](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Git/Functions/Update-Repositories.ps1)
+**See also:** [Update-Repositories](#update-repositories), [Update-Repository](#update-repository)
 
 ## [Install-Git](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Git/Functions/Install-Git.ps1)
 
@@ -351,7 +351,7 @@ Test-RepositoryUpdateStampFresh -StampFile (Join-Path $global:LoggingState.LogsD
 
 ## [Update-Repositories](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Git/Functions/Update-Repositories.ps1)
 
-- **Description:** Clones or updates one or more git repositories defined in `RepositoryGroups` in `Configuration.psd1`, where repositories are organized into named groups (for example "Private" and "Work") defined in configuration, never in code. With no parameters it shows an interactive menu grouped by group name; otherwise it updates one or more groups (`-Group`), a named repository, everything (`-All`), or a specific URL/path pair. The selection modes are mutually exclusive, enforced by parameter sets. Each existing repository is updated by [`Update-Repository`](#update-repository): local changes are stashed, the checked-out branch is fast-forwarded, and the stash is popped. With `-IncludeDefaultBranch`, or `RepositoryUpdate.IncludeDefaultBranch` in configuration, each repository's default branch is fast-forwarded too, without checking it out. A repository missing locally is cloned, or with `-NoClone` reported and skipped. `-Quiet` prints one line per repository plus a totals line (via [`Format-RepositoryUpdateResult`](#format-repositoryupdateresult)). A run that spans several groups prints a heading per group, in configuration order. Archive mode downloads repository contents without the `.git` directory (to the Desktop by default) via `git clone --depth 1` with `.git` removal. Administrator privileges are required only to clone: in archive mode, and when a selected repository is missing and `-NoClone` is not given.
+- **Description:** Clones or updates one or more git repositories defined in `RepositoryGroups` in `Configuration.psd1`, where repositories are organized into named groups (for example "Private" and "Work") defined in configuration, never in code. With no parameters it shows an interactive menu grouped by group name; otherwise it updates one or more groups (`-Group`), a named repository, everything (`-All`), or a specific URL/path pair. The selection modes are mutually exclusive, enforced by parameter sets. Each existing repository is updated by [`Update-Repository`](#update-repository): local changes are stashed, the checked-out branch is fast-forwarded, and the stash is popped. With `-IncludeDefaultBranch`, or `RepositoryUpdate.IncludeDefaultBranch` in configuration, each repository's default branch is fast-forwarded too, without checking it out. A repository missing locally is cloned, or with `-NoClone` reported and skipped. `-Quiet` prints one line per repository plus a totals line (via [`Format-RepositoryUpdateResult`](#format-repositoryupdateresult)). A run that spans several groups prints a heading per group, in configuration order. Archive mode downloads repository contents without the `.git` directory (to the Desktop by default) via `git clone --depth 1` with `.git` removal. Administrator privileges are required only to clone: in archive mode, and when a selected repository is missing and `-NoClone` is not given. When `$global:GithubPat` is set (`Install-Bootstrap` caches its `-Token` there), clones and archive downloads authenticate with it.
 - **Parameters:** -Repositories, -RepositoryUrl, -LocalPath, -Group, -All, -InCurrentDirectory, -Archive, -IncludeDefaultBranch, -NoClone, -Quiet
 - **Usage:** `Update-Repositories`, `Update-Repositories MyRepo`, `Update-Repositories -Group Private`, `Update-Repositories -Group Private, Work`, `Update-Repositories -All`, `Update-Repositories -RepositoryUrl "https://github.com/user/MyRepo" -LocalPath "<DevRoot>\MyRepo"`, `Update-Repositories -All -Archive`, `Update-Repositories -All -Archive -InCurrentDirectory`, `Update-Repositories -All -IncludeDefaultBranch`, `Update-Repositories MyRepo -IncludeDefaultBranch:$false`, `Update-Repositories -All -NoClone -Quiet`
 
@@ -579,8 +579,9 @@ Git-Obsidian
 ### Feature Branch Workflow
 
 ```powershell
-# Create feature branch
+# Create feature branch and switch to it
 gb feature/new-feature
+gsw feature/new-feature
 
 # Work on feature...
 

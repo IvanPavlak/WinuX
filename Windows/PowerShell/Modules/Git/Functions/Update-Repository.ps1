@@ -62,7 +62,8 @@ function Update-Repository {
 		operation is in progress, nothing done), NotARepository (the path is not the top of a
 		working tree, nothing done), StashFailed (local changes could not be stashed; anything
 		half-stashed was restored), StashConflict (the stash could not be restored cleanly and
-		is kept, its name in StashName), or Error.
+		is kept, its name in StashName), StashMissing (another git command applied or dropped
+		the stash before it could be restored; nothing more is done), or Error.
 		DefaultBranchOutcome: $null when the step did not run, Unresolved when no default
 		branch could be named, otherwise what Update-RepositoryDefaultBranch returned.
 

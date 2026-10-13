@@ -5,9 +5,12 @@ function Install-DotnetEf {
 
 	.DESCRIPTION
 		Installs the `dotnet ef` global tool at the version specified by the `DotnetEFVersion`
-		key in Configuration.psd1. Requires the .NET SDK to be installed; skips silently if not found.
+		key in Configuration.psd1 (the latest when it is empty). Requires the .NET SDK to be
+		installed; skips with a warning if `dotnet` is not found. When `dotnet-ef` is already
+		installed it prints the installed version and returns without reinstalling.
 
-		With `-Update`, installs the latest available version instead of the pinned version.
+		With `-Update`, runs `dotnet tool update --global dotnet-ef` (the latest available version)
+		instead of the pinned install.
 
 		Called automatically by Bootstrap.
 

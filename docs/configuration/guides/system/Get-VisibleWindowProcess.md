@@ -15,5 +15,5 @@ Get-VisibleWindowProcess | Where-Object { $_.WindowTitles.Count -gt 1 }
 
 ## Related
 
-- [`Get-VisibleWindowProcess` in the System module reference](../../../modules/system.md#getvisiblewindowprocess) - parameters, usage and behaviour
+- [`Get-VisibleWindowProcess` in the System module reference](../../../modules/system.md#get-visiblewindowprocess) - parameters, usage and behaviour
 - [System configuration guides](README.md) - every guide for this module

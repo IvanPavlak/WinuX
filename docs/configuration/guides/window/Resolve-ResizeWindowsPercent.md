@@ -9,12 +9,12 @@ Resolves the percentage `Resize-Windows` shrinks windows by when no `-Percent` i
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`ResizeWindowsPercent`](../../configuration-reference.md#resizewindowspercent) | hashtable of display profile to percentage | `@{ Default = 70 }` | How large `Resize-Windows` makes a window when no explicit `-Percent` is given, per display profile. `Resolve-ResizeWindowsPercent` and `Resolve-DisplayAwareProfile` pick the profile from the attached monitors. |
+| [`ResizeWindowsPercent`](../../configuration-reference.md#resizewindowspercent) | hashtable of display profile to percentage | `@{ Default = 70 }` | How large `Resize-Windows` makes a window when no explicit `-Percent` is given, per display profile. `Resolve-DisplayAwareProfile` picks the row: `SmallDisplay` while a laptop-class display is primary, else the row named after the layout machine type, else `Default`. A missing, non-numeric or out-of-range (10-500) value falls back to `70`. |
 
 ## Decisions
 
 1. How large should a resized window be on this display?
-    - Options: A percentage per profile. A `SmallDisplay` entry lets a laptop panel shrink windows less than a wide monitor does.
+    - Options: A percentage (10-500) per row: `Default`, a layout machine type (`PC`, `Laptop`, ...), or `SmallDisplay`. A `SmallDisplay` entry lets a laptop panel shrink windows less than a wide monitor does.
     - Default: `Default = 70`.
     - More detail: [`ResizeWindowsPercent`](../../configuration-reference.md#resizewindowspercent)
 
@@ -32,7 +32,7 @@ All of it goes in `Configuration.local.psd1`, at the repository's `Windows/Power
 
 ## Step 1: Set `ResizeWindowsPercent`
 
-How large `Resize-Windows` makes a window when no explicit `-Percent` is given, per display profile. `Resolve-ResizeWindowsPercent` and `Resolve-DisplayAwareProfile` pick the profile from the attached monitors.
+How large `Resize-Windows` makes a window when no explicit `-Percent` is given, per display profile. `Resolve-DisplayAwareProfile` picks the row: `SmallDisplay` while a laptop-class display is primary, else the row named after the layout machine type, else `Default`.
 
 ```powershell
 ResizeWindowsPercent = @{

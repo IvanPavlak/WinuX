@@ -9,7 +9,9 @@ function Create-Executable {
     standalone .exe file using ps2exe.
 
     The resulting executable is completely self-contained and includes all custom
-    function dependencies. The user only needs to run the .exe file.
+    function dependencies. The user only needs to run the .exe file. Its command-line
+    arguments are forwarded to the function, and it waits 60 seconds before the console
+    closes.
 
     .PARAMETER FunctionName
     The name of the PowerShell function to convert to an executable.
@@ -25,24 +27,25 @@ function Create-Executable {
     Requires the executable to run with administrator privileges.
 
     .PARAMETER IconFile
-    Path to a custom icon file (.ico) for the executable.
+    Path to a custom icon file (.ico) for the executable. Ignored when the file does not exist.
 
     .PARAMETER Title
-    Title for the executable (visible in file properties).
+    Title for the executable (visible in file properties). Defaults to FunctionName.
 
     .PARAMETER Description
-    Description for the executable (visible in file properties).
+    Description for the executable (visible in file properties). Defaults to
+    "PowerShell executable for FunctionName".
 
     .PARAMETER Company
-    Company name for the executable metadata.
+    Company name for the executable metadata. Defaults to "WinuX".
 
     .PARAMETER Version
-    Version number for the executable (e.g., "1.0.0.0").
+    Version number for the executable. Defaults to "1.0.0.0".
 
     .EXAMPLE
     Create-Executable -FunctionName "Determine-DotnetDependencies"
 
-    Creates DotnetDependencies.exe in the current directory with all dependencies bundled.
+    Creates Determine-DotnetDependencies.exe in the current directory with all dependencies bundled.
 
     .EXAMPLE
     Create-Executable -FunctionName "List-Functions" -OutputPath "C:\Tools\ListFunctions.exe" -Title "Function Lister"
@@ -50,7 +53,7 @@ function Create-Executable {
     Creates a custom executable with metadata.
 
     .EXAMPLE
-    Create-Executable -FunctionName "Configure-System" -RequireAdmin -NoConsole
+    Create-Executable -FunctionName "MyFunction" -RequireAdmin -NoConsole
 
     Creates a GUI executable that requires administrator privileges.
     #>

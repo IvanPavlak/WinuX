@@ -13,7 +13,7 @@ function Write-Log {
 		  Title    => DarkCyan  "`n[Message]"
 		  Step     => White     "`nMessage"
 		  Success  => Green      "`n=> Message"
-		  Warning  => Yellow     "`n=> Message"
+		  Warning  => Yellow     "`n Message"   (leading space, no "=>")
 		  Error    => Red        "`n=> Message"
 		  Debug    => DarkCyan    "`n [Caller] Message"   (verbose-gated)
 

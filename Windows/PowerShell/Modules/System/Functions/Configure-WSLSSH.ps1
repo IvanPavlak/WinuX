@@ -15,6 +15,10 @@ function Configure-WSLSSH {
         differ from the Windows username (Linux is case-sensitive and WSL accounts are
         lowercase by convention, e.g. Windows `Ivan` vs WSL `ivan`).
 
+        Any existing `.ssh` in the WSL home is deleted and recreated first. Every `wsl` call
+        targets `DefaultWSLDistribution` explicitly (`wsl -d`); the function does nothing until
+        that key is configured, and skips when the WSL user cannot be determined.
+
     .EXAMPLE
         Configure-WSLSSH
     #>

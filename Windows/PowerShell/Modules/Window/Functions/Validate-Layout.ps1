@@ -10,13 +10,24 @@ function Validate-Layout {
 		- Consistency of virtual desktop count across all monitors
 		- Contiguous desktop indices (1, 2, 3, ...)
 		- Desktop numbers in Layout array within valid range
+		- Zone-based entries (Zone without Layout) name a Monitor and DesktopNumber that the
+		  Monitors section defines a layout for
 		- Unused desktop definitions (warning only)
+		- Legacy hardcoded browser-alternation regex instead of the Browser token (warning only)
+
+		When no monitor defines VirtualDesktopLayouts the function returns at once as valid,
+		without checking the Layout array or a ProjectOverrides block.
+
+		A ProjectOverrides block is validated through Merge-LayoutProjectOverrides: every variant's
+		errors (unknown project, entry without DesktopNumber / Monitor, zone missing from the zone
+		layout that desktop and monitor end up with) are added to Errors.
 
 	.PARAMETER Config
 		The imported layout configuration hashtable.
 
 	.PARAMETER LayoutName
-		Optional name of the layout being validated (for error messages).
+		Optional name of the layout being validated. Default "Layout". Currently not used by the
+		function body - no message includes it.
 
 	.EXAMPLE
 		$config = Import-PowerShellDataFile -Path "Layout.psd1"
@@ -27,10 +38,6 @@ function Validate-Layout {
 		- IsValid (bool): Whether validation passed
 		- Errors (array): Array of error messages
 		- Warnings (array): Array of warning messages
-
-		A ProjectOverrides block is validated through Merge-LayoutProjectOverrides: every variant's
-		errors (unknown project, entry without DesktopNumber / Monitor, zone missing from the zone
-		layout that desktop and monitor end up with) are added to Errors.
 	#>
 	param (
 		[Parameter(Mandatory = $true)]

@@ -10,8 +10,12 @@ function Set-Wallpaper {
 		With the VirtualDesktop PowerShell module available, applies the wallpaper to ALL
 		virtual desktops. Without it, applies only to the current desktop.
 
-		With `-Auto`, detects the current system theme and sets the matching wallpaper.
-		Wallpaper style (fill, fit, stretch, tile, center) is read from `WallpaperStyles` config.
+		With `-Auto`, detects the current system theme (or uses -Theme) and sets the wallpaper
+		configured for the current machine type (falling back to `Default`); file names resolve
+		under `PathTemplates.Projects.Self.Wallpapers`. Without `-Auto` it is interactive: it lists
+		the files in that folder and prompts for a wallpaper and a style (Enter = Fill); -Theme is
+		ignored in that mode.
+		Wallpaper style (fill, fit, stretch, tile, center, span) is read from `WallpaperStyles` config.
 
 		A machine whose settings carry a `Monitors` array takes the multi-monitor path: active
 		displays are enumerated through `IDesktopWallpaper` and paired with the array by index.
@@ -20,21 +24,27 @@ function Set-Wallpaper {
 		mismatch. Displays past the end used to be skipped silently and kept whatever wallpaper
 		they already had.
 
-		Requires administrator privileges. Uses COM retry logic to handle transient failures.
+		Requires administrator privileges. Uses COM retry logic to handle transient failures, and
+		on an unexpected error re-runs itself through ReRun-LastCommand -AutoAccept.
 
 	.PARAMETER Auto
-		Auto-detect the system theme and apply the matching wallpaper.
+		Auto-detect the system theme and apply the matching wallpaper. Omit for the interactive picker.
 
 	.PARAMETER Theme
-		Theme to use: "Light", "Dark", or "Auto". Defaults to "Auto".
+		Theme to use with -Auto: "Light", "Dark", or "Auto" (detect from AppsUseLightTheme,
+		Dark when detection fails). Defaults to "Auto". Ignored without -Auto.
 
 	.EXAMPLE
 		Set-Wallpaper -Auto
 		Sets the wallpaper for all virtual desktops matching the current system theme.
 
 	.EXAMPLE
-		Set-Wallpaper -Theme "Light"
+		Set-Wallpaper -Auto -Theme "Light"
 		Sets the light theme wallpaper.
+
+	.EXAMPLE
+		Set-Wallpaper
+		Prompts for a wallpaper from the Wallpapers folder and a style.
 	#>
 	param(
 		[switch]$Auto,

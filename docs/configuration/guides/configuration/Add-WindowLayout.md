@@ -11,7 +11,7 @@ Creates a new window layout `.psd1` template file for a workspace under `Window/
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`SimpleLayoutWorkspaces`](../../configuration-reference.md#workspace-layouts) | array of workspace names | `@("Fullscreen", "Empty")` | Workspaces that use a single simple layout instead of a per-machine `<Workspace>_<MachineType>.psd1` file. `Set-WorkspaceWindowLayout` and `Add-WindowLayout` both consult it. |
+| [`SimpleLayoutWorkspaces`](../../configuration-reference.md#workspace-layouts) | array of workspace names | `@("Fullscreen", "Empty")` | Workspaces that use a single simple layout instead of a per-machine `<Workspace>_<MachineType>.psd1` file. `Set-WorkspaceWindowLayout` reads it; `Add-WindowLayout -Simple` appends the workspace to it. |
 
 ## Decisions
 
@@ -36,7 +36,7 @@ On this page that bites on `SimpleLayoutWorkspaces` - that key is an array, so w
 
 ## Step 1: Set `SimpleLayoutWorkspaces`
 
-Workspaces that use a single simple layout instead of a per-machine `<Workspace>_<MachineType>.psd1` file. `Set-WorkspaceWindowLayout` and `Add-WindowLayout` both consult it.
+Workspaces that use a single simple layout instead of a per-machine `<Workspace>_<MachineType>.psd1` file. `Set-WorkspaceWindowLayout` reads it; `Add-WindowLayout -Simple` appends the workspace to it.
 
 ```powershell
 SimpleLayoutWorkspaces = @("Fullscreen", "Empty", "MyScratch")

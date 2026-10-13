@@ -6,8 +6,8 @@ function Enable-ObsidianCli {
 	.DESCRIPTION
 		The CLI toggle (Settings > General > Advanced > Command line interface) is Obsidian
 		application state, not vault state: Obsidian keeps it as `"cli": true` in
-		%APPDATA%\obsidian\obsidian.json, the same file that lists the known vaults. A synced
-		.obsidian folder therefore never carries it from one machine to the next, and Open-Obsidian
+		%APPDATA%\obsidian\obsidian.json, the same file that lists the known vaults. A synced vault
+		(its .obsidian folder) therefore never carries it from one machine to the next, and Open-Obsidian
 		cannot load a workspace until it is set. This function sets it.
 
 		Obsidian rewrites obsidian.json on every settings change, so the flag is only written while

@@ -20,7 +20,9 @@ Function Git-Obsidian {
 		after a failed push finishes the job instead of reporting "No changes to update!"
 		over a clean tree whose last commit never reached the remote.
 
-		Restores the original working directory on exit.
+		On exit it changes to $currentDirectory, which this function never sets, so the shell
+		ends up in the home folder rather than where it started. ObsidianDirectory must be set:
+		an empty value also lands in the home folder, and the git commands run there.
 
 	.EXAMPLE
 		Git-Obsidian

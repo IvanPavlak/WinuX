@@ -1,12 +1,13 @@
 function Get-InstalledApps {
 	<#
 	.SYNOPSIS
-		Retrievesenumerates all installed Windows applications from the registry.
+		Enumerates all installed Windows applications from the registry.
 
 	.DESCRIPTION
-		Scans the Windows registry for all installed applications
-		(both 64-bit and 32-bit) and outputs a list with DisplayName, Version, and UninstallString.
-		Results are written to `installed_apps.txt` on the user's Desktop.
+		Scans the Windows registry's Uninstall keys for all installed applications
+		(both 64-bit and 32-bit) and outputs DisplayName, DisplayVersion, Publisher, InstallDate,
+		UninstallString, Bits and the registry Path of each. Results are written to
+		`installed_apps.txt` on the user's Desktop; an existing file there is cleared first.
 
 	.EXAMPLE
 		Get-InstalledApps

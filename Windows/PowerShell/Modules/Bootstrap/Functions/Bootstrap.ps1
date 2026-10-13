@@ -16,7 +16,8 @@ function Bootstrap {
 		LockedStartLayout.
 
 		Execution sequence:
-		1. (WithInitialSetup only) Rename-Machine, Start-MicrosoftActivationScripts, Start-Win11Debloat
+		1. (WithInitialSetup only) Initialize-Configuration (then the configuration is reloaded),
+		   Rename-Machine, Start-MicrosoftActivationScripts, Start-Win11Debloat
 		2. Git identity guarantee (restored from GitConfig when unset), then Update-Repositories
 		   (opt-in via Steps.RepositoryUpdate) - which groups it pulls is governed by
 		   BootstrapConfig.RepositoryUpdateScope
@@ -26,7 +27,9 @@ function Bootstrap {
 		6. WSL configuration (Steps.WSL; deprecated BootstrapConfig.WSLSetup still honored)
 		7. WinGet, Scoop, and Chocolatey - install package managers then apps from CSVs
 		8. Upgrade all packages, fork-defined personal steps (BootstrapConfig.PersonalSteps, optionally machine-gated), .NET EF CLI
-		9. Environment variables, Conda environments, NuGet config, taskbar pins
+		9. Environment variables, Conda environments, NuGet config, taskbar pins, then
+		   Set-TaskbarSettings and Set-VisualEffects (no step toggle - both no-op until their
+		   configuration sections are set)
 		10. WSL environment initialization, symbolic links, CoreAiRules enforcement layer (opt-in via
 		    Steps.CoreAiRules), AI skills links (opt-in via Steps.AiSkills), AI mods links and the
 		    Claude Code plugin list (opt-in via Steps.AiMods), Claude Code plugin marketplaces

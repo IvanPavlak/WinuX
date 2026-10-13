@@ -9,25 +9,18 @@ Opens one or more Visual Studio solutions configured in `VisualStudioSolutions` 
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`Universal`](../../configuration-reference.md#universal-constants) | hashtable, 26 keys | hashtable, 26 keys | Machine-independent constants: executable paths (`FirefoxExe`, `DockerExe`, `DbeaverExe`, ...), the `Browsers` map, `DefaultBrowser`, shared URLs, the `ProcessCleanup` lists, and `Desktop` (auto-resolved at load). Expanded in place by `Load-PathConfiguration`, so placeholders work here too. |
-| [`VisualStudioSolutions`](../../configuration-reference.md#visual-studio-solutions) | array of `@{ Name; Path }` | array of 1 | The solutions `Open-VisualStudio` offers, and what `Close-Project` closes. |
+| [`Universal.VisualStudio2026Exe`](../../configuration-reference.md#application-executables) | string (path) | `""` (empty) | The `devenv.exe` to launch. Required: empty or missing, the function reports an error and opens nothing. |
+| [`VisualStudioSolutions`](../../configuration-reference.md#visual-studio-solutions) | array of `@{ Name; Solution }` | array of 1 (`ExampleProject`) | The solutions `Open-VisualStudio` offers, and what `Close-Project` closes. `Solution` is not a literal path but a dot-notation reference into the expanded `PathTemplates` (`$global:MachineSpecificPaths`), e.g. `"Projects.ExampleProject.Solution"`. |
+| [`PathTemplates.Projects`](../../configuration-reference.md#path-templates--placeholder-system) | hashtable of project to path fields | `Self`, `ExampleProject` | Where each `Solution` reference resolves to - normally the project's `Solution` field, a `.sln` path. Placeholders such as `{Dev}` belong here. |
 
 ## Decisions
 
-1. Which browser should be the default?
-    - Options: A key from `Universal.Browsers`: `Firefox`, `Chrome`, `Edge`, `Brave`, `Tor`. Ships empty, so `Open-Browser` asks or uses the system default.
-    - Default: Empty.
-    - More detail: [`Universal`](../../configuration-reference.md#universal-constants)
-2. Are any of the shipped executable paths wrong on this machine?
-    - Options: Override the individual `Universal.<App>Exe` value. Absolute paths, or placeholder paths such as `{User}\AppData\Local\...`.
-    - Default: The shipped paths, which assume default install locations.
-    - More detail: [`Universal`](../../configuration-reference.md#universal-constants)
-3. Do you use a browser the base `Browsers` map does not list?
-    - Options: Add an entry with `Exe`, `PrivateArg` and `NewWindowArg`. Because hashtables merge per key, adding one browser does not remove the others.
-    - Default: The shipped five.
-    - More detail: [`Universal`](../../configuration-reference.md#universal-constants)
-4. Which Visual Studio solutions do you open regularly?
-    - Options: One entry per solution with a name and a path. Placeholders allowed.
+1. Where is Visual Studio installed on this machine?
+    - Options: The full path of `devenv.exe`, e.g. `C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE\devenv.exe`.
+    - Default: Empty - the function reports an error until it is set.
+    - More detail: [`Universal`](../../configuration-reference.md#application-executables)
+2. Which Visual Studio solutions do you open regularly?
+    - Options: One entry per solution with a name and a `Solution` reference such as `"Projects.MyProject.Solution"`, plus that path under `PathTemplates.Projects`. A literal path or placeholder in `Solution` does not resolve.
     - Default: The shipped single example.
     - More detail: [`VisualStudioSolutions`](../../configuration-reference.md#visual-studio-solutions)
 
@@ -48,28 +41,26 @@ On this page that bites on `VisualStudioSolutions` - that key is an array, so wh
 
 ## Step 1: Set `Universal`
 
-Machine-independent constants: executable paths (`FirefoxExe`, `DockerExe`, `DbeaverExe`, ...), the `Browsers` map, `DefaultBrowser`, shared URLs, the `ProcessCleanup` lists, and `Desktop` (auto-resolved at load). Expanded in place by `Load-PathConfiguration`, so placeholders work here too.
+The Visual Studio executable. `Universal` is a hashtable and deep-merges, so setting only this key keeps the rest of `Universal`.
 
 ```powershell
 Universal = @{
-    DefaultBrowser = "Firefox"
-    Browsers = @{
-        Vivaldi = @{
-            Exe          = "{User}\AppData\Local\Vivaldi\Application\vivaldi.exe"
-            PrivateArg   = "--incognito"
-            NewWindowArg = "--new-window"
-        }
-    }
+    VisualStudio2026Exe = "C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE\devenv.exe"
 }
 ```
 
 ## Step 2: Set `VisualStudioSolutions`
 
-The solutions `Open-VisualStudio` offers, and what `Close-Project` closes.
+The solutions `Open-VisualStudio` offers, and what `Close-Project` closes. Each `Solution` names a path under `PathTemplates`, so define the `.sln` there first (`PathTemplates` deep-merges). `VisualStudioSolutions` is an array, so restate the shipped entries you keep.
 
 ```powershell
+PathTemplates         = @{
+    Projects = @{
+        MyProject = @{ Solution = "{Dev}\MyProject\MyProject.sln" }
+    }
+}
 VisualStudioSolutions = @(
-    @{ Name = "MyProject"; Path = "{Dev}\MyProject\MyProject.sln" }
+    @{ Name = "MyProject"; Solution = "Projects.MyProject.Solution" }
 )
 ```
 
@@ -79,7 +70,7 @@ Reload the profile, then read the merged value back. `$global:Configuration` aft
 
 ```powershell
 Reload-PowerShellProfile
-$global:Configuration.Universal
+$global:Configuration.Universal.VisualStudio2026Exe
 ```
 
 ## Verification
@@ -88,9 +79,9 @@ Read-only checks. None of these change anything.
 
 ```powershell
 Reload-PowerShellProfile
-$global:Configuration.Universal
-$global:Configuration.VisualStudioSolutions
-$global:Configuration.VisualStudioSolutions | Format-Table Name, Path
+Test-Path $global:Configuration.Universal.VisualStudio2026Exe
+$global:Configuration.VisualStudioSolutions | Format-Table Name, Solution
+$global:MachineSpecificPaths.Projects.MyProject.Solution
 ```
 
 If a value reads back as empty, the two usual causes are a parse error in `Configuration.local.psd1` (run `Test-ConfigurationSchema`) and a key placed at the wrong nesting level.
@@ -102,18 +93,16 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 ```powershell
 # Configuration.local.psd1
 @{
-    Universal = @{
-        DefaultBrowser = "Firefox"
-        Browsers = @{
-            Vivaldi = @{
-                Exe          = "{User}\AppData\Local\Vivaldi\Application\vivaldi.exe"
-                PrivateArg   = "--incognito"
-                NewWindowArg = "--new-window"
-            }
+    Universal             = @{
+        VisualStudio2026Exe = "C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE\devenv.exe"
+    }
+    PathTemplates         = @{
+        Projects = @{
+            MyProject = @{ Solution = "{Dev}\MyProject\MyProject.sln" }
         }
     }
     VisualStudioSolutions = @(
-        @{ Name = "MyProject"; Path = "{Dev}\MyProject\MyProject.sln" }
+        @{ Name = "MyProject"; Solution = "Projects.MyProject.Solution" }
     )
 }
 ```
@@ -122,10 +111,6 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 
 - [`Open-VisualStudio` in the Application module reference](../../../modules/application.md#open-visualstudio) - parameters, usage and behaviour
 - [Application configuration guides](README.md) - every guide for this module
-- [Add Browser Group](add-browser-group.md) - browser groups, nesting, unique names, search and per-browser selection
-- [`Open-Browser`](Open-Browser.md) - reads the same configuration
-- [`Open-LeagueOfLegends`](Open-LeagueOfLegends.md) - reads the same configuration
-- [`Open-NotepadPlusPlus`](Open-NotepadPlusPlus.md) - reads the same configuration
-- [`Open-Steam`](Open-Steam.md) - reads the same configuration
+- [`Close-Project`](../workflow/Close-Project.md) - reads the same `VisualStudioSolutions`
 - [WinuXConfigurator](../../winux-configurator.md) - have an AI assistant walk these decisions with you
 - [Configuration reference](../../configuration-reference.md) - every key, section by section

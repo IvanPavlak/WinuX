@@ -11,11 +11,12 @@ section is empty, and Microsoft Activation Scripts and Win11Debloat no longer pr
 opt-in via `BootstrapConfig.Steps`. Personalization is opted into per feature via
 `Configuration.local.psd1` (see the [Configuration Overview](../configuration/overview.md)).
 
-What a vanilla run DOES do: update the repository, install the framework apps (PowerShell 7,
-Windows Terminal, PowerToys), install the PowerShell modules, and create the framework symlinks
-(the PowerShell profile + configuration and the FancyZones files). It does **not** upgrade the
-software already on the machine - `UpgradeAll` is opt-in (see below) - and it does not throw away
-whatever it links over: a real file already sitting at a link path is backed up first.
+What a vanilla run DOES do: install the framework apps (PowerShell 7, Windows Terminal, PowerToys)
+at their pinned versions, install the PowerShell modules, and create the framework symlinks (the
+PowerShell profile + configuration and the FancyZones files). It does **not** clone or pull other
+repositories - `RepositoryUpdate` is opt-in (see below) - it does not upgrade the software already
+on the machine - `UpgradeAll` is opt-in too - and it does not throw away whatever it links over: a
+real file already sitting at a link path is backed up first.
 
 Every step is individually toggleable via `BootstrapConfig.Steps` (or per invocation with
 `Bootstrap -Skip <steps>` / `-Include <steps>`) - see the
@@ -30,14 +31,15 @@ Every step is individually toggleable via `BootstrapConfig.Steps` (or per invoca
 │                                                                             │
 │  PHASE 1: INITIAL SETUP (only with -WithInitialSetup flag)                  │
 │  ├─→ Rename-Machine                                                         │
-│  │   └─ Prompts to set hostname for machine type detection                  │
+│  │   └─ No-op on a first run: Initialize-Configuration mapped the hostname  │
 │  ├─→ Start-MicrosoftActivationScripts                                       │
 │  │   └─ Optional Windows/Office activation (opt-in via Steps)               │
 │  └─→ Start-Win11Debloat                                                     │
 │      └─ Runs local vendored Win11Debloat (opt-in via Steps)                 │
 │                                                                             │
 │  PHASE 2: REPOSITORY SYNCHRONIZATION                                        │
-│  └─→ Update-Repositories (opt-in via Steps.RepositoryUpdate)                 │
+│  ├─→ Git identity guarantee (restored from GitConfig when unset)            │
+│  └─→ Update-Repositories (opt-in via Steps.RepositoryUpdate)                │
 │      ├─ Clone the groups RepositoryUpdateScope names for this machine       │
 │      └─ Pull latest changes for existing repos                              │
 │                                                                             │
@@ -61,7 +63,7 @@ Every step is individually toggleable via `BootstrapConfig.Steps` (or per invoca
 │  │   Only managers in play run: listed in PackageManagers AND holding at    │
 │  │   least one app for this machine. Base config => WinGet alone.           │
 │  ├─→ Install-WinGetPackageManager                                           │
-│  ├─→ Install-WinGetApps (from WinGetApps.csv)                               │
+│  ├─→ Install-WingetApps (from WinGetApps.csv)                               │
 │  ├─→ Install-ScoopPackageManager (skipped: empty ScoopApps.csv)             │
 │  ├─→ Install-ScoopApps (from ScoopApps.csv)                                 │
 │  ├─→ Install-ChocolateyPackageManager (skipped: empty ChocolateyApps.csv)   │
@@ -70,7 +72,7 @@ Every step is individually toggleable via `BootstrapConfig.Steps` (or per invoca
 │                                                                             │
 │  PHASE 5: DEVELOPMENT TOOLS                                                 │
 │  ├─→ PersonalSteps (fork-defined; base config runs none)                    │
-│  └─→ Install-DotnetEF (Entity Framework tools)                              │
+│  └─→ Install-DotnetEf (Entity Framework tools)                              │
 │                                                                             │
 │  PHASE 6: ENVIRONMENT CONFIGURATION                                         │
 │  ├─→ Set-EnvironmentVariables -Auto                                         │
@@ -86,7 +88,7 @@ Every step is individually toggleable via `BootstrapConfig.Steps` (or per invoca
 │                                                                             │
 │  PHASE 8: WSL & SYMBOLIC LINKS                                              │
 │  ├─→ Initialize-WSLEnvironment                                              │
-│  │   └─ Full WSL setup and distribution install                             │
+│  │   └─ Shell setup inside WSL (Configure-WSL installs the distro)          │
 │  ├─→ SymbolicLinkMaker                                                      │
 │  │   └─ Creates all symlinks from SymbolicLinks config                      │
 │  ├─→ Deploy-CoreAiRules (opt-in via Steps.CoreAiRules)                      │
@@ -95,6 +97,10 @@ Every step is individually toggleable via `BootstrapConfig.Steps` (or per invoca
 │  │   └─ Links AI/Skills/<source>/<skill> into every harness's skills dir    │
 │  ├─→ Deploy-AiMods (opt-in via Steps.AiMods)                                │
 │  │   └─ Links AI/Mods/<source>/<mod> into ~/.claude/mods + plugin list      │
+│  ├─→ Deploy-AiMarketplaces (opt-in via Steps.AiMarketplaces)                │
+│  │   └─ Claude Code plugin marketplaces + their plugins                     │
+│  ├─→ Enable-ObsidianCli (opt-in via Steps.ObsidianCli)                      │
+│  ├─→ Deploy-VSCodeProfiles (opt-in via Steps.VSCodeProfiles)                │
 │  └─→ Configure-WSLSSH                                                       │
 │      └─ Sets up SSH keys in WSL                                             │
 │                                                                             │
@@ -118,23 +124,33 @@ This adds the first-time-only steps:
 
 | Step                               | Description                             | Default                                                    |
 | ---------------------------------- | --------------------------------------- | ---------------------------------------------------------- |
-| `Rename-Machine`                   | Set hostname for machine type detection | On (interactive prompt)                                    |
+| `Rename-Machine`                   | Set hostname for machine type detection | On, but a no-op on a first run: `Initialize-Configuration` has already mapped the current hostname to `Test`; rename later with `Rename-Machine -Override` |
 | `Start-MicrosoftActivationScripts` | Windows/Office activation               | Off - opt in via `BootstrapConfig.Steps` (no prompt)       |
 | `Start-Win11Debloat`               | Runs local vendored Win11Debloat        | Off - opt in via `BootstrapConfig.Steps` (no prompt)       |
 
-Steps that run on **every** Bootstrap but ship off, because they act the moment they run:
+Steps that run on **every** Bootstrap but ship off, because they act the moment they run (in
+execution order):
 
 | Step                 | Description                                                     | Default                                       |
 | -------------------- | --------------------------------------------------------------- | --------------------------------------------- |
-| `UpgradeAll`         | `winget upgrade --all` (+ Scoop/Chocolatey), so **every** package already on the machine, not just WinuX's | Off - opt in via `BootstrapConfig.Steps` |
+| `RepositoryUpdate`   | Clones and pulls every repository `BootstrapConfig.RepositoryUpdateScope` names for this machine | Off - opt in via `BootstrapConfig.Steps` |
 | `DeveloperMode`      | Enables Developer Mode (symlinks without admin)                 | Off - opt in via `BootstrapConfig.Steps`      |
+| `UpgradeAll`         | `winget upgrade --all` (+ Scoop/Chocolatey), so **every** package already on the machine, not just WinuX's | Off - opt in via `BootstrapConfig.Steps` |
 | `NuGetConfig`        | Writes a NuGet config (prompts for a GitHub PAT)                | Off - opt in via `BootstrapConfig.Steps`      |
 | `CoreAiRules`        | Machine-global AI agent policy                                  | Off - opt in via `BootstrapConfig.Steps`      |
 | `AiSkills`           | Machine-global Agent Skills linked into every AI harness        | Off - opt in via `BootstrapConfig.Steps`      |
 | `AiMods`             | Machine-global Claude Code mods and the plugin list setting     | Off - opt in via `BootstrapConfig.Steps`      |
+| `AiMarketplaces`     | Claude Code plugin marketplaces in the user settings, and their plugins installed through the CLI | Off - opt in via `BootstrapConfig.Steps` |
 | `ObsidianCli`        | Turns the Obsidian command line interface on (per-machine Obsidian app setting) | Off - opt in via `BootstrapConfig.Steps` |
 | `VSCodeProfiles`     | Links VS Code profile files from the repository and installs their extensions | Off - opt in via `BootstrapConfig.Steps` |
 | `LockedStartLayout`  | Locks the taskbar layout via registry policy                    | Off - opt in via `BootstrapConfig.Steps`      |
+
+Every other step defaults on, because its function no-ops while its configuration section is
+empty: `RenameMachine`, `ExecutionPolicy`, `PowerPlan`, `PowerButtonActions`, `SystemTheme`,
+`Locale`, `DisplayLanguage`, `KeyboardLayouts`, `NerdFont`, `PowerShellModules`, `SpecialFolders`,
+`WSL`, `WinGetApps`, `ScoopApps`, `ChocolateyApps`, `DotnetEf`, `EnvironmentVariables`,
+`CondaEnvironments`, `Taskbar` and `SymbolicLinks`. The base `Configuration.psd1` spells
+`RepositoryUpdate` and `UpgradeAll` out as `$false` and sets `WSL` per machine type.
 
 ## What Gets Installed
 
@@ -248,7 +264,7 @@ Review this file if any step fails.
 
 ```powershell
 # Retry specific package manager
-Install-WinGetApps
+Install-WingetApps
 Install-ScoopApps
 Install-ChocolateyApps
 ```
@@ -291,8 +307,8 @@ Configure-WSL -Force
 
 After the restart:
 
-1. Open Windows Terminal - your profile is configured
-2. You should see the Oh My Posh prompt
+1. Open a new PowerShell 7 window (`pwsh`). Windows Terminal's default profile is still Windows PowerShell 5.1 until you link the Terminal settings or pick PowerShell 7 as its default profile
+2. You should see the WinuX startup output; the Oh My Posh prompt appears once Oh My Posh is opted in (`JanDeDobbeleer.OhMyPosh` in `WinGetApps.local.csv` and the `OhMyPosh` symlink)
 3. Run `List-Functions` to see all available commands
 4. Continue to [Subsequent Runs](subsequent-runs.md)
 5. Explore the [Configuration](../configuration/overview.md) to customize

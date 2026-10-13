@@ -9,12 +9,12 @@ Displays every loading spinner style defined in `Configuration.LoadingSpinners`,
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`LoadingSpinners`](../../configuration-reference.md#loading-spinners) | hashtable of spinner name to `@{ Frames; Interval }` | hashtable, 19 keys | The spinner animations `Loading-Spinner` can draw. `Preview-LoadingSpinners` renders every one of them. |
+| [`LoadingSpinners`](../../configuration-reference.md#loading-spinners) | hashtable of spinner name to `@{ Symbols; Delay }` | hashtable, 19 keys | The spinner animations `Loading-Spinner` can draw. `Preview-LoadingSpinners` renders every one of them, cycling each style's `Symbols` on a fixed 100 ms tick (it does not read `Delay`). |
 
 ## Decisions
 
 1. Do you want to add your own spinner?
-    - Options: Name to `@{ Frames = @(...); Interval = <ms> }`. Supplying the key replaces all 19 shipped spinners, so copy the base map first if you only want to add one.
+    - Options: Name to `@{ Symbols = @(...); Delay = <ms> }`. `LoadingSpinners` is a hashtable, so it deep-merges per key: a new name is added beside the 19 shipped spinners, and a shipped name you repeat has only the fields you supply replaced.
     - Default: The shipped 19.
     - More detail: [`LoadingSpinners`](../../configuration-reference.md#loading-spinners)
 
@@ -36,8 +36,8 @@ The spinner animations `Loading-Spinner` can draw. `Preview-LoadingSpinners` ren
 
 ```powershell
 LoadingSpinners = @{
-    Dots  = @{ Frames = @(".  ", ".. ", "..."); Interval = 200 }
-    MyOwn = @{ Frames = @("<", "^", ">", "v"); Interval = 120 }
+    Dots  = @{ Symbols = @(".  ", ".. ", "..."); Delay = 200 }
+    MyOwn = @{ Symbols = @("<", "^", ">", "v"); Delay = 120 }
 }
 ```
 
@@ -70,8 +70,8 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 # Configuration.local.psd1
 @{
     LoadingSpinners = @{
-        Dots  = @{ Frames = @(".  ", ".. ", "..."); Interval = 200 }
-        MyOwn = @{ Frames = @("<", "^", ">", "v"); Interval = 120 }
+        Dots  = @{ Symbols = @(".  ", ".. ", "..."); Delay = 200 }
+        MyOwn = @{ Symbols = @("<", "^", ">", "v"); Delay = 120 }
     }
 }
 ```

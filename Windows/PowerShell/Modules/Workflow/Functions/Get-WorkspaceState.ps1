@@ -6,9 +6,9 @@ function Get-WorkspaceState {
 	.DESCRIPTION
 		Open-Workspace records what each open actually produced - the windows that appeared and the
 		Windows Terminal tabs that appeared - into Workflow\State\OpenWorkspaces.txt, a PowerShell
-		data file parsed with the same Import-PowerShellDataFile used for layout and configuration
-		.psd1 files. Close-Workspace reads it back through this function and closes exactly those
-		windows and tabs.
+		data file parsed with the same Import-PowerShellDataFile used for the layout and
+		configuration psd1 files. Close-Workspace reads it back through this function and closes
+		exactly those windows and tabs.
 
 		The tracker is the ONLY input to a teardown. Ownership is deliberately never re-derived from
 		WorkspaceActions: a single-instance app such as Obsidian, already running because an earlier

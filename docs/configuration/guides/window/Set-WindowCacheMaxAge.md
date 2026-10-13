@@ -1,6 +1,6 @@
 # Set-WindowCacheMaxAge
 
-Sets the maximum age for the window cache, configuring how long the window enumeration cache remains valid.
+Sets the maximum age for the window cache, configuring how long the window enumeration cache remains valid (50 ms until this is called).
 
 ## Configuration Keys
 

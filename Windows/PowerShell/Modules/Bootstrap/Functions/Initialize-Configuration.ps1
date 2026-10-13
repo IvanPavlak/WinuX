@@ -6,7 +6,7 @@ function Initialize-Configuration {
 	.DESCRIPTION
 		WinuX ships a generic Configuration.psd1 (blank Git identity, placeholder paths) and never
 		commits personal data. Your personal values live in a sibling Configuration.local.psd1 which
-		Load-PathConfiguration deep-merges over the base at load time (see OpenSource.md section 15).
+		Load-PathConfiguration deep-merges over the base at load time (see docs/contributing/fork-model.md).
 		Because the base file is never edited, pulling upstream (WinuX) updates into a fork never
 		conflicts on configuration.
 

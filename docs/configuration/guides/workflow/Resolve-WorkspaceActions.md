@@ -9,7 +9,7 @@ Decides which of a workspace's configured actions run on this machine and with w
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`WorkspaceActions`](../../configuration-reference.md#workspace-actions) | hashtable of workspace name to action array | hashtable, 5 keys | The actions being resolved. Each `@{ Action; Parameters }` entry may carry the scopes `Machine = "PC/Work"` and/or `LayoutMachine = "Laptop/Work"` (an absent or blank key means every machine; the action runs only when both match) and the tables `MachineParameters` / `LayoutMachineParameters = @{ "<scope>" = @{ ... } }`, whose rows for this machine are merged over `Parameters` (`$null` removes a parameter). The project keys work the same way for the selected project(s): `Project = "MyProject/OtherProject"` and `ProjectParameters = @{ "<project scope>" = @{ ... } }`, applied after the machine tables. |
+| [`WorkspaceActions`](../../configuration-reference.md#workspace-actions) | ordered list of workspaces (one single-key hashtable each) | list of 5 | The actions being resolved (the caller hands one workspace's entries over as `-Actions`). Each `@{ Action; Parameters }` entry may carry the scopes `Machine = "PC/Work"` and/or `LayoutMachine = "Laptop/Work"` (an absent or blank key means every machine; the action runs only when both match) and the tables `MachineParameters` / `LayoutMachineParameters = @{ "<scope>" = @{ ... } }`, whose rows for this machine are merged over `Parameters` (`$null` removes a parameter). The project keys work the same way for the selected project(s): `Project = "MyProject/OtherProject"` and `ProjectParameters = @{ "<project scope>" = @{ ... } }`, applied after the machine tables. |
 | [`ProjectActions`](../../configuration-reference.md#project-actions) | ordered list of projects | ordered list | The tokens a `Project` scope or a `ProjectParameters` row key may name. Anything else is reported as an unknown project and never matches. Read only when an entry carries a project key. |
 | [`ValidMachineTypes`](../../configuration-reference.md#valid-machine-types) | array of strings | `@("Test")` | The tokens a `Machine` scope or a `MachineParameters` row key may name. Anything else is reported as an unknown token and never matches. |
 | [`LayoutMachineTypeOverrides`](../../configuration-reference.md#layout-set-overrides) | hashtable of machine type to layout set | `@{ Test = "" }` | Redirects a machine's layouts to another set. Every non-empty value is also a valid `LayoutMachine` token and `LayoutMachineParameters` row key, and a redirected machine matches those as that set, not as itself. |
@@ -59,15 +59,16 @@ On this page that bites on `WorkspaceActions`: it is an ordered list, so a local
 Add a scope (`Machine`, `LayoutMachine`) to an entry that should not run everywhere, and a table (`MachineParameters`, `LayoutMachineParameters`) to an entry that runs everywhere with a difference per machine. Every other entry stays as it is. Here the desktop's own layout wants two Google windows side by side while the laptop's and the work machine's layouts want one fullscreen window, Outlook belongs to the work machine only, and the project is opened without running it away from the desktop:
 
 ```powershell
-WorkspaceActions = @{
-    Gaming = @(
-        @{ Action = "Open-Steam" }
-        @{ Action = "Open-Browser"; Parameters = @{ Groups = @("Google") }; LayoutMachineParameters = @{ PC = @{ Instances = 2 } } }
-        @{ Action = "Open-Project"; Parameters = @{ Project = "Mods"; RunApp = $true }; MachineParameters = @{ "Laptop/Work" = @{ RunApp = $null } } }
-        @{ Action = "Open-Outlook"; Machine = "Work" }
-        @{ Action = "Set-WorkspaceWindowLayout"; Parameters = @{ WorkspaceName = "Gaming" } }
-    )
-}
+WorkspaceActions = @(
+    @{ Gaming = @(
+            @{ Action = "Open-Steam" }
+            @{ Action = "Open-Browser"; Parameters = @{ Groups = @("Google") }; LayoutMachineParameters = @{ PC = @{ Instances = 2 } } }
+            @{ Action = "Open-Project"; Parameters = @{ Project = "Mods"; RunApp = $true }; MachineParameters = @{ "Laptop/Work" = @{ RunApp = $null } } }
+            @{ Action = "Open-Outlook"; Machine = "Work" }
+            @{ Action = "Set-WorkspaceWindowLayout"; Parameters = @{ WorkspaceName = "Gaming" } }
+        )
+    }
+)
 ```
 
 ## Step 2: Check the layout sets the scopes and rows name
@@ -102,7 +103,7 @@ Reload the profile, then read the merged value back. `$global:Configuration` aft
 
 ```powershell
 Reload-PowerShellProfile
-$global:Configuration.WorkspaceActions.Gaming
+Get-OrderedEntry $global:Configuration.WorkspaceActions "Gaming"
 ```
 
 ## Verification
@@ -112,8 +113,8 @@ Read-only checks. None of these change anything.
 ```powershell
 Reload-PowerShellProfile
 Get-LayoutMachineType
-Resolve-WorkspaceActions -Actions $global:Configuration.WorkspaceActions.Gaming -Workspace "Gaming" | ForEach-Object { "$($_.Action) $(($_.Parameters.Keys | Sort-Object) -join ',')" }
-Resolve-WorkspaceActions -Actions $global:Configuration.WorkspaceActions.Gaming -Workspace "Gaming" -MachineType "Laptop" -LayoutMachineType "Laptop" | ForEach-Object { "$($_.Action) $(($_.Parameters.Keys | Sort-Object) -join ',')" }
+Resolve-WorkspaceActions -Actions (Get-OrderedEntry $global:Configuration.WorkspaceActions "Gaming") -Workspace "Gaming" | ForEach-Object { "$($_.Action) $(($_.Parameters.Keys | Sort-Object) -join ',')" }
+Resolve-WorkspaceActions -Actions (Get-OrderedEntry $global:Configuration.WorkspaceActions "Gaming") -Workspace "Gaming" -MachineType "Laptop" -LayoutMachineType "Laptop" | ForEach-Object { "$($_.Action) $(($_.Parameters.Keys | Sort-Object) -join ',')" }
 ```
 
 For the project keys, `Resolve-WorkspaceActions -Actions (Get-OrderedEntry $global:Configuration.WorkspaceActions "Client") -Workspace "Client" -Project "MyProject"` shows what an open for `MyProject` runs; an unknown project token shows up as `... unknown project [...] (not a ProjectActions name) - ignored`.
@@ -137,21 +138,23 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
         Test   = ""
     }
     SmallDisplayMachineType = "Laptop"
-    WorkspaceActions = @{
-        Gaming = @(
-            @{ Action = "Open-Steam" }
-            @{ Action = "Open-Browser"; Parameters = @{ Groups = @("Google") }; LayoutMachineParameters = @{ PC = @{ Instances = 2 } } }
-            @{ Action = "Open-Project"; Parameters = @{ Project = "Mods"; RunApp = $true }; MachineParameters = @{ "Laptop/Work" = @{ RunApp = $null } } }
-            @{ Action = "Open-Outlook"; Machine = "Work" }
-            @{ Action = "Set-WorkspaceWindowLayout"; Parameters = @{ WorkspaceName = "Gaming" } }
-        )
-        Client = @(
-            @{ Action = "Open-Project" }
-            @{ Action = "Open-Browser"; Parameters = @{ Groups = @("AI") }; ProjectParameters = @{ MyProject = @{ Groups = @("AI", "MyProjectDocs") } } }
-            @{ Action = "Open-DBeaver"; Project = "MyProject/OtherProject" }
-            @{ Action = "Set-WorkspaceWindowLayout"; Parameters = @{ WorkspaceName = "{Workspace}" } }
-        )
-    }
+    WorkspaceActions = @(
+        @{ Gaming = @(
+                @{ Action = "Open-Steam" }
+                @{ Action = "Open-Browser"; Parameters = @{ Groups = @("Google") }; LayoutMachineParameters = @{ PC = @{ Instances = 2 } } }
+                @{ Action = "Open-Project"; Parameters = @{ Project = "Mods"; RunApp = $true }; MachineParameters = @{ "Laptop/Work" = @{ RunApp = $null } } }
+                @{ Action = "Open-Outlook"; Machine = "Work" }
+                @{ Action = "Set-WorkspaceWindowLayout"; Parameters = @{ WorkspaceName = "Gaming" } }
+            )
+        }
+        @{ Client = @(
+                @{ Action = "Open-Project" }
+                @{ Action = "Open-Browser"; Parameters = @{ Groups = @("AI") }; ProjectParameters = @{ MyProject = @{ Groups = @("AI", "MyProjectDocs") } } }
+                @{ Action = "Open-DBeaver"; Project = "MyProject/OtherProject" }
+                @{ Action = "Set-WorkspaceWindowLayout"; Parameters = @{ WorkspaceName = "{Workspace}" } }
+            )
+        }
+    )
     ProjectActions = @(
         @{ MyProject = @( @{ Action = "Open-VSCode"; Parameters = @{ Folder = "MyProject" } } ) }
         @{ OtherProject = @( @{ Action = "Open-VSCode"; Parameters = @{ Folder = "OtherProject" } } ) }

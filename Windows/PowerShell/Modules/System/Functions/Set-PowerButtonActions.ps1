@@ -23,8 +23,14 @@ function Set-PowerButtonActions {
 		the laptop lid is closed (both on battery and when plugged in).
 		Also controls Fast Startup, Sleep, and Hibernate features.
 
-		With `-Auto`, reads all settings from `PowerButtonActions` in Configuration.psd1.
-		Without `-Auto`, accepts individual parameters (e.g. `-PowerButtonOnBattery "ShutDown"`).
+		With `-Auto`, reads the settings for the current machine type from `PowerButtonActions` in
+		Configuration.psd1 (explicit parameters override them). With no entry for the machine type
+		and no explicit parameter, -Auto leaves the power settings as-is. A missing
+		DisableFastStartup is left unmanaged; a missing DisableSleep / DisableHibernate is applied
+		as $false.
+		Without `-Auto`, accepts individual parameters (e.g. `-PowerButtonOnBattery "ShutDown"`);
+		every omitted parameter takes its hardcoded default (power button and lid-on-battery
+		ShutDown, sleep buttons and lid-plugged-in DoNothing, all three Disable* toggles $true).
 		Valid actions: "DoNothing", "Sleep", "Hibernate", "ShutDown".
 
 		Applies settings to ALL power schemes to prevent Windows from overriding them.
@@ -66,7 +72,8 @@ function Set-PowerButtonActions {
 
 	.EXAMPLE
 		Set-PowerButtonActions -PowerButtonPluggedIn "ShutDown" -PowerButtonOnBattery "Sleep"
-		Sets the power button actions for both power states.
+		Sets the power button actions for both power states; every other setting takes its
+		hardcoded default.
 	#>
 	[CmdletBinding()]
 	param(

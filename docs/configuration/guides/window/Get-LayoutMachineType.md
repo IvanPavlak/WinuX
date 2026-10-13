@@ -10,7 +10,7 @@ Resolves the machine type whose window-arrangement settings apply to the current
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
 | [`LayoutMachineTypeOverrides`](../../configuration-reference.md#layout-set-overrides) | hashtable of machine type to layout set name | `@{ Test = "" }` | Lets a machine use another machine layout set - for example a laptop docked to a different monitor arrangement. `Get-LayoutMachineType` resolves it, so layouts and the reset target can never disagree. An override name is not a machine type: it needs no `ValidMachineTypes` entry and no base paths, only `<Workspace>_<Name>.psd1` layout files. |
-| [`SmallDisplayMachineType`](../../configuration-reference.md#layout-set-overrides) | string | empty string | Which layout machine type counts as the small-display profile, used by `Get-LayoutMachineType` and the display-aware sizing helpers. |
+| [`SmallDisplayMachineType`](../../configuration-reference.md#layout-set-overrides) | string | empty string | The layout machine type to use when no override applies and the primary display is laptop-class (at most 3000 px wide, per `Test-SmallPrimaryDisplay`). Used by `Get-LayoutMachineType` and the display-aware sizing helpers; empty disables the rule. |
 
 ## Decisions
 
@@ -48,7 +48,7 @@ LayoutMachineTypeOverrides = @{
 
 ## Step 2: Set `SmallDisplayMachineType`
 
-Which layout machine type counts as the small-display profile, used by `Get-LayoutMachineType` and the display-aware sizing helpers.
+The layout machine type to use when no override applies and the primary display is laptop-class (at most 3000 px wide, per `Test-SmallPrimaryDisplay`). Used by `Get-LayoutMachineType` and the display-aware sizing helpers; empty disables the rule.
 
 ```powershell
 SmallDisplayMachineType = "Laptop"
@@ -72,7 +72,6 @@ Reload-PowerShellProfile
 $global:Configuration.LayoutMachineTypeOverrides
 $global:Configuration.SmallDisplayMachineType
 Get-LayoutMachineType
-$global:Configuration.LayoutMachineTypeOverrides
 ```
 
 If a value reads back as empty, the two usual causes are a parse error in `Configuration.local.psd1` (run `Test-ConfigurationSchema`) and a key placed at the wrong nesting level.

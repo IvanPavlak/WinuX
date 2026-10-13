@@ -26,10 +26,13 @@ function Merge-LayoutProjectOverrides {
 		  - Clearing a desktop and monitor without a replacement is not supported.
 
 		Validation runs over EVERY override block, selected or not, so a typo surfaces on any open:
-		a project token that is not a ProjectActions name, an override entry without DesktopNumber
-		or Monitor, and an override entry whose Zone does not exist in the zone layout its desktop
-		and monitor end up with (the override's Monitors applied over the base) are errors. Blocks
-		with errors are not applied.
+		an empty key or a project token that is not a ProjectActions name, a block that is not a
+		hashtable or has a key other than Monitors and Layout, a Monitors value that is not a
+		hashtable, an override entry without DesktopNumber or Monitor, and an override entry with a
+		Zone (and no Layout) whose desktop and monitor have no zone layout, or whose Zone does not
+		exist in the zone layout they end up with (the override's Monitors applied over the base),
+		are errors. Blocks with errors are not applied. A ProjectOverrides value that is not a
+		hashtable is one error and nothing is applied.
 
 		The input is never modified. Without a ProjectOverrides block, or when no selected project
 		is covered, the result's Config is the input itself.

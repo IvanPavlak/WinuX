@@ -1,6 +1,6 @@
 # Tests Module
 
-The Tests module provides **Pester test execution** for WinuX. It validates AI, Application, Bootstrap, Configuration, Git, Helper, Logging, System, Window, and Workflow module logic, plus repository-infrastructure checks.
+The Tests module provides **Pester test execution** for WinuX. It validates AI, Application, Bootstrap, Configuration, Git, Helper, Logging, System, Window, and Workflow module logic, the test harness's own helper scripts, plus repository-infrastructure checks.
 
 > [!NOTE]
 > The repository maintains broad module-wide test coverage with same-name test files for function behavior checks, including complete same-name coverage for the System module.
@@ -22,7 +22,7 @@ Recursively discovers `*.Tests.ps1` files under the Tests directory and, when pr
 | `-PassThru`       | Return the aggregate result object instead of just printing the summary. |
 | `-Quick`          | Skip every test tagged `Integration` (real git, real processes); a file whose tests are all tagged is not run at all. See [The Integration tier](#the-integration-tier). |
 | `-Changed`        | Run only the test files the changes since `-Since` can affect, conservatively, after printing each selected file and why. Combines with `-TestName` and `-Path` as a union. See [Running only what a change affects](#running-only-what-a-change-affects). |
-| `-Since`          | The ref `-Changed` compares against (its merge base with `HEAD`). Defaults to `master`. |
+| `-Since`          | The ref `-Changed` compares against (its merge base with `HEAD`). Defaults to the main branch: `master`, falling back to `origin/master`, `main`, then `origin/main` - the first that exists. |
 | `-BuildImpactMap` | Run the full suite while recording which functions each test file invokes, into `Results/impact-map.json`. About twice as slow as a normal run; cannot be combined with a filter, `-Changed` or `-Quick`. |
 
 ```powershell
@@ -61,7 +61,7 @@ if ($results.FailedCount -gt 0) {
 
 [Invoke-TestSuite.ps1](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Tests/Invoke-TestSuite.ps1) is the harness both `Run-Tests` and the `Tests` CI workflow run. It sits at the module root rather than in `Functions/` because it is a script, not an exported function.
 
-Pester (6.x included) has no native parallelism, so the harness provides it. Discovered test files are bucketed by expected duration and handed to N child `pwsh -NoProfile` processes. Each worker bootstraps its own session - `PSModulePath`, `$global:Configuration`, the nine engine modules plus `Custom` - and runs `Invoke-Pester` over its own bucket.
+Pester (6.x included) has no native parallelism, so the harness provides it. Discovered test files are bucketed by expected duration and handed to N child `pwsh -NoProfile` processes. Each worker bootstraps its own session - `PSModulePath`, `$global:Configuration`, the ten engine modules (every module except `Tests`) plus `Custom` when the Custom area exists - and runs `Invoke-Pester` over its own bucket.
 
 The Pester version is pinned repo-wide in `Modules/Tests/RequiredPesterVersion.txt` - the single source of truth the worker bootstrap (`Import-Module -RequiredVersion`), `Install-PowerShellModules`, and the `Tests` CI workflow all read. A machine without exactly that version fails loudly at worker bootstrap (exit code `2`) instead of silently running the suite on a version it was not written for; run `Install-PowerShellModules` to install the pin side-by-side with whatever else is present (the in-box 3.4.0 included). To bump the version, edit the pin file, re-run `Install-PowerShellModules` on each machine, and fix any new breaking changes in the same PR - the CI cache key rolls over automatically.
 
@@ -93,20 +93,20 @@ The same suite can take more than twice as long from one run to the next, and th
 
 ### The Integration tier
 
-Test files whose value is real I/O - real git, real processes - carry `-Tag 'Integration'` on their top-level `Describe`: the seven `Update-Repository.DataSafety.*` files, `Restore-RepositoryStash.Tests.ps1`, and the harness tests that drive real git or real processes (`Get-ChangedPaths.Tests.ps1`, `Import-NativeAssembly.Tests.ps1`). A file that is slow only because it is large stays untagged. `Run-Tests -Quick` does not dispatch a file whose tests are all tagged and passes `ExcludeTag = 'Integration'` to every worker for the rest; the live counter's denominator leaves the excluded tests out ([Get-ExpectedTestCount.ps1](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Tests/Get-ExpectedTestCount.ps1) reads literal `-Tag` values off the syntax tree). `-Quick` is a convenience, never the gate: a bare `Run-Tests` and `-CI` always run everything.
+Test files whose value is real I/O - real git, real processes - carry `-Tag 'Integration'` on their top-level `Describe`: the seven `Update-Repository.DataSafety.*` files, `Restore-RepositoryStash.Tests.ps1`, and the harness tests that drive real git or real processes (`Get-ChangedPaths.Tests.ps1`, `Import-NativeAssembly.Tests.ps1`); `Read-ImpactMap.Tests.ps1` tags only its one real-git `It`. A file that is slow only because it is large stays untagged. `Run-Tests -Quick` does not dispatch a file whose tests are all tagged and passes `ExcludeTag = 'Integration'` to every worker for the rest; the live counter's denominator leaves the excluded tests out ([Get-ExpectedTestCount.ps1](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Tests/Get-ExpectedTestCount.ps1) reads literal `-Tag` values off the syntax tree). `-Quick` is a convenience, never the gate: a bare `Run-Tests` and `-CI` always run everything.
 
 ### Running only what a change affects
 
-`Run-Tests -Changed` compares the working tree with the merge base of `HEAD` and `-Since` (default `master`), so it covers the branch's commits, staged and unstaged edits and untracked files ([Get-ChangedPaths.ps1](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Tests/Get-ChangedPaths.ps1)), and selects the union of ([Get-TestImpact.ps1](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Tests/Get-TestImpact.ps1)):
+`Run-Tests -Changed` compares the working tree with the merge base of `HEAD` and `-Since` (default `master`, falling back to `origin/master`, `main`, then `origin/main`), so it covers the branch's commits, staged and unstaged edits and untracked files ([Get-ChangedPaths.ps1](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Tests/Get-ChangedPaths.ps1)), and selects the union of ([Get-TestImpact.ps1](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Tests/Get-TestImpact.ps1)):
 
 1. Changed test files.
 2. Every test file that uses a changed fixture (any non-test file under a test folder, such as `Support/*.ps1` or `RepositoryDataSafetyFixtures.ps1`), transitively; a fixture no test references runs everything.
 3. For each changed function file: its own tests (`<Name>*.Tests.ps1`), every test file that references it, and the same for every transitive caller - a function file that references the name. References are read off each file's tokens, comments excluded and string contents included, so a function called through a name written as a string (`& 'Open-Workspace'`, a workspace action) counts; a folder in a path (`...\Bootstrap\Functions\X.ps1`) does not. The parsed references are cached in `Results/dependency-map.json`, keyed by file hash.
 4. Every test file the runtime impact map (`Results/impact-map.json`, built by `Run-Tests -BuildImpactMap`) says executed a changed function. A map built for another Pester version, or more than 50 commits ago, is ignored and the selection says so.
 5. The Infrastructure tests, for any documentation change (`*.md`), a module manifest (which also selects that module's tests), or a function file that was added or removed.
-6. The full suite for what analysis cannot see the consumers of: `Configuration.psd1` and `Configuration.local.psd1`, the profile, the harness and its helper scripts, `RequiredPesterVersion.txt`, any `*.psm1` loader, the Logging module (every test mocks it), `*.cs` sources, module `Data/` files, any other file in a module folder, anything under `AI/`, and **any changed path no rule recognizes**.
+6. The full suite for what analysis cannot see the consumers of: `Configuration.psd1` and `Configuration.local.psd1`, the profile, the harness and its helper scripts, `RequiredPesterVersion.txt`, any `*.psm1` loader, the Logging module (every test mocks it), `*.cs` sources, module `Data/` files, any other file in a module folder, anything under `AI/` except the agent prose in `AI/Context` and `AI/Instructions` (those `*.md` files count as documentation, rule 5), and **any changed path no rule recognizes**.
 
-The selection is printed before anything runs - each file and why it was picked (`changed`, `tests X`, `references X`, `caller of X (via Y)`, `uses the fixture X`, `executed X at runtime`, `documentation changed`, or the full-suite reasons) - and repeated in full in the run log. An Integration file selected because its own subject changed runs whole even under `-Quick`.
+The selection is printed before anything runs - each file and why it was picked (`changed`, `tests X`, `references X`, `caller of X (via Y)`, `uses the fixture X`, `executed X at runtime`, `documentation changed`, `function file added or removed`, `module manifest changed`, `its module's manifest changed`, or the full-suite reasons) - and repeated in full in the run log. An Integration file selected because its own subject changed runs whole even under `-Quick`.
 
 `-Changed` is a convenience, never the gate. Every green full run stamps `Results/last-green.json` with a fingerprint of the tree it tested (HEAD plus every uncommitted change), and a `-Changed` or `-Quick` run ends with a reminder when the current tree has no green full run yet. Two audits measure how often the selector misses:
 
@@ -129,7 +129,7 @@ Everything a detailed serial run would have printed - every per-test line, and e
 
 | File                                  | Contents                                                                                |
 | ------------------------------------- | --------------------------------------------------------------------------------------- |
-| `TestRun_<run>.log`                   | Summary (with the `Workers`, `Machine`, `Start-up` and `Worker history` lines), per-worker breakdown, selector misses, the `-Changed` selection, failures, slowest 20 files, then every worker transcript. |
+| `TestRun_<run>.log`                   | Summary (with the `Mode`, `Workers`, `Machine`, `Start-up` and `Worker history` lines), selector misses, the `-Changed` selection, per-worker breakdown, failures, slowest 20 files, then every worker transcript. |
 | `pester-results-<run>-worker<N>.xml`  | One NUnit3 XML per worker. CI merges the glob into a single check run.                   |
 | `timings.json`                        | Measured per-file duration and test count: bucketing for the next run, and the counter's fallback for a file whose count cannot be read off its source. |
 | `workers.json`                        | The worker-count history the learner reads (see [Worker count](#worker-count)). |
@@ -174,6 +174,7 @@ Modules/Tests/
 ├── Functions/
 │   └── Run-Tests.ps1       # Test runner function
 └── Modules/
+    ├── AI/                  # AI module tests
     ├── Application/         # Application module tests
     ├── Bootstrap/           # Bootstrap module tests
     ├── Configuration/       # Configuration module tests
@@ -183,7 +184,10 @@ Modules/Tests/
     │                        #   docs links, manifest completeness, function reference pages,
     │                        #   configuration guides) - run all with -TestName "Infrastructure"
     ├── Logging/             # Logging module tests
+    ├── Support/             # Shared test fixtures (fake virtual desktop, fake wait clock,
+    │                        #   Reset-WindowModuleState.ps1)
     ├── System/              # System module tests
+    ├── Tests/               # Tests of the harness helpers (worker learner, -Changed selector, ...)
     ├── Window/              # Window module tests
     └── Workflow/            # Workflow module tests
 ```
@@ -222,12 +226,16 @@ Describe "MyFunction" {
 
 | Area          | Coverage Summary                                                                        |
 | ------------- | --------------------------------------------------------------------------------------- |
+| AI            | Skill, mod, marketplace and CoreAiRules deployment, rosters, and Claude settings writes |
 | Application   | Launcher wrappers, browser/project open detection, installer workflows                  |
 | Bootstrap     | Machine detection and configuration loading paths                                       |
 | Configuration | Config schema checks and formatting helpers                                             |
 | Git           | Branch/status/diff/pull flows and repository initialization/update automation           |
 | Helper        | Path expansion, selection logic, retry behavior, and utility helpers                    |
+| Infrastructure | Documentation links, manifest completeness, the function reference pages, configuration guides |
+| Logging       | Log writing, levels, session start/stop, retention and idle-time maintenance            |
 | System        | Environment/theme/taskbar/WSL/process-management behavior (complete same-name coverage) |
+| Tests         | The harness helpers: worker-count learner and history, file weights, test counting, run conditions, the `-Changed` selector and impact map |
 | Window        | Layout resolution, FancyZones orchestration, cache/state helpers, positioning           |
 | Workflow      | Workspace/project open/close orchestration and terminal/browser automation              |
 
@@ -276,4 +284,4 @@ if ($results.FailedCount -gt 0) {
 }
 ```
 
-The `-PassThru` object carries `Result`, `TotalCount`, `PassedCount`, `FailedCount`, `SkippedCount`, `NotRunCount`, `Duration`, `Workers`, `Containers`, `Failures`, `ResultFiles`, `RunLog` and `ExitCode`. The `Tests` workflow does not use it - it calls the harness directly and gates on the exit code.
+The `-PassThru` object carries `Result`, `TotalCount`, `PassedCount`, `FailedCount`, `SkippedCount`, `NotRunCount`, `Duration`, `Workers`, `WorkerChoice` (the chosen count, its phase and reason), `Conditions` (the run-condition summary), `Selection` (the `-Changed` selection, or `$null`), `SelectorMisses`, `Containers`, `Failures`, `ResultFiles`, `RunLog` and `ExitCode`. The `Tests` workflow does not use it - it calls the harness directly and gates on the exit code.

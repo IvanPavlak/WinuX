@@ -1,6 +1,6 @@
 # Open-Outlook
 
-Opens the new Outlook (Microsoft Store app) through the shared `Start-Application` launcher, using configuration-driven values from `Configuration.psd1` (`OutlookLauncherExe` plus the Outlook AppsFolder argument).
+Opens the new Outlook (Microsoft Store app) through the shared `Start-Application` launcher, which starts `Universal.OutlookLauncherExe` (ships `C:\Windows\explorer.exe`, see [Start-Application](Start-Application.md)) with the fixed Outlook `shell:AppsFolder` argument; this function itself reads nothing.
 
 ## Configuration Keys
 

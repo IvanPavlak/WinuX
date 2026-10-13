@@ -12,9 +12,11 @@ function Save-CurrentLayout {
 		  - DesktopOffset  : the offset this run used (0 in normal mode, +N in -Alongside)
 		  - Alongside      : whether this snapshot was produced by an -Alongside open
 		  - Desktops       : the FancyZones layout applied to each monitor on each desktop
-		  - Windows        : one record per window that was positioned and snapped, with its
-		                     handle, process fingerprint, title, layout-relative desktop,
-		                     monitor and zone - i.e. exactly where each window belongs
+		  - Windows        : one record per configured window, with its handle, process
+		                     fingerprint, title, layout-relative desktop, monitor, FancyZones
+		                     layout, zone, Slot (the entry's ordinal among the entries of the
+		                     same desktop, monitor and zone) and expected bounds - i.e.
+		                     exactly where each window belongs
 
 		The window records are supplied by the caller via -WindowStates - Set-WorkspaceWindowLayout
 		builds them from the Set-WindowLayouts results so every configured window is captured,
@@ -27,6 +29,7 @@ function Save-CurrentLayout {
 		because normal mode resets the virtual desktops, so only this workspace is on screen.
 		An -Alongside open instead loads the existing snapshot and updates (or adds) only this
 		workspace's section, preserving the records of the workspaces already running.
+		-PreserveOtherSections applies the same merge to a plain open.
 
 		Desktop numbers in window records are stored layout-relative (pre-offset, 1-based, the
 		raw layout DesktopNumber) so the snapshot is offset-independent and re-usable whether
@@ -47,17 +50,18 @@ function Save-CurrentLayout {
 		The machine type the layout was applied for (PC / Laptop / Work). Recorded for context.
 
 	.PARAMETER DesktopOffset
-		The desktop offset applied this run (0 normally, +N for alongside).
+		The desktop offset applied this run (0 normally, +N for alongside). Default is 0.
 
 	.PARAMETER Alongside
 		Present when the workspace was opened alongside existing desktops. Controls whether the
 		file is merged (preserve other workspaces) or replaced.
 
 	.PARAMETER DesktopCount
-		Number of virtual desktops the workspace uses.
+		Number of virtual desktops the workspace uses. Default is 1.
 
 	.PARAMETER LayoutConfig
-		The workspace layout array ($config.Layout). Reserved for future cross-referencing.
+		The workspace layout array ($config.Layout). Reserved for future cross-referencing;
+		currently unused.
 
 	.PARAMETER MonitorConfig
 		The Monitors hashtable from the workspace .psd1 ($config.Monitors), used to record which

@@ -5,8 +5,10 @@ function Reload-PowerShellProfile {
 
 	.DESCRIPTION
 		First calls `Reload-WinuXModules` to re-import all WinuX modules (including the
-		Custom area), then dot-sources `AllUsersAllHosts` and `CurrentUserAllHosts` profile files
-		to pick up any profile-level changes without restarting the terminal.
+		Custom area), then dot-sources each of the `AllUsersAllHosts`, `AllUsersCurrentHost`,
+		`CurrentUserAllHosts` and `CurrentUserCurrentHost` profile files that exist, to pick up any
+		profile-level changes without restarting the terminal. Under verbose logging (or -Verbose)
+		the header and success banner are suppressed and each sourced file is logged instead.
 
 	.EXAMPLE
 		Reload-PowerShellProfile

@@ -10,8 +10,8 @@ The single place that knows which Docker Compose source a runnable project's dat
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
 | [`DockerComposeFiles`](../../configuration-reference.md#docker-compose-files) | hashtable of stack name to compose file | `@{ PostgreSQL = "docker-compose.postgresql.yml" }` | The Docker Compose stacks `Start-Containers` and `Resolve-ProjectDockerCompose` know. A relative value resolves under `MachineSpecificPaths.DockerDirectory`; an absolute path is used as-is, so non-database stacks can be registered too. |
-| [`ProjectTerminals`](../../configuration-reference.md#project-terminals) | array of `@{ Project; Tabs; ... }` | array of 3 | Which Windows Terminal tabs `Open-ProjectTerminals` creates for a project, and with what titles and starting directories. Tabs are created with `--title --suppressApplicationTitle`, so their titles are stable. |
-| [`RunnableProjectMappings`](../../configuration-reference.md#runnable-project-mappings) | array of `@{ Project; ... }` | array of 2 | Per-project run details `Run-Project` and `Resolve-ProjectDockerCompose` need: which database providers a project uses, whether it needs Docker, and how its servers start. |
+| [`ProjectTerminals`](../../configuration-reference.md#project-terminals) | array of `@{ Name; BasePath; Paths }` | array of 3 | Here only the project's `BasePath`: on the project-local branch its `Root` in `MachineSpecificPaths` is the directory holding the project's own compose file. |
+| [`RunnableProjectMappings`](../../configuration-reference.md#runnable-project-mappings) | array of `@{ Name; Commands; DatabaseProviders; UsesDocker }` | array of 2 | Per-project run details `Run-Project` and `Resolve-ProjectDockerCompose` need: which database providers a project uses, whether it needs Docker, and how its servers start. |
 
 ## Decisions
 
@@ -23,8 +23,8 @@ The single place that knows which Docker Compose source a runnable project's dat
     - Options: Add an entry per stack.
     - Default: One entry.
     - More detail: [`DockerComposeFiles`](../../configuration-reference.md#docker-compose-files)
-3. Which terminal tabs should open for this project?
-    - Options: One entry per project with its tab list. Each tab can set a title and a starting directory, and can run in WSL.
+3. Where does a project with its own compose file live?
+    - Options: Its `ProjectTerminals` entry's `BasePath` - a dot-notation path whose `Root` in `MachineSpecificPaths` is the project root holding the compose file.
     - Default: The shipped three entries.
     - More detail: [`ProjectTerminals`](../../configuration-reference.md#project-terminals)
 4. How does this project run?
@@ -64,13 +64,11 @@ DockerComposeFiles = @{
 
 ## Step 2: Set `ProjectTerminals`
 
-Which Windows Terminal tabs `Open-ProjectTerminals` creates for a project, and with what titles and starting directories. Tabs are created with `--title --suppressApplicationTitle`, so their titles are stable.
+`Resolve-ProjectDockerCompose` reads only the project's `BasePath` from it, and only on the project-local branch: the `Root` under that dot-notation path in `$global:MachineSpecificPaths` is the directory holding the project's own compose file. An entry without a `BasePath`, or one whose `Root` does not resolve, is an error.
 
 ```powershell
 ProjectTerminals = @(
-    @{ Project = "MyProject"; Tabs = @(
-        @{ Title = "MyProject"; Path = "{Dev}\MyProject" }
-    )}
+    @{ Name = "MyProject"; BasePath = "Projects.MyProject"; Paths = @("API", "UI") }
 )
 ```
 
@@ -80,7 +78,7 @@ Per-project run details `Run-Project` and `Resolve-ProjectDockerCompose` need: w
 
 ```powershell
 RunnableProjectMappings = @(
-    @{ Project = "MyProject"; DatabaseProviders = @("PostgreSQL") }
+    @{ Name = "MyProject"; Commands = @{ API = "dnr" }; DatabaseProviders = @("PostgreSQL") }
 )
 ```
 
@@ -119,12 +117,10 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
         PostgreSQL = "docker-compose.postgresql.yml"
     }
     ProjectTerminals = @(
-        @{ Project = "MyProject"; Tabs = @(
-            @{ Title = "MyProject"; Path = "{Dev}\MyProject" }
-        )}
+        @{ Name = "MyProject"; BasePath = "Projects.MyProject"; Paths = @("API", "UI") }
     )
     RunnableProjectMappings = @(
-        @{ Project = "MyProject"; DatabaseProviders = @("PostgreSQL") }
+        @{ Name = "MyProject"; Commands = @{ API = "dnr" }; DatabaseProviders = @("PostgreSQL") }
     )
 }
 ```

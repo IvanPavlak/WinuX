@@ -8,7 +8,8 @@ function Set-WindowCacheMaxAge {
 		Lower values provide more accurate data at the cost of more syscalls.
 
 	.PARAMETER MaxAgeMs
-		Maximum cache age in milliseconds. Default is 50ms.
+		Maximum cache age in milliseconds. Mandatory; the module starts with 50ms
+		(WindowModuleState.ps1) until this is called.
 
 	.EXAMPLE
 		Set-WindowCacheMaxAge -MaxAgeMs 100

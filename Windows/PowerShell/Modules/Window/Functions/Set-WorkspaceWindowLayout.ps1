@@ -50,7 +50,8 @@
 		Set-WindowLayouts as -Claims. The tail after the wait finishes every entry those passes
 		did not place, and verification stays global. WorkspaceLayoutPipelining = $false in the
 		configuration turns this off and restores the strictly sequential wait -> position ->
-		snap order.
+		snap order. Pipelining also stays off for a single-desktop layout, with
+		-DisableAutoWait, and in a window-only retry.
 
 		The wait phase credits what it can see. A window that existed before the open (the
 		pre-open capture) has nothing to stabilize and counts as stable on first sight in plain
@@ -91,6 +92,9 @@
 		- Preserves already configured virtual desktops
 		- Force-re-applies FancyZones monitor layouts (same reason as above)
 		- Re-applies the full layout config (idempotent skips keep it cheap)
+		- Skips the window wait and the browser first-tab and first-open normalization passes
+		An unexpected error escalates the same way. Both paths are capped at two reruns and
+		disabled in -Alongside mode.
 		This avoids disturbing windows/layouts that were already configured correctly.
 
 		The final virtual desktop landing is not handled here. Switching to and focusing the
@@ -99,7 +103,9 @@
 		duplicated across functions.
 
 	.PARAMETER WorkspaceName
-		The name of the workspace layout to apply (e.g., "WinuX", "Server").
+		The name of the workspace layout to apply (e.g., "WinuX", "Server"). When omitted, the
+		Fullscreen layout is applied. Only this parameter set reads and writes the
+		CurrentLayout.txt snapshot.
 
 	.PARAMETER LayoutPath
 		Optional custom path to a layout configuration file.
@@ -122,7 +128,8 @@
 	.PARAMETER PreCapturedExistingWindows
 		HashSet of window handles that existed before opening workspace applications.
 		Used to properly detect first run and distinguish new windows from existing ones.
-		Typically provided by Open-Workspace function.
+		Typically provided by Open-Workspace function. When omitted, the windows open after the
+		FancyZones phase are captured instead, and the first-open normalization is skipped.
 
 	.PARAMETER DesktopOffset
 		Offset to add to all virtual desktop numbers in the layout. This allows opening

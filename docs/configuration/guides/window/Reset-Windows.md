@@ -9,13 +9,13 @@ Convenience wrapper that resets the window layout to a clean slate for layout te
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`ResetAllWindowsDefaults`](../../configuration-reference.md#reset-windows-defaults) | hashtable of layout machine type to defaults | `@{ Default = ...; Test = ... }` | What `Reset-Windows` puts back when it resets: which desktop to land on, which layout to apply, and the per-machine variations. Keyed by the *layout* machine type, so `LayoutMachineTypeOverrides` affects the lookup. |
+| [`ResetAllWindowsDefaults`](../../configuration-reference.md#reset-windows-defaults) | hashtable of layout machine type to `@{ VirtualDesktop; Monitor }` | `@{ Test = @{ VirtualDesktop = 1; Monitor = "" }; Default = @{ VirtualDesktop = 1; Monitor = "" } }` | The defaults for `-VirtualDesktop` (the 1-based desktop every window is consolidated onto) and `-Monitor` (the monitor the windows are moved to and centered on - an index such as `"2"`, a label, or a device name; `""` skips monitor targeting). Keyed by the *layout* machine type, so `LayoutMachineTypeOverrides` affects the lookup; a type without an entry uses `Default`, and with neither the function uses desktop 1 and no monitor targeting. |
 
 ## Decisions
 
-1. What should a window reset land on?
-    - Options: A `Default` entry plus one per layout machine type that needs to differ.
-    - Default: The shipped `Default` and `Test` entries.
+1. Which desktop and monitor should a window reset consolidate onto?
+    - Options: A `Default` entry plus one per layout machine type that needs to differ, each `@{ VirtualDesktop = <n>; Monitor = "<index, label, device name or empty>" }`.
+    - Default: The shipped `Default` and `Test` entries - desktop 1, no monitor targeting.
     - More detail: [`ResetAllWindowsDefaults`](../../configuration-reference.md#reset-windows-defaults)
 
 ## Where to Put Values
@@ -32,11 +32,11 @@ All of it goes in `Configuration.local.psd1`, at the repository's `Windows/Power
 
 ## Step 1: Set `ResetAllWindowsDefaults`
 
-What `Reset-Windows` puts back when it resets: which desktop to land on, which layout to apply, and the per-machine variations. Keyed by the *layout* machine type, so `LayoutMachineTypeOverrides` affects the lookup.
+The desktop and monitor `Reset-Windows` consolidates every window onto when it is called without `-VirtualDesktop` / `-Monitor`. Keyed by the *layout* machine type, so `LayoutMachineTypeOverrides` affects the lookup. Because hashtables deep-merge per key, adding a `PC` entry keeps the shipped `Default` and `Test` entries.
 
 ```powershell
 ResetAllWindowsDefaults = @{
-    Default = @{ Workspace = "Default"; Desktop = 1 }
+    PC = @{ VirtualDesktop = 1; Monitor = "2" }
 }
 ```
 
@@ -70,7 +70,8 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 # Configuration.local.psd1
 @{
     ResetAllWindowsDefaults = @{
-        Default = @{ Workspace = "Default"; Desktop = 1 }
+        PC      = @{ VirtualDesktop = 1; Monitor = "2" }
+        Default = @{ VirtualDesktop = 1; Monitor = "" }
     }
 }
 ```

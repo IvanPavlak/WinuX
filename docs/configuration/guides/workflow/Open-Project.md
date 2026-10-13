@@ -47,12 +47,14 @@ Every project `Open-Project` offers, in the order the menu offers them. Each ent
 ```powershell
 ProjectActions = @(
     @{ MyProject = @(
-            @{ Action = "Open-VSCode";   Parameters = @{ Project = "MyProject" } }
-            @{ Action = "Open-Terminal"; Parameters = @{ Title = "MyProject" } }
+            @{ Action = "Open-VSCode"; Parameters = @{ Folder = "{ProjectName}" } }
+            @{ Action = "Open-ProjectTerminals-Or-RunProject"; Parameters = @{ Project = "{ProjectName}" } }
         )
     }
 )
 ```
+
+`{ProjectName}` as a whole parameter value is replaced with the project's name. `Open-ProjectTerminals-Or-RunProject` is the one special action: it runs `Open-ProjectTerminals`, or `Run-Project` when `Open-Project -RunApp` was used. Every other `Parameters` hashtable is splatted onto the named function as-is, so its keys must be that function's parameter names.
 
 ## Step 2: Reload and confirm the merge landed
 
@@ -85,8 +87,8 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 @{
     ProjectActions = @(
         @{ MyProject = @(
-                @{ Action = "Open-VSCode";   Parameters = @{ Project = "MyProject" } }
-                @{ Action = "Open-Terminal"; Parameters = @{ Title = "MyProject" } }
+                @{ Action = "Open-VSCode"; Parameters = @{ Folder = "{ProjectName}" } }
+                @{ Action = "Open-ProjectTerminals-Or-RunProject"; Parameters = @{ Project = "{ProjectName}" } }
             )
         }
     )

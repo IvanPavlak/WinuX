@@ -4,22 +4,26 @@ function Set-DisplayLanguage {
         Sets the Windows display language.
 
     .DESCRIPTION
-        Reads available display languages from `DisplayLanguages` in Configuration.psd1.
-        When called with a language code, sets that display language.
-        When called without arguments, shows an interactive menu of available languages.
+        Reads available display languages from `DisplayLanguages` in Configuration.psd1 (a map of
+        friendly name to language tag, e.g. "English (US)" = "en-US").
+        When called with a language name (a `DisplayLanguages` key), sets that display language.
+        When called without arguments, shows an interactive menu of available languages; Enter
+        selects `DefaultDisplayLanguage`.
+        Moves the language tag to the front of the Windows user language list (adding it when it
+        is not installed) and verifies the result; a sign-out is needed for it to take full effect.
         Requires administrator privileges.
 
     .PARAMETER Language
-        Language code as defined in Configuration.psd1 (e.g. "en-US", "hr-HR").
-        Omit to show the interactive menu.
+        Language name as defined in `DisplayLanguages` in Configuration.psd1 (the key, e.g.
+        "English (US)", not the tag "en-US"). Omit to show the interactive menu.
 
     .EXAMPLE
         Set-DisplayLanguage
         Shows the display language selection menu.
 
     .EXAMPLE
-        Set-DisplayLanguage -Language "en-US"
-        Sets the display language to English (US).
+        Set-DisplayLanguage -Language "English (US)"
+        Sets the display language to the tag configured for "English (US)" (e.g. en-US).
     #>
 	[CmdletBinding()]
 	param(

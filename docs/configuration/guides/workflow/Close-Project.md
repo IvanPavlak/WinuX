@@ -9,10 +9,11 @@ Closes all project-specific resources opened by `Open-Project` (Visual Studio wi
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
+| [`PathTemplates`](../../configuration-reference.md#path-templates--placeholder-system) | hashtable, 11 keys | hashtable, 11 keys (several ship empty) | Read through `$global:MachineSpecificPaths` (the expanded `PathTemplates`): the `Projects.<Name>.Solution` / `Projects.<Name>.Root` paths that `VisualStudioSolutions` and `VSCodeProjects` entries point at become extra window-title candidates, so a window whose title shows the real solution or folder name is matched even when it differs from the configured name. |
 | [`ProjectActions`](../../configuration-reference.md#project-actions) | ordered list of projects (one single-key hashtable each) | list of 3 | Every project `Open-Project` offers, in menu order: the project name is the key, the value is the ordered array of `@{ Action; Parameters }` entries opening it runs, where `Action` is any exported function name. `Close-Project` reads the same list to work out what to close. |
-| [`Universal`](../../configuration-reference.md#universal-constants) | hashtable, 26 keys | hashtable, 26 keys | Machine-independent constants: executable paths (`FirefoxExe`, `DockerExe`, `DbeaverExe`, ...), the `Browsers` map, `DefaultBrowser`, shared URLs, the `ProcessCleanup` lists, and `Desktop` (auto-resolved at load). Expanded in place by `Load-PathConfiguration`, so placeholders work here too. |
-| [`VisualStudioSolutions`](../../configuration-reference.md#visual-studio-solutions) | array of `@{ Name; Path }` | array of 1 | The solutions `Open-VisualStudio` offers, and what `Close-Project` closes. |
-| [`VSCodeProjects`](../../configuration-reference.md#vs-code-projects) | array of `@{ Name; Path }` | array of 2 | The folders `Open-VSCode` offers by name. |
+| [`Universal`](../../configuration-reference.md#universal-constants) | hashtable, 27 keys | hashtable, 27 keys | Machine-independent constants: executable paths (`FirefoxExe`, `DockerExe`, `DbeaverExe`, ...), the `Browsers` map, `DefaultBrowser`, shared URLs, the `TerminateProcessNames` / `VisibleWindowExclusions` lists, and `Desktop` (auto-resolved at load). Expanded in place by `Load-PathConfiguration`, so placeholders work here too. `Close-Project` reads `DefaultBrowser` (the browser whose tabs it closes; empty skips browser cleanup) and `Browsers` (the name must be a key there). |
+| [`VisualStudioSolutions`](../../configuration-reference.md#visual-studio-solutions) | array of `@{ Name; Solution }` (`Solution` is a dot-notation reference into the expanded paths) | array of 1 | The solutions `Open-VisualStudio` offers. `Close-Project` looks up an `Open-VisualStudio` action's `Solution` name here to resolve the real solution path for window matching. |
+| [`VSCodeProjects`](../../configuration-reference.md#vs-code-projects) | array of `@{ Name; Path }` (`Path` is a dot-notation reference into the expanded paths) | array of 2 | The folders `Open-VSCode` offers by name. `Close-Project` looks up an `Open-VSCode` action's `Folder` name here to resolve the real folder path for window matching. |
 
 Closing reads the same `ProjectActions` map the open used, so a project that opens cleanly and closes messily almost always means the action list and the reality drifted apart - an app opened by hand, or an action added without its counterpart.
 
@@ -31,7 +32,7 @@ Closing reads the same `ProjectActions` map the open used, so a project that ope
     - Default: The shipped three.
     - More detail: [`ProjectActions`](../../configuration-reference.md#project-actions)
 4. Which browser should be the default?
-    - Options: A key from `Universal.Browsers`: `Firefox`, `Chrome`, `Edge`, `Brave`, `Tor`. Ships empty, so `Open-Browser` asks or uses the system default.
+    - Options: A key from `Universal.Browsers`: `Firefox`, `Chrome`, `Edge`, `Brave`, `Tor`. Ships empty, so `Open-Browser` warns and returns until it is set, and `Close-Project` skips browser tab cleanup.
     - Default: Empty.
     - More detail: [`Universal`](../../configuration-reference.md#universal-constants)
 5. Are any of the shipped executable paths wrong on this machine?
@@ -43,13 +44,17 @@ Closing reads the same `ProjectActions` map the open used, so a project that ope
     - Default: The shipped five.
     - More detail: [`Universal`](../../configuration-reference.md#universal-constants)
 7. Which Visual Studio solutions do you open regularly?
-    - Options: One entry per solution with a name and a path. Placeholders allowed.
+    - Options: One entry per solution with a `Name` and a `Solution` dot-notation reference into the expanded paths (e.g. `Projects.MyProject.Solution`), not a literal `.sln` path.
     - Default: The shipped single example.
     - More detail: [`VisualStudioSolutions`](../../configuration-reference.md#visual-studio-solutions)
 8. Which folders should `Open-VSCode` offer by name?
-    - Options: One entry per folder with a name and a path. Placeholders allowed.
+    - Options: One entry per folder with a `Name` and a `Path` dot-notation reference into the expanded paths (e.g. `Projects.MyProject.Root`), not a literal folder path.
     - Default: The shipped two examples.
     - More detail: [`VSCodeProjects`](../../configuration-reference.md#vs-code-projects)
+9. Where do this project's root folder and solution file live?
+    - Options: A `PathTemplates.Projects.<Name>` sub-hashtable with `Root` and, for a Visual Studio project, `Solution`. Placeholders allowed. These are the paths the dot-notation references above resolve to.
+    - Default: The shipped `Projects` map (`Self` and `ExampleProject`).
+    - More detail: [`PathTemplates`](../../configuration-reference.md#path-templates--placeholder-system)
 
 ## Where to Put Values
 
@@ -58,12 +63,12 @@ All of it goes in `Configuration.local.psd1`, at the repository's `Windows/Power
 > [!WARNING]
 > The merge is not uniform. **Hashtables deep-merge per key**, so adding one entry to a hashtable leaves every other entry alone. **Arrays and scalars replace wholesale**, so supplying an array key in your local file discards the entire base array. When you want to *add* to a shipped array, copy the whole base array out of `Configuration.psd1` first and add your entry to the copy.
 
-On this page that bites on `Projects`, `VisualStudioSolutions`, `VSCodeProjects` - those keys are arrays, so whatever you write is the complete value.
+On this page that bites on `ProjectActions`, `VisualStudioSolutions`, `VSCodeProjects` - those keys are arrays, so whatever you write is the complete value.
 
 ## Steps Overview
 
 1. Set `ProjectActions`
-2. Set `Projects`
+2. Set `PathTemplates`
 3. Set `Universal`
 4. Set `VisualStudioSolutions`
 5. Set `VSCodeProjects`
@@ -71,28 +76,36 @@ On this page that bites on `Projects`, `VisualStudioSolutions`, `VSCodeProjects`
 
 ## Step 1: Set `ProjectActions`
 
-What `Open-Project` does for each project: an ordered array of `@{ Action; Parameters }` entries, where `Action` is any exported function name. `Close-Project` reads the same map to work out what to close.
+Every project `Open-Project` offers, in menu order: one single-key hashtable per project, whose value is an ordered array of `@{ Action; Parameters }` entries, where `Action` is any exported function name. `Close-Project` reads the same list to work out what to close: `Open-VisualStudio` (`Solution`) and `Open-VSCode` (`Folder`) actions name the windows, and an `Open-ProjectTerminals-Or-RunProject`, `Open-ProjectTerminals` or `Run-Project` action makes it close the project's terminal tabs.
 
 ```powershell
-ProjectActions = @{
-    MyProject = @(
-        @{ Action = "Open-VSCode";   Parameters = @{ Project = "MyProject" } }
-        @{ Action = "Open-Terminal"; Parameters = @{ Title = "MyProject" } }
-    )
-}
+ProjectActions = @(
+    @{ MyProject = @(
+            @{ Action = "Open-VSCode"; Parameters = @{ Folder = "{ProjectName}" } }
+            @{ Action = "Open-ProjectTerminals-Or-RunProject"; Parameters = @{ Project = "{ProjectName}" } }
+        )
+    }
+)
 ```
 
-## Step 2: Set `Projects`
+## Step 2: Set `PathTemplates`
 
-The project names `Open-Project` offers. A name here needs a matching `ProjectActions` entry to do anything, and usually a `PathTemplates.Projects` entry for its root.
+The per-project paths under `PathTemplates.Projects` that the `VisualStudioSolutions` and `VSCodeProjects` references resolve to. `PathTemplates` is a hashtable, so adding a project here leaves the shipped ones alone.
 
 ```powershell
-Projects = @("WinuX", "MyProject")
+PathTemplates = @{
+    Projects = @{
+        MyProject = @{
+            Root     = "{Dev}\MyProject"
+            Solution = "{Dev}\MyProject\MyProject.sln"
+        }
+    }
+}
 ```
 
 ## Step 3: Set `Universal`
 
-Machine-independent constants: executable paths (`FirefoxExe`, `DockerExe`, `DbeaverExe`, ...), the `Browsers` map, `DefaultBrowser`, shared URLs, the `ProcessCleanup` lists, and `Desktop` (auto-resolved at load). Expanded in place by `Load-PathConfiguration`, so placeholders work here too.
+Machine-independent constants: executable paths (`FirefoxExe`, `DockerExe`, `DbeaverExe`, ...), the `Browsers` map, `DefaultBrowser`, shared URLs, the `TerminateProcessNames` and `VisibleWindowExclusions` lists, and `Desktop` (auto-resolved at load). Expanded in place by `Load-PathConfiguration`, so placeholders work here too.
 
 ```powershell
 Universal = @{
@@ -109,21 +122,22 @@ Universal = @{
 
 ## Step 4: Set `VisualStudioSolutions`
 
-The solutions `Open-VisualStudio` offers, and what `Close-Project` closes.
+The solutions `Open-VisualStudio` offers. `Solution` is a dot-notation reference into the expanded paths, not a literal `.sln` path.
 
 ```powershell
 VisualStudioSolutions = @(
-    @{ Name = "MyProject"; Path = "{Dev}\MyProject\MyProject.sln" }
+    @{ Name = "MyProject"; Solution = "Projects.MyProject.Solution" }
 )
 ```
 
 ## Step 5: Set `VSCodeProjects`
 
-The folders `Open-VSCode` offers by name.
+The folders `Open-VSCode` offers by name. `Path` is a dot-notation reference into the expanded paths, not a literal folder path.
 
 ```powershell
 VSCodeProjects = @(
-    @{ Name = "MyProject"; Path = "{Dev}\MyProject" }
+    @{ Name = "WinuX"; Path = "Projects.Self.Root" }
+    @{ Name = "MyProject"; Path = "Projects.MyProject.Root" }
 )
 ```
 
@@ -143,11 +157,11 @@ Read-only checks. None of these change anything.
 ```powershell
 Reload-PowerShellProfile
 $global:Configuration.ProjectActions
-$global:Configuration.Projects
 $global:Configuration.Universal
 $global:Configuration.VisualStudioSolutions
 $global:Configuration.VSCodeProjects
-$global:Configuration.ProjectActions.MyProject
+$global:Configuration.ProjectActions | Where-Object { $_.Keys -contains "MyProject" }
+$global:MachineSpecificPaths.Projects.MyProject
 ```
 
 If a value reads back as empty, the two usual causes are a parse error in `Configuration.local.psd1` (run `Test-ConfigurationSchema`) and a key placed at the wrong nesting level.
@@ -159,13 +173,21 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 ```powershell
 # Configuration.local.psd1
 @{
-    ProjectActions = @{
-        MyProject = @(
-            @{ Action = "Open-VSCode";   Parameters = @{ Project = "MyProject" } }
-            @{ Action = "Open-Terminal"; Parameters = @{ Title = "MyProject" } }
-        )
+    ProjectActions = @(
+        @{ MyProject = @(
+                @{ Action = "Open-VSCode"; Parameters = @{ Folder = "{ProjectName}" } }
+                @{ Action = "Open-ProjectTerminals-Or-RunProject"; Parameters = @{ Project = "{ProjectName}" } }
+            )
+        }
+    )
+    PathTemplates = @{
+        Projects = @{
+            MyProject = @{
+                Root     = "{Dev}\MyProject"
+                Solution = "{Dev}\MyProject\MyProject.sln"
+            }
+        }
     }
-    Projects = @("WinuX", "MyProject")
     Universal = @{
         DefaultBrowser = "Firefox"
         Browsers = @{
@@ -177,10 +199,11 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
         }
     }
     VisualStudioSolutions = @(
-        @{ Name = "MyProject"; Path = "{Dev}\MyProject\MyProject.sln" }
+        @{ Name = "MyProject"; Solution = "Projects.MyProject.Solution" }
     )
     VSCodeProjects = @(
-        @{ Name = "MyProject"; Path = "{Dev}\MyProject" }
+        @{ Name = "WinuX"; Path = "Projects.Self.Root" }
+        @{ Name = "MyProject"; Path = "Projects.MyProject.Root" }
     )
 }
 ```

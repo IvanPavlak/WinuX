@@ -125,13 +125,13 @@ nothing - and the sweep itself runs at most once per `Configuration.Logging.Main
 
 ## [Write-LogSuccess](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Logging/Functions/Write-LogSuccess.ps1)
 
-- **Description:** Writes a success message in the house `=> ` style (Green), replacing the `Write-Host -ForegroundColor Green "`n=> ..."`idiom. Pass the message text only - the leading newline and`=> ` prefix are added by the engine.
+- **Description:** Writes a success message in the house `=> ` style (Green), replacing the ``Write-Host -ForegroundColor Green "`n=> ..."`` idiom. Pass the message text only - the leading newline and `=> ` prefix are added by the engine.
 - **Parameters:** `-Message` `[-NoLeadingNewline]` `[-BlankLineAfter]`
 - **Usage:** `Write-LogSuccess "Workspace opened successfully!"`
 
 ## [Write-LogTitle](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Logging/Functions/Write-LogTitle.ps1)
 
-- **Description:** Writes a section header in the house `[Title]` style (DarkCyan), replacing the `Write-Host -ForegroundColor DarkCyan "`n[Title]"` idiom. Pass the bare title text - the brackets and leading newline are added by the engine.
+- **Description:** Writes a section header in the house `[Title]` style (DarkCyan), replacing the ``Write-Host -ForegroundColor DarkCyan "`n[Title]"`` idiom. Pass the bare title text - the brackets and leading newline are added by the engine.
 - **Parameters:** `-Message` `[-NoLeadingNewline]` `[-BlankLineAfter]`
 - **Usage:** `Write-LogTitle "Kill All"`
 

@@ -38,8 +38,9 @@ function Wait-ForWorkspaceWindows {
 		Time to wait between polling attempts. Default is 0.1 seconds.
 
 	.PARAMETER FocusWindows
-		When enabled, cycles through and focuses found windows to speed up loading.
-		Some apps (Firefox, WhatsApp) load faster when focused. Default is enabled.
+		When enabled, focuses found browser windows that are not yet stable to speed up
+		loading - each window once, again only after it changes (handle, title or size). Browsers
+		load their tabs faster when focused. Default is enabled.
 
 	.PARAMETER FocusDelayMs
 		Milliseconds to focus each window before moving to the next.
@@ -101,6 +102,12 @@ function Wait-ForWorkspaceWindows {
 		  An entry whose only matches are excluded is abandoned after ProcessAbsentGraceSeconds
 		  like an entry whose process never appeared, so a starved entry costs the grace period,
 		  not the timeout.
+
+	.PARAMETER Clock
+		The wait clock (New-WaitClock) every time read and sleep of the wait goes through - the
+		poll interval, the focus dwell and every stability, grace and timeout measurement.
+		Defaults to a real one when omitted or $null; tests hand in a fake so the whole wait,
+		callbacks included, runs on virtual time.
 
 	.EXAMPLE
 		$config = Import-PowerShellDataFile -Path "layout.psd1"

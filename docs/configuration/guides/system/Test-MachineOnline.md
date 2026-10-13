@@ -9,13 +9,13 @@ Tests whether a machine is online (reachable via ICMP ping) and returns a boolea
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`WakeOnLanConfig`](../../configuration-reference.md#wake-on-lan-configuration) | hashtable of settings | `@{}` (empty) | Wake-on-LAN transport settings `Send-WakeOnLan` and `Test-MachineOnline` use - broadcast address, port, and reachability timeouts. Ships empty and falls back to sensible built-ins. |
+| [`WakeOnLanConfig`](../../configuration-reference.md#wake-on-lan-configuration) | ordered list of machines (one single-key hashtable each) | `@()` (empty) | The machines `-Machine` can name. Only each entry's `Address` (IP or hostname) is read here - it is the ping target. Not read at all when `-Address` is passed. Empty, or a machine with no `Address`, makes the function return `$false`. |
 
 ## Decisions
 
-1. Does your network need non-default Wake-on-LAN settings?
-    - Options: Broadcast address, UDP port and timeouts.
-    - Default: Empty - built-in defaults.
+1. Which machines should be reachable by name, and at what address?
+    - Options: Give each `WakeOnLanConfig` entry an `Address` (IP or hostname). The same entry also carries the `MacAddress` / `SubNetSpecificBroadcastAddress` / `Port` that `Send-WakeOnLan` needs. Ping timeouts and polling intervals are parameters (`-PingTimeoutMilliseconds`, `-IntervalSeconds`, `-TimeoutSeconds`), not configuration.
+    - Default: Empty - `-Machine` warns and returns `$false`; `-Address` still works.
     - More detail: [`WakeOnLanConfig`](../../configuration-reference.md#wake-on-lan-configuration)
 
 ## Where to Put Values
@@ -32,13 +32,18 @@ All of it goes in `Configuration.local.psd1`, at the repository's `Windows/Power
 
 ## Step 1: Set `WakeOnLanConfig`
 
-Wake-on-LAN transport settings `Send-WakeOnLan` and `Test-MachineOnline` use - broadcast address, port, and reachability timeouts. Ships empty and falls back to sensible built-ins.
+The machines `-Machine` can name: an ordered list of single-key hashtables, the key being the machine name. This function reads only `Address`, the ping target.
 
 ```powershell
-WakeOnLanConfig = @{
-    BroadcastAddress = "192.168.1.255"
-    Port             = 9
-}
+WakeOnLanConfig = @(
+    @{ HomeServer = @{
+            MacAddress                     = "00-11-22-33-44-55"
+            SubNetSpecificBroadcastAddress = "192.168.1.255"
+            Address                        = "192.168.1.50"
+            Port                           = 9
+        }
+    }
+)
 ```
 
 ## Step 2: Reload and confirm the merge landed
@@ -69,10 +74,15 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 ```powershell
 # Configuration.local.psd1
 @{
-    WakeOnLanConfig = @{
-        BroadcastAddress = "192.168.1.255"
-        Port             = 9
-    }
+    WakeOnLanConfig = @(
+        @{ HomeServer = @{
+                MacAddress                     = "00-11-22-33-44-55"
+                SubNetSpecificBroadcastAddress = "192.168.1.255"
+                Address                        = "192.168.1.50"
+                Port                           = 9
+            }
+        }
+    )
 }
 ```
 

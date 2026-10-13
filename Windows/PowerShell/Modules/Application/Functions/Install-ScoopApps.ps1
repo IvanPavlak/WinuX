@@ -6,9 +6,11 @@ function Install-ScoopApps {
 	.DESCRIPTION
 		Reads the app list through `Import-AppCsv`, which parses the committed CSV named by
 		`BootstrapConfig.DataFiles.ScoopApps` in Configuration.psd1 and layers the machine-local
-		`ScoopApps.local.csv` over it. Each row specifies an app name, optional bucket, and the
-		machine types it applies to. Apps for the current machine type and All-type apps are
-		installed; others are skipped.
+		`ScoopApps.local.csv` over it. Each row (App,Version,Global,Machine) specifies an app name,
+		an optional version pin (empty or "latest" = unpinned), whether to install it --global, and
+		the machine types it applies to. Apps for the current machine type and All-type apps are
+		installed (an app already installed is updated, unless it is version-pinned, then skipped);
+		others are skipped.
 
 		Requires administrator privileges. Called automatically by Bootstrap.
 

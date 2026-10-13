@@ -51,7 +51,7 @@ WorkspaceActions = @(
 | `Open-Outlook`                  | Opens Outlook                 | None                                                             |
 | `Open-Discord`                  | Opens Discord                 | None                                                             |
 | `Open-Acrobat`                  | Opens PDFs                    | `Pdf = "GroupName"`                                              |
-| `Open-DnD`                      | Opens D&D resources           | None                                                             |
+| `Open-DnD`                      | Opens D&D resources           | `Campaign = "Name"` (else a menu), `FoundryVTT = $true`          |
 | `Open-SecureBrowser`            | Opens Tor + VPN               | None                                                             |
 | `Send-WakeOnLan`                | Wakes a machine               | None                                                             |
 | `Set-WorkspaceWindowLayout`     | Applies window layout         | `WorkspaceName = "Name"`                                         |

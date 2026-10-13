@@ -47,6 +47,7 @@ function New-WorkspaceLayoutPipelineState {
 
 	.PARAMETER RecordPhase
 		Scriptblock (one string argument, the phase name) that books elapsed time to that phase.
+		Defaults to a no-op scriptblock when omitted or $null.
 
 	.PARAMETER SpinnerActive
 		Whether a Loading-Spinner is running and must be paused around a per-desktop pass.

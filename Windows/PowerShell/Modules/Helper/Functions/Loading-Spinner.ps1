@@ -70,7 +70,7 @@ function Loading-Spinner {
     .EXAMPLE
         Loading-Spinner -Function { Start-Sleep 3 } -Label "Processing"
 
-        $spinner = Loading-Spinner -Start -Label "Downloading" -Style "Bar"
+        $spinner = Loading-Spinner -Start -Label "Downloading" -Style "BarBlocks"
         Start-Sleep 5
         Loading-Spinner -Stop -Spinner $spinner
 

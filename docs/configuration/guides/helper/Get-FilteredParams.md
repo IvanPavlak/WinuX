@@ -9,7 +9,7 @@ This function reads no `Configuration.psd1` keys. There is nothing to configure.
 ## Usage
 
 ```powershell
-Get-FilteredParams -CommandName "Get-Item" -Params @{ Name = "file.txt"; Size = 100; Invalid = "xyz" }
+Get-FilteredParams -CommandName "Get-Item" -Params @{ Path = "file.txt"; Size = 100; Invalid = "xyz" }
 ```
 
 ## Related

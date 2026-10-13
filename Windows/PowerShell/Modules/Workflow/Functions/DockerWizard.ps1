@@ -22,6 +22,26 @@ function DockerWizard {
 		compose source was given - it resolved to a real file and `up -d` returned 0.
 		A requested compose file that does not exist is a failure, not a no-op.
 
+	.PARAMETER Stop
+		Stops Docker Desktop instead of starting it: requests a graceful shutdown through
+		`docker desktop stop --detach` when that CLI is available, then terminates leftover
+		Docker processes, Docker-owned wsl.exe processes and docker-desktop WSL distros until
+		everything is down or DockerTimeouts.StopSeconds (default 60) runs out. The compose
+		parameters are ignored when stopping.
+
+	.PARAMETER ComposeProjectPath
+		Directory to search for a compose file (compose.yaml, compose.yml, docker-compose.yaml,
+		docker-compose.yml, first match wins). Its services are started with `docker compose up -d`
+		once the daemon is ready. Ignored when -ComposeFilePath is also given.
+
+	.PARAMETER ComposeFilePath
+		Full path to a compose file whose services are started with `docker compose up -d` once
+		the daemon is ready. Takes precedence over -ComposeProjectPath.
+
+	.PARAMETER PassThru
+		Returns the [PSCustomObject]@{ Success; ComposeFilePath } status object described above
+		instead of nothing.
+
     .EXAMPLE
         DockerWizard
 

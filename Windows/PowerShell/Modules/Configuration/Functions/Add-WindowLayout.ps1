@@ -9,7 +9,9 @@ function Add-WindowLayout {
 	.PARAMETER WorkspaceName
 		The workspace name for the layout.
 	.PARAMETER MachineType
-		The machine type(s) to create layouts for. Defaults to current machine type.
+		The machine type(s) to create layouts for. When omitted, reads a MachineType key from the
+		loaded configuration and falls back to "Test"; the shipped configuration defines no such
+		key (the detected type is $global:MachineType), so pass it explicitly for this machine.
 	.PARAMETER Simple
 		If set, adds the workspace to SimpleLayoutWorkspaces in Configuration.psd1
 		(layout-only, no window positioning).

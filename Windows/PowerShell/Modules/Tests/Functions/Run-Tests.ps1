@@ -48,12 +48,14 @@ function Run-Tests {
         and the reason for each file are printed first. Combines with -TestName and -Path as a union.
 
     .PARAMETER Since
-        The ref -Changed compares against. Defaults to master.
+        The ref -Changed compares against (its merge base with HEAD). Defaults to the main branch:
+        master, falling back to origin/master, main, then origin/main - the first that exists.
 
     .PARAMETER BuildImpactMap
         Run the full suite while recording which functions each test file actually invokes, into
         Results/impact-map.json; -Changed then also selects by what ran, not only by what the code
-        says. Takes about twice as long as a normal run.
+        says. Takes about twice as long as a normal run. Cannot be combined with -TestName, -Path,
+        -Changed or -Quick: the harness refuses the combination with exit code 2.
 
     .EXAMPLE
         Run-Tests

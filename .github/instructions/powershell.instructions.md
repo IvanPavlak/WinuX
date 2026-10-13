@@ -32,6 +32,7 @@ These are man-style `## [Name](url)` entries - NOT a `## Overview` function tabl
 1. Update its entry alphabetically in `docs/modules/<module>.md`.
 2. Update the module `.psd1` `FunctionsToExport`.
 3. Run `List-Functions -ListDiscrepancies` (Helper module) - it PARSES the module pages and must report none.
+4. Never remove or rename an exported function or a `Configuration.psd1` key, or change a signature incompatibly, in one step. Deprecate it first (the old shape keeps working - an alias, a wrapper that warns, or the key still read), record it under `### Deprecated` in `CHANGELOG.md` with the migration, and leave the removal to the next MAJOR release (see `VERSIONING.md`).
 
 Fork-only functions (not yet upstreamed) live under `Modules/Custom/<Module>/Functions/`, are listed in `Custom.psd1`'s `FunctionsToExport` (which is what makes them autoload), and are documented in `docs/custom/<module>.md` using the same entry format. See `Windows/PowerShell/Modules/Custom/README.md`.
 

@@ -9,8 +9,10 @@ function Resolve-Selection {
 
 		1. FLAT MODE: Simple Yes/No or custom option list. User selects by number or text.
 		2. HIERARCHICAL MODE: When `-GroupsConfig` is provided, navigates nested groups (e.g., browser URL groups).
-		   Supports dot-notation for nested selection ("Work.Backend"), automatic expansion of parent groups,
-		   and parent/child navigation in the display.
+		   Each item is selectable by its dot-notation index path ("1.2") or by its own group/item name
+		   ("Backend"); a parent group whose children are nested groups expands to them automatically.
+		   Returns the lookup entries (GroupName, SubgroupName, PathNames, Path, StructureType, ...)
+		   rather than plain strings.
 
 		Used by Open-Browser, Open-Project, Set-Locale, Set-DisplayLanguage, Configure-NerdFont, and others.
 
@@ -27,7 +29,7 @@ function Resolve-Selection {
 		Suppresses the menu title.
 
 	.PARAMETER HideSelection
-		Hides the final selection echo.
+		Hides the numbered option list, so only the title and prompt are shown.
 
 	.PARAMETER PromptMessage
 		Prompt text shown before the menu. If omitted, a generic prompt is used.

@@ -50,7 +50,7 @@ source produces, or you are building a fork's installer.
 ```powershell
 cd <repo>\Windows\WinuX
 .\New-WinuXExecutable.ps1 # dev build -> .\WinuX.exe (gitignored)
-.\New-WinuXExecutable.ps1 -Version 0.1.0 -ChecksumPath .\WinuX.exe.sha256
+.\New-WinuXExecutable.ps1 -Version 1.0.0 -ChecksumPath .\WinuX.exe.sha256
 .\New-WinuXExecutable.ps1 -RepoUrl 'https://github.com/you/YourFork.git'
 ```
 

@@ -12,12 +12,19 @@ function Terminate-AllProcessesWithVisibleWindows {
 		without it would force-kill WindowsTerminal - the shell running the cleanup.
 		Additional windows can be excluded using the -Exclude parameter.
 
+		Candidates are found from the window side (Get-VisibleWindowProcess: every visible,
+		titled top-level window grouped by owning process), not from MainWindowTitle. A process
+		with ANY window matching -Exclude is spared whole, since a force-kill is per process.
+		After Stop-Process -Force it waits (Wait-Process, 5 s) for the targets to exit and
+		reports any still alive as a warning instead of printing the success line.
+
 	.PARAMETER Exclude
 		Array of window title patterns to exclude from termination.
 		Supports both wildcard and regex patterns (same format as layout .psd1 files):
 		  Wildcard: "*YouTube*", "*Obsidian*"
 		  Regex: ".*YouTube.*", "(.*Gmail.*|.*Inbox.*)"
-		Windows matching any of these patterns will not be closed.
+		Matched against each window title and the process name; a process with any matching
+		window is not terminated.
 
 	.EXAMPLE
 		Terminate-AllProcessesWithVisibleWindows

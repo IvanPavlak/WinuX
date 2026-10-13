@@ -26,7 +26,7 @@ Bootstrap is **idempotent** - safe to run multiple times:
 | **Update-Repositories**   | Pulls latest, stashes local changes if needed (opt-in via `Steps.RepositoryUpdate`) |
 | **System Configuration**  | Re-applies settings (no-op if already correct) |
 | **Package Installation**  | Installs new apps from CSV, skips existing     |
-| **Upgrade-All**           | Updates packages of every manager in play      |
+| **Upgrade-All**           | Updates packages of every manager in play (opt-in via `Steps.UpgradeAll`) |
 | **Symbolic Links**        | Re-creates (safe if already exist)             |
 | **Environment Variables** | Re-applies (no-op if already set)              |
 | **Taskbar**               | Reconfigures pinned apps                       |
@@ -67,8 +67,8 @@ Upgrade-All Chocolatey
 # Upgrade more than one
 Upgrade-All WinGet, Scoop
 
-# Install new WinGet apps (after editing CSV)
-Install-WinGetApps
+# Install new WinGet apps (after editing WinGetApps.local.csv)
+Install-WingetApps
 
 # Install new Scoop apps
 Install-ScoopApps

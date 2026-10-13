@@ -9,7 +9,7 @@ Checks whether the active power plan is set to the optimal performance mode for 
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`LaptopChassisTypes`](../../configuration-reference.md#more-sections-quick-reference) | array of integers | array of 8 | The WMI chassis type codes `Test-PowerPlan` treats as "this is a laptop", which is what decides whether battery-related power settings apply. |
+| [`LaptopChassisTypes`](../../configuration-reference.md#more-sections-quick-reference) | array of integers | array of 8 | The WMI chassis type codes `Test-PowerPlan` treats as "this is a laptop", which decides the plan it expects: High Performance on a laptop, Ultimate Performance otherwise. |
 
 ## Decisions
 
@@ -34,7 +34,7 @@ On this page that bites on `LaptopChassisTypes` - that key is an array, so whate
 
 ## Step 1: Set `LaptopChassisTypes`
 
-The WMI chassis type codes `Test-PowerPlan` treats as "this is a laptop", which is what decides whether battery-related power settings apply.
+The WMI chassis type codes `Test-PowerPlan` treats as "this is a laptop", which decides the plan it expects: High Performance on a laptop, Ultimate Performance otherwise.
 
 ```powershell
 LaptopChassisTypes = @(8, 9, 10, 11, 14, 30, 31, 32)

@@ -40,13 +40,14 @@ function Get-FancyZone {
 		The zone object from Get-FancyZoneCoordinates (X, Y, Width, Height, ZoneIndex, ...)
 		with two members added: ZoneName (the requested human-readable name) and
 		TotalZoneCount (how many zones the resolved layout defines - 1 marks a single-zone
-		layout, which the snap pipeline places directly instead of snapping).
+		layout, which the snap pipeline snaps through Invoke-SingleZoneWindowSnap instead of
+		the multi-zone keyboard-snap loop).
 
 	.EXAMPLE
-		Get-FancyZone -LayoutName "Seven" -ZoneName "Left" -MonitorY -1440
+		Get-FancyZone -LayoutName "Seven" -ZoneName "Left" -MonitorY -1440 -MonitorWidth 3440 -MonitorHeight 1440
 
 	.EXAMPLE
-		$zone = Get-FancyZone -LayoutName "One" -ZoneName "Right"
+		$zone = Get-FancyZone -LayoutName "One" -ZoneName "Right" -MonitorWidth 1920 -MonitorHeight 1080
 		Set-WindowPosition -WindowHandle $handle -X $zone.X -Y $zone.Y -Width $zone.Width -Height $zone.Height
 	#>
 	[CmdletBinding()]
@@ -141,8 +142,8 @@ function Get-FancyZone {
 
 	# How many zones the resolved layout defines, straight from custom-layouts.json. A count
 	# of 1 tells the snap pipeline the layout is single-zone (e.g. "Zero"), where FancyZones'
-	# relative Win+Arrow has no neighbouring zone to disambiguate it and Snap-AllWindows must
-	# place the window directly instead. Counting ZoneNameMappings keys would be wrong - two
+	# relative Win+Arrow has no neighbouring zone to disambiguate it and Snap-AllWindows routes
+	# the window through Invoke-SingleZoneWindowSnap. Counting ZoneNameMappings keys would be wrong - two
 	# names ("Full", "Fullscreen") map to the same index.
 	$zone | Add-Member -NotePropertyName "TotalZoneCount" -NotePropertyValue (@($zones).Count) -Force
 

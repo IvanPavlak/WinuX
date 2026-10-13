@@ -9,8 +9,9 @@ Loads and applies a predefined, machine-specific window layout for a workspace.
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`SimpleLayoutWorkspaces`](../../configuration-reference.md#workspace-layouts) | array of workspace names | `@("Fullscreen", "Empty")` | Workspaces that use a single simple layout instead of a per-machine `<Workspace>_<MachineType>.psd1` file. `Set-WorkspaceWindowLayout` and `Add-WindowLayout` both consult it. |
+| [`SimpleLayoutWorkspaces`](../../configuration-reference.md#more-sections-quick-reference) | array of workspace names | `@("Fullscreen", "Empty")` | Workspaces applied as a simple layout. They still load their `<Workspace>_<MachineType>.psd1` file, but its zone layouts are applied to every monitor on every existing virtual desktop, and every window is placed in its own monitor's single fullscreen zone wherever it is (`Empty` places none) - no desktop resize, no wait, no per-entry positioning, no verification, and no preservation of live alongside workspaces. `Add-WindowLayout -Simple` adds a name to it. |
 | [`LayoutMachineTypeOverrides`](../../configuration-reference.md#layout-set-overrides) | hashtable of machine type to layout set name | `@{ Test = "" }` | Lets a machine use another machine layout set - for example a laptop docked to a different monitor arrangement. `Get-LayoutMachineType` resolves it, so layouts and the reset target can never disagree. An override name is not a machine type: it needs no `ValidMachineTypes` entry and no base paths, only `<Workspace>_<Name>.psd1` layout files. |
+| [`SmallDisplayMachineType`](../../configuration-reference.md#layout-set-overrides) | string | empty string | The layout set read when the primary display is laptop-class (at most 3000px wide) and no `LayoutMachineTypeOverrides` entry applies. Resolved by `Get-LayoutMachineType`. |
 | [`WorkspaceLayoutPipelining`](../../configuration-reference.md#layout-numbers--zone-mappings) | bool | `$true` | Whether each virtual desktop is positioned and snapped as soon as every window on it is stable, while the slower windows on other desktops still load. `$false` restores the strictly sequential wait, then position, then snap order. |
 | [`ProjectOverrides`](../../configuration-reference.md#workspace-layouts) (layout file) | hashtable of project scope to `@{ Monitors; Layout }` | none | Lives at the end of a `<Workspace>_<MachineType>.psd1` layout file, not in `Configuration.psd1`. With `-Project` (handed over by `Open-Workspace`) the covered variants replace the base entries of the same desktop and monitor. Project tokens are checked against `ProjectActions`, zones against `ZoneNameMappings` (through `Merge-LayoutProjectOverrides`). |
 
@@ -19,16 +20,20 @@ Loads and applies a predefined, machine-specific window layout for a workspace.
 1. Which workspaces need only a simple layout?
     - Options: One name per workspace. The array replaces wholesale.
     - Default: `Fullscreen` and `Empty`.
-    - More detail: [`SimpleLayoutWorkspaces`](../../configuration-reference.md#workspace-layouts)
+    - More detail: [`SimpleLayoutWorkspaces`](../../configuration-reference.md#more-sections-quick-reference)
 2. Should this machine use another machine layout files?
     - Options: Machine type to override name. Empty means use the machine own type.
     - Default: Empty - no override.
     - More detail: [`LayoutMachineTypeOverrides`](../../configuration-reference.md#layout-set-overrides)
-3. Should desktops be positioned and snapped as they become ready?
+3. Should a laptop-class primary display read its own layout set?
+    - Options: A machine type or layout override name. Empty means display size never switches the set.
+    - Default: Empty.
+    - More detail: [`SmallDisplayMachineType`](../../configuration-reference.md#layout-set-overrides)
+4. Should desktops be positioned and snapped as they become ready?
     - Options: `$true` pipelines each desktop into the wait phase; `$false` waits for the slowest window first.
     - Default: `$true`. Switch it off to compare the two orders with `Get-WorkspaceBenchmark`, or if a layout misbehaves only with pipelining on.
     - More detail: [`WorkspaceLayoutPipelining`](../../configuration-reference.md#layout-numbers--zone-mappings)
-4. Does the layout of a workspace depend on the project it is opened for?
+5. Does the layout of a workspace depend on the project it is opened for?
     - Options: Keep one layout file per workspace and machine type, and add a `ProjectOverrides` block at its end with one variant per project scope (`"MyProject"`, `"MyProject/OtherProject"`) that replaces whole desktop-and-monitor pairs. Several selected projects apply in selection order, the later one wins.
     - Default: No `ProjectOverrides` - every project gets the base layout.
     - More detail: [`ProjectOverrides`](../../configuration-reference.md#workspace-layouts)
@@ -46,13 +51,14 @@ On this page that bites on `SimpleLayoutWorkspaces` - that key is an array, so w
 
 1. Set `SimpleLayoutWorkspaces`
 2. Set `LayoutMachineTypeOverrides`
-3. Set `WorkspaceLayoutPipelining`
-4. Add `ProjectOverrides` to a layout file
-5. Reload and confirm the merge landed
+3. Set `SmallDisplayMachineType`
+4. Set `WorkspaceLayoutPipelining`
+5. Add `ProjectOverrides` to a layout file
+6. Reload and confirm the merge landed
 
 ## Step 1: Set `SimpleLayoutWorkspaces`
 
-Workspaces that use a single simple layout instead of a per-machine `<Workspace>_<MachineType>.psd1` file. `Set-WorkspaceWindowLayout` and `Add-WindowLayout` both consult it.
+Workspaces applied as a simple layout. Each still needs its `<Workspace>_<MachineType>.psd1` file, but only its `Monitors` section matters: the zone layouts are applied to every monitor on every existing virtual desktop, and every window is placed in its own monitor's single fullscreen zone wherever it is (`Empty` places none). There is no desktop resize, no wait, no per-entry positioning and no verification, and live alongside workspaces are not preserved. `Add-WindowLayout -Simple` adds a name to this list.
 
 ```powershell
 SimpleLayoutWorkspaces = @("Fullscreen", "Empty", "MyScratch")
@@ -68,7 +74,15 @@ LayoutMachineTypeOverrides = @{
 }
 ```
 
-## Step 3: Set `WorkspaceLayoutPipelining`
+## Step 3: Set `SmallDisplayMachineType`
+
+The layout set read when the primary display is laptop-class (at most 3000px wide) and no `LayoutMachineTypeOverrides` entry applies. `Get-LayoutMachineType` resolves it; the set needs its own `<Workspace>_<Name>.psd1` files.
+
+```powershell
+SmallDisplayMachineType = "Laptop"
+```
+
+## Step 4: Set `WorkspaceLayoutPipelining`
 
 Whether `Set-WorkspaceWindowLayout` positions and snaps each virtual desktop as soon as every window on it is stable, while the slower windows on other desktops are still loading. The shipped default is `$true`; set `$false` for the strictly sequential order.
 
@@ -76,7 +90,7 @@ Whether `Set-WorkspaceWindowLayout` positions and snaps each virtual desktop as 
 WorkspaceLayoutPipelining = $false
 ```
 
-## Step 4: Add `ProjectOverrides` to a layout file
+## Step 5: Add `ProjectOverrides` to a layout file
 
 At the end of `Layouts/<MachineType>/<Workspace>_<MachineType>.psd1`, after the `Layout` array. Each variant names the desktops whose zone layout changes (`Monitors`) and the complete set of entries for every desktop and monitor it touches (`Layout`). Every entry needs `DesktopNumber` and `Monitor`, and its `Zone` must exist in the zone layout that desktop and monitor end up with.
 
@@ -92,7 +106,7 @@ ProjectOverrides = @{
 }
 ```
 
-## Step 5: Reload and confirm the merge landed
+## Step 6: Reload and confirm the merge landed
 
 Reload the profile, then read the merged value back. `$global:Configuration` after a reload is the ground truth - if what you set is not there, the local file did not parse or the key is nested one level away from where you put it.
 
@@ -109,6 +123,8 @@ Read-only checks. None of these change anything.
 Reload-PowerShellProfile
 $global:Configuration.SimpleLayoutWorkspaces
 $global:Configuration.LayoutMachineTypeOverrides
+$global:Configuration.SmallDisplayMachineType
+$global:Configuration.WorkspaceLayoutPipelining
 Get-LayoutMachineType
 Visualize-Layouts
 (Merge-LayoutProjectOverrides -Config (Import-PowerShellDataFile "<RepoRoot>\Windows\PowerShell\Modules\Window\Layouts\PC\Client_PC.psd1") -Project MyProject).Errors
@@ -129,8 +145,9 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
     LayoutMachineTypeOverrides = @{
         Test = "Docked"
     }
+    SmallDisplayMachineType = "Laptop"
     WorkspaceLayoutPipelining = $true
-    # ProjectOverrides is not a Configuration.local.psd1 key - it goes at the end of the workspace's layout file (Step 4)
+    # ProjectOverrides is not a Configuration.local.psd1 key - it goes at the end of the workspace's layout file (Step 5)
 }
 ```
 

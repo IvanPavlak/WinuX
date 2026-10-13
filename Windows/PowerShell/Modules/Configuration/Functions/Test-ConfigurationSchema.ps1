@@ -5,9 +5,10 @@ function Test-ConfigurationSchema {
 
 	.DESCRIPTION
 		Checks the global $Configuration hashtable for the presence and non-null/non-empty
-		values of every key required by core module functions. Reports all missing or empty
-		keys as warnings. Does not throw - missing keys produce warnings so the shell can
-		still start with a degraded configuration rather than failing entirely.
+		values of every key required by core module functions. Collects every problem and
+		reports them together as one warning. Without -Strict it does not throw - missing keys
+		produce a warning so the shell can still start with a degraded configuration rather
+		than failing entirely; with -Strict the same report is thrown as a terminating error.
 
 		Only FRAMEWORK keys are required. User-specific sections (themes, wallpapers,
 		locale, keyboard layouts, Wake-on-LAN, taskbar pins, ...) ship empty by design

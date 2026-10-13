@@ -10,9 +10,9 @@ The single read path for the three app lists.
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
 | [`BootstrapConfig.DataFiles`](../../configuration-reference.md#bootstrapconfig) | hashtable of list name to repository-relative path | 4 entries | Where the three committed app-list CSVs live, relative to the repository root. `Import-AppCsv` resolves the path from here, which is what keeps the location configuration-driven. |
-| [`PathTemplates.Projects.Self`](../../configuration-reference.md#path-templates--placeholder-system) | hashtable, path fields | shipped | WinuX own checkout: `Root` (the repository root) and `VSCodeWorkspaces` (where `.code-workspace` files live). Expanded into `$global:MachineSpecificPaths.Projects.Self`. |
+| [`PathTemplates.Projects.Self`](../../configuration-reference.md#path-templates--placeholder-system) | hashtable, path fields | shipped | WinuX own checkout. `Import-AppCsv` reads only `Root` (the repository root, shipped as `{RepoRoot}`), expanded into `$global:MachineSpecificPaths.Projects.Self.Root`, as the default for `-RepoRoot`. |
 
-This is the single read path for all three app lists, and the place the overlay rules live. An overlay row whose `App` matches a base row **replaces** it (so an overlay can pin a version, change the install scope, or re-target a machine without editing a tracked file). A row with a new `App` is **added**. A row whose `App` is `-` **removes** the base row - without that there would be no way to opt out of a shipped app. Comment rows (`App` starting with `#`) and blank `App` cells are dropped from both files. Row order is base-first, then overlay-only additions.
+This is the single read path for all three app lists, and the place the overlay rules live. An overlay row whose `App` matches a base row **replaces** it (so an overlay can pin a version, change the install scope, or re-target a machine without editing a tracked file). A row with a new `App` is **added**. A row whose `App` is `-<id>` **removes** the base row with that id - without that there would be no way to opt out of a shipped app. Comment rows (`App` starting with `#`) and blank `App` cells are dropped from both files. Row order is base-first, then overlay-only additions.
 
 ## Decisions
 
@@ -21,12 +21,8 @@ This is the single read path for all three app lists, and the place the overlay 
     - Default: The shipped paths under `Windows/PowerShell/Modules/Bootstrap/Data/`.
     - More detail: [`BootstrapConfig.DataFiles`](../../configuration-reference.md#bootstrapconfig)
 2. Is the WinuX checkout in the standard place?
-    - Options: A path, normally `{Dev}\WinuX` or `{Dev}\Dotfiles`. `{RepoRoot}` already resolves the running repository, so this rarely needs changing.
-    - Default: The shipped template.
-    - More detail: [`PathTemplates.Projects.Self`](../../configuration-reference.md#path-templates--placeholder-system)
-3. Where do your `.code-workspace` files live?
-    - Options: A directory path under `Projects.Self.VSCodeWorkspaces`.
-    - Default: The shipped template.
+    - Options: Leave `Projects.Self.Root` as `{RepoRoot}`, which already resolves the running repository wherever it was cloned; set a path such as `{Dev}\MyFork` only to read the app lists of another checkout.
+    - Default: The shipped template (`{RepoRoot}`).
     - More detail: [`PathTemplates.Projects.Self`](../../configuration-reference.md#path-templates--placeholder-system)
 
 ## Where to Put Values
@@ -56,14 +52,13 @@ BootstrapConfig = @{
 
 ## Step 2: Set `PathTemplates.Projects.Self`
 
-WinuX own checkout: `Root` (the repository root) and `VSCodeWorkspaces` (where `.code-workspace` files live). Expanded into `$global:MachineSpecificPaths.Projects.Self`.
+WinuX own checkout. `Import-AppCsv` reads only `Root`, expanded into `$global:MachineSpecificPaths.Projects.Self.Root`, as the default repository root.
 
 ```powershell
 PathTemplates = @{
     Projects = @{
         Self = @{
-            Root             = "{RepoRoot}"
-            VSCodeWorkspaces = "{RepoRoot}\VSCode\Workspaces"
+            Root = "{RepoRoot}"
         }
     }
 }
@@ -107,8 +102,7 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
     PathTemplates = @{
         Projects = @{
             Self = @{
-                Root             = "{RepoRoot}"
-                VSCodeWorkspaces = "{RepoRoot}\VSCode\Workspaces"
+                Root = "{RepoRoot}"
             }
         }
     }

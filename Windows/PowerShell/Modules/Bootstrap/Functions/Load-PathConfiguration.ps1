@@ -17,6 +17,9 @@ function Load-PathConfiguration {
 		WorkspaceActions entry into a plain action list and substitutes {Workspace}, so no reader of
 		WorkspaceActions has to know about templates.
 
+		Environment variables such as %USERPROFILE% in the BasePaths values are expanded before
+		the machine type is resolved and the paths are built.
+
 		Also ensures the WinuX Modules directory is present in `$env:PSModulePath` so that all
 		modules are available for autoloading, and registers the `Modules\Custom` fork area as an
 		additional module root so whole fork-owned modules autoload the same way.
@@ -27,7 +30,8 @@ function Load-PathConfiguration {
 
 	.PARAMETER Configuration
 		An already-parsed Configuration.psd1 hashtable. When provided, skips reading the file from
-		disk. Used by Bootstrap to avoid parsing the file twice.
+		disk. Used by the profile to avoid parsing the file twice (Bootstrap reads it from disk).
+		Configuration.local.psd1 is still merged into it.
 
 	.PARAMETER Quiet
 		Suppresses all console output. Used when loading configuration in background contexts.

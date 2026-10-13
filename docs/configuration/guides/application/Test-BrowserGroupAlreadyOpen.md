@@ -62,7 +62,7 @@ Read-only checks. None of these change anything.
 ```powershell
 Reload-PowerShellProfile
 $global:Configuration.BrowserGroupMatching
-Test-BrowserGroupAlreadyOpen -Urls @("http://localhost:3000") -GroupDisplayName "Monitoring"
+Test-BrowserGroupAlreadyOpen -Urls @("http://localhost:3000") -Browser Firefox -GroupDisplayName "Monitoring"
 ```
 
 If a value reads back as empty, the two usual causes are a parse error in `Configuration.local.psd1` (run `Test-ConfigurationSchema`) and a key placed at the wrong nesting level.

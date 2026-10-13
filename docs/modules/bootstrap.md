@@ -8,23 +8,23 @@ The Bootstrap module is the **heart of WinuX** - it orchestrates the entire syst
 - **Parameters:** -RepoRoot, -WithInitialSetup, -Skip, -Include
 - **Usage:** `Bootstrap`, `Bootstrap -WithInitialSetup`, `Bootstrap -RepoRoot "<DevRoot>\WinuX"`, `Bootstrap -Skip WSL`
 
-Transforms a fresh Windows installation into a fully configured development environment. The `-WithInitialSetup` switch adds first-time-only steps (machine rename, Windows activation, Win11Debloat) and should be omitted on subsequent runs. If `-RepoRoot` is not supplied it defaults to `$global:MachineSpecificPaths.Projects.Self.Root`. Logging runs via `Start-Logging` / `Stop-Logging` for the duration of the run.
+Transforms a fresh Windows installation into a fully configured development environment. The `-WithInitialSetup` switch adds first-time-only steps - [Initialize-Configuration](#initialize-configuration) (captures the Git identity and paths into `Configuration.local.psd1` from the `WINUX_*` environment variables or a prompt, then reloads the configuration), machine rename, Windows activation and Win11Debloat - and should be omitted on subsequent runs. If `-RepoRoot` is not supplied it defaults to `$global:MachineSpecificPaths.Projects.Self.Root`. Logging runs via `Start-Logging` / `Stop-Logging` for the duration of the run.
 
-Every step is individually toggleable via `BootstrapConfig.Steps`, resolved once per run by [Resolve-BootstrapSteps](#resolve-bootstrapsteps); `-Skip`/`-Include` override the config per invocation. Most steps also no-op on their own when their configuration section is empty, so an enabled step on the empty base config applies nothing. The opt-in steps that act the moment they run default off: `MicrosoftActivationScripts`, `Win11Debloat`, `DeveloperMode`, `NuGetConfig`, `UpgradeAll`, `CoreAiRules`, `AiSkills`, `AiMods`, `AiMarketplaces`, `ObsidianCli`, `VSCodeProfiles`, `LockedStartLayout`.
+Every step is individually toggleable via `BootstrapConfig.Steps`, resolved once per run by [Resolve-BootstrapSteps](#resolve-bootstrapsteps); `-Skip`/`-Include` override the config per invocation. Most steps also no-op on their own when their configuration section is empty, so an enabled step on the empty base config applies nothing. The opt-in steps that act the moment they run default off: `MicrosoftActivationScripts`, `Win11Debloat`, `RepositoryUpdate`, `DeveloperMode`, `NuGetConfig`, `UpgradeAll`, `CoreAiRules`, `AiSkills`, `AiMods`, `AiMarketplaces`, `ObsidianCli`, `VSCodeProfiles`, `LockedStartLayout`.
 
 The three package-manager steps are additionally gated by [Resolve-PackageManagers](#resolve-packagemanagers), called once per run: a manager is installed only when it is listed in `PackageManagers` **and** has at least one app for this machine type. The step toggle can therefore only turn a manager off - enabling `ScoopApps` does not install Scoop if `PackageManagers` omits it or its app list is empty. On the base configuration that means WinGet alone, because `ScoopApps.csv` and `ChocolateyApps.csv` ship empty.
 
 Execution sequence:
 
-1. (`-WithInitialSetup` only) `Rename-Machine`, `Start-MicrosoftActivationScripts`, `Start-Win11Debloat` (the latter two opt-in via `Steps`)
-2. `Update-Repositories` - pulls the configured repositories (opt-in via `Steps.RepositoryUpdate`); which groups it pulls is governed by `BootstrapConfig.RepositoryUpdateScope`, and whether each repository's default branch is fast-forwarded too by `RepositoryUpdate.IncludeDefaultBranch`
+1. (`-WithInitialSetup` only) `Initialize-Configuration`, `Rename-Machine`, `Start-MicrosoftActivationScripts`, `Start-Win11Debloat` (the latter two opt-in via `Steps`)
+2. Git identity guarantee (a missing global `user.name` / `user.email` is restored from `GitConfig`), then `Update-Repositories` - pulls the configured repositories (opt-in via `Steps.RepositoryUpdate`); which groups it pulls is governed by `BootstrapConfig.RepositoryUpdateScope`, and whether each repository's default branch is fast-forwarded too by `RepositoryUpdate.IncludeDefaultBranch`
 3. Execution policy, Developer Mode, power plan, power button actions
-4. System theme, locale, display language, keyboard layouts
-5. Nerd Font, PowerShell modules, special folder redirections
+4. System theme, locale, display language, keyboard layouts (from `DefaultLocale`, `DefaultDisplayLanguage`, `DefaultKeyboardLayoutSet`), then a summary of the language settings
+5. Nerd Font (`DefaultNerdFont`), PowerShell modules, special folder redirections, then an Explorer restart
 6. WSL configuration
 7. WinGet, Scoop, and Chocolatey - install each manager in play then its apps from CSVs
 8. Upgrade all packages (opt-in via `Steps.UpgradeAll`), fork-defined personal steps (BootstrapConfig.PersonalSteps, each entry optionally machine-gated like the app CSVs' `Machine` column), .NET EF CLI
-9. Environment variables, Conda environments, NuGet config, taskbar pins
+9. Environment variables, Conda environments, NuGet config, taskbar pins, then `Set-TaskbarSettings` and `Set-VisualEffects` (no step toggle - both no-op until their configuration sections are set)
 10. WSL environment initialization, symbolic links, CoreAiRules enforcement layer (opt-in via `Steps.CoreAiRules`), AI skills links (opt-in via `Steps.AiSkills`), AI mods links and the Claude Code plugin list (opt-in via `Steps.AiMods`, runs [Deploy-AiMods](ai.md#deploy-aimods)), Claude Code plugin marketplaces and their plugins (opt-in via `Steps.AiMarketplaces`, runs [Deploy-AiMarketplaces](ai.md#deploy-aimarketplaces)), Obsidian CLI flag (opt-in via `Steps.ObsidianCli`, runs [Enable-ObsidianCli](application.md#enable-obsidiancli) with `-CreateIfMissing`), VS Code profiles (opt-in via `Steps.VSCodeProfiles`, runs [Deploy-VSCodeProfiles](application.md#deploy-vscodeprofiles)), WSL SSH setup
 11. Lock taskbar layout, restart Explorer, restart machine
 
@@ -115,7 +115,7 @@ $paths = Expand-ConfigPaths -Configuration $Configuration -MachineType "PC"
 - **Parameters:** -Source, -DevPath, -UserPath, -MachineTypeName, -RepoRoot
 - **Usage:** `Expand-Hashtable -Source $config -DevPath "<DevRoot>" -UserPath "C:\Users\<User>" -MachineTypeName "MyMachine"`
 
-Recurses into nested hashtables and `IList` collections, expanding every string value it encounters while preserving structure and null entries. If `-RepoRoot` is omitted, it is inferred from `Source.Projects.Self.Root` (with `{Dev}` resolved first). When a source string contains a forward slash and expands to a Windows drive path, it is rewritten to the equivalent WSL mount path (for example `C:\foo` becomes `/mnt/c/foo`).
+Recurses into nested hashtables and `IList` collections, expanding every string value it encounters while preserving structure and null entries. Pass `-RepoRoot` to expand `{RepoRoot}`: without it the function falls back to `Source.Projects.Self.Root` (with `{Dev}` resolved first), but that key ships as `{RepoRoot}` itself, so on the shipped configuration the fallback resolves nothing and `{RepoRoot}` tokens are left untouched. When a source string contains a forward slash and expands to a Windows drive path, it is rewritten to the equivalent WSL mount path (for example `C:\foo` becomes `/mnt/c/foo`).
 
 | Parameter          | Description                                                                                   |
 | ------------------ | --------------------------------------------------------------------------------------------- |
@@ -123,7 +123,7 @@ Recurses into nested hashtables and `IList` collections, expanding every string 
 | `-DevPath`         | Development directory path substituted for `{Dev}`. (Mandatory)                               |
 | `-UserPath`        | User directory path substituted for `{User}`. (Mandatory)                                     |
 | `-MachineTypeName` | Machine type name substituted for `{MachineType}`. (Mandatory)                                |
-| `-RepoRoot`        | Optional WinuX root for `{RepoRoot}`. Inferred from `Source.Projects.Self.Root` when omitted. |
+| `-RepoRoot`        | WinuX root for `{RepoRoot}`. Without it `{RepoRoot}` tokens stay unexpanded (see above).      |
 
 ```powershell
 # Expand all placeholder tokens in a config hashtable
@@ -174,7 +174,7 @@ This function only reads. [Save-AppCsvOverlay](configuration.md#save-appcsvoverl
 ## [Initialize-Configuration](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Bootstrap/Functions/Initialize-Configuration.ps1)
 
 - **Description:** First-run writer that captures your personal identity and paths into a sibling `Configuration.local.psd1` override - never into the committed `Configuration.psd1`. WinuX ships a generic base config (blank Git identity, placeholder paths) and commits no personal data; this function writes only the keys that differ - `GitConfig.UserName`/`UserEmail`, the `BasePaths.<MachineType>` `{Dev}`/`{User}` roots, and this machine's `HostnameToMachineType` entry - which `Load-PathConfiguration` deep-merges over the base at load time. Because the base file is never edited, pulling upstream updates into a fork never conflicts on configuration. Validates that the generated override parses before writing. **An existing override is never replaced**: if `Configuration.local.psd1` is there at all, the function logs that it is leaving it alone and returns, whatever the file contains. Existence alone is the guard, deliberately not "exists and parses and carries an identity" - that older test let a file which was mid-edit, identity-less, or committed by a fork be regenerated down to the three keys below, silently discarding every other key it held. `-Force` still rewrites, but first copies the current file into the unified backup sink (`Backups\Windows\Config\Configuration.local\<timestamp>\`, via [`Backup-RepositoryItem`](helper.md#backup-repositoryitem)) and aborts without writing if that copy fails.
-- **Parameters:** -Owner, -GitName, -GitEmail, -DevPath, -MachineType, -ConfigPath, -LocalConfigPath, -BackupRoot, -Force
+- **Parameters:** -Owner, -GitName, -GitEmail, -DevPath, -MachineType, -ConfigPath, -LocalConfigPath, -BackupRoot, -Force, -WhatIf
 - **Usage:** `Initialize-Configuration`, `Initialize-Configuration -GitName "Jane Doe" -GitEmail "jane@example.com" -DevPath "D:\Dev"`
 
 Run once after cloning to make WinuX yours. Any value not passed as a parameter is requested interactively; in a non-interactive session missing values fall back to sensible defaults (your `%USERNAME%`, `%USERPROFILE%\Development\GitHub`) instead of prompting, so automated runs never block. The override file is gitignored by WinuX - keep it on your machine or in your own fork; your Git email never lands in the WinuX repository. See the [Fork Model](../contributing/fork-model.md) for how this override keeps a personal fork conflict-free.
@@ -228,10 +228,10 @@ $env:WINUX_BRANCH = 'OtherBranch'
 
 ## [Install-WinGetPackageManager](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Bootstrap/Functions/Install-WinGetPackageManager.ps1)
 
-- **Description:** Installs the WinGet package manager if it is not already present. Checks whether the `winget` command is available; if so, reports the current version and returns. Otherwise it installs the community `winget-install` script from the PowerShell Gallery via `Install-Script` and runs it to provision WinGet.
+- **Description:** Installs the WinGet package manager if it is not already present. Checks whether the `winget` command is available; if so, reports the current version and returns. Otherwise it installs the community `winget-install` script from the PowerShell Gallery via `Install-Script` and runs it to provision WinGet. Requires administrator privileges (checked up front via `Test-AdminPrivileges`).
 - **Usage:** `Install-WinGetPackageManager`
 
-Invoked automatically by Bootstrap as the first of the package-manager setup steps.
+Invoked automatically by Bootstrap as the first of the package-manager setup steps, when WinGet is in play ([Resolve-PackageManagers](#resolve-packagemanagers)) and `Steps.WinGetApps` is on.
 
 ```powershell
 # Install WinGet, or report that it is already installed
@@ -256,7 +256,7 @@ Invoke-PersonalSteps
 - **Parameters:** -RepoRoot, -Configuration, -Quiet
 - **Usage:** `Load-PathConfiguration -RepoRoot "C:\Users\<User>\Development\GitHub\WinuX"`, `Load-PathConfiguration -RepoRoot $path -Quiet`
 
-This is the single function that brings the entire WinuX system online. It reads the provided `$Configuration` hashtable (or imports `Configuration.psd1` from disk via `Import-PowerShellDataFile` when omitted), looks up `$env:COMPUTERNAME` in the `HostnameToMachineType` mapping, and falls back **silently** to `DefaultMachineType` when the hostname is not mapped - so profile loading never blocks on user input. It ensures the `Modules\` folder is in `$env:PSModulePath` for first-use autoload, then expands the `Universal` section with `Expand-Hashtable` and resolves all placeholder paths via `Expand-ConfigPaths` (both are Bootstrap functions, so this no longer autoloads any other module). Returns `$true` on success and `$false` on failure.
+This is the single function that brings the entire WinuX system online. It reads the provided `$Configuration` hashtable (or imports `Configuration.psd1` from disk via `Import-PowerShellDataFile` when omitted), looks up `$env:COMPUTERNAME` in the `HostnameToMachineType` mapping, and falls back **silently** to `DefaultMachineType` when the hostname is not mapped - so profile loading never blocks on user input. It expands environment variables such as `%USERPROFILE%` in the `BasePaths` values, ensures the `Modules\` folder is in `$env:PSModulePath` for first-use autoload (and `Modules\Custom` after it, for whole fork-owned modules), then expands the `Universal` section with `Expand-Hashtable` and resolves all placeholder paths via `Expand-ConfigPaths` (both are Bootstrap functions, so this no longer autoloads any other module). Returns `$true` on success and `$false` on failure.
 
 On a successful load it sets three global variables:
 
@@ -267,7 +267,7 @@ On a successful load it sets three global variables:
 | Parameter        | Type      | Required | Description                                                                                                                                                 |
 | ---------------- | --------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `-RepoRoot`      | String    | Yes      | Absolute path to the WinuX repository root. Used to locate `Windows\PowerShell\Configuration.psd1` and the `Modules\` folder.                               |
-| `-Configuration` | Hashtable | No       | An already-parsed configuration hashtable. When provided, skips re-reading the file from disk (Bootstrap and the profile use this to avoid a second parse). |
+| `-Configuration` | Hashtable | No       | An already-parsed configuration hashtable. When provided, skips re-reading the file from disk (the profile uses this to avoid a second parse). |
 | `-Quiet`         | Switch    | No       | Suppresses all console output. Used when loading configuration in background or startup contexts.                                                           |
 
 ```powershell
@@ -282,11 +282,11 @@ $global:MachineType                              # e.g. "PC"
 $global:MachineSpecificPaths.Projects.Self   # Expanded paths
 ```
 
-**See also:** [DetermineMachineType](bootstrap.md) (interactive machine-type prompt used during Bootstrap)
+**See also:** [DetermineMachineType](#determinemachinetype) (interactive machine-type prompt used during Bootstrap)
 
 ## [Merge-Hashtable](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Bootstrap/Functions/Merge-Hashtable.ps1)
 
-- **Description:** Recursively merges override values into a target hashtable (by reference). When both the target and override hold a hashtable for the same key, those nested hashtables are merged recursively; otherwise the override value replaces the target value. Used by `Expand-ConfigPaths` to apply machine-specific configuration overrides.
+- **Description:** Recursively merges override values into a target hashtable (by reference). When both the target and override hold a hashtable for the same key, those nested hashtables are merged recursively; otherwise the override value replaces the target value. Used by `Load-PathConfiguration` to merge `Configuration.local.psd1` over the base configuration and by `Expand-ConfigPaths` to apply machine-specific configuration overrides.
 - **Parameters:** -Target, -Overrides
 - **Usage:** `Merge-Hashtable -Target $config -Overrides $overrides`
 
@@ -311,7 +311,7 @@ Merge-Hashtable -Target $config -Overrides $overrides
 - **Parameters:** -Skip (step names forced off), -Include (step names forced on)
 - **Usage:** `Resolve-BootstrapSteps`, `Resolve-BootstrapSteps -Skip WSL`, `Resolve-BootstrapSteps -Include UpgradeAll`
 
-Step names, in execution order: `RenameMachine`, `MicrosoftActivationScripts`, `Win11Debloat` (these three only run with `-WithInitialSetup`), `ExecutionPolicy`, `DeveloperMode`, `PowerPlan`, `PowerButtonActions`, `SystemTheme`, `Locale`, `DisplayLanguage`, `KeyboardLayouts`, `NerdFont`, `PowerShellModules`, `SpecialFolders`, `WSL`, `WinGetApps`, `ScoopApps`, `ChocolateyApps`, `UpgradeAll`, `DotnetEf`, `EnvironmentVariables`, `CondaEnvironments`, `NuGetConfig`, `Taskbar`, `SymbolicLinks`, `CoreAiRules`, `AiSkills`, `AiMods`, `AiMarketplaces`, `ObsidianCli`, `VSCodeProfiles`, `LockedStartLayout`.
+Step names, in execution order: `RenameMachine`, `MicrosoftActivationScripts`, `Win11Debloat` (these three only run with `-WithInitialSetup`), `RepositoryUpdate`, `ExecutionPolicy`, `DeveloperMode`, `PowerPlan`, `PowerButtonActions`, `SystemTheme`, `Locale`, `DisplayLanguage`, `KeyboardLayouts`, `NerdFont`, `PowerShellModules`, `SpecialFolders`, `WSL`, `WinGetApps`, `ScoopApps`, `ChocolateyApps`, `UpgradeAll`, `DotnetEf`, `EnvironmentVariables`, `CondaEnvironments`, `NuGetConfig`, `Taskbar`, `SymbolicLinks`, `CoreAiRules`, `AiSkills`, `AiMods`, `AiMarketplaces`, `ObsidianCli`, `VSCodeProfiles`, `LockedStartLayout`.
 
 Most steps default **on**, because their functions no-op when their configuration section is empty - an enabled step on the empty base config applies nothing. The opt-in exceptions default **off**, because they have no configuration to be empty and act the moment they run: `MicrosoftActivationScripts`, `Win11Debloat`, `DeveloperMode`, `NuGetConfig` (prompts for a GitHub PAT), `UpgradeAll` (runs `winget upgrade --all` and its Scoop/Chocolatey equivalents, so it touches every package already on the machine, not only the ones WinuX installs), `CoreAiRules` (machine-global AI agent policy - see [CoreAiRules](../ai/coreairules.md)), `AiSkills` (machine-global Agent Skills - see [AI Skills](../ai/skills.md)), `AiMods` (machine-global Claude Code mods: links into `~\.claude\mods` and writes `env.CLAUDE_CODE_PLUGIN_DIRS` into the user's Claude Code settings - see [AI Mods](../ai/mods.md)), `AiMarketplaces` (registers Claude Code plugin marketplaces in the user's Claude Code settings and installs their plugins through the CLI - see [AI Mods - Marketplaces](../ai/mods.md#marketplaces)), `ObsidianCli` (writes `"cli": true` into Obsidian's per-machine `%APPDATA%\obsidian\obsidian.json` through `Enable-ObsidianCli -CreateIfMissing`, so `Open-Obsidian` can load workspaces on the machine - another application's settings file, hence opt-in), `VSCodeProfiles` (links VS Code profile files from the repository, registers missing profiles in VS Code's own state and installs extensions through [Deploy-VSCodeProfiles](application.md#deploy-vscodeprofiles)), `RepositoryUpdate` (clones and pulls every repository the machine's scope names, which reaches outside this repository the moment it runs) and `LockedStartLayout`. `RepositoryUpdate` decides **whether** the repository step runs; **which** groups it then pulls stays `BootstrapConfig.RepositoryUpdateScope`'s job, resolved by [`Resolve-RepositoryUpdateScope`](#resolve-repositoryupdatescope).
 
@@ -485,7 +485,7 @@ When PowerShell starts, `Microsoft.PowerShell_profile.ps1` runs:
 │     ├─→ Import Configuration.psd1 → $global:Configuration       │
 │     ├─→ Determine MachineType from $env:COMPUTERNAME            │
 │     ├─→ Build modules path, add to $env:PSModulePath            │
-│     └─→ Import Bootstrap module                                 │
+│     └─→ Import Logging, then Bootstrap module                   │
 │                                                                 │
 │  2. Load-PathConfiguration -Configuration $global:Configuration │
 │     ├─→ Reuses pre-loaded config (no second file read)          │
@@ -493,24 +493,31 @@ When PowerShell starts, `Microsoft.PowerShell_profile.ps1` runs:
 │     ├─→ Expands placeholders → $global:MachineSpecificPaths     │
 │     └─→ Sets $global:Configuration, $global:MachineType         │
 │                                                                 │
-│  3. Console Enhancement                                         │
+│  3. Test-ConfigurationSchema (warnings only, dot-sourced)       │
+│                                                                 │
+│  4. Console Enhancement                                         │
 │     ├─→ Oh-My-Posh (WinuX_{MachineType}.omp.json theme)         │
 │     ├─→ FastFetch (system info display)                         │
 │     ├─→ PSReadLine (history, predictions, key bindings)         │
 │     └─→ Terminal-Icons (file/folder icons)                      │
 │                                                                 │
-│  4. Register Aliases                                            │
+│  5. Register Aliases                                            │
 │     ├─→ Git: gb, gbd, gsw, gp, gmm, gs, gdf                     │
-│     ├─→ Workflow: w, b, efm, rp, t                              │
+│     ├─→ Workflow: w, cw, b, efm, rp, t, translate               │
 │     └─→ Dev tools: dnr, dnbr, dnp, nir, c, l                    │
 │                                                                 │
-│  5. Startup Checks                                              │
+│  6. Startup Checks                                              │
 │     └─→ Test-PowerPlan (dot-sourced directly, no module import) │
+│                                                                 │
+│  7. Deferred until the prompt is idle (one OnIdle event)        │
+│     ├─→ Terminal-Icons import                                   │
+│     ├─→ Invoke-LogMaintenance                                   │
+│     └─→ Invoke-StartupRepositoryUpdate (+ prompt check)         │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
 > [!NOTE]
-> WinuX modules are **not imported at startup**. Each `.psd1` manifest declares `FunctionsToExport`, enabling PowerShell autoload. A module loads automatically the first time one of its exported functions is called - keeping shell startup fast. This includes the fork-owned `Custom` module, which autoloads via its own `FunctionsToExport` (maintained by the fork, empty upstream - see [Fork Model: the Custom area](../contributing/fork-model.md)). The one exception is `Bootstrap`, which is imported explicitly (its `Expand-Hashtable` / `Expand-ConfigPaths` functions perform path expansion in `Load-PathConfiguration`).
+> WinuX modules are **not imported at startup**. Each `.psd1` manifest declares `FunctionsToExport`, enabling PowerShell autoload. A module loads automatically the first time one of its exported functions is called - keeping shell startup fast. This includes the fork-owned `Custom` module, which autoloads via its own `FunctionsToExport` (maintained by the fork, empty upstream - see [Fork Model: the Custom area](../contributing/fork-model.md)). The exceptions are `Logging` and `Bootstrap`, imported explicitly in that order (so every module can log from the start, and Bootstrap's `Expand-Hashtable` / `Expand-ConfigPaths` functions perform path expansion in `Load-PathConfiguration`).
 
 > [!NOTE]
 > `Test-PowerPlan` is dot-sourced directly from its `.ps1` file rather than importing the entire `System` module at startup. This avoids loading ~46 system functions just for one startup check.
@@ -538,9 +545,9 @@ $MachineSpecificPaths.Projects.Self.Root
 $Configuration.Themes[$MachineType]
 # Output: Dark
 
-# List all projects
-$Configuration.Projects
-# Output: @("MyProject", "OtherProject", "ThirdProject", ...)
+# List all projects, in menu order
+Get-OrderedNames $Configuration.ProjectActions
+# Output: MyProject, OtherProject, ThirdProject, ...
 ```
 
 ## Data Files

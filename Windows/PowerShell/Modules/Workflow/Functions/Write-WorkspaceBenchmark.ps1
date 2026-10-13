@@ -19,8 +19,9 @@ function Write-WorkspaceBenchmark {
 		per-action breakdown as Name=seconds pairs. Numbers are written culture-invariant so the
 		file reads the same on every machine.
 
-		The summary line lists the phases above 0.05 s, plus "retries N" when the layout needed
-		more than one attempt and the outcome when it is not Applied. Writing is best-effort: a
+		The summary line lists the launch actions, the phases and the remainder above 0.05 s, plus
+		"retries N" when the layout needed more than one attempt and the outcome when it is
+		neither Applied nor NoLayout. Writing is best-effort: a
 		failure warns and never fails the open. A file written before the Source column existed
 		is upgraded in place on the next write - every existing row kept, the new column empty.
 

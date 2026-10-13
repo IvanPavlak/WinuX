@@ -1,6 +1,6 @@
 # Write-LogSuccess
 
-Writes a success message in the house `=> ` style (Green), replacing the `Write-Host -ForegroundColor Green "`n=> ..."`idiom.
+Writes a success message in the house `=> ` style (Green), replacing the ``Write-Host -ForegroundColor Green "`n=> ..."`` idiom.
 
 ## Configuration Keys
 

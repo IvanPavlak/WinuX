@@ -32,7 +32,9 @@ function Invoke-VirtualDesktopOperation {
 		What the operation is, for the debug log and the RPC preflight message.
 
 	.PARAMETER MaxAttempts
-		How many times an RPC-classified failure is retried after a state reset. Default 3.
+		Total attempts, the first one included: an RPC-classified failure is retried after a
+		state reset until this many attempts have run, then thrown. Default 3 (two retries).
+		With -Probe, Get-RpcRetryPolicy may replace this and -InitialDelayMs.
 
 	.PARAMETER InitialDelayMs
 		Backoff before the second attempt, doubled each time. Default 200.

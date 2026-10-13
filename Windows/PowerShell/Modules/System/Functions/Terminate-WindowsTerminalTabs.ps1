@@ -22,6 +22,18 @@ function Terminate-WindowsTerminalTabs {
 		Waits before closing the current tab when `-OnlyCurrent` or `-IncludeCurrent`
 		is used. This gives the caller time to read the final status output before the
 		terminal closes.
+
+	.EXAMPLE
+		Terminate-WindowsTerminalTabs
+		Closes every other Windows Terminal tab, keeping the current one.
+
+	.EXAMPLE
+		Terminate-WindowsTerminalTabs -IncludeCurrent
+		Closes every other tab, then the current one through a clean process exit.
+
+	.EXAMPLE
+		Terminate-WindowsTerminalTabs -OnlyCurrent -CloseWaitSeconds 5
+		Closes only the calling tab, after a 5-second countdown.
     #>
 	[CmdletBinding()]
 	param(

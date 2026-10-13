@@ -28,7 +28,8 @@ function Get-WorkspaceLayoutTimings {
 
 	.OUTPUTS
 		[pscustomobject] with Workspace, LayoutFile, Alongside, DesktopOffset, Attempts, Outcome
-		(Applied, Escalated, Error or Aborted), TotalSeconds, Phases (ordered phase => seconds) and
+		(Applied, Prepared, Escalated, Error or Aborted - Prepared is a -PrepareOnly run that stopped
+		after the FancyZones phase), TotalSeconds, Phases (ordered phase => seconds) and
 		RecordedAt; or $null.
 
 	.EXAMPLE

@@ -8,7 +8,8 @@ function Collect-BrowserUrls {
 		Handles nested hashtables with Name/Url pairs and tracks opened subgroup names.
 
 	.PARAMETER Value
-		The browser group structure (array or hashtable) to process.
+		The browser group structure (array, hashtable or string) to process. The caller passes
+		the value; this function reads no configuration itself.
 
 	.PARAMETER Depth
 		Recursion depth counter (internal use, default 0).

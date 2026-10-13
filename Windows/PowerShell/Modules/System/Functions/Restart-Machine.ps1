@@ -16,7 +16,7 @@ function Restart-Machine {
 
     .EXAMPLE
         Restart-Machine -Selection "Yes"
-        Restarts immediately without prompting.
+        Restarts without prompting, after the 5-second countdown.
     #>
 	[CmdletBinding()]
 	param(

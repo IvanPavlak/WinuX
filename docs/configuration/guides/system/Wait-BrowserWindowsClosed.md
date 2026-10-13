@@ -15,5 +15,5 @@ Wait-BrowserWindowsClosed -Windows $survivors -TimeoutMs 2000
 
 ## Related
 
-- [`Wait-BrowserWindowsClosed` in the System module reference](../../../modules/system.md#waitbrowserwindowsclosed) - parameters, usage and behaviour
+- [`Wait-BrowserWindowsClosed` in the System module reference](../../../modules/system.md#wait-browserwindowsclosed) - parameters, usage and behaviour
 - [System configuration guides](README.md) - every guide for this module

@@ -4,9 +4,11 @@ WinuX can be installed with a **single command** that bootstraps your entire sys
 scratch. Everything is driven by your configuration - **you never edit code** to install it.
 
 > [!WARNING]
-> The installer runs as **Administrator** and makes broad, state-changing modifications
-> (installs software, creates symlinks, reconfigures the OS). **Evaluate WinuX in a virtual
-> machine first**, and read [`Install-Bootstrap.ps1`](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Bootstrap/Install-Bootstrap.ps1)
+> The installer runs as **Administrator** and changes system state. A vanilla run is deliberately
+> quiet - it installs Git, the three framework apps at their pinned versions and the PowerShell
+> modules, and creates the framework symlinks (an existing PowerShell profile and FancyZones files
+> are backed up and replaced) - but a fork's configuration can opt into far more: OS settings,
+> software, repositories, links. **Evaluate WinuX in a virtual machine first**, and read [`Install-Bootstrap.ps1`](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Bootstrap/Install-Bootstrap.ps1)
 > before running it (see the [Security Policy](https://github.com/IvanPavlak/WinuX/security)).
 
 ## One-liner installation
@@ -121,6 +123,7 @@ for when that is absent:
 | `WINUX_GIT_EMAIL` | Your Git `user.email` (else read from a committed `Configuration.local.psd1`).       | _(config, else prompt)_     |
 | `WINUX_DEV_PATH`  | Root development directory (the repo is cloned to `<WINUX_DEV_PATH>\GitHub\<repo>`). | `%USERPROFILE%\Development` |
 | `WINUX_BRANCH`    | Branch to check out after cloning.                                                   | `master`                    |
+| `WINUX_INSTALL_DIR` | Folder name to clone into under `<WINUX_DEV_PATH>\GitHub`, instead of the repository name. | _(the repository name)_ |
 
 ## What Install-Bootstrap does
 
@@ -151,8 +154,8 @@ for when that is absent:
 ## Installation location
 
 The repository is cloned to `<dev>\GitHub\<repo>`, where `<dev>` is `WINUX_DEV_PATH`
-(default `%USERPROFILE%\Development`) and `<repo>` is derived from your `WINUX_REPO_URL`. For
-the default install that is:
+(default `%USERPROFILE%\Development`) and `<repo>` is derived from your `WINUX_REPO_URL` (or is
+`WINUX_INSTALL_DIR` when set). For the default install that is:
 
 ```
 %USERPROFILE%\Development\GitHub\WinuX

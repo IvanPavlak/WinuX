@@ -14,8 +14,8 @@ Translates text between languages using the Google Translate API. Alias: ``trans
 ## Decisions
 
 1. Which language should translations default to?
-    - Options: A language name Google Translate accepts.
-    - Default: `English`.
+    - Options: A full language name from the function's built-in table (`Afrikaans` through `Welsh`, e.g. `Croatian`, `German`); a name outside the table makes every call fail with an unsupported-language error.
+    - Default: `English` (also the fallback when the section is absent).
     - More detail: [`DefaultTranslateLanguages`](../../configuration-reference.md#more-sections-quick-reference)
 
 ## Where to Put Values

@@ -244,3 +244,4 @@ BasePaths = @{
 3. **Comment consumer functions**: Use `# → Consumer: FunctionName` comments
 4. **Use existing patterns**: Look at neighboring entries for format reference
 5. **Placeholder paths only**: Never hardcode `C:\Users\You\...` - use `{User}\...`
+6. **Deprecate before removing**: Never remove or rename a `Configuration.psd1` key in one step. Keep the old key read (with the new one taking precedence), record it under `### Deprecated` in `CHANGELOG.md` with the migration, and leave the removal to the next MAJOR release (see `VERSIONING.md`)

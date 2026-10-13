@@ -17,8 +17,8 @@ function ConvertTo-WorkspaceOpenSummary {
 		Baseline in the one-factor-at-a-time set, or -Reference by name:
 		  Effect  - the variant's clean median minus the reference's, in seconds (negative is
 		            faster). Falls back to the plain median for a variant with no clean run.
-		  Spread  - the range (max minus min) of the variant's own clean-run totals: how much two
-		            opens of the SAME configuration differed.
+		  Spread  - the range (max minus min) of the variant's own clean-run totals (all its totals
+		            when it has no clean run): how much two opens of the SAME configuration differed.
 		  Verdict - "Reference" for the reference itself; "Noise" when |Effect| is not larger than
 		            half the larger of the two spreads, because a difference smaller than the
 		            within-variant scatter is not evidence of anything; otherwise "Faster" or
@@ -33,7 +33,8 @@ function ConvertTo-WorkspaceOpenSummary {
 		read them back. Rows with Measured = $false are ignored.
 
 	.PARAMETER Reference
-		The variant every other one is compared with. The first variant to run by default.
+		The variant every other one is compared with. The first variant to run by default, and also
+		when the name matches no variant.
 
 	.EXAMPLE
 		Read-WorkspaceOpenMeasurement -Session 20260907-135804 | ConvertTo-WorkspaceOpenSummary | Format-Table -AutoSize

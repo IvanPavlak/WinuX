@@ -5,7 +5,9 @@ function Test-MachineTypeScope {
 
 	.DESCRIPTION
 		The single gate behind every machine-scoped data source: the Machine column of the
-		WinGet/Scoop/Chocolatey CSVs and the BootstrapConfig.PersonalSteps entries. Splits the
+		WinGet/Scoop/Chocolatey CSVs, the BootstrapConfig.PersonalSteps entries, the
+		TaskbarConfiguration rows, and the Machine / LayoutMachine scopes of WorkspaceActions
+		entries (through Resolve-WorkspaceActions). Splits the
 		scope string on "/", trims each token, and returns $true when the scope names "All" or
 		the given machine type (matching is case-insensitive, so "laptop" covers "Laptop").
 

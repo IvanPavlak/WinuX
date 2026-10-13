@@ -9,17 +9,17 @@ Sets the system locale (user culture and home location).
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`DefaultLocale`](../../configuration-reference.md#locale--language) | string | empty string | The locale `Set-Locale` applies by default. Ships empty, so the function no-ops. |
-| [`Locales`](../../configuration-reference.md#locale--language) | hashtable of friendly name to culture name | `@{}` (empty) | The locales `Set-Locale` can apply. |
+| [`DefaultLocale`](../../configuration-reference.md#locale--language) | string | empty string | The `Locales` name that pressing Enter selects in the menu `Set-Locale` shows when called with no argument, and the one `Bootstrap` passes as `-Locale`. Ships empty, so Enter selects nothing usable - pick from the menu or pass `-Locale`. |
+| [`Locales`](../../configuration-reference.md#locale--language) | ordered list of locales (one single-key hashtable each, name to `@{ Code; GeoId }`) | `@()` (empty) | The locales `Set-Locale` can apply: `Code` is the culture name passed to `Set-Culture`, `GeoId` the home location passed to `Set-WinHomeLocation`. Empty makes `Set-Locale` warn and no-op. |
 
 ## Decisions
 
 1. Which locale should be the default?
-    - Options: A key from your `Locales` map.
-    - Default: Empty - `Set-Locale` no-ops.
+    - Options: A locale name from your `Locales` list.
+    - Default: Empty - the menu has no Enter default, so a locale must be picked or passed with `-Locale`.
     - More detail: [`DefaultLocale`](../../configuration-reference.md#locale--language)
 2. Which locales should be available?
-    - Options: Friendly name to culture name, e.g. `English = "en-US"`.
+    - Options: One `@{ Name = @{ Code = "<culture>"; GeoId = <id> } }` entry per locale, e.g. `@{ "English (US)" = @{ Code = "en-US"; GeoId = 244 } }`. The menu lists them in the order written.
     - Default: Empty - `Set-Locale` no-ops.
     - More detail: [`Locales`](../../configuration-reference.md#locale--language)
 
@@ -38,20 +38,20 @@ All of it goes in `Configuration.local.psd1`, at the repository's `Windows/Power
 
 ## Step 1: Set `DefaultLocale`
 
-The locale `Set-Locale` applies by default. Ships empty, so the function no-ops.
+The `Locales` name that pressing Enter selects in the menu `Set-Locale` shows when called with no argument.
 
 ```powershell
-DefaultLocale = "English"
+DefaultLocale = "English (US)"
 ```
 
 ## Step 2: Set `Locales`
 
-The locales `Set-Locale` can apply.
+The locales `Set-Locale` can apply, each a culture `Code` and a home-location `GeoId`.
 
 ```powershell
-Locales = @{
-    English = "en-US"
-}
+Locales = @(
+    @{ "English (US)" = @{ Code = "en-US"; GeoId = 244 } }
+)
 ```
 
 ## Step 3: Reload and confirm the merge landed
@@ -72,7 +72,8 @@ Reload-PowerShellProfile
 $global:Configuration.DefaultLocale
 $global:Configuration.Locales
 Display-SystemLanguageSettings
-Get-WinSystemLocale
+Get-Culture
+Get-WinHomeLocation
 ```
 
 If a value reads back as empty, the two usual causes are a parse error in `Configuration.local.psd1` (run `Test-ConfigurationSchema`) and a key placed at the wrong nesting level.
@@ -84,10 +85,10 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 ```powershell
 # Configuration.local.psd1
 @{
-    DefaultLocale = "English"
-    Locales = @{
-        English = "en-US"
-    }
+    DefaultLocale = "English (US)"
+    Locales = @(
+        @{ "English (US)" = @{ Code = "en-US"; GeoId = 244 } }
+    )
 }
 ```
 

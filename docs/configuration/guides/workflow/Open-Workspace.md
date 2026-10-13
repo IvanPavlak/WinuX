@@ -58,6 +58,10 @@ Action order is the whole of the behaviour here. Everything that creates a windo
     - Options: `Project = "MyProject/OtherProject"` to run it only for those projects, `ProjectParameters = @{ MyProject = @{ ... } }` to vary its parameters per project. The projects are known before anything launches - `-Project`, else the up-front project menu (when `Open-Project` has no fixed project), else the fixed `Open-Project` projects - and also pick the layout file's `ProjectOverrides`.
     - Default: No project keys - every action runs for every project with the same parameters.
     - More detail: [`WorkspaceActions`](../../configuration-reference.md#workspace-actions)
+10. Which projects should the up-front project menu offer?
+    - Options: One `ProjectActions` entry per project, in menu order; those names are also the only valid `Project` / `ProjectParameters` tokens.
+    - Default: The shipped project list.
+    - More detail: [`ProjectActions`](../../configuration-reference.md#project-actions)
 
 ## Where to Put Values
 
@@ -77,7 +81,8 @@ On this page that bites on `ProjectActions`, `ProjectTerminals` and `WorkspaceAc
 5. Set `WorkspaceBenchmark`
 6. Set `WorkspaceTemplates`
 7. Set `WorkspaceLayoutPrepareEarly`
-8. Reload and confirm the merge landed
+8. Set `ProjectActions`
+9. Reload and confirm the merge landed
 
 ## Step 1: Set `DefaultVSCodeWorkspaces`
 
@@ -99,13 +104,11 @@ DefaultWorkspace = "Default"
 
 ## Step 3: Set `ProjectTerminals`
 
-Which Windows Terminal tabs `Open-ProjectTerminals` creates for a project, and with what titles and starting directories. Tabs are created with `--title --suppressApplicationTitle`, so their titles are stable.
+Which Windows Terminal tabs `Open-ProjectTerminals` creates for a project: `Name` is the project, `BasePath` a dot-notation reference into the expanded paths, and each `Paths` key one tab (titled `<Name>.<Key>`). `Open-Workspace` reads it to know which tab names belong to the workspace, so a rerun from one of its own project tabs does not close that tab. Tabs are created with `--title --suppressApplicationTitle`, so their titles are stable.
 
 ```powershell
 ProjectTerminals = @(
-    @{ Project = "MyProject"; Tabs = @(
-        @{ Title = "MyProject"; Path = "{Dev}\MyProject" }
-    )}
+    @{ Name = "MyProject"; BasePath = "Projects.MyProject"; Paths = @("API", "UI") }
 )
 ```
 
@@ -165,7 +168,18 @@ Whether `Open-Workspace` runs the layout preamble - virtual desktop resize and F
 WorkspaceLayoutPrepareEarly = $false
 ```
 
-## Step 8: Reload and confirm the merge landed
+## Step 8: Set `ProjectActions`
+
+The projects `Open-Workspace` offers in its up-front project menu (shown when the workspace's `Open-Project` action has no fixed project), and the only valid tokens of an action's `Project` scope and `ProjectParameters` keys. It is a list, so a local value replaces the whole base list.
+
+```powershell
+ProjectActions = @(
+    @{ MyProject = @( @{ Action = "Open-VSCode"; Parameters = @{ Folder = "MyProject" } } ) }
+    @{ OtherProject = @( @{ Action = "Open-VSCode"; Parameters = @{ Folder = "OtherProject" } } ) }
+)
+```
+
+## Step 9: Reload and confirm the merge landed
 
 Reload the profile, then read the merged value back. `$global:Configuration` after a reload is the ground truth - if what you set is not there, the local file did not parse or the key is nested one level away from where you put it.
 
@@ -182,6 +196,7 @@ Read-only checks. None of these change anything.
 Reload-PowerShellProfile
 $global:Configuration.DefaultVSCodeWorkspaces
 $global:Configuration.DefaultWorkspace
+Get-OrderedNames $global:Configuration.ProjectActions
 $global:Configuration.ProjectTerminals
 $global:Configuration.WorkspaceActions
 $global:Configuration.WorkspaceBenchmark
@@ -208,9 +223,7 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
     }
     DefaultWorkspace = "Default"
     ProjectTerminals = @(
-        @{ Project = "MyProject"; Tabs = @(
-            @{ Title = "MyProject"; Path = "{Dev}\MyProject" }
-        )}
+        @{ Name = "MyProject"; BasePath = "Projects.MyProject"; Paths = @("API", "UI") }
     )
     ProjectActions = @(
         @{ MyProject = @( @{ Action = "Open-VSCode"; Parameters = @{ Folder = "MyProject" } } ) }

@@ -5,7 +5,8 @@ function Resolve-Steps {
 
 	.DESCRIPTION
 		Single-pass tri-state resolution shared by every step-map consumer
-		(Resolve-KillAllSteps, Resolve-BootstrapSteps). Per step, -Skip beats
+		(Resolve-KillAllSteps, Resolve-SystemThemeSteps, Resolve-BootstrapSteps,
+		Resolve-RunProjectSteps). Per step, -Skip beats
 		-Include beats config (-ConfigSteps.<Name> - a plain boolean, or a
 		per-machine-type hashtable with a Default fallback, the
 		BootstrapConfig.Steps.WSL shape) beats the built-in -Defaults.

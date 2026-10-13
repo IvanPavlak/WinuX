@@ -49,7 +49,7 @@ How `DetermineMachineType` turns this computer name into a machine type. A hostn
 ```powershell
 HostnameToMachineType = @{
     Test             = "Test"
-    "DESKTOP-GAMING" = "Machine"
+    "DESKTOP-GAMING" = "PC"
 }
 ```
 
@@ -94,7 +94,7 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 @{
     HostnameToMachineType = @{
         Test             = "Test"
-        "DESKTOP-GAMING" = "Machine"
+        "DESKTOP-GAMING" = "PC"
     }
     ValidMachineTypes = @("Test", "Machine", "Laptop")
 }

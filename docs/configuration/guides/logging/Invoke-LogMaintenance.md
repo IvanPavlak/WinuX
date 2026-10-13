@@ -12,21 +12,21 @@ Periodic, silent housekeeping sweep over the repository's generated state: sessi
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`Logging`](../../configuration-reference.md#more-sections-quick-reference) | hashtable, 4 keys | `@{ DefaultLevel = "Normal"; Colors; FileLogging; Maintenance }` | Console verbosity at session start (`Quiet` / `Normal` / `Verbose`), the per-level console colours, file-logging settings, and the automatic idle-time log maintenance. Read by `Initialize-LoggingState` at profile load and by `Invoke-LogMaintenance`. |
+| [`Logging`](../../configuration-reference.md#more-sections-quick-reference) | hashtable, 4 keys | `@{ DefaultLevel = "Normal"; Colors; FileLogging; Maintenance }` | This function reads `Logging.Maintenance` - `Enabled` (`$true`) switches the automatic idle-time sweep on or off, and `IntervalHours` (`24`) is the minimum gap between sweeps. The session-log limits it enforces through `Clear-OldLogs` come from `Logging.FileLogging.Retention`, covered on the [`Initialize-LoggingState`](Initialize-LoggingState.md) page. |
 
 ## Decisions
 
-1. How chatty should a new session be?
-    - Options: `Quiet`, `Normal` or `Verbose` under `DefaultLevel`. `Set-LogLevel` changes it for the current session without touching configuration.
-    - Default: `Normal`.
+1. Should the housekeeping sweep run automatically?
+    - Options: `Maintenance.Enabled = $true` runs it from the profile once the shell is idle; `$false` opts out, and the sweep then only runs when you call `Invoke-LogMaintenance -Force` (`-Force` also ignores the interval).
+    - Default: `$true`.
     - More detail: [`Logging`](../../configuration-reference.md#more-sections-quick-reference)
-2. Do you want session logs written to disk?
-    - Options: The `FileLogging` sub-hashtable switches it on and sets retention. Logs land under the Logging module `Logs/` directory, which is gitignored.
-    - Default: The shipped `FileLogging` settings.
+2. How often should it run?
+    - Options: Any whole number of hours under `Maintenance.IntervalHours`. The sweep is throttled by the stamp file `Logs\.last-maintenance`, so a shell opened inside the interval skips it in about a millisecond.
+    - Default: `24`.
     - More detail: [`Logging`](../../configuration-reference.md#more-sections-quick-reference)
-3. How long should old logs be kept?
-    - Options: The `Maintenance` sub-hashtable drives `Clear-OldLogs` through `Invoke-LogMaintenance`.
-    - Default: The shipped retention.
+3. How long should old session logs be kept?
+    - Options: The `FileLogging.Retention` limits (`MaxAgeDays`, `MaxSessionFiles`, `MaxTotalSizeMB`, `MaxErrorFileSizeMB`), which the sweep applies through `Clear-OldLogs`. The `Tests\Results` pruning (newest ten run logs, orphaned XMLs and abandoned `Work\` folders older than a day) is fixed and has no setting.
+    - Default: 7 days, 20 session files, 50 MB of session logs, and an error log trimmed past 5 MB.
     - More detail: [`Logging`](../../configuration-reference.md#more-sections-quick-reference)
 
 ## Where to Put Values
@@ -43,12 +43,12 @@ All of it goes in `Configuration.local.psd1`, at the repository's `Windows/Power
 
 ## Step 1: Set `Logging`
 
-Console verbosity at session start (`Quiet` / `Normal` / `Verbose`), the per-level console colours, file-logging settings, and the automatic idle-time log maintenance. Read by `Initialize-LoggingState` at profile load and by `Invoke-LogMaintenance`.
+`Logging.Maintenance` switches the automatic idle-time sweep on or off and sets the minimum hours between sweeps; `Logging.FileLogging.Retention` sets the session-log limits the sweep enforces.
 
 ```powershell
 Logging = @{
-    DefaultLevel = "Normal"
-    FileLogging  = @{ Enabled = $true }
+    Maintenance = @{ Enabled = $true; IntervalHours = 12 }
+    FileLogging = @{ Retention = @{ MaxAgeDays = 14 } }
 }
 ```
 
@@ -82,8 +82,18 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 # Configuration.local.psd1
 @{
     Logging = @{
-        DefaultLevel = "Normal"
-        FileLogging  = @{ Enabled = $true }
+        Maintenance = @{
+            Enabled       = $true
+            IntervalHours = 12
+        }
+        FileLogging = @{
+            Retention = @{
+                MaxAgeDays         = 14
+                MaxSessionFiles    = 40
+                MaxTotalSizeMB     = 100
+                MaxErrorFileSizeMB = 5
+            }
+        }
     }
 }
 ```
@@ -92,6 +102,6 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 
 - [`Invoke-LogMaintenance` in the Logging module reference](../../../modules/logging.md#invoke-logmaintenance) - parameters, usage and behaviour
 - [Logging configuration guides](README.md) - every guide for this module
-- [`Initialize-LoggingState`](Initialize-LoggingState.md) - reads the same configuration
+- [`Initialize-LoggingState`](Initialize-LoggingState.md) - reads the rest of `Logging`, including the retention limits
 - [WinuXConfigurator](../../winux-configurator.md) - have an AI assistant walk these decisions with you
 - [Configuration reference](../../configuration-reference.md) - every key, section by section

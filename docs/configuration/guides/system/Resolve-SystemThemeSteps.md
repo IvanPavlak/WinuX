@@ -9,7 +9,7 @@ Resolves which `Set-SystemTheme` follow-up steps should run - the actions taken 
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`SystemTheme`](../../configuration-reference.md#set-systemtheme-step-toggles) | hashtable with a `Steps` map | `@{ Steps = <4 toggles> }` | Which steps `Set-SystemTheme` performs when it switches theme (app theme, system theme, wallpaper, lock screen). Resolved by `Resolve-SystemThemeSteps`; each step is a boolean or a per-machine-type hashtable with a `Default`. |
+| [`SystemTheme`](../../configuration-reference.md#set-systemtheme-step-toggles) | hashtable with a `Steps` map | `@{ Steps = <4 toggles> }` | Which follow-up steps `Set-SystemTheme` performs after it writes the theme registry values (`RefreshBrowserTabs`, `RestartExplorer`, `SetWallpaper`, `SetLockScreenWallpaper`). Resolved by `Resolve-SystemThemeSteps`; each step is a boolean or a per-machine-type hashtable with a `Default`. |
 
 ## Decisions
 
@@ -32,12 +32,12 @@ All of it goes in `Configuration.local.psd1`, at the repository's `Windows/Power
 
 ## Step 1: Set `SystemTheme`
 
-Which steps `Set-SystemTheme` performs when it switches theme (app theme, system theme, wallpaper, lock screen). Resolved by `Resolve-SystemThemeSteps`; each step is a boolean or a per-machine-type hashtable with a `Default`.
+Which follow-up steps `Set-SystemTheme` performs after it writes the theme registry values (`RefreshBrowserTabs`, `RestartExplorer`, `SetWallpaper`, `SetLockScreenWallpaper`). Resolved by `Resolve-SystemThemeSteps`; each step is a boolean or a per-machine-type hashtable with a `Default`.
 
 ```powershell
 SystemTheme = @{
     Steps = @{
-        LockScreen = @{ Test = $false; Default = $true }
+        SetLockScreenWallpaper = @{ Test = $false; Default = $true }
     }
 }
 ```
@@ -72,7 +72,7 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 @{
     SystemTheme = @{
         Steps = @{
-            LockScreen = @{ Test = $false; Default = $true }
+            SetLockScreenWallpaper = @{ Test = $false; Default = $true }
         }
     }
 }

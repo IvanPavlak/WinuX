@@ -33,7 +33,7 @@ function Test-GitRepository {
 		Tells whether the current directory is inside a repository.
 
 	.EXAMPLE
-		Test-GitRepository -Path "C:\Users\Ivan\Development\GitHub\Dotfiles\Windows"
+		Test-GitRepository -Path "C:\Users\You\Development\MyRepo\Windows"
 		$true - the .git directory one level up is found by the walk.
 
 	.EXAMPLE

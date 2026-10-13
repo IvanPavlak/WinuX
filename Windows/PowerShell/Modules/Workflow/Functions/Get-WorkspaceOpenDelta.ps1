@@ -19,7 +19,7 @@ function Get-WorkspaceOpenDelta {
 		second tab titled "MyProject.Api" opened next to an existing one is a new tab even though
 		the title was already present; set subtraction would miss it.
 
-		Both process id and window title are recorded alongside the handle. Handles are the only
+		The process id, process name and window title are recorded alongside the handle. Handles are the only
 		unambiguous key while a window lives, but Electron apps recreate their window (new handle,
 		same process) and a restarted app keeps neither - the extra fields let Close-Workspace
 		re-resolve a record whose handle has gone stale.
@@ -59,7 +59,8 @@ function Get-WorkspaceOpenDelta {
 		already running at the next open, is never recorded again, and becomes permanently
 		unclosable. Adoption breaks that cycle.
 
-		Adoption reaches only for what Universal.VisibleWindowExclusions does not name. That is the
+		Adoption reaches only for what Universal.VisibleWindowExclusions does not name, and never for
+		the shell hosts Get-ShellProcessName lists (explorer, Start menu, Search, ...). The list is the
 		same list Kill-All uses to decide what a blunt teardown must leave alone (Rainmeter,
 		WindowsTerminal, Docker Desktop, PowerToys, ...), and it means exactly what is wanted here:
 		these processes are never a workspace's to close simply because they happened to be running

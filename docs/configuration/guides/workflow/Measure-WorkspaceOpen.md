@@ -11,7 +11,7 @@ Opens one workspace many times under alternating configuration variants - tearin
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`WorkspaceActions`](../../configuration-reference.md#workspace-actions) | hashtable of workspace name to action array | hashtable, 5 keys | The workspace to measure must have an entry; `Example`, which the base ships, is the default, so nothing needs defining first. A workspace ending in `Terminate-WindowsTerminalTabs -OnlyCurrent` / `-IncludeCurrent` is refused, because that action exits the calling shell; one whose `Open-Project` action has no project is refused unless the project is given on the command line. |
+| [`WorkspaceActions`](../../configuration-reference.md#workspace-actions) | ordered list of workspaces (one single-key hashtable each) | list of 5 | The workspace to measure must have an entry; `Example`, which the base ships, is the default, so nothing needs defining first. A workspace ending in `Terminate-WindowsTerminalTabs -OnlyCurrent` / `-IncludeCurrent` is refused, because that action exits the calling shell; one whose `Open-Project` action has no project is refused unless the project is given on the command line. |
 | [`FancyZonesApplyMethod`](../../configuration-reference.md#layout-numbers--zone-mappings) | `"File"` or `"Hotkeys"` | `"File"` | One of the three flags varied by default. The configured value is the `Baseline`; the one-factor-at-a-time set flips it. |
 | [`WorkspaceLayoutPipelining`](../../configuration-reference.md#layout-numbers--zone-mappings) | bool | `$true` | Same. |
 | [`WorkspaceLayoutPrepareEarly`](../../configuration-reference.md#layout-numbers--zone-mappings) | bool | `$true` | Same. |
@@ -22,15 +22,19 @@ Opens one workspace many times under alternating configuration variants - tearin
 1. Which workspace is opened?
     - Options: The shipped `Example` workspace, which every WinuX install has (its `WorkspaceActions` entry and layout files ship with the base), or any workspace of your own. A workspace whose `Open-Project` action has no project of its own shows a selection menu on every open, which would stall the experiment; give the project positionally, as for `Open-Workspace`: `Measure-WorkspaceOpen Client MyProject`. The project also selects the actions' `Project` scopes and `ProjectParameters` rows (through `Resolve-WorkspaceActions -Project`) and the layout file's `ProjectOverrides`, so the experiment measures the same open `Open-Workspace Client MyProject` performs. Anything further on the command line (`run`, for instance) is forwarded to `Open-Workspace` unchanged.
     - Default: `Example`. Use your own workspace once you know it well - a workspace you open every day is the one whose seconds matter.
+    - More detail: [`WorkspaceActions`](../../configuration-reference.md#workspace-actions)
 2. Which question is the experiment answering?
     - Options: All three flags at once (one flipped per variant), one flag only (`-Setting FancyZonesApplyMethod`), every combination (`-FullFactorial`), or hand-picked configurations (`-Variant`).
     - Default: The three flags, one flipped at a time, against the current configuration.
+    - More detail: [`FancyZonesApplyMethod`, `WorkspaceLayoutPipelining`, `WorkspaceLayoutPrepareEarly`](../../configuration-reference.md#layout-numbers--zone-mappings)
 3. How many opens can you spare?
     - Options: `-Runs` per variant, `-WarmUp` discarded opens first, and `-MaxMinutes` as a hard budget - once it is spent no further open starts and what ran is summarized. A WinuX open is 10 to 30 s plus the teardown, so the default 21 opens is roughly 10 minutes.
     - Default: 5 runs, 1 warm-up, no budget.
+    - More detail: [`Measure-WorkspaceOpen` in the Workflow module reference](../../../modules/workflow.md#measure-workspaceopen)
 4. How should the machine be reset between opens?
     - Options: The default `Kill-All -Skip Docker`, or any script block through `-Teardown`.
     - Default: `Kill-All -Skip Docker`.
+    - More detail: [`Measure-WorkspaceOpen` in the Workflow module reference](../../../modules/workflow.md#measure-workspaceopen)
 
 ## Where to Put Values
 
@@ -48,7 +52,7 @@ Nothing on this page needs a value in `Configuration.local.psd1`. When the exper
 ```powershell
 Measure-WorkspaceOpen -DryRun
 Measure-WorkspaceOpen WinuX -DryRun
-Measure-WorkspaceOpen Client Asseto -DryRun
+Measure-WorkspaceOpen Client MyProject -DryRun
 ```
 
 Prints the variants, their order and the total number of opens. Nothing is opened, torn down or changed. The first line is the shipped `Example` workspace; the other two are your own, the last one with the project its `Open-Project` action needs.
@@ -58,7 +62,7 @@ Prints the variants, their order and the total number of opens. Nothing is opene
 ```powershell
 Measure-WorkspaceOpen
 Measure-WorkspaceOpen WinuX
-Measure-WorkspaceOpen Client Asseto -MaxMinutes 20
+Measure-WorkspaceOpen Client MyProject -MaxMinutes 20
 ```
 
 Every open launches and lays out the whole workspace and every teardown closes it again, so do not type into the machine while it runs. Ctrl+C stops it; the configuration is restored either way. `-MaxMinutes` is the polite version of Ctrl+C: no further open starts once the budget is spent, and the opens that ran are summarized.

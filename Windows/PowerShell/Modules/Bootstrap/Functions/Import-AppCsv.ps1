@@ -19,9 +19,10 @@ function Import-AppCsv {
 		  pin a version, change the install scope, or re-target a machine without touching the base.
 		  Matching is case-insensitive, because package ids are.
 		- An overlay row with a new `App` is **added**.
-		- An overlay row whose `App` is `-` (or blank after the marker) **removes** the base row. Without
-		  this there would be no way to opt out of a shipped app, since a layer that can only add or
-		  replace cannot subtract.
+		- An overlay row whose `App` is `-<id>` **removes** the base row with that id (a bare `-` names
+		  nothing and is ignored). Without this there would be no way to opt out of a shipped app,
+		  since a layer that can only add or replace cannot subtract. When the overlay both removes
+		  and replaces the same id, the removal wins.
 		- Comment rows (`App` starting with `#`) and blank `App` cells are dropped from both files, which
 		  is what the callers used to do individually.
 

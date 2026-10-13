@@ -28,7 +28,8 @@ function Get-OrderedNames {
 
 	.PARAMETER Section
 		The configuration section to read. Accepts $null (returns nothing), an ordered array of
-		single-key hashtables, or a plain hashtable (sorted).
+		single-key hashtables, or a plain hashtable (sorted). A bare non-empty string item in the
+		array names itself (an entry with no value).
 
 	.EXAMPLE
 		Get-OrderedNames $Configuration.WorkspaceActions

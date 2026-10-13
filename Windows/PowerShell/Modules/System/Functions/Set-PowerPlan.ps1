@@ -8,7 +8,11 @@ function Set-PowerPlan {
 	.DESCRIPTION
 		With `-Auto`, reads the power plan for the current machine type from
 		`PowerPlans[MachineType]` in Configuration.psd1 and applies it.
-		Without `-Auto`, accepts a `-Mode` parameter (Balanced, HighPerformance, UltimatePerformance).
+		With no entry for the machine type, -Auto leaves the active plan as-is.
+		Without `-Auto`, accepts a `-Mode` parameter (Balanced, HighPerformance, UltimatePerformance);
+		with neither, prompts for a mode (Enter = Balanced).
+		Skips when the plan is already active; UltimatePerformance duplicates the hidden scheme
+		first when it is missing.
 		Requires administrator privileges.
 
 	.PARAMETER Auto
@@ -16,7 +20,7 @@ function Set-PowerPlan {
 
 	.PARAMETER Mode
 		Power plan mode: "Balanced", "HighPerformance", or "UltimatePerformance".
-		Ignored if `-Auto` is set.
+		Combined with `-Auto`, an explicit -Mode wins and configuration is not read.
 
 	.EXAMPLE
 		Set-PowerPlan -Auto

@@ -1,6 +1,6 @@
 # Get-BrowserTitlePattern
 
-Returns the window title regex that identifies a browser's main windows, keyed by browser name from `Configuration.Universal.Browsers` (Firefox, Tor, Chrome, Edge, Brave); unknown names return `$null`.
+Returns the window title regex that identifies a browser's main windows, from a built-in map keyed by the browser names `Configuration.Universal.Browsers` uses (Firefox, Tor, Chrome, Edge, Brave); unknown names return `$null`.
 
 ## Configuration Keys
 

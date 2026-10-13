@@ -21,11 +21,13 @@ function Start-Win11Debloat {
 		pwsh, so the script is launched through `powershell.exe`, the same interpreter the vendored
 		`Run.bat` uses, and a non-zero exit code is reported as an error instead of success.
 
-		Only called automatically during `Bootstrap -WithInitialSetup` (first-time provisioning).
+		Only called automatically during `Bootstrap -WithInitialSetup` (first-time provisioning),
+		and only when BootstrapConfig.Steps.Win11Debloat is on (off by default).
 
 	.PARAMETER Selection
-		Pre-selects one of the Win11Debloat menu options by name, bypassing the interactive menu.
-		Valid values are determined by the Win11Debloat script itself.
+		Pre-selects one of this function's menu options by name, bypassing the prompt:
+		"Use saved settings" (offered only when a non-empty LastUsedSettings.json exists),
+		"Debloat" (the interactive Win11Debloat menu) or "Don't debloat".
 
 	.EXAMPLE
 		Start-Win11Debloat

@@ -9,7 +9,8 @@ Opens Adobe Acrobat with one or more PDF groups defined in `AcrobatPdfGroups` in
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`AcrobatPdfGroups`](../../configuration-reference.md#acrobat-configuration) | ordered list of groups (one single-key hashtable each) | list of 1 (`ExampleRulebook`) | Every PDF group `Open-Acrobat` offers: the group name is the key, its PDF paths are the value. The menu follows the order you write them in. Paths accept placeholders such as `{User}` and `{Dev}`. |
+| [`AcrobatPdfGroups`](../../configuration-reference.md#acrobat-configuration) | ordered list of groups (one single-key hashtable each) | list of 1 (`ExampleRulebook`) | Every PDF group `Open-Acrobat` offers: the group name is the key, its PDF references are the value. The menu follows the order you write them in. Each reference is not a file path but a dot-notation path into the expanded `PathTemplates` (`$global:MachineSpecificPaths`), e.g. `"Dnd.ExampleCharacter"`. |
+| [`PathTemplates`](../../configuration-reference.md#path-templates--placeholder-system) | hashtable of path templates | `Dnd = @{}` and the other shipped templates | Where each reference resolves to - the PDF file itself. Placeholders such as `{User}` and `{Dev}` belong here. |
 
 ## Decisions
 
@@ -18,8 +19,8 @@ Opens Adobe Acrobat with one or more PDF groups defined in `AcrobatPdfGroups` in
     - Default: Leave the shipped example alone and skip - `Open-Acrobat` then only offers `ExampleRulebook`.
     - More detail: [`AcrobatPdfGroups`](../../configuration-reference.md#acrobat-configuration)
 2. Which PDF files belong to each group?
-    - Options: Absolute paths, or placeholder paths like `{User}\Documents\Manuals\Router.pdf`.
-    - Default: Skip - the shipped `ExampleRulebook` group points at a sample path and `Open-Acrobat` reports a missing file rather than failing.
+    - Options: Define each file under `PathTemplates` (absolute or placeholder paths like `{User}\Documents\Manuals\Router.pdf`) and list its dot-notation reference, e.g. `"Manuals.Router"`, in the group. A file path written straight into the group does not resolve.
+    - Default: Skip - the shipped `ExampleRulebook` group references `Dnd.ExampleCharacter`, which the base leaves unset, so `Open-Acrobat` reports an empty path rather than opening anything.
     - More detail: [`AcrobatPdfGroups`](../../configuration-reference.md#acrobat-configuration)
 
 ## Where to Put Values
@@ -38,13 +39,19 @@ On this page that bites on `AcrobatPdfGroups` - it is an ordered list, so whatev
 
 ## Step 1: Set `AcrobatPdfGroups`
 
-Every PDF group `Open-Acrobat` offers, in the order the menu offers them. Each entry is a single-key hashtable: the key is the group name, the value is its PDF paths. There is no separate group-name list - defining a group here is what puts it in the menu.
+Every PDF group `Open-Acrobat` offers, in the order the menu offers them. Each entry is a single-key hashtable: the key is the group name, the value is its PDF references into `PathTemplates`, where the files themselves are defined (`PathTemplates` deep-merges). There is no separate group-name list - defining a group here is what puts it in the menu.
 
 ```powershell
+PathTemplates    = @{
+    Manuals = @{
+        Router  = "{User}\Documents\Manuals\Router.pdf"
+        Monitor = "{User}\Documents\Manuals\Monitor.pdf"
+    }
+}
 AcrobatPdfGroups = @(
     @{ Manuals = @(
-            "{User}\Documents\Manuals\Router.pdf"
-            "{User}\Documents\Manuals\Monitor.pdf"
+            "Manuals.Router"
+            "Manuals.Monitor"
         )
     }
 )
@@ -65,9 +72,8 @@ Read-only checks. None of these change anything.
 
 ```powershell
 Reload-PowerShellProfile
-$global:Configuration.AcrobatPdfGroups
 Get-OrderedNames $global:Configuration.AcrobatPdfGroups
-Open-Acrobat              # interactive menu
+$global:MachineSpecificPaths.Manuals.Router
 ```
 
 If a value reads back as empty, the two usual causes are a parse error in `Configuration.local.psd1` (run `Test-ConfigurationSchema`) and a key placed at the wrong nesting level.
@@ -79,10 +85,16 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 ```powershell
 # Configuration.local.psd1
 @{
+    PathTemplates    = @{
+        Manuals = @{
+            Router  = "{User}\Documents\Manuals\Router.pdf"
+            Monitor = "{User}\Documents\Manuals\Monitor.pdf"
+        }
+    }
     AcrobatPdfGroups = @(
         @{ Manuals = @(
-                "{User}\Documents\Manuals\Router.pdf"
-                "{User}\Documents\Manuals\Monitor.pdf"
+                "Manuals.Router"
+                "Manuals.Monitor"
             )
         }
     )

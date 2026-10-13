@@ -11,12 +11,11 @@ Common issues and their solutions.
 **Solution:**
 
 ```powershell
-# Run with explicit path
-iex (irm "https://raw.githubusercontent.com/IvanPavlak/WinuX/master/Windows/WinuX/WinuX.ps1")
+# Run the documented one-liner (it fetches Install-Bootstrap.ps1 by its full path)
+[Net.ServicePointManager]::SecurityProtocol = 'Tls12'; $env:WINUX_REPO_URL = 'https://github.com/IvanPavlak/WinuX.git'; irm 'https://raw.githubusercontent.com/IvanPavlak/WinuX/master/Windows/PowerShell/Modules/Bootstrap/Install-Bootstrap.ps1' | iex
 
-# Or if locally:
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-. .\Windows\WinuX\WinuX.ps1
+# Or from a local clone (WinuX.ps1 ends with exit, so start it in its own process):
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\Windows\WinuX\WinuX.ps1
 ```
 
 ### Execution Policy Error
@@ -54,8 +53,11 @@ Bootstrap -WithInitialSetup
 **Solution:**
 
 ```powershell
-# Bootstrap auto-installs WinGet via Install-WinGetPackageManager
-# Or manually from Microsoft Store: "App Installer"
+# The installer's first stage (Windows PowerShell 5.1) needs winget to install PowerShell 7 and Git
+# BEFORE Bootstrap runs; on a fresh machine wait a few minutes after the first sign-in for
+# App Installer to register, or install "App Installer" from the Microsoft Store, then run again.
+# Bootstrap's own Install-WinGetPackageManager only runs later, in the package phase.
+winget --version
 ```
 
 ### WinGet Install Hangs During Unattended / VM Bootstrap
@@ -97,8 +99,7 @@ hostname
 3. Set hostname if needed:
 
 ```powershell
-Rename-Machine -NewName "DESKTOP-GAMING"
-# Requires restart
+Rename-Machine -Override   # prompts for the new name; requires restart
 ```
 
 ### Path Not Expanding
@@ -175,7 +176,15 @@ See [Workspace Templates](../configuration/configuration-reference.md#workspace-
 
 **Why it happens:** `Project` scopes and `ProjectParameters` row keys are validated against the `ProjectActions` names. An unknown token is reported and never matches, so a typo cannot silently run or skip an action. Every row key is checked on every open, whether or not that project is selected.
 
-**Solution:** Use the names exactly as `Get-OrderedNames $global:Configuration.ProjectActions` lists them (case does not matter), or add the project to `ProjectActions`. With no project selected at all, only actions scoped `All` (or unscoped) run - pass the project on the command line (`Open-Workspace Client MyProject`) or pick it in the project menu shown before anything launches.
+**Solution:** Use the names exactly as `Get-OrderedNames $global:Configuration.ProjectActions` lists them (case does not matter), or add the project to `ProjectActions`. With no project selected at all, only actions scoped `All` (or unscoped) run - pass the project on the command line (`Open-Workspace MyWorkspace MyProject`) or pick it in the project menu shown before anything launches.
+
+### A Changed Logging Setting Has No Effect
+
+**Problem:** You changed a `Logging` key (colors, `FileLogging`, `Maintenance` or its `Retention` limits) in `Configuration.local.psd1`, ran `Reload-PowerShellProfile`, and the log output or the log folder still behaves as before.
+
+**Why it happens:** `$global:LoggingState` is built once per shell by `Initialize-LoggingState`, and a profile reload does not rebuild it.
+
+**Solution:** Open a new shell, or run `Initialize-LoggingState -Force` in the current one.
 
 ## Symbolic Link Issues
 
@@ -758,7 +767,7 @@ Get-WorkspaceBenchmark -Summary -Formatted
 ```powershell
 Measure-WorkspaceOpen -DryRun                                          # the plan for the shipped Example workspace, nothing runs
 Measure-WorkspaceOpen WinuX                                            # your workspace: Baseline + each flag flipped alone, 5 rounds
-Measure-WorkspaceOpen Client Asseto -MaxMinutes 20               # a workspace that needs a project, with a time budget
+Measure-WorkspaceOpen MyWorkspace MyProject -MaxMinutes 20        # a workspace that needs a project, with a time budget
 Measure-WorkspaceOpen WinuX -Setting FancyZonesApplyMethod -Runs 8     # one flag, File against Hotkeys
 Get-WorkspaceOpenMeasurement -Formatted                                # the table again, after the scrollback is gone
 ```
@@ -877,6 +886,14 @@ A variant cannot clear a desktop and monitor without replacing it; leave the pai
 **Why it happens:** A titled entry matches by title pattern, and a bare `MyProject` also matches the `MyProjectApi` window (and any file tab named `MyProject`). Every window is claimed by exactly one entry, and the untitled catch-all only takes windows no titled entry's title matches - so a too-loose title on one entry hands it its sibling's window, or keeps the catch-all away from a window it should take.
 
 **Solution:** Anchor every VS Code title on the folder name as VS Code ends its caption - `<folder> - Visual Studio Code$` (`MyProject - Visual Studio Code$`, `MyProjectApi - Visual Studio Code$`) - so each pattern matches exactly one window. Several entries in one zone stack in file order, last on top. A single untitled `Code` entry is still the simplest choice when all VS Code windows belong in one zone. See [Several Windows of One Process](../configuration/guides/window/configure-window-layout.md#several-windows-of-one-process).
+
+### Add-WindowLayout Wrote A Test Layout On A Different Machine Type
+
+**Problem:** `Add-WindowLayout` without `-MachineType` created `<Workspace>_Test.psd1` although the shell runs on another machine type.
+
+**Why it happens:** The default machine type is read from a configuration key that does not exist, so it always falls back to `Test`; the detected type lives in `$global:MachineType`, which the function does not consult.
+
+**Solution:** Pass `-MachineType` explicitly (`Add-WindowLayout MyWorkspace -MachineType $global:MachineType`), or rename the generated file.
 
 ## fastfetch Logo Issues
 
@@ -1169,6 +1186,14 @@ Private = @{
 - **"could not fast-forward, nothing changed"** - either the branch has local commits that origin does not (rebase or merge them yourself), or the fast-forward would overwrite an ignored local file at a path upstream now tracks. In the second case, `git status --ignored` shows the file. Move it aside, update, and put your version back if you still need it.
 - **"local changes could not be restored cleanly and are kept in stash [name]"** - an upstream change overlaps your local edit. The working tree holds conflict markers, and the stash still holds your original changes. Resolve the markers, or reset the files and `git stash apply` the named stash. Until then, the next update reports the repository as busy and leaves it alone.
 - **"its stash was taken by another git command"** - another git command applied or dropped the update's stash while it ran. Check `git status` and `git stash list`; the changes are wherever that command put them.
+
+### Git-Obsidian Ran Git In The Home Folder, Or Left The Shell There
+
+**Problem:** `Git-Obsidian` reported changes (or a commit) from a repository you did not expect, or the prompt sits in your home folder afterwards.
+
+**Why it happens:** With `PathTemplates.ObsidianDirectory` empty (the shipped default), the function changes into an empty path, which PowerShell resolves to the home folder, and runs `git add`, `git commit` and `git push` there. It also never captures the starting directory, so the `finally` block restores nothing.
+
+**Solution:** Set `PathTemplates.ObsidianDirectory` in `Configuration.local.psd1` before using the function, and `cd` back by hand afterwards. If a commit landed in a home-folder repository, undo it there (`git reset --soft HEAD~1`).
 
 ## Performance Issues
 

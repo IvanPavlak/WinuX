@@ -1,7 +1,7 @@
 function Test-FancyZonesConfiguration {
 	<#
 	.SYNOPSIS
-		Validates the FancyZones configuration triad against each other.
+		Validates the four FancyZones configuration sources against each other.
 
 	.DESCRIPTION
 		Arbitrary layouts, zones, and spacing are supported in custom-layouts.json, which
@@ -12,8 +12,10 @@ function Test-FancyZonesConfiguration {
 		   - grid: rows/columns match their percentage arrays, each percentage axis sums
 		     to exactly 10000, cell-child-map is rows x columns and its zone indices form
 		     a contiguous 0..N-1 set, spacing is not negative.
-		   - canvas: ref-width/ref-height are positive, every zone has positive
-		     width/height (zones extending beyond the ref rect only warn).
+		   - canvas: ref-width/ref-height are positive, at least one zone is defined,
+		     every zone has positive width/height (zones extending beyond the ref rect
+		     only warn).
+		   - any other layout type is a warning (unusable in layout .psd1 files).
 		2. $Configuration.ZoneNameMappings agrees with custom-layouts.json: every mapped
 		   layout exists, and every mapped zone index is within the layout's derived zone
 		   count. Layouts without a mappings entry (and zone indices without a name) are

@@ -1,6 +1,6 @@
 # Write-LogTitle
 
-Writes a section header in the house `[Title]` style (DarkCyan), replacing the `Write-Host -ForegroundColor DarkCyan "`n[Title]"` idiom.
+Writes a section header in the house `[Title]` style (DarkCyan), replacing the ``Write-Host -ForegroundColor DarkCyan "`n[Title]"`` idiom.
 
 ## Configuration Keys
 

@@ -83,6 +83,7 @@ Skipping required documentation updates is treated the same as leaving the chang
 - Each module uses `.psd1` manifest + `.psm1` loader + `Functions/` directory pattern
 - Configuration entries use placeholder paths for machine independence
 - Browser groups, workspaces, projects, and symbolic links all follow hierarchical hashtable patterns in `Configuration.psd1`
+- Never remove or rename a `Configuration.psd1` key or an exported function, or change a signature incompatibly, in one step. Deprecate it first: keep the old shape working (the key still read, or an alias or wrapper that warns), and record it under `### Deprecated` in `CHANGELOG.md` with the migration. Removal waits for the next MAJOR release (see `VERSIONING.md`)
 - Tests use Pester framework in `Modules/Tests/`
 - Every new exported function should include corresponding tests in `Windows/PowerShell/Modules/Tests/Modules/<Module>/`
 - Tests should validate behavior, side effects, branching, and edge cases; do not add tests that only assert output message text

@@ -9,7 +9,7 @@ The standard unconfigured-section guard for the empty-by-default configuration: 
 
 `Confirm-ConfigValue` takes the configuration it works on from its caller rather than reading a fixed key, so there is no key table for it.
 
-The key and the allowed set both come from the caller, so this function has no configuration surface of its own. It is the membership check behind messages like "Theme 'Blue' is not one of Dark, Light" - the guard that turns a typo in `Configuration.local.psd1` into a readable error instead of silent wrong behaviour.
+The value and the warning text both come from the caller, so this function has no configuration surface of its own. It is the guard behind messages like "Themes not configured - leaving system theme as-is!": it returns `$true` when the value is configured, and otherwise writes the caller's warning through `Write-LogWarning` (unless `-Quiet`) and returns `$false`, so a section left empty by default is skipped with a readable notice instead of failing. `$null`, an empty or whitespace string, an empty collection and an empty hashtable all count as unconfigured (the `Test-ConfigValue` rules).
 
 ## Decisions
 

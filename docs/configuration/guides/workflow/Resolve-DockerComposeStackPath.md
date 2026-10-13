@@ -10,6 +10,7 @@ The one place a `Configuration.DockerComposeFiles` entry becomes a file path: ro
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
 | [`DockerComposeFiles`](../../configuration-reference.md#docker-compose-files) | hashtable of stack name to compose file | `@{ PostgreSQL = "docker-compose.postgresql.yml" }` | The Docker Compose stacks `Start-Containers` and `Resolve-ProjectDockerCompose` know. A relative value resolves under `MachineSpecificPaths.DockerDirectory`; an absolute path is used as-is, so non-database stacks can be registered too. |
+| [`PathTemplates.DockerDirectory`](../../configuration-reference.md#path-templates--placeholder-system) | path string (placeholders allowed) | `"{RepoRoot}\Docker"` | The directory a relative `DockerComposeFiles` value is joined under, read at runtime from `$global:MachineSpecificPaths.DockerDirectory`. Rarely changed. |
 
 ## Decisions
 

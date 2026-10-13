@@ -1,6 +1,6 @@
 # Open-TeamViewer
 
-Opens TeamViewer via `Start-Application`.
+Opens TeamViewer via `Start-Application`, which reads the executable from `Universal.TeamViewerExe` (ships empty - set it in `Configuration.local.psd1`, see [Start-Application](Start-Application.md)); this function itself reads nothing.
 
 ## Configuration Keys
 

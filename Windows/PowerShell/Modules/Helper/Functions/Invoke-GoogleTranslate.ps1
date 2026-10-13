@@ -11,15 +11,23 @@ function Invoke-GoogleTranslate {
 		parameter usage.
 
 	.PARAMETER Text
-		The text to translate. Accepts remaining arguments so multi-word input
-		does not need to be quoted.
+		The text to translate, as a single named token. Any further unquoted words are
+		collected by -RemainingWords and appended, so multi-word input does not need to
+		be quoted.
+
+	.PARAMETER RemainingWords
+		Hidden (DontShow) catch-all for every positional and remaining argument
+		(ValueFromRemainingArguments). Joined after -Text with spaces to form the text
+		to translate, which is what makes `Invoke-GoogleTranslate kako si` work without
+		quotes. Not meant to be passed by name.
 
 	.PARAMETER InputLanguage
 		Optional source language override. When omitted, Google Translate auto-detects
 		the input language.
 
 	.PARAMETER OutputLanguage
-		Target language for translation. Defaults to Configuration.psd1 → DefaultTranslateLanguages.OutputLanguage.
+		Target language for translation. Defaults to Configuration.psd1 → DefaultTranslateLanguages.OutputLanguage,
+		or English when that section is absent.
 
 	.EXAMPLE
 		Invoke-GoogleTranslate kako si

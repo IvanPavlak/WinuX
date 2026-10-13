@@ -9,21 +9,21 @@ Runs the vendored Win11Debloat script from the local repository to remove bloatw
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`BootstrapConfig`](../../configuration-reference.md#bootstrapconfig) | hashtable, 8 keys | hashtable, 8 keys | Everything about how `Bootstrap` runs: the `Steps` toggles that decide which provisioning steps execute, `DataFiles` (relative paths to the three app-list CSVs), `LocalScripts` / `ExternalScripts`, `PersonalSteps`, `RepositoryUpdateScope`, and where the bootstrap log lands. |
+| [`BootstrapConfig.LocalScripts.Win11Debloat`](../../configuration-reference.md#bootstrapconfig) | string (path) | `{RepoRoot}\Windows\Win11Debloat\vendor\Win11Debloat.ps1` | The vendored script to run. `{RepoRoot}` is expanded; empty falls back to the same default path. A missing script is reported and the step skipped. |
+| [`PathTemplates.Projects.Self.Root`](../../configuration-reference.md#path-templates--placeholder-system) | path template | `{RepoRoot}` | The repository root used for `{RepoRoot}`, the fallback script path and the saved-settings file `Windows\Win11Debloat\LastUsedSettings.json` (read from `$global:MachineSpecificPaths.Projects.Self.Root`). |
+| [`BootstrapConfig.Steps.Win11Debloat`](../../configuration-reference.md#bootstrapconfig) | boolean or per-machine-type hashtable | `$false` (built-in default) | Whether `Bootstrap -WithInitialSetup` runs this function. |
+
+The saved settings are not a configuration key: they are the repository file `Windows\Win11Debloat\LastUsedSettings.json`, which the function links into the vendored script's `Config` folder when it exists and is non-empty.
 
 ## Decisions
 
-1. Which bootstrap steps should run on this machine?
-    - Options: Each entry under `BootstrapConfig.Steps` is either a boolean or a per-machine-type hashtable with a `Default` fallback. Steps that act the moment they run (`CoreAiRules`, taskbar, wallpaper) ship off.
-    - Default: The shipped `Steps` map. Change only the steps you actually want to flip.
+1. Should a first-time `Bootstrap -WithInitialSetup` debloat this machine?
+    - Options: `$true`, `$false`, or a per-machine-type hashtable with a `Default` fallback under `BootstrapConfig.Steps.Win11Debloat`. Running `Start-Win11Debloat` by hand works either way.
+    - Default: `$false` - a vanilla bootstrap never runs or prompts for it.
     - More detail: [`BootstrapConfig`](../../configuration-reference.md#bootstrapconfig)
-2. Do you need to change where the app-list CSVs live?
-    - Options: Repository-relative paths under `BootstrapConfig.DataFiles`, keyed `WinGetApps`, `ScoopApps`, `ChocolateyApps`.
-    - Default: The shipped paths. Almost nobody changes these.
-    - More detail: [`BootstrapConfig`](../../configuration-reference.md#bootstrapconfig)
-3. Where should the bootstrap log be written?
-    - Options: `LogFileLocation` (for example `Desktop`) plus `LogFilePrefix`.
-    - Default: `Desktop` with prefix `BootstrapLog`.
+2. Is the vendored script somewhere other than `Windows\Win11Debloat\vendor`?
+    - Options: A full path, `{RepoRoot}` allowed, under `BootstrapConfig.LocalScripts.Win11Debloat`.
+    - Default: The shipped vendored path. Almost nobody changes this.
     - More detail: [`BootstrapConfig`](../../configuration-reference.md#bootstrapconfig)
 
 ## Where to Put Values
@@ -40,12 +40,15 @@ All of it goes in `Configuration.local.psd1`, at the repository's `Windows/Power
 
 ## Step 1: Set `BootstrapConfig`
 
-Everything about how `Bootstrap` runs: the `Steps` toggles that decide which provisioning steps execute, `DataFiles` (relative paths to the three app-list CSVs), `LocalScripts` / `ExternalScripts`, `PersonalSteps`, `RepositoryUpdateScope`, and where the bootstrap log lands.
+Opt the Bootstrap step in, and move the script only if you vendor it elsewhere. Hashtables deep-merge, so set only the keys you change.
 
 ```powershell
 BootstrapConfig = @{
-    Steps = @{
-        CoreAiRules = $true
+    Steps        = @{
+        Win11Debloat = $true
+    }
+    LocalScripts = @{
+        Win11Debloat = "{RepoRoot}\Windows\Win11Debloat\vendor\Win11Debloat.ps1"
     }
 }
 ```
@@ -56,7 +59,7 @@ Reload the profile, then read the merged value back. `$global:Configuration` aft
 
 ```powershell
 Reload-PowerShellProfile
-$global:Configuration.BootstrapConfig
+$global:Configuration.BootstrapConfig.LocalScripts.Win11Debloat
 ```
 
 ## Verification
@@ -65,8 +68,9 @@ Read-only checks. None of these change anything.
 
 ```powershell
 Reload-PowerShellProfile
-$global:Configuration.BootstrapConfig
-Resolve-BootstrapSteps | Format-Table
+Resolve-BootstrapSteps | Where-Object Name -eq "Win11Debloat"
+Test-Path ($global:Configuration.BootstrapConfig.LocalScripts.Win11Debloat -replace '\{RepoRoot\}', $global:MachineSpecificPaths.Projects.Self.Root)
+Test-Path (Join-Path $global:MachineSpecificPaths.Projects.Self.Root "Windows\Win11Debloat\LastUsedSettings.json")
 ```
 
 If a value reads back as empty, the two usual causes are a parse error in `Configuration.local.psd1` (run `Test-ConfigurationSchema`) and a key placed at the wrong nesting level.
@@ -79,8 +83,11 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 # Configuration.local.psd1
 @{
     BootstrapConfig = @{
-        Steps = @{
-            CoreAiRules = $true
+        Steps        = @{
+            Win11Debloat = $true
+        }
+        LocalScripts = @{
+            Win11Debloat = "{RepoRoot}\Windows\Win11Debloat\vendor\Win11Debloat.ps1"
         }
     }
 }
@@ -90,10 +97,7 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 
 - [`Start-Win11Debloat` in the Application module reference](../../../modules/application.md#start-win11debloat) - parameters, usage and behaviour
 - [Application configuration guides](README.md) - every guide for this module
-- [Add Browser Group](add-browser-group.md) - browser groups, nesting, unique names, search and per-browser selection
-- [`Create-CondaEnvironments`](Create-CondaEnvironments.md) - reads the same configuration
-- [`Update-Win11DebloatVendor`](Update-Win11DebloatVendor.md) - reads the same configuration
-- [`Bootstrap`](../bootstrap/Bootstrap.md) - reads the same configuration
-- [`Invoke-PersonalSteps`](../bootstrap/Invoke-PersonalSteps.md) - reads the same configuration
+- [`Update-Win11DebloatVendor`](Update-Win11DebloatVendor.md) - refreshes the vendored script this function runs
+- [`Bootstrap`](../bootstrap/Bootstrap.md) - runs this function when `BootstrapConfig.Steps.Win11Debloat` is on
 - [WinuXConfigurator](../../winux-configurator.md) - have an AI assistant walk these decisions with you
 - [Configuration reference](../../configuration-reference.md) - every key, section by section

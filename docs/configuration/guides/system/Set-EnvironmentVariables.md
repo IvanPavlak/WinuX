@@ -16,7 +16,7 @@ Sets user environment variables from the configuration or manually.
 ## Decisions
 
 1. Which user environment variables should WinuX keep set on this machine?
-    - Options: Name to value pairs. Values may use `{Dev}`, `{User}`, `{RepoRoot}`, `{AppData}`.
+    - Options: Name to value pairs. Values may use `{Dev}`, `{User}`, `{MachineType}`, `{AppData}` and `%APPDATA%` / `%LOCALAPPDATA%` / `%ALLUSERSPROFILE%`. `{RepoRoot}` is NOT expanded here - write the path out.
     - Default: Empty - `Set-EnvironmentVariables -Auto` writes nothing.
     - More detail: [`AutoEnvironmentVariables`](../../configuration-reference.md#more-sections-quick-reference)
 2. Which directories should be added to your User PATH?
@@ -59,7 +59,7 @@ User environment variables `Set-EnvironmentVariables -Auto` writes. Values accep
 ```powershell
 AutoEnvironmentVariables = @{
     DEV_ROOT     = "{Dev}"
-    WINUX_ROOT   = "{RepoRoot}"
+    TOOLS_ROOT   = "{Dev}\Tools"
 }
 ```
 
@@ -102,7 +102,6 @@ Reload-PowerShellProfile
 $global:Configuration.AutoEnvironmentVariables
 $global:Configuration.AutoPathAdditions
 $global:Configuration.BasePaths
-$global:Configuration.AutoEnvironmentVariables
 [Environment]::GetEnvironmentVariable("DEV_ROOT", "User")
 ```
 
@@ -117,7 +116,7 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 @{
     AutoEnvironmentVariables = @{
         DEV_ROOT     = "{Dev}"
-        WINUX_ROOT   = "{RepoRoot}"
+        TOOLS_ROOT   = "{Dev}\Tools"
     }
     AutoPathAdditions = @(
         "{User}\AppData\Local\Programs\oh-my-posh\bin"

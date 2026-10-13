@@ -12,9 +12,10 @@ function Close-Project {
 		are closed by Close-ProjectTerminals through UI Automation, never the tab this shell runs in.
 		Focus then returns to this shell's own terminal window.
 
-		Browser tabs are closed by detecting tabs with the project name in the title. Additionally,
-		if a swagger mapping exists, it also closes tabs with "Swagger UI" in the title (when
-		backend is running) or "Problem loading page" (when backend is not running).
+		Browser tabs are closed in Universal.DefaultBrowser (skipped when it is not configured) by
+		detecting tabs with the project name in the title. Additionally, if a swagger mapping exists,
+		it also closes tabs with "Swagger UI" in the title (when backend is running) or, for a
+		localhost Swagger URL, "Problem loading page" (when backend is not running).
 
 	.PARAMETER Project
 		Array of project names to close. Projects must be defined in $Configuration.ProjectActions.

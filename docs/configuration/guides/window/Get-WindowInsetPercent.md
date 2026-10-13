@@ -9,12 +9,12 @@ Returns the pre-snap inset fraction every FancyZones placement path trims off ea
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`SnapInsetPercent`](../../configuration-reference.md#snapinsetpercent) | double | `0.05` | How far in from the screen edge the five pre-snap placement paths inset a window, as a fraction. Read through `Get-WindowInsetPercent`. |
+| [`SnapInsetPercent`](../../configuration-reference.md#snapinsetpercent) | double | `0.05` | The fraction of a target zone trimmed off each side before a window is handed to FancyZones, shared by every pre-snap placement path. Read through `Get-WindowInsetPercent`; a value outside `0.0`-`0.49` or non-numeric falls back to `0.05`. |
 
 ## Decisions
 
 1. How much inset should pre-snap placement use?
-    - Options: A fraction between 0 and 0.5. `0.05` is 5 percent.
+    - Options: A fraction from `0.0` to `0.49` per side (`0.05` is 5 percent); anything outside that range falls back to `0.05`.
     - Default: `0.05`.
     - More detail: [`SnapInsetPercent`](../../configuration-reference.md#snapinsetpercent)
 
@@ -32,7 +32,7 @@ All of it goes in `Configuration.local.psd1`, at the repository's `Windows/Power
 
 ## Step 1: Set `SnapInsetPercent`
 
-How far in from the screen edge the five pre-snap placement paths inset a window, as a fraction. Read through `Get-WindowInsetPercent`.
+The fraction of a target zone trimmed off each side before a window is handed to FancyZones, shared by every pre-snap placement path. Read through `Get-WindowInsetPercent`; a value outside `0.0`-`0.49` or non-numeric falls back to `0.05`.
 
 ```powershell
 SnapInsetPercent = 0.05
@@ -55,7 +55,6 @@ Read-only checks. None of these change anything.
 Reload-PowerShellProfile
 $global:Configuration.SnapInsetPercent
 Get-WindowInsetPercent
-$global:Configuration.SnapInsetPercent
 ```
 
 If a value reads back as empty, the two usual causes are a parse error in `Configuration.local.psd1` (run `Test-ConfigurationSchema`) and a key placed at the wrong nesting level.

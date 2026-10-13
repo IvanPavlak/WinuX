@@ -35,7 +35,8 @@ function Invoke-Onefetch {
 		TerminalGreeting.Onefetch.Arguments.
 
 	.PARAMETER Path
-		The directory to test and run in. Defaults to the current location.
+		The directory tested for a git repository. Defaults to the current location. onefetch
+		itself is not given this path and always reports on the current location.
 
 	.PARAMETER Settings
 		The resolved greeting settings from Resolve-TerminalGreetingSettings. Show-TerminalGreeting

@@ -19,7 +19,8 @@ Closes #
 
 - [ ] Bug fix (non-breaking change that fixes an issue)
 - [ ] New feature / function (non-breaking change that adds functionality)
-- [ ] Breaking change (existing behavior, parameters, or signature changes)
+- [ ] Deprecation (a new shape replaces an old one that keeps working and names its replacement - a `### Deprecated` changelog entry with the migration, see VERSIONING.md)
+- [ ] Breaking change (removes a deprecated shape, or cannot keep the old one working - a MAJOR under VERSIONING.md's deprecation policy)
 - [ ] Documentation only
 - [ ] Tests only
 - [ ] Refactor / chore (no behavior change)

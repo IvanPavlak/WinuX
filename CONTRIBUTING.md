@@ -1,9 +1,10 @@
 # Contributing to WinuX
 
-Thank you for contributing! WinuX is an early-stage, deeply configurable Windows 11
-distribution that turns a fresh install into a fully configured environment from a single
-command. Contributions of all kinds are welcome - code, documentation, tests, bug reports,
-and ideas. By participating you agree to our [Code of Conduct](CODE_OF_CONDUCT.md).
+Thank you for contributing! WinuX is a deeply configurable Windows 11 distribution for power
+users that turns a fresh install into a fully configured environment from a single command;
+what it is and is not aiming to be is on the [roadmap](docs/roadmap.md). Contributions of all
+kinds are welcome - code, documentation, tests, bug reports, and ideas. By participating you
+agree to our [Code of Conduct](CODE_OF_CONDUCT.md).
 
 > **Security:** WinuX runs as **Administrator** and is installed via `irm | iex`. If you
 > believe you have found a security vulnerability, do **not** open a public issue - follow
@@ -81,10 +82,12 @@ WinuX targets **Windows 11** and **PowerShell 7+**.
     git fetch upstream
     ```
 
-> ⚠️ **Do not run the full installer against your daily-driver machine while developing.**
-> The bootstrap one-liner (`irm | iex`) is destructive: it installs software, creates
-> symlinks, and reconfigures the OS. Test risky changes in a VM or a disposable `Test`
-> machine type.
+> ⚠️ **Do not test engine changes by bootstrapping your daily-driver machine.** A vanilla run
+> is deliberately quiet - it installs the three framework apps at their pinned versions, the
+> PowerShell modules, and the framework symlinks (your PowerShell profile and FancyZones files
+> are backed up and replaced) - but against a personal fork every step you opted into runs for
+> real, and a half-finished change in one of them acts on your actual software, links and
+> settings. Test risky changes in a VM or on a disposable `Test` machine type.
 
 ---
 
@@ -228,9 +231,13 @@ Match the existing history:
 3. **Make focused commits** following the message style above.
 4. **Run the tests** (`Run-Tests`) and update docs + `FunctionsToExport` as required. Run
    `List-Functions -ListDiscrepancies` if you touched functions.
-5. **Push** to your fork and **open a PR** against `IvanPavlak/WinuX:master`. The PR template
+5. **Add a changelog entry** under `## [Unreleased]` in `CHANGELOG.md`. Never remove or rename
+   a `Configuration.psd1` key or an exported function outright: deprecate it first (the old
+   shape keeps working; add a `### Deprecated` entry with the migration) and leave the removal
+   to the next MAJOR release. See [VERSIONING.md](VERSIONING.md).
+6. **Push** to your fork and **open a PR** against `IvanPavlak/WinuX:master`. The PR template
    loads automatically - please fill it in completely.
-6. **Reference issues** the PR closes (e.g. `Closes #123`). For bugs and features, please
+7. **Reference issues** the PR closes (e.g. `Closes #123`). For bugs and features, please
    file an issue first using the [issue forms](.github/ISSUE_TEMPLATE/).
 
 ### Review & merge

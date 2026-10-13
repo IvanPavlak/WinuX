@@ -8,7 +8,8 @@ function Get-TargetTerminalWindow {
 		return that window; otherwise return the first Terminal window found.
 
 	.PARAMETER TerminalWindowHandle
-		Optional IntPtr handle to look for (default: all windows).
+		Optional IntPtr handle to look for. Defaults to IntPtr.Zero, which returns the first
+		Windows Terminal window; an unmatched handle falls back to the first window too.
 
 	.EXAMPLE
 		$termWin = Get-TargetTerminalWindow

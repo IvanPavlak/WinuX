@@ -5,14 +5,18 @@ function Open-VisualStudio {
 
 	.DESCRIPTION
 		Opens one or more solutions configured in `VisualStudioSolutions` in Configuration.psd1.
-		Each entry maps a name to a `.sln` file path. If a solution is already open (detected
-		by matching window title), it is skipped.
+		Each entry maps a Name to a Solution, a dot-notation reference into
+		$global:MachineSpecificPaths (e.g. "Projects.MyProject.Solution") that resolves to a
+		`.sln` file. If a solution is already open (detected by matching window title), it is
+		skipped. The executable is `Universal.VisualStudio2026Exe`, which must be set and exist.
 
-		When `-Solution` is omitted, shows an interactive selection menu.
-		When `-Default` is specified, opens the first solution in the list.
+		When `-Solution` is omitted, shows an interactive selection menu. When nothing is
+		selected, or `-Default` is specified, Visual Studio is launched without a solution
+		(skipped if it is already running).
 
 	.PARAMETER Default
-		Opens the first solution defined in VisualStudioSolutions without showing a menu.
+		Skips the menu (and ignores -Solution) and launches Visual Studio without a solution,
+		unless a devenv process is already running.
 
 	.PARAMETER Solution
 		One or more solution names as defined in the `VisualStudioSolutions` configuration.

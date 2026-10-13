@@ -36,10 +36,12 @@ function Format-OnefetchPanel {
 		Alignment. A separator wider than the ":" it replaces pushes each value right, while
 		onefetch's own continuation lines - the second author, the extra churn entries, the
 		language chips - are already padded and would be left behind. Those lines are re-padded by
-		the difference. Two kinds of line are deliberately not: anything above the first field,
-		because the title and its underline are not in the value column at all, and any line
-		carrying a background color, which is the color palette row and the language bar. Both
-		would only be pushed out of true.
+		the difference, with the padding inserted at the info column (measured once, off the
+		first field line) so the ascii logo to its left keeps its columns. Two kinds of line are
+		deliberately not: anything above the first field, because the title and its underline
+		are not in the value column at all, and any line carrying a background color, which is
+		the color palette row and the language bar. Both would only be pushed out of true. A line
+		too short to reach the info column is left untouched as well.
 
 	.PARAMETER Line
 		A line of onefetch output. Takes the whole stream from the pipeline.

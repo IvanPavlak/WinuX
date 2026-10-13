@@ -44,7 +44,10 @@ function Invoke-Fastfetch {
 		The knobs - Enabled, MaxShrinkSteps, ReflowTimeoutMilliseconds, PromptReserve - come from
 		the TerminalGreeting.Fastfetch.AutoFit configuration section through
 		Resolve-TerminalGreetingSettings; an explicit parameter on this call overrides the
-		configured value for that one call. The base ships auto-fit on, at 10 / 10 / 1.
+		configured value for that one call. The overrides only apply when this function resolves
+		the settings itself - with -Settings passed, that tree is used as is and -PromptReserve,
+		-MaxShrinkSteps and -ReflowTimeoutMilliseconds are ignored. The base ships auto-fit on,
+		at 10 / 10 / 1.
 
 		Because measuring and displaying are separate steps, `fastfetch` runs twice when auto-fit is
 		active. Use -NoResize (or TerminalGreeting.Fastfetch.AutoFit.Enabled = $false) to keep the

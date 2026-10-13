@@ -9,10 +9,11 @@ function Format-CanvasZoneListing {
 		one line per zone instead, with the zone's position and size expressed as
 		percentages of the layout's ref-width/ref-height coordinate space, e.g.:
 
-			Zone 0 [Left]: x=0.0% y=0.0% w=50.0% h=100.0%
+			Zone 0 [Left]: x=0% y=0% w=50% h=100%
 
-		Zone names come from the optional ZoneNames map (zone index -> name); zone
-		content (e.g. process names) from the optional ZoneContent map.
+		Percentages are rounded to one decimal place. Zone names come from the optional
+		ZoneNames map (zone index -> name); zone content (e.g. process names) from the
+		optional ZoneContent map - the first line of each label, joined with ", " after " => ".
 
 	.PARAMETER LayoutInfo
 		The canvas layout's info object from custom-layouts.json (ref-width,

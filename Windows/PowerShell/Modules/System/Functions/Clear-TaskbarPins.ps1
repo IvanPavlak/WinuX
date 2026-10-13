@@ -1,12 +1,14 @@
 function Clear-TaskbarPins {
 	<#
 	.SYNOPSIS
-		Clears all pinned taskbar items by deleting the Taskband registry key.
+		Clears all pinned taskbar items by removing the pin values from the Taskband registry key.
 
 	.DESCRIPTION
-		Deletes `HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Taskband` and
-		its subkeys to remove all taskbar pins. Restarts Explorer to apply the change
-		unless `-SkipExplorerRestart` is specified.
+		Removes the Favorites, FavoritesResolve, FavoritesChanges, FavoritesVersion,
+		FavoritesRemovedChanges and LayoutXMLLastModified values under
+		`HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Taskband` (the key itself is
+		kept) to remove all taskbar pins. Reports and returns when the key or its values are
+		missing. Restarts Explorer to apply the change unless `-SkipExplorerRestart` is specified.
 		Requires administrator privileges.
 
 	.PARAMETER SkipExplorerRestart

@@ -205,6 +205,15 @@ configuration nor your owned files are a source of conflicts. Custom-area code a
 paths upstream never touches, so they never conflict either. If you have edited _other_ tracked files
 (engine, docs), resolve those as you normally would.
 
+The version number tells you how much attention a merge needs - see
+[VERSIONING](https://github.com/IvanPavlak/WinuX/blob/master/VERSIONING.md). A PATCH or MINOR release
+never changes what your override, your overlays or your Custom-area code rely on; a MINOR may *deprecate*
+something, in which case the old shape keeps working and the release notes (`### Deprecated`) name the
+replacement. A MAJOR is where deprecated shapes are removed, with their migrations repeated under
+`### Removed`. So the habit that keeps merges uneventful is: read the `### Deprecated` entries of
+each release you merge and migrate them in your override while the old shape still works, and a MAJOR
+arrives with nothing left to do.
+
 > [!NOTE]
 > Keeping personal values out of tracked files is what makes this work. Avoid editing
 > `Configuration.psd1` with machine-specific values or the `Data/*.csv` app lists with your own apps; put

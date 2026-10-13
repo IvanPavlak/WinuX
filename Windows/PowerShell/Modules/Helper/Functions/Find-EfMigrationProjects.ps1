@@ -6,7 +6,7 @@ function Find-EfMigrationProjects {
 	.DESCRIPTION
 		Identifies migration projects using two patterns:
 		1. Dedicated migration projects whose name or directory matches *Migrations*
-		   (e.g. Domain.PostgreMigrations, Seup.Domain.SqlServerMigrations).
+		   (e.g. Domain.PostgreMigrations, MyProject.Domain.SqlServerMigrations).
 		2. Legacy layout where a Domain project contains a `Migrations` folder.
 
 		For each candidate it resolves the database type (via Get-DatabaseTypeFromProject),
@@ -38,7 +38,7 @@ function Find-EfMigrationProjects {
 
 	$migrationProjects = @()
 
-	# Pattern 1: Dedicated migration projects (e.g., Domain.PostgreMigrations, Seup.Domain.SqlServerMigrations)
+	# Pattern 1: Dedicated migration projects (e.g., Domain.PostgreMigrations, MyProject.Domain.SqlServerMigrations)
 	$dedicatedMigrationProjects = $CsprojFiles |
 		Where-Object { $_.Name -match "Migrations?" -or $_.Directory.Name -match "Migrations?" }
 

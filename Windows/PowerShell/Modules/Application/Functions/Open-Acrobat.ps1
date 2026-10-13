@@ -5,19 +5,28 @@ function Open-Acrobat {
         Opens Adobe Acrobat with one or more PDF groups from the configuration.
 
     .DESCRIPTION
-        Opens PDFs configured in `AcrobatPdfGroups` in Configuration.psd1.
-        When a PDF key is provided, opens the corresponding file directly.
+        Opens PDFs configured in `AcrobatPdfGroups` in Configuration.psd1, where each group
+        maps a name to one or more dot-notation references into $global:MachineSpecificPaths.
+        When a PDF key is provided, opens the corresponding file(s) directly.
         When multiple keys are provided, opens all of them.
-        When called without arguments or with an empty `-Pdf`, shows an interactive menu
-        of the PDF groups defined in `AcrobatGroups`.
+        When called without arguments, only launches Adobe Acrobat (or reports that it is
+        already running). With an empty `-Pdf`, shows an interactive menu of the groups
+        defined in `AcrobatPdfGroups` plus up to 10 recently opened PDFs (Acrobat's registry
+        history, then Windows Recent shortcuts). An empty `AcrobatPdfGroups` is reported as an
+        error in every mode.
 
     .PARAMETER Pdf
         One or more PDF group key names as defined in `AcrobatPdfGroups` in Configuration.psd1.
-        Omit or pass empty to show the interactive selection menu.
+        Pass an empty string to show the interactive selection menu; omit it to launch Acrobat
+        only.
 
     .EXAMPLE
         Open-Acrobat
-        Shows the PDF group selection menu.
+        Launches Adobe Acrobat without opening a PDF.
+
+    .EXAMPLE
+        Open-Acrobat -Pdf ""
+        Shows the PDF group and recent-PDF selection menu.
 
     .EXAMPLE
         Open-Acrobat -Pdf "ExampleCharacter"

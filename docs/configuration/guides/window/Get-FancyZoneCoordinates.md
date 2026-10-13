@@ -9,10 +9,9 @@ Calculates zone coordinates from FancyZones custom layouts.
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`PathTemplates.SymbolicLinks`](../../configuration-reference.md#symbolic-links) | nested hashtable of group to link entries | shipped, 2 groups | Every symbolic link `SymbolicLinkMaker` creates: `@{ <Group> = @{ <Name> = @{ Source; Target } } }`, with placeholders on both sides. WSL targets are supported and are what the AI-instruction links use. |
-| [`LayoutNumbers`](../../configuration-reference.md#layout-numbers--zone-mappings) | hashtable of name to FancyZones layout number | hashtable, 10 keys (`One` .. `Ten`) | Maps a readable layout name to the FancyZones custom-layout index `Apply-FancyZones` applies. |
+| [`PathTemplates.SymbolicLinks`](../../configuration-reference.md#symbolic-links) | nested hashtable of group to link entries | shipped, 2 groups | Every symbolic link `SymbolicLinkMaker` creates: `@{ <Group> = @{ <Name> = @{ Path; Target } } }` (`Path` is where the link is created, `Target` the repository file it points to), with placeholders on both sides. `Get-FancyZoneCoordinates` reads the expanded `PowerToys.CustomLayouts.Target` as its default `custom-layouts.json`. |
 
-The custom-layouts file this reads is normally reached through the PowerToys symbolic link (`PathTemplates.SymbolicLinks.PowerToys.CustomLayouts.Target`), which is why the symlink configuration matters here. Pass `-CustomLayoutsPath` to point at a file directly instead.
+The custom-layouts file this reads is normally the target of the PowerToys symbolic link (`PathTemplates.SymbolicLinks.PowerToys.CustomLayouts.Target`, read expanded from `$global:MachineSpecificPaths`), which is why the symlink configuration matters here. When that entry is absent (path configuration not loaded) it falls back to the repository file from `Get-FancyZonesLayoutsPath`. Pass `-CustomLayoutsPath` to point at a file directly instead.
 
 ## Decisions
 
@@ -20,10 +19,6 @@ The custom-layouts file this reads is normally reached through the PowerToys sym
     - Options: One entry per link, grouped by the app it belongs to. See [Add Symbolic Link](../system/add-symbolic-link.md) for the full shape and the WSL notes.
     - Default: The shipped groups.
     - More detail: [`PathTemplates.SymbolicLinks`](../../configuration-reference.md#symbolic-links)
-2. Do your FancyZones custom layouts sit at different indexes?
-    - Options: Name to index. The names are what layout files and `Visualize-Layouts` use.
-    - Default: The shipped `One` .. `Ten` mapping to 1 .. 10.
-    - More detail: [`LayoutNumbers`](../../configuration-reference.md#layout-numbers--zone-mappings)
 
 ## Where to Put Values
 
@@ -35,35 +30,26 @@ All of it goes in `Configuration.local.psd1`, at the repository's `Windows/Power
 ## Steps Overview
 
 1. Set `PathTemplates.SymbolicLinks`
-2. Set `LayoutNumbers`
-3. Reload and confirm the merge landed
+2. Reload and confirm the merge landed
 
 ## Step 1: Set `PathTemplates.SymbolicLinks`
 
-Every symbolic link `SymbolicLinkMaker` creates: `@{ <Group> = @{ <Name> = @{ Source; Target } } }`, with placeholders on both sides. WSL targets are supported and are what the AI-instruction links use.
+Every symbolic link `SymbolicLinkMaker` creates: `@{ <Group> = @{ <Name> = @{ Path; Target } } }`, where `Path` is where the link is created and `Target` is the repository file it points to, with placeholders on both sides. The shipped `PowerToys.CustomLayouts` entry is the one this function reads; override its `Target` only if your fork keeps `custom-layouts.json` somewhere else.
 
 ```powershell
 PathTemplates = @{
     SymbolicLinks = @{
-        MyApp = @{
-            Config = @{ Source = "{RepoRoot}\MyApp\config.json"; Target = "{AppData}\MyApp\config.json" }
+        PowerToys = @{
+            CustomLayouts = @{
+                Path   = "{User}\AppData\Local\Microsoft\PowerToys\FancyZones\custom-layouts.json"
+                Target = "{RepoRoot}\Windows\FancyZones\custom-layouts.json"
+            }
         }
     }
 }
 ```
 
-## Step 2: Set `LayoutNumbers`
-
-Maps a readable layout name to the FancyZones custom-layout index `Apply-FancyZones` applies.
-
-```powershell
-LayoutNumbers = @{
-    One = 1
-    Two = 2
-}
-```
-
-## Step 3: Reload and confirm the merge landed
+## Step 2: Reload and confirm the merge landed
 
 Reload the profile, then read the merged value back. `$global:Configuration` after a reload is the ground truth - if what you set is not there, the local file did not parse or the key is nested one level away from where you put it.
 
@@ -79,9 +65,8 @@ Read-only checks. None of these change anything.
 ```powershell
 Reload-PowerShellProfile
 $global:Configuration.PathTemplates
-$global:Configuration.LayoutNumbers
 $global:MachineSpecificPaths.SymbolicLinks.PowerToys.CustomLayouts.Target
-Get-FancyZoneCoordinates -LayoutName "Two"
+Get-FancyZoneCoordinates -LayoutName "Two" -MonitorWidth 1920 -MonitorHeight 1080
 ```
 
 If a value reads back as empty, the two usual causes are a parse error in `Configuration.local.psd1` (run `Test-ConfigurationSchema`) and a key placed at the wrong nesting level.
@@ -95,14 +80,13 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 @{
     PathTemplates = @{
         SymbolicLinks = @{
-            MyApp = @{
-                Config = @{ Source = "{RepoRoot}\MyApp\config.json"; Target = "{AppData}\MyApp\config.json" }
+            PowerToys = @{
+                CustomLayouts = @{
+                    Path   = "{User}\AppData\Local\Microsoft\PowerToys\FancyZones\custom-layouts.json"
+                    Target = "{RepoRoot}\Windows\FancyZones\custom-layouts.json"
+                }
             }
         }
-    }
-    LayoutNumbers = @{
-        One = 1
-        Two = 2
     }
 }
 ```
@@ -114,7 +98,6 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 - [Configure Window Layout](configure-window-layout.md) - the 3-layer layout system, zones and visualization
 - [`Add-SymbolicLink`](../configuration/Add-SymbolicLink.md) - reads the same configuration
 - [`SymbolicLinkMaker`](../system/SymbolicLinkMaker.md) - reads the same configuration
-- [`Apply-FancyZones`](Apply-FancyZones.md) - reads the same configuration
-- [`Test-FancyZonesConfiguration`](Test-FancyZonesConfiguration.md) - reads the same configuration
+- [`Get-FancyZonesLayoutsPath`](Get-FancyZonesLayoutsPath.md) - the repository-file fallback when the symlink entry is absent
 - [WinuXConfigurator](../../winux-configurator.md) - have an AI assistant walk these decisions with you
 - [Configuration reference](../../configuration-reference.md) - every key, section by section

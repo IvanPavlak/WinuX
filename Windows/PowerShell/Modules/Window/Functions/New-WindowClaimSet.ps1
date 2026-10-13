@@ -4,7 +4,7 @@ function New-WindowClaimSet {
 		Builds the one object that says which windows a layout pass may claim.
 
 	.DESCRIPTION
-		A workspace open decides window ownership from five facts that used to travel as five
+		A workspace open decides window ownership from the facts below, which used to travel as
 		separate parameters through Set-WorkspaceWindowLayout, Wait-ForWorkspaceWindows and
 		Set-WindowLayouts, with each function re-deriving what they meant:
 
@@ -19,14 +19,17 @@ function New-WindowClaimSet {
 
 		The two rules every consumer needs are derived here, once:
 
-		  - Test-Claimable(handle): $false when the handle is protected, excluded, existing while
+		  - TestClaimable(handle): $false when the handle is protected, excluded, existing while
 		    SkipExisting is on, or not a candidate while candidates are restricted.
 		  - WaitExcluded / WaitPreExisting: what the wait must skip entirely (protected windows,
 		    existing windows in alongside mode - they belong to someone else and never match an
 		    entry) versus what it counts as stable on first sight (existing windows in plain mode).
 
-		The object is immutable in shape but its sets are live: Set-WorkspaceWindowLayout adds
-		each per-desktop pass's placed handles to Excluded as the open progresses.
+		WithCandidates(handles) returns a new claim set with the same ownership facts and the
+		given candidates.
+
+		The object is immutable in shape but its sets are live: each per-desktop pass
+		(Invoke-ReadyDesktopPass) adds the handles it placed to Excluded as the open progresses.
 
 	.PARAMETER Existing
 		Handles of the windows that pre-existed the open.
@@ -48,7 +51,8 @@ function New-WindowClaimSet {
 
 	.OUTPUTS
 		[pscustomobject] Existing, SkipExisting, Protected, Excluded, Candidates (HashSet[IntPtr] or
-		$null), HasCandidates, PinnedMap, and the methods Test-Claimable, WaitExcluded, WaitPreExisting.
+		$null), HasCandidates, PinnedMap, and the methods TestClaimable, WaitExcluded, WaitPreExisting,
+		WithCandidates.
 
 	.EXAMPLE
 		$claims = New-WindowClaimSet -Existing $existingHandles -Protected $protection.WindowHandles

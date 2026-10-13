@@ -35,10 +35,10 @@
 	.\New-WinuXExecutable.ps1
 
 .EXAMPLE
-	.\New-WinuXExecutable.ps1 -Version 0.1.0 -ChecksumPath .\WinuX.exe.sha256
+	.\New-WinuXExecutable.ps1 -Version 1.0.0 -ChecksumPath .\WinuX.exe.sha256
 
 .EXAMPLE
-	.\New-WinuXExecutable.ps1 -Version 0.1.0 -RepoUrl 'https://github.com/you/YourFork.git'
+	.\New-WinuXExecutable.ps1 -Version 1.0.0 -RepoUrl 'https://github.com/you/YourFork.git'
 #>
 [CmdletBinding()]
 param(
@@ -59,13 +59,13 @@ $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
 # The Win32 version resource ps2exe embeds requires a four-part version - normalize whatever
-# was given ("0.1.0", "v0.1.0", a full "0.1.0.0", ...) and fail loudly on anything unparsable.
+# was given ("1.0.0", "v1.0.0", a full "1.0.0.0", ...) and fail loudly on anything unparsable.
 $normalizedVersion = $Version.TrimStart('v', 'V')
 try {
 	$parsedVersion = [System.Version]$normalizedVersion
 }
 catch {
-	throw "Version [$Version] is not a valid version number (expected MAJOR.MINOR.PATCH, e.g. 0.1.0)."
+	throw "Version [$Version] is not a valid version number (expected MAJOR.MINOR.PATCH, e.g. 1.0.0)."
 }
 $fourPartVersion = "{0}.{1}.{2}.{3}" -f $parsedVersion.Major, [Math]::Max(0, $parsedVersion.Minor), [Math]::Max(0, $parsedVersion.Build), [Math]::Max(0, $parsedVersion.Revision)
 

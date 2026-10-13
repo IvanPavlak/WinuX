@@ -9,7 +9,7 @@ Resolves which optional `Run-Project` steps should run - a thin wrapper over `Re
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`RunProject`](../../configuration-reference.md#more-sections-quick-reference) | hashtable with a `Steps` map | `@{ Steps = @{ Docker = ... } }` | Which `Run-Project` steps run. Resolved by `Resolve-RunProjectSteps`, exactly like `KillAll.Steps`: a boolean or a per-machine-type hashtable with a `Default` fallback. Setting `Docker = $false` means genuinely untouched - not even the provider prompt appears. |
+| [`RunProject`](../../configuration-reference.md#more-sections-quick-reference) | hashtable with a `Steps` map | `@{ Steps = @{ Docker = $true } }` | Which `Run-Project` steps run. Resolved by `Resolve-RunProjectSteps`, exactly like `KillAll.Steps`: a boolean or a per-machine-type hashtable with a `Default` fallback. Setting `Docker = $false` means genuinely untouched - not even the provider prompt appears. |
 
 ## Decisions
 

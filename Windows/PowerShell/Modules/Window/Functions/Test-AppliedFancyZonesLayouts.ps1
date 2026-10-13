@@ -10,7 +10,9 @@ function Test-AppliedFancyZonesLayouts {
 		the expected layout uuid. A target is Verified on a match, Missing when no entry exists,
 		Mismatch when the entry names another layout, and Duplicate when more than one entry claims
 		the same monitor and desktop - the sign that an entry written from outside used a device
-		block FancyZones does not recognize as its own, so FancyZones added a second one.
+		block FancyZones does not recognize as its own, so FancyZones added a second one. Every
+		target is Unreadable when the file is missing or still fails to parse after four reads
+		25 ms apart.
 
 		With -WaitForWriteAfterUtc the function first polls the file's last-write time until it is
 		later than the given stamp (or -TimeoutMs runs out) and reports the outcome as SaveObserved.

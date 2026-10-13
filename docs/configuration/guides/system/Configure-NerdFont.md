@@ -10,8 +10,8 @@ Installs and configures a Nerd Font.
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
 | [`DefaultNerdFont`](../../configuration-reference.md#more-sections-quick-reference) | string | empty string | Which entry from `NerdFonts` Bootstrap installs and `Configure-NerdFont` applies. Ships empty, so the function no-ops. |
-| [`NerdFonts`](../../configuration-reference.md#more-sections-quick-reference) | hashtable of font name to `@{ FolderName; SearchPattern }` | `@{}` (empty) | The repository-bundled Nerd Fonts `Configure-NerdFont` can install by name. |
-| [`Universal`](../../configuration-reference.md#universal-constants) | hashtable, 26 keys | hashtable, 26 keys | Machine-independent constants: executable paths (`FirefoxExe`, `DockerExe`, `DbeaverExe`, ...), the `Browsers` map, `DefaultBrowser`, shared URLs, the `ProcessCleanup` lists, and `Desktop` (auto-resolved at load). Expanded in place by `Load-PathConfiguration`, so placeholders work here too. |
+| [`NerdFonts`](../../configuration-reference.md#more-sections-quick-reference) | [ordered section](../../configuration-reference.md#ordered-sections): `@( @{ <FontName> = @{ FolderName; SearchPattern } } )` | `@()` (empty) | The repository-bundled Nerd Fonts `Configure-NerdFont` can install by name, in menu order. `FolderName` is the font folder relative to the repository root; `SearchPattern` is a file base-name wildcard (`.ttf`/`.otf` is appended) used to detect an existing install. Empty means the function warns and does nothing. |
+| [`Universal.Fonts`](../../configuration-reference.md#universal-paths) | string (path) | `"C:\Windows\Fonts"` | The fonts directory the files are copied into and checked against. |
 
 ## Decisions
 
@@ -20,21 +20,13 @@ Installs and configures a Nerd Font.
     - Default: Empty - `Configure-NerdFont` no-ops.
     - More detail: [`DefaultNerdFont`](../../configuration-reference.md#more-sections-quick-reference)
 2. Which bundled fonts should be installable?
-    - Options: Font name to the folder it lives in and the file pattern to install.
+    - Options: One `@{ <FontName> = @{ FolderName; SearchPattern } }` item per font, in the order the menu should list them. The repository ships the `JetBrainsMonoNerdFont` payload folder, matched by `SearchPattern = "*JetBrainsMono*Nerd*Font*"`.
     - Default: Empty - `Configure-NerdFont` no-ops.
     - More detail: [`NerdFonts`](../../configuration-reference.md#more-sections-quick-reference)
-3. Which browser should be the default?
-    - Options: A key from `Universal.Browsers`: `Firefox`, `Chrome`, `Edge`, `Brave`, `Tor`. Ships empty, so `Open-Browser` asks or uses the system default.
-    - Default: Empty.
-    - More detail: [`Universal`](../../configuration-reference.md#universal-constants)
-4. Are any of the shipped executable paths wrong on this machine?
-    - Options: Override the individual `Universal.<App>Exe` value. Absolute paths, or placeholder paths such as `{User}\AppData\Local\...`.
-    - Default: The shipped paths, which assume default install locations.
-    - More detail: [`Universal`](../../configuration-reference.md#universal-constants)
-5. Do you use a browser the base `Browsers` map does not list?
-    - Options: Add an entry with `Exe`, `PrivateArg` and `NewWindowArg`. Because hashtables merge per key, adding one browser does not remove the others.
-    - Default: The shipped five.
-    - More detail: [`Universal`](../../configuration-reference.md#universal-constants)
+3. Is the Windows fonts directory somewhere other than `C:\Windows\Fonts`?
+    - Options: Override `Universal.Fonts`. Almost never needed.
+    - Default: `C:\Windows\Fonts`.
+    - More detail: [`Universal`](../../configuration-reference.md#universal-paths)
 
 ## Where to Put Values
 
@@ -47,7 +39,7 @@ All of it goes in `Configuration.local.psd1`, at the repository's `Windows/Power
 
 1. Set `DefaultNerdFont`
 2. Set `NerdFonts`
-3. Set `Universal`
+3. Set `Universal.Fonts` (only if needed)
 4. Reload and confirm the merge landed
 
 ## Step 1: Set `DefaultNerdFont`
@@ -60,28 +52,21 @@ DefaultNerdFont = "JetBrainsMono"
 
 ## Step 2: Set `NerdFonts`
 
-The repository-bundled Nerd Fonts `Configure-NerdFont` can install by name.
+The repository-bundled Nerd Fonts `Configure-NerdFont` can install by name. An ordered section: an array of single-key hashtables, listed in menu order. Every `.ttf`/`.otf` in `FolderName` is installed; `SearchPattern` only detects an install that is already there.
 
 ```powershell
-NerdFonts = @{
-    JetBrainsMono = @{ FolderName = "JetBrainsMonoNerdFont"; SearchPattern = "*.ttf" }
-}
+NerdFonts = @(
+    @{ JetBrainsMono = @{ FolderName = "JetBrainsMonoNerdFont"; SearchPattern = "*JetBrainsMono*Nerd*Font*" } }
+)
 ```
 
-## Step 3: Set `Universal`
+## Step 3: Set `Universal.Fonts` (only if needed)
 
-Machine-independent constants: executable paths (`FirefoxExe`, `DockerExe`, `DbeaverExe`, ...), the `Browsers` map, `DefaultBrowser`, shared URLs, the `ProcessCleanup` lists, and `Desktop` (auto-resolved at load). Expanded in place by `Load-PathConfiguration`, so placeholders work here too.
+The fonts directory. `Universal` is a hashtable, so this one key merges over the base and every other `Universal` key stays as shipped.
 
 ```powershell
 Universal = @{
-    DefaultBrowser = "Firefox"
-    Browsers = @{
-        Vivaldi = @{
-            Exe          = "{User}\AppData\Local\Vivaldi\Application\vivaldi.exe"
-            PrivateArg   = "--incognito"
-            NewWindowArg = "--new-window"
-        }
-    }
+    Fonts = "C:\Windows\Fonts"
 }
 ```
 
@@ -102,9 +87,8 @@ Read-only checks. None of these change anything.
 Reload-PowerShellProfile
 $global:Configuration.DefaultNerdFont
 $global:Configuration.NerdFonts
-$global:Configuration.Universal
-$global:Configuration.NerdFonts.Keys
-$global:Configuration.DefaultNerdFont
+$global:Configuration.Universal.Fonts
+Get-OrderedNames $global:Configuration.NerdFonts
 ```
 
 If a value reads back as empty, the two usual causes are a parse error in `Configuration.local.psd1` (run `Test-ConfigurationSchema`) and a key placed at the wrong nesting level.
@@ -117,18 +101,11 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 # Configuration.local.psd1
 @{
     DefaultNerdFont = "JetBrainsMono"
-    NerdFonts = @{
-        JetBrainsMono = @{ FolderName = "JetBrainsMonoNerdFont"; SearchPattern = "*.ttf" }
-    }
+    NerdFonts = @(
+        @{ JetBrainsMono = @{ FolderName = "JetBrainsMonoNerdFont"; SearchPattern = "*JetBrainsMono*Nerd*Font*" } }
+    )
     Universal = @{
-        DefaultBrowser = "Firefox"
-        Browsers = @{
-            Vivaldi = @{
-                Exe          = "{User}\AppData\Local\Vivaldi\Application\vivaldi.exe"
-                PrivateArg   = "--incognito"
-                NewWindowArg = "--new-window"
-            }
-        }
+        Fonts = "C:\Windows\Fonts"
     }
 }
 ```
@@ -139,8 +116,5 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 - [System configuration guides](README.md) - every guide for this module
 - [Add Symbolic Link](add-symbolic-link.md) - link shapes, placeholders and the WSL cases
 - [`Bootstrap`](../bootstrap/Bootstrap.md) - reads the same configuration
-- [`Open-Browser`](../application/Open-Browser.md) - reads the same configuration
-- [`Open-LeagueOfLegends`](../application/Open-LeagueOfLegends.md) - reads the same configuration
-- [`Open-NotepadPlusPlus`](../application/Open-NotepadPlusPlus.md) - reads the same configuration
 - [WinuXConfigurator](../../winux-configurator.md) - have an AI assistant walk these decisions with you
 - [Configuration reference](../../configuration-reference.md) - every key, section by section

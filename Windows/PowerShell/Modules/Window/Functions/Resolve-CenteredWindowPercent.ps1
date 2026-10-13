@@ -8,7 +8,7 @@ function Resolve-CenteredWindowPercent {
 		on-screen pixel size within a monitor's work area, then clamps them to the
 		supplied [Min, Max] bounds and finally to Center-Windows' own [10, 100] range.
 
-		This lets a caller (Kill-All) keep a terminal at roughly the same PHYSICAL size
+		This lets a caller (Center-Terminal, which Kill-All runs) keep a terminal at roughly the same PHYSICAL size
 		across displays: on a large monitor the computed percentage is small, on a small
 		laptop panel it rises automatically (until the Max clamp), so the same target px
 		maps to a comfortably sized window everywhere.

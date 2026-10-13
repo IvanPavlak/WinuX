@@ -37,7 +37,9 @@ Modules/
   so they autoload from their own explicit `FunctionsToExport` exactly like engine modules.
 - **Engine wins on collision:** a payload file whose name matches an existing engine function
   file of its mirror module is skipped with a warning. The Custom area adds behavior; it never
-  overrides it.
+  overrides it. Two payload directories shipping the same file name are handled the same way:
+  the first one loaded wins and the duplicate is skipped with a warning. A payload file that does
+  not define a function matching its file name is reported, since nothing is exported for it.
 
 ## Rules
 

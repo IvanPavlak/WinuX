@@ -12,7 +12,8 @@ function Get-ActiveWindowInfo {
 	.PARAMETER Window
 		A window title pattern to filter by. Supports the same wildcard and regex syntax
 		used throughout the workspace setup (e.g., "*YouTube*", ".*Firefox.*").
-		When omitted, all open windows are included.
+		When omitted, all open windows are included. Also applies with -Continuous,
+		where a focused window whose title does not match is skipped.
 
 	.PARAMETER Continuous
 		If specified, continuously monitors the focused window and displays its info
