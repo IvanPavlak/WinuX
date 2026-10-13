@@ -16,7 +16,10 @@ BeforeAll {
 	function Resolve-Selection { param($InputObject) $InputObject }
 	function Close-ProjectTerminals { param($ProjectName) 0 }
 	function Close-BrowserTabsByPattern { param($ProcessName, $TitlePatterns) 0 }
-	function Focus-TerminalTab { param($TargetTitle) }
+	function Focus-TerminalTab { param($TargetTitle, [IntPtr]$WindowHandle) }
+	# Stubbed so the test run neither walks its own process tree nor touches the real keyboard state.
+	function Resolve-HostingTerminalTab { }
+	function Reset-KeyboardModifiers { }
 	# The graceful close goes through the Window module's seam; stubbed so no WM_CLOSE is posted.
 	function Close-Window { param([IntPtr[]]$Handle) $Handle.Count }
 }
@@ -29,6 +32,8 @@ Describe "Close-Project" {
 		Mock Write-LogTitle { }
 		Mock Write-LogDebug { }
 		Mock Focus-TerminalTab { }
+		Mock Resolve-HostingTerminalTab { $null }
+		Mock Reset-KeyboardModifiers { }
 		Mock Close-ProjectTerminals { 0 }
 		Mock Close-BrowserTabsByPattern { 0 }
 
@@ -174,6 +179,22 @@ Describe "Close-Project" {
 
 			$script:patternCalls.Count | Should -Be 1
 			$script:patternCalls[0] | Should -Be @("(?i)ExampleProject")
+		}
+	}
+
+	Context "Handing control back" {
+		It "returns focus to this shell's own terminal window" {
+			Mock Resolve-HostingTerminalTab { [PSCustomObject]@{ Handle = [IntPtr]4242; ProcessId = 1; TabTitle = "PowerShell" } }
+
+			Close-Project -Project "ExampleProject"
+
+			Should -Invoke Focus-TerminalTab -Times 1 -Exactly -ParameterFilter { $WindowHandle -eq [IntPtr]4242 }
+		}
+
+		It "releases any modifier left held by synthesized keystrokes" {
+			Close-Project -Project "ExampleProject"
+
+			Should -Invoke Reset-KeyboardModifiers -Times 1 -Exactly
 		}
 	}
 }

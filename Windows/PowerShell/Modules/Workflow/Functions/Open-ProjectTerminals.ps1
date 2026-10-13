@@ -90,7 +90,11 @@ function Open-ProjectTerminals {
 		- Numeric index: Focuses tab at specific position (e.g., "0" for first tab, "1" for second tab)
 		Default: "0" (focuses the first tab)
 
-		Note: Named tab focusing uses keyboard navigation (Ctrl+Shift+Tab) relative to the last created tab.
+		When the tabs open in this shell's own window, the function waits until every created tab is
+		in the tab strip and then selects the target through UI Automation (Select-WindowsTerminalTab).
+		Otherwise, or when UI Automation cannot select it, it falls back to `wt focus-tab` for "origin"
+		and numeric targets and to keyboard navigation (Ctrl+Shift+Tab) relative to the last created
+		tab for named targets.
 
 	.PARAMETER Force
 		Forces opening terminals even if they are already open. Bypasses the idempotency check that
@@ -475,7 +479,49 @@ function Open-ProjectTerminals {
 
 	# Focus tab based on FocusTab parameter (only when tabs share a window)
 	$focusWindowId = $sharedWindowId
-	if ($FocusTab -and $focusWindowId) {
+	$focusedThroughUia = $false
+
+	# Tabs that went into this shell's own window can be selected through UI Automation once they
+	# have all landed. `wt focus-tab` cannot promise that: it is a separate wt.exe call that can
+	# reach Windows Terminal before the new-tab calls queued ahead of it, and the last created tab
+	# then ends up active instead of the requested one.
+	$hostingTerminal = $null
+	if ($FocusTab -and $focusWindowId -and $focusWindowId -eq $callerWindowId -and
+		(Get-Command Resolve-HostingTerminalTab -ErrorAction SilentlyContinue)) {
+		$hostingTerminal = Resolve-HostingTerminalTab
+	}
+
+	if ($hostingTerminal) {
+		$selectParams = @{ WindowHandle = $hostingTerminal.Handle }
+		if ($FocusTab -eq "origin" -and $originTabName) {
+			$selectParams["TabTitle"] = $originTabName
+		}
+		elseif ($FocusTab -match '^\d+$') {
+			$selectParams["TabIndex"] = [int]$FocusTab
+		}
+		elseif ($tabNamesList -contains $FocusTab) {
+			$selectParams["TabTitle"] = $FocusTab
+		}
+
+		if ($selectParams.Count -gt 1) {
+			# Normally met within a few polls; the budget only bounds a tab that never appears.
+			$tabStrip = @{ Readable = $true }
+			[void](Wait-Until -TimeoutMs 3000 -PollIntervalMs 50 -Condition {
+					$liveTabTitles = Get-WindowsTerminalTabTitles -WindowHandle $hostingTerminal.Handle
+					if ($null -eq $liveTabTitles) {
+						$tabStrip.Readable = $false
+						return $true
+					}
+					@($tabNamesList | Where-Object { $liveTabTitles -notcontains $_ }).Count -eq 0
+				})
+
+			if ($tabStrip.Readable) {
+				$focusedThroughUia = Select-WindowsTerminalTab @selectParams
+			}
+		}
+	}
+
+	if ($FocusTab -and $focusWindowId -and -not $focusedThroughUia) {
 
 		if ($FocusTab -eq "origin" -and $originTabName) {
 			# Focus by tab name (origin tab)

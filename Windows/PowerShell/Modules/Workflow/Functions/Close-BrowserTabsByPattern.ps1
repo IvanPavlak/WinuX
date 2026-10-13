@@ -8,6 +8,15 @@ function Close-BrowserTabsByPattern {
         the specified patterns. Supports Chrome, Edge, and Firefox browsers.
         Uses keyboard navigation (Ctrl+Tab, Ctrl+W) to cycle through and close tabs.
 
+        A window whose own title matches is closed directly. Otherwise its tabs are cycled with
+        keystrokes, which land in whichever window has focus - so the window is brought to the
+        foreground and verified (Confirm-WindowForeground) before EVERY keystroke, and the window
+        is left alone the moment that fails. Without that check a Ctrl+W meant for the browser
+        closed the terminal tab the command was typed in. The active tab's title is read from
+        this exact window (several browser windows share one process) with the window cache
+        cleared, and after each keystroke the loop waits for the title to change, so it never
+        acts on the title of a tab that is already gone.
+
     .PARAMETER ProcessName
         The process name of the browser (e.g., "chrome", "msedge", "firefox")
 
@@ -48,12 +57,22 @@ function Close-BrowserTabsByPattern {
 		}
 
 		Add-Type -AssemblyName System.Windows.Forms
-		[void][System.Reflection.Assembly]::LoadWithPartialName("Microsoft.VisualBasic")
 
 		$totalClosedTabs = 0
 
 		# Ensure $browserWindows is always an array
 		$windowArray = if ($browserWindows -is [array]) { $browserWindows } else { @($browserWindows) }
+
+		# The active tab's title, read from THIS window. Several browser windows share one process,
+		# so "the first window of the process" can be another window - even one closed a moment
+		# ago. The window list is cached briefly, so it is refreshed before every read.
+		$readActiveTitle = {
+			param([IntPtr]$WindowHandle)
+			Clear-WindowCache
+			$liveWindow = @(Get-WindowHandle -ProcessName $ProcessName -ErrorAction SilentlyContinue |
+					Where-Object { $_.Handle -eq $WindowHandle })[0]
+			if ($liveWindow) { [string]$liveWindow.Title } else { $null }
+		}
 
 		foreach ($window in $windowArray) {
 			Write-LogDebug "  Processing browser window => [$($window.Title)]"
@@ -80,34 +99,13 @@ function Close-BrowserTabsByPattern {
 			}
 
 			# If window doesn't match, try tab cycling (for browsers where tabs share the same window)
-			# Focus this browser window
-			try {
-				$process = Get-Process -Id $window.ProcessId -ErrorAction SilentlyContinue
-				if ($process) {
-					[Microsoft.VisualBasic.Interaction]::AppActivate($process.Id)
-					Start-Sleep -Milliseconds 10
-				}
-			}
-			catch {
-				Write-LogDebug "  Could not focus window, skipping..." -Style Warning
-				continue
-			}
-
+			$windowHandle = [IntPtr]$window.Handle
 			$checkedTitles = @()
 			$closedTabsInWindow = @()
 			$maxTabs = 30  # Safety limit per window
 
 			for ($i = 0; $i -lt $maxTabs; $i++) {
-				# Get current tab title
-				$currentWindow = Get-WindowHandle -ProcessName $ProcessName -ErrorAction SilentlyContinue |
-					Where-Object { $_.ProcessId -eq $window.ProcessId } |
-					Select-Object -First 1
-
-				if (-not $currentWindow) {
-					break
-				}
-
-				$currentTitle = $currentWindow.Title
+				$currentTitle = & $readActiveTitle $windowHandle
 
 				if (-not $currentTitle) {
 					break
@@ -126,6 +124,18 @@ function Close-BrowserTabsByPattern {
 					}
 				}
 
+				# If we've already checked this title, we've cycled through all tabs
+				if (-not $shouldClose -and $checkedTitles -contains $currentTitle) {
+					break
+				}
+
+				# Keystrokes go to whichever window has focus. Verified right before each one, so a
+				# Ctrl+W can never land in the terminal this command runs in.
+				if (-not (Confirm-WindowForeground -WindowHandle $windowHandle)) {
+					Write-LogDebug "  Could not keep the browser window in the foreground, leaving its tabs => [$currentTitle]" -Style Warning
+					break
+				}
+
 				if ($shouldClose) {
 					Write-LogDebug "   -> Closing tab => [$currentTitle]" -Style Step
 
@@ -133,23 +143,20 @@ function Close-BrowserTabsByPattern {
 					[System.Windows.Forms.SendKeys]::SendWait("^w")
 					$closedTabsInWindow += $currentTitle
 					$totalClosedTabs++
-					Start-Sleep -Milliseconds 10
+				}
+				else {
+					$checkedTitles += $currentTitle
 
-					# After closing, we're automatically moved to another tab
-					# Continue checking from the current position
-					continue
+					# Move to next tab
+					[System.Windows.Forms.SendKeys]::SendWait("^{TAB}")
 				}
 
-				# If we've already checked this title, we've cycled through all tabs
-				if ($checkedTitles -contains $currentTitle) {
-					break
-				}
-
-				$checkedTitles += $currentTitle
-
-				# Move to next tab
-				[System.Windows.Forms.SendKeys]::SendWait("^{TAB}")
-				Start-Sleep -Milliseconds 10
+				# The title follows the switch a moment later. Wait for it, so the next read is the
+				# tab that is active now - not the one just closed or left. Two adjacent tabs with
+				# the same title simply run out the short budget.
+				[void](Wait-Until -TimeoutMs 300 -PollIntervalMs 10 -Condition {
+						(& $readActiveTitle $windowHandle) -ne $currentTitle
+					})
 			}
 
 			if ($closedTabsInWindow.Count -gt 0 -and (Test-LogVerbose)) {

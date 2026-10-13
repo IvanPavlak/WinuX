@@ -4,12 +4,29 @@ function Close-ProjectTerminals {
         Closes all Windows Terminal tabs matching a specific project name pattern.
 
     .DESCRIPTION
-        Cycles through all Windows Terminal tabs using keyboard shortcuts (Ctrl+Tab) and closes
-        tabs that match the pattern "ProjectName.*" (e.g., "AnotherProject.Api", "AnotherProject.Ui") using Ctrl+W.
+        Reads the tab strip of every Windows Terminal window through UI Automation and closes the
+        tabs whose title matches "ProjectName.*" (e.g., "AnotherProject.Api", "AnotherProject.Ui")
+        through each tab's own close button. No window is focused and no keystroke is sent.
+
+        The tab this shell runs in is never closed: closing it would end the process mid-run and
+        leave every other project tab open. It is identified by Resolve-HostingTerminalTab, and by
+        -StartingTabTitle when the caller passes one.
+
+        A window whose tabs cannot be read (its virtual desktop is not on screen) has its desktop
+        brought up for the read, and the view is put back afterwards. A window that stays
+        unreadable is reported and skipped - there is no keystroke fallback, because Ctrl+Tab and
+        Ctrl+W go to whatever tab is active, which is how the calling tab used to get closed.
+
         This is used to prevent duplicate tabs when reopening projects.
 
     .PARAMETER ProjectName
         The project name to match against tab titles (e.g., "AnotherProject", "ExampleProject")
+
+    .PARAMETER TerminalWindowHandle
+        Only close tabs in this Windows Terminal window. Without it every window is searched.
+
+    .PARAMETER StartingTabTitle
+        Title of a tab that must never be closed, in addition to the tab this shell runs in.
 
     .OUTPUTS
         Returns the count of closed tabs
@@ -19,7 +36,7 @@ function Close-ProjectTerminals {
         Closes all terminal tabs starting with "AnotherProject." (e.g., "AnotherProject.Api", "AnotherProject.Ui")
 
     .EXAMPLE
-        Close-ProjectTerminals -ProjectName "ExampleProject"
+        Set-LogLevel Verbose { Close-ProjectTerminals -ProjectName "ExampleProject" }
         Closes all terminal tabs for ExampleProject project with debug output
     #>
 	[CmdletBinding()]
@@ -34,112 +51,65 @@ function Close-ProjectTerminals {
 		[string]$StartingTabTitle
 	)
 
-	try {
-		$wtProcess = Get-Process | Where-Object { $_.ProcessName -eq "WindowsTerminal" } | Select-Object -First 1
+	$closedTabs = @()
+	$restoreDesktopIndex = $null
 
-		if (-not $wtProcess) {
+	try {
+		$terminalWindows = @(Get-WindowHandle -ProcessName "WindowsTerminal" -ErrorAction SilentlyContinue)
+		if ($TerminalWindowHandle -ne [System.IntPtr]::Zero) {
+			$terminalWindows = @($terminalWindows | Where-Object { $_.Handle -eq $TerminalWindowHandle })
+		}
+
+		if ($terminalWindows.Count -eq 0) {
 			Write-LogDebug " Windows Terminal is not running" -Style Warning
 			return 0
 		}
 
 		Write-LogDebug " Looking for terminal tabs with project [$ProjectName]..."
 
-		Add-Type -AssemblyName System.Windows.Forms
+		$hostingTerminal = Resolve-HostingTerminalTab
+		$projectTabPattern = "^$([regex]::Escape($ProjectName))\."
 
-		[void][System.Reflection.Assembly]::LoadWithPartialName("Microsoft.VisualBasic")
-		$initialWindow = Get-TargetTerminalWindow -TerminalWindowHandle $TerminalWindowHandle
+		foreach ($terminalWindow in $terminalWindows) {
+			$terminalHandle = [IntPtr]$terminalWindow.Handle
+			$liveTabTitles = Get-WindowsTerminalTabTitles -WindowHandle $terminalHandle
 
-		if ($initialWindow -and $initialWindow.Handle -ne [System.IntPtr]::Zero) {
-			[void](Set-WindowForeground -Handle $initialWindow.Handle)
-		}
-		else {
-			[Microsoft.VisualBasic.Interaction]::AppActivate($wtProcess.Id)
-		}
-		Start-Sleep -Milliseconds 25
-
-		$initialWindow = Get-TargetTerminalWindow -TerminalWindowHandle $TerminalWindowHandle
-		$startingTitle = if ($StartingTabTitle) { $StartingTabTitle } elseif ($initialWindow) { $initialWindow.Title } else { $null }
-
-		if (-not $startingTitle) {
-			Write-LogDebug " Could not get Windows Terminal window title" -Style Warning
-			return 0
-		}
-
-		# Since Open-Terminal uses --suppressApplicationTitle, tab names are preserved
-		# even when child processes (npm, node, dotnet) are running.
-		# We can directly close matching tabs without needing to Ctrl+C all tabs first.
-
-		$maxTabs = 20  # Safety limit
-
-		Write-LogDebug " Closing tabs matching project [$ProjectName]..."
-
-		$checkedTitles = @()
-		$closedTabs = @()
-
-		for ($i = 0; $i -lt $maxTabs; $i++) {
-			$currentWindow = Get-TargetTerminalWindow -TerminalWindowHandle $TerminalWindowHandle
-			$currentTitle = if ($currentWindow) { $currentWindow.Title } else { $null }
-
-			if (-not $currentTitle) {
-				break
-			}
-
-			# Check if this tab belongs to the project (e.g., "AnotherProject.Api", "AnotherProject.Ui")
-			if ($currentTitle -match "^$([regex]::Escape($ProjectName))\.") {
-				# Skip the tab we're running from to avoid killing the current session
-				if ($currentTitle -eq $startingTitle) {
-					Write-LogDebug "  Skipping current tab => [$currentTitle]" -Style Step
-					$checkedTitles += $currentTitle
-					[System.Windows.Forms.SendKeys]::SendWait("^{TAB}")
-					Start-Sleep -Milliseconds 25
-					continue
+			if ($null -eq $liveTabTitles) {
+				# Windows Terminal composes its tab strip only while its virtual desktop is on
+				# screen; a workspace's terminal is usually parked on another one.
+				$previousDesktop = Ensure-DesktopVisible -WindowHandle $terminalHandle
+				if ($null -ne $previousDesktop -and $null -eq $restoreDesktopIndex) {
+					$restoreDesktopIndex = $previousDesktop
 				}
 
-				Write-LogDebug "  Closing terminal tab => [$currentTitle]" -Style Step
+				$liveTabTitles = Get-WindowsTerminalTabTitles -WindowHandle $terminalHandle
+			}
 
-				# Close this tab with Ctrl+W
-				[System.Windows.Forms.SendKeys]::SendWait("^w")
-				$closedTabs += $currentTitle
-				Start-Sleep -Milliseconds 25
-
-				# After closing, we're automatically moved to another tab
-				# Continue checking from the current position
+			if ($null -eq $liveTabTitles) {
+				Write-LogWarning "Could not read the tabs of terminal window [$($terminalWindow.Title)] - its [$ProjectName] tabs were left open"
 				continue
 			}
 
-			# If we've already checked this title, we've cycled through all tabs
-			if ($checkedTitles -contains $currentTitle) {
-				break
-			}
+			foreach ($tabTitle in @($liveTabTitles | Where-Object { $_ -match $projectTabPattern })) {
+				$isHostingTab = $hostingTerminal -and
+				$hostingTerminal.Handle -eq $terminalHandle -and
+				$hostingTerminal.TabTitle -eq $tabTitle
 
-			$checkedTitles += $currentTitle
+				if ($isHostingTab -or ($StartingTabTitle -and $tabTitle -eq $StartingTabTitle)) {
+					Write-LogDebug "  Skipping current tab => [$tabTitle]" -Style Step
+					continue
+				}
 
-			# Move to next tab
-			[System.Windows.Forms.SendKeys]::SendWait("^{TAB}")
-			Start-Sleep -Milliseconds 25
-		}
+				Write-LogDebug "  Closing terminal tab => [$tabTitle]" -Style Step
 
-		if ($startingTitle) {
-			$targetWindow = Get-TargetTerminalWindow -TerminalWindowHandle $TerminalWindowHandle
-
-			if ($targetWindow -and $targetWindow.Handle -ne [System.IntPtr]::Zero) {
-				[void](Set-WindowForeground -Handle $targetWindow.Handle)
-				Start-Sleep -Milliseconds 25
-
-				for ($i = 0; $i -lt $maxTabs; $i++) {
-					$currentWindow = Get-TargetTerminalWindow -TerminalWindowHandle $TerminalWindowHandle
-					$currentTitle = if ($currentWindow) { $currentWindow.Title } else { $null }
-
-					if ($currentTitle -eq $startingTitle) {
-						break
-					}
-
-					[System.Windows.Forms.SendKeys]::SendWait("^{TAB}")
+				if (Close-WindowsTerminalTab -WindowHandle $terminalHandle -TabTitle $tabTitle) {
+					$closedTabs += $tabTitle
+					# Let Windows Terminal remove the tab from the strip before the next close.
 					Start-Sleep -Milliseconds 25
 				}
-			}
-			else {
-				Focus-TerminalTab -TargetTitle $startingTitle
+				else {
+					Write-LogDebug "  Could not close terminal tab => [$tabTitle]" -Style Warning
+				}
 			}
 		}
 
@@ -157,6 +127,11 @@ function Close-ProjectTerminals {
 	}
 	catch {
 		Write-LogDebug " Error closing terminal tabs => $_" -Style Error
-		return 0
+		return $closedTabs.Count
+	}
+	finally {
+		if ($null -ne $restoreDesktopIndex) {
+			[void](Ensure-DesktopVisible -DesktopIndex $restoreDesktopIndex)
+		}
 	}
 }

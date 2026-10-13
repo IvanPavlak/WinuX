@@ -8,8 +8,9 @@ function Close-Project {
 		associated with the specified project(s). Enables fast switching between projects by
 		closing only project-specific resources while keeping workspace-level applications running.
 
-		Terminal tabs are closed automatically by cycling through Windows Terminal tabs and
-		sending Ctrl+W to tabs matching the project name pattern (e.g., "AnotherProject.Api", "AnotherProject.Ui").
+		Terminal tabs matching the project name pattern (e.g., "AnotherProject.Api", "AnotherProject.Ui")
+		are closed by Close-ProjectTerminals through UI Automation, never the tab this shell runs in.
+		Focus then returns to this shell's own terminal window.
 
 		Browser tabs are closed by detecting tabs with the project name in the title. Additionally,
 		if a swagger mapping exists, it also closes tabs with "Swagger UI" in the title (when
@@ -39,7 +40,7 @@ function Close-Project {
 		Successfully closes:
 		- Visual Studio windows (by solution name)
 		- VSCode windows (by folder name)
-		- Terminal tabs (by project name pattern using Ctrl+W)
+		- Terminal tabs (by project name pattern, through each tab's UI Automation close button)
 		- Browser tabs (by project name, "Swagger UI", or "Problem loading page" in titles)
 	#>
 	[CmdletBinding()]
@@ -231,5 +232,19 @@ function Close-Project {
 
 	Write-LogSuccess "Project closed completely!"
 
-	Focus-TerminalTab
+	# Land back on the window this shell runs in, not whichever terminal window the first
+	# WindowsTerminal process happens to own.
+	$hostingTerminal = if (Get-Command Resolve-HostingTerminalTab -ErrorAction SilentlyContinue) { Resolve-HostingTerminalTab } else { $null }
+	if ($hostingTerminal) {
+		Focus-TerminalTab -WindowHandle $hostingTerminal.Handle
+	}
+	else {
+		Focus-TerminalTab
+	}
+
+	# Browser tab cleanup and the terminal focus fallback synthesize keystrokes. Never leave this
+	# flow with a modifier logically held down. No-op when nothing is stuck.
+	if (Get-Command Reset-KeyboardModifiers -ErrorAction SilentlyContinue) {
+		$null = Reset-KeyboardModifiers
+	}
 }
