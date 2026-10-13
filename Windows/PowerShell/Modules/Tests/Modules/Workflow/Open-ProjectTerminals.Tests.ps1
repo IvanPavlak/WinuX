@@ -483,4 +483,62 @@ Describe "Open-ProjectTerminals" {
 			$script:capturedExpected | Should -Contain "MixedProject.Api"
 		}
 	}
+
+	Context "Focusing the requested tab" {
+		BeforeAll {
+			# The UI Automation seams live in the Helper module, which this file never loads.
+			function Resolve-HostingTerminalTab { }
+			function Get-WindowsTerminalTabTitles { param([IntPtr]$WindowHandle) }
+			function Select-WindowsTerminalTab { param([IntPtr]$WindowHandle, [string]$TabTitle, [int]$TabIndex = -1) }
+			function Wait-Until { param([scriptblock]$Condition, [int]$TimeoutMs, [int]$PollIntervalMs) [bool](& $Condition) }
+		}
+
+		BeforeEach {
+			Mock Resolve-HostingTerminalTab { [PSCustomObject]@{ Handle = [IntPtr]4242; ProcessId = 1; TabTitle = "PowerShell" } }
+			Mock Get-WindowsTerminalTabTitles { @("PowerShell", "TestProject.Api", "TestProject.Ui") }
+			Mock Select-WindowsTerminalTab { $true }
+		}
+
+		It "selects tab 0 of this shell's own window through UI Automation, with no wt focus-tab race" {
+			# `wt focus-tab` is a separate wt.exe call that can overtake the new-tab calls queued
+			# ahead of it, leaving the LAST created tab active - the bug this path replaces.
+			Open-ProjectTerminals -Project "TestProject" -InSameShell
+
+			Should -Invoke Select-WindowsTerminalTab -Times 1 -Exactly -ParameterFilter {
+				$WindowHandle -eq [IntPtr]4242 -and $TabIndex -eq 0
+			}
+			Should -Invoke Start-Process -Times 0 -ParameterFilter { $ArgumentList -contains "focus-tab" }
+		}
+
+		It "selects a named project tab by title instead of stepping back with Ctrl+Shift+Tab" {
+			Open-ProjectTerminals -Project "TestProject" -InSameShell -FocusTab "TestProject.Api"
+
+			Should -Invoke Select-WindowsTerminalTab -Times 1 -Exactly -ParameterFilter { $TabTitle -eq "TestProject.Api" }
+			Should -Invoke Send-TerminalKeys -Times 0
+		}
+
+		It "falls back to wt focus-tab when the tab cannot be selected" {
+			Mock Select-WindowsTerminalTab { $false }
+
+			Open-ProjectTerminals -Project "TestProject" -InSameShell
+
+			Should -Invoke Start-Process -Times 1 -Exactly -ParameterFilter { $ArgumentList -contains "focus-tab" }
+		}
+
+		It "does not select anything while the tab strip is unreadable" {
+			Mock Get-WindowsTerminalTabTitles { $null }
+
+			Open-ProjectTerminals -Project "TestProject" -InSameShell
+
+			Should -Invoke Select-WindowsTerminalTab -Times 0
+			Should -Invoke Start-Process -Times 1 -Exactly -ParameterFilter { $ArgumentList -contains "focus-tab" }
+		}
+
+		It "leaves tabs opened in a new window to wt focus-tab" {
+			Open-ProjectTerminals -Project "TestProject" -InSameShell:$false
+
+			Should -Invoke Resolve-HostingTerminalTab -Times 0
+			Should -Invoke Select-WindowsTerminalTab -Times 0
+		}
+	}
 }

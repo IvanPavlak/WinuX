@@ -72,6 +72,7 @@
 		'Resolve-Selection',
 		'Resolve-WorkspaceTemplate',
 		'Run-Project',
+		'Select-WindowsTerminalTab',
 		'Show-FunctionDetails',
 		'Show-Image',
 		'Test-AdminPrivileges',

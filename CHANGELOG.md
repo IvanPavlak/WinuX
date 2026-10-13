@@ -8,6 +8,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.94] - 2026-10-13
+
+### Added
+
+- **`Select-WindowsTerminalTab` (Helper): select a Windows Terminal tab without keystrokes.** Selects one tab by title or by position through UI Automation (`SelectionItemPattern`), without focusing the window. Returns `$false` when the tab cannot be selected, so callers keep a fallback. Docs: the Helper module reference, the new `Select-WindowsTerminalTab` guide.
+
+### Fixed
+
+- **`Close-Project` no longer closes the tab it runs in and leaves the project tabs open.** `Close-ProjectTerminals` cycled tabs with Ctrl+Tab and sent Ctrl+W when the window title matched a project tab; the title lags the switch, so Ctrl+W could hit the calling tab, which ended the run (the other project tabs stayed open) mid-keystroke and left Ctrl logically held. It now reads every terminal window's tabs through UI Automation and closes each project tab through its close button, never the tab it runs in (`Resolve-HostingTerminalTab`) or `-StartingTabTitle`; a terminal on another virtual desktop has its desktop brought up for the read and the view put back. `-TerminalWindowHandle` now limits the search to that window; without it every terminal window is searched. `Close-Project` returns focus to its own terminal window and releases any held modifier (`Reset-KeyboardModifiers`). Docs: the Workflow module reference, troubleshooting ("Close-Project Closes The Calling Tab And Leaves The Project Tabs Open").
+- **`Close-Project`'s browser step no longer types Ctrl+W into the terminal.** `Close-BrowserTabsByPattern` activated the browser with `AppActivate` without checking it worked, and read the active tab's title from the first window of the browser process - with several browser windows sharing one process, that could be a window it had just closed, whose title still matched. The Ctrl+W then went to the terminal in front and closed the calling tab. It now verifies the browser window is in the foreground (`Confirm-WindowForeground`) right before every keystroke and stops on that window when it is not, reads the title from the window being processed with the window cache cleared, and waits for the title to change after each keystroke instead of a fixed 10 ms (the cached list could still show a closed tab's title, which closed the next tab too). Docs: the Workflow module reference, troubleshooting.
+- **A workspace no longer ends on its last project tab.** `Open-ProjectTerminals` applied `-FocusTab` with a separate `wt focus-tab` call that could overtake the new-tab calls before it. When the tabs open in the shell's own window it now waits until they are all in the tab strip and selects the requested tab through `Select-WindowsTerminalTab`, including named tabs (no more Ctrl+Shift+Tab); `wt focus-tab` remains the fallback. Docs: the Workflow module reference, troubleshooting ("A Workspace Ends On The Last Project Tab Instead Of The Tab It Was Started From").
+- **`Focus-TerminalTab -TargetTitle` lands on the right tab.** It activates the terminal window that holds the tab and selects the tab through `Select-WindowsTerminalTab`; the Ctrl+Tab cycle is only the fallback. Docs: the Workflow module reference.
+
 ## [0.1.93] - 2026-10-12
 
 ### Added
@@ -1557,7 +1570,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.93...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v0.1.94...HEAD
+[0.1.94]: https://github.com/IvanPavlak/WinuX/compare/v0.1.93...v0.1.94
 [0.1.93]: https://github.com/IvanPavlak/WinuX/compare/v0.1.92...v0.1.93
 [0.1.92]: https://github.com/IvanPavlak/WinuX/compare/v0.1.91...v0.1.92
 [0.1.91]: https://github.com/IvanPavlak/WinuX/compare/v0.1.90...v0.1.91

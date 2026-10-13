@@ -4,8 +4,10 @@ function Focus-TerminalTab {
         Focuses Windows Terminal and optionally navigates to a specific tab by title.
 
     .DESCRIPTION
-        Activates the Windows Terminal window. If a TargetTitle is provided, cycles through
-        tabs using Ctrl+Tab until the tab with the matching title is found and focused.
+        Activates the Windows Terminal window. If a TargetTitle is provided, the tab is selected
+        through UI Automation (Select-WindowsTerminalTab) in the window that holds it, which is
+        then the window activated. Only when UI Automation cannot select it does it fall back to
+        cycling through tabs with Ctrl+Tab until the window title matches.
 
     .PARAMETER TargetTitle
         The title of the tab to focus. If not specified, only activates the Windows Terminal window.
@@ -48,6 +50,19 @@ function Focus-TerminalTab {
 	)
 
 	if (-not $Quiet) { Write-LogTitle "Focusing Terminal Tab" }
+
+	# With a tab to land on and no window named, the window to activate is the one that HOLDS that
+	# tab - read through UI Automation, without focusing anything. Activating the first process's
+	# main window instead would cycle tabs in a window the tab may not even be in.
+	if ($TargetTitle -and $WindowHandle -eq [IntPtr]::Zero -and (Get-Command Get-WindowsTerminalTabTitles -ErrorAction SilentlyContinue)) {
+		foreach ($terminalWindow in @(Get-WindowHandle -ProcessName "WindowsTerminal" -ErrorAction SilentlyContinue)) {
+			$tabTitles = Get-WindowsTerminalTabTitles -WindowHandle ([IntPtr]$terminalWindow.Handle)
+			if ($tabTitles -contains $TargetTitle) {
+				$WindowHandle = [IntPtr]$terminalWindow.Handle
+				break
+			}
+		}
+	}
 
 	# A caller that already knows WHICH terminal window it wants passes the handle, and that exact
 	# window is what comes forward. The process path below cannot promise that: AppActivate takes a
@@ -99,6 +114,15 @@ function Focus-TerminalTab {
 	}
 
 	Write-LogDebug " Refocusing on starting tab => [$TargetTitle]..."
+
+	# Selecting the tab through UI Automation is exact and sends no keystroke. The Ctrl+Tab cycle
+	# below is the fallback: the window title lags each switch, so it can stop a tab late.
+	if ($WindowHandle -ne [IntPtr]::Zero -and
+		(Get-Command Select-WindowsTerminalTab -ErrorAction SilentlyContinue) -and
+		(Select-WindowsTerminalTab -WindowHandle $WindowHandle -TabTitle $TargetTitle)) {
+		if (-not $Quiet) { Write-LogSuccess "Focused Windows Terminal tab => [$TargetTitle]!" }
+		return
+	}
 
 	Add-Type -AssemblyName System.Windows.Forms
 

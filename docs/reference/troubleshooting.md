@@ -400,6 +400,22 @@ Get-CimInstance Win32_Process -Filter "Name = 'Obsidian.com'" | ForEach-Object {
 
 **Solution:** Fixed. A window is closed only when a candidate is a whole ` - ` separated segment of its title, the same rule `Open-VSCode` uses to detect an open folder (see [Test-WindowTitleCandidates](../modules/helper.md#test-windowtitlecandidates)). Two limits remain. A folder name with a dot (`My.App`) also yields the candidate `My`, which still closes a window whose folder is exactly `My`. A custom VS Code `window.title` that shows neither the folder name nor its full path as a segment of its own leaves the project's own window open.
 
+### Close-Project Closes The Calling Tab And Leaves The Project Tabs Open
+
+**Problem:** `Close-Project MyProject` (or a workspace that closes a project's tabs) closes the terminal tab it was typed in, while the `MyProject.*` tabs stay open. Afterwards the keyboard misbehaves until Ctrl is pressed and released: letters trigger shortcuts, clicks select instead of placing the cursor.
+
+**Why it happened:** Two steps typed Ctrl+W without making sure it would reach the intended window, and in Windows Terminal Ctrl+W closes the active tab. `Close-ProjectTerminals` walked the tabs with Ctrl+Tab and sent Ctrl+W when the window title matched a project tab; the title lags the tab switch, so it could still show a project tab's title while the calling tab was already active. The browser step (`Close-BrowserTabsByPattern`) activated the browser without checking it worked and read a matching title from another browser window of the same process (even one it had just closed), so its Ctrl+W went to the terminal still in front. Either way the shell running the command was closed, so the remaining tabs were never reached - and it was closed in the middle of sending Ctrl+W, after Ctrl went down and before it was released, which left Ctrl logically held. If the log of the run ends on a `Closing tab =>` line, this is what happened.
+
+**Solution:** Fixed in 0.1.94. `Close-ProjectTerminals` reads every terminal window's tabs through UI Automation and closes each project tab through its own close button: no focus change, no keystrokes, and the tab the command runs in is never closed. `Close-BrowserTabsByPattern` verifies the browser window is in the foreground right before every keystroke and leaves that window alone when it is not, and reads the title from the window it is working on. `Close-Project` then returns focus to its own terminal window and releases any held modifier (`Reset-KeyboardModifiers`). If the keyboard is stuck from an older run, press and release Ctrl, Shift, Alt and Win once, or run `Reset-KeyboardModifiers`.
+
+### A Workspace Ends On The Last Project Tab Instead Of The Tab It Was Started From
+
+**Problem:** After a workspace that opens project terminals, the active tab is the last project tab created (e.g. `MyProject.Worker`) instead of the first tab, where the workspace was started.
+
+**Why it happened:** `Open-ProjectTerminals` applied `-FocusTab` (default `"0"`, the first tab) with a separate `wt focus-tab` call. Each `wt` call reaches Windows Terminal on its own, so the focus call could arrive before the new-tab calls queued ahead of it, and the last tab to be created became the active one.
+
+**Solution:** Fixed in 0.1.94. When the tabs open in the shell's own window, `Open-ProjectTerminals` waits until every created tab is in the tab strip and then selects the requested tab through UI Automation (`Select-WindowsTerminalTab`). `wt focus-tab` is only the fallback, for tabs opened in a new window or a tab strip that cannot be read.
+
 ## Window Layout Issues
 
 ### Windows Not Positioning

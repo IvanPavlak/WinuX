@@ -69,7 +69,7 @@ Clear-OldBackups -MaxBackupsPerKey 3
 - **Parameters:** -WindowHandle, -TabTitle
 - **Usage:** `Close-WindowsTerminalTab -WindowHandle $wtWindow.Handle -TabTitle "MyProject.Api"`
 
-Locates the matching `TabItem` among the window's UI Automation descendants, then scans that tab's `Button` descendants for one exposing `InvokePattern` and invokes it, so closing the tab never depends on which window has focus. Returns `$true` when the close button was found and invoked; a zero handle, an unreadable UIA tree, a missing tab, or a close button without `InvokePattern` all return `$false` instead of throwing. Used by `Terminate-WindowsTerminalTabs` to close matching tabs without stealing focus.
+Locates the matching `TabItem` among the window's UI Automation descendants, then scans that tab's `Button` descendants for one exposing `InvokePattern` and invokes it, so closing the tab never depends on which window has focus. Returns `$true` when the close button was found and invoked; a zero handle, an unreadable UIA tree, a missing tab, or a close button without `InvokePattern` all return `$false` instead of throwing. Used by `Terminate-WindowsTerminalTabs`, `Close-Workspace` and `Close-ProjectTerminals` to close matching tabs without stealing focus.
 
 | Parameter       | Description                                                                                 |
 | --------------- | ------------------------------------------------------------------------------------------- |
@@ -751,7 +751,7 @@ $titles = Get-WindowsTerminalTabTitles -WindowHandle $wtWindow.Handle
 if ($null -eq $titles) { Write-Verbose "fall back to Ctrl+Tab cycling" }
 ```
 
-**See also:** [Close-WindowsTerminalTab](helper.md#close-windowsterminaltab), [Test-TerminalTabsAlreadyOpen](workflow.md#test-terminaltabsalreadyopen), [Terminate-WindowsTerminalTabs](system.md#terminate-windowsterminaltabs)
+**See also:** [Close-WindowsTerminalTab](helper.md#close-windowsterminaltab), [Select-WindowsTerminalTab](helper.md#select-windowsterminaltab), [Test-TerminalTabsAlreadyOpen](workflow.md#test-terminaltabsalreadyopen), [Terminate-WindowsTerminalTabs](system.md#terminate-windowsterminaltabs)
 
 ## [Get-WindowTitleCandidates](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Get-WindowTitleCandidates.ps1)
 
@@ -1357,6 +1357,29 @@ Run-Project -Project "MyProject" -Skip Docker
 ```
 
 **See also:** [Start-Containers](workflow.md#start-containers), [Resolve-ProjectDockerCompose](workflow.md#resolve-projectdockercompose), [Resolve-RunProjectSteps](#resolve-runprojectsteps), [Configuration Reference](../configuration/configuration-reference.md)
+
+## [Select-WindowsTerminalTab](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Select-WindowsTerminalTab.ps1)
+
+- **Description:** Makes one Windows Terminal tab the active tab through UI Automation - no focus change, no keystrokes. Finds the `TabItem` by position (`-TabIndex`, used when the tab there carries `-TabTitle` or no title was given, which tells apart tabs with the same title) or by exact title, and selects it through its `SelectionItemPattern`. Selecting a tab does not bring the window to the foreground, so it never pulls the view onto another virtual desktop. Replaces the Ctrl+Tab cycle that read the window title after each keystroke - the title lags the switch, so the cycle could stop a tab late. Returns `$false` when the tab cannot be found or selected, so callers can fall back to their legacy path.
+- **Parameters:** -WindowHandle, -TabTitle, -TabIndex
+- **Usage:** `Select-WindowsTerminalTab -WindowHandle $wtWindow.Handle -TabTitle "MyProject.Api"`, `Select-WindowsTerminalTab -WindowHandle $wtWindow.Handle -TabIndex 0`
+
+Used by [Focus-TerminalTab](workflow.md#focus-terminaltab) to land on a tab by title and by [Open-ProjectTerminals](workflow.md#open-projectterminals) to apply `-FocusTab` once every created tab is in the strip. A zero handle, an unreadable UIA tree (the window's virtual desktop is not on screen), a missing tab, or a tab without `SelectionItemPattern` all return `$false` instead of throwing.
+
+| Parameter       | Description                                                                            |
+| --------------- | -------------------------------------------------------------------------------------- |
+| `-WindowHandle` | `IntPtr` handle of the Windows Terminal top-level window that owns the tab. Mandatory. |
+| `-TabTitle`     | Exact title of the tab to select (as reported by `Get-WindowsTerminalTabTitles`).      |
+| `-TabIndex`     | 0-based position of the tab in the tab strip. `-1` (default) selects by title only.    |
+
+```powershell
+# Land on a project tab, falling back to the legacy path on failure
+if (-not (Select-WindowsTerminalTab -WindowHandle $wtWindow.Handle -TabTitle "MyProject.Api")) {
+    Write-Verbose "fall back to Ctrl+Tab cycling"
+}
+```
+
+**See also:** [Get-WindowsTerminalTabTitles](#get-windowsterminaltabtitles), [Close-WindowsTerminalTab](#close-windowsterminaltab), [Focus-TerminalTab](workflow.md#focus-terminaltab)
 
 ## [Show-FunctionDetails](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Show-FunctionDetails.ps1)
 
