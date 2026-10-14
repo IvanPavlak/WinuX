@@ -1,6 +1,6 @@
 # Import-TerminalIcons
 
-Imports `Terminal-Icons` into the global session state (the file and folder glyphs in directory listings) and, when the import fails on a torn theme cache file, moves that file aside with `Repair-TerminalIconsThemeCache` and imports again. The profile queues it as the startup stage `Terminal-Icons`, run after the first prompt.
+Imports `Terminal-Icons` into the global session state (the file and folder glyphs in directory listings) and, when the import fails on a torn theme cache file, moves that file aside with `Repair-TerminalIconsThemeCache` and imports again, up to three attempts in all. The profile queues it as the startup stage `Terminal-Icons`, run after the first prompt.
 
 ## Configuration Keys
 

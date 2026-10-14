@@ -1210,7 +1210,7 @@ Import-Module: The module to process 'Terminal-Icons.psm1' [...] was not process
 
 The profile imports the module after the first prompt, from the deferred startup queue, and before 1.0.0 that queue swallowed the failure, so nothing pointed at the cause.
 
-**Solution:** Fixed in 1.0.0. The queue imports through `Import-TerminalIcons`, which on a failed import runs `Repair-TerminalIconsThemeCache`: every cache file that does not parse is moved to `<name>.corrupt-<timestamp>` beside the original, a warning names it, the import runs again and the module regenerates the file from its built-in themes. Nothing is deleted. By hand, in a shell without icons:
+**Solution:** Fixed in 1.0.0. The queue imports through `Import-TerminalIcons`, which on a failed import runs `Repair-TerminalIconsThemeCache`: a cache file that does not parse is read once more after a short pause (another shell may still be writing it), and one that still fails is moved to `<name>.corrupt-<timestamp>-<pid>` beside the original with a warning naming it. The import then runs again, up to three attempts in all, and the module regenerates the file from its built-in themes. Shells that start together and meet the same torn file all end up with icons: one moves it aside and reports it, the others retry quietly. Nothing is deleted. By hand, in a shell without icons:
 
 ```powershell
 Import-Module Terminal-Icons        # shows the error

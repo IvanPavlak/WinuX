@@ -12,10 +12,13 @@ function Import-TerminalIcons {
 		its own.
 
 		Import-Module Terminal-Icons -Global is the whole happy path. When it throws,
-		Repair-TerminalIconsThemeCache probes the module's theme cache: a file torn by two shells
-		importing at the same instant makes every import fail until it is moved aside. If the
-		repair moved something, the import runs once more and a success line says so. If it found
-		nothing to move, or the second import fails as well, the error is logged with
+		Repair-TerminalIconsThemeCache probes the module's theme cache - a file torn by two shells
+		importing at the same instant makes every import fail until it is moved aside - and the
+		import runs again, up to three attempts in all. The import is retried whether or not this
+		shell moved anything: when several shells start together, another one may have moved the
+		torn file aside first, or may still be rewriting the cache this shell just read. A success
+		line reports a repair this shell made; an import that succeeded only on a later attempt
+		without one is a Debug line. When every attempt fails, the error is logged with
 		Write-LogError (console, session log and error log) - a shell without icons always leaves
 		a trace. A module that is not installed is a Debug line and $false;
 		Install-PowerShellModules installs it.
@@ -28,8 +31,8 @@ function Import-TerminalIcons {
 		PSReadLine.
 
 	.OUTPUTS
-		[bool] - $true when Terminal-Icons is loaded, $false when it is not installed or the
-		import failed.
+		[bool] - $true when Terminal-Icons is loaded, $false when it is not installed or every
+		import attempt failed.
 
 	.EXAMPLE
 		Import-TerminalIcons
@@ -51,35 +54,44 @@ function Import-TerminalIcons {
 		return $false
 	}
 
+	# One import and two repair-and-retry rounds: the second round covers a shell whose first retry
+	# met another shell's rewrite of the cache mid-write.
+	$maxAttempts = 3
 	$imported = $false
-	$printed = $false
-	try {
-		Import-Module -Name Terminal-Icons -Global -ErrorAction Stop
-		$imported = $true
-		Write-LogDebug "Terminal-Icons imported"
-	}
-	catch {
-		$firstError = $_
-		$printed = $true
-		Write-LogDebug "Terminal-Icons failed to import => $($firstError.Exception.Message) - probing its theme cache"
-		$quarantined = @(Repair-TerminalIconsThemeCache)
+	$lastError = $null
+	$quarantined = [System.Collections.Generic.List[System.IO.FileInfo]]::new()
 
-		if ($quarantined.Count -eq 0) {
-			Write-LogError "Terminal-Icons failed to import, and its theme cache parses => $($firstError.Exception.Message)" -Exception $firstError
+	for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+		try {
+			Import-Module -Name Terminal-Icons -Global -ErrorAction Stop
+			$imported = $true
+			Write-LogDebug "Terminal-Icons imported on attempt [$attempt]"
+			break
 		}
-		else {
-			try {
-				Import-Module -Name Terminal-Icons -Global -ErrorAction Stop
-				$imported = $true
-				Write-LogSuccess "Terminal-Icons imported after moving [$($quarantined.Count)] unreadable theme cache file(s) aside"
-			}
-			catch {
-				Write-LogError "Terminal-Icons still fails to import after its theme cache was repaired => $($_.Exception.Message)" -Exception $_
+		catch {
+			$lastError = $_
+			Write-LogDebug "Terminal-Icons import attempt [$attempt] failed => $($lastError.Exception.Message)"
+		}
+
+		if ($attempt -lt $maxAttempts) {
+			foreach ($moved in @(Repair-TerminalIconsThemeCache)) {
+				$quarantined.Add($moved)
 			}
 		}
 	}
 
-	if ($printed -and $RedrawPrompt) {
+	if ($imported -and $quarantined.Count -gt 0) {
+		Write-LogSuccess "Terminal-Icons imported after moving [$($quarantined.Count)] unreadable theme cache file(s) aside"
+	}
+	elseif (-not $imported -and $quarantined.Count -eq 0) {
+		Write-LogError "Terminal-Icons failed to import [$maxAttempts] times, and its theme cache parses => $($lastError.Exception.Message)" -Exception $lastError
+	}
+	elseif (-not $imported) {
+		Write-LogError "Terminal-Icons still fails to import after its theme cache was repaired => $($lastError.Exception.Message)" -Exception $lastError
+	}
+
+	# A quiet late success (another shell made the repair) printed nothing but Debug lines.
+	if ($RedrawPrompt -and ($quarantined.Count -gt 0 -or -not $imported)) {
 		$null = Restore-ShellPrompt
 	}
 

@@ -29,8 +29,8 @@ function Open-Acrobat {
         Shows the PDF group and recent-PDF selection menu.
 
     .EXAMPLE
-        Open-Acrobat -Pdf "ExampleCharacter"
-        Opens the PDF configured under the "ExampleCharacter" key in AcrobatPdfGroups.
+        Open-Acrobat -Pdf "ExampleRulebook"
+        Opens the PDFs of the "ExampleRulebook" group in AcrobatPdfGroups.
     #>
 	[CmdletBinding()]
 	param(

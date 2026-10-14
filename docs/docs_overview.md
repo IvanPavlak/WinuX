@@ -120,9 +120,10 @@ The profile (`Microsoft.PowerShell_profile.ps1`) executes this exact sequence. E
 
 ```
 1. Locate Configuration.psd1, resolve the repo from its real path (Get-RepositoryPath), add Modules/ to $env:PSModulePath
-2. Dot-source Helper\Functions\{Test-StartupStage, Complete-StartupStage, Get-ConfigSetting, Test-ConfigValue, Resolve-WorkspaceTemplate, Expand-WorkspaceTemplates}.ps1
+2. Dot-source Helper\Functions\{Test-StartupStage, Complete-StartupStage, Get-ConfigSetting, Test-ConfigValue, Resolve-WorkspaceTemplate, Expand-WorkspaceTemplates, Restore-ShellPrompt}.ps1
    (the only Helper functions used before the prompt - dot-sourced so the 80+-file Helper module is NOT autoloaded at startup;
-   the two workspace-template functions run inside Load-PathConfiguration's template expansion)
+   the two workspace-template functions run inside Load-PathConfiguration's template expansion, and Restore-ShellPrompt lets
+   the deferred work below draw the prompt again without importing Helper from idle time)
 3. Stage Core (Required - always runs, always timed)
    ├─ Import Configuration.psd1 → $global:Configuration
    ├─ Import-Module Logging → Import-Module Bootstrap

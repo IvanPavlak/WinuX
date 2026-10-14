@@ -3,6 +3,7 @@
 BeforeAll {
 	$ModuleRoot = (Get-RepositoryPath).Modules
 	. (Join-Path $ModuleRoot "System\Functions\Repair-TerminalIconsThemeCache.ps1")
+	. (Join-Path $ModuleRoot "System\Functions\Test-TerminalIconsCacheFile.ps1")
 }
 
 Describe "Repair-TerminalIconsThemeCache" {
@@ -10,6 +11,9 @@ Describe "Repair-TerminalIconsThemeCache" {
 		Mock Write-LogDebug { }
 		Mock Write-LogWarning { }
 		Mock Write-LogError { }
+		# The settle pause between the two reads; tests that need something to happen "meanwhile"
+		# override it.
+		Mock Start-Sleep { }
 
 		# $TestDrive persists across the tests of a Describe, so each test gets its own cache folder
 		# holding the two files a healthy cache has: a theme and the preferences.
@@ -19,33 +23,72 @@ Describe "Repair-TerminalIconsThemeCache" {
 		$script:prefs = Join-Path $script:cache "prefs.xml"
 		@{ Name = "devblackops"; Types = @{ Directories = @{ ".git" = "FF4500" } } } | Export-Clixml -Path $script:theme
 		@{ CurrentColorTheme = "devblackops"; CurrentIconTheme = "devblackops" } | Export-Clixml -Path $script:prefs
+		$script:torn = Join-Path $script:cache "devblackops_light_color.xml"
 	}
 
-	It "leaves a cache whose files all parse alone and returns nothing" {
+	It "leaves a cache whose files all parse alone, without pausing, and returns nothing" {
 		$result = @(Repair-TerminalIconsThemeCache -Path $script:cache)
 
 		$result.Count | Should -Be 0
 		(Get-ChildItem -Path $script:cache).Name | Sort-Object | Should -Be @("devblackops_color.xml", "prefs.xml")
+		Should -Invoke Start-Sleep -Times 0
 		Should -Invoke Write-LogWarning -Times 0
 		Should -Invoke Write-LogError -Times 0
 	}
 
-	It "moves a file that does not parse aside under a .corrupt-<stamp> name and returns it" {
+	It "moves a file that still does not parse after the pause aside under a .corrupt-<stamp>-<pid> name and returns it" {
 		# A torn file: the first half of a valid theme, the way a write interrupted by another
 		# shell's write leaves it.
-		$torn = Join-Path $script:cache "devblackops_light_color.xml"
 		$text = Get-Content -Path $script:theme -Raw
-		Set-Content -Path $torn -Value $text.Substring(0, [int]($text.Length / 2)) -NoNewline
+		Set-Content -Path $script:torn -Value $text.Substring(0, [int]($text.Length / 2)) -NoNewline
 
 		$result = @(Repair-TerminalIconsThemeCache -Path $script:cache)
 
 		$result.Count | Should -Be 1
 		$result[0] | Should -BeOfType [System.IO.FileInfo]
-		$result[0].Name | Should -Match '^devblackops_light_color\.xml\.corrupt-\d{8}-\d{6}$'
+		$result[0].Name | Should -Match ('^devblackops_light_color\.xml\.corrupt-\d{8}-\d{6}-' + $PID + '$')
 		$result[0].DirectoryName | Should -Be $script:cache
-		Test-Path -LiteralPath $torn | Should -BeFalse
+		Test-Path -LiteralPath $script:torn | Should -BeFalse
 		Test-Path -LiteralPath $result[0].FullName | Should -BeTrue
+		Should -Invoke Start-Sleep -Times 1 -Exactly
 		Should -Invoke Write-LogWarning -Times 1 -Exactly
+	}
+
+	It "leaves a file alone that another shell finished writing during the pause" {
+		Set-Content -Path $script:torn -Value "<Objs><Obj>half written"
+		Mock Start-Sleep { Copy-Item -LiteralPath $script:theme -Destination $script:torn -Force }
+
+		$result = @(Repair-TerminalIconsThemeCache -Path $script:cache)
+
+		$result.Count | Should -Be 0
+		Test-Path -LiteralPath $script:torn | Should -BeTrue
+		Should -Invoke Write-LogWarning -Times 0
+		Should -Invoke Write-LogError -Times 0
+	}
+
+	It "treats a file another shell moved aside during the pause as handled, without an error" {
+		Set-Content -Path $script:torn -Value "<Objs><Obj>never closed"
+		Mock Start-Sleep { Rename-Item -LiteralPath $script:torn -NewName "devblackops_light_color.xml.corrupt-other" }
+
+		$result = @(Repair-TerminalIconsThemeCache -Path $script:cache)
+
+		$result.Count | Should -Be 0
+		Should -Invoke Write-LogError -Times 0
+		Should -Invoke Write-LogWarning -Times 0
+	}
+
+	It "treats a file another shell moved aside between the second read and the rename as handled" {
+		Set-Content -Path $script:torn -Value "<Objs><Obj>never closed"
+		Mock Rename-Item {
+			Remove-Item -LiteralPath $LiteralPath -Force
+			throw "Cannot rename because item at '$LiteralPath' does not exist."
+		}
+
+		$result = @(Repair-TerminalIconsThemeCache -Path $script:cache)
+
+		$result.Count | Should -Be 0
+		Should -Invoke Write-LogError -Times 0
+		Should -Invoke Write-LogWarning -Times 0
 	}
 
 	It "keeps the files that parse in place while one is moved aside" {
@@ -58,14 +101,15 @@ Describe "Repair-TerminalIconsThemeCache" {
 		(Get-ChildItem -Path $script:cache -Filter "*.xml").Name | Sort-Object | Should -Be @("devblackops_color.xml", "prefs.xml")
 	}
 
-	It "moves every unreadable file aside, not only the first" {
+	It "moves every unreadable file aside after a single pause, not only the first" {
 		Set-Content -Path (Join-Path $script:cache "devblackops_icon.xml") -Value "<Objs><Obj>never closed"
-		Set-Content -Path (Join-Path $script:cache "devblackops_light_color.xml") -Value "not xml at all"
+		Set-Content -Path $script:torn -Value "not xml at all"
 
 		$result = @(Repair-TerminalIconsThemeCache -Path $script:cache)
 
 		$result.Count | Should -Be 2
 		($result.Name | Sort-Object) -join "," | Should -Match '^devblackops_icon\.xml\.corrupt-[\d-]+,devblackops_light_color\.xml\.corrupt-[\d-]+$'
+		Should -Invoke Start-Sleep -Times 1 -Exactly
 		Should -Invoke Write-LogWarning -Times 2 -Exactly
 	}
 
@@ -87,15 +131,14 @@ Describe "Repair-TerminalIconsThemeCache" {
 		Should -Invoke Write-LogError -Times 0
 	}
 
-	It "logs an error, leaves the file and returns nothing for it when it cannot be moved" {
-		$torn = Join-Path $script:cache "devblackops_icon.xml"
-		Set-Content -Path $torn -Value "<Objs><Obj>never closed"
+	It "logs an error, leaves the file and returns nothing for it when it is still there but cannot be moved" {
+		Set-Content -Path $script:torn -Value "<Objs><Obj>never closed"
 		Mock Rename-Item { throw "The process cannot access the file" }
 
 		$result = @(Repair-TerminalIconsThemeCache -Path $script:cache)
 
 		$result.Count | Should -Be 0
-		Test-Path -LiteralPath $torn | Should -BeTrue
+		Test-Path -LiteralPath $script:torn | Should -BeTrue
 		Should -Invoke Write-LogError -Times 1 -Exactly
 		Should -Invoke Write-LogWarning -Times 0
 	}

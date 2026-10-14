@@ -14,10 +14,17 @@ function Restore-ShellPrompt {
 
 		Nothing happens outside PSReadLine - the type is not loaded in a plain host or in a test
 		runner - and a redraw that fails is swallowed: the function never throws, so a caller runs
-		it unconditionally after printing.
+		it unconditionally after printing. The profile dot-sources this file before the first
+		prompt, so the redraw never autoloads the Helper module.
+
+	.PARAMETER ReadLine
+		The line editor type whose static InvokePrompt draws the prompt. Defaults to PSReadLine's
+		Microsoft.PowerShell.PSConsoleReadLine when it is loaded, and to $null - nothing to redraw
+		- when it is not. A parameter so tests can pass a stand-in type instead of driving the
+		real console.
 
 	.OUTPUTS
-		[bool] - $true when the prompt was drawn again, $false when PSReadLine is not loaded or
+		[bool] - $true when the prompt was drawn again, $false when there is no line editor or
 		the redraw failed.
 
 	.EXAMPLE
@@ -26,16 +33,20 @@ function Restore-ShellPrompt {
 	#>
 	[CmdletBinding()]
 	[OutputType([bool])]
-	param()
+	param(
+		[Parameter()]
+		[AllowNull()]
+		[type]$ReadLine = ('Microsoft.PowerShell.PSConsoleReadLine' -as [type])
+	)
 
-	$readLine = 'Microsoft.PowerShell.PSConsoleReadLine' -as [type]
-	if (-not $readLine) {
+	if (-not $ReadLine) {
 		return $false
 	}
 
 	try {
+		$row = [Console]::CursorTop
 		[Console]::Write("`r")
-		$readLine::InvokePrompt($null, [Console]::CursorTop)
+		$ReadLine::InvokePrompt($null, $row)
 		return $true
 	}
 	catch {

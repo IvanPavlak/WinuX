@@ -51,8 +51,10 @@ the destination gone, the ladder had nothing left to measure, and its practice o
 breaking changes in 0.1.x PATCH releases (MINOR was reserved for milestones) was telling forks
 the opposite of what they needed to know.
 
-1.0.0 therefore followed 0.1.94 directly. It carried no engine change: it declared the contract
-above stable and switched to the strict bump table and the deprecation policy. Everything that
+1.0.0 therefore followed 0.1.94 directly. It declared the contract above stable and switched to
+the strict bump table and the deprecation policy; its one engine change was a fix that rode along
+(the Terminal-Icons import repairs a torn theme cache), and no configuration key or exported
+function changed shape. Everything that
 shipped as `### Breaking` in the 0.x series stays as it shipped - the policy applies from 1.0.0
 onward.
 

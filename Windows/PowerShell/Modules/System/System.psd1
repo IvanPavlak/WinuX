@@ -87,6 +87,7 @@
 		'Test-MachineOnline',
 		'Test-PowerPlan',
 		'Test-RpcServerHealth',
+		'Test-TerminalIconsCacheFile',
 		'Test-WindowTitleMatch',
 		'Unpin-TaskbarApps',
 		'Update-DirectoryNames',
