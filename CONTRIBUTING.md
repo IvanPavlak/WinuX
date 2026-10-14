@@ -233,8 +233,12 @@ Match the existing history:
    `List-Functions -ListDiscrepancies` if you touched functions.
 5. **Add a changelog entry** under `## [Unreleased]` in `CHANGELOG.md`. Never remove or rename
    a `Configuration.psd1` key or an exported function outright: deprecate it first (the old
-   shape keeps working; add a `### Deprecated` entry with the migration) and leave the removal
-   to the next MAJOR release. See [VERSIONING.md](VERSIONING.md).
+   shape keeps working; add a `### Deprecated` entry with the migration, and record the item in
+   the `Deprecated` map of `Windows/PowerShell/Modules/Tests/ContractBaseline.json` with the
+   version it ships in) and leave the removal to the next MAJOR release. The
+   `Infrastructure-Contract` test fails a PR that breaks the contract or a release whose bump
+   disagrees with its changelog sections - see "What the policy costs" and "How it is
+   enforced" in [VERSIONING.md](VERSIONING.md).
 6. **Push** to your fork and **open a PR** against `IvanPavlak/WinuX:master`. The PR template
    loads automatically - please fill it in completely.
 7. **Reference issues** the PR closes (e.g. `Closes #123`). For bugs and features, please

@@ -7,9 +7,9 @@ The Tests module provides **Pester test execution** for WinuX. It validates AI, 
 
 ## [Run-Tests](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Tests/Functions/Run-Tests.ps1)
 
-- **Description:** Discovers all `.Tests.ps1` Pester tests in the PowerShell Modules Tests directory (every module's test folder plus the Infrastructure checks), and by default also the fork-owned Custom area (`Modules/Custom/<Module>/Tests`), then hands them to [Invoke-TestSuite](#invoke-testsuite) to run in parallel worker processes. Supports filtering by test name pattern, worker count (learned per machine when not given), echoing the full run log, returning the aggregate result object, skipping the Integration tier (`-Quick`), running only what the changes since a base can affect (`-Changed`, `-Since`), and recording the runtime impact map that backs `-Changed` (`-BuildImpactMap`). A bare `Run-Tests` is always the full suite, the gate before merging.
-- **Parameters:** -TestName, -Path, -Workers, -Detailed, -PassThru, -Quick, -Changed, -Since, -BuildImpactMap
-- **Usage:** `Run-Tests`, `Run-Tests -TestName "Open-Terminal"`, `Run-Tests -TestName "Open-Terminal", "Close-Workspace"`, `Run-Tests -Changed`, `Run-Tests -Changed -Quick`, `Run-Tests -Quick`, `Run-Tests -BuildImpactMap`, `Run-Tests -Detailed`, `$results = Run-Tests -PassThru`
+- **Description:** Discovers all `.Tests.ps1` Pester tests in the PowerShell Modules Tests directory (every module's test folder plus the Infrastructure checks), and by default also the fork-owned Custom area (`Modules/Custom/<Module>/Tests`), then hands them to [Invoke-TestSuite](#invoke-testsuite) to run in parallel worker processes. Supports filtering by test name pattern, worker count (learned per machine when not given), echoing the full run log, returning the aggregate result object, skipping the Integration tier (`-Quick`), running only what the changes since a base can affect (`-Changed`, `-Since`), recording the runtime impact map that backs `-Changed` (`-BuildImpactMap`), and the release step that records the contract the [contract gate](#the-contract-gate) holds every later change to (`-UpdateContractBaseline`). A bare `Run-Tests` is always the full suite, the gate before merging.
+- **Parameters:** -TestName, -Path, -Workers, -Detailed, -PassThru, -Quick, -Changed, -Since, -BuildImpactMap, -UpdateContractBaseline
+- **Usage:** `Run-Tests`, `Run-Tests -TestName "Open-Terminal"`, `Run-Tests -TestName "Open-Terminal", "Close-Workspace"`, `Run-Tests -Changed`, `Run-Tests -Changed -Quick`, `Run-Tests -Quick`, `Run-Tests -BuildImpactMap`, `Run-Tests -UpdateContractBaseline` (release step), `Run-Tests -Detailed`, `$results = Run-Tests -PassThru`
 
 Recursively discovers `*.Tests.ps1` files under the Tests directory and, when present, the `Modules/Custom` fork area (or only under a custom `-Path` when one is given), and invokes the harness. The terminal shows a spinner with a live test counter and then the verdict; the counter's total is counted from the test files before the run starts, so it is right for the files about to run rather than carried over from the previous run, and the per-test detail goes to the run log. With `-PassThru`, the aggregate result object is returned for scripting (e.g. CI/CD).
 
@@ -24,6 +24,7 @@ Recursively discovers `*.Tests.ps1` files under the Tests directory and, when pr
 | `-Changed`        | Run only the test files the changes since `-Since` can affect, conservatively, after printing each selected file and why. Combines with `-TestName` and `-Path` as a union. See [Running only what a change affects](#running-only-what-a-change-affects). |
 | `-Since`          | The ref `-Changed` compares against (its merge base with `HEAD`). Defaults to the main branch: `master`, falling back to `origin/master`, `main`, then `origin/main` - the first that exists. |
 | `-BuildImpactMap` | Run the full suite while recording which functions each test file invokes, into `Results/impact-map.json`. About twice as slow as a normal run; cannot be combined with a filter, `-Changed` or `-Quick`. |
+| `-UpdateContractBaseline` | Release step that runs no tests: rewrite `ContractBaseline.json` from the working tree, stamped with the newest released version in `CHANGELOG.md`, keeping the deprecation records that still apply. See [The contract gate](#the-contract-gate). Combines with nothing. |
 
 ```powershell
 # Run all discovered tests
@@ -49,6 +50,9 @@ Run-Tests -Changed -Quick
 
 # Refresh the runtime impact map -Changed uses as its backstop (about twice a normal run)
 Run-Tests -BuildImpactMap
+
+# Release step: record the contract the gate holds later changes to (runs no tests)
+Run-Tests -UpdateContractBaseline
 
 # Capture the result object for CI/CD gating
 $results = Run-Tests -PassThru
@@ -115,6 +119,16 @@ The selection is printed before anything runs - each file and why it was picked 
 
 A miss means a rule in `Get-TestImpact` should be fixed; see [A Change Was Not Caught By Run-Tests -Changed](../reference/troubleshooting.md#a-change-was-not-caught-by-run-tests--changed).
 
+### The contract gate
+
+`Infrastructure-Contract.Tests.ps1` enforces the versioning policy in `VERSIONING.md` on every run that includes the Infrastructure tests, CI included. `ContractBaseline.json` (beside the harness) records the contract at the last release - every exported function of every module except the Custom area, with its parameters, whether each is mandatory and its `[Alias()]` names; every exported alias; every key of the shipped `Configuration.psd1` two levels deep - and the `Deprecated` map, item to the version that deprecated it. The gate fails when:
+
+- a function, parameter or key in the baseline is gone, or a parameter became mandatory - unless `[Unreleased]` in `CHANGELOG.md` names the item in backticks under `### Removed` and its deprecation shipped in an earlier release, or names it under `### Breaking`;
+- a release from 1.0.0 on has a version bump its changelog sections do not allow (a removal outside a MAJOR, a MAJOR that removes nothing, an addition, change or deprecation in a PATCH);
+- the baseline was not refreshed in the newest release's commit.
+
+Its logic lives in four harness helpers - `Get-ChangelogReleases`, `Get-ContractSnapshot`, `Test-ContractCompatibility`, `Test-ChangelogVersionBumps` - plus `New-ContractBaseline`, which `Run-Tests -UpdateContractBaseline` uses to write the file; they are tested in `Modules/Tests/ContractGate.Tests.ps1`. When it fails, see [The Contract Gate Fails](../reference/troubleshooting.md#the-contract-gate-fails).
+
 ### Worker start-up
 
 A worker is a `pwsh -NoProfile` that imports the ten engine modules and Pester, so start-up is a fixed cost every worker pays and it grows with contention. Two things keep it down: the Window module loads `WindowNative.cs` as a cached, precompiled assembly instead of compiling it in every process (see the [Window module](window.md#native-assembly-cache)), and Window test files reset the module's state with the `Tests/Modules/Support/Reset-WindowModuleState.ps1` helper instead of re-importing the whole module.
@@ -169,7 +183,9 @@ Modules/Tests/
 ├── Invoke-TestSuite.ps1    # Parallel harness (script, not an exported function)
 ├── Get-*.ps1, Read-*.ps1,  # The harness's helpers, dot-sourced by it (plain scripts, because CI
 │   Write-*.ps1, ...        #   runs the harness with no WinuX module loaded): test counting,
-│                           #   weights, worker learner, run-condition sampler, -Changed selector
+│                           #   weights, worker learner, run-condition sampler, -Changed selector,
+│                           #   contract gate
+├── ContractBaseline.json   # The contract at the last release (Run-Tests -UpdateContractBaseline)
 ├── Results/                # Generated run artifacts (gitignored)
 ├── Functions/
 │   └── Run-Tests.ps1       # Test runner function
@@ -182,7 +198,8 @@ Modules/Tests/
     ├── Helper/              # Helper module tests
     ├── Infrastructure/      # Repository-wide coherence checks (Infrastructure-*.Tests.ps1:
     │                        #   docs links, manifest completeness, function reference pages,
-    │                        #   configuration guides) - run all with -TestName "Infrastructure"
+    │                        #   configuration guides, the contract gate) - run all with
+    │                        #   -TestName "Infrastructure"
     ├── Logging/             # Logging module tests
     ├── Support/             # Shared test fixtures (fake virtual desktop, fake wait clock,
     │                        #   Reset-WindowModuleState.ps1)

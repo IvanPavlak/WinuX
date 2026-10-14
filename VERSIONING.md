@@ -28,7 +28,10 @@ through two steps:
    profile runs that check at every load, and the mechanism will also run it at the start of
    `Bootstrap`. The next deprecation adds the warning mechanism together with its entry and
    covers the keys carried over from 0.x (below). Where the old shape is a function, the old
-   name stays as an alias or a thin wrapper that warns once per session.
+   name stays as an alias or a thin wrapper that warns once per session. The same change
+   records the item in the `Deprecated` map of `Windows/PowerShell/Modules/Tests/ContractBaseline.json`
+   with the version the deprecation ships in - that record is what later lets the gate accept
+   its removal (see "How it is enforced").
 2. **Remove (MAJOR).** The old shape is removed in the next MAJOR, under `### Removed`, with
    the migration repeated. A deprecation survives at least one MINOR release before its
    removal, so a fork that merges every release sees the warning before the break.
@@ -41,6 +44,54 @@ as uneventfully as a PATCH.
 The only exception is a change that cannot keep the old shape working - a security fix, or a
 Windows change that invalidates the old behavior outright. That bumps MAJOR immediately, under
 `### Breaking`, with migration notes.
+
+### What the policy costs
+
+Discipline. A configuration key or an exported function can no longer be removed or reshaped in
+one step: a rename ships the new name next to the old one, a parameter that has to go keeps
+working until the next MAJOR, and every removal waits for that MAJOR - however obvious the
+cleanup looks today. Old shapes live on in the code for at least one MINOR, usually longer,
+because MAJORs are rare on purpose.
+
+That is the price of the promise in the bump table, and it is paid by whoever changes the
+contract, not by every fork that merges the change. A policy that is only written down does not
+hold that line: a single careless PR that drops a key would make its release a MAJOR, and with
+enough of them every release is one, which tells forks nothing. So the policy is enforced.
+
+### How it is enforced
+
+`Windows/PowerShell/Modules/Tests/ContractBaseline.json` records the contract at the last
+release: every exported function (every module except the fork-owned Custom area) with its
+parameters, whether each is mandatory and its `[Alias()]` names; every exported alias; and every
+key of the shipped `Configuration.psd1`, two levels deep. It also holds the `Deprecated` map -
+item to the version that deprecated it - under `Functions`, `Parameters` (`Name -Parameter`) and
+`ConfigurationKeys` (`Top.Child`).
+
+The `Infrastructure-Contract` test, part of `Run-Tests -TestName "Infrastructure"` and of every
+CI run, fails a change that:
+
+- **Breaks the contract** - removes an exported function, a parameter or a configuration key, or
+  makes a parameter mandatory. Additions never fail; a renamed parameter that keeps the old name
+  as an `[Alias()]`, or a function kept as an exported alias, is not a removal. Two exceptions,
+  both read from `[Unreleased]` in `CHANGELOG.md`, because they are what make the next release a
+  MAJOR: a `### Removed` entry naming an item in backticks whose deprecation has already shipped
+  in a release (its `Deprecated` version is no later than the baseline's), or a `### Breaking`
+  entry naming it.
+- **Misnames its release** - for every release from 1.0.0 on: `### Removed` or `### Breaking`
+  outside a MAJOR; a MAJOR with neither, which is exactly the gratuitous MAJOR this policy
+  exists to prevent; `### Added`, `### Changed` or `### Deprecated` in a PATCH; a MAJOR or MINOR
+  that does not reset the lower parts to 0, or a version that does not go up.
+- **Forgets the baseline** - the baseline's version must be the newest release in
+  `CHANGELOG.md`, so a release commit that does not refresh it fails.
+
+Taking a snapshot is the release step `Run-Tests -UpdateContractBaseline`, which runs no tests:
+it rewrites the file from the working tree, stamps it with the newest released version, and
+carries the `Deprecated` records forward - dropping the ones the release removed, keeping the
+rest.
+
+The gate sees what a script can read. It cannot see a key the code reads that the shipped
+`Configuration.psd1` does not list, a parameter that keeps its name but changes its meaning, or
+a bootstrap step that behaves differently; those stay on the reviewer and on this document.
 
 ### From 0.1.94 to 1.0.0
 
@@ -74,7 +125,9 @@ Release candidates, when a MAJOR warrants one, use SemVer pre-release tags: `2.0
 - Always keep a `## [Unreleased]` section at the top; move its contents under a new
   `## [x.y.z] - YYYY-MM-DD` heading at release time and reset Unreleased.
 - Sections, in order: **Added · Changed · Breaking · Deprecated · Removed · Fixed · Security**
-  (omit empty ones).
+  (omit empty ones). The section names decide the bump, and the contract gate checks them: a
+  PATCH holds only `### Fixed` and `### Security`, so a doc fix or a theming tweak is a fix; a
+  `### Changed` entry makes the release at least a MINOR.
 - A `### Deprecated` entry names the replacement and the migration; the matching
   `### Removed` entry in the later MAJOR repeats the migration, so a fork skipping releases
   finds it in one place.
@@ -84,22 +137,26 @@ Release candidates, when a MAJOR warrants one, use SemVer pre-release tags: `2.0
 1. Move `[Unreleased]` items into a new dated `## [x.y.z]` section; reset Unreleased. Pick the
    bump from the table above: any `### Removed` entry that removes part of the contract, or
    any `### Breaking` entry, means MAJOR; any `### Added`, `### Changed` or `### Deprecated`
-   entry means at least MINOR; otherwise PATCH.
+   entry means at least MINOR; otherwise PATCH. The contract gate fails a bump that disagrees.
 2. Update the compare/tag links at the bottom of `CHANGELOG.md`.
-3. Commit: `Release vX.Y.Z`.
-4. Tag: `git tag -a vX.Y.Z -m "vX.Y.Z"` and push the tag.
-5. The `Release` workflow (`.github/workflows/release.yml`) picks the tag up automatically:
+3. Refresh the contract baseline: `Run-Tests -UpdateContractBaseline`, then
+   `Run-Tests -TestName "Infrastructure"`. The baseline file goes into the release commit.
+4. Commit: `Release vX.Y.Z`.
+5. Tag: `git tag -a vX.Y.Z -m "vX.Y.Z"` and push the tag.
+6. The `Release` workflow (`.github/workflows/release.yml`) picks the tag up automatically:
    it builds `WinuX.exe` (`Windows/WinuX/New-WinuXExecutable.ps1`), extracts the matching
    `CHANGELOG.md` section as the release notes, and creates the GitHub Release with the
    executable and its SHA-256 checksum attached. Creating the release in the GitHub UI first
    also works - the workflow then only attaches the assets.
-6. Verify the release page: notes match the changelog, and `WinuX.exe` + `WinuX.exe.sha256`
+7. Verify the release page: notes match the changelog, and `WinuX.exe` + `WinuX.exe.sha256`
    are attached (`releases/latest/download/WinuX.exe` must resolve).
 
 ## Do we automate?
 
 The **release page and installer** are automated: every `v*` tag builds `WinuX.exe` and
-publishes the GitHub Release with the hand-written changelog section as its body (see step 5).
+publishes the GitHub Release with the hand-written changelog section as its body (see step 6).
+The **versioning policy** is enforced by the contract gate (see "How it is enforced"), so a
+release cannot drift from the bump table unnoticed.
 
 The **changelog itself** stays hand-curated. The history predates Conventional Commits and
 this is a single-maintainer, end-user-facing project where a hand-curated changelog is higher

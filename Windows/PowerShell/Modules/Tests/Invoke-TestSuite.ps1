@@ -77,6 +77,12 @@
 	Full run that records, per test file, which functions it invoked (Results\impact-map.json),
 	the runtime backstop -Changed unions with its static analysis. About twice as slow.
 
+.PARAMETER UpdateContractBaseline
+	Release step, runs no tests: rewrites ContractBaseline.json from the working tree - the
+	exported functions with their parameters and the shipped Configuration.psd1's keys, stamped
+	with the newest released version in CHANGELOG.md - keeping the Deprecated records that still
+	apply. The Infrastructure-Contract gate holds every later change to it.
+
 .PARAMETER Worker
 	Internal. Marks this invocation as a worker child; not for interactive use.
 
@@ -161,6 +167,9 @@ param(
 
 	[Parameter(ParameterSetName = 'Orchestrate')]
 	[switch]$BuildImpactMap,
+
+	[Parameter(ParameterSetName = 'Orchestrate')]
+	[switch]$UpdateContractBaseline,
 
 	[Parameter(ParameterSetName = 'Worker', Mandatory = $true)]
 	[switch]$Worker,
@@ -457,7 +466,8 @@ foreach ($helper in @(
 		'Get-ExpectedTestCount', 'Get-MedianTestDuration', 'Get-TestFileWeight',
 		'Get-AdaptiveWorkerCount', 'Read-WorkerHistory', 'Write-WorkerHistory', 'Test-WorkerSampleRecordable',
 		'Start-RunConditionSampler', 'Stop-RunConditionSampler', 'Get-RunConditionSummary',
-		'Get-ChangedPaths', 'Get-TestReferenceMap', 'Get-TestImpact', 'Read-ImpactMap', 'Get-WorkingTreeFingerprint', 'Get-SelectorMisses')) {
+		'Get-ChangedPaths', 'Get-TestReferenceMap', 'Get-TestImpact', 'Read-ImpactMap', 'Get-WorkingTreeFingerprint', 'Get-SelectorMisses',
+		'Get-ChangelogReleases', 'Get-ContractSnapshot', 'New-ContractBaseline')) {
 	. (Join-Path -Path $PSScriptRoot -ChildPath "$helper.ps1")
 }
 
@@ -470,6 +480,32 @@ $script:LastSelectionFile = Join-Path -Path $script:ResultsRoot -ChildPath 'last
 $script:LastGreenFile = Join-Path -Path $script:ResultsRoot -ChildPath 'last-green.json'
 $script:RequiredPester = $null
 try { $script:RequiredPester = (Get-Content -LiteralPath (Join-Path $PSScriptRoot 'RequiredPesterVersion.txt') -ErrorAction Stop | Select-Object -First 1).Trim() } catch { }
+
+# -UpdateContractBaseline is the release step that records the contract the Infrastructure-Contract
+# gate holds every later change to. It runs no tests, so it combines with nothing.
+if ($UpdateContractBaseline) {
+	if ($CI -or $TestName -or $Path -or $Changed -or $Quick -or $BuildImpactMap) {
+		Write-Host -ForegroundColor Red "`n=> -UpdateContractBaseline runs no tests; it cannot be combined with any other switch."
+		exit 2
+	}
+	$repoRoot = Split-Path -Path (Split-Path -Path $script:PowerShellRoot -Parent) -Parent
+	$baselineFile = Join-Path -Path $PSScriptRoot -ChildPath 'ContractBaseline.json'
+	$released = @((Get-ChangelogReleases -Path (Join-Path $repoRoot 'CHANGELOG.md')).Releases)
+	if ($released.Count -eq 0) {
+		Write-Host -ForegroundColor Red "`n=> CHANGELOG.md has no released version to stamp the baseline with."
+		exit 2
+	}
+	$previous = $null
+	if (Test-Path -LiteralPath $baselineFile) {
+		try { $previous = Get-Content -LiteralPath $baselineFile -Raw | ConvertFrom-Json } catch { $previous = $null }
+	}
+	$snapshot = Get-ContractSnapshot -ModulesRoot $script:ModulesRoot -ConfigurationPath (Join-Path $script:PowerShellRoot 'Configuration.psd1')
+	$baseline = New-ContractBaseline -Snapshot $snapshot -Version $released[0].Version -Previous $previous
+	$json = $baseline | ConvertTo-Json -Depth 8
+	[System.IO.File]::WriteAllText($baselineFile, $json + "`n", [System.Text.UTF8Encoding]::new($false))
+	Write-Host -ForegroundColor Green ("`n=> Contract baseline [{0}] written: {1} functions, {2} configuration keys, {3} deprecation record(s) => [{4}]" -f $baseline.Version, $baseline.Functions.Count, @($baseline.ConfigurationKeys).Count, ($baseline.Deprecated.Values | ForEach-Object { $_.Count } | Measure-Object -Sum).Sum, $baselineFile)
+	exit 0
+}
 
 # -BuildImpactMap and -Changed/-Quick describe different runs: a map can only be built from the
 # full suite, and a selection is pointless when every file runs anyway.

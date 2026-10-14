@@ -1301,6 +1301,21 @@ exit
 # Open new terminal
 ```
 
+## Contributing And Release Issues
+
+### The Contract Gate Fails
+
+**Problem:** `Run-Tests -TestName "Infrastructure"` (or the `Pester Tests` check on a pull request) fails in `Infrastructure-Contract.Tests.ps1` with a line such as "Exported function [Name] was removed", "Parameter [-Name] of [Function] is mandatory now", "Configuration key [Top.Child] is no longer in the shipped Configuration.psd1", "[x.y.z] is a MAJOR release but removes and breaks nothing" or "has a baseline taken at the newest release".
+
+**Why it happens:** Since 1.0.0 the contract a fork depends on - the exported functions with their parameters and the shipped `Configuration.psd1`'s keys - only breaks in a MAJOR, and only after a deprecation that shipped in an earlier release. The gate compares the working tree with `Windows/PowerShell/Modules/Tests/ContractBaseline.json`, the contract recorded at the last release, and checks every release's version bump against its changelog sections. See "What the policy costs" and "How it is enforced" in `VERSIONING.md`.
+
+**Solution:** Match the message:
+
+- **A function, parameter or key was removed or renamed** - keep the old shape working instead: a wrapper function that warns once per session, an `[Alias('OldName')]` on a renamed parameter, or the key still read with the new one taking precedence. Add a `### Deprecated` entry with the migration and a record in the baseline's `Deprecated` map with the version it ships in. The removal comes in the next MAJOR, as a `### Removed` entry naming the item in backticks (`` `Name` ``, `` `Function -Parameter` `` or `` `Top.Child` ``).
+- **A parameter is mandatory now** - give it a default and keep it optional. A mandatory addition is an immediate break and needs a `### Breaking` entry naming it.
+- **A version bump disagrees with its sections** - a release with `### Removed` or `### Breaking` is a MAJOR; a MAJOR needs one of them; `### Added`, `### Changed` or `### Deprecated` makes it at least a MINOR, and a PATCH holds only `### Fixed` and `### Security`. Fix the version or move the entries.
+- **The baseline is not at the newest release** - the release commit forgot the snapshot: run `Run-Tests -UpdateContractBaseline` and commit `ContractBaseline.json` with the release.
+
 ## Debugging Commands
 
 ### Validate Everything
