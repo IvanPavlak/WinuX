@@ -25,7 +25,8 @@ function Write-AppliedFancyZonesLayouts {
 		file alone unless -Force is given, in which case the file is rewritten anyway so that
 		FancyZones reloads it. Every other entry in the file is preserved in place. The write is
 		atomic - the content goes to a temporary file in the same directory that then replaces
-		applied-layouts.json - and the file's last-write time is bumped afterwards, because the
+		applied-layouts.json (retried once after 50 ms; only when both attempts fail is the file
+		written in place as a last resort) - and the file's last-write time is bumped afterwards, because the
 		FancyZones watcher only wakes on last-write-time changes and a rename alone would go
 		unnoticed. A file that cannot be parsed is never overwritten: FancyZones treats a malformed
 		file as empty, so a broken write would wipe every layout it knows about.

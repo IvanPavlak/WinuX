@@ -4,7 +4,8 @@ function Countdown {
 		Display a colored countdown timer.
 
 	.DESCRIPTION
-		Shows a countdown from specified seconds to zero with optional message.
+		Prints one number per second from the specified seconds down to 1 (zero itself is not
+		printed), after an optional message.
 		Counts >3 in dark cyan, <=3 in red. Used before destructive operations.
 
 	.PARAMETER Seconds

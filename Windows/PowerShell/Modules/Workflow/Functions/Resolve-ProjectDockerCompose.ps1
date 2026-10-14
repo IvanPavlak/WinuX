@@ -44,7 +44,7 @@ function Resolve-ProjectDockerCompose {
 
 	$runnableMapping = (Get-ConfigSetting -Path 'RunnableProjectMappings' -Default @()) | Where-Object { $_.Name -eq $ProjectName }
 	if (-not $runnableMapping) {
-		Write-LogError "No runnable project mapping found for [$ProjectName] in Configuration.ps1"
+		Write-LogError "No runnable project mapping found for [$ProjectName] in Configuration.psd1"
 		return $null
 	}
 

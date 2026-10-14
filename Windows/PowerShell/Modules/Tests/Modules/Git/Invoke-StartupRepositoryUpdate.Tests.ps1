@@ -16,6 +16,7 @@ BeforeAll {
 	# Dot-sourced so they exist to Mock even in sessions whose imported modules predate them.
 	. "$ModuleRoot\Git\Functions\Update-Repositories.ps1"
 	. "$ModuleRoot\Bootstrap\Functions\Resolve-RepositoryUpdateScope.ps1"
+	. "$ModuleRoot\Helper\Functions\Restore-ShellPrompt.ps1"
 }
 
 AfterAll {
@@ -39,6 +40,7 @@ Describe "Invoke-StartupRepositoryUpdate" {
 
 		Mock Update-Repositories { }
 		Mock Write-LogError { }
+		Mock Restore-ShellPrompt { $false }
 	}
 
 	Context "enabled and throttled" {
@@ -270,11 +272,26 @@ Describe "Invoke-StartupRepositoryUpdate" {
 			Should -Invoke Write-LogError -Times 1 -Exactly
 		}
 
-		It "accepts -RedrawPrompt without a console line editor to redraw" {
-			# The test host is not inside PSReadLine's ReadLine, so the redraw has nothing to do;
-			# what matters is that the switch can never break the update or the shell.
+		It "draws the prompt again through Restore-ShellPrompt with -RedrawPrompt after a run" {
 			{ Invoke-StartupRepositoryUpdate -RedrawPrompt } | Should -Not -Throw
 			Should -Invoke Update-Repositories -Times 1 -Exactly
+			Should -Invoke Restore-ShellPrompt -Times 1 -Exactly
+		}
+
+		It "does not draw the prompt again when nothing ran" {
+			Set-Content -Path $script:StampFile -Value "stamp"
+
+			Invoke-StartupRepositoryUpdate -RedrawPrompt
+
+			Should -Invoke Update-Repositories -Times 0 -Exactly
+			Should -Invoke Restore-ShellPrompt -Times 0
+		}
+
+		It "never draws the prompt again without the switch" {
+			Invoke-StartupRepositoryUpdate
+
+			Should -Invoke Update-Repositories -Times 1 -Exactly
+			Should -Invoke Restore-ShellPrompt -Times 0
 		}
 
 		It "creates the logs folder when it does not exist yet" {

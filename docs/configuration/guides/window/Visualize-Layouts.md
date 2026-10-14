@@ -12,18 +12,18 @@ Generates ASCII art visualizations of FancyZones layouts and adds them as commen
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`LayoutNumbers`](../../configuration-reference.md#layout-numbers--zone-mappings) | hashtable of name to FancyZones layout number | hashtable, 10 keys (`One` .. `Ten`) | Maps a readable layout name to the FancyZones custom-layout index `Apply-FancyZones` applies. |
+| [`LayoutNumbers`](../../configuration-reference.md#layout-numbers--zone-mappings) | hashtable of layout name to hotkey number | hashtable, 10 keys (`Zero` .. `Nine` = 0 .. 9) | Maps a layout name from `custom-layouts.json` to its `Win+Ctrl+Alt+[Number]` hotkey slot (0-9, unique) that `Apply-FancyZones` sends. `Visualize-Layouts -DisplayAvailableLayouts` lists layouts in this hotkey order. |
 | [`ZoneNameMappings`](../../configuration-reference.md#layout-numbers--zone-mappings) | hashtable of layout name to zone-name map | hashtable, 10 keys | Human-readable zone names per FancyZones layout - what lets a layout file say `Zone = "Left"` instead of an index. `Get-FancyZone`, `Visualize-Layouts` and `Update-LayoutSectionHeaders` all read it. |
 
 ## Decisions
 
-1. Do your FancyZones custom layouts sit at different indexes?
-    - Options: Name to index. The names are what layout files and `Visualize-Layouts` use.
-    - Default: The shipped `One` .. `Ten` mapping to 1 .. 10.
+1. Do your FancyZones custom layouts sit on different hotkey numbers?
+    - Options: Layout name to hotkey number (0-9, unique, matching `layout-hotkeys.json`). The names are what layout files and `Visualize-Layouts` use.
+    - Default: The shipped `Zero` .. `Nine` mapping to 0 .. 9.
     - More detail: [`LayoutNumbers`](../../configuration-reference.md#layout-numbers--zone-mappings)
 2. What should the zones in each of your layouts be called?
     - Options: Layout name to `@{ <ZoneName> = <index> }`. Run `Visualize-Layouts` to see the current mapping drawn out, and see [Configure Window Layout](../window/configure-window-layout.md) for the 3-layer system.
-    - Default: The shipped mapping for layouts `One` .. `Ten`.
+    - Default: The shipped mapping for layouts `Zero` .. `Nine`.
     - More detail: [`ZoneNameMappings`](../../configuration-reference.md#layout-numbers--zone-mappings)
 3. Did you change a FancyZones layout in PowerToys?
     - Options: Then update its zone map here too, or layout files will place windows in the wrong zone.
@@ -45,7 +45,7 @@ All of it goes in `Configuration.local.psd1`, at the repository's `Windows/Power
 
 ## Step 1: Set `LayoutNumbers`
 
-Maps a readable layout name to the FancyZones custom-layout index `Apply-FancyZones` applies.
+Maps a layout name from `custom-layouts.json` to its `Win+Ctrl+Alt+[Number]` hotkey slot (0-9, unique) that `Apply-FancyZones` sends. `Visualize-Layouts -DisplayAvailableLayouts` lists layouts in this hotkey order, then any `custom-layouts.json` layout missing from it.
 
 ```powershell
 LayoutNumbers = @{

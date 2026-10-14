@@ -14,7 +14,9 @@ function Add-Project {
 		Array of action hashtables for ProjectActions.
 		If omitted, creates default Open-VSCode + Open-ProjectTerminals-Or-RunProject actions.
 	.PARAMETER TerminalTabs
-		Optional array of terminal tab hashtables: @{ Title = "..."; Path = "..." }
+		Optional array of terminal tab hashtables: @{ Title = "..."; Path = "..." }, written to a
+		TerminalTabs section. The shipped Configuration.psd1 has no TerminalTabs section and no
+		function reads one, so this is skipped (nothing is written) unless the file defines it.
 	.PARAMETER BasePath
 		Optional dot-notation base path for ProjectTerminals entry (e.g., "Projects.MyProject").
 	.PARAMETER Paths

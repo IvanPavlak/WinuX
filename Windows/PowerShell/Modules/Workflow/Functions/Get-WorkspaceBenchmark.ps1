@@ -14,8 +14,9 @@ function Get-WorkspaceBenchmark {
 
 		-Workspace keeps one or more workspaces, -Last bounds the result to the most recent N runs
 		after filtering (10 by default, 0 for all), and -Summary aggregates instead: per workspace
-		and mode, the number of runs, average/min/max total, the average of every phase, the retries
-		and the runs that did not end Applied.
+		and mode, the number of runs, average/min/max total, the averages of Actions, FancyZones,
+		Wait, Position, Snap, Verify and Other seconds, the retries, the runs that ended neither
+		Applied nor NoLayout, and the last run's timestamp.
 
 		The opens Measure-WorkspaceOpen runs land in the same file, stamped with their session in
 		the Source column ("Measure-WorkspaceOpen <session>"). They are the experiment's, not your

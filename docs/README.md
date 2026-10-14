@@ -34,6 +34,7 @@ Everything you need to get WinuX running on your machine.
 - [Prerequisites](getting-started/prerequisites.md)
 - [Installation](getting-started/installation.md)
 - [First Run](getting-started/first-run.md)
+- [Subsequent Runs](getting-started/subsequent-runs.md)
 
 ### Configuration
 
@@ -41,12 +42,16 @@ Deep dive into the configuration system.
 
 - [Overview](configuration/overview.md) - How Configuration.psd1 works
 - [Placeholder System](configuration/placeholder-system.md) - `{Dev}`, `{User}`, etc.
+- [Machine Types](configuration/machine-types.md) - One configuration, several machines
+- [Configuration Reference](configuration/configuration-reference.md) - Every section and key
+- [WinuXConfigurator](configuration/winux-configurator.md) - An AI-assisted interview that writes your configuration with you
 - [How-To Guides](configuration/guides/workflow/add-new-project.md) - Step-by-step tutorials
 
 ### Modules
 
 Detailed documentation for every module and function.
 
+- [AI](modules/ai.md) - Machine-global AI agent setup
 - [Application](modules/application.md) - App launchers & installers
 - [Bootstrap](modules/bootstrap.md) - System initialization
 - [Configuration](modules/configuration.md) - Programmatic config modifications
@@ -56,17 +61,21 @@ Detailed documentation for every module and function.
 - [System](modules/system.md) - System configuration
 - [Window](modules/window.md) - Window layout management
 - [Workflow](modules/workflow.md) - Workspace automation
+- [Tests](modules/tests.md) - Pester test runner
 
 ### AI Integration
 
 Built-in AI context system for GitHub Copilot and similar assistants.
 
 - [Overview](ai/overview.md) - How the layered context system works, slash commands, token optimization
+- [CoreAiRules](ai/coreairules.md), [AI Skills](ai/skills.md), [AI Mods](ai/mods.md) - Opt-in machine-global agent guardrails, skills and Claude Code mods
 
 ### Reference
 
 Quick reference materials.
 
+- [Software List](reference/software-list.md) - What the base bootstrap installs, and the app-list overlays
+- [Backups](reference/backups.md) - Where replaced files go and how to restore them
 - [Troubleshooting](reference/troubleshooting.md) - Common issues
 - [Known Issues](reference/known-issues.md) - Known problems and workarounds
 
@@ -74,7 +83,8 @@ Quick reference materials.
 
 Where WinuX is headed and how it's governed.
 
-- [Roadmap](roadmap.md) - Where WinuX is and where it's going
+- [Roadmap](roadmap.md) - Who WinuX is for, what it will not become, and where it's going
+- [Fork Model](contributing/fork-model.md) - Running WinuX from a personal fork and merging upstream releases
 - [Contributing Guide](https://github.com/IvanPavlak/WinuX/blob/master/CONTRIBUTING.md)
 - [Code of Conduct](https://github.com/IvanPavlak/WinuX/blob/master/CODE_OF_CONDUCT.md)
 - [Security Policy](https://github.com/IvanPavlak/WinuX/blob/master/SECURITY.md)

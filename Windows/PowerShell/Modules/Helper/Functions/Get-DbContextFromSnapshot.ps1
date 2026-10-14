@@ -1,4 +1,3 @@
-# Add to docs and readme
 function Get-DbContextFromSnapshot {
 	<#
 	.SYNOPSIS

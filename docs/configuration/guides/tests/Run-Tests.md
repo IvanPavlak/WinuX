@@ -16,9 +16,11 @@ Run-Tests -Detailed
 Run-Tests -Changed
 Run-Tests -Changed -Quick
 Run-Tests -BuildImpactMap
+Run-Tests -UpdateContractBaseline
 ```
 
 ## Related
 
 - [`Run-Tests` in the Tests module reference](../../../modules/tests.md#run-tests) - parameters, usage and behaviour
+- [The contract gate](../../../modules/tests.md#the-contract-gate) - what `-UpdateContractBaseline` records and what the gate enforces
 - [Tests configuration guides](README.md) - every guide for this module

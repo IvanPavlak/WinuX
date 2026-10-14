@@ -11,22 +11,29 @@ function Open-Project {
 		is replaced with the actual project name at execution time.
 
 		When no project name is supplied, shows an interactive menu of all projects
-		defined in the `Projects` array in Configuration.psd1. Multiple projects
+		defined in `ProjectActions` (its entry names, in order). Multiple projects
 		can be selected and will each be opened in sequence.
 
 		The special action `Open-ProjectTerminals-Or-RunProject` is context-sensitive:
 		with `-RunApp` it starts the project server via `Run-Project`; otherwise
 		it opens terminal tabs via `Open-ProjectTerminals`.
 
-		Returns the list of project names that were opened.
+		Returns the list of project names that were selected (a selected project
+		with no `ProjectActions` entry is warned about and still returned).
 
 	.PARAMETER Project
-		One or more project names as defined in the `Projects` configuration array.
+		One or more project names as defined in `ProjectActions`.
 		Omit to show the interactive selection menu.
 
 	.PARAMETER RunApp
 		Switch to start the project's runnable app instead of opening terminals.
 		Applies to the `Open-ProjectTerminals-Or-RunProject` action only.
+
+	.PARAMETER VSCodeWorkspace
+		Name of a `.code-workspace` file (base name). When set, every `Open-VSCode`
+		action of the project runs `Open-VSCodeWorkspace -VSCodeWorkspace <name>`
+		instead, in place of the project folder; all other actions run as configured.
+		Open-Workspace passes it from -VSCodeWorkspace or DefaultVSCodeWorkspaces.
 
 	.PARAMETER InSameShell
 		Forces the project's terminal tabs to open in the current Windows Terminal

@@ -5,19 +5,19 @@ Changes the `postgres` user password across every installed PostgreSQL version f
 > [!NOTE]
 > Every value on this page belongs in `Configuration.local.psd1`, never in the base `Configuration.psd1`. The base file is upstream's, it ships empty-by-default, and it is deep-merged with your local file at load time by `Load-PathConfiguration`. See [Fork Model](../../../contributing/fork-model.md).
 >
-> Never put an actual password in `Configuration.local.psd1`. Reference an environment variable or a credential store and keep the secret out of any file the repository can see.
+> The two passwords are read from the file as plain strings and passed to `psql` as they are - nothing resolves environment variables or credential stores. `Configuration.local.psd1` is gitignored, so they never reach the repository, but use this only for local development databases, never for a real or production password. The passwords also appear in the manual-instructions file written to the Desktop when an installation fails.
 
 ## Configuration Keys
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`PostgreSqlPasswords`](../../configuration-reference.md#more-sections-quick-reference) | hashtable of scope to password reference | `@{}` (empty) | How `Configure-PostgreSqlPasswords` finds the credentials it writes into a `.pgpass`-style setup. Ships empty; a password itself belongs in a secret store, not here. |
+| [`PostgreSqlPasswords`](../../configuration-reference.md#more-sections-quick-reference) | hashtable `@{ DefaultOrCurrent; New }` | `@{}` (empty) | The current password `Configure-PostgreSqlPasswords` authenticates with (`DefaultOrCurrent`) and the one it sets on the `postgres` user (`New`), used with `-Auto` or when the function is called without passwords. Ships empty, so the function warns and does nothing. |
 
 ## Decisions
 
-1. Which PostgreSQL scopes need credentials configured?
-    - Options: One entry per scope. Keep the actual secret out of the repository - reference an environment variable or a credential store.
-    - Default: Empty - the function reports that nothing is configured and returns.
+1. Should `Configure-PostgreSqlPasswords` be able to run without passwords on the command line?
+    - Options: Set `DefaultOrCurrent` (the password the installer set, often `postgres`) and `New` (the local development password to switch to). Leave the key empty and pass `-DefaultOrCurrentPassword` / `-NewPassword` on each call instead.
+    - Default: Empty - a call without passwords reports that nothing is configured and returns.
     - More detail: [`PostgreSqlPasswords`](../../configuration-reference.md#more-sections-quick-reference)
 
 ## Where to Put Values
@@ -34,11 +34,12 @@ All of it goes in `Configuration.local.psd1`, at the repository's `Windows/Power
 
 ## Step 1: Set `PostgreSqlPasswords`
 
-How `Configure-PostgreSqlPasswords` finds the credentials it writes into a `.pgpass`-style setup. Ships empty; a password itself belongs in a secret store, not here.
+The current and the new password of the `postgres` user. Both keys are required; with either missing the function reports that both passwords are needed and returns.
 
 ```powershell
 PostgreSqlPasswords = @{
-    Local = "env:PGPASSWORD"
+    DefaultOrCurrent = "postgres"
+    New              = "MyLocalDevPassword"
 }
 ```
 
@@ -71,7 +72,8 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 # Configuration.local.psd1
 @{
     PostgreSqlPasswords = @{
-        Local = "env:PGPASSWORD"
+        DefaultOrCurrent = "postgres"
+        New              = "MyLocalDevPassword"
     }
 }
 ```

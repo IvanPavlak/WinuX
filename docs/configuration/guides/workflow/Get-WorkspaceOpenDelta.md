@@ -9,21 +9,13 @@ The ownership rule for `Close-Workspace`, in one place.
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`Universal`](../../configuration-reference.md#universal-constants) | hashtable, 26 keys | hashtable, 26 keys | Machine-independent constants: executable paths (`FirefoxExe`, `DockerExe`, `DbeaverExe`, ...), the `Browsers` map, `DefaultBrowser`, shared URLs, the `ProcessCleanup` lists, and `Desktop` (auto-resolved at load). Expanded in place by `Load-PathConfiguration`, so placeholders work here too. |
+| [`Universal`](../../configuration-reference.md#universal-constants) | hashtable, 27 keys | hashtable, 27 keys | Machine-independent constants. This function reads only `Universal.VisibleWindowExclusions` (array of process names, 7 shipped), and only with `-AdoptUnclaimed`: a window that was already on screen is never adopted when its process is named there (nor when it is one of the shell hosts `Get-ShellProcessName` lists), and `WindowsTerminal` on the list keeps pre-existing terminal tabs out too. Windows and tabs the open created are recorded regardless. |
 
 ## Decisions
 
-1. Which browser should be the default?
-    - Options: A key from `Universal.Browsers`: `Firefox`, `Chrome`, `Edge`, `Brave`, `Tor`. Ships empty, so `Open-Browser` asks or uses the system default.
-    - Default: Empty.
-    - More detail: [`Universal`](../../configuration-reference.md#universal-constants)
-2. Are any of the shipped executable paths wrong on this machine?
-    - Options: Override the individual `Universal.<App>Exe` value. Absolute paths, or placeholder paths such as `{User}\AppData\Local\...`.
-    - Default: The shipped paths, which assume default install locations.
-    - More detail: [`Universal`](../../configuration-reference.md#universal-constants)
-3. Do you use a browser the base `Browsers` map does not list?
-    - Options: Add an entry with `Exe`, `PrivateArg` and `NewWindowArg`. Because hashtables merge per key, adding one browser does not remove the others.
-    - Default: The shipped five.
+1. Which already-running applications should a plain `Open-Workspace` never take ownership of?
+    - Options: Process names (no `.exe`) in `Universal.VisibleWindowExclusions`, matched exactly and case-insensitively. The same list is what `Kill-All` never force-kills, so an entry affects both. Keep `WindowsTerminal` and the PowerToys entries.
+    - Default: The shipped seven: `Rainmeter`, `WindowsTerminal`, `Docker Desktop`, `obs64`, `PowerToys`, `PowerToys.FancyZones`, `PowerToys.Settings`.
     - More detail: [`Universal`](../../configuration-reference.md#universal-constants)
 
 ## Where to Put Values
@@ -33,6 +25,8 @@ All of it goes in `Configuration.local.psd1`, at the repository's `Windows/Power
 > [!WARNING]
 > The merge is not uniform. **Hashtables deep-merge per key**, so adding one entry to a hashtable leaves every other entry alone. **Arrays and scalars replace wholesale**, so supplying an array key in your local file discards the entire base array. When you want to *add* to a shipped array, copy the whole base array out of `Configuration.psd1` first and add your entry to the copy.
 
+On this page that bites on `Universal.VisibleWindowExclusions` - `Universal` itself deep-merges, but that key is an array, so whatever you write is the complete list.
+
 ## Steps Overview
 
 1. Set `Universal`
@@ -40,18 +34,20 @@ All of it goes in `Configuration.local.psd1`, at the repository's `Windows/Power
 
 ## Step 1: Set `Universal`
 
-Machine-independent constants: executable paths (`FirefoxExe`, `DockerExe`, `DbeaverExe`, ...), the `Browsers` map, `DefaultBrowser`, shared URLs, the `ProcessCleanup` lists, and `Desktop` (auto-resolved at load). Expanded in place by `Load-PathConfiguration`, so placeholders work here too.
+The processes a plain open never adopts. Copy the shipped list and add to it.
 
 ```powershell
 Universal = @{
-    DefaultBrowser = "Firefox"
-    Browsers = @{
-        Vivaldi = @{
-            Exe          = "{User}\AppData\Local\Vivaldi\Application\vivaldi.exe"
-            PrivateArg   = "--incognito"
-            NewWindowArg = "--new-window"
-        }
-    }
+    VisibleWindowExclusions = @(
+        "Rainmeter"
+        "WindowsTerminal"
+        "Docker Desktop"
+        "obs64"
+        "PowerToys"
+        "PowerToys.FancyZones"
+        "PowerToys.Settings"
+        "MyTrayApp"
+    )
 }
 ```
 
@@ -71,7 +67,7 @@ Read-only checks. None of these change anything.
 ```powershell
 Reload-PowerShellProfile
 $global:Configuration.Universal
-$global:Configuration.Universal.Keys | Sort-Object
+$global:Configuration.Universal.VisibleWindowExclusions
 ```
 
 If a value reads back as empty, the two usual causes are a parse error in `Configuration.local.psd1` (run `Test-ConfigurationSchema`) and a key placed at the wrong nesting level.
@@ -84,14 +80,16 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 # Configuration.local.psd1
 @{
     Universal = @{
-        DefaultBrowser = "Firefox"
-        Browsers = @{
-            Vivaldi = @{
-                Exe          = "{User}\AppData\Local\Vivaldi\Application\vivaldi.exe"
-                PrivateArg   = "--incognito"
-                NewWindowArg = "--new-window"
-            }
-        }
+        VisibleWindowExclusions = @(
+            "Rainmeter"
+            "WindowsTerminal"
+            "Docker Desktop"
+            "obs64"
+            "PowerToys"
+            "PowerToys.FancyZones"
+            "PowerToys.Settings"
+            "MyTrayApp"
+        )
     }
 }
 ```
@@ -102,6 +100,7 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 - [Workflow configuration guides](README.md) - every guide for this module
 - [Add New Project](add-new-project.md) - the full 9-step walk for a new project
 - [Add New Workspace](add-new-workspace.md) - workspaces, action ordering and layouts
+- [`Terminate-AllProcessesWithVisibleWindows`](../system/Terminate-AllProcessesWithVisibleWindows.md) - reads the same `VisibleWindowExclusions` list
 - [`Open-Browser`](../application/Open-Browser.md) - reads the same configuration
 - [`Open-LeagueOfLegends`](../application/Open-LeagueOfLegends.md) - reads the same configuration
 - [`Open-NotepadPlusPlus`](../application/Open-NotepadPlusPlus.md) - reads the same configuration

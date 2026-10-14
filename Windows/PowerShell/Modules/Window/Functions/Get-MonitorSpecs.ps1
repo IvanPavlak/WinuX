@@ -46,10 +46,10 @@ function Get-MonitorSpecs {
 		$monitors = Get-MonitorSpecs -AsHashtable
 
 	.EXAMPLE
-		# Use in layout configuration
+		# Use in layout configuration (zone math uses the work area)
 		$zone = Get-FancyZone -LayoutName "One" -ZoneName "Left" `
-			-MonitorX $monitors.Primary.X -MonitorY $monitors.Primary.Y `
-			-MonitorWidth $monitors.Primary.Width -MonitorHeight $monitors.Primary.Height
+			-MonitorX $monitors.Primary.WorkX -MonitorY $monitors.Primary.WorkY `
+			-MonitorWidth $monitors.Primary.WorkWidth -MonitorHeight $monitors.Primary.WorkHeight
 	#>
 	[CmdletBinding()]
 	param (

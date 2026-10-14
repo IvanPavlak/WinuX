@@ -10,7 +10,8 @@ function Get-WindowHandle {
 
 	.PARAMETER ProcessName
 		The name of the process (without .exe extension). Supports both wildcard and regex syntax.
-		Wildcard patterns (*, ?) are automatically converted to regex.
+		A pattern is used as regex when it is valid regex; otherwise a wildcard pattern (*, ?) is
+		converted to regex, and anything else is matched as an exact name.
 		Plain names (no special characters) use exact matching for performance.
 		Examples:
 		  Exact: "chrome", "WindowsTerminal"
@@ -20,11 +21,22 @@ function Get-WindowHandle {
 
 	.PARAMETER WindowTitle
 		Pattern to match against window titles. Supports both wildcard and regex syntax.
-		Wildcard patterns (*, ?) are automatically converted to regex.
+		A pattern is used as regex when it is valid regex; otherwise a wildcard pattern (*, ?) is
+		converted to regex, and any other invalid pattern writes an error (matching nothing, or
+		falling back to ProcessName alone when that is also given).
 		Examples:
 		  Wildcard: "*Notepad++", "*YouTube*", "Chrome - *"
 		  Regex: "^Chrome", "Visual Studio Code$", ".*Firefox.*", "(?i)notepad"
 		Can be combined with ProcessName for redundant searching.
+
+	.PARAMETER All
+		Names the default parameter set; the body never reads it, so passing it changes nothing.
+		Every cached window is returned whenever neither ProcessName nor WindowTitle is given,
+		with or without -All, and a supplied filter still applies when -All is also passed.
+
+	.OUTPUTS
+		The matching window records from Get-CachedWindows (Handle, Title, ProcessName,
+		ProcessId, Left, Top, Width, Height, ...), not bare handles.
 
 	.EXAMPLE
 		Get-WindowHandle -ProcessName "chrome"

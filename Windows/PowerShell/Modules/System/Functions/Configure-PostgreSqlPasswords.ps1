@@ -4,11 +4,16 @@ function Configure-PostgreSqlPasswords {
         Changes the PostgreSQL default database user password.
 
     .DESCRIPTION
-        Prompts for the current (default) PostgreSQL password and the new password,
-        then updates the `postgres` user password in the PostgreSQL server.
+        Updates the `postgres` user password on every PostgreSQL installation found under
+        `C:\Program Files\PostgreSQL` and `C:\Program Files (x86)\PostgreSQL`, trying ports
+        5432-5435 and skipping an installation the new password already authenticates against.
+        Nothing is prompted for.
 
-        With `-Auto`, reads the current and new passwords from `PostgreSqlPasswords` in
-        Configuration.psd1 and applies them without prompting.
+        With `-Auto`, or when neither password is passed, the current and new passwords are read
+        from `PostgreSqlPasswords` (`DefaultOrCurrent`, `New`) in Configuration.psd1 - `-Auto`
+        replaces any password passed alongside it. Passing both passwords without `-Auto` uses
+        them as given; passing only one is an error. Installations that fail get manual
+        instructions written to the Desktop.
 
     .PARAMETER DefaultOrCurrentPassword
         The current PostgreSQL password (for authentication).
@@ -17,7 +22,8 @@ function Configure-PostgreSqlPasswords {
         The new PostgreSQL password to set.
 
     .PARAMETER Auto
-        Reads passwords from Configuration.psd1 instead of prompting.
+        Reads both passwords from `PostgreSqlPasswords` in Configuration.psd1, replacing any
+        passed explicitly.
 
     .EXAMPLE
         Configure-PostgreSqlPasswords -Auto

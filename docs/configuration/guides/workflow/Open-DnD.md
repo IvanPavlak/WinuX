@@ -9,7 +9,7 @@ Opens the full D&D campaign workspace for a tabletop RPG session: the Obsidian v
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`CampaignResources`](../../configuration-reference.md#more-sections-quick-reference) | ordered list of campaigns (one single-key hashtable each) | list of 1 (`ExampleCampaign`) | Every campaign `Open-DnD` knows: the name is the key, the value is what to open for it. The menu follows the order you write them in. |
+| [`CampaignResources`](../../configuration-reference.md#more-sections-quick-reference) | ordered list of campaigns (one single-key hashtable each, value `@{ Pdf; Browser }`) | list of 1 (`ExampleCampaign`) | Every campaign `Open-DnD` knows: the name is the key, the value names what to open for it - `Pdf`, an `AcrobatPdfGroups` name handed to `Open-Acrobat -Pdf`, and `Browser`, a `BrowserGroups` group handed to `Open-Browser`. Either may be left out. The menu follows the order you write them in. |
 
 ## Decisions
 
@@ -18,7 +18,7 @@ Opens the full D&D campaign workspace for a tabletop RPG session: the Obsidian v
     - Default: Skip unless you use `Open-DnD`.
     - More detail: [`CampaignResources`](../../configuration-reference.md#more-sections-quick-reference)
 2. Which resources belong to each campaign?
-    - Options: Paths and URLs per campaign. Placeholders allowed.
+    - Options: Per campaign, `Pdf` (an `AcrobatPdfGroups` name - the rulebook PDF) and `Browser` (a `BrowserGroups` group - the resource URLs). These are names of entries defined in those sections, not paths or URLs.
     - Default: Skip unless you use `Open-DnD`.
     - More detail: [`CampaignResources`](../../configuration-reference.md#more-sections-quick-reference)
 
@@ -43,12 +43,14 @@ Every campaign `Open-DnD` offers, in the order the menu offers them. Each entry 
 ```powershell
 CampaignResources = @(
     @{ MyCampaign = @{
-            Notes = "{User}\Documents\MyCampaign\Notes.md"
-            Map   = "https://example.com/map"
+            Pdf     = "MyRulebook"
+            Browser = "MyCampaignResources"
         }
     }
 )
 ```
+
+`MyRulebook` must be an `AcrobatPdfGroups` entry and `MyCampaignResources` a `BrowserGroups` group; `Open-DnD` also opens Obsidian, and `-FoundryVTT` starts FoundryVTT.
 
 ## Step 2: Reload and confirm the merge landed
 
@@ -81,8 +83,8 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 @{
     CampaignResources = @(
         @{ MyCampaign = @{
-                Notes = "{User}\Documents\MyCampaign\Notes.md"
-                Map   = "https://example.com/map"
+                Pdf     = "MyRulebook"
+                Browser = "MyCampaignResources"
             }
         }
     )

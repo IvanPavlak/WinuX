@@ -9,18 +9,23 @@ function Unpin-TaskbarApps {
 		on the policy registry key.
 
 		The empty layout XML is written directly to the machine-local `TaskbarLayoutFile` path
-		(the StartLayoutFile the policy points at); it is not versioned in the repository.
+		(PathTemplates.TaskbarLayoutFile - the StartLayoutFile the policy points at); it is not
+		versioned in the repository. A symlink left there by the old design is removed first; a
+		real file is backed up (Backup-RepositoryItem) before it is replaced, and the write is
+		skipped when the backup fails.
 
-		With `-FromBootstrap`, skips Explorer restart after clearing pins (let the caller handle it).
-		With `-SkipExplorerRestart`, also skips the Explorer restart.
+		Clear-TaskbarPins is always called with -SkipExplorerRestart; Explorer is restarted once,
+		at the end, unless -SkipExplorerRestart or -FromBootstrap is given.
+		With `-FromBootstrap`, also leaves `LockedStartLayout` unset (Bootstrap locks the layout).
 
 		Requires administrator privileges.
 
 	.PARAMETER SkipExplorerRestart
-		Skips the Explorer restart after clearing pins.
+		Skips the final Explorer restart.
 
 	.PARAMETER FromBootstrap
-		Used internally during bootstrap; passes `-SkipExplorerRestart` to `Clear-TaskbarPins`.
+		Used internally during bootstrap; skips the final Explorer restart and defers locking the
+		layout (`LockedStartLayout`) to the caller.
 
 	.PARAMETER BackupRoot
 		Root of the unified backup sink an existing real layout file is copied into before it

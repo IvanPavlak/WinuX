@@ -13,8 +13,11 @@ function Create-CondaEnvironments {
 		Creates all missing Conda environments from the YAML files.
 
 	.NOTES
-		Requires Miniconda3 to be installed (via Install-WinGetApps.ps1: Anaconda.Miniconda3).
-		Environment folder is configured in Configuration.psd1 under BootstrapConfig.DataFiles.CondaEnvironments.
+		Requires Miniconda3 to be installed and the Conda user environment variable to point at it
+		(AutoEnvironmentVariables.Conda, written by Set-EnvironmentVariables -Auto); without the
+		variable the function warns and returns. conda.exe is expected at <Conda>\Scripts\conda.exe.
+		Environment folder is configured in Configuration.psd1 under BootstrapConfig.DataFiles.CondaEnvironments,
+		relative to the repository root (Projects.Self.Root).
 	#>
 
 	Write-LogTitle "Creating Conda Environments"

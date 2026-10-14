@@ -10,7 +10,8 @@ The primary browser launcher for the entire system.
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
 | [`BrowserGroups`](../../configuration-reference.md#browser-groups) | array of single-key hashtables | array of 12 example groups | The named URL groups `Open-Browser` opens. Groups nest without limit; a leaf is either a bare URL string or `@{ Name; Url }`. Every `Name` must be unique across the whole tree, because a name is a valid selector on its own. |
-| [`Universal`](../../configuration-reference.md#universal-constants) | hashtable, 26 keys | hashtable, 26 keys | Machine-independent constants: executable paths (`FirefoxExe`, `DockerExe`, `DbeaverExe`, ...), the `Browsers` map, `DefaultBrowser`, shared URLs, the `ProcessCleanup` lists, and `Desktop` (auto-resolved at load). Expanded in place by `Load-PathConfiguration`, so placeholders work here too. |
+| [`Universal.DefaultBrowser`](../../configuration-reference.md#browser-configuration) | string (a `Browsers` key) | `""` (empty) | The browser used when `-Browser` is not given. Empty makes `Open-Browser` warn and return until you pass `-Browser` or set it. |
+| [`Universal.Browsers`](../../configuration-reference.md#browser-configuration) | hashtable of browser name to `@{ Exe; PrivateArg; NewWindowArg }` | `Firefox`, `Tor`, `Chrome`, `Edge`, `Brave` | The browsers `-Browser` (and `DefaultBrowser`) can name: the executable to start, the private-mode argument and the new-window argument. Placeholders such as `{User}` expand. |
 
 ## Decisions
 
@@ -23,17 +24,13 @@ The primary browser launcher for the entire system.
     - Default: Flat groups.
     - More detail: [`BrowserGroups`](../../configuration-reference.md#browser-groups)
 3. Which browser should be the default?
-    - Options: A key from `Universal.Browsers`: `Firefox`, `Chrome`, `Edge`, `Brave`, `Tor`. Ships empty, so `Open-Browser` asks or uses the system default.
-    - Default: Empty.
-    - More detail: [`Universal`](../../configuration-reference.md#universal-constants)
-4. Are any of the shipped executable paths wrong on this machine?
-    - Options: Override the individual `Universal.<App>Exe` value. Absolute paths, or placeholder paths such as `{User}\AppData\Local\...`.
-    - Default: The shipped paths, which assume default install locations.
-    - More detail: [`Universal`](../../configuration-reference.md#universal-constants)
-5. Do you use a browser the base `Browsers` map does not list?
-    - Options: Add an entry with `Exe`, `PrivateArg` and `NewWindowArg`. Because hashtables merge per key, adding one browser does not remove the others.
-    - Default: The shipped five.
-    - More detail: [`Universal`](../../configuration-reference.md#universal-constants)
+    - Options: A key from `Universal.Browsers`: `Firefox`, `Chrome`, `Edge`, `Brave`, `Tor`, or one you add.
+    - Default: Empty - `Open-Browser` warns and opens nothing unless `-Browser` is passed.
+    - More detail: [`Universal.DefaultBrowser`](../../configuration-reference.md#browser-configuration)
+4. Is a browser installed somewhere other than its shipped `Exe` path, or do you use one the base `Browsers` map does not list?
+    - Options: Override that browser's `Exe`, or add an entry with `Exe`, `PrivateArg` and `NewWindowArg`. Because hashtables merge per key, changing or adding one browser does not remove the others.
+    - Default: The shipped five, at their default install locations.
+    - More detail: [`Universal.Browsers`](../../configuration-reference.md#browser-configuration)
 
 ## Where to Put Values
 
@@ -65,7 +62,7 @@ BrowserGroups = @(
 
 ## Step 2: Set `Universal`
 
-Machine-independent constants: executable paths (`FirefoxExe`, `DockerExe`, `DbeaverExe`, ...), the `Browsers` map, `DefaultBrowser`, shared URLs, the `ProcessCleanup` lists, and `Desktop` (auto-resolved at load). Expanded in place by `Load-PathConfiguration`, so placeholders work here too.
+`DefaultBrowser` and, when needed, extra or corrected `Browsers` entries. `Universal` is a hashtable and deep-merges, so the other `Universal` keys and the shipped browsers stay.
 
 ```powershell
 Universal = @{
@@ -96,8 +93,8 @@ Read-only checks. None of these change anything.
 ```powershell
 Reload-PowerShellProfile
 $global:Configuration.BrowserGroups
-$global:Configuration.Universal
-Open-Browser              # interactive menu, opens nothing until you choose
+$global:Configuration.Universal.DefaultBrowser
+$global:Configuration.Universal.Browsers.Keys
 Collect-BrowserUrls -Value $global:Configuration.BrowserGroups
 ```
 
@@ -137,6 +134,5 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 - [`Add-BrowserGroup`](../configuration/Add-BrowserGroup.md) - reads the same configuration
 - [`Get-SwaggerCloseTitlePatterns`](../workflow/Get-SwaggerCloseTitlePatterns.md) - reads the same configuration
 - [`Resolve-SwaggerBrowserGroup`](../workflow/Resolve-SwaggerBrowserGroup.md) - reads the same configuration
-- [`Open-LeagueOfLegends`](Open-LeagueOfLegends.md) - reads the same configuration
 - [WinuXConfigurator](../../winux-configurator.md) - have an AI assistant walk these decisions with you
 - [Configuration reference](../../configuration-reference.md) - every key, section by section

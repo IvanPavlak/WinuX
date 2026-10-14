@@ -59,7 +59,7 @@ function Invoke-MultiZoneWindowSnap {
 		- Method   : KeyboardSnap | ShiftDrag | None
 		- Attempts : snap attempts consumed
 		- X/Y/Width/Height : the last observed bounds ($null when the rect was never readable)
-		- Error    : the exception message when the final attempt threw, else $null
+		- Error    : the exception message of the last attempt that threw, else $null
 
 	.EXAMPLE
 		$snap = Invoke-MultiZoneWindowSnap -WindowHandle $handle -ExpectedX 3 -ExpectedY 3 -ExpectedWidth 1717 -ExpectedHeight 1434 -WindowTitle 'Code'

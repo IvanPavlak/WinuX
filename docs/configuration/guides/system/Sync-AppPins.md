@@ -9,7 +9,7 @@ Reconciles a package manager's own version pins with the effective app list, in 
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`BootstrapConfig.DataFiles`](../../configuration-reference.md#bootstrapconfig) | hashtable of list name to repository-relative path | 4 entries | Where the three committed app-list CSVs live, relative to the repository root. `Import-AppCsv` resolves the path from here, which is what keeps the location configuration-driven. |
+| [`BootstrapConfig.DataFiles`](../../configuration-reference.md#bootstrapconfig) | hashtable of list name to repository-relative path | 4 entries | Where the three committed app-list CSVs live, relative to the repository root (`PathTemplates.Projects.Self.Root`). `Sync-AppPins` reads exactly one entry per call - `WinGetApps`, `ScoopApps` or `ChocolateyApps`, chosen by `-PackageManager` - through `Get-PinnedApps` and `Import-AppCsv`; `CondaEnvironments` is not read. Each list's `App` column is the managed set and its `Version` column decides what is pinned. |
 
 App lists are not `Configuration.psd1` keys. The committed CSV named by `BootstrapConfig.DataFiles` is upstream's baseline and stays untouched; everything you choose for this machine goes in the sibling `<name>.local.csv` overlay, which `Import-AppCsv` layers on top at read time. `Save-AppCsvOverlay` writes it for you.
 

@@ -11,9 +11,8 @@ function Measure-WorkspaceOpen {
 		remembering which flag was on for which row, tearing down the same way every time, and not
 		stopping after the run that confirmed the hunch. This function does all of that itself.
 
-		For every variant it puts the variant's values into the live configuration, and for every
-		run it tears the machine down (Kill-All -Skip Docker by default), waits -SettleSeconds for
-		the dust to settle, opens the workspace through the real Open-Workspace, and takes the
+		For every run it puts the variant's values into the live configuration, tears the machine
+		down (Kill-All -Skip Docker by default), waits -SettleSeconds for the dust to settle, opens the workspace through the real Open-Workspace, and takes the
 		benchmark row that open appended (Write-WorkspaceBenchmark). Runs are interleaved by default
 		- round 1 of every variant, then round 2, and so on - so a slow hour hits every variant
 		alike instead of one. -WarmUp opens (one by default) run first under the baseline and are
@@ -24,7 +23,7 @@ function Measure-WorkspaceOpen {
 		The workspace defaults to Example, which ships with WinuX (WorkspaceActions and its layout
 		files), so the experiment runs on a fresh install without anything defined first. Any
 		configured workspace works; one whose Open-Project action needs a project takes it
-		positionally, like Open-Workspace does ("Measure-WorkspaceOpen Client Asseto"), and
+		positionally, like Open-Workspace does ("Measure-WorkspaceOpen Client MyProject"), and
 		anything further on the command line is forwarded to Open-Workspace unchanged.
 
 		Which variants run:
@@ -70,12 +69,12 @@ function Measure-WorkspaceOpen {
 	.PARAMETER Project
 		Project name(s) handed to Open-Workspace -Project, so a workspace whose Open-Project action
 		would otherwise show a selection menu opens the same project(s) on every run without a
-		prompt. Positional, like in Open-Workspace: "Measure-WorkspaceOpen Client Asseto".
+		prompt. Positional, like in Open-Workspace: "Measure-WorkspaceOpen Client MyProject".
 
 	.PARAMETER ExtraArgs
 		Everything else on the command line is forwarded to Open-Workspace unchanged, which
 		forwards it to the actions that declare the parameter - the same way
-		"Open-Workspace Client Asseto run" does. The values are not varied between runs.
+		"Open-Workspace Client MyProject run" does. The values are not varied between runs.
 
 	.PARAMETER Runs
 		Measured opens per variant. 5 by default.
@@ -117,7 +116,8 @@ function Measure-WorkspaceOpen {
 		Print the plan and return it without opening, tearing down or touching the configuration.
 
 	.PARAMETER ResultPath
-		Write the per-run rows to a different file. Defaults to Get-WorkspaceOpenMeasurementPath.
+		Write the per-run rows to a different file. Defaults to WorkspaceOpenMeasurements.csv beside
+		the benchmark file - Get-WorkspaceOpenMeasurementPath, or beside -BenchmarkPath when given.
 
 	.PARAMETER BenchmarkPath
 		Read the benchmark rows from a different file. Defaults to Get-WorkspaceBenchmarkPath.
@@ -135,8 +135,8 @@ function Measure-WorkspaceOpen {
 		# The shipped Example workspace: 1 warm-up, then 5 rounds of Baseline + each layout flag flipped alone (21 opens).
 
 	.EXAMPLE
-		Measure-WorkspaceOpen Client Asseto
-		# A workspace whose Open-Project action needs a project: every open gets Asseto, no menu.
+		Measure-WorkspaceOpen Client MyProject
+		# A workspace whose Open-Project action needs a project: every open gets MyProject, no menu.
 
 	.EXAMPLE
 		Measure-WorkspaceOpen WinuX -Setting FancyZonesApplyMethod -Runs 8

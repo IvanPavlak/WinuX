@@ -1,15 +1,21 @@
 function Initialize-WSLEnvironment {
 	<#
 	.SYNOPSIS
-		Installs and configures fastfetch inside the WSL environment.
+		Installs and configures fastfetch and oh-my-posh inside the configured WSL distribution.
 
 	.DESCRIPTION
-		Installs the fastfetch system info tool inside the active WSL distribution via apt,
-		then adds `fastfetch` to `.bashrc` so it runs automatically on shell startup.
+		Installs the fastfetch system info tool inside the `DefaultWSLDistribution` distribution
+		via apt (from the fastfetch PPA, as root), then adds `fastfetch` to `.bashrc` so it runs
+		automatically on shell startup. It then installs `unzip` and `oh-my-posh` (official
+		install script) and appends an `oh-my-posh init bash` line to `~/.profile`, pointing at
+		the theme FILE NAME of `Universal.OhMyPoshThemeFile` (default WinuX.omp.json) inside
+		`/mnt/c/Users/<Windows user>/AppData/Local/Programs/oh-my-posh/themes/`. Each step
+		skips what is already installed or configured. Every `wsl` call targets the configured
+		distribution explicitly; the function does nothing until `DefaultWSLDistribution` is set.
 
 	.EXAMPLE
 		Initialize-WSLEnvironment
-		Installs fastfetch and adds it to WSL shell initialization.
+		Installs fastfetch and oh-my-posh and adds them to WSL shell initialization.
 	#>
 	Write-LogTitle "Configuring WSL Environment"
 

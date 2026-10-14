@@ -57,7 +57,6 @@ Read-only checks. None of these change anything.
 ```powershell
 Reload-PowerShellProfile
 $global:Configuration.Themes
-$global:Configuration.Themes
 Resolve-SystemThemeSteps | Format-Table
 ```
 

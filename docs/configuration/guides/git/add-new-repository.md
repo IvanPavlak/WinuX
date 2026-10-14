@@ -173,8 +173,8 @@ Adding a new private repository "MyAwesomeProject":
 Universal = @{
     GitHub = @{
         Private = @{
-            WinuX           = "/IvanPavlak/WinuX.git"
-            MyAwesomeProject = "/IvanPavlak/MyAwesomeProject.git"  # ← New
+            WinuX           = "/YourUsername/WinuX.git"
+            MyAwesomeProject = "/YourUsername/MyAwesomeProject.git"  # ← New
         }
     }
 }

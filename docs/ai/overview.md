@@ -26,12 +26,15 @@ Separate from the per-repository context system above, [`AI/CoreAiRules.md`](htt
 ```
 AI/
 ├── CoreAiRules.md                 # Machine-global agent guardrails (symlinked into every harness)
+├── InitialConfiguration_2026_03_24.md  # Dated design record of how this AI system was planned
 ├── Claude/
 │   └── managed-settings.json      # Claude Code enforcement layer (managed settings)
 ├── Mods/
 │   └── README.md                  # Claude Code mods root: <source>/<mod>/.claude-plugin/plugin.json, linked into ~/.claude/mods (fork adds sources)
 ├── Skills/
-│   └── README.md                  # Agent Skills root: <source>/<skill>/SKILL.md, linked into every harness (fork adds sources)
+│   ├── README.md                  # Agent Skills root: <source>/<skill>/SKILL.md, linked into every harness (fork adds sources)
+│   └── own/
+│       └── winux-configurator/    # SKILL.md + agents/openai.yaml - the WinuXConfigurator entry point
 ├── Context/
 │   ├── REPOSITORY_CONTEXT.md      # Architecture map for AI consumption
 │   └── WINDOWS_CONTEXT.md         # Full function reference
@@ -167,7 +170,7 @@ These files define specific conventions and patterns for the repository. They ar
 - Alias documentation format
 - Comment style and indentation (tabs per codebase)
 
-**When to use:** When writing documentation for functions or updating README entries.
+**When to use:** When writing documentation for functions or updating their entries in the module reference pages.
 
 ### ConfigurationPatterns.md
 

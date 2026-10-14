@@ -9,7 +9,8 @@ This function reads no `Configuration.psd1` keys. There is nothing to configure.
 ## Usage
 
 ```powershell
-Test-AppNotInstalled -appName "WindowsTerminal"
+Test-AppNotInstalled -appName "Microsoft.WindowsTerminal"
+Test-AppNotInstalled -appName "*WindowsTerminal*"
 ```
 
 ## Related

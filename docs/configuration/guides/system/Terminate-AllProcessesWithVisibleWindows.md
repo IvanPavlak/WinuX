@@ -1,6 +1,6 @@
 # Terminate-AllProcessesWithVisibleWindows
 
-Forcefully terminates all processes that expose a visible top-level window (non-empty `MainWindowTitle`), preserving the default exclusions used by the desktop cleanup flow: every browser declared in `Configuration.Universal.Browsers` (handled gracefully by `Terminate-AllBrowserProcesses` instead) plus every process named in the `Universal.VisibleWindowExclusions` configuration list (`Rainmeter...
+Forcefully terminates all processes that own a visible, titled top-level window (found window-side through `Get-VisibleWindowProcess`), preserving the default exclusions used by the desktop cleanup flow: every browser declared in `Configuration.Universal.Browsers` (handled gracefully by `Terminate-AllBrowserProcesses` instead) plus every process named in the `Universal.VisibleWindowExclusions` configuration list (`Rainmeter...
 
 > [!NOTE]
 > Every value on this page belongs in `Configuration.local.psd1`, never in the base `Configuration.psd1`. The base file is upstream's, it ships empty-by-default, and it is deep-merged with your local file at load time by `Load-PathConfiguration`. See [Fork Model](../../../contributing/fork-model.md).
@@ -9,22 +9,19 @@ Forcefully terminates all processes that expose a visible top-level window (non-
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`Universal`](../../configuration-reference.md#universal-constants) | hashtable, 26 keys | hashtable, 26 keys | Machine-independent constants: executable paths (`FirefoxExe`, `DockerExe`, `DbeaverExe`, ...), the `Browsers` map, `DefaultBrowser`, shared URLs, the `ProcessCleanup` lists, and `Desktop` (auto-resolved at load). Expanded in place by `Load-PathConfiguration`, so placeholders work here too. |
+| [`Universal.VisibleWindowExclusions`](../../configuration-reference.md#process-cleanup) | array of process names | `Rainmeter`, `WindowsTerminal`, `Docker Desktop`, `obs64`, `PowerToys`, `PowerToys.FancyZones`, `PowerToys.Settings` | The processes never force-killed. An empty list makes the function warn and terminate nothing, since it would otherwise kill `WindowsTerminal` - the shell running the cleanup. The PowerToys entries are load-bearing. |
+| [`Universal.Browsers`](../../configuration-reference.md#browser-configuration) | hashtable of browser name to `@{ Exe; ... }` | `Firefox`, `Tor`, `Chrome`, `Edge`, `Brave` | Every entry's `Exe` file name (without `.exe`) is added to the exclusions, because `Terminate-AllBrowserProcesses` closes those windows gracefully instead. |
 
 ## Decisions
 
-1. Which browser should be the default?
-    - Options: A key from `Universal.Browsers`: `Firefox`, `Chrome`, `Edge`, `Brave`, `Tor`. Ships empty, so `Open-Browser` asks or uses the system default.
-    - Default: Empty.
-    - More detail: [`Universal`](../../configuration-reference.md#universal-constants)
-2. Are any of the shipped executable paths wrong on this machine?
-    - Options: Override the individual `Universal.<App>Exe` value. Absolute paths, or placeholder paths such as `{User}\AppData\Local\...`.
-    - Default: The shipped paths, which assume default install locations.
-    - More detail: [`Universal`](../../configuration-reference.md#universal-constants)
-3. Do you use a browser the base `Browsers` map does not list?
-    - Options: Add an entry with `Exe`, `PrivateArg` and `NewWindowArg`. Because hashtables merge per key, adding one browser does not remove the others.
+1. Which processes must survive the force-kill?
+    - Options: Process names (no `.exe`) in `Universal.VisibleWindowExclusions` - tray-style apps, recorders, anything whose window you never want killed. The list is an array, so copy the whole base list and add to it: keep `WindowsTerminal` and the three PowerToys entries. For a one-off, pass `-Exclude` (window-title patterns) instead.
+    - Default: The shipped seven names.
+    - More detail: [`Universal.VisibleWindowExclusions`](../../configuration-reference.md#process-cleanup)
+2. Are all your browsers in `Universal.Browsers`?
+    - Options: A browser listed there is spared here and closed gracefully by `Terminate-AllBrowserProcesses`; a browser NOT listed is treated like any other app and force-killed. Hashtables merge per key, so adding one browser does not remove the others.
     - Default: The shipped five.
-    - More detail: [`Universal`](../../configuration-reference.md#universal-constants)
+    - More detail: [`Universal.Browsers`](../../configuration-reference.md#browser-configuration)
 
 ## Where to Put Values
 
@@ -35,23 +32,25 @@ All of it goes in `Configuration.local.psd1`, at the repository's `Windows/Power
 
 ## Steps Overview
 
-1. Set `Universal`
+1. Set `Universal.VisibleWindowExclusions`
 2. Reload and confirm the merge landed
 
-## Step 1: Set `Universal`
+## Step 1: Set `Universal.VisibleWindowExclusions`
 
-Machine-independent constants: executable paths (`FirefoxExe`, `DockerExe`, `DbeaverExe`, ...), the `Browsers` map, `DefaultBrowser`, shared URLs, the `ProcessCleanup` lists, and `Desktop` (auto-resolved at load). Expanded in place by `Load-PathConfiguration`, so placeholders work here too.
+`Universal` is a hashtable, so this key merges over the base; the array itself replaces the base list wholesale, which is why the shipped names are restated. `Universal.Browsers` rarely needs touching - see the [`Terminate-AllBrowserProcesses` guide](Terminate-AllBrowserProcesses.md).
 
 ```powershell
 Universal = @{
-    DefaultBrowser = "Firefox"
-    Browsers = @{
-        Vivaldi = @{
-            Exe          = "{User}\AppData\Local\Vivaldi\Application\vivaldi.exe"
-            PrivateArg   = "--incognito"
-            NewWindowArg = "--new-window"
-        }
-    }
+    VisibleWindowExclusions = @(
+        "Rainmeter"
+        "WindowsTerminal"
+        "Docker Desktop"
+        "obs64"
+        "PowerToys"
+        "PowerToys.FancyZones"
+        "PowerToys.Settings"
+        "MyTrayApp"
+    )
 }
 ```
 
@@ -61,7 +60,7 @@ Reload the profile, then read the merged value back. `$global:Configuration` aft
 
 ```powershell
 Reload-PowerShellProfile
-$global:Configuration.Universal
+$global:Configuration.Universal.VisibleWindowExclusions
 ```
 
 ## Verification
@@ -70,8 +69,9 @@ Read-only checks. None of these change anything.
 
 ```powershell
 Reload-PowerShellProfile
-$global:Configuration.Universal
-$global:Configuration.Universal.ProcessCleanup
+$global:Configuration.Universal.VisibleWindowExclusions
+$global:Configuration.Universal.Browsers.Values.Exe
+Get-VisibleWindowProcess | Select-Object ProcessName, Id, WindowTitles
 ```
 
 If a value reads back as empty, the two usual causes are a parse error in `Configuration.local.psd1` (run `Test-ConfigurationSchema`) and a key placed at the wrong nesting level.
@@ -84,14 +84,16 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 # Configuration.local.psd1
 @{
     Universal = @{
-        DefaultBrowser = "Firefox"
-        Browsers = @{
-            Vivaldi = @{
-                Exe          = "{User}\AppData\Local\Vivaldi\Application\vivaldi.exe"
-                PrivateArg   = "--incognito"
-                NewWindowArg = "--new-window"
-            }
-        }
+        VisibleWindowExclusions = @(
+            "Rainmeter"
+            "WindowsTerminal"
+            "Docker Desktop"
+            "obs64"
+            "PowerToys"
+            "PowerToys.FancyZones"
+            "PowerToys.Settings"
+            "MyTrayApp"
+        )
     }
 }
 ```
@@ -101,9 +103,7 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 - [`Terminate-AllProcessesWithVisibleWindows` in the System module reference](../../../modules/system.md#terminate-allprocesseswithvisiblewindows) - parameters, usage and behaviour
 - [System configuration guides](README.md) - every guide for this module
 - [Add Symbolic Link](add-symbolic-link.md) - link shapes, placeholders and the WSL cases
-- [`Open-Browser`](../application/Open-Browser.md) - reads the same configuration
-- [`Open-LeagueOfLegends`](../application/Open-LeagueOfLegends.md) - reads the same configuration
-- [`Open-NotepadPlusPlus`](../application/Open-NotepadPlusPlus.md) - reads the same configuration
-- [`Open-Steam`](../application/Open-Steam.md) - reads the same configuration
+- [`Report-KillAllSurvivors`](Report-KillAllSurvivors.md) - reads the same exclusion list
+- [`Terminate-AllBrowserProcesses`](Terminate-AllBrowserProcesses.md) - closes the excluded browsers gracefully
 - [WinuXConfigurator](../../winux-configurator.md) - have an AI assistant walk these decisions with you
 - [Configuration reference](../../configuration-reference.md) - every key, section by section

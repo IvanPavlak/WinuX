@@ -1,6 +1,6 @@
 # Open-Docker
 
-Starts Docker Desktop minimized to the system tray.
+Starts Docker Desktop minimized to the system tray via `Start-Application`, which reads the executable from `Universal.DockerExe` (ships the default install location, see [Start-Application](Start-Application.md)); this function itself reads nothing.
 
 ## Configuration Keys
 

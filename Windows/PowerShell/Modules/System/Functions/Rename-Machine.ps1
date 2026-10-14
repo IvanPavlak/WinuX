@@ -1,13 +1,18 @@
 function Rename-Machine {
 	<#
     .SYNOPSIS
-        Sets the machine hostname from Configuration.psd1 or prompts for a new name.
+        Renames the machine interactively, skipping when the hostname is already a configured one.
 
     .DESCRIPTION
         Reads the configured hostnames from `HostnameToMachineType` in Configuration.psd1.
         If the current hostname matches a configured name, skips the operation (idempotent).
-        With `-Override`, allows re-entry of a new hostname even if already configured.
-        Requires administrator privileges.
+        Otherwise asks whether to rename (Enter = No), then prompts for a new name, validates it
+        (max 63 characters, not all digits, only letters, digits and hyphens) and calls
+        Rename-Computer; a restart is required for the change to take effect. The new name is
+        typed in, never taken from configuration.
+        With `-Override`, allows re-entry of a new hostname even if already configured (choose
+        "Enter new name" or "Keep current").
+        Requires administrator privileges (checked through Test-AdminPrivileges).
 
     .PARAMETER Override
         Force reconfiguration of the hostname even if it's already set.

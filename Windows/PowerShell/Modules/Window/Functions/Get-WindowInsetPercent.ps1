@@ -6,9 +6,11 @@ function Get-WindowInsetPercent {
 	.DESCRIPTION
 		The single source of truth for $global:Configuration.SnapInsetPercent - the fraction
 		of a zone trimmed off each side before the window is handed to FancyZones. The value
-		reached five separate places as a hardcoded 0.05 (three parameter defaults and two
-		local variables); this getter is what those five now call, so changing the inset is
-		one config edit instead of five code edits that can silently drift apart.
+		used to be a hardcoded 0.05 in several places; this getter is what every placement path
+		now calls - the -InsetPercent defaults of Resize-Windows, Get-InsetWindowBounds,
+		Resize-PositionedWindows, Invoke-MultiZoneWindowSnap and Invoke-SingleZoneWindowSnap,
+		plus Set-WindowLayouts and Snap-AllWindows directly - so changing the inset is one
+		config edit instead of several code edits that can silently drift apart.
 
 		A getter rather than a module variable, because parameter defaults are evaluated at
 		call time and the configuration is not loaded when the module is imported. Reading

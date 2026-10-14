@@ -9,6 +9,12 @@ BeforeAll {
 	# The real entry reader, dot-sourced so it resolves against the stubs below exactly as the
 	# function under test does - which tab shape means what is its contract, not this function's.
 	. (Join-Path $ModuleRoot "Helper\Functions\Resolve-ProjectTerminalTab.ps1")
+	# A stub for the Describe-level mock to attach to (the Helper module is never loaded here).
+	# Without that mock the function's focus path resolved the REAL terminal window through the
+	# worker's process chain, polled its tab strip for the fake project tabs for 3 s and selected
+	# tab 0 of that window through UI Automation: every -InSameShell test stole the focus of the
+	# shell running the suite.
+	function Resolve-HostingTerminalTab { }
 
 	# Stub dependent functions
 	function Resolve-Selection { param($InputObject, $OptionList, $MenuTitle, [switch]$AllowMultipleSelections) $InputObject }
@@ -50,6 +56,9 @@ Describe "Open-ProjectTerminals" {
 		Mock Resolve-Selection { param($InputObject) $InputObject }
 		Mock Resolve-ProjectPath { param($ProjectName, $PathKey) "C:\Fake\$ProjectName\$PathKey" }
 		Mock Test-TerminalTabsAlreadyOpen { [PSCustomObject]@{ AllOpen = $false; FoundTabs = @() } }
+		# No hosting terminal: the focus path falls back to the mocked `wt focus-tab` and never touches
+		# a live window. The "Focusing the requested tab" context overrides this with a fake handle.
+		Mock Resolve-HostingTerminalTab { $null }
 
 		$global:Configuration = @{
 			ProjectTerminals       = @(

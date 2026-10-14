@@ -1,25 +1,29 @@
 function Set-Locale {
 	<#
     .SYNOPSIS
-        Sets the system locale.
+        Sets the user culture and home location from a configured locale.
 
     .DESCRIPTION
-        Reads available locales from `Locales` in Configuration.psd1. When called with a
-        locale name, sets that locale. When called without arguments, shows an interactive
-        menu of available locales.
+        Reads available locales from `Locales` in Configuration.psd1 (an ordered list of
+        `@{ <Name> = @{ Code; GeoId } }` entries). When called with a locale name, sets that
+        locale. When called without arguments, shows an interactive menu of available locales;
+        Enter selects `DefaultLocale`.
+        Applies the locale's `Code` with Set-Culture and its `GeoId` with Set-WinHomeLocation
+        (falling back to HKCU:\Control Panel\International\Geo), unless the current culture
+        already matches. The system locale (Set-WinSystemLocale) is not changed.
         Requires administrator privileges.
 
     .PARAMETER Locale
-        Locale name as defined in Configuration.psd1 (e.g. "en-US", "hr-HR").
-        Omit to show the interactive menu.
+        Locale name as defined in `Locales` in Configuration.psd1 (the entry name, e.g.
+        "English (US)", not the culture code "en-US"). Omit to show the interactive menu.
 
     .EXAMPLE
         Set-Locale
         Shows the locale selection menu.
 
     .EXAMPLE
-        Set-Locale -Locale "en-US"
-        Sets the system locale to en-US.
+        Set-Locale -Locale "English (US)"
+        Sets the user culture to the Code configured for "English (US)" (e.g. en-US).
     #>
 	[CmdletBinding()]
 	param(

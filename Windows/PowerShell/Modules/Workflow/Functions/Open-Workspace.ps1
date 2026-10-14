@@ -86,6 +86,16 @@ function Open-Workspace {
 		already-open ones toward the target - otherwise the layout is starved by exactly the
 		number of windows that happened to be open, and worsens on every rerun.
 
+	.PARAMETER ExtraArgs
+		Every remaining argument (ValueFromRemainingArguments). Parsed as -Name Value / -Switch
+		pairs and forwarded to each action that declares the parameter (a configured Parameters
+		value of the same name wins). Two kinds of name are handled by the open itself:
+		-VSCodeWorkspace <name> (or a bare -VSCodeWorkspace for a selection menu) overrides
+		$Configuration.DefaultVSCodeWorkspaces for this open and reaches the Open-Project action,
+		which reroutes its Open-VSCode action to Open-VSCodeWorkspace; a name matching a variable
+		of a templated workspace sets that variable for this open only and is not forwarded to
+		the actions.
+
 	.EXAMPLE
 		Open-Workspace WinuX
 		# Opens WinuX workspace on the first virtual desktop(s)
@@ -538,8 +548,8 @@ function Open-Workspace {
 			#   3. bare "-VSCodeWorkspace" flag (no value) => interactive Resolve-Selection menu
 			#   4. none => today's behaviour (VS Code opens the project folder; layout matches it)
 			# The resolved name is forwarded via $effectiveExtraParams to Open-Project (which
-			# reroutes its Open-VSCode action to Open-VSCodeWorkspace) and to
-			# Set-WorkspaceWindowLayout (which retitles the inferred VS Code layout entry).
+			# reroutes its Open-VSCode action to Open-VSCodeWorkspace); Get-FilteredParams
+			# drops it before any other action, including Set-WorkspaceWindowLayout, is called.
 			$effectiveExtraParams = @{}
 			foreach ($k in $extraParams.Keys) {
 				if ($consumedTemplateVariables -contains $k) { continue }
@@ -821,7 +831,7 @@ function Open-Workspace {
 
 				# Merge extra parameters (from command line) - action config takes precedence.
 				# Uses $effectiveExtraParams (the CLI args with the resolved VSCodeWorkspace name
-				# folded in) so the override reaches Open-Project and Set-WorkspaceWindowLayout.
+				# folded in) so the override reaches Open-Project.
 				foreach ($key in $effectiveExtraParams.Keys) {
 					if (-not $actionParams.ContainsKey($key)) {
 						$actionParams[$key] = $effectiveExtraParams[$key]

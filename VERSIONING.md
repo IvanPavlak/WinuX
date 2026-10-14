@@ -6,53 +6,116 @@ WinuX uses `MAJOR.MINOR.PATCH`. Because a distribution has no classic API, we de
 contract as: **the `Configuration.psd1` schema, the bootstrap/install contract, and the set
 of exported functions.**
 
-| Bump      | When                                                                                                                                  |
-| --------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| **MAJOR** | Breaking change to the config schema, the install/bootstrap contract, or removal of an exported function with no compatibility alias. |
-| **MINOR** | New function, module, config option, or GUI surface - backward compatible.                                                            |
-| **PATCH** | Bug fixes, doc fixes, theming tweaks, dependency bumps.                                                                               |
+| Bump      | When                                                                                                                                                      |
+| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **MAJOR** | A change that breaks the contract: a config key or shape that stops being read, a bootstrap step that stops working as documented, an exported function removed or re-signatured with no compatibility path. |
+| **MINOR** | New function, module, config option, or backward-compatible behavior change - and every deprecation (the old shape keeps working, a warning says what replaces it). |
+| **PATCH** | Bug fixes, doc fixes, theming tweaks, dependency bumps, tested-version pins.                                                                              |
 
-### Pre-1.0 (the 0.x series)
+The contract is what a fork depends on when it merges upstream: its `Configuration.local.psd1`
+override, its `*.local.csv` overlays, its own Custom-area code calling exported functions, and
+the way it bootstraps a machine. The version number exists to tell a fork, before it merges,
+whether any of that needs attention.
 
-Per SemVer §4, anything MAY change while we are below 1.0. In the 0.x series the version number
-tracks the **milestone ladder below**, which overrides the general PATCH/MINOR split in the
-table above:
+### Deprecation policy - breaking changes are batched, never surprises
 
-- **MINOR (`0.x.0`)** is reserved for reaching a numbered milestone on the ladder (e.g. `0.2.0`
-  is the fully config-driven bootstrap). A milestone release naturally also carries whatever
-  additions and fixes accumulated on the way to it.
-- **PATCH (`0.1.x`, `0.2.x`, ...)** carries everything that ships *between* milestones - new
-  functions, new config options, bug fixes, doc/theming/dependency changes - as long as it is
-  backward compatible. This deliberately relaxes the table's PATCH definition (where a new
-  function/config option is a MINOR); the strict split resumes at `1.0.0`.
-- **Breaking changes** still bump the **MINOR** (not MAJOR) and MUST appear under a `### Breaking`
-  heading with migration notes.
+A breaking change does not land in the release that introduces its replacement. It goes
+through two steps:
 
-So a backward-compatible addition that does not itself reach the next milestone - e.g. adding
-`Set-VisualEffects` and its `VisualEffects` config section - ships as a **PATCH** (`0.1.1`),
-leaving `0.2.0` reserved for the milestone it names.
+1. **Deprecate (MINOR).** The new shape ships and the old one keeps working. The release
+   notes list the change under `### Deprecated` with the migration. Where the old shape is a
+   configuration key, `Test-ConfigurationSchema` warns on it and names the replacement; the
+   profile runs that check at every load, and the mechanism will also run it at the start of
+   `Bootstrap`. The next deprecation adds the warning mechanism together with its entry and
+   covers the keys carried over from 0.x (below). Where the old shape is a function, the old
+   name stays as an alias or a thin wrapper that warns once per session. The same change
+   records the item in the `Deprecated` map of `Windows/PowerShell/Modules/Tests/ContractBaseline.json`
+   with the version the deprecation ships in - that record is what later lets the gate accept
+   its removal (see "How it is enforced").
+2. **Remove (MAJOR).** The old shape is removed in the next MAJOR, under `### Removed`, with
+   the migration repeated. A deprecation survives at least one MINOR release before its
+   removal, so a fork that merges every release sees the warning before the break.
 
-**1.0.0** is reached when all four pillars are simultaneously true and proven on clean
-machines:
+A MAJOR therefore carries removals, not surprises: the pending ones accumulate under
+`### Deprecated` and ship together with one migration section, whenever the maintainer decides
+to cut one. There is no promised cadence. A fork that keeps its warnings at zero merges a MAJOR
+as uneventfully as a PATCH.
 
-1. A GUI covers almost everything a normal user needs.
-2. A guided, standalone install.
-3. WinuX is completely standalone (no manual clone-and-fix).
-4. It is battle-tested (green CI + clean-VM smoke tests).
+The only exception is a change that cannot keep the old shape working - a security fix, or a
+Windows change that invalidates the old behavior outright. That bumps MAJOR immediately, under
+`### Breaking`, with migration notes.
 
-Release candidates use SemVer pre-release tags: `1.0.0-rc.1`, `1.0.0-rc.2`, …
+### What the policy costs
 
-### Milestone ladder
+Discipline. A configuration key or an exported function can no longer be removed or reshaped in
+one step: a rename ships the new name next to the old one, a parameter that has to go keeps
+working until the next MAJOR, and every removal waits for that MAJOR - however obvious the
+cleanup looks today. Old shapes live on in the code for at least one MINOR, usually longer,
+because MAJORs are rare on purpose.
 
-| Version     | Gate                                                                                                                                                 |
-| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 0.1.0       | First public release; sanitized snapshot, generic `Test` profile, license + governance files, docs on Pages, CI green, changelog started. |
-| 0.2.0       | Fully config-driven bootstrap - fork, edit one config, run one line, working system; zero code edits.                                                |
-| 0.3.0       | Standalone guided installer with uninstall/rollback.                                                                                                 |
-| 0.4.0       | A safer, idempotent, migration-aware evolution of the existing `Bootstrap -WithInitialSetup` reprovisioning.                                         |
-| 0.5.0       | Battle-testing: green CI on windows-latest + a documented clean-VM test matrix.                                                                      |
-| 0.6.0-0.9.x | Incremental GUI build-out per config domain; 0.9.0 = GUI feature-complete.                                                                           |
-| 1.0.0       | All four pillars true and proven.                                                                                                                    |
+That is the price of the promise in the bump table, and it is paid by whoever changes the
+contract, not by every fork that merges the change. A policy that is only written down does not
+hold that line: a single careless PR that drops a key would make its release a MAJOR, and with
+enough of them every release is one, which tells forks nothing. So the policy is enforced.
+
+### How it is enforced
+
+`Windows/PowerShell/Modules/Tests/ContractBaseline.json` records the contract at the last
+release: every exported function (every module except the fork-owned Custom area) with its
+parameters, whether each is mandatory and its `[Alias()]` names; every exported alias; and every
+key of the shipped `Configuration.psd1`, two levels deep. It also holds the `Deprecated` map -
+item to the version that deprecated it - under `Functions`, `Parameters` (`Name -Parameter`) and
+`ConfigurationKeys` (`Top.Child`).
+
+The `Infrastructure-Contract` test, part of `Run-Tests -TestName "Infrastructure"` and of every
+CI run, fails a change that:
+
+- **Breaks the contract** - removes an exported function, a parameter or a configuration key, or
+  makes a parameter mandatory. Additions never fail; a renamed parameter that keeps the old name
+  as an `[Alias()]`, or a function kept as an exported alias, is not a removal. Two exceptions,
+  both read from `[Unreleased]` in `CHANGELOG.md`, because they are what make the next release a
+  MAJOR: a `### Removed` entry naming an item in backticks whose deprecation has already shipped
+  in a release (its `Deprecated` version is no later than the baseline's), or a `### Breaking`
+  entry naming it.
+- **Misnames its release** - for every release from 1.0.0 on: `### Removed` or `### Breaking`
+  outside a MAJOR; a MAJOR with neither, which is exactly the gratuitous MAJOR this policy
+  exists to prevent; `### Added`, `### Changed` or `### Deprecated` in a PATCH; a MAJOR or MINOR
+  that does not reset the lower parts to 0, or a version that does not go up.
+- **Forgets the baseline** - the baseline's version must be the newest release in
+  `CHANGELOG.md`, so a release commit that does not refresh it fails.
+
+Taking a snapshot is the release step `Run-Tests -UpdateContractBaseline`, which runs no tests:
+it rewrites the file from the working tree, stamps it with the newest released version, and
+carries the `Deprecated` records forward - dropping the ones the release removed, keeping the
+rest.
+
+The gate sees what a script can read. It cannot see a key the code reads that the shipped
+`Configuration.psd1` does not list, a parameter that keeps its name but changes its meaning, or
+a bootstrap step that behaves differently; those stay on the reviewer and on this document.
+
+### From 0.1.94 to 1.0.0
+
+The 0.x series tracked a milestone ladder that ended in a graphical front-end and a guided
+installer for non-technical users. That destination was dropped (see the
+[roadmap](docs/roadmap.md)); the terminal and the configuration file *are* the product. With
+the destination gone, the ladder had nothing left to measure, and its practice of shipping
+breaking changes in 0.1.x PATCH releases (MINOR was reserved for milestones) was telling forks
+the opposite of what they needed to know.
+
+1.0.0 therefore followed 0.1.94 directly. It declared the contract above stable and switched to
+the strict bump table and the deprecation policy; its one engine change was a fix that rode along
+(the Terminal-Icons import repairs a torn theme cache), and no configuration key or exported
+function changed shape. Everything that
+shipped as `### Breaking` in the 0.x series stays as it shipped - the policy applies from 1.0.0
+onward.
+
+Two keys deprecated during 0.x carry over as deprecated: `BootstrapConfig.WSLSetup` (still
+honored when `BootstrapConfig.Steps.WSL` is absent) and `PathTemplates.ObsidianStartupScript`
+(ignored since 0.1.61). Neither warns yet; both are covered when the warning mechanism lands,
+and neither is removed before 2.0.0.
+
+Release candidates, when a MAJOR warrants one, use SemVer pre-release tags: `2.0.0-rc.1`,
+`2.0.0-rc.2`, ...
 
 ## Changelog
 
@@ -62,26 +125,38 @@ Release candidates use SemVer pre-release tags: `1.0.0-rc.1`, `1.0.0-rc.2`, …
 - Always keep a `## [Unreleased]` section at the top; move its contents under a new
   `## [x.y.z] - YYYY-MM-DD` heading at release time and reset Unreleased.
 - Sections, in order: **Added · Changed · Breaking · Deprecated · Removed · Fixed · Security**
-  (omit empty ones).
+  (omit empty ones). The section names decide the bump, and the contract gate checks them: a
+  PATCH holds only `### Fixed` and `### Security`, so a doc fix or a theming tweak is a fix; a
+  `### Changed` entry makes the release at least a MINOR.
+- A `### Deprecated` entry names the replacement and the migration; the matching
+  `### Removed` entry in the later MAJOR repeats the migration, so a fork skipping releases
+  finds it in one place.
 
 ## Release process (~5 minutes)
 
-1. Move `[Unreleased]` items into a new dated `## [x.y.z]` section; reset Unreleased.
+1. Move `[Unreleased]` items into a new dated `## [x.y.z]` section; reset Unreleased. Pick the
+   bump from the table above: any `### Removed` entry that removes part of the contract, or
+   any `### Breaking` entry, means MAJOR; any `### Added`, `### Changed` or `### Deprecated`
+   entry means at least MINOR; otherwise PATCH. The contract gate fails a bump that disagrees.
 2. Update the compare/tag links at the bottom of `CHANGELOG.md`.
-3. Commit: `Release vX.Y.Z`.
-4. Tag: `git tag -a vX.Y.Z -m "vX.Y.Z"` and push the tag.
-5. The `Release` workflow (`.github/workflows/release.yml`) picks the tag up automatically:
+3. Refresh the contract baseline: `Run-Tests -UpdateContractBaseline`, then
+   `Run-Tests -TestName "Infrastructure"`. The baseline file goes into the release commit.
+4. Commit: `Release vX.Y.Z`.
+5. Tag: `git tag -a vX.Y.Z -m "vX.Y.Z"` and push the tag.
+6. The `Release` workflow (`.github/workflows/release.yml`) picks the tag up automatically:
    it builds `WinuX.exe` (`Windows/WinuX/New-WinuXExecutable.ps1`), extracts the matching
    `CHANGELOG.md` section as the release notes, and creates the GitHub Release with the
    executable and its SHA-256 checksum attached. Creating the release in the GitHub UI first
    also works - the workflow then only attaches the assets.
-6. Verify the release page: notes match the changelog, and `WinuX.exe` + `WinuX.exe.sha256`
+7. Verify the release page: notes match the changelog, and `WinuX.exe` + `WinuX.exe.sha256`
    are attached (`releases/latest/download/WinuX.exe` must resolve).
 
 ## Do we automate?
 
 The **release page and installer** are automated: every `v*` tag builds `WinuX.exe` and
-publishes the GitHub Release with the hand-written changelog section as its body (see step 5).
+publishes the GitHub Release with the hand-written changelog section as its body (see step 6).
+The **versioning policy** is enforced by the contract gate (see "How it is enforced"), so a
+release cannot drift from the bump table unnoticed.
 
 The **changelog itself** stays hand-curated. The history predates Conventional Commits and
 this is a single-maintainer, end-user-facing project where a hand-curated changelog is higher

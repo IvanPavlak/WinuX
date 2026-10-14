@@ -5,8 +5,10 @@ function Invoke-TerminateWindowsTerminalTabsExit {
 
 	.DESCRIPTION
 		Invokes the script-scoped exit action used by `Terminate-WindowsTerminalTabs`
-		during `-IncludeCurrent` cleanup. When no test seam is configured, exits the
-		current process with code `0`.
+		during `-IncludeCurrent` cleanup. When no test seam is configured, releases stuck
+		keyboard modifiers (Reset-KeyboardModifiers, when available) and exits the current
+		process with code `0` - `[Environment]::Exit` skips every finally block, so callers'
+		own cleanup never runs.
 
 	.EXAMPLE
 		Invoke-TerminateWindowsTerminalTabsExit

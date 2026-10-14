@@ -11,12 +11,13 @@ Sets the Windows lock screen background image to match the active theme and mach
 | --- | ---- | -------------- | ---------------- |
 | [`WallpaperDarkSettings`](../../configuration-reference.md#wallpaper-settings) | hashtable of machine type to wallpaper settings | `@{}` (empty) | Which wallpaper `Set-Wallpaper` and `Set-LockScreenWallpaper` apply in dark mode, per machine type. Supports a single file or one per monitor. |
 | [`WallpaperLightSettings`](../../configuration-reference.md#wallpaper-settings) | hashtable of machine type to wallpaper settings | `@{}` (empty) | The light-mode counterpart of `WallpaperDarkSettings`. |
+| [`PathTemplates.Projects.Self.Wallpapers`](../../configuration-reference.md#path-templates--placeholder-system) | path template | `{RepoRoot}\Wallpapers` | The folder every `File` above is resolved against (read from `$global:MachineSpecificPaths.Projects.Self.Wallpapers`). For a multi-monitor entry the lock screen uses the first monitor's `File`. |
 
 ## Decisions
 
 1. Which dark-mode wallpaper should this machine type use?
-    - Options: A `@{ File; Style }` entry per machine type, or a per-monitor map for multi-monitor setups. `Style` is a key from `WallpaperStyles`.
-    - Default: Empty - `Set-Wallpaper` reports nothing configured.
+    - Options: A `@{ File; Style }` entry per machine type (or `Default`), or `@{ Monitors = @( @{ File; Style }, ... ) }` for multi-monitor setups - the lock screen takes the first monitor's `File`. `Style` is a key from `WallpaperStyles` (used by `Set-Wallpaper`, not the lock screen).
+    - Default: Empty - `Set-LockScreenWallpaper` leaves the lock screen untouched.
     - More detail: [`WallpaperDarkSettings`](../../configuration-reference.md#wallpaper-settings)
 2. Which light-mode wallpaper should this machine type use?
     - Options: Same shape as `WallpaperDarkSettings`.

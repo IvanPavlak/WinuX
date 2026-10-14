@@ -8,10 +8,12 @@ function Test-AppNotInstalled {
 		Returns $false if app is installed.
 
 	.PARAMETER appName
-		The name or partial name of the AppX package to check.
+		The AppX package name to check, passed to Get-AppxPackage -Name. It must be the full
+		package name (e.g. "Microsoft.WindowsTerminal"); match a partial name with wildcards
+		("*WindowsTerminal*").
 
 	.EXAMPLE
-		if (Test-AppNotInstalled -appName "WindowsTerminal") { Write-Host "Install Terminal" }
+		if (Test-AppNotInstalled -appName "Microsoft.WindowsTerminal") { Write-Host "Install Terminal" }
 	#>
 	param([string]$appName)
 	return !(Get-AppxPackage $appName)

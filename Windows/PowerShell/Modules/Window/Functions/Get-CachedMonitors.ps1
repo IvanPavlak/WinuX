@@ -8,8 +8,10 @@ function Get-CachedMonitors {
 		refreshes from System.Windows.Forms.Screen.AllScreens. This reduces
 		repeated calls to the Windows Forms API.
 
-		The cache is invalidated by either of two signals: a display-topology change (see
-		below) or the TTL expiring. Call Clear-MonitorCache to invalidate it explicitly.
+		The cache is invalidated by either of two signals: a display-topology change (a
+		fingerprint of the monitor count plus the virtual-screen rectangle) or the TTL
+		($script:MonitorCache.MaxAgeSec, 5 seconds) expiring. Call Clear-MonitorCache to
+		invalidate it explicitly.
 
 	.OUTPUTS
 		Array of System.Windows.Forms.Screen objects representing all monitors.

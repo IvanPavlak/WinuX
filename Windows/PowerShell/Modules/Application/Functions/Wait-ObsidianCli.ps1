@@ -7,7 +7,28 @@ function Wait-ObsidianCli {
 		Runs `obsidian vault=<Vault> workspaces` repeatedly. While Obsidian is still starting the
 		CLI answers "The CLI is unable to find Obsidian" (exit code 1); the first answer without it
 		means commands will be executed. A probe that timed out or failed to launch counts as
-		"not yet", and no single probe waits past the overall deadline.
+		"not yet", and each probe's own timeout is the time left to the overall deadline (at
+		least 1 s). Returns $true as soon as a probe gets through, $false once the deadline has
+		passed.
+
+	.PARAMETER CliPath
+		Full path to Obsidian.com (Get-ObsidianCliPath).
+
+	.PARAMETER Vault
+		The vault to probe.
+
+	.PARAMETER TimeoutSeconds
+		Give up after this many seconds. Default 10.
+
+	.PARAMETER PollMilliseconds
+		Pause between probes in milliseconds. Default 200.
+
+	.OUTPUTS
+		[bool] $true when the CLI reached the running vault, $false on timeout.
+
+	.EXAMPLE
+		Wait-ObsidianCli -CliPath (Get-ObsidianCliPath) -Vault Obsidian -TimeoutSeconds 10
+		Waits up to 10 seconds for a just-launched Obsidian to answer the CLI.
 	#>
 	[CmdletBinding()]
 	[OutputType([bool])]

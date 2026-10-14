@@ -36,8 +36,8 @@ Test            → MachineType → Test
 
 > [!TIP]
 > If your hostname doesn't match, nothing fails: WinuX falls back to the default machine type
-> (`Test` in the shipped configuration), and the first run's `Rename-Machine` step asks whether
-> you want to rename the machine. You can also rename it yourself:
+> (`Test` in the shipped configuration), and the first run writes the current hostname into your
+> local override as `Test`. Rename the machine later with `Rename-Machine -Override`, or yourself:
 >
 > ```powershell
 > Rename-Computer -NewName "DESKTOP-GAMING" -Restart

@@ -46,8 +46,11 @@ if (-not (Test-Path $ModulesPath)) {
 # first Helper command typed afterwards autoloads the module as before, and the module's copies
 # simply replace these. Resolve-WorkspaceTemplate and Expand-WorkspaceTemplates ride along for the
 # same reason: Load-PathConfiguration expands the workspace templates (and the Schema stage reads
-# the result) before the first prompt.
-foreach ($stageFunction in "Test-StartupStage", "Complete-StartupStage", "Get-ConfigSetting", "Test-ConfigValue", "Resolve-WorkspaceTemplate", "Expand-WorkspaceTemplates") {
+# the result) before the first prompt. Restore-ShellPrompt rides along so the work queued for after
+# the prompt (below) can draw the prompt again without importing Helper from idle time: the
+# Terminal-Icons import, the repository update's -RedrawPrompt and the deferred-failure report all
+# call it.
+foreach ($stageFunction in "Test-StartupStage", "Complete-StartupStage", "Get-ConfigSetting", "Test-ConfigValue", "Resolve-WorkspaceTemplate", "Expand-WorkspaceTemplates", "Restore-ShellPrompt") {
 	. (Join-Path $ModulesPath "Helper\Functions\$stageFunction.ps1")
 }
 $null = Test-StartupStage -Name "Core" -Required
@@ -141,20 +144,34 @@ if (Test-StartupStage -Name "PSReadLine") {
 
 # Work that has to happen in this session but not before the first prompt is queued here and run by
 # the single PowerShell.OnIdle subscription registered at the end of this file, which fires once the
-# prompt is rendered and the shell has been idle ~300 ms. Each entry is a scriptblock; the
-# subscription runs them in order, each in its own try/catch, so one failing never stops the next.
-$deferredStartup = [System.Collections.Generic.List[scriptblock]]::new()
+# prompt is rendered and the shell has been idle ~300 ms. Each entry is a hashtable with the stage's
+# Name and its Action scriptblock; the subscription runs them in order, each in its own try/catch, so
+# one failing never stops the next, and reports a failure under the stage's name.
+$deferredStartup = [System.Collections.Generic.List[hashtable]]::new()
 
 # Import the Terminal-Icons module (if installed) for displaying icons in the console. Deferred:
 # the import was measured at 165-400 ms and the icons are only needed once something is listed, so
-# it runs after the prompt - -Global, because the OnIdle action is a scope of its own. The one
+# it runs after the prompt, through Import-TerminalIcons (System): Import-Module -Global, because
+# the OnIdle action is a scope of its own, plus the repair of the module's own theme cache when a
+# torn cache file is what stops the import (two shells importing at the same instant race on the
+# module's rewrite of that cache, and until the file is moved aside every import fails). Its three
+# function files are dot-sourced inside the action, so the stage still costs nothing before the
+# prompt and the System module is not autoloaded for them. Their paths are resolved HERE and
+# captured by GetNewClosure, never read from $ModulesPath inside the action: Reload-PowerShellProfile
+# dot-sources this file from a System module function, so a plain scriptblock created here binds to
+# that module's session state, where $ModulesPath is the loader's own System\Functions. The one
 # observable difference is a listing typed within the first ~300 ms of a new shell, which prints
 # without icons; every later one has them.
 if (Test-StartupStage -Name "Terminal-Icons") {
-	$deferredStartup.Add({
-			if (Get-Module -ListAvailable -Name Terminal-Icons) {
-				Import-Module -Name Terminal-Icons -Global
-			}
+	$terminalIconsFiles = @("Import-TerminalIcons", "Repair-TerminalIconsThemeCache", "Test-TerminalIconsCacheFile" | ForEach-Object { Join-Path $ModulesPath "System\Functions\$_.ps1" })
+	$deferredStartup.Add(@{
+			Name   = "Terminal-Icons"
+			Action = {
+				foreach ($iconsFunction in $terminalIconsFiles) {
+					. $iconsFunction
+				}
+				$null = Import-TerminalIcons -RedrawPrompt
+			}.GetNewClosure()
 		})
 	Complete-StartupStage
 }
@@ -250,7 +267,7 @@ if (Test-StartupStage -Name "PowerPlan") {
 # already-swept days the fired action hits the stamp-file check inside Invoke-LogMaintenance and
 # returns in ~1ms.
 if (Test-StartupStage -Name "LogMaintenance") {
-	$deferredStartup.Add({ Invoke-LogMaintenance })
+	$deferredStartup.Add(@{ Name = "LogMaintenance"; Action = { Invoke-LogMaintenance } })
 	Complete-StartupStage
 }
 
@@ -264,9 +281,12 @@ if (Test-StartupStage -Name "LogMaintenance") {
 # Register-RepositoryUpdatePromptCheck then wraps the prompt (Daily schedule only), so a shell that
 # stays open into the next day - a machine woken from sleep - runs it at its first prompt then.
 if (Test-StartupStage -Name "RepositoryUpdate") {
-	$deferredStartup.Add({
-			Invoke-StartupRepositoryUpdate -RedrawPrompt
-			Register-RepositoryUpdatePromptCheck
+	$deferredStartup.Add(@{
+			Name   = "RepositoryUpdate"
+			Action = {
+				Invoke-StartupRepositoryUpdate -RedrawPrompt
+				Register-RepositoryUpdatePromptCheck
+			}
 		})
 	Complete-StartupStage
 }
@@ -276,15 +296,27 @@ if (Test-StartupStage -Name "RepositoryUpdate") {
 # shell has been idle ~300ms - so shell launch pays nothing. The queue travels as a global variable
 # because the action runs in a scope of its own - NOT as -MessageData: Register-EngineEvent with
 # -Action silently drops it ($Event.MessageData arrives $null), so the loop would run over nothing
-# and every deferred entry would quietly never happen. The action's pipeline output goes to the
-# event system, never the console, and it unregisters itself so it fires at most once per session;
-# -SupportEvent keeps the subscription and its event job out of Get-Job / Get-EventSubscriber
-# (which is also why unregistering needs -Force).
+# and every deferred entry would quietly never happen. An entry that throws is reported, never
+# swallowed: Write-LogError puts the exception in the session log and, with its stack trace, in the
+# error log, prints the one red line under the prompt, and Restore-ShellPrompt draws the prompt
+# again below it (an import that fails silently leaves nothing that points at the cause). The
+# action's pipeline output goes to the event system, never the console, and it unregisters itself
+# so it fires at most once per session; -SupportEvent keeps the subscription and its event job out
+# of Get-Job / Get-EventSubscriber (which is also why unregistering needs -Force).
 if ($deferredStartup.Count -gt 0) {
 	$global:WinuXDeferredStartup = $deferredStartup
 	Register-EngineEvent -SourceIdentifier PowerShell.OnIdle -SupportEvent -Action {
-		foreach ($deferredAction in $global:WinuXDeferredStartup) {
-			try { & $deferredAction } catch { }
+		foreach ($deferredEntry in $global:WinuXDeferredStartup) {
+			try {
+				& $deferredEntry.Action
+			}
+			catch {
+				try {
+					Write-LogError "Deferred startup [$($deferredEntry.Name)] failed => $($_.Exception.Message)" -Exception $_
+					$null = Restore-ShellPrompt
+				}
+				catch { }
+			}
 		}
 		Remove-Variable -Name WinuXDeferredStartup -Scope Global -ErrorAction SilentlyContinue
 		Unregister-Event -SourceIdentifier PowerShell.OnIdle -Force -ErrorAction SilentlyContinue

@@ -18,20 +18,24 @@ This guide explains how to create and configure window layouts for the WinuX "ti
 │     └─→ Organized by machine type: Layouts/PC/, Layouts/Laptop/             │
 │                                                                             │
 │  3. Set-WorkspaceWindowLayout                                               │
-│     └─→ Reads layout file                                                   │
-│     └─→ Normalizes browser windows to first tab only when they have >1 tab  │
+│     └─→ Reads layout file (+ ProjectOverrides, monitor coverage)            │
+│     └─→ Validates the FancyZones configuration                              │
+│     └─→ Ensures the required virtual desktops exist                         │
 │     └─→ Applies FancyZones layouts to monitors                              │
+│     └─→ Waits for windows (ready desktops placed early)                     │
+│     └─→ Resets browser windows to first tab when needed                     │
 │     └─→ Moves windows to virtual desktops                                   │
 │     └─→ Positions windows in zones using shared inset resize                │
 │     └─→ Reapplies shared pre-snap resize to tracked windows                 │
 │     └─→ Snaps windows using FancyZones                                      │
+│     └─→ Verifies, retries in-process, then reruns                           │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ## Layout File Structure
 
-Layout files are PowerShell data files (`.psd1`) with two main sections, plus one optional top-level key:
+Layout files are PowerShell data files (`.psd1`) with two main sections, plus two optional top-level keys - `AutoExtendMonitors` (below) and a `ProjectOverrides` block at the end (see [Project Variants of a Layout](#project-variants-of-a-layout)):
 
 ```powershell
 @{
@@ -93,7 +97,7 @@ The layouts shipped in this repo are named `Zero` through `Nine`:
 | `Nine`  | Top-Left, Bottom-Left, Top-Middle, Bottom-Middle, Top-Right, Bottom-Right |
 
 > [!NOTE]
-> Single-zone layouts (`Zero`, addressed as `Zone = "Fullscreen"` or `Zone = "Full"`) are placed **directly** at the zone rectangle instead of being snapped with `Win+Up`: FancyZones' arrow snap is a relative move and a one-zone grid has no neighbouring zone to make it deterministic. Such windows are not registered in FancyZones' zone history, which is harmless - manual `Win+Arrow` moves still resolve zones from the window's position.
+> Single-zone layouts (`Zero`, addressed as `Zone = "Fullscreen"` or `Zone = "Full"`) take a dedicated path. In a workspace layout the window snaps through `Invoke-SingleZoneWindowSnap`: a stale FancyZones zone assignment is cleared first (FancyZones' arrow snap is a relative move, and a one-zone grid has no neighbouring zone to resolve it otherwise), the window is centered in the zone, then `Win+Up` with a shift-drag fallback, so it ends up registered with FancyZones. Only the `Fullscreen` simple workspace (`SimpleLayoutWorkspaces`) places windows **directly** at the zone rectangle without switching desktops; those windows are not registered in FancyZones' zone history, which is harmless - manual `Win+Arrow` moves still resolve zones from the window's position.
 
 ### Canvas Layouts
 
@@ -248,24 +252,25 @@ Updates live as you switch windows.
 
 ## Window Title Patterns
 
-Use wildcards for flexibility:
+Use wildcards for flexibility. Matching is case-insensitive and unanchored: a wildcard such as `*Visual Studio Code` matches the text anywhere in the title, so anchor with regex (`^`, `$`) when position matters:
 
-| Pattern               | Matches                           |
-| --------------------- | --------------------------------- |
-| `*Mozilla Firefox*`   | Any Firefox window                |
-| `*Visual Studio Code` | VS Code (title ends with this)    |
-| `*Obsidian*`          | Any Obsidian window               |
-| `*- Visual Studio*`   | Visual Studio (not VS Code)       |
-| `MyProject*`          | Windows starting with "MyProject" |
+| Pattern               | Matches                                                                                   |
+| --------------------- | ----------------------------------------------------------------------------------------- |
+| `*Mozilla Firefox*`   | Any Firefox window                                                                        |
+| `*Visual Studio Code` | Any title containing "Visual Studio Code" (not only at the end)                           |
+| `Visual Studio Code$` | VS Code (title ends with this - regex)                                                    |
+| `*Obsidian*`          | Any Obsidian window                                                                       |
+| `*- Visual Studio*`   | Visual Studio, but also VS Code titles - pair it with `ProcessName = "devenv"`            |
+| `^MyProject`          | Windows starting with "MyProject" (regex; `MyProject*` is valid regex, a contains match)  |
 
 ### Matching one window across browsers and states
 
-`WindowTitle` is treated as a regular expression (it falls back to wildcard interpretation only when the value is not valid regex), so a single entry can target a window whose title changes with the browser or the app's state. The Server layout uses this to place a project's API/Swagger tab no matter which browser opened it or whether the backend is running:
+`WindowTitle` is treated as a regular expression (it falls back to wildcard interpretation only when the value is not valid regex), so a single entry can target a window whose title changes with the browser or the app's state. For example, to place a project's API/Swagger tab no matter which browser opened it or whether the backend is running:
 
 ```powershell
 @{
     ProcessName   = "Browser"
-    WindowTitle   = "(.*Problem loading page.*|.*\blocalhost\b.*|.*Swagger UI.*|.*\bAsseto\b.*)"
+    WindowTitle   = "(.*Problem loading page.*|.*\blocalhost\b.*|.*Swagger UI.*|.*\bMyProject\b.*)"
     DesktopNumber = 2
     Zone          = "Left"
     Monitor       = "Primary"
@@ -277,7 +282,7 @@ Use wildcards for flexibility:
 | `Swagger UI`           | Backend up - the rendered Swagger page's own title (any browser)    |
 | `Problem loading page` | Backend down in Firefox (its error-page title)                      |
 | `localhost`            | Backend down in Chromium browsers (Chrome/Edge/Brave show the host) |
-| `Asseto`, ...          | A backend that customizes its Swagger/page title per project        |
+| `MyProject`, ...       | A backend that customizes its Swagger/page title per project        |
 
 This keeps the zone filled whether or not the API is running, and across Firefox and all Chromium browsers - `localhost` is locale-independent, while `Problem loading page` is Firefox's English title.
 
@@ -459,12 +464,13 @@ A workspace opened for different projects can arrange its windows differently wi
 Layouts are applied via workspace actions:
 
 ```powershell
-WorkspaceActions = @{
-    Development = @(
-        # ... open apps first ...
-        @{ Action = "Set-WorkspaceWindowLayout"; Parameters = @{ WorkspaceName = "Development" } }
-    )
-}
+WorkspaceActions = @(
+    @{ Development = @(
+            # ... open apps first ...
+            @{ Action = "Set-WorkspaceWindowLayout"; Parameters = @{ WorkspaceName = "Development" } }
+        )
+    }
+)
 ```
 
 Or manually:
@@ -512,7 +518,7 @@ Notes:
 
 ### Window Not Being Positioned
 
-1. Check process name matches exactly (case-sensitive)
+1. Check the process name matches (a plain name is an exact, case-insensitive match)
 2. Verify window title pattern matches
 3. Use `Get-ActiveWindowInfo` to get correct values
 4. Use `Set-LogLevel Verbose` to see what's happening

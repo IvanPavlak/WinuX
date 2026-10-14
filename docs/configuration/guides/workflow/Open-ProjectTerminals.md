@@ -1,6 +1,6 @@
 # Open-ProjectTerminals
 
-Opens project-specific Windows Terminal tabs based on `Configuration.ProjectTerminals`, with automatic tab naming (`ProjectName.PathKey`, e.g.
+Opens project-specific Windows Terminal tabs based on `Configuration.ProjectTerminals`, with automatic tab naming (`ProjectName.PathKey`, e.g. `MyProject.API`).
 
 > [!NOTE]
 > Every value on this page belongs in `Configuration.local.psd1`, never in the base `Configuration.psd1`. The base file is upstream's, it ships empty-by-default, and it is deep-merged with your local file at load time by `Load-PathConfiguration`. See [Fork Model](../../../contributing/fork-model.md).
@@ -10,7 +10,8 @@ Opens project-specific Windows Terminal tabs based on `Configuration.ProjectTerm
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
 | [`DefaultWSLDistribution`](../../configuration-reference.md#wsl-configuration) | string | empty string | The WSL distribution every WSL-touching function uses. Ships empty, and that is deliberate: `Configure-WSL`, `Initialize-WSLEnvironment`, `Configure-WSLSSH`, `Open-WSLTab`, `Deploy-CoreAiRules` and WSL symlinks all no-op until it is set. |
-| [`ProjectTerminals`](../../configuration-reference.md#project-terminals) | array of `@{ Project; Tabs; ... }` | array of 3 | Which Windows Terminal tabs `Open-ProjectTerminals` creates for a project, and with what titles and starting directories. Tabs are created with `--title --suppressApplicationTitle`, so their titles are stable. |
+| [`ProjectTerminals`](../../configuration-reference.md#project-terminals) | array of `@{ Name; BasePath; Paths }` | array of 3 | Which Windows Terminal tabs `Open-ProjectTerminals` creates for a project: one tab per `Paths` entry, titled `<Name>.<Key>`, starting in that path under `BasePath` (or a WSL / plain / explicit-path tab for the special entries). Tabs are created with `--title --suppressApplicationTitle`, so their titles are stable. |
+| [`TerminalGreeting.Onefetch.InProjectTerminals`](../../configuration-reference.md#terminal-greeting-startup-and-the-c-alias) | bool | `$true` | Whether each path tab runs `Invoke-Onefetch` after its `Set-Location`. An explicit `-InvokeOnefetch` on the call wins. |
 
 ## Decisions
 
@@ -22,6 +23,10 @@ Opens project-specific Windows Terminal tabs based on `Configuration.ProjectTerm
     - Options: One entry per project with its tab list. Each tab can set a title and a starting directory, and can run in WSL - a WSL tab written as `@{ Key = "WSL"; Path = "/mnt/c/Users/Me/Repo" }` starts in that directory instead of the distribution's home, with the path written as WSL sees it. `Run-Project` reads the same list, so these are the tabs `rp` opens too.
     - Default: The shipped three entries.
     - More detail: [`ProjectTerminals`](../../configuration-reference.md#project-terminals)
+3. Should every project tab show the onefetch repository panel?
+    - Options: `$true` appends `Invoke-Onefetch` to each path tab (it still obeys `TerminalGreeting.Onefetch.Enabled` and skips non-repositories); `$false` leaves project tabs plain while `c` keeps the panel.
+    - Default: `$true`.
+    - More detail: [`TerminalGreeting`](../../configuration-reference.md#terminal-greeting-startup-and-the-c-alias)
 
 ## Where to Put Values
 
@@ -30,13 +35,14 @@ All of it goes in `Configuration.local.psd1`, at the repository's `Windows/Power
 > [!WARNING]
 > The merge is not uniform. **Hashtables deep-merge per key**, so adding one entry to a hashtable leaves every other entry alone. **Arrays and scalars replace wholesale**, so supplying an array key in your local file discards the entire base array. When you want to *add* to a shipped array, copy the whole base array out of `Configuration.psd1` first and add your entry to the copy.
 
-On this page that bites on `ProjectTerminals` - that key is an array, so whatever you write is the complete value.
+On this page that bites on `ProjectTerminals` - that key is an array, so whatever you write is the complete value. `TerminalGreeting` is a hashtable and deep-merges, so `@{ Onefetch = @{ InProjectTerminals = $false } }` changes that one flag only.
 
 ## Steps Overview
 
 1. Set `DefaultWSLDistribution`
 2. Set `ProjectTerminals`
-3. Reload and confirm the merge landed
+3. Set `TerminalGreeting.Onefetch.InProjectTerminals`
+4. Reload and confirm the merge landed
 
 ## Step 1: Set `DefaultWSLDistribution`
 
@@ -48,17 +54,27 @@ DefaultWSLDistribution = "Ubuntu"
 
 ## Step 2: Set `ProjectTerminals`
 
-Which Windows Terminal tabs `Open-ProjectTerminals` creates for a project, and with what titles and starting directories. Tabs are created with `--title --suppressApplicationTitle`, so their titles are stable.
+Which Windows Terminal tabs `Open-ProjectTerminals` creates for a project. `Name` is the project name, `BasePath` a dot-notation reference into the expanded paths (not a literal folder), and every `Paths` entry is one tab titled `<Name>.<Key>`: a subpath key under `BasePath`, `"ROOT"`, `"DEFAULT"` (plain tab), `"WSL"`, `@{ Key = "WSL"; Path = "/mnt/c/..." }`, `@{ Key = "Logs"; Path = "C:\Logs" }` or `@{ Key = "Shell" }`. Tabs are created with `--title --suppressApplicationTitle`, so their titles are stable.
 
 ```powershell
 ProjectTerminals = @(
-    @{ Project = "MyProject"; Tabs = @(
-        @{ Title = "MyProject"; Path = "{Dev}\MyProject" }
-    )}
+    @{ Name = "MyProject"; BasePath = "Projects.MyProject"; Paths = @("API", "UI", "WSL") }
 )
 ```
 
-## Step 3: Reload and confirm the merge landed
+## Step 3: Set `TerminalGreeting.Onefetch.InProjectTerminals`
+
+Whether each path tab appends `Invoke-Onefetch` after its `Set-Location`. Ships `$true`; an explicit `-InvokeOnefetch` on the call wins.
+
+```powershell
+TerminalGreeting = @{
+    Onefetch = @{
+        InProjectTerminals = $false
+    }
+}
+```
+
+## Step 4: Reload and confirm the merge landed
 
 Reload the profile, then read the merged value back. `$global:Configuration` after a reload is the ground truth - if what you set is not there, the local file did not parse or the key is nested one level away from where you put it.
 
@@ -76,6 +92,7 @@ Reload-PowerShellProfile
 $global:Configuration.DefaultWSLDistribution
 $global:Configuration.ProjectTerminals
 $global:Configuration.ProjectTerminals | ConvertTo-Json -Depth 4
+$global:Configuration.TerminalGreeting.Onefetch.InProjectTerminals
 ```
 
 If a value reads back as empty, the two usual causes are a parse error in `Configuration.local.psd1` (run `Test-ConfigurationSchema`) and a key placed at the wrong nesting level.
@@ -89,10 +106,13 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 @{
     DefaultWSLDistribution = "Ubuntu"
     ProjectTerminals = @(
-        @{ Project = "MyProject"; Tabs = @(
-            @{ Title = "MyProject"; Path = "{Dev}\MyProject" }
-        )}
+        @{ Name = "MyProject"; BasePath = "Projects.MyProject"; Paths = @("API", "UI", "WSL") }
     )
+    TerminalGreeting = @{
+        Onefetch = @{
+            InProjectTerminals = $false
+        }
+    }
 }
 ```
 

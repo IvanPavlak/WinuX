@@ -11,6 +11,7 @@ Parses the per-module documentation pages under `docs/modules/*.md` (and the for
 | --- | ---- | -------------- | ---------------- |
 | [`FunctionDiscrepancyExclusions`](../../configuration-reference.md#more-sections-quick-reference) | array of function names | array of 3 (`"Install-Bootstrap"`, `"fastfetch"`, `"Get-PoshStackCount"`) | Names `List-Functions -ListDiscrepancies` deliberately ignores, in BOTH directions - things that are not exported module functions: a documented standalone script, or a function the profile chain defines rather than a module. |
 | [`ListFunctionsColors`](../../configuration-reference.md#console-colors) | hashtable, 3 keys | `@{ Border = "DarkCyan"; DiscrepancyError = "Red"; DiscrepancySuccess = "Green" }` | Console colours `List-Functions` prints with. |
+| [`PathTemplates.Projects.Self`](../../configuration-reference.md#path-templates--placeholder-system) | hashtable, path fields | shipped (`{RepoRoot}`-relative) | WinuX own checkout, read through `$global:MachineSpecificPaths.Projects.Self`: `Docs` is where the `modules/*.md` and `custom/*.md` pages are parsed from (falling back to `<Root>\docs` when unset), and `Modules` is the folder whose modules are enumerated for the discrepancy check. |
 
 ## Decisions
 
@@ -22,6 +23,10 @@ Parses the per-module documentation pages under `docs/modules/*.md` (and the for
     - Options: Any `[ConsoleColor]` name.
     - Default: DarkCyan / Red / Green.
     - More detail: [`ListFunctionsColors`](../../configuration-reference.md#console-colors)
+3. Do the docs and modules live somewhere other than the repository's own `docs` and `Windows\PowerShell\Modules` folders?
+    - Options: Override `Docs` and/or `Modules` under `PathTemplates.Projects.Self`. `{RepoRoot}` already resolves the running repository, so this rarely needs changing.
+    - Default: The shipped `{RepoRoot}\docs` and `{RepoRoot}\Windows\PowerShell\Modules`.
+    - More detail: [`PathTemplates.Projects.Self`](../../configuration-reference.md#path-templates--placeholder-system)
 
 ## Where to Put Values
 
@@ -36,7 +41,8 @@ On this page that bites on `FunctionDiscrepancyExclusions` - that key is an arra
 
 1. Set `FunctionDiscrepancyExclusions`
 2. Set `ListFunctionsColors`
-3. Reload and confirm the merge landed
+3. Set `PathTemplates.Projects.Self` (rarely needed)
+4. Reload and confirm the merge landed
 
 ## Step 1: Set `FunctionDiscrepancyExclusions`
 
@@ -72,7 +78,19 @@ Console colours `List-Functions` prints with.
 ListFunctionsColors = @{ Border = "DarkGray" }
 ```
 
-## Step 3: Reload and confirm the merge landed
+## Step 3: Set `PathTemplates.Projects.Self` (rarely needed)
+
+Where the documentation pages are parsed from (`Docs`) and which modules are enumerated for the discrepancy check (`Modules`). Hashtables deep-merge, so only the field you change needs to be written.
+
+```powershell
+PathTemplates = @{
+    Projects = @{
+        Self = @{ Docs = "{RepoRoot}\docs" }
+    }
+}
+```
+
+## Step 4: Reload and confirm the merge landed
 
 Reload the profile, then read the merged value back. `$global:Configuration` after a reload is the ground truth - if what you set is not there, the local file did not parse or the key is nested one level away from where you put it.
 
@@ -89,6 +107,7 @@ Read-only checks. None of these change anything.
 Reload-PowerShellProfile
 $global:Configuration.FunctionDiscrepancyExclusions
 $global:Configuration.ListFunctionsColors
+$global:MachineSpecificPaths.Projects.Self
 List-Functions
 List-Functions -ListDiscrepancies    # must report none
 ```
@@ -104,6 +123,11 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 @{
     FunctionDiscrepancyExclusions = @("Install-Bootstrap", "fastfetch", "Get-PoshStackCount", "My-ForkOnlyScript")
     ListFunctionsColors = @{ Border = "DarkGray" }
+    PathTemplates = @{
+        Projects = @{
+            Self = @{ Docs = "{RepoRoot}\docs" }
+        }
+    }
 }
 ```
 

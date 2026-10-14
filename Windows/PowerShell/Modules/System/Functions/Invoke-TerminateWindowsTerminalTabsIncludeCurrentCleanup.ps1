@@ -5,8 +5,9 @@ function Invoke-TerminateWindowsTerminalTabsIncludeCurrentCleanup {
 
 	.DESCRIPTION
 		Prints the final closed-tab summary, restores the original host window title,
-		spawns a safety-net PowerShell process to force-close the hosting Windows
-		Terminal process if it lingers, and then invokes the exit seam.
+		optionally waits `-CloseWaitSeconds`, spawns a hidden safety-net Windows PowerShell
+		process that force-stops the first `WindowsTerminal` process found if it is still
+		running 2 seconds later, and then invokes the exit seam.
 
 	.PARAMETER ClosedTabs
 		Titles of terminal tabs that were closed before the current tab cleanup step.
@@ -18,8 +19,8 @@ function Invoke-TerminateWindowsTerminalTabsIncludeCurrentCleanup {
 		Original PowerShell host title to restore before exiting.
 
 	.PARAMETER CloseWaitSeconds
-		Waits before closing the current tab so the caller can read the final status
-		output before the shell exits.
+		Seconds (0-300, default 0) to wait before closing the current tab so the caller can
+		read the final status output before the shell exits.
 
 	.EXAMPLE
 		Invoke-TerminateWindowsTerminalTabsIncludeCurrentCleanup -ClosedTabs @('TabA') -StartingTitle 'CurrentTab' -OriginalHostTitle 'OriginalTitle'

@@ -15,14 +15,14 @@ The [Window module reference](../../../modules/window.md) is the authority on wh
 | `Center-Terminal` | `CenterTerminalSizing` | [Center-Terminal](Center-Terminal.md) |
 | `Generate-LayoutVisualization` | `ZoneNameMappings` | [Generate-LayoutVisualization](Generate-LayoutVisualization.md) |
 | `Get-FancyZone` | `ZoneNameMappings` | [Get-FancyZone](Get-FancyZone.md) |
-| `Get-FancyZoneCoordinates` | `PathTemplates.SymbolicLinks`, `LayoutNumbers` | [Get-FancyZoneCoordinates](Get-FancyZoneCoordinates.md) |
+| `Get-FancyZoneCoordinates` | `PathTemplates.SymbolicLinks` | [Get-FancyZoneCoordinates](Get-FancyZoneCoordinates.md) |
 | `Get-LayoutMachineType` | `LayoutMachineTypeOverrides`, `SmallDisplayMachineType` | [Get-LayoutMachineType](Get-LayoutMachineType.md) |
 | `Get-WindowInsetPercent` | `SnapInsetPercent` | [Get-WindowInsetPercent](Get-WindowInsetPercent.md) |
 | `Merge-LayoutProjectOverrides` | `ProjectActions`, `ZoneNameMappings`, layout-file `ProjectOverrides` | [Merge-LayoutProjectOverrides](Merge-LayoutProjectOverrides.md) |
 | `Reset-Windows` | `ResetAllWindowsDefaults` | [Reset-Windows](Reset-Windows.md) |
 | `Resolve-LayoutTokens` | `Universal` | [Resolve-LayoutTokens](Resolve-LayoutTokens.md) |
 | `Resolve-ResizeWindowsPercent` | `ResizeWindowsPercent` | [Resolve-ResizeWindowsPercent](Resolve-ResizeWindowsPercent.md) |
-| `Set-WorkspaceWindowLayout` | `SimpleLayoutWorkspaces`, `LayoutMachineTypeOverrides`, layout-file `ProjectOverrides` | [Set-WorkspaceWindowLayout](Set-WorkspaceWindowLayout.md) |
+| `Set-WorkspaceWindowLayout` | `SimpleLayoutWorkspaces`, `LayoutMachineTypeOverrides`, `SmallDisplayMachineType`, `WorkspaceLayoutPipelining`, layout-file `ProjectOverrides` | [Set-WorkspaceWindowLayout](Set-WorkspaceWindowLayout.md) |
 | `Test-FancyZonesConfiguration` | `LayoutNumbers`, `ZoneNameMappings` | [Test-FancyZonesConfiguration](Test-FancyZonesConfiguration.md) |
 | `Update-LayoutSectionHeaders` | `ZoneNameMappings` | [Update-LayoutSectionHeaders](Update-LayoutSectionHeaders.md) |
 | `Visualize-Layouts` | `LayoutNumbers`, `ZoneNameMappings` | [Visualize-Layouts](Visualize-Layouts.md) |

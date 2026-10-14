@@ -36,7 +36,7 @@ function Apply-FancyZones {
 
 	.PARAMETER DesktopCount
 		Caps how many desktops are processed (from the offset), preventing overwrite of
-		adjacent workspaces' layouts. Default is 0.
+		adjacent workspaces' layouts. Default is 0 (no cap).
 
 	.PARAMETER Force
 		Bypasses the applied-layouts idempotency check. In file mode the entries are rewritten

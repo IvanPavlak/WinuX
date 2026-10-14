@@ -7,24 +7,32 @@ function Start-MicrosoftActivationScripts {
 		Downloads and runs the Microsoft Activation Scripts (MAS) online activation method
 		via `irm https://get.activated.win | iex`.
 
-		With no arguments and `-Override` not set, checks whether Windows is already
-		activated and skips if it is. Use `-Override` to force re-activation.
+		Without `-Override`, checks whether Windows is already activated (slmgr.vbs /xpr) and
+		whether Office is installed (an Excel.Application entry under
+		HKLM:\Software\RegisteredApplications), and returns without prompting when both are true.
+		Otherwise it asks a Yes/No question (Enter = No) and runs MAS only on Yes. Use `-Override`
+		to skip the check.
 
-		Only called automatically during `Bootstrap -WithInitialSetup` (first-time provisioning).
+		Only called automatically during `Bootstrap -WithInitialSetup` (first-time provisioning),
+		and only when BootstrapConfig.Steps.MicrosoftActivationScripts is on (off by default).
 
 	.PARAMETER Selection
-		Pre-selects the activation method by name, bypassing the interactive menu.
+		Pre-answers the Yes/No prompt, bypassing it: "Yes" runs MAS, "No" skips.
 
 	.PARAMETER Override
 		Forces the activation script to run even if Windows appears to already be activated.
 
 	.EXAMPLE
 		Start-MicrosoftActivationScripts
-		Checks activation status and runs MAS if Windows is not activated.
+		Checks activation status and asks whether to run MAS unless Windows is activated and Office installed.
 
 	.EXAMPLE
 		Start-MicrosoftActivationScripts -Override
-		Runs MAS regardless of current activation status.
+		Asks whether to run MAS regardless of current activation status.
+
+	.EXAMPLE
+		Start-MicrosoftActivationScripts -Selection Yes
+		Runs MAS without prompting (unless Windows is activated and Office installed).
 	#>
 	[CmdletBinding()]
 	param(

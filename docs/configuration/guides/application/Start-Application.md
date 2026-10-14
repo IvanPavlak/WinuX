@@ -9,22 +9,16 @@ Common (DRY) helper to start applications with standardized error handling, proc
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`Universal`](../../configuration-reference.md#universal-constants) | hashtable, 26 keys | hashtable, 26 keys | Machine-independent constants: executable paths (`FirefoxExe`, `DockerExe`, `DbeaverExe`, ...), the `Browsers` map, `DefaultBrowser`, shared URLs, the `ProcessCleanup` lists, and `Desktop` (auto-resolved at load). Expanded in place by `Load-PathConfiguration`, so placeholders work here too. |
+| [`Universal.<ConfigKey>`](../../configuration-reference.md#application-executables) | string (path) | per key: `DockerExe` and `OutlookLauncherExe` ship set; `DbeaverExe`, `FoundryVTTExe`, `NotepadPlusPlusExe`, `RiseupVpnExe`, `TeamViewerExe` and `VirtualBoxExe` ship `""` (empty) | The executable the `ConfigPath` start method launches, named by `-ConfigKey`. Empty or missing, the launch warns (`[<ConfigKey>] is not configured (Universal section)`) and returns; the path itself is not checked before `Start-Process`. Placeholders such as `{User}` expand. The other start methods read no configuration. |
+
+The `ConfigPath` launchers and the key each needs: `Open-DBeaver` (`DbeaverExe`), `Open-Docker` (`DockerExe`), `Open-FoundryVTT` (`FoundryVTTExe`), `Open-NotepadPlusPlus` without a file (`NotepadPlusPlusExe`), `Open-Outlook` (`OutlookLauncherExe`), `Open-RiseupVPN` (`RiseupVpnExe`), `Open-TeamViewer` (`TeamViewerExe`), `Open-VirtualBox` (`VirtualBoxExe`).
 
 ## Decisions
 
-1. Which browser should be the default?
-    - Options: A key from `Universal.Browsers`: `Firefox`, `Chrome`, `Edge`, `Brave`, `Tor`. Ships empty, so `Open-Browser` asks or uses the system default.
-    - Default: Empty.
-    - More detail: [`Universal`](../../configuration-reference.md#universal-constants)
-2. Are any of the shipped executable paths wrong on this machine?
-    - Options: Override the individual `Universal.<App>Exe` value. Absolute paths, or placeholder paths such as `{User}\AppData\Local\...`.
-    - Default: The shipped paths, which assume default install locations.
-    - More detail: [`Universal`](../../configuration-reference.md#universal-constants)
-3. Do you use a browser the base `Browsers` map does not list?
-    - Options: Add an entry with `Exe`, `PrivateArg` and `NewWindowArg`. Because hashtables merge per key, adding one browser does not remove the others.
-    - Default: The shipped five.
-    - More detail: [`Universal`](../../configuration-reference.md#universal-constants)
+1. Which of the `ConfigPath` launchers do you use, and where are their applications installed?
+    - Options: Set `Universal.<App>Exe` for each one you use, to the full path of its executable. Correct `DockerExe` or `OutlookLauncherExe` only when the shipped value is wrong on this machine.
+    - Default: Empty for the personal applications, so their launchers warn and open nothing; `DockerExe` and `OutlookLauncherExe` ship their default install locations.
+    - More detail: [`Universal`](../../configuration-reference.md#application-executables)
 
 ## Where to Put Values
 
@@ -40,18 +34,12 @@ All of it goes in `Configuration.local.psd1`, at the repository's `Windows/Power
 
 ## Step 1: Set `Universal`
 
-Machine-independent constants: executable paths (`FirefoxExe`, `DockerExe`, `DbeaverExe`, ...), the `Browsers` map, `DefaultBrowser`, shared URLs, the `ProcessCleanup` lists, and `Desktop` (auto-resolved at load). Expanded in place by `Load-PathConfiguration`, so placeholders work here too.
+The executables of the launchers you use. `Universal` is a hashtable and deep-merges, so set only the keys you need.
 
 ```powershell
 Universal = @{
-    DefaultBrowser = "Firefox"
-    Browsers = @{
-        Vivaldi = @{
-            Exe          = "{User}\AppData\Local\Vivaldi\Application\vivaldi.exe"
-            PrivateArg   = "--incognito"
-            NewWindowArg = "--new-window"
-        }
-    }
+    DbeaverExe    = "{User}\AppData\Local\DBeaver\dbeaver.exe"
+    VirtualBoxExe = "C:\Program Files\Oracle\VirtualBox\VirtualBox.exe"
 }
 ```
 
@@ -70,8 +58,8 @@ Read-only checks. None of these change anything.
 
 ```powershell
 Reload-PowerShellProfile
-$global:Configuration.Universal
-$global:Configuration.Universal.Keys | Sort-Object
+$global:Configuration.Universal.DbeaverExe
+$global:Configuration.Universal.VirtualBoxExe
 ```
 
 If a value reads back as empty, the two usual causes are a parse error in `Configuration.local.psd1` (run `Test-ConfigurationSchema`) and a key placed at the wrong nesting level.
@@ -84,14 +72,8 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 # Configuration.local.psd1
 @{
     Universal = @{
-        DefaultBrowser = "Firefox"
-        Browsers = @{
-            Vivaldi = @{
-                Exe          = "{User}\AppData\Local\Vivaldi\Application\vivaldi.exe"
-                PrivateArg   = "--incognito"
-                NewWindowArg = "--new-window"
-            }
-        }
+        DbeaverExe    = "{User}\AppData\Local\DBeaver\dbeaver.exe"
+        VirtualBoxExe = "C:\Program Files\Oracle\VirtualBox\VirtualBox.exe"
     }
 }
 ```
@@ -100,10 +82,7 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 
 - [`Start-Application` in the Application module reference](../../../modules/application.md#start-application) - parameters, usage and behaviour
 - [Application configuration guides](README.md) - every guide for this module
-- [Add Browser Group](add-browser-group.md) - browser groups, nesting, unique names, search and per-browser selection
-- [`Open-Browser`](Open-Browser.md) - reads the same configuration
-- [`Open-LeagueOfLegends`](Open-LeagueOfLegends.md) - reads the same configuration
-- [`Open-NotepadPlusPlus`](Open-NotepadPlusPlus.md) - reads the same configuration
-- [`Open-Steam`](Open-Steam.md) - reads the same configuration
+- [`Open-NotepadPlusPlus`](Open-NotepadPlusPlus.md) - reads `NotepadPlusPlusExe` itself as well
+- The `ConfigPath` launchers, whose key lives here: [`Open-DBeaver`](Open-DBeaver.md), [`Open-Docker`](Open-Docker.md), [`Open-FoundryVTT`](Open-FoundryVTT.md), [`Open-Outlook`](Open-Outlook.md), [`Open-RiseupVPN`](Open-RiseupVPN.md), [`Open-TeamViewer`](Open-TeamViewer.md), [`Open-VirtualBox`](Open-VirtualBox.md)
 - [WinuXConfigurator](../../winux-configurator.md) - have an AI assistant walk these decisions with you
 - [Configuration reference](../../configuration-reference.md) - every key, section by section

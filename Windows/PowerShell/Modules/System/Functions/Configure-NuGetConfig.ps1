@@ -5,8 +5,19 @@ function Configure-NuGetConfig {
 
     .DESCRIPTION
         Copies a NuGet.config file from the WinuX repository to the user's AppData NuGet
-        folder. The source and destination paths are read from `MachineSpecificPaths.NuGetConfig`.
-        Skips the copy if the destination already exists unless `-Override` is set.
+        folder. The source and destination paths are read from `MachineSpecificPaths.NuGetConfig`
+        (the expanded `PathTemplates.NuGetConfig`).
+
+        When the destination already exists and `-Override` is not set, its packageSources are
+        compared with the template's by key and URL: a match returns without changes, any
+        missing, extra or differing source triggers a reconfigure. Without a readable template
+        it warns to use `-Override` and returns.
+
+        A reconfigure prompts for the GitHub username and personal access token (the token as a
+        secure string), substitutes them for the `[Username]` and `[Token]` placeholders in the
+        template, and writes the result as UTF-8. An existing real (non-symlink) destination
+        file is first copied into the backup sink (Backup-RepositoryItem, category System, key
+        NuGetConfig); if that backup fails the write is skipped.
 
     .PARAMETER Override
         Force reconfiguration of NuGet settings even if already configured.

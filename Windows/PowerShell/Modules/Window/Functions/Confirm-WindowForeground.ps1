@@ -8,8 +8,9 @@ function Confirm-WindowForeground {
 		effect before returning. Focus handoff is asynchronous, so a single
 		ForceForegroundWindow call can race with input injection; this helper retries with an
 		increasing settle delay and only reports success once GetForegroundWindow confirms the
-		window is actually focused. Used by Snap-AllWindows immediately before injecting snap
-		hotkeys, and reusable by any flow that must guarantee focus before sending input.
+		window is actually focused. Used by Snap-AllWindows' per-window snap paths
+		(Invoke-MultiZoneWindowSnap, Invoke-SingleZoneWindowSnap) immediately before injecting
+		snap hotkeys, and reusable by any flow that must guarantee focus before sending input.
 
 	.PARAMETER WindowHandle
 		The handle of the window to bring to the foreground.

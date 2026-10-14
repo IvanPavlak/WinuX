@@ -95,7 +95,7 @@ ProjectTerminals = @(
 Terminal tabs will be named `MyNewProject.API` and `MyNewProject.UI`.
 
 > [!WARNING]
-> `ProjectTerminals` only defines available tab paths. To actually open those tabs from `Open-Project` (and from workspace flows like `w AlgoProject` that call `Open-Project`), the same project **must** include this action in `ProjectActions`:
+> `ProjectTerminals` only defines available tab paths. To actually open those tabs from `Open-Project` (and from workspace flows like `w MyWorkspace` that call `Open-Project`), the same project **must** include this action in `ProjectActions`:
 > `@{ Action = "Open-ProjectTerminals-Or-RunProject"; Parameters = @{ Project = "{ProjectName}" } }`
 > Without that action, only other configured actions (for example `Open-VSCode`) will run, and no terminal tabs will open.
 
@@ -135,13 +135,14 @@ BrowserGroups = @(
 No separate per-project mapping is needed - the lookup is by name. Opening the tab is opt-in per workspace: declare the [Open-ProjectSwagger](../../../modules/workflow.md#open-projectswagger) action after the workspace's `Open-Project` and `Open-Browser` actions, and it resolves the active project's `Swagger` group via [Resolve-SwaggerBrowserGroup](../../../modules/workflow.md#resolve-swaggerbrowsergroup) and opens it unless it is already open:
 
 ```powershell
-WorkspaceActions = @{
-    MyWorkspace = @(
-        @{ Action = "Open-Project"; Parameters = @{ Project = "MyNewProject" } }
-        @{ Action = "Open-Browser"; Parameters = @{ Groups = @("AI", "GitHub") } }
-        @{ Action = "Open-ProjectSwagger"; Parameters = @{ Project = "{SelectedProjects}" } }
-    )
-}
+WorkspaceActions = @(
+    @{ MyWorkspace = @(
+            @{ Action = "Open-Project"; Parameters = @{ Project = "MyNewProject" } }
+            @{ Action = "Open-Browser"; Parameters = @{ Groups = @("AI", "GitHub") } }
+            @{ Action = "Open-ProjectSwagger"; Parameters = @{ Project = "{SelectedProjects}" } }
+        )
+    }
+)
 ```
 
 A workspace that omits the action never opens a Swagger tab, so skip this step entirely if you do not use Swagger.

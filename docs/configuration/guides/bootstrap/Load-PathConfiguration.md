@@ -12,7 +12,7 @@ Loads `Configuration.psd1`, detects the machine type, expands path placeholders,
 | [`BasePaths`](../../configuration-reference.md#base-paths-per-machine-type) | hashtable of machine type to `@{ Dev; User }` | hashtable, 2 keys (`Machine`, `Test`) | The two root directories every placeholder path is built from, per machine type. `{Dev}` expands to `Dev`, `{User}` to `User`. This is the single most load-bearing key: get it wrong and every templated path is wrong. |
 | [`DefaultMachineType`](../../configuration-reference.md#default-machine-type) | string | `"Test"` | The machine type used when the hostname is not in `HostnameToMachineType`. This is the safety net behind machine detection. |
 | [`HostnameToMachineType`](../../configuration-reference.md#hostname-to-machine-type-mapping) | hashtable of hostname to machine type | `@{ Test = "Test" }` | How `DetermineMachineType` turns this computer name into a machine type. A hostname that is not listed falls back to `DefaultMachineType`. |
-| [`Universal`](../../configuration-reference.md#universal-constants) | hashtable, 26 keys | hashtable, 26 keys | Machine-independent constants: executable paths (`FirefoxExe`, `DockerExe`, `DbeaverExe`, ...), the `Browsers` map, `DefaultBrowser`, shared URLs, the `ProcessCleanup` lists, and `Desktop` (auto-resolved at load). Expanded in place by `Load-PathConfiguration`, so placeholders work here too. |
+| [`Universal`](../../configuration-reference.md#universal-constants) | hashtable, 27 keys | hashtable, 27 keys | Machine-independent constants: executable paths (`FirefoxExe`, `DockerExe`, `DbeaverExe`, ...), the `Browsers` map, `DefaultBrowser`, shared URLs, the `TerminateProcessNames` and `VisibleWindowExclusions` lists, and `Desktop` (auto-resolved at load). Expanded in place by `Load-PathConfiguration`, so placeholders work here too. |
 
 This is where the merge you are relying on actually happens: the base `Configuration.psd1` is imported, `Configuration.local.psd1` is deep-merged over it by `Merge-Hashtable`, `Universal` is expanded in place, and `Expand-ConfigPaths` produces `$global:MachineSpecificPaths`. If a value you set is not showing up, inspect it here first - `$global:Configuration.<Key>` after a reload is the ground truth for whether your local file landed.
 
@@ -43,7 +43,7 @@ This is where the merge you are relying on actually happens: the base `Configura
     - Default: Just this machine.
     - More detail: [`HostnameToMachineType`](../../configuration-reference.md#hostname-to-machine-type-mapping)
 7. Which browser should be the default?
-    - Options: A key from `Universal.Browsers`: `Firefox`, `Chrome`, `Edge`, `Brave`, `Tor`. Ships empty, so `Open-Browser` asks or uses the system default.
+    - Options: A key from `Universal.Browsers`: `Firefox`, `Chrome`, `Edge`, `Brave`, `Tor`. Ships empty; with no `DefaultBrowser`, `Open-Browser` warns and opens nothing, and the functions that depend on it skip their browser step.
     - Default: Empty.
     - More detail: [`Universal`](../../configuration-reference.md#universal-constants)
 8. Are any of the shipped executable paths wrong on this machine?
@@ -102,13 +102,13 @@ How `DetermineMachineType` turns this computer name into a machine type. A hostn
 ```powershell
 HostnameToMachineType = @{
     Test             = "Test"
-    "DESKTOP-GAMING" = "Machine"
+    "DESKTOP-GAMING" = "PC"
 }
 ```
 
 ## Step 4: Set `Universal`
 
-Machine-independent constants: executable paths (`FirefoxExe`, `DockerExe`, `DbeaverExe`, ...), the `Browsers` map, `DefaultBrowser`, shared URLs, the `ProcessCleanup` lists, and `Desktop` (auto-resolved at load). Expanded in place by `Load-PathConfiguration`, so placeholders work here too.
+Machine-independent constants: executable paths (`FirefoxExe`, `DockerExe`, `DbeaverExe`, ...), the `Browsers` map, `DefaultBrowser`, shared URLs, the `TerminateProcessNames` and `VisibleWindowExclusions` lists, and `Desktop` (auto-resolved at load). Expanded in place by `Load-PathConfiguration`, so placeholders work here too.
 
 ```powershell
 Universal = @{
@@ -167,7 +167,7 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
     DefaultMachineType = "Test"
     HostnameToMachineType = @{
         Test             = "Test"
-        "DESKTOP-GAMING" = "Machine"
+        "DESKTOP-GAMING" = "PC"
     }
     Universal = @{
         DefaultBrowser = "Firefox"

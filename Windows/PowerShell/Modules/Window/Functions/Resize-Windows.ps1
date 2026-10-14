@@ -23,7 +23,7 @@ function Resize-Windows {
 
 		When TargetX, TargetY, TargetWidth, and TargetHeight are provided, the function
 		uses the shared FancyZones pre-snap inset sizing logic instead of percentage
-		scaling. This keeps Set-WindowLayouts, pre-snap workspace resizing, and
+		scaling (supplying only some of the four throws). This keeps Set-WindowLayouts, pre-snap workspace resizing, and
 		Snap-AllWindows retries aligned. An InsetPercent of 0 places the window at the
 		exact target bounds, which is how Center-Windows reuses this path for centering.
 
@@ -84,6 +84,10 @@ function Resize-Windows {
 	.PARAMETER SkipIfAlreadyPositioned
 		Skips resizing when the window is already at the adjusted target bounds within
 		the specified Tolerance.
+
+	.OUTPUTS
+		None. The outcome (ResizedCount, SkippedCount, FailedWindows) is stored in
+		$script:LastResizeWindowsResult, which Resize-PositionedWindows reads.
 
 	.EXAMPLE
 		Resize-Windows

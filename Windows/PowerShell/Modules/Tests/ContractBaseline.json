@@ -1,0 +1,7236 @@
+{
+  "Version": "1.0.0",
+  "Functions": {
+    "Add-BrowserGroup": {
+      "Module": "Configuration",
+      "Parameters": {
+        "BackupRoot": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ConfigurationFilePath": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "GroupName": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "SimpleUrls": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "Urls": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Add-PositionedWindow": {
+      "Module": "Window",
+      "Parameters": {
+        "DesktopNumber": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ExpectedHeight": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "ExpectedProcessId": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ExpectedProcessName": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ExpectedWidth": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "ExpectedX": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "ExpectedY": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "LayoutOrder": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "SingleZone": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "WindowHandle": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "WindowTitle": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Add-Project": {
+      "Module": "Configuration",
+      "Parameters": {
+        "Actions": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "BackupRoot": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "BasePath": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ConfigurationFilePath": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Name": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "Paths": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Runnable": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "TerminalTabs": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Add-SymbolicLink": {
+      "Module": "Configuration",
+      "Parameters": {
+        "BackupRoot": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ConfigurationFilePath": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Links": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "Name": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "Path": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "Target": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Add-WindowLayout": {
+      "Module": "Configuration",
+      "Parameters": {
+        "BackupRoot": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ConfigurationFilePath": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "LayoutsDirectory": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "MachineType": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Simple": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "WorkspaceName": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Add-WindowsFormsType": {
+      "Module": "System",
+      "Parameters": {
+        "Quiet": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Add-Workspace": {
+      "Module": "Configuration",
+      "Parameters": {
+        "Actions": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "BackupRoot": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ConfigurationFilePath": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Name": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "Template": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Apply-FancyZones": {
+      "Module": "Window",
+      "Parameters": {
+        "DesktopCount": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "DesktopNumber": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "DesktopOffset": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Force": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "MonitorConfig": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "MonitorInfo": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Backup-RepositoryItem": {
+      "Module": "Helper",
+      "Parameters": {
+        "BackupRoot": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Category": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "DirectoryOnly": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Key": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "Path": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Bootstrap": {
+      "Module": "Bootstrap",
+      "Parameters": {
+        "Include": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "RepoRoot": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Skip": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "WithInitialSetup": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "BranchExists": {
+      "Module": "Helper",
+      "Parameters": {
+        "Branch": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Build-ZoneGridMap": {
+      "Module": "Window",
+      "Parameters": {
+        "CellChildMap": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Cd-Desktop": {
+      "Module": "Helper",
+      "Parameters": {}
+    },
+    "Center-Terminal": {
+      "Module": "Window",
+      "Parameters": {}
+    },
+    "Center-Text": {
+      "Module": "Window",
+      "Parameters": {
+        "Text": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "Width": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Center-Windows": {
+      "Module": "Window",
+      "Parameters": {
+        "HeightPercent": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Monitor": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "OnPrimary": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ProcessName": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "WidthPercent": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "WindowTitle": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Clear-FancyZonesCache": {
+      "Module": "Window",
+      "Parameters": {}
+    },
+    "Clear-FancyZonesWindowAssignment": {
+      "Module": "Window",
+      "Parameters": {
+        "WindowHandle": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Clear-MonitorCache": {
+      "Module": "Window",
+      "Parameters": {}
+    },
+    "Clear-OldBackups": {
+      "Module": "Helper",
+      "Parameters": {
+        "BackupRoot": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "MaxAgeDays": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "MaxBackupsPerKey": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "MaxTotalSizeMB": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Clear-OldLogs": {
+      "Module": "Logging",
+      "Parameters": {
+        "MaxAgeDays": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "MaxErrorFileSizeMB": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "MaxSessionFiles": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "MaxTotalSizeMB": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Clear-TaskbarPins": {
+      "Module": "System",
+      "Parameters": {
+        "SkipExplorerRestart": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Clear-WhatsAppLocalStorage": {
+      "Module": "System",
+      "Parameters": {}
+    },
+    "Clear-WindowCache": {
+      "Module": "Window",
+      "Parameters": {}
+    },
+    "Close-BrowserTabsByPattern": {
+      "Module": "Workflow",
+      "Parameters": {
+        "ProcessName": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "TitlePatterns": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Close-BrowserWindows": {
+      "Module": "System",
+      "Parameters": {
+        "WindowsToClose": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Close-Project": {
+      "Module": "Workflow",
+      "Parameters": {
+        "Project": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Close-ProjectTerminals": {
+      "Module": "Workflow",
+      "Parameters": {
+        "ProjectName": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "StartingTabTitle": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "TerminalWindowHandle": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Close-Window": {
+      "Module": "Window",
+      "Parameters": {
+        "Handle": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Close-WindowsTerminalTab": {
+      "Module": "Helper",
+      "Parameters": {
+        "TabTitle": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "WindowHandle": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Close-Workspace": {
+      "Module": "Workflow",
+      "Parameters": {
+        "StatePath": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Workspace": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Collect-BrowserUrls": {
+      "Module": "Helper",
+      "Parameters": {
+        "Depth": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Value": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Complete-DeferredActions": {
+      "Module": "Helper",
+      "Parameters": {}
+    },
+    "Complete-ObsidianWorkspaceLoad": {
+      "Module": "Application",
+      "Parameters": {
+        "CliPath": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "ColdStart": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Name": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "TimeoutSeconds": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Vault": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Complete-StartupStage": {
+      "Module": "Helper",
+      "Parameters": {
+        "TracePath": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Configure-NerdFont": {
+      "Module": "System",
+      "Parameters": {
+        "FontName": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Configure-NuGetConfig": {
+      "Module": "System",
+      "Parameters": {
+        "BackupRoot": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Override": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Configure-PostgreSqlPasswords": {
+      "Module": "System",
+      "Parameters": {
+        "Auto": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "DefaultOrCurrentPassword": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "NewPassword": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Configure-Taskbar": {
+      "Module": "System",
+      "Parameters": {
+        "BackupRoot": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "FromBootstrap": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Configure-WSL": {
+      "Module": "System",
+      "Parameters": {
+        "Force": {
+          "Mandatory": false,
+          "Aliases": [
+            "Override"
+          ]
+        }
+      }
+    },
+    "Configure-WSLSSH": {
+      "Module": "System",
+      "Parameters": {}
+    },
+    "Confirm-ConfigValue": {
+      "Module": "Helper",
+      "Parameters": {
+        "Quiet": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Value": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "WarningMessage": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Confirm-WindowForeground": {
+      "Module": "Window",
+      "Parameters": {
+        "BaseSettleMs": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "MaxAttempts": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "WindowHandle": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Confirm-WorkspaceWindowPositions": {
+      "Module": "Window",
+      "Parameters": {
+        "DesktopOffset": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ExcludeWindowHandles": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "LayoutConfig": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "MonitorConfig": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "MonitorInfo": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Tolerance": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Convert-GlobalVariablesToParameters": {
+      "Module": "Helper",
+      "Parameters": {
+        "FunctionDefinition": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "GlobalVariables": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "ConvertFrom-VSCodeExtensionLine": {
+      "Module": "Application",
+      "Parameters": {
+        "Line": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "ConvertTo-ActionString": {
+      "Module": "Configuration",
+      "Parameters": {
+        "Action": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "Indent": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "ConvertTo-InternalDesktopIndex": {
+      "Module": "Window",
+      "Parameters": {
+        "DesktopNumber": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "DesktopOffset": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "ConvertTo-WorkspaceOpenSummary": {
+      "Module": "Workflow",
+      "Parameters": {
+        "Reference": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Row": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Countdown": {
+      "Module": "Helper",
+      "Parameters": {
+        "Message": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Seconds": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Create-CenteredBorder": {
+      "Module": "Helper",
+      "Parameters": {
+        "BorderChar": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Title": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Create-CondaEnvironments": {
+      "Module": "Application",
+      "Parameters": {}
+    },
+    "Create-Executable": {
+      "Module": "Helper",
+      "Parameters": {
+        "Company": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Description": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "FunctionName": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "IconFile": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "NoConsole": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "OutputPath": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "RequireAdmin": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Title": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Version": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Custom-ReadHost": {
+      "Module": "Helper",
+      "Parameters": {
+        "AddNewLine": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "AsSecureString": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ForegroundColor": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "PromptMessage": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Deploy-AiMarketplaces": {
+      "Module": "AI",
+      "Parameters": {
+        "Command": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "WslCommand": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Deploy-AiMods": {
+      "Module": "AI",
+      "Parameters": {}
+    },
+    "Deploy-AiSkills": {
+      "Module": "AI",
+      "Parameters": {}
+    },
+    "Deploy-CoreAiRules": {
+      "Module": "AI",
+      "Parameters": {}
+    },
+    "Deploy-VSCodeProfiles": {
+      "Module": "Application",
+      "Parameters": {
+        "Command": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Name": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Prune": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Determine-DotnetDependencies": {
+      "Module": "System",
+      "Parameters": {
+        "ExcludePaths": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ListProjects": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "SearchPath": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "DetermineMachineType": {
+      "Module": "Bootstrap",
+      "Parameters": {}
+    },
+    "Display-SystemLanguageSettings": {
+      "Module": "System",
+      "Parameters": {}
+    },
+    "Docker-Cleanup": {
+      "Module": "Workflow",
+      "Parameters": {
+        "Action": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "DockerWizard": {
+      "Module": "Workflow",
+      "Parameters": {
+        "ComposeFilePath": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ComposeProjectPath": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "PassThru": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Stop": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "DotnetBuildAndRun": {
+      "Module": "Helper",
+      "Parameters": {}
+    },
+    "DotnetPublish": {
+      "Module": "Helper",
+      "Parameters": {}
+    },
+    "DotnetRun": {
+      "Module": "Helper",
+      "Parameters": {}
+    },
+    "EfCoreMigrationWizard": {
+      "Module": "Workflow",
+      "Parameters": {}
+    },
+    "Enable-DeveloperMode": {
+      "Module": "System",
+      "Parameters": {}
+    },
+    "Enable-ObsidianCli": {
+      "Module": "Application",
+      "Parameters": {
+        "CreateIfMissing": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "SettingsPath": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Ensure-DesktopVisible": {
+      "Module": "Window",
+      "Parameters": {
+        "DesktopIndex": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "WindowHandle": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Ensure-VirtualDesktops": {
+      "Module": "Window",
+      "Parameters": {
+        "Count": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "SwitchToDesktop": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Ensure-WindowsFormsLoaded": {
+      "Module": "Window",
+      "Parameters": {}
+    },
+    "Expand-ConfigPaths": {
+      "Module": "Bootstrap",
+      "Parameters": {
+        "Configuration": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "MachineType": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "RepoRoot": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Expand-Hashtable": {
+      "Module": "Bootstrap",
+      "Parameters": {
+        "DevPath": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "MachineTypeName": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "RepoRoot": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Source": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "UserPath": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Expand-LayoutMonitorCoverage": {
+      "Module": "Window",
+      "Parameters": {
+        "Config": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "MonitorInfo": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Expand-WorkspaceTemplates": {
+      "Module": "Helper",
+      "Parameters": {
+        "Configuration": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Quiet": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Export-VSCodeProfile": {
+      "Module": "Application",
+      "Parameters": {
+        "Command": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Name": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Find-ConfigurationSection": {
+      "Module": "Configuration",
+      "Parameters": {
+        "Lines": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "SectionName": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Find-EfMigrationProjects": {
+      "Module": "Helper",
+      "Parameters": {
+        "CsprojFiles": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "SolutionRoot": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Find-EfStartupProject": {
+      "Module": "Helper",
+      "Parameters": {
+        "CsprojFiles": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "MigrationsProjectFile": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "MigrationsProjectPath": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "SolutionRoot": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Find-Item": {
+      "Module": "Helper",
+      "Parameters": {
+        "ErrorMessage": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "MaxDownwardDepth": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "MaxUpwardDepth": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "MenuTitle": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "NameFilter": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Pattern": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "PromptMessage": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ReturnFullObject": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "SearchMessage": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "SearchTarget": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "SelectFirst": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "StartPath": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "SuccessMessage": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Focus-TerminalTab": {
+      "Module": "Workflow",
+      "Parameters": {
+        "Quiet": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "TargetTitle": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "WindowHandle": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Focus-VirtualDesktop": {
+      "Module": "Window",
+      "Parameters": {
+        "DesktopNumber": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "DesktopOffset": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Format-CanvasZoneListing": {
+      "Module": "Window",
+      "Parameters": {
+        "LayoutInfo": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "ZoneContent": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ZoneNames": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Format-OnefetchPanel": {
+      "Module": "System",
+      "Parameters": {
+        "Colors": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Line": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Separator": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Format-RepositoryUpdateResult": {
+      "Module": "Git",
+      "Parameters": {
+        "Result": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Format-WorkspaceStateContent": {
+      "Module": "Workflow",
+      "Parameters": {
+        "Entry": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Format-ZoneContent": {
+      "Module": "Window",
+      "Parameters": {
+        "Content": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Width": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Generate-DynamicVisualization": {
+      "Module": "Window",
+      "Parameters": {
+        "LayoutInfo": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "TotalWidth": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ZoneContent": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ZoneNames": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Generate-LayoutVisualization": {
+      "Module": "Window",
+      "Parameters": {
+        "DesktopNumber": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "LayoutsJsonPath": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "LayoutType": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "MonitorName": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Windows": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-ActiveWindowInfo": {
+      "Module": "Window",
+      "Parameters": {
+        "Continuous": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Window": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-AiModRoster": {
+      "Module": "AI",
+      "Parameters": {
+        "Root": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-AiSkillDescription": {
+      "Module": "AI",
+      "Parameters": {
+        "SkillFile": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-AiSkillManifest": {
+      "Module": "AI",
+      "Parameters": {
+        "Path": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-AiSkillRoster": {
+      "Module": "AI",
+      "Parameters": {
+        "Root": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-AppliedFancyZonesState": {
+      "Module": "Window",
+      "Parameters": {
+        "Force": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-BrowserTitlePattern": {
+      "Module": "System",
+      "Parameters": {
+        "BrowserName": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-BrowserWindowsByTarget": {
+      "Module": "System",
+      "Parameters": {
+        "TargetPids": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "TitlePattern": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-CachedFancyZonesLayouts": {
+      "Module": "Window",
+      "Parameters": {
+        "LayoutsJsonPath": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-CachedMonitors": {
+      "Module": "Window",
+      "Parameters": {}
+    },
+    "Get-CachedWindows": {
+      "Module": "Window",
+      "Parameters": {}
+    },
+    "Get-ChassisType": {
+      "Module": "System",
+      "Parameters": {
+        "CachePath": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Refresh": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-ConfigSetting": {
+      "Module": "Helper",
+      "Parameters": {
+        "Configuration": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Default": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Path": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-ConsoleWindowSize": {
+      "Module": "System",
+      "Parameters": {}
+    },
+    "Get-CurrentLayout": {
+      "Module": "Window",
+      "Parameters": {
+        "LayoutsDir": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "Workspace": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-CurrentVirtualDesktopIndex": {
+      "Module": "Window",
+      "Parameters": {}
+    },
+    "Get-DatabaseTypeFromProject": {
+      "Module": "Helper",
+      "Parameters": {
+        "projectName": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "projectPath": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "snapshotContent": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-DbContextFromSnapshot": {
+      "Module": "Helper",
+      "Parameters": {
+        "SnapshotPath": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-DbContextsFromProject": {
+      "Module": "Helper",
+      "Parameters": {
+        "ProjectPath": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-DocsReferenceMarker": {
+      "Module": "Helper",
+      "Parameters": {
+        "Path": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-DotnetVersionFromTFM": {
+      "Module": "Helper",
+      "Parameters": {
+        "TFM": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-DuplicateMonitorEdid": {
+      "Module": "Window",
+      "Parameters": {
+        "DisplayToEdidMap": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-EfCoreDbContexts": {
+      "Module": "Helper",
+      "Parameters": {
+        "ProjectPath": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "StartupProjectPath": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "WorkingDirectory": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-EfCurrentDatabaseType": {
+      "Module": "Helper",
+      "Parameters": {
+        "SolutionRoot": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-EfMigrations": {
+      "Module": "Helper",
+      "Parameters": {
+        "MigrationFolderPath": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-FancyZone": {
+      "Module": "Window",
+      "Parameters": {
+        "CustomLayoutsPath": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "LayoutName": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "MonitorHeight": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "MonitorWidth": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "MonitorX": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "MonitorY": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ZoneName": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-FancyZoneCoordinates": {
+      "Module": "Window",
+      "Parameters": {
+        "CustomLayoutsPath": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "LayoutName": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "MonitorHeight": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "MonitorWidth": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "MonitorX": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "MonitorY": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-FancyZonesLayoutsPath": {
+      "Module": "Window",
+      "Parameters": {
+        "File": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-FancyZonesWindowAssignment": {
+      "Module": "Window",
+      "Parameters": {
+        "WindowHandle": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-FastfetchLogoArgument": {
+      "Module": "System",
+      "Parameters": {
+        "CellHeight": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "CellWidth": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ImagePath": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "OutputRedirected": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "PaddingRight": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ReferenceLogoPath": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-FilteredParams": {
+      "Module": "Helper",
+      "Parameters": {
+        "CommandName": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Params": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-InsetWindowBounds": {
+      "Module": "Window",
+      "Parameters": {
+        "InsetPercent": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "TargetHeight": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "TargetWidth": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "TargetX": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "TargetY": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-InstalledApps": {
+      "Module": "System",
+      "Parameters": {}
+    },
+    "Get-LayoutDefinition": {
+      "Module": "Window",
+      "Parameters": {
+        "LayoutName": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "LayoutsJsonPath": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-LayoutMachineType": {
+      "Module": "Window",
+      "Parameters": {
+        "MonitorInfo": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-LayoutProcessSiblings": {
+      "Module": "Window",
+      "Parameters": {
+        "LayoutConfig": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-LogPath": {
+      "Module": "Logging",
+      "Parameters": {
+        "Directory": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ErrorLog": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-MonitorDeviceIdentityMap": {
+      "Module": "Window",
+      "Parameters": {}
+    },
+    "Get-MonitorInfo": {
+      "Module": "Window",
+      "Parameters": {
+        "Quiet": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-MonitorSpecs": {
+      "Module": "Window",
+      "Parameters": {
+        "AsHashtable": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "MonitorInfo": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-ObsidianCliPath": {
+      "Module": "Application",
+      "Parameters": {}
+    },
+    "Get-ObsidianExecutablePath": {
+      "Module": "Application",
+      "Parameters": {}
+    },
+    "Get-ObsidianWorkspaceNames": {
+      "Module": "Application",
+      "Parameters": {
+        "VaultDirectory": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-OrderedEntry": {
+      "Module": "Helper",
+      "Parameters": {
+        "Name": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "Section": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-OrderedNames": {
+      "Module": "Helper",
+      "Parameters": {
+        "Section": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-PinnedApps": {
+      "Module": "System",
+      "Parameters": {
+        "DataFileKey": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "VersionExcludeValue": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-PositionedWindowCount": {
+      "Module": "Window",
+      "Parameters": {}
+    },
+    "Get-PowerShellFunctionDependencies": {
+      "Module": "Helper",
+      "Parameters": {
+        "FunctionName": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "Recursive": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-RepositoryName": {
+      "Module": "Helper",
+      "Parameters": {
+        "RepositoryUrl": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-RepositoryPath": {
+      "Module": "Helper",
+      "Parameters": {
+        "StartPath": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-RepositoryUpdateDayStart": {
+      "Module": "Git",
+      "Parameters": {
+        "At": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "DayStartHour": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-RepositoryUpdateStartupSettings": {
+      "Module": "Git",
+      "Parameters": {}
+    },
+    "Get-RpcRetryPolicy": {
+      "Module": "Helper",
+      "Parameters": {
+        "InitialDelayMs": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "MaxAttempts": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "OperationLabel": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Probe": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-ShellProcessName": {
+      "Module": "Helper",
+      "Parameters": {}
+    },
+    "Get-SwaggerCloseTitlePatterns": {
+      "Module": "Workflow",
+      "Parameters": {
+        "Project": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-SymbolicLinkEntries": {
+      "Module": "System",
+      "Parameters": {
+        "Name": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Scope": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "SymbolicLinks": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-TargetTerminalWindow": {
+      "Module": "Helper",
+      "Parameters": {
+        "TerminalWindowHandle": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-TerminalCellSize": {
+      "Module": "System",
+      "Parameters": {
+        "TimeoutMilliseconds": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-TerminalTabSnapshot": {
+      "Module": "Helper",
+      "Parameters": {
+        "EnsureVisible": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-VirtualDesktopCount": {
+      "Module": "Window",
+      "Parameters": {}
+    },
+    "Get-VirtualDesktopGuid": {
+      "Module": "Window",
+      "Parameters": {
+        "DesktopIndex": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-VisibleWindowProcess": {
+      "Module": "System",
+      "Parameters": {}
+    },
+    "Get-VSCodeCliPath": {
+      "Module": "Application",
+      "Parameters": {}
+    },
+    "Get-VSCodeInstalledExtensions": {
+      "Module": "Application",
+      "Parameters": {
+        "Command": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "ProfileName": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-VSCodeProfileItems": {
+      "Module": "Application",
+      "Parameters": {
+        "Location": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "Source": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-VSCodeProfileLocation": {
+      "Module": "Application",
+      "Parameters": {
+        "Name": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "Register": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "UserData": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-VSCodeWorkspaceNames": {
+      "Module": "Application",
+      "Parameters": {}
+    },
+    "Get-WindowDesktopIndex": {
+      "Module": "Window",
+      "Parameters": {
+        "WindowHandle": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-WindowDisplayName": {
+      "Module": "Window",
+      "Parameters": {
+        "ProcessName": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "Title": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-WindowFrameMargin": {
+      "Module": "Window",
+      "Parameters": {
+        "WindowHandle": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-WindowHandle": {
+      "Module": "Window",
+      "Parameters": {
+        "All": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ProcessName": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "WindowTitle": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-WindowInsetPercent": {
+      "Module": "Window",
+      "Parameters": {}
+    },
+    "Get-WindowModuleDelays": {
+      "Module": "Window",
+      "Parameters": {}
+    },
+    "Get-WindowsTerminalTabTitles": {
+      "Module": "Helper",
+      "Parameters": {
+        "WindowHandle": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-WindowTitleCandidates": {
+      "Module": "Helper",
+      "Parameters": {
+        "Names": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-WorkspaceBenchmark": {
+      "Module": "Workflow",
+      "Parameters": {
+        "BenchmarkPath": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Formatted": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "IncludeMeasured": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Last": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Source": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Summary": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Workspace": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-WorkspaceBenchmarkPath": {
+      "Module": "Workflow",
+      "Parameters": {}
+    },
+    "Get-WorkspaceLayoutTimings": {
+      "Module": "Window",
+      "Parameters": {}
+    },
+    "Get-WorkspaceOpenDelta": {
+      "Module": "Workflow",
+      "Parameters": {
+        "AdoptUnclaimed": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Alongside": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "DesktopOffset": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ExistingTerminalTabs": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ExistingWindowHandles": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "PreCapturedTerminalTabs": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ProtectedWindowHandles": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Workspace": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-WorkspaceOpenMeasurement": {
+      "Module": "Workflow",
+      "Parameters": {
+        "Formatted": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ListSessions": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "PassThru": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Reference": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ResultPath": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Session": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-WorkspaceOpenMeasurementPath": {
+      "Module": "Workflow",
+      "Parameters": {}
+    },
+    "Get-WorkspaceOpenProtection": {
+      "Module": "Workflow",
+      "Parameters": {
+        "Opening": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "StatePath": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-WorkspaceRerunCommand": {
+      "Module": "Window",
+      "Parameters": {}
+    },
+    "Get-WorkspaceRerunMirror": {
+      "Module": "Window",
+      "Parameters": {
+        "Name": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "Scope": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "TtlMinutes": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-WorkspaceState": {
+      "Module": "Workflow",
+      "Parameters": {
+        "StatePath": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Workspace": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-WorkspaceStatePath": {
+      "Module": "Workflow",
+      "Parameters": {
+        "StartPath": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Git-Diff": {
+      "Module": "Git",
+      "Parameters": {}
+    },
+    "Git-Obsidian": {
+      "Module": "Git",
+      "Parameters": {}
+    },
+    "GitBranch": {
+      "Module": "Git",
+      "Parameters": {
+        "BranchName": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "GitBranchDeleteAndPrune": {
+      "Module": "Git",
+      "Parameters": {
+        "BranchName": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "GitMergeM": {
+      "Module": "Git",
+      "Parameters": {}
+    },
+    "GitPull": {
+      "Module": "Git",
+      "Parameters": {}
+    },
+    "GitStatus": {
+      "Module": "Git",
+      "Parameters": {}
+    },
+    "GitSwitch": {
+      "Module": "Git",
+      "Parameters": {
+        "BranchName": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Import-AppCsv": {
+      "Module": "Bootstrap",
+      "Parameters": {
+        "DataFileKey": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "RepoRoot": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Import-TerminalIcons": {
+      "Module": "System",
+      "Parameters": {
+        "RedrawPrompt": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Import-VirtualDesktopModule": {
+      "Module": "Window",
+      "Parameters": {
+        "Silent": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Initialize-Configuration": {
+      "Module": "Bootstrap",
+      "Parameters": {
+        "BackupRoot": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ConfigPath": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "DevPath": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Force": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "GitEmail": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "GitName": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "LocalConfigPath": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "MachineType": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Owner": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Initialize-Directory": {
+      "Module": "Helper",
+      "Parameters": {
+        "Path": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Initialize-LoggingState": {
+      "Module": "Logging",
+      "Parameters": {
+        "Force": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Initialize-OhMyPosh": {
+      "Module": "System",
+      "Parameters": {}
+    },
+    "Initialize-PositionedWindowTracking": {
+      "Module": "Window",
+      "Parameters": {}
+    },
+    "Initialize-PSReadLine": {
+      "Module": "System",
+      "Parameters": {
+        "Settings": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Initialize-Repository": {
+      "Module": "Git",
+      "Parameters": {
+        "LocalPath": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "RepositoryUrl": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Token": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Initialize-WorkspaceWindowLayoutRerun": {
+      "Module": "Window",
+      "Parameters": {
+        "WindowOnlyRetry": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Initialize-WSLEnvironment": {
+      "Module": "System",
+      "Parameters": {}
+    },
+    "Install-ChocolateyApps": {
+      "Module": "Application",
+      "Parameters": {}
+    },
+    "Install-ChocolateyPackageManager": {
+      "Module": "Application",
+      "Parameters": {}
+    },
+    "Install-DotnetEf": {
+      "Module": "Application",
+      "Parameters": {
+        "Update": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Install-FromExecutable": {
+      "Module": "Application",
+      "Parameters": {
+        "Arguments": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "DetectionPath": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "InstallerName": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "MaxAttempts": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Name": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "Path": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "RequireAdmin": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Url": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "ValidExitCodes": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Install-Git": {
+      "Module": "Git",
+      "Parameters": {}
+    },
+    "Install-PowerShellModules": {
+      "Module": "Application",
+      "Parameters": {}
+    },
+    "Install-ScoopApps": {
+      "Module": "Application",
+      "Parameters": {}
+    },
+    "Install-ScoopPackageManager": {
+      "Module": "Application",
+      "Parameters": {}
+    },
+    "Install-WingetApps": {
+      "Module": "Application",
+      "Parameters": {}
+    },
+    "Install-WinGetPackageManager": {
+      "Module": "Bootstrap",
+      "Parameters": {}
+    },
+    "Invoke-Browser": {
+      "Module": "Application",
+      "Parameters": {
+        "Query": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Invoke-Clear": {
+      "Module": "System",
+      "Parameters": {
+        "Settings": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Invoke-Fastfetch": {
+      "Module": "System",
+      "Parameters": {
+        "ExtraRows": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "MaxShrinkSteps": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "NoResize": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "PromptReserve": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ReflowTimeoutMilliseconds": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Settings": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Invoke-GoogleTranslate": {
+      "Module": "Helper",
+      "Parameters": {
+        "InputLanguage": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "OutputLanguage": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "RemainingWords": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Text": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Invoke-LogMaintenance": {
+      "Module": "Logging",
+      "Parameters": {
+        "Force": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ResultsDirectory": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Invoke-MultiZoneWindowSnap": {
+      "Module": "Window",
+      "Parameters": {
+        "ExpectedHeight": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "ExpectedWidth": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "ExpectedX": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "ExpectedY": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "InsetPercent": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "MaxAttempts": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "WindowHandle": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "WindowTitle": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Invoke-ObsidianCli": {
+      "Module": "Application",
+      "Parameters": {
+        "Arguments": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "CliPath": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "TimeoutSeconds": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Invoke-ObsidianWorkspaceLoad": {
+      "Module": "Application",
+      "Parameters": {
+        "CliPath": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "Name": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "Silent": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "TimeoutSeconds": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Vault": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Invoke-Onefetch": {
+      "Module": "System",
+      "Parameters": {
+        "Arguments": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Measure": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Path": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Settings": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Invoke-PersonalSteps": {
+      "Module": "Bootstrap",
+      "Parameters": {}
+    },
+    "Invoke-PrivacyRequest": {
+      "Module": "Helper",
+      "Parameters": {
+        "RetryCount": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "TimeoutSec": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Uri": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "UseTor": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Invoke-ReadyDesktopPass": {
+      "Module": "Window",
+      "Parameters": {
+        "AbandonedEntries": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Pipeline": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "ReadyDesktopNumber": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "ReadyEntries": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "StableWindowHandles": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Invoke-RepositoryUpdatePromptCheck": {
+      "Module": "Git",
+      "Parameters": {}
+    },
+    "Invoke-RerunLastCommandExit": {
+      "Module": "Helper",
+      "Parameters": {}
+    },
+    "Invoke-ShellStartupSample": {
+      "Module": "System",
+      "Parameters": {
+        "Bare": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Executable": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Skip": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Invoke-SingleZoneWindowPlacement": {
+      "Module": "Window",
+      "Parameters": {
+        "MaxAttempts": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "TargetHeight": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "TargetWidth": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "TargetX": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "TargetY": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "WindowHandle": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "WindowTitle": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Invoke-SingleZoneWindowSnap": {
+      "Module": "Window",
+      "Parameters": {
+        "InsetPercent": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "MaxAttempts": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "TargetHeight": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "TargetWidth": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "TargetX": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "TargetY": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "WindowHandle": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "WindowTitle": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Invoke-StartupRepositoryUpdate": {
+      "Module": "Git",
+      "Parameters": {
+        "Force": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "RedrawPrompt": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Invoke-TerminateWindowsTerminalTabsExit": {
+      "Module": "System",
+      "Parameters": {}
+    },
+    "Invoke-TerminateWindowsTerminalTabsIncludeCurrentCleanup": {
+      "Module": "System",
+      "Parameters": {
+        "ClosedTabs": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "CloseWaitSeconds": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "OriginalHostTitle": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "StartingTitle": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Invoke-TorRequest": {
+      "Module": "Helper",
+      "Parameters": {
+        "RetryCount": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "TimeoutSec": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Uri": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Invoke-VirtualDesktopOperation": {
+      "Module": "Window",
+      "Parameters": {
+        "InitialDelayMs": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Label": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "MaxAttempts": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Operation": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "Probe": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Invoke-WithOptionalRetry": {
+      "Module": "Helper",
+      "Parameters": {
+        "EnableRetry": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "InitialDelayMs": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "MaxAttempts": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "OnRetry": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ScriptBlock": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Invoke-WithRetry": {
+      "Module": "Helper",
+      "Parameters": {
+        "InitialDelayMs": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "MaxAttempts": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "OnRetry": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ScriptBlock": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Kill-All": {
+      "Module": "System",
+      "Parameters": {
+        "Exclude": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Include": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "IncludeCurrent": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ReloadPowerShellProfile": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Skip": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "List-AvailableColors": {
+      "Module": "Helper",
+      "Parameters": {}
+    },
+    "List-Drives": {
+      "Module": "System",
+      "Parameters": {}
+    },
+    "List-Functions": {
+      "Module": "Helper",
+      "Parameters": {
+        "Category": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Function": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ListDiscrepancies": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Quiet": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "List-Skills": {
+      "Module": "AI",
+      "Parameters": {
+        "ListDiscrepancies": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Quiet": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Skill": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Source": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Load-PathConfiguration": {
+      "Module": "Bootstrap",
+      "Parameters": {
+        "Configuration": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Quiet": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "RepoRoot": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Loading-Spinner": {
+      "Module": "Helper",
+      "Parameters": {
+        "CheckmarkOnly": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Completed": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Discard": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Function": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "Label": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Pause": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "Resume": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "Spinner": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Start": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "Stop": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "Style": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Measure-ShellStartup": {
+      "Module": "System",
+      "Parameters": {
+        "Mode": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "PassThru": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Runs": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Stages": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Measure-WorkspaceOpen": {
+      "Module": "Workflow",
+      "Parameters": {
+        "BenchmarkPath": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Configuration": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "DryRun": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ExtraArgs": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "FullFactorial": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "MaxMinutes": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Order": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "PassThru": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Project": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ResultPath": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Runs": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Seed": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Setting": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "SettleSeconds": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Teardown": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Variant": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "WarmUp": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Workspace": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Merge-Hashtable": {
+      "Module": "Bootstrap",
+      "Parameters": {
+        "Overrides": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "Target": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Merge-LayoutProjectOverrides": {
+      "Module": "Window",
+      "Parameters": {
+        "Config": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "Project": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ProjectNames": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ZoneNameMappings": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Merge-VSCodeExtensionList": {
+      "Module": "Application",
+      "Parameters": {
+        "Installed": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Lines": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Move-StableWindowEarly": {
+      "Module": "Window",
+      "Parameters": {
+        "LayoutEntry": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "Pipeline": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "Window": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Move-Windows": {
+      "Module": "Window",
+      "Parameters": {
+        "Current": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Monitor": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ProcessName": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "VirtualDesktop": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "WindowTitle": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Move-WindowToVirtualDesktop": {
+      "Module": "Window",
+      "Parameters": {
+        "Clock": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "DesktopNumber": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "WindowHandle": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "New-SixelImage": {
+      "Module": "System",
+      "Parameters": {
+        "CachePath": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Force": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "MaxPixelHeight": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "MaxPixelWidth": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "Path": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "New-WaitClock": {
+      "Module": "Helper",
+      "Parameters": {}
+    },
+    "New-WindowClaimSet": {
+      "Module": "Window",
+      "Parameters": {
+        "Candidates": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Excluded": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Existing": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "PinnedMap": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Protected": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "SkipExisting": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "New-WindowsSymbolicLink": {
+      "Module": "System",
+      "Parameters": {
+        "BackupRoot": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "DisplayName": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Path": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "Target": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "New-WorkspaceLayoutPipelineState": {
+      "Module": "Window",
+      "Parameters": {
+        "Alongside": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Claims": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "DesktopCount": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "DesktopOffset": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "LayoutConfig": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "MonitorConfig": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "MonitorInfo": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "RecordPhase": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "SpinnerActive": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ZoneReset": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "New-WSLSymbolicLink": {
+      "Module": "System",
+      "Parameters": {
+        "BackupRoot": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "DisplayName": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Distribution": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "Path": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "Target": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "NpmInstallAndStart": {
+      "Module": "Helper",
+      "Parameters": {}
+    },
+    "Open-Acrobat": {
+      "Module": "Application",
+      "Parameters": {
+        "Pdf": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Open-Browser": {
+      "Module": "Application",
+      "Parameters": {
+        "Alongside": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Browser": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Groups": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Instances": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "NoMenu": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Override": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Private": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ProtectedWindowHandles": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Search": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Open-ClaudeDesktop": {
+      "Module": "Application",
+      "Parameters": {}
+    },
+    "Open-DBeaver": {
+      "Module": "Application",
+      "Parameters": {}
+    },
+    "Open-Discord": {
+      "Module": "Application",
+      "Parameters": {}
+    },
+    "Open-DnD": {
+      "Module": "Workflow",
+      "Parameters": {
+        "Campaign": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "FoundryVTT": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Open-Docker": {
+      "Module": "Application",
+      "Parameters": {}
+    },
+    "Open-FoundryVTT": {
+      "Module": "Application",
+      "Parameters": {}
+    },
+    "Open-LeagueOfLegends": {
+      "Module": "Application",
+      "Parameters": {}
+    },
+    "Open-NotepadPlusPlus": {
+      "Module": "Application",
+      "Parameters": {
+        "File": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Open-Obsidian": {
+      "Module": "Application",
+      "Parameters": {
+        "CurrentWorkspace": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Default": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Deferred": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Workspace": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Open-Outlook": {
+      "Module": "Application",
+      "Parameters": {}
+    },
+    "Open-Project": {
+      "Module": "Workflow",
+      "Parameters": {
+        "InSameShell": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Project": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "RunApp": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "VSCodeWorkspace": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Open-ProjectSwagger": {
+      "Module": "Workflow",
+      "Parameters": {
+        "Browser": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Project": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Open-ProjectTerminals": {
+      "Module": "Workflow",
+      "Parameters": {
+        "FocusTab": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Force": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "InSameGroup": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "InSameShell": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "InvokeOnefetch": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Project": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Open-RiseupVPN": {
+      "Module": "Application",
+      "Parameters": {}
+    },
+    "Open-SecureBrowser": {
+      "Module": "Application",
+      "Parameters": {}
+    },
+    "Open-Slack": {
+      "Module": "Application",
+      "Parameters": {}
+    },
+    "Open-Steam": {
+      "Module": "Application",
+      "Parameters": {}
+    },
+    "Open-TeamViewer": {
+      "Module": "Application",
+      "Parameters": {}
+    },
+    "Open-Terminal": {
+      "Module": "Application",
+      "Parameters": {
+        "Administrator": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Command": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "InSameShell": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "TabTitles": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "WindowId": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Open-Training": {
+      "Module": "Workflow",
+      "Parameters": {}
+    },
+    "Open-VirtualBox": {
+      "Module": "Application",
+      "Parameters": {}
+    },
+    "Open-VisualStudio": {
+      "Module": "Application",
+      "Parameters": {
+        "Default": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Solution": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Open-VSCode": {
+      "Module": "Application",
+      "Parameters": {
+        "Default": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Folder": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Open-VSCodeWorkspace": {
+      "Module": "Application",
+      "Parameters": {
+        "VSCodeWorkspace": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Open-WhatsApp": {
+      "Module": "Application",
+      "Parameters": {}
+    },
+    "Open-Workspace": {
+      "Module": "Workflow",
+      "Parameters": {
+        "Alongside": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ExtraArgs": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Project": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Workspace": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Open-WSLTab": {
+      "Module": "Application",
+      "Parameters": {
+        "Distribution": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Path": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Quiet": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "TabTitle": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "WindowId": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Preview-LoadingSpinners": {
+      "Module": "Helper",
+      "Parameters": {}
+    },
+    "ProcessGroupRecursive": {
+      "Module": "Helper",
+      "Parameters": {
+        "Depth": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "DisplayItems": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "GroupValue": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "IndexPath": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "LookupMap": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "PathNames": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Protect-Log": {
+      "Module": "Logging",
+      "Parameters": {
+        "ErrorLog": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Path": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Read-ShellStartupTrace": {
+      "Module": "System",
+      "Parameters": {
+        "Path": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Read-WorkspaceBenchmark": {
+      "Module": "Workflow",
+      "Parameters": {
+        "BenchmarkPath": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Read-WorkspaceOpenMeasurement": {
+      "Module": "Workflow",
+      "Parameters": {
+        "ResultPath": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Session": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Rebuild-IconCache": {
+      "Module": "System",
+      "Parameters": {}
+    },
+    "Refresh-BrowserTabs": {
+      "Module": "Helper",
+      "Parameters": {}
+    },
+    "Register-DeferredAction": {
+      "Module": "Helper",
+      "Parameters": {
+        "Action": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "Label": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "Parameters": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Register-RepositoryUpdatePromptCheck": {
+      "Module": "Git",
+      "Parameters": {}
+    },
+    "Reload-PowerShellProfile": {
+      "Module": "System",
+      "Parameters": {}
+    },
+    "Reload-WinuXModules": {
+      "Module": "System",
+      "Parameters": {}
+    },
+    "Remove-VirtualDesktops": {
+      "Module": "System",
+      "Parameters": {
+        "EmptyOnly": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Index": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Rename-Machine": {
+      "Module": "System",
+      "Parameters": {
+        "Override": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Repair-RpcServer": {
+      "Module": "System",
+      "Parameters": {
+        "InitialBackoffMs": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "MaxAttempts": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ProbeTimeoutMs": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Repair-TerminalIconsThemeCache": {
+      "Module": "System",
+      "Parameters": {
+        "Path": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Report-KillAllSurvivors": {
+      "Module": "System",
+      "Parameters": {
+        "Exclude": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "ReRun-LastCommand": {
+      "Module": "Helper",
+      "Parameters": {
+        "AutoAccept": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Command": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ErrorMessage": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "NumberOfLastTriggeringCommands": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Reset-KeyboardModifiers": {
+      "Module": "Window",
+      "Parameters": {
+        "IncludeMouseButton": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Reset-VirtualDesktopComProxy": {
+      "Module": "Window",
+      "Parameters": {}
+    },
+    "Reset-VirtualDesktopState": {
+      "Module": "Window",
+      "Parameters": {}
+    },
+    "Reset-Windows": {
+      "Module": "Window",
+      "Parameters": {
+        "Monitor": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "VirtualDesktop": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Resize-PositionedWindows": {
+      "Module": "Window",
+      "Parameters": {
+        "DesktopNumbers": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "InsetPercent": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Tolerance": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Resize-Windows": {
+      "Module": "Window",
+      "Parameters": {
+        "InsetPercent": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Percent": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ProcessName": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "SkipIfAlreadyPositioned": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "TargetHeight": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "TargetWidth": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "TargetX": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "TargetY": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Tolerance": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "WindowHandle": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "WindowTitle": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Resolve-AiModsConfig": {
+      "Module": "AI",
+      "Parameters": {
+        "Configuration": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "RepoRoot": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Resolve-AiModsPluginDirs": {
+      "Module": "AI",
+      "Parameters": {
+        "Deployed": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Existing": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Harness": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "Separator": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Resolve-AiSkillsConfig": {
+      "Module": "AI",
+      "Parameters": {
+        "Configuration": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "RepoRoot": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Resolve-BootstrapSteps": {
+      "Module": "Bootstrap",
+      "Parameters": {
+        "Include": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Skip": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Resolve-CenteredWindowPercent": {
+      "Module": "Window",
+      "Parameters": {
+        "MaxHeightPercent": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "MaxWidthPercent": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "MinHeightPercent": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "MinWidthPercent": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "TargetHeightPx": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "TargetWidthPx": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "WorkAreaHeight": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "WorkAreaWidth": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Resolve-CenterTerminalSizing": {
+      "Module": "Window",
+      "Parameters": {
+        "MonitorInfo": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Section": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Resolve-DisplayAwareProfile": {
+      "Module": "Window",
+      "Parameters": {
+        "MonitorInfo": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Section": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Resolve-DockerComposeStackPath": {
+      "Module": "Workflow",
+      "Parameters": {
+        "Name": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Resolve-EfMigrationDbContext": {
+      "Module": "Helper",
+      "Parameters": {
+        "MigrationProject": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "MigrationsProjectPath": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "SolutionRoot": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "StartupProjectDirectory": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "StartupProjectPath": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Resolve-HostingTerminalTab": {
+      "Module": "Helper",
+      "Parameters": {}
+    },
+    "Resolve-KillAllSteps": {
+      "Module": "System",
+      "Parameters": {
+        "Include": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Skip": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Resolve-LayoutTokens": {
+      "Module": "Window",
+      "Parameters": {
+        "LayoutEntry": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Resolve-MonitorLabel": {
+      "Module": "Window",
+      "Parameters": {
+        "Index": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "Label": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Resolve-PackageManagers": {
+      "Module": "Bootstrap",
+      "Parameters": {
+        "MachineType": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "PackageManager": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Resolve-PositionedWindowHandle": {
+      "Module": "Window",
+      "Parameters": {
+        "WindowState": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Resolve-ProjectDockerCompose": {
+      "Module": "Workflow",
+      "Parameters": {
+        "DatabaseProvider": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ProjectName": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Resolve-ProjectPath": {
+      "Module": "Helper",
+      "Parameters": {
+        "ForRepository": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "PathKey": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ProjectName": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Resolve-ProjectTerminalTab": {
+      "Module": "Helper",
+      "Parameters": {
+        "PathEntry": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "ProjectName": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Resolve-RepositoryDefaultBranch": {
+      "Module": "Git",
+      "Parameters": {
+        "LocalPath": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Resolve-RepositoryTargets": {
+      "Module": "Git",
+      "Parameters": {
+        "All": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Group": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Repositories": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Resolve-RepositoryUpdateScope": {
+      "Module": "Bootstrap",
+      "Parameters": {
+        "Path": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Resolve-ResizeWindowsPercent": {
+      "Module": "Window",
+      "Parameters": {
+        "MonitorInfo": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Resolve-RunProjectSteps": {
+      "Module": "Helper",
+      "Parameters": {
+        "Include": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Skip": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Resolve-Selection": {
+      "Module": "Helper",
+      "Parameters": {
+        "AllowEmptyPromptResponse": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "AllowMultipleSelections": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ConfirmationMessage": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "DefaultOptionIndex": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "GroupsConfig": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "HideMenuTitle": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "HidePromptMessage": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "HideSelection": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "InputObject": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "MenuTitle": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "OptionList": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "PromptMessage": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Resolve-Steps": {
+      "Module": "Helper",
+      "Parameters": {
+        "ConfigSteps": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Defaults": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "Include": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Skip": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Resolve-SwaggerBrowserGroup": {
+      "Module": "Workflow",
+      "Parameters": {
+        "Browser": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "CachedBrowserWindows": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Project": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "SkipDuplicateCheck": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Resolve-SystemThemeSteps": {
+      "Module": "System",
+      "Parameters": {
+        "Include": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Skip": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Resolve-TargetMonitor": {
+      "Module": "Window",
+      "Parameters": {
+        "Monitor": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "MonitorInfo": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Resolve-TerminalGreetingSettings": {
+      "Module": "System",
+      "Parameters": {
+        "MaxShrinkSteps": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "PromptReserve": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ReflowTimeoutMilliseconds": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Settings": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Resolve-TrackedWorkspaceWindow": {
+      "Module": "Workflow",
+      "Parameters": {
+        "LiveWindows": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Record": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Resolve-VSCodeProfilesConfig": {
+      "Module": "Application",
+      "Parameters": {
+        "Configuration": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "MachineType": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "RepoRoot": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Resolve-WorkspaceActions": {
+      "Module": "Workflow",
+      "Parameters": {
+        "Actions": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Configuration": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "LayoutMachineType": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "MachineType": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Project": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Workspace": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Resolve-WorkspaceTemplate": {
+      "Module": "Helper",
+      "Parameters": {
+        "Definition": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "Name": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "Templates": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Variables": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Restart-Explorer": {
+      "Module": "System",
+      "Parameters": {
+        "Delay": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Message": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Restart-Machine": {
+      "Module": "System",
+      "Parameters": {
+        "Selection": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Restore-RepositoryStash": {
+      "Module": "Git",
+      "Parameters": {
+        "Quiet": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "StashCommit": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Restore-ShellPrompt": {
+      "Module": "Helper",
+      "Parameters": {
+        "ReadLine": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Run-Project": {
+      "Module": "Helper",
+      "Parameters": {
+        "Include": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "InSameShell": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Project": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Skip": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Run-Tests": {
+      "Module": "Tests",
+      "Parameters": {
+        "BuildImpactMap": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Changed": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Detailed": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "PassThru": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Path": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Quick": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Since": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "TestName": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "UpdateContractBaseline": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Workers": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Save-AppCsvOverlay": {
+      "Module": "Configuration",
+      "Parameters": {
+        "DataFileKey": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "NoBackup": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "RepoRoot": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Row": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Save-CurrentLayout": {
+      "Module": "Window",
+      "Parameters": {
+        "Alongside": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "DesktopCount": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "DesktopOffset": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "LayoutConfig": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "LayoutsDir": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "MachineType": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "MonitorConfig": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "PreserveOtherSections": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "WindowStates": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Workspace": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Save-WorkspaceState": {
+      "Module": "Workflow",
+      "Parameters": {
+        "AdoptUnclaimed": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Alongside": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Append": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "DesktopOffset": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Entry": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "ExistingTerminalTabs": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ExistingWindowHandles": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "PreCapturedTerminalTabs": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "PreserveEntry": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ProtectedWindowHandles": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "StatePath": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Workspace": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Select-WindowsTerminalTab": {
+      "Module": "Helper",
+      "Parameters": {
+        "TabIndex": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "TabTitle": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "WindowHandle": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Send-FancyZonesLayoutShortcut": {
+      "Module": "Window",
+      "Parameters": {
+        "LayoutNumber": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "MonitorHeight": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "MonitorWidth": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "MonitorX": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "MonitorY": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Send-TerminalFontKey": {
+      "Module": "System",
+      "Parameters": {
+        "Action": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Send-WakeOnLan": {
+      "Module": "System",
+      "Parameters": {
+        "Machine": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "NoWait": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "TimeoutSeconds": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Set-ClaudeSettingsEnv": {
+      "Module": "AI",
+      "Parameters": {
+        "Name": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "SettingsPath": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Value": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Set-ClaudeSettingsKey": {
+      "Module": "AI",
+      "Parameters": {
+        "Path": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "SettingsPath": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Value": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Set-CustomExecutionPolicy": {
+      "Module": "System",
+      "Parameters": {
+        "Scope": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Set-DisplayLanguage": {
+      "Module": "System",
+      "Parameters": {
+        "Language": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Set-EnvironmentVariables": {
+      "Module": "System",
+      "Parameters": {
+        "Auto": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Name": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Value": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Set-ExplorerOptions": {
+      "Module": "System",
+      "Parameters": {}
+    },
+    "Set-GitConsoleColor": {
+      "Module": "Git",
+      "Parameters": {
+        "Off": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Set-KeyboardLayouts": {
+      "Module": "System",
+      "Parameters": {
+        "LayoutSet": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Override": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Set-Locale": {
+      "Module": "System",
+      "Parameters": {
+        "Locale": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Set-LockScreenWallpaper": {
+      "Module": "System",
+      "Parameters": {
+        "Theme": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Set-LogLevel": {
+      "Module": "Logging",
+      "Parameters": {
+        "Command": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Level": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Set-PowerButtonActions": {
+      "Module": "System",
+      "Parameters": {
+        "Auto": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "DisableFastStartup": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "DisableHibernate": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "DisableSleep": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "LidCloseOnBattery": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "LidClosePluggedIn": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "PowerButtonOnBattery": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "PowerButtonPluggedIn": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "SleepButtonOnBattery": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "SleepButtonPluggedIn": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Set-PowerPlan": {
+      "Module": "System",
+      "Parameters": {
+        "Auto": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Mode": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Set-ShortcutAumid": {
+      "Module": "System",
+      "Parameters": {
+        "Aumid": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "LinkPath": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "TargetPath": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Set-SpecialFolders": {
+      "Module": "System",
+      "Parameters": {}
+    },
+    "Set-StackedWindowOrder": {
+      "Module": "Window",
+      "Parameters": {
+        "Results": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Set-SystemTheme": {
+      "Module": "System",
+      "Parameters": {
+        "Auto": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Include": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "KeepTerminalOpen": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Skip": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Theme": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Set-TaskbarSettings": {
+      "Module": "System",
+      "Parameters": {}
+    },
+    "Set-VisualEffects": {
+      "Module": "System",
+      "Parameters": {}
+    },
+    "Set-Wallpaper": {
+      "Module": "System",
+      "Parameters": {
+        "Auto": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Theme": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Set-WindowCacheMaxAge": {
+      "Module": "Window",
+      "Parameters": {
+        "MaxAgeMs": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Set-WindowForeground": {
+      "Module": "Window",
+      "Parameters": {
+        "Handle": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Set-WindowLayouts": {
+      "Module": "Window",
+      "Parameters": {
+        "AbandonedEntries": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Claims": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ConfigPath": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "DesktopNumbers": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "DesktopOffset": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ExpectedWindowState": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "KeepPositionedWindows": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "LayoutConfig": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "MonitorConfig": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "MonitorInfo": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "SkipEntryKeys": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Set-WindowModuleDelays": {
+      "Module": "Window",
+      "Parameters": {
+        "Delays": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Set-WindowPosition": {
+      "Module": "Window",
+      "Parameters": {
+        "Height": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "Width": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "WindowHandle": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "X": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "Y": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Set-WorkspaceRerunCommand": {
+      "Module": "Window",
+      "Parameters": {
+        "Clear": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Command": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Set-WorkspaceRerunMirror": {
+      "Module": "Window",
+      "Parameters": {
+        "Name": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "Scope": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Value": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Set-WorkspaceWindowLayout": {
+      "Module": "Window",
+      "Parameters": {
+        "Alongside": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "DesktopOffset": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "DisableAutoWait": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "LayoutPath": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "PreCapturedExistingWindows": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "PrepareOnly": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Project": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ProtectedWindowHandles": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "SnapDelayMs": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "TimeoutSeconds": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "WorkspaceName": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Show-FunctionDetails": {
+      "Module": "Helper",
+      "Parameters": {
+        "FunctionInfo": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "FunctionName": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Show-Image": {
+      "Module": "Helper",
+      "Parameters": {
+        "ImagePath": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Show-PinnedAppsWarning": {
+      "Module": "System",
+      "Parameters": {
+        "Message": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "PinnedApps": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Show-TerminalGreeting": {
+      "Module": "System",
+      "Parameters": {
+        "MaxShrinkSteps": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "NoClear": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "NoFastfetch": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "NoOnefetch": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "NoResize": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "PromptReserve": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ReflowTimeoutMilliseconds": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Snap-AllWindows": {
+      "Module": "Window",
+      "Parameters": {
+        "All": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "CurrentDesktopOnly": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "DesktopCount": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "DesktopNumbers": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "DesktopOffset": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "SnapDelayMs": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "WindowHandles": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ZoneReset": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Start-Application": {
+      "Module": "Application",
+      "Parameters": {
+        "AppName": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "Arguments": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ConfigKey": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "CustomStartLogic": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ExecutablePath": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "NoNewWindow": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "PackageName": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ProcessName": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "ProcessPathFilter": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "RequireMainWindow": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "SkipPathValidation": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "SkipProcessCheck": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "StartMethod": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "SuppressOutput": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Sync": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Start-Containers": {
+      "Module": "Workflow",
+      "Parameters": {
+        "Down": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Name": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Stop": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Start-FancyZones": {
+      "Module": "Application",
+      "Parameters": {
+        "ForceRestart": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "MaxWaitSeconds": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "PassThru": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Start-Logging": {
+      "Module": "Logging",
+      "Parameters": {}
+    },
+    "Start-MicrosoftActivationScripts": {
+      "Module": "Application",
+      "Parameters": {
+        "Override": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Selection": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Start-ObsidianDetached": {
+      "Module": "Application",
+      "Parameters": {
+        "Vault": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Start-Win11Debloat": {
+      "Module": "Application",
+      "Parameters": {
+        "Selection": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Stop-Logging": {
+      "Module": "Logging",
+      "Parameters": {}
+    },
+    "Stop-PowerToysCompletely": {
+      "Module": "Application",
+      "Parameters": {
+        "MaxGracefulWaitMs": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "PreferGracefulExit": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Switch-VirtualDesktop": {
+      "Module": "Window",
+      "Parameters": {
+        "Clock": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Index": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "MaxAttempts": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "PollIntervalMs": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "TimeoutMs": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "SymbolicLinkMaker": {
+      "Module": "System",
+      "Parameters": {
+        "Name": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Scope": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Sync-AppPins": {
+      "Module": "System",
+      "Parameters": {
+        "PackageManager": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Terminate-AllBrowserProcesses": {
+      "Module": "System",
+      "Parameters": {
+        "Exclude": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Terminate-AllProcessesByName": {
+      "Module": "System",
+      "Parameters": {
+        "Exclude": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Terminate-AllProcessesWithVisibleWindows": {
+      "Module": "System",
+      "Parameters": {
+        "Exclude": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Terminate-WindowsTerminalTabs": {
+      "Module": "System",
+      "Parameters": {
+        "CloseWaitSeconds": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "IncludeCurrent": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "OnlyCurrent": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Test-AdminPrivileges": {
+      "Module": "Helper",
+      "Parameters": {
+        "AutoElevate": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "CheckOnly": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Test-AiModsCli": {
+      "Module": "AI",
+      "Parameters": {
+        "Command": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ModPath": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Test-AppliedFancyZonesLayouts": {
+      "Module": "Window",
+      "Parameters": {
+        "AppliedLayoutsPath": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Clock": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "PollIntervalMs": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Targets": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "TimeoutMs": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "WaitForWriteAfterUtc": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Test-AppNotInstalled": {
+      "Module": "Helper",
+      "Parameters": {
+        "appName": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Test-BrowserGroupAlreadyOpen": {
+      "Module": "Application",
+      "Parameters": {
+        "Browser": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "CachedBrowserWindows": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "GroupDisplayName": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "ReturnCount": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Urls": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Test-ConfigurationKeyPath": {
+      "Module": "Configuration",
+      "Parameters": {
+        "Path": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "Table": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Test-ConfigurationSchema": {
+      "Module": "Configuration",
+      "Parameters": {
+        "Configuration": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Strict": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Test-ConfigValue": {
+      "Module": "Helper",
+      "Parameters": {
+        "Value": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Test-FancyZonesConfiguration": {
+      "Module": "Window",
+      "Parameters": {
+        "CustomLayoutsPath": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "LayoutHotkeysPath": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Silent": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Test-FancyZonesLayoutApplied": {
+      "Module": "Window",
+      "Parameters": {
+        "MonitorId": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "VirtualDesktopGuid": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Test-FastfetchPanelOverflow": {
+      "Module": "System",
+      "Parameters": {
+        "PanelHeight": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "PanelWidth": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "PromptReserve": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "WindowHeight": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "WindowWidth": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Test-GitRepository": {
+      "Module": "Git",
+      "Parameters": {
+        "Path": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Test-HasEfCoreDesign": {
+      "Module": "Helper",
+      "Parameters": {
+        "projectPath": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Test-LogVerbose": {
+      "Module": "Logging",
+      "Parameters": {}
+    },
+    "Test-MachineOnline": {
+      "Module": "System",
+      "Parameters": {
+        "Address": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "DisplayName": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "IntervalSeconds": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Machine": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "PingTimeoutMilliseconds": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Quiet": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "TimeoutSeconds": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "WaitForOnline": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Test-MachineTypeScope": {
+      "Module": "Bootstrap",
+      "Parameters": {
+        "AdditionalValidTypes": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Context": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "MachineType": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Scope": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Test-ManifestCompleteness": {
+      "Module": "Helper",
+      "Parameters": {}
+    },
+    "Test-PositionedWindow": {
+      "Module": "Window",
+      "Parameters": {
+        "WindowHandle": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Test-PowerPlan": {
+      "Module": "System",
+      "Parameters": {
+        "CachePath": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Refresh": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Test-PrivacyStatus": {
+      "Module": "Helper",
+      "Parameters": {
+        "ISPIPAddress": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Silent": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "UseTor": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Test-ProjectAlreadyOpen": {
+      "Module": "Application",
+      "Parameters": {
+        "ApplicationName": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "ProcessName": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "ProjectName": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Test-RegistryValue": {
+      "Module": "Helper",
+      "Parameters": {
+        "ExpectedValue": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "Name": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "Path": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Test-RepositoryUpdateStampFresh": {
+      "Module": "Git",
+      "Parameters": {
+        "DayStartHour": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "IntervalHours": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Schedule": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "StampFile": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Test-RpcServerHealth": {
+      "Module": "System",
+      "Parameters": {
+        "Probe": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ProbeTimeoutMs": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ServiceNames": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Test-RpcUnavailableError": {
+      "Module": "Helper",
+      "Parameters": {
+        "InputObject": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Test-SmallPrimaryDisplay": {
+      "Module": "Window",
+      "Parameters": {
+        "MaxWidthPx": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "MonitorInfo": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Test-StartupStage": {
+      "Module": "Helper",
+      "Parameters": {
+        "Name": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "Required": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Skip": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Test-TcpPortReachable": {
+      "Module": "Helper",
+      "Parameters": {
+        "Port": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "TargetHost": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "TimeoutMs": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Test-TerminalIconsCacheFile": {
+      "Module": "System",
+      "Parameters": {
+        "Path": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "Reason": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Test-TerminalTabsAlreadyOpen": {
+      "Module": "Workflow",
+      "Parameters": {
+        "ExpectedTabNames": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "ProjectName": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Test-VirtualDesktopComHealth": {
+      "Module": "Window",
+      "Parameters": {
+        "TimeoutMs": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Test-WindowTitleCandidates": {
+      "Module": "Helper",
+      "Parameters": {
+        "Candidates": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ProcessName": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "WindowTitle": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Test-WindowTitleMatch": {
+      "Module": "System",
+      "Parameters": {
+        "Patterns": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "ProcessName": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "WindowTitle": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Test-WindowVisible": {
+      "Module": "Window",
+      "Parameters": {
+        "Handle": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Test-WSLDistributionInstalled": {
+      "Module": "Helper",
+      "Parameters": {}
+    },
+    "Test-WSLEnabled": {
+      "Module": "Helper",
+      "Parameters": {}
+    },
+    "Training-Backup": {
+      "Module": "Workflow",
+      "Parameters": {}
+    },
+    "Unpin-TaskbarApps": {
+      "Module": "System",
+      "Parameters": {
+        "BackupRoot": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "FromBootstrap": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "SkipExplorerRestart": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Update-AiMods": {
+      "Module": "AI",
+      "Parameters": {
+        "Check": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Source": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Update-AiSkills": {
+      "Module": "AI",
+      "Parameters": {
+        "Check": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Source": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Update-DirectoryNames": {
+      "Module": "System",
+      "Parameters": {
+        "Path": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "WhatIf": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Update-LayoutSectionHeaders": {
+      "Module": "Window",
+      "Parameters": {
+        "Config": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Content": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Update-Repositories": {
+      "Module": "Git",
+      "Parameters": {
+        "All": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "Archive": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Group": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "IncludeDefaultBranch": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "InCurrentDirectory": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "LocalPath": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "NoClone": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Quiet": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Repositories": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "RepositoryUrl": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Update-Repository": {
+      "Module": "Git",
+      "Parameters": {
+        "IncludeDefaultBranch": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "LocalPath": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "Name": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "Quiet": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Update-RepositoryDefaultBranch": {
+      "Module": "Git",
+      "Parameters": {
+        "CurrentBranch": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "DefaultBranch": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "LocalPath": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Quiet": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Update-Win11DebloatVendor": {
+      "Module": "Application",
+      "Parameters": {
+        "ReleaseTag": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Repository": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Upgrade-All": {
+      "Module": "System",
+      "Parameters": {
+        "PackageManager": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Validate-Layout": {
+      "Module": "Window",
+      "Parameters": {
+        "Config": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "LayoutName": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Visualize-Layouts": {
+      "Module": "Window",
+      "Parameters": {
+        "All": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "BackupRoot": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "DisplayAvailableLayouts": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Layout": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "LayoutPath": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "Update": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Wait-BrowserWindowReady": {
+      "Module": "Application",
+      "Parameters": {
+        "Clock": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ProcessName": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "TimeoutSeconds": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "TitlePattern": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Wait-BrowserWindowsClosed": {
+      "Module": "System",
+      "Parameters": {
+        "Clock": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "PollIntervalMs": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "TimeoutMs": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Windows": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Wait-ConsoleReflow": {
+      "Module": "System",
+      "Parameters": {
+        "Before": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "Clock": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "PollIntervalMilliseconds": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "TimeoutMilliseconds": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Wait-ForWorkspaceWindows": {
+      "Module": "Window",
+      "Parameters": {
+        "Claims": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Clock": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "CollectiveStabilitySeconds": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "FocusDelayMs": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "FocusWindows": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "LayoutConfig": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "MinimumStableDurationSeconds": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "OnDesktopReady": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "OnWindowStable": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "PollIntervalSeconds": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ProcessAbsentGraceSeconds": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "RequireStableDimensions": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "TimeoutSeconds": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Wait-ObsidianCli": {
+      "Module": "Application",
+      "Parameters": {
+        "CliPath": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "PollMilliseconds": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "TimeoutSeconds": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Vault": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Wait-Until": {
+      "Module": "Helper",
+      "Parameters": {
+        "Clock": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Condition": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "PollIntervalMs": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "SleepFirst": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "TimeoutMs": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Wait-WindowRect": {
+      "Module": "Window",
+      "Parameters": {
+        "Clock": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ExpectedHeight": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "ExpectedWidth": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "ExpectedX": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "ExpectedY": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "PollIntervalMs": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "TimeoutMs": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "TolerancePx": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "WindowHandle": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Wait-WindowsClosed": {
+      "Module": "Window",
+      "Parameters": {
+        "Clock": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "PollIntervalMilliseconds": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "TimeoutMilliseconds": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Window": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Write-AppliedFancyZonesLayouts": {
+      "Module": "Window",
+      "Parameters": {
+        "AppliedLayoutsPath": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "CustomLayoutsPath": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Force": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Targets": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Write-Log": {
+      "Module": "Logging",
+      "Parameters": {
+        "BlankLineAfter": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Exception": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Level": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Message": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "NoConsole": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "NoLeadingNewline": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "NoNewLine": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Style": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Write-LogDebug": {
+      "Module": "Logging",
+      "Parameters": {
+        "BlankLineAfter": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Message": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "NoLeadingNewline": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Style": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Write-LogError": {
+      "Module": "Logging",
+      "Parameters": {
+        "BlankLineAfter": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Exception": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Message": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "NoLeadingNewline": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Write-LogList": {
+      "Module": "Logging",
+      "Parameters": {
+        "Items": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Write-LogSegments": {
+      "Module": "Logging",
+      "Parameters": {
+        "NoLeadingNewline": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Segments": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Write-LogStep": {
+      "Module": "Logging",
+      "Parameters": {
+        "BlankLineAfter": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Message": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "NoLeadingNewline": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "NoNewLine": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Style": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Write-LogSuccess": {
+      "Module": "Logging",
+      "Parameters": {
+        "BlankLineAfter": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Message": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "NoLeadingNewline": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Write-LogTitle": {
+      "Module": "Logging",
+      "Parameters": {
+        "BlankLineAfter": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Message": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "NoLeadingNewline": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Write-LogWarning": {
+      "Module": "Logging",
+      "Parameters": {
+        "BlankLineAfter": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Message": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "NoLeadingNewline": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Write-ManualInstructionsToDesktop": {
+      "Module": "Helper",
+      "Parameters": {
+        "Content": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "FileName": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "Title": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Write-WindowInfoBlock": {
+      "Module": "Window",
+      "Parameters": {
+        "Info": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Write-WorkspaceBenchmark": {
+      "Module": "Workflow",
+      "Parameters": {
+        "ActionTimings": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Alongside": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "BenchmarkPath": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "LayoutTimings": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "PassThru": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Quiet": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Source": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "TotalSeconds": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Workspace": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    }
+  },
+  "Aliases": [],
+  "ConfigurationKeys": [
+    "AcrobatPdfGroups",
+    "AiMarketplaces",
+    "AiMarketplaces.Marketplaces",
+    "AiMarketplaces.PluginConfigs",
+    "AiMods",
+    "AiMods.Harnesses",
+    "AiMods.Root",
+    "AiMods.Sources",
+    "AiSkills",
+    "AiSkills.Harnesses",
+    "AiSkills.Root",
+    "AiSkills.Sources",
+    "AutoElevate",
+    "AutoEnvironmentVariables",
+    "AutoPathAdditions",
+    "Backups",
+    "Backups.Retention",
+    "BasePaths",
+    "BasePaths.Machine",
+    "BasePaths.Test",
+    "BootstrapConfig",
+    "BootstrapConfig.DataFiles",
+    "BootstrapConfig.ExternalScripts",
+    "BootstrapConfig.LocalScripts",
+    "BootstrapConfig.LogFileLocation",
+    "BootstrapConfig.LogFilePrefix",
+    "BootstrapConfig.PersonalSteps",
+    "BootstrapConfig.RepositoryUpdateScope",
+    "BootstrapConfig.Steps",
+    "BrowserGroupMatching",
+    "BrowserGroupMatching.BrowserProcessNames",
+    "BrowserGroupMatching.ExactTitle",
+    "BrowserGroupMatching.KeywordExtraction",
+    "BrowserGroupMatching.Matching",
+    "BrowserGroupMatching.NegativeMatching",
+    "BrowserGroups",
+    "CampaignResources",
+    "CenterTerminalSizing",
+    "CenterTerminalSizing.Default",
+    "DefaultDatabaseProvider",
+    "DefaultDisplayLanguage",
+    "DefaultKeyboardLayoutSet",
+    "DefaultLocale",
+    "DefaultMachineType",
+    "DefaultNerdFont",
+    "DefaultSpinner",
+    "DefaultTranslateLanguages",
+    "DefaultTranslateLanguages.OutputLanguage",
+    "DefaultVSCodeWorkspaces",
+    "DefaultWakeOnLanMachine",
+    "DefaultWorkspace",
+    "DefaultWSLDistribution",
+    "DefaultWSLUsername",
+    "DisplayLanguages",
+    "DockerCleanupActions",
+    "DockerComposeFiles",
+    "DockerComposeFiles.PostgreSQL",
+    "DockerTimeouts",
+    "DockerTimeouts.CleanupSeconds",
+    "DockerTimeouts.StartSeconds",
+    "DockerTimeouts.StopSeconds",
+    "DotnetEFVersion",
+    "DotnetProjectsSearchPath",
+    "ExplorerOptions",
+    "FancyZonesApplyMethod",
+    "FunctionDiscrepancyExclusions",
+    "GitConfig",
+    "GitConfig.UserEmail",
+    "GitConfig.UserName",
+    "GitConfig.WingetPackageId",
+    "HostnameToMachineType",
+    "HostnameToMachineType.Test",
+    "KeyboardLayouts",
+    "KeyboardLayoutSets",
+    "KillAll",
+    "KillAll.Steps",
+    "LaptopChassisTypes",
+    "LayoutMachineTypeOverrides",
+    "LayoutMachineTypeOverrides.Test",
+    "LayoutNumbers",
+    "LayoutNumbers.Eight",
+    "LayoutNumbers.Five",
+    "LayoutNumbers.Four",
+    "LayoutNumbers.Nine",
+    "LayoutNumbers.One",
+    "LayoutNumbers.Seven",
+    "LayoutNumbers.Six",
+    "LayoutNumbers.Three",
+    "LayoutNumbers.Two",
+    "LayoutNumbers.Zero",
+    "ListFunctionsColors",
+    "ListFunctionsColors.Border",
+    "ListFunctionsColors.DiscrepancyError",
+    "ListFunctionsColors.DiscrepancySuccess",
+    "LoadingSpinners",
+    "LoadingSpinners.Arc",
+    "LoadingSpinners.Arrows",
+    "LoadingSpinners.BarBlocks",
+    "LoadingSpinners.Binary",
+    "LoadingSpinners.BlockFill",
+    "LoadingSpinners.Box",
+    "LoadingSpinners.BrailleBlocks",
+    "LoadingSpinners.Circle",
+    "LoadingSpinners.Clock",
+    "LoadingSpinners.Dot",
+    "LoadingSpinners.Dots",
+    "LoadingSpinners.GrowingDots",
+    "LoadingSpinners.Hamburger",
+    "LoadingSpinners.Line",
+    "LoadingSpinners.Moon",
+    "LoadingSpinners.Pulse",
+    "LoadingSpinners.SquareCorners",
+    "LoadingSpinners.Star",
+    "LoadingSpinners.Triangle",
+    "Locales",
+    "Logging",
+    "Logging.Colors",
+    "Logging.DefaultLevel",
+    "Logging.FileLogging",
+    "Logging.Maintenance",
+    "MachineOverrides",
+    "MachineOverrides.Machine",
+    "MachineOverrides.Test",
+    "MachinePathMappings",
+    "MachinePathMappings.Default",
+    "MachinePathMappings.Test",
+    "NerdFonts",
+    "Obsidian",
+    "Obsidian.DefaultWorkspace",
+    "Obsidian.Vault",
+    "PackageManagers",
+    "PathTemplates",
+    "PathTemplates.Dnd",
+    "PathTemplates.DockerDirectory",
+    "PathTemplates.LearningBook",
+    "PathTemplates.NuGetConfig",
+    "PathTemplates.ObsidianDirectory",
+    "PathTemplates.ObsidianStartupScript",
+    "PathTemplates.Projects",
+    "PathTemplates.SymbolicLinks",
+    "PathTemplates.TaskbarLayoutFile",
+    "PathTemplates.TrainingBackupDirectory",
+    "PathTemplates.TrainingDirectory",
+    "PostgreSqlPasswords",
+    "PowerButtonActions",
+    "PowerPlans",
+    "ProjectActions",
+    "ProjectTerminals",
+    "PSReadLine",
+    "PSReadLine.EditMode",
+    "PSReadLine.HistoryNoDuplicates",
+    "PSReadLine.HistorySavePath",
+    "PSReadLine.KeyHandlers",
+    "PSReadLine.MaximumHistoryCount",
+    "PSReadLine.PredictionSource",
+    "PSReadLine.PredictionViewStyle",
+    "RepositoryGroups",
+    "RepositoryUpdate",
+    "RepositoryUpdate.DefaultBranch",
+    "RepositoryUpdate.IncludeDefaultBranch",
+    "RepositoryUpdate.Startup",
+    "ResetAllWindowsDefaults",
+    "ResetAllWindowsDefaults.Default",
+    "ResetAllWindowsDefaults.Test",
+    "ResizeWindowsPercent",
+    "ResizeWindowsPercent.Default",
+    "RunnableProjectMappings",
+    "RunProject",
+    "RunProject.Steps",
+    "ShowFunctionDetailsColors",
+    "ShowFunctionDetailsColors.Description",
+    "ShowFunctionDetailsColors.FunctionName",
+    "ShowFunctionDetailsColors.Parameters",
+    "SimpleLayoutWorkspaces",
+    "SmallDisplayMachineType",
+    "SnapInsetPercent",
+    "SpecialFolders",
+    "SystemTheme",
+    "SystemTheme.Steps",
+    "TaskbarConfiguration",
+    "TaskbarSettings",
+    "TerminalGreeting",
+    "TerminalGreeting.Clear",
+    "TerminalGreeting.Fastfetch",
+    "TerminalGreeting.Onefetch",
+    "Themes",
+    "Universal",
+    "Universal.Browsers",
+    "Universal.DbeaverExe",
+    "Universal.DefaultBrowser",
+    "Universal.Desktop",
+    "Universal.DockerExe",
+    "Universal.FastFetchImageLogo",
+    "Universal.FirefoxExe",
+    "Universal.Fonts",
+    "Universal.FoundryVTTExe",
+    "Universal.GitHub",
+    "Universal.IconCacheDb",
+    "Universal.IconCacheFolder",
+    "Universal.LeagueOfLegendsExe",
+    "Universal.NotepadPlusPlusExe",
+    "Universal.OhMyPoshThemeFile",
+    "Universal.OutlookLauncherExe",
+    "Universal.RiseupVpnExe",
+    "Universal.SteamExe",
+    "Universal.TaskbarPinFolder",
+    "Universal.TeamViewerExe",
+    "Universal.TerminateProcessNames",
+    "Universal.TrainingFile",
+    "Universal.VirtualBoxExe",
+    "Universal.VisibleWindowExclusions",
+    "Universal.VisualStudio2026Exe",
+    "Universal.WhatsAppLocalStoragePath",
+    "Universal.WindowsTerminalHome",
+    "ValidMachineTypes",
+    "VisualEffects",
+    "VisualStudioSolutions",
+    "VSCodeProfiles",
+    "VSCodeProfiles.Catalogue",
+    "VSCodeProfiles.Deploy",
+    "VSCodeProfiles.Prune",
+    "VSCodeProfiles.Root",
+    "VSCodeProfiles.SettingsSync",
+    "VSCodeProfiles.UserData",
+    "VSCodeProjects",
+    "WakeOnLanConfig",
+    "WallpaperDarkSettings",
+    "WallpaperLightSettings",
+    "WallpaperStyles",
+    "WallpaperStyles.Center",
+    "WallpaperStyles.Fill",
+    "WallpaperStyles.Fit",
+    "WallpaperStyles.Span",
+    "WallpaperStyles.Stretch",
+    "WallpaperStyles.Tile",
+    "WorkspaceActions",
+    "WorkspaceBenchmark",
+    "WorkspaceBenchmark.Display",
+    "WorkspaceBenchmark.Enabled",
+    "WorkspaceBenchmark.Last",
+    "WorkspaceLayoutPipelining",
+    "WorkspaceLayoutPrepareEarly",
+    "WorkspaceTemplates",
+    "WorkspaceTemplates.Project",
+    "ZoneNameMappings",
+    "ZoneNameMappings.Eight",
+    "ZoneNameMappings.Five",
+    "ZoneNameMappings.Four",
+    "ZoneNameMappings.Nine",
+    "ZoneNameMappings.One",
+    "ZoneNameMappings.Seven",
+    "ZoneNameMappings.Six",
+    "ZoneNameMappings.Three",
+    "ZoneNameMappings.Two",
+    "ZoneNameMappings.Zero"
+  ],
+  "Deprecated": {
+    "Functions": {},
+    "Parameters": {},
+    "ConfigurationKeys": {
+      "BootstrapConfig.WSLSetup": "0.1.26",
+      "PathTemplates.ObsidianStartupScript": "0.1.61"
+    }
+  }
+}

@@ -9,8 +9,8 @@ Installs Chocolatey-managed apps from the WinuX CSV, filtered by machine type.
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`BootstrapConfig.DataFiles`](../../configuration-reference.md#bootstrapconfig) | hashtable of list name to repository-relative path | 4 entries | Where the three committed app-list CSVs live, relative to the repository root. `Import-AppCsv` resolves the path from here, which is what keeps the location configuration-driven. |
-| [`PackageManagers`](../../configuration-reference.md#packagemanagers) | array of manager names | `@("WinGet")` | Which package managers Bootstrap provisions and installs from. `Resolve-PackageManagers` filters the list by machine type. |
+| [`BootstrapConfig.DataFiles`](../../configuration-reference.md#bootstrapconfig) | hashtable of list name to repository-relative path | 4 entries | Where the three committed app-list CSVs live, relative to the repository root. This function reads the `ChocolateyApps` entry (base `Windows\PowerShell\Modules\Bootstrap\Data\ChocolateyApps.csv`) through `Import-AppCsv`; resolving the path from here is what keeps the location configuration-driven. |
+| [`PackageManagers`](../../configuration-reference.md#packagemanagers) | array of manager names | `@("WinGet")` | Not read by this function: which package managers Bootstrap provisions and installs from. `Resolve-PackageManagers` drops a listed manager whose app list holds nothing for this machine type, so Bootstrap calls this function only when `Chocolatey` is listed and has apps here. |
 
 App lists are not `Configuration.psd1` keys. The committed CSV named by `BootstrapConfig.DataFiles` is upstream's baseline and stays untouched; everything you choose for this machine goes in the sibling `<name>.local.csv` overlay, which `Import-AppCsv` layers on top at read time. `Save-AppCsvOverlay` writes it for you.
 
@@ -22,7 +22,7 @@ App lists are not `Configuration.psd1` keys. The committed CSV named by `Bootstr
     - More detail: [`BootstrapConfig.DataFiles`](../../configuration-reference.md#bootstrapconfig)
 2. Which package managers do you want on this machine?
     - Options: Any of `WinGet`, `Scoop`, `Chocolatey`. The array replaces wholesale, so list all of them you want.
-    - Default: `@("WinGet")`.
+    - Default: `@("WinGet")` - Bootstrap neither installs Chocolatey nor calls this function.
     - More detail: [`PackageManagers`](../../configuration-reference.md#packagemanagers)
 
 ## Where to Put Values
@@ -47,7 +47,7 @@ Where the three committed app-list CSVs live, relative to the repository root. `
 ```powershell
 BootstrapConfig = @{
     DataFiles = @{
-        WinGetApps = "Windows/PowerShell/Modules/Bootstrap/Data/WinGetApps.csv"
+        ChocolateyApps = "Windows\PowerShell\Modules\Bootstrap\Data\ChocolateyApps.csv"
     }
 }
 ```
@@ -57,7 +57,7 @@ BootstrapConfig = @{
 Which package managers Bootstrap provisions and installs from. `Resolve-PackageManagers` filters the list by machine type.
 
 ```powershell
-PackageManagers = @("WinGet", "Scoop")
+PackageManagers = @("WinGet", "Chocolatey")
 ```
 
 ## Step 3: Reload and confirm the merge landed
@@ -91,10 +91,10 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 @{
     BootstrapConfig = @{
         DataFiles = @{
-            WinGetApps = "Windows/PowerShell/Modules/Bootstrap/Data/WinGetApps.csv"
+            ChocolateyApps = "Windows\PowerShell\Modules\Bootstrap\Data\ChocolateyApps.csv"
         }
     }
-    PackageManagers = @("WinGet", "Scoop")
+    PackageManagers = @("WinGet", "Chocolatey")
 }
 ```
 

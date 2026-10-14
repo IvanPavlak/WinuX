@@ -8,6 +8,12 @@ function Configure-NerdFont {
         a font name, installs that Nerd Font. When called without arguments, shows an
         interactive menu of available fonts.
         The default font is read from `DefaultNerdFont` in Configuration.psd1.
+
+        Every .ttf/.otf file in the font's `FolderName` (relative to the WinuX root) is copied
+        into the fonts directory (`Universal.Fonts`) and registered under HKLM. The font's
+        `SearchPattern` (a file base-name wildcard) is only used to detect an existing install:
+        when matching files exist in the fonts directory AND a matching registry value exists,
+        the font is skipped. Does nothing when `NerdFonts` is not configured.
         Requires administrator privileges.
 
     .PARAMETER FontName

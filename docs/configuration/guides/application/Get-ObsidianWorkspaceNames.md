@@ -1,6 +1,6 @@
 # Get-ObsidianWorkspaceNames
 
-Reads the saved Obsidian workspace names (the core Workspaces plugin) from `<VaultDirectory>\.obsidian\workspaces.json`. Returns an empty array for an empty directory, a missing file or a file that does not parse.
+Reads the saved Obsidian workspace names (the core Workspaces plugin) from `<VaultDirectory>\.obsidian\workspaces.json`. Returns an empty array for an empty `-VaultDirectory`, a missing file, a file without saved workspaces or a file that does not parse.
 
 ## Configuration Keys
 

@@ -35,9 +35,9 @@ A comprehensive PowerShell-based dotfiles system that turns a fresh Windows 11 i
 
 ___
 
-> **Today** WinuX is a terminal/keyboard-driven system built for power users. **The goal** is to make
-> it accessible to _everyone_ - a guided installer and a GUI are on the [roadmap](docs/roadmap.md) -
-> without ever taking away the deep configurability that defines it.
+WinuX is a terminal/keyboard-driven system built for power users - people who keep a dotfiles repository, and who want Windows to be theirs the way their Linux system is!
+
+See the [roadmap](docs/roadmap.md) for what it is and is not.
 
 ---
 

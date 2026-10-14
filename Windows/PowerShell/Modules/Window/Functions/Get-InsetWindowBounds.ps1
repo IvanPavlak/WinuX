@@ -12,8 +12,8 @@ function Get-InsetWindowBounds {
 	.DESCRIPTION
 		Returns the adjusted bounds used before FancyZones snapping. The inset window
 		sits inside the target zone so the snap target remains unambiguous, deliberately
-		offset by WindowModuleTolerances.InsetCenterBiasPx instead of being perfectly
-		centered on the zone.
+		offset by $script:InsetCenterBiasPx (2 pixels, added to both X and Y; defined at
+		the top of this file) instead of being perfectly centered on the zone.
 
 		The bias is load-bearing. FancyZones' Win+Arrow is a RELATIVE move: it first
 		decides which zone the window is currently in, then moves it to the neighbouring
@@ -44,7 +44,19 @@ function Get-InsetWindowBounds {
 
 	.PARAMETER InsetPercent
 		The inset percentage applied on each side. Defaults to Get-WindowInsetPercent
-		(the SnapInsetPercent configuration value, 0.05 when unset).
+		(the SnapInsetPercent configuration value, 0.05 when unset). Range 0.0-0.49.
+
+	.OUTPUTS
+		[PSCustomObject] with the Target* inputs, InsetPercent, ZoneCenterX/ZoneCenterY and the
+		adjusted geometry: AdjustedX, AdjustedY, AdjustedWidth, AdjustedHeight (each floored
+		at 1), AdjustedRight, AdjustedBottom.
+
+	.EXAMPLE
+		$bounds = Get-InsetWindowBounds -TargetX 0 -TargetY 0 -TargetWidth 1920 -TargetHeight 1080
+		Set-WindowPosition -WindowHandle $handle -X $bounds.AdjustedX -Y $bounds.AdjustedY -Width $bounds.AdjustedWidth -Height $bounds.AdjustedHeight
+
+	.EXAMPLE
+		Get-InsetWindowBounds -TargetX 0 -TargetY 0 -TargetWidth 960 -TargetHeight 1080 -InsetPercent 0.05
 	#>
 	[CmdletBinding()]
 	param(

@@ -11,7 +11,7 @@ Resolves the `Swagger` browser group for a project so it can be handed to `Open-
 | --- | ---- | -------------- | ---------------- |
 | [`BrowserGroupMatching`](../../configuration-reference.md#more-sections-quick-reference) | hashtable, 5 keys | hashtable, 5 keys | How an already-open browser group is recognised: `BrowserProcessNames` (label to process name), `ExactTitle`, `KeywordExtraction`, `Matching` thresholds and `NegativeMatching`. Tuning knobs, not a list of your own data. |
 | [`BrowserGroups`](../../configuration-reference.md#browser-groups) | array of single-key hashtables | array of 12 example groups | The named URL groups `Open-Browser` opens. Groups nest without limit; a leaf is either a bare URL string or `@{ Name; Url }`. Every `Name` must be unique across the whole tree, because a name is a valid selector on its own. |
-| [`Universal`](../../configuration-reference.md#universal-constants) | hashtable, 26 keys | hashtable, 26 keys | Machine-independent constants: executable paths (`FirefoxExe`, `DockerExe`, `DbeaverExe`, ...), the `Browsers` map, `DefaultBrowser`, shared URLs, the `ProcessCleanup` lists, and `Desktop` (auto-resolved at load). Expanded in place by `Load-PathConfiguration`, so placeholders work here too. |
+| [`Universal`](../../configuration-reference.md#universal-constants) | hashtable, 27 keys | hashtable, 27 keys | Machine-independent constants: executable paths (`FirefoxExe`, `DockerExe`, `DbeaverExe`, ...), the `Browsers` map, `DefaultBrowser`, shared URLs, the `TerminateProcessNames` and `VisibleWindowExclusions` lists, and `Desktop` (auto-resolved at load). Expanded in place by `Load-PathConfiguration`, so placeholders work here too. |
 
 ## Decisions
 
@@ -28,7 +28,7 @@ Resolves the `Swagger` browser group for a project so it can be handed to `Open-
     - Default: Flat groups.
     - More detail: [`BrowserGroups`](../../configuration-reference.md#browser-groups)
 4. Which browser should be the default?
-    - Options: A key from `Universal.Browsers`: `Firefox`, `Chrome`, `Edge`, `Brave`, `Tor`. Ships empty, so `Open-Browser` asks or uses the system default.
+    - Options: A key from `Universal.Browsers`: `Firefox`, `Chrome`, `Edge`, `Brave`, `Tor`. Ships empty; with no `DefaultBrowser`, `Open-Browser` warns and opens nothing, and the functions that depend on it skip their browser step.
     - Default: Empty.
     - More detail: [`Universal`](../../configuration-reference.md#universal-constants)
 5. Are any of the shipped executable paths wrong on this machine?
@@ -87,7 +87,7 @@ BrowserGroups = @(
 
 ## Step 3: Set `Universal`
 
-Machine-independent constants: executable paths (`FirefoxExe`, `DockerExe`, `DbeaverExe`, ...), the `Browsers` map, `DefaultBrowser`, shared URLs, the `ProcessCleanup` lists, and `Desktop` (auto-resolved at load). Expanded in place by `Load-PathConfiguration`, so placeholders work here too.
+Machine-independent constants: executable paths (`FirefoxExe`, `DockerExe`, `DbeaverExe`, ...), the `Browsers` map, `DefaultBrowser`, shared URLs, the `TerminateProcessNames` and `VisibleWindowExclusions` lists, and `Desktop` (auto-resolved at load). Expanded in place by `Load-PathConfiguration`, so placeholders work here too.
 
 ```powershell
 Universal = @{

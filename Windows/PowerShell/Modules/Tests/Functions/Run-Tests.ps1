@@ -48,12 +48,21 @@ function Run-Tests {
         and the reason for each file are printed first. Combines with -TestName and -Path as a union.
 
     .PARAMETER Since
-        The ref -Changed compares against. Defaults to master.
+        The ref -Changed compares against (its merge base with HEAD). Defaults to the main branch:
+        master, falling back to origin/master, main, then origin/main - the first that exists.
 
     .PARAMETER BuildImpactMap
         Run the full suite while recording which functions each test file actually invokes, into
         Results/impact-map.json; -Changed then also selects by what ran, not only by what the code
-        says. Takes about twice as long as a normal run.
+        says. Takes about twice as long as a normal run. Cannot be combined with -TestName, -Path,
+        -Changed or -Quick: the harness refuses the combination with exit code 2.
+
+    .PARAMETER UpdateContractBaseline
+        Release step, runs no tests: rewrites Modules/Tests/ContractBaseline.json from the working
+        tree, stamped with the newest released version in CHANGELOG.md. Run it in the release
+        commit, after the [Unreleased] section has become the new version's section; the
+        Infrastructure-Contract gate then holds every later change to that contract (see
+        VERSIONING.md). Cannot be combined with any other switch.
 
     .EXAMPLE
         Run-Tests
@@ -114,7 +123,10 @@ function Run-Tests {
 		[string]$Since,
 
 		[Parameter()]
-		[switch]$BuildImpactMap
+		[switch]$BuildImpactMap,
+
+		[Parameter()]
+		[switch]$UpdateContractBaseline
 	)
 
 	$Harness = Join-Path -Path (Split-Path -Path $PSScriptRoot -Parent) -ChildPath "Invoke-TestSuite.ps1"
@@ -123,7 +135,7 @@ function Run-Tests {
 		return
 	}
 
-	Write-LogTitle "Running Pester Tests"
+	if (-not $UpdateContractBaseline) { Write-LogTitle "Running Pester Tests" }
 
 	# Splatted rather than passed positionally so an unset filter stays unset - the harness
 	# treats an empty -TestName as "no filter", but being explicit keeps the two in step.
@@ -137,6 +149,7 @@ function Run-Tests {
 	if ($Changed) { $HarnessArguments.Changed = $true }
 	if ($Since) { $HarnessArguments.Since = $Since }
 	if ($BuildImpactMap) { $HarnessArguments.BuildImpactMap = $true }
+	if ($UpdateContractBaseline) { $HarnessArguments.UpdateContractBaseline = $true }
 
 	# The harness owns all run output (spinner, failures, verdict, log path) so that a local run
 	# and a CI run report identically. It exits 0 pass / 1 test failures / 2 infrastructure

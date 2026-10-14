@@ -9,13 +9,13 @@ Generates an ASCII art visualization of a FancyZones layout, showing which proce
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`ZoneNameMappings`](../../configuration-reference.md#layout-numbers--zone-mappings) | hashtable of layout name to zone-name map | hashtable, 10 keys | Human-readable zone names per FancyZones layout - what lets a layout file say `Zone = "Left"` instead of an index. `Get-FancyZone`, `Visualize-Layouts` and `Update-LayoutSectionHeaders` all read it. |
+| [`ZoneNameMappings`](../../configuration-reference.md#layout-numbers--zone-mappings) | hashtable of layout name to zone-name map | hashtable, 10 keys | Human-readable zone names per FancyZones layout - what lets a layout file say `Zone = "Left"` instead of an index. `Generate-LayoutVisualization` reads it to map each window's `Zone` to a zone index and to label empty zones. |
 
 ## Decisions
 
 1. What should the zones in each of your layouts be called?
     - Options: Layout name to `@{ <ZoneName> = <index> }`. Run `Visualize-Layouts` to see the current mapping drawn out, and see [Configure Window Layout](../window/configure-window-layout.md) for the 3-layer system.
-    - Default: The shipped mapping for layouts `One` .. `Ten`.
+    - Default: The shipped mapping for layouts `Zero` .. `Nine`.
     - More detail: [`ZoneNameMappings`](../../configuration-reference.md#layout-numbers--zone-mappings)
 2. Did you change a FancyZones layout in PowerToys?
     - Options: Then update its zone map here too, or layout files will place windows in the wrong zone.

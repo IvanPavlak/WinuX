@@ -125,7 +125,7 @@
 # → WorkspaceTemplates, templated WorkspaceActions entries : Resolve-WorkspaceTemplate (expanded at load by Expand-WorkspaceTemplates)
 #
 # Application Configuration:
-# → BrowserGroups                   : Open-Browser, Collect-BrowserUrls
+# → BrowserGroups                   : Open-Browser, Test-BrowserGroupAlreadyOpen
 # → AcrobatPdfGroups                : Open-Acrobat
 # → CampaignResources               : Open-DnD
 # → Universal executable paths      : Open-* functions (DBeaver, VirtualBox, etc.)
@@ -282,8 +282,9 @@
 		WindowsTerminalHome      = "{User}"
 
 		# Application executable paths consumed by Start-Application (Open-* functions).
-		# These ship empty - an unconfigured path makes its Open-* function warn and
-		# return instead of launching anything. Set the ones you use in
+		# These ship empty - an unconfigured path makes its Open-* function warn (Open-Steam
+		# and Open-LeagueOfLegends log an error) and return instead of launching anything.
+		# Set the ones you use in
 		# Configuration.local.psd1, e.g.:
 		#   LeagueOfLegendsExe  = "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Riot Games\League of Legends"
 		#   SteamExe            = "C:\Program Files (x86)\Steam\steam.exe"
@@ -1216,7 +1217,7 @@
 	# ==========================================================================
 	# Valid machine types. WinuX ships only the minimal "Test" profile; add your own types
 	# here (plus a Layouts/<Type>/ folder and <name>_<Type> payload variants) - see
-	# docs/configuration/guides/add-new-machine.md.
+	# docs/configuration/guides/bootstrap/add-new-machine.md.
 	ValidMachineTypes             = @(
 		"Test"
 	)
@@ -1238,7 +1239,7 @@
 		# DefaultMachineType. "Test" is the minimal working profile; add your own machines.
 		"Test" = "Test"
 		# Example second machine (first add "PC" to ValidMachineTypes and create its
-		# Layouts/PC/ folder + payload variants - see docs/configuration/guides/add-new-machine.md):
+		# Layouts/PC/ folder + payload variants - see docs/configuration/guides/bootstrap/add-new-machine.md):
 		# "YOUR-PC-HOSTNAME" = "PC"
 	}
 
@@ -1281,7 +1282,7 @@
 	#
 	# Example:
 	#   Locales = @(
-	#       @{ "Croatian" = @{ Code = "hr-HR"; GeoId = 191 } }
+	#       @{ "Croatian" = @{ Code = "hr-HR"; GeoId = 108 } }
 	#       @{ "English (US)" = @{ Code = "en-US"; GeoId = 244 } }
 	#   )
 	#   DefaultLocale = "Croatian"
@@ -1982,7 +1983,7 @@
 	# Supported Commands:
 	# - "dnr"          : DotnetRun (dotnet run)
 	# - "dnbr"         : DotnetBuildAndRun (dotnet build + run)
-	# - "nir"          : NpmInstallAndStart (npm install + npm run dev)
+	# - "nir"          : NpmInstallAndStart (npm install + npm start)
 	# - "npm run dev"  : Direct npm command
 	# A path with no command in the table just gets its terminal tab, nothing run in it.
 	# ==========================================================================
@@ -2128,9 +2129,8 @@
 	# Optional. Maps an Open-Workspace name to a .code-workspace file (base name, no
 	# extension) under Projects.Self.VSCodeWorkspaces (<repo>\VSCode\Workspaces). When set,
 	# opening that workspace opens the .code-workspace in VS Code IN PLACE OF the project
-	# folder, and Set-WorkspaceWindowLayout retitles the inferred VS Code layout entry
-	# (ProcessName 'Code') so the layout targets the workspace window instead of the folder
-	# window. A command-line "-VSCodeWorkspace <name>" overrides this; a bare
+	# folder; a layout entry with ProcessName 'Code' matches the workspace window as it
+	# matches the folder window. A command-line "-VSCodeWorkspace <name>" overrides this; a bare
 	# "-VSCodeWorkspace" (no value) shows a Resolve-Selection menu of available workspaces.
 	# Empty => plain project-folder behaviour (the default).
 	#
@@ -2410,7 +2410,7 @@
 	# ==========================================================================
 	# Per-campaign resources consumed by Open-DnD (rulebook PDF + resource browser group).
 	CampaignResources             = @(
-		@{ ExampleCampaign = @{ Pdf = "ExampleCharacter"; Browser = "Reference" } }
+		@{ ExampleCampaign = @{ Pdf = "ExampleRulebook"; Browser = "Reference" } }
 	)
 
 	# ==========================================================================
@@ -2444,7 +2444,7 @@
 	# Ships empty - Configure-Taskbar leaves the taskbar pins exactly as they are
 	# (no clearing, no pinning) until you opt in. Keep your real, machine-tagged
 	# list in Configuration.local.psd1 - it replaces this array wholesale on merge.
-	# See docs/configuration/guides/add-new-machine.md.
+	# See docs/configuration/guides/bootstrap/add-new-machine.md.
 	#
 	# Example:
 	#   TaskbarConfiguration = @(

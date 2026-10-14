@@ -9,12 +9,13 @@ Opens one or more VS Code project folders defined in `VSCodeProjects` in `Config
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`VSCodeProjects`](../../configuration-reference.md#vs-code-projects) | array of `@{ Name; Path }` | array of 2 | The folders `Open-VSCode` offers by name. |
+| [`VSCodeProjects`](../../configuration-reference.md#vs-code-projects) | array of `@{ Name; Path }` | array of 2 (`WinuX`, `ExampleProject`) | The folders `Open-VSCode` offers by name. `Path` is not a literal path but a dot-notation reference into the expanded `PathTemplates` (`$global:MachineSpecificPaths`), e.g. `"Projects.Self.Root"`. |
+| [`PathTemplates.Projects`](../../configuration-reference.md#path-templates--placeholder-system) | hashtable of project to path fields | `Self`, `ExampleProject` | Where each `Path` reference resolves to. A project's folder is normally its `Root`; placeholders such as `{Dev}` belong here. |
 
 ## Decisions
 
 1. Which folders should `Open-VSCode` offer by name?
-    - Options: One entry per folder with a name and a path. Placeholders allowed.
+    - Options: One entry per folder with a name and a `Path` reference such as `"Projects.MyProject.Root"`, plus that path under `PathTemplates.Projects`. A literal path or placeholder in `Path` does not resolve.
     - Default: The shipped two examples.
     - More detail: [`VSCodeProjects`](../../configuration-reference.md#vs-code-projects)
 
@@ -34,11 +35,17 @@ On this page that bites on `VSCodeProjects` - that key is an array, so whatever 
 
 ## Step 1: Set `VSCodeProjects`
 
-The folders `Open-VSCode` offers by name.
+The folders `Open-VSCode` offers by name. Each `Path` names a path under `PathTemplates`, so define the folder there first (`PathTemplates` is a hashtable and deep-merges). `VSCodeProjects` is an array, so restate the shipped entries you keep.
 
 ```powershell
+PathTemplates  = @{
+    Projects = @{
+        MyProject = @{ Root = "{Dev}\MyProject" }
+    }
+}
 VSCodeProjects = @(
-    @{ Name = "MyProject"; Path = "{Dev}\MyProject" }
+    @{ Name = "WinuX"; Path = "Projects.Self.Root" }
+    @{ Name = "MyProject"; Path = "Projects.MyProject.Root" }
 )
 ```
 
@@ -57,8 +64,8 @@ Read-only checks. None of these change anything.
 
 ```powershell
 Reload-PowerShellProfile
-$global:Configuration.VSCodeProjects
 $global:Configuration.VSCodeProjects | Format-Table Name, Path
+$global:MachineSpecificPaths.Projects.MyProject.Root
 ```
 
 If a value reads back as empty, the two usual causes are a parse error in `Configuration.local.psd1` (run `Test-ConfigurationSchema`) and a key placed at the wrong nesting level.
@@ -70,8 +77,14 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 ```powershell
 # Configuration.local.psd1
 @{
+    PathTemplates  = @{
+        Projects = @{
+            MyProject = @{ Root = "{Dev}\MyProject" }
+        }
+    }
     VSCodeProjects = @(
-        @{ Name = "MyProject"; Path = "{Dev}\MyProject" }
+        @{ Name = "WinuX"; Path = "Projects.Self.Root" }
+        @{ Name = "MyProject"; Path = "Projects.MyProject.Root" }
     )
 }
 ```

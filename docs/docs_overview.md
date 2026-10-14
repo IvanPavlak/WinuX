@@ -47,7 +47,7 @@ The authoritative, always-current function reference is the set of per-module pa
 | ----------------------- | -------------------------------------- | -------------------------------------------------------------------------------------------------------- |
 | `ValidMachineTypes`     | Allowed machine type values            | `@("PC", "Laptop", "Work", "Test")`                                                                      |
 | `HostnameToMachineType` | Maps hostname → machine type           | `@{ "DESKTOP-GAMING" = "PC"; "LAPTOP-PERSONAL" = "Laptop"; "WORKSTATION-01" = "Work"; "Test" = "Test" }` |
-| `DefaultMachineType`    | Fallback if hostname not found         | `"Laptop"`                                                                                               |
+| `DefaultMachineType`    | Fallback if hostname not found         | `"Test"` (the shipped value)                                                                             |
 | `LaptopChassisTypes`    | WMI chassis types for laptop detection | `@(8, 9, 10, 11, 14, 30, 31, 32)`                                                                        |
 | `BasePaths`             | Root directories per machine type      | `@{ PC = @{ Dev = "..."; User = "..." } }`                                                               |
 
@@ -73,23 +73,27 @@ decisions behind them, and where the values go. Each module's `README.md` indexe
 | `GitConfig` (WingetPackageId, UserName, UserEmail) | `Install-Git`                                      |
 | `HostnameToMachineType`, `ValidMachineTypes`       | `DetermineMachineType`, `Test-MachineTypeScope`    |
 | `BasePaths`, `PathTemplates`                       | `Expand-ConfigPaths`, all path-dependent functions |
-| `SymbolicLinks`                                    | `SymbolicLinkMaker`                                |
-| `RepositoryGroups`                                 | `Update-Repositories`, `Initialize-Repository`     |
+| `PathTemplates.SymbolicLinks`                      | `SymbolicLinkMaker`                                |
+| `RepositoryGroups`                                 | `Update-Repositories`, `Resolve-RepositoryTargets` |
+| `PathTemplates.ObsidianDirectory`                  | `Open-Obsidian`, `Git-Obsidian`                    |
+| `Logging`                                          | `Initialize-LoggingState`                          |
+| `Logging.Maintenance`                              | `Invoke-LogMaintenance`                            |
+| `Logging.FileLogging.Retention`                    | `Clear-OldLogs`                                    |
 | `RepositoryUpdate`                                 | `Update-Repositories`, `Resolve-RepositoryDefaultBranch`, `Get-RepositoryUpdateStartupSettings`, `Invoke-StartupRepositoryUpdate` |
-| `BrowserGroups`                                    | `Open-Browser`, `Collect-BrowserUrls`              |
-| `Projects`, `ProjectActions`                       | `Open-Project`                                     |
-| `Workspaces`, `DefaultWorkspace`, `WorkspaceActions`, `WorkspaceBenchmark` | `Open-Workspace`           |
+| `BrowserGroups`                                    | `Open-Browser`, `Test-BrowserGroupAlreadyOpen`, `Resolve-SwaggerBrowserGroup`, `Get-SwaggerCloseTitlePatterns` |
+| `PathTemplates.Projects`, `ProjectActions`         | `Open-Project` (`ProjectActions` also by `Close-Project`, `Open-Workspace`, `Resolve-WorkspaceActions`, `Merge-LayoutProjectOverrides`) |
+| `DefaultWorkspace`, `WorkspaceActions`, `WorkspaceBenchmark` | `Open-Workspace`                         |
 | `WorkspaceActions` entry scopes (`Machine`, `LayoutMachine`, `Project`) and tables (`MachineParameters`, `LayoutMachineParameters`, `ProjectParameters`) | `Resolve-WorkspaceActions` (for `Open-Workspace`, `Measure-WorkspaceOpen`) |
 | `WorkspaceTemplates`, templated `WorkspaceActions` entries, `{Workspace}` | `Resolve-WorkspaceTemplate` (expanded at load by `Expand-WorkspaceTemplates`, again by `Open-Workspace` for command-line variables), `Test-ConfigurationSchema`, `Add-Workspace -Template` |
 | Layout file `ProjectOverrides` (checked against `ProjectActions`, `ZoneNameMappings`) | `Merge-LayoutProjectOverrides` (for `Set-WorkspaceWindowLayout -Project`, `Validate-Layout`, `Visualize-Layouts`) |
 | `Themes`                                           | `Set-SystemTheme`                                  |
 | `SystemTheme.Steps`                                | `Set-SystemTheme`, `Resolve-SystemThemeSteps`      |
-| `WallpaperDarkSettings`, `WallpaperLightSettings`  | `Set-Wallpaper`                                    |
+| `WallpaperDarkSettings`, `WallpaperLightSettings`, `WallpaperStyles` | `Set-Wallpaper`, `Set-LockScreenWallpaper`       |
 | `TaskbarConfiguration`                             | `Configure-Taskbar`                                |
 | `TaskbarSettings`                                  | `Set-TaskbarSettings`                              |
 | `VisualEffects`                                    | `Set-VisualEffects`                                |
-| `LayoutNumbers`, `ZoneNameMappings`, `FancyZonesApplyMethod` | `Apply-FancyZones`, `Get-FancyZone`, `Test-FancyZonesConfiguration` |
-| `WorkspaceLayoutPipelining`                        | `Set-WorkspaceWindowLayout`                        |
+| `LayoutNumbers`, `ZoneNameMappings`, `FancyZonesApplyMethod` | `Apply-FancyZones`, `Get-FancyZone`, `Test-FancyZonesConfiguration`, `Visualize-Layouts` (`LayoutNumbers`, `ZoneNameMappings`), `Generate-LayoutVisualization`, `Update-LayoutSectionHeaders`, `Merge-LayoutProjectOverrides` (`ZoneNameMappings`) |
+| `WorkspaceLayoutPipelining`, `SimpleLayoutWorkspaces` | `Set-WorkspaceWindowLayout` (`SimpleLayoutWorkspaces` is written by `Add-WindowLayout -Simple`) |
 | `WorkspaceLayoutPrepareEarly`                      | `Open-Workspace`                                   |
 | `LayoutMachineTypeOverrides`, `SmallDisplayMachineType` | `Get-LayoutMachineType` (for `Set-WorkspaceWindowLayout`, `Reset-Windows`, `Resolve-DisplayAwareProfile`, `Resolve-WorkspaceActions`) |
 | `ResetAllWindowsDefaults`                          | `Reset-Windows`                                    |
@@ -102,10 +106,10 @@ decisions behind them, and where the values go. Each module's `README.md` indexe
 | `AiSkills`                                         | `Deploy-AiSkills`, `Update-AiSkills`, `List-Skills`, `Get-AiSkillRoster` (via `Resolve-AiSkillsConfig`) |
 | `AiMods`                                           | `Deploy-AiMods`, `Update-AiMods`, `Get-AiModRoster` (via `Resolve-AiModsConfig`); `Deploy-AiMods` also writes `env.CLAUDE_CODE_PLUGIN_DIRS` of `~\.claude\settings.json` through `Resolve-AiModsPluginDirs` and `Set-ClaudeSettingsEnv`, and checks the CLI with `Test-AiModsCli` |
 | `AiMarketplaces`                                   | `Deploy-AiMarketplaces`; writes `extraKnownMarketplaces` and `pluginConfigs` of `~\.claude\settings.json` through `Set-ClaudeSettingsKey` and each marketplace's `Env` variables into its `env` block through `Set-ClaudeSettingsEnv`, then adds the marketplaces and installs the plugins through the Claude Code CLI |
-| `AutoEnvironmentVariables`                         | `Set-EnvironmentVariables`                         |
+| `AutoEnvironmentVariables`, `AutoPathAdditions`, `BasePaths` | `Set-EnvironmentVariables`                   |
 | `Locales`, `DefaultLocale`                         | `Set-Locale`                                       |
-| `DisplayLanguages`                                 | `Set-DisplayLanguage`                              |
-| `KeyboardLayouts`, `DefaultKeyboardLayoutSet`      | `Set-KeyboardLayouts`                              |
+| `DisplayLanguages`, `DefaultDisplayLanguage`       | `Set-DisplayLanguage`                              |
+| `KeyboardLayouts`, `KeyboardLayoutSets`, `DefaultKeyboardLayoutSet` | `Set-KeyboardLayouts`                 |
 | `AutoElevate`                                      | `Test-AdminPrivileges`                             |
 
 ---
@@ -116,9 +120,10 @@ The profile (`Microsoft.PowerShell_profile.ps1`) executes this exact sequence. E
 
 ```
 1. Locate Configuration.psd1, resolve the repo from its real path (Get-RepositoryPath), add Modules/ to $env:PSModulePath
-2. Dot-source Helper\Functions\{Test-StartupStage, Complete-StartupStage, Get-ConfigSetting, Test-ConfigValue, Resolve-WorkspaceTemplate, Expand-WorkspaceTemplates}.ps1
+2. Dot-source Helper\Functions\{Test-StartupStage, Complete-StartupStage, Get-ConfigSetting, Test-ConfigValue, Resolve-WorkspaceTemplate, Expand-WorkspaceTemplates, Restore-ShellPrompt}.ps1
    (the only Helper functions used before the prompt - dot-sourced so the 80+-file Helper module is NOT autoloaded at startup;
-   the two workspace-template functions run inside Load-PathConfiguration's template expansion)
+   the two workspace-template functions run inside Load-PathConfiguration's template expansion, and Restore-ShellPrompt lets
+   the deferred work below draw the prompt again without importing Helper from idle time)
 3. Stage Core (Required - always runs, always timed)
    ├─ Import Configuration.psd1 → $global:Configuration
    ├─ Import-Module Logging → Import-Module Bootstrap
@@ -138,10 +143,12 @@ The profile (`Microsoft.PowerShell_profile.ps1`) executes this exact sequence. E
 11. Stage PowerPlan - dot-source System\Functions\{Get-ChassisType, Test-PowerPlan}.ps1, then Test-PowerPlan (chassis type from a per-machine cache)
 12. Stage LogMaintenance - QUEUED
 13. Stage RepositoryUpdate - QUEUED; one PowerShell.OnIdle subscription then runs the queue once the prompt is rendered and the shell
-    has been idle ~300 ms: Import-Module Terminal-Icons -Global, Invoke-LogMaintenance, Invoke-StartupRepositoryUpdate
+    has been idle ~300 ms: Import-TerminalIcons -RedrawPrompt (Import-Module Terminal-Icons -Global; a torn theme cache file is
+    moved aside and the import retried), Invoke-LogMaintenance, Invoke-StartupRepositoryUpdate
     (no-op unless RepositoryUpdate.Startup.Enabled; once a day from Startup.DayStartHour, or once per
     Startup.IntervalHours with Schedule "Interval"), then Register-RepositoryUpdatePromptCheck (Daily only:
-    wraps the prompt so a shell still open the next day runs it at its first prompt)
+    wraps the prompt so a shell still open the next day runs it at its first prompt). An entry that throws is reported
+    through Write-LogError (console, session log and error log) and the prompt is drawn again (Restore-ShellPrompt)
 ```
 
 > **Module autoload:** All WinuX modules declare `FunctionsToExport` in their `.psd1` manifests. PowerShell builds an autoload index at startup (no code executed) and imports a module automatically the first time one of its exported functions is called. `Logging` and `Bootstrap` are imported eagerly by the profile (in that order, so Bootstrap and all other modules can log from the start); nothing else is imported before the first prompt - the handful of Helper, Configuration, System and Git functions the profile needs are dot-sourced from their files, because importing a module costs 4-6 ms per function file (Helper and System were measured at 330-500 ms each) and the first autoload adds PowerShell's module discovery on top. The fork-owned `Custom` module autoloads the same way via its `FunctionsToExport` (which the fork maintains, one entry per Custom function; empty on a pure-upstream setup). `Start-Logging`/`Stop-Logging` live in the `Logging` module (moved out of `Helper`).
@@ -152,9 +159,10 @@ The profile (`Microsoft.PowerShell_profile.ps1`) executes this exact sequence. E
 `Bootstrap -WithInitialSetup` runs these phases in order:
 
 ```
-Phase 1 (Initial Setup only):    Rename-Machine → Start-MicrosoftActivationScripts → Start-Win11Debloat
+Phase 1 (Initial Setup only):    Initialize-Configuration (then Load-PathConfiguration again) → Rename-Machine → Start-MicrosoftActivationScripts → Start-Win11Debloat
                                  (MAS and Win11Debloat are opt-in via BootstrapConfig.Steps)
-Phase 2 (Repos):                 Update-Repositories (opt-in via BootstrapConfig.Steps.RepositoryUpdate;
+Phase 2 (Repos):                 Git identity guarantee (restored from GitConfig when unset)
+                                 → Update-Repositories (opt-in via BootstrapConfig.Steps.RepositoryUpdate;
                                  -All or -Group <names>, per BootstrapConfig.RepositoryUpdateScope)
 Phase 3 (System Config):         Set-CustomExecutionPolicy → Enable-DeveloperMode
                                  → Set-PowerPlan → Set-PowerButtonActions → Set-SystemTheme
@@ -163,11 +171,11 @@ Phase 3 (System Config):         Set-CustomExecutionPolicy → Enable-DeveloperM
                                  → Install-PowerShellModules → Set-SpecialFolders
                                  → Restart-Explorer → Configure-WSL (config-gated: Steps.WSL)
 Phase 4 (Packages):              Resolve-PackageManagers (base => WinGet alone)
-                                 → Install-WinGetPackageManager → Install-WinGetApps
+                                 → Install-WinGetPackageManager → Install-WingetApps
                                  → Install-ScoopPackageManager → Install-ScoopApps
                                  → Install-ChocolateyPackageManager → Install-ChocolateyApps → Upgrade-All
                                  (each manager runs only if in play: PackageManagers + non-empty app list)
-Phase 5 (Dev Tools):             PersonalSteps (fork-defined; base runs none) → Install-DotnetEF
+Phase 5 (Dev Tools):             PersonalSteps (fork-defined; base runs none) → Install-DotnetEf
 Phase 6 (Environment):           Set-EnvironmentVariables -Auto → Create-CondaEnvironments
                                  → Configure-NuGetConfig
 Phase 7 (Taskbar):               Configure-Taskbar -FromBootstrap → Set-TaskbarSettings → Set-VisualEffects
@@ -176,8 +184,11 @@ Phase 8 (WSL & Symlinks):        Initialize-WSLEnvironment → SymbolicLinkMaker
                                  → Deploy-AiSkills (opt-in via BootstrapConfig.Steps.AiSkills)
                                  → Deploy-AiMods (opt-in via BootstrapConfig.Steps.AiMods)
                                  → Deploy-AiMarketplaces (opt-in via BootstrapConfig.Steps.AiMarketplaces)
+                                 → Enable-ObsidianCli (opt-in via BootstrapConfig.Steps.ObsidianCli)
+                                 → Deploy-VSCodeProfiles (opt-in via BootstrapConfig.Steps.VSCodeProfiles)
                                  → Configure-WSLSSH (WSL steps config-gated)
-Phase 9 (Finalize):              Lock taskbar → Restart-Explorer → Restart-Machine
+Phase 9 (Finalize):              Lock taskbar (opt-in via BootstrapConfig.Steps.LockedStartLayout)
+                                 → Restart-Explorer → Restart-Machine
 ```
 
 ---
@@ -205,10 +216,13 @@ Phase 9 (Finalize):              Lock taskbar → Restart-Explorer → Restart-M
 ```
 docs/
 ├── index.html                              # Docsify config, theme, splash screen
+├── .nojekyll                               # Stops GitHub Pages running Jekyll over the site
 ├── _sidebar.md                             # Navigation menu hierarchy
 ├── README.md                               # Landing page (root /)
 ├── docs_overview.md                        # THIS FILE
-├── roadmap.md                              # Where WinuX is and where it's headed
+├── roadmap.md                              # Who WinuX is for, its non-goals, where it's headed
+│
+├── assets/                                 # logo.png, showcase.svg, UltrawideDemo.webp, StackedUltrawideDemo.webp
 │
 ├── getting-started/
 │   ├── prerequisites.md                    # Windows 11, WinGet, admin, hostname
@@ -255,12 +269,15 @@ docs/
 ├── ai/
 │   ├── overview.md                         # Layered AI context system, slash commands
 │   ├── agent-system.md                     # Custom agents, prompts, instructions
-│   ├── coreairules.md                        # Machine-global AI agent guardrails (opt-in)
+│   ├── coreairules.md                      # Machine-global AI agent guardrails (opt-in)
 │   ├── skills.md                           # Machine-global Agent Skills (opt-in)
 │   └── mods.md                             # Machine-global Claude Code mods (opt-in)
 │
 ├── contributing/
 │   └── fork-model.md                       # Fork model, config + app-list overrides, merge=ours
+│
+├── custom/
+│   └── README.md                           # The fork-owned Custom area (its pages carry a reference marker)
 │
 └── reference/
     ├── software-list.md                    # Packages installed from the CSV files
@@ -334,4 +351,4 @@ in which a page claimed a contract by accident. See [the Custom area docs](custo
 
 ---
 
-_Last verified: September 9, 2026_
+_Last verified: October 13, 2026_

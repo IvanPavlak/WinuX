@@ -15,7 +15,7 @@ function Get-WorkspaceOpenMeasurement {
 		row per recorded session - id, workspace, project, when it started, how many opens and
 		variants it had - so the id of an older run can be found. -Formatted renders the result as
 		an auto-sized table instead of returning objects; -PassThru returns a single object with
-		Summary and Runs (the typed per-run rows) for your own analysis.
+		Session, Summary and Runs (the typed per-run rows) for your own analysis.
 
 		Warns and returns nothing when no experiment has been recorded yet.
 
@@ -33,7 +33,8 @@ function Get-WorkspaceOpenMeasurement {
 		Render the result as an auto-sized table instead of returning objects.
 
 	.PARAMETER PassThru
-		Return one object with Summary and Runs (the typed per-run rows of the session).
+		Return one object with Session, Summary and Runs (the typed per-run rows of the session).
+		Ignored when -Formatted is also given, and with -ListSessions.
 
 	.PARAMETER ResultPath
 		Read a different file. Defaults to Get-WorkspaceOpenMeasurementPath.

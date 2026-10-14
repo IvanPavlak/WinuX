@@ -1,32 +1,38 @@
 function Determine-DotnetDependencies {
 	<#
 	.SYNOPSIS
-		Scans .NET projects and lists their dependencies.
+		Scans .NET projects and reports which .NET SDKs they need and which are missing.
 
 	.DESCRIPTION
-		Recursively scans a directory for `.csproj` and `.vbproj` files, parses their
-		PackageReference entries, and outputs all NuGet dependencies.
+		Recursively scans a directory for `.csproj`, `.fsproj` and `.vbproj` files, parses their
+		TargetFramework / TargetFrameworks, and lists the target frameworks found with a project
+		count. It then lists the installed SDKs and runtimes (`dotnet --list-sdks` /
+		`--list-runtimes`), compares the modern .NET versions the projects target against the
+		installed SDKs, and for every missing SDK prints a `winget install
+		Microsoft.DotNet.SDK.<major>` command and the matching WinGetApps.csv row.
 
-		Excludes common non-source directories (node_modules, bin, obj, etc.) by default.
-		With `-ListProjects`, outputs the project list before listing dependencies.
+		Excludes common non-source directories (node_modules, bin, obj, etc.) by default; an
+		exclusion matches anywhere in a project's full path, not only a whole folder name.
+		With `-ListProjects`, each target framework is followed by the projects that use it.
 
 	.PARAMETER SearchPath
 		Root directory to scan for .NET projects. Defaults to `MachineSpecificPaths.DotnetProjectsSearchPath`
-		or `$env:USERPROFILE\\Development` if not configured.
+		(only present when that key is placed under PathTemplates) or `$env:USERPROFILE\Development`
+		if not configured.
 
 	.PARAMETER ExcludePaths
 		Array of directory names to exclude from scanning. Defaults to common build/cache folders.
 
 	.PARAMETER ListProjects
-		Also outputs the list of .NET projects found.
+		Also outputs the projects found, grouped under their target framework.
 
 	.EXAMPLE
 		Determine-DotnetDependencies
 		Scans the configured .NET projects directory for dependencies.
 
 	.EXAMPLE
-		Determine-DotnetDependencies -SearchPath "C:\\repos" -ListProjects
-		Scans the repos folder and lists projects before dependencies.
+		Determine-DotnetDependencies -SearchPath "C:\repos" -ListProjects
+		Scans the repos folder and lists each project under its target framework.
 	#>
 	[CmdletBinding()]
 	param(

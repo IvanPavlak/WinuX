@@ -7,10 +7,10 @@ The Configuration module provides **reliable programmatic modification** of `Con
 ## [Add-BrowserGroup](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Configuration/Functions/Add-BrowserGroup.ps1)
 
 - **Description:** Adds a new browser URL group to the `BrowserGroups` array in `Configuration.psd1`. Supports named URLs with labels (recommended, via `-Urls`) and simple URL lists (via `-SimpleUrls`).
-- **Parameters:** -GroupName, -Urls (hashtable[]), -SimpleUrls (string[]), -ConfigurationFilePath
+- **Parameters:** -GroupName, -Urls (hashtable[]), -SimpleUrls (string[]), -ConfigurationFilePath, -BackupRoot
 - **Usage:** `Add-BrowserGroup -GroupName GroupName -Urls @(@{ Name = "GitHub"; Url = "https://github.com" })`, `Add-BrowserGroup -GroupName GroupName -SimpleUrls @("https://www.google.com/")`
 
-Locates the `BrowserGroups` section via `Find-ConfigurationSection`, builds a correctly indented entry, and inserts it at the end of the section. The named (`-Urls`) and simple (`-SimpleUrls`) forms are mutually exclusive parameter sets, exactly one of which is required.
+Locates the `BrowserGroups` section via `Find-ConfigurationSection`, builds a correctly indented entry, and inserts it at the end of the section. Before writing, it backs the file up into the unified backup sink (`Backups\Windows\Config\Configuration\<timestamp>\`, via [`Backup-RepositoryItem`](helper.md#backup-repositoryitem)); a backup that cannot be taken aborts the write. The named (`-Urls`) and simple (`-SimpleUrls`) forms are mutually exclusive parameter sets, exactly one of which is required.
 
 | Parameter                | Description                                                                                      |
 | ------------------------ | ------------------------------------------------------------------------------------------------ |
@@ -18,6 +18,7 @@ Locates the `BrowserGroups` section via `Find-ConfigurationSection`, builds a co
 | `-Urls`                  | Array of URL hashtables `@{ Name = "Label"; Url = "https://..." }`. Mandatory for the named set. |
 | `-SimpleUrls`            | Array of plain URL strings for groups without labels. Mandatory for the simple set.              |
 | `-ConfigurationFilePath` | Override the `Configuration.psd1` path (for testing).                                            |
+| `-BackupRoot`            | Override the backup sink root. Defaults to `Backups\Windows` in the repository the file belongs to. |
 
 ```powershell
 # Named URLs (recommended) - labels appear in the Open-Browser menu
@@ -35,20 +36,21 @@ Add-BrowserGroup -GroupName GroupName -SimpleUrls @("https://www.google.com/")
 ## [Add-Project](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Configuration/Functions/Add-Project.ps1)
 
 - **Description:** Adds a project to `Configuration.psd1`. Appends its `ProjectActions` entry - the project's only definition and its place in the `Open-Project` menu - and optionally adds `TerminalTabs`, `ProjectTerminals` and `RunnableProjectMappings` entries. If no actions are given it creates default `Open-VSCode` + `Open-ProjectTerminals-Or-RunProject` actions.
-- **Parameters:** -Name, -Actions, -TerminalTabs, -BasePath, -Paths, -Runnable, -ConfigurationFilePath
+- **Parameters:** -Name, -Actions, -TerminalTabs, -BasePath, -Paths, -Runnable, -ConfigurationFilePath, -BackupRoot
 - **Usage:** `Add-Project -Name "MyProject"`, `Add-Project -Name "MyProject" -TerminalTabs @(@{ Title = "Root"; Path = "DEFAULT" }) -Runnable`
 
-Edits `Configuration.psd1` in place by locating each section (`ProjectActions`, and optionally `TerminalTabs`, `RunnableProjectMappings`, `ProjectTerminals`) and inserting the new lines. A `ProjectActions` entry is always created; the other sections are only touched when their corresponding parameters are supplied.
+Edits `Configuration.psd1` in place by locating each section (`ProjectActions`, and optionally `TerminalTabs`, `RunnableProjectMappings`, `ProjectTerminals`) and inserting the new lines. A `ProjectActions` entry is always created; the other sections are only touched when their corresponding parameters are supplied (and silently skipped when the file has no such section). Before writing, the file is backed up into the unified backup sink (`Backups\Windows\Config\Configuration\<timestamp>\`); a backup that cannot be taken aborts the write.
 
 | Parameter                | Description                                                                                                                                  |
 | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `-Name`                  | The project name (mandatory, positional). Added to the `Projects` array and used as the key for every other generated entry.                 |
+| `-Name`                  | The project name (mandatory, positional). The key of the new `ProjectActions` entry and the name used in every other generated entry.       |
 | `-Actions`               | Array of action hashtables for `ProjectActions`. Omit to generate the default `Open-VSCode` + `Open-ProjectTerminals-Or-RunProject` actions. |
-| `-TerminalTabs`          | Optional array of terminal tab hashtables, each `@{ Title = "..."; Path = "..." }`, added to the `TerminalTabs` section.                     |
+| `-TerminalTabs`          | Optional array of terminal tab hashtables, each `@{ Title = "..."; Path = "..." }`, added to a `TerminalTabs` section. The shipped `Configuration.psd1` has no such section and no function reads one, so today this writes nothing. |
 | `-BasePath`              | Optional dot-notation base path for the `ProjectTerminals` entry (e.g. `"Projects.MyProject"`). Requires `-Paths`.                           |
 | `-Paths`                 | Optional array of path names for the `ProjectTerminals` entry (e.g. `@("ROOT", "API")`). Requires `-BasePath`.                               |
 | `-Runnable`              | If set, adds a `RunnableProjectMappings` entry (with an empty `Commands` table).                                                                                              |
 | `-ConfigurationFilePath` | Override the `Configuration.psd1` path (for testing).                                                                                        |
+| `-BackupRoot`            | Override the backup sink root. Defaults to `Backups\Windows` in the repository the configuration file belongs to.                           |
 
 ```powershell
 # Minimal: add the project with default Open-VSCode + Open-ProjectTerminals-Or-RunProject actions
@@ -70,10 +72,10 @@ Add-Project -Name "MyProject" -Actions @(
 ## [Add-SymbolicLink](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Configuration/Functions/Add-SymbolicLink.ps1)
 
 - **Description:** Adds a symbolic link entry to the `SymbolicLinks` section of `Configuration.psd1`. Supports both simple (single Path/Target) and nested (multiple files under one app) entries, preserving the file's indentation and key alignment.
-- **Parameters:** -Name, -Path, -Target, -Links, -ConfigurationFilePath
+- **Parameters:** -Name, -Path, -Target, -Links, -ConfigurationFilePath, -BackupRoot
 - **Usage:** `Add-SymbolicLink -Name "MyApp" -Path "{AppData}\MyApp\config.json" -Target "{RepoRoot}\MyApp\config.json"`, `Add-SymbolicLink -Name "MyApp" -Links @(@{ Name = "Settings"; Path = "{AppData}\MyApp\settings.json"; Target = "{RepoRoot}\MyApp\settings.json" })`
 
-Reads the current `Configuration.psd1`, locates the `SymbolicLinks` section via `Find-ConfigurationSection`, builds a new entry with correct indentation (keys aligned at 21 characters), and inserts it before the section's closing bracket. The `Simple` and `Nested` parameter sets are mutually exclusive: use `-Path`/`-Target` for a single link, or `-Links` for multiple files belonging to one app. Use placeholder tokens such as `{AppData}` and `{RepoRoot}` in paths so they resolve per machine.
+Reads the current `Configuration.psd1`, locates the `SymbolicLinks` section via `Find-ConfigurationSection`, builds a new entry with correct indentation (keys aligned at 21 characters), and inserts it before the section's closing bracket, after backing the file up into the unified backup sink (a backup that cannot be taken aborts the write). The `Simple` and `Nested` parameter sets are mutually exclusive: use `-Path`/`-Target` for a single link, or `-Links` for multiple files belonging to one app. Use placeholder tokens such as `{AppData}` and `{RepoRoot}` in paths so they resolve per machine.
 
 | Parameter                | Description                                                                                             |
 | ------------------------ | ------------------------------------------------------------------------------------------------------- |
@@ -82,6 +84,7 @@ Reads the current `Configuration.psd1`, locates the `SymbolicLinks` section via 
 | `-Target`                | The actual file path that the link points to. Use placeholders. (Simple set)                            |
 | `-Links`                 | Array of hashtables with `Name`, `Path`, and `Target` keys for nested, multi-file entries. (Nested set) |
 | `-ConfigurationFilePath` | Override the `Configuration.psd1` path (for testing).                                                   |
+| `-BackupRoot`            | Override the backup sink root. Defaults to `Backups\Windows` in the repository the file belongs to.     |
 
 ```powershell
 # Simple link: one file for one app
@@ -99,18 +102,19 @@ Add-SymbolicLink -Name "MyApp" -Links @(
 ## [Add-WindowLayout](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Configuration/Functions/Add-WindowLayout.ps1)
 
 - **Description:** Creates a new window layout `.psd1` template file for a workspace under `Window/Layouts/{MachineType}/`. The generated template includes a basic monitor configuration and a sample layout entry that can be customized afterward. Optionally registers the workspace in `SimpleLayoutWorkspaces` in `Configuration.psd1` for layout-only switching with no window positioning.
-- **Parameters:** -WorkspaceName, -MachineType, -Simple, -ConfigurationFilePath, -LayoutsDirectory
+- **Parameters:** -WorkspaceName, -MachineType, -Simple, -ConfigurationFilePath, -LayoutsDirectory, -BackupRoot
 - **Usage:** `Add-WindowLayout -WorkspaceName "MyWorkspace"`, `Add-WindowLayout -WorkspaceName "MyWorkspace" -MachineType @("PC", "Laptop")`, `Add-WindowLayout -WorkspaceName "MyWorkspace" -Simple`
 
-For each machine type, the function creates the `{MachineType}` subdirectory if needed and writes a `{WorkspaceName}_{MachineType}.psd1` template; existing layout files are left untouched (no overwrite). When `-MachineType` is omitted it defaults to the current machine's type from `Configuration.psd1` (falling back to `Test`). With `-Simple`, the workspace name is appended to the `SimpleLayoutWorkspaces` array in `Configuration.psd1`.
+For each machine type, the function creates the `{MachineType}` subdirectory if needed and writes a `{WorkspaceName}_{MachineType}.psd1` template; existing layout files are left untouched (no overwrite). When `-MachineType` is omitted it reads a `MachineType` key from the loaded configuration and falls back to `Test` - the shipped configuration defines no such key (the detected type lives in `$global:MachineType`), so pass `-MachineType` explicitly to target the current machine. With `-Simple`, the workspace name is appended to the `SimpleLayoutWorkspaces` array in `Configuration.psd1` (single-line or multi-line), after the file is backed up into the unified backup sink; a backup that cannot be taken aborts that write, and a missing configuration file only warns.
 
 | Parameter                | Description                                                                                                  |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------ |
 | `-WorkspaceName`         | The workspace name for the layout (positional, required).                                                    |
-| `-MachineType`           | One or more machine types (`string[]`) to create layouts for. Defaults to the current machine type.          |
+| `-MachineType`           | One or more machine types (`string[]`) to create layouts for. Defaults to `Test` (see above).                |
 | `-Simple`                | Adds the workspace to `SimpleLayoutWorkspaces` in `Configuration.psd1` (layout-only, no window positioning). |
 | `-ConfigurationFilePath` | Override the `Configuration.psd1` path (for testing).                                                        |
 | `-LayoutsDirectory`      | Override the Layouts directory path (for testing).                                                           |
+| `-BackupRoot`            | Override the backup sink root for the `-Simple` write. Defaults to `Backups\Windows` in the repository the configuration file belongs to. |
 
 ```powershell
 # Create a layout for the current machine type
@@ -127,7 +131,7 @@ Add-WindowLayout -WorkspaceName "MyWorkspace" -Simple
 
 ## [Add-Workspace](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Configuration/Functions/Add-Workspace.ps1)
 
-- **Description:** Adds a workspace to `Configuration.psd1` by appending one entry at the end of the `WorkspaceActions` list - the only definition of a workspace, so it shows up last in the `Open-Workspace` menu. The entry is either an action list (`-Actions`; if no actions are specified, a default `Set-WorkspaceWindowLayout` action for the workspace) or, with `-Template`, the one-line templated entry `@{ <Name> = @{ Template = "<Template>" } }` that stamps out a `WorkspaceTemplates` entry under the new name (add `Variables`, `Overrides` or `Add` to it by hand). The template must exist in the loaded configuration; an unknown one is reported with the defined templates listed and nothing is written. `-Template` cannot be combined with `-Actions`.
+- **Description:** Adds a workspace to `Configuration.psd1` by appending one entry at the end of the `WorkspaceActions` list - the only definition of a workspace, so it shows up last in the `Open-Workspace` menu. The entry is either an action list (`-Actions`; if no actions are specified, a default `Set-WorkspaceWindowLayout` action for the workspace) or, with `-Template`, the one-line templated entry `@{ <Name> = @{ Template = "<Template>" } }` that stamps out a `WorkspaceTemplates` entry under the new name (add `Variables`, `Overrides` or `Add` to it by hand). When the loaded configuration defines `WorkspaceTemplates`, the template must be one of them; an unknown one is reported with the defined templates listed and nothing is written. Before writing, the file is backed up into the unified backup sink (`Backups\Windows\Config\Configuration\<timestamp>\`); a backup that cannot be taken aborts the write. `-Template` cannot be combined with `-Actions`.
 - **Parameters:** -Name, -Actions, -Template, -ConfigurationFilePath, -BackupRoot
 - **Usage:** `Add-Workspace -Name "MyWorkspace"`, `Add-Workspace -Name "MyWorkspace" -Actions @(@{ Action = "Open-Project"; Parameters = @{ Project = "MyProject" } })`, `Add-Workspace -Name "MyProject" -Template "Project"`
 
@@ -137,6 +141,7 @@ Add-WindowLayout -WorkspaceName "MyWorkspace" -Simple
 | `-Actions`               | Array of action hashtables for `WorkspaceActions`, each `@{ Action = "FunctionName"; Parameters = @{ Key = "Value" } }`. Omit to create a default `Set-WorkspaceWindowLayout` action. |
 | `-Template`              | The name of a `WorkspaceTemplates` entry. Writes the one-line templated entry instead of an action list. Cannot be combined with `-Actions`. |
 | `-ConfigurationFilePath` | Override the `Configuration.psd1` path (used for testing).                                                                                                                            |
+| `-BackupRoot`            | Override the backup sink root. Defaults to `Backups\Windows` in the repository the configuration file belongs to.                                                                     |
 
 ```powershell
 # Add a workspace with custom actions
@@ -207,7 +212,7 @@ $section = Find-ConfigurationSection -Lines $lines -SectionName "BrowserGroups"
 ## [Save-AppCsvOverlay](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Configuration/Functions/Save-AppCsvOverlay.ps1)
 
 - **Description:** Writes the machine-local app list overlay, validating before it replaces anything. The only function that writes an overlay: it replaces `<name>.local.csv` wholesale from the rows it is given, having first proved the result parses and that every row is something the installers can actually act on.
-- **Parameters:** -DataFileKey, -Row, -RepoRoot, -NoBackup
+- **Parameters:** -DataFileKey, -Row, -RepoRoot, -NoBackup, -WhatIf
 - **Usage:** `Save-AppCsvOverlay -DataFileKey WinGetApps -Row @(@{ App = "Obsidian.Obsidian"; Machine = "All" })`, `Save-AppCsvOverlay -DataFileKey WinGetApps -Row @(@{ App = "-Microsoft.PowerToys"; Machine = "All" })`, `Save-AppCsvOverlay -DataFileKey ScoopApps -Row @() -WhatIf`
 
 **Only the overlay is ever written.** The committed CSV is read to take its column header and to validate against, and is never modified - which is what keeps a fork's app choices out of a tracked file and stops an upstream pull from conflicting on one. [`Import-AppCsv`](bootstrap.md#import-appcsv) then layers what is written here over the shipped list, exactly as the shell layers `Configuration.local.psd1` over `Configuration.psd1`.
@@ -278,11 +283,11 @@ Test-ConfigurationKeyPath -Table $Configuration -Path @("GitConfig", "UserName")
 
 ## [Test-ConfigurationSchema](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Configuration/Functions/Test-ConfigurationSchema.ps1)
 
-- **Description:** Validates that all required keys are present in the loaded configuration. Checks the global `$Configuration` hashtable for the presence and non-null/non-empty values of every key required by core module functions, and reports each missing or empty key. In the default mode it writes warnings without throwing, so the shell can still start with a degraded configuration rather than failing entirely; with `-Strict` it throws a terminating error on the first set of missing keys, suitable for bootstrap or test fail-fast. It also validates workspace templates: `WorkspaceTemplates` must be a hashtable of templates that each carry `Actions`, the problems `Expand-WorkspaceTemplates` recorded at load (`WorkspaceTemplateErrors`) are reported, and templated entries still present as raw hashtables in `WorkspaceActions` (a configuration that was never expanded) are resolved through `Resolve-WorkspaceTemplate` - an unknown template, a variable without a value, an ambiguous or unmatched override, an unknown placeholder, a variable cycle or a bad `Before` / `After` anchor is reported with the workspace named. Templates already expanded at load are not expanded a second time.
+- **Description:** Validates that all required keys are present in the loaded configuration. Checks the global `$Configuration` hashtable for the presence and non-null/non-empty values of every framework key the engine needs, and collects every problem into one report. In the default mode it writes that report as a single warning without throwing, so the shell can still start with a degraded configuration rather than failing entirely; with `-Strict` it throws one terminating error listing every problem, suitable for bootstrap or test fail-fast. It also checks the shape of the ordered sections (`BrowserGroups`, `RepositoryGroups`, `ProjectActions`, `WorkspaceActions`, `CampaignResources`, `AcrobatPdfGroups`, `WakeOnLanConfig`, `Locales`, `KeyboardLayoutSets`, `NerdFonts`): when configured, each must be an array of single-key hashtables, and a plain hashtable is reported because its entry order is lost at load. It also validates workspace templates: `WorkspaceTemplates` must be a hashtable of templates that each carry `Actions`, the problems `Expand-WorkspaceTemplates` recorded at load (`WorkspaceTemplateErrors`) are reported, and templated entries still present as raw hashtables in `WorkspaceActions` (a configuration that was never expanded) are resolved through `Resolve-WorkspaceTemplate` - an unknown template, a variable without a value, an ambiguous or unmatched override, an unknown placeholder, a variable cycle or a bad `Before` / `After` anchor is reported with the workspace named. Templates already expanded at load are not expanded a second time.
 - **Parameters:** -Configuration, -Strict
 - **Usage:** `Test-ConfigurationSchema`, `Test-ConfigurationSchema -Strict`, `Test-ConfigurationSchema -Configuration $myConfig`
 
-Call this immediately after `Load-PathConfiguration` during the bootstrap or profile initialization sequence to surface typos and missing entries early. It validates required top-level keys and nested paths (machine detection, the path system, `GitConfig`, locale settings, and application keys such as `BrowserGroups`, `SymbolicLinks`, and `RepositoryGroups`), delegating each presence check to `Test-ConfigurationKeyPath`. If `$Configuration` is null, the function warns (or throws under `-Strict`) that `Load-PathConfiguration` may not have run.
+Call this immediately after `Load-PathConfiguration` during the bootstrap or profile initialization sequence to surface typos and missing entries early. It validates required top-level keys and nested paths (machine detection, the path system including `PathTemplates.Projects.Self.Root`, `GitConfig.UserName` / `UserEmail` / `WingetPackageId`, and `BrowserGroups`, `PathTemplates.SymbolicLinks` and `RepositoryGroups`), delegating each presence check to `Test-ConfigurationKeyPath`. User-specific sections such as locale, keyboard layouts and themes are deliberately not required - they ship empty and their consumers no-op. If `$Configuration` is null, the function warns (or throws under `-Strict`) that `Load-PathConfiguration` may not have run.
 
 | Parameter        | Description                                                                                                                         |
 | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
@@ -313,29 +318,34 @@ All `Add-*` functions follow the same pattern:
 2. **Find** the target section using `Find-ConfigurationSection` (bracket depth tracking)
 3. **Build** the new entry string with correct indentation and key alignment
 4. **Insert** the entry before the section's closing bracket
-5. **Write** the modified content back to disk
+5. **Back up** the file into the unified backup sink (`Backups\Windows\Config\Configuration\<timestamp>\`) - a backup that cannot be taken aborts the write
+6. **Write** the modified content back to disk
 
 Key alignment is preserved automatically - `WorkspaceActions` keys align at 24 characters, `ProjectActions` at 28 characters, and `SymbolicLinks` at 21 characters - matching the existing format.
 
 ## Testing
 
-All functions are covered by Pester tests in `Modules/Tests/Modules/Configuration/`:
+Every function is covered by Pester tests in `Modules/Tests/Modules/Configuration/`:
 
-| Test File                             | Tests | Validates                                                                                             |
-| ------------------------------------- | ----- | ----------------------------------------------------------------------------------------------------- |
-| `Find-ConfigurationSection.Tests.ps1` | 7     | Hashtable/array finding, single-line arrays, string placeholders, nesting                             |
-| `Add-BrowserGroup.Tests.ps1`          | 4     | Named URLs, simple URLs, valid format, error handling                                                 |
-| `Add-Workspace.Tests.ps1`             | 4     | Name addition, actions, default action, valid format                                                  |
-| `Add-Project.Tests.ps1`               | 8     | Basic, defaults, custom actions, TerminalTabs, ProjectTerminals, RunnableProjectMappings, PathMappings, full |
-| `Add-SymbolicLink.Tests.ps1`          | 4     | Simple link, preserve existing, nested links, valid format                                            |
-| `Add-WindowLayout.Tests.ps1`          | 8     | File creation, multiple machines, no overwrite, valid data, SimpleLayoutWorkspaces                    |
-| `Save-AppCsvOverlay.Tests.ps1`        | 20    | Overlay written and reported, the committed CSV byte-identical, header on line 1, comment banner, backups, `-WhatIf`, every machine-token refusal, blank `-RepoRoot`, comma and quote round-trips, header-only overlay, columns from the base header, temp-file hygiene |
+| Test File                               | Validates                                                                                             |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `Find-ConfigurationSection.Tests.ps1`   | Hashtable/array finding, single-line arrays, string placeholders, nesting                             |
+| `Add-BrowserGroup.Tests.ps1`            | Named URLs, simple URLs, valid format, error handling, backup before the write                        |
+| `Add-Workspace.Tests.ps1`               | Entry appended last, actions, default action, `-Template`, valid format, backup before the write      |
+| `Add-Project.Tests.ps1`                 | Basic, defaults, custom actions, TerminalTabs, ProjectTerminals, RunnableProjectMappings, full, backup before the write |
+| `Add-SymbolicLink.Tests.ps1`            | Simple link, preserve existing, nested links, valid format, backup before the write                   |
+| `Add-WindowLayout.Tests.ps1`            | File creation, multiple machines, no overwrite, valid data, SimpleLayoutWorkspaces, backup before the `-Simple` write |
+| `ConvertTo-ActionString.Tests.ps1`      | Value types, nested tables with sorted keys, quoted scope keys, `Machine` / `LayoutMachine` written last |
+| `Save-AppCsvOverlay.Tests.ps1`          | Overlay written and reported, the committed CSV byte-identical, header on line 1, comment banner, backups, `-WhatIf`, every machine-token refusal, blank `-RepoRoot`, comma and quote round-trips, header-only overlay, columns from the base header, temp-file hygiene |
+| `Test-ConfigurationKeyPath.Tests.ps1`   | Present, missing and empty key paths                                                                  |
+| `Test-ConfigurationSchema.Tests.ps1`    | Required keys, `-Strict`, ordered-section shape, workspace templates                                  |
+| `VanillaConfiguration.Tests.ps1`        | The empty-by-default contract: the base `Configuration.psd1` ships every personal section empty       |
 
 > [!IMPORTANT]
 > `Save-AppCsvOverlay` writes files, and the overlay it writes lands beside the committed CSV in `Modules/Bootstrap/Data/`. Its tests therefore build a synthetic app list in a sandbox repository under `$TestDrive` and pass it as `-RepoRoot`; a test pointed at the working tree would drop overlays into the tracked data folder, where they would shadow the real committed app lists. The folder is rebuilt for every test, so no stale overlay or backup can make an assertion pass for the wrong reason, and "the committed list is never modified" is asserted as an exact byte comparison rather than a text one.
 
-Run tests with:
+Run them with:
 
 ```powershell
-Invoke-Pester -Path "Modules/Tests/Modules/Configuration" -Output Detailed
+Run-Tests -Path (Join-Path (Get-RepositoryPath).Modules "Tests\Modules\Configuration")
 ```

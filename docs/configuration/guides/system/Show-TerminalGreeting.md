@@ -9,7 +9,7 @@ The greeting a shell opens with, and what `c` redraws: clear the screen, show th
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`TerminalGreeting`](../../configuration-reference.md#terminal-greeting-startup-and-the-c-alias) | hashtable, 3 branches | `Clear` on, `Fastfetch` on (auto-fit on, `10` / `10` / `1`), `Onefetch` off | Which of the three steps run, how the font is fitted to the panels, and what arguments onefetch gets. Resolved by [`Resolve-TerminalGreetingSettings`](Resolve-TerminalGreetingSettings.md); an explicit parameter on the call beats the configured value for that one call. |
+| [`TerminalGreeting`](../../configuration-reference.md#terminal-greeting-startup-and-the-c-alias) | hashtable, 3 branches | `Clear` on, `Fastfetch` on (auto-fit on, `10` / `10` / `1`), `Onefetch` off (and its `Style` off) | Which of the three steps run, how the font is fitted to the panels, what arguments onefetch gets, and whether its panel is restyled (`Onefetch.Style`, walked in the [`Format-OnefetchPanel` guide](Format-OnefetchPanel.md)). Resolved by [`Resolve-TerminalGreetingSettings`](Resolve-TerminalGreetingSettings.md); an explicit parameter on the call beats the configured value for that one call. |
 
 The whole section is optional. A configuration with no `TerminalGreeting` at all behaves exactly like the shipped values - clear, then a font-fitted fastfetch, no onefetch - so there is nothing you must set to keep the greeting working.
 

@@ -9,22 +9,19 @@ Opens the training Word document in Microsoft Word.
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`Universal`](../../configuration-reference.md#universal-constants) | hashtable, 26 keys | hashtable, 26 keys | Machine-independent constants: executable paths (`FirefoxExe`, `DockerExe`, `DbeaverExe`, ...), the `Browsers` map, `DefaultBrowser`, shared URLs, the `ProcessCleanup` lists, and `Desktop` (auto-resolved at load). Expanded in place by `Load-PathConfiguration`, so placeholders work here too. |
+| [`Universal.TrainingFile`](../../configuration-reference.md#universal-paths) | string (file name) | `""` (empty) | The Word document `Open-Training` opens, joined onto `TrainingDirectory`. |
+| [`PathTemplates.TrainingDirectory`](../../configuration-reference.md#path-templates--placeholder-system) | path string (placeholders allowed) | `""` (empty) | The folder the training document lives in, read at runtime from `$global:MachineSpecificPaths.TrainingDirectory`. |
 
 ## Decisions
 
-1. Which browser should be the default?
-    - Options: A key from `Universal.Browsers`: `Firefox`, `Chrome`, `Edge`, `Brave`, `Tor`. Ships empty, so `Open-Browser` asks or uses the system default.
-    - Default: Empty.
-    - More detail: [`Universal`](../../configuration-reference.md#universal-constants)
-2. Are any of the shipped executable paths wrong on this machine?
-    - Options: Override the individual `Universal.<App>Exe` value. Absolute paths, or placeholder paths such as `{User}\AppData\Local\...`.
-    - Default: The shipped paths, which assume default install locations.
-    - More detail: [`Universal`](../../configuration-reference.md#universal-constants)
-3. Do you use a browser the base `Browsers` map does not list?
-    - Options: Add an entry with `Exe`, `PrivateArg` and `NewWindowArg`. Because hashtables merge per key, adding one browser does not remove the others.
-    - Default: The shipped five.
-    - More detail: [`Universal`](../../configuration-reference.md#universal-constants)
+1. Which Word document should `Open-Training` open?
+    - Options: The document's file name, e.g. `Training.docx`.
+    - Default: Empty - set it before using `Open-Training`.
+    - More detail: [`Universal`](../../configuration-reference.md#universal-paths)
+2. Which folder holds it?
+    - Options: A path template, placeholders allowed, e.g. `{User}\Training\2026`.
+    - Default: Empty - set it before using `Open-Training`.
+    - More detail: [`PathTemplates`](../../configuration-reference.md#path-templates--placeholder-system)
 
 ## Where to Put Values
 
@@ -33,35 +30,41 @@ All of it goes in `Configuration.local.psd1`, at the repository's `Windows/Power
 > [!WARNING]
 > The merge is not uniform. **Hashtables deep-merge per key**, so adding one entry to a hashtable leaves every other entry alone. **Arrays and scalars replace wholesale**, so supplying an array key in your local file discards the entire base array. When you want to *add* to a shipped array, copy the whole base array out of `Configuration.psd1` first and add your entry to the copy.
 
+Both keys sit inside hashtables (`Universal`, `PathTemplates`) that deep-merge, so setting just these two keys leaves every other entry alone.
+
 ## Steps Overview
 
-1. Set `Universal`
-2. Reload and confirm the merge landed
+1. Set `Universal.TrainingFile`
+2. Set `PathTemplates.TrainingDirectory`
+3. Reload and confirm the merge landed
 
-## Step 1: Set `Universal`
+## Step 1: Set `Universal.TrainingFile`
 
-Machine-independent constants: executable paths (`FirefoxExe`, `DockerExe`, `DbeaverExe`, ...), the `Browsers` map, `DefaultBrowser`, shared URLs, the `ProcessCleanup` lists, and `Desktop` (auto-resolved at load). Expanded in place by `Load-PathConfiguration`, so placeholders work here too.
+The file name of the Word document to open.
 
 ```powershell
 Universal = @{
-    DefaultBrowser = "Firefox"
-    Browsers = @{
-        Vivaldi = @{
-            Exe          = "{User}\AppData\Local\Vivaldi\Application\vivaldi.exe"
-            PrivateArg   = "--incognito"
-            NewWindowArg = "--new-window"
-        }
-    }
+    TrainingFile = "Training.docx"
 }
 ```
 
-## Step 2: Reload and confirm the merge landed
+## Step 2: Set `PathTemplates.TrainingDirectory`
+
+The folder that holds the document. It is expanded per machine type into `$global:MachineSpecificPaths.TrainingDirectory`, so placeholders work here.
+
+```powershell
+PathTemplates = @{
+    TrainingDirectory = "{User}\Training\2026"
+}
+```
+
+## Step 3: Reload and confirm the merge landed
 
 Reload the profile, then read the merged value back. `$global:Configuration` after a reload is the ground truth - if what you set is not there, the local file did not parse or the key is nested one level away from where you put it.
 
 ```powershell
 Reload-PowerShellProfile
-$global:Configuration.Universal
+$global:Configuration.Universal.TrainingFile
 ```
 
 ## Verification
@@ -70,8 +73,9 @@ Read-only checks. None of these change anything.
 
 ```powershell
 Reload-PowerShellProfile
-$global:Configuration.Universal
+$global:Configuration.Universal.TrainingFile
 $global:MachineSpecificPaths.TrainingDirectory
+Test-Path (Join-Path $global:MachineSpecificPaths.TrainingDirectory $global:Configuration.Universal.TrainingFile)
 ```
 
 If a value reads back as empty, the two usual causes are a parse error in `Configuration.local.psd1` (run `Test-ConfigurationSchema`) and a key placed at the wrong nesting level.
@@ -84,14 +88,10 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 # Configuration.local.psd1
 @{
     Universal = @{
-        DefaultBrowser = "Firefox"
-        Browsers = @{
-            Vivaldi = @{
-                Exe          = "{User}\AppData\Local\Vivaldi\Application\vivaldi.exe"
-                PrivateArg   = "--incognito"
-                NewWindowArg = "--new-window"
-            }
-        }
+        TrainingFile = "Training.docx"
+    }
+    PathTemplates = @{
+        TrainingDirectory = "{User}\Training\2026"
     }
 }
 ```
@@ -102,9 +102,5 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 - [Workflow configuration guides](README.md) - every guide for this module
 - [Add New Project](add-new-project.md) - the full 9-step walk for a new project
 - [Add New Workspace](add-new-workspace.md) - workspaces, action ordering and layouts
-- [`Open-Browser`](../application/Open-Browser.md) - reads the same configuration
-- [`Open-LeagueOfLegends`](../application/Open-LeagueOfLegends.md) - reads the same configuration
-- [`Open-NotepadPlusPlus`](../application/Open-NotepadPlusPlus.md) - reads the same configuration
-- [`Open-Steam`](../application/Open-Steam.md) - reads the same configuration
 - [WinuXConfigurator](../../winux-configurator.md) - have an AI assistant walk these decisions with you
 - [Configuration reference](../../configuration-reference.md) - every key, section by section

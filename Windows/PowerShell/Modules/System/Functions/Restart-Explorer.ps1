@@ -15,7 +15,7 @@ function Restart-Explorer {
 		COM classes.
 
 	.PARAMETER Message
-		Label to display in the loading spinner during the delay. Omit for no spinner.
+		Label to display in the loading spinner during the delay. Omit for an unlabelled spinner.
 
 	.PARAMETER Delay
 		Seconds to wait after stopping Explorer before continuing. Defaults to 1.

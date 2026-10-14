@@ -9,17 +9,17 @@ Displays an animated loading spinner, or runs code while showing spinner feedbac
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`DefaultSpinner`](../../configuration-reference.md#loading-spinners) | string | `"Dots"` | Which entry from `LoadingSpinners` `Loading-Spinner` uses when no spinner is named. |
-| [`LoadingSpinners`](../../configuration-reference.md#loading-spinners) | hashtable of spinner name to `@{ Frames; Interval }` | hashtable, 19 keys | The spinner animations `Loading-Spinner` can draw. `Preview-LoadingSpinners` renders every one of them. |
+| [`DefaultSpinner`](../../configuration-reference.md#loading-spinners) | string | `"Dots"` | Which entry from `LoadingSpinners` `Loading-Spinner` falls back to when `-Style` is passed as an empty string. `-Style` itself defaults to `Dots`, so an ordinary call never reads this key. |
+| [`LoadingSpinners`](../../configuration-reference.md#loading-spinners) | hashtable of spinner name to `@{ Symbols; Delay }` | hashtable, 19 keys | The spinner animations `Loading-Spinner` can draw: `Symbols` is the frame array, `Delay` the milliseconds between frames. `Preview-LoadingSpinners` renders every one of them. |
 
 ## Decisions
 
 1. Which loading spinner should be the default?
-    - Options: A key from `LoadingSpinners`. Run `Preview-LoadingSpinners` to see them all.
+    - Options: A key from `LoadingSpinners`. Run `Preview-LoadingSpinners` to see them all. Only takes effect for a call that passes `-Style ""`; every other call uses its own `-Style` (default `Dots`).
     - Default: `Dots`.
     - More detail: [`DefaultSpinner`](../../configuration-reference.md#loading-spinners)
 2. Do you want to add your own spinner?
-    - Options: Name to `@{ Frames = @(...); Interval = <ms> }`. Supplying the key replaces all 19 shipped spinners, so copy the base map first if you only want to add one.
+    - Options: Name to `@{ Symbols = @(...); Delay = <ms> }`. `LoadingSpinners` is a hashtable, so it deep-merges per key: a new name is added beside the 19 shipped spinners, and a shipped name you repeat has only the fields you supply replaced.
     - Default: The shipped 19.
     - More detail: [`LoadingSpinners`](../../configuration-reference.md#loading-spinners)
 
@@ -38,7 +38,7 @@ All of it goes in `Configuration.local.psd1`, at the repository's `Windows/Power
 
 ## Step 1: Set `DefaultSpinner`
 
-Which entry from `LoadingSpinners` `Loading-Spinner` uses when no spinner is named.
+Which entry from `LoadingSpinners` `Loading-Spinner` falls back to when `-Style` is passed as an empty string. `-Style` itself defaults to `Dots`, so an ordinary call never reads this key.
 
 ```powershell
 DefaultSpinner = "Dots"
@@ -46,12 +46,12 @@ DefaultSpinner = "Dots"
 
 ## Step 2: Set `LoadingSpinners`
 
-The spinner animations `Loading-Spinner` can draw. `Preview-LoadingSpinners` renders every one of them.
+The spinner animations `Loading-Spinner` can draw: `Symbols` is the frame array, `Delay` the milliseconds between frames. `Preview-LoadingSpinners` renders every one of them.
 
 ```powershell
 LoadingSpinners = @{
-    Dots  = @{ Frames = @(".  ", ".. ", "..."); Interval = 200 }
-    MyOwn = @{ Frames = @("<", "^", ">", "v"); Interval = 120 }
+    Dots  = @{ Symbols = @(".  ", ".. ", "..."); Delay = 200 }
+    MyOwn = @{ Symbols = @("<", "^", ">", "v"); Delay = 120 }
 }
 ```
 
@@ -86,8 +86,8 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 @{
     DefaultSpinner = "Dots"
     LoadingSpinners = @{
-        Dots  = @{ Frames = @(".  ", ".. ", "..."); Interval = 200 }
-        MyOwn = @{ Frames = @("<", "^", ">", "v"); Interval = 120 }
+        Dots  = @{ Symbols = @(".  ", ".. ", "..."); Delay = 200 }
+        MyOwn = @{ Symbols = @("<", "^", ">", "v"); Delay = 120 }
     }
 }
 ```

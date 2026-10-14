@@ -42,13 +42,11 @@ Two, and the feature is inert without either.
     - Default: `$false` - the panel is onefetch's own unless you ask otherwise.
     - More detail: [`TerminalGreeting`](../../configuration-reference.md#terminal-greeting-startup-and-the-c-alias)
 2. What should separate a field name from its value?
-    - Options: `TerminalGreeting.Onefetch.Style.Separator`. `" -> "` matches a fastfetch `display.separator` of the same shape. Any string works - `" > "`, `" : "`, `" → "`. Leave it `""` to keep onefetch's colon and use this feature for colour alone.
+    - Options: `TerminalGreeting.Onefetch.Style.Separator`. `" -> "` matches a fastfetch `display.separator` of the same shape. Any string works - `" > "`, `" : "`, `" → "`. Leave it `""` to keep onefetch's colon and use this feature for colour alone. A separator wider than the `:` it replaces shifts every value right, and the continuation lines are re-padded to follow it - see [Alignment](#alignment).
     - Default: `""`.
-    - Note: a separator wider than the `:` it replaces shifts every value right, and the continuation lines are re-padded to follow it. That is handled for you - see [Alignment](#alignment).
     - More detail: [`TerminalGreeting`](../../configuration-reference.md#terminal-greeting-startup-and-the-c-alias)
 3. Which colours should be repainted, and as what?
-    - Options: `TerminalGreeting.Onefetch.Style.Colors`, a hashtable keyed by the ANSI index (`0-15`) onefetch was told to use, valued by the SGR parameters to paint it with instead. The value is the body of an escape sequence, so a true colour is written exactly as a fastfetch configuration writes one: `"38;2;30;144;255"`.
-    - This pairs with `Arguments`: you tell the binary *which index* to use for each slot through `--text-colors`, then map that index to a true colour here. An index you did not ask onefetch to use will simply never appear in the output.
+    - Options: `TerminalGreeting.Onefetch.Style.Colors`, a hashtable keyed by the ANSI index (`0-15`) onefetch was told to use, valued by the SGR parameters to paint it with instead. The value is the body of an escape sequence, so a true colour is written exactly as a fastfetch configuration writes one: `"38;2;30;144;255"`. This pairs with `Arguments`: you tell the binary *which index* to use for each slot through `--text-colors`, then map that index to a true colour here. An index you did not ask onefetch to use will simply never appear in the output.
     - Default: `@{}` - repaint nothing.
     - More detail: [`TerminalGreeting`](../../configuration-reference.md#terminal-greeting-startup-and-the-c-alias)
 

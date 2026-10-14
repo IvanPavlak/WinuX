@@ -9,21 +9,24 @@ Updates Conda and idempotently creates Conda environments from the YAML files in
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`BootstrapConfig`](../../configuration-reference.md#bootstrapconfig) | hashtable, 8 keys | hashtable, 8 keys | Everything about how `Bootstrap` runs: the `Steps` toggles that decide which provisioning steps execute, `DataFiles` (relative paths to the three app-list CSVs), `LocalScripts` / `ExternalScripts`, `PersonalSteps`, `RepositoryUpdateScope`, and where the bootstrap log lands. |
+| [`BootstrapConfig.DataFiles.CondaEnvironments`](../../configuration-reference.md#bootstrapconfig) | string (repository-relative path) | `Conda\Environments` | The folder whose `*.yml` files are the environments; each file's name is the environment name. Joined onto `PathTemplates.Projects.Self.Root`. |
+| [`PathTemplates.Projects.Self.Root`](../../configuration-reference.md#path-templates--placeholder-system) | path template | `{RepoRoot}` | The repository root the folder above is resolved against (read from `$global:MachineSpecificPaths.Projects.Self.Root`). |
+| [`AutoEnvironmentVariables.Conda`](../../configuration-reference.md#more-sections-quick-reference) | path | not set (`AutoEnvironmentVariables` ships `@{}`) | Not read directly: the function reads the `Conda` user environment variable, which `Set-EnvironmentVariables -Auto` writes from this entry. Without it the function warns and skips; `conda.exe` is expected at `<Conda>\Scripts\conda.exe`. |
+| [`BootstrapConfig.Steps.CondaEnvironments`](../../configuration-reference.md#bootstrapconfig) | boolean or per-machine-type hashtable | `$true` (built-in default) | Whether `Bootstrap` runs this function. |
 
 ## Decisions
 
-1. Which bootstrap steps should run on this machine?
-    - Options: Each entry under `BootstrapConfig.Steps` is either a boolean or a per-machine-type hashtable with a `Default` fallback. Steps that act the moment they run (`CoreAiRules`, taskbar, wallpaper) ship off.
-    - Default: The shipped `Steps` map. Change only the steps you actually want to flip.
+1. Should Conda environments be created on this machine?
+    - Options: Install Miniconda3 and set `AutoEnvironmentVariables.Conda` to its install folder (for example `{User}\miniconda3`), then run `Set-EnvironmentVariables -Auto`; leave it unset to skip Conda entirely.
+    - Default: Not set - the function warns and skips.
+    - More detail: [`AutoEnvironmentVariables`](../../configuration-reference.md#more-sections-quick-reference)
+2. Do the environment files live somewhere other than `Conda\Environments`?
+    - Options: A repository-relative folder path under `BootstrapConfig.DataFiles.CondaEnvironments`.
+    - Default: `Conda\Environments`. Almost nobody changes this.
     - More detail: [`BootstrapConfig`](../../configuration-reference.md#bootstrapconfig)
-2. Do you need to change where the app-list CSVs live?
-    - Options: Repository-relative paths under `BootstrapConfig.DataFiles`, keyed `WinGetApps`, `ScoopApps`, `ChocolateyApps`.
-    - Default: The shipped paths. Almost nobody changes these.
-    - More detail: [`BootstrapConfig`](../../configuration-reference.md#bootstrapconfig)
-3. Where should the bootstrap log be written?
-    - Options: `LogFileLocation` (for example `Desktop`) plus `LogFilePrefix`.
-    - Default: `Desktop` with prefix `BootstrapLog`.
+3. Should Bootstrap run this step?
+    - Options: `$true`, `$false`, or a per-machine-type hashtable with a `Default` fallback under `BootstrapConfig.Steps.CondaEnvironments`.
+    - Default: `$true` - and the missing `Conda` variable already makes it a no-op on machines without Conda.
     - More detail: [`BootstrapConfig`](../../configuration-reference.md#bootstrapconfig)
 
 ## Where to Put Values
@@ -35,28 +38,42 @@ All of it goes in `Configuration.local.psd1`, at the repository's `Windows/Power
 
 ## Steps Overview
 
-1. Set `BootstrapConfig`
-2. Reload and confirm the merge landed
+1. Set `AutoEnvironmentVariables.Conda`
+2. Set `BootstrapConfig`
+3. Reload and confirm the merge landed
 
-## Step 1: Set `BootstrapConfig`
+## Step 1: Set `AutoEnvironmentVariables.Conda`
 
-Everything about how `Bootstrap` runs: the `Steps` toggles that decide which provisioning steps execute, `DataFiles` (relative paths to the three app-list CSVs), `LocalScripts` / `ExternalScripts`, `PersonalSteps`, `RepositoryUpdateScope`, and where the bootstrap log lands.
+Point the `Conda` variable at the Miniconda3 install folder, then persist it with `Set-EnvironmentVariables -Auto` (Bootstrap does this too) and open a new shell.
+
+```powershell
+AutoEnvironmentVariables = @{
+    Conda = "{User}\miniconda3"
+}
+```
+
+## Step 2: Set `BootstrapConfig`
+
+Only needed to move the environments folder or to turn the Bootstrap step off. Hashtables deep-merge, so set only the keys you change.
 
 ```powershell
 BootstrapConfig = @{
-    Steps = @{
-        CoreAiRules = $true
+    DataFiles = @{
+        CondaEnvironments = "Conda\Environments"
+    }
+    Steps     = @{
+        CondaEnvironments = $true
     }
 }
 ```
 
-## Step 2: Reload and confirm the merge landed
+## Step 3: Reload and confirm the merge landed
 
 Reload the profile, then read the merged value back. `$global:Configuration` after a reload is the ground truth - if what you set is not there, the local file did not parse or the key is nested one level away from where you put it.
 
 ```powershell
 Reload-PowerShellProfile
-$global:Configuration.BootstrapConfig
+$global:Configuration.BootstrapConfig.DataFiles.CondaEnvironments
 ```
 
 ## Verification
@@ -65,8 +82,9 @@ Read-only checks. None of these change anything.
 
 ```powershell
 Reload-PowerShellProfile
-$global:Configuration.BootstrapConfig
-Resolve-BootstrapSteps | Format-Table
+$env:Conda
+Join-Path $global:MachineSpecificPaths.Projects.Self.Root $global:Configuration.BootstrapConfig.DataFiles.CondaEnvironments
+Resolve-BootstrapSteps | Where-Object Name -eq "CondaEnvironments"
 ```
 
 If a value reads back as empty, the two usual causes are a parse error in `Configuration.local.psd1` (run `Test-ConfigurationSchema`) and a key placed at the wrong nesting level.
@@ -78,9 +96,15 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 ```powershell
 # Configuration.local.psd1
 @{
-    BootstrapConfig = @{
-        Steps = @{
-            CoreAiRules = $true
+    AutoEnvironmentVariables = @{
+        Conda = "{User}\miniconda3"
+    }
+    BootstrapConfig          = @{
+        DataFiles = @{
+            CondaEnvironments = "Conda\Environments"
+        }
+        Steps     = @{
+            CondaEnvironments = $true
         }
     }
 }
@@ -90,10 +114,7 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 
 - [`Create-CondaEnvironments` in the Application module reference](../../../modules/application.md#create-condaenvironments) - parameters, usage and behaviour
 - [Application configuration guides](README.md) - every guide for this module
-- [Add Browser Group](add-browser-group.md) - browser groups, nesting, unique names, search and per-browser selection
-- [`Start-Win11Debloat`](Start-Win11Debloat.md) - reads the same configuration
-- [`Update-Win11DebloatVendor`](Update-Win11DebloatVendor.md) - reads the same configuration
-- [`Bootstrap`](../bootstrap/Bootstrap.md) - reads the same configuration
-- [`Invoke-PersonalSteps`](../bootstrap/Invoke-PersonalSteps.md) - reads the same configuration
+- [`Bootstrap`](../bootstrap/Bootstrap.md) - runs this function when `BootstrapConfig.Steps.CondaEnvironments` is on
+- [`Set-EnvironmentVariables`](../system/Set-EnvironmentVariables.md) - persists `AutoEnvironmentVariables`, including `Conda`
 - [WinuXConfigurator](../../winux-configurator.md) - have an AI assistant walk these decisions with you
 - [Configuration reference](../../configuration-reference.md) - every key, section by section

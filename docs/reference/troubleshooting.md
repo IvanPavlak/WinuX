@@ -11,12 +11,11 @@ Common issues and their solutions.
 **Solution:**
 
 ```powershell
-# Run with explicit path
-iex (irm "https://raw.githubusercontent.com/IvanPavlak/WinuX/master/Windows/WinuX/WinuX.ps1")
+# Run the documented one-liner (it fetches Install-Bootstrap.ps1 by its full path)
+[Net.ServicePointManager]::SecurityProtocol = 'Tls12'; $env:WINUX_REPO_URL = 'https://github.com/IvanPavlak/WinuX.git'; irm 'https://raw.githubusercontent.com/IvanPavlak/WinuX/master/Windows/PowerShell/Modules/Bootstrap/Install-Bootstrap.ps1' | iex
 
-# Or if locally:
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-. .\Windows\WinuX\WinuX.ps1
+# Or from a local clone (WinuX.ps1 ends with exit, so start it in its own process):
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\Windows\WinuX\WinuX.ps1
 ```
 
 ### Execution Policy Error
@@ -54,8 +53,11 @@ Bootstrap -WithInitialSetup
 **Solution:**
 
 ```powershell
-# Bootstrap auto-installs WinGet via Install-WinGetPackageManager
-# Or manually from Microsoft Store: "App Installer"
+# The installer's first stage (Windows PowerShell 5.1) needs winget to install PowerShell 7 and Git
+# BEFORE Bootstrap runs; on a fresh machine wait a few minutes after the first sign-in for
+# App Installer to register, or install "App Installer" from the Microsoft Store, then run again.
+# Bootstrap's own Install-WinGetPackageManager only runs later, in the package phase.
+winget --version
 ```
 
 ### WinGet Install Hangs During Unattended / VM Bootstrap
@@ -97,8 +99,7 @@ hostname
 3. Set hostname if needed:
 
 ```powershell
-Rename-Machine -NewName "DESKTOP-GAMING"
-# Requires restart
+Rename-Machine -Override   # prompts for the new name; requires restart
 ```
 
 ### Path Not Expanding
@@ -175,7 +176,15 @@ See [Workspace Templates](../configuration/configuration-reference.md#workspace-
 
 **Why it happens:** `Project` scopes and `ProjectParameters` row keys are validated against the `ProjectActions` names. An unknown token is reported and never matches, so a typo cannot silently run or skip an action. Every row key is checked on every open, whether or not that project is selected.
 
-**Solution:** Use the names exactly as `Get-OrderedNames $global:Configuration.ProjectActions` lists them (case does not matter), or add the project to `ProjectActions`. With no project selected at all, only actions scoped `All` (or unscoped) run - pass the project on the command line (`Open-Workspace Client MyProject`) or pick it in the project menu shown before anything launches.
+**Solution:** Use the names exactly as `Get-OrderedNames $global:Configuration.ProjectActions` lists them (case does not matter), or add the project to `ProjectActions`. With no project selected at all, only actions scoped `All` (or unscoped) run - pass the project on the command line (`Open-Workspace MyWorkspace MyProject`) or pick it in the project menu shown before anything launches.
+
+### A Changed Logging Setting Has No Effect
+
+**Problem:** You changed a `Logging` key (colors, `FileLogging`, `Maintenance` or its `Retention` limits) in `Configuration.local.psd1`, ran `Reload-PowerShellProfile`, and the log output or the log folder still behaves as before.
+
+**Why it happens:** `$global:LoggingState` is built once per shell by `Initialize-LoggingState`, and a profile reload does not rebuild it.
+
+**Solution:** Open a new shell, or run `Initialize-LoggingState -Force` in the current one.
 
 ## Symbolic Link Issues
 
@@ -758,7 +767,7 @@ Get-WorkspaceBenchmark -Summary -Formatted
 ```powershell
 Measure-WorkspaceOpen -DryRun                                          # the plan for the shipped Example workspace, nothing runs
 Measure-WorkspaceOpen WinuX                                            # your workspace: Baseline + each flag flipped alone, 5 rounds
-Measure-WorkspaceOpen Client Asseto -MaxMinutes 20               # a workspace that needs a project, with a time budget
+Measure-WorkspaceOpen MyWorkspace MyProject -MaxMinutes 20        # a workspace that needs a project, with a time budget
 Measure-WorkspaceOpen WinuX -Setting FancyZonesApplyMethod -Runs 8     # one flag, File against Hotkeys
 Get-WorkspaceOpenMeasurement -Formatted                                # the table again, after the scrollback is gone
 ```
@@ -877,6 +886,14 @@ A variant cannot clear a desktop and monitor without replacing it; leave the pai
 **Why it happens:** A titled entry matches by title pattern, and a bare `MyProject` also matches the `MyProjectApi` window (and any file tab named `MyProject`). Every window is claimed by exactly one entry, and the untitled catch-all only takes windows no titled entry's title matches - so a too-loose title on one entry hands it its sibling's window, or keeps the catch-all away from a window it should take.
 
 **Solution:** Anchor every VS Code title on the folder name as VS Code ends its caption - `<folder> - Visual Studio Code$` (`MyProject - Visual Studio Code$`, `MyProjectApi - Visual Studio Code$`) - so each pattern matches exactly one window. Several entries in one zone stack in file order, last on top. A single untitled `Code` entry is still the simplest choice when all VS Code windows belong in one zone. See [Several Windows of One Process](../configuration/guides/window/configure-window-layout.md#several-windows-of-one-process).
+
+### Add-WindowLayout Wrote A Test Layout On A Different Machine Type
+
+**Problem:** `Add-WindowLayout` without `-MachineType` created `<Workspace>_Test.psd1` although the shell runs on another machine type.
+
+**Why it happens:** The default machine type is read from a configuration key that does not exist, so it always falls back to `Test`; the detected type lives in `$global:MachineType`, which the function does not consult.
+
+**Solution:** Pass `-MachineType` explicitly (`Add-WindowLayout MyWorkspace -MachineType $global:MachineType`), or rename the generated file.
 
 ## fastfetch Logo Issues
 
@@ -1170,6 +1187,47 @@ Private = @{
 - **"local changes could not be restored cleanly and are kept in stash [name]"** - an upstream change overlaps your local edit. The working tree holds conflict markers, and the stash still holds your original changes. Resolve the markers, or reset the files and `git stash apply` the named stash. Until then, the next update reports the repository as busy and leaves it alone.
 - **"its stash was taken by another git command"** - another git command applied or dropped the update's stash while it ran. Check `git status` and `git stash list`; the changes are wherever that command put them.
 
+### Git-Obsidian Ran Git In The Home Folder, Or Left The Shell There
+
+**Problem:** `Git-Obsidian` reported changes (or a commit) from a repository you did not expect, or the prompt sits in your home folder afterwards.
+
+**Why it happens:** With `PathTemplates.ObsidianDirectory` empty (the shipped default), the function changes into an empty path, which PowerShell resolves to the home folder, and runs `git add`, `git commit` and `git push` there. It also never captures the starting directory, so the `finally` block restores nothing.
+
+**Solution:** Set `PathTemplates.ObsidianDirectory` in `Configuration.local.psd1` before using the function, and `cd` back by hand afterwards. If a commit landed in a home-folder repository, undo it there (`git reset --soft HEAD~1`).
+
+## Shell Startup Issues
+
+### Directory Listings Print Without Icons
+
+**Problem:** `ls` (or the alias `l`) prints the plain `Mode / LastWriteTime / Length / Name` table with no glyph in front of any entry, in every new shell, although `Terminal-Icons` is installed and the profile imports it.
+
+**Why it happens:** Terminal-Icons keeps its themes and preferences as Clixml files under `%APPDATA%\powershell\Community\Terminal-Icons\` and rewrites all of them on every import. Two shells importing it in the same instant (a workspace opening several tabs at once) race on those writes and can leave one file torn - two writes spliced mid-line. From then on every `Import-Module Terminal-Icons` fails on that file:
+
+```
+Import-Clixml: Name attribute for dictionary key is incorrectly specified. Line N, position 2.
+Import-Module: The module to process 'Terminal-Icons.psm1' [...] was not processed because no valid module was found
+```
+
+The profile imports the module after the first prompt, from the deferred startup queue, and before 1.0.0 that queue swallowed the failure, so nothing pointed at the cause.
+
+**Solution:** Fixed in 1.0.0. The queue imports through `Import-TerminalIcons`, which on a failed import runs `Repair-TerminalIconsThemeCache`: a cache file that does not parse is read once more after a short pause (another shell may still be writing it), and one that still fails is moved to `<name>.corrupt-<timestamp>-<pid>` beside the original with a warning naming it. The import then runs again, up to three attempts in all, and the module regenerates the file from its built-in themes. Shells that start together and meet the same torn file all end up with icons: one moves it aside and reports it, the others retry quietly. Nothing is deleted. By hand, in a shell without icons:
+
+```powershell
+Import-Module Terminal-Icons        # shows the error
+Repair-TerminalIconsThemeCache      # moves the torn file aside
+Import-TerminalIcons                # loads the module
+```
+
+A listing typed within the first ~300 ms of a new shell prints without icons by design (the import waits until the prompt has been idle); every later one has them. If `Get-Module -ListAvailable Terminal-Icons` finds nothing, the module is not installed: `Install-PowerShellModules` installs it.
+
+### A Red Deferred Startup Failure Line Under The First Prompt
+
+**Problem:** A new shell prints `=> Deferred startup [Terminal-Icons] failed => ...` (or `[LogMaintenance]`, `[RepositoryUpdate]`) in red right after the first prompt, and the prompt is drawn again under it.
+
+**Why it happens:** The three startup stages that run after the first prompt - the Terminal-Icons import, the log maintenance and the opt-in repository update - are queued and run by one `PowerShell.OnIdle` event. An entry that throws is reported this way instead of being swallowed, so a stage that stopped working is noticed at once rather than weeks later.
+
+**Solution:** The line carries the exception; the session log (`Logs\Session_<date>_<time>_<pid>.log`) has it under `[ERROR]`, and `Logs\Errors.log` adds the stack trace. Run the stage by hand to reproduce it: `Import-TerminalIcons`, `Invoke-LogMaintenance` or `Invoke-StartupRepositoryUpdate -Force`. To start one shell without the stage: `$env:WINUX_STARTUP_SKIP = "Terminal-Icons"; pwsh` (see [Slow Profile Load](#slow-profile-load) for the stage names).
+
 ## Performance Issues
 
 ### Slow Profile Load
@@ -1242,6 +1300,21 @@ Compare with an earlier run under similar `Machine` conditions before concluding
 exit
 # Open new terminal
 ```
+
+## Contributing And Release Issues
+
+### The Contract Gate Fails
+
+**Problem:** `Run-Tests -TestName "Infrastructure"` (or the `Pester Tests` check on a pull request) fails in `Infrastructure-Contract.Tests.ps1` with a line such as "Exported function [Name] was removed", "Parameter [-Name] of [Function] is mandatory now", "Configuration key [Top.Child] is no longer in the shipped Configuration.psd1", "[x.y.z] is a MAJOR release but removes and breaks nothing" or "has a baseline taken at the newest release".
+
+**Why it happens:** Since 1.0.0 the contract a fork depends on - the exported functions with their parameters and the shipped `Configuration.psd1`'s keys - only breaks in a MAJOR, and only after a deprecation that shipped in an earlier release. The gate compares the working tree with `Windows/PowerShell/Modules/Tests/ContractBaseline.json`, the contract recorded at the last release, and checks every release's version bump against its changelog sections. See "What the policy costs" and "How it is enforced" in `VERSIONING.md`.
+
+**Solution:** Match the message:
+
+- **A function, parameter or key was removed or renamed** - keep the old shape working instead: a wrapper function that warns once per session, an `[Alias('OldName')]` on a renamed parameter, or the key still read with the new one taking precedence. Add a `### Deprecated` entry with the migration and a record in the baseline's `Deprecated` map with the version it ships in. The removal comes in the next MAJOR, as a `### Removed` entry naming the item in backticks (`` `Name` ``, `` `Function -Parameter` `` or `` `Top.Child` ``).
+- **A parameter is mandatory now** - give it a default and keep it optional. A mandatory addition is an immediate break and needs a `### Breaking` entry naming it.
+- **A version bump disagrees with its sections** - a release with `### Removed` or `### Breaking` is a MAJOR; a MAJOR needs one of them; `### Added`, `### Changed` or `### Deprecated` makes it at least a MINOR, and a PATCH holds only `### Fixed` and `### Security`. Fix the version or move the entries.
+- **The baseline is not at the newest release** - the release commit forgot the snapshot: run `Run-Tests -UpdateContractBaseline` and commit `ContractBaseline.json` with the release.
 
 ## Debugging Commands
 

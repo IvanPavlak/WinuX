@@ -14,6 +14,8 @@ Writes the machine-local app list overlay, validating before it replaces anythin
 | [`BootstrapConfig`](../../configuration-reference.md#bootstrapconfig) | hashtable, 8 keys | hashtable, 8 keys | Everything about how `Bootstrap` runs: the `Steps` toggles that decide which provisioning steps execute, `DataFiles` (relative paths to the three app-list CSVs), `LocalScripts` / `ExternalScripts`, `PersonalSteps`, `RepositoryUpdateScope`, and where the bootstrap log lands. |
 | [`ValidMachineTypes`](../../configuration-reference.md#valid-machine-types) | array of strings | `@("Test")` | The machine types WinuX accepts. `DetermineMachineType` refuses anything not listed, and `Test-MachineTypeScope` uses it to decide whether a CSV row or a step applies. |
 
+Of `BootstrapConfig` it reads only `DataFiles`, to find the committed CSV for `-DataFileKey`. Without `-RepoRoot`, the repository root comes from the expanded `PathTemplates.Projects.Self.Root` (ships as `{RepoRoot}`, nothing to set).
+
 This is the writer for the `*.local.csv` overlays. It never modifies the committed CSV - it writes the sibling overlay that `Import-AppCsv` layers on top, keeping a timestamped copy of the previous overlay in the [backup sink](../../../reference/backups.md) first.
 
 ## Decisions

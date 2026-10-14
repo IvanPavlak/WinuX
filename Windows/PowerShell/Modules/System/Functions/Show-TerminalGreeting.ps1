@@ -32,8 +32,12 @@ function Show-TerminalGreeting {
 		are the values the base ships - so a fork that has not migrated its Configuration.local.psd1
 		gets the previous behavior: clear, then a font-fitted fastfetch.
 
-		The -No* switches turn one step off for one call. The four auto-fit knobs forward to
-		Invoke-Fastfetch, where an explicit value beats the configured one for that call.
+		The -No* switches turn one step off for one call (-NoResize is forwarded to
+		Invoke-Fastfetch). The three numeric auto-fit knobs (-PromptReserve, -MaxShrinkSteps,
+		-ReflowTimeoutMilliseconds) are handed to Resolve-TerminalGreetingSettings - only the ones
+		actually passed - so an explicit value beats the configured one for that call. The onefetch
+		measurement is skipped when -NoFastfetch or -NoResize is given or
+		TerminalGreeting.Onefetch.IncludeInAutoFit is $false.
 
 	.PARAMETER NoClear
 		Skip the clear step for this call.

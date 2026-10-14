@@ -47,7 +47,7 @@ function Open-ProjectTerminals {
 	.PARAMETER Project
 		Array of project names to open terminals for. Projects must be defined in $Configuration.ProjectTerminals.
 		If not specified, displays an interactive selection menu.
-		Available projects: WinuX, ExampleProject, AnotherProject
+		Shipped projects: WinuX, ExampleProject, Server
 
 	.PARAMETER InvokeOnefetch
 		Appends Invoke-Onefetch to each path tab's command, after the Set-Location, so the tab shows
@@ -108,11 +108,11 @@ function Open-ProjectTerminals {
 
 	.EXAMPLE
 		Open-ProjectTerminals -Project "WinuX"
-		Opens terminal for WinuX project with tab named "WinuX.Root".
+		Opens terminals for WinuX project with tabs named "WinuX.ROOT" and "WinuX.DOCS".
 
 	.EXAMPLE
 		Open-ProjectTerminals -Project "ExampleProject"
-		Opens terminals for ExampleProject project with tabs "ExampleProject.Api" and "ExampleProject.Ui".
+		Opens terminals for ExampleProject project with tabs "ExampleProject.API" and "ExampleProject.UI".
 
 	.EXAMPLE
 		Open-ProjectTerminals -Project "ExampleProject" -FocusTab "origin"
@@ -149,7 +149,7 @@ function Open-ProjectTerminals {
 
 	.EXAMPLE
 		# Custom path entry in configuration:
-		# "MyProject" = @{ BasePath = "Projects.MyProject"; Paths = @("API", @{ Key = "Logs"; Path = "C:\Logs" }) }
+		# @{ Name = "MyProject"; BasePath = "Projects.MyProject"; Paths = @("API", @{ Key = "Logs"; Path = "C:\Logs" }) }
 		# Opens the API tab from PathTemplates and a "Logs" tab at C:\Logs.
 
 	.EXAMPLE

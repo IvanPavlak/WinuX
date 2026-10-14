@@ -31,7 +31,12 @@ function Set-SystemTheme {
 		With `-Auto`, reads the theme for the current machine type from Configuration.psd1
 		`Themes[MachineType]` and applies it automatically. When `Themes` is not configured
 		(the empty base config) or carries no entry for the machine type, `-Auto` leaves the
-		system theme as-is - opting in happens via Configuration.local.psd1.
+		system theme as-is - opting in happens via Configuration.local.psd1. With neither
+		-Theme nor -Auto, Dark is applied.
+
+		When run inside Windows Terminal, the current tab is closed 5 seconds after the run
+		(Terminate-WindowsTerminalTabs -OnlyCurrent) unless -KeepTerminalOpen is given. On an
+		unexpected error the function re-runs itself through ReRun-LastCommand -AutoAccept.
 
 		Requires administrator privileges.
 

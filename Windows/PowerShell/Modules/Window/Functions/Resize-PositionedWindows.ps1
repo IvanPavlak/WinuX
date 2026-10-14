@@ -14,12 +14,26 @@ function Resize-PositionedWindows {
 	.PARAMETER Tolerance
 		Pixel tolerance for deciding whether a window is already at the adjusted
 		pre-snap position. Default is the module's shared position verification tolerance.
+
 	.PARAMETER DesktopNumbers
 		Only the tracked windows on these desktops (the 1-based numbers Add-PositionedWindow
-		recorded, offset already folded in) are resized. Set-WorkspaceWindowLayout uses it to
-		prepare one desktop for its snap while the others are still loading - a window on a
-		desktop that was already snapped sits at its FULL zone rect and must not be pulled
-		back to the inset. Default (empty) resizes every tracked window.
+		recorded, offset already folded in) are resized. The per-desktop pass of
+		Set-WorkspaceWindowLayout (Invoke-ReadyDesktopPass) uses it to prepare one desktop for
+		its snap while the others are still loading - a window on a desktop that was already
+		snapped sits at its FULL zone rect and must not be pulled back to the inset. Default
+		(empty) resizes every tracked window.
+
+	.OUTPUTS
+		PSCustomObject with ResizedCount, SkippedCount and FailedWindows, summed over the
+		per-window Resize-Windows results. All zero when no window is tracked.
+
+	.EXAMPLE
+		Resize-PositionedWindows
+		# Re-insets every tracked window before the snap pass.
+
+	.EXAMPLE
+		Resize-PositionedWindows -DesktopNumbers 2
+		# Re-insets only the tracked windows on desktop 2.
 	#>
 	[CmdletBinding()]
 	param(

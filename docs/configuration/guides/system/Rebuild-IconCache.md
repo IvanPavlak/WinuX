@@ -9,22 +9,15 @@ Clears the Windows icon cache and restarts Explorer to fix missing or corrupted 
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`Universal`](../../configuration-reference.md#universal-constants) | hashtable, 26 keys | hashtable, 26 keys | Machine-independent constants: executable paths (`FirefoxExe`, `DockerExe`, `DbeaverExe`, ...), the `Browsers` map, `DefaultBrowser`, shared URLs, the `ProcessCleanup` lists, and `Desktop` (auto-resolved at load). Expanded in place by `Load-PathConfiguration`, so placeholders work here too. |
+| [`Universal.IconCacheDb`](../../configuration-reference.md#universal-paths) | string (placeholder path) | `"{User}\AppData\Local\IconCache.db"` | The legacy icon cache database deleted while Explorer is stopped. Skipped when the file does not exist. Expanded by `Load-PathConfiguration`, so `{User}` works here. |
+| [`Universal.IconCacheFolder`](../../configuration-reference.md#universal-paths) | string (placeholder path) | `"{User}\AppData\Local\Microsoft\Windows\Explorer"` | The folder whose `iconcache*` files are deleted. Skipped when empty or missing. |
 
 ## Decisions
 
-1. Which browser should be the default?
-    - Options: A key from `Universal.Browsers`: `Firefox`, `Chrome`, `Edge`, `Brave`, `Tor`. Ships empty, so `Open-Browser` asks or uses the system default.
-    - Default: Empty.
-    - More detail: [`Universal`](../../configuration-reference.md#universal-constants)
-2. Are any of the shipped executable paths wrong on this machine?
-    - Options: Override the individual `Universal.<App>Exe` value. Absolute paths, or placeholder paths such as `{User}\AppData\Local\...`.
-    - Default: The shipped paths, which assume default install locations.
-    - More detail: [`Universal`](../../configuration-reference.md#universal-constants)
-3. Do you use a browser the base `Browsers` map does not list?
-    - Options: Add an entry with `Exe`, `PrivateArg` and `NewWindowArg`. Because hashtables merge per key, adding one browser does not remove the others.
-    - Default: The shipped five.
-    - More detail: [`Universal`](../../configuration-reference.md#universal-constants)
+1. Are the shipped icon cache locations the right ones on this machine?
+    - Options: Override `Universal.IconCacheDb` and/or `Universal.IconCacheFolder` with an absolute or placeholder path. Only `IconCache.db` and the `iconcache*` files in the folder are deleted, so point the folder at Explorer's cache directory only.
+    - Default: The standard Windows locations under `{User}\AppData\Local`.
+    - More detail: [`Universal`](../../configuration-reference.md#universal-paths)
 
 ## Where to Put Values
 
@@ -35,23 +28,17 @@ All of it goes in `Configuration.local.psd1`, at the repository's `Windows/Power
 
 ## Steps Overview
 
-1. Set `Universal`
+1. Set `Universal.IconCacheDb` and `Universal.IconCacheFolder`
 2. Reload and confirm the merge landed
 
-## Step 1: Set `Universal`
+## Step 1: Set `Universal.IconCacheDb` and `Universal.IconCacheFolder`
 
-Machine-independent constants: executable paths (`FirefoxExe`, `DockerExe`, `DbeaverExe`, ...), the `Browsers` map, `DefaultBrowser`, shared URLs, the `ProcessCleanup` lists, and `Desktop` (auto-resolved at load). Expanded in place by `Load-PathConfiguration`, so placeholders work here too.
+Only needed when the shipped paths are wrong on this machine. `Universal` is a hashtable, so these keys merge over the base and every other `Universal` key stays as shipped.
 
 ```powershell
 Universal = @{
-    DefaultBrowser = "Firefox"
-    Browsers = @{
-        Vivaldi = @{
-            Exe          = "{User}\AppData\Local\Vivaldi\Application\vivaldi.exe"
-            PrivateArg   = "--incognito"
-            NewWindowArg = "--new-window"
-        }
-    }
+    IconCacheDb     = "{User}\AppData\Local\IconCache.db"
+    IconCacheFolder = "{User}\AppData\Local\Microsoft\Windows\Explorer"
 }
 ```
 
@@ -61,7 +48,8 @@ Reload the profile, then read the merged value back. `$global:Configuration` aft
 
 ```powershell
 Reload-PowerShellProfile
-$global:Configuration.Universal
+$global:Configuration.Universal.IconCacheDb
+$global:Configuration.Universal.IconCacheFolder
 ```
 
 ## Verification
@@ -70,8 +58,9 @@ Read-only checks. None of these change anything.
 
 ```powershell
 Reload-PowerShellProfile
-$global:Configuration.Universal
-$global:Configuration.Universal.Keys | Sort-Object
+$global:Configuration.Universal.IconCacheDb
+$global:Configuration.Universal.IconCacheFolder
+Get-ChildItem $global:Configuration.Universal.IconCacheFolder -Filter "iconcache*"
 ```
 
 If a value reads back as empty, the two usual causes are a parse error in `Configuration.local.psd1` (run `Test-ConfigurationSchema`) and a key placed at the wrong nesting level.
@@ -84,14 +73,8 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 # Configuration.local.psd1
 @{
     Universal = @{
-        DefaultBrowser = "Firefox"
-        Browsers = @{
-            Vivaldi = @{
-                Exe          = "{User}\AppData\Local\Vivaldi\Application\vivaldi.exe"
-                PrivateArg   = "--incognito"
-                NewWindowArg = "--new-window"
-            }
-        }
+        IconCacheDb     = "{User}\AppData\Local\IconCache.db"
+        IconCacheFolder = "{User}\AppData\Local\Microsoft\Windows\Explorer"
     }
 }
 ```
@@ -101,9 +84,5 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 - [`Rebuild-IconCache` in the System module reference](../../../modules/system.md#rebuild-iconcache) - parameters, usage and behaviour
 - [System configuration guides](README.md) - every guide for this module
 - [Add Symbolic Link](add-symbolic-link.md) - link shapes, placeholders and the WSL cases
-- [`Open-Browser`](../application/Open-Browser.md) - reads the same configuration
-- [`Open-LeagueOfLegends`](../application/Open-LeagueOfLegends.md) - reads the same configuration
-- [`Open-NotepadPlusPlus`](../application/Open-NotepadPlusPlus.md) - reads the same configuration
-- [`Open-Steam`](../application/Open-Steam.md) - reads the same configuration
 - [WinuXConfigurator](../../winux-configurator.md) - have an AI assistant walk these decisions with you
 - [Configuration reference](../../configuration-reference.md) - every key, section by section

@@ -1,6 +1,6 @@
 # Apply-FancyZones
 
-Applies predefined FancyZones layouts to monitors by sending the `Win+Ctrl+Alt+[Number]` shortcut against a window positioned on each monitor.
+Applies predefined FancyZones layouts to monitors on the workspace's virtual desktops, by writing them into FancyZones' `applied-layouts.json` (the default) or by sending the `Win+Ctrl+Alt+[Number]` shortcut with the cursor on each monitor.
 
 > [!NOTE]
 > Every value on this page belongs in `Configuration.local.psd1`, never in the base `Configuration.psd1`. The base file is upstream's, it ships empty-by-default, and it is deep-merged with your local file at load time by `Load-PathConfiguration`. See [Fork Model](../../../contributing/fork-model.md).
@@ -9,14 +9,14 @@ Applies predefined FancyZones layouts to monitors by sending the `Win+Ctrl+Alt+[
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`LayoutNumbers`](../../configuration-reference.md#layout-numbers--zone-mappings) | hashtable of name to FancyZones layout number | hashtable, 10 keys (`One` .. `Ten`) | Maps a readable layout name to the FancyZones custom-layout index `Apply-FancyZones` applies. |
+| [`LayoutNumbers`](../../configuration-reference.md#layout-numbers--zone-mappings) | hashtable of name to FancyZones layout number | hashtable, 10 keys (`Zero` .. `Nine`) | Maps a readable layout name to the FancyZones custom-layout index `Apply-FancyZones` applies. |
 | [`FancyZonesApplyMethod`](../../configuration-reference.md#layout-numbers--zone-mappings) | string, `File` or `Hotkeys` | `File` | Whether the layouts are written into FancyZones' `applied-layouts.json` (one write, one probe shortcut, no desktop switching, shortcut pass as the per-desktop fallback) or sent as `Win+Ctrl+Alt+[Number]` on every desktop. |
 
 ## Decisions
 
 1. Do your FancyZones custom layouts sit at different indexes?
     - Options: Name to index. The names are what layout files and `Visualize-Layouts` use.
-    - Default: The shipped `One` .. `Ten` mapping to 1 .. 10.
+    - Default: The shipped `Zero` .. `Nine` mapping to 0 .. 9.
     - More detail: [`LayoutNumbers`](../../configuration-reference.md#layout-numbers--zone-mappings)
 2. Should the layouts be written into `applied-layouts.json` or sent as shortcuts on every desktop?
     - Options: `File` or `Hotkeys`.
@@ -97,7 +97,6 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 - [`Apply-FancyZones` in the Window module reference](../../../modules/window.md#apply-fancyzones) - parameters, usage and behaviour
 - [Window configuration guides](README.md) - every guide for this module
 - [Configure Window Layout](configure-window-layout.md) - the 3-layer layout system, zones and visualization
-- [`Get-FancyZoneCoordinates`](Get-FancyZoneCoordinates.md) - reads the same configuration
 - [`Test-FancyZonesConfiguration`](Test-FancyZonesConfiguration.md) - reads the same configuration
 - [`Visualize-Layouts`](Visualize-Layouts.md) - reads the same configuration
 - [WinuXConfigurator](../../winux-configurator.md) - have an AI assistant walk these decisions with you

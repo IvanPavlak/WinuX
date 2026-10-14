@@ -11,7 +11,7 @@ Adds a symbolic link entry to the `SymbolicLinks` section of `Configuration.psd1
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`PathTemplates.SymbolicLinks`](../../configuration-reference.md#symbolic-links) | nested hashtable of group to link entries | shipped, 2 groups | Every symbolic link `SymbolicLinkMaker` creates: `@{ <Group> = @{ <Name> = @{ Source; Target } } }`, with placeholders on both sides. WSL targets are supported and are what the AI-instruction links use. |
+| [`PathTemplates.SymbolicLinks`](../../configuration-reference.md#symbolic-links) | nested hashtable of group to link entries | shipped, 2 groups | Every symbolic link `SymbolicLinkMaker` creates: `@{ <Group> = @{ <Name> = @{ Path; Target } } }` (or `@{ <Name> = @{ Path; Target } }` for a single link), where `Path` is where the link is created and `Target` is the file it points to, with placeholders on both sides. WSL targets are supported and are what the AI-instruction links use. |
 
 ## Decisions
 
@@ -34,13 +34,13 @@ All of it goes in `Configuration.local.psd1`, at the repository's `Windows/Power
 
 ## Step 1: Set `PathTemplates.SymbolicLinks`
 
-Every symbolic link `SymbolicLinkMaker` creates: `@{ <Group> = @{ <Name> = @{ Source; Target } } }`, with placeholders on both sides. WSL targets are supported and are what the AI-instruction links use.
+Every symbolic link `SymbolicLinkMaker` creates: `@{ <Group> = @{ <Name> = @{ Path; Target } } }` (or `@{ <Name> = @{ Path; Target } }` for a single link), where `Path` is where the link is created and `Target` is the file it points to, with placeholders on both sides. WSL targets are supported and are what the AI-instruction links use.
 
 ```powershell
 PathTemplates = @{
     SymbolicLinks = @{
         MyApp = @{
-            Config = @{ Source = "{RepoRoot}\MyApp\config.json"; Target = "{AppData}\MyApp\config.json" }
+            Config = @{ Path = "{AppData}\MyApp\config.json"; Target = "{RepoRoot}\MyApp\config.json" }
         }
     }
 }
@@ -62,7 +62,7 @@ Read-only checks. None of these change anything.
 ```powershell
 Reload-PowerShellProfile
 $global:Configuration.PathTemplates
-Get-SymbolicLinkEntries          # lists every configured link and whether it exists
+Get-SymbolicLinkEntries -SymbolicLinks $global:MachineSpecificPaths.SymbolicLinks   # every configured link, expanded
 ```
 
 If a value reads back as empty, the two usual causes are a parse error in `Configuration.local.psd1` (run `Test-ConfigurationSchema`) and a key placed at the wrong nesting level.
@@ -77,7 +77,7 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
     PathTemplates = @{
         SymbolicLinks = @{
             MyApp = @{
-                Config = @{ Source = "{RepoRoot}\MyApp\config.json"; Target = "{AppData}\MyApp\config.json" }
+                Config = @{ Path = "{AppData}\MyApp\config.json"; Target = "{RepoRoot}\MyApp\config.json" }
             }
         }
     }

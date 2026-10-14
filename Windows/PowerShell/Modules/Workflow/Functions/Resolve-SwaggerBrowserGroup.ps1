@@ -29,7 +29,9 @@ function Resolve-SwaggerBrowserGroup {
 		how a workspace passes either an explicit -Project or the projects selected by Open-Project).
 
 	.PARAMETER Browser
-		Browser to check against. Defaults to $Configuration.Universal.DefaultBrowser.
+		Browser to check against. Defaults to $Configuration.Universal.DefaultBrowser. With
+		neither given nor configured, the duplicate check (and the probe) is skipped and the
+		group name is returned as-is.
 
 	.PARAMETER CachedBrowserWindows
 		Pre-fetched window handle list, forwarded to Test-BrowserGroupAlreadyOpen to avoid a
@@ -39,7 +41,7 @@ function Resolve-SwaggerBrowserGroup {
 		Return the resolved group name without checking whether the tab is already open.
 
 	.EXAMPLE
-		$group = Resolve-SwaggerBrowserGroup -Project "Asseto"
+		$group = Resolve-SwaggerBrowserGroup -Project "MyProject"
 		if ($group) { Open-Browser $group }
 
 	.EXAMPLE

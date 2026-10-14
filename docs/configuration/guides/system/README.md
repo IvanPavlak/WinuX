@@ -11,23 +11,25 @@ The [System module reference](../../../modules/system.md) is the authority on wh
 
 | Function | Configuration keys | Guide |
 | -------- | ------------------ | ----- |
-| `Clear-WhatsAppLocalStorage` | `Universal` | [Clear-WhatsAppLocalStorage](Clear-WhatsAppLocalStorage.md) |
-| `Configure-NerdFont` | `DefaultNerdFont`, `NerdFonts`, `Universal` | [Configure-NerdFont](Configure-NerdFont.md) |
+| `Clear-WhatsAppLocalStorage` | `Universal.WhatsAppLocalStoragePath` | [Clear-WhatsAppLocalStorage](Clear-WhatsAppLocalStorage.md) |
+| `Configure-NerdFont` | `DefaultNerdFont`, `NerdFonts`, `Universal.Fonts` | [Configure-NerdFont](Configure-NerdFont.md) |
+| `Configure-NuGetConfig` | `PathTemplates.NuGetConfig` | [Configure-NuGetConfig](Configure-NuGetConfig.md) |
 | `Configure-PostgreSqlPasswords` | `PostgreSqlPasswords` | [Configure-PostgreSqlPasswords](Configure-PostgreSqlPasswords.md) |
-| `Configure-Taskbar` | `HostnameToMachineType`, `TaskbarConfiguration`, `Universal` | [Configure-Taskbar](Configure-Taskbar.md) |
+| `Configure-Taskbar` | `HostnameToMachineType`, `TaskbarConfiguration`, `Universal.TaskbarPinFolder`, `PathTemplates.TaskbarLayoutFile` | [Configure-Taskbar](Configure-Taskbar.md) |
 | `Configure-WSL` | `DefaultWSLDistribution`, `DefaultWSLUsername` | [Configure-WSL](Configure-WSL.md) |
 | `Configure-WSLSSH` | `DefaultWSLDistribution` | [Configure-WSLSSH](Configure-WSLSSH.md) |
 | `Determine-DotnetDependencies` | `DotnetProjectsSearchPath` | [Determine-DotnetDependencies](Determine-DotnetDependencies.md) |
 | `Format-OnefetchPanel` | `TerminalGreeting.Onefetch.Style` | [Format-OnefetchPanel](Format-OnefetchPanel.md) |
 | `Get-FastfetchLogoArgument` | `Universal.FastFetchImageLogo`, `PathTemplates.SymbolicLinks` | [Get-FastfetchLogoArgument](Get-FastfetchLogoArgument.md) |
 | `Get-PinnedApps` | `BootstrapConfig.DataFiles` | [Get-PinnedApps](Get-PinnedApps.md) |
-| `Initialize-OhMyPosh` | `Universal` | [Initialize-OhMyPosh](Initialize-OhMyPosh.md) |
+| `Initialize-OhMyPosh` | `Universal.OhMyPoshThemeFile` | [Initialize-OhMyPosh](Initialize-OhMyPosh.md) |
 | `Initialize-PSReadLine` | `PSReadLine` | [Initialize-PSReadLine](Initialize-PSReadLine.md) |
-| `Initialize-WSLEnvironment` | `DefaultWSLDistribution`, `Universal` | [Initialize-WSLEnvironment](Initialize-WSLEnvironment.md) |
+| `Initialize-WSLEnvironment` | `DefaultWSLDistribution`, `Universal.OhMyPoshThemeFile` | [Initialize-WSLEnvironment](Initialize-WSLEnvironment.md) |
 | `Invoke-Fastfetch` | `TerminalGreeting.Fastfetch` | [Invoke-Fastfetch](Invoke-Fastfetch.md) |
 | `Invoke-Onefetch` | `TerminalGreeting.Onefetch` | [Invoke-Onefetch](Invoke-Onefetch.md) |
-| `Rebuild-IconCache` | `Universal` | [Rebuild-IconCache](Rebuild-IconCache.md) |
+| `Rebuild-IconCache` | `Universal.IconCacheDb`, `Universal.IconCacheFolder` | [Rebuild-IconCache](Rebuild-IconCache.md) |
 | `Rename-Machine` | `HostnameToMachineType` | [Rename-Machine](Rename-Machine.md) |
+| `Report-KillAllSurvivors` | `Universal.VisibleWindowExclusions` | [Report-KillAllSurvivors](Report-KillAllSurvivors.md) |
 | `Resolve-KillAllSteps` | `KillAll` | [Resolve-KillAllSteps](Resolve-KillAllSteps.md) |
 | `Resolve-SystemThemeSteps` | `SystemTheme` | [Resolve-SystemThemeSteps](Resolve-SystemThemeSteps.md) |
 | `Resolve-TerminalGreetingSettings` | `TerminalGreeting` | [Resolve-TerminalGreetingSettings](Resolve-TerminalGreetingSettings.md) |
@@ -37,22 +39,23 @@ The [System module reference](../../../modules/system.md) is the authority on wh
 | `Set-ExplorerOptions` | `ExplorerOptions` | [Set-ExplorerOptions](Set-ExplorerOptions.md) |
 | `Set-KeyboardLayouts` | `DefaultKeyboardLayoutSet`, `KeyboardLayouts`, `KeyboardLayoutSets` | [Set-KeyboardLayouts](Set-KeyboardLayouts.md) |
 | `Set-Locale` | `DefaultLocale`, `Locales` | [Set-Locale](Set-Locale.md) |
-| `Set-LockScreenWallpaper` | `WallpaperDarkSettings`, `WallpaperLightSettings` | [Set-LockScreenWallpaper](Set-LockScreenWallpaper.md) |
+| `Set-LockScreenWallpaper` | `WallpaperDarkSettings`, `WallpaperLightSettings`, `PathTemplates.Projects.Self.Wallpapers` | [Set-LockScreenWallpaper](Set-LockScreenWallpaper.md) |
 | `Set-PowerButtonActions` | `PowerButtonActions` | [Set-PowerButtonActions](Set-PowerButtonActions.md) |
 | `Set-PowerPlan` | `PowerPlans` | [Set-PowerPlan](Set-PowerPlan.md) |
 | `Set-SpecialFolders` | `BasePaths`, `SpecialFolders` | [Set-SpecialFolders](Set-SpecialFolders.md) |
 | `Set-SystemTheme` | `Themes` | [Set-SystemTheme](Set-SystemTheme.md) |
 | `Set-TaskbarSettings` | `TaskbarSettings` | [Set-TaskbarSettings](Set-TaskbarSettings.md) |
 | `Set-VisualEffects` | `VisualEffects` | [Set-VisualEffects](Set-VisualEffects.md) |
-| `Set-Wallpaper` | `WallpaperDarkSettings`, `WallpaperLightSettings`, `WallpaperStyles` | [Set-Wallpaper](Set-Wallpaper.md) |
+| `Set-Wallpaper` | `WallpaperDarkSettings`, `WallpaperLightSettings`, `WallpaperStyles`, `PathTemplates.Projects.Self.Wallpapers` | [Set-Wallpaper](Set-Wallpaper.md) |
 | `Show-TerminalGreeting` | `TerminalGreeting` | [Show-TerminalGreeting](Show-TerminalGreeting.md) |
 | `SymbolicLinkMaker` | `PathTemplates.SymbolicLinks`, `DefaultWSLDistribution` | [SymbolicLinkMaker](SymbolicLinkMaker.md) |
 | `Sync-AppPins` | `BootstrapConfig.DataFiles` | [Sync-AppPins](Sync-AppPins.md) |
-| `Terminate-AllBrowserProcesses` | `Universal` | [Terminate-AllBrowserProcesses](Terminate-AllBrowserProcesses.md) |
-| `Terminate-AllProcessesByName` | `Universal` | [Terminate-AllProcessesByName](Terminate-AllProcessesByName.md) |
-| `Terminate-AllProcessesWithVisibleWindows` | `Universal` | [Terminate-AllProcessesWithVisibleWindows](Terminate-AllProcessesWithVisibleWindows.md) |
+| `Terminate-AllBrowserProcesses` | `Universal.Browsers` | [Terminate-AllBrowserProcesses](Terminate-AllBrowserProcesses.md) |
+| `Terminate-AllProcessesByName` | `Universal.TerminateProcessNames` | [Terminate-AllProcessesByName](Terminate-AllProcessesByName.md) |
+| `Terminate-AllProcessesWithVisibleWindows` | `Universal.VisibleWindowExclusions`, `Universal.Browsers` | [Terminate-AllProcessesWithVisibleWindows](Terminate-AllProcessesWithVisibleWindows.md) |
 | `Test-MachineOnline` | `WakeOnLanConfig` | [Test-MachineOnline](Test-MachineOnline.md) |
 | `Test-PowerPlan` | `LaptopChassisTypes` | [Test-PowerPlan](Test-PowerPlan.md) |
+| `Unpin-TaskbarApps` | `PathTemplates.TaskbarLayoutFile` | [Unpin-TaskbarApps](Unpin-TaskbarApps.md) |
 
 ## Task Guides
 
@@ -64,7 +67,7 @@ Longer walkthroughs that cut across several functions and keys.
 
 These read no `Configuration.psd1` keys. Their guides record that fact and show how to call them.
 
-[Add-WindowsFormsType](Add-WindowsFormsType.md), [Clear-TaskbarPins](Clear-TaskbarPins.md), [Close-BrowserWindows](Close-BrowserWindows.md), [Configure-NuGetConfig](Configure-NuGetConfig.md), [Display-SystemLanguageSettings](Display-SystemLanguageSettings.md), [Enable-DeveloperMode](Enable-DeveloperMode.md), [Get-BrowserTitlePattern](Get-BrowserTitlePattern.md), [Get-BrowserWindowsByTarget](Get-BrowserWindowsByTarget.md), [Get-ChassisType](Get-ChassisType.md), [Get-ConsoleWindowSize](Get-ConsoleWindowSize.md), [Get-InstalledApps](Get-InstalledApps.md), [Get-SymbolicLinkEntries](Get-SymbolicLinkEntries.md), [Get-TerminalCellSize](Get-TerminalCellSize.md), [Get-VisibleWindowProcess](Get-VisibleWindowProcess.md), [Invoke-Clear](Invoke-Clear.md), [Invoke-ShellStartupSample](Invoke-ShellStartupSample.md), [Invoke-TerminateWindowsTerminalTabsExit](Invoke-TerminateWindowsTerminalTabsExit.md), [Invoke-TerminateWindowsTerminalTabsIncludeCurrentCleanup](Invoke-TerminateWindowsTerminalTabsIncludeCurrentCleanup.md), [Kill-All](Kill-All.md), [List-Drives](List-Drives.md), [Measure-ShellStartup](Measure-ShellStartup.md), [New-SixelImage](New-SixelImage.md), [New-WindowsSymbolicLink](New-WindowsSymbolicLink.md), [New-WSLSymbolicLink](New-WSLSymbolicLink.md), [Read-ShellStartupTrace](Read-ShellStartupTrace.md), [Reload-PowerShellProfile](Reload-PowerShellProfile.md), [Reload-WinuXModules](Reload-WinuXModules.md), [Remove-VirtualDesktops](Remove-VirtualDesktops.md), [Repair-RpcServer](Repair-RpcServer.md), [Report-KillAllSurvivors](Report-KillAllSurvivors.md), [Restart-Explorer](Restart-Explorer.md), [Restart-Machine](Restart-Machine.md), [Send-TerminalFontKey](Send-TerminalFontKey.md), [Set-CustomExecutionPolicy](Set-CustomExecutionPolicy.md), [Set-ShortcutAumid](Set-ShortcutAumid.md), [Show-PinnedAppsWarning](Show-PinnedAppsWarning.md), [Terminate-WindowsTerminalTabs](Terminate-WindowsTerminalTabs.md), [Test-FastfetchPanelOverflow](Test-FastfetchPanelOverflow.md), [Test-RpcServerHealth](Test-RpcServerHealth.md), [Test-WindowTitleMatch](Test-WindowTitleMatch.md), [Unpin-TaskbarApps](Unpin-TaskbarApps.md), [Update-DirectoryNames](Update-DirectoryNames.md), [Upgrade-All](Upgrade-All.md), [Wait-BrowserWindowsClosed](Wait-BrowserWindowsClosed.md), [Wait-ConsoleReflow](Wait-ConsoleReflow.md)
+[Add-WindowsFormsType](Add-WindowsFormsType.md), [Clear-TaskbarPins](Clear-TaskbarPins.md), [Close-BrowserWindows](Close-BrowserWindows.md), [Display-SystemLanguageSettings](Display-SystemLanguageSettings.md), [Enable-DeveloperMode](Enable-DeveloperMode.md), [Get-BrowserTitlePattern](Get-BrowserTitlePattern.md), [Get-BrowserWindowsByTarget](Get-BrowserWindowsByTarget.md), [Get-ChassisType](Get-ChassisType.md), [Get-ConsoleWindowSize](Get-ConsoleWindowSize.md), [Get-InstalledApps](Get-InstalledApps.md), [Get-SymbolicLinkEntries](Get-SymbolicLinkEntries.md), [Get-TerminalCellSize](Get-TerminalCellSize.md), [Get-VisibleWindowProcess](Get-VisibleWindowProcess.md), [Import-TerminalIcons](Import-TerminalIcons.md), [Invoke-Clear](Invoke-Clear.md), [Invoke-ShellStartupSample](Invoke-ShellStartupSample.md), [Invoke-TerminateWindowsTerminalTabsExit](Invoke-TerminateWindowsTerminalTabsExit.md), [Invoke-TerminateWindowsTerminalTabsIncludeCurrentCleanup](Invoke-TerminateWindowsTerminalTabsIncludeCurrentCleanup.md), [Kill-All](Kill-All.md), [List-Drives](List-Drives.md), [Measure-ShellStartup](Measure-ShellStartup.md), [New-SixelImage](New-SixelImage.md), [New-WindowsSymbolicLink](New-WindowsSymbolicLink.md), [New-WSLSymbolicLink](New-WSLSymbolicLink.md), [Read-ShellStartupTrace](Read-ShellStartupTrace.md), [Reload-PowerShellProfile](Reload-PowerShellProfile.md), [Reload-WinuXModules](Reload-WinuXModules.md), [Remove-VirtualDesktops](Remove-VirtualDesktops.md), [Repair-RpcServer](Repair-RpcServer.md), [Repair-TerminalIconsThemeCache](Repair-TerminalIconsThemeCache.md), [Restart-Explorer](Restart-Explorer.md), [Restart-Machine](Restart-Machine.md), [Send-TerminalFontKey](Send-TerminalFontKey.md), [Set-CustomExecutionPolicy](Set-CustomExecutionPolicy.md), [Set-ShortcutAumid](Set-ShortcutAumid.md), [Show-PinnedAppsWarning](Show-PinnedAppsWarning.md), [Terminate-WindowsTerminalTabs](Terminate-WindowsTerminalTabs.md), [Test-FastfetchPanelOverflow](Test-FastfetchPanelOverflow.md), [Test-RpcServerHealth](Test-RpcServerHealth.md), [Test-TerminalIconsCacheFile](Test-TerminalIconsCacheFile.md), [Test-WindowTitleMatch](Test-WindowTitleMatch.md), [Update-DirectoryNames](Update-DirectoryNames.md), [Upgrade-All](Upgrade-All.md), [Wait-BrowserWindowsClosed](Wait-BrowserWindowsClosed.md), [Wait-ConsoleReflow](Wait-ConsoleReflow.md)
 
 ## Related
 

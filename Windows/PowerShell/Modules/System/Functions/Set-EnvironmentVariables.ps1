@@ -1,19 +1,24 @@
 function Set-EnvironmentVariables {
 	<#
     .SYNOPSIS
-        Sets system environment variables from the configuration or manually.
+        Sets user environment variables from the configuration or manually.
 
     .DESCRIPTION
         With `-Auto`, reads all variables from `AutoEnvironmentVariables` in Configuration.psd1,
-        expands placeholder paths, and sets them as system environment variables.
-        Manual mode accepts `-Name` and `-Value` to set an individual variable.
+        expands placeholder paths ({Dev}, {User}, {MachineType}, resolved through `BasePaths` for
+        the current machine type), and sets them as User-scope environment variables (skipped when
+        already correct, updated when different). It then appends each `AutoPathAdditions` entry
+        to the User PATH when not already present.
+        Manual mode accepts `-Name` and `-Value` to set an individual variable (the value is
+        placeholder-expanded the same way).
+        After any run, all User-scope variables are refreshed into the current session.
         Requires administrator privileges.
 
     .PARAMETER Name
         Variable name for manual mode (e.g. "MY_VAR").
 
     .PARAMETER Value
-        Variable value for manual mode (e.g. "C:\\Tools").
+        Variable value for manual mode (e.g. "C:\Tools").
 
     .PARAMETER Auto
         Reads all variables from configuration and sets them automatically.
@@ -23,7 +28,7 @@ function Set-EnvironmentVariables {
         Sets all configured environment variables.
 
     .EXAMPLE
-        Set-EnvironmentVariables -Name "MY_VAR" -Value "C:\\Tools"
+        Set-EnvironmentVariables -Name "MY_VAR" -Value "C:\Tools"
         Sets a single environment variable.
     #>
 	param(

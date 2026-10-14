@@ -4,8 +4,8 @@ function Initialize-PositionedWindowTracking {
 		Initializes or clears the tracking set for positioned windows.
 
 	.DESCRIPTION
-		Creates a module-scoped HashSet to track window handles that have been positioned
-		by Set-WindowLayouts. If the HashSet already exists, it will be cleared.
+		Creates a module-scoped ArrayList to track the windows that have been positioned
+		by Set-WindowLayouts. If the list already exists, it will be cleared.
 		This allows Snap-AllWindows to only snap windows that were intentionally positioned.
 
 	.EXAMPLE

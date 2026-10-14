@@ -54,7 +54,6 @@ Read-only checks. None of these change anything.
 ```powershell
 Reload-PowerShellProfile
 $global:Configuration.DotnetEFVersion
-$global:Configuration.DotnetEFVersion
 dotnet tool list --global
 ```
 

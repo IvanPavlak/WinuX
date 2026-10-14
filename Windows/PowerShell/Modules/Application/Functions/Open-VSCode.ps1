@@ -5,14 +5,17 @@ function Open-VSCode {
 
 	.DESCRIPTION
 		Opens one or more folder paths configured in `VSCodeProjects` in Configuration.psd1.
-		Each entry maps a name to a directory path. If a VS Code window for that folder is
-		already open (detected by matching window title), it is skipped.
+		Each entry maps a Name to a Path, a dot-notation reference into
+		$global:MachineSpecificPaths (e.g. "Projects.Self.Root"). If a VS Code window for that
+		folder is already open (detected by matching window title), it is skipped.
 
-		When `-Folder` is omitted, shows an interactive selection menu.
-		When `-Default` is specified, opens the first project in the list.
+		When `-Folder` is omitted, shows an interactive selection menu. When nothing is selected,
+		or `-Default` is specified, VS Code is launched without a folder (skipped if it is
+		already running).
 
 	.PARAMETER Default
-		Opens the first project defined in VSCodeProjects without showing a menu.
+		Skips the menu (and ignores -Folder) and launches VS Code without a folder, unless a Code
+		process is already running.
 
 	.PARAMETER Folder
 		One or more project names as defined in the `VSCodeProjects` configuration.

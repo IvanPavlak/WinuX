@@ -1,6 +1,6 @@
 # Rename-Machine
 
-Sets the machine hostname from `Configuration.psd1` or interactively prompts for a new name.
+Renames the machine interactively, skipping when the current hostname is already one configured in `HostnameToMachineType`.
 
 > [!NOTE]
 > Every value on this page belongs in `Configuration.local.psd1`, never in the base `Configuration.psd1`. The base file is upstream's, it ships empty-by-default, and it is deep-merged with your local file at load time by `Load-PathConfiguration`. See [Fork Model](../../../contributing/fork-model.md).
@@ -41,7 +41,7 @@ How `DetermineMachineType` turns this computer name into a machine type. A hostn
 ```powershell
 HostnameToMachineType = @{
     Test             = "Test"
-    "DESKTOP-GAMING" = "Machine"
+    "DESKTOP-GAMING" = "PC"
 }
 ```
 
@@ -61,7 +61,6 @@ Read-only checks. None of these change anything.
 ```powershell
 Reload-PowerShellProfile
 $global:Configuration.HostnameToMachineType
-$global:Configuration.HostnameToMachineType
 $env:COMPUTERNAME
 ```
 
@@ -76,7 +75,7 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 @{
     HostnameToMachineType = @{
         Test             = "Test"
-        "DESKTOP-GAMING" = "Machine"
+        "DESKTOP-GAMING" = "PC"
     }
 }
 ```

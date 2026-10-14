@@ -194,6 +194,8 @@ When you **add** a function:
 
 When you **modify** a function's behavior, parameters, or signature, do step 7 (and step 2 only if you renamed it).
 
+When you **remove or rename** an exported function, or change its signature incompatibly, never do it in one step. Deprecate it first: keep the old name as an alias or a thin wrapper that warns once per session, record it under `### Deprecated` in `CHANGELOG.md` with the migration and in the `Deprecated` map of `Modules/Tests/ContractBaseline.json` with the version it ships in, and leave the removal to the next MAJOR release (see `VERSIONING.md`). The same applies to a `Configuration.psd1` key a function stops reading. The `Infrastructure-Contract` test enforces it: a removed function or parameter, or a parameter made mandatory, fails CI. Rename a parameter by keeping the old name in an `[Alias()]`, and add a new parameter as optional with a default.
+
 ### Documentation is not optional
 
 The docsify docs under `docs/` are the SINGLE SOURCE OF TRUTH. `README.md` at the repo root is now a MINIMAL pointer (logo + intro + demo-video placeholder + link to the docs) - it carries NO function reference. NEVER add `#### [Name]` function entries, a function Table of Contents, or per-function content to README, and do NOT update README when a function changes.

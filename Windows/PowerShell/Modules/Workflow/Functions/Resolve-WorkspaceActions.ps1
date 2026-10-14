@@ -82,10 +82,10 @@ function Resolve-WorkspaceActions {
 		workspace instead of recording an open that produced nothing.
 
 	.PARAMETER Actions
-		The configured action entries of one workspace (the value of $Configuration.WorkspaceActions
-		for that workspace): hashtables (or objects) with Action, optional Parameters, and the optional
-		Machine / LayoutMachine scopes and MachineParameters / LayoutMachineParameters tables. Null or
-		empty resolves to an empty array.
+		The configured action entries of one workspace (Get-OrderedEntry $Configuration.WorkspaceActions
+		<name>): hashtables (or objects) with Action, optional Parameters, and the optional
+		Machine / LayoutMachine / Project scopes and MachineParameters / LayoutMachineParameters /
+		ProjectParameters tables. Null or empty resolves to an empty array.
 
 	.PARAMETER Workspace
 		The workspace name, used in the debug, warning and unknown-token messages.

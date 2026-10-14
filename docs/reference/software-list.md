@@ -18,8 +18,11 @@ software its own features need; everything you add for yourself goes in a machin
   `All` is special, and `/` combines several types (`PC/Laptop`). The base config ships only `Test`.
   Tokens are validated against `ValidMachineTypes` via `Test-MachineTypeScope` - unknown machine
   types are reported via `Write-LogError` and never match.
-- All three package managers are installed by Bootstrap even when their CSV is empty - add rows
-  to the matching overlay and re-run to install more.
+- A package manager is installed and used only when it is in play: listed in `PackageManagers`
+  (the base ships `@("WinGet")`) **and** holding at least one app for this machine type once the
+  overlay is applied (`Resolve-PackageManagers`). A vanilla bootstrap therefore installs WinGet's
+  apps alone and never installs Scoop or Chocolatey just to sit empty. To use one, add it to
+  `PackageManagers` in `Configuration.local.psd1`, add rows to its overlay, and re-run.
 
 ## Machine-Local Overlay
 

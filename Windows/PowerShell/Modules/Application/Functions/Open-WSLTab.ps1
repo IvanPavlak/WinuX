@@ -6,7 +6,9 @@ function Open-WSLTab {
 	.DESCRIPTION
 		Opens a tab on the WSL profile of a distribution - by default the configured
 		`DefaultWSLDistribution`, in the current Windows Terminal window, at the distribution's home
-		directory, which is the bare `wsl-tab` call.
+		directory, which is what a bare `Open-WSLTab` call does. The tab is opened with
+		`wt new-tab -p <distribution>`, so a Windows Terminal profile named like the distribution
+		must exist (WSL registers one per installed distribution).
 
 		The parameters exist for the project tabs. Open-ProjectTerminals and Run-Project both put WSL
 		tabs in a project's window, and both used to spawn them themselves - or, in Run-Project's

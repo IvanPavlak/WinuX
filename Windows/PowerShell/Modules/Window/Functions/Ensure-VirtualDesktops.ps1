@@ -7,7 +7,9 @@ function Ensure-VirtualDesktops {
 		Ensures the specified number of virtual desktops exist.
 
 	.DESCRIPTION
-		Creates virtual desktops if they don't exist, up to the specified count.
+		Creates virtual desktops if fewer than the specified count exist, and removes the
+		highest-numbered desktops (then switches to the first desktop) if more exist.
+		Returns $true on success, $false when the module is missing or a create/remove fails.
 		Requires the VirtualDesktop PowerShell module.
 
 		Sits on the Window module's seam: every count, create and remove call runs through
@@ -26,6 +28,7 @@ function Ensure-VirtualDesktops {
 
 	.PARAMETER SwitchToDesktop
 		If specified, switches to the specified desktop number (1-based) after ensuring desktops exist.
+		Default 0 (no switch); a value greater than Count is ignored.
 
 	.EXAMPLE
 		Ensure-VirtualDesktops -Count 3

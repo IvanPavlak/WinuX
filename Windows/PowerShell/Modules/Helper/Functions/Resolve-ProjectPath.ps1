@@ -4,24 +4,33 @@ function Resolve-ProjectPath {
 		Resolve project path from configuration mappings.
 
 	.DESCRIPTION
-		Looks up project in Configuration.ProjectPathMappings and resolves local/remote paths
-
-using dot-notation through MachineSpecificPaths. Supports both local and repository mappings.
+		Looks up the project in Configuration.ProjectTerminals (by Name) and walks its dot-notation
+		BasePath through MachineSpecificPaths, returning the path for -PathKey or every path listed in
+		the entry's Paths. With -ForRepository it looks the name up in Configuration.RepositoryGroups
+		instead, resolves LocalPath through MachineSpecificPaths and UrlPath through
+		Universal.GitHub, and returns a [PSCustomObject] with RepositoryUrl (Universal.GitHub.Base +
+		the resolved UrlPath) and LocalPath. An unknown name, an unknown -PathKey, or a null path
+		segment logs an error and stops.
 
 	.PARAMETER ProjectName
-		Project key from configuration (required).
+		Project name (ProjectTerminals Name) or, with -ForRepository, repository name
+		(RepositoryGroups entry Name). Required.
 
 	.PARAMETER PathKey
-		Optional specific path key ('LocalPath', 'RemotePath'). Defaults to LocalPath.
+		Optional single path key to return - one of the project's ProjectTerminals Paths entries
+		(e.g. 'Api', 'Root'). When omitted, every path in Paths is returned. Ignored with
+		-ForRepository.
 
 	.PARAMETER ForRepository
-		If specified, use RepositoryGroups instead of ProjectPathMappings.
+		If specified, use RepositoryGroups instead of ProjectTerminals and return RepositoryUrl
+		and LocalPath.
 
 	.EXAMPLE
-		$path = Resolve-ProjectPath -ProjectName "MyApp" -PathKey "LocalPath"
+		$path = Resolve-ProjectPath -ProjectName "MyProject" -PathKey "Api"
 		Write-Host "Project at: $path"
 
-		$repoPath = Resolve-ProjectPath -ProjectName "WinuX" -ForRepository
+		$repo = Resolve-ProjectPath -ProjectName "WinuX" -ForRepository
+		# $repo.RepositoryUrl, $repo.LocalPath
 	#>
 	[CmdletBinding()]
 	param(

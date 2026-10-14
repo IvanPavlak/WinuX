@@ -9,36 +9,29 @@ Resolves a project's file paths from the configuration mappings.
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`ProjectTerminals`](../../configuration-reference.md#project-terminals) | array of `@{ Project; Tabs; ... }` | array of 3 | Which Windows Terminal tabs `Open-ProjectTerminals` creates for a project, and with what titles and starting directories. Tabs are created with `--title --suppressApplicationTitle`, so their titles are stable. |
-| [`RepositoryGroups`](../../configuration-reference.md#repository-groups) | array of single-key hashtables | array of 1 | The repository groups `Update-Repositories` walks and `Initialize-Repository` can clone into. Group name to an array of repository entries. `UrlPath` and `LocalPath` are dot-notation paths, not literal values - resolving them is exactly what `Resolve-ProjectPath -ForRepository` does. |
-| [`Universal`](../../configuration-reference.md#universal-constants) | hashtable, 26 keys | hashtable, 26 keys | Machine-independent constants: executable paths (`FirefoxExe`, `DockerExe`, `DbeaverExe`, ...), the `Browsers` map, `DefaultBrowser`, shared URLs, the `ProcessCleanup` lists, and `Desktop` (auto-resolved at load). Expanded in place by `Load-PathConfiguration`, so placeholders work here too. |
+| [`ProjectTerminals`](../../configuration-reference.md#project-terminals) | array of `@{ Name; BasePath; Paths }` | array of 3 | The project lookup in the default mode: the entry whose `Name` matches `-ProjectName`. `BasePath` is dot-notation into the machine-specific paths (e.g. `Projects.MyProject`), and `Paths` names the subpath keys under it that are returned - all of them, or only the one `-PathKey` names. |
+| [`RepositoryGroups`](../../configuration-reference.md#repository-groups) | array of single-key hashtables | array of 1 | The repository lookup with `-ForRepository`: group name to an array of `@{ Name; UrlPath; LocalPath }` entries. `UrlPath` is dot-notation into `Universal.GitHub` and `LocalPath` dot-notation into the machine-specific paths - resolving both is exactly what `Resolve-ProjectPath -ForRepository` does. |
+| [`Universal.GitHub`](../../configuration-reference.md#github-configuration) | hashtable | `@{ Base = "https://github.com"; Private = @{ WinuX = "/YourUsername/WinuX.git" } }` | With `-ForRepository`: the value a `UrlPath` resolves to inside this hashtable is appended to `Base` to form the returned `RepositoryUrl`. |
+| [`PathTemplates.Projects`](../../configuration-reference.md#path-templates--placeholder-system) | hashtable of project name to path fields | `Self` and `ExampleProject` | What `BasePath` and `LocalPath` resolve into, once `Expand-ConfigPaths` has expanded it into `$global:MachineSpecificPaths.Projects`. A project or path key missing here is reported as a null path segment. |
 
 ## Decisions
 
-1. Which terminal tabs should open for this project?
-    - Options: One entry per project with its tab list. Each tab can set a title and a starting directory, and can run in WSL.
+1. Which projects should resolve, and to which of their paths?
+    - Options: One `ProjectTerminals` entry per project, with `BasePath` pointing at its `PathTemplates.Projects` entry and `Paths` naming the subpath keys (`ROOT`, `API`, `UI`, ...).
     - Default: The shipped three entries.
     - More detail: [`ProjectTerminals`](../../configuration-reference.md#project-terminals)
-2. Which repository groups do you want to manage?
-    - Options: One group per collection, e.g. `Personal`, `Work`. Each entry carries the repository name and its remote - see [Add New Repository](../git/add-new-repository.md).
-    - Default: The shipped single example group.
+2. Which repositories should `-ForRepository` resolve?
+    - Options: One `RepositoryGroups` entry per repository, in any group, carrying `Name`, `UrlPath` and `LocalPath` - see [Add New Repository](../git/add-new-repository.md).
+    - Default: The shipped single example group (`WinuX`).
     - More detail: [`RepositoryGroups`](../../configuration-reference.md#repository-groups)
-3. Where should each group be cloned to?
-    - Options: A path per group, normally under `{Dev}`.
-    - Default: The shipped path.
-    - More detail: [`RepositoryGroups`](../../configuration-reference.md#repository-groups)
-4. Which browser should be the default?
-    - Options: A key from `Universal.Browsers`: `Firefox`, `Chrome`, `Edge`, `Brave`, `Tor`. Ships empty, so `Open-Browser` asks or uses the system default.
-    - Default: Empty.
-    - More detail: [`Universal`](../../configuration-reference.md#universal-constants)
-5. Are any of the shipped executable paths wrong on this machine?
-    - Options: Override the individual `Universal.<App>Exe` value. Absolute paths, or placeholder paths such as `{User}\AppData\Local\...`.
-    - Default: The shipped paths, which assume default install locations.
-    - More detail: [`Universal`](../../configuration-reference.md#universal-constants)
-6. Do you use a browser the base `Browsers` map does not list?
-    - Options: Add an entry with `Exe`, `PrivateArg` and `NewWindowArg`. Because hashtables merge per key, adding one browser does not remove the others.
-    - Default: The shipped five.
-    - More detail: [`Universal`](../../configuration-reference.md#universal-constants)
+3. What is your GitHub base URL, and which repository paths does it combine with?
+    - Options: `Universal.GitHub.Base` (e.g. `https://github.com` or `https://YourUsername@github.com`) plus one `"<Name>" = "/<owner>/<repo>.git"` entry per repository under a group such as `Private`.
+    - Default: `https://github.com` and the placeholder `WinuX` entry.
+    - More detail: [`Universal.GitHub`](../../configuration-reference.md#github-configuration)
+4. Where does each project live on this machine?
+    - Options: A `PathTemplates.Projects.<Project>` hashtable with a `Root` and any subpaths (`Api`, `Ui`, ...), written with placeholders such as `{Dev}` so the same entry resolves on every machine.
+    - Default: The shipped `Self` and `ExampleProject` entries.
+    - More detail: [`PathTemplates.Projects`](../../configuration-reference.md#path-templates--placeholder-system)
 
 ## Where to Put Values
 
@@ -53,24 +46,23 @@ On this page that bites on `ProjectTerminals`, `RepositoryGroups` - those keys a
 
 1. Set `ProjectTerminals`
 2. Set `RepositoryGroups`
-3. Set `Universal`
-4. Reload and confirm the merge landed
+3. Set `Universal.GitHub`
+4. Set `PathTemplates.Projects`
+5. Reload and confirm the merge landed
 
 ## Step 1: Set `ProjectTerminals`
 
-Which Windows Terminal tabs `Open-ProjectTerminals` creates for a project, and with what titles and starting directories. Tabs are created with `--title --suppressApplicationTitle`, so their titles are stable.
+The project lookup in the default mode. `BasePath` is dot-notation into the machine-specific paths, and `Paths` names the subpath keys under it that are returned.
 
 ```powershell
 ProjectTerminals = @(
-    @{ Project = "MyProject"; Tabs = @(
-        @{ Title = "MyProject"; Path = "{Dev}\MyProject" }
-    )}
+    @{ Name = "MyProject"; BasePath = "Projects.MyProject"; Paths = @("ROOT", "API") }
 )
 ```
 
 ## Step 2: Set `RepositoryGroups`
 
-The repository groups `Update-Repositories` walks and `Initialize-Repository` can clone into. Group name to an array of repository entries. `UrlPath` and `LocalPath` are dot-notation paths, not literal values - resolving them is exactly what `Resolve-ProjectPath -ForRepository` does.
+The repository lookup with `-ForRepository`. `UrlPath` and `LocalPath` are dot-notation paths, not literal values - resolving them is exactly what `Resolve-ProjectPath -ForRepository` does.
 
 ```powershell
 RepositoryGroups = @(
@@ -81,24 +73,33 @@ RepositoryGroups = @(
 )
 ```
 
-## Step 3: Set `Universal`
+## Step 3: Set `Universal.GitHub`
 
-Machine-independent constants: executable paths (`FirefoxExe`, `DockerExe`, `DbeaverExe`, ...), the `Browsers` map, `DefaultBrowser`, shared URLs, the `ProcessCleanup` lists, and `Desktop` (auto-resolved at load). Expanded in place by `Load-PathConfiguration`, so placeholders work here too.
+`Base` plus the value a `UrlPath` resolves to is the returned `RepositoryUrl`. A leading `Universal.GitHub.` in `UrlPath` is optional - it is stripped before the walk.
 
 ```powershell
 Universal = @{
-    DefaultBrowser = "Firefox"
-    Browsers = @{
-        Vivaldi = @{
-            Exe          = "{User}\AppData\Local\Vivaldi\Application\vivaldi.exe"
-            PrivateArg   = "--incognito"
-            NewWindowArg = "--new-window"
-        }
+    GitHub = @{
+        Base    = "https://github.com"
+        Private = @{ MyRepo = "/YourUsername/MyRepo.git" }
     }
 }
 ```
 
-## Step 4: Reload and confirm the merge landed
+## Step 4: Set `PathTemplates.Projects`
+
+What `BasePath` and `LocalPath` resolve into. Path keys are matched case-insensitively, so `ROOT` in `Paths` reads `Root` here.
+
+```powershell
+PathTemplates = @{
+    Projects = @{
+        MyProject = @{ Root = "{Dev}\MyProject"; Api = "{Dev}\MyProject\src\Api" }
+        MyRepo    = @{ Root = "{Dev}\MyRepo" }
+    }
+}
+```
+
+## Step 5: Reload and confirm the merge landed
 
 Reload the profile, then read the merged value back. `$global:Configuration` after a reload is the ground truth - if what you set is not there, the local file did not parse or the key is nested one level away from where you put it.
 
@@ -115,8 +116,10 @@ Read-only checks. None of these change anything.
 Reload-PowerShellProfile
 $global:Configuration.ProjectTerminals
 $global:Configuration.RepositoryGroups
-$global:Configuration.Universal
+$global:Configuration.Universal.GitHub
+$global:MachineSpecificPaths.Projects
 Resolve-ProjectPath -ProjectName "MyProject"
+Resolve-ProjectPath -ProjectName "MyRepo" -ForRepository
 ```
 
 If a value reads back as empty, the two usual causes are a parse error in `Configuration.local.psd1` (run `Test-ConfigurationSchema`) and a key placed at the wrong nesting level.
@@ -129,9 +132,7 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 # Configuration.local.psd1
 @{
     ProjectTerminals = @(
-        @{ Project = "MyProject"; Tabs = @(
-            @{ Title = "MyProject"; Path = "{Dev}\MyProject" }
-        )}
+        @{ Name = "MyProject"; BasePath = "Projects.MyProject"; Paths = @("ROOT", "API") }
     )
     RepositoryGroups = @(
         @{ Personal = @(
@@ -140,13 +141,15 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
         }
     )
     Universal = @{
-        DefaultBrowser = "Firefox"
-        Browsers = @{
-            Vivaldi = @{
-                Exe          = "{User}\AppData\Local\Vivaldi\Application\vivaldi.exe"
-                PrivateArg   = "--incognito"
-                NewWindowArg = "--new-window"
-            }
+        GitHub = @{
+            Base    = "https://github.com"
+            Private = @{ MyRepo = "/YourUsername/MyRepo.git" }
+        }
+    }
+    PathTemplates = @{
+        Projects = @{
+            MyProject = @{ Root = "{Dev}\MyProject"; Api = "{Dev}\MyProject\src\Api" }
+            MyRepo    = @{ Root = "{Dev}\MyRepo" }
         }
     }
 }

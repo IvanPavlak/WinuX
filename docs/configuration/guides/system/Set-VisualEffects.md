@@ -9,7 +9,7 @@ Applies the Performance Options "Visual Effects" settings (System Properties > P
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`VisualEffects`](../../configuration-reference.md#visual-effects) | hashtable of setting name to value | `@{}` (empty) | Windows visual-effect settings `Set-VisualEffects` writes. Ships empty. |
+| [`VisualEffects`](../../configuration-reference.md#visual-effects) | hashtable of effect name to boolean | `@{}` (every key commented out) | The Performance Options "Visual Effects" checkboxes `Set-VisualEffects` sets - one key per checkbox (the 17 names are listed in the [module reference](../../../modules/system.md#set-visualeffects)), `$true` = on, `$false` = off. Unknown keys are skipped with a warning. Ships empty. |
 
 ## Decisions
 
@@ -32,11 +32,11 @@ All of it goes in `Configuration.local.psd1`, at the repository's `Windows/Power
 
 ## Step 1: Set `VisualEffects`
 
-Windows visual-effect settings `Set-VisualEffects` writes. Ships empty.
+The Performance Options "Visual Effects" checkboxes `Set-VisualEffects` sets, one key per checkbox. Ships empty.
 
 ```powershell
 VisualEffects = @{
-    Animations = $false
+    AnimationsInTheTaskbar = $false
 }
 ```
 
@@ -69,7 +69,7 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 # Configuration.local.psd1
 @{
     VisualEffects = @{
-        Animations = $false
+        AnimationsInTheTaskbar = $false
     }
 }
 ```

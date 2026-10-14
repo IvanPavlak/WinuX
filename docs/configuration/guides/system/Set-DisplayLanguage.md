@@ -9,18 +9,18 @@ Sets the Windows display language.
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`DefaultDisplayLanguage`](../../configuration-reference.md#locale--language) | string | empty string | The Windows display language `Set-DisplayLanguage` applies when called with no argument. Ships empty, so the function no-ops until you set it. |
+| [`DefaultDisplayLanguage`](../../configuration-reference.md#locale--language) | string | empty string | The `DisplayLanguages` key that pressing Enter selects in the menu `Set-DisplayLanguage` shows when called with no argument, and the one `Bootstrap` passes as `-Language`. Ships empty, so Enter selects nothing usable - pick from the menu or pass `-Language`. |
 | [`DisplayLanguages`](../../configuration-reference.md#locale--language) | hashtable of friendly name to language tag | `@{}` (empty) | The display languages `Set-DisplayLanguage` can install and select. |
 
 ## Decisions
 
 1. Which Windows display language should be the default?
     - Options: A key from your `DisplayLanguages` map.
-    - Default: Empty - `Set-DisplayLanguage` reports that nothing is configured and returns.
+    - Default: Empty - the menu has no Enter default, so a language must be picked or passed with `-Language`.
     - More detail: [`DefaultDisplayLanguage`](../../configuration-reference.md#locale--language)
 2. Which display languages should be available?
     - Options: Friendly name to Windows language tag, e.g. `English = "en-US"`.
-    - Default: Empty - `Set-DisplayLanguage` has nothing to choose from.
+    - Default: Empty - `Set-DisplayLanguage` reports that nothing is configured and returns.
     - More detail: [`DisplayLanguages`](../../configuration-reference.md#locale--language)
 
 ## Where to Put Values
@@ -38,7 +38,7 @@ All of it goes in `Configuration.local.psd1`, at the repository's `Windows/Power
 
 ## Step 1: Set `DefaultDisplayLanguage`
 
-The Windows display language `Set-DisplayLanguage` applies when called with no argument. Ships empty, so the function no-ops until you set it.
+The `DisplayLanguages` key that pressing Enter selects in the menu `Set-DisplayLanguage` shows when called with no argument. Ships empty, so Enter selects nothing usable - pick from the menu or pass `-Language`.
 
 ```powershell
 DefaultDisplayLanguage = "English"

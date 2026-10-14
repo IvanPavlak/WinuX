@@ -31,7 +31,9 @@ function Snap-AllWindows {
 		positioning a later sibling of a multi-window process can silently displace an
 		already-snapped window.
 
-		When using -All switch, snaps all visible windows without requiring prior positioning.
+		When using -All switch, snaps all visible windows without requiring prior positioning:
+		each window is forced foreground and sent Win+Up once, with no verification and no
+		shift-drag fallback.
 		In workspace mode, failed keyboard/shift-drag snap retries are returned to
 		Set-WorkspaceWindowLayout so the workspace command can be rerun.
 
@@ -60,8 +62,11 @@ function Snap-AllWindows {
 		Wait-WindowRect instead of fixed delays, so this parameter has no effect there.
 	.PARAMETER DesktopOffset
 		Virtual desktop offset, so alongside workspaces target the correct desktop. Default is 0.
+		Applies to the positioned-windows pass only (it is added when each tracked desktop number
+		is converted through ConvertTo-InternalDesktopIndex); -All ignores it.
 	.PARAMETER DesktopCount
-		Number of desktops to process. Default is 0.
+		Number of desktops to process. Default is 0. Currently unused by the function body:
+		Set-WorkspaceWindowLayout and Invoke-ReadyDesktopPass still pass it, but it has no effect.
 	.PARAMETER DesktopNumbers
 		Restricts the positioned-windows pass to the tracked windows on these desktops (the
 		1-based numbers Add-PositionedWindow recorded, offset already folded in). Used by

@@ -96,9 +96,9 @@ Paths to installed applications used by `Open-*` functions.
 
 **Keys:**
 
-- `FirefoxExe`, `LeagueOfLegendsExe`, `SteamExe`, `RiseupVpnExe`, `DbeaverExe`, `TeamViewerExe`, `FoundryVTTExe`, `NotepadPlusPlusExe`, `VisualStudio2026Exe`, `VirtualBoxExe`, `DockerExe`
+- `FirefoxExe`, `LeagueOfLegendsExe`, `SteamExe`, `RiseupVpnExe`, `DbeaverExe`, `TeamViewerExe`, `FoundryVTTExe`, `NotepadPlusPlusExe`, `VisualStudio2026Exe`, `VirtualBoxExe`, `DockerExe`, `OutlookLauncherExe` (what `Open-Outlook` starts the Outlook app through; ships `C:\Windows\explorer.exe`)
 
-**Consumer functions:** `Open-DBeaver`, `Open-Discord`, `Open-Obsidian`, `Open-Acrobat`, `Open-LeagueOfLegends`, etc.
+**Consumer functions:** `Open-DBeaver`, `Open-Docker`, `Open-FoundryVTT`, `Open-LeagueOfLegends`, `Open-NotepadPlusPlus`, `Open-Outlook`, `Open-RiseupVPN`, `Open-Steam`, `Open-TeamViewer`, `Open-VirtualBox`, `Open-VisualStudio` (each through `Start-Application -ConfigKey`). `Open-Discord`, `Open-Obsidian` and `Open-Acrobat` read no `*Exe` key, and nothing reads `FirefoxExe` (browsers resolve through `Browsers`).
 
 The base ships the personal executable paths (everything except the framework's own tools) empty;
 each `Open-*` consumer warns and no-ops until you set its path in `Configuration.local.psd1`.
@@ -115,6 +115,8 @@ Common system paths that do not vary by machine.
 - `IconCacheDb`, `IconCacheFolder` - Windows Explorer icon cache
 - `OhMyPoshThemeFile` - Oh-My-Posh theme location
 - `WhatsAppLocalStoragePath` - WhatsApp cache directory
+- `TrainingFile` - The Word document `Open-Training` opens from `PathTemplates.TrainingDirectory`
+  (ships empty - set both in `Configuration.local.psd1` before using `Open-Training`)
 - `FastFetchImageLogo` - **Opt-in.** An image fastfetch renders instead of its text logo, in the
   terminals that can display one (WezTerm, Windows Terminal). Ships `$null`, which keeps the text
   logo everywhere. Takes either a **string** (one image for every machine) or a **hashtable keyed
@@ -126,7 +128,8 @@ Common system paths that do not vary by machine.
   [Get-FastfetchLogoArgument](guides/system/Get-FastfetchLogoArgument.md).
 
 **Consumer functions:** `Get-FastfetchLogoArgument` (`FastFetchImageLogo`), `Initialize-OhMyPosh`,
-`Clear-WhatsAppLocalStorage`, `Rebuild-IconCache`
+`Clear-WhatsAppLocalStorage`, `Rebuild-IconCache`, `Configure-NerdFont` (`Fonts`), `Configure-Taskbar`
+(`TaskbarPinFolder`), `Initialize-WSLEnvironment` (`OhMyPoshThemeFile`)
 
 ### Process Cleanup
 
@@ -281,6 +284,11 @@ PathTemplates = @{
 ```
 
 **Consumer functions:** `Expand-ConfigPaths`, `Expand-Hashtable`, all path-dependent functions
+
+`PathTemplates.TaskbarLayoutFile` ships filled because it is not personal: it is the
+machine-local destination of the generated taskbar layout XML (`C:\ProgramData\provisioning\taskbar_layout.xml`),
+which `Configure-Taskbar` and `Unpin-TaskbarApps` write and the Explorer `StartLayoutFile` policy
+points at. It is never versioned in the repository.
 
 **Deprecated:** `PathTemplates.ObsidianStartupScript` - `Open-Obsidian` launched Obsidian through this Python script until 0.1.61 and now starts it detached through WMI (`Start-ObsidianDetached`). The key still parses and is ignored; remove it from your local file at leisure. See [Open-Obsidian](guides/application/Open-Obsidian.md#legacy-startup-script).
 
@@ -544,7 +552,7 @@ Defines hierarchical URL groups for the `Open-Browser` function. Supports three 
     )
     ```
 
-**Consumer functions:** `Open-Browser`, `Collect-BrowserUrls`, `Test-BrowserGroupAlreadyOpen`
+**Consumer functions:** `Open-Browser`, `Test-BrowserGroupAlreadyOpen`, `Resolve-SwaggerBrowserGroup`, `Get-SwaggerCloseTitlePatterns`
 
 **Important:** Names must be unique across all groups (used by `Test-BrowserGroupAlreadyOpen` for idempotency checking).
 
@@ -874,6 +882,9 @@ Machine and theme-specific wallpaper configurations.
 
 - `WallpaperDarkSettings.{MachineType}` → Dark theme wallpaper paths (per monitor)
 - `WallpaperLightSettings.{MachineType}` → Light theme wallpaper paths (per monitor)
+- `WallpaperStyles` → Maps each `Style` name an entry may use (`Fill`, `Fit`, `Stretch`, `Tile`,
+  `Center`, `Span`) to the registry `WallpaperStyle` value `Set-Wallpaper` writes. Ships complete;
+  there is nothing to change unless you add a style Windows supports under a new name.
 
 **Format:** Per-monitor array (order matters for multi-monitor setups)
 
@@ -964,7 +975,7 @@ SystemTheme = @{
 
 - `Locales` - [Ordered section](#ordered-sections): `@( @{ Croatian = @{ Code = "hr-HR"; GeoId = 108 } } ... )`, offered in the order written
 - `DisplayLanguages` - Hashtable keyed by language name → language code
-- `DefaultLocale` / `DefaultDisplayLanguage` - Select which named entry Bootstrap applies
+- `DefaultLocale` / `DefaultDisplayLanguage` - Select which named entry Bootstrap applies (also the Enter default in the interactive menu)
 
 **Consumer functions:** `Set-Locale`, `Set-DisplayLanguage`
 
@@ -1021,7 +1032,7 @@ hardcoded defaults).
 Pinned apps, applied by `Configure-Taskbar`. A flat, ordered array (entry order sets pin order);
 each row is machine-scoped through its `Machine` field.
 
-**Key:** `TaskbarConfiguration` → Array of `@{ Name; Type; Value; Machine }` rows, where `Type`
+**Key:** `TaskbarConfiguration` → Array of `@{ Name; Type; Value; Machine }` rows (a `Path` row may add `Aumid`, see below), where `Type`
 is `AUMID` or `Path` and `Machine` is a scope string (`All`, `Test`, `PC/Laptop`, ...) matched
 against the current machine type by `Test-MachineTypeScope` - the same gate the app CSVs use. A
 row without `Machine` (or a blank one) defaults to `All`, so one list can drive every machine.
@@ -1238,7 +1249,8 @@ Anything other than the three valid values is reported as unknown rather than si
   personal tools in `Configuration.local.psd1`. Steps that do not resolve are skipped with a
   warning.
 - `ExternalScripts` / `LocalScripts` - URLs and vendored script paths used by optional steps
-  (Microsoft Activation Scripts, Win11Debloat). The steps themselves are enabled via
+  (Microsoft Activation Scripts, Win11Debloat; the `MicrosoftActivationScripts` URL entry is not
+  read today, that step uses its built-in URL). The steps themselves are enabled via
   `Steps.MicrosoftActivationScripts` / `Steps.Win11Debloat` (both off by default).
 - `DataFiles` - Repo-relative paths to the three package CSVs and the Conda environments folder.
 
@@ -1479,8 +1491,19 @@ Sections not detailed above, with their real shapes and consumers:
 | `ExplorerOptions` | array of registry entries (ships empty - Win11Debloat covers the defaults) | File Explorer tweaks applied via the registry | `Set-ExplorerOptions` |
 | `AutoEnvironmentVariables` | name → path (placeholders allowed) | User environment variables written by `Set-EnvironmentVariables -Auto` (ships empty - no-ops until set in `Configuration.local.psd1`) | `Set-EnvironmentVariables` |
 | `AutoPathAdditions` | array of directories | Directories persisted onto the User `PATH`, e.g. Oh My Posh install locations (ships empty - no-ops until set in `Configuration.local.psd1`) | `Set-EnvironmentVariables` |
-| `Logging` | `@{ DefaultLevel; Colors; ... }` | Console verbosity at session start (`Quiet`/`Normal`/`Verbose`), per-level console colors (plus `Info`, Blue, a color that belongs to no level, for `-Style Info` and `Write-LogSegments`), file-logging settings, and automatic idle-time log maintenance | Logging module (`Write-Log*`, `Set-LogLevel`, `Invoke-LogMaintenance`) |
-| `BrowserGroupMatching` | `@{ BrowserProcessNames; KeywordExtraction; ... }` | Maps browser labels to process names and tunes URL-keyword extraction for detecting already-open browser groups | `Test-BrowserGroupAlreadyOpen`, `Collect-BrowserUrls` |
+| `Logging` | `@{ DefaultLevel; Colors; FileLogging; Maintenance }` | Console verbosity at session start (`Quiet`/`Normal`/`Verbose`), per-level console colors (plus `Info`, Blue, a color that belongs to no level, for `-Style Info` and `Write-LogSegments`), file-logging settings, and automatic idle-time log maintenance | Logging module (`Write-Log*`, `Set-LogLevel`, `Invoke-LogMaintenance`) |
+| `BrowserGroupMatching` | `@{ BrowserProcessNames; KeywordExtraction; Matching; ExactTitle; NegativeMatching }` | Maps browser labels to process names and tunes URL-keyword extraction for detecting already-open browser groups; `ExactTitle` holds the exact-title rules for provider homepages and `NegativeMatching` the shared-provider services excluded when checking a bare provider homepage | `Test-BrowserGroupAlreadyOpen`, `Resolve-SwaggerBrowserGroup` |
+| `LaptopChassisTypes` | array of WMI chassis type codes | The chassis types that count as a laptop (ships `@(8, 9, 10, 11, 14, 30, 31, 32)`), which decides the power plan `Test-PowerPlan` expects | `Test-PowerPlan` |
+| `CampaignResources` | [ordered section](#ordered-sections): `@( @{ <Campaign> = @{ Pdf; Browser } } ... )` | Per-campaign rulebook PDF (an `AcrobatPdfGroups` name) and resource browser group (a `BrowserGroups` name) | `Open-DnD` |
+| `RunProject` | `@{ Steps = @{ Docker = <bool or per-machine-type hashtable> } }` | Optional `Run-Project` steps, resolved like `KillAll.Steps`; `Docker` (on by default) starts the Docker stacks a project mapping declares through `DatabaseProviders` or `UsesDocker` | `Run-Project` (via `Resolve-RunProjectSteps`) |
+| `DockerCleanupActions` | array of `@{ Name; Command; ConfirmationMessage }` | The `Docker-Cleanup` menu entries; an entry with a `ConfirmationMessage` runs only after an explicit "Yes". The array replaces wholesale on merge | `Docker-Cleanup` |
+| `DotnetProjectsSearchPath` | path string (placeholders allowed) | Where `Determine-DotnetDependencies` searches for .NET projects (ships `"{Dev}"`). The function currently looks the key up under the expanded `PathTemplates` instead of the top level, so the shipped value is not picked up and the search falls back to `{User}\Development`; until that is fixed, set `PathTemplates.DotnetProjectsSearchPath` in your override | `Determine-DotnetDependencies` |
+| `DotnetEFVersion` | version string | The `dotnet-ef` version Bootstrap installs: empty (the shipped value) installs the latest, `"8.*"` or `"8.0.11"` pins one | `Install-DotnetEf` |
+| `PostgreSqlPasswords` | `@{ DefaultOrCurrent; New }` | Current and new PostgreSQL password (ships empty - `Configure-PostgreSqlPasswords` does nothing until set in `Configuration.local.psd1`, and Bootstrap no longer calls it). Never put a real password in the tracked base file | `Configure-PostgreSqlPasswords` |
+| `SimpleLayoutWorkspaces` | array of workspace names | Workspaces handled as simple layouts: `Fullscreen` places every window in its monitor's fullscreen zone, `Empty` places none; neither tracks positioned windows (ships `@("Fullscreen", "Empty")`) | `Set-WorkspaceWindowLayout` (reads), `Add-WindowLayout -Simple` (writes) |
+| `FunctionDiscrepancyExclusions` | array of function names | Names `List-Functions -ListDiscrepancies` never reports (ships `Install-Bootstrap`, `fastfetch`, `Get-PoshStackCount`) | `List-Functions` |
+| `ListFunctionsColors`, `ShowFunctionDetailsColors` | `@{ Border; DiscrepancyError; DiscrepancySuccess }`, `@{ FunctionName; Description; Parameters }` | Console colors of the two function browsers; see [Console Colors](#console-colors) | `List-Functions`, `Show-FunctionDetails` |
+| `DefaultTranslateLanguages` | `@{ OutputLanguage }` | The language `Invoke-GoogleTranslate` (`translate`) translates into when `-OutputLanguage` is not given (ships `"English"`) | `Invoke-GoogleTranslate` |
 
 ---
 
@@ -1692,7 +1715,6 @@ Colors used by various output functions.
 
 - `ListFunctionsColors` - Colors for `List-Functions`
 - `ShowFunctionDetailsColors` - Colors for `Show-FunctionDetails`
-- `DefaultTranslateLanguages` - Default languages for `Invoke-GoogleTranslate`
 
 ### Loading Spinners
 
@@ -1700,8 +1722,8 @@ Animation styles for long-running operations.
 
 **Keys:**
 
-- `LoadingSpinners` → Array of spinner style definitions
-- `DefaultSpinner` → Default spinner style name
+- `LoadingSpinners` → Hashtable of style name → `@{ Symbols = @(...); Delay = <ms> }`, deep-merged with the local override
+- `DefaultSpinner` → Style name used only when `Loading-Spinner -Style ""` is passed (the parameter defaults to `Dots`)
 
 **Consumer function:** `Loading-Spinner`
 
@@ -1800,13 +1822,13 @@ ResizeWindowsPercent = @{
 
 A plain number, not a keyed section. The fraction of a target zone trimmed off **each side** before a window is handed to FancyZones for snapping, so the snap target stays unambiguous.
 
-Valid range is `0.0`-`0.49` (two insets of `0.5` would leave a zero-width window); an invalid or missing value falls back to the built-in `0.05`. This is the single source of truth for all five placement paths - previously the same `0.05` was hardcoded in each of them.
+Valid range is `0.0`-`0.49` (two insets of `0.5` would leave a zero-width window); an invalid or missing value falls back to the built-in `0.05`. This is the single source of truth for all seven placement paths - previously the same `0.05` was hardcoded in each of them.
 
 ```powershell
 SnapInsetPercent = 0.05
 ```
 
-**Consumer functions:** `Get-WindowInsetPercent`, read by `Resize-Windows`, `Get-InsetWindowBounds`, `Resize-PositionedWindows`, `Set-WindowLayouts`, `Snap-AllWindows`
+**Consumer functions:** `Get-WindowInsetPercent`, read by `Resize-Windows`, `Get-InsetWindowBounds`, `Resize-PositionedWindows`, `Invoke-MultiZoneWindowSnap`, `Invoke-SingleZoneWindowSnap`, `Set-WindowLayouts`, `Snap-AllWindows`
 
 ---
 

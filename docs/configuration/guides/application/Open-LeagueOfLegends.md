@@ -9,22 +9,14 @@ Opens the League of Legends client via `Start-Application`.
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`Universal`](../../configuration-reference.md#universal-constants) | hashtable, 26 keys | hashtable, 26 keys | Machine-independent constants: executable paths (`FirefoxExe`, `DockerExe`, `DbeaverExe`, ...), the `Browsers` map, `DefaultBrowser`, shared URLs, the `ProcessCleanup` lists, and `Desktop` (auto-resolved at load). Expanded in place by `Load-PathConfiguration`, so placeholders work here too. |
+| [`Universal.LeagueOfLegendsExe`](../../configuration-reference.md#application-executables) | string (path) | `""` (empty) | What `Open-LeagueOfLegends` starts (path validation skipped, so a Start-menu shortcut works too). Empty, the launch fails with an error. Placeholders such as `{User}` expand. |
 
 ## Decisions
 
-1. Which browser should be the default?
-    - Options: A key from `Universal.Browsers`: `Firefox`, `Chrome`, `Edge`, `Brave`, `Tor`. Ships empty, so `Open-Browser` asks or uses the system default.
-    - Default: Empty.
-    - More detail: [`Universal`](../../configuration-reference.md#universal-constants)
-2. Are any of the shipped executable paths wrong on this machine?
-    - Options: Override the individual `Universal.<App>Exe` value. Absolute paths, or placeholder paths such as `{User}\AppData\Local\...`.
-    - Default: The shipped paths, which assume default install locations.
-    - More detail: [`Universal`](../../configuration-reference.md#universal-constants)
-3. Do you use a browser the base `Browsers` map does not list?
-    - Options: Add an entry with `Exe`, `PrivateArg` and `NewWindowArg`. Because hashtables merge per key, adding one browser does not remove the others.
-    - Default: The shipped five.
-    - More detail: [`Universal`](../../configuration-reference.md#universal-constants)
+1. Where is the League of Legends client on this machine?
+    - Options: The client executable, or its Start-menu entry, e.g. `C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Riot Games\League of Legends`.
+    - Default: Empty - `Open-LeagueOfLegends` reports an error until it is set.
+    - More detail: [`Universal`](../../configuration-reference.md#application-executables)
 
 ## Where to Put Values
 
@@ -40,18 +32,11 @@ All of it goes in `Configuration.local.psd1`, at the repository's `Windows/Power
 
 ## Step 1: Set `Universal`
 
-Machine-independent constants: executable paths (`FirefoxExe`, `DockerExe`, `DbeaverExe`, ...), the `Browsers` map, `DefaultBrowser`, shared URLs, the `ProcessCleanup` lists, and `Desktop` (auto-resolved at load). Expanded in place by `Load-PathConfiguration`, so placeholders work here too.
+The client to start. `Universal` is a hashtable and deep-merges, so setting only this key keeps the rest of `Universal`.
 
 ```powershell
 Universal = @{
-    DefaultBrowser = "Firefox"
-    Browsers = @{
-        Vivaldi = @{
-            Exe          = "{User}\AppData\Local\Vivaldi\Application\vivaldi.exe"
-            PrivateArg   = "--incognito"
-            NewWindowArg = "--new-window"
-        }
-    }
+    LeagueOfLegendsExe = "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Riot Games\League of Legends"
 }
 ```
 
@@ -70,7 +55,6 @@ Read-only checks. None of these change anything.
 
 ```powershell
 Reload-PowerShellProfile
-$global:Configuration.Universal
 $global:Configuration.Universal.LeagueOfLegendsExe
 ```
 
@@ -84,14 +68,7 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 # Configuration.local.psd1
 @{
     Universal = @{
-        DefaultBrowser = "Firefox"
-        Browsers = @{
-            Vivaldi = @{
-                Exe          = "{User}\AppData\Local\Vivaldi\Application\vivaldi.exe"
-                PrivateArg   = "--incognito"
-                NewWindowArg = "--new-window"
-            }
-        }
+        LeagueOfLegendsExe = "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Riot Games\League of Legends"
     }
 }
 ```
@@ -100,8 +77,6 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 
 - [`Open-LeagueOfLegends` in the Application module reference](../../../modules/application.md#open-leagueoflegends) - parameters, usage and behaviour
 - [Application configuration guides](README.md) - every guide for this module
-- [Add Browser Group](add-browser-group.md) - browser groups, nesting, unique names, search and per-browser selection
-- [`Open-Browser`](Open-Browser.md) - reads the same configuration
 - [`Open-NotepadPlusPlus`](Open-NotepadPlusPlus.md) - reads the same configuration
 - [`Open-Steam`](Open-Steam.md) - reads the same configuration
 - [`Open-VisualStudio`](Open-VisualStudio.md) - reads the same configuration

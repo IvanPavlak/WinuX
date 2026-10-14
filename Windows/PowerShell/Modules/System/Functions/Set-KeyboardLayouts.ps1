@@ -5,9 +5,14 @@ function Set-KeyboardLayouts {
 
 	.DESCRIPTION
 		Reads layout sets from `KeyboardLayoutSets` in Configuration.psd1 (e.g. "Gaming", "Development").
-		Each set is a named collection of keyboard layout codes to install.
+		Each set is a named, ordered list of layout names, each mapped to its keyboard layout id
+		through `KeyboardLayouts`.
 		When called with a layout set name, installs all layouts in that set.
-		When called without arguments, shows an interactive menu of available layout sets.
+		When called without arguments, shows an interactive menu of available layout sets; Enter
+		selects `DefaultKeyboardLayoutSet`.
+		Skips when the set is already active unless -Override is given. Applies the layouts through
+		Set-WinUserLanguageList (the first layout's language becomes primary, input methods of other
+		languages are removed) and rewrites HKCU:\Keyboard Layout\Preload for legacy applications.
 
 	.PARAMETER LayoutSet
 		Name of the layout set to install (e.g. "Gaming"). Omit to show the interactive menu.

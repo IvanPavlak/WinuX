@@ -25,6 +25,7 @@ function Get-ChassisType {
 
 	.OUTPUTS
 		[int[]] - the chassis type codes; empty when neither the cache nor the hardware answered.
+		A CIM query that fails outright throws.
 
 	.EXAMPLE
 		Get-ChassisType

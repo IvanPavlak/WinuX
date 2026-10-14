@@ -18,7 +18,7 @@ function Update-DirectoryNames {
 		Updates all dated directories in the current location.
 
 	.EXAMPLE
-		Update-DirectoryNames -Path "C:\\My Folders" -WhatIf
+		Update-DirectoryNames -Path "C:\My Folders" -WhatIf
 		Shows what dated directories would be updated without making changes.
 	#>
 	param (

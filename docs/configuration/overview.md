@@ -39,6 +39,10 @@ The configuration uses a hierarchical structure designed to eliminate duplicatio
 
 ## Complete Section Reference
 
+The tables below map the main sections to the functions that read them. Every key, including the
+AI, logging, backup, terminal-greeting and window-sizing sections not listed here, is documented in
+the [Configuration Reference](configuration-reference.md).
+
 ### System Configuration
 
 | Section                    | Purpose                          | Consumer Function               |
@@ -52,13 +56,13 @@ The configuration uses a hierarchical structure designed to eliminate duplicatio
 | `VisualEffects`            | Visual effects (Performance tab) | `Set-VisualEffects`             |
 | `AutoEnvironmentVariables` | Environment variables            | `Set-EnvironmentVariables`      |
 | `PostgreSqlPasswords`      | Database credentials             | `Configure-PostgreSqlPasswords` |
-| `NuGetConfig`              | NuGet source/destination         | `Configure-NuGetConfig`         |
+| `PathTemplates.NuGetConfig` | NuGet source/destination        | `Configure-NuGetConfig`         |
 | `Themes`                   | Dark/Light per machine           | `Set-SystemTheme`               |
 | `PowerButtonActions`       | Button & lid actions per machine | `Set-PowerButtonActions`        |
 | `WallpaperStyles`          | Fill, Fit, Stretch, etc.         | `Set-Wallpaper`                 |
 | `WallpaperDarkSettings`    | Dark wallpaper per machine       | `Set-Wallpaper`                 |
 | `WallpaperLightSettings`   | Light wallpaper per machine      | `Set-Wallpaper`                 |
-| `TaskbarConfiguration*`    | Pinned apps configuration        | `Configure-Taskbar`             |
+| `TaskbarConfiguration`     | Pinned apps configuration        | `Configure-Taskbar`, `Unpin-TaskbarApps`, `Clear-TaskbarPins` |
 | `PowerPlans`               | Power plan per machine           | `Set-PowerPlan`                 |
 | `SpecialFolders`           | Special folder redirections      | `Set-SpecialFolders`            |
 | `DefaultWSLDistribution`   | Default WSL distribution         | `Configure-WSL`                 |
@@ -70,9 +74,8 @@ The configuration uses a hierarchical structure designed to eliminate duplicatio
 | --------------------- | -------------------------- | ---------------------------------------------- |
 | `BasePaths`           | Dev/User paths per machine | `Expand-ConfigPaths`                           |
 | `PathTemplates`       | All templated paths        | All path-dependent functions                   |
-| `SymbolicLinks`       | Source → Target mappings   | `SymbolicLinkMaker`                            |
+| `PathTemplates.SymbolicLinks` | Source → Target mappings | `SymbolicLinkMaker`                     |
 | `RepositoryGroups`    | Git repos grouped by type  | `Update-Repositories`, `Initialize-Repository` |
-| `MachinePathMappings` | Machine-to-path resolution | Path expansion functions                       |
 
 ### Project & Workflow Management
 
@@ -83,8 +86,8 @@ The configuration uses a hierarchical structure designed to eliminate duplicatio
 | `RunnableProjectMappings`  | Every runnable project and its per-path run commands (ordered - this is the menu) | `Run-Project`           |
 | `VisualStudioSolutions`    | VS solutions (name + path)      | `Open-VisualStudio`     |
 | `VSCodeProjects`           | VS Code projects (name + path)  | `Open-VSCode`           |
-| `DotnetProjectsSearchPath` | .NET project search paths       | `Run-Project`           |
-| `DotnetEFVersion`          | EF Core tools version           | `EfCoreMigrationWizard` |
+| `DotnetProjectsSearchPath` | .NET project search root (currently read as `PathTemplates.DotnetProjectsSearchPath`, see the reference) | `Determine-DotnetDependencies` |
+| `DotnetEFVersion`          | EF Core tools version           | `Install-DotnetEf`      |
 
 ### Workspace Management
 
@@ -106,16 +109,16 @@ The configuration uses a hierarchical structure designed to eliminate duplicatio
 | Section           | Purpose                     | Consumer Function                |
 | ----------------- | --------------------------- | -------------------------------- |
 | `PackageManagers` | Opted-in package managers   | `Resolve-PackageManagers`        |
-| `BootstrapConfig` | Log files, external scripts | `Bootstrap`, `Install-Bootstrap` |
+| `BootstrapConfig` | Step toggles, personal steps, repository scope, log files, external scripts | `Bootstrap` (via `Resolve-BootstrapSteps`, `Invoke-PersonalSteps`, `Resolve-RepositoryUpdateScope`) |
 
 ### Machine Type Detection
 
 | Section                 | Purpose                  | Consumer Function      |
 | ----------------------- | ------------------------ | ---------------------- |
-| `ValidMachineTypes`     | PC, Laptop, Work, Test   | `DetermineMachineType` |
+| `ValidMachineTypes`     | Allowed types (ships `Test`) | `DetermineMachineType`, `Test-MachineTypeScope` |
 | `HostnameToMachineType` | Hostname → type mapping  | `DetermineMachineType` |
 | `DefaultMachineType`    | Fallback machine type    | `DetermineMachineType` |
-| `LaptopChassisTypes`    | Chassis types for laptop | `DetermineMachineType` |
+| `LaptopChassisTypes`    | Chassis types for laptop | `Test-PowerPlan`       |
 
 ### UI & Visual Configuration
 
@@ -155,7 +158,7 @@ This triggers the following process:
 
 ```
 ┌────────────────────────────────────────────────────────────────┐
-│  1. Read Configuration.psd1                                    │
+│  1. Read Configuration.psd1 + merge Configuration.local.psd1   │
 ├────────────────────────────────────────────────────────────────┤
 │  2. Resolve machine type                                       │
 │     └─→ Hostname looked up in HostnameToMachineType            │

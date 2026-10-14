@@ -9,6 +9,12 @@ function Update-LayoutSectionHeaders {
 		Layout array based on the actual DesktopNumber, Monitor, and Layout type
 		values in the configuration. Layout files use 1-based indexing for DesktopNumber.
 
+		Entries are re-sorted by DesktopNumber, monitor order (Resolve-MonitorLabel), the zone's
+		index in ZoneNameMappings, then original position. A pair with no VirtualDesktopLayouts
+		entry is headed "Layout: Unknown". Only entries whose text carries both DesktopNumber = <n>
+		and a double-quoted Monitor = "..." are re-emitted; any other entry is dropped from the
+		rewritten array.
+
 		Only the base Layout array is rewritten. A ProjectOverrides block after it (project
 		variants of the layout, see Merge-LayoutProjectOverrides) is carried over verbatim.
 

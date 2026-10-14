@@ -4,9 +4,10 @@ function Open-Obsidian {
 		Opens Obsidian, optionally into a saved Obsidian workspace.
 
 	.DESCRIPTION
-		Launches Obsidian through the official Obsidian command line interface (`Obsidian.com`,
-		registered as `obsidian` on PATH from Settings > General > Advanced > Command line interface)
-		and, when a workspace is resolved, loads it with `obsidian vault=<Vault> workspace:load name=<Name>`.
+		Launches Obsidian detached from the shell (see below) and, when a workspace is resolved,
+		loads it through the official Obsidian command line interface (`Obsidian.com`, found on PATH
+		or beside Obsidian.exe by Get-ObsidianCliPath) with
+		`obsidian vault=<Vault> workspace:load name=<Name>`.
 		The CLI talks to the running instance, so with Obsidian already open the workspace is
 		switched in place - no second window. Without a workspace an already-running Obsidian is
 		left alone, as before.

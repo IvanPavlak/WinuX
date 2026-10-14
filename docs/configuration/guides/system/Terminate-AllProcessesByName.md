@@ -9,22 +9,14 @@ Forcefully terminates every process named in the `Universal.TerminateProcessName
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`Universal`](../../configuration-reference.md#universal-constants) | hashtable, 26 keys | hashtable, 26 keys | Machine-independent constants: executable paths (`FirefoxExe`, `DockerExe`, `DbeaverExe`, ...), the `Browsers` map, `DefaultBrowser`, shared URLs, the `ProcessCleanup` lists, and `Desktop` (auto-resolved at load). Expanded in place by `Load-PathConfiguration`, so placeholders work here too. |
+| [`Universal.TerminateProcessNames`](../../configuration-reference.md#process-cleanup) | array of process names | `@("Code")` | The processes force-terminated (`Stop-Process -Force`) by name, every running instance. A name that is not running is ignored; an empty list makes the function warn and terminate nothing. |
 
 ## Decisions
 
-1. Which browser should be the default?
-    - Options: A key from `Universal.Browsers`: `Firefox`, `Chrome`, `Edge`, `Brave`, `Tor`. Ships empty, so `Open-Browser` asks or uses the system default.
-    - Default: Empty.
-    - More detail: [`Universal`](../../configuration-reference.md#universal-constants)
-2. Are any of the shipped executable paths wrong on this machine?
-    - Options: Override the individual `Universal.<App>Exe` value. Absolute paths, or placeholder paths such as `{User}\AppData\Local\...`.
-    - Default: The shipped paths, which assume default install locations.
-    - More detail: [`Universal`](../../configuration-reference.md#universal-constants)
-3. Do you use a browser the base `Browsers` map does not list?
-    - Options: Add an entry with `Exe`, `PrivateArg` and `NewWindowArg`. Because hashtables merge per key, adding one browser does not remove the others.
-    - Default: The shipped five.
-    - More detail: [`Universal`](../../configuration-reference.md#universal-constants)
+1. Which processes should `Kill-All` force-terminate by name?
+    - Options: Process names as `Get-Process` reports them (no `.exe`), e.g. `"Code"`, `"Teams"`, `"Slack"`. Leave out anything with unsaved state you care about - there is no graceful close. Docker is handled by `DockerWizard` and does not belong here. The list is an array, so your local value is the whole list.
+    - Default: The shipped minimal example, `"Code"`.
+    - More detail: [`Universal.TerminateProcessNames`](../../configuration-reference.md#process-cleanup)
 
 ## Where to Put Values
 
@@ -35,23 +27,19 @@ All of it goes in `Configuration.local.psd1`, at the repository's `Windows/Power
 
 ## Steps Overview
 
-1. Set `Universal`
+1. Set `Universal.TerminateProcessNames`
 2. Reload and confirm the merge landed
 
-## Step 1: Set `Universal`
+## Step 1: Set `Universal.TerminateProcessNames`
 
-Machine-independent constants: executable paths (`FirefoxExe`, `DockerExe`, `DbeaverExe`, ...), the `Browsers` map, `DefaultBrowser`, shared URLs, the `ProcessCleanup` lists, and `Desktop` (auto-resolved at load). Expanded in place by `Load-PathConfiguration`, so placeholders work here too.
+`Universal` is a hashtable, so this key merges over the base; the array itself replaces the base list wholesale.
 
 ```powershell
 Universal = @{
-    DefaultBrowser = "Firefox"
-    Browsers = @{
-        Vivaldi = @{
-            Exe          = "{User}\AppData\Local\Vivaldi\Application\vivaldi.exe"
-            PrivateArg   = "--incognito"
-            NewWindowArg = "--new-window"
-        }
-    }
+    TerminateProcessNames = @(
+        "Code"
+        "Teams"
+    )
 }
 ```
 
@@ -61,7 +49,7 @@ Reload the profile, then read the merged value back. `$global:Configuration` aft
 
 ```powershell
 Reload-PowerShellProfile
-$global:Configuration.Universal
+$global:Configuration.Universal.TerminateProcessNames
 ```
 
 ## Verification
@@ -70,8 +58,8 @@ Read-only checks. None of these change anything.
 
 ```powershell
 Reload-PowerShellProfile
-$global:Configuration.Universal
-$global:Configuration.Universal.ProcessCleanup
+$global:Configuration.Universal.TerminateProcessNames
+Get-Process -Name $global:Configuration.Universal.TerminateProcessNames -ErrorAction SilentlyContinue
 ```
 
 If a value reads back as empty, the two usual causes are a parse error in `Configuration.local.psd1` (run `Test-ConfigurationSchema`) and a key placed at the wrong nesting level.
@@ -84,14 +72,10 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 # Configuration.local.psd1
 @{
     Universal = @{
-        DefaultBrowser = "Firefox"
-        Browsers = @{
-            Vivaldi = @{
-                Exe          = "{User}\AppData\Local\Vivaldi\Application\vivaldi.exe"
-                PrivateArg   = "--incognito"
-                NewWindowArg = "--new-window"
-            }
-        }
+        TerminateProcessNames = @(
+            "Code"
+            "Teams"
+        )
     }
 }
 ```
@@ -101,9 +85,6 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 - [`Terminate-AllProcessesByName` in the System module reference](../../../modules/system.md#terminate-allprocessesbyname) - parameters, usage and behaviour
 - [System configuration guides](README.md) - every guide for this module
 - [Add Symbolic Link](add-symbolic-link.md) - link shapes, placeholders and the WSL cases
-- [`Open-Browser`](../application/Open-Browser.md) - reads the same configuration
-- [`Open-LeagueOfLegends`](../application/Open-LeagueOfLegends.md) - reads the same configuration
-- [`Open-NotepadPlusPlus`](../application/Open-NotepadPlusPlus.md) - reads the same configuration
-- [`Open-Steam`](../application/Open-Steam.md) - reads the same configuration
+- [`Kill-All`](Kill-All.md) - the caller (its `NamedProcesses` step)
 - [WinuXConfigurator](../../winux-configurator.md) - have an AI assistant walk these decisions with you
 - [Configuration reference](../../configuration-reference.md) - every key, section by section

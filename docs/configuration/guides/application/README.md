@@ -11,30 +11,30 @@ The [Application module reference](../../../modules/application.md) is the autho
 
 | Function | Configuration keys | Guide |
 | -------- | ------------------ | ----- |
-| `Create-CondaEnvironments` | `BootstrapConfig` | [Create-CondaEnvironments](Create-CondaEnvironments.md) |
+| `Create-CondaEnvironments` | `BootstrapConfig.DataFiles.CondaEnvironments`, `PathTemplates.Projects.Self.Root`, `AutoEnvironmentVariables.Conda`, `BootstrapConfig.Steps` | [Create-CondaEnvironments](Create-CondaEnvironments.md) |
 | `Deploy-VSCodeProfiles` | `VSCodeProfiles`, `BootstrapConfig.Steps` | [Deploy-VSCodeProfiles](Deploy-VSCodeProfiles.md) |
 | `Export-VSCodeProfile` | `VSCodeProfiles` | [Export-VSCodeProfile](Export-VSCodeProfile.md) |
 | `Get-VSCodeProfileLocation` | `VSCodeProfiles.UserData` | [Get-VSCodeProfileLocation](Get-VSCodeProfileLocation.md) |
-| `Get-VSCodeWorkspaceNames` | `PathTemplates.Projects.Self` | [Get-VSCodeWorkspaceNames](Get-VSCodeWorkspaceNames.md) |
+| `Get-VSCodeWorkspaceNames` | `PathTemplates.Projects.Self.VSCodeWorkspaces` | [Get-VSCodeWorkspaceNames](Get-VSCodeWorkspaceNames.md) |
 | `Install-ChocolateyApps` | `BootstrapConfig.DataFiles`, `PackageManagers` | [Install-ChocolateyApps](Install-ChocolateyApps.md) |
 | `Install-DotnetEf` | `DotnetEFVersion` | [Install-DotnetEf](Install-DotnetEf.md) |
 | `Install-ScoopApps` | `BootstrapConfig.DataFiles`, `PackageManagers` | [Install-ScoopApps](Install-ScoopApps.md) |
 | `Install-WingetApps` | `BootstrapConfig.DataFiles` | [Install-WingetApps](Install-WingetApps.md) |
-| `Open-Acrobat` | `AcrobatPdfGroups` | [Open-Acrobat](Open-Acrobat.md) |
-| `Open-Browser` | `BrowserGroups`, `Universal` | [Open-Browser](Open-Browser.md) |
-| `Open-LeagueOfLegends` | `Universal` | [Open-LeagueOfLegends](Open-LeagueOfLegends.md) |
-| `Open-NotepadPlusPlus` | `Universal` | [Open-NotepadPlusPlus](Open-NotepadPlusPlus.md) |
+| `Open-Acrobat` | `AcrobatPdfGroups`, `PathTemplates` | [Open-Acrobat](Open-Acrobat.md) |
+| `Open-Browser` | `BrowserGroups`, `Universal.DefaultBrowser`, `Universal.Browsers` | [Open-Browser](Open-Browser.md) |
+| `Open-LeagueOfLegends` | `Universal.LeagueOfLegendsExe` | [Open-LeagueOfLegends](Open-LeagueOfLegends.md) |
+| `Open-NotepadPlusPlus` | `Universal.NotepadPlusPlusExe` | [Open-NotepadPlusPlus](Open-NotepadPlusPlus.md) |
 | `Open-Obsidian` | `PathTemplates.ObsidianDirectory`, `Obsidian`, `AutoPathAdditions` | [Open-Obsidian](Open-Obsidian.md) |
-| `Open-Steam` | `Universal` | [Open-Steam](Open-Steam.md) |
-| `Open-VisualStudio` | `Universal`, `VisualStudioSolutions` | [Open-VisualStudio](Open-VisualStudio.md) |
-| `Open-VSCode` | `VSCodeProjects` | [Open-VSCode](Open-VSCode.md) |
-| `Open-VSCodeWorkspace` | `PathTemplates.Projects.Self` | [Open-VSCodeWorkspace](Open-VSCodeWorkspace.md) |
+| `Open-Steam` | `Universal.SteamExe` | [Open-Steam](Open-Steam.md) |
+| `Open-VisualStudio` | `Universal.VisualStudio2026Exe`, `VisualStudioSolutions`, `PathTemplates.Projects` | [Open-VisualStudio](Open-VisualStudio.md) |
+| `Open-VSCode` | `VSCodeProjects`, `PathTemplates.Projects` | [Open-VSCode](Open-VSCode.md) |
+| `Open-VSCodeWorkspace` | `PathTemplates.Projects.Self.VSCodeWorkspaces` | [Open-VSCodeWorkspace](Open-VSCodeWorkspace.md) |
 | `Open-WSLTab` | `DefaultWSLDistribution` | [Open-WSLTab](Open-WSLTab.md) |
 | `Resolve-VSCodeProfilesConfig` | `VSCodeProfiles` | [Resolve-VSCodeProfilesConfig](Resolve-VSCodeProfilesConfig.md) |
-| `Start-Application` | `Universal` | [Start-Application](Start-Application.md) |
-| `Start-Win11Debloat` | `BootstrapConfig` | [Start-Win11Debloat](Start-Win11Debloat.md) |
+| `Start-Application` | `Universal.<ConfigKey>` (the `*Exe` paths of the `ConfigPath` launchers) | [Start-Application](Start-Application.md) |
+| `Start-Win11Debloat` | `BootstrapConfig.LocalScripts.Win11Debloat`, `PathTemplates.Projects.Self.Root`, `BootstrapConfig.Steps` | [Start-Win11Debloat](Start-Win11Debloat.md) |
 | `Test-BrowserGroupAlreadyOpen` | `BrowserGroupMatching` | [Test-BrowserGroupAlreadyOpen](Test-BrowserGroupAlreadyOpen.md) |
-| `Update-Win11DebloatVendor` | `PathTemplates.Projects.Self`, `BootstrapConfig` | [Update-Win11DebloatVendor](Update-Win11DebloatVendor.md) |
+| `Update-Win11DebloatVendor` | `PathTemplates.Projects.Self.Root` | [Update-Win11DebloatVendor](Update-Win11DebloatVendor.md) |
 
 ## Task Guides
 

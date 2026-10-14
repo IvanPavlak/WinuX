@@ -15,7 +15,7 @@ Updates the section headers (e.g., `# VIRTUAL DESKTOP 1 - Monitor: Primary - Lay
 
 1. What should the zones in each of your layouts be called?
     - Options: Layout name to `@{ <ZoneName> = <index> }`. Run `Visualize-Layouts` to see the current mapping drawn out, and see [Configure Window Layout](../window/configure-window-layout.md) for the 3-layer system.
-    - Default: The shipped mapping for layouts `One` .. `Ten`.
+    - Default: The shipped mapping for layouts `Zero` .. `Nine`.
     - More detail: [`ZoneNameMappings`](../../configuration-reference.md#layout-numbers--zone-mappings)
 2. Did you change a FancyZones layout in PowerToys?
     - Options: Then update its zone map here too, or layout files will place windows in the wrong zone.

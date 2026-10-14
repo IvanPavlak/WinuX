@@ -1,7 +1,7 @@
 ---
 title: AI Utilization System - Initial Configuration
 date: 2026-03-24
-status: in-progress
+status: superseded (the GUI direction was dropped at 1.0.0; see docs/roadmap.md)
 providers: [Copilot, Claude, LocalModels]
 ---
 

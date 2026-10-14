@@ -9,13 +9,13 @@ Sets the Windows power plan to Balanced, HighPerformance, or UltimatePerformance
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`PowerPlans`](../../configuration-reference.md#power-plans) | hashtable of plan name to GUID or settings | `@{}` (empty) | The power plans `Set-PowerPlan` can select. Ships empty. |
+| [`PowerPlans`](../../configuration-reference.md#power-plans) | hashtable of machine type to plan mode | `@{}` (empty) | The plan `Set-PowerPlan -Auto` activates on each machine type: `Balanced`, `HighPerformance` or `UltimatePerformance`. Ships empty. |
 
 ## Decisions
 
-1. Which power plans should be selectable?
-    - Options: Plan name to its GUID or settings map. `powercfg /list` prints the GUIDs.
-    - Default: Empty - `Set-PowerPlan` no-ops.
+1. Which power plan should each machine type run?
+    - Options: Machine type to one of `Balanced`, `HighPerformance`, `UltimatePerformance` (the hidden Ultimate Performance scheme is duplicated on first use). No GUIDs - the function maps the mode name to the scheme itself.
+    - Default: Empty - `Set-PowerPlan -Auto` warns and leaves the active plan as-is.
     - More detail: [`PowerPlans`](../../configuration-reference.md#power-plans)
 
 ## Where to Put Values
@@ -32,11 +32,12 @@ All of it goes in `Configuration.local.psd1`, at the repository's `Windows/Power
 
 ## Step 1: Set `PowerPlans`
 
-The power plans `Set-PowerPlan` can select. Ships empty.
+The plan `Set-PowerPlan -Auto` activates on each machine type. Ships empty.
 
 ```powershell
 PowerPlans = @{
-    HighPerformance = "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c"
+    Machine = "UltimatePerformance"
+    Laptop  = "HighPerformance"
 }
 ```
 
@@ -56,8 +57,7 @@ Read-only checks. None of these change anything.
 ```powershell
 Reload-PowerShellProfile
 $global:Configuration.PowerPlans
-$global:Configuration.PowerPlans
-powercfg /list
+powercfg /getactivescheme
 ```
 
 If a value reads back as empty, the two usual causes are a parse error in `Configuration.local.psd1` (run `Test-ConfigurationSchema`) and a key placed at the wrong nesting level.
@@ -70,7 +70,8 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 # Configuration.local.psd1
 @{
     PowerPlans = @{
-        HighPerformance = "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c"
+        Machine = "UltimatePerformance"
+        Laptop  = "HighPerformance"
     }
 }
 ```

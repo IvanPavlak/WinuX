@@ -12,11 +12,12 @@ Sets the desktop wallpaper based on `MachineType` and theme.
 | [`WallpaperDarkSettings`](../../configuration-reference.md#wallpaper-settings) | hashtable of machine type to wallpaper settings | `@{}` (empty) | Which wallpaper `Set-Wallpaper` and `Set-LockScreenWallpaper` apply in dark mode, per machine type. Supports a single file or one per monitor. |
 | [`WallpaperLightSettings`](../../configuration-reference.md#wallpaper-settings) | hashtable of machine type to wallpaper settings | `@{}` (empty) | The light-mode counterpart of `WallpaperDarkSettings`. |
 | [`WallpaperStyles`](../../configuration-reference.md#wallpaper-settings) | hashtable of style name to registry value | `@{ Center = "0"; Fill = "10"; Fit = "6"; Span = "22"; Stretch = "2"; Tile = "0" }` | The wallpaper fit modes `Set-Wallpaper` understands, mapped to the registry values Windows expects. |
+| [`PathTemplates.Projects.Self.Wallpapers`](../../configuration-reference.md#path-templates--placeholder-system) | path template | `{RepoRoot}\Wallpapers` | The folder every configured `File` is resolved against, and the folder the interactive picker (no `-Auto`) lists (read from `$global:MachineSpecificPaths.Projects.Self.Wallpapers`). |
 
 ## Decisions
 
 1. Which dark-mode wallpaper should this machine type use?
-    - Options: A `@{ File; Style }` entry per machine type, or a per-monitor map for multi-monitor setups. `Style` is a key from `WallpaperStyles`.
+    - Options: A `@{ File; Style }` entry per machine type (or `Default`), or `@{ Monitors = @( @{ File; Style }, ... ) }` for multi-monitor setups (entries cycle when there are more displays than entries). `Style` is a key from `WallpaperStyles`.
     - Default: Empty - `Set-Wallpaper` reports nothing configured.
     - More detail: [`WallpaperDarkSettings`](../../configuration-reference.md#wallpaper-settings)
 2. Which light-mode wallpaper should this machine type use?

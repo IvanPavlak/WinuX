@@ -1,6 +1,6 @@
 # Countdown
 
-Displays a colored countdown timer from a given number of seconds down to zero, with an optional message shown before it begins.
+Displays a colored countdown timer, printing one number per second from the given number of seconds down to 1, with an optional message shown before it begins.
 
 ## Configuration Keys
 

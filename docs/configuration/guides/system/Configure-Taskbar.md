@@ -13,8 +13,9 @@ Configures the Windows taskbar pins from configuration.
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
 | [`HostnameToMachineType`](../../configuration-reference.md#hostname-to-machine-type-mapping) | hashtable of hostname to machine type | `@{ Test = "Test" }` | How `DetermineMachineType` turns this computer name into a machine type. A hostname that is not listed falls back to `DefaultMachineType`. |
-| [`TaskbarConfiguration`](../../configuration-reference.md#taskbar-configuration) | array of app entries | `@()` (empty) | Which apps `Configure-Taskbar` pins, in order. Ships empty, so the taskbar is left alone until you configure it. |
-| [`Universal`](../../configuration-reference.md#universal-constants) | hashtable, 26 keys | hashtable, 26 keys | Machine-independent constants: executable paths (`FirefoxExe`, `DockerExe`, `DbeaverExe`, ...), the `Browsers` map, `DefaultBrowser`, shared URLs, the `ProcessCleanup` lists, and `Desktop` (auto-resolved at load). Expanded in place by `Load-PathConfiguration`, so placeholders work here too. |
+| [`TaskbarConfiguration`](../../configuration-reference.md#taskbar-configuration) | array of `@{ Name; Type; Value; Machine; Aumid }` rows | `@()` (empty) | Which apps `Configure-Taskbar` pins, in order. `Type` is `AUMID` or `Path`; `Machine` (default `All`) scopes a row to machine types; `Aumid` (Path rows only) stamps a runtime AppUserModelID on the pin shortcut. Ships empty, so the taskbar is left alone until you configure it. |
+| [`Universal.TaskbarPinFolder`](../../configuration-reference.md#universal-paths) | string (placeholder path) | `"{AppData}\Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar"` | The folder whose `.lnk` pin shortcuts are deleted before the new layout is written. |
+| [`PathTemplates.TaskbarLayoutFile`](../../configuration-reference.md#path-templates--placeholder-system) | string (path) | `"C:\ProgramData\provisioning\taskbar_layout.xml"` | Where the generated layout XML is written and what the `StartLayoutFile` policy points at. Machine-local, never versioned. `Path` rows with an `Aumid` get their generated shortcuts in a `TaskbarPins` folder beside it. |
 
 ## Decisions
 
@@ -27,21 +28,17 @@ Configures the Windows taskbar pins from configuration.
     - Default: Just this machine.
     - More detail: [`HostnameToMachineType`](../../configuration-reference.md#hostname-to-machine-type-mapping)
 3. Which apps should be pinned to the taskbar, in what order?
-    - Options: One entry per app, in pin order. The array replaces wholesale.
+    - Options: One `@{ Name; Type; Value; Machine }` row per app, in pin order. `Type = "AUMID"` with the app's AppUserModelID as `Value` (find it with `Get-StartApps`), or `Type = "Path"` with an exe or `.lnk` path (`{User}` is expanded); add `Aumid` to a `Path` row for an app that opens as a second icon next to its pin. The array replaces wholesale.
     - Default: Empty - the taskbar is not touched.
     - More detail: [`TaskbarConfiguration`](../../configuration-reference.md#taskbar-configuration)
-4. Which browser should be the default?
-    - Options: A key from `Universal.Browsers`: `Firefox`, `Chrome`, `Edge`, `Brave`, `Tor`. Ships empty, so `Open-Browser` asks or uses the system default.
-    - Default: Empty.
-    - More detail: [`Universal`](../../configuration-reference.md#universal-constants)
-5. Are any of the shipped executable paths wrong on this machine?
-    - Options: Override the individual `Universal.<App>Exe` value. Absolute paths, or placeholder paths such as `{User}\AppData\Local\...`.
-    - Default: The shipped paths, which assume default install locations.
-    - More detail: [`Universal`](../../configuration-reference.md#universal-constants)
-6. Do you use a browser the base `Browsers` map does not list?
-    - Options: Add an entry with `Exe`, `PrivateArg` and `NewWindowArg`. Because hashtables merge per key, adding one browser does not remove the others.
-    - Default: The shipped five.
-    - More detail: [`Universal`](../../configuration-reference.md#universal-constants)
+4. Should a pin appear on every machine, or only on some?
+    - Options: A `Machine` scope per row - `All`, one machine type, or several joined with `/` (`PC/Laptop`). Every type named must be in `ValidMachineTypes`.
+    - Default: `All` - a row without `Machine` pins on every machine.
+    - More detail: [`TaskbarConfiguration`](../../configuration-reference.md#taskbar-configuration)
+5. Do the shipped pin folder and layout path fit this machine?
+    - Options: Override `Universal.TaskbarPinFolder` or `PathTemplates.TaskbarLayoutFile`. Almost never needed.
+    - Default: The shipped Quick Launch pin folder and `C:\ProgramData\provisioning\taskbar_layout.xml`.
+    - More detail: [`Universal`](../../configuration-reference.md#universal-paths)
 
 ## Where to Put Values
 
@@ -56,7 +53,7 @@ On this page that bites on `TaskbarConfiguration` - that key is an array, so wha
 
 1. Set `HostnameToMachineType`
 2. Set `TaskbarConfiguration`
-3. Set `Universal`
+3. Set `Universal.TaskbarPinFolder` / `PathTemplates.TaskbarLayoutFile` (only if needed)
 4. Reload and confirm the merge landed
 
 ## Step 1: Set `HostnameToMachineType`
@@ -66,7 +63,7 @@ How `DetermineMachineType` turns this computer name into a machine type. A hostn
 ```powershell
 HostnameToMachineType = @{
     Test             = "Test"
-    "DESKTOP-GAMING" = "Machine"
+    "DESKTOP-GAMING" = "PC"   # "PC" must also be listed in ValidMachineTypes
 }
 ```
 
@@ -76,24 +73,21 @@ Which apps `Configure-Taskbar` pins, in order. Ships empty, so the taskbar is le
 
 ```powershell
 TaskbarConfiguration = @(
-    @{ Name = "Windows Terminal"; AppId = "Microsoft.WindowsTerminal_8wekyb3d8bbwe!App" }
+    @{ Name = "WindowsTerminal"; Type = "AUMID"; Value = "Microsoft.WindowsTerminal_8wekyb3d8bbwe!App"; Machine = "All" }
+    @{ Name = "DBeaver";         Type = "Path";  Value = "{User}\AppData\Local\DBeaver\dbeaver.exe"; Aumid = "DBeaver"; Machine = "PC" }
 )
 ```
 
-## Step 3: Set `Universal`
+## Step 3: Set `Universal.TaskbarPinFolder` / `PathTemplates.TaskbarLayoutFile` (only if needed)
 
-Machine-independent constants: executable paths (`FirefoxExe`, `DockerExe`, `DbeaverExe`, ...), the `Browsers` map, `DefaultBrowser`, shared URLs, the `ProcessCleanup` lists, and `Desktop` (auto-resolved at load). Expanded in place by `Load-PathConfiguration`, so placeholders work here too.
+Both ship with working values. `Universal` and `PathTemplates` are hashtables, so a single key merges over the base and everything else stays as shipped.
 
 ```powershell
 Universal = @{
-    DefaultBrowser = "Firefox"
-    Browsers = @{
-        Vivaldi = @{
-            Exe          = "{User}\AppData\Local\Vivaldi\Application\vivaldi.exe"
-            PrivateArg   = "--incognito"
-            NewWindowArg = "--new-window"
-        }
-    }
+    TaskbarPinFolder = "{AppData}\Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar"
+}
+PathTemplates = @{
+    TaskbarLayoutFile = "C:\ProgramData\provisioning\taskbar_layout.xml"
 }
 ```
 
@@ -113,9 +107,8 @@ Read-only checks. None of these change anything.
 ```powershell
 Reload-PowerShellProfile
 $global:Configuration.HostnameToMachineType
-$global:Configuration.TaskbarConfiguration
-$global:Configuration.Universal
-$global:Configuration.TaskbarConfiguration | Format-Table
+$global:Configuration.Universal.TaskbarPinFolder
+$global:Configuration.TaskbarConfiguration | ForEach-Object { [pscustomobject]$_ } | Format-Table Name, Type, Value, Machine, Aumid
 $global:MachineSpecificPaths.TaskbarLayoutFile
 ```
 
@@ -130,20 +123,17 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 @{
     HostnameToMachineType = @{
         Test             = "Test"
-        "DESKTOP-GAMING" = "Machine"
+        "DESKTOP-GAMING" = "PC"   # "PC" must also be listed in ValidMachineTypes
     }
     TaskbarConfiguration = @(
-        @{ Name = "Windows Terminal"; AppId = "Microsoft.WindowsTerminal_8wekyb3d8bbwe!App" }
+        @{ Name = "WindowsTerminal"; Type = "AUMID"; Value = "Microsoft.WindowsTerminal_8wekyb3d8bbwe!App"; Machine = "All" }
+        @{ Name = "DBeaver";         Type = "Path";  Value = "{User}\AppData\Local\DBeaver\dbeaver.exe"; Aumid = "DBeaver"; Machine = "PC" }
     )
     Universal = @{
-        DefaultBrowser = "Firefox"
-        Browsers = @{
-            Vivaldi = @{
-                Exe          = "{User}\AppData\Local\Vivaldi\Application\vivaldi.exe"
-                PrivateArg   = "--incognito"
-                NewWindowArg = "--new-window"
-            }
-        }
+        TaskbarPinFolder = "{AppData}\Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar"
+    }
+    PathTemplates = @{
+        TaskbarLayoutFile = "C:\ProgramData\provisioning\taskbar_layout.xml"
     }
 }
 ```
@@ -156,6 +146,7 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 - [`DetermineMachineType`](../bootstrap/DetermineMachineType.md) - reads the same configuration
 - [`Load-PathConfiguration`](../bootstrap/Load-PathConfiguration.md) - reads the same configuration
 - [`Rename-Machine`](Rename-Machine.md) - reads the same configuration
-- [`Open-Browser`](../application/Open-Browser.md) - reads the same configuration
+- [`Unpin-TaskbarApps`](Unpin-TaskbarApps.md) - clears the pins before the new layout is applied
+- [`Set-ShortcutAumid`](Set-ShortcutAumid.md) - stamps the `Aumid` of a `Path` row onto its pin shortcut
 - [WinuXConfigurator](../../winux-configurator.md) - have an AI assistant walk these decisions with you
 - [Configuration reference](../../configuration-reference.md) - every key, section by section

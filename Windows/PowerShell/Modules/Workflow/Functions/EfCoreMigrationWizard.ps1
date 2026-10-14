@@ -21,12 +21,18 @@ function EfCoreMigrationWizard {
 		slow `dotnet ef dbcontext list` design-time build is skipped. Ambiguous/absent cases fall
 		back to a source scan plus design-time discovery.
 
-		Menu options:
-		- Add migration - prompts for name, calls `dotnet ef migrations add`
-		- Remove last migration - calls `dotnet ef migrations remove`
-		- Redo last migration - removes then re-adds with the same name
-		- Squash all migrations - removes all and adds a single "initial-migration"
-		- Sync to database - calls `dotnet ef database update`
+		Menu options (offered only when they apply):
+		- Add new migration - prompts for name, calls `dotnet ef migrations add`
+		- Redo last migration (2+ migrations) - reverts the database to the previous migration
+		  (`dotnet ef database update`), removes the last migration, then re-adds it with the same name
+		- Remove last migration (1+ migrations) - reverts the database to the previous migration (or
+		  the initial state), then calls `dotnet ef migrations remove`
+		- Squash all migrations (1+ migrations) - after a confirmation, deletes every *.cs file in the
+		  migrations folder and adds a single "initial-migration"
+		- Sync migration to other database(s) (2+ migration projects) - adds a migration with the
+		  same name to the selected other provider projects, run now or printed to run manually
+		  (the provider flag, e.g. UseNpgSql, must be enabled in appsettings.Development.json)
+		- Exit
 		Alias: efm
 
 	.EXAMPLE

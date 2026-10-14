@@ -9,23 +9,15 @@ Expands layout-file tokens to regex patterns at the matching boundary.
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`Universal`](../../configuration-reference.md#universal-constants) | hashtable, 26 keys | hashtable, 26 keys | Machine-independent constants: executable paths (`FirefoxExe`, `DockerExe`, `DbeaverExe`, ...), the `Browsers` map, `DefaultBrowser`, shared URLs, the `ProcessCleanup` lists, and `Desktop` (auto-resolved at load). Expanded in place by `Load-PathConfiguration`, so placeholders work here too. |
+| [`Universal`](../../configuration-reference.md#universal-constants) | hashtable | shipped `Browsers` map: `Firefox`, `Tor`, `Chrome`, `Edge`, `Brave` | Only `Universal.Browsers` is read: every key except `Tor` joins the title side of the `Browser` token, and the basename of its `Exe` joins the process side. |
 
 The `Browser` layout token expands from `Universal.Browsers` - the same map `Open-Browser` reads - with Tor excluded (SecureBrowser layouts target `tor` explicitly). Because hashtables deep-merge per key, adding a browser under `Universal.Browsers` in `Configuration.local.psd1` both makes it launchable by `Open-Browser` and joins it into the `Browser` token, without touching the shipped entries. A **top-level** `Browsers` map is honoured as a legacy fallback (an earlier version of this function read only that location), and when no configuration is loaded at all the token falls back to the built-in `firefox|chrome|msedge|brave` set.
 
 ## Decisions
 
-1. Which browser should be the default?
-    - Options: A key from `Universal.Browsers`: `Firefox`, `Chrome`, `Edge`, `Brave`, `Tor`. Ships empty, so `Open-Browser` asks or uses the system default.
-    - Default: Empty.
-    - More detail: [`Universal`](../../configuration-reference.md#universal-constants)
-2. Are any of the shipped executable paths wrong on this machine?
-    - Options: Override the individual `Universal.<App>Exe` value. Absolute paths, or placeholder paths such as `{User}\AppData\Local\...`.
-    - Default: The shipped paths, which assume default install locations.
-    - More detail: [`Universal`](../../configuration-reference.md#universal-constants)
-3. Do you use a browser the base `Browsers` map does not list?
-    - Options: Add an entry with `Exe`, `PrivateArg` and `NewWindowArg`. Because hashtables merge per key, adding one browser does not remove the others.
-    - Default: The shipped five.
+1. Do you use a browser the base `Browsers` map does not list?
+    - Options: Add an entry with `Exe`, `PrivateArg` and `NewWindowArg`. Because hashtables merge per key, adding one browser does not remove the others, and the new browser joins the `Browser` token.
+    - Default: The shipped five; the `Browser` token covers all of them except `Tor`.
     - More detail: [`Universal`](../../configuration-reference.md#universal-constants)
 
 ## Where to Put Values
@@ -42,11 +34,10 @@ All of it goes in `Configuration.local.psd1`, at the repository's `Windows/Power
 
 ## Step 1: Set `Universal`
 
-Machine-independent constants: executable paths (`FirefoxExe`, `DockerExe`, `DbeaverExe`, ...), the `Browsers` map, `DefaultBrowser`, shared URLs, the `ProcessCleanup` lists, and `Desktop` (auto-resolved at load). Expanded in place by `Load-PathConfiguration`, so placeholders work here too.
+This function reads only `Universal.Browsers`. Add a browser there and it joins the `Browser` token: its key on the title side, its `Exe` basename (`vivaldi`) on the process side. `Universal` is expanded in place by `Load-PathConfiguration`, so placeholders work in `Exe`.
 
 ```powershell
 Universal = @{
-    DefaultBrowser = "Firefox"
     Browsers = @{
         Vivaldi = @{
             Exe          = "{User}\AppData\Local\Vivaldi\Application\vivaldi.exe"
@@ -63,7 +54,7 @@ Reload the profile, then read the merged value back. `$global:Configuration` aft
 
 ```powershell
 Reload-PowerShellProfile
-$global:Configuration.Universal
+$global:Configuration.Universal.Browsers
 ```
 
 ## Verification
@@ -72,7 +63,7 @@ Read-only checks. None of these change anything.
 
 ```powershell
 Reload-PowerShellProfile
-$global:Configuration.Universal
+$global:Configuration.Universal.Browsers
 Resolve-LayoutTokens -LayoutEntry @{ ProcessName = "Browser" }   # shows the expanded regex
 ```
 
@@ -86,7 +77,6 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 # Configuration.local.psd1
 @{
     Universal = @{
-        DefaultBrowser = "Firefox"
         Browsers = @{
             Vivaldi = @{
                 Exe          = "{User}\AppData\Local\Vivaldi\Application\vivaldi.exe"

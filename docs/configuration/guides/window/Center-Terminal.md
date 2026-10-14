@@ -9,13 +9,13 @@ Centers the Windows Terminal on the primary monitor at a physically-constant siz
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`CenterTerminalSizing`](../../configuration-reference.md#centerterminalsizing) | hashtable of profile name to sizing rules | hashtable, 1 key (`Default`) | How large `Center-Terminal` makes the terminal, per display profile. `Resolve-CenterTerminalSizing` picks the profile from the attached monitors, falling back to `Default`. |
+| [`CenterTerminalSizing`](../../configuration-reference.md#centerterminalsizing) | hashtable of row name to pixel target (or the legacy flat target) | hashtable, 1 key (`Default`: 1376x700 px) | The on-screen pixel size `Center-Terminal` aims the terminal at, converted to percentages of the live primary monitor's work area. `Resolve-CenterTerminalSizing` picks the row: `SmallDisplay` (primary display at most 3000 px wide), then the machine type, then `Default`; nothing usable falls back to 40% x 50%. |
 
 ## Decisions
 
 1. How large should a centred terminal be on this machine?
-    - Options: A percentage-of-screen pair under a profile name. Add a named profile for a second monitor setup and keep `Default` as the fallback.
-    - Default: The shipped `Default` profile.
+    - Options: A pixel target (`TargetWidthPx` / `TargetHeightPx`) plus `Min*Percent` / `Max*Percent` clamps, under a row named `SmallDisplay`, a machine type (`PC`, `Laptop`, `Work`, `Test`) or `Default`. One target already gives the same physical size on every display; add rows only to tune it.
+    - Default: The shipped `Default` row (1376x700 px, the legacy 40% x 50% on a 3440x1440 ultrawide).
     - More detail: [`CenterTerminalSizing`](../../configuration-reference.md#centerterminalsizing)
 
 ## Where to Put Values
@@ -32,11 +32,12 @@ All of it goes in `Configuration.local.psd1`, at the repository's `Windows/Power
 
 ## Step 1: Set `CenterTerminalSizing`
 
-How large `Center-Terminal` makes the terminal, per display profile. `Resolve-CenterTerminalSizing` picks the profile from the attached monitors, falling back to `Default`.
+The on-screen pixel size `Center-Terminal` aims the terminal at. `Resolve-CenterTerminalSizing` picks the row (`SmallDisplay` when the primary display is at most 3000 px wide, then the machine type, then `Default`), and the target is converted to percentages of the live primary monitor's work area, clamped to the row's `Min*Percent` / `Max*Percent`. A row without `TargetWidthPx` is ignored and the terminal falls back to 40% x 50%.
 
 ```powershell
 CenterTerminalSizing = @{
-    Default = @{ WidthPercent = 60; HeightPercent = 70 }
+    Default      = @{ TargetWidthPx = 1376; TargetHeightPx = 700; MinWidthPercent = 25; MaxWidthPercent = 72; MinHeightPercent = 35; MaxHeightPercent = 75 }
+    SmallDisplay = @{ TargetWidthPx = 1152; TargetHeightPx = 624; MinWidthPercent = 25; MaxWidthPercent = 90; MinHeightPercent = 35; MaxHeightPercent = 90 }
 }
 ```
 
@@ -69,7 +70,8 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 # Configuration.local.psd1
 @{
     CenterTerminalSizing = @{
-        Default = @{ WidthPercent = 60; HeightPercent = 70 }
+        Default      = @{ TargetWidthPx = 1376; TargetHeightPx = 700; MinWidthPercent = 25; MaxWidthPercent = 72; MinHeightPercent = 35; MaxHeightPercent = 75 }
+        SmallDisplay = @{ TargetWidthPx = 1152; TargetHeightPx = 624; MinWidthPercent = 25; MaxWidthPercent = 90; MinHeightPercent = 35; MaxHeightPercent = 90 }
     }
 }
 ```

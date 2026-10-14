@@ -9,23 +9,23 @@ Configures keyboard layouts from predefined layout sets read from `KeyboardLayou
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`DefaultKeyboardLayoutSet`](../../configuration-reference.md#keyboard-layouts) | string | empty string | Which named set from `KeyboardLayoutSets` `Set-KeyboardLayouts` applies by default. Ships empty, so the function no-ops. |
-| [`KeyboardLayouts`](../../configuration-reference.md#keyboard-layouts) | hashtable of friendly name to layout id | `@{}` (empty) | The individual keyboard layouts available to `KeyboardLayoutSets`. |
-| [`KeyboardLayoutSets`](../../configuration-reference.md#keyboard-layouts) | hashtable of set name to array of layout names | `@{}` (empty) | Named combinations of `KeyboardLayouts` entries. `Set-KeyboardLayouts` applies one set at a time; order is the order Windows cycles them. |
+| [`DefaultKeyboardLayoutSet`](../../configuration-reference.md#keyboard-layouts) | string | empty string | Which named set from `KeyboardLayoutSets` pressing Enter selects in the menu `Set-KeyboardLayouts` shows when called with no argument, and the one `Bootstrap` passes as `-LayoutSet`. Ships empty, so Enter selects nothing usable - pick from the menu or pass `-LayoutSet`. |
+| [`KeyboardLayouts`](../../configuration-reference.md#keyboard-layouts) | hashtable of friendly name to 8-digit keyboard layout id (KLID) | `@{}` (empty) | The individual keyboard layouts available to `KeyboardLayoutSets`. Empty makes `Set-KeyboardLayouts` warn and no-op. |
+| [`KeyboardLayoutSets`](../../configuration-reference.md#keyboard-layouts) | ordered list of sets (one single-key hashtable each, set name to array of layout names) | `@()` (empty) | Named combinations of `KeyboardLayouts` entries. `Set-KeyboardLayouts` applies one set at a time; order is the order Windows cycles them. |
 
 ## Decisions
 
 1. Which keyboard layout set should be the default?
-    - Options: A key from your `KeyboardLayoutSets` map.
-    - Default: Empty - `Set-KeyboardLayouts` no-ops.
+    - Options: A set name from your `KeyboardLayoutSets` list.
+    - Default: Empty - the menu has no Enter default, so a set must be picked or passed with `-LayoutSet`.
     - More detail: [`DefaultKeyboardLayoutSet`](../../configuration-reference.md#keyboard-layouts)
 2. Which keyboard layouts do you use?
-    - Options: Friendly name to Windows input-language id, e.g. `English = "0409:00000409"`.
+    - Options: Friendly name to the 8-digit keyboard layout id (KLID), e.g. `US = "00000409"`, `Croatian = "0000041A"`. The language is derived from the id's last four digits.
     - Default: Empty - `Set-KeyboardLayouts` no-ops.
     - More detail: [`KeyboardLayouts`](../../configuration-reference.md#keyboard-layouts)
 3. Which layout combinations do you want to switch between?
-    - Options: Set name to an ordered array of `KeyboardLayouts` keys. The first is the default input language.
-    - Default: Empty.
+    - Options: One `@{ SetName = @(...) }` entry per set, each an ordered array of `KeyboardLayouts` keys. The first layout's language becomes the primary language. The menu lists the sets in the order written.
+    - Default: Empty - `Set-KeyboardLayouts` warns and no-ops.
     - More detail: [`KeyboardLayoutSets`](../../configuration-reference.md#keyboard-layouts)
 
 ## Where to Put Values
@@ -44,7 +44,7 @@ All of it goes in `Configuration.local.psd1`, at the repository's `Windows/Power
 
 ## Step 1: Set `DefaultKeyboardLayoutSet`
 
-Which named set from `KeyboardLayoutSets` `Set-KeyboardLayouts` applies by default. Ships empty, so the function no-ops.
+Which named set from `KeyboardLayoutSets` pressing Enter selects in the menu `Set-KeyboardLayouts` shows when called with no argument.
 
 ```powershell
 DefaultKeyboardLayoutSet = "Standard"
@@ -56,7 +56,7 @@ The individual keyboard layouts available to `KeyboardLayoutSets`.
 
 ```powershell
 KeyboardLayouts = @{
-    English = "0409:00000409"
+    English = "00000409"
 }
 ```
 
@@ -65,9 +65,9 @@ KeyboardLayouts = @{
 Named combinations of `KeyboardLayouts` entries. `Set-KeyboardLayouts` applies one set at a time; order is the order Windows cycles them.
 
 ```powershell
-KeyboardLayoutSets = @{
-    Standard = @("English")
-}
+KeyboardLayoutSets = @(
+    @{ Standard = @("English") }
+)
 ```
 
 ## Step 4: Reload and confirm the merge landed
@@ -89,7 +89,6 @@ $global:Configuration.DefaultKeyboardLayoutSet
 $global:Configuration.KeyboardLayouts
 $global:Configuration.KeyboardLayoutSets
 Display-SystemLanguageSettings
-$global:Configuration.KeyboardLayoutSets
 ```
 
 If a value reads back as empty, the two usual causes are a parse error in `Configuration.local.psd1` (run `Test-ConfigurationSchema`) and a key placed at the wrong nesting level.
@@ -103,11 +102,11 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 @{
     DefaultKeyboardLayoutSet = "Standard"
     KeyboardLayouts = @{
-        English = "0409:00000409"
+        English = "00000409"
     }
-    KeyboardLayoutSets = @{
-        Standard = @("English")
-    }
+    KeyboardLayoutSets = @(
+        @{ Standard = @("English") }
+    )
 }
 ```
 

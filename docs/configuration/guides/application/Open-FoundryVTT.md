@@ -1,6 +1,6 @@
 # Open-FoundryVTT
 
-Opens the FoundryVTT virtual tabletop server by starting the FoundryVTT desktop application via `Start-Application`.
+Opens the FoundryVTT virtual tabletop server by starting the FoundryVTT desktop application via `Start-Application`, which reads the executable from `Universal.FoundryVTTExe` (ships empty - set it in `Configuration.local.psd1`, see [Start-Application](Start-Application.md)); this function itself reads nothing.
 
 ## Configuration Keys
 

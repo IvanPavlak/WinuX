@@ -11,10 +11,31 @@ function Invoke-ObsidianCli {
 		Obsidian and in a few seconds while Obsidian is still booting; the timeout is only the
 		safety net and never delays an answer.
 
+		Obsidian.com writes its chatter (argument echo, callback URL, update check) straight to the
+		console it is attached to, past any stream redirection, so it runs in a hidden console of
+		its own with stdout and stderr redirected to temporary files, which are read back and
+		removed. Returns the output lines (stdout, then stderr, blank lines dropped), led by a
+		"CLI call timed out after N s" line after a timeout. A launch failure is returned as a
+		single "CLI call failed: <message>" line rather than thrown.
+
+	.PARAMETER CliPath
+		Full path to Obsidian.com (Get-ObsidianCliPath).
+
+	.PARAMETER Arguments
+		The CLI tokens in the CLI's own parameter=value shape, vault=<name> first, e.g.
+		@("vault=Obsidian", "workspace:load", "name=Server").
+
 	.PARAMETER TimeoutSeconds
 		Longest wait for the CLI to exit. Default 5 - every answer from a running Obsidian arrives
 		in under 1 s; only a load sent while Obsidian is still booting takes longer, and Obsidian
 		still applies a load it has received after the call is killed.
+
+	.OUTPUTS
+		[string[]] The CLI's output lines.
+
+	.EXAMPLE
+		Invoke-ObsidianCli -CliPath (Get-ObsidianCliPath) -Arguments @("vault=Obsidian", "workspaces")
+		Lists the saved workspaces of the running vault.
 	#>
 	[CmdletBinding()]
 	[OutputType([object[]])]

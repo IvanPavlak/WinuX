@@ -21,6 +21,10 @@ Returns the Swagger-specific browser tab title patterns to close for a project.
     - Options: Nest another single-key hashtable inside the group array. A parent selector opens everything below it.
     - Default: Flat groups.
     - More detail: [`BrowserGroups`](../../configuration-reference.md#browser-groups)
+3. Which projects have a Swagger page that `Close-Project` should close?
+    - Options: One `@{ Name; Url }` entry per project in a top-level `Swagger` group, with `Name` equal to the project name (matched case-insensitively). Any entry yields `(?i)swagger ui`; a `localhost` or `127.0.0.1` URL also yields `(?i)problem loading page`. No `Swagger` group, or no entry for a project, returns no patterns.
+    - Default: The shipped single `ExampleProject` entry (`http://localhost:5000/swagger/index.html`).
+    - More detail: [`BrowserGroups`](../../configuration-reference.md#browser-groups)
 
 ## Where to Put Values
 
@@ -46,6 +50,9 @@ BrowserGroups = @(
         @{ Name = "Dashboard"; Url = "http://localhost:3000" }
         @{ Name = "Logs";      Url = "http://localhost:5341" }
     )}
+    @{ Swagger = @(
+        @{ Name = "MyProject"; Url = "http://localhost:5000/swagger/index.html" }
+    )}
 )
 ```
 
@@ -65,7 +72,7 @@ Read-only checks. None of these change anything.
 ```powershell
 Reload-PowerShellProfile
 $global:Configuration.BrowserGroups
-Get-SwaggerCloseTitlePatterns
+Get-SwaggerCloseTitlePatterns -Project "MyProject"
 ```
 
 If a value reads back as empty, the two usual causes are a parse error in `Configuration.local.psd1` (run `Test-ConfigurationSchema`) and a key placed at the wrong nesting level.
@@ -81,6 +88,9 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
         @{ Monitoring = @(
             @{ Name = "Dashboard"; Url = "http://localhost:3000" }
             @{ Name = "Logs";      Url = "http://localhost:5341" }
+        )}
+        @{ Swagger = @(
+            @{ Name = "MyProject"; Url = "http://localhost:5000/swagger/index.html" }
         )}
     )
 }

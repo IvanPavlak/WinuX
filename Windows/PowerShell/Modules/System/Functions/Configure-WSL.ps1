@@ -16,6 +16,11 @@ function Configure-WSL {
 		- Username: your choice (lowercase)
 		- Password: [prompted, used for sudo]
 
+		Does nothing until `DefaultWSLDistribution` is configured. When a fresh install is not
+		yet registered (it needs a reboot), the user setup is deferred with a warning. Whenever
+		the distribution is installed it is pinned as the WSL default (`wsl --set-default`) on
+		every run, because Docker Desktop and podman routinely steal the default.
+
 		Requires administrator privileges.
 
 	.PARAMETER Force
@@ -23,6 +28,7 @@ function Configure-WSL {
 		unregisters the existing distribution (DELETING everything inside it), reinstalls
 		it, recreates the user, and re-runs Initialize-WSLEnvironment, SymbolicLinkMaker
 		-Scope WSL (restoring only the WSL symlinks the reinstall wiped), and Configure-WSLSSH.
+		Alias: -Override.
 
 	.EXAMPLE
 		Configure-WSL

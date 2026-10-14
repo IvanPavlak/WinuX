@@ -11,7 +11,11 @@ function Expand-Hashtable {
 		- {RepoRoot} → WinuX repository root
 		- {AppData} → AppData directory
 
-		Works recursively on nested hashtables and arrays. Non-placeholdertokens are passed through unchanged.
+		- %APPDATA%, %ALLUSERSPROFILE%, %LOCALAPPDATA% → their environment paths
+
+		Works recursively on nested hashtables and arrays. Non-placeholder tokens are passed through unchanged.
+		A string that contains a forward slash and expands to a Windows drive path is rewritten to
+		its WSL mount path (C:\foo -> /mnt/c/foo).
 		Used internally by Expand-ConfigPaths; rarely called directly.
 
 	.PARAMETER Source

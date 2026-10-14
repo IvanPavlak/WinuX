@@ -24,6 +24,11 @@ function Expand-ConfigPaths {
 		The machine type (PC, Laptop, Work, Test). Used to select base paths and overrides.
 		Falls back to "Test" if the machine type is not found in BasePaths.
 
+	.PARAMETER RepoRoot
+		Explicit repository root substituted for {RepoRoot}. Load-PathConfiguration passes the
+		self-located repository path. Without it {RepoRoot} tokens are left unexpanded, because
+		the fallback in Expand-Hashtable reads Projects.Self.Root, which ships as "{RepoRoot}".
+
 	.EXAMPLE
 		$paths = Expand-ConfigPaths -Configuration $Configuration -MachineType "PC"
 		Expands all placeholder paths for the PC machine type.

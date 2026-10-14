@@ -64,7 +64,7 @@ Close-BrowserWindows -WindowsToClose $windows
 - **Parameters:** -FontName
 - **Usage:** `Configure-NerdFont`, `Configure-NerdFont -FontName "JetBrainsMono"`
 
-Copies the matching `.ttf`/`.otf` files from the font's source folder under the WinuX root into the Windows fonts directory and registers them under `HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts`. The operation is idempotent: if the target font is already present in both the filesystem and the registry it is skipped, and individual font files that already exist are not re-copied. The font's `SearchPattern` and `FolderName` come from its entry in `NerdFonts`.
+Copies every `.ttf`/`.otf` file in the font's source folder (its `FolderName`, relative to the WinuX root) into the Windows fonts directory (`Universal.Fonts`) and registers them under `HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts`. The operation is idempotent: the font's `SearchPattern` (a file base-name wildcard - `.ttf`/`.otf` is appended to it) detects an existing install, and when matching files exist in the fonts directory and a matching value exists in the registry the font is skipped; individual font files that already exist are not re-copied. `NerdFonts` is an [ordered section](../configuration/configuration-reference.md#ordered-sections) (`@( @{ <FontName> = @{ FolderName; SearchPattern } } )`) and ships empty, in which case the function warns and does nothing; an unknown `-FontName` is reported as an error.
 
 | Parameter   | Description                                                                                                                             |
 | ----------- | --------------------------------------------------------------------------------------------------------------------------------------- |
@@ -80,15 +80,16 @@ Configure-NerdFont -FontName "JetBrainsMono"
 
 ## [Configure-NuGetConfig](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Configure-NuGetConfig.ps1)
 
-- **Description:** Configures NuGet package source settings for the GitHub Package Registry by copying a NuGet.config template from the WinuX repository to the user's AppData NuGet folder. Source and destination paths are read from `MachineSpecificPaths.NuGetConfig`. If the destination already exists, it compares package sources against the repository template and reconfigures only on a mismatch; otherwise it skips the copy unless `-Override` is set. When a copy is performed it prompts securely for the GitHub username and personal access token (PAT), substituting them into the template.
-- **Parameters:** -Override
+- **Description:** Configures NuGet package source settings for the GitHub Package Registry by copying a NuGet.config template from the WinuX repository to the user's AppData NuGet folder. Source and destination paths are read from `MachineSpecificPaths.NuGetConfig`. If the destination already exists, it compares package sources against the repository template and reconfigures only on a mismatch; otherwise it skips the copy unless `-Override` is set. When a copy is performed it prompts securely for the GitHub username and personal access token (PAT), substituting them into the template. An existing real (non-symlink) config at the destination is first copied into the unified backup sink (`Backups\Windows\System\NuGetConfig\<timestamp>\`, gitignored); when that backup fails the write is skipped.
+- **Parameters:** -Override, -BackupRoot
 - **Usage:** `Configure-NuGetConfig`, `Configure-NuGetConfig -Override`
 
-Reads `MachineSpecificPaths.NuGetConfig.SourcePath` and `.DestinationPath`. When the destination exists, it parses both XML files and diffs the `packageSources` entries by key and URL: any missing, extra, or differing source triggers reconfiguration. If the sources match, it reports success and returns without changes. During reconfiguration it prompts for the GitHub username and PAT (entered as a secure string), replaces the `[Username]` and `[Token]` placeholders in the template, creates the destination directory if needed, and writes the resulting file as UTF-8.
+Reads `MachineSpecificPaths.NuGetConfig.SourcePath` and `.DestinationPath` (the expanded `PathTemplates.NuGetConfig`). When the destination exists, it parses both XML files and diffs the `packageSources` entries by key and URL: any missing, extra, or differing source triggers reconfiguration. If the sources match, it reports success and returns without changes; if the template itself is missing, it warns to use `-Override` and returns. During reconfiguration it prompts for the GitHub username and PAT (entered as a secure string), replaces the `[Username]` and `[Token]` placeholders in the template, creates the destination directory if needed, and writes the resulting file as UTF-8.
 
 | Parameter   | Description                                                                                              |
 | ----------- | -------------------------------------------------------------------------------------------------------- |
 | `-Override` | Force reconfiguration of NuGet settings even if the destination already exists and matches the template. |
+| `-BackupRoot` | Root of the backup sink an existing real config is copied into before it is overwritten (under `System\NuGetConfig\<timestamp>`). Defaults to `<Repo>\Backups\Windows`. |
 
 ```powershell
 # Configure NuGet only if not already correctly set up
@@ -100,17 +101,17 @@ Configure-NuGetConfig -Override
 
 ## [Configure-PostgreSqlPasswords](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Configure-PostgreSqlPasswords.ps1)
 
-- **Description:** Changes the `postgres` user password across every installed PostgreSQL version found on the machine. Prompts for the current and new passwords, or with `-Auto` reads them from `PostgreSqlPasswords` in `Configuration.psd1` and applies them without prompting. Already-configured installations are detected and skipped (idempotent); a manual-instructions file is written to the Desktop only for installations that fail.
+- **Description:** Changes the `postgres` user password across every installed PostgreSQL version found on the machine. Nothing is prompted for: the current and new passwords are either passed together as `-DefaultOrCurrentPassword` / `-NewPassword`, or - with `-Auto`, or when neither is passed - read from `PostgreSqlPasswords` (`DefaultOrCurrent`, `New`) in `Configuration.psd1`. Already-configured installations are detected and skipped (idempotent); a manual-instructions file is written to the Desktop only for installations that fail.
 - **Parameters:** -DefaultOrCurrentPassword, -NewPassword, -Auto
 - **Usage:** `Configure-PostgreSqlPasswords`, `Configure-PostgreSqlPasswords -Auto`, `Configure-PostgreSqlPasswords -DefaultOrCurrentPassword foo -NewPassword bar`
 
-Scans `C:\Program Files\PostgreSQL` and `C:\Program Files (x86)\PostgreSQL` for every version's `bin\psql.exe`. For each installation it tries ports 5432, 5433, 5434, and 5435: it first checks whether the new password already authenticates (skip if so), otherwise runs `ALTER USER postgres WITH PASSWORD '<new>'` via a temporary SQL file. A call with no arguments defaults to the configuration values (same as `-Auto`); explicit `-DefaultOrCurrentPassword` / `-NewPassword` override the configuration. If any version fails on all attempted ports (or an unexpected error occurs), step-by-step manual instructions are written to the Desktop via `Write-ManualInstructionsToDesktop`.
+Scans `C:\Program Files\PostgreSQL` and `C:\Program Files (x86)\PostgreSQL` for every version's `bin\psql.exe`. For each installation it tries ports 5432, 5433, 5434, and 5435: it first checks whether the new password already authenticates (skip if so), otherwise runs `ALTER USER postgres WITH PASSWORD '<new>'` via a temporary SQL file. A call with no arguments defaults to the configuration values (same as `-Auto`), and an unconfigured `PostgreSqlPasswords` makes it warn and return. Passing both `-DefaultOrCurrentPassword` and `-NewPassword` (without `-Auto`) bypasses the configuration; passing only one of them is an error, and `-Auto` always takes the configuration values, replacing any password passed alongside it. If any version fails on all attempted ports (or an unexpected error occurs), step-by-step manual instructions are written to the Desktop via `Write-ManualInstructionsToDesktop`.
 
 | Parameter                   | Description                                                                                                 |
 | --------------------------- | ----------------------------------------------------------------------------------------------------------- |
 | `-DefaultOrCurrentPassword` | The current PostgreSQL password, used to authenticate before the change.                                    |
 | `-NewPassword`              | The new password to set on the `postgres` user.                                                             |
-| `-Auto`                     | Reads `DefaultOrCurrent` and `New` from `PostgreSqlPasswords` in `Configuration.psd1` instead of prompting. |
+| `-Auto`                     | Reads `DefaultOrCurrent` and `New` from `PostgreSqlPasswords` in `Configuration.psd1`, replacing any password passed explicitly. |
 
 ```powershell
 # Use the passwords from Configuration.psd1 (PostgreSqlPasswords key)
@@ -126,20 +127,21 @@ Configure-PostgreSqlPasswords -DefaultOrCurrentPassword foo -NewPassword bar
 ## [Configure-Taskbar](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Configure-Taskbar.ps1)
 
 - **Description:** Configures the Windows taskbar pins from configuration. When `TaskbarConfiguration` is not configured (the empty base default), it warns and leaves the existing pins as-is - the destructive clearing never runs on an empty section. When it is configured, it clears all existing pins (via `Unpin-TaskbarApps`) and rebuilds the icon cache up front, builds an XML layout from `TaskbarConfiguration` in `Configuration.psd1`, then applies it with an unlock -> apply -> lock -> restart Explorer sequence optimized for Windows 11. Requires administrator privileges.
-- **Parameters:** -FromBootstrap
+- **Parameters:** -FromBootstrap, -BackupRoot
 - **Usage:** `Configure-Taskbar`, `Configure-Taskbar -FromBootstrap`
 
-Resolves the current machine type (via `DetermineMachineType`) and states in the output which machine the pins are being configured for (or that the hostname is unmapped and the default set is used). Reads the pin list from `TaskbarConfiguration` (each entry is either an `AUMID` or a `Path`, with `{User}` tokens expanded to the current profile), keeping only rows whose `Machine` scope matches the machine type - the same `Test-MachineTypeScope` gate the app CSVs use; a row without `Machine` defaults to `All`. A `Path` row may carry an `Aumid` key for apps that register their own AppUserModelID at runtime and would otherwise open as a second, separate icon next to their pin (Eclipse/SWT apps such as DBeaver): the row is then pinned through a shortcut stamped with that identity via `Set-ShortcutAumid` - a `.lnk` Value is stamped in place, an `.exe` Value gets a machine-local shortcut generated under `TaskbarPins\<Name>.lnk` next to the layout file (falling back to the raw path with a warning if stamping fails). It writes the generated layout directly to the machine-local `TaskbarLayoutFile` (`C:\ProgramData\provisioning\taskbar_layout.xml`) - not versioned in the repo and needing no symlink - and sets the `StartLayoutFile` and `LockedStartLayout` registry policies under `HKLM:\SOFTWARE\Policies\Microsoft\Windows\Explorer`. Explorer applies a pin list asynchronously for several seconds after it starts, and it records the layout file's timestamp in `Taskband\LayoutXMLLastModified` so a file it has already seen is never re-applied - which makes any Explorer restart landing mid-apply a permanent truncation of the pins rather than a retried one. The Explorer-touching steps are ordered around that: the icon cache rebuild (`Rebuild-IconCache`) runs up front and provides the single bounce that clears the old pins from the screen (`Unpin-TaskbarApps` is called with `-SkipExplorerRestart` so it does not add another), and the final `Restart-Explorer` is the last thing the function does - preceded by a reset of the applied-layout marker and the layout file's timestamp so that start is guaranteed to re-apply, and given an 8-second settle so control does not return while pins are still being written. With `-FromBootstrap`, it skips the 5-second Explorer-initialization wait and leaves the layout unlocked so the Bootstrap script can lock it after its own Explorer restart.
+Resolves the current machine type (via `DetermineMachineType`) and states in the output which machine the pins are being configured for (or that the hostname is unmapped and the default set is used). Reads the pin list from `TaskbarConfiguration` (each entry is either an `AUMID` or a `Path`, with `{User}` tokens expanded to the current profile), keeping only rows whose `Machine` scope matches the machine type - the same `Test-MachineTypeScope` gate the app CSVs use; a row without `Machine` defaults to `All`. A `Path` row may carry an `Aumid` key for apps that register their own AppUserModelID at runtime and would otherwise open as a second, separate icon next to their pin (Eclipse/SWT apps such as DBeaver): the row is then pinned through a shortcut stamped with that identity via `Set-ShortcutAumid` - a `.lnk` Value is stamped in place, an `.exe` Value gets a machine-local shortcut generated under `TaskbarPins\<Name>.lnk` next to the layout file (falling back to the raw path with a warning if stamping fails). Before writing, it deletes the `.lnk` files in `Universal.TaskbarPinFolder`. It writes the generated layout directly to the machine-local `TaskbarLayoutFile` (`PathTemplates.TaskbarLayoutFile`, shipped as `C:\ProgramData\provisioning\taskbar_layout.xml`) - not versioned in the repo and needing no symlink. A leftover symlink at that path is removed first; an existing real layout file is copied into the unified backup sink (`Backups\Windows\System\TaskbarLayout\<timestamp>\`) before it is overwritten, and the write is skipped when that backup fails. It then sets the `StartLayoutFile` and `LockedStartLayout` registry policies under `HKLM:\SOFTWARE\Policies\Microsoft\Windows\Explorer`. Explorer applies a pin list asynchronously for several seconds after it starts, and it records the layout file's timestamp in `Taskband\LayoutXMLLastModified` so a file it has already seen is never re-applied - which makes any Explorer restart landing mid-apply a permanent truncation of the pins rather than a retried one. The Explorer-touching steps are ordered around that: the icon cache rebuild (`Rebuild-IconCache`) runs up front and provides the single bounce that clears the old pins from the screen (`Unpin-TaskbarApps` is called with `-SkipExplorerRestart` so it does not add another), and the final `Restart-Explorer` is the last thing the function does - preceded by a reset of the applied-layout marker and the layout file's timestamp so that start is guaranteed to re-apply, and given an 8-second settle so control does not return while pins are still being written. With `-FromBootstrap`, the pins are cleared via `Unpin-TaskbarApps -FromBootstrap` with no icon cache rebuild, a 5-second wait lets Explorer finish initializing before the layout is built, and the layout is left unlocked with no marker reset and no Explorer restart, so the Bootstrap script can lock it after its own Explorer restart.
 
 | Parameter        | Description                                                                                                                                                |
 | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `-FromBootstrap` | Skips the 5-second wait for Explorer initialization and leaves the layout unlocked for the Bootstrap sequence to lock later. Used internally during setup. |
+| `-FromBootstrap` | Bootstrap mode: no icon cache rebuild, a 5-second wait for Explorer initialization, and the layout left unlocked with no Explorer restart for the Bootstrap sequence to lock later. Used internally during setup. |
+| `-BackupRoot`    | Root of the backup sink an existing real layout file is copied into before it is overwritten (under `System\TaskbarLayout\<timestamp>`). Defaults to `<Repo>\Backups\Windows`. |
 
 ```powershell
 # Clear and reconfigure the taskbar pins (interactive use)
 Configure-Taskbar
 
-# Internal use during the bootstrap sequence (skips the init delay, leaves layout unlocked)
+# Internal use during the bootstrap sequence (waits for Explorer init, leaves layout unlocked)
 Configure-Taskbar -FromBootstrap
 ```
 
@@ -149,12 +151,14 @@ Configure-Taskbar -FromBootstrap
 
 - **Description:** Enables the Windows Subsystem for Linux optional feature (if not already enabled) and installs the default WSL distribution read from `DefaultWSLDistribution` in `Configuration.psd1` (if not already installed). The base ships that key empty, so the function warns and skips WSL setup until a distribution is set in `Configuration.local.psd1`. On first installation it sets up the WSL user account - non-interactively when `DefaultWSLUsername` is configured, otherwise via the distribution's interactive first-launch wizard. Requires administrator privileges.
 - **Parameters:** -Force (alias -Override)
-- **Usage:** `Configure-WSL`, `Configure-WSL -Force`
+- **Usage:** `Configure-WSL`, `Configure-WSL -Force`, `Configure-WSL -Override`
 
 Checks `Test-WSLEnabled` and enables the `Microsoft-Windows-Subsystem-Linux` optional feature with `-NoRestart` when needed. It then checks `Test-WSLDistributionInstalled` and, if the distribution is missing, runs `wsl --install -d <distro> --no-launch` followed by the user account setup:
 
 - With `DefaultWSLUsername` configured (lowercased automatically - Linux usernames are lowercase), the account is created non-interactively with `useradd` (home directory, bash shell, `adm`/`sudo` groups), you are prompted once for its sudo password (passwords never live in configuration), and the account is written as `default` under `[user]` in `/etc/wsl.conf` followed by a distro restart so it takes effect.
 - Without it, a bare `wsl` launch runs the interactive first-launch wizard (username and sudo password); use `exit` to let setup continue.
+
+When a freshly installed distribution is not registered yet (it needs a reboot first), the user setup - and with `-Force` the re-run steps below - is deferred with a warning to re-run Bootstrap after rebooting.
 
 Both stages are idempotent and report when WSL or the distribution is already present. Whenever the distribution is installed, it is also pinned as the WSL *default* (`wsl --set-default`) on every run - Docker Desktop and podman machines routinely steal the default, which silently redirects bare `wsl` invocations (and Windows Terminal's default WSL profile) into the wrong distro.
 
@@ -181,12 +185,12 @@ Removes any existing `.ssh` in the WSL home directory, recreates it, then copies
 - **Parameters:** -SearchPath, -ExcludePaths, -ListProjects
 - **Usage:** `Determine-DotnetDependencies`, `Determine-DotnetDependencies -ListProjects`, `Determine-DotnetDependencies -SearchPath C:\repos -ListProjects`
 
-The search path defaults to `MachineSpecificPaths.DotnetProjectsSearchPath`, falling back to `$env:USERPROFILE\Development` when that key is not configured. Common build and cache folders (`node_modules`, `bin`, `obj`, `.git`, `.vs`, `packages`) are excluded by default. Only modern .NET target frameworks are evaluated against the installed SDKs; missing versions are surfaced with `Microsoft.DotNet.SDK.<major>` package commands.
+The search path defaults to `MachineSpecificPaths.DotnetProjectsSearchPath`, falling back to `$env:USERPROFILE\Development` when that key is not configured. `MachineSpecificPaths` holds the expanded `PathTemplates`, so only a `PathTemplates.DotnetProjectsSearchPath` entry reaches it - the top-level `DotnetProjectsSearchPath` key the base ships (`"{Dev}"`) is currently not read, and without a `PathTemplates` entry the scan starts at `$env:USERPROFILE\Development`. Common build and cache folders (`node_modules`, `bin`, `obj`, `.git`, `.vs`, `packages`) are excluded by default; an exclusion matches anywhere in a project file's full path (so `bin` also skips a project under a folder such as `Cabinet`), not only a whole folder name. Only modern .NET target frameworks are evaluated against the installed SDKs; missing versions are surfaced with `Microsoft.DotNet.SDK.<major>` package commands.
 
 | Parameter       | Description                                                                                                                                                |
 | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `-SearchPath`   | Root directory to scan for .NET projects. Defaults to `MachineSpecificPaths.DotnetProjectsSearchPath` or `$env:USERPROFILE\Development` if not configured. |
-| `-ExcludePaths` | Array of directory names to exclude from scanning. Defaults to common build/cache folders.                                                                 |
+| `-ExcludePaths` | Array of names to exclude from scanning, matched as substrings of each project file's full path. Defaults to common build/cache folders.                  |
 | `-ListProjects` | Also outputs the list of .NET projects found, grouped per target framework.                                                                                |
 
 ```powershell
@@ -245,7 +249,7 @@ onefetch | Format-OnefetchPanel -Separator " -> " -Colors @{ "12" = "38;2;30;144
 
 ## [Get-BrowserTitlePattern](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Get-BrowserTitlePattern.ps1)
 
-- **Description:** Returns the window title regex that identifies a browser's main windows, keyed by browser name from `Configuration.Universal.Browsers` (Firefox, Tor, Chrome, Edge, Brave); unknown names return `$null`. The single source of truth for browser window identification, shared by `Terminate-AllBrowserProcesses` (to find the windows to close) and `Open-Browser`'s `-Instances` mode (to count only the target browser's existing windows - Firefox and Tor Browser share the `firefox.exe` process name, so a process-level count cannot tell them apart).
+- **Description:** Returns the window title regex that identifies a browser's main windows, from a built-in map keyed by the browser names `Configuration.Universal.Browsers` uses (Firefox, Tor, Chrome, Edge, Brave) - the patterns are not read from configuration, so a browser added to `Universal.Browsers` has none; unknown names return `$null`. The single source of truth for browser window identification, shared by `Terminate-AllBrowserProcesses` (to find the windows to close) and `Open-Browser`'s `-Instances` mode (to count only the target browser's existing windows - Firefox and Tor Browser share the `firefox.exe` process name, so a process-level count cannot tell them apart).
 - **Parameters:** -BrowserName
 - **Usage:** `Get-BrowserTitlePattern -BrowserName "Edge"`
 
@@ -275,19 +279,19 @@ Filters `Get-CachedWindows` by owning process ID and returns each match as a `PS
 
 | Parameter       | Type     | Description                                                      |
 | --------------- | -------- | ---------------------------------------------------------------- |
-| `-TargetPids`   | `int[]`  | Process IDs whose top-level windows should be enumerated.        |
-| `-TitlePattern` | `string` | Regex used to keep only the intended browser brand main windows. |
+| `-TargetPids`   | `int[]`  | Process IDs whose top-level windows should be enumerated. Mandatory. |
+| `-TitlePattern` | `string` | Optional regex for the browser brand's main windows. Sets each window's `MatchesPattern` flag; it does not filter. |
 
 ```powershell
 # Return visible Chrome windows owned by process 1234
 Get-BrowserWindowsByTarget -TargetPids @(1234) -TitlePattern "Google Chrome"
 ```
 
-**See also:** [Close-BrowserWindows](../modules/system.md)
+**See also:** [Close-BrowserWindows](#close-browserwindows), [Get-BrowserTitlePattern](#get-browsertitlepattern)
 
 ## [Get-ChassisType](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Get-ChassisType.ps1)
 
-- **Description:** Returns the machine's SMBIOS chassis type codes (`Win32_SystemEnclosure.ChassisTypes` - 3 for a desktop, 9 or 10 for a laptop), from the hardware on the first call and from a per-machine cache file (`%LOCALAPPDATA%\WinuX\ChassisTypes.txt`, one code per line) on every later one. The CIM query loads the CimCmdlets module and was the largest part of [Test-PowerPlan](#test-powerplan)'s cost on every shell start, for a value that never changes on a given machine. `-Refresh` queries the hardware again and rewrites the cache; a cache that is missing, empty or not integers is ignored and re-created, and one that cannot be written just means the hardware is queried every time. Returns an empty list when neither answered.
+- **Description:** Returns the machine's SMBIOS chassis type codes (`Win32_SystemEnclosure.ChassisTypes` - 3 for a desktop, 9 or 10 for a laptop), from the hardware on the first call and from a per-machine cache file (`%LOCALAPPDATA%\WinuX\ChassisTypes.txt`, one code per line) on every later one. The CIM query loads the CimCmdlets module and was the largest part of [Test-PowerPlan](#test-powerplan)'s cost on every shell start, for a value that never changes on a given machine. `-Refresh` queries the hardware again and rewrites the cache; a cache that is missing, empty or not integers is ignored and re-created, and one that cannot be written just means the hardware is queried every time. Returns an empty list when neither answered; a failing CIM query throws.
 - **Parameters:** `[-Refresh]` `[-CachePath]`
 - **Usage:** `Get-ChassisType`, `Get-ChassisType -Refresh`
 
@@ -311,7 +315,7 @@ if ($panelWidth -gt $window.Width) { "too wide" }
 
 ## [Get-FastfetchLogoArgument](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Get-FastfetchLogoArgument.ps1)
 
-- **Description:** Builds the fastfetch arguments that render an image logo in the current terminal, returning an empty array whenever an image is not possible so the caller runs fastfetch exactly as configured. Opt-in: returns nothing until `Universal.FastFetchImageLogo` names an image - either one path for every machine, or a hashtable keyed by machine type, where a machine with no entry gets no image. Dispatches per terminal: WezTerm gets `--logo-type iterm` (the OSC 1337 inline-image protocol, which WezTerm scales itself), Windows Terminal gets `--logo-type raw` over a sixel that [`Get-TerminalCellSize`](#get-terminalcellsize) and [`New-SixelImage`](#new-sixelimage) have already sized to fit, and every other host gets nothing. Reserves a fixed block of character cells and fits the image inside it preserving the aspect ratio, so the panel has the geometry it would have with a text logo of the same dimensions; `-ReferenceLogoPath` defaults to the deployed fastfetch text logo (`PathTemplates.SymbolicLinks.FastFetch.Logo`), so the block is measured from the very logo the image replaces. Returns nothing when output is redirected, so a shell whose whole stdout is a file or a pipe gets text rather than 50KB of sixel. Never throws.
+- **Description:** Builds the fastfetch arguments that render an image logo in the current terminal, returning an empty array whenever an image is not possible so the caller runs fastfetch exactly as configured. Opt-in: returns nothing until `Universal.FastFetchImageLogo` names an image - either one path for every machine, or a hashtable keyed by machine type, where a machine with no entry gets no image. Dispatches per terminal: WezTerm gets `--logo-type iterm` (the OSC 1337 inline-image protocol, which WezTerm scales itself), Windows Terminal gets `--logo-type raw` over a sixel that [`Get-TerminalCellSize`](#get-terminalcellsize) and [`New-SixelImage`](#new-sixelimage) have already sized to fit, and every other host gets nothing. Reserves a fixed block of character cells and fits the image inside it preserving the aspect ratio, so the panel has the geometry it would have with a text logo of the same dimensions; `-ReferenceLogoPath` defaults to the deployed fastfetch text logo (the `Path` of `PathTemplates.SymbolicLinks.FastFetch.Logo`), so the block is measured from the very logo the image replaces. Returns nothing when output is redirected, so a shell whose whole stdout is a file or a pipe gets text rather than 50KB of sixel. Never throws.
 - **Parameters:** `[-ImagePath]` `[-ReferenceLogoPath]` `[-CellWidth]` `[-CellHeight]` `[-PaddingRight]` `[-OutputRedirected]`
 - **Usage:** `Get-FastfetchLogoArgument`, `Get-FastfetchLogoArgument -ImagePath $logo -CellWidth 30 -CellHeight 15`
 
@@ -336,7 +340,7 @@ configuration key.
 | Parameter | Description |
 | --------- | ----------- |
 | `-ImagePath` | The image to use as the logo. Anything ImageMagick can decode. Omit it and the value comes from `Universal.FastFetchImageLogo` - the whole string, or this machine's entry when that key is a per-machine hashtable. With neither set the function returns an empty array. |
-| `-ReferenceLogoPath` | Text logo whose dimensions define the cell block: its line count becomes the height, its longest line - fastfetch's `$1`-`$9` color placeholders removed - becomes the width. Defaults to `PathTemplates.SymbolicLinks.FastFetch.Logo`. Overrides `-CellWidth` and `-CellHeight` when readable. |
+| `-ReferenceLogoPath` | Text logo whose dimensions define the cell block: its line count becomes the height, its longest line - fastfetch's `$1`-`$9` color placeholders removed - becomes the width. Defaults to the `Path` of `PathTemplates.SymbolicLinks.FastFetch.Logo`. Overrides `-CellWidth` and `-CellHeight` when readable. |
 | `-CellWidth` | Width of the reserved block in cells, used when no reference logo is readable. Default 36. |
 | `-CellHeight` | Height of the reserved block in cells, used when no reference logo is readable. Default 16. |
 | `-PaddingRight` | Blank columns between the logo block and the module list. Default 4. |
@@ -442,7 +446,7 @@ if ($cell) { $pixelWidth = 36 * $cell.Width }
 
 ## [Get-VisibleWindowProcess](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Get-VisibleWindowProcess.ps1)
 
-- **Description:** Lists every process that owns at least one visible, titled application window - the discovery step behind `Terminate-AllProcessesWithVisibleWindows` and the `Kill-All` survivor audit. It answers "which processes have a window on screen" from the window side: every visible, titled top-level window is enumerated (`EnumWindows`, through the Window module's `Get-CachedWindows` after a cache clear) and grouped by owning process, so a process is a candidate as soon as any of its windows is on screen. Shell windows (the same title list `Move-Windows` and `Center-Windows` skip) and the shell processes `Get-ShellProcessName` lists (the desktop itself and the hosts of other apps' windows) are never returned. Without the Window module it falls back to `Get-Process` and `MainWindowTitle` with the same shell filter.
+- **Description:** Lists every process that owns at least one visible, titled application window - the discovery step behind `Terminate-AllProcessesWithVisibleWindows` and the `Kill-All` survivor audit. It answers "which processes have a window on screen" from the window side: every visible, titled, non-zero-size top-level window is enumerated (`EnumWindows`, through the Window module's `Get-CachedWindows` after a cache clear) and grouped by owning process, so a process is a candidate as soon as any of its windows is on screen. Shell windows (the same title list `Move-Windows` and `Center-Windows` skip) and the shell processes `Get-ShellProcessName` lists (the desktop itself and the hosts of other apps' windows) are never returned. Without the Window module it falls back to `Get-Process` and `MainWindowTitle` with the same shell filter.
 - **Usage:** `Get-VisibleWindowProcess`, `Get-VisibleWindowProcess | Where-Object { $_.WindowTitles.Count -gt 1 }`
 
 This replaces the classic `Get-Process | Where-Object MainWindowTitle` test, which skipped windows at random. .NET's `MainWindowHandle` is the FIRST visible, unowned top-level window of the process in z-order, titled or not: a process whose untitled helper window happened to sit above its real window (Electron and Chromium apps create such windows) reported an empty `MainWindowTitle` and was passed over, and because z-order follows focus history the same app was seen on one run and missed on the next. Packaged (UWP) apps were missed the same way, since their visible frames belong to `ApplicationFrameHost` while the app's own process reports no main window. Enumerating the windows sidesteps both. Each returned object carries `ProcessName`, `Id`, `WindowTitles` (every visible titled window of the process), `MainWindowTitle` (the first of those - what exclusion matching and log lines use) and `Source` (`EnumWindows` or `MainWindowTitle`).
@@ -456,6 +460,15 @@ Get-VisibleWindowProcess | Where-Object { $_.WindowTitles.Count -gt 1 }
 ```
 
 **See also:** [Terminate-AllProcessesWithVisibleWindows](#terminate-allprocesseswithvisiblewindows), [Report-KillAllSurvivors](#report-killallsurvivors)
+
+## [Import-TerminalIcons](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Import-TerminalIcons.ps1)
+
+- **Description:** Imports `Terminal-Icons` into the global session state - the file and folder glyphs in directory listings - and heals the module's own theme cache when that is what stops the import. The profile queues it as the startup stage `Terminal-Icons`, run after the first prompt from the `PowerShell.OnIdle` queue (the import measured at 165-400 ms, and the icons are only needed once something is listed). Returns `$false` with a Debug line when the module is not installed. When `Import-Module` throws, [Repair-TerminalIconsThemeCache](#repair-terminaliconsthemecache) probes the cache and the import runs again, up to three attempts in all. It retries whether or not this shell moved anything: when several shells start together, another may have moved the torn file aside first or may still be rewriting the cache. A repair this shell made is reported with a success line; a late success without one is only a Debug line; when every attempt fails the error is logged with `Write-LogError` (console, session log and error log) and `$false` returned, so a shell without icons always leaves a trace. `-RedrawPrompt` draws the prompt again through [Restore-ShellPrompt](helper.md#restore-shellprompt) when something was printed, since from the idle-time queue the prompt is already on screen.
+- **Parameters:** -RedrawPrompt
+- **Usage:** `Import-TerminalIcons`, `Import-TerminalIcons -RedrawPrompt` (what the profile runs)
+
+**See also:** [Repair-TerminalIconsThemeCache](#repair-terminaliconsthemecache), [Restore-ShellPrompt](helper.md#restore-shellprompt), [Install-PowerShellModules](application.md#install-powershellmodules)
+
 
 ## [Initialize-OhMyPosh](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Initialize-OhMyPosh.ps1)
 
@@ -472,11 +485,12 @@ Called by the PowerShell profile on every shell start. **Must be dot-invoked** (
 ## [Initialize-PSReadLine](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Initialize-PSReadLine.ps1)
 
 - **Description:** Applies every PSReadLine editing, history and prediction option from the `PSReadLine` section of `Configuration.psd1` to the current session. It replaces the block of hardcoded `Set-PSReadLineOption` / `Set-PSReadLineKeyHandler` calls the profile used to carry, so a fork tunes the interactive shell in `Configuration.local.psd1` instead of editing the shared profile. Every key is optional: `$null` (or a missing key) is skipped and PSReadLine keeps what it already had, which for a vanilla install is its own default. That is also how a fork drops a base key binding - set that key to `$null` under `KeyHandlers`. The order is fixed and load-bearing: `EditMode` first, because `-EditMode` installs a whole key map and resets every binding made before it; then the `KeyHandlers`; then the history options; then `PredictionSource` and `PredictionViewStyle` last, inside their own `try`/`catch`, because those two are the only calls that throw on a console without virtual-terminal support and a cosmetic feature must never break shell startup. `MaximumHistoryCount` drives two limits with one number - PSReadLine's recall cap (arrow keys, `Ctrl+R`) and the session `$MaximumHistoryCount` (`Get-History`), the latter clamped to PowerShell's 32767 ceiling. A value that is not a positive integer is reported with `Write-LogWarning` and both limits are left alone. `HistorySavePath` accepts `%ENV%` variables.
-- **Usage:** `Initialize-PSReadLine [-Settings <hashtable>]`
+- **Parameters:** -Settings (hashtable, positional)
+- **Usage:** `Initialize-PSReadLine`, `Initialize-PSReadLine -Settings @{ MaximumHistoryCount = 32767 }`
 
 | Parameter | Description |
 | --------- | ----------- |
-| `-Settings` | The section to apply. Defaults to `$global:Configuration.PSReadLine`. `$null` or empty logs at debug level and applies nothing. |
+| `-Settings` | The section to apply (`hashtable`, position 0). Defaults to `Configuration.PSReadLine`. `$null` or empty logs at debug level and applies nothing. |
 
 Called by the PowerShell profile on every interactive shell start, after `Import-Module PSReadLine` and **before** [Initialize-OhMyPosh](#initialize-ohmyposh): a theme carrying a `transient_prompt` binds `Enter`, and an `-EditMode` call after that binding would reset it to `AcceptLine`. A plain call, not dot-invoked - PSReadLine options are process-global, nothing has to land in the caller's scope. PSReadLine never trims its history file; it appends every command and loads the newest `MaximumHistoryCount` lines at startup, so the cap is what is recallable, not what is stored. `HistoryNoDuplicates` likewise hides repeated commands during recall only - every invocation is still written.
 
@@ -497,10 +511,10 @@ Get-PSReadLineKeyHandler -Bound | Where-Object Key -in UpArrow, DownArrow
 
 ## [Initialize-WSLEnvironment](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Initialize-WSLEnvironment.ps1)
 
-- **Description:** Initializes the configured WSL distribution with shell tooling. Installs the `fastfetch` system info tool via apt and adds it to `.bashrc` so it runs on shell startup, then installs `unzip` and `oh-my-posh` and wires `oh-my-posh` into `.profile` with the configured theme. Each step is idempotent, detecting existing installs and configuration before acting. No-ops until `DefaultWSLDistribution` is configured.
+- **Description:** Initializes the configured WSL distribution with shell tooling. Installs the `fastfetch` system info tool via apt and adds it to `.bashrc` so it runs on shell startup, then installs `unzip` and `oh-my-posh` and wires `oh-my-posh` into `.profile` with the configured theme (the file name of `Universal.OhMyPoshThemeFile`). Each step is idempotent, detecting existing installs and configuration before acting. No-ops until `DefaultWSLDistribution` is configured.
 - **Usage:** `Initialize-WSLEnvironment`
 
-Every `wsl` call targets the configured `DefaultWSLDistribution` explicitly (`wsl -d <distro>`) rather than the WSL default - Docker Desktop and podman machines routinely steal the default distribution, which would otherwise silently provision the wrong distro. First it checks whether `fastfetch` is present (`command -v fastfetch`); if missing it adds the fastfetch PPA, runs `apt update`, and installs the package as root, then appends `fastfetch` to `~/.bashrc` unless already present. It then provisions a temporary setup script in `/tmp` that installs `unzip` (if not already installed) and `oh-my-posh` (via the official install script), appends the `oh-my-posh init bash` line to `~/.profile` referencing the configured theme, reloads the profile, and is removed afterward.
+Every `wsl` call targets the configured `DefaultWSLDistribution` explicitly (`wsl -d <distro>`) rather than the WSL default - Docker Desktop and podman machines routinely steal the default distribution, which would otherwise silently provision the wrong distro. First it checks whether `fastfetch` is present (`command -v fastfetch`); if missing it adds the fastfetch PPA, runs `apt update`, and installs the package as root, then appends `fastfetch` to `~/.bashrc` unless already present. It then provisions a temporary setup script in `/tmp` that installs `unzip` (if not already installed) and `oh-my-posh` (via the official install script), appends the `oh-my-posh init bash` line to `~/.profile` referencing the configured theme, reloads the profile, and is removed afterward. Only the theme's file name is taken from `Universal.OhMyPoshThemeFile` (`WinuX.omp.json` when unset); the line always points at `/mnt/c/Users/<Windows user>/AppData/Local/Programs/oh-my-posh/themes/<file name>`, whatever directory the key names. The `unzip` install runs through `sudo` as the distribution's default user, so it can prompt for that user's password.
 
 ```powershell
 # Install and configure fastfetch and oh-my-posh inside the configured WSL distribution
@@ -529,7 +543,7 @@ Set-LogLevel Verbose { Invoke-Clear }
 
 ## [Invoke-Fastfetch](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Invoke-Fastfetch.ps1)
 
-- **Description:** Displays the fastfetch system info panel, shrinking the font step by step until the panel fits the window. It does NOT clear the screen - [Invoke-Clear](#invoke-clear) is the step that does, so each part of the greeting can be switched off on its own. Inside Windows Terminal it first measures the panel by capturing fastfetch's output (in pipe mode fastfetch emits one line per visual row, so the captured line count is the panel height and the longest line is its width), then sends `Ctrl+0` ("reset font size") so the panel is always judged against - and returns to - the default font. While `Test-FastfetchPanelOverflow` says the panel still overflows it sends `Ctrl+Minus` ("decrease font size") one step at a time through `Send-TerminalFontKey`, waiting for the terminal to reflow with `Wait-ConsoleReflow` after each step, until the panel fits, `MaxShrinkSteps` steps have been taken, or the terminal stops changing size (its minimum font); then it renders the colored panel. Resetting first keeps the result deterministic (default font when it fits, the fewest steps below it that fit when it does not) and avoids oscillating on repeated calls, and the loop needs no per-machine value: a small laptop display, a high DPI scale, a wide fastfetch configuration and a tall one are all absorbed the same way. `-ExtraRows` adds rows to the height the panel is judged by, which is how the greeting fits the fastfetch and onefetch panels together. The knobs come from the `TerminalGreeting.Fastfetch.AutoFit` configuration section through `Resolve-TerminalGreetingSettings`; an explicit parameter overrides the configured value for that one call. The measuring run invokes the fastfetch BINARY rather than the `fastfetch` command name, so a profile-defined `fastfetch` function cannot distort the measurement with a decoration that has no measurable width - an inline-image logo is a single enormous line. The displaying run goes through the command name as usual, so such a wrapper still decorates what you see.
+- **Description:** Displays the fastfetch system info panel, shrinking the font step by step until the panel fits the window. It does NOT clear the screen - [Invoke-Clear](#invoke-clear) is the step that does, so each part of the greeting can be switched off on its own. Inside Windows Terminal it first measures the panel by capturing fastfetch's output (in pipe mode fastfetch emits one line per visual row, so the captured line count is the panel height and the longest line is its width), then sends `Ctrl+0` ("reset font size") so the panel is always judged against - and returns to - the default font. While `Test-FastfetchPanelOverflow` says the panel still overflows it sends `Ctrl+Minus` ("decrease font size") one step at a time through `Send-TerminalFontKey`, waiting for the terminal to reflow with `Wait-ConsoleReflow` after each step, until the panel fits, `MaxShrinkSteps` steps have been taken, or the terminal stops changing size (its minimum font); then it renders the colored panel. Resetting first keeps the result deterministic (default font when it fits, the fewest steps below it that fit when it does not) and avoids oscillating on repeated calls, and the loop needs no per-machine value: a small laptop display, a high DPI scale, a wide fastfetch configuration and a tall one are all absorbed the same way. `-ExtraRows` adds rows to the height the panel is judged by, which is how the greeting fits the fastfetch and onefetch panels together. The knobs come from the `TerminalGreeting.Fastfetch.AutoFit` configuration section through `Resolve-TerminalGreetingSettings`; an explicit parameter overrides the configured value for that one call - unless `-Settings` is passed, in which case that tree is used as is and `-PromptReserve`, `-MaxShrinkSteps` and `-ReflowTimeoutMilliseconds` are ignored. The measuring run invokes the fastfetch BINARY rather than the `fastfetch` command name, so a profile-defined `fastfetch` function cannot distort the measurement with a decoration that has no measurable width - an inline-image logo is a single enormous line. The displaying run goes through the command name as usual, so such a wrapper still decorates what you see.
 - **Parameters:** -NoResize, -ExtraRows, -PromptReserve, -MaxShrinkSteps, -ReflowTimeoutMilliseconds, `[-Settings]`
 - **Usage:** `Invoke-Fastfetch`, `Invoke-Fastfetch -NoResize`, `Invoke-Fastfetch -MaxShrinkSteps 0`, `Invoke-Fastfetch -ExtraRows 12`, `Invoke-Fastfetch -PromptReserve 2`
 
@@ -577,7 +591,7 @@ Like fastfetch, onefetch emits one line per visual row when its output is redire
 | ------------ | ---------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
 | `-Measure`   | `switch`   | -                                    | Return the row count of the panel instead of displaying it. `0` when nothing would be shown.               |
 | `-Arguments` | `string[]` | `TerminalGreeting.Onefetch.Arguments` | Arguments passed through to the onefetch binary.                                                          |
-| `-Path`      | `string`   | `$PWD.Path`                          | The directory to test and run in.                                                                          |
+| `-Path`      | `string`   | `$PWD.Path`                          | The directory tested for a git repository. onefetch itself is not given this path and always reports on the current location. |
 | `-Settings`  | `psobject` | `Resolve-TerminalGreetingSettings`   | The resolved greeting settings. Omitted, this resolves for itself.                                        |
 
 ```powershell
@@ -620,7 +634,7 @@ This helper centralizes the process-exit step of the `-IncludeCurrent` shutdown 
 - **Parameters:** -ClosedTabs, -StartingTitle, -OriginalHostTitle, -CloseWaitSeconds
 - **Usage:** `Invoke-TerminateWindowsTerminalTabsIncludeCurrentCleanup -ClosedTabs @("TabA") -StartingTitle "CurrentTab" -OriginalHostTitle "OriginalTitle"`, `Invoke-TerminateWindowsTerminalTabsIncludeCurrentCleanup -ClosedTabs @("TabA") -StartingTitle "CurrentTab" -OriginalHostTitle "OriginalTitle" -CloseWaitSeconds 5`
 
-Internal helper invoked by `Terminate-WindowsTerminalTabs` when `-IncludeCurrent` is used. It reports the total count of closed tabs (the already-closed `-ClosedTabs` plus the current tab's `-StartingTitle`), restores `-OriginalHostTitle` on the PowerShell host, and starts a hidden background PowerShell process as a safety net that force-closes the hosting `WindowsTerminal` process should it fail to exit on its own. Control then passes to the deterministic process-exit seam.
+Internal helper invoked by `Terminate-WindowsTerminalTabs` when `-IncludeCurrent` is used. It reports the total count of closed tabs (the already-closed `-ClosedTabs` plus the current tab's `-StartingTitle`), restores `-OriginalHostTitle` on the PowerShell host, waits `-CloseWaitSeconds` if given, and starts a hidden background Windows PowerShell (`powershell.exe`) process as a safety net: 2 seconds later it force-stops the first `WindowsTerminal` process that was found when it was started - the hosting one on a typical single-process Windows Terminal - if that process has not exited on its own. Control then passes to the deterministic process-exit seam.
 
 | Parameter            | Type       | Default | Description                                                                                   |
 | -------------------- | ---------- | ------- | --------------------------------------------------------------------------------------------- |
@@ -639,7 +653,7 @@ Invoke-TerminateWindowsTerminalTabsIncludeCurrentCleanup -ClosedTabs @("TabA") -
 
 ## [Kill-All](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Kill-All.ps1)
 
-- **Description:** Orchestrates a full desktop cleanup as a sequence of configurable steps. Removes all virtual desktops except the first (`VirtualDesktops`), stops Docker Desktop cleanly via `DockerWizard -Stop` before generic process termination (`Docker`), gracefully closes all configured browser processes via WM_CLOSE (`Browsers`), terminates remaining processes with visible windows except browsers and the `Universal.VisibleWindowExclusions` list (`VisibleWindows`) and the configured `Universal.TerminateProcessNames` processes (`NamedProcesses`), then waits a short RPC/DCOM quiescence window (500 ms) before closing extra Windows Terminal tabs (`TerminalTabs`) so subsequent commands (e.g. `Open-Workspace`) do not hit `0x800706BA` from DCOM churn. Unless `-IncludeCurrent` is given, the surviving Windows Terminal is then centered on the primary monitor via `Center-Windows -OnPrimary` (`CenterTerminal`) and refocused via `Focus-TerminalTab` (`FocusTerminal`), so the run always ends on the terminal. Can optionally reload the PowerShell profile (`ReloadProfile`, off by default). Every step can be toggled persistently via `KillAll.Steps` in `Configuration.psd1` / `Configuration.local.psd1` (plain booleans or per-machine-type hashtables with a `Default` fallback) and per invocation via `-Skip` / `-Include`.
+- **Description:** Orchestrates a full desktop cleanup as a sequence of configurable steps. Removes all virtual desktops except the first (`VirtualDesktops`), stops Docker Desktop cleanly via `DockerWizard -Stop` before generic process termination (`Docker`), gracefully closes all configured browser processes via WM_CLOSE (`Browsers`), terminates remaining processes with visible windows except browsers and the `Universal.VisibleWindowExclusions` list (`VisibleWindows`) and the configured `Universal.TerminateProcessNames` processes (`NamedProcesses`), then waits a short RPC/DCOM quiescence window (500 ms) before closing extra Windows Terminal tabs (`TerminalTabs`) so subsequent commands (e.g. `Open-Workspace`) do not hit `0x800706BA` from DCOM churn. Unless `-IncludeCurrent` is given, the surviving Windows Terminal is then centered on the primary monitor via `Center-Terminal` (which sizes it from `CenterTerminalSizing` and places it through `Center-Windows -OnPrimary`) (`CenterTerminal`) and refocused via `Focus-TerminalTab` (`FocusTerminal`), so the run always ends on the terminal. Can optionally reload the PowerShell profile (`ReloadProfile`, off by default). Every step can be toggled persistently via `KillAll.Steps` in `Configuration.psd1` / `Configuration.local.psd1` (plain booleans or per-machine-type hashtables with a `Default` fallback) and per invocation via `-Skip` / `-Include`.
 - **Parameters:** -Exclude (wildcard/regex patterns), -Skip (step names), -Include (step names), -IncludeCurrent, -ReloadPowerShellProfile
 - **Usage:** `Kill-All`, `Kill-All -Exclude "*YouTube*"`, `Kill-All -Skip Docker`, `Kill-All -Skip Docker, Browsers`, `Kill-All -Include ReloadProfile`, `Kill-All -IncludeCurrent`, `Kill-All -ReloadPowerShellProfile`
 
@@ -652,8 +666,8 @@ Step resolution is tri-state: `-Skip` beats `-Include` beats the `KillAll.Steps`
 **The open-workspace tracker is cleared too**, but only when `Browsers`, `VisibleWindows` and `NamedProcesses` all ran. A full run leaves nothing a workspace opened, so a populated tracker would have [Close-Workspace](workflow.md#close-workspace) go on offering workspaces that are long gone and then report every one of their windows as already closed. Skip any of those three steps and the tracker is **kept**: staleness is merely noisy (an item it cannot find is reported as already closed), whereas clearing too eagerly is a real capability loss, because the windows that *did* survive a partial run become unclosable. The clear happens before the tab termination, since `-IncludeCurrent` ends the process outright, and is guarded with `Get-Command` because `Workflow` is a separate module that need not be loaded.
 
 | Parameter                  | Description                                                                                                                                              |
-| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| `-Exclude`                 | One or more window title patterns to spare from termination. Supports both wildcard (`"*YouTube*"`, `"Chrome - *"`) and regex (`"^Chrome"`, `"(._Gmail._ | ._Inbox._)"`) patterns, same format as layout `.psd1` files. |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `-Exclude`                 | One or more window title patterns to spare from termination. Supports both wildcard (`"*YouTube*"`, `"Chrome - *"`) and regex (`"^Chrome"`, `"(.*Gmail.*\|.*Inbox.*)"`) patterns, same format as layout `.psd1` files. |
 | `-Skip`                    | Step names to skip for this invocation, overriding config. Valid: `VirtualDesktops`, `Docker`, `Browsers`, `VisibleWindows`, `NamedProcesses`, `TerminalTabs`, `CenterTerminal`, `FocusTerminal`, `ReloadProfile`. Wins over `-Include`. |
 | `-Include`                 | Step names to run for this invocation even if config disables them. Same valid names as `-Skip`.                                                        |
 | `-IncludeCurrent`          | Also closes the current Windows Terminal tab.                                                                                                            |
@@ -694,7 +708,7 @@ Kill-All -ReloadPowerShellProfile
 | `Configuration` | `bare (-NoProfile)`, `Core`, then `+ Stage` (Cumulative) or `full`, then `- Stage` (Isolated) |
 | `Min` / `Median` / `Max` | wall time of the child shell, launch to exit, in ms |
 | `Delta` | Cumulative: median minus the previous row. Isolated: median minus the full start (negative is a saving) |
-| `InShell` | the stage's own median as the profile measured it - the difference to Delta is the harness overhead and whatever the stage pulled in for later stages |
+| `InShell` | the stage's own median as the profile measured it - the difference to Delta is the harness overhead and whatever the stage pulled in for later stages. Empty for `FastfetchImageLogo` and `OnefetchStyle`: the all-hosts profile's wrappers honour their skip, but they run inside `Greeting` and write no trace entry of their own |
 
 ```powershell
 # The whole ladder, five runs per configuration, from a Windows Terminal tab on the Desktop
@@ -753,7 +767,7 @@ New-SixelImage -Path $logo -MaxPixelWidth (36 * 10) -MaxPixelHeight (16 * 20)
 - **Parameters:** -Path, -Target, -Distribution, -DisplayName, -BackupRoot
 - **Usage:** `New-WSLSymbolicLink -Path "/home/user/.ssh/config" -Target "/mnt/c/Users/User/.ssh/config" -Distribution "Ubuntu"`
 
-`-DisplayName` is the label used in log messages **and** the backup subfolder name (`SymbolicLinkMaker` passes the entry's dotted key); it defaults to `Path`, with the characters a path carries but a folder name cannot hold replaced by `_`. `-BackupRoot` overrides the sink root replaced items are copied into and defaults to `<Repo>\Backups\Windows`; it is a **Windows** path, translated into the distribution with `wslpath -a` so the in-distro `cp -a` can write to it. A backup that cannot be translated or copied skips the entry rather than removing a file it could not save. Creation failures are logged, never thrown.
+`-DisplayName` is the label used in log messages **and** the backup subfolder name (`SymbolicLinkMaker` passes the entry's dotted key); it defaults to `Path`, with the characters a path carries but a folder name cannot hold replaced by `_`. `-BackupRoot` overrides the sink root replaced items are copied into and defaults to `<Repo>\Backups\Windows`; it is a **Windows** path, translated into the distribution with `wslpath -a` so the in-distro `cp -a` can write to it. A backup that cannot be translated or copied skips the entry rather than removing a file it could not save. Only an existing file or symlink is replaced: a real **directory** already at `Path` is neither backed up nor removed, so `ln -s` then creates the link inside it. Creation failures are logged, never thrown.
 
 **See also:** [SymbolicLinkMaker](#symboliclinkmaker), [New-WindowsSymbolicLink](#new-windowssymboliclink), [Get-SymbolicLinkEntries](#get-symboliclinkentries)
 
@@ -844,11 +858,11 @@ Set-LogLevel Verbose { Remove-VirtualDesktops -EmptyOnly }
 
 ## [Rename-Machine](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Rename-Machine.ps1)
 
-- **Description:** Sets the machine hostname from `Configuration.psd1` or interactively prompts for a new name. If the current hostname matches a configured name it skips the operation (idempotent); with `-Override` it allows re-entering a new hostname even when already configured. Enforces Windows naming rules. Requires administrator privileges.
+- **Description:** Renames the machine interactively, skipping when the current hostname is already one configured in `HostnameToMachineType` (the new name is always typed in, never taken from configuration). If the current hostname matches a configured name it skips the operation (idempotent); with `-Override` it allows re-entering a new hostname even when already configured. Enforces Windows naming rules. Requires administrator privileges.
 - **Parameters:** -Override
 - **Usage:** `Rename-Machine`, `Rename-Machine -Override`
 
-Reads the configured hostnames from `HostnameToMachineType` in `Configuration.psd1` and compares them against the current `COMPUTERNAME`. When run without `-Override` and the name already matches, it reports the configured hostname and returns. Otherwise it prompts for a new name and validates it against Windows rules (max 63 characters, not all-numeric, only letters, digits, and hyphens) before calling `Rename-Computer`. A restart is required for the change to take effect.
+Reads the configured hostnames from `HostnameToMachineType` in `Configuration.psd1` and compares them against the current `COMPUTERNAME`. When run without `-Override` and the name already matches, it reports the configured hostname and returns. Otherwise it first asks whether to rename at all (Enter means No), then prompts for a new name (Enter cancels) and validates it against Windows rules (max 63 characters, not all-numeric, only letters, digits, and hyphens) before calling `Rename-Computer`. A restart is required for the change to take effect.
 
 | Parameter   | Description                                                                                             |
 | ----------- | ------------------------------------------------------------------------------------------------------- |
@@ -900,6 +914,15 @@ Set-LogLevel Verbose { Repair-RpcServer }
 ```
 
 Even when `Repair-RpcServer` returns `$false`, callers continue their normal flow (the workspace rerun still spawns) rather than aborting; there is no reboot prompt. Running from an elevated shell gives the service-restart step better odds.
+
+## [Repair-TerminalIconsThemeCache](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Repair-TerminalIconsThemeCache.ps1)
+
+- **Description:** Moves aside every file of the `Terminal-Icons` theme cache that no longer parses, so the module can import again. The module keeps its themes and preferences as Clixml files under `%APPDATA%\powershell\Community\Terminal-Icons\` and rewrites all of them on every import; two shells importing it in the same instant (a workspace opening several tabs at once) race on those writes and can leave a file torn - two writes spliced mid-line - after which every `Import-Module Terminal-Icons` fails on it (`Import-Clixml: Name attribute for dictionary key is incorrectly specified`). Each `.xml` file in the folder is checked with [Test-TerminalIconsCacheFile](#test-terminaliconscachefile); a file that fails is checked once more after a 250 ms pause, because another shell may be in the middle of writing it, and only a file that still fails is renamed to `<name>.corrupt-<yyyyMMdd-HHmmss>-<pid>` beside the original with a warning naming it. The module regenerates it from its built-in themes on the next import. The process id keeps two shells repairing in the same second from both claiming one rename. Nothing is deleted, files that parse are untouched, a file an earlier repair moved aside is not probed again, a file another shell moved aside first is a Debug line, and a file that is still there but cannot be renamed is reported as an error and left. Returns the files this call quarantined (`FileInfo`); nothing when every file parsed, the folder does not exist, or another shell got there first.
+- **Parameters:** -Path (the cache folder; defaults to `%APPDATA%\powershell\Community\Terminal-Icons`)
+- **Usage:** `Repair-TerminalIconsThemeCache`, `Repair-TerminalIconsThemeCache -Path "D:\Backup\Terminal-Icons"`
+
+**See also:** [Import-TerminalIcons](#import-terminalicons), [Test-TerminalIconsCacheFile](#test-terminaliconscachefile)
+
 
 ## [Report-KillAllSurvivors](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Report-KillAllSurvivors.ps1)
 
@@ -980,6 +1003,9 @@ The resolved tree, with the shipped defaults:
 | `Onefetch.IncludeInAutoFit`                     | `bool`     | `$true`  | -                         |
 | `Onefetch.InProjectTerminals`                   | `bool`     | `$true`  | -                         |
 | `Onefetch.Arguments`                            | `string[]` | `@()`    | -                         |
+| `Onefetch.Style.Enabled`                        | `bool`     | `$false` | -                         |
+| `Onefetch.Style.Separator`                      | `string`   | `""`     | -                         |
+| `Onefetch.Style.Colors`                         | `hashtable`| `@{}`    | -                         |
 
 | Parameter                    | Type        | Default                                  | Description                                                                 |
 | ---------------------------- | ----------- | ---------------------------------------- | --------------------------------------------------------------------------- |
@@ -1036,7 +1062,7 @@ Restart-Explorer -Message "Waiting for changes to apply..." -Delay 3
 # Show the Yes/No confirmation prompt
 Restart-Machine
 
-# Restart immediately without prompting
+# Restart without prompting, after the 5-second countdown
 Restart-Machine -Selection "Yes"
 ```
 
@@ -1070,7 +1096,7 @@ $after = Wait-ConsoleReflow -Before $before -TimeoutMilliseconds 10
 - **Parameters:** -Machine, -TimeoutSeconds, -NoWait
 - **Usage:** `Send-WakeOnLan`, `Send-WakeOnLan -Machine "MyMachine"`, `Send-WakeOnLan -Machine "MyMachine" -NoWait`
 
-Each machine entry specifies a MAC address, subnet-specific broadcast address and port, and optionally an `Address` for verification. With `-NoWait` the function sends the packet only, with no online pre-check or post-send verification (the original fire-and-forget behaviour). Verification is delegated to `Test-MachineOnline`. Machines are configured as an ordered list of single-key hashtables, which is also the order the menu offers them in; `All` and `None` are appended by the function and never configured. The base ships `WakeOnLanConfig` empty; both functions warn and no-op until it is set in `Configuration.local.psd1` - no packet is ever sent from an empty config.
+Each machine entry specifies a MAC address, subnet-specific broadcast address and port, and optionally an `Address` for verification. With `-NoWait` the function sends the packet only, with no online pre-check or post-send verification (the original fire-and-forget behaviour). Verification is delegated to `Test-MachineOnline`. Machines are configured as an ordered list of single-key hashtables, which is also the order the menu offers them in; `All` and `None` are appended by the function and never configured. Pressing Enter at the menu wakes `DefaultWakeOnLanMachine` (nothing when it is empty). The base ships `WakeOnLanConfig` empty; both functions warn and no-op until it is set in `Configuration.local.psd1` - no packet is ever sent from an empty config.
 
 | Parameter         | Description                                                                                                      |
 | ----------------- | ---------------------------------------------------------------------------------------------------------------- |
@@ -1093,14 +1119,16 @@ Send-WakeOnLan -Machine "MyMachine" -NoWait
 Example `WakeOnLanConfig` entry in `Configuration.psd1`:
 
 ```powershell
-WakeOnLanConfig = @{
-    MyMachine = @{
-        MacAddress                     = "00:11:22:33:44:55"
-        SubNetSpecificBroadcastAddress = "192.0.2.255"
-        Address                        = "192.0.2.10"  # IP/hostname; "" to disable ping checks
-        Port                           = 9
+WakeOnLanConfig = @(
+    @{ MyMachine = @{
+            MacAddress                     = "00:11:22:33:44:55"
+            SubNetSpecificBroadcastAddress = "192.0.2.255"
+            Address                        = "192.0.2.10"  # IP/hostname; "" to disable ping checks
+            Port                           = 9
+        }
     }
-}
+)
+DefaultWakeOnLanMachine = "MyMachine"  # what pressing Enter at the menu wakes
 ```
 
 **See also:** [Test-MachineOnline](system.md#test-machineonline)
@@ -1108,9 +1136,8 @@ WakeOnLanConfig = @{
 ## [Set-CustomExecutionPolicy](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Set-CustomExecutionPolicy.ps1)
 
 - **Description:** Sets the PowerShell execution policy to `Bypass` for a specified scope by calling `Set-ExecutionPolicy -ExecutionPolicy Bypass`, allowing unsigned scripts to run within that scope without user prompts.
-- **Parameters:** -Scope
+- **Parameters:** -Scope (`Process`, `CurrentUser`, `LocalMachine`; default `Process`)
 - **Usage:** `Set-CustomExecutionPolicy`, `Set-CustomExecutionPolicy -Scope CurrentUser`
-- **Scopes:** Process, CurrentUser, LocalMachine
 
 | Parameter | Description                                                                                                                                                                                             |
 | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1126,22 +1153,22 @@ Set-CustomExecutionPolicy -Scope CurrentUser
 
 ## [Set-DisplayLanguage](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Set-DisplayLanguage.ps1)
 
-- **Description:** Sets the Windows display language. Reads available languages from `DisplayLanguages` in `Configuration.psd1`; pass a language code to set it directly, or call with no arguments to pick from an interactive menu (Enter selects the configured `DefaultDisplayLanguage`). Requires administrator privileges.
+- **Description:** Sets the Windows display language. Reads available languages from `DisplayLanguages` in `Configuration.psd1` (friendly name to language tag); pass a language name (a `DisplayLanguages` key) to set it directly, or call with no arguments to pick from an interactive menu (Enter selects the configured `DefaultDisplayLanguage`). Requires administrator privileges.
 - **Parameters:** -Language
-- **Usage:** `Set-DisplayLanguage`, `Set-DisplayLanguage -Language "en-US"`
+- **Usage:** `Set-DisplayLanguage`, `Set-DisplayLanguage -Language "English (US)"`
 
 Resolves the chosen language to its tag from `DisplayLanguages` and moves it to the front of the Windows user language list (adding it first if not already installed), then verifies the change took effect. If the requested language is already the active display language it is left unchanged. A sign-out and sign-in is required for the change to take full effect.
 
 | Parameter   | Description                                                                                                      |
 | ----------- | ---------------------------------------------------------------------------------------------------------------- |
-| `-Language` | Language code as defined in `Configuration.psd1` (e.g. `"en-US"`, `"hr-HR"`). Omit to show the interactive menu. |
+| `-Language` | Language name as defined in `DisplayLanguages` (the key, e.g. `"English (US)"`, not the tag `"en-US"`). Omit to show the interactive menu. |
 
 ```powershell
 # Show the interactive display language selection menu
 Set-DisplayLanguage
 
-# Set the display language directly to English (US)
-Set-DisplayLanguage -Language "en-US"
+# Set the display language directly to the tag configured for "English (US)"
+Set-DisplayLanguage -Language "English (US)"
 ```
 
 ## [Set-EnvironmentVariables](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Set-EnvironmentVariables.ps1)
@@ -1180,7 +1207,7 @@ Set-ExplorerOptions
 
 ## [Set-KeyboardLayouts](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Set-KeyboardLayouts.ps1)
 
-- **Description:** Configures keyboard layouts from predefined layout sets read from `KeyboardLayoutSets` in `Configuration.psd1` (e.g. "Gaming", "Development"). Each set is a named collection of keyboard layout codes. Passing a set name installs all its layouts; calling it without arguments shows an interactive menu of available sets (Enter selects the configured default). Idempotent: skips reconfiguration when the requested set is already active unless `-Override` is given.
+- **Description:** Configures keyboard layouts from predefined layout sets read from `KeyboardLayoutSets` in `Configuration.psd1` (e.g. "Gaming", "Development"). Each set is a named, ordered list of layout names, each mapped to its keyboard layout id through `KeyboardLayouts`. Passing a set name installs all its layouts; calling it without arguments shows an interactive menu of available sets (Enter selects the configured default). Idempotent: skips reconfiguration when the requested set is already active unless `-Override` is given.
 - **Parameters:** -LayoutSet, -Override
 - **Usage:** `Set-KeyboardLayouts`, `Set-KeyboardLayouts -LayoutSet "Gaming"`, `Set-KeyboardLayouts -LayoutSet "Development" -Override`
 
@@ -1204,34 +1231,34 @@ Set-KeyboardLayouts -LayoutSet "Development" -Override
 
 ## [Set-Locale](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Set-Locale.ps1)
 
-- **Description:** Sets the system locale (user culture and home location). Reads available locales from `Locales` in `Configuration.psd1`. When given a locale name it sets that locale; called without arguments it shows an interactive menu of available locales. Requires administrator privileges.
+- **Description:** Sets the user culture and home location from a configured locale (the system locale itself is not changed). Reads available locales from `Locales` in `Configuration.psd1` (an ordered list of `@{ <Name> = @{ Code; GeoId } }` entries). When given a locale name it sets that locale; called without arguments it shows an interactive menu of available locales. Requires administrator privileges.
 - **Parameters:** -Locale
-- **Usage:** `Set-Locale`, `Set-Locale -Locale "en-US"`, `Set-Locale -Locale "hr-HR"`
+- **Usage:** `Set-Locale`, `Set-Locale -Locale "English (US)"`, `Set-Locale -Locale "Croatian"`
 
 Validates admin privileges first, then resolves the target locale either from the `-Locale` argument or via an interactive selection menu (pressing Enter selects the configured `DefaultLocale`). The chosen locale's `Code` and `GeoId` are read from `Configuration.psd1`; the function applies the culture with `Set-Culture` and the home location with `Set-WinHomeLocation` (falling back to the `HKCU:\Control Panel\International\Geo` registry key if the cmdlet fails). If the current culture already matches the target, no change is made. Some settings may require a system restart to take full effect.
 
 | Parameter | Description                                                                                                    |
 | --------- | -------------------------------------------------------------------------------------------------------------- |
-| `-Locale` | Locale name as defined in `Configuration.psd1` (e.g. `"en-US"`, `"hr-HR"`). Omit to show the interactive menu. |
+| `-Locale` | Locale name as defined in `Locales` (the entry name, e.g. `"English (US)"`, not the culture code `"en-US"`). Omit to show the interactive menu. |
 
 ```powershell
 # Show the interactive locale selection menu (Enter picks the default)
 Set-Locale
 
-# Set the system locale to US English
-Set-Locale -Locale "en-US"
+# Apply the locale configured as "English (US)"
+Set-Locale -Locale "English (US)"
 
-# Set the system locale to Croatian
-Set-Locale -Locale "hr-HR"
+# Apply the locale configured as "Croatian"
+Set-Locale -Locale "Croatian"
 ```
 
 ## [Set-LockScreenWallpaper](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Set-LockScreenWallpaper.ps1)
 
-- **Description:** Sets the Windows lock screen background image to match the active theme and machine type via native registry settings. Resolves the image from the same `WallpaperLightSettings` / `WallpaperDarkSettings` configuration in `Configuration.psd1` as `Set-Wallpaper` (for multi-monitor configs the first monitor's file is used). With `-Theme Auto` (the default) it detects the current system theme from the registry; disables Windows Spotlight / rotating lock screen so the custom image is shown. Writes to the `PersonalizationCSP` key under elevation and falls back to per-user registry otherwise. Requires administrator privileges.
+- **Description:** Sets the Windows lock screen background image to match the active theme and machine type via native registry settings. Resolves the image from the same `WallpaperLightSettings` / `WallpaperDarkSettings` configuration in `Configuration.psd1` as `Set-Wallpaper` (for multi-monitor configs the first monitor's file is used). With `-Theme Auto` (the default) it detects the current system theme from the registry (`AppsUseLightTheme`). The file name is resolved under `PathTemplates.Projects.Self.Wallpapers`. Writes to the `PersonalizationCSP` key under elevation and, if that write fails, falls back to per-user registry (disabling Windows Spotlight / rotating lock screen there). An empty wallpaper section, or no entry for the machine type and no `Default`, leaves the lock screen untouched. On an unexpected error it re-runs itself once via `ReRun-LastCommand -AutoAccept`. Requires administrator privileges.
 - **Parameters:** -Theme [Light | Dark | Auto]
 - **Usage:** `Set-LockScreenWallpaper`, `Set-LockScreenWallpaper -Theme Dark`, `Set-LockScreenWallpaper -Theme Light`
 
-Resolves the image path from the same `WallpaperDarkSettings` / `WallpaperLightSettings` configuration as `Set-Wallpaper`, picking the entry for the current machine type (falling back to `Default`). It then disables Windows Spotlight / rotating lock screen (`RotatingLockScreenEnabled`, `RotatingLockScreenOverlayEnabled`) and sets the lock screen image via the `PersonalizationCSP` registry key (`HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\PersonalizationCSP`) when elevated; if the CSP write fails it falls back to per-user registry under `HKCU`. `Set-SystemTheme` calls this automatically alongside `Set-Wallpaper`, so you typically don't need to invoke it directly.
+Resolves the image path from the same `WallpaperDarkSettings` / `WallpaperLightSettings` configuration as `Set-Wallpaper`, picking the entry for the current machine type (falling back to `Default`). It then sets the lock screen image via the `PersonalizationCSP` registry key (`HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\PersonalizationCSP`); if the CSP write fails (not elevated) it falls back to per-user registry under `HKCU`, disabling Windows Spotlight / rotating lock screen (`RotatingLockScreenEnabled`, `RotatingLockScreenOverlayEnabled`) and writing `LockScreenImagePath` under `Themes\Personalize`. `Set-SystemTheme` calls this automatically alongside `Set-Wallpaper`, so you typically don't need to invoke it directly.
 
 | Parameter | Type     | Default  | Description                                               |
 | --------- | -------- | -------- | --------------------------------------------------------- |
@@ -1249,7 +1276,7 @@ Set-LockScreenWallpaper -Theme Light
 Set-LogLevel Verbose { Set-LockScreenWallpaper }
 ```
 
-**See also:** [Set-Wallpaper](system.md), [Set-SystemTheme](system.md)
+**See also:** [Set-Wallpaper](#set-wallpaper), [Set-SystemTheme](#set-systemtheme)
 
 ## [Set-PowerButtonActions](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Set-PowerButtonActions.ps1)
 
@@ -1257,7 +1284,7 @@ Set-LogLevel Verbose { Set-LockScreenWallpaper }
 - **Parameters:** -Auto, -PowerButtonOnBattery, -PowerButtonPluggedIn, -SleepButtonOnBattery, -SleepButtonPluggedIn, -LidCloseOnBattery, -LidClosePluggedIn, -DisableFastStartup, -DisableSleep, -DisableHibernate
 - **Usage:** `Set-PowerButtonActions -Auto`, `Set-PowerButtonActions`, `Set-PowerButtonActions -PowerButtonPluggedIn "ShutDown" -PowerButtonOnBattery "Sleep"`, `Set-PowerButtonActions -Auto -LidCloseOnBattery Hibernate`
 
-With `-Auto`, the function determines the machine type and reads its block from `PowerButtonActions` in `Configuration.psd1`; explicit parameters override the configured values, and missing nullable toggles are left unmanaged. When `PowerButtonActions` is not configured (the empty base default) or has no entry for the machine type, a bare `-Auto` warns and leaves the power settings as-is - it no longer applies hardcoded defaults; only explicitly passed parameters are applied (over the built-in defaults as base). Without `-Auto`, omitted action parameters fall back to hardcoded defaults. The six button/lid actions are written through `powercfg` and reinforced directly in the registry across every power scheme, then the active scheme is re-activated to force the changes to take effect.
+With `-Auto`, the function determines the machine type and reads its block from `PowerButtonActions` in `Configuration.psd1`; explicit parameters override the configured values; a missing `DisableFastStartup` is left unmanaged, while a missing `DisableSleep` / `DisableHibernate` is applied as `$false` (Sleep shown in the Power menu, `powercfg /hibernate on`). When `PowerButtonActions` is not configured (the empty base default) or has no entry for the machine type, a bare `-Auto` warns and leaves the power settings as-is - it no longer applies hardcoded defaults; only explicitly passed parameters are applied (over the built-in defaults as base). Without `-Auto`, every omitted parameter falls back to its hardcoded default - power button and lid-on-battery `ShutDown`, sleep buttons and lid-plugged-in `DoNothing`, and all three `Disable*` toggles `$true` - so even a call naming one action also disables Fast Startup, Sleep and Hibernate. The six button/lid actions are written through `powercfg` and reinforced directly in the registry across every power scheme, then the active scheme is re-activated to force the changes to take effect.
 
 | Parameter               | Description                                                                                               |
 | ----------------------- | --------------------------------------------------------------------------------------------------------- |
@@ -1282,7 +1309,7 @@ Set-PowerButtonActions
 # Read from config but override a single behavior
 Set-PowerButtonActions -Auto -LidCloseOnBattery Hibernate
 
-# Set the power button action for both power states explicitly
+# Set the power button action for both power states explicitly (everything else takes its hardcoded default)
 Set-PowerButtonActions -PowerButtonPluggedIn "ShutDown" -PowerButtonOnBattery "Sleep"
 ```
 
@@ -1299,7 +1326,7 @@ Resolves the target mode from configuration (`-Auto`), the explicit `-Mode` para
 | Parameter | Description                                                                                          |
 | --------- | ---------------------------------------------------------------------------------------------------- |
 | `-Auto`   | Reads the power plan for the current machine type from `PowerPlans` in `Configuration.psd1`.         |
-| `-Mode`   | Power plan mode: `Balanced`, `HighPerformance`, or `UltimatePerformance`. Ignored if `-Auto` is set. |
+| `-Mode`   | Power plan mode: `Balanced`, `HighPerformance`, or `UltimatePerformance` (positional). Combined with `-Auto`, an explicit `-Mode` wins and `PowerPlans` is not read. |
 
 ```powershell
 # Auto mode - reads the plan for this machine type from configuration
@@ -1367,7 +1394,7 @@ Set-SpecialFolders
 - **Parameters:** -Theme [Dark | Light], -Auto, -Skip (step names), -Include (step names), -KeepTerminalOpen
 - **Usage:** `Set-SystemTheme -Auto`, `Set-SystemTheme -Auto -KeepTerminalOpen`, `Set-SystemTheme -Theme Dark`, `Set-SystemTheme -Theme Light`, `Set-SystemTheme -Auto -Include RefreshBrowserTabs`, `Set-SystemTheme -Theme Dark -Skip RestartExplorer, SetLockScreenWallpaper`
 
-Writes `AppsUseLightTheme`, `SystemUsesLightTheme`, and `ColorPrevalence` under `HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize` (value `0` for Dark, `1` for Light). It then calls `Set-Wallpaper` (via the `IDesktopWallpaper` COM interface) and `Set-LockScreenWallpaper` so both backgrounds match the selected theme. When run inside Windows Terminal, the current tab is closed 5 seconds after a successful run unless `-KeepTerminalOpen` is set (useful for longer-running admin workflows such as `Bootstrap`).
+Writes `AppsUseLightTheme`, `SystemUsesLightTheme`, and `ColorPrevalence` under `HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize` (value `0` for Dark, `1` for Light). It then calls `Set-Wallpaper` (via the `IDesktopWallpaper` COM interface) and `Set-LockScreenWallpaper` so both backgrounds match the selected theme. When run inside Windows Terminal, the current tab is closed 5 seconds after a successful run (`Terminate-WindowsTerminalTabs -OnlyCurrent`) unless `-KeepTerminalOpen` is set (useful for longer-running admin workflows such as `Bootstrap`). On an unexpected error it re-runs itself once via `ReRun-LastCommand -AutoAccept`.
 
 Step resolution is tri-state: `-Skip` beats `-Include` beats the `SystemTheme.Steps` config (see [Configuration Reference: Set-SystemTheme Step Toggles](../configuration/configuration-reference.md#set-systemtheme-step-toggles)) beats the built-in defaults - everything on except `RefreshBrowserTabs`. Restarting Explorer is what makes the new theme visible on shell chrome, so it belongs to applying a theme rather than being collateral of it; skip it and the taskbar and open Explorer windows keep the old theme until Explorer restarts on its own or you sign out. The wallpaper steps are on because both functions no-op on the empty base config. Reloading every browser tab is the one action with real collateral - it takes focus per window and hard-reloads pages, discarding unsaved page state - so it is the only opt-in step. `RestartExplorer` runs _before_ the wallpaper updates and must stay there, because restarting Explorer after a wallpaper change can cause Windows to reload stale wallpaper cache data and revert the desktop image. `RefreshBrowserTabs` only runs when the theme actually changed: tabs that already render the requested theme have nothing to pick up from a reload.
 
@@ -1470,14 +1497,14 @@ Set-VisualEffects
 - **Parameters:** -Auto, -Theme [Light | Dark | Auto]
 - **Usage:** `Set-Wallpaper -Auto`, `Set-Wallpaper -Auto -Theme Dark`, `Set-Wallpaper` (interactive)
 
-Requires administrator privileges. In `-Auto` mode the theme defaults to `Auto`, which detects the current system theme from the registry (`HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize\AppsUseLightTheme`), defaulting to `Dark` if detection fails. It then resolves the wallpaper entry for the current machine type, applying per-monitor images for multi-monitor configs or a single image otherwise, and propagates the result to every virtual desktop when the `VirtualDesktop` module is loaded - each switch through `Switch-VirtualDesktop`, with no desktop retry logic of its own. Without `-Auto`, it lists wallpapers from the WinuX Wallpapers folder and prompts for a wallpaper and a style (defaulting to `Fill`).
+Requires administrator privileges. In `-Auto` mode the theme defaults to `Auto`, which detects the current system theme from the registry (`HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize\AppsUseLightTheme`), defaulting to `Dark` if detection fails. It then resolves the wallpaper entry for the current machine type, applying per-monitor images for multi-monitor configs or a single image otherwise, and propagates the result to every virtual desktop when the `VirtualDesktop` module is loaded - each switch through `Switch-VirtualDesktop`, with no desktop retry logic of its own. Without `-Auto`, it lists wallpapers from the WinuX Wallpapers folder (`PathTemplates.Projects.Self.Wallpapers`, which is also where every configured `File` is resolved) and prompts for a wallpaper and a style (defaulting to `Fill`). On an unexpected error it re-runs itself once via `ReRun-LastCommand -AutoAccept`.
 
 **The `Monitors` array does not have to match the display count.** Active displays are enumerated through `IDesktopWallpaper` and paired with the array by index; a display past the end of the array **cycles** back to the start, so a 2-entry array on 3 displays gives the third display the first entry, and a single warning reports the mismatch. Displays past the end were previously skipped in silence and kept whatever wallpaper they already had - no warning, no fallback. Cycling applies to all three per-monitor passes (the idempotency check, the initial apply, and the per-virtual-desktop reapply). Only an empty `Monitors` array leaves a display on the Windows default.
 
 | Parameter | Description                                                                                               |
 | --------- | --------------------------------------------------------------------------------------------------------- |
 | `-Auto`   | Auto-detect the system theme and apply the matching configured wallpaper. Omit for an interactive picker. |
-| `-Theme`  | Theme to use: `Light`, `Dark`, or `Auto`. Defaults to `Auto` (reads from the registry).                   |
+| `-Theme`  | Theme to use with `-Auto`: `Light`, `Dark`, or `Auto`. Defaults to `Auto` (reads from the registry). Ignored without `-Auto`. |
 
 ```powershell
 # Apply configured wallpaper, auto-detecting the current system theme
@@ -1624,7 +1651,7 @@ Sync-AppPins -PackageManager Scoop
 
 ## [Terminate-AllBrowserProcesses](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Terminate-AllBrowserProcesses.ps1)
 
-- **Description:** Gracefully terminates every browser declared in `Configuration.Universal.Browsers` (Firefox, Tor, Chrome, Edge, Brave) by posting `WM_CLOSE` to each browser's visible top-level windows. Browsers are disambiguated by both process name (derived from the configured `Exe` filename) and a brand-specific window title regex, so browsers that share a process name (Firefox vs. Tor, both `firefox.exe`) and chromium child processes (GPU/renderer/utility) are handled correctly. With `-Exclude`, `WM_CLOSE` is posted only to non-matching windows - kept windows are never touched, so there is no foreground-focus race.
+- **Description:** Gracefully terminates every browser declared in `Configuration.Universal.Browsers` (Firefox, Tor, Chrome, Edge, Brave) by posting `WM_CLOSE` to every visible, titled top-level window of each browser's process (the process name is derived from the configured `Exe` filename; the brand-specific title regex only attributes windows to a brand for logging, and a window shared by two targets - Firefox and Tor are both `firefox.exe` - is closed once). With `-Exclude`, `WM_CLOSE` is posted only to non-matching windows - kept windows are never touched, so there is no foreground-focus race. The close is verified: it waits for the windows to go, posts `WM_CLOSE` once more to any still standing, and reports the survivors as a warning instead of its success line. Browsers are never force-killed.
 - **Parameters:** -Exclude
 - **Usage:** `Terminate-AllBrowserProcesses`, `Terminate-AllBrowserProcesses -Exclude "*YouTube*"`, `Terminate-AllBrowserProcesses -Exclude "*YouTube*", "*Gmail*"`
 
@@ -1681,8 +1708,8 @@ Candidates come from the window side: [Get-VisibleWindowProcess](#get-visiblewin
 **The kill is verified.** `Stop-Process -Force` returns once the terminate request is issued, not once the process is gone, so the function waits for the targeted processes to exit (`Wait-Process`, five seconds) and then looks again. A process still alive - access denied on an elevated app, a hung teardown - is reported as a warning naming the process, PID and window instead of being counted as terminated, and the success line is printed only when nothing survived.
 
 | Parameter  | Description                                                                                                                               |
-| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `-Exclude` | Array of window-title patterns to spare from termination. Supports both wildcard (`"*YouTube*"`) and regex (`".*YouTube.*"`, `"(._Gmail._ | ._Inbox._)"`) forms, the same format used by layout `.psd1` files. Windows matching any pattern are not closed. |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `-Exclude` | Array of window-title (or process-name) patterns to spare from termination. Supports both wildcard (`"*YouTube*"`) and regex (`".*YouTube.*"`, `"(.*Gmail.*\|.*Inbox.*)"`) forms, the same format used by layout `.psd1` files. A process with ANY window matching a pattern is spared whole. |
 
 > [!WARNING]
 > The PowerToys exclusions are intentional. Killing only the visible `PowerToys.Settings` window leaves the supervisor in a "running but FancyZones absent" half-state that breaks subsequent workspace layout application and forces an expensive `Start-FancyZones -ForceRestart`. Never remove these from `Universal.VisibleWindowExclusions`.
@@ -1786,8 +1813,9 @@ if (Test-MachineOnline -Machine "MyMachine" -Quiet) { "MyMachine is up" }
 
 ## [Test-PowerPlan](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Test-PowerPlan.ps1)
 
-- **Description:** Checks whether the active power plan is set to the optimal performance mode for the current machine type. Reads the chassis type through [Get-ChassisType](#get-chassistype) - the hardware once, a per-machine cache on every later start - to determine if the machine is a laptop or desktop, then verifies High Performance for laptops/portables or Ultimate Performance for desktops, and warns if not optimally configured. Chassis types are defined in `Configuration.LaptopChassisTypes`. `-Refresh` re-reads the chassis from the hardware.
-- **Usage:** `Test-PowerPlan`
+- **Description:** Checks whether the active power plan is set to the optimal performance mode for the current machine type. Reads the chassis type through [Get-ChassisType](#get-chassistype) - the hardware once, a per-machine cache on every later start - to determine if the machine is a laptop or desktop, then verifies High Performance for laptops/portables or Ultimate Performance for desktops, and warns if not optimally configured. Chassis types are defined in `Configuration.LaptopChassisTypes`. `-Refresh` re-reads the chassis from the hardware and rewrites the cache; `-CachePath` overrides where the cache lives (default `%LOCALAPPDATA%\WinuX\ChassisTypes.txt`).
+- **Parameters:** -Refresh, -CachePath (default `%LOCALAPPDATA%\WinuX\ChassisTypes.txt`)
+- **Usage:** `Test-PowerPlan`, `Test-PowerPlan -Refresh`
 
 Reads the active scheme via `powercfg /getactivescheme` and compares it against the expected plan for the detected machine type. If the active plan is wrong, it prints a yellow warning suggesting `Set-PowerPlan -Auto` to fix it. Any failure during the check is reported as a red error. Commonly run at shell startup from the PowerShell profile.
 
@@ -1800,11 +1828,11 @@ Test-PowerPlan
 
 ## [Test-RpcServerHealth](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Test-RpcServerHealth.ps1)
 
-- **Description:** Verifies that required Remote Procedure Call (RPC) infrastructure services are running and, optionally, that this session's live RPC/COM state actually responds. Essential for FancyZones, virtual desktop management, and other system operations that depend on RPC. With `-Probe` it runs a lightweight VirtualDesktop COM roundtrip via `Test-VirtualDesktopComHealth` - in-process, under a timeout - catching both the "service is Running but the endpoint is hung" failure mode and the "this session's cached COM proxies are stale after an Explorer restart" failure mode (`0x800706BA` / `0x80010108`) that a status check or a child-process probe cannot detect. Successful `-Probe` results are cached for 8 seconds so the several preflights of one workspace open pay for a single probe; failures are never cached, so recovery paths always re-verify.
+- **Description:** Verifies that required Remote Procedure Call (RPC) infrastructure services are running and, optionally, that this session's live RPC/COM state actually responds. Essential for FancyZones, virtual desktop management, and other system operations that depend on RPC. With `-Probe` it runs a lightweight VirtualDesktop COM roundtrip via `Test-VirtualDesktopComHealth` - in-process, under a timeout - catching both the "service is Running but the endpoint is hung" failure mode and the "this session's cached COM proxies are stale after an Explorer restart" failure mode (`0x800706BA` / `0x80010108`) that a status check or a child-process probe cannot detect. Successful `-Probe` results are cached for 30 seconds so the several preflights of one workspace open pay for a single probe; failures are never cached, so recovery paths always re-verify.
 - **Parameters:** -ServiceNames (defaults to @("RpcSs", "DcomLaunch", "RpcEptMapper")), -Probe, -ProbeTimeoutMs (default 5000)
 - **Usage:** `Test-RpcServerHealth`, `Test-RpcServerHealth -Probe`, `Test-RpcServerHealth -ServiceNames @("RpcSs", "DcomLaunch")`
 
-A healthy live probe is cached for 30 seconds, long enough to span the two layout calls of one workspace open (the prepare step before the launch actions and the full call after them); failures are never cached. Checks that each required RPC service is present and in `Running` state, returning `$false` on the first one that is missing or stopped. With `-Probe`, after confirming services are running it runs a live roundtrip against the CURRENT session's VirtualDesktop COM state on a background runspace (`Test-VirtualDesktopComHealth`). If the call times out (hung endpoint) or fails with an RPC availability error (classified via `Test-RpcUnavailableError`), the function returns `$false`. A successful probe result is cached for 8 seconds and short-circuits the whole check - one workspace open runs this preflight several times seconds apart (layout entry, desktop remove/ensure, alongside cleanup), and each probe spins up a fresh runspace plus service checks - while failures are never cached, so recovery paths always re-verify against live state. The probe deliberately runs in-process: the previous `Start-Job` child-process design created its own fresh COM proxies, so after an Explorer restart it reported healthy while the current session stayed broken. Non-RPC probe failures (e.g. the `VirtualDesktop` module missing) are treated as healthy so they don't trigger unnecessary recovery, and when the probe helper itself is unavailable (Window module not loaded) the function falls back to service status only. Returns `$true` only when all checks pass.
+A healthy live probe is cached for 30 seconds, long enough to span the two layout calls of one workspace open (the prepare step before the launch actions and the full call after them); failures are never cached. Checks that each required RPC service is present and in `Running` state, returning `$false` on the first one that is missing or stopped. With `-Probe`, after confirming services are running it runs a live roundtrip against the CURRENT session's VirtualDesktop COM state on a background runspace (`Test-VirtualDesktopComHealth`). If the call times out (hung endpoint) or fails with an RPC availability error (classified via `Test-RpcUnavailableError`), the function returns `$false`. A successful probe result is cached for 30 seconds and short-circuits the whole check - one workspace open runs this preflight several times seconds apart (layout entry, desktop remove/ensure, alongside cleanup), and each probe spins up a fresh runspace plus service checks - while failures are never cached, so recovery paths always re-verify against live state. The probe deliberately runs in-process: the previous `Start-Job` child-process design created its own fresh COM proxies, so after an Explorer restart it reported healthy while the current session stayed broken. Non-RPC probe failures (e.g. the `VirtualDesktop` module missing) are treated as healthy so they don't trigger unnecessary recovery, and when the probe helper itself is unavailable (Window module not loaded) the function falls back to service status only. Returns `$true` only when all checks pass.
 
 | Parameter         | Type       | Default                                    | Description                                                                                                 |
 | ----------------- | ---------- | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
@@ -1832,6 +1860,15 @@ Used by `Start-FancyZones`, `Set-WorkspaceWindowLayout`, and `Initialize-Workspa
 
 **See also:** [Repair-RpcServer](system.md#repair-rpcserver)
 
+## [Test-TerminalIconsCacheFile](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Test-TerminalIconsCacheFile.ps1)
+
+- **Description:** Reports whether one `Terminal-Icons` theme cache file parses, by reading it with `Import-Clixml` the way the module reads it on import. Never throws: a file that does not parse, has vanished or cannot be read returns `$false`, and `-Reason` receives the parse error's message when the caller passes a `[ref]`. [Repair-TerminalIconsThemeCache](#repair-terminaliconsthemecache) calls it twice per suspect file, before and after its settle pause.
+- **Parameters:** -Path (position 0), -Reason (`[ref]`)
+- **Usage:** `Test-TerminalIconsCacheFile -Path "$env:APPDATA\powershell\Community\Terminal-Icons\prefs.xml"`
+
+**See also:** [Repair-TerminalIconsThemeCache](#repair-terminaliconsthemecache)
+
+
 ## [Test-WindowTitleMatch](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Test-WindowTitleMatch.ps1)
 
 - **Description:** Tests whether a window/process matches any of the provided patterns, returning a boolean. It first checks for a case-insensitive exact match against the process name, then matches the window title against each pattern as either a wildcard or a regex. Used internally by `Kill-All` and `Terminate-*` functions for exclusion filtering.
@@ -1841,10 +1878,10 @@ Used by `Start-FancyZones`, `Set-WorkspaceWindowLayout`, and `Initialize-Workspa
 Iterates over `-Patterns` and returns `$true` on the first match. For each pattern it first attempts a case-insensitive exact match against `-ProcessName`. If that fails (and a `-WindowTitle` is present) the pattern is treated as a regex; when it is not valid regex but looks like a wildcard, it is converted (`*` to `.*`, `?` to `.`) before matching against the title. Blank patterns are skipped, and `$false` is returned when nothing matches. Pattern format mirrors `Get-WindowHandle` and the window-layout `.psd1` files.
 
 | Parameter      | Description                                                                                                                                                                                   |
-| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `-WindowTitle` | The actual window title to test against the patterns. May be empty.                                                                                                                           |
 | `-ProcessName` | The process name to test against the patterns for exact (case-insensitive) matching. Optional.                                                                                                |
-| `-Patterns`    | Required array of patterns. Each entry may be an exact process name (e.g. `"Code"`, `"firefox"`), a wildcard (e.g. `"*YouTube*"`, `"Chrome - *"`), or a regex (e.g. `"^Chrome"`, `"(._Gmail._ | ._Inbox._)"`). |
+| `-Patterns`    | Required array of patterns. Each entry may be an exact process name (e.g. `"Code"`, `"firefox"`), a wildcard (e.g. `"*YouTube*"`, `"Chrome - *"`), or a regex (e.g. `"^Chrome"`, `"(.*Gmail.*\|.*Inbox.*)"`). A pattern is tried as a regex first and converted from wildcard only when it is not a valid regex; title matching is case-insensitive. |
 
 ```powershell
 # Wildcard match against the window title -> $true
@@ -1863,15 +1900,16 @@ Test-WindowTitleMatch -WindowTitle "Gmail Inbox" -Patterns @("(.*Gmail.*|.*Inbox
 ## [Unpin-TaskbarApps](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Unpin-TaskbarApps.ps1)
 
 - **Description:** Clears all taskbar pins and applies an XML layout policy that prevents further taskbar modifications. It first calls `Clear-TaskbarPins` to remove pin data directly from the registry, then writes an empty `TaskbarLayout` XML and deploys it via Group Policy under `HKLM:\SOFTWARE\Policies\Microsoft\Windows\Explorer`, locking the layout until the policy registry key is removed. Restarts Explorer to apply the changes. Requires administrator privileges.
-- **Parameters:** -SkipExplorerRestart, -FromBootstrap
+- **Parameters:** -SkipExplorerRestart, -FromBootstrap, -BackupRoot (default: `<Repo>\Backups\Windows`)
 - **Usage:** `Unpin-TaskbarApps`, `Unpin-TaskbarApps -SkipExplorerRestart`
 
-Optimized for Windows 11 (Build 26100+). The empty layout XML is written directly to the machine-local `TaskbarLayoutFile` (`C:\ProgramData\provisioning\taskbar_layout.xml`), registered as `StartLayoutFile`, and the layout is locked via `LockedStartLayout` - no repo file and no symlink are involved. `-FromBootstrap` is used internally during bootstrap: it skips the Explorer restart, defers the layout lock to the caller, and passes `-SkipExplorerRestart` down to `Clear-TaskbarPins`.
+Optimized for Windows 11 (Build 26100+). The empty layout XML is written directly to the machine-local `TaskbarLayoutFile` (`C:\ProgramData\provisioning\taskbar_layout.xml`), registered as `StartLayoutFile`, and the layout is locked via `LockedStartLayout` - no repo file and no symlink are involved. `Clear-TaskbarPins` is always called with `-SkipExplorerRestart`, so Explorer restarts at most once, at the end. `-FromBootstrap` is used internally during bootstrap: it skips that restart and defers the layout lock to the caller. A layout file that is still a symlink from the old design is removed first; a real one is backed up into `Backups/Windows/System/TaskbarLayout/<timestamp>/` (under `-BackupRoot`) before it is replaced, and the write is skipped if the backup fails. The path comes from `PathTemplates.TaskbarLayoutFile`.
 
 | Parameter              | Description                                                                                                                        |
 | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
 | `-SkipExplorerRestart` | Skips the Explorer restart after clearing pins.                                                                                    |
 | `-FromBootstrap`       | Internal use during bootstrap; skips the Explorer restart and defers locking the layout to the caller. |
+| `-BackupRoot`          | Root of the backup sink an existing real layout file is copied into before it is overwritten. Defaults to `<Repo>\Backups\Windows`. |
 
 ```powershell
 # Clear taskbar pins and apply the locking policy (restarts Explorer)
@@ -1881,7 +1919,7 @@ Unpin-TaskbarApps
 Unpin-TaskbarApps -SkipExplorerRestart
 ```
 
-**See also:** [Configure-Taskbar](system.md), [Clear-TaskbarPins](system.md)
+**See also:** [Configure-Taskbar](#configure-taskbar), [Clear-TaskbarPins](#clear-taskbarpins)
 
 ## [Update-DirectoryNames](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Update-DirectoryNames.ps1)
 
@@ -1934,10 +1972,6 @@ Upgrade-All -PackageManager "WinGet", "Scoop"
 
 **See also:** [Sync-AppPins](#sync-apppins), [Get-PinnedApps](#get-pinnedapps), [Resolve-PackageManagers](bootstrap.md#resolve-packagemanagers)
 
-## Testing
-
-> [!NOTE]
-
 ## [Wait-BrowserWindowsClosed](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Wait-BrowserWindowsClosed.ps1)
 
 - **Description:** Waits for browser windows that were sent `WM_CLOSE` to actually disappear. `Close-BrowserWindows` POSTS the message, which is asynchronous - the call returns before the browser has even seen it - so `Terminate-AllBrowserProcesses` used to report success while a window was still standing (a "close all tabs?" or `beforeunload` dialog waiting for an answer, a download-in-progress prompt, a browser that had not processed the message yet). This polls the supplied handles through `Test-WindowVisible` until none is a live, visible window any more or the timeout expires, and returns the windows still standing so the caller can retry or report them.
@@ -1984,4 +2018,7 @@ if ($after.Width -eq $before.Width -and $after.Height -eq $before.Height) { "the
 
 **See also:** [Get-ConsoleWindowSize](#get-consolewindowsize), [Send-TerminalFontKey](#send-terminalfontkey), [Invoke-Fastfetch](#invoke-fastfetch)
 
+## Testing
+
+> [!NOTE]
 > System functions are covered by Pester tests in `Windows/PowerShell/Modules/Tests/Modules/System/`. Use `Run-Tests -TestName "System"` (or `Run-Tests`) to validate current behavior after changes.

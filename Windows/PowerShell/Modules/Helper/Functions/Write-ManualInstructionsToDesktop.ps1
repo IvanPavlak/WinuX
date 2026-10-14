@@ -17,7 +17,7 @@ function Write-ManualInstructionsToDesktop {
         Main body content with instructions.
 
     .EXAMPLE
-        Write-ManualInstructionsToDesktop -FileName "VPN-Setup.txt" -Title "VPN Configuration" -Content "1. Download VPN client...\n2. Install and configure..."
+        Write-ManualInstructionsToDesktop -FileName "VPN-Setup.txt" -Title "VPN Configuration" -Content "1. Download VPN client...`n2. Install and configure..."
     #>
 	[CmdletBinding()]
 	param(

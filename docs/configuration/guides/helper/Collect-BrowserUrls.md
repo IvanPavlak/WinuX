@@ -1,6 +1,6 @@
 # Collect-BrowserUrls
 
-Recursively collects all URLs from nested browser group hashtables, flattening the hierarchical `BrowserGroups` structure (from `Configuration.psd1`) into a flat URL array.
+Recursively collects all URLs from nested browser group hashtables, flattening a hierarchical `BrowserGroups` value that its caller (`Open-Browser`) passes in into a flat URL array. It reads no configuration itself.
 
 ## Configuration Keys
 

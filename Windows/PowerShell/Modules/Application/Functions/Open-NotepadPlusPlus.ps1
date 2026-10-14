@@ -4,10 +4,13 @@ function Open-NotepadPlusPlus {
 		Opens Notepad++, optionally with a specific file.
 
 	.DESCRIPTION
-		When called with a file path, opens that file in Notepad++. If the file is already
-		open in an existing Notepad++ window, focuses that window instead of opening a duplicate.
+		When called with a file path, resolves it (it must exist) and opens it in Notepad++
+		(Universal.NotepadPlusPlusExe). If a Notepad++ window title already contains the file
+		name, it warns that the file is already open and does not open a duplicate; the window
+		is not brought to the front.
 
-		When called without arguments, opens Notepad++ without any file.
+		When called without arguments, launches Notepad++ without a file through
+		Start-Application -ConfigKey NotepadPlusPlusExe (a warning if it is already running).
 
 	.PARAMETER File
 		Path to the file to open. Omit to open Notepad++ without a file.
@@ -18,7 +21,7 @@ function Open-NotepadPlusPlus {
 
 	.EXAMPLE
 		Open-NotepadPlusPlus -File "C:\config.json"
-		Opens config.json in Notepad++, or focuses the existing window if already open.
+		Opens config.json in Notepad++, or reports that it is already open.
 	#>
 	param(
 		[Parameter(Position = 0)]

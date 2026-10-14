@@ -11,21 +11,21 @@ The [Workflow module reference](../../../modules/workflow.md) is the authority o
 
 | Function | Configuration keys | Guide |
 | -------- | ------------------ | ----- |
-| `Close-Project` | `ProjectActions`, `Projects`, `Universal`, `VisualStudioSolutions`, `VSCodeProjects` | [Close-Project](Close-Project.md) |
+| `Close-Project` | `PathTemplates`, `ProjectActions`, `Universal`, `VisualStudioSolutions`, `VSCodeProjects` | [Close-Project](Close-Project.md) |
 | `Docker-Cleanup` | `DockerCleanupActions` | [Docker-Cleanup](Docker-Cleanup.md) |
 | `DockerWizard` | `DockerTimeouts` | [DockerWizard](DockerWizard.md) |
 | `Get-SwaggerCloseTitlePatterns` | `BrowserGroups` | [Get-SwaggerCloseTitlePatterns](Get-SwaggerCloseTitlePatterns.md) |
 | `Get-WorkspaceOpenDelta` | `Universal` | [Get-WorkspaceOpenDelta](Get-WorkspaceOpenDelta.md) |
 | `Measure-WorkspaceOpen` | `FancyZonesApplyMethod`, `WorkspaceActions`, `WorkspaceBenchmark`, `WorkspaceLayoutPipelining`, `WorkspaceLayoutPrepareEarly` | [Measure-WorkspaceOpen](Measure-WorkspaceOpen.md) |
 | `Open-DnD` | `CampaignResources` | [Open-DnD](Open-DnD.md) |
-| `Open-Project` | `ProjectActions`, `Projects` | [Open-Project](Open-Project.md) |
-| `Open-ProjectTerminals` | `DefaultWSLDistribution`, `ProjectTerminals` | [Open-ProjectTerminals](Open-ProjectTerminals.md) |
-| `Open-Training` | `Universal` | [Open-Training](Open-Training.md) |
-| `Open-Workspace` | `DefaultVSCodeWorkspaces`, `DefaultWorkspace`, `ProjectTerminals`, `WorkspaceActions` (incl. the `Machine` / `LayoutMachine` scopes and `MachineParameters` / `LayoutMachineParameters` tables), `WorkspaceBenchmark`, `Workspaces` | [Open-Workspace](Open-Workspace.md) |
-| `Resolve-DockerComposeStackPath` | `DockerComposeFiles` | [Resolve-DockerComposeStackPath](Resolve-DockerComposeStackPath.md) |
+| `Open-Project` | `ProjectActions` | [Open-Project](Open-Project.md) |
+| `Open-ProjectTerminals` | `DefaultWSLDistribution`, `ProjectTerminals`, `TerminalGreeting` | [Open-ProjectTerminals](Open-ProjectTerminals.md) |
+| `Open-Training` | `PathTemplates`, `Universal` | [Open-Training](Open-Training.md) |
+| `Open-Workspace` | `DefaultVSCodeWorkspaces`, `DefaultWorkspace`, `ProjectActions`, `ProjectTerminals`, `WorkspaceActions` (incl. the `Machine` / `LayoutMachine` / `Project` scopes and `MachineParameters` / `LayoutMachineParameters` / `ProjectParameters` tables), `WorkspaceBenchmark`, `WorkspaceLayoutPrepareEarly`, `WorkspaceTemplates` | [Open-Workspace](Open-Workspace.md) |
+| `Resolve-DockerComposeStackPath` | `DockerComposeFiles`, `PathTemplates` | [Resolve-DockerComposeStackPath](Resolve-DockerComposeStackPath.md) |
 | `Resolve-ProjectDockerCompose` | `DockerComposeFiles`, `ProjectTerminals`, `RunnableProjectMappings` | [Resolve-ProjectDockerCompose](Resolve-ProjectDockerCompose.md) |
 | `Resolve-SwaggerBrowserGroup` | `BrowserGroupMatching`, `BrowserGroups`, `Universal` | [Resolve-SwaggerBrowserGroup](Resolve-SwaggerBrowserGroup.md) |
-| `Resolve-WorkspaceActions` | `LayoutMachineTypeOverrides`, `SmallDisplayMachineType`, `ValidMachineTypes`, `WorkspaceActions` | [Resolve-WorkspaceActions](Resolve-WorkspaceActions.md) |
+| `Resolve-WorkspaceActions` | `LayoutMachineTypeOverrides`, `ProjectActions`, `SmallDisplayMachineType`, `ValidMachineTypes`, `WorkspaceActions` | [Resolve-WorkspaceActions](Resolve-WorkspaceActions.md) |
 | `Start-Containers` | `DockerComposeFiles` | [Start-Containers](Start-Containers.md) |
 
 ## Task Guides

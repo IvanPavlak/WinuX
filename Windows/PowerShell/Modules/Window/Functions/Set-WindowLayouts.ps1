@@ -44,14 +44,23 @@
 		- X, Y, Width, Height: Window position and size in pixels
 
 		For zone-based positioning:
-		- Layout: FancyZones layout name (e.g., "One", "Seven")
+		- Layout: FancyZones layout name (e.g., "One", "Seven"); optional when -MonitorConfig
+		  defines VirtualDesktopLayouts for the entry's Monitor and DesktopNumber
 		- Zone: Human-readable zone name (e.g., "Left", "Top-Right")
-		- Monitor: (Optional) Monitor spec with X, Y, Width, Height properties
+		- Monitor: A monitor label ("Primary", "Secondary", "Monitor3", ... resolved through
+		  -MonitorInfo) or a hashtable with X, Y, Width, Height properties. An entry whose
+		  monitor has no resolvable geometry, or whose layout name cannot be determined, is
+		  skipped and produces no result row.
+
+		Layout tokens such as "Browser" are expanded by Resolve-LayoutTokens before matching.
 
 		- ZoneName: (Optional) A descriptive name for the zone
 
 	.PARAMETER ConfigPath
-		Path to a JSON or PSD1 file containing the layout configuration.
+		Path to a JSON or PSD1 file containing the layout configuration. A JSON file holds the
+		entry array itself. A PSD1 file is read with Import-PowerShellDataFile, which returns
+		one hashtable, so it is treated as a single entry - the Layout array of a workspace
+		layout file is not unwrapped.
 
 	.PARAMETER MonitorInfo
 		Array of monitor specs used to resolve string monitor labels (e.g. "Primary",
@@ -112,8 +121,9 @@
 		Integer shift applied to all 1-based desktop numbers. Default is 0.
 
 	.PARAMETER DesktopNumbers
-		Processes only the entries on these desktops (the layout's own 1-based DesktopNumber,
-		default 1) while the WHOLE layout still drives duplicate-key detection and sort order.
+		Processes only the entries on these desktops (the layout's own 1-based DesktopNumber;
+		an entry without one counts as desktop 1) while the WHOLE layout still drives
+		duplicate-key detection and sort order.
 		This is how Set-WorkspaceWindowLayout positions one desktop while the rest of the
 		workspace is still loading: a key that appears once on that desktop but again on
 		another must still claim exactly one window, which a layout subset could not know.
@@ -886,7 +896,7 @@
 				$titleMatches = Get-WindowHandle -WindowTitle $config.WindowTitle
 				# Enforce AND logic: when ProcessName is also specified, filter title matches
 				# to only those belonging to the correct process. Without this, a broad title
-				# regex (e.g. .*\bAsseto\b.*) can match windows from other processes
+				# regex (e.g. .*\bMyProject\b.*) can match windows from other processes
 				# (e.g. "asseto - Visual Studio Code") and steal them from the correct entry.
 				if ($config.ProcessName -and $titleMatches) {
 					$processWindows = Get-WindowHandle -ProcessName $config.ProcessName

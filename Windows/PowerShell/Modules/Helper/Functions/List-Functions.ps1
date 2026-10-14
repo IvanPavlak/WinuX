@@ -20,6 +20,10 @@ function List-Functions {
     .PARAMETER ListDiscrepancies
         Show functions with mismatches between the documentation and actual loaded code.
 
+    .PARAMETER Quiet
+        Used with -ListDiscrepancies. Suppresses the "no discrepancies" success message, so
+        output appears only when a discrepancy exists - used by the profile startup check.
+
     .EXAMPLE
         List-Functions -Category "System"
         List-Functions -Function "Open-Browser", "Set-Wallpaper"
