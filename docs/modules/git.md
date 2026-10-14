@@ -216,7 +216,7 @@ The stamp records when the last run happened, so a machine that was off for days
 
 Several shells opened at once (a workspace opening its terminals) run it exactly once. The run is claimed with a lock file, `Logs\.repository-update.lock`, created atomically and held open for the whole run, and the stamp is checked again once the lock is held ([`Test-RepositoryUpdateStampFresh`](#test-repositoryupdatestampfresh)). A shell that loses the claim returns silently, even with `-Force`. A lock left by a shell that died mid-run can be deleted - a live holder's open handle prevents that on Windows - so the next shell clears it and runs.
 
-The run happens inside the shell after the prompt is already drawn, so its summary pushes the prompt away and typing waits until the fetches finish. The profile passes `-RedrawPrompt`, which draws the prompt again below the summary with PSReadLine's `InvokePrompt` - without it PSReadLine keeps waiting on a blank line. Skip it for one shell with `$env:WINUX_STARTUP_SKIP = "RepositoryUpdate"`.
+The run happens inside the shell after the prompt is already drawn, so its summary pushes the prompt away and typing waits until the fetches finish. The profile passes `-RedrawPrompt`, which draws the prompt again below the summary through [Restore-ShellPrompt](helper.md#restore-shellprompt) (PSReadLine's `InvokePrompt`) - without it PSReadLine keeps waiting on a blank line. Skip it for one shell with `$env:WINUX_STARTUP_SKIP = "RepositoryUpdate"`.
 
 | Parameter       | Type     | Default | Description                                                                                             |
 | --------------- | -------- | ------- | ------------------------------------------------------------------------------------------------------- |
@@ -231,7 +231,7 @@ Invoke-StartupRepositoryUpdate -Force
 Get-Item (Join-Path $global:LoggingState.LogsDir ".last-repository-update") -Force | Select-Object LastWriteTime
 ```
 
-**See also:** [Update-Repositories](#update-repositories), [Resolve-RepositoryUpdateScope](bootstrap.md#resolve-repositoryupdatescope), [Invoke-StartupRepositoryUpdate configuration guide](../configuration/guides/git/Invoke-StartupRepositoryUpdate.md)
+**See also:** [Update-Repositories](#update-repositories), [Resolve-RepositoryUpdateScope](bootstrap.md#resolve-repositoryupdatescope), [Restore-ShellPrompt](helper.md#restore-shellprompt), [Invoke-StartupRepositoryUpdate configuration guide](../configuration/guides/git/Invoke-StartupRepositoryUpdate.md)
 
 ## [Register-RepositoryUpdatePromptCheck](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Git/Functions/Register-RepositoryUpdatePromptCheck.ps1)
 

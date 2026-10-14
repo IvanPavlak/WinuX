@@ -49,10 +49,10 @@ function Invoke-StartupRepositoryUpdate {
 	.PARAMETER RedrawPrompt
 		After a run, draw the prompt again below the summary. The profile passes it: the update
 		runs from the idle-time hook after the prompt is already on screen, so its output pushes
-		the prompt away and PSReadLine keeps waiting with no prompt visible. Redrawing uses
-		PSReadLine's InvokePrompt at the current console row, after a carriage return (output
-		written during ReadLine leaves the cursor past column 0). Nothing happens when no update
-		ran, outside PSReadLine, or if the redraw fails.
+		the prompt away and PSReadLine keeps waiting with no prompt visible. The redraw is
+		Restore-ShellPrompt (Helper): PSReadLine's InvokePrompt at the current console row, after
+		a carriage return. Nothing happens when no update ran, outside PSReadLine, or if the
+		redraw fails.
 
 	.EXAMPLE
 		Invoke-StartupRepositoryUpdate
@@ -144,11 +144,7 @@ function Invoke-StartupRepositoryUpdate {
 
 	# Only after an update was attempted - the disabled, throttled and lost-the-lock paths print
 	# nothing, so there is no prompt to restore.
-	if ($ran -and $RedrawPrompt -and ('Microsoft.PowerShell.PSConsoleReadLine' -as [type])) {
-		try {
-			[Console]::Write("`r")
-			[Microsoft.PowerShell.PSConsoleReadLine]::InvokePrompt($null, [Console]::CursorTop)
-		}
-		catch { }
+	if ($ran -and $RedrawPrompt) {
+		$null = Restore-ShellPrompt
 	}
 }

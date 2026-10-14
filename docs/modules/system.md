@@ -461,6 +461,15 @@ Get-VisibleWindowProcess | Where-Object { $_.WindowTitles.Count -gt 1 }
 
 **See also:** [Terminate-AllProcessesWithVisibleWindows](#terminate-allprocesseswithvisiblewindows), [Report-KillAllSurvivors](#report-killallsurvivors)
 
+## [Import-TerminalIcons](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Import-TerminalIcons.ps1)
+
+- **Description:** Imports `Terminal-Icons` into the global session state - the file and folder glyphs in directory listings - and heals the module's own theme cache when that is what stops the import. The profile queues it as the startup stage `Terminal-Icons`, run after the first prompt from the `PowerShell.OnIdle` queue (the import measured at 165-400 ms, and the icons are only needed once something is listed). Returns `$false` with a Debug line when the module is not installed. When `Import-Module` throws, [Repair-TerminalIconsThemeCache](#repair-terminaliconsthemecache) probes the cache: if it moved a file aside, the import runs once more and a success line says so; if it found nothing to move, or the second import fails too, the error is logged with `Write-LogError` (console, session log and error log) and `$false` returned, so a shell without icons always leaves a trace. `-RedrawPrompt` draws the prompt again through [Restore-ShellPrompt](helper.md#restore-shellprompt) when something was printed, since from the idle-time queue the prompt is already on screen.
+- **Parameters:** -RedrawPrompt
+- **Usage:** `Import-TerminalIcons`, `Import-TerminalIcons -RedrawPrompt` (what the profile runs)
+
+**See also:** [Repair-TerminalIconsThemeCache](#repair-terminaliconsthemecache), [Restore-ShellPrompt](helper.md#restore-shellprompt), [Install-PowerShellModules](application.md#install-powershellmodules)
+
+
 ## [Initialize-OhMyPosh](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Initialize-OhMyPosh.ps1)
 
 - **Description:** Resolves the `oh-my-posh` binary and initializes the prompt theme for the current session - the robust form of the classic profile one-liner `oh-my-posh init pwsh --config <theme> | Invoke-Expression`. Resolution order: PATH (`Get-Command`), then the known install locations (winget EXE per-user and machine scope, WinGet portable links, Store alias). When a fallback location hits, its directory is prepended to the session PATH so `oh-my-posh` also resolves as a plain command afterwards. When the binary is genuinely absent, prints a single install hint instead of erroring on every prompt. The theme file is read from `Universal.OhMyPoshThemeFile` in `Configuration.psd1`.
@@ -905,6 +914,15 @@ Set-LogLevel Verbose { Repair-RpcServer }
 ```
 
 Even when `Repair-RpcServer` returns `$false`, callers continue their normal flow (the workspace rerun still spawns) rather than aborting; there is no reboot prompt. Running from an elevated shell gives the service-restart step better odds.
+
+## [Repair-TerminalIconsThemeCache](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Repair-TerminalIconsThemeCache.ps1)
+
+- **Description:** Moves aside every file of the `Terminal-Icons` theme cache that no longer parses, so the module can import again. The module keeps its themes and preferences as Clixml files under `%APPDATA%\powershell\Community\Terminal-Icons\` and rewrites all of them on every import; two shells importing it in the same instant (a workspace opening several tabs at once) race on those writes and can leave a file torn - two writes spliced mid-line - after which every `Import-Module Terminal-Icons` fails on it (`Import-Clixml: Name attribute for dictionary key is incorrectly specified`). Each `.xml` file in the folder is read with `Import-Clixml`; one that fails is renamed to `<name>.corrupt-<yyyyMMdd-HHmmss>` beside the original with a warning naming it, and the module regenerates it from its built-in themes on the next import. Nothing is deleted, files that parse are untouched, a file an earlier repair moved aside is not probed again, and a file that cannot be renamed is reported as an error and left. Returns the quarantined files (`FileInfo`); nothing when every file parsed or the folder does not exist.
+- **Parameters:** -Path (the cache folder; defaults to `%APPDATA%\powershell\Community\Terminal-Icons`)
+- **Usage:** `Repair-TerminalIconsThemeCache`, `Repair-TerminalIconsThemeCache -Path "D:\Backup\Terminal-Icons"`
+
+**See also:** [Import-TerminalIcons](#import-terminalicons)
+
 
 ## [Report-KillAllSurvivors](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Report-KillAllSurvivors.ps1)
 

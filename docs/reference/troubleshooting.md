@@ -1195,6 +1195,39 @@ Private = @{
 
 **Solution:** Set `PathTemplates.ObsidianDirectory` in `Configuration.local.psd1` before using the function, and `cd` back by hand afterwards. If a commit landed in a home-folder repository, undo it there (`git reset --soft HEAD~1`).
 
+## Shell Startup Issues
+
+### Directory Listings Print Without Icons
+
+**Problem:** `ls` (or the alias `l`) prints the plain `Mode / LastWriteTime / Length / Name` table with no glyph in front of any entry, in every new shell, although `Terminal-Icons` is installed and the profile imports it.
+
+**Why it happens:** Terminal-Icons keeps its themes and preferences as Clixml files under `%APPDATA%\powershell\Community\Terminal-Icons\` and rewrites all of them on every import. Two shells importing it in the same instant (a workspace opening several tabs at once) race on those writes and can leave one file torn - two writes spliced mid-line. From then on every `Import-Module Terminal-Icons` fails on that file:
+
+```
+Import-Clixml: Name attribute for dictionary key is incorrectly specified. Line N, position 2.
+Import-Module: The module to process 'Terminal-Icons.psm1' [...] was not processed because no valid module was found
+```
+
+The profile imports the module after the first prompt, from the deferred startup queue, and before 1.0.0 that queue swallowed the failure, so nothing pointed at the cause.
+
+**Solution:** Fixed in 1.0.0. The queue imports through `Import-TerminalIcons`, which on a failed import runs `Repair-TerminalIconsThemeCache`: every cache file that does not parse is moved to `<name>.corrupt-<timestamp>` beside the original, a warning names it, the import runs again and the module regenerates the file from its built-in themes. Nothing is deleted. By hand, in a shell without icons:
+
+```powershell
+Import-Module Terminal-Icons        # shows the error
+Repair-TerminalIconsThemeCache      # moves the torn file aside
+Import-TerminalIcons                # loads the module
+```
+
+A listing typed within the first ~300 ms of a new shell prints without icons by design (the import waits until the prompt has been idle); every later one has them. If `Get-Module -ListAvailable Terminal-Icons` finds nothing, the module is not installed: `Install-PowerShellModules` installs it.
+
+### A Red Deferred Startup Failure Line Under The First Prompt
+
+**Problem:** A new shell prints `=> Deferred startup [Terminal-Icons] failed => ...` (or `[LogMaintenance]`, `[RepositoryUpdate]`) in red right after the first prompt, and the prompt is drawn again under it.
+
+**Why it happens:** The three startup stages that run after the first prompt - the Terminal-Icons import, the log maintenance and the opt-in repository update - are queued and run by one `PowerShell.OnIdle` event. An entry that throws is reported this way instead of being swallowed, so a stage that stopped working is noticed at once rather than weeks later.
+
+**Solution:** The line carries the exception; the session log (`Logs\Session_<date>_<time>_<pid>.log`) has it under `[ERROR]`, and `Logs\Errors.log` adds the stack trace. Run the stage by hand to reproduce it: `Import-TerminalIcons`, `Invoke-LogMaintenance` or `Invoke-StartupRepositoryUpdate -Force`. To start one shell without the stage: `$env:WINUX_STARTUP_SKIP = "Terminal-Icons"; pwsh` (see [Slow Profile Load](#slow-profile-load) for the stage names).
+
 ## Performance Issues
 
 ### Slow Profile Load

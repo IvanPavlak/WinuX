@@ -1322,6 +1322,14 @@ $templates = @{ Project = @{
 
 **See also:** [Expand-WorkspaceTemplates](#expand-workspacetemplates), [Open-Workspace](workflow.md#open-workspace), [Test-ConfigurationSchema](configuration.md#test-configurationschema), [Add a New Workspace](../configuration/guides/workflow/add-new-workspace.md)
 
+## [Restore-ShellPrompt](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Restore-ShellPrompt.ps1)
+
+- **Description:** Draws the prompt again after something printed below it while PSReadLine was already waiting for input. Work that runs at an idle prompt - the deferred startup queue the profile runs from its one `PowerShell.OnIdle` event, or anything else printing from an event action - pushes the prompt up the screen and PSReadLine keeps waiting on a blank line. The function writes a carriage return (output written during ReadLine leaves the cursor past column 0) and asks PSReadLine to draw the prompt at the current console row through `InvokePrompt`. Returns `$true` when it did; `$false`, without throwing, when PSReadLine is not loaded (a plain host, a test runner) or the redraw failed, so a caller runs it unconditionally after printing. [Invoke-StartupRepositoryUpdate](git.md#invoke-startuprepositoryupdate) `-RedrawPrompt`, [Import-TerminalIcons](system.md#import-terminalicons) `-RedrawPrompt` and the profile's deferred startup failure report use it.
+- **Usage:** `$null = Restore-ShellPrompt`
+
+**See also:** [Invoke-StartupRepositoryUpdate](git.md#invoke-startuprepositoryupdate), [Import-TerminalIcons](system.md#import-terminalicons)
+
+
 ## [Run-Project](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Run-Project.ps1)
 
 - **Description:** Opens Windows Terminal tabs for one or more configured runnable projects. Selects from `Configuration.RunnableProjectMappings`, in configuration order (with optional multi-select via `Resolve-Selection`) and runs each project's configured commands in its own tab. Existing terminal tabs for a project are detected and closed first to prevent duplicates, then fresh tabs are opened; behind the optional Docker step, the project's Docker Compose source is resolved via `Resolve-ProjectDockerCompose` (prompting for the database provider when several are configured) and Docker is started when required. Both the project selection and database provider menus default to the first option when Enter is pressed.

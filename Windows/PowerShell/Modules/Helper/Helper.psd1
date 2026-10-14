@@ -71,6 +71,7 @@
 		'Resolve-RunProjectSteps',
 		'Resolve-Selection',
 		'Resolve-WorkspaceTemplate',
+		'Restore-ShellPrompt',
 		'Run-Project',
 		'Select-WindowsTerminalTab',
 		'Show-FunctionDetails',
