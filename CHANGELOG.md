@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-## [1.0.0] - 2026-10-13
+## [1.0.0] - 2026-10-14
 
 WinuX 1.0.0 follows 0.1.94 directly. Its one engine change is the Terminal-Icons hardening under Added and Fixed below; everything else is documentation and policy. It declares the contract stable - the `Configuration.psd1` schema, the bootstrap contract and the set of exported functions - and retires the 0.x milestone ladder, whose destination (a graphical front-end and a guided installer for non-technical users) is no longer the project's goal. From this release the version number means what a fork needs it to mean: a PATCH or MINOR never breaks your override, your overlays or your Custom-area code, and a MAJOR only removes what an earlier release deprecated.
 
