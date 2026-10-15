@@ -12,7 +12,7 @@ The [Git module reference](../../../modules/git.md) is the authority on what eac
 | Function | Configuration keys | Guide |
 | -------- | ------------------ | ----- |
 | `Get-RepositoryUpdateStartupSettings` | `RepositoryUpdate` | [Get-RepositoryUpdateStartupSettings](Get-RepositoryUpdateStartupSettings.md) |
-| `Git-Obsidian` | `PathTemplates.ObsidianDirectory` | [Git-Obsidian](Git-Obsidian.md) |
+| `Git-Obsidian` | `PathTemplates.ObsidianDirectory`, `Obsidian.GitEndLocation` | [Git-Obsidian](Git-Obsidian.md) |
 | `Install-Git` | `GitConfig` | [Install-Git](Install-Git.md) |
 | `Invoke-StartupRepositoryUpdate` | `RepositoryUpdate` | [Invoke-StartupRepositoryUpdate](Invoke-StartupRepositoryUpdate.md) |
 | `Resolve-RepositoryDefaultBranch` | `RepositoryUpdate` | [Resolve-RepositoryDefaultBranch](Resolve-RepositoryDefaultBranch.md) |

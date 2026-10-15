@@ -1,5 +1,5 @@
 {
-  "Version": "1.0.2",
+  "Version": "1.1.0",
   "Functions": {
     "Add-BrowserGroup": {
       "Module": "Configuration",
@@ -7098,6 +7098,7 @@
     "NerdFonts",
     "Obsidian",
     "Obsidian.DefaultWorkspace",
+    "Obsidian.GitEndLocation",
     "Obsidian.Vault",
     "PackageManagers",
     "PathTemplates",

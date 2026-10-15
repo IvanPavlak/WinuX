@@ -20,19 +20,31 @@ Function Git-Obsidian {
 		after a failed push finishes the job instead of reporting "No changes to update!"
 		over a clean tree whose last commit never reached the remote.
 
-		On exit it changes to $currentDirectory, which this function never sets, so the shell
-		ends up in the home folder rather than where it started. ObsidianDirectory must be set:
-		an empty value also lands in the home folder, and the git commands run there.
+		Where the shell ends up afterwards is `$Configuration.Obsidian.GitEndLocation`:
+		"Current" (the default, also used for an empty or unknown value) returns to the folder
+		the function was called from, "Vault" stays in the vault directory.
+
+		An empty ObsidianDirectory is reported as not configured and nothing runs, so git is
+		never pointed at whatever folder the shell happens to be in.
 
 	.EXAMPLE
 		Git-Obsidian
 		Commits and pushes any vault changes, pushes commits an earlier failed run left
-		behind, or reports that nothing changed.
+		behind, or reports that nothing changed, then returns to the calling folder.
 	#>
 
 	Write-LogTitle "Git-Obsidian" -BlankLineAfter
 
-	Set-Location -Path $MachineSpecificPaths.ObsidianDirectory
+	$vaultDirectory = if ($global:MachineSpecificPaths) { [string]$global:MachineSpecificPaths.ObsidianDirectory } else { '' }
+	if ([string]::IsNullOrWhiteSpace($vaultDirectory)) {
+		Write-LogWarning "ObsidianDirectory is not configured - set PathTemplates.ObsidianDirectory in Configuration.local.psd1." -NoLeadingNewline
+		return
+	}
+
+	$endLocation = [string](Get-ConfigSetting -Path 'Obsidian.GitEndLocation' -Default 'Current')
+	$startDirectory = (Get-Location).Path
+
+	Set-Location -Path $vaultDirectory
 
 	try {
 		$changes = git status --porcelain
@@ -84,6 +96,9 @@ Function Git-Obsidian {
 		Write-LogError $_.Exception.Message -NoLeadingNewline
 	}
 	finally {
-		Set-Location -Path $currentDirectory
+		# "Vault" leaves the shell where the git commands ran; anything else returns to the caller's folder.
+		if ($endLocation -ne 'Vault') {
+			Set-Location -Path $startDirectory
+		}
 	}
 }

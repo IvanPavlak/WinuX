@@ -9,10 +9,8 @@ Commits and pushes all pending changes in the Obsidian vault repository, providi
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`PathTemplates.ObsidianDirectory`](../../configuration-reference.md#path-templates--placeholder-system) | path template | `""` (empty) | The vault root - a git working tree whose upstream is where the backup is pushed. `Git-Obsidian` changes into the expanded `$global:MachineSpecificPaths.ObsidianDirectory` and runs every git command there. Required. |
-
-> [!WARNING]
-> Set `ObsidianDirectory` before running `Git-Obsidian`. The function does not check for an empty value: an empty path makes `Set-Location` land in your home folder, and the git commands (including `git add .`, `git commit` and `git push`) then run there instead of in a vault.
+| [`PathTemplates.ObsidianDirectory`](../../configuration-reference.md#path-templates--placeholder-system) | path template | `""` (empty) | The vault root - a git working tree whose upstream is where the backup is pushed. `Git-Obsidian` changes into the expanded `$global:MachineSpecificPaths.ObsidianDirectory` and runs every git command there. Required: an empty value is reported as not configured and no git command runs. |
+| [`Obsidian.GitEndLocation`](../../configuration-reference.md#obsidian-configuration) | string | `"Current"` | Where the shell ends up afterwards. `"Current"` returns to the folder `Git-Obsidian` was called from, `"Vault"` stays in the vault directory. An empty or unknown value behaves like `"Current"`. |
 
 ## Decisions
 
@@ -20,6 +18,10 @@ Commits and pushes all pending changes in the Obsidian vault repository, providi
     - Options: The vault root, normally `{Dev}\Obsidian`. It must be a git clone with an upstream branch, because the function commits there and pushes to that upstream.
     - Default: Empty - there is no vault to back up.
     - More detail: [`PathTemplates.ObsidianDirectory`](../../configuration-reference.md#path-templates--placeholder-system)
+2. Where should the shell be after a backup?
+    - Options: `"Current"` to keep working where you called it from, `"Vault"` to land in the vault (handy when you go on to work in the vault repository).
+    - Default: `"Current"`.
+    - More detail: [`Obsidian.GitEndLocation`](../../configuration-reference.md#obsidian-configuration)
 
 ## Where to Put Values
 
@@ -28,12 +30,13 @@ All of it goes in `Configuration.local.psd1`, at the repository's `Windows/Power
 > [!WARNING]
 > The merge is not uniform. **Hashtables deep-merge per key**, so adding one entry to a hashtable leaves every other entry alone. **Arrays and scalars replace wholesale**, so supplying an array key in your local file discards the entire base array. When you want to *add* to a shipped array, copy the whole base array out of `Configuration.psd1` first and add your entry to the copy.
 
-`PathTemplates` is a hashtable, so `ObsidianDirectory` alone deep-merges and every shipped path template stays.
+`PathTemplates` and `Obsidian` are hashtables, so `ObsidianDirectory` and `GitEndLocation` each deep-merge alone and every other shipped key stays.
 
 ## Steps Overview
 
 1. Set `PathTemplates.ObsidianDirectory`
-2. Reload and confirm the merge landed
+2. Optionally set `Obsidian.GitEndLocation`
+3. Reload and confirm the merge landed
 
 ## Step 1: Set `PathTemplates.ObsidianDirectory`
 
@@ -45,13 +48,24 @@ PathTemplates = @{
 }
 ```
 
-## Step 2: Reload and confirm the merge landed
+## Step 2: Optionally set `Obsidian.GitEndLocation`
+
+Skip this to keep the default, which returns the shell to the folder you called `Git-Obsidian` from. Set `"Vault"` to stay in the vault instead.
+
+```powershell
+Obsidian = @{
+    GitEndLocation = "Vault"
+}
+```
+
+## Step 3: Reload and confirm the merge landed
 
 Reload the profile, then read the merged value back. `$global:Configuration` after a reload is the ground truth - if what you set is not there, the local file did not parse or the key is nested one level away from where you put it.
 
 ```powershell
 Reload-PowerShellProfile
 $global:MachineSpecificPaths.ObsidianDirectory
+$global:Configuration.Obsidian.GitEndLocation
 ```
 
 ## Verification
@@ -61,6 +75,7 @@ Read-only checks. None of these change anything.
 ```powershell
 Reload-PowerShellProfile
 $global:MachineSpecificPaths.ObsidianDirectory
+$global:Configuration.Obsidian.GitEndLocation
 Test-GitRepository -Path $global:MachineSpecificPaths.ObsidianDirectory
 git -C $global:MachineSpecificPaths.ObsidianDirectory status --short --branch
 ```
@@ -76,6 +91,9 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 @{
     PathTemplates = @{
         ObsidianDirectory = "{Dev}\Obsidian"
+    }
+    Obsidian      = @{
+        GitEndLocation = "Current"
     }
 }
 ```
@@ -98,6 +116,6 @@ Found [1] unpushed commit(s) from an earlier run. Pushing...
 
 - [`Git-Obsidian` in the Git module reference](../../../modules/git.md#git-obsidian) - parameters, usage and behaviour
 - [Git configuration guides](README.md) - every guide for this module
-- [`Open-Obsidian`](../application/Open-Obsidian.md) - reads the same `ObsidianDirectory`
+- [`Open-Obsidian`](../application/Open-Obsidian.md) - reads the same `ObsidianDirectory` and the rest of the `Obsidian` section
 - [WinuXConfigurator](../../winux-configurator.md) - have an AI assistant walk these decisions with you
 - [Configuration reference](../../configuration-reference.md) - every key, section by section

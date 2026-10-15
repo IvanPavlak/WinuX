@@ -8,6 +8,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-15
+
+### Added
+
+- **`Obsidian.GitEndLocation`: choose where the shell ends up after `Git-Obsidian`.** `"Current"` (the shipped default) returns to the folder `Git-Obsidian` was called from; `"Vault"` stays in the vault directory where the git commands ran. An empty or unknown value behaves like `"Current"`. The key sits in the existing `Obsidian` section, which deep-merges, so `Obsidian = @{ GitEndLocation = "Vault" }` in `Configuration.local.psd1` is all a fork needs to keep the old stay-in-the-vault habit. Documented in `docs/configuration/configuration-reference.md` (Obsidian Configuration), `docs/modules/git.md` and the `Git-Obsidian` configuration guide.
+
+### Fixed
+
+- **`Git-Obsidian` no longer leaves the shell in the home folder.** Its `finally` block changed to `$currentDirectory`, a variable the function never set, so every run ended in the home folder instead of where it was called from. The starting folder is now captured before the function moves into the vault, and the shell returns there (or stays in the vault, per `Obsidian.GitEndLocation` above), also after a failed commit or push.
+- **`Git-Obsidian` no longer runs git outside the vault when `PathTemplates.ObsidianDirectory` is empty (the shipped default).** It changed into the empty path and ran `git add .`, `git commit` and `git push` wherever that landed. It now warns that `ObsidianDirectory` is not configured and returns without moving or running any git command. The troubleshooting entry "Git-Obsidian Ran Git In The Home Folder, Or Left The Shell There" is removed, since neither can happen any more. Tests: `Git-Obsidian.Tests.ps1` covers returning to the calling folder by default, with the key unset and after a failed push, staying in the vault with `"Vault"`, and the empty-directory guard running no git command.
+
 ## [1.0.2] - 2026-10-15
 
 ### Fixed
@@ -1613,7 +1624,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v1.0.2...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/IvanPavlak/WinuX/compare/v1.0.2...v1.1.0
 [1.0.2]: https://github.com/IvanPavlak/WinuX/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/IvanPavlak/WinuX/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/IvanPavlak/WinuX/compare/v0.1.94...v1.0.0
