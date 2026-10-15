@@ -76,6 +76,7 @@ decisions behind them, and where the values go. Each module's `README.md` indexe
 | `PathTemplates.SymbolicLinks`                      | `SymbolicLinkMaker`                                |
 | `RepositoryGroups`                                 | `Update-Repositories`, `Resolve-RepositoryTargets` |
 | `PathTemplates.ObsidianDirectory`                  | `Open-Obsidian`, `Git-Obsidian`                    |
+| `Obsidian` (DefaultWorkspace, Vault, GitEndLocation) | `Open-Obsidian`, `Git-Obsidian` (`GitEndLocation`) |
 | `Logging`                                          | `Initialize-LoggingState`                          |
 | `Logging.Maintenance`                              | `Invoke-LogMaintenance`                            |
 | `Logging.FileLogging.Retention`                    | `Clear-OldLogs`                                    |

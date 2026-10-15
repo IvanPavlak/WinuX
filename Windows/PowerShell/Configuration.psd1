@@ -2073,7 +2073,7 @@
 	# ==========================================================================
 	# Obsidian
 	# ==========================================================================
-	# → Consumer: Open-Obsidian
+	# → Consumers: Open-Obsidian (DefaultWorkspace, Vault), Git-Obsidian (GitEndLocation)
 	# Open-Obsidian drives Obsidian through its official command line interface (Obsidian 1.12.4+;
 	# enable it once per machine under Settings > General > Advanced > Command line interface or
 	# with Enable-ObsidianCli, and put "%LOCALAPPDATA%\Programs\obsidian" on PATH via
@@ -2083,10 +2083,14 @@
 	#                      Empty = leave Obsidian where it was (or to plugins such as Homepage).
 	#   Vault            - Vault name for the CLI. Empty = the leaf folder of
 	#                      PathTemplates.ObsidianDirectory.
+	#   GitEndLocation   - Where the shell ends up after Git-Obsidian:
+	#                        "Current" => back in the folder it was called from (default)
+	#                        "Vault"   => in the vault directory, where the git commands ran
 	# Deep-merges: set only the key you need in Configuration.local.psd1.
 	Obsidian                      = @{
 		DefaultWorkspace = ""
 		Vault            = ""
+		GitEndLocation   = "Current"
 	}
 
 	# ==========================================================================

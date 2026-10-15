@@ -584,12 +584,13 @@ AcrobatPdfGroups = @(
 
 How `Open-Obsidian` addresses the vault and which Obsidian workspace a cold start lands on. `Open-Obsidian` drives Obsidian through its official command line interface (Obsidian 1.12.4+, enabled once per machine under Settings > General > Advanced > Command line interface or with `Enable-ObsidianCli`). Inside a workspace open it loads the Obsidian workspace named like the WinuX workspace when the vault has one - the name arrives through the `CurrentWorkspace` parameter `Open-Workspace` injects into every action - and `Parameters = @{ Workspace = "Name" }` on the action overrides that. The vault root itself is `PathTemplates.ObsidianDirectory`.
 
-**Key:** `Obsidian` → Hashtable with two optional string keys (both `""` by default)
+**Key:** `Obsidian` → Hashtable with three optional string keys
 
 - `DefaultWorkspace` - Obsidian workspace to load on a cold start when neither `-Workspace` nor a same-named match resolves. Empty leaves Obsidian where it was (or to plugins such as Homepage). Never applied to an already-running Obsidian.
 - `Vault` - Vault name for the CLI. Empty means the leaf folder of `PathTemplates.ObsidianDirectory`.
+- `GitEndLocation` - Where the shell ends up after `Git-Obsidian`: `"Current"` (default) returns to the folder it was called from, `"Vault"` stays in the vault directory. An empty or unknown value behaves like `"Current"`.
 
-**Consumer function:** `Open-Obsidian`
+**Consumer functions:** `Open-Obsidian` (`DefaultWorkspace`, `Vault`), `Git-Obsidian` (`GitEndLocation`)
 
 **Example:**
 
@@ -597,6 +598,7 @@ How `Open-Obsidian` addresses the vault and which Obsidian workspace a cold star
 Obsidian = @{
     DefaultWorkspace = "Empty"   # cold start lands here unless a workspace resolves
     Vault            = ""        # folder name is the vault name
+    GitEndLocation   = "Current" # Git-Obsidian returns to the calling folder
 }
 ```
 

@@ -1233,14 +1233,6 @@ Private = @{
 - **"local changes could not be restored cleanly and are kept in stash [name]"** - an upstream change overlaps your local edit. The working tree holds conflict markers, and the stash still holds your original changes. Resolve the markers, or reset the files and `git stash apply` the named stash. Until then, the next update reports the repository as busy and leaves it alone.
 - **"its stash was taken by another git command"** - another git command applied or dropped the update's stash while it ran. Check `git status` and `git stash list`; the changes are wherever that command put them.
 
-### Git-Obsidian Ran Git In The Home Folder, Or Left The Shell There
-
-**Problem:** `Git-Obsidian` reported changes (or a commit) from a repository you did not expect, or the prompt sits in your home folder afterwards.
-
-**Why it happens:** With `PathTemplates.ObsidianDirectory` empty (the shipped default), the function changes into an empty path, which PowerShell resolves to the home folder, and runs `git add`, `git commit` and `git push` there. It also never captures the starting directory, so the `finally` block restores nothing.
-
-**Solution:** Set `PathTemplates.ObsidianDirectory` in `Configuration.local.psd1` before using the function, and `cd` back by hand afterwards. If a commit landed in a home-folder repository, undo it there (`git reset --soft HEAD~1`).
-
 ## Shell Startup Issues
 
 ### Directory Listings Print Without Icons

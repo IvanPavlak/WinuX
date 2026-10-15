@@ -1,6 +1,9 @@
 #Requires -Modules Pester
 
 BeforeAll {
+	$script:OriginalMachineSpecificPaths = $global:MachineSpecificPaths
+	$script:OriginalConfiguration = $global:Configuration
+
 	$ModuleRoot = (Get-RepositoryPath).Modules
 	$FunctionsPath = Join-Path $ModuleRoot "Git\Functions"
 
@@ -27,11 +30,17 @@ BeforeAll {
 	}
 }
 
+AfterAll {
+	$global:MachineSpecificPaths = $script:OriginalMachineSpecificPaths
+	$global:Configuration = $script:OriginalConfiguration
+}
+
 Describe "Git-Obsidian" {
 	BeforeEach {
-		$script:MachineSpecificPaths = @{ ObsidianDirectory = "C:\Vault" }
-		$script:currentDirectory = "C:\Start"
+		$global:MachineSpecificPaths = @{ ObsidianDirectory = "C:\Vault" }
+		$global:Configuration = @{ Obsidian = @{ GitEndLocation = "Current" } }
 
+		Mock Get-Location { [pscustomobject]@{ Path = "C:\Start" } }
 		Mock Set-Location { }
 		Mock Write-LogTitle { }
 		Mock Write-LogSuccess { }
@@ -179,12 +188,52 @@ Describe "Git-Obsidian" {
 		}
 	}
 
-	It "restores the original directory" {
-		Set-GitScenario -Status "" -Unpushed "0"
+	Context "where the shell ends up" {
+		It "returns to the calling folder by default" {
+			Set-GitScenario -Status "" -Unpushed "0"
+
+			Git-Obsidian
+
+			Should -Invoke Set-Location -Times 1 -ParameterFilter { $Path -eq "C:\Vault" }
+			Should -Invoke Set-Location -Times 1 -ParameterFilter { $Path -eq "C:\Start" }
+		}
+
+		It "returns to the calling folder when GitEndLocation is not configured" {
+			$global:Configuration = @{ Obsidian = @{} }
+			Set-GitScenario -Status "M note.md" -Unpushed "1"
+
+			Git-Obsidian
+
+			Should -Invoke Set-Location -Times 1 -ParameterFilter { $Path -eq "C:\Start" }
+		}
+
+		It "returns to the calling folder after a failed push" {
+			Set-GitScenario -Status "M note.md" -Unpushed "1" -PushExitCode 128
+
+			Git-Obsidian
+
+			Should -Invoke Set-Location -Times 1 -ParameterFilter { $Path -eq "C:\Start" }
+		}
+
+		It "stays in the vault when GitEndLocation is Vault" {
+			$global:Configuration = @{ Obsidian = @{ GitEndLocation = "Vault" } }
+			Set-GitScenario -Status "M note.md" -Unpushed "1"
+
+			Git-Obsidian
+
+			Should -Invoke Set-Location -Times 1 -ParameterFilter { $Path -eq "C:\Vault" }
+			Should -Invoke Set-Location -Times 0 -ParameterFilter { $Path -eq "C:\Start" }
+		}
+	}
+
+	It "runs no git command and does not move when ObsidianDirectory is empty" {
+		$global:MachineSpecificPaths = @{ ObsidianDirectory = "" }
+		Set-GitScenario -Status "M note.md" -Unpushed "1"
 
 		Git-Obsidian
 
-		Should -Invoke Set-Location -Times 1 -ParameterFilter { $Path -eq "C:\Vault" }
-		Should -Invoke Set-Location -Times 1 -ParameterFilter { $Path -eq "C:\Start" }
+		Should -Invoke git -Times 0
+		Should -Invoke Set-Location -Times 0
+		Should -Invoke Write-LogWarning -Times 1 -ParameterFilter { $Message -match "not configured" }
 	}
 }
