@@ -425,6 +425,20 @@ Get-CimInstance Win32_Process -Filter "Name = 'Obsidian.com'" | ForEach-Object {
 
 **Solution:** Fixed in 0.1.94. When the tabs open in the shell's own window, `Open-ProjectTerminals` waits until every created tab is in the tab strip and then selects the requested tab through UI Automation (`Select-WindowsTerminalTab`). `wt focus-tab` is only the fallback, for tabs opened in a new window or a tab strip that cannot be read.
 
+### Project Tabs Open In The Other Terminal Window
+
+**Problem:** With two Windows Terminal windows open, `Open-ProjectTerminals MyProject -InSameShell` (or a workspace that opens project tabs in the current window) opens the tabs in the other window instead of the one the command was typed in. The command still reports `Project [MyProject] terminals opened!`.
+
+**Why it happened:** A shell cannot tell Windows Terminal which window it runs in: Windows Terminal does not give a shell its window ID, so "this window" is sent as `wt -w 0`, and Windows Terminal resolves window `0` to the window it saw activated most recently. Anything that brings the other window forward while the command runs sends the tabs there. The already-open check is one such thing: it reads each terminal window's tabs through UI Automation, and when a window's tab strip cannot be read it brings that window to the foreground and cycles its tabs with Ctrl+Tab, which leaves the last window it checked in front. The function that identifies the shell's own window could not help either: current Windows Terminal versions host every window in one process, and it told windows apart by process ID, so it always answered with the first one.
+
+**Solution:** Fixed in 1.0.2. `Resolve-HostingTerminalTab` now tells this shell's window apart from the other windows of the same process, by the project tab title or by briefly writing a marker into the shell's title. `Open-Terminal` brings that window to the foreground right before it opens tabs in window `0`, so the window the command was typed in is the most recently activated one when Windows Terminal resolves it. If the tabs still land elsewhere, check the verbose log for `Could not tell which terminal window hosts this shell`:
+
+```powershell
+Set-LogLevel Verbose { Open-ProjectTerminals MyProject -InSameShell }
+```
+
+That line means neither the project tab title nor the title probe identified the window, so it was left alone rather than guessed. It happens in a tab opened with a fixed title (a project tab) when another window's active tab has the same title.
+
 ## Window Layout Issues
 
 ### Windows Not Positioning
@@ -502,7 +516,7 @@ $env:WORKSPACE_WINDOW_ONLY_RETRY = $null
 
 Which monitor FancyZones picks is unreliable when two displays are the same model: identical panels report the same EDID code and can report the same serial number, so `applied-layouts.json` accumulates several device identities for the same physical monitor. `Get-DuplicateMonitorEdid` detects the EDID collision (`Apply-FancyZones` uses it to stop false "already applied" skips), but the zone history has no such guard.
 
-**Solution:** This now self-corrects. `Reset-Windows` passes its configured monitor to `Center-Windows`, which runs last, so any window pulled onto another monitor mid-run is brought back to the intended one. `Move-Windows` also verifies each placement with `Wait-WindowRect` and re-applies it once, and reports windows that would not stay put instead of counting them as moved.
+**Solution:** This now self-corrects. `Reset-Windows` passes its configured monitor to `Center-Windows`, which runs last, so any window pulled onto another monitor mid-run is brought back to the intended one. `Move-Windows` also verifies each placement with `Wait-WindowRect` and re-applies it once, and reports windows that would not stay put instead of counting them as moved. `Center-Windows` then re-checks every window after a settle delay and re-centers any that FancyZones moved after their placement - see [A Window Is Reported Centered But Ends Up Elsewhere](#a-window-is-reported-centered-but-ends-up-elsewhere).
 
 To confirm what happened on a specific run:
 
@@ -515,6 +529,21 @@ Center-Windows -Monitor 2
 ```
 
 If windows still drift, the FancyZones re-apply behaviors are the trigger - `fancyzones_displayOrWorkAreaChange_moveWindows` and `fancyzones_zoneSetChange_moveWindows` in `FancyZones/settings.json`. Turning them off stops the drift at the source, but they are load-bearing for workspace layouts, so prefer the self-correcting path above.
+
+### A Window Is Reported Centered But Ends Up Elsewhere
+
+**Problem:** After `Reset-Windows` or `Center-Windows`, one or two windows are not centered - typically Electron apps such as Obsidian or VS Code - although the verbose log shows `✓ Window positioned` and `✓ Centered` for every window.
+
+**Why it happens:** Each placement is checked with `Wait-WindowRect`, and that check passes on its first read: `SetWindowPos` on another process's window returns only after that window has handled the move, so the rectangle read straight afterwards matches. Something then moves the window again a few hundred milliseconds later - FancyZones restoring a remembered zone for a window that just arrived on the collapsed desktop, or the app re-applying its own saved bounds after being restored and resized. The check had already passed, nothing looked at the window again, and the summary counted it as centered.
+
+**Solution:** This now self-corrects. After the pass, `Center-Windows` runs up to three convergence rounds: each waits 250 ms, re-enumerates the windows fresh, and compares every window with the bounds it was centered on. A window that moved is re-centered (at most twice), and one that still is not on its bounds in the final round is listed as not centered in normal mode instead of counted. To see what moved it:
+
+```powershell
+# Look for "moved to (x, y) [WxH] after round N - re-centering" and "Re-centered"
+Set-LogLevel Verbose { Reset-Windows }
+```
+
+The observed rectangle tells you who moved the window: a rectangle that matches a FancyZones zone is a zone restore (see [Windows Land On The Wrong Monitor After Reset-Windows](#windows-land-on-the-wrong-monitor-after-reset-windows) for the settings involved), while the app's last size and position is the app restoring its own bounds. A window that keeps moving back through every round is reported, and `Center-Windows` run on its own a moment later usually places it for good.
 
 ### Fullscreen Windows Jumbled Or On The Wrong Monitor
 
@@ -584,7 +613,7 @@ The `registry:` list in FancyZones' `Synced virtual desktops` lines is in deskto
 
 **Why it happens:** The upstream `Move-Window` cmdlet (MScholtes VirtualDesktop) has a silent fallback: when the requested window's view cannot be moved, it moves the process's MAIN window instead - a different window of the same process - and does not throw. Multi-window processes are therefore the usual victims. `Move-WindowToVirtualDesktop` verifies each move and returns `$false` when the window did not land, but that result used to be swallowed: the cmdlet's own output (the Desktop object) leaked into the function's pipeline output, and a two-element array is truthy in PowerShell, so `Move-Windows` counted the failure as moved and never retried.
 
-**Solution:** This now self-corrects. The leaked output is discarded, so failed moves engage the retry ladder in `Move-Windows` (and `Set-WindowLayouts` / `Snap-AllWindows`), and after the move pass up to three convergence rounds re-enumerate the windows fresh, re-check every one against the target desktop, retry each straggler at most twice, and report anything they cannot recover as a failure instead of a clean pass. Re-enumerating (rather than re-checking the list the first pass saw) also catches a window that had no title while it loaded, which the first enumeration skips entirely. `Center-Windows`, the last step of the reset, verifies every placement with `Wait-WindowRect` too and lists the windows it could not center in normal mode:
+**Solution:** This now self-corrects. The leaked output is discarded, so failed moves engage the retry ladder in `Move-Windows` (and `Set-WindowLayouts` / `Snap-AllWindows`), and after the move pass up to three convergence rounds re-enumerate the windows fresh, re-check every one against the target desktop, retry each straggler at most twice, and report anything they cannot recover as a failure instead of a clean pass. Re-enumerating (rather than re-checking the list the first pass saw) also catches a window that had no title while it loaded, which the first enumeration skips entirely. `Center-Windows`, the last step of the reset, verifies every placement with `Wait-WindowRect` too, runs the same kind of convergence rounds for window positions, and lists the windows it could not center in normal mode:
 
 ```powershell
 # Per-window trace: look for "Convergence round N", "Recovered" (a round fixed it)

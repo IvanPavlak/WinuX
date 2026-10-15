@@ -5,12 +5,21 @@ BeforeAll {
 	$FunctionsPath = Join-Path $ModuleRoot "Application\Functions"
 
 	. "$FunctionsPath\Open-Terminal.ps1"
+
+	# Window ID 0 activates the caller's own window first. Stand-ins so the mocks below exist even
+	# when the Helper and Window modules are not loaded, and no test touches a real window.
+	function Resolve-HostingTerminalTab { }
+	function Set-WindowForeground { param([IntPtr]$Handle) }
+	function Write-LogDebug { param($Message, $Style) }
 }
 
 Describe "Open-Terminal" {
 	BeforeEach {
 		Mock Start-Process { }
 		Mock Start-Sleep { }
+		Mock Resolve-HostingTerminalTab { $null }
+		Mock Set-WindowForeground { $true }
+		Mock Write-LogDebug { }
 
 		$script:previousWtWindowId = $env:WT_WINDOW_ID
 		Remove-Item Env:WT_WINDOW_ID -ErrorAction SilentlyContinue
@@ -214,6 +223,66 @@ Describe "Open-Terminal" {
 			Should -Invoke Start-Process -Times 1 -ParameterFilter {
 				$ArgumentList -contains "explicit-id"
 			}
+		}
+	}
+
+	Context "Activating the caller's window for window ID 0" {
+		# "wt -w 0" lands in the most recently activated terminal window, so the caller's own
+		# window is activated first - otherwise a second window that came forward during the
+		# command receives the tabs.
+		BeforeEach {
+			$script:calls = [System.Collections.Generic.List[string]]::new()
+			Mock Resolve-HostingTerminalTab { [PSCustomObject]@{ Handle = [IntPtr]4242; ProcessId = 1; TabTitle = 'PowerShell'; Exact = $true } }
+			Mock Set-WindowForeground { $script:calls.Add("activate $Handle"); $true }
+			Mock Start-Process { $script:calls.Add('spawn') }
+		}
+
+		It "activates the identified window before spawning the tabs" {
+			Open-Terminal -Command "echo test" -InSameShell
+
+			Should -Invoke Set-WindowForeground -Times 1 -Exactly -ParameterFilter { $Handle -eq [IntPtr]4242 }
+			$script:calls | Should -Be @('activate 4242', 'spawn')
+		}
+
+		It "activates it for an explicit window ID of 0 as well" {
+			# Open-ProjectTerminals passes its caller window as -WindowId "0".
+			Open-Terminal -Command "echo test" -WindowId "0"
+
+			Should -Invoke Set-WindowForeground -Times 1 -Exactly
+		}
+
+		It "leaves the windows alone when its own window is only a guess" {
+			Mock Resolve-HostingTerminalTab { [PSCustomObject]@{ Handle = [IntPtr]4242; ProcessId = 1; TabTitle = 'PowerShell'; Exact = $false } }
+
+			Open-Terminal -Command "echo test" -InSameShell
+
+			Should -Invoke Set-WindowForeground -Times 0
+			Should -Invoke Start-Process -Times 1 -ParameterFilter { $ArgumentList -contains "0" }
+		}
+
+		It "still opens the tabs when the shell is not hosted by Windows Terminal" {
+			Mock Resolve-HostingTerminalTab { $null }
+
+			Open-Terminal -Command "echo test" -InSameShell
+
+			Should -Invoke Set-WindowForeground -Times 0
+			Should -Invoke Start-Process -Times 1
+		}
+
+		It "does not look for its window when the target window is named" {
+			$env:WT_WINDOW_ID = "caller-window-guid"
+
+			Open-Terminal -Command "echo test" -InSameShell
+			Open-Terminal -Command "echo test" -WindowId "explicit-id"
+			Open-Terminal -Command "echo test"
+
+			Should -Invoke Resolve-HostingTerminalTab -Times 0
+		}
+
+		It "does not activate a window for an elevated spawn" {
+			Open-Terminal -Command "echo test" -InSameShell -Administrator
+
+			Should -Invoke Resolve-HostingTerminalTab -Times 0
 		}
 	}
 }

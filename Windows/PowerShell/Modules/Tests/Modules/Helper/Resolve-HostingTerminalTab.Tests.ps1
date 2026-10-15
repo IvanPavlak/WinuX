@@ -4,8 +4,13 @@ BeforeAll {
 	$ModuleRoot = (Get-RepositoryPath).Modules
 
 	. (Join-Path $ModuleRoot "Helper\Functions\Resolve-HostingTerminalTab.ps1")
+	# The title probe polls through the real Wait-Until; its first check succeeds or the test
+	# mocks it, so no test waits for real.
+	. (Join-Path $ModuleRoot "Helper\Functions\Wait-Until.ps1")
+	. (Join-Path $ModuleRoot "Helper\Functions\New-WaitClock.ps1")
 
 	function Get-WindowHandle { param($ProcessName, $WindowTitle) @() }
+	function Clear-WindowCache { }
 
 	# A stand-in for the Process.Parent chain the real walk climbs. Property access is all the
 	# function uses, so a plain object chain is a faithful stand-in.
@@ -100,5 +105,105 @@ Describe "Resolve-HostingTerminalTab" {
 		Mock Get-WindowHandle { @((New-TerminalWindow -Handle 407 -ProcessId 44 -Title 'pwsh')) }
 
 		(Resolve-HostingTerminalTab).TabTitle | Should -Be 'pwsh'
+	}
+
+	It "reports the only window of the hosting terminal as identified" {
+		Mock Get-WindowHandle { @((New-TerminalWindow -Handle 407 -ProcessId 44 -Title 'pwsh')) }
+
+		(Resolve-HostingTerminalTab).Exact | Should -BeTrue
+	}
+
+	Context "several windows in one terminal process" {
+		# Current Windows Terminal versions host every window in one process, so the parent-process
+		# walk alone cannot tell the windows apart.
+		BeforeEach {
+			$script:previousConsoleTitle = $Host.UI.RawUI.WindowTitle
+		}
+
+		AfterEach {
+			$Host.UI.RawUI.WindowTitle = $script:previousConsoleTitle
+		}
+
+		It "picks the one window whose active tab is this shell's project tab" {
+			$env:WT_PROJECT_TAB = 'Server.Api'
+			Mock Get-WindowHandle {
+				@(
+					(New-TerminalWindow -Handle 909 -ProcessId 44 -Title 'PowerShell'),
+					(New-TerminalWindow -Handle 407 -ProcessId 44 -Title 'Server.Api')
+				)
+			}
+
+			$resolved = Resolve-HostingTerminalTab
+
+			$resolved.Handle | Should -Be ([IntPtr]407)
+			$resolved.Exact | Should -BeTrue
+			$resolved.TabTitle | Should -Be 'Server.Api'
+		}
+
+		It "finds its own window through a title probe and restores the shell's title" {
+			$Host.UI.RawUI.WindowTitle = 'my shell'
+			# Window 407 is this shell's: its title follows whatever the shell sets, the way Windows
+			# Terminal mirrors the active tab's title. Window 909 is another window.
+			Mock Get-WindowHandle {
+				@(
+					(New-TerminalWindow -Handle 909 -ProcessId 44 -Title 'PowerShell'),
+					(New-TerminalWindow -Handle 407 -ProcessId 44 -Title $Host.UI.RawUI.WindowTitle)
+				)
+			}
+
+			$resolved = Resolve-HostingTerminalTab
+
+			$resolved.Handle | Should -Be ([IntPtr]407)
+			$resolved.Exact | Should -BeTrue
+			$resolved.TabTitle | Should -Be 'my shell'
+			$Host.UI.RawUI.WindowTitle | Should -Be 'my shell'
+		}
+
+		It "falls back to the probe when the project tab title is shown by more than one window" {
+			$env:WT_PROJECT_TAB = 'Server.Api'
+			Mock Get-WindowHandle {
+				@(
+					(New-TerminalWindow -Handle 909 -ProcessId 44 -Title 'Server.Api'),
+					(New-TerminalWindow -Handle 407 -ProcessId 44 -Title 'Server.Api')
+				)
+			}
+			Mock Wait-Until { $false }
+
+			$resolved = Resolve-HostingTerminalTab
+
+			Should -Invoke Wait-Until -Times 1 -Exactly
+			$resolved.Exact | Should -BeFalse
+		}
+
+		It "returns the first window as a guess when nothing identifies it" {
+			Mock Get-WindowHandle {
+				@(
+					(New-TerminalWindow -Handle 909 -ProcessId 44 -Title 'PowerShell'),
+					(New-TerminalWindow -Handle 407 -ProcessId 44 -Title 'PowerShell')
+				)
+			}
+			# The probe never shows up (a tab that cannot retitle itself).
+			Mock Wait-Until { $false }
+
+			$resolved = Resolve-HostingTerminalTab
+
+			$resolved.Handle | Should -Be ([IntPtr]909)
+			$resolved.Exact | Should -BeFalse
+		}
+
+		It "does not probe when the project tab title identifies the window" {
+			$env:WT_PROJECT_TAB = 'Server.Api'
+			Mock Get-WindowHandle {
+				@(
+					(New-TerminalWindow -Handle 909 -ProcessId 44 -Title 'PowerShell'),
+					(New-TerminalWindow -Handle 407 -ProcessId 44 -Title 'Server.Api')
+				)
+			}
+			Mock Wait-Until { $true }
+
+			$null = Resolve-HostingTerminalTab
+
+			Should -Invoke Wait-Until -Times 0
+		}
 	}
 }
