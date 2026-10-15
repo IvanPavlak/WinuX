@@ -302,6 +302,18 @@ function Open-ProjectTerminals {
 	}
 	# Other cases are handled per-project or per-tab inside the loop
 
+	# Tabs that go into this shell's own window are focused through UI Automation afterwards (see
+	# the focus step at the end), which needs that window's handle. It is resolved NOW, before any
+	# tab opens: Resolve-HostingTerminalTab tells this shell's window apart from other windows of
+	# the same Windows Terminal process by a title probe, which only works while this shell's tab is
+	# the active one. Once the project tabs open, the last of them is active and has a fixed title,
+	# so a lookup then could only guess.
+	$hostingTerminal = $null
+	if ($FocusTab -and $sharedWindowId -and $sharedWindowId -eq $callerWindowId -and
+		(Get-Command Resolve-HostingTerminalTab -ErrorAction SilentlyContinue)) {
+		$hostingTerminal = Resolve-HostingTerminalTab
+	}
+
 	# Track tab names and their relative positions for focus functionality
 	$tabNamesList = @()
 	$totalTabsCreated = 0
@@ -484,14 +496,11 @@ function Open-ProjectTerminals {
 	# Tabs that went into this shell's own window can be selected through UI Automation once they
 	# have all landed. `wt focus-tab` cannot promise that: it is a separate wt.exe call that can
 	# reach Windows Terminal before the new-tab calls queued ahead of it, and the last created tab
-	# then ends up active instead of the requested one.
-	$hostingTerminal = $null
-	if ($FocusTab -and $focusWindowId -and $focusWindowId -eq $callerWindowId -and
-		(Get-Command Resolve-HostingTerminalTab -ErrorAction SilentlyContinue)) {
-		$hostingTerminal = Resolve-HostingTerminalTab
-	}
-
-	if ($hostingTerminal) {
+	# then ends up active instead of the requested one. The window was resolved before the tabs
+	# opened; only an identified window is used, because selecting a tab in a guessed window could
+	# act on another terminal window. A guess leaves the focus to `wt focus-tab` below, which
+	# targets window 0 - the caller's window, which Open-Terminal activated before the spawn.
+	if ($hostingTerminal -and $hostingTerminal.Exact) {
 		$selectParams = @{ WindowHandle = $hostingTerminal.Handle }
 		if ($FocusTab -eq "origin" -and $originTabName) {
 			$selectParams["TabTitle"] = $originTabName

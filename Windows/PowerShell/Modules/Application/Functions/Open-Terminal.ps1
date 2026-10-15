@@ -28,8 +28,11 @@ function Open-Terminal {
 		Default: $false (creates a new window)
 		The current window is targeted via $env:WT_WINDOW_ID when the calling shell knows its
 		own window ID (set by Open-Workspace's -Alongside bootstrap). Without it, window ID 0
-		is used - note that "wt -w 0" targets the MOST RECENTLY USED window, which with
-		multiple Windows Terminal windows open is not necessarily the caller's window.
+		is used. "wt -w 0" targets the MOST RECENTLY USED window, which with multiple Windows
+		Terminal windows open is not necessarily the caller's window, so before spawning the
+		tabs this shell's own window (Resolve-HostingTerminalTab) is activated, which makes it
+		the most recently used one. A window that cannot be identified is left alone. The same
+		applies to an explicit -WindowId of 0.
 
 	.PARAMETER WindowId
 		Specifies an explicit Windows Terminal window ID to open tabs in.
@@ -100,6 +103,31 @@ function Open-Terminal {
 			else {
 				[guid]::NewGuid().ToString()
 			}
+
+			# "wt -w 0" is the window Windows Terminal saw activated MOST RECENTLY, not the window
+			# this shell runs in. With two terminal windows open, anything that brought the other
+			# one forward during the command sends the tabs there - Test-TerminalTabsAlreadyOpen's
+			# keyboard fallback, for one, activates every terminal window it reads and leaves the
+			# last one in front. Activating this shell's own window right before the spawn makes it
+			# the most recent one again. Only an identified window is activated: a guess could pick
+			# the other window and cause the very misplacement this prevents. SetForegroundWindow,
+			# not Confirm-WindowForeground, because the latter restores the window and would
+			# un-maximize a maximized terminal; the shell's process was started by Windows Terminal,
+			# the foreground process, so the plain request is allowed.
+			if ([string]$resolvedWindowId -eq '0' -and -not $Administrator -and
+				(Get-Command Resolve-HostingTerminalTab -ErrorAction SilentlyContinue) -and
+				(Get-Command Set-WindowForeground -ErrorAction SilentlyContinue)) {
+				$hostingTerminal = Resolve-HostingTerminalTab
+				if ($hostingTerminal -and $hostingTerminal.Exact) {
+					if (-not (Set-WindowForeground -Handle $hostingTerminal.Handle)) {
+						Write-LogDebug "Could not activate this shell's window [$($hostingTerminal.Handle)] - the tabs go to the most recently used terminal window" -Style Warning
+					}
+				}
+				elseif ($hostingTerminal) {
+					Write-LogDebug "Could not tell which terminal window hosts this shell - the tabs go to the most recently used one" -Style Warning
+				}
+			}
+
 			# Chain every tab into ONE wt invocation ("new-tab ... ; new-tab ..."): Windows
 			# Terminal processes subcommands of a single command line strictly in order, so
 			# this guarantees tab ordering without the old one-spawn-per-tab + 25ms-sleep

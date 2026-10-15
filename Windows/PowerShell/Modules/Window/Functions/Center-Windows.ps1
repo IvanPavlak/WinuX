@@ -29,9 +29,20 @@ function Center-Windows {
 		placement is then verified with Wait-WindowRect and re-applied once when the
 		window did not land on the centered bounds - SetWindowPos reports success for
 		the call even when an external window manager (FancyZones restoring a
-		remembered zone) moves the window straight back. Windows that would not hold
-		the centered bounds are reported in normal mode as well as under verbose
-		logging, so a partial pass never looks like a complete one.
+		remembered zone) moves the window straight back.
+
+		That check passes on its first read, so it cannot see a window that is moved
+		again a few hundred milliseconds later (FancyZones restoring a remembered
+		zone after a desktop collapse, an Electron app such as Obsidian or VS Code
+		re-applying its own saved bounds). After the pass, up to three convergence
+		rounds therefore wait 250 ms, re-enumerate the windows fresh, and compare
+		each one with the bounds it was centered on: a window that moved is
+		re-centered, a window that was not in the first enumeration is centered, and
+		the final round only checks, recording any window still off its bounds as
+		failed. Each window is re-centered at most twice, and the loop stops at the
+		first round that finds nothing to do. Windows that would not hold the
+		centered bounds are reported in normal mode as well as under verbose logging,
+		so a partial pass never looks like a complete one.
 
 		Uses existing module functions:
 		- Get-WindowHandle for pattern-based window filtering (wildcard, regex, exact)
@@ -222,10 +233,6 @@ function Center-Windows {
 			''
 		)
 
-		$centeredCount = 0
-		$centeredLabels = @()
-		$skippedCount = 0
-		$skippedLabels = @()
 		# Two placement attempts with a short verification budget per window keeps the worst
 		# case bounded for a full-desktop pass (same budget as the Move-Windows monitor leg).
 		$placementAttempts = 2
@@ -234,6 +241,103 @@ function Center-Windows {
 		$excludedInvalidSizeCount = 0
 		$totalEnumeratedWindows = @($allWindows).Count
 		$totalEligibleWindows = 0
+
+		# One record per eligible window, keyed by handle: the centered bounds it was given
+		# (Target) and whether it holds them ('Centered') or not ('Failed'). The convergence
+		# rounds below re-check every window against its RECORDED bounds and overwrite the
+		# category as they learn more, and the summary is derived from this map at the end - the
+		# same shape as the Move-Windows outcome records. $outcomeOrder keeps first-seen order
+		# for the printed lists.
+		$outcomes = @{}
+		$outcomeOrder = [System.Collections.Generic.List[string]]::new()
+		$recordOutcome = {
+			param($Handle, $Category, $Label, $Target)
+			$key = [string]$Handle
+			if (-not $outcomes.ContainsKey($key)) { $outcomeOrder.Add($key) }
+			$outcomes[$key] = @{ Category = $Category; Label = $Label; Target = $Target }
+		}
+
+		# The centered bounds for a window. With -OnPrimary or -Monitor every window is forced
+		# onto the resolved monitor; otherwise the monitor under the window's center point is
+		# used, falling back to the primary monitor for a window that sits off-screen.
+		$resolveTarget = {
+			param($Window)
+
+			if ($forcedMonitor) {
+				$targetMonitor = $forcedMonitor
+			}
+			else {
+				$windowCenterX = $Window.Left + [math]::Floor($Window.Width / 2)
+				$windowCenterY = $Window.Top + [math]::Floor($Window.Height / 2)
+
+				$targetMonitor = $null
+				foreach ($mon in $monitors) {
+					if ($windowCenterX -ge $mon.Left -and $windowCenterX -lt $mon.Right -and
+						$windowCenterY -ge $mon.Top -and $windowCenterY -lt $mon.Bottom) {
+						$targetMonitor = $mon
+						break
+					}
+				}
+
+				if (-not $targetMonitor) {
+					$targetMonitor = $monitors | Where-Object { $_.IsPrimary } | Select-Object -First 1
+					if (-not $targetMonitor) {
+						$targetMonitor = $monitors[0]
+					}
+
+					Write-LogDebug "  [$($Window.Title)] is off-screen, moving to primary monitor!" -Style Warning
+				}
+			}
+
+			$targetWidth = [math]::Floor($targetMonitor.WorkAreaWidth * $WidthPercent / 100)
+			$targetHeight = [math]::Floor($targetMonitor.WorkAreaHeight * $HeightPercent / 100)
+			return @{
+				X      = $targetMonitor.WorkAreaLeft + [math]::Floor(($targetMonitor.WorkAreaWidth - $targetWidth) / 2)
+				Y      = $targetMonitor.WorkAreaTop + [math]::Floor(($targetMonitor.WorkAreaHeight - $targetHeight) / 2)
+				Width  = $targetWidth
+				Height = $targetHeight
+			}
+		}
+
+		# Place one window on its centered bounds and verify it.
+		#
+		# The move/resize is delegated to Resize-Windows in target-bounds mode. InsetPercent 0
+		# places the window at the exact centered bounds (no FancyZones inset), keeping all
+		# placement on the shared Resize-Windows path (DRY). Bound explicitly, so it deliberately
+		# overrides the configurable Get-WindowInsetPercent default rather than tracking it -
+		# centering is exact placement, never an inset pre-snap position.
+		#
+		# The placement is then VERIFIED and re-applied once, the same way Move-Windows treats its
+		# monitor placement: SetWindowPos reports success for the call, not for where the window
+		# ends up. This check only proves the window got there; whether it STAYS there is what the
+		# convergence rounds below establish.
+		$placeWindow = {
+			param($Handle, $Title, $ProcName, $Target)
+
+			$lastObserved = $null
+			for ($attempt = 1; $attempt -le $placementAttempts; $attempt++) {
+				$null = Resize-Windows -WindowHandle $Handle -TargetX $Target.X -TargetY $Target.Y -TargetWidth $Target.Width -TargetHeight $Target.Height -InsetPercent 0
+				$resizeResult = $script:LastResizeWindowsResult
+
+				if (-not ($resizeResult -and $resizeResult.ResizedCount -gt 0)) {
+					continue
+				}
+
+				$placementCheck = Wait-WindowRect -WindowHandle $Handle `
+					-ExpectedX $Target.X -ExpectedY $Target.Y `
+					-ExpectedWidth $Target.Width -ExpectedHeight $Target.Height `
+					-TimeoutMs $placementVerifyTimeoutMs
+
+				if ($placementCheck.Verified) {
+					return @{ Placed = $true; Observed = $placementCheck }
+				}
+
+				$lastObserved = $placementCheck
+				Write-LogDebug "     ! [$Title] ($ProcName) did not hold the centered bounds on attempt $attempt (observed $($placementCheck.X), $($placementCheck.Y))" -Style Warning
+			}
+
+			return @{ Placed = $false; Observed = $lastObserved }
+		}
 
 		foreach ($window in $allWindows) {
 			$handle = $window.Handle
@@ -254,89 +358,132 @@ function Center-Windows {
 
 			$totalEligibleWindows++
 
-			# Determine the target monitor. With -OnPrimary or -Monitor every window is
-			# forced onto the resolved monitor; otherwise pick the monitor the window is
-			# currently on based on its center point.
-			if ($forcedMonitor) {
-				$targetMonitor = $forcedMonitor
+			$target = & $resolveTarget $window
+			$placement = & $placeWindow $handle $title $procName $target
+			$label = Get-WindowDisplayName -ProcessName $procName -Title $title
+
+			if ($placement.Placed) {
+				& $recordOutcome $handle 'Centered' $label $target
+				Write-LogDebug "     ✓ Centered [$title] ($procName) => ($($target.X), $($target.Y)) [$($target.Width)x$($target.Height)]" -Style Success
 			}
 			else {
-				$windowCenterX = $window.Left + [math]::Floor($window.Width / 2)
-				$windowCenterY = $window.Top + [math]::Floor($window.Height / 2)
-
-				$targetMonitor = $null
-
-				foreach ($mon in $monitors) {
-					if ($windowCenterX -ge $mon.Left -and $windowCenterX -lt $mon.Right -and
-						$windowCenterY -ge $mon.Top -and $windowCenterY -lt $mon.Bottom) {
-						$targetMonitor = $mon
-						break
-					}
-				}
-
-				# Fallback: if window center isn't inside any monitor (e.g., off-screen),
-				# use the primary monitor
-				if (-not $targetMonitor) {
-					$targetMonitor = $monitors | Where-Object { $_.IsPrimary } | Select-Object -First 1
-					if (-not $targetMonitor) {
-						$targetMonitor = $monitors[0]
-					}
-
-					Write-LogDebug "  [$title] is off-screen, moving to primary monitor!" -Style Warning
-				}
+				& $recordOutcome $handle 'Failed' $label $target
+				$observedText = if ($placement.Observed) { " (last observed $($placement.Observed.X), $($placement.Observed.Y))" } else { '' }
+				Write-LogDebug "     ✗ Failed to center [$title] ($procName)$observedText" -Style Warning
 			}
+		}
 
-			# Calculate centered position within the monitor's work area
-			$newWidth = [math]::Floor($targetMonitor.WorkAreaWidth * $WidthPercent / 100)
-			$newHeight = [math]::Floor($targetMonitor.WorkAreaHeight * $HeightPercent / 100)
-			$newX = $targetMonitor.WorkAreaLeft + [math]::Floor(($targetMonitor.WorkAreaWidth - $newWidth) / 2)
-			$newY = $targetMonitor.WorkAreaTop + [math]::Floor(($targetMonitor.WorkAreaHeight - $newHeight) / 2)
+		# Convergence rounds: the pass ends only once every window is SEEN holding its centered
+		# bounds after a settle delay. The per-window check above passes on its first read,
+		# because SetWindowPos on another process's window returns only after that window has
+		# handled the move - so a window that is moved again a few hundred milliseconds later
+		# was counted as centered and never looked at again. Two things do exactly that during a
+		# reset: FancyZones restoring a remembered zone for a window that just arrived on the
+		# collapsed desktop, and Electron apps (Obsidian, VS Code) re-applying their own saved
+		# bounds after being restored and resized.
+		#
+		# Each round waits $roundSettleMs (longer than the per-window verify budget the drift
+		# escaped), re-enumerates the windows FRESH and compares each one with the bounds it was
+		# RECORDED with, not with bounds re-derived from where it is now - a window dragged onto
+		# another monitor must come back to where it was centered. A window off its bounds is
+		# re-placed; a window that was not in the first enumeration (no title yet while it
+		# loaded) is centered now. The final round only checks: a window still off its bounds
+		# there is recorded as failed, so every window is re-placed at most
+		# ($convergenceRounds - 1) times and the summary never trusts a re-placement nobody
+		# looked at afterwards. The loop ends early on the first round that finds nothing to do.
+		$convergenceRounds = 3
+		$roundSettleMs = 250
+		$tolerancePx = $script:WindowModuleTolerances.PositionVerificationPx
 
-			# Delegate the actual move/resize to Resize-Windows in target-bounds mode.
-			# InsetPercent 0 places the window at the exact centered bounds (no FancyZones inset),
-			# keeping all placement on the shared Resize-Windows path (DRY). Bound explicitly, so
-			# it deliberately overrides the configurable Get-WindowInsetPercent default rather
-			# than tracking it - centering is exact placement, never an inset pre-snap position.
-			#
-			# The placement is then VERIFIED and re-applied once, the same way Move-Windows treats
-			# its monitor placement: SetWindowPos reports success for the call, not for where the
-			# window ends up, and an external window manager (FancyZones restoring a remembered
-			# zone) can move it straight back. Trusting the call made a window left where it was
-			# count as centered.
-			$centered = $false
-			$lastObserved = $null
-			for ($attempt = 1; $attempt -le $placementAttempts; $attempt++) {
-				$null = Resize-Windows -WindowHandle $handle -TargetX $newX -TargetY $newY -TargetWidth $newWidth -TargetHeight $newHeight -InsetPercent 0
-				$resizeResult = $script:LastResizeWindowsResult
+		for ($round = 1; $round -le $convergenceRounds; $round++) {
+			$isFinalRound = ($round -eq $convergenceRounds)
 
-				if (-not ($resizeResult -and $resizeResult.ResizedCount -gt 0)) {
+			Start-Sleep -Milliseconds $roundSettleMs
+			Clear-WindowCache
+			$roundWindows = if ($hasFilter) { Get-WindowHandle @filterParams } else { Get-CachedWindows }
+
+			$stragglers = @()
+			foreach ($window in @($roundWindows)) {
+				if ($window.Title -in $skipTitles) { continue }
+				if ($window.Width -le 0 -or $window.Height -le 0) { continue }
+
+				$key = [string]$window.Handle
+				if (-not $outcomes.ContainsKey($key)) {
+					$stragglers += @{ Window = $window; Target = (& $resolveTarget $window); IsNew = $true }
 					continue
 				}
 
-				$placementCheck = Wait-WindowRect -WindowHandle $handle `
-					-ExpectedX $newX -ExpectedY $newY `
-					-ExpectedWidth $newWidth -ExpectedHeight $newHeight `
-					-TimeoutMs $placementVerifyTimeoutMs
+				$record = $outcomes[$key]
+				$target = $record.Target
+				$holds = ([Math]::Abs($window.Left - $target.X) -le $tolerancePx) -and
+					([Math]::Abs($window.Top - $target.Y) -le $tolerancePx) -and
+					([Math]::Abs($window.Width - $target.Width) -le $tolerancePx) -and
+					([Math]::Abs($window.Height - $target.Height) -le $tolerancePx)
 
-				if ($placementCheck.Verified) {
-					$centered = $true
-					break
+				if ($holds) {
+					# A window whose own verification gave up may still have settled on its bounds.
+					if ($record.Category -ne 'Centered') {
+						& $recordOutcome $window.Handle 'Centered' $record.Label $target
+					}
+					continue
 				}
 
-				$lastObserved = $placementCheck
-				Write-LogDebug "     ! [$title] ($procName) did not hold the centered bounds on attempt $attempt (observed $($placementCheck.X), $($placementCheck.Y))" -Style Warning
+				$stragglers += @{ Window = $window; Target = $target; IsNew = $false }
 			}
 
-			if ($centered) {
+			if ($stragglers.Count -eq 0) {
+				Write-LogDebug "     Convergence round ${round}: every window holds its centered bounds" -Style Success
+				break
+			}
+
+			foreach ($straggler in $stragglers) {
+				$window = $straggler.Window
+				$target = $straggler.Target
+				$title = $window.Title
+				$procName = $window.ProcessName
+				$observedText = "($($window.Left), $($window.Top)) [$($window.Width)x$($window.Height)]"
+
+				if ($straggler.IsNew) {
+					$totalEligibleWindows++
+					$label = Get-WindowDisplayName -ProcessName $procName -Title $title
+					Write-LogDebug "     ! [$title] ($procName) appeared in convergence round $round - centering it" -Style Warning
+				}
+				else {
+					$label = $outcomes[[string]$window.Handle].Label
+					if ($isFinalRound) {
+						& $recordOutcome $window.Handle 'Failed' $label $target
+						Write-LogDebug "     ✗ [$title] ($procName) is still at $observedText after round $round instead of ($($target.X), $($target.Y)) [$($target.Width)x$($target.Height)]" -Style Warning
+						continue
+					}
+					Write-LogDebug "     ! [$title] ($procName) moved to $observedText after round $round - re-centering" -Style Warning
+				}
+
+				$placement = & $placeWindow $window.Handle $title $procName $target
+				if ($placement.Placed) {
+					& $recordOutcome $window.Handle 'Centered' $label $target
+					Write-LogDebug "     ✓ Re-centered [$title] ($procName) => ($($target.X), $($target.Y)) [$($target.Width)x$($target.Height)]" -Style Success
+				}
+				else {
+					& $recordOutcome $window.Handle 'Failed' $label $target
+					Write-LogDebug "     ✗ Failed to re-center [$title] ($procName)" -Style Warning
+				}
+			}
+		}
+
+		# Derive the summary from the outcome records.
+		$centeredCount = 0
+		$centeredLabels = @()
+		$skippedCount = 0
+		$skippedLabels = @()
+		foreach ($key in $outcomeOrder) {
+			$outcome = $outcomes[$key]
+			if ($outcome.Category -eq 'Centered') {
 				$centeredCount++
-				$centeredLabels += Get-WindowDisplayName -ProcessName $procName -Title $title
-				Write-LogDebug "     ✓ Centered [$title] ($procName) => ($newX, $newY) [${newWidth}x${newHeight}]" -Style Success
+				$centeredLabels += $outcome.Label
 			}
 			else {
 				$skippedCount++
-				$skippedLabels += Get-WindowDisplayName -ProcessName $procName -Title $title
-				$observedText = if ($lastObserved) { " (last observed $($lastObserved.X), $($lastObserved.Y))" } else { '' }
-				Write-LogDebug "     ✗ Failed to center [$title] ($procName)$observedText" -Style Warning
+				$skippedLabels += $outcome.Label
 			}
 		}
 

@@ -503,7 +503,7 @@ Describe "Open-ProjectTerminals" {
 		}
 
 		BeforeEach {
-			Mock Resolve-HostingTerminalTab { [PSCustomObject]@{ Handle = [IntPtr]4242; ProcessId = 1; TabTitle = "PowerShell" } }
+			Mock Resolve-HostingTerminalTab { [PSCustomObject]@{ Handle = [IntPtr]4242; ProcessId = 1; TabTitle = "PowerShell"; Exact = $true } }
 			Mock Get-WindowsTerminalTabTitles { @("PowerShell", "TestProject.Api", "TestProject.Ui") }
 			Mock Select-WindowsTerminalTab { $true }
 		}
@@ -536,6 +536,28 @@ Describe "Open-ProjectTerminals" {
 
 		It "does not select anything while the tab strip is unreadable" {
 			Mock Get-WindowsTerminalTabTitles { $null }
+
+			Open-ProjectTerminals -Project "TestProject" -InSameShell
+
+			Should -Invoke Select-WindowsTerminalTab -Times 0
+			Should -Invoke Start-Process -Times 1 -Exactly -ParameterFilter { $ArgumentList -contains "focus-tab" }
+		}
+
+		It "resolves this shell's window before any tab opens" {
+			# The lookup tells windows apart with a title probe, which only works while this shell's
+			# tab is active - once the project tabs open, the last of them is.
+			$script:order = [System.Collections.Generic.List[string]]::new()
+			Mock Resolve-HostingTerminalTab { $script:order.Add('resolve'); [PSCustomObject]@{ Handle = [IntPtr]4242; ProcessId = 1; TabTitle = "PowerShell"; Exact = $true } }
+			Mock Open-Terminal { $script:order.Add('open') }
+
+			Open-ProjectTerminals -Project "TestProject" -InSameShell
+
+			Should -Invoke Resolve-HostingTerminalTab -Times 1 -Exactly
+			$script:order[0] | Should -Be 'resolve'
+		}
+
+		It "leaves the focus to wt focus-tab when its own window is only a guess" {
+			Mock Resolve-HostingTerminalTab { [PSCustomObject]@{ Handle = [IntPtr]4242; ProcessId = 1; TabTitle = "PowerShell"; Exact = $false } }
 
 			Open-ProjectTerminals -Project "TestProject" -InSameShell
 
