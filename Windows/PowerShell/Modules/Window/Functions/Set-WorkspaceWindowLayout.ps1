@@ -89,7 +89,9 @@
 
 		Only when the in-process retries are exhausted does it escalate to a workspace rerun
 		in a fresh shell (window-only retry mode) that:
-		- Preserves already configured virtual desktops
+		- Keeps the virtual desktops that exist and creates the ones the layout still needs,
+		  never removing any (a Kill-All or Reset-Windows between the escalation and the rerun
+		  may have collapsed them to one)
 		- Force-re-applies FancyZones monitor layouts (same reason as above)
 		- Re-applies the full layout config (idempotent skips keep it cheap)
 		- Skips the window wait and the browser first-tab and first-open normalization passes
@@ -942,8 +944,29 @@
 			}
 
 		}
-		elseif (Test-LogVerbose) {
-			Write-LogDebug "Window-only retry active - skipping virtual desktop reconfiguration" -Style Warning
+		else {
+			# A window-only retry keeps the desktops the escalating run left behind - as long as
+			# they are still there. The marker outlives the run that wrote it (a 10-minute
+			# User-scope mirror, consumed by the next open of ANY workspace - see
+			# Get-WorkspaceRerunMirror), so the open that honors it can follow a Kill-All or
+			# Reset-Windows that collapsed the desktops to one. Skipping the desktops then made
+			# every move fail "out of range", the run escalated again, and each rerun started
+			# from the same single desktop. The missing desktops are created here; nothing is ever
+			# removed (shrinking could delete an alongside workspace), and a count that already
+			# covers the layout is left exactly as it is. The zone layouts are force-reapplied
+			# below in any case.
+			$totalRequiredDesktops = $requiredVirtualDesktops + $DesktopOffset
+			$currentDesktopCount = Get-VirtualDesktopCount
+			if ($currentDesktopCount -lt $totalRequiredDesktops) {
+				Write-LogWarning "Window-only retry found $currentDesktopCount virtual desktop(s) but the layout needs $totalRequiredDesktops - creating the missing one(s)"
+				$vdResult = Ensure-VirtualDesktops -Count $totalRequiredDesktops
+				if (-not $vdResult) {
+					throw "Failed to create the virtual desktops the window-only retry needs (RPC server may be unavailable)"
+				}
+			}
+			elseif (Test-LogVerbose) {
+				Write-LogDebug "Window-only retry active - keeping the $currentDesktopCount existing virtual desktop(s)" -Style Warning
+			}
 		}
 		& $recordPhase 'Desktops'
 

@@ -82,7 +82,7 @@ CI run, fails a change that:
   exists to prevent; `### Added`, `### Changed` or `### Deprecated` in a PATCH; a MAJOR or MINOR
   that does not reset the lower parts to 0, or a version that does not go up.
 - **Forgets the baseline** - the baseline's version must be the newest release in
-  `CHANGELOG.md`, so a release commit that does not refresh it fails.
+  `CHANGELOG.md`, so a change that cuts a release without refreshing it fails.
 
 Taking a snapshot is the release step `Run-Tests -UpdateContractBaseline`, which runs no tests:
 it rewrites the file from the working tree, stamps it with the newest released version, and
@@ -140,9 +140,9 @@ Release candidates, when a MAJOR warrants one, use SemVer pre-release tags: `2.0
    entry means at least MINOR; otherwise PATCH. The contract gate fails a bump that disagrees.
 2. Update the compare/tag links at the bottom of `CHANGELOG.md`.
 3. Refresh the contract baseline: `Run-Tests -UpdateContractBaseline`, then
-   `Run-Tests -TestName "Infrastructure"`. The baseline file goes into the release commit.
-4. Commit: `Release vX.Y.Z`.
-5. Tag: `git tag -a vX.Y.Z -m "vX.Y.Z"` and push the tag.
+   `Run-Tests -TestName "Infrastructure"`. The baseline file ships in the same commit.
+4. Commit the release edits (the changelog section, the compare links and the baseline) together with the change they release, in the same commit and pull request; there is no separate release commit. A release with nothing else pending is its own small change, titled `Release vX.Y.Z`.
+5. Once the pull request is merged, tag the merge commit: `git tag -a vX.Y.Z -m "vX.Y.Z"` and push the tag.
 6. The `Release` workflow (`.github/workflows/release.yml`) picks the tag up automatically:
    it builds `WinuX.exe` (`Windows/WinuX/New-WinuXExecutable.ps1`), extracts the matching
    `CHANGELOG.md` section as the release notes, and creates the GitHub Release with the

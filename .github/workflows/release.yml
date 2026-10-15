@@ -5,8 +5,8 @@ name: Release
 # is always available at <repo>/releases/latest/download/WinuX.exe. The binary is never
 # committed; this workflow is its only distribution path.
 #
-# VERSIONING.md steps 1-4 stay manual (hand-curated changelog, commit, tag); this automates
-# step 5. It works for both release flows: pushing a tag from the CLI creates the release here,
+# VERSIONING.md steps 1-5 stay manual (hand-curated changelog, the release edits in the pull request, tag); this automates
+# step 6. It works for both release flows: pushing a tag from the CLI creates the release here,
 # and creating the release in the GitHub UI first also pushes its tag, in which case this run
 # only attaches the assets to the existing release.
 

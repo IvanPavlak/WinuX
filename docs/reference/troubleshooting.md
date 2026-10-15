@@ -477,6 +477,23 @@ Test-VirtualDesktopComHealth
 
 Opening a new shell also works (a fresh process builds fresh COM connections), but is no longer necessary.
 
+### Every Window Move Fails With "Desktop number N is out of range. Available desktops: 0-0"
+
+**Problem:** A workspace open - often `Kill-All ...; w MyWorkspace` typed as one line - prints `Move-WindowToVirtualDesktop: Desktop number 1 is out of range. Available desktops: 0-0` (from `Set-WindowLayouts.ps1` and `Snap-AllWindows.ps1`) for every window the layout puts on desktop 2 or higher, `Snap-AllWindows` reports each of them as `left desktop N during the pass and could not be brought back`, and both in-process retries fail the same way. Desktops 2 and 3 were never created. The run ends with `Window-only retry mode active: keeping current virtual desktops and FancyZones state.`, and the next open of the workspace does the same.
+
+**Why it happened:** The open was a window-only retry without knowing it. When a workspace open exhausts its in-process retries it arms a window-only retry marker and respawns the shell; the marker reaches the new shell through a User-scope mirror that lives 10 minutes and is consumed by the next open of ANY workspace (see [Get-WorkspaceRerunMirror](../modules/window.md#get-workspacererunmirror)). When the respawned command never ran - the tab was closed, or interrupted - the marker waited for whichever open came next: here a different workspace, typed after a `Kill-All` that had collapsed the virtual desktops to one. A window-only retry exists to leave the desktops alone, so the open kept that single desktop under a three-desktop layout, every move to desktop 2 or 3 was out of range, and the failure armed the marker again - each following open started from the same single desktop. In the session log (`Modules/Logging/Logs/Session_*.log`) the condition shows as `Window-only retry - the layout is not prepared ahead of the launch actions` right under the `Opening MyWorkspace Workspace` title.
+
+**Solution:** Fixed. A window-only retry now creates the desktops the layout still needs when fewer exist, and never removes any, so a stale marker costs at most one skipped window wait (the in-process retries cover that). A pending marker can also be inspected and cleared by hand:
+
+```powershell
+# The mirror a respawned shell reads ("1|<unix-timestamp>" while pending, empty otherwise)
+[Environment]::GetEnvironmentVariable('WORKSPACE_WINDOW_ONLY_RETRY', 'User')
+
+# Clear it, and the process copy of the shell you are typing in
+Set-WorkspaceRerunMirror -Name 'WORKSPACE_WINDOW_ONLY_RETRY' -Value $null
+$env:WORKSPACE_WINDOW_ONLY_RETRY = $null
+```
+
 ### Windows Land On The Wrong Monitor After Reset-Windows
 
 **Problem:** `Reset-Windows` consolidates onto the configured monitor, but a handful of windows end up centered on a different monitor. The verbose log shows every window moved successfully (`monitor moved [35]`), yet `Center-Windows` then reports target zones on the other monitor.
@@ -1314,7 +1331,7 @@ exit
 - **A function, parameter or key was removed or renamed** - keep the old shape working instead: a wrapper function that warns once per session, an `[Alias('OldName')]` on a renamed parameter, or the key still read with the new one taking precedence. Add a `### Deprecated` entry with the migration and a record in the baseline's `Deprecated` map with the version it ships in. The removal comes in the next MAJOR, as a `### Removed` entry naming the item in backticks (`` `Name` ``, `` `Function -Parameter` `` or `` `Top.Child` ``).
 - **A parameter is mandatory now** - give it a default and keep it optional. A mandatory addition is an immediate break and needs a `### Breaking` entry naming it.
 - **A version bump disagrees with its sections** - a release with `### Removed` or `### Breaking` is a MAJOR; a MAJOR needs one of them; `### Added`, `### Changed` or `### Deprecated` makes it at least a MINOR, and a PATCH holds only `### Fixed` and `### Security`. Fix the version or move the entries.
-- **The baseline is not at the newest release** - the release commit forgot the snapshot: run `Run-Tests -UpdateContractBaseline` and commit `ContractBaseline.json` with the release.
+- **The baseline is not at the newest release** - the change that cut the release forgot the snapshot: run `Run-Tests -UpdateContractBaseline` and commit `ContractBaseline.json` with the release.
 
 ## Debugging Commands
 

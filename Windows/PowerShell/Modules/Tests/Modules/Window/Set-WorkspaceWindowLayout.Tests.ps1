@@ -727,6 +727,79 @@ Describe "Set-WorkspaceWindowLayout" {
 		}
 	}
 
+	Context "Window-only retry and the virtual desktops" {
+		# The window-only marker outlives the run that wrote it (its mirror lives 10 minutes and
+		# the next open of any workspace consumes it), so the open that honors it can follow a
+		# Kill-All that collapsed the desktops to one. Keeping "the current desktops" then kept a
+		# single desktop under a three-desktop layout: every move was out of range, the run
+		# escalated again, and each rerun started from the same single desktop.
+		BeforeEach {
+			Mock Test-Path { $true }
+			Mock Import-PowerShellDataFile {
+				@{
+					Layout   = @(
+						@{ ProcessName = 'Code'; WindowTitle = '*'; DesktopNumber = 1 }
+						@{ ProcessName = 'Browser'; WindowTitle = '*'; DesktopNumber = 3 }
+					)
+					Monitors = @{
+						MonitorA = @{
+							VirtualDesktopLayouts = @{
+								1 = 'One'
+								2 = 'One'
+								3 = 'One'
+							}
+						}
+					}
+				}
+			}
+			Mock Set-WindowLayouts { @([PSCustomObject]@{ Status = 'Configured' }) }
+			Mock Write-LogWarning { }
+			[Environment]::SetEnvironmentVariable('WORKSPACE_WINDOW_ONLY_RETRY', '1', 'Process')
+		}
+
+		It "creates the desktops the layout needs when fewer exist" {
+			Mock Get-VirtualDesktopCount { 1 }
+
+			Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace'
+
+			Should -Invoke Ensure-VirtualDesktops -Times 1 -Exactly -ParameterFilter { $Count -eq 3 }
+			Should -Invoke Remove-VirtualDesktops -Times 0
+			# Still a window-only retry: the zone layouts are force-reapplied and the wait is skipped.
+			Should -Invoke Apply-FancyZones -Times 1 -Exactly -ParameterFilter { $Force }
+			Should -Invoke Wait-ForWorkspaceWindows -Times 0
+		}
+
+		It "counts the desktop offset into what it creates" {
+			Mock Get-VirtualDesktopCount { 2 }
+
+			Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace' -DesktopOffset 2
+
+			Should -Invoke Ensure-VirtualDesktops -Times 1 -Exactly -ParameterFilter { $Count -eq 5 }
+		}
+
+		It "never removes desktops that are already there" {
+			Mock Get-VirtualDesktopCount { 5 }
+
+			Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace'
+
+			Should -Invoke Ensure-VirtualDesktops -Times 0
+			Should -Invoke Remove-VirtualDesktops -Times 0
+		}
+
+		It "escalates when the missing desktops cannot be created" {
+			Mock Get-VirtualDesktopCount { 1 }
+			Mock Ensure-VirtualDesktops { $false }
+			Mock Write-LogError { }
+
+			Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace'
+
+			# No layout pass against a single desktop; the failure takes the usual escalation.
+			Should -Invoke Set-WindowLayouts -Times 0
+			Should -Invoke Write-LogError -Times 1 -Exactly -ParameterFilter { $Message -like '*virtual desktops*' }
+			Should -Invoke ReRun-LastCommand -Times 1 -Exactly
+		}
+	}
+
 	It "never sleeps between positioning and the snap pass, and forwards the snap desktop parameters" {
 		Mock Test-Path { $true }
 		Mock Import-PowerShellDataFile {

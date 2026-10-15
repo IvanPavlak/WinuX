@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-10-15
+
+### Fixed
+
+- **A workspace open no longer runs against a single virtual desktop because an earlier open's window-only retry marker was still pending.** When an open exhausts its in-process retries it arms a window-only retry and respawns the shell; the marker reaches the new shell through a User-scope mirror that lives 10 minutes and is consumed by the next open of any workspace. If the respawned command never ran, the next open typed by hand honored the marker - and when that open followed a `Kill-All` or `Reset-Windows`, which collapse the desktops to one, the window-only retry kept that single desktop under a multi-desktop layout: every `Move-WindowToVirtualDesktop` failed with `Desktop number N is out of range. Available desktops: 0-0`, the run escalated and armed the marker again, and each following open started from the same single desktop. `Set-WorkspaceWindowLayout` now creates the desktops the layout still needs in a window-only retry when fewer exist, and never removes any (an alongside workspace may own the extra ones); the zone layouts were already force-reapplied on that path. Tests: `Set-WorkspaceWindowLayout.Tests.ps1`. Docs: the Window module reference, troubleshooting ("Every Window Move Fails With \"Desktop number N is out of range\"").
+
+- **The release process no longer asks for a separate release commit.** `VERSIONING.md` step 4 told the releaser to commit `Release vX.Y.Z` after the change was done, which only repeated the changelog move and the baseline refresh as a second commit. Those release edits now ship in the same commit and pull request as the change they release, and the tag goes on the merge commit; a release with nothing else pending is its own small change. Docs: `VERSIONING.md` (release steps 3 to 5, "How it is enforced"), troubleshooting ("The Contract Gate Fails"), the step numbers in the header comment of `.github/workflows/release.yml` (comment only, the workflow itself is unchanged).
+
 ## [1.0.0] - 2026-10-14
 
 WinuX 1.0.0 follows 0.1.94 directly. Its one engine change is the Terminal-Icons hardening under Added and Fixed below; everything else is documentation and policy. It declares the contract stable - the `Configuration.psd1` schema, the bootstrap contract and the set of exported functions - and retires the 0.x milestone ladder, whose destination (a graphical front-end and a guided installer for non-technical users) is no longer the project's goal. From this release the version number means what a fork needs it to mean: a PATCH or MINOR never breaks your override, your overlays or your Custom-area code, and a MAJOR only removes what an earlier release deprecated.
@@ -1598,7 +1606,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/IvanPavlak/WinuX/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/IvanPavlak/WinuX/compare/v0.1.94...v1.0.0
 [0.1.94]: https://github.com/IvanPavlak/WinuX/compare/v0.1.93...v0.1.94
 [0.1.93]: https://github.com/IvanPavlak/WinuX/compare/v0.1.92...v0.1.93
