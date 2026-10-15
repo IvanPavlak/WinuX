@@ -12,7 +12,7 @@ The [Workflow module reference](../../../modules/workflow.md) is the authority o
 | Function | Configuration keys | Guide |
 | -------- | ------------------ | ----- |
 | `Close-Project` | `PathTemplates`, `ProjectActions`, `Universal`, `VisualStudioSolutions`, `VSCodeProjects` | [Close-Project](Close-Project.md) |
-| `Docker-Cleanup` | `DockerCleanupActions` | [Docker-Cleanup](Docker-Cleanup.md) |
+| `Docker-Cleanup` | `DockerCleanupActions`, `DockerCleanupStartMode` | [Docker-Cleanup](Docker-Cleanup.md) |
 | `DockerWizard` | `DockerTimeouts` | [DockerWizard](DockerWizard.md) |
 | `Get-SwaggerCloseTitlePatterns` | `BrowserGroups` | [Get-SwaggerCloseTitlePatterns](Get-SwaggerCloseTitlePatterns.md) |
 | `Get-WorkspaceOpenDelta` | `Universal` | [Get-WorkspaceOpenDelta](Get-WorkspaceOpenDelta.md) |

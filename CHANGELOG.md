@@ -8,6 +8,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-10-15
+
+### Added
+
+- **`DockerCleanupStartMode`: `Docker-Cleanup` starts Docker when the daemon is not running.** It used to warn "Docker is not running!" and return. With `"Ask"` (the shipped default, also used for an empty or unknown value) it asks whether to start Docker, Enter meaning Yes; `"Always"` starts it without asking; `"Never"` keeps the old warn-and-return. Docker is started through `DockerWizard -PassThru`, so `DockerTimeouts.StartSeconds` bounds the wait, and the menu appears only once `DockerWizard` reports `Success`; a declined prompt or a failed start returns without touching anything. The key is a top-level scalar beside `DockerCleanupActions`, so `DockerCleanupStartMode = "Never"` in `Configuration.local.psd1` restores the old behavior.
+- **`Docker-Cleanup` shows what each action would touch before it asks.** `DockerCleanupActions` entries take two new optional fields: `Description` (one sentence) and `PreviewCommand` (a command whose output lists what the action would stop or remove). Every selected action prints its name, description and preview list before anything runs. An action whose preview lists nothing is skipped with "nothing to do", and when nothing is left the function returns without a prompt. Entries without the new fields keep working: they print their name and are never skipped.
+- **`Docker-Cleanup` has an `All` option and multi-select.** The menu adds `All` to the configured actions (the same shape as `Send-WakeOnLan` and `Visualize-Layouts`), and several actions can be picked at once. Selected actions always run in configuration order, whatever order they were picked in. One red confirmation covers all of them: the action's own `ConfirmationMessage` when it is the only one, "Are you sure you want to run these N actions?" otherwise, with Enter still meaning No. `-Action` accepts several names or `All` (`Docker-Cleanup All`). A failing action is reported with its exit code and the remaining ones still run.
+
+### Changed
+
+- **The shipped `DockerCleanupActions` are five granular actions instead of three.** In run order: "Stop all containers", "Delete all containers" (running ones too), "Delete all images", "Delete all volumes" (named and anonymous), "Prune networks and build cache" - each with a `Description`, a `PreviewCommand` and a `ConfirmationMessage`. "Stop all containers" and "Delete all volumes" keep their names, so `Docker-Cleanup "Delete all volumes"` still works. The combined entry "Delete all containers, images and volumes" (`docker system prune -a --volumes -f`) is gone from the defaults, because the prune kept running containers and the images they use, so it did less than its name said; run `Docker-Cleanup All` for a complete wipe instead. A fork that overrides `DockerCleanupActions` in `Configuration.local.psd1` keeps its own list unchanged (the array replaces wholesale).
+
+Tests: `Docker-Cleanup.Tests.ps1` covers the three start modes, an unknown mode, a failed start, the `All` option, configuration-order execution, the preview listing and skipping, the single combined confirmation, and continuing after a failed action. Docs: the Workflow module reference (`Docker-Cleanup`, `DockerWizard`), `docs/configuration/configuration-reference.md`, the `Docker-Cleanup` configuration guide and the Workflow guides index.
+
 ## [1.1.0] - 2026-10-15
 
 ### Added
@@ -1624,7 +1638,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/IvanPavlak/WinuX/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/IvanPavlak/WinuX/compare/v1.0.2...v1.1.0
 [1.0.2]: https://github.com/IvanPavlak/WinuX/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/IvanPavlak/WinuX/compare/v1.0.0...v1.0.1

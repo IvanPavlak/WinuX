@@ -194,29 +194,35 @@ Set-LogLevel Verbose { Close-Workspace Server }
 
 ## [Docker-Cleanup](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Workflow/Functions/Docker-Cleanup.ps1)
 
-- **Description:** Menu-driven Docker maintenance with per-action confirmation safeguards. Presents the actions defined in `Configuration.DockerCleanupActions` (each entry: `Name`, `Command`, optional `ConfirmationMessage`) and runs the selected one. An action carrying a `ConfirmationMessage` only runs after an explicit "Yes" on a red confirmation prompt - pressing Enter defaults to "No" - so destructive operations can never fire on muscle memory. Warns and returns without a menu when the `docker` CLI is not installed, no actions are configured, or the Docker daemon is not running (`docker info` fails); a non-zero exit code from the command is reported as a failure.
+- **Description:** Menu-driven Docker maintenance that shows what each action would touch before one confirmation. Presents the actions defined in `Configuration.DockerCleanupActions` (each entry: `Name`, `Command`, optional `Description`, `PreviewCommand` and `ConfirmationMessage`) plus an `All` option on a multi-select menu, and runs the selected ones in configuration order, whatever order they were picked in. Before anything runs, every selected action prints its name, its `Description` and the items its `PreviewCommand` lists (the running containers, the images, the volumes...); an action whose preview lists nothing is skipped with "nothing to do", and when nothing is left the function returns without asking. One red confirmation then covers every remaining action that carries a `ConfirmationMessage` - the action's own message when it is the only one, "Are you sure you want to run these N actions?" otherwise - and pressing Enter defaults to "No", so destructive operations can never fire on muscle memory. A failing action is reported with its exit code and the remaining ones still run. When the Docker daemon is not running (`docker info` fails), `Configuration.DockerCleanupStartMode` decides: `"Ask"` (the default, also used for an empty or unknown value) asks whether to start Docker with Enter meaning Yes, `"Always"` starts it without asking, `"Never"` warns and returns. Docker is started through [DockerWizard](#dockerwizard) `-PassThru`, and the menu appears only once it reports `Success`; a declined prompt or a failed start returns without touching anything. Warns and returns without a menu when the `docker` CLI is not installed or no actions are configured; a non-zero exit code from the command is reported as a failure.
 - **Parameters:** -Action
-- **Usage:** `Docker-Cleanup`, `Docker-Cleanup "Delete all volumes"`
+- **Usage:** `Docker-Cleanup`, `Docker-Cleanup "Delete all volumes"`, `Docker-Cleanup All`
 
-The shipped defaults cover the three classic teardown moves - stop all containers, `docker system prune -a --volumes -f`, and delete all volumes - and the list is plain configuration: forks replace it wholesale in `Configuration.local.psd1` to add or reword actions (the override replaces the array, so carry over any defaults you want to keep). The safeguard itself is [Resolve-Selection](helper.md#resolve-selection)'s `-ConfirmationMessage` parameter, so any other caller can reuse it.
+The shipped defaults are five actions in a safe order - stop all containers, delete all containers (running ones too), delete all images, delete all volumes (named and anonymous), and prune unused networks and the build cache - so `All` wipes Docker completely, which `docker system prune -a --volumes` alone does not (it keeps running containers and the images they use). The list is plain configuration: forks replace it wholesale in `Configuration.local.psd1` to add or reword actions (the override replaces the array, so carry over any defaults you want to keep). The safeguard itself is [Resolve-Selection](helper.md#resolve-selection)'s `-ConfirmationMessage` parameter, so any other caller can reuse it.
 
 | Parameter | Description                                                                                          |
 | --------- | ----------------------------------------------------------------------------------------------------- |
-| `-Action` | Optional configured action name to run directly, skipping the menu. The confirmation still applies. |
+| `-Action` | Optional configured action name(s), menu numbers, or `All`, run directly, skipping the menu. The preview and the confirmation still apply. |
 
 ```powershell
 # Interactive menu of configured cleanup actions
 Docker-Cleanup
 
-# Run a specific action directly - the red confirmation prompt still gates it
+# Run a specific action directly - the preview and the red confirmation prompt still gate it
 Docker-Cleanup "Delete all volumes"
+
+# Wipe everything: every configured action, previewed together, one confirmation
+Docker-Cleanup All
+
+# Several actions, run in configuration order
+Docker-Cleanup "Delete all containers", "Delete all volumes"
 ```
 
 **See also:** [DockerWizard](#dockerwizard), [Start-Containers](#start-containers), [Resolve-Selection](helper.md#resolve-selection)
 
 ## [DockerWizard](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Workflow/Functions/DockerWizard.ps1)
 
-- **Description:** Starts or stops Docker Desktop with loading-spinner feedback, daemon readiness detection, graceful Docker Desktop CLI integration, and Docker-owned WSL cleanup. When starting, it can clean up a partial Docker state, launch Docker Desktop in detached mode (falling back to `Open-Docker`), wait for `docker info` to succeed, and optionally start Docker Compose services from an explicit compose file path or a project directory (probing `compose.yaml`, `compose.yml`, `docker-compose.yaml` and `docker-compose.yml`, the same precedence `docker compose` itself uses). When stopping, it first requests a graceful shutdown and then force-cleans Docker-owned helper processes and `docker-desktop` WSL distros only if Docker gets stuck. Used by `Run-Project` and `Start-Containers` to transparently spin up database containers, and by `Kill-All` (`DockerWizard -Stop`) to shut Docker down.
+- **Description:** Starts or stops Docker Desktop with loading-spinner feedback, daemon readiness detection, graceful Docker Desktop CLI integration, and Docker-owned WSL cleanup. When starting, it can clean up a partial Docker state, launch Docker Desktop in detached mode (falling back to `Open-Docker`), wait for `docker info` to succeed, and optionally start Docker Compose services from an explicit compose file path or a project directory (probing `compose.yaml`, `compose.yml`, `docker-compose.yaml` and `docker-compose.yml`, the same precedence `docker compose` itself uses). When stopping, it first requests a graceful shutdown and then force-cleans Docker-owned helper processes and `docker-desktop` WSL distros only if Docker gets stuck. Used by `Run-Project` and `Start-Containers` to transparently spin up database containers, by `Docker-Cleanup` to start a stopped daemon before its menu (per `DockerCleanupStartMode`), and by `Kill-All` (`DockerWizard -Stop`) to shut Docker down.
 - **Parameters:** -Stop, -ComposeProjectPath, -ComposeFilePath, -PassThru
 - **Usage:** `DockerWizard`, `DockerWizard -Stop`, `DockerWizard -ComposeProjectPath "<DevRoot>\MyProject"`, `DockerWizard -ComposeFilePath "C:\WinuX\Docker\docker-compose.postgresql.yml"`
 
