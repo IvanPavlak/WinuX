@@ -1,5 +1,5 @@
 {
-  "Version": "1.2.0",
+  "Version": "1.3.0",
   "Functions": {
     "Add-BrowserGroup": {
       "Module": "Configuration",
@@ -7040,6 +7040,7 @@
     "GitConfig.UserEmail",
     "GitConfig.UserName",
     "GitConfig.WingetPackageId",
+    "GitStatusArguments",
     "HostnameToMachineType",
     "HostnameToMachineType.Test",
     "KeyboardLayouts",

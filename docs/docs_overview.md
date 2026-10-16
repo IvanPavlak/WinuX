@@ -71,6 +71,7 @@ decisions behind them, and where the values go. Each module's `README.md` indexe
 | Config Section                                     | Used By                                            |
 | -------------------------------------------------- | -------------------------------------------------- |
 | `GitConfig` (WingetPackageId, UserName, UserEmail) | `Install-Git`                                      |
+| `GitStatusArguments`                               | `GitStatus`                                        |
 | `HostnameToMachineType`, `ValidMachineTypes`       | `DetermineMachineType`, `Test-MachineTypeScope`    |
 | `BasePaths`, `PathTemplates`                       | `Expand-ConfigPaths`, all path-dependent functions |
 | `PathTemplates.SymbolicLinks`                      | `SymbolicLinkMaker`                                |

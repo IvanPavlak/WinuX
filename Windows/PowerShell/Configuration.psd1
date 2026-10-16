@@ -996,6 +996,20 @@
 	}
 
 	# ==========================================================================
+	# Git Status Arguments
+	# ==========================================================================
+	# → Consumer: GitStatus (alias gs)
+	# The arguments GitStatus passes to `git status` when it is called with none. One array
+	# element per git argument; an empty array runs a plain `git status`. Arguments given on
+	# the call (`gs -v -v -u`) replace these entirely. An array replaces wholesale in
+	# Configuration.local.psd1, so supply the whole list there.
+	#
+	# Example (the verbose output GitStatus used before it became configurable):
+	#   GitStatusArguments = @('-v', '-v', '-u')
+	# ==========================================================================
+	GitStatusArguments            = @('--short')
+
+	# ==========================================================================
 	# Package Managers Configuration
 	# ==========================================================================
 	# → Consumers: Resolve-PackageManagers (and through it Bootstrap and Upgrade-All)

@@ -8,6 +8,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-10-16
+
+### Added
+
+- **`GitStatusArguments`: choose what a plain `gs` passes to `git status`.** A new top-level array key, one element per git argument, shipped as `@('--short')`. An empty array runs a plain `git status`. Arguments given on the call (`gs -v -v -u`) replace the configured ones entirely instead of being appended, so the old output stays one command away. An array replaces wholesale in `Configuration.local.psd1`, so a fork lists the whole argument set it wants. Documented in `docs/configuration/configuration-reference.md` (Git Status Arguments), `docs/modules/git.md` and the `GitStatus` configuration guide, which moves from the no-configuration stub to the full template.
+
+### Changed
+
+- **`GitStatus` (`gs`) now shows `git status --short` by default instead of `git status -v -v -u`.** The old output printed the full diff of every staged change, which buried the file list on anything but a small change. To keep it, set `GitStatusArguments = @('-v', '-v', '-u')` in `Configuration.local.psd1`, or run `gs -v -v -u` for one call. The function reads the key through `Get-ConfigSetting`, falling back to `--short` when it is absent. Tests: `GitStatus.Tests.ps1` covers the configured arguments, the fallback with the key absent, an empty array, and explicit arguments replacing the configured ones without reading the configuration.
+
 ## [1.2.0] - 2026-10-15
 
 ### Added
@@ -1638,7 +1648,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/IvanPavlak/WinuX/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/IvanPavlak/WinuX/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/IvanPavlak/WinuX/compare/v1.0.2...v1.1.0
 [1.0.2]: https://github.com/IvanPavlak/WinuX/compare/v1.0.1...v1.0.2
