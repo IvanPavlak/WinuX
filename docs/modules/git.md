@@ -120,8 +120,7 @@ GitMergeM
 
 ## [GitStatus](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Git/Functions/GitStatus.ps1)
 
-- **Description:** Shows the working tree status using the arguments in the `GitStatusArguments` configuration key (default `@('--short')`, so a plain `gs` runs `git status --short`). An empty array runs a plain `git status`. Arguments given on the call replace the configured ones entirely.
-- **Parameters:** Any arguments are passed to `git status` as they are and replace `GitStatusArguments`.
+- **Description:** Shows the working tree status using the arguments in the `GitStatusArguments` configuration key (default `@('--short')`, so a plain `gs` runs `git status --short`). An empty array runs a plain `git status`. Arguments given on the call are passed to `git status` as they are and replace the configured ones entirely (PowerShell itself consumes a bare `--`, so `gs -- path` runs `git status path`).
 - **Usage:** `GitStatus [git status arguments]`, `gs`
 - **Alias:** gs
 
@@ -136,7 +135,7 @@ gs
 gs -v -v -u
 ```
 
-**Configuration:** `GitStatusArguments` - see the [`GitStatus` configuration guide](../configuration/guides/git/GitStatus.md).
+**See also:** [GitStatus configuration guide](../configuration/guides/git/GitStatus.md)
 
 ## [GitSwitch](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Git/Functions/GitSwitch.ps1)
 

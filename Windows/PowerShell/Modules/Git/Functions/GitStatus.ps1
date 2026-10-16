@@ -18,7 +18,8 @@ function GitStatus {
 		Runs `git status -v -v -u`, ignoring the configured arguments.
 	#>
 	# Plain assignments, never `$x = if (...) { @(...) }`: that runs the array through the pipeline and
-	# unrolls a one-element list such as @('--short') into a string, which native git does not receive as an argument.
+	# unrolls a one-element list such as @('--short') into a string, and splatting a string on a native
+	# command passes one argument per character (`- - s h o r t`), so git never sees `--short`.
 	[string[]]$gitArguments = $args
 	if ($gitArguments.Count -eq 0) {
 		$gitArguments = @(Get-ConfigSetting -Path 'GitStatusArguments' -Default @('--short'))
