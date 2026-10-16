@@ -116,6 +116,7 @@
 # → DockerComposeFiles            : Start-Containers, Resolve-ProjectDockerCompose (Run-Project)
 # → DockerTimeouts                : DockerWizard
 # → DockerCleanupActions          : Docker-Cleanup
+# → DockerCleanupStartMode        : Docker-Cleanup (starts Docker through DockerWizard)
 # → VisualStudioSolutions         : Open-VisualStudio
 # → VSCodeProjects                : Open-VSCode
 #
@@ -2023,24 +2024,55 @@
 		CleanupSeconds = 30  # wait for a partial-state cleanup before starting anyway
 	}
 
+	# What Docker-Cleanup does when the Docker daemon is not running:
+	#   "Ask"    => ask whether to start Docker, Enter meaning Yes (default; also used
+	#               for an empty or unknown value)
+	#   "Always" => start Docker without asking
+	#   "Never"  => warn and return without starting anything
+	# Docker is started through DockerWizard, so DockerTimeouts.StartSeconds applies.
+	DockerCleanupStartMode        = "Ask"
+
 	# Docker maintenance actions offered by Docker-Cleanup. Each entry:
 	# - Name                : menu label (also accepted directly: Docker-Cleanup "<Name>")
+	# - Description         : optional - one sentence shown before the confirmation
 	# - Command             : PowerShell command line to run
+	# - PreviewCommand      : optional - command whose output lists what the action would
+	#                         stop or remove; an empty list skips the action ("nothing to do")
 	# - ConfirmationMessage : optional - when present, the action only runs after an
 	#                         explicit "Yes" on a red confirmation prompt (Enter cancels)
+	# The menu adds an "All" option that runs every entry. Selected entries always run in
+	# the order listed here, so keep stops and container deletes before images and volumes.
 	# Override this list wholesale in Configuration.local.psd1 to add your own actions.
 	DockerCleanupActions          = @(
 		@{ Name              = "Stop all containers";
+			Description         = "Stops every running container.";
 			Command             = 'docker ps -q | ForEach-Object { docker stop $_ }';
+			PreviewCommand      = 'docker ps --format "{{.Names}} ({{.Image}})"';
 			ConfirmationMessage = "Are you sure you want to stop all running containers?"
 		}
-		@{ Name              = "Delete all containers, images and volumes";
-			Command             = 'docker system prune -a --volumes -f';
-			ConfirmationMessage = "Are you sure you want to delete ALL containers, images and volumes?"
+		@{ Name              = "Delete all containers";
+			Description         = "Force-removes every container, running or stopped.";
+			Command             = 'docker ps -aq | ForEach-Object { docker rm -f $_ }';
+			PreviewCommand      = 'docker ps -a --format "{{.Names}} ({{.Image}}, {{.Status}})"';
+			ConfirmationMessage = "Are you sure you want to delete ALL containers?"
+		}
+		@{ Name              = "Delete all images";
+			Description         = "Force-removes every image, including ones a container still uses.";
+			Command             = 'docker images -aq | Select-Object -Unique | ForEach-Object { docker rmi -f $_ }';
+			PreviewCommand      = 'docker images -a --format "{{.Repository}}:{{.Tag}} ({{.ID}}, {{.Size}})"';
+			ConfirmationMessage = "Are you sure you want to delete ALL images?"
 		}
 		@{ Name              = "Delete all volumes";
+			Description         = "Removes every volume, named and anonymous, with the data in it.";
 			Command             = 'docker volume ls -q | ForEach-Object { docker volume rm $_ }';
+			PreviewCommand      = 'docker volume ls --format "{{.Name}} ({{.Driver}})"';
 			ConfirmationMessage = "Are you sure you want to delete ALL volumes?"
+		}
+		@{ Name              = "Prune networks and build cache";
+			Description         = "Removes custom networks no container uses, and the whole build cache.";
+			Command             = 'docker network prune -f; docker builder prune -a -f';
+			PreviewCommand      = 'docker network ls --filter type=custom --format "network: {{.Name}}"; docker system df --format "{{.Type}}: {{.Size}}" | Where-Object { $_ -like "Build Cache:*" -and $_ -notlike "*: 0B" }';
+			ConfirmationMessage = "Are you sure you want to prune unused networks and the build cache?"
 		}
 	)
 
