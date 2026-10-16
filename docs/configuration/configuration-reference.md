@@ -1171,6 +1171,23 @@ SymbolicLinks = @{
 
 ---
 
+## Git Status Arguments
+
+**Key:** `GitStatusArguments` → Array of strings, one element per `git status` argument (default `@('--short')`)
+
+The arguments `GitStatus` (alias `gs`) passes to `git status` when it is called with none. An empty array runs a plain `git status`. Arguments given on the call (`gs -v -v -u`) replace the configured ones entirely. An array replaces wholesale in `Configuration.local.psd1`, so supply the whole list there.
+
+**Consumer function:** `GitStatus`
+
+**Example:**
+
+```powershell
+# Configuration.local.psd1 - the verbose output GitStatus showed before it became configurable
+GitStatusArguments = @('-v', '-v', '-u')
+```
+
+---
+
 ## NuGet Configuration
 
 **Key:** `PathTemplates.NuGetConfig` → Source and destination paths
