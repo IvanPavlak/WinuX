@@ -8,6 +8,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-10-17
+
+### Added
+
+- **`Start-ProcessDetached` (Application module): start a process that owns no console.** It creates the process through WMI (`Win32_Process.Create`), whose parent is the WMI provider host, so the new process neither inherits this shell's console nor can attach to it. It returns the process id, or `$null` when WMI refuses or throws (the reason goes to the debug log), so the caller chooses its own fallback. `Start-ObsidianDetached` now launches through it, with its behavior unchanged.
+- **`Start-VSCodeDetached` and `Get-VSCodeExecutablePath` (Application module).** `Start-VSCodeDetached -ArgumentList "-n", "`"<folder>`""` resolves `Code.exe` through `Get-VSCodeExecutablePath` (one folder above `code.cmd`, then the per-user and the machine-wide install) and creates it through `Start-ProcessDetached`; when the executable cannot be found or WMI refuses it falls back to `code` through `Start-Process -NoNewWindow`, the previous shape.
+
+### Fixed
+
+- **A workspace tab no longer stays open after `[Closing current terminal tab]` when the run cold-started VS Code.** `Terminate-WindowsTerminalTabs -OnlyCurrent` did exit the shell, but Windows Terminal closes a tab only when every process attached to the tab's console has disconnected, and the VS Code that `Open-VSCode` and `Open-VSCodeWorkspace` started with `Start-Process code -NoNewWindow` inherited that console (down `code.cmd`, `cmd.exe` and the VS Code CLI to the VS Code main process) and held it for as long as it ran - with no `[process exited with code ...]` line, because the connection never ended. A run that found VS Code already running was unaffected, since `code -n` then hands the folder to the running instance and exits, which is why it looked intermittent. Both launchers now start VS Code through `Start-VSCodeDetached`. Tests: new `Start-ProcessDetached.Tests.ps1`, `Start-VSCodeDetached.Tests.ps1`, `Get-VSCodeExecutablePath.Tests.ps1` and `Open-VSCodeWorkspace.Tests.ps1`; `Open-VSCode.Tests.ps1` and `Start-ObsidianDetached.Tests.ps1` updated. Docs: the Application module reference (`Open-VSCode`, `Open-VSCodeWorkspace`, `Start-ObsidianDetached` and the three new entries), three new configuration guides and the Application guides index, and the troubleshooting entry "The Workspace Tab Stays Open After [Closing current terminal tab]".
+
 ## [1.3.0] - 2026-10-16
 
 ### Added
@@ -1648,7 +1659,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/IvanPavlak/WinuX/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/IvanPavlak/WinuX/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/IvanPavlak/WinuX/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/IvanPavlak/WinuX/compare/v1.0.2...v1.1.0

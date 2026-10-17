@@ -13,6 +13,9 @@ function Open-VSCode {
 		or `-Default` is specified, VS Code is launched without a folder (skipped if it is
 		already running).
 
+		VS Code is started through Start-VSCodeDetached, so it owns no console and never keeps the
+		terminal tab open after a workspace closes its own tab.
+
 	.PARAMETER Default
 		Skips the menu (and ignores -Folder) and launches VS Code without a folder, unless a Code
 		process is already running.
@@ -66,7 +69,7 @@ function Open-VSCode {
 			Write-LogStep "Opening VSCode..."
 
 			if (-not (Get-Process -Name "Code" -ErrorAction SilentlyContinue)) {
-				Start-Process code -NoNewWindow -ErrorAction Stop
+				Start-VSCodeDetached
 				Write-LogSuccess "VSCode opened!"
 			}
 			else {
@@ -98,7 +101,7 @@ function Open-VSCode {
 					$alreadyOpen = Test-ProjectAlreadyOpen -ProjectName $folderName -ProcessName "Code" -ApplicationName "VSCode"
 
 					if (-not $alreadyOpen) {
-						Start-Process -FilePath "code" -ArgumentList "-n", "`"$folderPath`"" -NoNewWindow -ErrorAction Stop
+						Start-VSCodeDetached -ArgumentList "-n", "`"$folderPath`""
 						Write-LogSuccess "Opened project [$f] in VSCode!"
 					}
 				}

@@ -142,6 +142,17 @@ Get-ObsidianWorkspaceNames -VaultDirectory $MachineSpecificPaths.ObsidianDirecto
 - **Description:** Returns the path of VS Code's command line (`code.cmd`), or `$null` when VS Code is not installed. Prefers `code` on PATH; a session that installed VS Code a moment ago (Bootstrap's WinGet step) does not see the installer's PATH entry yet, so the per-user install (`%LOCALAPPDATA%\Programs\Microsoft VS Code\bin\code.cmd`) and the machine-wide install (`%ProgramFiles%\Microsoft VS Code\bin\code.cmd`) are checked next. Used by `Deploy-VSCodeProfiles` and `Export-VSCodeProfile`.
 - **Usage:** `Get-VSCodeCliPath`
 
+## [Get-VSCodeExecutablePath](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Get-VSCodeExecutablePath.ps1)
+
+- **Description:** Resolves `Code.exe` for a detached launch: one folder above the command line (`Get-VSCodeCliPath` returns `<install>\bin\code.cmd`), then the per-user install (`%LOCALAPPDATA%\Programs\Microsoft VS Code\Code.exe`), then the machine-wide install (`%ProgramFiles%\Microsoft VS Code\Code.exe`). Returns the first candidate that exists, `$null` otherwise.
+- **Usage:** `Get-VSCodeExecutablePath`
+
+Helper for `Start-VSCodeDetached`, which needs the executable itself: `code.cmd` runs through `cmd.exe` and the VS Code CLI, and a process created through WMI must be the final executable.
+
+```powershell
+Get-VSCodeExecutablePath
+```
+
 ## [Get-VSCodeInstalledExtensions](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Get-VSCodeInstalledExtensions.ps1)
 
 - **Description:** Lists the extensions a VS Code profile has installed as an ordered dictionary of id to version, through `code --list-extensions --show-versions` (plus `--profile <ProfileName>` for any profile but `Default`). Ids match case-insensitively. Returns an empty dictionary when nothing is installed and `$null` when the command fails, for instance for a profile VS Code does not know, so a caller can tell the two apart. Used by `Deploy-VSCodeProfiles` and `Export-VSCodeProfile`.
@@ -677,11 +688,11 @@ Open-VisualStudio -Default
 
 ## [Open-VSCode](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Open-VSCode.ps1)
 
-- **Description:** Opens one or more VS Code project folders defined in `VSCodeProjects` in `Configuration.psd1`. Each entry maps a name to a directory path. Omit `-Folder` to show an interactive selection menu. With no menu selection, or with `-Default` (which skips the menu), VS Code is launched without a folder unless `Code` is already running. Folders already open (detected by matching window title) are skipped.
+- **Description:** Opens one or more VS Code project folders defined in `VSCodeProjects` in `Configuration.psd1`. Each entry maps a name to a directory path. Omit `-Folder` to show an interactive selection menu. With no menu selection, or with `-Default` (which skips the menu), VS Code is launched without a folder unless `Code` is already running. Folders already open (detected by matching window title) are skipped. VS Code is started through `Start-VSCodeDetached`, so it owns no console and never keeps the terminal tab open after a workspace closes its own tab.
 - **Parameters:** -Default, -Folder
 - **Usage:** `Open-VSCode`, `Open-VSCode MyProject`, `Open-VSCode MyProject, OtherProject`, `Open-VSCode -Folder MyProject`, `Open-VSCode -Default`
 
-Reads the `VSCodeProjects` array from `Configuration.psd1`, building a name-to-path lookup. Each path is resolved through the machine-specific path map, so the same project name works across machines. When `-Folder` is omitted and `-Default` is not set, an interactive menu lists the available folders and supports multiple selections. With no projects selected, or with `-Default` (which also ignores `-Folder`), VS Code is launched bare (skipped if `Code` is already running). For each selected folder the path is validated with `Test-Path`, the folder is opened in a new window with `code -n`, and `Test-ProjectAlreadyOpen` prevents reopening a folder that already has a window.
+Reads the `VSCodeProjects` array from `Configuration.psd1`, building a name-to-path lookup. Each path is resolved through the machine-specific path map, so the same project name works across machines. When `-Folder` is omitted and `-Default` is not set, an interactive menu lists the available folders and supports multiple selections. With no projects selected, or with `-Default` (which also ignores `-Folder`), VS Code is launched bare (skipped if `Code` is already running). For each selected folder the path is validated with `Test-Path`, the folder is opened in a new window through `Start-VSCodeDetached` (`Code.exe -n`, created detached from this shell's console), and `Test-ProjectAlreadyOpen` prevents reopening a folder that already has a window.
 
 | Parameter  | Description                                                                                            |
 | ---------- | ------------------------------------------------------------------------------------------------------ |
@@ -704,11 +715,11 @@ Open-VSCode -Default
 
 ## [Open-VSCodeWorkspace](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Open-VSCodeWorkspace.ps1)
 
-- **Description:** Opens a VS Code multi-root workspace (`*.code-workspace`) from `PathTemplates.Projects.Self.VSCodeWorkspaces` (`<repo>\VSCode\Workspaces`). A workspace is addressed by its file base name (e.g. `Consolidation` => `Consolidation.code-workspace`). Omit `-VSCodeWorkspace` to show an interactive selection menu. A workspace already open (detected by its `<name> (Workspace)` window title) is skipped. Returns the names it opened or found already open; a missing folder is an error and an empty one a warning.
+- **Description:** Opens a VS Code multi-root workspace (`*.code-workspace`) from `PathTemplates.Projects.Self.VSCodeWorkspaces` (`<repo>\VSCode\Workspaces`). A workspace is addressed by its file base name (e.g. `Consolidation` => `Consolidation.code-workspace`). Omit `-VSCodeWorkspace` to show an interactive selection menu. A workspace already open (detected by its `<name> (Workspace)` window title) is skipped. Returns the names it opened or found already open; a missing folder is an error and an empty one a warning. VS Code is started through `Start-VSCodeDetached`, so it owns no console and never keeps the terminal tab open after a workspace closes its own tab.
 - **Parameters:** -VSCodeWorkspace
 - **Usage:** `Open-VSCodeWorkspace`, `Open-VSCodeWorkspace Consolidation`
 
-The workspace counterpart to `Open-VSCode`: where `Open-VSCode` opens a project FOLDER, this opens a `.code-workspace` FILE. `Open-Workspace` reroutes its `Open-VSCode` action here when a `-VSCodeWorkspace` override is active, so the workspace opens in place of the project folder and the window layout can target it. Names come from `Get-VSCodeWorkspaceNames`, selection uses `Resolve-Selection`, each file is opened with `code -n`, and `Test-ProjectAlreadyOpen` prevents reopening one that already has a window.
+The workspace counterpart to `Open-VSCode`: where `Open-VSCode` opens a project FOLDER, this opens a `.code-workspace` FILE. `Open-Workspace` reroutes its `Open-VSCode` action here when a `-VSCodeWorkspace` override is active, so the workspace opens in place of the project folder and the window layout can target it. Names come from `Get-VSCodeWorkspaceNames`, selection uses `Resolve-Selection`, each file is opened through `Start-VSCodeDetached` (`Code.exe -n`, created detached from this shell's console), and `Test-ProjectAlreadyOpen` prevents reopening one that already has a window.
 
 | Parameter          | Description                                                                                                            |
 | ------------------ | ---------------------------------------------------------------------------------------------------------------------- |
@@ -877,7 +888,7 @@ Start-MicrosoftActivationScripts -Selection Yes
 
 ## [Start-ObsidianDetached](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Start-ObsidianDetached.ps1)
 
-- **Description:** Launches Obsidian for a vault without tying it to the current shell. Creates `Obsidian.exe "obsidian://open?vault=<Vault>"` through WMI (`Win32_Process.Create`), whose parent is the WMI provider host, so the new process owns no console. Falls back to `Start-Process "obsidian://open?vault=<Vault>"` when the executable cannot be located or WMI refuses.
+- **Description:** Launches Obsidian for a vault without tying it to the current shell. Creates `Obsidian.exe "obsidian://open?vault=<Vault>"` through `Start-ProcessDetached` (WMI, `Win32_Process.Create`), whose parent is the WMI provider host, so the new process owns no console. Falls back to `Start-Process "obsidian://open?vault=<Vault>"` when the executable cannot be located or WMI refuses.
 - **Parameters:** -Vault
 - **Usage:** `Start-ObsidianDetached -Vault Obsidian`
 
@@ -889,6 +900,45 @@ Why not a plain `Start-Process`: Electron attaches to the console of the process
 
 ```powershell
 Start-ObsidianDetached -Vault Obsidian
+```
+
+## [Start-ProcessDetached](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Start-ProcessDetached.ps1)
+
+- **Description:** Starts a process that owns no console and is not tied to the current shell. Creates it through WMI (`Win32_Process.Create`), whose parent is the WMI provider host, so the new process neither inherits this shell's console nor can attach to it. Returns the new process id, or `$null` when WMI refuses or throws (the reason goes to the debug log), so the caller decides on a fallback. `Start-VSCodeDetached` and `Start-ObsidianDetached` launch through it.
+- **Parameters:** `-FilePath` `[-ArgumentList]` `[-WorkingDirectory]`
+- **Usage:** `Start-ProcessDetached -FilePath "C:\Apps\Tool\Tool.exe" -ArgumentList "-n", "`"C:\My Project`""`
+
+Why a launcher needs this: Windows Terminal closes a tab only when every process attached to the tab's console has disconnected. An application started with a plain `Start-Process -NoNewWindow` inherits the console (Electron applications also attach to the console of the process that launched them), so a shell that exits afterwards - a workspace ending in `Terminate-WindowsTerminalTabs -OnlyCurrent` - leaves its tab open, with no `[process exited with code ...]` line, until that application closes.
+
+| Parameter           | Description                                                                                                                          |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `-FilePath`         | The executable to start. Quoted into the command line as is.                                                                         |
+| `-ArgumentList`     | Arguments appended to the command line, separated by spaces, exactly as given - quote a value that contains spaces yourself, as with `Start-Process -ArgumentList`. |
+| `-WorkingDirectory` | The new process's current directory. Omit to let WMI choose (the user's profile folder).                                             |
+
+```powershell
+$processId = Start-ProcessDetached -FilePath "C:\Apps\Tool\Tool.exe" -ArgumentList "-n", "`"C:\My Project`""
+if (-not $processId) { Start-Process -FilePath "C:\Apps\Tool\Tool.exe" -ArgumentList "-n", "`"C:\My Project`"" }
+```
+
+## [Start-VSCodeDetached](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Start-VSCodeDetached.ps1)
+
+- **Description:** Launches VS Code without tying it to this shell's console. Resolves `Code.exe` (`Get-VSCodeExecutablePath`) and creates it through `Start-ProcessDetached` (WMI, `Win32_Process.Create`), so the new VS Code owns no console. Falls back to `code` through `Start-Process -NoNewWindow` when the executable cannot be located or WMI refuses; that path hands the shell's console down `code.cmd`, `cmd.exe` and the VS Code CLI to the VS Code main process, which then holds it for as long as VS Code runs. Used by `Open-VSCode` and `Open-VSCodeWorkspace`.
+- **Parameters:** `[-ArgumentList]`
+- **Usage:** `Start-VSCodeDetached`, `Start-VSCodeDetached -ArgumentList "-n", "`"C:\Projects\MyProject`""`
+
+A VS Code that is already running is not affected either way: `code -n` then hands the folder to the running instance and exits. The detached launch matters for a cold start from a shell that exits afterwards, such as a workspace whose last action is `Terminate-WindowsTerminalTabs -OnlyCurrent` - the tab stayed open until VS Code was closed.
+
+| Parameter       | Description                                                                                                                         |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `-ArgumentList` | Arguments for VS Code, as given to `Start-Process -ArgumentList`, e.g. `"-n", "`"<folder>`""`. Quote a path that may contain spaces yourself. Omit to open an empty window. |
+
+```powershell
+# Open a folder in a new window that outlives this terminal tab
+Start-VSCodeDetached -ArgumentList "-n", "`"C:\Projects\MyProject`""
+
+# Open VS Code without a folder
+Start-VSCodeDetached
 ```
 
 ## [Start-Win11Debloat](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Start-Win11Debloat.ps1)

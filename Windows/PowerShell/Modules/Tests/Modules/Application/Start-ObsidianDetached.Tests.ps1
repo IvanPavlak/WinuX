@@ -4,6 +4,7 @@ BeforeAll {
 	$AppFunctionsPath = Join-Path (Get-RepositoryPath).Modules "Application\Functions"
 	. "$AppFunctionsPath\Start-ObsidianDetached.ps1"
 	. "$AppFunctionsPath\Get-ObsidianExecutablePath.ps1"
+	. "$AppFunctionsPath\Start-ProcessDetached.ps1"
 }
 
 Describe "Start-ObsidianDetached" {
