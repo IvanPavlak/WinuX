@@ -4,19 +4,17 @@ function Start-VSCodeDetached {
 		Launches VS Code without tying it to this shell's console.
 
 	.DESCRIPTION
-		Resolves Code.exe (Get-VSCodeExecutablePath) and creates it through Start-ProcessDetached
-		(WMI, Win32_Process.Create), so the new VS Code owns no console. Falls back to `code`
-		through Start-Process -NoNewWindow when the executable cannot be located or WMI refuses;
-		that path hands the shell's console down code.cmd, cmd.exe and the VS Code CLI to the
-		VS Code main process, which then holds it for as long as VS Code runs.
+		Starts Code.exe (Get-VSCodeExecutablePath) through Start-ProcessDetached, so the new
+		VS Code owns no console. The fallback, when the executable cannot be located or WMI
+		refuses, is `code` through Start-Process -NoNewWindow - the previous launch shape, which
+		hands this shell's console down to VS Code. Open-VSCode and Open-VSCodeWorkspace launch
+		through this function.
 
-		Why it matters: Windows Terminal closes a tab only when every process attached to the
-		tab's console has disconnected. A workspace whose last action is
-		Terminate-WindowsTerminalTabs -OnlyCurrent exits its shell, but a VS Code cold-started
-		from that shell with a plain Start-Process -NoNewWindow kept the console, and the tab
-		stayed open with no "[process exited with code ...]" line. A VS Code that is already
-		running is not affected: `code -n` then hands the folder to the running instance and
-		exits.
+		A VS Code that is already running is unaffected either way: `code -n` then hands the
+		folder to the running instance and exits. The detached launch matters for a cold start
+		from a shell that exits afterwards, such as a workspace ending in
+		Terminate-WindowsTerminalTabs -OnlyCurrent (see "The Workspace Tab Stays Open After
+		[Closing current terminal tab]" in docs/reference/troubleshooting.md).
 
 	.PARAMETER ArgumentList
 		Arguments for VS Code, as given to Start-Process -ArgumentList, e.g. "-n", "`"<folder>`"".
@@ -36,25 +34,14 @@ function Start-VSCodeDetached {
 		[string[]]$ArgumentList
 	)
 
-	$exe = Get-VSCodeExecutablePath
-	if ($exe) {
-		$processId = Start-ProcessDetached -FilePath $exe -ArgumentList $ArgumentList
-		if ($processId) {
-			return
-		}
-		Write-LogDebug " [Start-VSCodeDetached] Detached launch failed - falling back to code on PATH (VS Code will share this shell's console)" -Style Warning
-	}
-	else {
-		Write-LogDebug " [Start-VSCodeDetached] Code.exe not found - launching code on PATH (VS Code will share this shell's console)" -Style Warning
-	}
-
-	$startParams = @{
+	$fallback = @{
 		FilePath    = "code"
 		NoNewWindow = $true
 		ErrorAction = 'Stop'
 	}
 	if ($ArgumentList) {
-		$startParams['ArgumentList'] = $ArgumentList
+		$fallback['ArgumentList'] = $ArgumentList
 	}
-	Start-Process @startParams
+
+	$null = Start-ProcessDetached -FilePath (Get-VSCodeExecutablePath) -ArgumentList $ArgumentList -Fallback $fallback
 }

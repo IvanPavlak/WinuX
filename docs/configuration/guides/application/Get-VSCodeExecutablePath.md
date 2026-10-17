@@ -1,6 +1,6 @@
 # Get-VSCodeExecutablePath
 
-Resolves `Code.exe` (one folder above `code.cmd`, then the per-user and machine-wide installs) for `Start-VSCodeDetached`, or `$null` when VS Code is not installed.
+Resolves `Code.exe` one folder above the command line `Get-VSCodeCliPath` returns, for `Start-VSCodeDetached`; `$null` when VS Code is not installed.
 
 ## Configuration Keys
 

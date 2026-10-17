@@ -1,6 +1,6 @@
 # Start-VSCodeDetached
 
-Launches VS Code (`Code.exe`, resolved by `Get-VSCodeExecutablePath`) through `Start-ProcessDetached` so it owns no console, falling back to `code` through `Start-Process -NoNewWindow` when the executable cannot be located or WMI refuses.
+Launches `Code.exe` (resolved by `Get-VSCodeExecutablePath`) through `Start-ProcessDetached` so it owns no console, with `code` through `Start-Process -NoNewWindow` as the fallback when the executable cannot be located or WMI refuses.
 
 ## Configuration Keys
 

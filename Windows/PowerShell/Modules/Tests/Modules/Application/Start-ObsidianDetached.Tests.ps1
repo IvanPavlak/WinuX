@@ -10,56 +10,35 @@ BeforeAll {
 Describe "Start-ObsidianDetached" {
 	BeforeEach {
 		Mock Write-LogDebug { }
-		Mock Start-Process { }
-		Mock Invoke-CimMethod { [PSCustomObject]@{ ReturnValue = 0; ProcessId = 4242 } }
+		Mock Get-ObsidianExecutablePath { 'C:\Apps\Obsidian\Obsidian.exe' }
+		Mock Start-ProcessDetached { 4242 }
 	}
 
-	It "creates Obsidian.exe through WMI with the vault URI so no console is inherited" {
-		Mock Get-ObsidianExecutablePath { 'C:\Apps\Obsidian\Obsidian.exe' }
-
+	It "launches Obsidian.exe detached with the quoted vault URI and the URI as the fallback" {
 		Start-ObsidianDetached -Vault 'Obsidian'
 
-		Should -Invoke Invoke-CimMethod -Times 1 -Exactly -ParameterFilter {
-			$ClassName -eq 'Win32_Process' -and $MethodName -eq 'Create' -and
-			$Arguments.CommandLine -eq '"C:\Apps\Obsidian\Obsidian.exe" "obsidian://open?vault=Obsidian"'
+		Should -Invoke Start-ProcessDetached -Times 1 -Exactly -ParameterFilter {
+			$FilePath -eq 'C:\Apps\Obsidian\Obsidian.exe' -and
+			$ArgumentList -eq '"obsidian://open?vault=Obsidian"' -and
+			$Fallback.FilePath -eq 'obsidian://open?vault=Obsidian' -and $Fallback.Count -eq 1
 		}
-		Should -Invoke Start-Process -Times 0
 	}
 
-	It "URI-encodes the vault name" {
-		Mock Get-ObsidianExecutablePath { 'C:\Apps\Obsidian\Obsidian.exe' }
-
+	It "URI-encodes the vault name in both the argument and the fallback" {
 		Start-ObsidianDetached -Vault 'My Vault'
 
-		Should -Invoke Invoke-CimMethod -Times 1 -Exactly -ParameterFilter {
-			$Arguments.CommandLine -eq '"C:\Apps\Obsidian\Obsidian.exe" "obsidian://open?vault=My%20Vault"'
+		Should -Invoke Start-ProcessDetached -Times 1 -Exactly -ParameterFilter {
+			$ArgumentList -eq '"obsidian://open?vault=My%20Vault"' -and $Fallback.FilePath -eq 'obsidian://open?vault=My%20Vault'
 		}
 	}
 
-	It "falls back to the obsidian:// URI when the executable cannot be found" {
+	It "hands an empty executable and the URI fallback to the helper when Obsidian.exe cannot be found" {
 		Mock Get-ObsidianExecutablePath { $null }
 
-		Start-ObsidianDetached -Vault 'My Vault'
-
-		Should -Invoke Invoke-CimMethod -Times 0
-		Should -Invoke Start-Process -Times 1 -Exactly -ParameterFilter { $FilePath -eq 'obsidian://open?vault=My%20Vault' }
-	}
-
-	It "falls back to the obsidian:// URI when WMI refuses to create the process" {
-		Mock Get-ObsidianExecutablePath { 'C:\Apps\Obsidian\Obsidian.exe' }
-		Mock Invoke-CimMethod { [PSCustomObject]@{ ReturnValue = 8; ProcessId = $null } }
-
 		Start-ObsidianDetached -Vault 'Obsidian'
 
-		Should -Invoke Start-Process -Times 1 -Exactly -ParameterFilter { $FilePath -eq 'obsidian://open?vault=Obsidian' }
-	}
-
-	It "falls back to the obsidian:// URI when WMI throws" {
-		Mock Get-ObsidianExecutablePath { 'C:\Apps\Obsidian\Obsidian.exe' }
-		Mock Invoke-CimMethod { throw 'access denied' }
-
-		Start-ObsidianDetached -Vault 'Obsidian'
-
-		Should -Invoke Start-Process -Times 1 -Exactly -ParameterFilter { $FilePath -eq 'obsidian://open?vault=Obsidian' }
+		Should -Invoke Start-ProcessDetached -Times 1 -Exactly -ParameterFilter {
+			-not $FilePath -and $Fallback.FilePath -eq 'obsidian://open?vault=Obsidian'
+		}
 	}
 }

@@ -11,53 +11,43 @@ BeforeAll {
 Describe "Start-VSCodeDetached" {
 	BeforeEach {
 		Mock Write-LogDebug { }
-		Mock Start-Process { }
 		Mock Get-VSCodeExecutablePath { 'C:\Apps\Code\Code.exe' }
 		Mock Start-ProcessDetached { 4242 }
 	}
 
-	It "launches Code.exe detached with the arguments and never touches Start-Process" {
+	It "launches Code.exe detached with the arguments and the previous code launch as the fallback" {
 		Start-VSCodeDetached -ArgumentList '-n', '"C:\Repos\MyProject"'
 
 		Should -Invoke Start-ProcessDetached -Times 1 -Exactly -ParameterFilter {
-			$FilePath -eq 'C:\Apps\Code\Code.exe' -and $ArgumentList[0] -eq '-n' -and $ArgumentList[1] -eq '"C:\Repos\MyProject"'
+			$FilePath -eq 'C:\Apps\Code\Code.exe' -and
+			$ArgumentList[0] -eq '-n' -and $ArgumentList[1] -eq '"C:\Repos\MyProject"' -and
+			$Fallback.FilePath -eq 'code' -and $Fallback.NoNewWindow -and $Fallback.ErrorAction -eq 'Stop' -and
+			$Fallback.ArgumentList[0] -eq '-n' -and $Fallback.ArgumentList[1] -eq '"C:\Repos\MyProject"'
 		}
-		Should -Invoke Start-Process -Times 0
 	}
 
-	It "opens an empty window when no arguments are given" {
+	It "opens an empty window, with a bare code launch as the fallback, when no arguments are given" {
 		Start-VSCodeDetached
 
 		Should -Invoke Start-ProcessDetached -Times 1 -Exactly -ParameterFilter {
-			$FilePath -eq 'C:\Apps\Code\Code.exe' -and -not $ArgumentList
+			$FilePath -eq 'C:\Apps\Code\Code.exe' -and -not $ArgumentList -and
+			$Fallback.FilePath -eq 'code' -and $Fallback.NoNewWindow -and -not $Fallback.ContainsKey('ArgumentList')
 		}
 	}
 
-	It "falls back to code on PATH, sharing the console, when Code.exe cannot be found" {
+	It "hands an empty executable and the fallback to the helper when Code.exe cannot be found" {
 		Mock Get-VSCodeExecutablePath { $null }
 
 		Start-VSCodeDetached -ArgumentList '-n', '"C:\Repos\MyProject"'
 
-		Should -Invoke Start-ProcessDetached -Times 0
-		Should -Invoke Start-Process -Times 1 -Exactly -ParameterFilter {
-			$FilePath -eq 'code' -and $NoNewWindow -and $ArgumentList[0] -eq '-n' -and $ArgumentList[1] -eq '"C:\Repos\MyProject"'
+		Should -Invoke Start-ProcessDetached -Times 1 -Exactly -ParameterFilter {
+			-not $FilePath -and $Fallback.FilePath -eq 'code' -and $Fallback.ArgumentList[1] -eq '"C:\Repos\MyProject"'
 		}
 	}
 
-	It "falls back to code on PATH when the detached launch fails" {
-		Mock Start-ProcessDetached { $null }
+	It "lets a failed launch throw to the caller" {
+		Mock Start-ProcessDetached { throw 'code is not installed' }
 
-		Start-VSCodeDetached
-
-		Should -Invoke Start-Process -Times 1 -Exactly -ParameterFilter {
-			$FilePath -eq 'code' -and $NoNewWindow -and -not $ArgumentList
-		}
-	}
-
-	It "lets a failed fallback launch throw to the caller" {
-		Mock Get-VSCodeExecutablePath { $null }
-		Mock Start-Process { throw 'code is not installed' }
-
-		{ Start-VSCodeDetached } | Should -Throw
+		{ Start-VSCodeDetached } | Should -Throw 'code is not installed'
 	}
 }

@@ -1,74 +1,85 @@
 function Start-ProcessDetached {
 	<#
 	.SYNOPSIS
-		Starts a process that owns no console and is not tied to the current shell.
+		Starts a process that owns no console, or runs a Start-Process fallback when it cannot.
 
 	.DESCRIPTION
 		Creates the process through WMI (Win32_Process.Create). Its parent is the WMI provider
 		host, which has no console, so the new process neither inherits this shell's console nor
-		can attach to it (Electron applications attach to the console of the process that
-		launched them). Windows Terminal closes a tab only when every process attached to the
-		tab's console has disconnected, so an application launched with a plain
-		Start-Process -NoNewWindow from a shell that then exits keeps that tab open, with no
-		"[process exited with code ...]" line to show why. Start-VSCodeDetached and
-		Start-ObsidianDetached launch through this function for that reason.
+		can attach to it. That is what lets a workspace close its own terminal tab afterwards:
+		Windows Terminal keeps a tab open while any process is still attached to its console
+		(see "The Workspace Tab Stays Open After [Closing current terminal tab]" in
+		docs/reference/troubleshooting.md).
 
-		Returns the new process id, or $null when WMI refuses or throws; the caller decides on a
-		fallback. Nothing is written to the console on failure - the reason goes to the debug log.
+		When no executable is given, or WMI refuses or throws, Start-Process runs with the
+		-Fallback parameters instead and the process it starts shares this shell's console;
+		without a fallback the function just returns $null. The reason goes to the debug log
+		either way. Start-VSCodeDetached and Start-ObsidianDetached are the callers.
 
 	.PARAMETER FilePath
-		The executable to start. Quoted into the command line as is.
+		The executable to start, quoted into the command line as is. Empty when the caller could
+		not resolve it, which goes straight to the fallback.
 
 	.PARAMETER ArgumentList
 		Arguments appended to the command line, separated by spaces, exactly as given - quote a
 		value that contains spaces yourself ("`"$path`""), as with Start-Process -ArgumentList.
 
-	.PARAMETER WorkingDirectory
-		The new process's current directory. Omit to let WMI choose (the user's profile folder).
+	.PARAMETER Fallback
+		Start-Process parameters, splatted when the detached launch is not possible - typically
+		the launch the caller used before it went detached. Start-Process errors propagate to
+		the caller.
 
 	.OUTPUTS
-		[int] The process id, or $null when the process could not be created.
+		[int] The process id of the detached process; $null when the fallback ran or nothing
+		could be started.
 
 	.EXAMPLE
-		$processId = Start-ProcessDetached -FilePath "C:\Apps\Tool\Tool.exe" -ArgumentList "-n", "`"C:\My Project`""
-		if (-not $processId) { Start-Process -FilePath "C:\Apps\Tool\Tool.exe" -ArgumentList "-n", "`"C:\My Project`"" }
+		Start-ProcessDetached -FilePath "C:\Apps\Tool\Tool.exe" -ArgumentList "-n", "`"C:\My Project`"" -Fallback @{ FilePath = "tool"; ArgumentList = "-n", "`"C:\My Project`""; NoNewWindow = $true }
+		Starts Tool.exe without a console, or through this shell's console when WMI cannot.
 	#>
 	[CmdletBinding()]
 	[OutputType([int])]
 	param (
-		[Parameter(Mandatory = $true)]
+		[Parameter()]
+		[AllowEmptyString()]
 		[string]$FilePath,
 
 		[Parameter()]
 		[string[]]$ArgumentList,
 
 		[Parameter()]
-		[string]$WorkingDirectory
+		[hashtable]$Fallback
 	)
 
-	$commandLine = "`"$FilePath`""
-	if ($ArgumentList) {
-		$commandLine += " " + ($ArgumentList -join " ")
+	$failure = $null
+	if ([string]::IsNullOrWhiteSpace($FilePath)) {
+		$failure = "No executable to launch detached"
+	}
+	else {
+		$commandLine = "`"$FilePath`""
+		if ($ArgumentList) {
+			$commandLine += " " + ($ArgumentList -join " ")
+		}
+
+		try {
+			$result = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{ CommandLine = $commandLine } -ErrorAction Stop
+			if ($result.ReturnValue -eq 0) {
+				Write-LogDebug " [Start-ProcessDetached] Launched detached => $commandLine (pid $($result.ProcessId))" -Style Success
+				return [int]$result.ProcessId
+			}
+			$failure = "Win32_Process.Create returned $($result.ReturnValue) for [$FilePath]"
+		}
+		catch {
+			$failure = "Win32_Process.Create threw for [$FilePath] => $($_.Exception.Message)"
+		}
 	}
 
-	$arguments = @{ CommandLine = $commandLine }
-	if ($WorkingDirectory) {
-		$arguments['CurrentDirectory'] = $WorkingDirectory
-	}
-
-	try {
-		$result = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments $arguments -ErrorAction Stop
-	}
-	catch {
-		Write-LogDebug " [Start-ProcessDetached] Win32_Process.Create threw for [$FilePath] => $($_.Exception.Message)" -Style Warning
+	if ($Fallback) {
+		Write-LogDebug " [Start-ProcessDetached] $failure - falling back to Start-Process (the process will share this shell's console)" -Style Warning
+		Start-Process @Fallback
 		return $null
 	}
 
-	if ($result.ReturnValue -ne 0) {
-		Write-LogDebug " [Start-ProcessDetached] Win32_Process.Create returned $($result.ReturnValue) for [$FilePath]" -Style Warning
-		return $null
-	}
-
-	Write-LogDebug " [Start-ProcessDetached] Launched detached => $commandLine (pid $($result.ProcessId))" -Style Success
-	return [int]$result.ProcessId
+	Write-LogDebug " [Start-ProcessDetached] $failure" -Style Warning
+	return $null
 }

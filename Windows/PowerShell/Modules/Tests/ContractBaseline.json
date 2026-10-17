@@ -5627,11 +5627,11 @@
           "Mandatory": false,
           "Aliases": []
         },
-        "FilePath": {
-          "Mandatory": true,
+        "Fallback": {
+          "Mandatory": false,
           "Aliases": []
         },
-        "WorkingDirectory": {
+        "FilePath": {
           "Mandatory": false,
           "Aliases": []
         }

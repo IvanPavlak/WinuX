@@ -144,14 +144,10 @@ Get-ObsidianWorkspaceNames -VaultDirectory $MachineSpecificPaths.ObsidianDirecto
 
 ## [Get-VSCodeExecutablePath](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Get-VSCodeExecutablePath.ps1)
 
-- **Description:** Resolves `Code.exe` for a detached launch: one folder above the command line (`Get-VSCodeCliPath` returns `<install>\bin\code.cmd`), then the per-user install (`%LOCALAPPDATA%\Programs\Microsoft VS Code\Code.exe`), then the machine-wide install (`%ProgramFiles%\Microsoft VS Code\Code.exe`). Returns the first candidate that exists, `$null` otherwise.
+- **Description:** Resolves `Code.exe` for `Start-VSCodeDetached`: one folder above the command line that `Get-VSCodeCliPath` returns (`<install>\bin\code.cmd`). Returns `$null` when VS Code is not installed or no `Code.exe` sits beside the command line.
 - **Usage:** `Get-VSCodeExecutablePath`
 
-Helper for `Start-VSCodeDetached`, which needs the executable itself: `code.cmd` runs through `cmd.exe` and the VS Code CLI, and a process created through WMI must be the final executable.
-
-```powershell
-Get-VSCodeExecutablePath
-```
+`Get-VSCodeCliPath` already covers `code` on PATH and both installer locations, so the executable is derived from it rather than probed again. A process created through WMI must be the final executable, and `code.cmd` only runs through `cmd.exe` and the VS Code CLI.
 
 ## [Get-VSCodeInstalledExtensions](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Get-VSCodeInstalledExtensions.ps1)
 
@@ -888,7 +884,7 @@ Start-MicrosoftActivationScripts -Selection Yes
 
 ## [Start-ObsidianDetached](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Start-ObsidianDetached.ps1)
 
-- **Description:** Launches Obsidian for a vault without tying it to the current shell. Creates `Obsidian.exe "obsidian://open?vault=<Vault>"` through `Start-ProcessDetached` (WMI, `Win32_Process.Create`), whose parent is the WMI provider host, so the new process owns no console. Falls back to `Start-Process "obsidian://open?vault=<Vault>"` when the executable cannot be located or WMI refuses.
+- **Description:** Launches Obsidian for a vault without tying it to the current shell: `Obsidian.exe "obsidian://open?vault=<Vault>"` through `Start-ProcessDetached`, with `Start-Process "obsidian://open?vault=<Vault>"` as the fallback when the executable cannot be located or WMI refuses.
 - **Parameters:** -Vault
 - **Usage:** `Start-ObsidianDetached -Vault Obsidian`
 
@@ -904,33 +900,33 @@ Start-ObsidianDetached -Vault Obsidian
 
 ## [Start-ProcessDetached](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Start-ProcessDetached.ps1)
 
-- **Description:** Starts a process that owns no console and is not tied to the current shell. Creates it through WMI (`Win32_Process.Create`), whose parent is the WMI provider host, so the new process neither inherits this shell's console nor can attach to it. Returns the new process id, or `$null` when WMI refuses or throws (the reason goes to the debug log), so the caller decides on a fallback. `Start-VSCodeDetached` and `Start-ObsidianDetached` launch through it.
-- **Parameters:** `-FilePath` `[-ArgumentList]` `[-WorkingDirectory]`
-- **Usage:** `Start-ProcessDetached -FilePath "C:\Apps\Tool\Tool.exe" -ArgumentList "-n", "`"C:\My Project`""`
+- **Description:** Starts a process that owns no console, or runs a `Start-Process` fallback when it cannot. Creates the process through WMI (`Win32_Process.Create`), whose parent is the WMI provider host, so the new process neither inherits this shell's console nor can attach to it. When no executable is given, or WMI refuses or throws, `Start-Process` runs with the `-Fallback` parameters instead and the process it starts shares this shell's console; without a fallback the function just returns `$null`. Returns the detached process id, `$null` otherwise; the reason goes to the debug log. `Start-VSCodeDetached` and `Start-ObsidianDetached` launch through it.
+- **Parameters:** -FilePath, -ArgumentList, -Fallback
+- **Usage:** `Start-ProcessDetached -FilePath "C:\Apps\Tool\Tool.exe" -ArgumentList "-n", "`"C:\My Project`"" -Fallback @{ FilePath = "tool"; NoNewWindow = $true }`
 
-Why a launcher needs this: Windows Terminal closes a tab only when every process attached to the tab's console has disconnected. An application started with a plain `Start-Process -NoNewWindow` inherits the console (Electron applications also attach to the console of the process that launched them), so a shell that exits afterwards - a workspace ending in `Terminate-WindowsTerminalTabs -OnlyCurrent` - leaves its tab open, with no `[process exited with code ...]` line, until that application closes.
+A detached launch is what lets a workspace close its own terminal tab afterwards: Windows Terminal keeps a tab open while any process is still attached to its console - see [The Workspace Tab Stays Open After [Closing current terminal tab]](../reference/troubleshooting.md#the-workspace-tab-stays-open-after-closing-current-terminal-tab).
 
-| Parameter           | Description                                                                                                                          |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `-FilePath`         | The executable to start. Quoted into the command line as is.                                                                         |
-| `-ArgumentList`     | Arguments appended to the command line, separated by spaces, exactly as given - quote a value that contains spaces yourself, as with `Start-Process -ArgumentList`. |
-| `-WorkingDirectory` | The new process's current directory. Omit to let WMI choose (the user's profile folder).                                             |
+| Parameter       | Description                                                                                                                                                              |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `-FilePath`     | The executable to start, quoted into the command line as is. Empty when the caller could not resolve it, which goes straight to the fallback.                           |
+| `-ArgumentList` | Arguments appended to the command line, separated by spaces, exactly as given - quote a value that contains spaces yourself, as with `Start-Process -ArgumentList`.     |
+| `-Fallback`     | `Start-Process` parameters, splatted when the detached launch is not possible - typically the launch the caller used before it went detached. `Start-Process` errors propagate to the caller. |
 
 ```powershell
-$processId = Start-ProcessDetached -FilePath "C:\Apps\Tool\Tool.exe" -ArgumentList "-n", "`"C:\My Project`""
-if (-not $processId) { Start-Process -FilePath "C:\Apps\Tool\Tool.exe" -ArgumentList "-n", "`"C:\My Project`"" }
+# Detached when possible, through this shell's console otherwise
+$null = Start-ProcessDetached -FilePath "C:\Apps\Tool\Tool.exe" -ArgumentList "-n", "`"C:\My Project`"" -Fallback { Start-Process tool -ArgumentList "-n", "`"C:\My Project`"" -NoNewWindow }
 ```
 
 ## [Start-VSCodeDetached](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Start-VSCodeDetached.ps1)
 
-- **Description:** Launches VS Code without tying it to this shell's console. Resolves `Code.exe` (`Get-VSCodeExecutablePath`) and creates it through `Start-ProcessDetached` (WMI, `Win32_Process.Create`), so the new VS Code owns no console. Falls back to `code` through `Start-Process -NoNewWindow` when the executable cannot be located or WMI refuses; that path hands the shell's console down `code.cmd`, `cmd.exe` and the VS Code CLI to the VS Code main process, which then holds it for as long as VS Code runs. Used by `Open-VSCode` and `Open-VSCodeWorkspace`.
-- **Parameters:** `[-ArgumentList]`
+- **Description:** Launches VS Code without tying it to this shell's console: `Code.exe` (`Get-VSCodeExecutablePath`) through `Start-ProcessDetached`, with `code` through `Start-Process -NoNewWindow` (the previous launch shape, which shares the console) as the fallback when the executable cannot be located or WMI refuses. Used by `Open-VSCode` and `Open-VSCodeWorkspace`.
+- **Parameters:** -ArgumentList
 - **Usage:** `Start-VSCodeDetached`, `Start-VSCodeDetached -ArgumentList "-n", "`"C:\Projects\MyProject`""`
 
-A VS Code that is already running is not affected either way: `code -n` then hands the folder to the running instance and exits. The detached launch matters for a cold start from a shell that exits afterwards, such as a workspace whose last action is `Terminate-WindowsTerminalTabs -OnlyCurrent` - the tab stayed open until VS Code was closed.
+A VS Code that is already running is unaffected either way: `code -n` hands the folder to the running instance and exits. The detached launch matters for a cold start from a shell that exits afterwards, such as a workspace ending in `Terminate-WindowsTerminalTabs -OnlyCurrent` - see the troubleshooting entry linked under `Start-ProcessDetached`.
 
-| Parameter       | Description                                                                                                                         |
-| --------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Parameter       | Description                                                                                                                                                       |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `-ArgumentList` | Arguments for VS Code, as given to `Start-Process -ArgumentList`, e.g. `"-n", "`"<folder>`""`. Quote a path that may contain spaces yourself. Omit to open an empty window. |
 
 ```powershell
