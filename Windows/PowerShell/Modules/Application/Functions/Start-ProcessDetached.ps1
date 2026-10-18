@@ -41,7 +41,6 @@ function Start-ProcessDetached {
 	[OutputType([int])]
 	param (
 		[Parameter()]
-		[AllowEmptyString()]
 		[string]$FilePath,
 
 		[Parameter()]

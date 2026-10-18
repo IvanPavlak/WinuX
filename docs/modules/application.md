@@ -684,7 +684,7 @@ Open-VisualStudio -Default
 
 ## [Open-VSCode](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Open-VSCode.ps1)
 
-- **Description:** Opens one or more VS Code project folders defined in `VSCodeProjects` in `Configuration.psd1`. Each entry maps a name to a directory path. Omit `-Folder` to show an interactive selection menu. With no menu selection, or with `-Default` (which skips the menu), VS Code is launched without a folder unless `Code` is already running. Folders already open (detected by matching window title) are skipped. VS Code is started through `Start-VSCodeDetached`, so it owns no console and never keeps the terminal tab open after a workspace closes its own tab.
+- **Description:** Opens one or more VS Code project folders defined in `VSCodeProjects` in `Configuration.psd1`. Each entry maps a name to a directory path. Omit `-Folder` to show an interactive selection menu. With no menu selection, or with `-Default` (which skips the menu), VS Code is launched without a folder unless `Code` is already running. Folders already open (detected by matching window title) are skipped.
 - **Parameters:** -Default, -Folder
 - **Usage:** `Open-VSCode`, `Open-VSCode MyProject`, `Open-VSCode MyProject, OtherProject`, `Open-VSCode -Folder MyProject`, `Open-VSCode -Default`
 
@@ -711,7 +711,7 @@ Open-VSCode -Default
 
 ## [Open-VSCodeWorkspace](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Open-VSCodeWorkspace.ps1)
 
-- **Description:** Opens a VS Code multi-root workspace (`*.code-workspace`) from `PathTemplates.Projects.Self.VSCodeWorkspaces` (`<repo>\VSCode\Workspaces`). A workspace is addressed by its file base name (e.g. `Consolidation` => `Consolidation.code-workspace`). Omit `-VSCodeWorkspace` to show an interactive selection menu. A workspace already open (detected by its `<name> (Workspace)` window title) is skipped. Returns the names it opened or found already open; a missing folder is an error and an empty one a warning. VS Code is started through `Start-VSCodeDetached`, so it owns no console and never keeps the terminal tab open after a workspace closes its own tab.
+- **Description:** Opens a VS Code multi-root workspace (`*.code-workspace`) from `PathTemplates.Projects.Self.VSCodeWorkspaces` (`<repo>\VSCode\Workspaces`). A workspace is addressed by its file base name (e.g. `Consolidation` => `Consolidation.code-workspace`). Omit `-VSCodeWorkspace` to show an interactive selection menu. A workspace already open (detected by its `<name> (Workspace)` window title) is skipped. Returns the names it opened or found already open; a missing folder is an error and an empty one a warning.
 - **Parameters:** -VSCodeWorkspace
 - **Usage:** `Open-VSCodeWorkspace`, `Open-VSCodeWorkspace Consolidation`
 
@@ -914,7 +914,7 @@ A detached launch is what lets a workspace close its own terminal tab afterwards
 
 ```powershell
 # Detached when possible, through this shell's console otherwise
-$null = Start-ProcessDetached -FilePath "C:\Apps\Tool\Tool.exe" -ArgumentList "-n", "`"C:\My Project`"" -Fallback { Start-Process tool -ArgumentList "-n", "`"C:\My Project`"" -NoNewWindow }
+$null = Start-ProcessDetached -FilePath "C:\Apps\Tool\Tool.exe" -ArgumentList "-n", "`"C:\My Project`"" -Fallback @{ FilePath = "tool"; ArgumentList = "-n", "`"C:\My Project`""; NoNewWindow = $true }
 ```
 
 ## [Start-VSCodeDetached](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Start-VSCodeDetached.ps1)

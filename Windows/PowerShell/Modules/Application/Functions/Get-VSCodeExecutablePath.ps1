@@ -27,12 +27,7 @@ function Get-VSCodeExecutablePath {
 		return $null
 	}
 
-	$installRoot = Split-Path -Parent (Split-Path -Parent $cli)
-	if (-not $installRoot) {
-		return $null
-	}
-
-	$exe = Join-Path $installRoot 'Code.exe'
+	$exe = Join-Path (Split-Path -Parent (Split-Path -Parent $cli)) 'Code.exe'
 	if (Test-Path -LiteralPath $exe) {
 		return $exe
 	}
