@@ -439,6 +439,14 @@ Set-LogLevel Verbose { Open-ProjectTerminals MyProject -InSameShell }
 
 That line means neither the project tab title nor the title probe identified the window, so it was left alone rather than guessed. It happens in a tab opened with a fixed title (a project tab) when another window's active tab has the same title.
 
+### The Workspace Tab Stays Open After [Closing current terminal tab]
+
+**Problem:** A workspace whose last action is `Terminate-WindowsTerminalTabs -OnlyCurrent` prints `[Closing current terminal tab]` and nothing else. The Windows Terminal tab stays open with that output, there is no `[process exited with code ...]` line, and it happens on some runs and not others.
+
+**Why it happens:** The shell did exit. Windows Terminal closes a tab only when every process attached to the tab's console has disconnected, not when the shell ends, and it prints the "process exited" line only then. An application started from that shell with a plain `Start-Process -NoNewWindow` inherits the console (Electron applications also attach to the console of the process that launched them) and keeps the tab alive for as long as it runs. `Open-VSCode` and `Open-VSCodeWorkspace` used to launch `code` that way, so a run that cold-started VS Code left the tab open until VS Code was closed. A run that found VS Code already running was not affected: `code -n` then hands the folder to the running instance and exits.
+
+**Solution:** Fixed in 1.4.0: VS Code is started through `Start-VSCodeDetached`, which creates `Code.exe` through WMI (`Start-ProcessDetached`), whose parent has no console. If a tab still stays open, something else launched from that shell is holding the console. From another tab, confirm the shell is gone - `Get-Process -Id <pid>` with the pid from the session log's file name, `Logs\Session_<date>_<time>_<pid>.log` - then look at what that run started: closing that application closes the tab. A fork launcher that starts an Electron application with `Start-Process -NoNewWindow` should launch through `Start-ProcessDetached` instead.
+
 ## Window Layout Issues
 
 ### Windows Not Positioning

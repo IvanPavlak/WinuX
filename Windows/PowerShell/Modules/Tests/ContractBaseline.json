@@ -1,5 +1,5 @@
 {
-  "Version": "1.3.0",
+  "Version": "1.4.0",
   "Functions": {
     "Add-BrowserGroup": {
       "Module": "Configuration",
@@ -1992,6 +1992,10 @@
       "Parameters": {}
     },
     "Get-VSCodeCliPath": {
+      "Module": "Application",
+      "Parameters": {}
+    },
+    "Get-VSCodeExecutablePath": {
       "Module": "Application",
       "Parameters": {}
     },
@@ -5612,6 +5616,32 @@
       "Parameters": {
         "Vault": {
           "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Start-ProcessDetached": {
+      "Module": "Application",
+      "Parameters": {
+        "ArgumentList": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Fallback": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "FilePath": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Start-VSCodeDetached": {
+      "Module": "Application",
+      "Parameters": {
+        "ArgumentList": {
+          "Mandatory": false,
           "Aliases": []
         }
       }

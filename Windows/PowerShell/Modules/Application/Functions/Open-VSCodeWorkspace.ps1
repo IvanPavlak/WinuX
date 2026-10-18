@@ -17,6 +17,9 @@ function Open-VSCodeWorkspace {
 		its Open-VSCode action here when a -VSCodeWorkspace override is active, so the
 		workspace opens in place of the project folder and the layout logic can target it.
 
+		VS Code is started through Start-VSCodeDetached, so it owns no console and never keeps the
+		terminal tab open after a workspace closes its own tab.
+
 	.PARAMETER VSCodeWorkspace
 		One or more workspace names (file base names) as found in the Workspaces folder.
 		Omit to show the interactive selection menu.
@@ -80,7 +83,7 @@ function Open-VSCodeWorkspace {
 
 		if (-not $alreadyOpen) {
 			try {
-				Start-Process -FilePath "code" -ArgumentList "-n", "`"$workspaceFile`"" -NoNewWindow -ErrorAction Stop
+				Start-VSCodeDetached -ArgumentList "-n", "`"$workspaceFile`""
 				Write-LogSuccess "Opened VS Code workspace [$name]!"
 			}
 			catch {

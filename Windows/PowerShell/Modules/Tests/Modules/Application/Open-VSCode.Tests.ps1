@@ -6,6 +6,7 @@ BeforeAll {
 
 	$AppFunctionsPath = Join-Path (Get-RepositoryPath).Modules "Application\Functions"
 	. "$AppFunctionsPath\Open-VSCode.ps1"
+	. "$AppFunctionsPath\Start-VSCodeDetached.ps1"
 }
 
 AfterAll {
@@ -28,16 +29,16 @@ Describe "Open-VSCode" {
 		Mock Test-Path { $true }
 		Mock Test-ProjectAlreadyOpen { $false }
 		Mock Get-Process { $null }
-		Mock Start-Process { }
+		Mock Start-VSCodeDetached { }
 	}
 
 	It "returns early when VSCodeProjects configuration is missing" {
 		$global:Configuration = @{}
 		Open-VSCode -Folder WinuX
-		Should -Invoke Start-Process -Times 0
+		Should -Invoke Start-VSCodeDetached -Times 0
 	}
 
-	It "opens configured folder in a new VS Code window when project is not already open" {
+	It "opens configured folder detached in a new VS Code window when project is not already open" {
 		Open-VSCode -Folder WinuX
 
 		Should -Invoke Resolve-Selection -Times 1 -Exactly -ParameterFilter {
@@ -46,8 +47,8 @@ Describe "Open-VSCode" {
 		Should -Invoke Test-ProjectAlreadyOpen -Times 1 -Exactly -ParameterFilter {
 			$ProjectName -eq 'WinuX' -and $ProcessName -eq 'Code'
 		}
-		Should -Invoke Start-Process -Times 1 -Exactly -ParameterFilter {
-			$FilePath -eq 'code' -and $ArgumentList[0] -eq '-n' -and $ArgumentList[1] -eq '"C:\Repos\WinuX"'
+		Should -Invoke Start-VSCodeDetached -Times 1 -Exactly -ParameterFilter {
+			$ArgumentList[0] -eq '-n' -and $ArgumentList[1] -eq '"C:\Repos\WinuX"'
 		}
 	}
 
@@ -56,6 +57,29 @@ Describe "Open-VSCode" {
 
 		Open-VSCode -Folder WinuX
 
-		Should -Invoke Start-Process -Times 0
+		Should -Invoke Start-VSCodeDetached -Times 0
+	}
+
+	It "launches VS Code detached without a folder with -Default when Code is not running" {
+		Open-VSCode -Default
+
+		Should -Invoke Resolve-Selection -Times 0
+		Should -Invoke Start-VSCodeDetached -Times 1 -Exactly -ParameterFilter { -not $ArgumentList }
+	}
+
+	It "does not launch a bare VS Code with -Default when Code is already running" {
+		Mock Get-Process { [PSCustomObject]@{ Name = 'Code' } }
+
+		Open-VSCode -Default
+
+		Should -Invoke Start-VSCodeDetached -Times 0
+	}
+
+	It "reports a missing folder path and launches nothing" {
+		Mock Test-Path { $false }
+
+		Open-VSCode -Folder WinuX
+
+		Should -Invoke Start-VSCodeDetached -Times 0
 	}
 }
