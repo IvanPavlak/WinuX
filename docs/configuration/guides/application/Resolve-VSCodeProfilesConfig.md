@@ -10,6 +10,7 @@ Resolves the `VSCodeProfiles` section into expanded paths, the catalogue and thi
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
 | [`VSCodeProfiles.Root`](../../configuration-reference.md#vs-code-profiles) | string | `{RepoRoot}\VSCode\Profiles` | `Root`, and each entry's `Source` beneath it. |
+| [`VSCodeProfiles.Extensions`](../../configuration-reference.md#vs-code-profiles) | string | `{RepoRoot}\VSCode\Extensions` | `Extensions`. |
 | [`VSCodeProfiles.UserData`](../../configuration-reference.md#vs-code-profiles) | string | `{AppData}\Code\User` | `UserData`. |
 | [`VSCodeProfiles.SettingsSync`](../../configuration-reference.md#vs-code-profiles) | boolean | `$false` | `SettingsSync`. |
 | [`VSCodeProfiles.Prune`](../../configuration-reference.md#vs-code-profiles) | boolean | `$false` | `Prune`. |
@@ -70,6 +71,7 @@ Read-only checks. None of these change anything.
 @{
     VSCodeProfiles = @{
         Root         = "{RepoRoot}\VSCode\Profiles"
+        Extensions   = "{RepoRoot}\VSCode\Extensions"
         UserData     = "{AppData}\Code\User"
         SettingsSync = $false
         Prune        = $false

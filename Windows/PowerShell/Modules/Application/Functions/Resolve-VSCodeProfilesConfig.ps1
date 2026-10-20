@@ -11,6 +11,9 @@ function Resolve-VSCodeProfilesConfig {
 
 		  Root          The profile folders in the repository (default {RepoRoot}\VSCode\Profiles),
 		                one subfolder per catalogue entry.
+		  Extensions    The local VS Code extensions in the repository (default
+		                {RepoRoot}\VSCode\Extensions), one subfolder per extension; see
+		                Get-VSCodeLocalExtensions.
 		  UserData      VS Code's user data folder (default {AppData}\Code\User). Its root is the
 		                Default profile; other profiles live under profiles\<location>.
 		  SettingsSync  $true when Settings Sync manages extensions too; $false installs them with
@@ -71,9 +74,11 @@ function Resolve-VSCodeProfilesConfig {
 
 	$expand = @{ '{RepoRoot}' = $RepoRoot; '{User}' = $env:USERPROFILE; '{AppData}' = $env:APPDATA }
 	$root = if ($section.Root) { [string]$section.Root } else { "{RepoRoot}\VSCode\Profiles" }
+	$extensions = if ($section.Extensions) { [string]$section.Extensions } else { "{RepoRoot}\VSCode\Extensions" }
 	$userData = if ($section.UserData) { [string]$section.UserData } else { "{AppData}\Code\User" }
 	foreach ($placeholder in $expand.Keys) {
 		$root = $root.Replace($placeholder, $expand[$placeholder])
+		$extensions = $extensions.Replace($placeholder, $expand[$placeholder])
 		$userData = $userData.Replace($placeholder, $expand[$placeholder])
 	}
 
@@ -102,6 +107,7 @@ function Resolve-VSCodeProfilesConfig {
 
 	return @{
 		Root         = $root
+		Extensions   = $extensions
 		UserData     = $userData
 		SettingsSync = [bool]$section.SettingsSync
 		Prune        = [bool]$section.Prune

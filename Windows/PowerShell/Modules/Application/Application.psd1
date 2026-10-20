@@ -52,6 +52,8 @@
 		'Get-VSCodeExecutablePath',
 		'Start-VSCodeDetached',
 		'Get-VSCodeInstalledExtensions',
+		'Get-VSCodeLocalExtensions',
+		'Install-VSCodeLocalExtensions',
 		'Get-VSCodeProfileItems',
 		'Get-VSCodeProfileLocation',
 		'Merge-VSCodeExtensionList',
