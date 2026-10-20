@@ -385,6 +385,22 @@ Get-CimInstance Win32_Process -Filter "Name = 'Obsidian.com'" | ForEach-Object {
 
 **Solution:** Close every VS Code window and run `Deploy-VSCodeProfiles` again. Registration happens once; later runs find the profile and deploy with VS Code open. The list is backed up under `Backups\Windows\VSCodeProfiles\` before it is rewritten.
 
+### Removing A Local VS Code Extension Deleted Its Folder In The Repository
+
+**Problem:** After uninstalling one of your own extensions (from `VSCodeProfiles.Extensions`) in VS Code's Extensions view or with `code --uninstall-extension`, its folder in the repository is empty or gone.
+
+**Why it happens:** `Install-VSCodeLocalExtensions` installs a local extension as a symbolic link in `%USERPROFILE%\.vscode\extensions`. Uninstalling deletes the extension's folder, and through the link that is the repository copy. `Deploy-VSCodeProfiles` never installs or prunes a local extension for this reason, but VS Code itself does not know the folder is a link.
+
+**Solution:** Restore the folder from git (`git restore -- VSCode/Extensions/<Folder>`). To retire a local extension, delete only its link (`Remove-Item "$env:USERPROFILE\.vscode\extensions\<publisher>.<name>-<version>"`, without `-Recurse`) and then its folder in the repository. To hide one for a while, disable it in VS Code instead.
+
+### A Local VS Code Theme Does Not Show Up In The Color Theme Picker
+
+**Problem:** `Install-VSCodeLocalExtensions` (or `Deploy-VSCodeProfiles`) reported the link, but the theme is not listed under `Preferences: Color Theme`.
+
+**Why it happens:** VS Code scans its extensions folder at startup, so a window that was already open does not see the new link. A `package.json` without `publisher`, `name` or `version` is skipped with a warning, and a theme `label` the profile's `workbench.colorTheme` does not match exactly falls back to the default theme.
+
+**Solution:** Run `Developer: Reload Window` (or restart VS Code). Check `Get-VSCodeLocalExtensions -Root (Resolve-VSCodeProfilesConfig).Extensions` lists the extension, and that `workbench.colorTheme` matches a `label` under `contributes.themes` in its `package.json`.
+
 ### A VS Code Extension Keeps Coming Back Or Disappearing After Deploy-VSCodeProfiles
 
 **Problem:** An extension removed from `extensions.txt` reappears, or one `Deploy-VSCodeProfiles` installed vanishes on another machine.

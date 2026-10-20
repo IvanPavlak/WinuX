@@ -1,5 +1,5 @@
 {
-  "Version": "1.4.0",
+  "Version": "1.5.0",
   "Functions": {
     "Add-BrowserGroup": {
       "Module": "Configuration",
@@ -2012,6 +2012,15 @@
         }
       }
     },
+    "Get-VSCodeLocalExtensions": {
+      "Module": "Application",
+      "Parameters": {
+        "Root": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
     "Get-VSCodeProfileItems": {
       "Module": "Application",
       "Parameters": {
@@ -2544,6 +2553,19 @@
     "Install-ScoopPackageManager": {
       "Module": "Application",
       "Parameters": {}
+    },
+    "Install-VSCodeLocalExtensions": {
+      "Module": "Application",
+      "Parameters": {
+        "Destination": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Extension": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
     },
     "Install-WingetApps": {
       "Module": "Application",
@@ -7222,6 +7244,7 @@
     "VSCodeProfiles",
     "VSCodeProfiles.Catalogue",
     "VSCodeProfiles.Deploy",
+    "VSCodeProfiles.Extensions",
     "VSCodeProfiles.Prune",
     "VSCodeProfiles.Root",
     "VSCodeProfiles.SettingsSync",

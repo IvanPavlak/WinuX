@@ -10,6 +10,9 @@ BeforeAll {
 	. "$FunctionsPath\Get-VSCodeInstalledExtensions.ps1"
 	. "$FunctionsPath\ConvertFrom-VSCodeExtensionLine.ps1"
 	. "$FunctionsPath\Get-VSCodeCliPath.ps1"
+	. "$FunctionsPath\Get-VSCodeLocalExtensions.ps1"
+	# Mocked below - dot-sourced only so Mock can attach to it.
+	. "$FunctionsPath\Install-VSCodeLocalExtensions.ps1"
 	# The cmdlet itself, captured before any mock shadows it.
 	$script:RealGetItem = Get-Command -Name Get-Item -CommandType Cmdlet
 }
@@ -25,8 +28,10 @@ Describe "Deploy-VSCodeProfiles" {
 		Mock New-WindowsSymbolicLink { }
 		Mock Backup-RepositoryItem { "C:\Backups\storage" }
 		Mock Get-Process { $null } -ParameterFilter { $Name -eq "Code" }
+		Mock Install-VSCodeLocalExtensions { }
 
 		$script:Root = Join-Path $TestDrive "repo\Profiles"
+		$script:Extensions = Join-Path $TestDrive "repo\Extensions"
 		$script:UserData = Join-Path $TestDrive "User"
 		Remove-Item -Path (Join-Path $TestDrive "repo"), $script:UserData -Recurse -Force -ErrorAction SilentlyContinue
 		$script:Source = Join-Path $script:Root "MyProfile"
@@ -37,6 +42,7 @@ Describe "Deploy-VSCodeProfiles" {
 
 		$script:Section = @{
 			Root         = $script:Root
+			Extensions   = $script:Extensions
 			UserData     = $script:UserData
 			SettingsSync = $false
 			Prune        = $false
@@ -187,6 +193,43 @@ Describe "Deploy-VSCodeProfiles" {
 		Deploy-VSCodeProfiles -Name MyProfile -Command $script:Stub
 
 		Should -Invoke New-WindowsSymbolicLink -Times 1 -Exactly
+	}
+
+	Context "local extensions" {
+		BeforeEach {
+			$folder = Join-Path $script:Extensions "Themes"
+			New-Item -ItemType Directory -Path $folder -Force | Out-Null
+			Set-Content -Path (Join-Path $folder "package.json") -Value '{ "publisher": "Publisher", "name": "themes", "version": "1.0.0" }'
+		}
+
+		It "links the local extensions even when this machine type selects no profile" {
+			$script:Section.Deploy = @{ Default = @() }
+
+			Deploy-VSCodeProfiles -Command $script:Stub
+
+			Should -Invoke Install-VSCodeLocalExtensions -Times 1 -Exactly -ParameterFilter {
+				@($Extension).Count -eq 1 -and $Extension[0].Id -eq "publisher.themes"
+			}
+		}
+
+		It "never installs a local extension from the Marketplace, even when extensions.txt lists it" {
+			Set-Content -Path (Join-Path $script:Source "extensions.txt") -Value @("publisher.themes", "a.wanted")
+
+			Deploy-VSCodeProfiles -Command $script:Stub
+
+			$calls = @(Get-Content -Path $script:Log)
+			$calls | Where-Object { $_ -like "*publisher.themes*" } | Should -BeNullOrEmpty
+			$calls | Should -Contain "--install-extension a.wanted --do-not-sync"
+		}
+
+		It "never prunes a local extension that extensions.txt leaves out" {
+			$env:WINUX_TEST_CODE_LIST = "a.wanted@1.0.0;b.present@1.0.0;c.pinned@2.0.0;publisher.themes@1.0.0;d.extra@3.0.0"
+
+			Deploy-VSCodeProfiles -Command $script:Stub -Prune
+
+			$uninstalls = @(Get-Content -Path $script:Log | Where-Object { $_ -like "--uninstall-extension*" })
+			$uninstalls | Should -Be @("--uninstall-extension d.extra")
+		}
 	}
 
 	It "reports a failed install and carries on" {

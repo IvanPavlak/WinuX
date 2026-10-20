@@ -10,6 +10,7 @@ Brings VS Code to the profiles the configuration selects for this machine type: 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
 | [`VSCodeProfiles.Root`](../../configuration-reference.md#vs-code-profiles) | string | `{RepoRoot}\VSCode\Profiles` | Where the profile folders live, one per catalogue entry. |
+| [`VSCodeProfiles.Extensions`](../../configuration-reference.md#vs-code-profiles) | string | `{RepoRoot}\VSCode\Extensions` | Local extensions (a colour theme of your own, for example), linked into VS Code before the profiles deploy, never installed from the Marketplace and never pruned. See [Install-VSCodeLocalExtensions](Install-VSCodeLocalExtensions.md). |
 | [`VSCodeProfiles.UserData`](../../configuration-reference.md#vs-code-profiles) | string | `{AppData}\Code\User` | VS Code's user data folder. Change it only for a portable or Insiders install. |
 | [`VSCodeProfiles.SettingsSync`](../../configuration-reference.md#vs-code-profiles) | boolean | `$false` | Whether extensions install so Settings Sync carries them too (`$true`) or with `--do-not-sync` (`$false`). |
 | [`VSCodeProfiles.Prune`](../../configuration-reference.md#vs-code-profiles) | boolean | `$false` | Whether extensions the list does not name are uninstalled. |
@@ -41,7 +42,11 @@ The profile's UI state (history, layout, signed-in accounts) is not a configurat
     - Options: `$true` uninstalls every extension `extensions.txt` does not name; `$false` leaves them, and `Deploy-VSCodeProfiles -Prune` removes them for one run.
     - Default: `$false`.
     - More detail: [`VSCodeProfiles.Prune`](../../configuration-reference.md#vs-code-profiles)
-6. Should Bootstrap deploy the profiles on every run?
+6. Do you keep VS Code extensions of your own (a theme, for example) in the repository?
+    - Options: One folder with a `package.json` per extension under `Extensions`; they are linked into VS Code first, and a profile's `settings.json` can then select the theme. Walked through on the [Install-VSCodeLocalExtensions](Install-VSCodeLocalExtensions.md) guide.
+    - Default: None - nothing is linked while the folder is missing.
+    - More detail: [`VSCodeProfiles.Extensions`](../../configuration-reference.md#vs-code-profiles)
+7. Should Bootstrap deploy the profiles on every run?
     - Options: `$true` to link and install on every Bootstrap, after the package managers so VS Code is installed; `$false` to run `Deploy-VSCodeProfiles` by hand.
     - Default: `$false` - a vanilla bootstrap deploys nothing.
     - More detail: [`BootstrapConfig.Steps`](../../configuration-reference.md#bootstrapconfig)
@@ -151,6 +156,7 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 @{
     VSCodeProfiles  = @{
         Root         = "{RepoRoot}\VSCode\Profiles"
+        Extensions   = "{RepoRoot}\VSCode\Extensions"
         UserData     = "{AppData}\Code\User"
         SettingsSync = $true
         Prune        = $false

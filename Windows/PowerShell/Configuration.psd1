@@ -2203,6 +2203,11 @@
 	# live profile back into its folder.
 	#
 	# Root         : the profile folders ({RepoRoot}, {User} and {AppData} expand here)
+	# Extensions   : local extensions - one unpackaged extension folder (with a package.json)
+	#                each, such as a colour theme of your own. Deploy links every one into
+	#                VS Code's extensions folder as <publisher>.<name>-<version>, so VS Code
+	#                loads it straight from the repository; it is never installed from the
+	#                Marketplace and never pruned. Nothing is linked while the folder is missing.
 	# UserData     : VS Code's user data folder - its root is the Default profile
 	# SettingsSync : $false installs extensions with --do-not-sync, so Settings Sync leaves
 	#                them alone; $true installs them normally and lets Sync carry them too
@@ -2222,6 +2227,7 @@
 	# ==========================================================================
 	VSCodeProfiles                = @{
 		Root         = "{RepoRoot}\VSCode\Profiles"
+		Extensions   = "{RepoRoot}\VSCode\Extensions"
 		UserData     = "{AppData}\Code\User"
 		SettingsSync = $false
 		Prune        = $false

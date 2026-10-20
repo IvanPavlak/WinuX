@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-10-20
+
+### Added
+
+- **Local VS Code extensions: `VSCodeProfiles.Extensions` (default `{RepoRoot}\VSCode\Extensions`).** Keep VS Code extensions of your own in the repository, such as a colour theme, one unpackaged folder with a `package.json` each. `Deploy-VSCodeProfiles` (and with it the opt-in `BootstrapConfig.Steps.VSCodeProfiles`) now links every one into VS Code's extensions folder as `<publisher>.<name>-<version>` before it deploys the profiles, so VS Code loads it straight from the repository with no VSIX and no Marketplace, and a theme edit shows up on the next `Developer: Reload Window`. Local extensions are never installed from the Marketplace and never pruned, even when `extensions.txt` lists them or leaves them out, because an uninstall through the link would delete the repository copy. The base configuration ships no folder, so nothing changes until a fork adds one.
+- **`Get-VSCodeLocalExtensions` and `Install-VSCodeLocalExtensions` (Application module).** `Get-VSCodeLocalExtensions` reads each local extension's `package.json` into its id, version, link name and folder. `Install-VSCodeLocalExtensions` makes the links through `New-WindowsSymbolicLink`, leaves a correct link alone and removes the link of an older version of the same extension (a link only, never a real folder). `Resolve-VSCodeProfilesConfig` now also returns `Extensions`.
+
 ## [1.4.0] - 2026-10-17
 
 ### Added

@@ -47,7 +47,7 @@ Create-CondaEnvironments
 
 ## [Deploy-VSCodeProfiles](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Deploy-VSCodeProfiles.ps1)
 
-- **Description:** Brings VS Code to the profiles `VSCodeProfiles.Deploy` selects for the current machine type (or the entries `-Name` gives). For each `VSCodeProfiles.Catalogue` entry it locates the VS Code profile the entry deploys onto (`Target`, the entry name by default) through `Get-VSCodeProfileLocation -Register`: `Default` is VS Code's user data folder, and any other profile is registered in VS Code's profile list when VS Code does not know it yet, which is refused while VS Code is running. It then symlinks every file the entry's folder carries (`settings.json`, `keybindings.json` or `keybindings.windows.json`, `tasks.json`, `snippets\`; see `Get-VSCodeProfileItems`) through `New-WindowsSymbolicLink`, which backs up a real file it replaces (a link already pointing at the repository file is left as it is), and installs every extension `extensions.txt` lists that the profile lacks with `code --install-extension <id> --profile <Target>`. A pinned extension installed at another version is reinstalled at the pin. With `VSCodeProfiles.SettingsSync` off (the default) installs carry `--do-not-sync`. Extensions the list does not name stay installed unless `-Prune` or `VSCodeProfiles.Prune` is set. A name the catalogue does not carry is an error, an entry with no folder yet is skipped with a warning, and a missing VS Code command line (`Get-VSCodeCliPath`) skips only the extensions. Idempotent. Bootstrap runs it when the opt-in `BootstrapConfig.Steps.VSCodeProfiles` is on.
+- **Description:** Brings VS Code to the profiles `VSCodeProfiles.Deploy` selects for the current machine type (or the entries `-Name` gives). First it links every local extension under `VSCodeProfiles.Extensions` into VS Code through `Install-VSCodeLocalExtensions`, also when no profile is selected; local extensions are never installed from the Marketplace and never pruned, whether `extensions.txt` lists them or not, because an uninstall through the link would delete the repository copy. For each `VSCodeProfiles.Catalogue` entry it locates the VS Code profile the entry deploys onto (`Target`, the entry name by default) through `Get-VSCodeProfileLocation -Register`: `Default` is VS Code's user data folder, and any other profile is registered in VS Code's profile list when VS Code does not know it yet, which is refused while VS Code is running. It then symlinks every file the entry's folder carries (`settings.json`, `keybindings.json` or `keybindings.windows.json`, `tasks.json`, `snippets\`; see `Get-VSCodeProfileItems`) through `New-WindowsSymbolicLink`, which backs up a real file it replaces (a link already pointing at the repository file is left as it is), and installs every extension `extensions.txt` lists that the profile lacks with `code --install-extension <id> --profile <Target>`. A pinned extension installed at another version is reinstalled at the pin. With `VSCodeProfiles.SettingsSync` off (the default) installs carry `--do-not-sync`. Extensions the list does not name stay installed unless `-Prune` or `VSCodeProfiles.Prune` is set. A name the catalogue does not carry is an error, an entry with no folder yet is skipped with a warning, and a missing VS Code command line (`Get-VSCodeCliPath`) skips only the extensions. Idempotent. Bootstrap runs it when the opt-in `BootstrapConfig.Steps.VSCodeProfiles` is on.
 - **Parameters:** -Name, -Prune, -Command
 - **Usage:** `Deploy-VSCodeProfiles`, `Deploy-VSCodeProfiles -Name MyProfile -Prune`
 
@@ -154,6 +154,12 @@ Get-ObsidianWorkspaceNames -VaultDirectory $MachineSpecificPaths.ObsidianDirecto
 - **Description:** Lists the extensions a VS Code profile has installed as an ordered dictionary of id to version, through `code --list-extensions --show-versions` (plus `--profile <ProfileName>` for any profile but `Default`). Ids match case-insensitively. Returns an empty dictionary when nothing is installed and `$null` when the command fails, for instance for a profile VS Code does not know, so a caller can tell the two apart. Used by `Deploy-VSCodeProfiles` and `Export-VSCodeProfile`.
 - **Parameters:** -Command, -ProfileName
 - **Usage:** `Get-VSCodeInstalledExtensions -Command (Get-VSCodeCliPath) -ProfileName Default`
+
+## [Get-VSCodeLocalExtensions](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Get-VSCodeLocalExtensions.ps1)
+
+- **Description:** Lists the local VS Code extensions under `-Root` (`VSCodeProfiles.Extensions`): every subfolder that holds a `package.json`, an unpackaged extension such as a colour theme of your own. Each result carries `Id` (`<publisher>.<name>`, lowercased), `Version`, `LinkName` (`<Id>-<Version>`, the folder name VS Code expects) and `Source` (the folder). Folders without a `package.json` are ignored; a manifest that is not valid JSON, or lacks `publisher`, `name` or `version`, is skipped with a warning; a missing `-Root` lists nothing. Sorted by folder name, read-only. Used by `Install-VSCodeLocalExtensions` and `Deploy-VSCodeProfiles`.
+- **Parameters:** -Root
+- **Usage:** `Get-VSCodeLocalExtensions -Root (Resolve-VSCodeProfilesConfig).Extensions`
 
 ## [Get-VSCodeProfileItems](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Get-VSCodeProfileItems.ps1)
 
@@ -294,6 +300,31 @@ Install-ScoopApps
 ```powershell
 # Install Scoop, or report that it is already installed
 Install-ScoopPackageManager
+```
+
+## [Install-VSCodeLocalExtensions](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Install-VSCodeLocalExtensions.ps1)
+
+- **Description:** Links the repository's local VS Code extensions (`Get-VSCodeLocalExtensions` over `VSCodeProfiles.Extensions`, or the ones `-Extension` gives) into VS Code's extensions folder as `<publisher>.<name>-<version>`, through `New-WindowsSymbolicLink`. VS Code loads every extension folder it finds there and registers it on its next scan, so the link is a complete install - no VSIX, no Marketplace - and editing a file in the repository changes the live extension on the next `Developer: Reload Window`. A link already pointing at the extension's folder is left alone, and a link under an older version name that points at the same folder is removed (a symbolic link only, never a real folder, never with `-Recurse`), so a version bump in `package.json` never loads the extension twice. Never uninstall a linked extension through `code --uninstall-extension`: VS Code deletes the extension's folder, and through the link that is the repository copy. Needs administrator privileges or Developer Mode. Called first by `Deploy-VSCodeProfiles`.
+- **Parameters:** -Extension, -Destination
+- **Usage:** `Install-VSCodeLocalExtensions`, `Install-VSCodeLocalExtensions -Destination "$env:USERPROFILE\.vscode-insiders\extensions"`
+
+A local extension is a folder with a `package.json` that names `publisher`, `name` and `version` and contributes what the extension carries, for example two colour themes:
+
+```json
+{
+    "name": "themes",
+    "displayName": "Themes",
+    "publisher": "mypublisher",
+    "version": "1.0.0",
+    "engines": { "vscode": "^1.80.0" },
+    "categories": ["Themes"],
+    "contributes": {
+        "themes": [
+            { "label": "My Dark", "uiTheme": "vs-dark", "path": "./themes/Dark.json" },
+            { "label": "My Light", "uiTheme": "vs", "path": "./themes/Light.json" }
+        ]
+    }
+}
 ```
 
 ## [Install-WingetApps](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Install-WingetApps.ps1)
@@ -756,7 +787,7 @@ The tab is opened with `wt -w <window> new-tab -p <distribution>`, so it relies 
 
 ## [Resolve-VSCodeProfilesConfig](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Resolve-VSCodeProfilesConfig.ps1)
 
-- **Description:** Resolves the `VSCodeProfiles` section into the one hashtable `Deploy-VSCodeProfiles` and `Export-VSCodeProfile` share: `Root` and `UserData` with `{RepoRoot}`, `{User}` and `{AppData}` expanded, `SettingsSync`, `Prune`, `Entries` (catalogue name to `@{ Name; Target; Source }`, in catalogue order, `Target` defaulting to the name), `Selected` (the machine type's own `Deploy` list, else `Default`, else none) and `Unknown` (selected names the catalogue does not carry). Every key falls back to its default, so the empty base configuration resolves to an empty catalogue.
+- **Description:** Resolves the `VSCodeProfiles` section into the one hashtable `Deploy-VSCodeProfiles` and `Export-VSCodeProfile` share: `Root`, `Extensions` and `UserData` with `{RepoRoot}`, `{User}` and `{AppData}` expanded, `SettingsSync`, `Prune`, `Entries` (catalogue name to `@{ Name; Target; Source }`, in catalogue order, `Target` defaulting to the name), `Selected` (the machine type's own `Deploy` list, else `Default`, else none) and `Unknown` (selected names the catalogue does not carry). Every key falls back to its default, so the empty base configuration resolves to an empty catalogue.
 - **Parameters:** -Configuration, -MachineType, -RepoRoot
 - **Usage:** `(Resolve-VSCodeProfilesConfig).Selected`, `Resolve-VSCodeProfilesConfig -MachineType Work`
 

@@ -10,6 +10,7 @@ Describe "Resolve-VSCodeProfilesConfig" {
 		$config = Resolve-VSCodeProfilesConfig -Configuration @{} -MachineType "PC" -RepoRoot "C:\Repo"
 
 		$config.Root | Should -Be "C:\Repo\VSCode\Profiles"
+		$config.Extensions | Should -Be "C:\Repo\VSCode\Extensions"
 		$config.UserData | Should -Be (Join-Path $env:APPDATA "Code\User")
 		$config.SettingsSync | Should -BeFalse
 		$config.Prune | Should -BeFalse
@@ -17,11 +18,12 @@ Describe "Resolve-VSCodeProfilesConfig" {
 		@($config.Selected).Count | Should -Be 0
 	}
 
-	It "expands the placeholders of Root and UserData" {
-		$section = @{ VSCodeProfiles = @{ Root = "{RepoRoot}\Profiles"; UserData = "{User}\CodeData" } }
+	It "expands the placeholders of Root, Extensions and UserData" {
+		$section = @{ VSCodeProfiles = @{ Root = "{RepoRoot}\Profiles"; Extensions = "{RepoRoot}\Local"; UserData = "{User}\CodeData" } }
 		$config = Resolve-VSCodeProfilesConfig -Configuration $section -MachineType "PC" -RepoRoot "C:\Repo"
 
 		$config.Root | Should -Be "C:\Repo\Profiles"
+		$config.Extensions | Should -Be "C:\Repo\Local"
 		$config.UserData | Should -Be (Join-Path $env:USERPROFILE "CodeData")
 	}
 

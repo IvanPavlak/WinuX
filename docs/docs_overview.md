@@ -187,7 +187,8 @@ Phase 8 (WSL & Symlinks):        Initialize-WSLEnvironment → SymbolicLinkMaker
                                  → Deploy-AiMods (opt-in via BootstrapConfig.Steps.AiMods)
                                  → Deploy-AiMarketplaces (opt-in via BootstrapConfig.Steps.AiMarketplaces)
                                  → Enable-ObsidianCli (opt-in via BootstrapConfig.Steps.ObsidianCli)
-                                 → Deploy-VSCodeProfiles (opt-in via BootstrapConfig.Steps.VSCodeProfiles)
+                                 → Deploy-VSCodeProfiles (opt-in via BootstrapConfig.Steps.VSCodeProfiles;
+                                   links VSCodeProfiles.Extensions first via Install-VSCodeLocalExtensions)
                                  → Configure-WSLSSH (WSL steps config-gated)
 Phase 9 (Finalize):              Lock taskbar (opt-in via BootstrapConfig.Steps.LockedStartLayout)
                                  → Restart-Explorer → Restart-Machine

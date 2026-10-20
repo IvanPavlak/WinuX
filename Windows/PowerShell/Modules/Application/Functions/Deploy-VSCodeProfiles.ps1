@@ -7,7 +7,16 @@ function Deploy-VSCodeProfiles {
 		VS Code profiles live in the repository as one folder per VSCodeProfiles.Catalogue
 		entry under VSCodeProfiles.Root (settings.json, keybindings.json, tasks.json, snippets\
 		and extensions.txt; see Get-VSCodeProfileItems). VSCodeProfiles.Deploy names the
-		entries each machine type deploys. For every selected entry:
+		entries each machine type deploys.
+
+		First, every local extension under VSCodeProfiles.Extensions (an unpackaged extension
+		folder with a package.json, such as a colour theme of your own) is linked into VS Code's
+		extensions folder through Install-VSCodeLocalExtensions - also when no profile is
+		selected. Local extensions are never installed from the Marketplace and never pruned,
+		whether extensions.txt lists them or not: an uninstall through the link would delete
+		the repository copy.
+
+		Then, for every selected entry:
 
 		1. The VS Code profile the entry deploys onto (its Target, the entry name by default)
 		   is located through Get-VSCodeProfileLocation -Register: Default is VS Code's user
@@ -65,6 +74,11 @@ function Deploy-VSCodeProfiles {
 	Write-LogTitle "Deploying VS Code Profiles"
 
 	$config = Resolve-VSCodeProfilesConfig
+
+	$localExtensions = @(Get-VSCodeLocalExtensions -Root $config.Extensions)
+	Install-VSCodeLocalExtensions -Extension $localExtensions
+	$localIds = @($localExtensions | ForEach-Object { $_.Id })
+
 	$selected = if ($Name) { @($Name) } else { @($config.Selected) }
 
 	if ($selected.Count -eq 0) {
@@ -131,6 +145,10 @@ function Deploy-VSCodeProfiles {
 		if (-not $config.SettingsSync) { $syncArguments = @("--do-not-sync") }
 
 		foreach ($extension in $wanted) {
+			if ($localIds -contains $extension.Id) {
+				Write-LogDebug "Extension [$($extension.Id)] is a local extension - linked, not installed"
+				continue
+			}
 			$isInstalled = $installed.Contains($extension.Id)
 			if ($isInstalled -and (-not $extension.Version -or $installed[$extension.Id] -eq $extension.Version)) {
 				Write-LogDebug "Extension [$($extension.Id)] already installed in [$($entry.Target)]"
@@ -161,6 +179,8 @@ function Deploy-VSCodeProfiles {
 		$wantedIds = @($wanted | ForEach-Object { $_.Id })
 		foreach ($id in @($installed.Keys)) {
 			if ($wantedIds -contains $id) { continue }
+			# Never uninstall a linked local extension: VS Code would delete the repository copy.
+			if ($localIds -contains $id) { continue }
 			try {
 				$global:LASTEXITCODE = 0
 				& $Command --uninstall-extension $id @profileArguments *> $null

@@ -805,13 +805,14 @@ VS Code profiles kept in the repository, one folder per catalogue entry, deploye
 | Sub-key | Type | Default (base) | What it controls |
 | ------- | ---- | -------------- | ---------------- |
 | `Root` | string | `{RepoRoot}\VSCode\Profiles` | The profile folders; `{RepoRoot}`, `{User}` and `{AppData}` expand. |
+| `Extensions` | string | `{RepoRoot}\VSCode\Extensions` | Local extensions: one unpackaged extension folder (with a `package.json`) each, such as a colour theme of your own. `Deploy-VSCodeProfiles` links every one into VS Code's extensions folder as `<publisher>.<name>-<version>` through `Install-VSCodeLocalExtensions`; they are never installed from the Marketplace and never pruned. A missing folder links nothing. |
 | `UserData` | string | `{AppData}\Code\User` | VS Code's user data folder; its root is the `Default` profile, other profiles live under `profiles\<location>`. |
 | `SettingsSync` | boolean | `$false` | `$false` installs extensions with `--do-not-sync`, so Settings Sync leaves them alone; `$true` installs them normally. Sync itself is never switched on or off. |
 | `Prune` | boolean | `$false` | `$true` uninstalls extensions `extensions.txt` does not name (`-Prune` does it for one run). |
 | `Catalogue` | ordered array | `@()` (empty) | One single-key hashtable per entry; `Target` is the VS Code profile it deploys onto (defaults to the entry name, `"Default"` is VS Code's built-in profile). |
 | `Deploy` | hashtable | `@{ Default = @() }` | Per machine type, the catalogue entries it deploys; `Default` covers any machine type not listed. |
 
-**Consumer functions:** `Resolve-VSCodeProfilesConfig` (and through it `Deploy-VSCodeProfiles`, `Export-VSCodeProfile`, `Get-VSCodeProfileLocation`)
+**Consumer functions:** `Resolve-VSCodeProfilesConfig` (and through it `Deploy-VSCodeProfiles`, `Export-VSCodeProfile`, `Get-VSCodeProfileLocation`, `Install-VSCodeLocalExtensions`)
 
 **Example:**
 
