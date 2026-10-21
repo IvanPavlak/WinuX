@@ -342,7 +342,7 @@ $startup.StartupProjectPath
 - **Parameters:** -Pattern (required), -StartPath, -MaxUpwardDepth, -MaxDownwardDepth, -SearchTarget, -NameFilter, -SelectFirst, -MenuTitle, -PromptMessage, -SearchMessage, -SuccessMessage, -ErrorMessage, -ReturnFullObject
 - **Usage:** `Find-Item -Pattern "*.sln"`, `Find-Item -Pattern "*.csproj" -NameFilter "Domain"`, `Find-Item -Pattern "*" -SearchTarget "Directory" -NameFilter "Database" -MaxDownwardDepth 3`
 
-Starting from `-StartPath` (the current directory by default), the search first scans downward up to `-MaxDownwardDepth` levels. If no match is found, it walks up to the parent directory and searches again, repeating until a match is found or `-MaxUpwardDepth` parent levels have been traversed. The first level that yields any matches stops the traversal. When exactly one item matches (or `-SelectFirst` is given) it returns immediately; multiple matches trigger an interactive selection menu via `Resolve-Selection`.
+Starting from `-StartPath` (the current directory by default), the search first scans downward up to `-MaxDownwardDepth` levels. If no match is found, it walks up to the parent directory and searches again, repeating until a match is found or `-MaxUpwardDepth` parent levels have been traversed. The first level that yields any matches stops the traversal. When exactly one item matches (or `-SelectFirst` is given) it returns immediately; multiple matches trigger an interactive selection menu via `Resolve-Selection`, and the item returned is the one at the picked menu position, so two files sharing a name in different folders are told apart.
 
 | Parameter           | Description                                                                                                        |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------ |
@@ -597,7 +597,7 @@ Get-Item @filtered
 - **Parameters:** -FunctionName, -Recursive
 - **Usage:** `Get-PowerShellFunctionDependencies -FunctionName "MyFunction"`, `Get-PowerShellFunctionDependencies -FunctionName "MyFunction" -Recursive`
 
-Resolves each discovered command with `Get-Command` and buckets it by source: empty source means a built-in cmdlet, a source matching one of the repository's custom modules (Application, Bootstrap, Git, Helper, System, Workflow) is treated as a Custom dependency, anything else is an external Module dependency, and commands that fail to resolve land in Unknown. Returns a hashtable with `BuiltIn`, `Module`, `Custom`, `Unknown`, and `GlobalVariables` keys; each `Custom` item carries `Command`, `Module`, `Definition` and `ScriptPath`. Returns `$null` (with a warning) when the function cannot be found. Already-processed functions are tracked in a module-scoped list to prevent infinite recursion loops; the list is not reset between calls (only `Create-Executable` resets it), so a repeat call for an already-analysed function returns `$null`.
+Resolves each discovered command with `Get-Command` and buckets it by source: empty source means a built-in cmdlet, a source matching one of the repository's modules (every folder under `Windows\PowerShell\Modules`, read at call time) is treated as a Custom dependency, anything else is an external Module dependency, and commands that fail to resolve land in Unknown. Returns a hashtable with `BuiltIn`, `Module`, `Custom`, `Unknown`, and `GlobalVariables` keys; each `Custom` item carries `Command`, `Module`, `Definition` and `ScriptPath`. Returns `$null` (with a warning) when the function cannot be found. Already-processed functions are tracked in a module-scoped list to prevent infinite recursion loops; every top-level call starts with an empty list, so a repeat call for the same function returns its dependencies again.
 
 | Parameter       | Description                                                                   |
 | --------------- | ----------------------------------------------------------------------------- |
@@ -1191,7 +1191,7 @@ foreach ($tab in $tabs) {
 
 ## [Resolve-ProjectPath](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Resolve-ProjectPath.ps1)
 
-- **Description:** Resolves a project's file paths from the configuration mappings. Looks the project up in `Configuration.ProjectTerminals` (or `Configuration.RepositoryGroups` with `-ForRepository`) and walks the dot-notation reference through `MachineSpecificPaths` to produce the actual path(s). Can return a single named path or the full collection of paths for a project.
+- **Description:** Resolves a project's file paths from the configuration mappings. Looks the project up in `Configuration.ProjectTerminals` (or `Configuration.RepositoryGroups` with `-ForRepository`) and walks the dot-notation reference through `MachineSpecificPaths` to produce the actual path(s). Can return a single named path or the full collection of paths for a project. An unknown project, repository or path key, or a path segment that resolves to nothing, logs an error and returns nothing (an assignment receives `$null`), so a caller looping over several projects or repositories skips that one and carries on with the rest.
 - **Parameters:** -ProjectName, -PathKey, -ForRepository
 - **Usage:** `Resolve-ProjectPath -ProjectName MyProject`, `Resolve-ProjectPath -ProjectName MyProject -PathKey "Api"`, `Resolve-ProjectPath -ProjectName MyRepo -ForRepository`
 
@@ -1217,7 +1217,7 @@ $repo = Resolve-ProjectPath -ProjectName MyRepo -ForRepository
 
 ## [Resolve-ProjectTerminalTab](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Resolve-ProjectTerminalTab.ps1)
 
-- **Description:** Reads one `ProjectTerminals` path entry into the tab it describes. A tab is written in any of six shapes - a path key, the `DEFAULT` and `WSL` keywords, and three hashtable forms - and this is the single reader of all six, shared by [Open-ProjectTerminals](workflow.md#open-projectterminals) and [Run-Project](#run-project) so `op` and `rp` can never disagree about what a project's tabs are. Returns `Key`, `Title` (`<Project>.<Key>`), `Kind` (`Path`, `Default` or `WSL`), `Path` and `Distribution`.
+- **Description:** Reads one `ProjectTerminals` path entry into the tab it describes. A tab is written in any of six shapes - a path key, the `DEFAULT` and `WSL` keywords, and three hashtable forms - and this is the single reader of all six, shared by [Open-ProjectTerminals](workflow.md#open-projectterminals) and [Run-Project](#run-project) so `op` and `rp` can never disagree about what a project's tabs are. Returns `Key`, `Title` (`<Project>.<Key>`), `Kind` (`Path`, `Default` or `WSL`), `Path` and `Distribution`, or `$null` when a path key does not resolve - callers skip that tab, because a `Path` tab with no path would run its command wherever the shell starts.
 - **Parameters:** -ProjectName, -PathEntry
 - **Usage:** `Resolve-ProjectTerminalTab -ProjectName "MyProject" -PathEntry "Api"`, `Resolve-ProjectTerminalTab -ProjectName "MyProject" -PathEntry @{ Key = "WSL"; Path = "/mnt/c/Dev/MyProject" }`
 

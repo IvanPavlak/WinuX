@@ -53,7 +53,10 @@ Read-only checks. None of these change anything.
 Reload-PowerShellProfile
 Test-ConfigurationSchema
 $global:Configuration.WorkspaceTemplateErrors
+$global:Configuration.LocalConfigurationKeys
 ```
+
+A warning that `Configuration.local.psd1` sets deprecated keys lists each with what to do instead; see [Deprecated Keys](../../configuration-reference.md#deprecated-keys). `LocalConfigurationKeys` is the runtime list of keys the local file sets, which the check reads.
 
 If a value reads back as empty, the two usual causes are a parse error in `Configuration.local.psd1` (run `Test-ConfigurationSchema`) and a key placed at the wrong nesting level.
 

@@ -198,7 +198,7 @@ function Find-Item {
 			$MenuTitle = "[Found $($foundItems.Count)]"
 		}
 
-		$itemOptions = $foundItems | ForEach-Object {
+		$itemOptions = @($foundItems | ForEach-Object {
 			$relativePath = $_.FullName.Replace("$StartPath\", "")
 			if ($SearchTarget -eq "Directory") {
 				$relativePath
@@ -206,7 +206,7 @@ function Find-Item {
 			else {
 				"$($_.Name) - $relativePath"
 			}
-		}
+		})
 
 		$selectedOption = Resolve-Selection -OptionList $itemOptions -MenuTitle $MenuTitle -PromptMessage $PromptMessage
 
@@ -215,14 +215,10 @@ function Find-Item {
 			return $null
 		}
 
-		$selectedItem = $null
-		if ($SearchTarget -eq "Directory") {
-			$selectedItem = $foundItems | Where-Object { $_.FullName -like "*$selectedOption" } | Select-Object -First 1
-		}
-		else {
-			$selectedName = ($selectedOption -split ' - ')[0]
-			$selectedItem = $foundItems | Where-Object { $_.Name -eq $selectedName } | Select-Object -First 1
-		}
+		# Map the pick back by its position in the menu. Matching on the file name returned the
+		# first of two files sharing a name, and a wildcard match broke on [ ] in a folder name.
+		$selectedIndex = [Array]::IndexOf($itemOptions, [string]@($selectedOption)[0])
+		$selectedItem = if ($selectedIndex -ge 0) { @($foundItems)[$selectedIndex] } else { $null }
 
 		if ($selectedItem) {
 			Write-LogSuccess "Selected [$($selectedItem.Name)] at [$($selectedItem.FullName)]"

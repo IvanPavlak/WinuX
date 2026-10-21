@@ -86,7 +86,7 @@ the [Configuration Reference](configuration-reference.md).
 | `RunnableProjectMappings`  | Every runnable project and its per-path run commands (ordered - this is the menu) | `Run-Project`           |
 | `VisualStudioSolutions`    | VS solutions (name + path)      | `Open-VisualStudio`     |
 | `VSCodeProjects`           | VS Code projects (name + path)  | `Open-VSCode`           |
-| `DotnetProjectsSearchPath` | .NET project search root (currently read as `PathTemplates.DotnetProjectsSearchPath`, see the reference) | `Determine-DotnetDependencies` |
+| `DotnetProjectsSearchPath` | .NET project search root | `Determine-DotnetDependencies` |
 | `DotnetEFVersion`          | EF Core tools version           | `Install-DotnetEf`      |
 
 ### Workspace Management

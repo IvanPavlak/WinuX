@@ -8,8 +8,10 @@ function Close-BrowserTabsByPattern {
         the specified patterns. Supports Chrome, Edge, and Firefox browsers.
         Uses keyboard navigation (Ctrl+Tab, Ctrl+W) to cycle through and close tabs.
 
-        A window whose own title matches is closed directly. Otherwise its tabs are cycled with
-        keystrokes, which land in whichever window has focus - so the window is brought to the
+        Only tabs are ever closed, never a whole window directly: a browser window's title is the
+        title of its ACTIVE tab, so closing a window whose title matched closed every other tab in
+        it too. Every window's tabs are cycled with keystrokes (closing the last tab of a window
+        still closes that window), which land in whichever window has focus - so the window is brought to the
         foreground and verified (Confirm-WindowForeground) before EVERY keystroke, and the window
         is left alone the moment that fails. Without that check a Ctrl+W meant for the browser
         closed the terminal tab the command was typed in. The active tab's title is read from
@@ -77,28 +79,8 @@ function Close-BrowserTabsByPattern {
 		foreach ($window in $windowArray) {
 			Write-LogDebug "  Processing browser window => [$($window.Title)]"
 
-			# First check if this window's title matches (for Firefox with process isolation where each tab is a separate window)
-			$shouldCloseWindow = $false
-			foreach ($pattern in $TitlePatterns) {
-				if (Test-LogVerbose) {
-					$matchResult = if ($window.Title -match $pattern) { "MATCH" } else { "no match" }
-					Write-LogDebug "Checking pattern [$pattern] against window [$($window.Title)] => $matchResult"
-				}
-				if ($window.Title -match $pattern) {
-					$shouldCloseWindow = $true
-					break
-				}
-			}
-
-			if ($shouldCloseWindow) {
-				Write-LogDebug "   -> Closing window directly => [$($window.Title)]" -Style Step
-				[void](Close-Window -Handle ([IntPtr]$window.Handle))
-				$totalClosedTabs++
-				Start-Sleep -Milliseconds 10
-				continue
-			}
-
-			# If window doesn't match, try tab cycling (for browsers where tabs share the same window)
+			# Tab cycling for every window. A window whose title matched used to be closed whole,
+			# but that title is only the active tab's, so the window's other tabs went with it.
 			$windowHandle = [IntPtr]$window.Handle
 			$checkedTitles = @()
 			$closedTabsInWindow = @()

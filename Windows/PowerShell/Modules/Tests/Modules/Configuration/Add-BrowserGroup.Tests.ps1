@@ -3,6 +3,8 @@
 BeforeAll {
 	$ConfigurationFunctionsPath = Join-Path (Get-RepositoryPath).Modules "Configuration\Functions"
 	. "$ConfigurationFunctionsPath\Find-ConfigurationSection.ps1"
+	. "$ConfigurationFunctionsPath\Get-ConfigurationWriteTarget.ps1"
+	. "$ConfigurationFunctionsPath\Save-ConfigurationFile.ps1"
 	. "$ConfigurationFunctionsPath\ConvertTo-ActionString.ps1"
 	. "$ConfigurationFunctionsPath\Add-BrowserGroup.ps1"
 }
@@ -99,6 +101,44 @@ Describe "Add-BrowserGroup" {
 			Add-BrowserGroup -GroupName "Search" -SimpleUrls @("https://www.bing.com/") -ConfigurationFilePath $testConfig
 
 			Get-Content -Path $testConfig -Raw | Should -Be $before
+		}
+	}
+
+	Context "default target: Configuration.local.psd1" {
+		BeforeEach {
+			$script:ConfigurationPath = $testConfig
+			$script:LocalConfig = Join-Path $psDir "Configuration.local.psd1"
+			$script:BaseBefore = Get-Content -Path $testConfig -Raw
+		}
+
+		AfterEach {
+			$script:ConfigurationPath = $null
+		}
+
+		It "writes into Configuration.local.psd1 and leaves the base file alone" {
+			Add-BrowserGroup -GroupName "DevTools" -SimpleUrls @("https://github.com")
+
+			Get-Content -Path $testConfig -Raw | Should -Be $script:BaseBefore
+			$local = Import-PowerShellDataFile -Path $script:LocalConfig
+			$names = @($local.BrowserGroups | ForEach-Object { @($_.Keys)[0] })
+			# The local array replaces the base one at load, so the base groups come along.
+			$names | Should -Be @("Google", "DevTools")
+		}
+
+		It "appends to the local list when the local file already has one" {
+			Set-Content -Path $script:LocalConfig -Value @('@{', '	BrowserGroups = @(', '		@{ Mine = @("https://example.org") }', '	)', '}')
+
+			Add-BrowserGroup -GroupName "DevTools" -SimpleUrls @("https://github.com")
+
+			$local = Import-PowerShellDataFile -Path $script:LocalConfig
+			@($local.BrowserGroups | ForEach-Object { @($_.Keys)[0] }) | Should -Be @("Mine", "DevTools")
+		}
+
+		It "writes into the base file with -Base" {
+			Add-BrowserGroup -GroupName "DevTools" -SimpleUrls @("https://github.com") -Base
+
+			Get-Content -Path $testConfig -Raw | Should -Match "DevTools"
+			Test-Path $script:LocalConfig | Should -BeFalse
 		}
 	}
 }

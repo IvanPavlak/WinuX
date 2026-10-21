@@ -196,4 +196,64 @@ Describe "Test-ConfigurationSchema" {
 			{ Test-ConfigurationSchema -Configuration $script:TemplateConfig -Strict } | Should -Throw '*WorkspaceActions.Broken*'
 		}
 	}
+
+	Context "deprecated keys" {
+		BeforeEach {
+			$script:DeprecationConfig = @{
+				ValidMachineTypes     = @('PC')
+				HostnameToMachineType = @{ 'PC1' = 'PC' }
+				DefaultMachineType    = 'PC'
+				LaptopChassisTypes    = @('9')
+				BasePaths             = @{ Dev = 'C:\Dev' }
+				PathTemplates         = @{ Root = '{Dev}'; Projects = @{ Self = @{ Root = '{RepoRoot}' } }; SymbolicLinks = @{ } }
+				GitConfig             = @{ UserName = 'ExampleUser'; UserEmail = 'x@y.z'; WingetPackageId = 'Git.Git' }
+				BrowserGroups         = @(@{ Work = @('https://example.com') })
+				RepositoryGroups      = @(@{ Private = @(@{ Name = 'WinuX'; UrlPath = 'Universal.GitHub.Private.WinuX'; LocalPath = 'Projects.Self.Root' }) })
+				DefaultDatabaseProvider = 'PostgreSQL'
+			}
+		}
+
+		It "warns on a deprecated key the local file sets" {
+			$script:DeprecationConfig.LocalConfigurationKeys = @('DefaultDatabaseProvider', 'Universal', 'Universal.WindowsTerminalHome')
+
+			Test-ConfigurationSchema -Configuration $script:DeprecationConfig
+
+			Should -Invoke Write-Warning -Times 1 -Exactly
+			Should -Invoke Write-Warning -Times 1 -Exactly -ParameterFilter {
+				$Message -match 'deprecated' -and $Message -match 'DefaultDatabaseProvider' -and $Message -match 'Universal\.WindowsTerminalHome'
+			}
+		}
+
+		It "stays silent about a deprecated key only the base ships" {
+			# The base keeps every deprecated key until the MAJOR that removes it.
+			$script:DeprecationConfig.LocalConfigurationKeys = @('GitConfig', 'GitConfig.UserName')
+
+			Test-ConfigurationSchema -Configuration $script:DeprecationConfig
+
+			Should -Invoke Write-Warning -Times 0
+		}
+
+		It "never fails -Strict over a deprecated key, which still works" {
+			$script:DeprecationConfig.LocalConfigurationKeys = @('DefaultDatabaseProvider')
+
+			{ Test-ConfigurationSchema -Configuration $script:DeprecationConfig -Strict } | Should -Not -Throw
+			Should -Invoke Write-Warning -Times 1 -Exactly
+		}
+
+		It "reports every configuration key the contract baseline records as deprecated" {
+			# The baseline's Deprecated map is what lets a MAJOR remove a key; a key recorded there
+			# that the schema check does not know would be removed without ever having warned.
+			$baseline = Get-Content -Path (Join-Path (Get-RepositoryPath).Modules "Tests\ContractBaseline.json") -Raw | ConvertFrom-Json
+			# A child of a deprecated section is covered by the section's own warning.
+			$recorded = @($baseline.Deprecated.ConfigurationKeys.PSObject.Properties.Name |
+					Where-Object { $_ -notmatch '^MachinePathMappings\.' })
+			$script:DeprecationConfig.LocalConfigurationKeys = $recorded
+
+			Test-ConfigurationSchema -Configuration $script:DeprecationConfig
+
+			foreach ($key in $recorded) {
+				Should -Invoke Write-Warning -Times 1 -Exactly -ParameterFilter { $Message -match [regex]::Escape($key) }
+			}
+		}
+	}
 }

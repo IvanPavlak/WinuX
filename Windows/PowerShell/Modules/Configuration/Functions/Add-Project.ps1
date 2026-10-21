@@ -1,13 +1,16 @@
 function Add-Project {
 	<#
 	.SYNOPSIS
-		Adds a project to Configuration.psd1.
+		Adds a project to Configuration.local.psd1.
 	.DESCRIPTION
-		Appends a project to the ProjectActions list in Configuration.psd1, and optionally
+		Appends a project to the ProjectActions list in Configuration.local.psd1 (the base
+		Configuration.psd1 with -Base), and optionally
 		adds TerminalTabs, ProjectTerminals and RunnableProjectMappings entries. Each list
 		is the only definition of its side of a project - what Open-Project offers and the
 		order it offers it in comes from ProjectActions alone, so one entry is written per
-		list, never a name in one place and a definition in another.
+		list, never a name in one place and a definition in another. Each list the local file
+		does not have yet is copied in from the base first, because a local array replaces the
+		base one at load; only the lists this call writes are copied.
 	.PARAMETER Name
 		The project name.
 	.PARAMETER Actions
@@ -25,8 +28,11 @@ function Add-Project {
 		If set, adds a RunnableProjectMappings entry so Run-Project offers the project.
 		The commands stay empty: every configured path gets a terminal tab, and you fill
 		in `Commands = @{ <PathKey> = "<command>" }` for the paths that run something.
+	.PARAMETER Base
+		Write into the base Configuration.psd1 instead of Configuration.local.psd1 (engine work).
 	.PARAMETER ConfigurationFilePath
-		Override the Configuration.psd1 path (for testing).
+		Override the configuration file path (for testing). Written as it is, with no section
+		copied in.
 	.PARAMETER BackupRoot
 		Override the backup sink root. Defaults to Backups\Windows in the repository the
 		configuration file belongs to.
@@ -47,18 +53,23 @@ function Add-Project {
 		[string[]]$Paths,
 		[switch]$Runnable,
 
+		[switch]$Base,
+
 		[string]$ConfigurationFilePath,
 
 		[string]$BackupRoot
 	)
 
-	$configPath = if ($ConfigurationFilePath) { $ConfigurationFilePath } else { $script:ConfigurationPath }
-	if (-not $configPath -or -not (Test-Path $configPath)) {
-		Write-LogError "Error: Configuration file not found at '$configPath'!"
-		return
-	}
-
-	$lines = @(Get-Content -Path $configPath)
+	# Configuration.local.psd1 unless -Base or -ConfigurationFilePath says otherwise; a list the
+	# local file lacks is copied in from the base first (see Get-ConfigurationWriteTarget) - only
+	# the lists this call writes, so the local file does not freeze a copy of the others.
+	$sectionsToWrite = @('ProjectActions')
+	if ($Runnable) { $sectionsToWrite += 'RunnableProjectMappings' }
+	if ($BasePath -and $Paths) { $sectionsToWrite += 'ProjectTerminals' }
+	$target = Get-ConfigurationWriteTarget -ConfigurationFilePath $ConfigurationFilePath -Base:$Base -CopySection $sectionsToWrite
+	if (-not $target) { return }
+	$configPath = $target.Path
+	$lines = @($target.Lines)
 	$t = "`t"
 
 	# 1. Add ProjectActions entry - the project's only definition and its menu position
@@ -153,20 +164,8 @@ function Add-Project {
 		}
 	}
 
-	# Configuration.psd1 is a tracked file - keep a timestamped undo in the unified backup sink
-	# of the repository the file belongs to (so a sandboxed config never pollutes the real sink)
-	# before rewriting it. A backup that cannot be taken aborts the write.
-	try {
-		if (-not $BackupRoot) {
-			$BackupRoot = Join-Path -Path (Get-RepositoryPath -StartPath (Split-Path -Path $configPath -Parent)).Repo -ChildPath "Backups\Windows"
-		}
-		Backup-RepositoryItem -Path $configPath -Category "Config" -Key "Configuration" -BackupRoot $BackupRoot | Out-Null
-	}
-	catch {
-		Write-LogError "Could not back up '$configPath'; aborting without changes. $($_.Exception.Message)"
-		return
-	}
-
-	Set-Content -Path $configPath -Value $lines
-	Write-LogSuccess "Project '$Name' added to Configuration.psd1"
+	# A timestamped undo goes to the unified backup sink of the repository the file belongs to
+	# first; a backup that cannot be taken aborts the write.
+	if (-not (Save-ConfigurationFile -Path $configPath -Lines $lines -BackupRoot $BackupRoot)) { return }
+	Write-LogSuccess "Project '$Name' added to $($target.FileName)"
 }

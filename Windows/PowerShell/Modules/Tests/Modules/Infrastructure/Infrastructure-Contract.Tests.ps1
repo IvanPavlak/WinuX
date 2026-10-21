@@ -13,7 +13,8 @@ Describe "Contract" {
 
 		- removes an exported function, a parameter or a configuration key, or makes a parameter
 		  mandatory, unless [Unreleased] in CHANGELOG.md sanctions it: a "### Removed" entry naming
-		  an item deprecated in an earlier release, or a "### Breaking" entry (Test-ContractCompatibility);
+		  an item deprecated in an earlier release, a "### Breaking" entry, or a "### Withdrawn" entry
+		  for an item that was never meant to be shared engine code (Test-ContractCompatibility);
 		- releases a version whose bump does not match its changelog section - a removal outside a
 		  MAJOR, a MAJOR that removes nothing, an addition in a PATCH (Test-ChangelogVersionBumps);
 		- releases without refreshing the baseline (Run-Tests -UpdateContractBaseline).

@@ -8,6 +8,9 @@ function Get-InstalledApps {
 		(both 64-bit and 32-bit) and outputs DisplayName, DisplayVersion, Publisher, InstallDate,
 		UninstallString, Bits and the registry Path of each. Results are written to
 		`installed_apps.txt` on the user's Desktop; an existing file there is cleared first.
+		The local machine's registry is opened in its 64-bit view, so the plain Uninstall key holds
+		the 64-bit applications and the Wow6432Node key the 32-bit ones. When nothing is found, a
+		warning replaces the success message.
 
 	.EXAMPLE
 		Get-InstalledApps
@@ -21,35 +24,44 @@ function Get-InstalledApps {
 		Clear-Content $outputPath
 	}
 
-	foreach ($comp in $Hostname) {
-		$keys = "", "\Wow6432Node"
-		foreach ($key in $keys) {
-			try {
-				$reg = [Microsoft.Win32.RegistryKey]::OpenRemoteBaseKey("LocalMachine", $comp)
-				$apps = $reg.OpenSubKey("SOFTWARE$key\Microsoft\Windows\CurrentVersion\Uninstall").GetSubKeyNames()
-			}
-			catch {
-				continue
-			}
-			foreach ($app in $apps) {
-				$program = $reg.OpenSubKey("SOFTWARE$key\Microsoft\Windows\CurrentVersion\Uninstall\$app")
-				$name = $program.GetValue("DisplayName")
-				if ($name -and $name -match $NameRegex) {
-					$appInfo = [pscustomobject]@{
-						DisplayName     = $name
-						DisplayVersion  = $program.GetValue("DisplayVersion")
-						Publisher       = $program.GetValue("Publisher")
-						InstallDate     = $program.GetValue("InstallDate")
-						UninstallString = $program.GetValue("UninstallString")
-						Bits            = $(if ($key -eq "\Wow6432Node") { "64" } else { "32" })
-						Path            = $program.name
-					}
+	# The 64-bit view, whatever the bitness of this shell: Wow6432Node is then the 32-bit hive.
+	# OpenRemoteBaseKey against this machine's own name needed the Remote Registry service.
+	$reg = [Microsoft.Win32.RegistryKey]::OpenBaseKey("LocalMachine", "Registry64")
+	$exportedCount = 0
 
-					$appInfo | Format-List | Out-String | Add-Content -Path $outputPath
+	$keys = "", "\Wow6432Node"
+	foreach ($key in $keys) {
+		try {
+			$apps = $reg.OpenSubKey("SOFTWARE$key\Microsoft\Windows\CurrentVersion\Uninstall").GetSubKeyNames()
+		}
+		catch {
+			continue
+		}
+		foreach ($app in $apps) {
+			$program = $reg.OpenSubKey("SOFTWARE$key\Microsoft\Windows\CurrentVersion\Uninstall\$app")
+			if (-not $program) { continue }
+			$name = $program.GetValue("DisplayName")
+			if ($name -and $name -match $NameRegex) {
+				$appInfo = [pscustomobject]@{
+					DisplayName     = $name
+					DisplayVersion  = $program.GetValue("DisplayVersion")
+					Publisher       = $program.GetValue("Publisher")
+					InstallDate     = $program.GetValue("InstallDate")
+					UninstallString = $program.GetValue("UninstallString")
+					Bits            = $(if ($key -eq "\Wow6432Node") { "32" } else { "64" })
+					Path            = $program.name
 				}
+
+				$appInfo | Format-List | Out-String | Add-Content -Path $outputPath
+				$exportedCount++
 			}
 		}
 	}
 
-	Write-LogSuccess "Installed apps have been exported to $outputPath"
+	if ($exportedCount -eq 0) {
+		Write-LogWarning "No installed apps were found in the registry - nothing exported to $outputPath"
+		return
+	}
+
+	Write-LogSuccess "$exportedCount installed apps have been exported to $outputPath"
 }

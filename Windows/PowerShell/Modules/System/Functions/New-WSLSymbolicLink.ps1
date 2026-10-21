@@ -7,8 +7,8 @@ function New-WSLSymbolicLink {
 		Creates a symlink at Path pointing to Target inside the given WSL distribution
 		(`ln -s`). The parent directory is created with `mkdir -p` if missing.
 
-		A REAL file already sitting at Path is copied out to the repository's unified
-		backup sink on the Windows side before it is removed, so linking over a shell
+		A REAL file or directory already sitting at Path is copied out to the repository's
+		unified backup sink on the Windows side before it is removed, so linking over a shell
 		profile or an SSH config that only ever existed inside the distro never loses it.
 		Backup-RepositoryItem creates the timestamped folder (the copy itself happens
 		inside the distro with cp -a) and the copy lands in
@@ -18,7 +18,8 @@ function New-WSLSymbolicLink {
 
 		An existing SYMLINK at Path is removed without a backup: it carries no content of
 		its own, so archiving it would only pile up copies of WinuX's own links on every
-		re-run.
+		re-run. When the existing item cannot be removed the link is skipped, because
+		`ln -s` onto a directory that is still there would create the link inside it.
 
 		Every wsl.exe call targets the distribution explicitly (`wsl -d`) - Docker
 		Desktop and podman machines routinely steal the WSL *default*, and a bare
@@ -84,7 +85,9 @@ function New-WSLSymbolicLink {
 		}
 	}
 
-	wsl -d $Distribution test -L $Path -o -f $Path
+	# -e, not -f: a real directory at Path must be backed up and removed too, or `ln -s` would
+	# create the link inside it.
+	wsl -d $Distribution test -L $Path -o -e $Path
 	if ($LASTEXITCODE -eq 0) {
 		wsl -d $Distribution test -L $Path
 		$isLink = ($LASTEXITCODE -eq 0)
@@ -119,12 +122,20 @@ function New-WSLSymbolicLink {
 			Write-LogWarning "Backed up existing item => [$Path] => [$backupDir]"
 		}
 
-		wsl -d $Distribution rm -f $Path
+		# A link is removed with -f alone, so rm never follows it into a linked directory. A real
+		# directory needs -r, and it has been backed up above.
+		if ($isLink) {
+			wsl -d $Distribution rm -f $Path
+		}
+		else {
+			wsl -d $Distribution rm -rf $Path
+		}
 		if ($LASTEXITCODE -eq 0) {
 			Write-LogWarning "Removed existing item => [$Path]"
 		}
 		else {
-			Write-LogError "Failed to remove existing item => [$Path]"
+			Write-LogError "Skipped WSL symlink (failed to remove existing item) => [$Path]"
+			return
 		}
 	}
 

@@ -94,6 +94,21 @@ function Load-PathConfiguration {
 		if (Test-Path $LocalConfigFile) {
 			$localConfig = Import-PowerShellDataFile $LocalConfigFile
 			if ($localConfig -is [hashtable]) {
+				# The keys the local file sets, two levels deep (the depth the contract baseline
+				# tracks), recorded before the merge folds them into the base. A runtime key, never a
+				# setting: Test-ConfigurationSchema warns on the deprecated ones. The base keeps
+				# shipping a deprecated key until the MAJOR that removes it, so only the local file
+				# tells whether a fork still relies on one.
+				$localConfigurationKeys = [System.Collections.Generic.List[string]]::new()
+				foreach ($topKey in @($localConfig.Keys)) {
+					$localConfigurationKeys.Add([string]$topKey)
+					if ($localConfig[$topKey] -is [System.Collections.IDictionary]) {
+						foreach ($childKey in @($localConfig[$topKey].Keys)) {
+							$localConfigurationKeys.Add("$topKey.$childKey")
+						}
+					}
+				}
+
 				# WorkspaceTemplates merge template by template: a local template REPLACES the base
 				# template of the same name instead of deep-merging into it (Merge-Hashtable would
 				# keep the base template's Variables under a local Actions list).
@@ -104,6 +119,7 @@ function Load-PathConfiguration {
 					$localConfig.Remove('WorkspaceTemplates')
 				}
 				Merge-Hashtable -Target $global:Configuration -Overrides $localConfig
+				$global:Configuration['LocalConfigurationKeys'] = @($localConfigurationKeys)
 				if (-not $Quiet) {
 					Write-LogSuccess "Merged local overrides from Configuration.local.psd1"
 				}

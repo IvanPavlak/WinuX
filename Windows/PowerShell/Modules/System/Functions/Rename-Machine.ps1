@@ -92,7 +92,9 @@ function Rename-Machine {
 		if ($isValid) {
 			try {
 				Write-LogSuccess "Renaming machine to [$newName]!"
-				Rename-Computer -NewName $newName -LocalCredential $env:Username -ErrorAction Stop
+				# No -LocalCredential: an elevated local rename needs none, and the user name passed
+				# there as a string only raised a credential prompt.
+				Rename-Computer -NewName $newName -ErrorAction Stop
 				Write-LogSuccess "Success! Restart the computer for the change to take effect!"
 				break
 			}

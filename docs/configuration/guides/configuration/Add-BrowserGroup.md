@@ -5,7 +5,7 @@ Adds a new browser URL group to the `BrowserGroups` array in `Configuration.psd1
 > [!NOTE]
 > Every value on this page belongs in `Configuration.local.psd1`, never in the base `Configuration.psd1`. The base file is upstream's, it ships empty-by-default, and it is deep-merged with your local file at load time by `Load-PathConfiguration`. See [Fork Model](../../../contributing/fork-model.md).
 >
-> Direction: **writes** configuration. This function edits `Configuration.psd1` in place rather than reading it, so the "Where to Put Values" section below describes what it produces, not what you type by hand.
+> Direction: **writes** configuration. This function edits `Configuration.local.psd1` in place rather than reading it (the base `Configuration.psd1` only with `-Base`; a list the local file does not have yet is first copied in whole from the base, because a local array replaces the base one at load), so the "Where to Put Values" section below describes what it produces, not what you type by hand.
 
 ## Configuration Keys
 
@@ -13,7 +13,7 @@ Adds a new browser URL group to the `BrowserGroups` array in `Configuration.psd1
 | --- | ---- | -------------- | ---------------- |
 | [`BrowserGroups`](../../configuration-reference.md#browser-groups) | array of single-key hashtables | array of 12 example groups | The named URL groups `Open-Browser` opens. Groups nest without limit; a leaf is either a bare URL string or `@{ Name; Url }`. Every `Name` must be unique across the whole tree, because a name is a valid selector on its own. |
 
-The writer edits the `BrowserGroups` section of `Configuration.psd1` textually (through `Find-ConfigurationSection`), so it preserves the surrounding comments and formatting. Before every write it copies the file into the unified [backup sink](../../../reference/backups.md) (`Backups/Windows/Config/Configuration/<timestamp>/`) as a one-click undo; a write whose backup cannot be taken is aborted.
+The writer edits the `BrowserGroups` section of `Configuration.local.psd1` textually (through `Find-ConfigurationSection`), so it preserves the surrounding comments and formatting. Before every write it copies the file into the unified [backup sink](../../../reference/backups.md) (`Backups/Windows/Config/Configuration.local/<timestamp>/`, or `Configuration/` for the base file) as a one-click undo; a write whose backup cannot be taken is aborted.
 
 ## Decisions
 

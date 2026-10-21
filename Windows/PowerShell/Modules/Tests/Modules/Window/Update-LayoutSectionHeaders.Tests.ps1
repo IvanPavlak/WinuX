@@ -224,6 +224,72 @@ Describe "Update-LayoutSectionHeaders" {
 			$processMatches[2].Groups[1].Value | Should -Be "RightApp"
 		}
 
+		It "keeps an entry whose Monitor is single-quoted" {
+			# Only a double-quoted Monitor used to be read, and the entry was dropped from the
+			# rewritten array - Visualize-Layouts -Update then deleted it from the file.
+			$content = @'
+@{
+    Layout = @(
+        @{
+            ProcessName = "App1"
+            DesktopNumber = 1
+            Monitor = 'Primary'
+        }
+        @{
+            ProcessName = "App2"
+            DesktopNumber = 1
+            Monitor = "Primary"
+        }
+    )
+}
+'@
+			$result = Update-LayoutSectionHeaders -Content $content -Config @{}
+
+			$result | Should -Match 'App1'
+			$result | Should -Match 'App2'
+			$result | Should -Match 'VIRTUAL DESKTOP 1'
+		}
+
+		It "reads an entry written on one line as an entry of its own" {
+			$content = @'
+@{
+    Layout = @(
+        @{ ProcessName = "App1"; DesktopNumber = 2; Monitor = "Primary" }
+        @{ ProcessName = "App2"; DesktopNumber = 1; Monitor = "Primary" }
+    )
+}
+'@
+			$result = Update-LayoutSectionHeaders -Content $content -Config @{}
+
+			$result | Should -Match 'App1'
+			$result | Should -Match 'App2'
+			$result.IndexOf('App2') | Should -BeLessThan $result.IndexOf('App1')
+		}
+
+		It "returns the content unchanged when an entry has no readable DesktopNumber" {
+			Mock Write-LogWarning { } -ModuleName Window
+			$content = @'
+@{
+    Layout = @(
+        @{
+            ProcessName = "App1"
+            DesktopNumber = 1
+            Monitor = "Primary"
+        }
+        @{
+            ProcessName = "App2"
+            DesktopNumber = $desktop
+            Monitor = "Primary"
+        }
+    )
+}
+'@
+			$result = Update-LayoutSectionHeaders -Content $content -Config @{}
+
+			$result | Should -Be $content
+			Should -Invoke Write-LogWarning -Times 1 -Exactly -ModuleName Window
+		}
+
 		It "Should return original content when Layout array cannot be parsed" {
 			$content = "Simple text without Layout array structure"
 			$config = @{}

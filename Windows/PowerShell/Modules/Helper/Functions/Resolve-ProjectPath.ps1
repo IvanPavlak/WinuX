@@ -10,7 +10,8 @@ function Resolve-ProjectPath {
 		instead, resolves LocalPath through MachineSpecificPaths and UrlPath through
 		Universal.GitHub, and returns a [PSCustomObject] with RepositoryUrl (Universal.GitHub.Base +
 		the resolved UrlPath) and LocalPath. An unknown name, an unknown -PathKey, or a null path
-		segment logs an error and stops.
+		segment logs an error and returns nothing (an assignment receives $null), so a caller
+		looping over several projects or repositories skips this one and carries on with the rest.
 
 	.PARAMETER ProjectName
 		Project name (ProjectTerminals Name) or, with -ForRepository, repository name
@@ -60,7 +61,7 @@ function Resolve-ProjectPath {
 
 		if ($null -eq $mapping) {
 			Write-LogError "Error: Repository [$ProjectName] not found in configuration!"
-			break
+			return
 		}
 
 		$currentLocal = $MachineSpecificPaths
@@ -91,11 +92,11 @@ function Resolve-ProjectPath {
 
 		if ($null -eq $currentLocal) {
 			Write-LogError "Error: Resolved LocalPath for repository [$ProjectName] is null!"
-			break
+			return
 		}
 		if ($null -eq $currentUrl) {
 			Write-LogError "Error: Resolved UrlPath for repository [$ProjectName] is null!"
-			break
+			return
 		}
 
 		$fullUrl = $githubBase + $currentUrl
@@ -110,7 +111,7 @@ function Resolve-ProjectPath {
 		$mapping = $projectTerminals | Where-Object { $_.Name -eq $ProjectName }
 		if (-not $mapping) {
 			Write-LogError "Error: Project [$ProjectName] not found in configuration!" -BlankLineAfter
-			break
+			return
 		}
 
 		$current = $MachineSpecificPaths
@@ -126,13 +127,13 @@ function Resolve-ProjectPath {
 
 		if ($null -eq $baseObject) {
 			Write-LogError "Error: Resolved BasePath for project [$ProjectName] is null!" -BlankLineAfter
-			break
+			return
 		}
 
 		if ($PathKey) {
 			if ($mapping.Paths -notcontains $PathKey) {
 				Write-LogError "Error: PathKey [$PathKey] not found for project [$ProjectName] in configuration!." -BlankLineAfter
-				break
+				return
 			}
 			return $baseObject.$PathKey
 		}

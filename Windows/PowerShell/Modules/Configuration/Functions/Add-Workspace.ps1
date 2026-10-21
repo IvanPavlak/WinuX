@@ -1,9 +1,11 @@
 function Add-Workspace {
 	<#
 	.SYNOPSIS
-		Adds a workspace to Configuration.psd1.
+		Adds a workspace to Configuration.local.psd1.
 	.DESCRIPTION
-		Appends a workspace to the WorkspaceActions list in Configuration.psd1. That list
+		Appends a workspace to the WorkspaceActions list in Configuration.local.psd1 (the base
+		Configuration.psd1 with -Base). When the local file has no WorkspaceActions yet, the base
+		list is copied in first, because the local array replaces the base one at load. That list
 		is the only definition of a workspace: it is both what Open-Workspace offers and
 		the order it offers them in, so one entry is written, never two. The entry is either
 		an action list (-Actions) or a one-line templated entry (-Template) that stamps out a
@@ -18,8 +20,11 @@ function Add-Workspace {
 		The name of a WorkspaceTemplates entry. Writes the one-line templated entry
 		@{ <Name> = @{ Template = "<Template>" } } instead of an action list; add Variables,
 		Overrides or Add to it by hand. Cannot be combined with -Actions.
+	.PARAMETER Base
+		Write into the base Configuration.psd1 instead of Configuration.local.psd1 (engine work).
 	.PARAMETER ConfigurationFilePath
-		Override the Configuration.psd1 path (for testing).
+		Override the configuration file path (for testing). Written as it is, with no section
+		copied in.
 	.PARAMETER BackupRoot
 		Override the backup sink root. Defaults to Backups\Windows in the repository the
 		configuration file belongs to.
@@ -44,18 +49,19 @@ function Add-Workspace {
 		[Parameter(Mandatory, ParameterSetName = 'Template')]
 		[string]$Template,
 
+		[switch]$Base,
+
 		[string]$ConfigurationFilePath,
 
 		[string]$BackupRoot
 	)
 
-	$configPath = if ($ConfigurationFilePath) { $ConfigurationFilePath } else { $script:ConfigurationPath }
-	if (-not $configPath -or -not (Test-Path $configPath)) {
-		Write-LogError "Error: Configuration file not found at '$configPath'!"
-		return
-	}
-
-	$lines = @(Get-Content -Path $configPath)
+	# Configuration.local.psd1 unless -Base or -ConfigurationFilePath says otherwise; a section
+	# the local file lacks is copied in from the base first (see Get-ConfigurationWriteTarget).
+	$target = Get-ConfigurationWriteTarget -ConfigurationFilePath $ConfigurationFilePath -Base:$Base -CopySection 'WorkspaceActions'
+	if (-not $target) { return }
+	$configPath = $target.Path
+	$lines = @($target.Lines)
 	$t = "`t"
 
 	$waSection = Find-ConfigurationSection -Lines $lines -SectionName "WorkspaceActions"
@@ -103,20 +109,8 @@ function Add-Workspace {
 		$newLines.Insert($insertIndex + $i, $actionLines[$i])
 	}
 
-	# Configuration.psd1 is a tracked file - keep a timestamped undo in the unified backup sink
-	# of the repository the file belongs to (so a sandboxed config never pollutes the real sink)
-	# before rewriting it. A backup that cannot be taken aborts the write.
-	try {
-		if (-not $BackupRoot) {
-			$BackupRoot = Join-Path -Path (Get-RepositoryPath -StartPath (Split-Path -Path $configPath -Parent)).Repo -ChildPath "Backups\Windows"
-		}
-		Backup-RepositoryItem -Path $configPath -Category "Config" -Key "Configuration" -BackupRoot $BackupRoot | Out-Null
-	}
-	catch {
-		Write-LogError "Could not back up '$configPath'; aborting without changes. $($_.Exception.Message)"
-		return
-	}
-
-	Set-Content -Path $configPath -Value $newLines
-	Write-LogSuccess "Workspace '$Name' added to Configuration.psd1"
+	# A timestamped undo goes to the unified backup sink of the repository the file belongs to
+	# first; a backup that cannot be taken aborts the write.
+	if (-not (Save-ConfigurationFile -Path $configPath -Lines $newLines -BackupRoot $BackupRoot)) { return }
+	Write-LogSuccess "Workspace '$Name' added to $($target.FileName)"
 }

@@ -9,16 +9,13 @@ Scans a directory tree for .NET projects and lists their dependencies.
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`DotnetProjectsSearchPath`](../../configuration-reference.md#more-sections-quick-reference) | string (placeholder path) | `"{Dev}"` | The root `Determine-DotnetDependencies` scans for .NET projects. |
-
-> [!WARNING]
-> The function currently reads `$global:MachineSpecificPaths.DotnetProjectsSearchPath`, and `MachineSpecificPaths` holds only the expanded `PathTemplates` (plus `MachineOverrides`). The top-level `DotnetProjectsSearchPath` key above is therefore not read: without a `DotnetProjectsSearchPath` entry under `PathTemplates`, the scan starts at `$env:USERPROFILE\Development`. Until that is fixed, put the value under `PathTemplates` (placeholders expand there), or pass `-SearchPath`.
+| [`DotnetProjectsSearchPath`](../../configuration-reference.md#more-sections-quick-reference) | string (placeholder path) | `"{Dev}"` | The root `Determine-DotnetDependencies` scans for .NET projects. Placeholders are expanded for the current machine type from `BasePaths`; an empty value, or one whose placeholders cannot be expanded, falls back to `$env:USERPROFILE\Development`. A `DotnetProjectsSearchPath` placed under `PathTemplates` instead still works and wins. |
 
 ## Decisions
 
 1. Where should the .NET dependency scan start?
     - Options: A placeholder or absolute path. `{Dev}` is usually right.
-    - Default: `{Dev}` in the base file, but see the warning above - in practice `$env:USERPROFILE\Development`.
+    - Default: `{Dev}`, the development root of the current machine type.
     - More detail: [`DotnetProjectsSearchPath`](../../configuration-reference.md#more-sections-quick-reference)
 
 ## Where to Put Values

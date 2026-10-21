@@ -41,7 +41,6 @@
 		'Save-WorkspaceState',
 		'Start-Containers',
 		'Test-TerminalTabsAlreadyOpen',
-		'Training-Backup',
 		'Write-WorkspaceBenchmark'
 	)
 }

@@ -1,12 +1,12 @@
 ---
-description: "Add a symbolic link entry to Configuration.psd1 for syncing app config files."
+description: "Add a symbolic link entry to Configuration.local.psd1 for syncing app config files."
 argument-hint: "App name and config file paths (e.g., 'LazyGit config from AppData to WinuX')"
 agent: "agent"
 ---
 
 # Add Symbolic Link
 
-Add a symbolic link entry to Configuration.psd1 using `Add-SymbolicLink`.
+Add a symbolic link entry to Configuration.local.psd1 using `Add-SymbolicLink` (it writes the local override by default; `-Base` writes the base Configuration.psd1).
 
 ## Steps
 

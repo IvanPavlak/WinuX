@@ -33,18 +33,22 @@ Describe "Close-BrowserTabsByPattern" {
 	}
 
 	Context "When browser windows exist with matching titles" {
-		It "Should identify windows matching the title pattern" {
+		It "never closes a whole window whose title matches" {
+			# The title is the active tab's: closing the window took every other tab with it.
 			$mockWindow = [PSCustomObject]@{
 				Title     = "Swagger UI - Chrome"
 				Handle    = [IntPtr]::new(12345)
 				ProcessId = 100
 			}
 			Mock Get-WindowHandle { $mockWindow }
-
-			# The direct close goes through the Window module's Close-Window seam, so it is mocked
-			# here and asserted on rather than posting a real WM_CLOSE.
+			Mock Clear-WindowCache { }
 			Mock Close-Window { 1 }
+			Mock Confirm-WindowForeground { $false }
+
 			{ Close-BrowserTabsByPattern -ProcessName "chrome" -TitlePatterns @("(?i)swagger") } | Should -Not -Throw
+
+			Should -Invoke Close-Window -Times 0
+			Should -Invoke Confirm-WindowForeground -Times 1 -Exactly -ParameterFilter { $WindowHandle -eq [IntPtr]12345 }
 		}
 	}
 
@@ -68,8 +72,9 @@ Describe "Close-BrowserTabsByPattern" {
 
 			$result = Close-BrowserTabsByPattern -ProcessName "firefox" -TitlePatterns @("(?i)problem loading page", "(?i)MyProject")
 
-			$result | Should -Be 1
-			Should -Invoke Close-Window -Times 1 -Exactly -ParameterFilter { $Handle -contains [IntPtr]1 }
+			$result | Should -Be 0
+			Should -Invoke Close-Window -Times 0
+			Should -Invoke Confirm-WindowForeground -Times 1 -Exactly -ParameterFilter { $WindowHandle -eq [IntPtr]1 }
 			Should -Invoke Confirm-WindowForeground -Times 1 -Exactly -ParameterFilter { $WindowHandle -eq [IntPtr]2 }
 			Should -Invoke Wait-Until -Times 0
 		}

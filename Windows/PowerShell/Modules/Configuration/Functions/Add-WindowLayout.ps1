@@ -9,14 +9,19 @@ function Add-WindowLayout {
 	.PARAMETER WorkspaceName
 		The workspace name for the layout.
 	.PARAMETER MachineType
-		The machine type(s) to create layouts for. When omitted, reads a MachineType key from the
-		loaded configuration and falls back to "Test"; the shipped configuration defines no such
-		key (the detected type is $global:MachineType), so pass it explicitly for this machine.
+		The machine type(s) to create layouts for. When omitted, uses this machine's detected type
+		($global:MachineType) and falls back to "Test" only when no type has been detected.
 	.PARAMETER Simple
-		If set, adds the workspace to SimpleLayoutWorkspaces in Configuration.psd1
-		(layout-only, no window positioning).
+		If set, adds the workspace to SimpleLayoutWorkspaces in Configuration.local.psd1 (the base
+		Configuration.psd1 with -Base), layout-only with no window positioning. When the local
+		file has no SimpleLayoutWorkspaces yet, the base list is copied in first, because the
+		local array replaces the base one at load.
+	.PARAMETER Base
+		With -Simple, write into the base Configuration.psd1 instead of Configuration.local.psd1
+		(engine work).
 	.PARAMETER ConfigurationFilePath
-		Override the Configuration.psd1 path (for testing).
+		Override the configuration file path (for testing). Written as it is, with no section
+		copied in.
 	.PARAMETER LayoutsDirectory
 		Override the Layouts directory path (for testing).
 	.PARAMETER BackupRoot
@@ -36,6 +41,8 @@ function Add-WindowLayout {
 
 		[switch]$Simple,
 
+		[switch]$Base,
+
 		[string]$ConfigurationFilePath,
 		[string]$LayoutsDirectory,
 		[string]$BackupRoot
@@ -48,13 +55,7 @@ function Add-WindowLayout {
 	}
 
 	if (-not $MachineType) {
-		$configuredMachineType = Get-ConfigSetting -Path 'MachineType'
-		if ($configuredMachineType) {
-			$MachineType = @($configuredMachineType)
-		}
-		else {
-			$MachineType = @("Test")
-		}
+		$MachineType = if ($global:MachineType) { @([string]$global:MachineType) } else { @("Test") }
 	}
 
 	$template = @'
@@ -118,13 +119,15 @@ VIRTUAL DESKTOP 1 - Monitor: Primary - Layout: One
 
 	# Optionally add to SimpleLayoutWorkspaces
 	if ($Simple) {
-		$configPath = if ($ConfigurationFilePath) { $ConfigurationFilePath } else { $script:ConfigurationPath }
-		if (-not $configPath -or -not (Test-Path $configPath)) {
+		# Configuration.local.psd1 unless -Base or -ConfigurationFilePath says otherwise; the list
+		# is copied in from the base first when the local file lacks it.
+		$target = Get-ConfigurationWriteTarget -ConfigurationFilePath $ConfigurationFilePath -Base:$Base -CopySection 'SimpleLayoutWorkspaces'
+		if (-not $target) {
 			Write-LogWarning "Warning: Configuration file not found, skipping SimpleLayoutWorkspaces update"
 			return
 		}
-
-		$lines = @(Get-Content -Path $configPath)
+		$configPath = $target.Path
+		$lines = @($target.Lines)
 		$section = Find-ConfigurationSection -Lines $lines -SectionName "SimpleLayoutWorkspaces"
 
 		if ($section) {
@@ -142,22 +145,10 @@ VIRTUAL DESKTOP 1 - Monitor: Primary - Layout: One
 				$lines = @($newLines)
 			}
 
-			# Configuration.psd1 is a tracked file - keep a timestamped undo in the unified
-			# backup sink of the repository the file belongs to before rewriting it. A backup
-			# that cannot be taken aborts the write.
-			try {
-				if (-not $BackupRoot) {
-					$BackupRoot = Join-Path -Path (Get-RepositoryPath -StartPath (Split-Path -Path $configPath -Parent)).Repo -ChildPath "Backups\Windows"
-				}
-				Backup-RepositoryItem -Path $configPath -Category "Config" -Key "Configuration" -BackupRoot $BackupRoot | Out-Null
-			}
-			catch {
-				Write-LogError "Could not back up '$configPath'; aborting without changes. $($_.Exception.Message)"
-				return
-			}
-
-			Set-Content -Path $configPath -Value $lines
-			Write-LogSuccess "'$WorkspaceName' added to SimpleLayoutWorkspaces"
+			# A timestamped undo goes to the unified backup sink of the repository the file
+			# belongs to first; a backup that cannot be taken aborts the write.
+			if (-not (Save-ConfigurationFile -Path $configPath -Lines $lines -BackupRoot $BackupRoot)) { return }
+			Write-LogSuccess "'$WorkspaceName' added to SimpleLayoutWorkspaces in $($target.FileName)"
 		}
 	}
 }

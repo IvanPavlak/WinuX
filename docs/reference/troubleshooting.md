@@ -957,14 +957,6 @@ A variant cannot clear a desktop and monitor without replacing it; leave the pai
 
 **Solution:** Anchor every VS Code title on the folder name as VS Code ends its caption - `<folder> - Visual Studio Code$` (`MyProject - Visual Studio Code$`, `MyProjectApi - Visual Studio Code$`) - so each pattern matches exactly one window. Several entries in one zone stack in file order, last on top. A single untitled `Code` entry is still the simplest choice when all VS Code windows belong in one zone. See [Several Windows of One Process](../configuration/guides/window/configure-window-layout.md#several-windows-of-one-process).
 
-### Add-WindowLayout Wrote A Test Layout On A Different Machine Type
-
-**Problem:** `Add-WindowLayout` without `-MachineType` created `<Workspace>_Test.psd1` although the shell runs on another machine type.
-
-**Why it happens:** The default machine type is read from a configuration key that does not exist, so it always falls back to `Test`; the detected type lives in `$global:MachineType`, which the function does not consult.
-
-**Solution:** Pass `-MachineType` explicitly (`Add-WindowLayout MyWorkspace -MachineType $global:MachineType`), or rename the generated file.
-
 ## fastfetch Logo Issues
 
 Setting `Universal.FastFetchImageLogo` makes fastfetch render that image instead of the text logo,
@@ -1375,7 +1367,7 @@ exit
 
 - **A function, parameter or key was removed or renamed** - keep the old shape working instead: a wrapper function that warns once per session, an `[Alias('OldName')]` on a renamed parameter, or the key still read with the new one taking precedence. Add a `### Deprecated` entry with the migration and a record in the baseline's `Deprecated` map with the version it ships in. The removal comes in the next MAJOR, as a `### Removed` entry naming the item in backticks (`` `Name` ``, `` `Function -Parameter` `` or `` `Top.Child` ``).
 - **A parameter is mandatory now** - give it a default and keep it optional. A mandatory addition is an immediate break and needs a `### Breaking` entry naming it.
-- **A version bump disagrees with its sections** - a release with `### Removed` or `### Breaking` is a MAJOR; a MAJOR needs one of them; `### Added`, `### Changed` or `### Deprecated` makes it at least a MINOR, and a PATCH holds only `### Fixed` and `### Security`. Fix the version or move the entries.
+- **A version bump disagrees with its sections** - a release with `### Removed` or `### Breaking` is a MAJOR; a MAJOR needs one of them; `### Added`, `### Changed`, `### Deprecated` or `### Withdrawn` makes it at least a MINOR, and a PATCH holds only `### Fixed` and `### Security`. Fix the version or move the entries.
 - **The baseline is not at the newest release** - the change that cut the release forgot the snapshot: run `Run-Tests -UpdateContractBaseline` and commit `ContractBaseline.json` with the release.
 
 ## Debugging Commands

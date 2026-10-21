@@ -194,6 +194,19 @@ Describe "Test-ContractCompatibility" {
 
 		@(Test-ContractCompatibility -Baseline $script:baseline -Current $script:current -Unreleased @{ Breaking = '`Set-Thing` and `Get-Thing -Limit`' }) | Should -BeNullOrEmpty
 	}
+
+	It "accepts removing a never-deprecated function and key that [Unreleased] lists under Withdrawn" {
+		$script:current.Functions.Remove('Set-Thing')
+		$script:current.ConfigurationKeys = @($script:current.ConfigurationKeys | Where-Object { $_ -ne 'GitConfig.UserEmail' })
+
+		@(Test-ContractCompatibility -Baseline $script:baseline -Current $script:current -Unreleased @{ Withdrawn = '- `Set-Thing` and `GitConfig.UserEmail` were personal.' }) | Should -BeNullOrEmpty
+	}
+
+	It "still reports a removal that Withdrawn does not name" {
+		$script:current.Functions.Remove('Set-Thing')
+
+		@(Test-ContractCompatibility -Baseline $script:baseline -Current $script:current -Unreleased @{ Withdrawn = '`Get-Thing`' }).Count | Should -Be 1
+	}
 }
 
 Describe "New-ContractBaseline" {
@@ -270,6 +283,15 @@ Describe "Test-ChangelogVersionBumps" {
 			$violations.Count | Should -Be 1 -Because "a [$kind] section is at least a MINOR"
 			$violations[0] | Should -Match 'at least a MINOR'
 		}
+	}
+
+	It "accepts a Withdrawn section in a MINOR and rejects it in a PATCH" {
+		# Withdrawn removes an item that was never shared engine code: at least a MINOR, never a MAJOR.
+		@(Test-ChangelogVersionBumps -Releases @((New-Release '1.1.0' 'Withdrawn', 'Changed'), (New-Release '1.0.0' 'Changed'))) | Should -BeNullOrEmpty
+
+		$violations = @(Test-ChangelogVersionBumps -Releases @((New-Release '1.0.1' 'Withdrawn'), (New-Release '1.0.0' 'Changed')))
+		$violations.Count | Should -Be 1
+		$violations[0] | Should -Match 'at least a MINOR'
 	}
 
 	It "rejects a version that does not reset the lower parts, and one that does not go up" {

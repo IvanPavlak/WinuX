@@ -112,7 +112,7 @@ Describe "Invoke-Onefetch" {
 
 			Invoke-Onefetch -Path $script:Repo
 
-			$script:Captured | Should -Be @("--no-art", "--no-merges")
+			$script:Captured | Should -Be @("--no-art", "--no-merges", $script:Repo)
 		}
 
 		It "lets an explicit -Arguments beat the configured ones for one call" {
@@ -122,16 +122,37 @@ Describe "Invoke-Onefetch" {
 
 			Invoke-Onefetch -Path $script:Repo -Arguments "--no-merges"
 
-			$script:Captured | Should -Be @("--no-merges")
+			$script:Captured | Should -Be @("--no-merges", $script:Repo)
 		}
 
-		It "passes nothing when nothing is configured" {
+		It "passes only the path when nothing is configured" {
 			$script:Captured = "not set"
 			Mock onefetch { $script:Captured = $args }
 
 			Invoke-Onefetch -Path $script:Repo
 
-			$script:Captured.Count | Should -Be 0
+			@($script:Captured) | Should -Be @($script:Repo)
+		}
+
+		It "reports on -Path rather than the current location" {
+			# The path used to be tested and then dropped, so onefetch always reported on $PWD.
+			$script:Captured = $null
+			Mock onefetch { $script:Captured = $args }
+			$nested = Join-Path $script:Repo "src"
+			New-Item -ItemType Directory -Path $nested -Force | Out-Null
+
+			Invoke-Onefetch -Path $nested
+
+			@($script:Captured)[-1] | Should -Be $nested
+		}
+
+		It "hands -Path to onefetch when measuring too" {
+			$script:Captured = $null
+			Mock onefetch { $script:Captured = $args; "row" }
+
+			Invoke-Onefetch -Path $script:Repo -Measure | Out-Null
+
+			@($script:Captured)[-1] | Should -Be $script:Repo
 		}
 	}
 

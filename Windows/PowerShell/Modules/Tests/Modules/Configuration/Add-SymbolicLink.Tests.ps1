@@ -3,6 +3,8 @@
 BeforeAll {
 	$ConfigurationFunctionsPath = Join-Path (Get-RepositoryPath).Modules "Configuration\Functions"
 	. "$ConfigurationFunctionsPath\Find-ConfigurationSection.ps1"
+	. "$ConfigurationFunctionsPath\Get-ConfigurationWriteTarget.ps1"
+	. "$ConfigurationFunctionsPath\Save-ConfigurationFile.ps1"
 	. "$ConfigurationFunctionsPath\Add-SymbolicLink.ps1"
 }
 
@@ -99,6 +101,31 @@ Describe "Add-SymbolicLink" {
 			Add-SymbolicLink -Name "MyApp" -Path "{User}\x" -Target "{RepoRoot}\x" -ConfigurationFilePath $testConfig
 
 			Get-Content -Path $testConfig -Raw | Should -Be $before
+		}
+	}
+
+	Context "default target: Configuration.local.psd1" {
+		BeforeEach {
+			$script:ConfigurationPath = $testConfig
+			$script:LocalConfig = Join-Path $psDir "Configuration.local.psd1"
+			$script:BaseBefore = Get-Content -Path $testConfig -Raw
+		}
+
+		AfterEach {
+			$script:ConfigurationPath = $null
+		}
+
+		It "adds the link to PathTemplates.SymbolicLinks in Configuration.local.psd1 without copying the base links" {
+			# SymbolicLinks deep-merges, so the base links stay in the base.
+			Set-Content -Path $script:LocalConfig -Value @('@{', '	PathTemplates = @{', '		ObsidianDirectory = "{Dev}\Vault"', '	}', '}')
+
+			Add-SymbolicLink -Name "MyApp" -Path "{AppData}\MyApp\config.json" -Target "{RepoRoot}\MyApp\config.json"
+
+			Get-Content -Path $testConfig -Raw | Should -Be $script:BaseBefore
+			$local = Import-PowerShellDataFile -Path $script:LocalConfig
+			$local.PathTemplates.ObsidianDirectory | Should -Be "{Dev}\Vault"
+			$local.PathTemplates.SymbolicLinks.MyApp.Target | Should -Be "{RepoRoot}\MyApp\config.json"
+			$local.PathTemplates.SymbolicLinks.ContainsKey("Git") | Should -BeFalse
 		}
 	}
 }

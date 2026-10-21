@@ -3,6 +3,8 @@
 BeforeAll {
 	$ConfigurationFunctionsPath = Join-Path (Get-RepositoryPath).Modules "Configuration\Functions"
 	. "$ConfigurationFunctionsPath\Find-ConfigurationSection.ps1"
+	. "$ConfigurationFunctionsPath\Get-ConfigurationWriteTarget.ps1"
+	. "$ConfigurationFunctionsPath\Save-ConfigurationFile.ps1"
 	. "$ConfigurationFunctionsPath\ConvertTo-ActionString.ps1"
 	. "$ConfigurationFunctionsPath\Add-Project.ps1"
 	. (Join-Path (Get-RepositoryPath).Modules "Helper\Functions\Get-OrderedNames.ps1")
@@ -150,6 +152,30 @@ Describe "Add-Project" {
 			Add-Project -Name "NewApp" -ConfigurationFilePath $testConfig
 
 			Get-Content -Path $testConfig -Raw | Should -Be $before
+		}
+	}
+
+	Context "default target: Configuration.local.psd1" {
+		BeforeEach {
+			$script:ConfigurationPath = $testConfig
+			$script:LocalConfig = Join-Path $psDir "Configuration.local.psd1"
+			$script:BaseBefore = Get-Content -Path $testConfig -Raw
+		}
+
+		AfterEach {
+			$script:ConfigurationPath = $null
+		}
+
+		It "copies in only the lists the call writes" {
+			# A copied list freezes the base entries in the local file, so a list the call does not
+			# write is left to the base.
+			Add-Project -Name "NewApp" -Runnable
+
+			Get-Content -Path $testConfig -Raw | Should -Be $script:BaseBefore
+			$local = Import-PowerShellDataFile -Path $script:LocalConfig
+			@($local.ProjectActions | ForEach-Object { @($_.Keys)[0] }) | Should -Be @("Existing", "NewApp")
+			@($local.RunnableProjectMappings.Name) | Should -Be @("Existing", "NewApp")
+			$local.ContainsKey("ProjectTerminals") | Should -BeFalse
 		}
 	}
 }

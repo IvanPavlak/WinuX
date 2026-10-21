@@ -5,7 +5,8 @@ function Update-DirectoryNames {
 
 	.DESCRIPTION
 		Scans directories in a given path for names containing a date suffix (YYYY_MM_DD).
-		Replaces the date with today's date in the format YYYY_MM_DD.
+		Replaces the date with today's date in the format YYYY_MM_DD, keeping everything before
+		it. A name that is only a date (2025_01_01) becomes today's date.
 
 	.PARAMETER Path
 		Root directory to scan. Defaults to the current location.
@@ -45,12 +46,16 @@ function Update-DirectoryNames {
 			$isValidDateFormat =
 			$year -match '^\d{4}$' -and
 			$month -match '^\d{2}$' -and
-			$day -match '^\d{2}$' -and
-			$day -ne $currentDate
+			$day -match '^\d{2}$'
 
 			if ($isValidDateFormat) {
-				$nonDateSegments = $parts[0..$([Math]::Max(0, $nonDateParts - 1))]
-				$newName = (($nonDateSegments) -join "_") + "_" + $currentDate
+				# An already-current date is caught below by comparing the whole name.
+				$newName = if ($nonDateParts -eq 0) {
+					$currentDate
+				}
+				else {
+					($parts[0..($nonDateParts - 1)] -join "_") + "_" + $currentDate
+				}
 
 				if ($newName -ne $directory.Name) {
 					try {

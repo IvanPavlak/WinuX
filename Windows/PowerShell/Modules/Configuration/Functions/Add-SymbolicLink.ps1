@@ -1,9 +1,12 @@
 function Add-SymbolicLink {
 	<#
 	.SYNOPSIS
-		Adds a symbolic link entry to Configuration.psd1.
+		Adds a symbolic link entry to Configuration.local.psd1.
 	.DESCRIPTION
-		Creates a new SymbolicLinks entry with Path and Target.
+		Creates a new PathTemplates.SymbolicLinks entry with Path and Target in
+		Configuration.local.psd1 (the base Configuration.psd1 with -Base). SymbolicLinks is a
+		hashtable and deep-merges, so a local file without one only gains an empty block for the
+		new entry; the base links stay.
 		Supports both simple (single link) and nested (multiple files) entries.
 	.PARAMETER Name
 		Name for the symbolic link entry (typically the app name).
@@ -13,8 +16,11 @@ function Add-SymbolicLink {
 		The actual file path (target of the link). Use placeholders.
 	.PARAMETER Links
 		For nested entries: array of hashtables with Name, Path, and Target keys.
+	.PARAMETER Base
+		Write into the base Configuration.psd1 instead of Configuration.local.psd1 (engine work).
 	.PARAMETER ConfigurationFilePath
-		Override the Configuration.psd1 path (for testing).
+		Override the configuration file path (for testing). Written as it is, with no section
+		copied in.
 	.PARAMETER BackupRoot
 		Override the backup sink root. Defaults to Backups\Windows in the repository the
 		configuration file belongs to.
@@ -40,21 +46,22 @@ function Add-SymbolicLink {
 		[Parameter(Mandatory, ParameterSetName = "Nested")]
 		[hashtable[]]$Links,
 
+		[switch]$Base,
+
 		[string]$ConfigurationFilePath,
 
 		[string]$BackupRoot
 	)
 
-	$configPath = if ($ConfigurationFilePath) { $ConfigurationFilePath } else { $script:ConfigurationPath }
-	if (-not $configPath -or -not (Test-Path $configPath)) {
-		Write-LogError "Error: Configuration file not found at '$configPath'!"
-		return
-	}
-
-	$lines = @(Get-Content -Path $configPath)
+	# Configuration.local.psd1 unless -Base or -ConfigurationFilePath says otherwise; a section
+	# the local file lacks is copied in from the base first (see Get-ConfigurationWriteTarget).
+	$target = Get-ConfigurationWriteTarget -ConfigurationFilePath $ConfigurationFilePath -Base:$Base -HashtableSection 'PathTemplates.SymbolicLinks'
+	if (-not $target) { return }
+	$configPath = $target.Path
+	$lines = @($target.Lines)
 	$section = Find-ConfigurationSection -Lines $lines -SectionName "SymbolicLinks"
 	if (-not $section) {
-		Write-LogError "Error: SymbolicLinks section not found in Configuration.psd1!"
+		Write-LogError "Error: SymbolicLinks section not found in $($target.FileName)!"
 		return
 	}
 
@@ -87,22 +94,10 @@ function Add-SymbolicLink {
 		$newLines.Insert($insertIndex + $i, $entryLines[$i])
 	}
 
-	# Configuration.psd1 is a tracked file - keep a timestamped undo in the unified backup sink
-	# of the repository the file belongs to (so a sandboxed config never pollutes the real sink)
-	# before rewriting it. A backup that cannot be taken aborts the write.
-	try {
-		if (-not $BackupRoot) {
-			$BackupRoot = Join-Path -Path (Get-RepositoryPath -StartPath (Split-Path -Path $configPath -Parent)).Repo -ChildPath "Backups\Windows"
-		}
-		Backup-RepositoryItem -Path $configPath -Category "Config" -Key "Configuration" -BackupRoot $BackupRoot | Out-Null
-	}
-	catch {
-		Write-LogError "Could not back up '$configPath'; aborting without changes. $($_.Exception.Message)"
-		return
-	}
-
-	Set-Content -Path $configPath -Value $newLines
-	Write-LogSuccess "Symbolic link '$Name' added to Configuration.psd1"
+	# A timestamped undo goes to the unified backup sink of the repository the file belongs to
+	# first; a backup that cannot be taken aborts the write.
+	if (-not (Save-ConfigurationFile -Path $configPath -Lines $newLines -BackupRoot $BackupRoot)) { return }
+	Write-LogSuccess "Symbolic link '$Name' added to $($target.FileName)"
 
 	if (Test-LogVerbose) {
 		Write-LogDebug "[Add-SymbolicLink] Inserted at line $insertIndex"

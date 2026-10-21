@@ -123,7 +123,7 @@ A miss means a rule in `Get-TestImpact` should be fixed; see [A Change Was Not C
 
 `Infrastructure-Contract.Tests.ps1` enforces the versioning policy in `VERSIONING.md` on every run that includes the Infrastructure tests, CI included. `ContractBaseline.json` (beside the harness) records the contract at the last release - every exported function of every module except the Custom area, with its parameters, whether each is mandatory and its `[Alias()]` names; every exported alias; every key of the shipped `Configuration.psd1` two levels deep - and the `Deprecated` map, item to the version that deprecated it. The gate fails when:
 
-- a function, parameter or key in the baseline is gone, or a parameter became mandatory - unless `[Unreleased]` in `CHANGELOG.md` names the item in backticks under `### Removed` and its deprecation shipped in an earlier release, or names it under `### Breaking`;
+- a function, parameter or key in the baseline is gone, or a parameter became mandatory - unless `[Unreleased]` in `CHANGELOG.md` names the item in backticks under `### Removed` and its deprecation shipped in an earlier release, or names it under `### Breaking` or `### Withdrawn` (an item that was never meant to be shared engine code);
 - a release from 1.0.0 on has a version bump its changelog sections do not allow (a removal outside a MAJOR, a MAJOR that removes nothing, an addition, change or deprecation in a PATCH);
 - the baseline was not refreshed in the newest release's commit.
 

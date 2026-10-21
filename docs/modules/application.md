@@ -891,7 +891,7 @@ Set-LogLevel Verbose { Start-FancyZones }
 
 ## [Start-MicrosoftActivationScripts](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Start-MicrosoftActivationScripts.ps1)
 
-- **Description:** Runs the Microsoft Activation Scripts (MAS) to activate Windows and Office. Downloads and runs the official online activation method via `irm https://get.activated.win | iex`. Without `-Override` it checks whether Windows is already activated and whether Office is installed, and skips only when both are true; otherwise it asks a Yes/No question (default No) and runs MAS only on Yes. Use `-Override` to skip the check.
+- **Description:** Runs the Microsoft Activation Scripts (MAS) to activate Windows and Office. Downloads and runs the online activation method from `BootstrapConfig.ExternalScripts.MicrosoftActivationScripts` (the base ships the official `https://get.activated.win`, which is also the fallback when the key is empty) via `irm <url> | iex`. Without `-Override` it checks whether Windows is already activated and whether Office is installed, and skips only when both are true; otherwise it asks a Yes/No question (default No) and runs MAS only on Yes. Use `-Override` to skip the check.
 - **Parameters:** -Selection, -Override
 - **Usage:** `Start-MicrosoftActivationScripts`, `Start-MicrosoftActivationScripts -Override`, `Start-MicrosoftActivationScripts -Selection Yes`
 

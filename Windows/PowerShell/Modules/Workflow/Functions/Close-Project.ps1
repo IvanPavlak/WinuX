@@ -199,8 +199,9 @@ function Close-Project {
 
 			Write-LogDebug "  Process name to search => [$processName]" -Style Step
 
-			# Build patterns to match - always include project name
-			$patterns = @("(?i)$([regex]::Escape($projectName))")
+			# Build patterns to match - always include project name, as a whole word: a bare
+			# substring made project "Server" close every tab with "server" anywhere in its title.
+			$patterns = @("(?i)(?<!\w)$([regex]::Escape($projectName))(?!\w)")
 
 			# Swagger-specific close patterns (extracted to Get-SwaggerCloseTitlePatterns; empty
 			# when the project has no Swagger entry - trigger stays presence-based)

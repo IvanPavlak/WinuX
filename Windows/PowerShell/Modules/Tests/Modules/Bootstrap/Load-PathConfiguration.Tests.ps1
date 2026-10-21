@@ -98,6 +98,12 @@ Describe "Load-PathConfiguration" {
 				$global:Configuration.HostnameToMachineType["OVERRIDE-PC"] | Should -Be "Machine"
 				# Deep merge keeps base keys, doesn't replace the whole hashtable.
 				$global:Configuration.HostnameToMachineType["MY-PC"]     | Should -Be "PC"
+				# The keys the local file set, two levels deep, for Test-ConfigurationSchema's
+				# deprecation warnings; base-only keys are not among them.
+				$global:Configuration.LocalConfigurationKeys | Should -Contain "DefaultMachineType"
+				$global:Configuration.LocalConfigurationKeys | Should -Contain "HostnameToMachineType"
+				$global:Configuration.LocalConfigurationKeys | Should -Contain "HostnameToMachineType.OVERRIDE-PC"
+				$global:Configuration.LocalConfigurationKeys | Should -Not -Contain "HostnameToMachineType.MY-PC"
 			}
 			finally {
 				Remove-Item -Path (Join-Path $ConfigDir "Configuration.local.psd1") -ErrorAction SilentlyContinue

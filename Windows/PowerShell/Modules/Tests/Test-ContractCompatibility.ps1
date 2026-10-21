@@ -13,14 +13,18 @@ function Test-ContractCompatibility {
 		- a parameter that is mandatory now but was optional or absent in the baseline;
 		- a key of the shipped Configuration.psd1 (two levels deep) that is gone.
 
-		Additions are never violations. A break is sanctioned, and not reported, in two cases, both
-		read from the changelog's [Unreleased] section, which is what makes the next release a
-		MAJOR:
+		Additions are never violations. A break is sanctioned, and not reported, in three cases, all
+		read from the changelog's [Unreleased] section. The first two are what make the next release
+		a MAJOR:
 
 		- Removal of a deprecated item: the item is listed in the baseline's Deprecated map with a
 		  version no later than the baseline's own (so the deprecation has shipped in a release),
 		  and [Unreleased] has a "### Removed" subsection naming it in backticks.
 		- An immediate break: [Unreleased] has a "### Breaking" subsection naming it in backticks.
+		- A withdrawn item: [Unreleased] has a "### Withdrawn" subsection naming it in backticks.
+		  Withdrawn is for an item that was never meant to be shared engine code (a fork's personal
+		  function or key that shipped by mistake); it needs no deprecation and makes the release at
+		  least a MINOR (Test-ChangelogVersionBumps), not a MAJOR.
 
 		Items are named `FunctionName` for a function, `FunctionName -Parameter` for a parameter and
 		`Top.Child` for a configuration key.
@@ -57,6 +61,7 @@ function Test-ContractCompatibility {
 	$baselineVersion = [version](($Baseline.Version -replace '-.*$', ''))
 	$removedText = [string]$Unreleased['Removed']
 	$breakingText = [string]$Unreleased['Breaking']
+	$withdrawnText = [string]$Unreleased['Withdrawn']
 
 	$deprecatedIn = {
 		param([string]$Kind, [string]$Item)
@@ -71,6 +76,7 @@ function Test-ContractCompatibility {
 		param([string]$Kind, [string]$Item)
 		$token = '`' + $Item + '`'
 		if ($breakingText.Contains($token)) { return $true }
+		if ($withdrawnText.Contains($token)) { return $true }
 		$since = & $deprecatedIn $Kind $Item
 		return ($null -ne $since -and $since -le $baselineVersion -and $removedText.Contains($token))
 	}

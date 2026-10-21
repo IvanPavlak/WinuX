@@ -147,9 +147,10 @@ $global:Configuration.Keys.Count
 $global:MachineSpecificPaths.Projects.Self.Root
 $global:Configuration.WorkspaceTemplateEntries.Keys
 $global:Configuration.WorkspaceTemplateErrors
+$global:Configuration.LocalConfigurationKeys
 ```
 
-The last two lines show which workspaces were expanded from a template at load and any template problem found (both are runtime keys written by `Expand-WorkspaceTemplates`, not settings).
+The next two lines show which workspaces were expanded from a template at load and any template problem found (both are runtime keys written by `Expand-WorkspaceTemplates`, not settings). The last line lists the keys `Configuration.local.psd1` sets, two levels deep (a runtime key written by `Load-PathConfiguration` for the deprecation warnings of `Test-ConfigurationSchema`).
 
 If a value reads back as empty, the two usual causes are a parse error in `Configuration.local.psd1` (run `Test-ConfigurationSchema`) and a key placed at the wrong nesting level.
 

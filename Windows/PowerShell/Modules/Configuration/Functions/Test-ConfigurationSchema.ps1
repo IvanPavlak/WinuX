@@ -29,6 +29,12 @@ function Test-ConfigurationSchema {
 		ambiguous or unmatched override, an unknown placeholder, a variable cycle or a bad Before /
 		After anchor is reported with the workspace named.
 
+		Finally it reports deprecated keys a fork still sets in Configuration.local.psd1 (read from
+		LocalConfigurationKeys, which Load-PathConfiguration records), each with the version that
+		deprecated it and what to do instead. A deprecated key still works, so this is always a
+		separate warning and never fails -Strict. The base keeps shipping every deprecated key until
+		the MAJOR that removes it, so a key only the base sets is not reported.
+
 		Call this function immediately after Load-PathConfiguration during the bootstrap
 		or profile initialization sequence to surface typos and missing entries early.
 
@@ -180,6 +186,26 @@ function Test-ConfigurationSchema {
 			$resolution = Resolve-WorkspaceTemplate -Name $entryName -Definition $templatedEntries[$entryName] -Templates $workspaceTemplates
 			foreach ($message in @($resolution.Errors)) { $failures.Add($message) }
 		}
+	}
+
+	# Deprecated keys. Every key here is also recorded in the Deprecated map of
+	# Modules/Tests/ContractBaseline.json, which is what lets the next MAJOR remove it.
+	$deprecatedKeys = [ordered]@{
+		'BootstrapConfig.WSLSetup'            = @{ Since = '0.1.26'; Migration = 'use BootstrapConfig.Steps.WSL (same shape); WSLSetup is only read while Steps has no WSL entry' }
+		'PathTemplates.ObsidianStartupScript' = @{ Since = '0.1.61'; Migration = 'nothing reads it since 0.1.61 - delete it' }
+		'DefaultDatabaseProvider'             = @{ Since = '1.6.0'; Migration = 'nothing reads it - delete it' }
+		'MachinePathMappings'                 = @{ Since = '1.6.0'; Migration = 'nothing reads it - delete it (per-machine paths live in BasePaths and PathTemplates)' }
+		'Universal.WindowsTerminalHome'       = @{ Since = '1.6.0'; Migration = 'nothing reads it - delete it' }
+	}
+
+	$localKeys = @($Configuration['LocalConfigurationKeys'])
+	$deprecations = @(foreach ($key in $deprecatedKeys.Keys) {
+			if ($localKeys -contains $key) {
+				"$key (deprecated in $($deprecatedKeys[$key].Since), removed in 2.0.0): $($deprecatedKeys[$key].Migration)"
+			}
+		})
+	if ($deprecations.Count -gt 0) {
+		Write-Warning ("Configuration.local.psd1 sets $($deprecations.Count) deprecated key(s):`n  - " + ($deprecations -join "`n  - "))
 	}
 
 	if ($failures.Count -gt 0) {

@@ -270,7 +270,6 @@ Common paths and templates using placeholder tokens for machine independence.
 ```powershell
 PathTemplates = @{
     ObsidianDirectory                = "{Dev}\Obsidian"
-    TrainingBackupDirectory          = "{Dev}\Training_Backup"
 
     Projects = @{
         OtherProject = @{
@@ -1027,8 +1026,8 @@ Power button and lid close behavior per machine type.
 **Consumer function:** `Set-PowerButtonActions`
 
 The base ships `PowerButtonActions` empty; `Set-PowerButtonActions -Auto` warns and leaves the
-power settings as-is until you set it in `Configuration.local.psd1` (it no longer applies
-hardcoded defaults).
+power settings as-is until you set it in `Configuration.local.psd1`. A key a machine-type entry
+leaves out (an action or a `Disable*` toggle) is not managed and stays as it is.
 
 ### Taskbar Configuration
 
@@ -1269,8 +1268,9 @@ Anything other than the three valid values is reported as unknown rather than si
   personal tools in `Configuration.local.psd1`. Steps that do not resolve are skipped with a
   warning.
 - `ExternalScripts` / `LocalScripts` - URLs and vendored script paths used by optional steps
-  (Microsoft Activation Scripts, Win11Debloat; the `MicrosoftActivationScripts` URL entry is not
-  read today, that step uses its built-in URL). The steps themselves are enabled via
+  (Microsoft Activation Scripts, Win11Debloat; `Start-MicrosoftActivationScripts` downloads from
+  the `MicrosoftActivationScripts` URL entry, falling back to `https://get.activated.win` when it
+  is empty). The steps themselves are enabled via
   `Steps.MicrosoftActivationScripts` / `Steps.Win11Debloat` (both off by default).
 - `DataFiles` - Repo-relative paths to the three package CSVs and the Conda environments folder.
 
@@ -1518,13 +1518,36 @@ Sections not detailed above, with their real shapes and consumers:
 | `RunProject` | `@{ Steps = @{ Docker = <bool or per-machine-type hashtable> } }` | Optional `Run-Project` steps, resolved like `KillAll.Steps`; `Docker` (on by default) starts the Docker stacks a project mapping declares through `DatabaseProviders` or `UsesDocker` | `Run-Project` (via `Resolve-RunProjectSteps`) |
 | `DockerCleanupActions` | array of `@{ Name; Description; Command; PreviewCommand; ConfirmationMessage }` (`Description`, `PreviewCommand` and `ConfirmationMessage` optional) | The `Docker-Cleanup` menu entries, run in this order (the menu adds an `All` option). `PreviewCommand` lists what the action would stop or remove and an empty list skips it; an entry with a `ConfirmationMessage` runs only after an explicit "Yes". Ships five actions that together wipe containers, images, volumes, unused networks and the build cache. The array replaces wholesale on merge | `Docker-Cleanup` |
 | `DockerCleanupStartMode` | `"Ask"`, `"Always"` or `"Never"` | What `Docker-Cleanup` does when the Docker daemon is not running: ask whether to start it (Enter means Yes; the shipped default, also used for an empty or unknown value), start it without asking, or warn and return. Docker is started through `DockerWizard`, so `DockerTimeouts.StartSeconds` applies | `Docker-Cleanup` |
-| `DotnetProjectsSearchPath` | path string (placeholders allowed) | Where `Determine-DotnetDependencies` searches for .NET projects (ships `"{Dev}"`). The function currently looks the key up under the expanded `PathTemplates` instead of the top level, so the shipped value is not picked up and the search falls back to `{User}\Development`; until that is fixed, set `PathTemplates.DotnetProjectsSearchPath` in your override | `Determine-DotnetDependencies` |
+| `DotnetProjectsSearchPath` | path string (placeholders allowed) | Where `Determine-DotnetDependencies` searches for .NET projects (ships `"{Dev}"`). Placeholders are expanded for the current machine type; without a value the search falls back to `$env:USERPROFILE\Development` | `Determine-DotnetDependencies` |
 | `DotnetEFVersion` | version string | The `dotnet-ef` version Bootstrap installs: empty (the shipped value) installs the latest, `"8.*"` or `"8.0.11"` pins one | `Install-DotnetEf` |
 | `PostgreSqlPasswords` | `@{ DefaultOrCurrent; New }` | Current and new PostgreSQL password (ships empty - `Configure-PostgreSqlPasswords` does nothing until set in `Configuration.local.psd1`, and Bootstrap no longer calls it). Never put a real password in the tracked base file | `Configure-PostgreSqlPasswords` |
 | `SimpleLayoutWorkspaces` | array of workspace names | Workspaces handled as simple layouts: `Fullscreen` places every window in its monitor's fullscreen zone, `Empty` places none; neither tracks positioned windows (ships `@("Fullscreen", "Empty")`) | `Set-WorkspaceWindowLayout` (reads), `Add-WindowLayout -Simple` (writes) |
 | `FunctionDiscrepancyExclusions` | array of function names | Names `List-Functions -ListDiscrepancies` never reports (ships `Install-Bootstrap`, `fastfetch`, `Get-PoshStackCount`) | `List-Functions` |
 | `ListFunctionsColors`, `ShowFunctionDetailsColors` | `@{ Border; DiscrepancyError; DiscrepancySuccess }`, `@{ FunctionName; Description; Parameters }` | Console colors of the two function browsers; see [Console Colors](#console-colors) | `List-Functions`, `Show-FunctionDetails` |
 | `DefaultTranslateLanguages` | `@{ OutputLanguage }` | The language `Invoke-GoogleTranslate` (`translate`) translates into when `-OutputLanguage` is not given (ships `"English"`) | `Invoke-GoogleTranslate` |
+
+---
+
+## Deprecated Keys
+
+A deprecated key still parses and changes nothing a fork relies on, and it stays in the base
+`Configuration.psd1` until the MAJOR release that removes it (see `VERSIONING.md`). When your
+`Configuration.local.psd1` still sets one, `Test-ConfigurationSchema` - which the profile runs at
+every shell start - writes one warning listing each such key with the version that deprecated it
+and what to do instead. The warning never fails `-Strict`. A key only the base ships is not
+reported.
+
+| Key | Deprecated in | What to do |
+| --- | --- | --- |
+| `BootstrapConfig.WSLSetup` | 0.1.26 | Use `BootstrapConfig.Steps.WSL` (same shape). `WSLSetup` is only read while `Steps` has no `WSL` entry. |
+| `PathTemplates.ObsidianStartupScript` | 0.1.61 | Nothing reads it; delete it. See [Path Templates](#path-templates--placeholder-system). |
+| `DefaultDatabaseProvider` | 1.6.0 | Nothing reads it; delete it. |
+| `MachinePathMappings` | 1.6.0 | Nothing reads it; delete it. Per-machine paths live in [`BasePaths`](#base-paths-per-machine-type) and [`PathTemplates`](#path-templates--placeholder-system). |
+| `Universal.WindowsTerminalHome` | 1.6.0 | Nothing reads it; delete it. |
+
+All of them are removed in 2.0.0. `Load-PathConfiguration` records which keys the local file sets,
+two levels deep, as the runtime key `LocalConfigurationKeys` (not a setting; never put it in a
+file), and that list is what the check reads.
 
 ---
 

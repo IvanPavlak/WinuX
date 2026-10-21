@@ -11,8 +11,10 @@ function Test-ChangelogVersionBumps {
 		- A section with "### Removed" or "### Breaking" must be a MAJOR bump.
 		- A MAJOR bump must have one of them - a MAJOR that breaks nothing is the gratuitous major
 		  the policy exists to prevent, and it would make every fork review a merge for nothing.
-		- A section with "### Added", "### Changed" or "### Deprecated" must be at least a MINOR
-		  bump; a PATCH carries only "### Fixed" and "### Security".
+		- A section with "### Added", "### Changed", "### Deprecated" or "### Withdrawn" must be at
+		  least a MINOR bump; a PATCH carries only "### Fixed" and "### Security". "### Withdrawn"
+		  removes an item that was never meant to be shared engine code, so it does not make a
+		  release a MAJOR.
 		- A MAJOR resets MINOR and PATCH to 0, a MINOR resets PATCH to 0, and every version is
 		  higher than the one before it.
 
@@ -39,7 +41,7 @@ function Test-ChangelogVersionBumps {
 
 		$sections = @($new.Sections.Keys)
 		$breaks = ($sections -contains 'Removed') -or ($sections -contains 'Breaking')
-		$adds = ($sections -contains 'Added') -or ($sections -contains 'Changed') -or ($sections -contains 'Deprecated')
+		$adds = ($sections -contains 'Added') -or ($sections -contains 'Changed') -or ($sections -contains 'Deprecated') -or ($sections -contains 'Withdrawn')
 
 		$major = $new.Major -gt $old.Major
 		$minor = -not $major -and $new.Major -eq $old.Major -and $new.Minor -gt $old.Minor
@@ -56,7 +58,7 @@ function Test-ChangelogVersionBumps {
 			$violations.Add("[$($new.Version)] is a MAJOR release but removes and breaks nothing (no ### Removed or ### Breaking); release it as a MINOR or PATCH.")
 		}
 		if ($adds -and $patch) {
-			$violations.Add("[$($new.Version)] adds, changes or deprecates something (### Added, ### Changed or ### Deprecated), so it must be at least a MINOR release; a PATCH carries only ### Fixed and ### Security.")
+			$violations.Add("[$($new.Version)] adds, changes, deprecates or withdraws something (### Added, ### Changed, ### Deprecated or ### Withdrawn), so it must be at least a MINOR release; a PATCH carries only ### Fixed and ### Security.")
 		}
 		if ($major -and ($new.Minor -ne 0 -or $new.Patch -ne 0)) {
 			$violations.Add("[$($new.Version)] is a MAJOR release, so its MINOR and PATCH must be 0.")

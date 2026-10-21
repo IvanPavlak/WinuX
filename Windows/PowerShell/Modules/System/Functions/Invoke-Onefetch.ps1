@@ -5,7 +5,7 @@ function Invoke-Onefetch {
 		the third step of Show-TerminalGreeting.
 
 	.DESCRIPTION
-		Runs `onefetch` in the current directory, and does nothing at all - silently, with one
+		Runs `onefetch` on -Path (the current directory by default), and does nothing at all - silently, with one
 		debug line saying why - in any of the four cases where it would be noise:
 
 		  - TerminalGreeting.Onefetch.Enabled is $false. This is the shipped default: onefetch is
@@ -35,8 +35,8 @@ function Invoke-Onefetch {
 		TerminalGreeting.Onefetch.Arguments.
 
 	.PARAMETER Path
-		The directory tested for a git repository. Defaults to the current location. onefetch
-		itself is not given this path and always reports on the current location.
+		The directory tested for a git repository and handed to onefetch as the repository to
+		report on. Defaults to the current location.
 
 	.PARAMETER Settings
 		The resolved greeting settings from Resolve-TerminalGreetingSettings. Show-TerminalGreeting
@@ -96,6 +96,8 @@ function Invoke-Onefetch {
 
 	if (-not $PSBoundParameters.ContainsKey("Arguments")) { $Arguments = $Settings.Onefetch.Arguments }
 	$onefetchArgs = @($Arguments | Where-Object { -not [string]::IsNullOrWhiteSpace("$_") })
+	# onefetch takes the repository as its positional INPUT; it finds the root from a subfolder.
+	if (-not [string]::IsNullOrWhiteSpace($Path)) { $onefetchArgs += $Path }
 
 	if ($Measure) {
 		# Redirected output puts onefetch in plain mode: one line per visual row, no color or

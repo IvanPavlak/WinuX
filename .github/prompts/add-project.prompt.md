@@ -1,12 +1,12 @@
 ---
-description: "Add a new project with actions, terminal tabs, and path mappings to Configuration.psd1."
+description: "Add a new project with actions, terminal tabs, and path mappings to Configuration.local.psd1."
 argument-hint: "Project name and setup (e.g., 'NewApp with VS Code, terminals, and API/UI paths')"
 agent: "agent"
 ---
 
 # Add Project
 
-Add a project to Configuration.psd1 using `Add-Project`.
+Add a project to Configuration.local.psd1 using `Add-Project` (it writes the local override by default; `-Base` writes the base Configuration.psd1).
 
 ## Steps
 
@@ -29,7 +29,7 @@ Add-Project -Name "NewApp" -Actions @(
 ) -BasePath "Projects.NewApp" -Paths @("ROOT", "API") -Runnable
 ```
 
-3. Remind user to add the project path to `PathTemplates.Projects` in Configuration.psd1 if needed.
+3. Remind user to add the project path to `PathTemplates.Projects` in Configuration.local.psd1 if needed.
 
 ## Notes
 

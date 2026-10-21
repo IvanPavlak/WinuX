@@ -1795,14 +1795,16 @@
 			$maxReruns = 2
 			$rerunCount = [int](& $readRerunState 'WORKSPACE_RERUN_COUNT')
 
-			if ($rerunCount -ge $maxReruns) {
+			# Alongside never respawns, so it neither checks nor spends the rerun budget: a count
+			# written here would outlive this run and cut short a later plain open's reruns.
+			if (-not $Alongside -and $rerunCount -ge $maxReruns) {
 				Write-LogError "Maximum auto-reruns ($maxReruns) reached - stopping to prevent infinite loop!"
 				& $writeRerunState 'WORKSPACE_RERUN_COUNT' $null
 				return
 			}
 
-			& $writeRerunState 'WORKSPACE_RERUN_COUNT' ([string]($rerunCount + 1))
 			if (-not $Alongside) {
+				& $writeRerunState 'WORKSPACE_RERUN_COUNT' ([string]($rerunCount + 1))
 				$escalationFailures = if ($snapFailures.Count -gt 0) {
 					$snapFailures
 				}
@@ -1955,14 +1957,16 @@
 		$maxReruns = 2
 		$rerunCount = [int](& $readRerunState 'WORKSPACE_RERUN_COUNT')
 
-		if ($rerunCount -ge $maxReruns) {
+		# Alongside never respawns, so it neither checks nor spends the rerun budget (see the
+		# escalation path above).
+		if (-not $Alongside -and $rerunCount -ge $maxReruns) {
 			Write-LogError "Maximum auto-reruns ($maxReruns) reached - stopping to prevent infinite loop!"
 			& $writeRerunState 'WORKSPACE_RERUN_COUNT' $null
 			return
 		}
 
-		& $writeRerunState 'WORKSPACE_RERUN_COUNT' ([string]($rerunCount + 1))
 		if (-not $Alongside) {
+			& $writeRerunState 'WORKSPACE_RERUN_COUNT' ([string]($rerunCount + 1))
 			$failedWindow = $null
 			if ($snapResult -and $snapResult.FailedWindows) {
 				$failedWindow = $snapResult.FailedWindows | Where-Object { $null -ne $_.Handle -and $_.Handle -ne [IntPtr]::Zero } | Select-Object -First 1
@@ -1971,6 +1975,9 @@
 				$firstFailedSnap = $snapResult.FailedWindows | Select-Object -First 1
 				if ($firstFailedSnap.WindowTitle) {
 					& $writeRerunState $windowOnlyRetryTitleEnvVar $firstFailedSnap.WindowTitle
+				}
+				if ($firstFailedSnap.ProcessName) {
+					& $writeRerunState $windowOnlyRetryProcessEnvVar $firstFailedSnap.ProcessName
 				}
 			}
 			& $writeRerunState $windowOnlyRetryEnvVar '1'

@@ -3,6 +3,8 @@
 BeforeAll {
 	$ConfigurationFunctionsPath = Join-Path (Get-RepositoryPath).Modules "Configuration\Functions"
 	. "$ConfigurationFunctionsPath\Find-ConfigurationSection.ps1"
+	. "$ConfigurationFunctionsPath\Get-ConfigurationWriteTarget.ps1"
+	. "$ConfigurationFunctionsPath\Save-ConfigurationFile.ps1"
 	. "$ConfigurationFunctionsPath\Add-WindowLayout.ps1"
 }
 
@@ -37,6 +39,37 @@ Describe "Add-WindowLayout" {
 
 			$layoutFile = Join-Path $testLayoutsDir "PC\TestWS_PC.psd1"
 			Test-Path $layoutFile | Should -BeTrue
+		}
+
+		It "defaults to the detected machine type when -MachineType is omitted" {
+			# The default used to come from a MachineType configuration key that does not exist,
+			# so every call without -MachineType wrote a Test layout.
+			$originalMachineType = $global:MachineType
+			try {
+				$global:MachineType = "Laptop"
+
+				Add-WindowLayout -WorkspaceName "TestWS" -LayoutsDirectory $testLayoutsDir
+			}
+			finally {
+				$global:MachineType = $originalMachineType
+			}
+
+			Test-Path (Join-Path $testLayoutsDir "Laptop\TestWS_Laptop.psd1") | Should -BeTrue
+			Test-Path (Join-Path $testLayoutsDir "Test\TestWS_Test.psd1") | Should -BeFalse
+		}
+
+		It "falls back to Test when no machine type has been detected" {
+			$originalMachineType = $global:MachineType
+			try {
+				$global:MachineType = $null
+
+				Add-WindowLayout -WorkspaceName "TestWS" -LayoutsDirectory $testLayoutsDir
+			}
+			finally {
+				$global:MachineType = $originalMachineType
+			}
+
+			Test-Path (Join-Path $testLayoutsDir "Test\TestWS_Test.psd1") | Should -BeTrue
 		}
 
 		It "Should create layout files for multiple machine types" {
@@ -132,6 +165,26 @@ Describe "Add-WindowLayout" {
 				-LayoutsDirectory $testLayoutsDir -ConfigurationFilePath $testConfig
 
 			Get-Content -Path $testConfig -Raw | Should -Be $before
+		}
+	}
+
+	Context "default target: Configuration.local.psd1" {
+		BeforeEach {
+			$script:ConfigurationPath = $testConfig
+			$script:LocalConfig = Join-Path $psDir "Configuration.local.psd1"
+			$script:BaseBefore = Get-Content -Path $testConfig -Raw
+		}
+
+		AfterEach {
+			$script:ConfigurationPath = $null
+		}
+
+		It "adds a simple workspace to Configuration.local.psd1 with the base list copied in" {
+			Add-WindowLayout -WorkspaceName "TestWS" -MachineType @("PC") -Simple -LayoutsDirectory $testLayoutsDir -BackupRoot (Join-Path $TestDrive "Backups")
+
+			Get-Content -Path $testConfig -Raw | Should -Be $script:BaseBefore
+			$local = Import-PowerShellDataFile -Path $script:LocalConfig
+			@($local.SimpleLayoutWorkspaces) | Should -Be @("Fullscreen", "Empty", "TestWS")
 		}
 	}
 }

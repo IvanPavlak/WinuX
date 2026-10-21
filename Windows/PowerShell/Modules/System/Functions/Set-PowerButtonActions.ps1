@@ -23,14 +23,14 @@ function Set-PowerButtonActions {
 		the laptop lid is closed (both on battery and when plugged in).
 		Also controls Fast Startup, Sleep, and Hibernate features.
 
-		With `-Auto`, reads the settings for the current machine type from `PowerButtonActions` in
-		Configuration.psd1 (explicit parameters override them). With no entry for the machine type
-		and no explicit parameter, -Auto leaves the power settings as-is. A missing
-		DisableFastStartup is left unmanaged; a missing DisableSleep / DisableHibernate is applied
-		as $false.
-		Without `-Auto`, accepts individual parameters (e.g. `-PowerButtonOnBattery "ShutDown"`);
-		every omitted parameter takes its hardcoded default (power button and lid-on-battery
-		ShutDown, sleep buttons and lid-plugged-in DoNothing, all three Disable* toggles $true).
+		Only the settings that are given are changed; every other one is left as it is.
+		With `-Auto`, the settings come from the current machine type's entry in
+		`PowerButtonActions` (Configuration.psd1), and explicit parameters override them. A key the
+		entry leaves out is not managed. With no entry for the machine type, only the explicit
+		parameters apply, and with neither the power settings are left as-is.
+		Without `-Auto`, only the parameters passed are applied (e.g. `-PowerButtonOnBattery
+		"ShutDown"` changes that one action and nothing else). A call that gives no setting at all
+		warns and changes nothing.
 		Valid actions: "DoNothing", "Sleep", "Hibernate", "ShutDown".
 
 		Applies settings to ALL power schemes to prevent Windows from overriding them.
@@ -72,8 +72,7 @@ function Set-PowerButtonActions {
 
 	.EXAMPLE
 		Set-PowerButtonActions -PowerButtonPluggedIn "ShutDown" -PowerButtonOnBattery "Sleep"
-		Sets the power button actions for both power states; every other setting takes its
-		hardcoded default.
+		Sets the power button actions for both power states and leaves every other setting as it is.
 	#>
 	[CmdletBinding()]
 	param(
@@ -119,17 +118,14 @@ function Set-PowerButtonActions {
 	Write-LogTitle "Configuring Power Button & Lid Actions"
 
 	# --- Resolve settings from configuration or parameters ---
-	$defaults = @{
-		PowerButtonOnBattery = "ShutDown"
-		PowerButtonPluggedIn = "ShutDown"
-		SleepButtonOnBattery = "DoNothing"
-		SleepButtonPluggedIn = "DoNothing"
-		LidCloseOnBattery    = "ShutDown"
-		LidClosePluggedIn    = "DoNothing"
-		DisableFastStartup   = $true
-		DisableSleep         = $true
-		DisableHibernate     = $true
-	}
+	# Every setting starts unmanaged: an action left empty and a toggle left $null are not touched.
+	# There are no hardcoded defaults - they used to disable Fast Startup, Sleep and Hibernate on
+	# any call that did not pass all three, and -Auto turned Sleep and Hibernate ON for an entry
+	# that left them out.
+	$settingKeys = @(
+		'PowerButtonOnBattery', 'PowerButtonPluggedIn', 'SleepButtonOnBattery', 'SleepButtonPluggedIn',
+		'LidCloseOnBattery', 'LidClosePluggedIn', 'DisableFastStartup', 'DisableSleep', 'DisableHibernate'
+	)
 
 	if ($Auto) {
 		$MachineType = DetermineMachineType
@@ -137,46 +133,32 @@ function Set-PowerButtonActions {
 
 		$powerButtonActions = Get-ConfigSetting -Path 'PowerButtonActions'
 		$machineConfig = if (Test-ConfigValue $powerButtonActions) { $powerButtonActions[$MachineType] } else { $null }
-		$nullableToggleKeys = @('DisableFastStartup', 'DisableSleep', 'DisableHibernate')
 
 		if (-not (Test-ConfigValue $machineConfig)) {
-			# Empty-by-default contract: with no machine entry and no explicit parameters,
-			# -Auto changes nothing - the old behavior applied invasive hardcoded defaults
-			# (disabling sleep and hibernate) on unconfigured machines.
-			$explicitParams = @($defaults.Keys | Where-Object { $null -ne $PSBoundParameters[$_] })
+			$explicitParams = @($settingKeys | Where-Object { $PSBoundParameters.ContainsKey($_) })
 			if ($explicitParams.Count -eq 0) {
 				Write-LogWarning "PowerButtonActions not configured for [$MachineType] - leaving power settings as-is!"
 				return
 			}
-			Write-LogWarning "PowerButtonActions not configured for [$MachineType] - using built-in defaults as base for the explicitly passed parameters!"
+			Write-LogWarning "PowerButtonActions not configured for [$MachineType] - applying only the explicitly passed parameters!"
 			$machineConfig = @{}
 		}
 
 		# Config values serve as base, explicit parameters override
-		foreach ($key in $defaults.Keys) {
-			$paramValue = $PSBoundParameters[$key]
-			if ($null -ne $paramValue) {
-				# Explicit parameter wins
-			}
-			elseif ($machineConfig.ContainsKey($key)) {
+		foreach ($key in $settingKeys) {
+			if (-not $PSBoundParameters.ContainsKey($key) -and $machineConfig.ContainsKey($key)) {
 				Set-Variable -Name $key -Value $machineConfig[$key]
-			}
-			elseif ($nullableToggleKeys -contains $key) {
-				# Missing nullable toggles are treated as unmanaged.
-				Set-Variable -Name $key -Value $null
-			}
-			else {
-				Set-Variable -Name $key -Value $defaults[$key]
 			}
 		}
 	}
-	else {
-		# No -Auto: use explicit parameters with hardcoded defaults
-		foreach ($key in $defaults.Keys) {
-			if (-not $PSBoundParameters.ContainsKey($key)) {
-				Set-Variable -Name $key -Value $defaults[$key]
-			}
-		}
+
+	$managedKeys = @($settingKeys | Where-Object {
+			$value = Get-Variable -Name $_ -ValueOnly
+			$null -ne $value -and -not ($value -is [string] -and $value -eq '')
+		})
+	if ($managedKeys.Count -eq 0) {
+		Write-LogWarning "No power setting given - nothing to change! Pass a setting or use -Auto."
+		return
 	}
 
 	# --- Map friendly names to powercfg index values ---
@@ -213,7 +195,7 @@ function Set-PowerButtonActions {
 	Write-LogSuccess "Found $($schemeGuids.Count) power scheme(s)!" -BlankLineAfter
 
 	try {
-		# --- Define the settings to apply ---
+		# --- Define the settings to apply (an action that was not given is left out) ---
 		$settings = @(
 			@{ Name = "Power button (On battery)"; Setting = "PBUTTONACTION"; Type = "DC"; Value = $actionMap[$PowerButtonOnBattery] }
 			@{ Name = "Power button (Plugged in)"; Setting = "PBUTTONACTION"; Type = "AC"; Value = $actionMap[$PowerButtonPluggedIn] }
@@ -221,7 +203,7 @@ function Set-PowerButtonActions {
 			@{ Name = "Sleep button (Plugged in)"; Setting = "SBUTTONACTION"; Type = "AC"; Value = $actionMap[$SleepButtonPluggedIn] }
 			@{ Name = "Lid close (On battery)"; Setting = "LIDACTION"; Type = "DC"; Value = $actionMap[$LidCloseOnBattery] }
 			@{ Name = "Lid close (Plugged in)"; Setting = "LIDACTION"; Type = "AC"; Value = $actionMap[$LidClosePluggedIn] }
-		)
+		) | Where-Object { $null -ne $_.Value }
 
 		# --- Sub-group and setting GUIDs for registry queries ---
 		$buttonsSubGroup = "4f971e89-eebd-4455-a8de-9e59040e7347"
@@ -281,7 +263,7 @@ function Set-PowerButtonActions {
 		# --- Fast Startup ---
 		Write-Host ""
 		if ($null -eq $DisableFastStartup) {
-			Write-LogWarning "Fast Startup: Skipped (managed by Win11Debloat)" -NoLeadingNewline
+			Write-LogWarning "Fast Startup: not managed (left as-is)" -NoLeadingNewline
 		}
 		else {
 			$fastStartupPath = "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Power"
@@ -308,7 +290,10 @@ function Set-PowerButtonActions {
 		$currentHibernateOption = (Get-ItemProperty -Path $flyoutPath -Name ShowHibernateOption -ErrorAction SilentlyContinue).ShowHibernateOption
 		$desiredHibernateOption = if ($DisableHibernate) { 0 } else { 1 }
 
-		if ($currentHibernateOption -eq $desiredHibernateOption) {
+		if ($null -eq $DisableHibernate) {
+			Write-LogWarning "Hibernate: not managed (left as-is)" -NoLeadingNewline
+		}
+		elseif ($currentHibernateOption -eq $desiredHibernateOption) {
 			$label = if ($DisableHibernate) { "Disabled (hidden from Power menu)" } else { "Enabled" }
 			Write-LogWarning "Hibernate: $label (already set)" -NoLeadingNewline
 		}
@@ -329,7 +314,10 @@ function Set-PowerButtonActions {
 		$currentSleepOption = (Get-ItemProperty -Path $flyoutPath -Name ShowSleepOption -ErrorAction SilentlyContinue).ShowSleepOption
 		$desiredSleepOption = if ($DisableSleep) { 0 } else { 1 }
 
-		if ($currentSleepOption -eq $desiredSleepOption) {
+		if ($null -eq $DisableSleep) {
+			Write-LogWarning "Sleep: not managed (left as-is)" -NoLeadingNewline
+		}
+		elseif ($currentSleepOption -eq $desiredSleepOption) {
 			$label = if ($DisableSleep) { "Hidden from Power menu" } else { "Shown in Power menu" }
 			Write-LogWarning "Sleep: $label (already set)" -NoLeadingNewline
 		}

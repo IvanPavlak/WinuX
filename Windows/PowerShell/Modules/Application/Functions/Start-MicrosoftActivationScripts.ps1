@@ -85,7 +85,11 @@ function Start-MicrosoftActivationScripts {
 			return
 		}
 		elseif ($resolvedSelection -eq "Yes") {
-			Invoke-RestMethod https://get.activated.win | Invoke-Expression
+			# The URL comes from BootstrapConfig.ExternalScripts.MicrosoftActivationScripts, which the
+			# base ships; the hard-coded value is only the fallback for a configuration without it.
+			$scriptUrl = [string](Get-ConfigSetting -Path 'BootstrapConfig.ExternalScripts.MicrosoftActivationScripts' -Default '')
+			if ([string]::IsNullOrWhiteSpace($scriptUrl)) { $scriptUrl = 'https://get.activated.win' }
+			Invoke-RestMethod $scriptUrl | Invoke-Expression
 			Write-LogSuccess "Windows Activation completed"
 		}
 	}

@@ -1,12 +1,12 @@
 ---
-description: "Add a new browser group to Configuration.psd1 using the Configuration module."
+description: "Add a new browser group to Configuration.local.psd1 using the Configuration module."
 argument-hint: "Group name and URLs (e.g., 'DevTools with GitHub and StackOverflow')"
 agent: "agent"
 ---
 
 # Add Browser Group
 
-Add a browser group to Configuration.psd1 using `Add-BrowserGroup`.
+Add a browser group to Configuration.local.psd1 using `Add-BrowserGroup` (it writes the local override by default; `-Base` writes the base Configuration.psd1).
 
 ## Steps
 

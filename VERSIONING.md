@@ -24,10 +24,10 @@ through two steps:
 
 1. **Deprecate (MINOR).** The new shape ships and the old one keeps working. The release
    notes list the change under `### Deprecated` with the migration. Where the old shape is a
-   configuration key, `Test-ConfigurationSchema` warns on it and names the replacement; the
-   profile runs that check at every load, and the mechanism will also run it at the start of
-   `Bootstrap`. The next deprecation adds the warning mechanism together with its entry and
-   covers the keys carried over from 0.x (below). Where the old shape is a function, the old
+   configuration key, `Test-ConfigurationSchema` warns on it and names the replacement when a
+   fork's `Configuration.local.psd1` still sets it (the key table lives in that function; the
+   base keeps shipping the key, so only the local file tells whether a fork relies on it); the
+   profile runs that check at every load. Where the old shape is a function, the old
    name stays as an alias or a thin wrapper that warns once per session. The same change
    records the item in the `Deprecated` map of `Windows/PowerShell/Modules/Tests/ContractBaseline.json`
    with the version the deprecation ships in - that record is what later lets the gate accept
@@ -44,6 +44,20 @@ as uneventfully as a PATCH.
 The only exception is a change that cannot keep the old shape working - a security fix, or a
 Windows change that invalidates the old behavior outright. That bumps MAJOR immediately, under
 `### Breaking`, with migration notes.
+
+### Withdrawn items
+
+One narrow case skips the deprecation: an item that was never meant to be shared engine code - a
+fork's personal function or configuration key (one that drives that fork's own scripts or files)
+that shipped in WinuX by mistake. Such an item may be removed in a MINOR without a prior
+deprecation when the release names it in backticks under `### Withdrawn`, with where it went
+(usually the fork's own Custom area). `### Withdrawn` makes a release at least a MINOR, never a
+PATCH, and never a MAJOR on its own.
+
+It is not a shortcut around the deprecation policy. The test is whether any other fork could
+reasonably be using the item: anything general-purpose, documented as a feature, or reachable
+from a shipped configuration a fork fills in goes through deprecation and a MAJOR like everything
+else.
 
 ### What the policy costs
 
@@ -72,14 +86,15 @@ CI run, fails a change that:
 
 - **Breaks the contract** - removes an exported function, a parameter or a configuration key, or
   makes a parameter mandatory. Additions never fail; a renamed parameter that keeps the old name
-  as an `[Alias()]`, or a function kept as an exported alias, is not a removal. Two exceptions,
-  both read from `[Unreleased]` in `CHANGELOG.md`, because they are what make the next release a
+  as an `[Alias()]`, or a function kept as an exported alias, is not a removal. Three exceptions,
+  all read from `[Unreleased]` in `CHANGELOG.md`. Two of them are what make the next release a
   MAJOR: a `### Removed` entry naming an item in backticks whose deprecation has already shipped
   in a release (its `Deprecated` version is no later than the baseline's), or a `### Breaking`
-  entry naming it.
+  entry naming it. The third is a `### Withdrawn` entry naming it (see Withdrawn items above),
+  which makes the release at least a MINOR.
 - **Misnames its release** - for every release from 1.0.0 on: `### Removed` or `### Breaking`
   outside a MAJOR; a MAJOR with neither, which is exactly the gratuitous MAJOR this policy
-  exists to prevent; `### Added`, `### Changed` or `### Deprecated` in a PATCH; a MAJOR or MINOR
+  exists to prevent; `### Added`, `### Changed`, `### Deprecated` or `### Withdrawn` in a PATCH; a MAJOR or MINOR
   that does not reset the lower parts to 0, or a version that does not go up.
 - **Forgets the baseline** - the baseline's version must be the newest release in
   `CHANGELOG.md`, so a change that cuts a release without refreshing it fails.
@@ -111,8 +126,8 @@ onward.
 
 Two keys deprecated during 0.x carry over as deprecated: `BootstrapConfig.WSLSetup` (still
 honored when `BootstrapConfig.Steps.WSL` is absent) and `PathTemplates.ObsidianStartupScript`
-(ignored since 0.1.61). Neither warns yet; both are covered when the warning mechanism lands,
-and neither is removed before 2.0.0.
+(ignored since 0.1.61). Both warn since 1.6.0, which added the warning mechanism, and neither is
+removed before 2.0.0.
 
 Release candidates, when a MAJOR warrants one, use SemVer pre-release tags: `2.0.0-rc.1`,
 `2.0.0-rc.2`, ...

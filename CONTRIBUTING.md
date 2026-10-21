@@ -235,7 +235,9 @@ Match the existing history:
    a `Configuration.psd1` key or an exported function outright: deprecate it first (the old
    shape keeps working; add a `### Deprecated` entry with the migration, and record the item in
    the `Deprecated` map of `Windows/PowerShell/Modules/Tests/ContractBaseline.json` with the
-   version it ships in) and leave the removal to the next MAJOR release. The
+   version it ships in) and leave the removal to the next MAJOR release. The one exception is an
+   item that was never meant to be shared engine code, which a MINOR may remove under
+   `### Withdrawn` (`VERSIONING.md`, Withdrawn items). The
    `Infrastructure-Contract` test fails a PR that breaks the contract or a release whose bump
    disagrees with its changelog sections - see "What the policy costs" and "How it is
    enforced" in [VERSIONING.md](VERSIONING.md).

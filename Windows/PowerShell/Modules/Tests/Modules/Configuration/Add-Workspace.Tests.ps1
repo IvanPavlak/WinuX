@@ -3,6 +3,8 @@
 BeforeAll {
 	$ConfigurationFunctionsPath = Join-Path (Get-RepositoryPath).Modules "Configuration\Functions"
 	. "$ConfigurationFunctionsPath\Find-ConfigurationSection.ps1"
+	. "$ConfigurationFunctionsPath\Get-ConfigurationWriteTarget.ps1"
+	. "$ConfigurationFunctionsPath\Save-ConfigurationFile.ps1"
 	. "$ConfigurationFunctionsPath\ConvertTo-ActionString.ps1"
 	. "$ConfigurationFunctionsPath\Add-Workspace.ps1"
 	. (Join-Path (Get-RepositoryPath).Modules "Helper\Functions\Get-OrderedNames.ps1")

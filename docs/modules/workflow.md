@@ -4,11 +4,11 @@ The Workflow module **orchestrates complex operations** like opening workspaces 
 
 ## [Close-BrowserTabsByPattern](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Workflow/Functions/Close-BrowserTabsByPattern.ps1)
 
-- **Description:** Helper that closes all browser tabs whose titles match one or more regex patterns. Cycles through every tab in each matching browser window using keyboard navigation (Ctrl+Tab to move, Ctrl+W to close) and supports Chrome, Edge, and Firefox. Firefox windows (where each tab is process-isolated as its own window) are closed directly via a `WM_CLOSE` message. Returns the count of closed tabs. Used by `Close-Project` to close Swagger tabs regardless of which tab is currently focused.
+- **Description:** Helper that closes all browser tabs whose titles match one or more regex patterns. Cycles through every tab in each matching browser window using keyboard navigation (Ctrl+Tab to move, Ctrl+W to close) and supports Chrome, Edge, and Firefox. Only tabs are closed, never a whole window directly: a browser window's title is its active tab's, so closing a window whose title matched used to close every other tab in it too. Closing the last tab of a window still closes the window. Returns the count of closed tabs. Used by `Close-Project` to close Swagger tabs regardless of which tab is currently focused.
 - **Parameters:** -ProcessName, -TitlePatterns
 - **Usage:** `Close-BrowserTabsByPattern -ProcessName "chrome" -TitlePatterns @("(?i)swagger")`, `Close-BrowserTabsByPattern -ProcessName "msedge" -TitlePatterns @("(?i)localhost:5000")`
 
-For each browser window it first checks the window title against the patterns (handling Firefox's per-tab windows), closing it directly when it matches. Otherwise it cycles through the window's tabs with Ctrl+Tab, closing any whose title matches with Ctrl+W, until it loops back to an already-seen title or hits the per-window safety limit of 30 tabs.
+For each browser window it cycles through the window's tabs with Ctrl+Tab, closing any whose title matches with Ctrl+W, until it loops back to an already-seen title or hits the per-window safety limit of 30 tabs.
 
 Keystrokes land in whichever window has focus, so the browser window is brought to the foreground and verified ([Confirm-WindowForeground](window.md#confirm-windowforeground)) right before every Ctrl+Tab and Ctrl+W, and the window's tabs are left alone the moment that fails - otherwise a Ctrl+W meant for the browser closes the terminal tab the command was typed in. The active tab's title is read from that exact window (browser windows share one process) with the window cache cleared ([Clear-WindowCache](window.md#clear-windowcache)), and after each keystroke the loop waits up to 300 ms ([Wait-Until](helper.md#wait-until)) for the title to change, so it never acts on a tab that is already gone.
 
@@ -41,7 +41,7 @@ Projects must be defined in `$Configuration.ProjectActions` (there is no separat
 
 A Visual Studio or VS Code window is closed only when a candidate is a whole ` - ` separated segment of its title, as [Test-WindowTitleCandidates](helper.md#test-windowtitlecandidates) describes. Closing a project whose folder is `MyApp` therefore leaves a `myapp-ui` window open, and closing `MySolution` leaves `MySolution.Tests` open.
 - **Terminal tabs** named after the project (e.g. `MyProject.Api`, `MyProject.Ui`), when the project has an `Open-ProjectTerminals-Or-RunProject`, `Open-ProjectTerminals` or `Run-Project` action - delegated to `Close-ProjectTerminals`, which closes matching tabs through their UI Automation close buttons (no keystrokes).
-- **Browser tabs** in the configured `Universal.DefaultBrowser` (skipped when it is empty or not a `Universal.Browsers` key; `Tor` is searched as the `firefox` process) whose titles contain the project name. If a `Swagger` entry under `BrowserGroups` matches the project, it also closes tabs titled "Swagger UI" (backend running) or, for localhost URLs, "Problem loading page" (backend not running) - those extra patterns come from [Get-SwaggerCloseTitlePatterns](#get-swaggerclosetitlepatterns) and are empty for a project with no `Swagger` entry. Closing is delegated to `Close-BrowserTabsByPattern`, which cycles through all tabs so it works even when a different tab is focused.
+- **Browser tabs** in the configured `Universal.DefaultBrowser` (skipped when it is empty or not a `Universal.Browsers` key; `Tor` is searched as the `firefox` process) whose titles contain the project name as a whole word (`MyProject` matches `MyProject - Swagger UI` and `MyProject.Api`, but not `MyProjectApp` or `MyProject2`). If a `Swagger` entry under `BrowserGroups` matches the project, it also closes tabs titled "Swagger UI" (backend running) or, for localhost URLs, "Problem loading page" (backend not running) - those extra patterns come from [Get-SwaggerCloseTitlePatterns](#get-swaggerclosetitlepatterns) and are empty for a project with no `Swagger` entry. Closing is delegated to `Close-BrowserTabsByPattern`, which cycles through all tabs so it works even when a different tab is focused.
 
 After closing, `Focus-TerminalTab` refocuses the terminal window this shell runs in (resolved with `Resolve-HostingTerminalTab`), falling back to the first `WindowsTerminal` process's main window when that cannot be resolved. Resolving configured paths to window-title candidates makes matching reliable when the project key differs from the actual solution/folder name shown in the title (e.g. `MyProjectKey` vs `My.Project.Solution` / `Project`).
 
@@ -1090,18 +1090,6 @@ elseif ($result.FoundTabs.Count -gt 0) {
     # Open only the tabs that are still missing
     Write-Host "Some tabs open: $($result.FoundTabs -join ', ')"
 }
-```
-
-## [Training-Backup](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Workflow/Functions/Training-Backup.ps1)
-
-- **Description:** Runs the external training backup batch script in its configured directory. Navigates to `$MachineSpecificPaths.TrainingBackupDirectory`, executes `TrainingBackup.bat` (which backs up the training document to its configured destinations), and restores the original working directory on exit.
-- **Usage:** `Training-Backup`
-
-The backup script and its directory live outside this WinuX repository, so the actual backup destinations and processing are defined there. The function wraps the call so the original working directory is always restored via a `finally` block, and reports success or the captured error message.
-
-```powershell
-# Run the training backup script
-Training-Backup
 ```
 
 ## [Write-WorkspaceBenchmark](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Workflow/Functions/Write-WorkspaceBenchmark.ps1)

@@ -96,7 +96,7 @@ WorkspaceActions = @{
 - `Open-Browser` - with `@{ Groups = @("...") }`
 - `Set-WorkspaceWindowLayout` - with `@{ WorkspaceName = "..." }`
 - `Open-Obsidian`, `Open-DBeaver`, `Open-Outlook`, `Open-Discord`
-- `Send-WakeOnLan`, `Training-Backup`, `Test-PrivacyStatus`
+- `Send-WakeOnLan`, `Test-PrivacyStatus`
 - `Return` - **special**: stops processing remaining actions
 
 **Parameter forwarding**: Command-line parameters passed to `Open-Workspace` are automatically forwarded to actions that accept them (via `Get-FilteredParams`).
@@ -244,4 +244,4 @@ BasePaths = @{
 3. **Comment consumer functions**: Use `# → Consumer: FunctionName` comments
 4. **Use existing patterns**: Look at neighboring entries for format reference
 5. **Placeholder paths only**: Never hardcode `C:\Users\You\...` - use `{User}\...`
-6. **Deprecate before removing**: Never remove or rename a `Configuration.psd1` key in one step. Keep the old key read (with the new one taking precedence), record it under `### Deprecated` in `CHANGELOG.md` with the migration and in the `Deprecated.ConfigurationKeys` map of `Modules/Tests/ContractBaseline.json` with the version it ships in, and leave the removal to the next MAJOR release (see `VERSIONING.md`). The `Infrastructure-Contract` test fails a change that drops a key of the shipped `Configuration.psd1` (two levels deep) unless that record has shipped in a release and `[Unreleased]` lists the key under `### Removed`
+6. **Deprecate before removing**: Never remove or rename a `Configuration.psd1` key in one step. Keep the old key read (with the new one taking precedence), record it under `### Deprecated` in `CHANGELOG.md` with the migration and in the `Deprecated.ConfigurationKeys` map of `Modules/Tests/ContractBaseline.json` with the version it ships in, and leave the removal to the next MAJOR release (see `VERSIONING.md`). The one exception is a key that was never meant to be shared engine configuration (a fork's personal key that shipped in WinuX by mistake): a MINOR may remove it when the release names it in backticks under `### Withdrawn` (`VERSIONING.md`, Withdrawn items). The `Infrastructure-Contract` test fails a change that drops a key of the shipped `Configuration.psd1` (two levels deep) unless that record has shipped in a release and `[Unreleased]` lists the key under `### Removed`

@@ -6,7 +6,8 @@ function Get-ChangelogReleases {
 	.DESCRIPTION
 		Reads the Keep-a-Changelog layout the repository uses: a "## [Unreleased]" heading, then one
 		"## [X.Y.Z] - date" heading per release, each holding "### Added", "### Changed",
-		"### Deprecated", "### Removed", "### Breaking", "### Fixed" or "### Security" subsections.
+		"### Deprecated", "### Withdrawn", "### Removed", "### Breaking", "### Fixed" or "### Security"
+		subsections.
 		The compare links at the bottom of the file are not part of any section.
 
 		Each release carries its version as text and as Major / Minor / Patch numbers (a SemVer

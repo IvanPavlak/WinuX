@@ -32,4 +32,21 @@ Describe "Rename-Machine" {
 		Should -Invoke Write-LogTitle -Times 1
 		Should -Invoke Write-LogWarning -Times 1
 	}
+
+	It "renames with the typed name and no credential prompt" {
+		# -LocalCredential used to receive the user name as a string, which made Rename-Computer
+		# prompt for a credential before every rename.
+		Mock Resolve-Selection { "Enter new name" }
+		Mock Custom-ReadHost { "NEW-NAME" }
+		Mock Write-LogStep { }
+		Mock Write-LogSuccess { }
+		Mock Write-LogError { }
+
+		Rename-Machine -Override
+
+		Should -Invoke Rename-Computer -Times 1 -Exactly -ParameterFilter {
+			$NewName -eq "NEW-NAME" -and $null -eq $LocalCredential
+		}
+		Should -Invoke Write-LogError -Times 0
+	}
 }

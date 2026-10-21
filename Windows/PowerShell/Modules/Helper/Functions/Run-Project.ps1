@@ -174,6 +174,7 @@ function Run-Project {
 				# accepts, shared with Open-ProjectTerminals - including the WSL shapes, which this
 				# function used to take for Windows paths and hand straight to Set-Location.
 				$tab = Resolve-ProjectTerminalTab -ProjectName $Name -PathEntry $pathEntry
+				if ($null -eq $tab) { continue }
 
 				# The command for this path, looked up by path key. A path with no command
 				# just gets its tab; the legacy positional array is still read by index.

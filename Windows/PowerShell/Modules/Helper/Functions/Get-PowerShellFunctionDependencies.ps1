@@ -8,8 +8,12 @@ function Get-PowerShellFunctionDependencies {
     It categorizes dependencies into:
     - BuiltIn: PowerShell built-in cmdlets (e.g., Get-ChildItem, Write-Host)
     - Module: Commands from external PowerShell modules
-    - Custom: Commands from custom modules in the WinuX repository
+    - Custom: Commands from the modules of this repository (every module folder under
+      Windows\PowerShell\Modules, so AI, Configuration, Logging, Window and Custom too)
     - Unknown: Commands that couldn't be resolved
+
+    Every top-level call starts with an empty list of processed functions, so asking twice for
+    the same function returns its dependencies both times; only the recursion shares the list.
 
     .PARAMETER FunctionName
     The name of the function to analyze.
@@ -37,8 +41,11 @@ function Get-PowerShellFunctionDependencies {
 		[switch]$Recursive
 	)
 
-	# Track processed functions to avoid infinite loops
-	if (-not $script:ProcessedFunctions) {
+	# Track processed functions to avoid infinite loops. Only a recursive call (this function
+	# further up the call stack) shares the list; a top-level call starts from an empty one, or a
+	# repeat call for a function analysed before would return $null.
+	$isNestedCall = @(Get-PSCallStack | Select-Object -Skip 1 | Where-Object { $_.Command -eq 'Get-PowerShellFunctionDependencies' }).Count -gt 0
+	if (-not $isNestedCall -or -not $script:ProcessedFunctions) {
 		$script:ProcessedFunctions = @()
 	}
 
@@ -84,15 +91,11 @@ function Get-PowerShellFunctionDependencies {
 		GlobalVariables = @()
 	}
 
-	# Custom modules from this repository
-	$customModuleNames = @(
-		"Application",
-		"Bootstrap",
-		"Git",
-		"Helper",
-		"System",
-		"Workflow"
-	)
+	# Every module of this repository, read from the module folders so a new module is never
+	# missed (a hard-coded list lacked AI, Configuration, Logging, Window and Custom, so an
+	# executable built by Create-Executable that called Write-Log* broke without WinuX).
+	$customModuleNames = @(Get-ChildItem -Path (Get-RepositoryPath).Modules -Directory -ErrorAction SilentlyContinue |
+			Select-Object -ExpandProperty Name)
 
 	# Analyze each command
 	foreach ($cmd in $commandNames) {

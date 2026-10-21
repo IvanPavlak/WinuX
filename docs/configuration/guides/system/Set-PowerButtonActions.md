@@ -9,17 +9,17 @@ Configures what happens when the power button is pressed, the sleep button is pr
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`PowerButtonActions`](../../configuration-reference.md#power-button-actions) | hashtable of machine type to action settings | `@{}` (empty) | What `Set-PowerButtonActions -Auto` makes the power button, sleep button and lid do on this machine type (`PowerButtonOnBattery`, `PowerButtonPluggedIn`, `SleepButtonOnBattery`, `SleepButtonPluggedIn`, `LidCloseOnBattery`, `LidClosePluggedIn`: `DoNothing` / `Sleep` / `Hibernate` / `ShutDown`), plus the `DisableFastStartup` / `DisableSleep` / `DisableHibernate` booleans. A missing action takes the built-in default; a missing `DisableFastStartup` is left unmanaged, but a missing `DisableSleep` / `DisableHibernate` is applied as `$false` (Sleep shown, hibernation turned on). Ships empty. |
+| [`PowerButtonActions`](../../configuration-reference.md#power-button-actions) | hashtable of machine type to action settings | `@{}` (empty) | What `Set-PowerButtonActions -Auto` makes the power button, sleep button and lid do on this machine type (`PowerButtonOnBattery`, `PowerButtonPluggedIn`, `SleepButtonOnBattery`, `SleepButtonPluggedIn`, `LidCloseOnBattery`, `LidClosePluggedIn`: `DoNothing` / `Sleep` / `Hibernate` / `ShutDown`), plus the `DisableFastStartup` / `DisableSleep` / `DisableHibernate` booleans. A key the entry leaves out is not managed: that action or toggle stays as it is. Ships empty. |
 
 ## Decisions
 
 1. What should the buttons and the lid do on this machine type?
-    - Options: A `@{ <MachineType> = @{ ... } }` entry with any of the six action keys, each `DoNothing`, `Sleep`, `Hibernate` or `ShutDown`. Actions you leave out take the built-in defaults (power button and lid-on-battery `ShutDown`, sleep buttons and lid-plugged-in `DoNothing`).
+    - Options: A `@{ <MachineType> = @{ ... } }` entry with any of the six action keys, each `DoNothing`, `Sleep`, `Hibernate` or `ShutDown`. Actions you leave out are not managed and stay as they are.
     - Default: Empty - `-Auto` warns and leaves the power settings as-is.
     - More detail: [`PowerButtonActions`](../../configuration-reference.md#power-button-actions)
 2. Should Fast Startup, Sleep and Hibernate be disabled?
-    - Options: `DisableFastStartup`, `DisableSleep`, `DisableHibernate` in the same machine-type entry, each `$true` or `$false`. Leave `DisableFastStartup` out to keep Fast Startup unmanaged (Win11Debloat owns it by default). `DisableSleep` and `DisableHibernate` are always applied - left out, they act as `$false` - so set both explicitly.
-    - Default: Fast Startup unmanaged; Sleep shown and hibernation on.
+    - Options: `DisableFastStartup`, `DisableSleep`, `DisableHibernate` in the same machine-type entry, each `$true` or `$false`. Leave one out to keep it unmanaged, for example `DisableFastStartup` when Win11Debloat owns Fast Startup.
+    - Default: All three unmanaged.
     - More detail: [`PowerButtonActions`](../../configuration-reference.md#power-button-actions)
 
 ## Where to Put Values

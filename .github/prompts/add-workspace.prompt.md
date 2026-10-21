@@ -1,12 +1,12 @@
 ---
-description: "Add a new workspace with actions to Configuration.psd1 using the Configuration module."
+description: "Add a new workspace with actions to Configuration.local.psd1 using the Configuration module."
 argument-hint: "Workspace name and what it should open (e.g., 'Trading with browser groups and layout')"
 agent: "agent"
 ---
 
 # Add Workspace
 
-Add a workspace to Configuration.psd1 using `Add-Workspace`.
+Add a workspace to Configuration.local.psd1 using `Add-Workspace` (it writes the local override by default; `-Base` writes the base Configuration.psd1).
 
 ## Steps
 

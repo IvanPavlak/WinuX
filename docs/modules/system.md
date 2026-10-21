@@ -185,12 +185,12 @@ Removes any existing `.ssh` in the WSL home directory, recreates it, then copies
 - **Parameters:** -SearchPath, -ExcludePaths, -ListProjects
 - **Usage:** `Determine-DotnetDependencies`, `Determine-DotnetDependencies -ListProjects`, `Determine-DotnetDependencies -SearchPath C:\repos -ListProjects`
 
-The search path defaults to `MachineSpecificPaths.DotnetProjectsSearchPath`, falling back to `$env:USERPROFILE\Development` when that key is not configured. `MachineSpecificPaths` holds the expanded `PathTemplates`, so only a `PathTemplates.DotnetProjectsSearchPath` entry reaches it - the top-level `DotnetProjectsSearchPath` key the base ships (`"{Dev}"`) is currently not read, and without a `PathTemplates` entry the scan starts at `$env:USERPROFILE\Development`. Common build and cache folders (`node_modules`, `bin`, `obj`, `.git`, `.vs`, `packages`) are excluded by default; an exclusion matches anywhere in a project file's full path (so `bin` also skips a project under a folder such as `Cabinet`), not only a whole folder name. Only modern .NET target frameworks are evaluated against the installed SDKs; missing versions are surfaced with `Microsoft.DotNet.SDK.<major>` package commands.
+The search path defaults to the top-level `DotnetProjectsSearchPath` key (the base ships `"{Dev}"`), with its placeholders expanded for this machine type from `BasePaths`. A `DotnetProjectsSearchPath` placed under `PathTemplates` (read from `MachineSpecificPaths`) still wins, and `$env:USERPROFILE\Development` is the fallback when neither is configured or the placeholders cannot be expanded. Common build and cache folders (`node_modules`, `bin`, `obj`, `.git`, `.vs`, `packages`) are excluded by default; an exclusion matches a whole folder name anywhere in a project file's path (so `bin` skips `...\bin\...` but not a folder such as `Cabinet`), and an exclusion that itself contains a path separator matches as part of the full path. Only modern .NET target frameworks are evaluated against the installed SDKs; missing versions are surfaced with `Microsoft.DotNet.SDK.<major>` package commands.
 
 | Parameter       | Description                                                                                                                                                |
 | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `-SearchPath`   | Root directory to scan for .NET projects. Defaults to `MachineSpecificPaths.DotnetProjectsSearchPath` or `$env:USERPROFILE\Development` if not configured. |
-| `-ExcludePaths` | Array of names to exclude from scanning, matched as substrings of each project file's full path. Defaults to common build/cache folders.                  |
+| `-SearchPath`   | Root directory to scan for .NET projects. Defaults to the expanded `DotnetProjectsSearchPath` key or `$env:USERPROFILE\Development` if not configured.      |
+| `-ExcludePaths` | Array of folder names to exclude from scanning, matched against whole path segments (a value with a separator matches as part of the path). Defaults to common build/cache folders. |
 | `-ListProjects` | Also outputs the list of .NET projects found, grouped per target framework.                                                                                |
 
 ```powershell
@@ -361,7 +361,7 @@ Get-FastfetchLogoArgument -ImagePath "C:\Logos\Flag.png" -CellWidth 30 -CellHeig
 - **Description:** Enumerates all installed Windows applications (both 64-bit and 32-bit) by scanning the registry's Uninstall keys, then exports the results to `installed_apps.txt` on the Desktop.
 - **Usage:** `Get-InstalledApps`
 
-For each application found it records `DisplayName`, `DisplayVersion`, `Publisher`, `InstallDate`, `UninstallString`, `Bits`, and the registry `Path`, writing the formatted list to `C:\Users\<User>\Desktop\installed_apps.txt`. Any existing file at that location is cleared before the export.
+For each application found it records `DisplayName`, `DisplayVersion`, `Publisher`, `InstallDate`, `UninstallString`, `Bits`, and the registry `Path`, writing the formatted list to `C:\Users\<User>\Desktop\installed_apps.txt`. Any existing file at that location is cleared before the export. The local registry is read in its 64-bit view, so `Bits` is `64` for the plain `Uninstall` key and `32` for `Wow6432Node`, and when no application is found a warning replaces the success message.
 
 ```powershell
 # Enumerate all installed apps and export to Desktop\installed_apps.txt
@@ -591,7 +591,7 @@ Like fastfetch, onefetch emits one line per visual row when its output is redire
 | ------------ | ---------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
 | `-Measure`   | `switch`   | -                                    | Return the row count of the panel instead of displaying it. `0` when nothing would be shown.               |
 | `-Arguments` | `string[]` | `TerminalGreeting.Onefetch.Arguments` | Arguments passed through to the onefetch binary.                                                          |
-| `-Path`      | `string`   | `$PWD.Path`                          | The directory tested for a git repository. onefetch itself is not given this path and always reports on the current location. |
+| `-Path`      | `string`   | `$PWD.Path`                          | The directory tested for a git repository and handed to onefetch as the repository to report on. |
 | `-Settings`  | `psobject` | `Resolve-TerminalGreetingSettings`   | The resolved greeting settings. Omitted, this resolves for itself.                                        |
 
 ```powershell
@@ -763,11 +763,11 @@ New-SixelImage -Path $logo -MaxPixelWidth (36 * 10) -MaxPixelHeight (16 * 20)
 
 ## [New-WSLSymbolicLink](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/New-WSLSymbolicLink.ps1)
 
-- **Description:** Creates a single symlink inside a WSL distribution (`ln -s`) at `Path` pointing to `Target`, backing up whatever it replaces. The parent directory is created with `mkdir -p` if missing. A **real** file already sitting at the path is copied out to `<Repo>\Backups\Windows\SymbolicLinks\<DisplayName>\<yyyy-MM-dd_HH-mm-ss>\` on the Windows side (the timestamped folder created by [`Backup-RepositoryItem`](helper.md#backup-repositoryitem), the copy done in-distro with `cp -a`) before it is removed - gitignored, never committed - so linking over a shell profile or an SSH config that only ever existed inside the distro never loses it; when the backup cannot be written the link is skipped and the existing item is left untouched. An existing **symlink** at the path is removed without a backup: it carries no content of its own, so archiving it would only pile up copies of WinuX's own links on every re-run. A missing target is skipped with a warning instead of linked (self-heals once the target exists). Every `wsl.exe` call targets the given distribution explicitly (`wsl -d`) - Docker Desktop and podman machines routinely steal the WSL default, and a bare `wsl` would create the link inside the wrong distro. The WSL creation branch of [`SymbolicLinkMaker`](#symboliclinkmaker).
+- **Description:** Creates a single symlink inside a WSL distribution (`ln -s`) at `Path` pointing to `Target`, backing up whatever it replaces. The parent directory is created with `mkdir -p` if missing. A **real** file or directory already sitting at the path is copied out to `<Repo>\Backups\Windows\SymbolicLinks\<DisplayName>\<yyyy-MM-dd_HH-mm-ss>\` on the Windows side (the timestamped folder created by [`Backup-RepositoryItem`](helper.md#backup-repositoryitem), the copy done in-distro with `cp -a`) before it is removed - gitignored, never committed - so linking over a shell profile or an SSH config that only ever existed inside the distro never loses it; when the backup cannot be written the link is skipped and the existing item is left untouched. An existing **symlink** at the path is removed without a backup: it carries no content of its own, so archiving it would only pile up copies of WinuX's own links on every re-run. A missing target is skipped with a warning instead of linked (self-heals once the target exists). Every `wsl.exe` call targets the given distribution explicitly (`wsl -d`) - Docker Desktop and podman machines routinely steal the WSL default, and a bare `wsl` would create the link inside the wrong distro. The WSL creation branch of [`SymbolicLinkMaker`](#symboliclinkmaker).
 - **Parameters:** -Path, -Target, -Distribution, -DisplayName, -BackupRoot
 - **Usage:** `New-WSLSymbolicLink -Path "/home/user/.ssh/config" -Target "/mnt/c/Users/User/.ssh/config" -Distribution "Ubuntu"`
 
-`-DisplayName` is the label used in log messages **and** the backup subfolder name (`SymbolicLinkMaker` passes the entry's dotted key); it defaults to `Path`, with the characters a path carries but a folder name cannot hold replaced by `_`. `-BackupRoot` overrides the sink root replaced items are copied into and defaults to `<Repo>\Backups\Windows`; it is a **Windows** path, translated into the distribution with `wslpath -a` so the in-distro `cp -a` can write to it. A backup that cannot be translated or copied skips the entry rather than removing a file it could not save. Only an existing file or symlink is replaced: a real **directory** already at `Path` is neither backed up nor removed, so `ln -s` then creates the link inside it. Creation failures are logged, never thrown.
+`-DisplayName` is the label used in log messages **and** the backup subfolder name (`SymbolicLinkMaker` passes the entry's dotted key); it defaults to `Path`, with the characters a path carries but a folder name cannot hold replaced by `_`. `-BackupRoot` overrides the sink root replaced items are copied into and defaults to `<Repo>\Backups\Windows`; it is a **Windows** path, translated into the distribution with `wslpath -a` so the in-distro `cp -a` can write to it. A backup that cannot be translated or copied skips the entry rather than removing a file it could not save. A real directory is removed with `rm -rf` after its backup, a symlink with `rm -f` alone (never following it); when the existing item cannot be removed the link is skipped, because `ln -s` onto a directory that is still there would create the link inside it. Creation failures are logged, never thrown.
 
 **See also:** [SymbolicLinkMaker](#symboliclinkmaker), [New-WindowsSymbolicLink](#new-windowssymboliclink), [Get-SymbolicLinkEntries](#get-symboliclinkentries)
 
@@ -1280,11 +1280,11 @@ Set-LogLevel Verbose { Set-LockScreenWallpaper }
 
 ## [Set-PowerButtonActions](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Set-PowerButtonActions.ps1)
 
-- **Description:** Configures what happens when the power button is pressed, the sleep button is pressed, or the laptop lid is closed, for both battery and plugged-in states. Also controls Fast Startup, Sleep, and Hibernate visibility in the Power menu. With `-Auto` it reads per-machine settings from `PowerButtonActions` in `Configuration.psd1`; otherwise it accepts individual parameters with hardcoded defaults. Applies settings to ALL power schemes and enforces them via the registry to prevent Windows from reverting them. Idempotent - skips settings already at the desired value. Requires administrator privileges.
+- **Description:** Configures what happens when the power button is pressed, the sleep button is pressed, or the laptop lid is closed, for both battery and plugged-in states. Also controls Fast Startup, Sleep, and Hibernate visibility in the Power menu. Only the settings that are given are changed; every other one is left as it is. With `-Auto` it reads per-machine settings from `PowerButtonActions` in `Configuration.psd1`; otherwise it applies just the parameters passed. Applies settings to ALL power schemes and enforces them via the registry to prevent Windows from reverting them. Idempotent - skips settings already at the desired value. Requires administrator privileges.
 - **Parameters:** -Auto, -PowerButtonOnBattery, -PowerButtonPluggedIn, -SleepButtonOnBattery, -SleepButtonPluggedIn, -LidCloseOnBattery, -LidClosePluggedIn, -DisableFastStartup, -DisableSleep, -DisableHibernate
-- **Usage:** `Set-PowerButtonActions -Auto`, `Set-PowerButtonActions`, `Set-PowerButtonActions -PowerButtonPluggedIn "ShutDown" -PowerButtonOnBattery "Sleep"`, `Set-PowerButtonActions -Auto -LidCloseOnBattery Hibernate`
+- **Usage:** `Set-PowerButtonActions -Auto`, `Set-PowerButtonActions -LidCloseOnBattery Sleep`, `Set-PowerButtonActions -PowerButtonPluggedIn "ShutDown" -PowerButtonOnBattery "Sleep"`, `Set-PowerButtonActions -Auto -LidCloseOnBattery Hibernate`
 
-With `-Auto`, the function determines the machine type and reads its block from `PowerButtonActions` in `Configuration.psd1`; explicit parameters override the configured values; a missing `DisableFastStartup` is left unmanaged, while a missing `DisableSleep` / `DisableHibernate` is applied as `$false` (Sleep shown in the Power menu, `powercfg /hibernate on`). When `PowerButtonActions` is not configured (the empty base default) or has no entry for the machine type, a bare `-Auto` warns and leaves the power settings as-is - it no longer applies hardcoded defaults; only explicitly passed parameters are applied (over the built-in defaults as base). Without `-Auto`, every omitted parameter falls back to its hardcoded default - power button and lid-on-battery `ShutDown`, sleep buttons and lid-plugged-in `DoNothing`, and all three `Disable*` toggles `$true` - so even a call naming one action also disables Fast Startup, Sleep and Hibernate. The six button/lid actions are written through `powercfg` and reinforced directly in the registry across every power scheme, then the active scheme is re-activated to force the changes to take effect.
+With `-Auto`, the function determines the machine type and reads its block from `PowerButtonActions` in `Configuration.psd1`; explicit parameters override the configured values, and a key the block leaves out (an action or a `Disable*` toggle) is not managed. When `PowerButtonActions` is not configured (the empty base default) or has no entry for the machine type, a bare `-Auto` warns and leaves the power settings as-is, and `-Auto` with explicit parameters applies only those. Without `-Auto`, only the parameters passed are applied: `Set-PowerButtonActions -LidCloseOnBattery Sleep` changes that one action and nothing else, and a call that gives no setting at all warns and changes nothing. There are no hardcoded defaults any more (until 1.6.0 every omitted parameter took one, so a call naming one action also disabled Fast Startup, Sleep and Hibernate, and `-Auto` turned Sleep and Hibernate on for an entry that left them out). The six button/lid actions are written through `powercfg` and reinforced directly in the registry across every power scheme, then the active scheme is re-activated to force the changes to take effect.
 
 | Parameter               | Description                                                                                               |
 | ----------------------- | --------------------------------------------------------------------------------------------------------- |
@@ -1303,13 +1303,13 @@ With `-Auto`, the function determines the machine type and reads its block from 
 # Read and apply all configured button actions for this machine type
 Set-PowerButtonActions -Auto
 
-# Apply hardcoded defaults without touching configuration
-Set-PowerButtonActions
+# Change one action and leave everything else as it is
+Set-PowerButtonActions -LidCloseOnBattery Sleep
 
 # Read from config but override a single behavior
 Set-PowerButtonActions -Auto -LidCloseOnBattery Hibernate
 
-# Set the power button action for both power states explicitly (everything else takes its hardcoded default)
+# Set the power button action for both power states explicitly (everything else is left as it is)
 Set-PowerButtonActions -PowerButtonPluggedIn "ShutDown" -PowerButtonOnBattery "Sleep"
 ```
 
@@ -1927,7 +1927,7 @@ Unpin-TaskbarApps -SkipExplorerRestart
 - **Parameters:** -Path, -WhatIf
 - **Usage:** `Update-DirectoryNames`, `Update-DirectoryNames -Path "C:\My Folders"`, `Update-DirectoryNames -Path "C:\My Folders" -WhatIf`
 
-Only directories whose name ends in three underscore-separated segments matching `YYYY`, `MM`, and `DD` are considered. The trailing date is replaced with the current date while any leading name segments are preserved (for example `MyDocs_2024_01_15` becomes `MyDocs_2026_06_24`). Rename failures are caught and reported per directory, and when nothing needs changing a summary line confirms all directories are up to date.
+Only directories whose name ends in three underscore-separated segments matching `YYYY`, `MM`, and `DD` are considered. The trailing date is replaced with the current date while any leading name segments are preserved (for example `MyDocs_2024_01_15` becomes `MyDocs_2026_06_24`), and a name that is only a date (`2024_01_15`) becomes today's date. Rename failures are caught and reported per directory, and when nothing needs changing a summary line confirms all directories are up to date.
 
 | Parameter | Description                                                                            |
 | --------- | -------------------------------------------------------------------------------------- |

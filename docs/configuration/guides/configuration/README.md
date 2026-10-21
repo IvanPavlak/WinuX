@@ -1,6 +1,6 @@
 # Configuration Module Configuration Guides
 
-One configuration guide per exported function of the `Configuration` module, which covers programmatic edits to `Configuration.psd1` itself - the `Add-*` writers, the app-list overlay writer, and the schema and section primitives they are built on.
+One configuration guide per exported function of the `Configuration` module, which covers programmatic edits to the configuration files themselves - the `Add-*` writers (which write `Configuration.local.psd1` by default), the app-list overlay writer, and the schema and section primitives they are built on.
 
 The [Configuration module reference](../../../modules/configuration.md) is the authority on what each function *does*. These guides cover what to *configure* for it.
 
@@ -24,7 +24,7 @@ The [Configuration module reference](../../../modules/configuration.md) is the a
 
 These read no `Configuration.psd1` keys. Their guides record that fact and show how to call them.
 
-[ConvertTo-ActionString](ConvertTo-ActionString.md), [Test-ConfigurationKeyPath](Test-ConfigurationKeyPath.md)
+[ConvertTo-ActionString](ConvertTo-ActionString.md), [Get-ConfigurationWriteTarget](Get-ConfigurationWriteTarget.md), [Save-ConfigurationFile](Save-ConfigurationFile.md), [Test-ConfigurationKeyPath](Test-ConfigurationKeyPath.md)
 
 ## Related
 

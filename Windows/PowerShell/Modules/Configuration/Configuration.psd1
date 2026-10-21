@@ -1,7 +1,7 @@
 @{
 	ModuleVersion     = "1.0"
 	Author            = "Ivan Pavlak"
-	Description       = "Functions for modifying Configuration.psd1, window layout files, and the machine-local app list overlays"
+	Description       = "Functions for modifying Configuration.local.psd1 (or the base Configuration.psd1), window layout files, and the machine-local app list overlays"
 	RootModule        = "Configuration.psm1"
 	RequiredModules   = @()
 	FunctionsToExport = @(
@@ -14,6 +14,8 @@
 		'Add-SymbolicLink',
 		'Add-WindowLayout',
 		'Save-AppCsvOverlay',
-		'Test-ConfigurationSchema'
+		'Test-ConfigurationSchema',
+		'Get-ConfigurationWriteTarget',
+		'Save-ConfigurationFile'
 	)
 }

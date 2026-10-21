@@ -1,5 +1,5 @@
 {
-  "Version": "1.5.0",
+  "Version": "1.5.1",
   "Functions": {
     "Add-BrowserGroup": {
       "Module": "Configuration",
@@ -7286,7 +7286,12 @@
     "Parameters": {},
     "ConfigurationKeys": {
       "BootstrapConfig.WSLSetup": "0.1.26",
-      "PathTemplates.ObsidianStartupScript": "0.1.61"
+      "DefaultDatabaseProvider": "1.6.0",
+      "MachinePathMappings": "1.6.0",
+      "MachinePathMappings.Default": "1.6.0",
+      "MachinePathMappings.Test": "1.6.0",
+      "PathTemplates.ObsidianStartupScript": "0.1.61",
+      "Universal.WindowsTerminalHome": "1.6.0"
     }
   }
 }

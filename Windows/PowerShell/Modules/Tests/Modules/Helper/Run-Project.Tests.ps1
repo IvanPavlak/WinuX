@@ -158,6 +158,27 @@ Describe "Run-Project" {
 		@($script:openedCommands)[1] | Should -Match 'nir$'
 	}
 
+	It "drops a tab whose path key does not resolve and still opens the other tabs" {
+		# Resolve-ProjectPath used to end with a bare break, which left this loop and silently
+		# dropped every remaining tab of the project.
+		$global:Configuration = [PSCustomObject]@{
+			RunnableProjectMappings = @(@{ Name = "Demo"; Commands = @{ Missing = "dnr"; Ui = "nir" } })
+			ProjectTerminals        = @(@{ Name = "Demo"; Paths = @("Missing", "Ui") })
+			DockerComposeFiles      = @{}
+		}
+		Mock Resolve-ProjectPath { if ($PathKey -eq "Missing") { $null } else { "C:\Dev\Demo\$PathKey" } }
+		$script:openedCommands = $null
+		$script:openedTitles = $null
+		Mock Open-Terminal { $script:openedCommands = $Command; $script:openedTitles = $TabTitles }
+
+		Run-Project
+
+		Should -Invoke Open-Terminal -Times 1
+		@($script:openedCommands).Count | Should -Be 1
+		@($script:openedCommands)[0] | Should -Match 'nir$'
+		@($script:openedTitles) | Should -Be @("Demo.Ui")
+	}
+
 	It "opens a WSL entry as a WSL tab instead of handing its path to Set-Location" {
 		# The regression: a WSL path read as an ordinary explicit path reached
 		# "Set-Location -Path '/mnt/c/...'", and PowerShell resolves a rooted path against the

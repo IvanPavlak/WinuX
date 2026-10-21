@@ -64,6 +64,49 @@ Describe "New-WSLSymbolicLink" {
 		@(Get-ChildItem -Path $keyDir -Directory).Count | Should -Be 1
 	}
 
+	It "backs up and removes a real directory instead of linking inside it" {
+		# The existence probe used to be `test -f`, which a directory fails: the backup and the
+		# removal were skipped and `ln -s` put the link inside the directory.
+		Mock wsl {
+			$global:LASTEXITCODE = 0
+			if (($args -contains 'test') -and ($args -contains '-L') -and ($args -notcontains '-o')) {
+				$global:LASTEXITCODE = 1
+			}
+			if (($args -contains 'test') -and ($args -contains '-o') -and ($args -notcontains '-e')) {
+				$global:LASTEXITCODE = 1
+			}
+			if ($args -contains 'wslpath') { return "/mnt/c/backup" }
+		}
+
+		New-WSLSymbolicLink -Path "/home/test/.config/app" -Target "/mnt/c/app" -Distribution "Ubuntu" `
+			-BackupRoot $script:BackupRoot
+
+		Should -Invoke wsl -ParameterFilter { $args -contains 'cp' } -Times 1 -Exactly
+		Should -Invoke wsl -ParameterFilter { ($args -contains 'rm') -and ($args -contains '-rf') } -Times 1 -Exactly
+		Should -Invoke wsl -ParameterFilter { $args -contains 'ln' } -Times 1 -Exactly
+	}
+
+	It "removes an existing symlink without -r" {
+		New-WSLSymbolicLink -Path "/home/test/link" -Target "/mnt/c/target" -Distribution "Ubuntu" `
+			-BackupRoot $script:BackupRoot
+
+		Should -Invoke wsl -ParameterFilter { ($args -contains 'rm') -and ($args -contains '-f') } -Times 1 -Exactly
+		Should -Invoke wsl -ParameterFilter { ($args -contains 'rm') -and ($args -contains '-rf') } -Times 0
+	}
+
+	It "skips the link when the existing item cannot be removed" {
+		Mock wsl {
+			$global:LASTEXITCODE = 0
+			if ($args -contains 'rm') { $global:LASTEXITCODE = 1 }
+		}
+
+		New-WSLSymbolicLink -Path "/home/test/link" -Target "/mnt/c/target" -Distribution "Ubuntu" `
+			-BackupRoot $script:BackupRoot
+
+		Should -Invoke wsl -ParameterFilter { $args -contains 'ln' } -Times 0
+		Should -Invoke Write-LogError -Times 1
+	}
+
 	It "keeps the original and skips the link when the backup copy fails" {
 		Mock wsl {
 			$global:LASTEXITCODE = 0

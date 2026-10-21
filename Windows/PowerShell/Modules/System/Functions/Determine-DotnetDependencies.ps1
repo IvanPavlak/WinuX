@@ -11,14 +11,17 @@ function Determine-DotnetDependencies {
 		installed SDKs, and for every missing SDK prints a `winget install
 		Microsoft.DotNet.SDK.<major>` command and the matching WinGetApps.csv row.
 
-		Excludes common non-source directories (node_modules, bin, obj, etc.) by default; an
-		exclusion matches anywhere in a project's full path, not only a whole folder name.
+		Excludes common non-source directories (node_modules, bin, obj, etc.) by default. An
+		exclusion matches a whole folder name anywhere in a project's path, so `bin` skips
+		`...\bin\...` but not `...\Cabinet\...`; an exclusion that itself contains a path separator
+		matches as a substring of the full path.
 		With `-ListProjects`, each target framework is followed by the projects that use it.
 
 	.PARAMETER SearchPath
-		Root directory to scan for .NET projects. Defaults to `MachineSpecificPaths.DotnetProjectsSearchPath`
-		(only present when that key is placed under PathTemplates) or `$env:USERPROFILE\Development`
-		if not configured.
+		Root directory to scan for .NET projects. Defaults to the top-level `DotnetProjectsSearchPath`
+		key with its placeholders expanded for this machine type (a `DotnetProjectsSearchPath`
+		placed under PathTemplates, read from `MachineSpecificPaths`, still wins), or
+		`$env:USERPROFILE\Development` if neither is configured.
 
 	.PARAMETER ExcludePaths
 		Array of directory names to exclude from scanning. Defaults to common build/cache folders.
@@ -51,7 +54,16 @@ function Determine-DotnetDependencies {
 			$SearchPath = $global:MachineSpecificPaths.DotnetProjectsSearchPath
 		}
 		else {
-			$SearchPath = "$env:USERPROFILE\Development"
+			# The key the base configuration ships is top-level, outside PathTemplates, so it is
+			# never expanded into MachineSpecificPaths: expand its placeholders here.
+			$configuredPath = [string](Get-ConfigSetting -Path 'DotnetProjectsSearchPath' -Default '')
+			$machineBasePaths = (Get-ConfigSetting -Path 'BasePaths' -Default @{})[$global:MachineType]
+			if ($configuredPath -and $machineBasePaths -and $machineBasePaths.Dev -and $machineBasePaths.User) {
+				$configuredPath = Expand-Hashtable -Source $configuredPath -DevPath $machineBasePaths.Dev -UserPath $machineBasePaths.User -MachineTypeName $global:MachineType -RepoRoot (Get-RepositoryPath).Repo
+			}
+
+			# A token left unexpanded (no base paths for this machine type) is not a usable path.
+			$SearchPath = if ($configuredPath -and $configuredPath -notmatch '\{\w+\}') { $configuredPath } else { "$env:USERPROFILE\Development" }
 		}
 	}
 
@@ -72,8 +84,15 @@ function Determine-DotnetDependencies {
 		$projects = Get-ChildItem -Path $SearchPath -Filter $ext -Recurse -ErrorAction SilentlyContinue |
 			Where-Object {
 				$excluded = $false
+				$segments = $_.FullName -split '[\\/]'
 				foreach ($excludePath in $ExcludePaths) {
-					if ($_.FullName -match [regex]::Escape($excludePath)) {
+					$isMatch = if ($excludePath -match '[\\/]') {
+						$_.FullName -match [regex]::Escape($excludePath)
+					}
+					else {
+						$segments -contains $excludePath
+					}
+					if ($isMatch) {
 						$excluded = $true
 						break
 					}

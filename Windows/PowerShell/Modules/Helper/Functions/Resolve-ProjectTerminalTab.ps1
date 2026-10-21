@@ -32,6 +32,10 @@ function Resolve-ProjectTerminalTab {
 		Title is always "<ProjectName>.<Key>", the tab title Open-Terminal pins with
 		--suppressApplicationTitle and Close-ProjectTerminals matches on.
 
+		A path key that Resolve-ProjectPath cannot resolve (it logs the reason) returns $null
+		instead of a tab, and callers skip it: a "Path" tab with no path would run its command
+		in whatever directory the shell starts in.
+
 	.PARAMETER ProjectName
 		The project the entry belongs to. Only used to build the tab title and to resolve a path key
 		through Resolve-ProjectPath.
@@ -40,7 +44,8 @@ function Resolve-ProjectTerminalTab {
 		One element of a ProjectTerminals mapping's `Paths` - a string key or a hashtable.
 
 	.OUTPUTS
-		[pscustomobject] with Key, Title, Kind ("Path", "Default" or "WSL"), Path and Distribution.
+		[pscustomobject] with Key, Title, Kind ("Path", "Default" or "WSL"), Path and Distribution,
+		or $null when a path key does not resolve.
 
 	.EXAMPLE
 		Resolve-ProjectTerminalTab -ProjectName "MyProject" -PathEntry "Api"
@@ -111,6 +116,10 @@ function Resolve-ProjectTerminalTab {
 	else {
 		Resolve-ProjectPath -ProjectName $ProjectName -PathKey $pathKey
 	}
+
+	# Resolve-ProjectPath has already logged why the key did not resolve. A tab with no path
+	# would run its command wherever the shell starts, so there is no tab at all.
+	if (-not (Test-ConfigValue $tab.Path)) { return $null }
 
 	return $tab
 }

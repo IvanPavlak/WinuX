@@ -280,6 +280,7 @@
 		FirefoxExe               = "C:\Program Files\Mozilla Firefox\firefox.exe"
 		OutlookLauncherExe       = "C:\Windows\explorer.exe"
 		DockerExe                = "C:\Program Files\Docker\Docker\frontend\Docker Desktop.exe"
+		# DEPRECATED in 1.6.0, removed in 2.0.0: nothing reads WindowsTerminalHome.
 		WindowsTerminalHome      = "{User}"
 
 		# Application executable paths consumed by Start-Application (Open-* functions).
@@ -635,7 +636,6 @@
 		# Personal path templates ship empty - the functions that consume them warn and
 		# return until you set them in Configuration.local.psd1, e.g.:
 		#   ObsidianDirectory       = "{Dev}\Obsidian"
-		#   TrainingBackupDirectory = "{Dev}\ExampleBackup"
 		#   LearningBook            = "{User}\Learning\ExampleBook.pdf"
 		#   TrainingDirectory       = "{User}\Training\2026"
 		#   Dnd                     = @{ ExampleCharacter = "{Dev}\Obsidian\Campaigns\ExampleCampaign\ExampleCharacter.pdf" }
@@ -643,7 +643,6 @@
 		# DEPRECATED - Open-Obsidian launches Obsidian through its official CLI since 2026-09 and
 		# no longer reads this key. Kept so an existing Configuration.local.psd1 still merges.
 		ObsidianStartupScript   = ""
-		TrainingBackupDirectory = ""
 		LearningBook            = ""
 		TrainingDirectory       = ""
 		Dnd                     = @{}
@@ -1283,7 +1282,8 @@
 		Test = ""
 	}
 
-	# Maps machine type keys used in bootstrap/configuration
+	# DEPRECATED in 1.6.0, removed in 2.0.0: nothing reads MachinePathMappings. Per-machine
+	# paths live in BasePaths and PathTemplates.
 	MachinePathMappings           = @{
 		"Test"    = "Test"
 		"Default" = "Test"
@@ -2002,6 +2002,7 @@
 	# - "npm run dev"  : Direct npm command
 	# A path with no command in the table just gets its terminal tab, nothing run in it.
 	# ==========================================================================
+	# DEPRECATED in 1.6.0, removed in 2.0.0: nothing reads DefaultDatabaseProvider.
 	DefaultDatabaseProvider       = "PostgreSQL"
 
 	# Optional Run-Project steps, resolved like KillAll.Steps: each entry is a plain
@@ -2272,7 +2273,6 @@
 	#   - Open-DnD                    : Opens D&D campaign tools
 	#   - Open-SecureBrowser          : Opens Tor browser with RiseupVPN
 	#   - Send-WakeOnLan              : Wakes a machine via Wake-on-LAN
-	#   - Training-Backup             : Runs Training-Backup command
 	#   - Set-WorkspaceWindowLayout   : Applies window layout for the workspace
 	#   - Test-PrivacyStatus          : Tests browser privacy status
 	#   - Return                      : Exits workspace processing immediately

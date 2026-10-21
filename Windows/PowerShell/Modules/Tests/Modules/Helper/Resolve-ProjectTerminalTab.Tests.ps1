@@ -35,6 +35,13 @@ Describe "Resolve-ProjectTerminalTab" {
 			Should -Invoke Resolve-ProjectPath -Times 0
 		}
 
+		It "returns no tab when the path key does not resolve" {
+			# A Path tab without a path would run its command wherever the shell starts.
+			Mock Resolve-ProjectPath { $null }
+
+			Resolve-ProjectTerminalTab -ProjectName "Demo" -PathEntry "Missing" | Should -BeNullOrEmpty
+		}
+
 		It "titles every tab ProjectName.Key" {
 			(Resolve-ProjectTerminalTab -ProjectName "Demo" -PathEntry "Api").Title | Should -Be "Demo.Api"
 			(Resolve-ProjectTerminalTab -ProjectName "Demo" -PathEntry @{ Key = "Logs"; Path = "C:\Logs" }).Title | Should -Be "Demo.Logs"

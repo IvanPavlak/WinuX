@@ -602,6 +602,79 @@ Describe "Set-WorkspaceWindowLayout" {
 		Should -Invoke Start-FancyZones -Times 0
 		Should -Invoke Initialize-WorkspaceWindowLayoutRerun -Times 0
 		Should -Invoke ReRun-LastCommand -Times 0
+		# No rerun happened, so none is counted: a count written here survived into a later
+		# plain open and used up its rerun budget.
+		[Environment]::GetEnvironmentVariable('WORKSPACE_RERUN_COUNT', 'Process') | Should -BeNullOrEmpty
+		Should -Invoke Set-WorkspaceRerunMirror -Times 0 -ParameterFilter { $Name -eq 'WORKSPACE_RERUN_COUNT' -and $Value }
+	}
+
+	It "does not count a rerun when alongside escalation exhausts its in-process retries" {
+		Mock Test-Path { $true }
+		Mock Import-PowerShellDataFile {
+			@{
+				Layout   = @(
+					@{ ProcessName = 'Code'; WindowTitle = '*Code*'; DesktopNumber = 1 }
+				)
+				Monitors = @{
+					MonitorA = @{
+						VirtualDesktopLayouts = @{
+							1 = 'One'
+						}
+					}
+				}
+			}
+		}
+		Mock Get-VirtualDesktopCount { 1 }
+		Mock Set-WindowLayouts { @([PSCustomObject]@{ Status = 'Configured' }) }
+		Mock Snap-AllWindows {
+			$script:LastSnapAllWindowsResult = [PSCustomObject]@{
+				SnappedCount  = 0
+				FailedWindows = @([PSCustomObject]@{ Handle = [IntPtr]99; WindowTitle = 'Code'; ProcessName = 'Code'; Error = 'Snap failed after retries' })
+			}
+		}
+
+		Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace' -Alongside
+
+		Should -Invoke ReRun-LastCommand -Times 0
+		[Environment]::GetEnvironmentVariable('WORKSPACE_RERUN_COUNT', 'Process') | Should -BeNullOrEmpty
+		Should -Invoke Set-WorkspaceRerunMirror -Times 0 -ParameterFilter { $Name -eq 'WORKSPACE_RERUN_COUNT' -and $Value }
+	}
+
+	It "records the failed window's process for the respawn when the open throws after the snap pass" {
+		Mock Test-Path { $true }
+		Mock Import-PowerShellDataFile {
+			@{
+				Layout   = @(
+					@{ ProcessName = 'Code'; WindowTitle = '*Code*'; DesktopNumber = 1 }
+				)
+				Monitors = @{
+					MonitorA = @{
+						VirtualDesktopLayouts = @{
+							1 = 'One'
+						}
+					}
+				}
+			}
+		}
+		Mock Get-VirtualDesktopCount { 1 }
+		Mock Set-WindowLayouts { @([PSCustomObject]@{ Status = 'Configured' }) }
+		Mock Snap-AllWindows {
+			$script:LastSnapAllWindowsResult = [PSCustomObject]@{
+				SnappedCount  = 0
+				FailedWindows = @([PSCustomObject]@{ Handle = [IntPtr]99; WindowTitle = 'Code'; ProcessName = 'Code'; Error = 'Snap failed after retries' })
+			}
+		}
+		# A terminating error right after the snap pass reports its failures, so the catch path
+		# runs with the snap result in hand.
+		Mock Write-LogWarning { }
+		Mock Write-LogWarning { throw 'reporting failure' } -ParameterFilter { $Message -like 'Snap-AllWindows failed*' }
+
+		Set-WorkspaceWindowLayout -WorkspaceName 'MyWorkspace'
+
+		Should -Invoke ReRun-LastCommand -Times 1 -Exactly
+		# The catch path used to write only the title marker; the escalation path writes both.
+		Should -Invoke Set-WorkspaceRerunMirror -Times 1 -ParameterFilter { $Name -eq 'WORKSPACE_WINDOW_ONLY_RETRY_PROCESS' -and $Value -eq 'Code' }
+		Should -Invoke Set-WorkspaceRerunMirror -Times 1 -ParameterFilter { $Name -eq 'WORKSPACE_RERUN_COUNT' -and $Value -eq '1' }
 	}
 
 	Context "Rerun state inherited from the registry by a respawned shell" {

@@ -11,9 +11,11 @@ function Update-LayoutSectionHeaders {
 
 		Entries are re-sorted by DesktopNumber, monitor order (Resolve-MonitorLabel), the zone's
 		index in ZoneNameMappings, then original position. A pair with no VirtualDesktopLayouts
-		entry is headed "Layout: Unknown". Only entries whose text carries both DesktopNumber = <n>
-		and a double-quoted Monitor = "..." are re-emitted; any other entry is dropped from the
-		rewritten array.
+		entry is headed "Layout: Unknown". Every entry must carry DesktopNumber = <n> and a quoted
+		Monitor = "..." (single or double quotes) for the array to be rewritten; when any entry
+		lacks either, a warning is logged and the content is returned unchanged rather than
+		rewritten without that entry. Single-line entries (@{ ... } on one line) are read as
+		entries of their own.
 
 		Only the base Layout array is rewritten. A ProjectOverrides block after it (project
 		variants of the layout, see Merge-LayoutProjectOverrides) is carried over verbatim.
@@ -98,11 +100,18 @@ function Update-LayoutSectionHeaders {
 		$inEntry = $false
 
 		foreach ($line in $layoutContent -split '\r?\n') {
-			# Detect start of an entry
-			if ($line -match '^\s*@\{') {
-				$inEntry = $true
-				$braceDepth = 1
+			# Detect start of an entry. The braces of the opening line itself count, so an entry
+			# written on one line closes on that line instead of swallowing the next one.
+			if (-not $inEntry -and $line -match '^\s*@\{') {
 				$currentEntry = $line
+				$braceDepth = ([regex]::Matches($line, '\{')).Count - ([regex]::Matches($line, '\}')).Count
+				if ($braceDepth -le 0) {
+					$entries += $currentEntry
+					$currentEntry = ""
+				}
+				else {
+					$inEntry = $true
+				}
 			}
 			elseif ($inEntry) {
 				$currentEntry += "`n$line"
@@ -148,10 +157,10 @@ function Update-LayoutSectionHeaders {
 			if ($entry -match 'DesktopNumber\s*=\s*(\d+)') {
 				$desktopNum = [int]$matches[1]
 			}
-			if ($entry -match 'Monitor\s*=\s*"([^"]+)"') {
+			if ($entry -match 'Monitor\s*=\s*["'']([^"'']+)["'']') {
 				$monitor = $matches[1]
 			}
-			if ($entry -match 'Zone\s*=\s*"([^"]+)"') {
+			if ($entry -match 'Zone\s*=\s*["'']([^"'']+)["'']') {
 				$zone = $matches[1]
 			}
 
@@ -171,6 +180,14 @@ function Update-LayoutSectionHeaders {
 					Content       = $entry
 				}
 			}
+		}
+
+		# An entry whose desktop or monitor cannot be read from its text has no place in the
+		# rebuilt array. Rewriting without it would delete it from the file, so leave the content
+		# as it is.
+		if ($entriesWithMetadata.Count -ne $entries.Count) {
+			Write-LogWarning "Section headers not updated: $($entries.Count - $entriesWithMetadata.Count) layout entry(ies) carry no readable DesktopNumber or Monitor value!"
+			return $Content + $projectOverridesTail
 		}
 
 		# Group and rebuild with section headers

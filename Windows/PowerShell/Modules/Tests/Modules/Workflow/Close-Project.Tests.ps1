@@ -169,7 +169,7 @@ Describe "Close-Project" {
 			Close-Project -Project "ExampleProject"
 
 			$script:patternCalls.Count | Should -Be 1
-			$script:patternCalls[0] | Should -Contain "(?i)ExampleProject"
+			$script:patternCalls[0] | Should -Contain "(?i)(?<!\w)ExampleProject(?!\w)"
 			$script:patternCalls[0] | Should -Contain "(?i)swagger ui"
 			$script:patternCalls[0] | Should -Contain "(?i)problem loading page"
 		}
@@ -178,7 +178,18 @@ Describe "Close-Project" {
 			Close-Project -Project "ExampleProject"
 
 			$script:patternCalls.Count | Should -Be 1
-			$script:patternCalls[0] | Should -Be @("(?i)ExampleProject")
+			$script:patternCalls[0] | Should -Be @("(?i)(?<!\w)ExampleProject(?!\w)")
+		}
+
+		It "matches the project name as a whole word only" {
+			# A bare substring made project "Server" close every tab with "server" in its title.
+			Close-Project -Project "ExampleProject"
+
+			$namePattern = @($script:patternCalls[0])[0]
+			"ExampleProject - Swagger UI" | Should -Match $namePattern
+			"ExampleProject.Api - Chrome" | Should -Match $namePattern
+			"MyExampleProjectApp - Chrome" | Should -Not -Match $namePattern
+			"ExampleProject2 - Chrome" | Should -Not -Match $namePattern
 		}
 	}
 
