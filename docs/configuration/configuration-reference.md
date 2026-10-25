@@ -1252,6 +1252,8 @@ Anything other than the three valid values is reported as unknown rather than si
   `CoreAiRules`, `AiSkills` and `AiMods` are its aliases until 2.0.0: with no `AiArtifacts` entry,
   any of them on turns it on, and in `-Skip` / `-Include` they stand for it), `AiMarketplaces` (Claude Code plugin marketplaces registered in the user's
   Claude Code settings and their plugins installed through the CLI via `Deploy-AiMarketplaces` - see [AI Mods - Marketplaces](../ai/mods.md#marketplaces)),
+  `AiMcpServers` (the MCP servers of [`AiMcpServers`](#ai-mcp-servers) added to Claude Code through its CLI and to Codex's
+  `config.toml` via `Deploy-AiMcpServers` - see [AI MCP Servers](../ai/mcp-servers.md)),
   `ObsidianCli` (`Enable-ObsidianCli -CreateIfMissing`
   writes `"cli": true` into Obsidian's per-machine `%APPDATA%\obsidian\obsidian.json`, which a synced vault never carries,
   so `Open-Obsidian` can load workspaces - see [Enable-ObsidianCli](guides/application/Enable-ObsidianCli.md)),
@@ -1499,6 +1501,43 @@ AiMarketplaces = @{
     }
     PluginConfigs = @{
         "my-plugin" = @{ options = @{ theme = "dark"; pulse = $true } }
+    }
+}
+```
+
+---
+
+## AI MCP Servers
+
+**Key:** `AiMcpServers` → Hashtable: the MCP servers every machine adds to Claude Code and Codex, and which of the two apps each machine type gets them
+
+**Consumer functions:** [`Deploy-AiMcpServers`](../modules/ai.md#deploy-aimcpservers)
+
+An MCP server is not an artifact a link can carry: Claude Code keeps its servers in the user's `~\.claude.json`, Codex in `~\.codex\config.toml`, so they are written there.
+
+- `Deploy` - The apps to add the servers to, per machine type with a `Default` fallback (`@{ Default = @("claude-code", "codex"); Work = @("claude-code") }`), or one array for every machine type. The values are `claude-code` and `codex`; any other is warned about and skipped. Ships empty, so nothing is added until a fork names an app.
+- `Servers` - One entry per server, keyed by its name (letters, digits, `-` and `_`; the name each app lists it under). An entry is either an HTTP server - `Url` (an `http(s)` address), optional `Transport` (`http`, the default, or `sse`, which Codex cannot read, so an `sse` server reaches Claude Code only), optional `Headers` (a hashtable of header names and values) and optional `BearerTokenEnvVar` (the name of the environment variable holding a token: Claude Code gets an `Authorization: Bearer ${VAR}` header it expands when it starts, Codex `bearer_token_env_var`; not together with an `Authorization` header) - or a stdio server: `Command`, optional `Args` (an array) and optional `Env` (a hashtable of variables, as strings). Optional `Machine` scopes an entry to some machine types (`"PC/Work"`, validated by `Test-MachineTypeScope`). An entry with both `Url` and `Command`, neither, or a key the other kind takes is reported and skipped. Ships empty.
+
+**Side effect:** `Deploy-AiMcpServers` runs `claude mcp add --scope user` for every server the `mcpServers` block of `~\.claude.json` does not carry yet, and `claude mcp remove --scope user` followed by `claude mcp add` for one it carries with another definition (on Windows and against the Claude Code CLI inside WSL), and writes each server's `[mcp_servers.<name>]` table into `~\.codex\config.toml` (`$env:CODEX_HOME\config.toml` when set; `/home/<DefaultWSLUsername>/.codex/config.toml` in WSL), every other line of the file kept. Servers are added and updated, never removed.
+
+Deployment is opt-in via `BootstrapConfig.Steps.AiMcpServers`. Never put a secret in the configuration: a token belongs in the environment variable `BearerTokenEnvVar` names. A server that signs in with OAuth needs the sign-in once per machine and app (`/mcp` in Claude Code, `codex mcp login <name>`). Design: [AI MCP Servers](../ai/mcp-servers.md).
+
+```powershell
+AiMcpServers = @{
+    Deploy  = @{ Default = @("claude-code", "codex") }
+    Servers = @{
+        "my-remote" = @{ Url = "https://mcp.example.com/mcp" }
+        "my-keyed"  = @{
+            Url               = "https://api.example.com/mcp"
+            Headers           = @{ "X-Project" = "MyProject" }
+            BearerTokenEnvVar = "MY_API_KEY"
+        }
+        "my-local"  = @{
+            Command = "npx"
+            Args    = @("-y", "my-mcp-server")
+            Env     = @{ LOG_LEVEL = "info" }
+            Machine = "PC/Work"
+        }
     }
 }
 ```

@@ -1,5 +1,5 @@
 {
-  "Version": "1.6.0",
+  "Version": "1.7.0",
   "Functions": {
     "Add-BrowserGroup": {
       "Module": "Configuration",
@@ -850,6 +850,19 @@
       }
     },
     "Deploy-AiMarketplaces": {
+      "Module": "AI",
+      "Parameters": {
+        "Command": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "WslCommand": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Deploy-AiMcpServers": {
       "Module": "AI",
       "Parameters": {
         "Command": {
@@ -7126,6 +7139,9 @@
     "AiMarketplaces",
     "AiMarketplaces.Marketplaces",
     "AiMarketplaces.PluginConfigs",
+    "AiMcpServers",
+    "AiMcpServers.Deploy",
+    "AiMcpServers.Servers",
     "AiMods",
     "AiMods.Harnesses",
     "AiMods.Root",

@@ -96,6 +96,8 @@ Every step is individually toggleable via `BootstrapConfig.Steps` (or per invoca
 │  │      names (skills, mods, rules, prompts, agents), Windows and WSL       │
 │  ├─→ Deploy-AiMarketplaces (opt-in via Steps.AiMarketplaces)                │
 │  │   └─ Claude Code plugin marketplaces + their plugins                     │
+│  ├─→ Deploy-AiMcpServers (opt-in via Steps.AiMcpServers)                    │
+│  │   └─ MCP servers into Claude Code (its CLI) and Codex (config.toml)      │
 │  ├─→ Enable-ObsidianCli (opt-in via Steps.ObsidianCli)                      │
 │  ├─→ Deploy-VSCodeProfiles (opt-in via Steps.VSCodeProfiles)                │
 │  └─→ Configure-WSLSSH                                                       │
@@ -136,6 +138,7 @@ execution order):
 | `NuGetConfig`        | Writes a NuGet config (prompts for a GitHub PAT)                | Off - opt in via `BootstrapConfig.Steps`      |
 | `AiArtifacts`        | Machine-global AI skills, mods, rules, prompts and agents linked into the apps `AiArtifacts.Deploy` names (the deprecated names `CoreAiRules`, `AiSkills`, `AiMods` are its aliases) | Off - opt in via `BootstrapConfig.Steps` |
 | `AiMarketplaces`     | Claude Code plugin marketplaces in the user settings, and their plugins installed through the CLI | Off - opt in via `BootstrapConfig.Steps` |
+| `AiMcpServers`       | MCP servers added to Claude Code through its CLI and to Codex's `config.toml` | Off - opt in via `BootstrapConfig.Steps` |
 | `ObsidianCli`        | Turns the Obsidian command line interface on (per-machine Obsidian app setting) | Off - opt in via `BootstrapConfig.Steps` |
 | `VSCodeProfiles`     | Links VS Code profile files from the repository and installs their extensions | Off - opt in via `BootstrapConfig.Steps` |
 | `LockedStartLayout`  | Locks the taskbar layout via registry policy                    | Off - opt in via `BootstrapConfig.Steps`      |

@@ -20,6 +20,8 @@ This layered approach means simple questions use minimal tokens, while complex t
 
 Separate from the per-repository context system above, the [AI artifacts](artifacts.md) are deployed machine-globally, so every AI app on the machine loads them in every project: skills, Claude Code mods, rules, prompts and agents, kept under `AI/<Kind>/<source>/<item>` and linked by `Deploy-AiArtifacts` into the apps `AiArtifacts.Deploy` names (Claude Code, Codex, Gemini CLI, Copilot, or an app of your own), on Windows and in WSL. `Update-AiArtifacts` vendors upstream repositories at a pinned commit. WinuX ships the mechanism, the inactive harness catalogue, an example rules skeleton and two product skills; the rest is the fork's. Deployment is opt-in via `BootstrapConfig.Steps.AiArtifacts`. The kind specifics are on [CoreAiRules](coreairules.md) (always-on rules and Claude Code's managed settings), [AI Skills](skills.md) and [AI Mods](mods.md).
 
+MCP servers are deployed machine-globally as well, but they are not artifacts: each app keeps them in its own configuration file. [AI MCP Servers](mcp-servers.md) covers `Deploy-AiMcpServers`, which adds the servers under `AiMcpServers` to Claude Code (through its CLI) and Codex (its `config.toml`), opt-in via `BootstrapConfig.Steps.AiMcpServers`.
+
 ## Directory Structure
 
 ```

@@ -52,6 +52,7 @@
     - [CoreAiRules](/ai/coreairules.md)
     - [AI Skills](/ai/skills.md)
     - [AI Mods](/ai/mods.md)
+    - [AI MCP Servers](/ai/mcp-servers.md)
 
 - **Contributing**
     - [Fork Model](/contributing/fork-model.md)

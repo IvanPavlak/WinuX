@@ -28,7 +28,7 @@
 # Individual bootstrap steps are toggleable
 # via BootstrapConfig.Steps (see that section); invasive steps such as
 # MicrosoftActivationScripts, Win11Debloat, DeveloperMode, NuGetConfig,
-# UpgradeAll, AiArtifacts, AiMarketplaces, ObsidianCli and LockedStartLayout are OFF
+# UpgradeAll, AiArtifacts, AiMarketplaces, AiMcpServers, ObsidianCli and LockedStartLayout are OFF
 # until you opt in. A vanilla run
 # therefore installs the framework apps but upgrades nothing else already
 # on the machine.
@@ -1044,6 +1044,40 @@
 		Marketplaces  = @{}
 		PluginConfigs = @{}
 	}
+	# ==========================================================================
+	# AI MCP Servers (see docs/ai/mcp-servers.md)
+	# ==========================================================================
+	# MCP servers live in each app's own configuration, not in a folder Deploy-AiArtifacts could
+	# link: Claude Code keeps them in the user's ~\.claude.json, Codex in ~\.codex\config.toml.
+	# Deploy-AiMcpServers (opt in via BootstrapConfig.Steps.AiMcpServers) adds every server named
+	# here to the apps Deploy names for this machine type, on Windows and in WSL: to Claude Code at
+	# user scope through `claude mcp add --scope user` (a server carried with another definition
+	# is removed and added again), and to Codex as its [mcp_servers.<name>] table, every other line
+	# of config.toml kept. Servers are added and updated, never removed.
+	# Deploy  : the apps, per machine type with a Default fallback (or one array for every type):
+	#           "claude-code", "codex".
+	# Servers : one entry per server, keyed by its name (letters, digits, - and _). Either
+	#           Url (an HTTP server; Transport = "sse" for an SSE one, which Codex cannot read) with
+	#           optional Headers and BearerTokenEnvVar, or Command (a stdio server) with optional
+	#           Args and Env. Machine = "PC/Work" scopes it to some machine types.
+	# Never put a secret here: BearerTokenEnvVar names the environment variable holding the token
+	# (Claude Code gets an `Authorization: Bearer ${VAR}` header, Codex bearer_token_env_var). A
+	# server that signs in with OAuth needs the sign-in once per machine: /mcp in Claude Code,
+	# `codex mcp login <name>` in Codex.
+	# Ships with no servers - Deploy-AiMcpServers no-ops until a fork adds one in
+	# Configuration.local.psd1, e.g.:
+	#   Deploy  = @{ Default = @("claude-code", "codex") }
+	#   Servers = @{
+	#       "my-remote" = @{ Url = "https://mcp.example.com/mcp" }                     # OAuth sign-in
+	#       "my-keyed"  = @{ Url = "https://api.example.com/mcp"; BearerTokenEnvVar = "MY_API_KEY"
+	#                        Headers = @{ "X-Project" = "MyProject" } }
+	#       "my-local"  = @{ Command = "npx"; Args = @("-y", "my-mcp-server"); Env = @{ LOG_LEVEL = "info" }
+	#                        Machine = "PC/Work" }
+	#   }
+	AiMcpServers                  = @{
+		Deploy  = @{}
+		Servers = @{}
+	}
 
 	# ==========================================================================
 	# Machine-Specific Overrides (Only Store Differences!)
@@ -1143,7 +1177,7 @@
 	# - Upgrade-All, fork-defined PersonalSteps, Install-DotnetEF
 	# - Set-EnvironmentVariables, Create-CondaEnvironments, Configure-NuGetConfig
 	# - Configure-Taskbar, Initialize-WSLEnvironment, SymbolicLinkMaker, Deploy-AiArtifacts (opt-in),
-	#   Deploy-AiMarketplaces (opt-in), Enable-ObsidianCli (opt-in),
+	#   Deploy-AiMarketplaces (opt-in), Deploy-AiMcpServers (opt-in), Enable-ObsidianCli (opt-in),
 	#   Deploy-VSCodeProfiles (opt-in)
 	# - Configure-WSLSSH, Lock taskbar layout, Restart-Machine
 	#
@@ -1185,7 +1219,8 @@
 		# (prompts for a GitHub PAT), UpgradeAll (upgrades every package already
 		# on the machine, not just WinuX's own), AiArtifacts (machine-global AI skills,
 		# mods, rules, prompts and agents), AiMarketplaces
-		# (Claude Code plugin marketplaces in the user settings and `claude plugin install`), ObsidianCli
+		# (Claude Code plugin marketplaces in the user settings and `claude plugin install`), AiMcpServers
+		# (MCP servers added to Claude Code and Codex), ObsidianCli
 		# (edits Obsidian's per-machine app settings), VSCodeProfiles (links VS Code profile files,
 		# registers profiles in VS Code's state and installs extensions), LockedStartLayout.
 		#
@@ -1236,6 +1271,9 @@
 		# - AiMarketplaces             : Deploy-AiMarketplaces (OFF by default - registers the Claude Code
 		#                                plugin marketplaces under AiMarketplaces in the user settings and
 		#                                installs their plugins through the CLI, see docs/ai/mods.md)
+		# - AiMcpServers               : Deploy-AiMcpServers (OFF by default - adds the MCP servers under
+		#                                AiMcpServers to Claude Code through its CLI and to Codex's
+		#                                config.toml, see docs/ai/mcp-servers.md)
 		# - ObsidianCli                : Enable-ObsidianCli -CreateIfMissing (OFF by default - sets
 		#                                "cli": true in %APPDATA%\obsidian\obsidian.json, Obsidian's
 		#                                per-machine app settings a synced vault never carries, so
