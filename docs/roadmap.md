@@ -64,6 +64,10 @@ These are deliberate. They keep the project honest about what it is.
 - **The contract is declared stable.** The configuration schema, the bootstrap contract and the
   set of exported functions are versioned under strict semantic versioning from 1.0.0 onward,
   with the deprecation policy described in VERSIONING.
+- **Deprecation warnings where you will see them (1.6.0).** `Test-ConfigurationSchema` warns on
+  every deprecated configuration key or step name still in use and names its replacement, at
+  every profile load and at the start of the bootstrap, so you learn what to migrate before the
+  next MAJOR removes it.
 - **The personal-fork model is the supported way to use WinuX.** A maintainer's own machine and
   the public project share one source of truth; see the [Fork Model](contributing/fork-model.md)
   page.
@@ -72,15 +76,9 @@ These are deliberate. They keep the project honest about what it is.
 
 WinuX is the maintainer's daily system, and the 1.x releases carry what daily use produces:
 fixes, new functions, new configuration options, and version pins that follow the tested
-machines. There is no feature list to tick off. Three things are known to be ahead, and none
+machines. There is no feature list to tick off. Two things are known to be ahead, and none
 has a date:
 
-- **Deprecation warnings where you will see them** - they arrive with the next deprecated
-  configuration key, not before. `Test-ConfigurationSchema` will warn on the old key and name its
-  replacement, at every profile load and at the start of the bootstrap, so you learn what to
-  migrate before the next MAJOR removes it. The two keys deprecated during 0.x
-  (`BootstrapConfig.WSLSetup`, still honored, and `PathTemplates.ObsidianStartupScript`, ignored)
-  are covered by the same mechanism when it lands.
 - **Multi-monitor arrangements beyond the maintainer's own** - tested when that hardware is at
   hand. Other hardware, display scaling, keyboard layouts and locales the maintainer does not run
   are covered by the people who run them: a bug report with a configuration that reproduces it is

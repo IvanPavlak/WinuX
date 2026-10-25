@@ -5,8 +5,8 @@ function Resolve-AiModsPluginDirs {
 
 	.DESCRIPTION
 		Claude Code loads one plugin per entry of CLAUDE_CODE_PLUGIN_DIRS, a path list in the
-		platform's separator (';' on Windows, ':' in WSL and on macOS). Deploy-AiMods owns the
-		entries under its harness directory and nothing else, so the merge is:
+		platform's separator (';' on Windows, ':' in WSL). The claude-plugin-dirs hook of
+		Deploy-AiArtifacts owns the entries under the mods folder and nothing else, so the merge is:
 
 		  1. Every deployed link path, in the order given.
 		  2. Every existing entry NOT under the harness, verbatim and in its original order -
@@ -18,13 +18,13 @@ function Resolve-AiModsPluginDirs {
 		case-insensitively; with any other separator they compare exactly.
 
 		Pure: reads and writes nothing, so the merge is testable on its own and shared by the
-		Windows and WSL halves of Deploy-AiMods.
+		Windows and WSL sides of Deploy-AiArtifacts.
 
 	.PARAMETER Existing
 		The current CLAUDE_CODE_PLUGIN_DIRS value, or empty when the key is not set.
 
 	.PARAMETER Deployed
-		The link paths Deploy-AiMods just created, one per mod.
+		The link paths Deploy-AiArtifacts just created, one per mod.
 
 	.PARAMETER Harness
 		The harness directory the deployed links live in (e.g. C:\Users\You\.claude\mods).

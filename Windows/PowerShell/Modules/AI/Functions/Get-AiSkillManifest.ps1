@@ -1,12 +1,12 @@
 function Get-AiSkillManifest {
 	<#
 	.SYNOPSIS
-		Reads the UPSTREAM.md manifest that Update-AiSkills writes into a vendored skills source folder.
+		Reads the UPSTREAM.md manifest that Update-AiArtifacts writes into a vendored source folder.
 
 	.DESCRIPTION
-		Returns a hashtable with the pinned upstream commit and the names of every skill the
+		Returns a hashtable with the pinned upstream commit and the names of every item the
 		manifest lists (the first column of its skill table, rows shaped like "| `name` | ...").
-		Update-AiSkills uses the names to know which folders it owns and may replace or remove;
+		Update-AiArtifacts uses the names to know which folders it owns and may replace or remove;
 		anything else in the source folder is left alone. -Check uses the commit to compare
 		against the current upstream head.
 
