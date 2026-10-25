@@ -12,8 +12,8 @@ function Bootstrap {
 		no-op on their own when their configuration section is empty, so an enabled step on
 		the empty base config applies nothing. Opt-in steps that act the moment they run
 		default off: MicrosoftActivationScripts, Win11Debloat, RepositoryUpdate, DeveloperMode,
-		NuGetConfig, UpgradeAll, AiArtifacts, AiMarketplaces, ObsidianCli, VSCodeProfiles,
-		LockedStartLayout.
+		NuGetConfig, UpgradeAll, AiArtifacts, AiMarketplaces, AiMcpServers, ObsidianCli,
+		VSCodeProfiles, LockedStartLayout.
 
 		Execution sequence:
 		0. Test-ConfigurationSchema, which reports missing keys and every deprecated configuration
@@ -35,7 +35,8 @@ function Bootstrap {
 		10. WSL environment initialization, symbolic links, AI artifacts - skills, mods, rules,
 		    prompts and agents, on Windows and in WSL (opt-in via Steps.AiArtifacts; the deprecated
 		    step names CoreAiRules, AiSkills and AiMods are its aliases), Claude Code plugin marketplaces
-		    and their plugins (opt-in via Steps.AiMarketplaces), Obsidian CLI flag (opt-in via
+		    and their plugins (opt-in via Steps.AiMarketplaces), the MCP servers of Claude Code and
+		    Codex (opt-in via Steps.AiMcpServers), Obsidian CLI flag (opt-in via
 		    Steps.ObsidianCli), VS Code profiles (opt-in via Steps.VSCodeProfiles), WSL SSH setup
 		    (WSL steps use the same gate)
 		11. Lock taskbar layout, restart Explorer, restart machine
@@ -283,6 +284,11 @@ function Bootstrap {
 		# AiMarketplaces.Marketplaces in the user settings, seeds the plugins' options and installs the
 		# plugins through the CLI. The base names no marketplaces, so this is opt-in as well.
 		if ($steps.AiMarketplaces) { Deploy-AiMarketplaces } else { Write-LogWarning "AI marketplaces skipped - opt in via BootstrapConfig.Steps.AiMarketplaces" }
+
+		# MCP servers (docs/ai/mcp-servers.md) - adds every server under AiMcpServers.Servers to the
+		# apps AiMcpServers.Deploy names (Claude Code through its CLI, Codex in its config.toml), on
+		# Windows and in WSL. The base names no servers, so this is opt-in as well.
+		if ($steps.AiMcpServers) { Deploy-AiMcpServers } else { Write-LogWarning "AI MCP servers skipped - opt in via BootstrapConfig.Steps.AiMcpServers" }
 
 		# Obsidian's command line interface toggle is per-machine app state ("cli": true in
 		# %APPDATA%\obsidian\obsidian.json), never carried by a synced vault - Open-Obsidian cannot

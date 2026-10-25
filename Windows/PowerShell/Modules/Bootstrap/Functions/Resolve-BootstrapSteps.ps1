@@ -20,7 +20,8 @@ function Resolve-BootstrapSteps {
 		(upgrades every package already on the machine, not just WinuX's own),
 		AiArtifacts (machine-global AI skills, mods, rules, prompts and agents
 		links), AiMarketplaces (Claude Code plugin
-		marketplaces in the user settings and `claude plugin install`), ObsidianCli (turns the Obsidian command line
+		marketplaces in the user settings and `claude plugin install`), AiMcpServers
+		(MCP servers added to Claude Code and Codex), ObsidianCli (turns the Obsidian command line
 		interface on in Obsidian's per-machine app settings), VSCodeProfiles
 		(links VS Code profile files, registers profiles in VS Code's state and
 		installs extensions), and LockedStartLayout.
@@ -100,6 +101,7 @@ function Resolve-BootstrapSteps {
 		SymbolicLinks              = $true
 		AiArtifacts                = $false
 		AiMarketplaces             = $false
+		AiMcpServers               = $false
 		ObsidianCli                = $false
 		VSCodeProfiles             = $false
 		LockedStartLayout          = $false

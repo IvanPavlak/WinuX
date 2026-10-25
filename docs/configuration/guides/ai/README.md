@@ -1,6 +1,6 @@
 # AI Module Configuration Guides
 
-One configuration guide per exported function of the `AI` module, which covers machine-global AI coding agent setup: one generic mechanism that vendors the AI artifacts (skills, mods, rules, prompts and agents) and deploys them into the AI apps a machine uses, on Windows and in WSL, plus Claude Code plugin marketplace registration.
+One configuration guide per exported function of the `AI` module, which covers machine-global AI coding agent setup: one generic mechanism that vendors the AI artifacts (skills, mods, rules, prompts and agents) and deploys them into the AI apps a machine uses, on Windows and in WSL, plus Claude Code plugin marketplace registration and the MCP servers of Claude Code and Codex.
 
 The [AI module reference](../../../modules/ai.md) is the authority on what each function *does*. These guides cover what to *configure* for it. The design is on [AI Artifacts](../../../ai/artifacts.md).
 
@@ -13,6 +13,7 @@ The [AI module reference](../../../modules/ai.md) is the authority on what each 
 | -------- | ------------------ | ----- |
 | `Deploy-AiArtifacts` | `AiArtifacts`, `AiHarnesses`, `BootstrapConfig.Steps.AiArtifacts`, `DefaultWSLDistribution`, `DefaultWSLUsername` | [Deploy-AiArtifacts](Deploy-AiArtifacts.md) |
 | `Deploy-AiMarketplaces` | `AiMarketplaces`, `BootstrapConfig.Steps.AiMarketplaces`, `DefaultWSLDistribution`, `DefaultWSLUsername` | [Deploy-AiMarketplaces](Deploy-AiMarketplaces.md) |
+| `Deploy-AiMcpServers` | `AiMcpServers`, `BootstrapConfig.Steps.AiMcpServers`, `DefaultWSLDistribution`, `DefaultWSLUsername`, `ValidMachineTypes` | [Deploy-AiMcpServers](Deploy-AiMcpServers.md) |
 | `Get-AiArtifactPlan` | `AiArtifacts.Deploy`, `AiArtifacts.Use`, `AiHarnesses` | [Get-AiArtifactPlan](Get-AiArtifactPlan.md) |
 | `Get-AiArtifactRoster` | `AiArtifacts.Root`, `AiArtifacts.Sources`, `AiArtifacts.Exclude` | [Get-AiArtifactRoster](Get-AiArtifactRoster.md) |
 | `Get-AiModRoster` (deprecated) | `AiMods.Root` | [Get-AiModRoster](Get-AiModRoster.md) |

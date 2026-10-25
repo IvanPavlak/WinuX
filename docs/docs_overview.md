@@ -104,10 +104,11 @@ decisions behind them, and where the values go. Each module's `README.md` indexe
 | `SnapInsetPercent`                                 | `Get-WindowInsetPercent` (for the five pre-snap placement paths) |
 | `TerminalGreeting`                                 | `Show-TerminalGreeting` (alias `c`, and shell startup), `Invoke-Clear`, `Invoke-Fastfetch`, `Invoke-Onefetch`, `Format-OnefetchPanel` (via `Resolve-TerminalGreetingSettings`); `Onefetch.InProjectTerminals` also drives `Open-ProjectTerminals` |
 | `KillAll.Steps`                                    | `Kill-All`, `Resolve-KillAllSteps`                 |
-| `BootstrapConfig.Steps`                            | `Bootstrap`, `Resolve-BootstrapSteps` (incl. the opt-in `AiArtifacts` step → `Deploy-AiArtifacts`, whose deprecated aliases are `CoreAiRules`, `AiSkills` and `AiMods`, and the `AiMarketplaces` step → `Deploy-AiMarketplaces`) |
+| `BootstrapConfig.Steps`                            | `Bootstrap`, `Resolve-BootstrapSteps` (incl. the opt-in `AiArtifacts` step → `Deploy-AiArtifacts`, whose deprecated aliases are `CoreAiRules`, `AiSkills` and `AiMods`, the `AiMarketplaces` step → `Deploy-AiMarketplaces`, and the `AiMcpServers` step → `Deploy-AiMcpServers`) |
 | `AiArtifacts`, `AiHarnesses`                       | `Deploy-AiArtifacts`, `Update-AiArtifacts`, `List-AiArtifacts`, `Get-AiArtifactPlan`, `Get-AiArtifactRoster` (via `Resolve-AiArtifactsConfig`); the `claude-plugin-dirs` hook of `Deploy-AiArtifacts` writes `env.CLAUDE_CODE_PLUGIN_DIRS` of `~\.claude\settings.json` through `Resolve-AiModsPluginDirs` and `Set-ClaudeSettingsEnv`, and checks the CLI with `Test-AiModsCli` |
 | `AiSkills`, `AiMods` (deprecated since 1.6.0)      | Read and mapped onto `AiArtifacts` by `Resolve-AiArtifactsConfig`; still read by the deprecated `Resolve-AiSkillsConfig`, `Resolve-AiModsConfig`, `Get-AiSkillRoster`, `Get-AiModRoster`; reported by `Test-ConfigurationSchema` |
 | `AiMarketplaces`                                   | `Deploy-AiMarketplaces`; writes `extraKnownMarketplaces` and `pluginConfigs` of `~\.claude\settings.json` through `Set-ClaudeSettingsKey` and each marketplace's `Env` variables into its `env` block through `Set-ClaudeSettingsEnv`, then adds the marketplaces and installs the plugins through the Claude Code CLI |
+| `AiMcpServers`                                     | `Deploy-AiMcpServers`; adds the servers to Claude Code through `claude mcp add --scope user` (reading `mcpServers` of `~\.claude.json`) and writes their `[mcp_servers.<name>]` tables into Codex's `config.toml`; `Machine` scopes go through `Test-MachineTypeScope` |
 | `AutoEnvironmentVariables`, `AutoPathAdditions`, `BasePaths` | `Set-EnvironmentVariables`                   |
 | `Locales`, `DefaultLocale`                         | `Set-Locale`                                       |
 | `DisplayLanguages`, `DefaultDisplayLanguage`       | `Set-DisplayLanguage`                              |
@@ -186,6 +187,7 @@ Phase 7 (Taskbar):               Configure-Taskbar -FromBootstrap → Set-Taskba
 Phase 8 (WSL & Symlinks):        Initialize-WSLEnvironment → SymbolicLinkMaker
                                  → Deploy-AiArtifacts (opt-in via BootstrapConfig.Steps.AiArtifacts)
                                  → Deploy-AiMarketplaces (opt-in via BootstrapConfig.Steps.AiMarketplaces)
+                                 → Deploy-AiMcpServers (opt-in via BootstrapConfig.Steps.AiMcpServers)
                                  → Enable-ObsidianCli (opt-in via BootstrapConfig.Steps.ObsidianCli)
                                  → Deploy-VSCodeProfiles (opt-in via BootstrapConfig.Steps.VSCodeProfiles;
                                    links VSCodeProfiles.Extensions first via Install-VSCodeLocalExtensions)
@@ -257,7 +259,7 @@ docs/
 │       └── workflow/      (README + guides)     # + add-new-project.md, add-new-workspace.md
 │
 ├── modules/
-│   ├── ai.md                               # AI artifacts deployment and vendoring, marketplaces
+│   ├── ai.md                               # AI artifacts deployment and vendoring, marketplaces, MCP servers
 │   ├── application.md                      # install, launch, browser, VS Code profiles
 │   ├── bootstrap.md                        # Bootstrap, Load-PathConfiguration, etc.
 │   ├── configuration.md                    # programmatic config modifications
@@ -275,7 +277,8 @@ docs/
 │   ├── artifacts.md                        # The AI artifacts mechanism: kinds, harnesses, WSL, migration
 │   ├── coreairules.md                      # Rules items and Claude Code managed settings (opt-in)
 │   ├── skills.md                           # Machine-global Agent Skills (opt-in)
-│   └── mods.md                             # Machine-global Claude Code mods (opt-in)
+│   ├── mods.md                             # Machine-global Claude Code mods (opt-in)
+│   └── mcp-servers.md                      # MCP servers added to Claude Code and Codex (opt-in)
 │
 ├── contributing/
 │   └── fork-model.md                       # Fork model, config + app-list overrides, merge=ours

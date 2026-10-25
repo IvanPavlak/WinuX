@@ -83,6 +83,7 @@ Each folder was checked against the app's own documentation (2026-10-25); the so
 - Codex agents are TOML and Gemini CLI commands are TOML: only an item carrying that variant reaches them.
 - Copilot: the Copilot CLI's skill, instruction and agent folders. The CLI documents no prompt files, so the catalogue has no Copilot prompts. VS Code's Copilot also reads `~\.claude\skills` and `~\.agents\skills`, so with both `claude-code` and `copilot` on, it sees each skill twice.
 - T3 Code has no entry: it drives the agents installed on the machine (Claude Code, Codex, ...), which read their own folders, so turning those on covers it.
+- MCP servers are not an artifact kind: each app keeps them inside its own configuration file, so [Deploy-AiMcpServers](../modules/ai.md#deploy-aimcpservers) writes them there instead of linking anything. See [AI MCP Servers](mcp-servers.md).
 
 Sources: Claude Code [skills](https://code.claude.com/docs/en/skills), [.claude directory](https://code.claude.com/docs/en/claude-directory), [managed settings](https://code.claude.com/docs/en/managed-settings) and [environment variables](https://code.claude.com/docs/en/env-vars); Codex [skills](https://learn.chatgpt.com/docs/build-skills), [custom prompts](https://learn.chatgpt.com/docs/custom-prompts), [AGENTS.md](https://learn.chatgpt.com/docs/agent-configuration/agents-md) and [subagents](https://learn.chatgpt.com/docs/agent-configuration/subagents); Gemini CLI [skills](https://geminicli.com/docs/cli/skills/), [custom commands](https://geminicli.com/docs/cli/custom-commands/), [subagents](https://geminicli.com/docs/core/subagents/) and [GEMINI.md](https://geminicli.com/docs/cli/gemini-md/); Copilot CLI [skills](https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/create-skills), [custom agents](https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/create-custom-agents-for-cli) and [custom instructions](https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-custom-instructions), VS Code [agent skills](https://code.visualstudio.com/docs/copilot/customization/agent-skills); [T3 Code](https://github.com/pingdotgg/t3code).
 
@@ -103,7 +104,7 @@ AiArtifacts = @{
 
 ## Deploying
 
-[Deploy-AiArtifacts](../modules/ai.md#deploy-aiartifacts) deploys, `-Kind` limits it to some kinds and `-WhatIf` reports what a run would change (`MISSING`, `WRONG`, `DIFFERS`, `STALE`) and changes nothing. It is the Bootstrap step `AiArtifacts`, off by default; `AiMarketplaces` (below) is its own step.
+[Deploy-AiArtifacts](../modules/ai.md#deploy-aiartifacts) deploys, `-Kind` limits it to some kinds and `-WhatIf` reports what a run would change (`MISSING`, `WRONG`, `DIFFERS`, `STALE`) and changes nothing. It is the Bootstrap step `AiArtifacts`, off by default; `AiMarketplaces` (below) and `AiMcpServers` ([AI MCP Servers](mcp-servers.md)) are their own steps.
 
 ```powershell
 BootstrapConfig = @{

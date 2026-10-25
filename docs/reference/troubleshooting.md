@@ -372,6 +372,20 @@ A plugin that loads but ignores one of its options has the same shape of cause o
 
 **Solution:** The file is not valid JSON - usually a trailing comma or a comment added by hand. Fix it (Claude Code itself refuses an invalid settings file too), then re-run `Deploy-AiArtifacts -Kind Mods`. The function never overwrites a file it cannot read, so nothing was lost.
 
+## AI MCP Server Issues
+
+### An MCP Server Is Listed but Its Tools Are Missing
+
+**Problem:** `Deploy-AiMcpServers` reports the server added or already configured and `claude mcp list` lists it, yet a new Claude Code or Codex session has none of its tools, or the list says the server needs authentication.
+
+**Solution:** The configuration carries the server, not its credentials. A server that signs in with OAuth needs the sign-in once per machine and app, because the tokens stay in the machine's credential store: run `/mcp` in Claude Code and pick the server, and `codex mcp login <name>` for Codex (inside WSL, once more for the WSL user). A server with `BearerTokenEnvVar` needs that variable set in the environment the app starts from: set it as a user environment variable, then open a new terminal (or restart the desktop app). Claude Code warns about an unset variable and sends the `${VAR}` text unexpanded, so the server rejects the request.
+
+### A Codex MCP Server Lost an Option Added by Hand
+
+**Problem:** A line added by hand to the `[mcp_servers.<name>]` table of `~\.codex\config.toml` (`enabled_tools`, `startup_timeout_sec`, a subtable) is gone after `Deploy-AiMcpServers` runs.
+
+**Solution:** The table of a server under `AiMcpServers.Servers` belongs to the repository: when it differs from the definition, the whole table and its subtables are replaced. Comments in that stretch, and every other table of the file, are kept. Either manage that server by hand (take it out of `AiMcpServers.Servers`; servers are never removed, so its table stays), or keep options of your own on servers WinuX does not manage.
+
 ## Application Launch Issues
 
 ### "WhatsApp is already running!" With No WhatsApp Window

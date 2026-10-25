@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-10-25
+
+### Added
+
+- **MCP servers for Claude Code and Codex: `AiMcpServers` and `Deploy-AiMcpServers` (AI module).** An MCP server is not an artifact a link can carry, since each app keeps its servers inside its own configuration file, so it gets its own section and command, beside `AiMarketplaces`. `AiMcpServers.Servers` holds one definition per server, keyed by its name: a `Url` (an HTTP server, or an SSE one with `Transport = "sse"`) with optional `Headers` and `BearerTokenEnvVar`, or a `Command` with optional `Args` and `Env` (a stdio server), and an optional `Machine` scope checked by `Test-MachineTypeScope`. `AiMcpServers.Deploy` names the apps per machine type with a `Default` fallback (or one array for every type): `claude-code` and `codex`. `Deploy-AiMcpServers [-Command] [-WslCommand]` adds every server to Claude Code at user scope through `claude mcp add --scope user`, comparing with the `mcpServers` block of `~\.claude.json` (read only, `-AsHashtable`, so keys that differ only in case do not break it): a missing server is added, one with another definition is removed and added again, a matching one is left alone, and a missing CLI only warns. It writes each server's `[mcp_servers.<name>]` table into Codex's `config.toml` (`CODEX_HOME` honoured), replacing that table and its subtables in place or appending it, with every other line, comments and the file's line endings kept, and rewrites the file only when a table changed; Codex reads no SSE servers, so those are skipped there with a warning. `BearerTokenEnvVar` keeps tokens out of the repository: Claude Code gets an `Authorization: Bearer ${VAR}` header, Codex `bearer_token_env_var`. Servers are added and updated, never removed. Inside WSL the Codex tables go to the WSL user's `config.toml` through the `\\wsl.localhost` share and the Claude Code steps run again against the CLI installed inside WSL (its `~/.claude.json` read through WSL; a `claude` under `/mnt/` counts as missing). An OAuth server still needs its sign-in once per machine and app (`/mcp`, `codex mcp login <name>`), which the run's last line says. The base ships no servers and no apps. Tests: `Deploy-AiMcpServers.Tests.ps1`. Docs: the new AI MCP Servers page (`docs/ai/mcp-servers.md`), the AI module reference, the `Deploy-AiMcpServers` guide, the configuration reference, the AI overview and AI Artifacts pages, and two troubleshooting entries ("An MCP Server Is Listed but Its Tools Are Missing", "A Codex MCP Server Lost an Option Added by Hand").
+- **Bootstrap step `AiMcpServers`** (OFF by default) runs `Deploy-AiMcpServers` right after `AiMarketplaces`. Tests: the Bootstrap and `Resolve-BootstrapSteps` suites. Docs: the Bootstrap module reference and guides, First Run and the docs overview.
+
 ## [1.6.0] - 2026-10-25
 
 ### Added
@@ -1691,7 +1698,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v1.6.0...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v1.7.0...HEAD
+[1.7.0]: https://github.com/IvanPavlak/WinuX/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/IvanPavlak/WinuX/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/IvanPavlak/WinuX/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/IvanPavlak/WinuX/compare/v1.3.0...v1.4.0
