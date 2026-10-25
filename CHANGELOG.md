@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.7.1] - 2026-10-26
+
+### Fixed
+
+- **The Fork Model now covers a fork that also merges Foundation, WinuX's macOS counterpart.** A new section, "A second upstream: Foundation", says which paths each upstream owns (Foundation's side, with its bridge merge and `Merge-Upstream --owned-only`, is on Foundation's own Fork Model page) and fixes the one thing a plain second remote breaks: tags. Branches stay under each remote's name, but a clone keeps every tag in one namespace and both projects tag `v0.1.0` and up, so fetching the second upstream refused to overwrite WinuX's tags of the same name. The page shows how to keep WinuX's tags under `winux/` (`remote.upstream.tagOpt --no-tags`, a `+refs/tags/*:refs/tags/winux/*` refspec, the bare local copies dropped and fetched again). Documentation only: no configuration key, function or Bootstrap step changed, and a fork of WinuX alone needs none of it.
+
 ## [1.7.0] - 2026-10-25
 
 ### Added
@@ -1698,7 +1704,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v1.7.0...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v1.7.1...HEAD
+[1.7.1]: https://github.com/IvanPavlak/WinuX/compare/v1.7.0...v1.7.1
 [1.7.0]: https://github.com/IvanPavlak/WinuX/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/IvanPavlak/WinuX/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/IvanPavlak/WinuX/compare/v1.4.0...v1.5.0
