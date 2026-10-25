@@ -1,6 +1,6 @@
 # Resolve-AiModsPluginDirs
 
-Computes the new `CLAUDE_CODE_PLUGIN_DIRS` value from the current one and the mods `Deploy-AiMods` just linked: the deployed links first, then every entry added by hand, with entries under the harness that no longer have a mod dropped.
+Computes the new `CLAUDE_CODE_PLUGIN_DIRS` value from the current one and the mods `Deploy-AiArtifacts` just linked (its `claude-plugin-dirs` hook): the deployed links first, then every entry added by hand, with entries under the harness that no longer have a mod dropped.
 
 ## Configuration Keys
 

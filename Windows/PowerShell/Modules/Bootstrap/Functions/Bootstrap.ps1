@@ -12,10 +12,12 @@ function Bootstrap {
 		no-op on their own when their configuration section is empty, so an enabled step on
 		the empty base config applies nothing. Opt-in steps that act the moment they run
 		default off: MicrosoftActivationScripts, Win11Debloat, RepositoryUpdate, DeveloperMode,
-		NuGetConfig, UpgradeAll, CoreAiRules, AiSkills, AiMods, AiMarketplaces, ObsidianCli, VSCodeProfiles,
+		NuGetConfig, UpgradeAll, AiArtifacts, AiMarketplaces, ObsidianCli, VSCodeProfiles,
 		LockedStartLayout.
 
 		Execution sequence:
+		0. Test-ConfigurationSchema, which reports missing keys and every deprecated configuration
+		   key or step name still in use, with its replacement
 		1. (WithInitialSetup only) Initialize-Configuration (then the configuration is reloaded),
 		   Rename-Machine, Start-MicrosoftActivationScripts, Start-Win11Debloat
 		2. Git identity guarantee (restored from GitConfig when unset), then Update-Repositories
@@ -30,9 +32,9 @@ function Bootstrap {
 		9. Environment variables, Conda environments, NuGet config, taskbar pins, then
 		   Set-TaskbarSettings and Set-VisualEffects (no step toggle - both no-op until their
 		   configuration sections are set)
-		10. WSL environment initialization, symbolic links, CoreAiRules enforcement layer (opt-in via
-		    Steps.CoreAiRules), AI skills links (opt-in via Steps.AiSkills), AI mods links and the
-		    Claude Code plugin list (opt-in via Steps.AiMods), Claude Code plugin marketplaces
+		10. WSL environment initialization, symbolic links, AI artifacts - skills, mods, rules,
+		    prompts and agents, on Windows and in WSL (opt-in via Steps.AiArtifacts; the deprecated
+		    step names CoreAiRules, AiSkills and AiMods are its aliases), Claude Code plugin marketplaces
 		    and their plugins (opt-in via Steps.AiMarketplaces), Obsidian CLI flag (opt-in via
 		    Steps.ObsidianCli), VS Code profiles (opt-in via Steps.VSCodeProfiles), WSL SSH setup
 		    (WSL steps use the same gate)
@@ -100,6 +102,10 @@ function Bootstrap {
 
 		Load-PathConfiguration -RepoRoot $RepoRoot | Out-Null
 		$steps = Resolve-BootstrapSteps -Skip $Skip -Include $Include
+
+		# Deprecated configuration keys and step names are reported before anything runs, so a fork
+		# sees what to migrate before the next MAJOR removes them (VERSIONING.md, Deprecation policy).
+		Test-ConfigurationSchema -WarningAction Continue
 
 		if ($WithInitialSetup) {
 			Write-LogTitle "Initial Boostrap Started"
@@ -267,18 +273,11 @@ function Bootstrap {
 
 		if ($steps.SymbolicLinks) { SymbolicLinkMaker } else { Write-LogWarning "Symbolic links skipped (BootstrapConfig.Steps.SymbolicLinks)" }
 
-		# Machine-global AI agent policy (docs/ai/coreairules.md) - never imposed by a vanilla
-		# bootstrap; the instruction/enforcement symlinks it complements are opt-in
-		# SymbolicLinks entries handled by SymbolicLinkMaker above.
-		if ($steps.CoreAiRules) { Deploy-CoreAiRules } else { Write-LogWarning "CoreAiRules skipped - opt in via BootstrapConfig.Steps.CoreAiRules" }
-
-		# Machine-global Agent Skills (docs/ai/skills.md) - links every skill under AiSkills.Root into
-		# each harness's skills directory. The base ships no skills, so this is opt-in as well.
-		if ($steps.AiSkills) { Deploy-AiSkills } else { Write-LogWarning "AI skills skipped - opt in via BootstrapConfig.Steps.AiSkills" }
-
-		# Machine-global Claude Code mods (docs/ai/mods.md) - links every mod under AiMods.Root into
-		# ~/.claude/mods and lists them in env.CLAUDE_CODE_PLUGIN_DIRS. The base ships no mods, so this is opt-in as well.
-		if ($steps.AiMods) { Deploy-AiMods } else { Write-LogWarning "AI mods skipped - opt in via BootstrapConfig.Steps.AiMods" }
+		# Machine-global AI artifacts (docs/ai/artifacts.md) - links the skills, mods, rules, prompts
+		# and agents under AiArtifacts.Root into the apps AiArtifacts.Deploy names, on Windows and in WSL.
+		# The base deploys into no app, so this is opt-in. The deprecated step names CoreAiRules,
+		# AiSkills and AiMods resolve to it (Resolve-BootstrapSteps).
+		if ($steps.AiArtifacts) { Deploy-AiArtifacts } else { Write-LogWarning "AI artifacts skipped - opt in via BootstrapConfig.Steps.AiArtifacts" }
 
 		# Claude Code plugin marketplaces (docs/ai/mods.md) - registers every marketplace under
 		# AiMarketplaces.Marketplaces in the user settings, seeds the plugins' options and installs the

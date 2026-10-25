@@ -13,7 +13,7 @@ Windows/
 │   ├── Configuration.psd1                     # Central config hub
 │   ├── Microsoft.PowerShell_profile.ps1       # Profile
 │   └── Modules/
-│       ├── AI/                                # CoreAiRules enforcement + Agent Skills + Claude Code mods deployment
+│       ├── AI/                                # AI artifacts (skills, mods, rules, prompts, agents) + marketplaces
 │       ├── Bootstrap/                         # Install-Bootstrap.ps1 + CSV data files
 │       ├── Helper/
 │       ├── Application/
@@ -104,9 +104,9 @@ decisions behind them, and where the values go. Each module's `README.md` indexe
 | `SnapInsetPercent`                                 | `Get-WindowInsetPercent` (for the five pre-snap placement paths) |
 | `TerminalGreeting`                                 | `Show-TerminalGreeting` (alias `c`, and shell startup), `Invoke-Clear`, `Invoke-Fastfetch`, `Invoke-Onefetch`, `Format-OnefetchPanel` (via `Resolve-TerminalGreetingSettings`); `Onefetch.InProjectTerminals` also drives `Open-ProjectTerminals` |
 | `KillAll.Steps`                                    | `Kill-All`, `Resolve-KillAllSteps`                 |
-| `BootstrapConfig.Steps`                            | `Bootstrap`, `Resolve-BootstrapSteps` (incl. the opt-in `CoreAiRules` step → `Deploy-CoreAiRules`, `AiSkills` step → `Deploy-AiSkills`, `AiMods` step → `Deploy-AiMods` and `AiMarketplaces` step → `Deploy-AiMarketplaces`) |
-| `AiSkills`                                         | `Deploy-AiSkills`, `Update-AiSkills`, `List-Skills`, `Get-AiSkillRoster` (via `Resolve-AiSkillsConfig`) |
-| `AiMods`                                           | `Deploy-AiMods`, `Update-AiMods`, `Get-AiModRoster` (via `Resolve-AiModsConfig`); `Deploy-AiMods` also writes `env.CLAUDE_CODE_PLUGIN_DIRS` of `~\.claude\settings.json` through `Resolve-AiModsPluginDirs` and `Set-ClaudeSettingsEnv`, and checks the CLI with `Test-AiModsCli` |
+| `BootstrapConfig.Steps`                            | `Bootstrap`, `Resolve-BootstrapSteps` (incl. the opt-in `AiArtifacts` step → `Deploy-AiArtifacts`, whose deprecated aliases are `CoreAiRules`, `AiSkills` and `AiMods`, and the `AiMarketplaces` step → `Deploy-AiMarketplaces`) |
+| `AiArtifacts`, `AiHarnesses`                       | `Deploy-AiArtifacts`, `Update-AiArtifacts`, `List-AiArtifacts`, `Get-AiArtifactPlan`, `Get-AiArtifactRoster` (via `Resolve-AiArtifactsConfig`); the `claude-plugin-dirs` hook of `Deploy-AiArtifacts` writes `env.CLAUDE_CODE_PLUGIN_DIRS` of `~\.claude\settings.json` through `Resolve-AiModsPluginDirs` and `Set-ClaudeSettingsEnv`, and checks the CLI with `Test-AiModsCli` |
+| `AiSkills`, `AiMods` (deprecated since 1.6.0)      | Read and mapped onto `AiArtifacts` by `Resolve-AiArtifactsConfig`; still read by the deprecated `Resolve-AiSkillsConfig`, `Resolve-AiModsConfig`, `Get-AiSkillRoster`, `Get-AiModRoster`; reported by `Test-ConfigurationSchema` |
 | `AiMarketplaces`                                   | `Deploy-AiMarketplaces`; writes `extraKnownMarketplaces` and `pluginConfigs` of `~\.claude\settings.json` through `Set-ClaudeSettingsKey` and each marketplace's `Env` variables into its `env` block through `Set-ClaudeSettingsEnv`, then adds the marketplaces and installs the plugins through the Claude Code CLI |
 | `AutoEnvironmentVariables`, `AutoPathAdditions`, `BasePaths` | `Set-EnvironmentVariables`                   |
 | `Locales`, `DefaultLocale`                         | `Set-Locale`                                       |
@@ -161,6 +161,8 @@ The profile (`Microsoft.PowerShell_profile.ps1`) executes this exact sequence. E
 `Bootstrap -WithInitialSetup` runs these phases in order:
 
 ```
+Phase 0 (Schema):                Load-PathConfiguration → Test-ConfigurationSchema (missing keys and
+                                 deprecated keys or step names, warning-only)
 Phase 1 (Initial Setup only):    Initialize-Configuration (then Load-PathConfiguration again) → Rename-Machine → Start-MicrosoftActivationScripts → Start-Win11Debloat
                                  (MAS and Win11Debloat are opt-in via BootstrapConfig.Steps)
 Phase 2 (Repos):                 Git identity guarantee (restored from GitConfig when unset)
@@ -182,9 +184,7 @@ Phase 6 (Environment):           Set-EnvironmentVariables -Auto → Create-Conda
                                  → Configure-NuGetConfig
 Phase 7 (Taskbar):               Configure-Taskbar -FromBootstrap → Set-TaskbarSettings → Set-VisualEffects
 Phase 8 (WSL & Symlinks):        Initialize-WSLEnvironment → SymbolicLinkMaker
-                                 → Deploy-CoreAiRules (opt-in via BootstrapConfig.Steps.CoreAiRules)
-                                 → Deploy-AiSkills (opt-in via BootstrapConfig.Steps.AiSkills)
-                                 → Deploy-AiMods (opt-in via BootstrapConfig.Steps.AiMods)
+                                 → Deploy-AiArtifacts (opt-in via BootstrapConfig.Steps.AiArtifacts)
                                  → Deploy-AiMarketplaces (opt-in via BootstrapConfig.Steps.AiMarketplaces)
                                  → Enable-ObsidianCli (opt-in via BootstrapConfig.Steps.ObsidianCli)
                                  → Deploy-VSCodeProfiles (opt-in via BootstrapConfig.Steps.VSCodeProfiles;
@@ -257,7 +257,7 @@ docs/
 │       └── workflow/      (README + guides)     # + add-new-project.md, add-new-workspace.md
 │
 ├── modules/
-│   ├── ai.md                               # CoreAiRules enforcement, Agent Skills deployment
+│   ├── ai.md                               # AI artifacts deployment and vendoring, marketplaces
 │   ├── application.md                      # install, launch, browser, VS Code profiles
 │   ├── bootstrap.md                        # Bootstrap, Load-PathConfiguration, etc.
 │   ├── configuration.md                    # programmatic config modifications
@@ -270,9 +270,10 @@ docs/
 │   └── tests.md                            # Test runner and test organization
 │
 ├── ai/
-│   ├── overview.md                         # Layered AI context system, slash commands
-│   ├── agent-system.md                     # Custom agents, prompts, instructions
-│   ├── coreairules.md                      # Machine-global AI agent guardrails (opt-in)
+│   ├── overview.md                         # Layered AI context system, product skills
+│   ├── agent-system.md                     # Instructions, skills, prompts and agents as artifacts
+│   ├── artifacts.md                        # The AI artifacts mechanism: kinds, harnesses, WSL, migration
+│   ├── coreairules.md                      # Rules items and Claude Code managed settings (opt-in)
 │   ├── skills.md                           # Machine-global Agent Skills (opt-in)
 │   └── mods.md                             # Machine-global Claude Code mods (opt-in)
 │

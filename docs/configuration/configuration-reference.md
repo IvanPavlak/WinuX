@@ -1152,6 +1152,11 @@ SymbolicLinks = @{
 - Forward slashes (`/`) in `Target` → Creates WSL symlink
 - Backslashes (`\`) in `Target` → Creates Windows symlink
 
+The commented `AI` block of 1.5 (the CoreAiRules rules file linked into `CLAUDE.md`, `AGENTS.md`
+and `GEMINI.md`, and Claude Code's managed settings) is deprecated since 1.6.0: the rules are an
+[AI artifact](#ai-artifacts) now. A fork's `PathTemplates.SymbolicLinks.AI` entries keep working
+until 2.0.0 and are reported by `Test-ConfigurationSchema`.
+
 **Consumer function:** `SymbolicLinkMaker`
 
 ---
@@ -1241,12 +1246,11 @@ Anything other than the three valid values is reported as unknown rather than si
   `DeveloperMode`, `NuGetConfig` (prompts for a GitHub PAT), `UpgradeAll` (`Upgrade-All` runs
   `winget upgrade --all` and its Scoop/Chocolatey equivalents, so it upgrades every package
   already on the machine, not only the ones WinuX installs - the base spells this one out as
-  `$false` rather than leaving it to the default), `CoreAiRules` (machine-global AI
-  agent policy applied via `Deploy-CoreAiRules` and the opt-in `SymbolicLinks` entries - see
-  [CoreAiRules](../ai/coreairules.md)), `AiSkills` (machine-global Agent Skills linked into every
-  AI harness via `Deploy-AiSkills` - see [AI Skills](../ai/skills.md)), `AiMods` (machine-global Claude Code
-  mods linked into `~\.claude\mods` and listed in `env.CLAUDE_CODE_PLUGIN_DIRS` of the user's Claude Code settings via
-  `Deploy-AiMods` - see [AI Mods](../ai/mods.md)), `AiMarketplaces` (Claude Code plugin marketplaces registered in the user's
+  `$false` rather than leaving it to the default), `AiArtifacts` (machine-global AI skills, mods,
+  rules, prompts and agents linked into the apps [`AiArtifacts.Deploy`](#ai-artifacts) names via
+  `Deploy-AiArtifacts` - see [AI Artifacts](../ai/artifacts.md); the deprecated step names
+  `CoreAiRules`, `AiSkills` and `AiMods` are its aliases until 2.0.0: with no `AiArtifacts` entry,
+  any of them on turns it on, and in `-Skip` / `-Include` they stand for it), `AiMarketplaces` (Claude Code plugin marketplaces registered in the user's
   Claude Code settings and their plugins installed through the CLI via `Deploy-AiMarketplaces` - see [AI Mods - Marketplaces](../ai/mods.md#marketplaces)),
   `ObsidianCli` (`Enable-ObsidianCli -CreateIfMissing`
   writes `"cli": true` into Obsidian's per-machine `%APPDATA%\obsidian\obsidian.json`, which a synced vault never carries,
@@ -1259,7 +1263,9 @@ Anything other than the three valid values is reported as unknown rather than si
   branch is fast-forwarded too, follows [`RepositoryUpdate`](#repository-update)), `LockedStartLayout`. Per invocation,
   `Bootstrap -Skip <steps>` / `-Include <steps>` override this config. The full step list in execution
   order is documented next to the section in `Configuration.psd1`. The deprecated `WSLSetup`
-  key (same shape as `Steps.WSL`) is still honored when `Steps` carries no `WSL` entry.
+  key (same shape as `Steps.WSL`) is still honored when `Steps` carries no `WSL` entry. Every
+  deprecated key or step name still in use is reported by `Test-ConfigurationSchema` at every
+  profile load and at the start of every `Bootstrap` - see [Deprecated Keys](#deprecated-keys).
 - `PersonalSteps` - Fork-defined optional bootstrap steps run right after `Upgrade-All`. Each
   entry is either a function name string (runs on every machine type) or a hashtable
   `@{ Function = "Install-MyTool"; Machine = "PC/Laptop" }` gated per machine type exactly like
@@ -1370,67 +1376,99 @@ VisualEffects = @{
 
 ---
 
-## AI Skills
+## AI Artifacts
 
-**Key:** `AiSkills` → Hashtable: where Agent Skills live and which AI harnesses they are linked into
+**Key:** `AiArtifacts` → Hashtable: where the AI artifacts (skills, mods, rules, prompts, agents) live, which upstream repositories they are vendored from, which are left out, and which AI apps each machine type deploys them into
 
-**Consumer functions:** [`Deploy-AiSkills`](../modules/ai.md#deploy-aiskills), [`Update-AiSkills`](../modules/ai.md#update-aiskills), both through [`Resolve-AiSkillsConfig`](../modules/ai.md#resolve-aiskillsconfig)
+**Consumer functions:** [`Deploy-AiArtifacts`](../modules/ai.md#deploy-aiartifacts), [`Update-AiArtifacts`](../modules/ai.md#update-aiartifacts), [`List-AiArtifacts`](../modules/ai.md#list-aiartifacts), [`Get-AiArtifactPlan`](../modules/ai.md#get-aiartifactplan), [`Get-AiArtifactRoster`](../modules/ai.md#get-aiartifactroster), all through [`Resolve-AiArtifactsConfig`](../modules/ai.md#resolve-aiartifactsconfig)
 
 **Subkeys:**
 
-- `Root` - The skills root (default `{RepoRoot}\AI\Skills`): one subfolder per source, each holding flat `<skill>\SKILL.md` folders. Vendored upstreams live in `<Root>\<source>\` and are filled by `Update-AiSkills`; hand-written skills go in `<Root>\own\`, which no refresh touches.
-- `Harnesses` - The Windows directories `Deploy-AiSkills` links every skill into, one symbolic link per skill (default `{User}\.claude\skills` for Claude Code and `{User}\.agents\skills` for Codex CLI and Gemini CLI). The `{User}` entries also yield the WSL twins under `/home/<DefaultWSLUsername>/`. An array - it replaces wholesale on merge.
-- `Sources` - Upstream skill repositories vendored by `Update-AiSkills`, keyed by the folder name under `Root`. Each entry: `Repository` (`owner/name`), `Ref` (branch, tag or commit; default `main`; `UPSTREAM.md` records the exact commit it resolved to), `Folders` (upstream folders whose skill subfolders are flattened; default `skills`), `Exclude` (skill names to leave out - a personal skill replaces a Claude Code built-in of the same name, so `code-review` is the usual candidate). Ships empty.
+- `Root` - The artifacts root (default `{RepoRoot}\AI`). Items live kind first: `<Root>\<Kind>\<source>\<item>`, `Kind` one of `Skills`, `Mods`, `Rules`, `Prompts`, `Agents`. The source folders read are `own` (read first, so it wins a name clash), `winux` (the product skills), `example` (the example rules) and every `Sources` entry; any other folder is not read.
+- `Sources` - Upstream repositories vendored by `Update-AiArtifacts`, keyed by the source folder name. Each entry: `Repository` (`owner/name`), `Ref` (branch, tag or commit; default `main`; `UPSTREAM.md` records the exact commit), one key per kind naming the upstream folders that hold its items (`Skills`, `Mods`, `Rules`, `Prompts`, `Agents`; `.` is the repository root; no kind key reads `Skills = @("skills")`), `Exclude` (item names not to vendor) and `SkipPaths` (top-level entries of an item not to copy; default `.git`, `.github`, `tests`, `design`, `docs`). Ships empty.
+- `Exclude` - Items not to deploy: `"kind/name"` (every source, e.g. `"skills/tdd"`) or `"kind/source/name"` (one source, e.g. `"rules/example/CoreAiRules"`); an entry may be `@{ Item = "skills/tdd"; Machine = "Work" }` for one machine scope. An array - it replaces wholesale on merge. Ships empty.
+- `Use` - Per kind, the item a `File` destination takes (the rules linked as `CLAUDE.md`, `AGENTS.md`, ...); without one such a destination links nothing. A value may be per machine type: `@{ Default = "CoreAiRules"; Work = "WorkRules" }`. Ships `@{ Rules = "CoreAiRules" }`, the example rules skeleton.
+- `Deploy` - Per machine type, the [`AiHarnesses`](#ai-harnesses) entries this machine deploys into; `Default` covers every machine type without its own key. Ships `@{ Default = @() }`: nothing is deployed.
 
-Only `{RepoRoot}`, `{User}` and `{AppData}` are expanded in this section - it is machine-type independent and does not go through `PathTemplates`. Deployment is opt-in via `BootstrapConfig.Steps.AiSkills`. Design: [AI Skills](../ai/skills.md).
+Only `{RepoRoot}`, `{User}` and `{AppData}` are expanded in this section - it does not go through `PathTemplates`. Deployment is opt-in via `BootstrapConfig.Steps.AiArtifacts`. Design: [AI Artifacts](../ai/artifacts.md).
 
 ```powershell
-AiSkills = @{
-    Root      = "{RepoRoot}\AI\Skills"
-    Harnesses = @("{User}\.claude\skills", "{User}\.agents\skills")
-    Sources   = @{
+AiArtifacts = @{
+    Sources = @{
         mattpocock = @{
-            Repository = "mattpocock/skills"
+            Repository = "OWNER/skills"
             Ref        = "main"
-            Folders    = @("skills/engineering", "skills/productivity")
-            Exclude    = @()
+            Skills     = @("skills/engineering", "skills/productivity")
         }
+    }
+    Exclude = @("rules/example/CoreAiRules")
+    Use     = @{ Rules = "CoreAiRules" }
+    Deploy  = @{
+        Default = @("claude-code", "codex")
+        Work    = @("claude-code")
     }
 }
 ```
 
 ---
 
-## AI Mods
+## AI Harnesses
 
-**Key:** `AiMods` → Hashtable: where Claude Code mods live, where they are linked, and which upstream repositories they are vendored from
+**Key:** `AiHarnesses` → Hashtable: the AI apps `Deploy-AiArtifacts` can deploy into, and where each one reads each kind
 
-**Consumer functions:** [`Deploy-AiMods`](../modules/ai.md#deploy-aimods), [`Update-AiMods`](../modules/ai.md#update-aimods), [`Get-AiModRoster`](../modules/ai.md#get-aimodroster), all through [`Resolve-AiModsConfig`](../modules/ai.md#resolve-aimodsconfig)
+**Consumer functions:** [`Deploy-AiArtifacts`](../modules/ai.md#deploy-aiartifacts), [`List-AiArtifacts`](../modules/ai.md#list-aiartifacts), [`Get-AiArtifactPlan`](../modules/ai.md#get-aiartifactplan), through [`Resolve-AiArtifactsConfig`](../modules/ai.md#resolve-aiartifactsconfig)
 
-A mod is a Claude Code function-hook plugin: a folder holding `.claude-plugin\plugin.json` and a hooks module.
+The base ships an inactive catalogue - `claude-code`, `codex`, `gemini-cli`, `copilot` - each checked against the app's documentation; `AiArtifacts.Deploy` turns entries on. Per entry:
 
-- `Root` - The mods root (default `{RepoRoot}\AI\Mods`): one subfolder per source, each holding `<mod>\` folders. Vendored upstreams live in `<Root>\<source>\` and are filled by `Update-AiMods`; hand-written mods go in `<Root>\own\`, which no refresh touches.
-- `Harnesses` - The Windows directories `Deploy-AiMods` links every mod into, one symbolic link per mod (default `{User}\.claude\mods`). The links of the FIRST directory are what `CLAUDE_CODE_PLUGIN_DIRS` lists. The `{User}` entries also yield the WSL twins under `/home/<DefaultWSLUsername>/`. An array - it replaces wholesale on merge.
-- `Sources` - Upstream mod repositories vendored by `Update-AiMods`, keyed by the folder name under `Root`. Each entry: `Repository` (`owner/name`), `Ref` (branch, tag or commit; default `main`; `UPSTREAM.md` records the exact commit it resolved to), `Folders` (upstream folders holding mods; `.` is the repository root, the default), `Exclude` (mod names to leave out), `SkipPaths` (top-level entries of a mod not to copy; default `.git`, `.github`, `tests`, `design`, `docs`). Ships empty.
+- `WSL` - `$true`: every destination with a WSL twin is deployed inside the default WSL distribution too (`DefaultWSLDistribution`, as `DefaultWSLUsername`), one `wsl` call per destination.
+- `Destinations` - One hashtable per destination: `Kind` (`Skills`, `Mods`, `Rules`, `Prompts`, `Agents`), `Placement` (`Each`: `Path` is a folder, one link per item; `Copy`: the same, copied; `File`: `Path` is one file, linked to the item `AiArtifacts.Use` names), `Files` (the first one the item has: `.` is the item folder, a file name is that file, linked as `<item>` plus its extension), `Hooks` (optional: `claude-plugin-dirs` lists the links in `env.CLAUDE_CODE_PLUGIN_DIRS` of the Claude Code `settings.json` and validates them; `managed-settings` makes the WSL twin as root), `Path` (the Windows destination), `WSLPath` (optional: the WSL twin, when it is not a `{User}` path mapped onto `/home/<DefaultWSLUsername>`) and `Machine` (optional machine scope, `"PC/Work"`).
 
-**Side effect:** `Deploy-AiMods` writes exactly one key outside the repository, `env.CLAUDE_CODE_PLUGIN_DIRS` of the user's `~\.claude\settings.json` (and of `/home/<DefaultWSLUsername>/.claude/settings.json` in WSL): the mod links first, then every entry added by hand; entries under the first harness without a mod are dropped, and every other setting in the file is kept. That file is not configurable - it is the only user settings file Claude Code reads the variable from.
-
-Only `{RepoRoot}`, `{User}` and `{AppData}` are expanded in this section - it is machine-type independent and does not go through `PathTemplates`. Deployment is opt-in via `BootstrapConfig.Steps.AiMods`. Design: [AI Mods](../ai/mods.md).
+A destination two harnesses name is filled once. A fork adds an app with an entry of its own; a same-named entry deep-merges, but `Destinations`, an array, replaces the base list wholesale. The full catalogue with its sources is on [AI Artifacts - The base catalogue](../ai/artifacts.md#the-base-catalogue).
 
 ```powershell
-AiMods = @{
-    Root      = "{RepoRoot}\AI\Mods"
-    Harnesses = @("{User}\.claude\mods")
-    Sources   = @{
-        "my-mod" = @{
-            Repository = "MyOrg/MyMod"
-            Ref        = "v1.0.0"
-            Folders    = @(".")
-            Exclude    = @()
-            SkipPaths  = @(".git", ".github", "tests", "design", "docs")
-        }
+AiHarnesses = @{
+    "my-app" = @{
+        WSL          = $false
+        Destinations = @(
+            @{ Kind = "Skills"; Placement = "Copy"; Files = @("."); Path = "{User}\.my-app\skills" }
+            @{ Kind = "Rules"; Placement = "File"; Files = @("RULES.md"); Path = "{User}\.my-app\RULES.md" }
+        )
     }
 }
+```
+
+---
+
+## AI Skills (deprecated)
+
+**Key:** `AiSkills` → Hashtable, deprecated since 1.6.0 and removed in 2.0.0 - use [`AiArtifacts`](#ai-artifacts)
+
+The 1.5 skills section (`Root`, default `{RepoRoot}\AI\Skills`; `Harnesses`, default `{User}\.claude\skills` and `{User}\.agents\skills`; `Sources`, entries with `Repository`, `Ref`, `Folders`, `Exclude`). The base still ships it with those defaults. Until 2.0.0, `Resolve-AiArtifactsConfig` reads `Sources` as `AiArtifacts.Sources` entries with `Skills = Folders` (an `AiArtifacts.Sources` entry of the same name wins) and a non-default `Root` as `AiArtifacts.Root` (its parent folder); `Harnesses` is no longer read - the skills folders are `AiHarnesses` destinations. `Test-ConfigurationSchema` warns while `Sources` is set or `Root` or `Harnesses` differs from the default. Read only by the deprecated `Resolve-AiSkillsConfig` and `Get-AiSkillRoster` otherwise.
+
+**Migration:**
+
+```powershell
+# 1.5
+AiSkills = @{ Sources = @{ mattpocock = @{ Repository = "OWNER/skills"; Folders = @("skills/engineering") } } }
+# 1.6
+AiArtifacts = @{ Sources = @{ mattpocock = @{ Repository = "OWNER/skills"; Skills = @("skills/engineering") } } }
+```
+
+---
+
+## AI Mods (deprecated)
+
+**Key:** `AiMods` → Hashtable, deprecated since 1.6.0 and removed in 2.0.0 - use [`AiArtifacts`](#ai-artifacts)
+
+The 1.5 mods section (`Root`, default `{RepoRoot}\AI\Mods`; `Harnesses`, default `{User}\.claude\mods`; `Sources`, entries with `Repository`, `Ref`, `Folders`, `Exclude`, `SkipPaths`). The base still ships it with those defaults. Until 2.0.0, `Resolve-AiArtifactsConfig` reads `Sources` as `AiArtifacts.Sources` entries with `Mods = Folders` (default `.`), `Exclude` and `SkipPaths`, and a non-default `Root` as `AiArtifacts.Root`; `Harnesses` is no longer read - the mods folder is the `claude-code` destination whose `claude-plugin-dirs` hook writes `env.CLAUDE_CODE_PLUGIN_DIRS`. `Test-ConfigurationSchema` warns while `Sources` is set or `Root` or `Harnesses` differs from the default. Read only by the deprecated `Resolve-AiModsConfig` and `Get-AiModRoster` otherwise.
+
+**Migration:**
+
+```powershell
+# 1.5
+AiMods = @{ Sources = @{ "my-mod" = @{ Repository = "MyOrg/MyMod"; Ref = "v1.0.0"; Folders = @(".") } } }
+# 1.6
+AiArtifacts = @{ Sources = @{ "my-mod" = @{ Repository = "MyOrg/MyMod"; Ref = "v1.0.0"; Mods = @(".") } } }
 ```
 
 ---
@@ -1448,7 +1486,7 @@ A plugin marketplace is a repository carrying `.claude-plugin\marketplace.json`;
 
 **Side effect:** `Deploy-AiMarketplaces` writes `extraKnownMarketplaces.<name>`, `env.<variable>` and `pluginConfigs.<plugin>@<name>.<key>` of the user's `~\.claude\settings.json` (and of `/home/<DefaultWSLUsername>/.claude/settings.json` in WSL), every other setting kept, and runs `claude plugin marketplace add <owner/name>` for marketplaces the CLI does not list yet and `claude plugin install <plugin>@<name>` for plugins it does not list yet.
 
-Deployment is opt-in via `BootstrapConfig.Steps.AiMarketplaces`. A plugin loaded from a folder (`AiMods`) and installed from a marketplace would run twice: give each plugin one path; `Deploy-AiMarketplaces` warns about a `CLAUDE_CODE_PLUGIN_DIRS` folder that duplicates a marketplace plugin. Design: [AI Mods - Marketplaces](../ai/mods.md#marketplaces).
+Deployment is opt-in via `BootstrapConfig.Steps.AiMarketplaces`. A plugin loaded from a folder (an `AiArtifacts` mod) and installed from a marketplace would run twice: give each plugin one path; `Deploy-AiMarketplaces` warns about a `CLAUDE_CODE_PLUGIN_DIRS` folder that duplicates a marketplace plugin. Design: [AI Mods - Marketplaces](../ai/mods.md#marketplaces).
 
 ```powershell
 AiMarketplaces = @{
@@ -1496,6 +1534,29 @@ The Windows UAC consent dialog still appears either way: it is raised by Windows
 ```powershell
 AutoElevate = $true
 ```
+
+---
+
+## Deprecated Keys
+
+Keys and step names that still work but are removed in the next MAJOR release ([VERSIONING.md](https://github.com/IvanPavlak/WinuX/blob/master/VERSIONING.md), Deprecation policy). `Test-ConfigurationSchema` reports every one still in use - at every profile load and at the start of every `Bootstrap` - as one warning naming the key, the release that deprecated it, the removal and the replacement. A deprecation is never an error, not even under `-Strict`. A key the base still ships (`AiSkills`, `AiMods`) is reported only when it differs from the shipped default, so a vanilla configuration stays silent.
+
+| Key | Deprecated in | Removed in | Reported when | Replacement |
+| --- | ------------- | ---------- | ------------- | ----------- |
+| `BootstrapConfig.WSLSetup` | 0.1.26 | 2.0.0 | present | `BootstrapConfig.Steps.WSL` (same shape) |
+| `PathTemplates.ObsidianStartupScript` | 0.1.61 | 2.0.0 | not empty | nothing - it is ignored; remove it |
+| `AiSkills.Sources` | 1.6.0 | 2.0.0 | not empty | `AiArtifacts.Sources`, `Folders` renamed to `Skills` |
+| `AiSkills.Root` | 1.6.0 | 2.0.0 | not `{RepoRoot}\AI\Skills` | `AiArtifacts.Root` (the folder that holds `Skills`) |
+| `AiSkills.Harnesses` | 1.6.0 | 2.0.0 | not the shipped two folders | `AiArtifacts.Deploy` (the skills folders are `AiHarnesses` destinations) |
+| `AiMods.Sources` | 1.6.0 | 2.0.0 | not empty | `AiArtifacts.Sources`, `Folders` renamed to `Mods` |
+| `AiMods.Root` | 1.6.0 | 2.0.0 | not `{RepoRoot}\AI\Mods` | `AiArtifacts.Root` (the folder that holds `Mods`) |
+| `AiMods.Harnesses` | 1.6.0 | 2.0.0 | not `{User}\.claude\mods` | `AiArtifacts.Deploy` (the mods folder is a destination of the `claude-code` harness) |
+| `PathTemplates.SymbolicLinks.AI` | 1.6.0 | 2.0.0 | present | `AiArtifacts.Use.Rules` and `AiArtifacts.Deploy` (the rules item in `AI\Rules\own\<Name>\`) |
+| `BootstrapConfig.Steps.CoreAiRules` | 1.6.0 | 2.0.0 | present | `BootstrapConfig.Steps.AiArtifacts` |
+| `BootstrapConfig.Steps.AiSkills` | 1.6.0 | 2.0.0 | present | `BootstrapConfig.Steps.AiArtifacts` |
+| `BootstrapConfig.Steps.AiMods` | 1.6.0 | 2.0.0 | present | `BootstrapConfig.Steps.AiArtifacts` |
+
+How each AI key is mapped meanwhile: [AI Artifacts - Migrating from 1.5](../ai/artifacts.md#migrating-from-15).
 
 ---
 

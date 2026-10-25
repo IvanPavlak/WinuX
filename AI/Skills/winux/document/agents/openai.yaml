@@ -1,0 +1,5 @@
+interface:
+  display_name: "Document a function"
+  short_description: "Turn a WinuX function's comment-based help into its module page entry and guide"
+policy:
+  allow_implicit_invocation: true

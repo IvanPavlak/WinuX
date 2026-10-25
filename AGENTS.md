@@ -104,9 +104,9 @@ State which tests each command covers, then wait for the developer's pass/fail r
 ## AI System
 
 - Centralized AI configuration lives in `AI/` - provider-agnostic, human-readable
-- Machine-global agent guardrails live in `AI/CoreAiRules.md` (deployed as an opt-in Bootstrap step with Claude Code managed-settings enforcement - see `docs/ai/coreairules.md`); they restate the CRITICAL SAFETY policy below and never replace it
-- Use `/oneoff` or `/research` prompts for conversation persistence
-- Use `/document` to generate documentation from code comments
+- Machine-global agent guardrails are a rules item of the AI artifacts layout: the base ships the skeleton `AI/Rules/example/CoreAiRules/RULES.md`, a fork writes its own in `AI/Rules/own/<Name>/` (deployed as an opt-in Bootstrap step with Claude Code managed-settings enforcement - see `docs/ai/coreairules.md`); they restate the CRITICAL SAFETY policy below and never replace it
+- AI artifacts (skills, mods, rules, prompts, agents) live under `AI/<Kind>/<source>/<item>`: `own` for the user's own, `winux` for WinuX's product skills (`winux-configurator`, `document`), `example` for the example rules, and vendored sources; `Deploy-AiArtifacts` links them into the apps `AiArtifacts.Deploy` names (see `docs/ai/artifacts.md`). WinuX ships the mechanism, not the user's prompts or agents
+- Use the `document` skill to generate documentation from code comments
 - Configuration functions in `Modules/Configuration/` for reliable configuration modifications
 
 ## ⚠️ CRITICAL SAFETY - Never Act Destructively On Your Own

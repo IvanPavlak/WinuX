@@ -6,7 +6,7 @@ WinuX ships empty by design. The base `Configuration.psd1` is dozens of top-leve
 
 ## How to Start
 
-WinuX ships this document as an Agent Skill, `AI/Skills/own/winux-configurator/`, so with [AI Skills](../ai/skills.md) deployed (`Deploy-AiSkills`, opt-in via `BootstrapConfig.Steps.AiSkills`) the session is one command in any project, because the skill resolves the checkout from its own symbolic link:
+WinuX ships this document as an Agent Skill, `AI/Skills/winux/winux-configurator/`, so with the [AI artifacts](../ai/artifacts.md) deployed (`Deploy-AiArtifacts`, opt-in via `BootstrapConfig.Steps.AiArtifacts` with an app in `AiArtifacts.Deploy`) the session is one command in any project, because the skill resolves the checkout from its own symbolic link:
 
 - Claude Code: `/winux-configurator`
 - Codex CLI: `$winux-configurator`

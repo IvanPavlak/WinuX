@@ -29,8 +29,23 @@ function Test-ConfigurationSchema {
 		ambiguous or unmatched override, an unknown placeholder, a variable cycle or a bad Before /
 		After anchor is reported with the workspace named.
 
+		It validates the AI artifact sections: AiArtifacts.Deploy names only AiHarnesses entries,
+		its Use and Exclude entries name a kind (Skills, Mods, Rules, Prompts, Agents), and every
+		AiHarnesses destination carries a known Kind and Placement (Each, Copy, File), Files and
+		Path.
+
+		Finally it reports deprecated configuration (VERSIONING.md, Deprecation policy): one
+		warning per deprecated key or step name the merged configuration still uses, naming the
+		release that deprecated it, the release that removes it and its replacement. The table of
+		deprecations is the $deprecations list at the top of this function - the only thing a
+		later deprecation adds to. A deprecation never counts as a failure, even under -Strict:
+		the old shape keeps working until the next MAJOR. A key that the base Configuration.psd1
+		still ships (AiSkills, AiMods) only warns when it is set to something other than the
+		shipped default, so a vanilla configuration stays silent.
+
 		Call this function immediately after Load-PathConfiguration during the bootstrap
-		or profile initialization sequence to surface typos and missing entries early.
+		or profile initialization sequence to surface typos and missing entries early; the
+		profile does so at every load and Bootstrap at the start of every run.
 
 	.PARAMETER Configuration
 		The configuration hashtable to validate. Defaults to $global:Configuration.
@@ -58,6 +73,24 @@ function Test-ConfigurationSchema {
 
 		[Parameter()]
 		[switch]$Strict
+	)
+
+	# Deprecated configuration: Path (dotted), Since, Removal, Replacement and When - Present
+	# (the key exists), NotEmpty (Test-ConfigValue) or NotDefault (differs from Default, the
+	# value the base Configuration.psd1 ships; an array compares element by element).
+	$deprecations = @(
+		@{ Path = 'BootstrapConfig.WSLSetup'; Since = '0.1.26'; Removal = '2.0.0'; When = 'Present'; Replacement = 'BootstrapConfig.Steps.WSL (same shape)' }
+		@{ Path = 'PathTemplates.ObsidianStartupScript'; Since = '0.1.61'; Removal = '2.0.0'; When = 'NotEmpty'; Replacement = 'nothing - it is ignored; remove it' }
+		@{ Path = 'AiSkills.Sources'; Since = '1.6.0'; Removal = '2.0.0'; When = 'NotEmpty'; Replacement = 'AiArtifacts.Sources, Folders renamed to Skills' }
+		@{ Path = 'AiSkills.Root'; Since = '1.6.0'; Removal = '2.0.0'; When = 'NotDefault'; Default = '{RepoRoot}\AI\Skills'; Replacement = 'AiArtifacts.Root (the folder that holds Skills)' }
+		@{ Path = 'AiSkills.Harnesses'; Since = '1.6.0'; Removal = '2.0.0'; When = 'NotDefault'; Default = @('{User}\.claude\skills', '{User}\.agents\skills'); Replacement = 'AiArtifacts.Deploy (the skills folders are AiHarnesses destinations)' }
+		@{ Path = 'AiMods.Sources'; Since = '1.6.0'; Removal = '2.0.0'; When = 'NotEmpty'; Replacement = 'AiArtifacts.Sources, Folders renamed to Mods' }
+		@{ Path = 'AiMods.Root'; Since = '1.6.0'; Removal = '2.0.0'; When = 'NotDefault'; Default = '{RepoRoot}\AI\Mods'; Replacement = 'AiArtifacts.Root (the folder that holds Mods)' }
+		@{ Path = 'AiMods.Harnesses'; Since = '1.6.0'; Removal = '2.0.0'; When = 'NotDefault'; Default = @('{User}\.claude\mods'); Replacement = 'AiArtifacts.Deploy (the mods folder is a destination of the claude-code harness)' }
+		@{ Path = 'PathTemplates.SymbolicLinks.AI'; Since = '1.6.0'; Removal = '2.0.0'; When = 'Present'; Replacement = 'AiArtifacts.Use.Rules and AiArtifacts.Deploy (the rules item in AI\Rules\own\<Name>\)' }
+		@{ Path = 'BootstrapConfig.Steps.CoreAiRules'; Since = '1.6.0'; Removal = '2.0.0'; When = 'Present'; Replacement = 'BootstrapConfig.Steps.AiArtifacts' }
+		@{ Path = 'BootstrapConfig.Steps.AiSkills'; Since = '1.6.0'; Removal = '2.0.0'; When = 'Present'; Replacement = 'BootstrapConfig.Steps.AiArtifacts' }
+		@{ Path = 'BootstrapConfig.Steps.AiMods'; Since = '1.6.0'; Removal = '2.0.0'; When = 'Present'; Replacement = 'BootstrapConfig.Steps.AiArtifacts' }
 	)
 
 	$failures = [System.Collections.Generic.List[string]]::new()
@@ -180,6 +213,105 @@ function Test-ConfigurationSchema {
 			$resolution = Resolve-WorkspaceTemplate -Name $entryName -Definition $templatedEntries[$entryName] -Templates $workspaceTemplates
 			foreach ($message in @($resolution.Errors)) { $failures.Add($message) }
 		}
+	}
+
+	# AI artifacts: AiArtifacts.Deploy names AiHarnesses entries; Use and Exclude name a kind;
+	# every harness destination is complete. Only checked when the sections are present.
+	$aiKinds = @('skills', 'mods', 'rules', 'prompts', 'agents')
+	$aiHarnesses = $Configuration['AiHarnesses']
+	if ($null -ne $aiHarnesses) {
+		if (-not ($aiHarnesses -is [System.Collections.IDictionary])) {
+			$failures.Add("AiHarnesses must be a hashtable of harness name => @{ WSL = `$true; Destinations = @( ... ) }")
+			$aiHarnesses = $null
+		}
+		else {
+			foreach ($harnessName in $aiHarnesses.Keys) {
+				$harness = $aiHarnesses[$harnessName]
+				if (-not ($harness -is [System.Collections.IDictionary])) {
+					$failures.Add("AiHarnesses.$harnessName must be a hashtable with Destinations = @( ... )")
+					continue
+				}
+				$index = 0
+				foreach ($destination in @($harness['Destinations'])) {
+					$index++
+					if ($null -eq $destination) { continue }
+					if (-not ($destination -is [System.Collections.IDictionary])) {
+						$failures.Add("AiHarnesses.$harnessName.Destinations[$index] must be a hashtable")
+						continue
+					}
+					if ($aiKinds -notcontains ([string]$destination['Kind']).ToLowerInvariant()) {
+						$failures.Add("AiHarnesses.$harnessName.Destinations[$index] has Kind [$($destination['Kind'])] - expected Skills, Mods, Rules, Prompts or Agents")
+					}
+					if (@('each', 'copy', 'file') -notcontains ([string]$destination['Placement']).ToLowerInvariant()) {
+						$failures.Add("AiHarnesses.$harnessName.Destinations[$index] has Placement [$($destination['Placement'])] - expected Each, Copy or File")
+					}
+					if (@($destination['Files'] | Where-Object { $_ }).Count -eq 0 -or -not $destination['Path']) {
+						$failures.Add("AiHarnesses.$harnessName.Destinations[$index] needs Files and Path")
+					}
+				}
+			}
+		}
+	}
+
+	$aiArtifacts = $Configuration['AiArtifacts']
+	if ($null -ne $aiArtifacts) {
+		if (-not ($aiArtifacts -is [System.Collections.IDictionary])) {
+			$failures.Add("AiArtifacts must be a hashtable (Root, Sources, Exclude, Use, Deploy)")
+		}
+		else {
+			$deploy = $aiArtifacts['Deploy']
+			if ($null -ne $deploy -and -not ($deploy -is [System.Collections.IDictionary])) {
+				$failures.Add("AiArtifacts.Deploy must be a hashtable of machine type => harness names, e.g. @{ Default = @(`"claude-code`") }")
+			}
+			elseif ($null -ne $deploy -and $null -ne $aiHarnesses) {
+				foreach ($machine in $deploy.Keys) {
+					foreach ($harnessName in @($deploy[$machine] | Where-Object { $_ })) {
+						if (@($aiHarnesses.Keys | Where-Object { [string]$_ -eq [string]$harnessName }).Count -eq 0) {
+							$failures.Add("AiArtifacts.Deploy.$machine names [$harnessName], which is no AiHarnesses entry")
+						}
+					}
+				}
+			}
+			$use = $aiArtifacts['Use']
+			if ($use -is [System.Collections.IDictionary]) {
+				foreach ($kind in $use.Keys) {
+					if ($aiKinds -notcontains ([string]$kind).ToLowerInvariant()) {
+						$failures.Add("AiArtifacts.Use has the key [$kind] - expected Skills, Mods, Rules, Prompts or Agents")
+					}
+				}
+			}
+			foreach ($entry in @($aiArtifacts['Exclude'])) {
+				$item = if ($entry -is [System.Collections.IDictionary]) { [string]$entry['Item'] } else { [string]$entry }
+				if (-not $item) { continue }
+				$parts = $item.Split('/')
+				if ($parts.Count -lt 2 -or $parts.Count -gt 3 -or $aiKinds -notcontains $parts[0].ToLowerInvariant() -or @($parts | Where-Object { -not $_ }).Count -gt 0) {
+					$failures.Add("AiArtifacts.Exclude has [$item] - expected KIND/NAME or KIND/SOURCE/NAME, e.g. skills/tdd")
+				}
+			}
+		}
+	}
+
+	# Deprecated keys and step names: one warning each, never a failure.
+	$deprecationWarnings = [System.Collections.Generic.List[string]]::new()
+	foreach ($deprecation in $deprecations) {
+		$segments = $deprecation.Path.Split('.')
+		$parent = $Configuration
+		foreach ($segment in $segments[0..($segments.Count - 2)]) {
+			if ($parent -is [System.Collections.IDictionary] -and $parent.Contains($segment)) { $parent = $parent[$segment] } else { $parent = $null; break }
+		}
+		if (-not ($parent -is [System.Collections.IDictionary]) -or -not $parent.Contains($segments[-1])) { continue }
+		$value = $parent[$segments[-1]]
+		$inUse = switch ($deprecation.When) {
+			'Present' { $true }
+			'NotEmpty' { [bool](Test-ConfigValue $value) }
+			'NotDefault' { (@($value | ForEach-Object { ([string]$_).TrimEnd('\') }) -join '|') -ne (@($deprecation.Default | ForEach-Object { ([string]$_).TrimEnd('\') }) -join '|') }
+		}
+		if ($inUse) {
+			$deprecationWarnings.Add("$($deprecation.Path) is deprecated since $($deprecation.Since) and removed in $($deprecation.Removal) - use $($deprecation.Replacement)")
+		}
+	}
+	if ($deprecationWarnings.Count -gt 0) {
+		Write-Warning ("Configuration uses $($deprecationWarnings.Count) deprecated key(s) (see CHANGELOG.md, ### Deprecated):`n  - " + ($deprecationWarnings -join "`n  - "))
 	}
 
 	if ($failures.Count -gt 0) {

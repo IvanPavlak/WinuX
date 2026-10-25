@@ -14,7 +14,7 @@ Runs the fork-defined personal install steps from `BootstrapConfig.PersonalSteps
 ## Decisions
 
 1. Which bootstrap steps should run on this machine?
-    - Options: Each entry under `BootstrapConfig.Steps` is either a boolean or a per-machine-type hashtable with a `Default` fallback. Steps that act the moment they run (`CoreAiRules`, taskbar, wallpaper) ship off.
+    - Options: Each entry under `BootstrapConfig.Steps` is either a boolean or a per-machine-type hashtable with a `Default` fallback. Steps that act the moment they run (`AiArtifacts`, taskbar, wallpaper) ship off.
     - Default: The shipped `Steps` map. Change only the steps you actually want to flip.
     - More detail: [`BootstrapConfig`](../../configuration-reference.md#bootstrapconfig)
 2. Do you need to change where the app-list CSVs live?
@@ -45,7 +45,7 @@ Everything about how `Bootstrap` runs: the `Steps` toggles that decide which pro
 ```powershell
 BootstrapConfig = @{
     Steps = @{
-        CoreAiRules = $true
+        AiArtifacts = $true
     }
 }
 ```
@@ -80,7 +80,7 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 @{
     BootstrapConfig = @{
         Steps = @{
-            CoreAiRules = $true
+            AiArtifacts = $true
         }
     }
 }

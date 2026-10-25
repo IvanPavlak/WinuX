@@ -22,7 +22,7 @@ This is the widest configuration surface in WinuX - `Bootstrap` reads the step t
 ## Decisions
 
 1. Which bootstrap steps should run on this machine?
-    - Options: Each entry under `BootstrapConfig.Steps` is either a boolean or a per-machine-type hashtable with a `Default` fallback. Most steps ship **on**, because they no-op when their own configuration section is empty. The thirteen that act the moment they run ship **off**: `MicrosoftActivationScripts`, `Win11Debloat`, `RepositoryUpdate`, `DeveloperMode`, `NuGetConfig`, `UpgradeAll`, `CoreAiRules`, `AiSkills`, `AiMods`, `AiMarketplaces`, `ObsidianCli`, `VSCodeProfiles`, `LockedStartLayout`.
+    - Options: Each entry under `BootstrapConfig.Steps` is either a boolean or a per-machine-type hashtable with a `Default` fallback. Most steps ship **on**, because they no-op when their own configuration section is empty. The eleven that act the moment they run ship **off**: `MicrosoftActivationScripts`, `Win11Debloat`, `RepositoryUpdate`, `DeveloperMode`, `NuGetConfig`, `UpgradeAll`, `AiArtifacts`, `AiMarketplaces`, `ObsidianCli`, `VSCodeProfiles`, `LockedStartLayout`. The deprecated step names `CoreAiRules`, `AiSkills` and `AiMods` are aliases of `AiArtifacts` until 2.0.0.
     - Default: The shipped `Steps` map (`UpgradeAll = $false`, `RepositoryUpdate = $false`, plus `WSL` on everywhere except the `Test` type). Change only the steps you actually want to flip. Switching `UpgradeAll` on lets a Bootstrap run `winget upgrade --all` and its Scoop/Chocolatey equivalents, which upgrade every package already on the machine, not only the ones WinuX installs.
     - More detail: [`BootstrapConfig`](../../configuration-reference.md#bootstrapconfig)
 2. Do you need to change where the app-list CSVs live?
@@ -91,7 +91,7 @@ Everything about how `Bootstrap` runs: the `Steps` toggles that decide which pro
 ```powershell
 BootstrapConfig = @{
     Steps = @{
-        CoreAiRules = $true
+        AiArtifacts = $true
         UpgradeAll  = $true
     }
 }
@@ -186,7 +186,7 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 @{
     BootstrapConfig = @{
         Steps = @{
-            CoreAiRules = $true
+            AiArtifacts = $true
             UpgradeAll  = $true
         }
     }

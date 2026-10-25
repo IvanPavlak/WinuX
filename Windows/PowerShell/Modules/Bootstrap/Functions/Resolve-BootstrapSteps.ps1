@@ -18,9 +18,8 @@ function Resolve-BootstrapSteps {
 		(clones and pulls every repository the machine's scope names),
 		DeveloperMode, NuGetConfig (prompts for a GitHub PAT), UpgradeAll
 		(upgrades every package already on the machine, not just WinuX's own),
-		CoreAiRules (machine-global AI agent policy), AiSkills (machine-global
-		Agent Skills links), AiMods (machine-global Claude Code mods links and
-		the CLAUDE_CODE_PLUGIN_DIRS settings key), AiMarketplaces (Claude Code plugin
+		AiArtifacts (machine-global AI skills, mods, rules, prompts and agents
+		links), AiMarketplaces (Claude Code plugin
 		marketplaces in the user settings and `claude plugin install`), ObsidianCli (turns the Obsidian command line
 		interface on in Obsidian's per-machine app settings), VSCodeProfiles
 		(links VS Code profile files, registers profiles in VS Code's state and
@@ -29,6 +28,12 @@ function Resolve-BootstrapSteps {
 		Legacy alias: when Steps.WSL is absent but the deprecated
 		BootstrapConfig.WSLSetup exists, WSL resolves from WSLSetup, so
 		forks that predate Steps keep working unmodified.
+
+		Deprecated step names (1.6.0, removed in 2.0.0): CoreAiRules, AiSkills
+		and AiMods are aliases of AiArtifacts. When Steps carries no AiArtifacts
+		entry, AiArtifacts resolves on when any of them does; in -Skip and
+		-Include they stand for AiArtifacts. The returned map carries
+		AiArtifacts only.
 
 		Returns an ordered hashtable of step name -> boolean, in Bootstrap
 		execution order. Bootstrap calls this exactly once per invocation.
@@ -93,9 +98,7 @@ function Resolve-BootstrapSteps {
 		NuGetConfig                = $false
 		Taskbar                    = $true
 		SymbolicLinks              = $true
-		CoreAiRules                = $false
-		AiSkills                   = $false
-		AiMods                     = $false
+		AiArtifacts                = $false
 		AiMarketplaces             = $false
 		ObsidianCli                = $false
 		VSCodeProfiles             = $false
@@ -116,6 +119,23 @@ function Resolve-BootstrapSteps {
 			$configSteps['WSL'] = $legacyWslSetup
 		}
 	}
+
+	# Deprecated step aliases (1.6.0): CoreAiRules, AiSkills and AiMods stand for AiArtifacts.
+	# In config they count only when Steps carries no AiArtifacts entry; any one of them on turns
+	# it on for this machine type. Work on a copy so the merged global config is never mutated.
+	$aliases = @('CoreAiRules', 'AiSkills', 'AiMods')
+	if ($configSteps -is [hashtable] -and -not $configSteps.ContainsKey('AiArtifacts')) {
+		$present = @($aliases | Where-Object { $configSteps.ContainsKey($_) })
+		if ($present.Count -gt 0) {
+			$aliasDefaults = [ordered]@{}
+			foreach ($alias in $present) { $aliasDefaults[$alias] = $false }
+			$aliasStates = Resolve-Steps -Defaults $aliasDefaults -ConfigSteps $configSteps
+			$configSteps = $configSteps.Clone()
+			$configSteps['AiArtifacts'] = [bool](@($aliasStates.Values) -contains $true)
+		}
+	}
+	if ($Skip) { $Skip = @($Skip | ForEach-Object { if ($aliases -contains $_) { 'AiArtifacts' } else { $_ } }) }
+	if ($Include) { $Include = @($Include | ForEach-Object { if ($aliases -contains $_) { 'AiArtifacts' } else { $_ } }) }
 
 	return Resolve-Steps -Defaults $defaults -ConfigSteps $configSteps -Skip $Skip -Include $Include
 }

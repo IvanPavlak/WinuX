@@ -243,7 +243,7 @@ Describe "MyFunction" {
 
 | Area          | Coverage Summary                                                                        |
 | ------------- | --------------------------------------------------------------------------------------- |
-| AI            | Skill, mod, marketplace and CoreAiRules deployment, rosters, and Claude settings writes |
+| AI            | AI artifact deployment and vendoring (and the deprecated skill, mod and rules wrappers), rosters, marketplaces, and Claude settings writes |
 | Application   | Launcher wrappers, browser/project open detection, installer workflows                  |
 | Bootstrap     | Machine detection and configuration loading paths                                       |
 | Configuration | Config schema checks and formatting helpers                                             |

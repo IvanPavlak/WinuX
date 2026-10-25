@@ -2,6 +2,9 @@
 
 Resolves the `AiMods` configuration section into expanded paths (`Root`, `Harnesses`, `WSLHarnesses`), the configured `Sources`, and the Claude Code settings files (`SettingsPath`, `WSLSettingsPath`), the one view of that section every AI mods function shares.
 
+> [!WARNING]
+> Deprecated since 1.6.0, removed in 2.0.0 - use [`Resolve-AiArtifactsConfig`](Resolve-AiArtifactsConfig.md). This function reads only the deprecated keys below, which [`Resolve-AiArtifactsConfig`](Resolve-AiArtifactsConfig.md) maps onto `AiArtifacts` until 2.0.0; nothing in WinuX calls it any more. See [Migrating from 1.5](../../../ai/artifacts.md#migrating-from-15).
+
 > [!NOTE]
 > Every value on this page belongs in `Configuration.local.psd1`, never in the base `Configuration.psd1`. The base file is upstream's, it ships empty-by-default, and it is deep-merged with your local file at load time by `Load-PathConfiguration`. See [Fork Model](../../../contributing/fork-model.md).
 
@@ -9,7 +12,7 @@ Resolves the `AiMods` configuration section into expanded paths (`Root`, `Harnes
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`AiMods`](../../configuration-reference.md#ai-mods) | hashtable | `Root`, `Harnesses` defaults; `Sources = @{}` | The whole section: `Root` (mods root), `Harnesses` (Windows mods directories), `Sources` (upstreams). `{RepoRoot}`, `{User}` and `{AppData}` are expanded in `Root` and `Harnesses`. |
+| [`AiMods`](../../configuration-reference.md#ai-mods-deprecated) | hashtable | `Root`, `Harnesses` defaults; `Sources = @{}` | The whole section: `Root` (mods root), `Harnesses` (Windows mods directories), `Sources` (upstreams). `{RepoRoot}`, `{User}` and `{AppData}` are expanded in `Root` and `Harnesses`. |
 | [`DefaultWSLUsername`](../../configuration-reference.md#wsl-configuration) | string | empty string | Derives `WSLHarnesses` from the `{User}` harness entries (`/home/<user>/...`) and `WSLSettingsPath` (`/home/<user>/.claude/settings.json`). Empty yields neither. |
 
 `SettingsPath` is always `~\.claude\settings.json` and is not configurable: it is the only user settings file Claude Code reads `CLAUDE_CODE_PLUGIN_DIRS` from.
@@ -19,7 +22,7 @@ Resolves the `AiMods` configuration section into expanded paths (`Root`, `Harnes
 1. Do the defaults need changing at all?
     - Options: Set `AiMods.Root` or `AiMods.Harnesses` only when the mods should live elsewhere or be linked somewhere else. `Sources` is configured on the [`Update-AiMods`](Update-AiMods.md) page.
     - Default: `{RepoRoot}\AI\Mods` and `{User}\.claude\mods`; no sources.
-    - More detail: [`AiMods`](../../configuration-reference.md#ai-mods)
+    - More detail: [`AiMods`](../../configuration-reference.md#ai-mods-deprecated)
 2. Should WSL paths be derived?
     - Options: Set `DefaultWSLUsername` to get `/home/<user>/<harness>` for every `{User}` entry plus the WSL settings file; leave it empty for Windows only.
     - Default: Empty - no WSL harnesses, no WSL settings file.

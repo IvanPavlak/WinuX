@@ -9,7 +9,7 @@ Initializes the configured WSL distribution with shell tooling.
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`DefaultWSLDistribution`](../../configuration-reference.md#wsl-configuration) | string | empty string | The WSL distribution every WSL-touching function uses. Ships empty, and that is deliberate: `Configure-WSL`, `Initialize-WSLEnvironment`, `Configure-WSLSSH`, `Open-WSLTab`, `Deploy-CoreAiRules` and WSL symlinks all no-op until it is set. |
+| [`DefaultWSLDistribution`](../../configuration-reference.md#wsl-configuration) | string | empty string | The WSL distribution every WSL-touching function uses. Ships empty, and that is deliberate: `Configure-WSL`, `Initialize-WSLEnvironment`, `Configure-WSLSSH`, `Open-WSLTab`, `Deploy-AiArtifacts` and WSL symlinks all no-op until it is set. |
 | [`Universal.OhMyPoshThemeFile`](../../configuration-reference.md#universal-paths) | string (placeholder path) | `"{User}\AppData\Local\Programs\oh-my-posh\themes\WinuX.omp.json"` | Only its FILE NAME is used: the WSL `~/.profile` line loads `/mnt/c/Users/<Windows user>/AppData/Local/Programs/oh-my-posh/themes/<file name>`, whatever directory the key names. Unset falls back to `WinuX.omp.json`. |
 
 ## Decisions
@@ -38,7 +38,7 @@ All of it goes in `Configuration.local.psd1`, at the repository's `Windows/Power
 
 ## Step 1: Set `DefaultWSLDistribution`
 
-The WSL distribution every WSL-touching function uses. Ships empty, and that is deliberate: `Configure-WSL`, `Initialize-WSLEnvironment`, `Configure-WSLSSH`, `Open-WSLTab`, `Deploy-CoreAiRules` and WSL symlinks all no-op until it is set.
+The WSL distribution every WSL-touching function uses. Ships empty, and that is deliberate: `Configure-WSL`, `Initialize-WSLEnvironment`, `Configure-WSLSSH`, `Open-WSLTab`, `Deploy-AiArtifacts` and WSL symlinks all no-op until it is set.
 
 ```powershell
 DefaultWSLDistribution = "Ubuntu"

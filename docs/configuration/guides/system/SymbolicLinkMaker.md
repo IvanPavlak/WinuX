@@ -13,7 +13,7 @@ Creates symbolic links defined in `SymbolicLinks` under `MachineSpecificPaths` i
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
 | [`PathTemplates.SymbolicLinks`](../../configuration-reference.md#symbolic-links) | nested hashtable of group to link entries | shipped, 2 groups | Every symbolic link `SymbolicLinkMaker` creates: `@{ <Group> = @{ <Name> = @{ Source; Target } } }`, with placeholders on both sides. WSL targets are supported and are what the AI-instruction links use. |
-| [`DefaultWSLDistribution`](../../configuration-reference.md#wsl-configuration) | string | empty string | The WSL distribution every WSL-touching function uses. Ships empty, and that is deliberate: `Configure-WSL`, `Initialize-WSLEnvironment`, `Configure-WSLSSH`, `Open-WSLTab`, `Deploy-CoreAiRules` and WSL symlinks all no-op until it is set. |
+| [`DefaultWSLDistribution`](../../configuration-reference.md#wsl-configuration) | string | empty string | The WSL distribution every WSL-touching function uses. Ships empty, and that is deliberate: `Configure-WSL`, `Initialize-WSLEnvironment`, `Configure-WSLSSH`, `Open-WSLTab`, `Deploy-AiArtifacts` and WSL symlinks all no-op until it is set. |
 
 ## Decisions
 
@@ -55,7 +55,7 @@ PathTemplates = @{
 
 ## Step 2: Set `DefaultWSLDistribution`
 
-The WSL distribution every WSL-touching function uses. Ships empty, and that is deliberate: `Configure-WSL`, `Initialize-WSLEnvironment`, `Configure-WSLSSH`, `Open-WSLTab`, `Deploy-CoreAiRules` and WSL symlinks all no-op until it is set.
+The WSL distribution every WSL-touching function uses. Ships empty, and that is deliberate: `Configure-WSL`, `Initialize-WSLEnvironment`, `Configure-WSLSSH`, `Open-WSLTab`, `Deploy-AiArtifacts` and WSL symlinks all no-op until it is set.
 
 ```powershell
 DefaultWSLDistribution = "Ubuntu"

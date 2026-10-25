@@ -38,7 +38,7 @@ WinuX/
     │   ├── Microsoft.PowerShell_profile.ps1        # Profile loader
     │   ├── profile.ps1                             # All-hosts profile (opt-in): fastfetch image logo
     │   └── Modules/
-    │       ├── AI/                                 # CoreAiRules enforcement & Agent Skills deployment
+    │       ├── AI/                                 # AI artifacts deployment (skills, mods, rules, prompts, agents) & marketplaces
     │       ├── Application/                        # App launchers & installers
     │       ├── Bootstrap/                          # System initialization
     │       │   └── Data/

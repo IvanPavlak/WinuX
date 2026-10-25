@@ -8,6 +8,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-10-25
+
+### Added
+
+- **One generic AI mechanism: `AiArtifacts` and `AiHarnesses`.** WinuX now ships the mechanism for AI skills, mods, rules, prompts and agents, and no content of its own that belongs to you. Items live kind first, `AI\<Kind>\<source>\<item>` (`Skills`, `Mods`, `Rules`, `Prompts`, `Agents`); the sources read are `own` (yours, read first, winning a name clash with a warning), `winux` (the product skills), `example` (the example rules) and every vendored source. `AiArtifacts` holds `Root`, `Sources` (one definition per upstream repository with per-kind folders, so one upstream can feed skills, mods and agents), `Exclude` (`skills/tdd`, or `rules/example/CoreAiRules` for one source), `Use` (the item a single-file destination takes, `Rules = "CoreAiRules"`) and `Deploy` (per machine type, the harnesses to deploy into). `AiHarnesses` is an inactive catalogue of `claude-code`, `codex`, `gemini-cli` and `copilot`, each destination checked against the app's own documentation, with `Each` / `Copy` / `File` placements, per-app file variants (`claude.md`, `codex.toml`, `copilot.agent.md`, `managed-settings.json`), the `claude-plugin-dirs` and `managed-settings` hooks, and a WSL twin per harness derived from `DefaultWSLUsername`. A fork defines any other app with an entry of its own. Nothing is deployed until a fork names harnesses in `AiArtifacts.Deploy`.
+- **`Deploy-AiArtifacts`, `Update-AiArtifacts`, `List-AiArtifacts` (AI module).** `Deploy-AiArtifacts [-Kind] [-WhatIf]` links every item into every destination of the harnesses this machine deploys into, on Windows and in WSL (one `wsl` call per destination, the managed settings as root), backs up a real file in the way into `Backups\Windows\SymbolicLinks`, prunes only dangling links into the artifacts root and reports with `-WhatIf` without changing anything. `Update-AiArtifacts [-Source] [-Check]` vendors every kind a source names, pinned with an `UPSTREAM.md` per kind folder in the format Foundation writes. `List-AiArtifacts [-Kind] [-Source] [-Name] [-ListDiscrepancies]` lists the roster grouped by kind and source and checks what is deployed. The helpers `Resolve-AiArtifactsConfig`, `Get-AiArtifactRoster` and `Get-AiArtifactPlan` are the one reading all three share. `Deploy-AiMarketplaces` stays its own command: marketplaces install through the Claude Code CLI and are not an artifact kind.
+- **One Bootstrap step `AiArtifacts`** (OFF by default) runs `Deploy-AiArtifacts`; `AiMarketplaces` stays its own step.
+- **Deprecation warnings.** `Test-ConfigurationSchema` reports every deprecated configuration key or step name still in use, with the release that deprecated it, the release that removes it and its replacement; the profile runs it at every load and `Bootstrap` now at the start of every run. A deprecation warns and never fails, even under `-Strict`. The table covers the 1.6.0 deprecations below and the two carried over from 0.x, `BootstrapConfig.WSLSetup` and `PathTemplates.ObsidianStartupScript`. `Test-ConfigurationSchema` also checks the shape of `AiArtifacts` and `AiHarnesses`.
+- **Product skills in `AI\Skills\winux\`:** `winux-configurator` (moved from `AI\Skills\own\`) and `document`, which turns a function's comment-based help into its module page entry and configuration guide (it replaces `.github/prompts/document.prompt.md`). Leave one out with `Exclude = @("skills/winux/document")`.
+- **Example rules in `AI\Rules\example\CoreAiRules\`:** a skeleton (`RULES.md`, headings and one sample rule) that `Use.Rules = "CoreAiRules"` names by default. Your own rules go in `AI\Rules\own\CoreAiRules\` (with a `managed-settings.json` variant for Claude Code's managed settings), which wins the name clash; `Exclude = @("rules/example/CoreAiRules")` silences it.
+
+### Changed
+
+- **Claude Code's managed settings on Windows go to `C:\Program Files\ClaudeCode\managed-settings.json`.** Claude Code no longer reads the old `C:\ProgramData\ClaudeCode` path the CoreAiRules `SymbolicLinks` example used, so rules enforced there had silently stopped applying. The `claude-code` harness links the new path.
+- **Content that leaves the base (not part of the contract).** WinuX ships the mechanism and its product skills only; your prompts, agents and templates are fork content. Removed from the base: `.github/prompts/` (the five `add-*` prompts, which the configurator skill covers; `oneoff`; `research`; `document`, now the `document` skill), `.github/agents/researcher.agent.md`, `AI/Templates/`, `AI/Models/`, `AI/Providers/`, `AI/InitialConfiguration_2026_03_24.md`, `AI/CoreAiRules.md` and `AI/Claude/managed-settings.json` (replaced by the example rules). Migration: copy whatever of these you use into your fork before merging this release, since a merged deletion removes an unedited fork copy - prompts and agents as items under `AI\Prompts\own\` and `AI\Agents\own\` (or skills under `AI\Skills\own\`), the rules into `AI\Rules\own\<Name>\`. `AGENTS.md` no longer names `/oneoff`, `/research` or `/document`.
+
+### Deprecated
+
+All of these keep working until 2.0.0 and are reported by `Test-ConfigurationSchema`; the functions warn once per session.
+
+- **`AiSkills` and `AiMods` (configuration).** Still read and mapped onto `AiArtifacts` by `Resolve-AiArtifactsConfig`: each `Sources` entry becomes an `AiArtifacts.Sources` entry (`Folders` read as `Skills` or `Mods`; `Exclude` and `SkipPaths` kept), and a `Root` other than the shipped default moves `AiArtifacts.Root` to its parent folder. `Harnesses` is no longer read. Migration: move the sources to `AiArtifacts.Sources` with `Folders` renamed to `Skills` / `Mods`, and name the apps in `AiArtifacts.Deploy`, e.g. `Deploy = @{ Default = @("claude-code", "codex", "gemini-cli") }` (the folders the old commands wrote).
+- **The CoreAiRules entries under `PathTemplates.SymbolicLinks.AI`.** `SymbolicLinkMaker` still links them. Migration: keep the rules in `AI\Rules\own\<Name>\RULES.md` (plus `managed-settings.json`), set `AiArtifacts.Use.Rules`, name the harnesses in `AiArtifacts.Deploy` and drop the `AI` entries; `Deploy-AiArtifacts` links the rules into every app's global instruction file and the managed settings, on Windows and in WSL.
+- **The Bootstrap step names `CoreAiRules`, `AiSkills` and `AiMods`** are aliases of `AiArtifacts`: with no `Steps.AiArtifacts` entry, any of them on turns it on, and `-Skip` / `-Include` accept them. When `AiArtifacts.Deploy` names no harness for the machine type, a deprecated step or source deploys into `claude-code`, `codex` and `gemini-cli`, with a warning. Migration: `Steps = @{ AiArtifacts = $true }`.
+- **`Deploy-AiSkills`, `Deploy-AiMods`, `Deploy-CoreAiRules`** are wrappers of `Deploy-AiArtifacts -Kind Skills / Mods / Rules`; **`Update-AiSkills`, `Update-AiMods`** of `Update-AiArtifacts` (`-Source`, `-Check` forwarded); **`List-Skills`** of `List-AiArtifacts -Kind Skills` (`-Skill` forwarded as `-Name`). The helpers **`Resolve-AiSkillsConfig`, `Resolve-AiModsConfig`, `Get-AiSkillRoster`, `Get-AiModRoster`** keep reading the deprecated keys and are no longer called; use `Resolve-AiArtifactsConfig` and `Get-AiArtifactRoster`.
+
 ## [1.5.0] - 2026-10-20
 
 ### Added
@@ -1666,7 +1691,9 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v1.4.0...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v1.6.0...HEAD
+[1.6.0]: https://github.com/IvanPavlak/WinuX/compare/v1.5.0...v1.6.0
+[1.5.0]: https://github.com/IvanPavlak/WinuX/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/IvanPavlak/WinuX/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/IvanPavlak/WinuX/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/IvanPavlak/WinuX/compare/v1.1.0...v1.2.0

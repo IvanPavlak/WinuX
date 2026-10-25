@@ -10,7 +10,7 @@ The user wants their WinuX configuration filled in by interview. The protocol is
 
 This skill is linked into the harness's user-level skills directory, so the current working directory is almost never the checkout.
 
-- The skill folder (`~/.claude/skills/winux-configurator` or `~/.agents/skills/winux-configurator`) is a symbolic link to `<RepoRoot>/AI/Skills/own/winux-configurator/`. Resolve the link and take the folder three levels above it. In PowerShell with the WinuX profile loaded, `(Get-RepositoryPath).Repo` answers directly.
+- The skill folder (`~/.claude/skills/winux-configurator` or `~/.agents/skills/winux-configurator`) is a symbolic link to `<RepoRoot>/AI/Skills/winux/winux-configurator/`. Resolve the link and take the folder three levels above it. In PowerShell with the WinuX profile loaded, `(Get-RepositoryPath).Repo` answers directly.
 - Confirm the result by checking that `<RepoRoot>/Windows/PowerShell/Configuration.psd1` exists. If it does not, ask the user for the checkout path.
 - If the repository cannot be reached at all, fetch the protocol from `https://raw.githubusercontent.com/IvanPavlak/WinuX/master/docs/configuration/winux-configurator.md` and tell the user that without the checkout you can interview and print fragments, but not write or verify.
 

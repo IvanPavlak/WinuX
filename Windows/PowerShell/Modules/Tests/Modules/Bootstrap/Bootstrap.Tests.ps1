@@ -23,9 +23,11 @@ BeforeAll {
 	. "$BootstrapFunctionsPath\Resolve-RepositoryUpdateScope.ps1"
 	# The opt-in Obsidian CLI step; dot-sourced so it exists to Mock in every session.
 	. "$ModuleRoot\Application\Functions\Enable-ObsidianCli.ps1"
-	# The opt-in AI mods step; dot-sourced so it exists to Mock even in sessions whose imported
-	# AI module predates the export.
-	. "$ModuleRoot\AI\Functions\Deploy-AiMods.ps1"
+	# The opt-in AI artifacts step; dot-sourced so it exists to Mock even in sessions whose
+	# imported AI module predates the export.
+	. "$ModuleRoot\AI\Functions\Deploy-AiArtifacts.ps1"
+	# The schema check Bootstrap runs first (deprecation warnings), likewise.
+	. "$ModuleRoot\Configuration\Functions\Test-ConfigurationSchema.ps1"
 	# The opt-in AI marketplaces step, likewise.
 	. "$ModuleRoot\AI\Functions\Deploy-AiMarketplaces.ps1"
 	# The opt-in VS Code profiles step, likewise.
@@ -98,7 +100,8 @@ Describe "Bootstrap" {
 		Mock Set-ItemProperty { }
 		Mock Restart-Machine { }
 		Mock Enable-ObsidianCli { }
-		Mock Deploy-AiMods { }
+		Mock Deploy-AiArtifacts { }
+		Mock Test-ConfigurationSchema { }
 		Mock Deploy-AiMarketplaces { }
 		Mock Deploy-VSCodeProfiles { }
 	}
@@ -133,7 +136,7 @@ Describe "Bootstrap" {
 		Should -Invoke Start-Win11Debloat -Times 1 -Exactly
 	}
 
-	It "keeps the other opt-in steps off by default (DeveloperMode, NuGetConfig, AiMods, AiMarketplaces, ObsidianCli, VSCodeProfiles, LockedStartLayout)" {
+	It "keeps the other opt-in steps off by default (DeveloperMode, NuGetConfig, AiArtifacts, AiMarketplaces, ObsidianCli, VSCodeProfiles, LockedStartLayout)" {
 		$global:MachineType = 'Laptop'
 
 		Bootstrap
@@ -141,8 +144,7 @@ Describe "Bootstrap" {
 		Should -Invoke Enable-DeveloperMode -Times 0
 		Should -Invoke Configure-NuGetConfig -Times 0
 		Should -Invoke Enable-ObsidianCli -Times 0
-		Should -Invoke Deploy-AiMods -Times 0
-		Should -Invoke Write-LogWarning -ParameterFilter { $Message -eq "AI mods skipped - opt in via BootstrapConfig.Steps.AiMods" }
+		Should -Invoke Deploy-AiArtifacts -Times 0
 		Should -Invoke Deploy-AiMarketplaces -Times 0
 		Should -Invoke Write-LogWarning -ParameterFilter { $Message -eq "AI marketplaces skipped - opt in via BootstrapConfig.Steps.AiMarketplaces" }
 		Should -Invoke Deploy-VSCodeProfiles -Times 0
@@ -152,17 +154,34 @@ Describe "Bootstrap" {
 
 	It "runs the opt-in steps when BootstrapConfig.Steps enables them" {
 		$global:MachineType = 'Laptop'
-		$global:Configuration.BootstrapConfig = @{ Steps = @{ DeveloperMode = $true; NuGetConfig = $true; AiMods = $true; AiMarketplaces = $true; ObsidianCli = $true; VSCodeProfiles = $true; LockedStartLayout = $true } }
+		$global:Configuration.BootstrapConfig = @{ Steps = @{ DeveloperMode = $true; NuGetConfig = $true; AiArtifacts = $true; AiMarketplaces = $true; ObsidianCli = $true; VSCodeProfiles = $true; LockedStartLayout = $true } }
 
 		Bootstrap
 
 		Should -Invoke Enable-DeveloperMode -Times 1 -Exactly
 		Should -Invoke Configure-NuGetConfig -Times 1 -Exactly
 		Should -Invoke Enable-ObsidianCli -Times 1 -Exactly -ParameterFilter { $CreateIfMissing }
-		Should -Invoke Deploy-AiMods -Times 1 -Exactly
+		Should -Invoke Deploy-AiArtifacts -Times 1 -Exactly
 		Should -Invoke Deploy-AiMarketplaces -Times 1 -Exactly
 		Should -Invoke Deploy-VSCodeProfiles -Times 1 -Exactly
 		Should -Invoke Set-ItemProperty -Times 1 -Exactly -ParameterFilter { $Name -eq 'LockedStartLayout' }
+	}
+
+	It "runs the AI artifacts step for a deprecated step name, once" {
+		$global:MachineType = 'Laptop'
+		$global:Configuration.BootstrapConfig = @{ Steps = @{ CoreAiRules = $true; AiSkills = $true; AiMods = $false } }
+
+		Bootstrap
+
+		Should -Invoke Deploy-AiArtifacts -Times 1 -Exactly
+	}
+
+	It "checks the configuration schema once before the steps run" {
+		$global:MachineType = 'Laptop'
+
+		Bootstrap
+
+		Should -Invoke Test-ConfigurationSchema -Times 1 -Exactly
 	}
 
 	It "skips a default-on step when -Skip forces it off" {

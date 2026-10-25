@@ -28,7 +28,7 @@
 # Individual bootstrap steps are toggleable
 # via BootstrapConfig.Steps (see that section); invasive steps such as
 # MicrosoftActivationScripts, Win11Debloat, DeveloperMode, NuGetConfig,
-# UpgradeAll, CoreAiRules, AiSkills, AiMods, AiMarketplaces, ObsidianCli and LockedStartLayout are OFF
+# UpgradeAll, AiArtifacts, AiMarketplaces, ObsidianCli and LockedStartLayout are OFF
 # until you opt in. A vanilla run
 # therefore installs the framework apps but upgrades nothing else already
 # on the machine.
@@ -808,46 +808,14 @@
 			#       Path   = "{AppData}\lazydocker\config.yml"
 			#       Target = "{RepoRoot}\LazyDocker\config.yml"
 			#   }
-			# CoreAiRules - machine-global AI coding agent policy (see docs/ai/coreairules.md).
-			# One canonical rules file (AI/CoreAiRules.md) linked into every harness's global
-			# instruction file, on Windows and inside WSL, plus the Claude Code managed
-			# settings enforcement layer. The managed-settings entry uses a literal
-			# ProgramData path (no placeholder exists for it; literals pass through
-			# expansion untouched) and backslashes only, because any forward slash would
-			# route the entry to the WSL branch. The root-owned /etc/claude-code link
-			# inside WSL is created by Deploy-CoreAiRules instead (opt in via
-			# BootstrapConfig.Steps.CoreAiRules; SymbolicLinkMaker's WSL branch does not
-			# elevate). Adjust the /home/<user>/ paths to your WSL username:
-			#   AI = @{
-			#       ClaudeCoreAiRules       = @{
-			#           Path   = "{User}\.claude\CLAUDE.md"
-			#           Target = "{RepoRoot}\AI\CoreAiRules.md"
-			#       }
-			#       CodexCoreAiRules        = @{
-			#           Path   = "{User}\.codex\AGENTS.md"
-			#           Target = "{RepoRoot}\AI\CoreAiRules.md"
-			#       }
-			#       GeminiCoreAiRules       = @{
-			#           Path   = "{User}\.gemini\GEMINI.md"
-			#           Target = "{RepoRoot}\AI\CoreAiRules.md"
-			#       }
-			#       ClaudeManagedSettings = @{
-			#           Path   = "C:\ProgramData\ClaudeCode\managed-settings.json"
-			#           Target = "{RepoRoot}\AI\Claude\managed-settings.json"
-			#       }
-			#       WSLClaudeCoreAiRules    = @{
-			#           Path   = "/home/<user>/.claude/CLAUDE.md"
-			#           Target = "{RepoRoot}/AI/CoreAiRules.md"
-			#       }
-			#       WSLCodexCoreAiRules     = @{
-			#           Path   = "/home/<user>/.codex/AGENTS.md"
-			#           Target = "{RepoRoot}/AI/CoreAiRules.md"
-			#       }
-			#       WSLGeminiCoreAiRules    = @{
-			#           Path   = "/home/<user>/.gemini/GEMINI.md"
-			#           Target = "{RepoRoot}/AI/CoreAiRules.md"
-			#       }
-			#   }
+			# AI = @{ ... } - DEPRECATED since 1.6.0, removed in 2.0.0. The CoreAiRules entries that
+			# linked one rules file into every harness's global instruction file (and the Claude Code
+			# managed settings) are AiArtifacts rules now: write the rules in
+			# AI\Rules\own\<Name>\RULES.md (plus managed-settings.json), name it with
+			# AiArtifacts.Use.Rules and turn the harnesses on with AiArtifacts.Deploy; Deploy-AiArtifacts
+			# then links them on Windows and inside WSL. A fork's AI entries keep working until 2.0.0
+			# (SymbolicLinkMaker still links them, and a Rules item they target becomes Use.Rules when
+			# none is set); Test-ConfigurationSchema warns while they exist. See docs/ai/coreairules.md.
 			# SSH config symlinking is a natural fit for WinuX, but no example ssh/config
 			# ships in the public repo (it would expose private hosts). To manage your own,
 			# add an entry pointing at a config file you keep in your fork, e.g.:
@@ -871,17 +839,141 @@
 	}
 
 	# ==========================================================================
-	# AI Skills (see docs/ai/skills.md)
+	# AI Artifacts (see docs/ai/artifacts.md)
 	# ==========================================================================
+	# → Consumers: Deploy-AiArtifacts, Update-AiArtifacts, List-AiArtifacts (through
+	#   Resolve-AiArtifactsConfig)
+	#
+	# The skills, mods, rules, prompts and agents Deploy-AiArtifacts (opt in via
+	# BootstrapConfig.Steps.AiArtifacts) links into the AI apps of AiHarnesses below. They live
+	# under Root, kind first: <Root>\<Kind>\<source>\<item>, Kind one of Skills, Mods, Rules,
+	# Prompts, Agents. A source folder is `own` (your own items, read first, so it wins a name
+	# clash, with a warning), `winux` (the skills WinuX ships), `example` (the example rules) or
+	# a Sources entry (vendored by Update-AiArtifacts); any other folder is not read. Only
+	# {RepoRoot}, {User} and {AppData} expand here.
+	#
+	# Root    : the artifacts root
+	# Sources : one entry per vendored upstream; Update-AiArtifacts copies it into
+	#           <Root>\<Kind>\<name>\:
+	#             Repository  owner/name on GitHub
+	#             Ref         branch, tag or commit to pin (default main)
+	#             Skills, Mods, Rules, Prompts, Agents
+	#                         the upstream folders holding items of that kind, "." for the
+	#                         repository root (no kind key: Skills = @("skills"))
+	#             Exclude     items not to vendor
+	#             SkipPaths   top-level entries of an item not to copy (default .git, .github,
+	#                         tests, design, docs)
+	# Exclude : items not to deploy, "skills/tdd" (every source) or "rules/example/CoreAiRules"
+	#           (one source); an entry may be @{ Item = "skills/tdd"; Machine = "Work" }
+	# Use     : per kind, the item a File destination takes (the rules linked as
+	#           ~\.claude\CLAUDE.md, ~\.codex\AGENTS.md, ...); without one such a destination
+	#           links nothing. A value may be per machine type: @{ Default = "A"; Work = "B" }
+	# Deploy  : per machine type, the AiHarnesses entries it deploys into; Default covers any
+	#           machine type not listed (none: nothing is deployed)
+	#
+	# Ships deploying nothing - a fork turns harnesses on in Configuration.local.psd1, e.g.:
+	#   AiArtifacts = @{
+	#       Sources = @{
+	#           mattpocock = @{ Repository = "OWNER/skills"; Skills = @("skills/engineering") }
+	#       }
+	#       Exclude = @("rules/example/CoreAiRules")
+	#       Deploy  = @{ Default = @("claude-code", "codex"); Work = @("claude-code") }
+	#   }
+	AiArtifacts                   = @{
+		Root    = "{RepoRoot}\AI"
+		Sources = @{}
+		Exclude = @()
+		Use     = @{
+			Rules = "CoreAiRules"
+		}
+		Deploy  = @{
+			Default = @()
+		}
+	}
+
+	# ==========================================================================
+	# AI Harnesses (see docs/ai/artifacts.md)
+	# ==========================================================================
+	# → Consumers: Deploy-AiArtifacts, List-AiArtifacts (through Resolve-AiArtifactsConfig)
+	#
+	# The apps Deploy-AiArtifacts can deploy into. The catalogue is inactive: AiArtifacts.Deploy
+	# turns a harness on. A fork defines another app with an entry of its own (a same-named
+	# entry deep-merges, so Destinations, an array, replaces the base list wholesale).
+	#
+	# Per harness:
+	#   WSL           $true: every destination under {User} has a WSL twin under
+	#                 /home/<DefaultWSLUsername>, deployed in one `wsl` call per destination
+	#                 (none without a WSL distribution or DefaultWSLUsername)
+	#   Destinations  one entry per destination:
+	#     Kind        Skills, Mods, Rules, Prompts or Agents
+	#     Placement   Each: Path is a folder, one link per item; Copy: the same, copied (for an
+	#                 app that does not follow links); File: Path is one file, linked to the
+	#                 item AiArtifacts.Use names
+	#     Files       what to take from an item folder, the first one the item has: "." is the
+	#                 folder itself (linked as <item>), a file name is that file (linked as
+	#                 <item> plus the file's extension: claude.md as <item>.md); an item with
+	#                 none of them is left out of this destination
+	#     Hooks       built-in steps: claude-plugin-dirs lists the links in
+	#                 env.CLAUDE_CODE_PLUGIN_DIRS of the Claude Code settings.json and validates
+	#                 them with `claude plugin validate`; managed-settings makes the WSL twin as
+	#                 root (a root-owned path)
+	#     Path        the Windows destination
+	#     WSLPath     the WSL twin, when it is not derived from a {User} path
+	#     Machine     optional machine scope ("PC/Work"); absent = every machine type
+	#
+	# A destination two harnesses name ({User}\.agents\skills) is filled once. T3 Code has no
+	# entry: it drives the agents installed on the machine, which read their own folders.
+	AiHarnesses                   = @{
+		"claude-code" = @{
+			WSL          = $true
+			Destinations = @(
+				@{ Kind = "Skills"; Placement = "Each"; Files = @("."); Path = "{User}\.claude\skills" }
+				@{ Kind = "Mods"; Placement = "Each"; Files = @("."); Hooks = @("claude-plugin-dirs"); Path = "{User}\.claude\mods" }
+				@{ Kind = "Rules"; Placement = "File"; Files = @("RULES.md"); Path = "{User}\.claude\CLAUDE.md" }
+				@{ Kind = "Rules"; Placement = "File"; Files = @("managed-settings.json"); Hooks = @("managed-settings"); Path = "C:\Program Files\ClaudeCode\managed-settings.json"; WSLPath = "/etc/claude-code/managed-settings.json" }
+				@{ Kind = "Prompts"; Placement = "Each"; Files = @("claude.md", "PROMPT.md"); Path = "{User}\.claude\commands" }
+				@{ Kind = "Agents"; Placement = "Each"; Files = @("claude.md", "AGENT.md"); Path = "{User}\.claude\agents" }
+			)
+		}
+		codex         = @{
+			WSL          = $true
+			Destinations = @(
+				@{ Kind = "Skills"; Placement = "Each"; Files = @("."); Path = "{User}\.agents\skills" }
+				@{ Kind = "Rules"; Placement = "File"; Files = @("RULES.md"); Path = "{User}\.codex\AGENTS.md" }
+				@{ Kind = "Prompts"; Placement = "Each"; Files = @("codex.md", "PROMPT.md"); Path = "{User}\.codex\prompts" }
+				@{ Kind = "Agents"; Placement = "Each"; Files = @("codex.toml"); Path = "{User}\.codex\agents" }
+			)
+		}
+		"gemini-cli"  = @{
+			WSL          = $true
+			Destinations = @(
+				@{ Kind = "Skills"; Placement = "Each"; Files = @("."); Path = "{User}\.agents\skills" }
+				@{ Kind = "Rules"; Placement = "File"; Files = @("RULES.md"); Path = "{User}\.gemini\GEMINI.md" }
+				@{ Kind = "Prompts"; Placement = "Each"; Files = @("gemini.toml"); Path = "{User}\.gemini\commands" }
+				@{ Kind = "Agents"; Placement = "Each"; Files = @("gemini.md", "AGENT.md"); Path = "{User}\.gemini\agents" }
+			)
+		}
+		copilot       = @{
+			WSL          = $true
+			Destinations = @(
+				@{ Kind = "Skills"; Placement = "Each"; Files = @("."); Path = "{User}\.agents\skills" }
+				@{ Kind = "Rules"; Placement = "File"; Files = @("copilot.md", "RULES.md"); Path = "{User}\.copilot\copilot-instructions.md" }
+				@{ Kind = "Agents"; Placement = "Each"; Files = @("copilot.agent.md"); Path = "{User}\.copilot\agents" }
+			)
+		}
+	}
+
+	# ==========================================================================
+	# AI Skills - DEPRECATED since 1.6.0, removed in 2.0.0 (use AiArtifacts)
+	# ==========================================================================
+	# Still read: Sources map onto AiArtifacts.Sources (Folders as Skills), a Root other than
+	# the default onto AiArtifacts.Root, and Test-ConfigurationSchema warns while either is
+	# set. Harnesses is no longer read - the skills destinations are AiHarnesses entries.
 	# Agent Skills (a SKILL.md per folder) kept in the repository and linked into every
-	# AI coding harness's user-level skills directory by Deploy-AiSkills (opt in via
-	# BootstrapConfig.Steps.AiSkills), so they are available in every project on every
-	# machine. Root holds one subfolder per source: vendored upstreams filled by
-	# Update-AiSkills from Sources, plus `own` for hand-written skills. Harnesses are
-	# the Windows directories linked into; their WSL twins are derived from the {User}
-	# entries and DefaultWSLUsername. Only {RepoRoot}, {User} and {AppData} expand here.
-	# Ships with no sources - Update-AiSkills and Deploy-AiSkills no-op until a fork adds
-	# one in Configuration.local.psd1, e.g.:
+	# AI coding harness's user-level skills directory, so they are available in every project
+	# on every machine. Root holds one subfolder per source: vendored upstreams, plus `own` for
+	# hand-written skills. Only {RepoRoot}, {User} and {AppData} expand here.
+	# Ships with no sources; the shape a fork used, now written as AiArtifacts.Sources:
 	#   Sources = @{
 	#       mattpocock = @{
 	#           Repository = "mattpocock/skills"
@@ -897,20 +989,17 @@
 	}
 
 	# ==========================================================================
-	# AI Mods (see docs/ai/mods.md)
+	# AI Mods - DEPRECATED since 1.6.0, removed in 2.0.0 (use AiArtifacts)
 	# ==========================================================================
+	# Still read: Sources map onto AiArtifacts.Sources (Folders as Mods, Exclude, SkipPaths),
+	# a Root other than the default onto AiArtifacts.Root, and Test-ConfigurationSchema warns
+	# while either is set. Harnesses is no longer read - the mods destination is the
+	# claude-code entry of AiHarnesses, whose claude-plugin-dirs hook writes
+	# env.CLAUDE_CODE_PLUGIN_DIRS of ~\.claude\settings.json.
 	# Claude Code mods - function-hook plugins (a folder holding .claude-plugin\plugin.json
-	# and a hooks module) that draw bands, panes and status entries and hook engine events -
-	# kept in the repository and deployed by Deploy-AiMods (opt in via
-	# BootstrapConfig.Steps.AiMods): every mod is linked into the Harnesses directories
-	# (default ~\.claude\mods), and the single key env.CLAUDE_CODE_PLUGIN_DIRS of the user's
-	# ~\.claude\settings.json is set to list the links of the first harness, keeping every
-	# other setting and every plugin entry added by hand. Root holds one subfolder per
-	# source: vendored upstreams filled by Update-AiMods from Sources (pinned to a commit,
-	# with UPSTREAM.md), plus `own` for hand-written mods. WSL twins of the harnesses are
-	# derived from the {User} entries and DefaultWSLUsername. Only {RepoRoot}, {User} and
-	# {AppData} expand here. Ships with no mods and no sources - Update-AiMods and
-	# Deploy-AiMods no-op until a fork adds one in Configuration.local.psd1, e.g.:
+	# and a hooks module). Root holds one subfolder per source: vendored upstreams, plus `own`
+	# for hand-written mods. Only {RepoRoot}, {User} and {AppData} expand here. Ships with no
+	# mods and no sources; the shape a fork used, now written as AiArtifacts.Sources:
 	#   Sources = @{
 	#       "my-mod" = @{
 	#           Repository = "MyOrg/MyMod"     # owner/name on GitHub
@@ -937,7 +1026,8 @@
 	# environment from there in every session), writes the plugins' options beneath
 	# pluginConfigs.<plugin>@<marketplace>, and, when the CLI is on PATH, adds the marketplaces
 	# it does not know yet and installs the listed plugins. The same plugin loaded from a folder
-	# (AiMods) and installed from a marketplace would run twice: give each plugin one path.
+	# (an AiArtifacts mod) and installed from a marketplace would run twice: give each plugin
+	# one path. Marketplaces are not an artifact kind: their plugins install through the CLI.
 	# Ships with no marketplaces - Deploy-AiMarketplaces no-ops until a fork adds one in
 	# Configuration.local.psd1, e.g.:
 	#   Marketplaces = @{
@@ -1052,8 +1142,8 @@
 	# - Configure-WSL, Install package managers and apps
 	# - Upgrade-All, fork-defined PersonalSteps, Install-DotnetEF
 	# - Set-EnvironmentVariables, Create-CondaEnvironments, Configure-NuGetConfig
-	# - Configure-Taskbar, Initialize-WSLEnvironment, SymbolicLinkMaker, Deploy-CoreAiRules (opt-in),
-	#   Deploy-AiSkills (opt-in), Deploy-AiMods (opt-in), Deploy-AiMarketplaces (opt-in), Enable-ObsidianCli (opt-in),
+	# - Configure-Taskbar, Initialize-WSLEnvironment, SymbolicLinkMaker, Deploy-AiArtifacts (opt-in),
+	#   Deploy-AiMarketplaces (opt-in), Enable-ObsidianCli (opt-in),
 	#   Deploy-VSCodeProfiles (opt-in)
 	# - Configure-WSLSSH, Lock taskbar layout, Restart-Machine
 	#
@@ -1093,9 +1183,8 @@
 		# run have no empty state to detect and default OFF - opt in here:
 		# MicrosoftActivationScripts, Win11Debloat, DeveloperMode, NuGetConfig
 		# (prompts for a GitHub PAT), UpgradeAll (upgrades every package already
-		# on the machine, not just WinuX's own), CoreAiRules (machine-global AI
-		# agent policy), AiSkills (machine-global Agent Skills), AiMods (machine-global
-		# Claude Code mods and the CLAUDE_CODE_PLUGIN_DIRS settings key), AiMarketplaces
+		# on the machine, not just WinuX's own), AiArtifacts (machine-global AI skills,
+		# mods, rules, prompts and agents), AiMarketplaces
 		# (Claude Code plugin marketplaces in the user settings and `claude plugin install`), ObsidianCli
 		# (edits Obsidian's per-machine app settings), VSCodeProfiles (links VS Code profile files,
 		# registers profiles in VS Code's state and installs extensions), LockedStartLayout.
@@ -1138,13 +1227,12 @@
 		# - NuGetConfig                : Configure-NuGetConfig (OFF by default)
 		# - Taskbar                    : Configure-Taskbar -FromBootstrap
 		# - SymbolicLinks              : SymbolicLinkMaker
-		# - CoreAiRules                : Deploy-CoreAiRules (OFF by default - machine-global AI
-		#                                agent policy, see docs/ai/coreairules.md)
-		# - AiSkills                   : Deploy-AiSkills (OFF by default - links the skills under
-		#                                AiSkills.Root into every AI harness, see docs/ai/skills.md)
-		# - AiMods                     : Deploy-AiMods (OFF by default - links the Claude Code mods
-		#                                under AiMods.Root into ~/.claude/mods and lists them in
-		#                                env.CLAUDE_CODE_PLUGIN_DIRS, see docs/ai/mods.md)
+		# - AiArtifacts                : Deploy-AiArtifacts (OFF by default - links the skills, mods,
+		#                                rules, prompts and agents under AiArtifacts.Root into the
+		#                                AiHarnesses AiArtifacts.Deploy names, see docs/ai/artifacts.md).
+		#                                The deprecated step names CoreAiRules, AiSkills and AiMods
+		#                                are aliases of it until 2.0.0: any of them on (and no
+		#                                AiArtifacts entry) turns it on
 		# - AiMarketplaces             : Deploy-AiMarketplaces (OFF by default - registers the Claude Code
 		#                                plugin marketplaces under AiMarketplaces in the user settings and
 		#                                installs their plugins through the CLI, see docs/ai/mods.md)

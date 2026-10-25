@@ -1,6 +1,6 @@
 # Get-AiSkillDescription
 
-Extracts the `description:` from a `SKILL.md` YAML frontmatter as one line of Markdown table text, for the skill table `Update-AiSkills` writes into `UPSTREAM.md`.
+Extracts the `description:` from a `SKILL.md` YAML frontmatter as one line of Markdown table text, for the item table `Update-AiArtifacts` writes into `UPSTREAM.md` and the summaries `List-AiArtifacts` shows.
 
 ## Configuration Keys
 
