@@ -153,7 +153,8 @@ Describe "Deploy-AiArtifacts" {
 			New-Item -ItemType Junction -Path $Path -Target $Target | Out-Null
 		}
 		New-Item -ItemType Directory -Path $script:Folder -Force | Out-Null
-		$moved = Join-Path $script:Root "Skills\own\alpha"
+		# Where alpha used to live (another source folder), so the link dangles while the skill itself exists.
+		$moved = Join-Path $script:Root "Skills\winux\alpha"
 		New-Item -ItemType Directory -Path $moved -Force | Out-Null
 		New-Item -ItemType Junction -Path (Join-Path $script:Folder "alpha") -Target $moved | Out-Null
 		Remove-Item -Path $moved -Recurse -Force
@@ -268,7 +269,12 @@ Describe "Deploy-AiArtifacts" {
 			$script:WSLCalls.Count | Should -Be 2
 			($script:WSLCalls[0] -join ' ') | Should -BeLike "-d Ubuntu -u you -e sh /mnt/*/winux-ai-artifacts-*.sh"
 			($script:WSLCalls[1] -join ' ') | Should -BeLike "-d Ubuntu -u root -e sh *"
-			Get-ChildItem -Path ([IO.Path]::GetTempPath()) -Filter "winux-ai-artifacts-*.sh" | Should -BeNullOrEmpty
+			# Only the scripts these calls ran: another run on the machine may have its own in the temp folder.
+			foreach ($call in $script:WSLCalls) {
+				$wslScript = [string]$call[-1]
+				$windowsScript = $wslScript.Substring(5, 1) + ":" + $wslScript.Substring(6).Replace('/', '\')
+				Test-Path -LiteralPath $windowsScript | Should -BeFalse
+			}
 		}
 
 		It "skips the WSL twins when no distribution is installed" {
