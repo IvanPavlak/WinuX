@@ -8,4 +8,4 @@ Layout: one subfolder per source, each holding flat `<skill>/SKILL.md` folders.
 - `winux/` - the product skills WinuX ships: [winux-configurator](winux/winux-configurator/SKILL.md), which runs the [AI-assisted configuration session](../../docs/configuration/winux-configurator.md), and [document](winux/document/SKILL.md), which turns a function's comment-based help into its module page entry and configuration guide. Leave one out with `AiArtifacts.Exclude = @("skills/winux/document")`.
 - `<source>/` - an upstream vendored by `Update-AiArtifacts` from `AiArtifacts.Sources.<source>`; its `UPSTREAM.md` records the pinned commit and lists every vendored skill.
 
-Any other folder is not read on Windows. A repository that carries both halves keeps Foundation's product skills in `foundation/`, which only the Mac deploys.
+Any other folder is not read.

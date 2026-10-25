@@ -31,7 +31,7 @@ Describe "Get-AiArtifactRoster" {
 		New-Item-In "Skills\mattpocock\tdd"
 		New-Item-In "Skills\own\teach-me"
 		New-Item-In "Skills\example\sample"
-		New-Item-In "Skills\foundation\document"
+		New-Item-In "Skills\unlisted\document"
 
 		$roster = Get-AiArtifactRoster -Kind Skills -Config $script:Config
 

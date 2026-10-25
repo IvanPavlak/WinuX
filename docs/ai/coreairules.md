@@ -39,7 +39,6 @@ Enforcement layer (link to `managed-settings.json`, only when the item has one):
 | -- | --------------------- |
 | Windows | `C:\Program Files\ClaudeCode\managed-settings.json` |
 | WSL | `/etc/claude-code/managed-settings.json` (per distribution) |
-| macOS | `/Library/Application Support/ClaudeCode/managed-settings.json` (Foundation, `docs/unix/ai.md` in a repository that carries it) |
 
 Claude Code no longer reads the legacy Windows path `C:\ProgramData\ClaudeCode\managed-settings.json`; a link left there from 1.5 has no effect ([managed settings](https://code.claude.com/docs/en/managed-settings)). The WSL link is the `managed-settings` hook of the `claude-code` destination: `/etc` is root-owned, so `Deploy-AiArtifacts` makes that twin with `wsl -u root` (no sudo prompt). The Windows link needs the administrator rights the whole run asks for.
 

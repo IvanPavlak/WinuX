@@ -1,6 +1,6 @@
 # AI Artifacts
 
-How WinuX deploys the AI artifacts - the skills, mods, rules, prompts and agents - into the AI apps a machine uses, on Windows and inside WSL. WinuX ships the mechanism and its own product skills; which artifacts a machine gets, and into which apps, is the fork's choice, configured in `Configuration.local.psd1` like everything else. The Mac half, Foundation, builds the same model with `Unix/config` files (in a repository that carries it: `docs/unix/ai.md`).
+How WinuX deploys the AI artifacts - the skills, mods, rules, prompts and agents - into the AI apps a machine uses, on Windows and inside WSL. WinuX ships the mechanism and its own product skills; which artifacts a machine gets, and into which apps, is the fork's choice, configured in `Configuration.local.psd1` like everything else.
 
 The kind specifics are on their own pages: [AI Skills](skills.md), [AI Mods](mods.md) and [CoreAiRules](coreairules.md) (the rules). The commands are on the [AI module page](../modules/ai.md).
 
@@ -23,7 +23,7 @@ The sources read, in this order, the first winning an item name two of them carr
 1. `own` - your own items, never touched by a refresh. WinuX ships it empty.
 2. Then, in name order: `winux` (the product skills WinuX ships: [winux-configurator](../configuration/winux-configurator.md) and `document`, which turns a function's comment-based help into its module page entry and configuration guide), `example` (the example rules) and every vendored source, an `AiArtifacts.Sources` entry filled by [Update-AiArtifacts](../modules/ai.md#update-aiartifacts).
 
-Any other source folder is not read: a repository that carries both halves keeps Foundation's product skills in `AI\Skills\foundation\`, which only the Mac deploys. Leave an item out with an `AiArtifacts.Exclude` entry: `"skills/tdd"` drops it from every source, `"skills/winux/document"` from one, and `@{ Item = "skills/tdd"; Machine = "Work" }` on one machine type.
+Any other source folder is not read. Leave an item out with an `AiArtifacts.Exclude` entry: `"skills/tdd"` drops it from every source, `"skills/winux/document"` from one, and `@{ Item = "skills/tdd"; Machine = "Work" }` on one machine type.
 
 Prompts and agents ship no items: they are kinds a fork fills, under `AI\Prompts\own\` and `AI\Agents\own\` or from a vendored source.
 
@@ -47,7 +47,7 @@ Each harness has `WSL` (`$true`: WSL twins, below) and `Destinations`, one hasht
 | `Kind` | `Skills`, `Mods`, `Rules`, `Prompts` or `Agents` |
 | `Placement` | `Each`: `Path` is a folder, one link per item; `Copy`: the same, copied (for an app that does not follow links), a copy that differs from the repository's is replaced; `File`: `Path` is one file, linked to the item `AiArtifacts.Use` names for the kind |
 | `Files` | the first one the item has: `.` is the item folder itself (linked as `<item>`), a file name is that file (linked as `<item>` plus the file's extension: `claude.md` as `<item>.md`, `copilot.agent.md` as `<item>.agent.md`); an item with none of them is left out of this destination |
-| `Hooks` | `claude-plugin-dirs`: sets `env.CLAUDE_CODE_PLUGIN_DIRS` of `~\.claude\settings.json` to the links, **joined with `;`** (`:` in WSL and on a Mac), then every entry added by hand, and runs `claude plugin validate` on each (a missing or rejecting CLI only warns); `managed-settings`: the WSL twin is made as root |
+| `Hooks` | `claude-plugin-dirs`: sets `env.CLAUDE_CODE_PLUGIN_DIRS` of `~\.claude\settings.json` to the links, **joined with `;`** (`:` in WSL), then every entry added by hand, and runs `claude plugin validate` on each (a missing or rejecting CLI only warns); `managed-settings`: the WSL twin is made as root |
 | `Path` | the Windows destination; `{User}`, `{RepoRoot}` and `{AppData}` expand |
 | `WSLPath` | the WSL twin, when it is not derived from a `{User}` path |
 | `Machine` | optional machine scope (`"PC/Work"`); absent means every machine type |
@@ -135,7 +135,7 @@ AiArtifacts = @{
 }
 ```
 
-`Update-AiArtifacts` downloads the pinned archive and copies the items found under each kind's folders into `AI\<Kind>\<source>\`, writing an `UPSTREAM.md` per kind folder (the format Foundation writes) and the upstream license. A source without a kind key reads `Skills = @("skills")`; `SkipPaths` (default `.git`, `.github`, `tests`, `design`, `docs`) are top-level entries of an item not copied; a private repository needs a GitHub token (`GITHUB_TOKEN`, `GH_TOKEN` or a signed-in `gh`). The vendored tree is committed, so a fresh machine needs only `Deploy-AiArtifacts`.
+`Update-AiArtifacts` downloads the pinned archive and copies the items found under each kind's folders into `AI\<Kind>\<source>\`, writing an `UPSTREAM.md` per kind folder and the upstream license. A source without a kind key reads `Skills = @("skills")`; `SkipPaths` (default `.git`, `.github`, `tests`, `design`, `docs`) are top-level entries of an item not copied; a private repository needs a GitHub token (`GITHUB_TOKEN`, `GH_TOKEN` or a signed-in `gh`). The vendored tree is committed, so a fresh machine needs only `Deploy-AiArtifacts`.
 
 ## Marketplaces
 
@@ -200,4 +200,3 @@ The prompts and agent the base used to carry (`.github/prompts/add-*`, `oneoff`,
 - [AI module reference](../modules/ai.md) - every command
 - [AI configuration guides](../configuration/guides/ai/README.md) - the keys, decision by decision
 - [AI Skills](skills.md), [AI Mods](mods.md), [CoreAiRules](coreairules.md) - the kind specifics
-- `docs/unix/ai.md` (in a repository that carries Foundation) - the Mac half of the same model

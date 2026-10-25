@@ -11,9 +11,7 @@ function Get-AiArtifactRoster {
 
 		  - The sources read, in order: `own` first (your own items), then, in name order,
 		    `winux` (the product skills), `example` (the example rules) and every source
-		    AiArtifacts.Sources configures. Any other source folder is not read (a repository
-		    that carries both halves keeps Foundation's product skills in `foundation`, which
-		    only the Mac deploys).
+		    AiArtifacts.Sources configures. Any other source folder is not read.
 		  - An item is a folder: a skill holds SKILL.md, a mod .claude-plugin\plugin.json, a
 		    rules, prompt or agent item at least one file that does not start with a dot (its
 		    per-app variants: RULES.md, claude.md, managed-settings.json, ...).

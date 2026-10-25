@@ -332,7 +332,7 @@ claude --version
 (Get-Content "$env:USERPROFILE\.claude\settings.json" -Raw | ConvertFrom-Json).env
 ```
 
-2. Name the variable under the marketplace's `Env` in `Configuration.local.psd1` and re-run `Deploy-AiMarketplaces` (or Bootstrap with `Steps.AiMarketplaces` on); on macOS and Linux, add `env CLAUDE_CODE_ENABLE_FUNCTION_HOOKS 1` to the marketplace's section of `Unix/config/ai-marketplaces.conf` and re-run `Deploy-AiMarketplaces`. The WSL settings file receives it in the same run.
+2. Name the variable under the marketplace's `Env` in `Configuration.local.psd1` and re-run `Deploy-AiMarketplaces` (or Bootstrap with `Steps.AiMarketplaces` on). The WSL settings file receives it in the same run.
 
 ```powershell
 Marketplaces = @{

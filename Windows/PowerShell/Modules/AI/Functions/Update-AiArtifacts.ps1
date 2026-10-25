@@ -23,8 +23,7 @@ function Update-AiArtifacts {
 		SkipPaths (default .git, .github, tests, design, docs). Provenance goes into
 		<Root>\<Kind>\<name>\UPSTREAM.md (repository, resolved commit, fetch time, folders,
 		exclusions, skipped paths, and a table of every vendored item with its description), in
-		the format Get-AiSkillManifest reads and Foundation's Update-AiArtifacts writes, and the
-		upstream LICENSE is copied next to it.
+		the format Get-AiSkillManifest reads, and the upstream LICENSE is copied next to it.
 
 		SAFETY: only the item folders named in the PREVIOUS UPSTREAM.md (plus the ones about to be
 		written) are removed before copying, so a folder added by hand inside a source folder
@@ -310,7 +309,7 @@ function Update-AiArtifacts {
 					"| $('-' * $singular.Length) | --------------- | ----------- |"
 				) + $rows
 
-				# LF and no BOM, as Foundation writes it, so the two halves produce the same file.
+				# LF and no BOM, so the file is the same on every machine whatever its line-ending settings.
 				[IO.File]::WriteAllText($manifestPath, ($manifest -join "`n") + "`n", (New-Object System.Text.UTF8Encoding($false)))
 
 				$removed = @($previous.Skills | Where-Object { -not $incoming.Contains($_) })
