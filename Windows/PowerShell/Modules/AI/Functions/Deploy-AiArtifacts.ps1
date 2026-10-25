@@ -25,7 +25,8 @@ function Deploy-AiArtifacts {
 		whole-folder style) is replaced by a real folder; one that links elsewhere, or a file in
 		its place, is skipped. Links go through New-WindowsSymbolicLink, which first copies a real
 		file or folder in the way into Backups\Windows\SymbolicLinks\AiArtifacts.<kind>.<item>
-		and skips the item when that copy fails. Only dangling links that point into the
+		and skips the item when that copy fails; a link in the way (a wrong one, or one whose
+		target is gone) holds no content and is simply replaced. Only dangling links that point into the
 		artifacts root are pruned; a link to anything else is never touched.
 
 		Hooks of a destination:
@@ -221,6 +222,12 @@ function Deploy-AiArtifacts {
 					Write-LogStep "$(if ($current) { 'WRONG  ' } else { 'MISSING' }) $($item.Target)"
 					$failures++
 					continue
+				}
+				# A link in the way (wrong, or dangling after its target moved) is removed here: it
+				# holds no content, and New-WindowsSymbolicLink tests the path with Test-Path, which
+				# is false for a dangling link, so it would leave it and then fail to create its own.
+				if ($isLink) {
+					$current.Delete()
 				}
 				New-WindowsSymbolicLink -Path $item.Target -Target $item.Source -DisplayName $key
 				$created = Get-Item -LiteralPath $item.Target -Force -ErrorAction SilentlyContinue

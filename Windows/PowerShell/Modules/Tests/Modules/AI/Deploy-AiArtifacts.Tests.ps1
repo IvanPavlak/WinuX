@@ -145,6 +145,29 @@ Describe "Deploy-AiArtifacts" {
 		Should -Invoke Write-LogError -Times 1 -Exactly -Because "the run reports its failure count"
 	}
 
+	It "replaces a link whose target is gone or wrong, which New-WindowsSymbolicLink would not remove" {
+		# The real New-WindowsSymbolicLink leaves any existing link in place when Test-Path is
+		# false for it (a dangling link), so this mock refuses to create over anything at the path.
+		Mock New-WindowsSymbolicLink {
+			if (Get-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue) { return }
+			New-Item -ItemType Junction -Path $Path -Target $Target | Out-Null
+		}
+		New-Item -ItemType Directory -Path $script:Folder -Force | Out-Null
+		$moved = Join-Path $script:Root "Skills\own\alpha"
+		New-Item -ItemType Directory -Path $moved -Force | Out-Null
+		New-Item -ItemType Junction -Path (Join-Path $script:Folder "alpha") -Target $moved | Out-Null
+		Remove-Item -Path $moved -Recurse -Force
+		$elsewhere = Join-Path $TestDrive "elsewhere\bravo"
+		New-Item -ItemType Directory -Path $elsewhere -Force | Out-Null
+		New-Item -ItemType Junction -Path (Join-Path $script:Folder "bravo") -Target $elsewhere | Out-Null
+
+		Deploy-AiArtifacts
+
+		(Get-Item -LiteralPath (Join-Path $script:Folder "alpha") -Force).LinkTarget.TrimEnd('\') | Should -Be $script:Alpha.TrimEnd('\')
+		(Get-Item -LiteralPath (Join-Path $script:Folder "bravo") -Force).LinkTarget.TrimEnd('\') | Should -Be $script:Bravo.TrimEnd('\')
+		Test-Path -LiteralPath $elsewhere | Should -BeTrue
+	}
+
 	It "prunes dangling links into the artifacts root and leaves other links alone" {
 		New-Item -ItemType Directory -Path $script:Folder -Force | Out-Null
 		$gone = Join-Path $script:Root "Skills\own\gone"
