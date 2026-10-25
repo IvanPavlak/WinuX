@@ -218,3 +218,29 @@ arrives with nothing left to do.
 > Keeping personal values out of tracked files is what makes this work. Avoid editing
 > `Configuration.psd1` with machine-specific values or the `Data/*.csv` app lists with your own apps; put
 > them in `Configuration.local.psd1` and the `*.local.csv` overlays instead.
+
+## A second upstream: Foundation
+
+[Foundation](https://github.com/IvanPavlak/Foundation), the macOS counterpart of WinuX, mirrors this
+repository's layout path for path, so one fork can merge both: WinuX for `Windows/` and the shared
+files, Foundation for `Unix/`, `docs/unix/` and the other paths its `Unix/config/upstream.conf` owns.
+Foundation's [Fork Model](https://ivanpavlak.github.io/Foundation/#/unix/fork-model) covers that
+side (the remote, the one-time bridge merge and `Merge-Upstream --owned-only`).
+
+The one thing that changes on this side is tags. Each remote's branches live under its own name
+(`upstream/master`), but a clone keeps every tag in one namespace, and both projects tag `v0.1.0` and
+up: with plain remotes, fetching the second upstream would refuse to overwrite WinuX's tags of the
+same name. A fork of both therefore keeps each upstream's tags under a prefix, `winux/v1.7.0` and
+`foundation/v0.1.0`. For the WinuX remote, stop the plain tag import, drop the bare copies it made
+(they live only in your clone and come back prefixed; a fork that tags releases of its own deletes only
+the names `git ls-remote --tags upstream` lists), and fetch the tags under `winux/`:
+
+```powershell
+git config remote.upstream.tagOpt --no-tags
+git config --add remote.upstream.fetch '+refs/tags/*:refs/tags/winux/*'
+git tag -l | Where-Object { $_ -notmatch '/' } | ForEach-Object { git tag -d $_ }
+git fetch upstream
+```
+
+`git tag -l 'winux/*'` then lists WinuX's releases. A fork of WinuX alone needs none of this: its
+plain `upstream` tags clash with nothing.
