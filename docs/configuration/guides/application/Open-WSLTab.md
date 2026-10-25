@@ -9,7 +9,7 @@ Opens a WSL tab in Windows Terminal - by default in the caller's window, at the 
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`DefaultWSLDistribution`](../../configuration-reference.md#wsl-configuration) | string | empty string | The WSL distribution every WSL-touching function uses. Ships empty, and that is deliberate: `Configure-WSL`, `Initialize-WSLEnvironment`, `Configure-WSLSSH`, `Open-WSLTab`, `Deploy-CoreAiRules` and WSL symlinks all no-op until it is set. |
+| [`DefaultWSLDistribution`](../../configuration-reference.md#wsl-configuration) | string | empty string | The WSL distribution every WSL-touching function uses. Ships empty, and that is deliberate: `Configure-WSL`, `Initialize-WSLEnvironment`, `Configure-WSLSSH`, `Open-WSLTab`, `Deploy-AiArtifacts` and WSL symlinks all no-op until it is set. |
 
 ## Decisions
 
@@ -32,7 +32,7 @@ All of it goes in `Configuration.local.psd1`, at the repository's `Windows/Power
 
 ## Step 1: Set `DefaultWSLDistribution`
 
-The WSL distribution every WSL-touching function uses. Ships empty, and that is deliberate: `Configure-WSL`, `Initialize-WSLEnvironment`, `Configure-WSLSSH`, `Open-WSLTab`, `Deploy-CoreAiRules` and WSL symlinks all no-op until it is set.
+The WSL distribution every WSL-touching function uses. Ships empty, and that is deliberate: `Configure-WSL`, `Initialize-WSLEnvironment`, `Configure-WSLSSH`, `Open-WSLTab`, `Deploy-AiArtifacts` and WSL symlinks all no-op until it is set.
 
 ```powershell
 DefaultWSLDistribution = "Ubuntu"
@@ -78,6 +78,6 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 - [`Test-WSLDistributionInstalled`](../helper/Test-WSLDistributionInstalled.md) - reads the same configuration
 - [`Configure-WSL`](../system/Configure-WSL.md) - reads the same configuration
 - [`Configure-WSLSSH`](../system/Configure-WSLSSH.md) - reads the same configuration
-- [`Deploy-CoreAiRules`](../ai/Deploy-CoreAiRules.md) - reads the same configuration
+- [`Deploy-AiArtifacts`](../ai/Deploy-AiArtifacts.md) - reads the same configuration
 - [WinuXConfigurator](../../winux-configurator.md) - have an AI assistant walk these decisions with you
 - [Configuration reference](../../configuration-reference.md) - every key, section by section

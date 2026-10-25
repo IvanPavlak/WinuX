@@ -1,6 +1,9 @@
 # Get-AiSkillRoster
 
-Walks the skills root and returns the flattened roster - skill name to path and source - that both `Deploy-AiSkills` and `List-Skills` work from.
+Walks the skills root and returns the flattened roster - skill name to path and source - that the deprecated `Deploy-AiSkills` and `List-Skills` worked from.
+
+> [!WARNING]
+> Deprecated since 1.6.0, removed in 2.0.0 - use [`Get-AiArtifactRoster`](Get-AiArtifactRoster.md). This function reads only the deprecated keys below, which [`Resolve-AiArtifactsConfig`](Resolve-AiArtifactsConfig.md) maps onto `AiArtifacts` until 2.0.0; nothing in WinuX calls it any more. See [Migrating from 1.5](../../../ai/artifacts.md#migrating-from-15).
 
 > [!NOTE]
 > Every value on this page belongs in `Configuration.local.psd1`, never in the base `Configuration.psd1`. The base file is upstream's, it ships empty-by-default, and it is deep-merged with your local file at load time by `Load-PathConfiguration`. See [Fork Model](../../../contributing/fork-model.md).
@@ -9,7 +12,7 @@ Walks the skills root and returns the flattened roster - skill name to path and 
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`AiSkills.Root`](../../configuration-reference.md#ai-skills) | string | `{RepoRoot}\AI\Skills` | The folder walked when `-Root` is not supplied. Read through [`Resolve-AiSkillsConfig`](Resolve-AiSkillsConfig.md), so `{RepoRoot}`, `{User}` and `{AppData}` are expanded. |
+| [`AiSkills.Root`](../../configuration-reference.md#ai-skills-deprecated) | string | `{RepoRoot}\AI\Skills` | The folder walked when `-Root` is not supplied. Read through [`Resolve-AiSkillsConfig`](Resolve-AiSkillsConfig.md), so `{RepoRoot}`, `{User}` and `{AppData}` are expanded. |
 
 Nothing else. The roster is a reading of the disk, not of the configuration: what counts as a skill (`<source>\<skill>\SKILL.md`) and how a name collision is resolved (first source alphabetically) are fixed rules, not settings, because `Deploy-AiSkills` links by exactly those rules and a configurable disagreement between the two would mean listing one thing and deploying another.
 
@@ -18,7 +21,7 @@ Nothing else. The roster is a reading of the disk, not of the configuration: wha
 1. Where do the skills live?
     - Options: Leave `AiSkills.Root` at the default so the roster comes from the repository, or point it elsewhere if your skills are not kept in the repo.
     - Default: `{RepoRoot}\AI\Skills`, one subfolder per source.
-    - More detail: [`AiSkills`](../../configuration-reference.md#ai-skills)
+    - More detail: [`AiSkills`](../../configuration-reference.md#ai-skills-deprecated)
 2. Do you need to configure this function at all?
     - Options: In practice no - configure `AiSkills` once on the [`Resolve-AiSkillsConfig`](Resolve-AiSkillsConfig.md) or [`Deploy-AiSkills`](Deploy-AiSkills.md) page and every reader of the section follows, this one included. Pass `-Root` for a one-off walk of a different tree.
     - Default: The resolved `AiSkills.Root`.

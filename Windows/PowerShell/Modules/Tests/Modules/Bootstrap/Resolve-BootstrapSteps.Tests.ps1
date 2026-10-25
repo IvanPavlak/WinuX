@@ -35,7 +35,7 @@ Describe "Resolve-BootstrapSteps" {
 					"DotnetEf", "EnvironmentVariables", "CondaEnvironments", "Taskbar", "SymbolicLinks")) {
 				$states[$name] | Should -BeTrue -Because "step [$name] defaults to on"
 			}
-			foreach ($name in @("MicrosoftActivationScripts", "Win11Debloat", "RepositoryUpdate", "DeveloperMode", "NuGetConfig", "UpgradeAll", "CoreAiRules", "AiSkills", "AiMods", "AiMarketplaces", "ObsidianCli", "VSCodeProfiles", "LockedStartLayout")) {
+			foreach ($name in @("MicrosoftActivationScripts", "Win11Debloat", "RepositoryUpdate", "DeveloperMode", "NuGetConfig", "UpgradeAll", "AiArtifacts", "AiMarketplaces", "ObsidianCli", "VSCodeProfiles", "LockedStartLayout")) {
 				$states[$name] | Should -BeFalse -Because "step [$name] is opt-in"
 			}
 		}
@@ -63,7 +63,7 @@ Describe "Resolve-BootstrapSteps" {
 		It "Should list the steps in Bootstrap execution order" {
 			$states = Resolve-BootstrapSteps
 
-			@($states.Keys) -join "," | Should -Be "RenameMachine,MicrosoftActivationScripts,Win11Debloat,RepositoryUpdate,ExecutionPolicy,DeveloperMode,PowerPlan,PowerButtonActions,SystemTheme,Locale,DisplayLanguage,KeyboardLayouts,NerdFont,PowerShellModules,SpecialFolders,WSL,WinGetApps,ScoopApps,ChocolateyApps,UpgradeAll,DotnetEf,EnvironmentVariables,CondaEnvironments,NuGetConfig,Taskbar,SymbolicLinks,CoreAiRules,AiSkills,AiMods,AiMarketplaces,ObsidianCli,VSCodeProfiles,LockedStartLayout"
+			@($states.Keys) -join "," | Should -Be "RenameMachine,MicrosoftActivationScripts,Win11Debloat,RepositoryUpdate,ExecutionPolicy,DeveloperMode,PowerPlan,PowerButtonActions,SystemTheme,Locale,DisplayLanguage,KeyboardLayouts,NerdFont,PowerShellModules,SpecialFolders,WSL,WinGetApps,ScoopApps,ChocolateyApps,UpgradeAll,DotnetEf,EnvironmentVariables,CondaEnvironments,NuGetConfig,Taskbar,SymbolicLinks,AiArtifacts,AiMarketplaces,ObsidianCli,VSCodeProfiles,LockedStartLayout"
 		}
 
 		It "Should return the defaults when Configuration itself is null" {
@@ -166,6 +166,62 @@ Describe "Resolve-BootstrapSteps" {
 			Resolve-BootstrapSteps | Out-Null
 
 			$global:Configuration.BootstrapConfig.Steps.ContainsKey("WSL") | Should -BeFalse
+		}
+	}
+
+	Context "Deprecated AI step names" {
+		It "Should no longer return the deprecated step names" {
+			$states = Resolve-BootstrapSteps
+
+			foreach ($name in @("CoreAiRules", "AiSkills", "AiMods")) {
+				$states.Contains($name) | Should -BeFalse -Because "[$name] is an alias of AiArtifacts"
+			}
+		}
+
+		It "Should turn AiArtifacts on when any deprecated alias is on" -TestCases @(
+			@{ Alias = "CoreAiRules" }
+			@{ Alias = "AiSkills" }
+			@{ Alias = "AiMods" }
+		) {
+			param($Alias)
+			$global:Configuration.BootstrapConfig = @{ Steps = @{ $Alias = $true } }
+
+			(Resolve-BootstrapSteps)["AiArtifacts"] | Should -BeTrue
+		}
+
+		It "Should keep AiArtifacts off when every alias present is off" {
+			$global:Configuration.BootstrapConfig = @{ Steps = @{ AiSkills = $false; AiMods = $false } }
+
+			(Resolve-BootstrapSteps)["AiArtifacts"] | Should -BeFalse
+		}
+
+		It "Should resolve a per-machine-type alias for this machine type" {
+			$global:Configuration.BootstrapConfig = @{ Steps = @{ AiSkills = @{ Default = $false; Test = $true } } }
+			(Resolve-BootstrapSteps)["AiArtifacts"] | Should -BeTrue
+
+			$global:MachineType = "Work"
+			(Resolve-BootstrapSteps)["AiArtifacts"] | Should -BeFalse
+		}
+
+		It "Should let an AiArtifacts entry win over the aliases" {
+			$global:Configuration.BootstrapConfig = @{ Steps = @{ AiArtifacts = $false; CoreAiRules = $true; AiSkills = $true } }
+
+			(Resolve-BootstrapSteps)["AiArtifacts"] | Should -BeFalse
+		}
+
+		It "Should not mutate the merged configuration while mapping the aliases" {
+			$global:Configuration.BootstrapConfig = @{ Steps = @{ AiMods = $true } }
+
+			$null = Resolve-BootstrapSteps
+
+			$global:Configuration.BootstrapConfig.Steps.ContainsKey("AiArtifacts") | Should -BeFalse
+		}
+
+		It "Should read an alias in -Include and -Skip as AiArtifacts" {
+			(Resolve-BootstrapSteps -Include AiSkills)["AiArtifacts"] | Should -BeTrue
+
+			$global:Configuration.BootstrapConfig = @{ Steps = @{ AiArtifacts = $true } }
+			(Resolve-BootstrapSteps -Skip CoreAiRules)["AiArtifacts"] | Should -BeFalse
 		}
 	}
 }

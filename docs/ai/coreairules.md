@@ -1,78 +1,82 @@
 # CoreAiRules
 
-Always-enforced, machine-uniform rules for AI coding agents: **no commit, no push, no destructive git, no AI co-author attribution, ever on the agent's own initiative; explicit requests still require a confirmation prompt.** Nor may an agent set up a branch so that a later push bypasses the pull request: a new branch never tracks a remote branch under a different name such as `origin/master`, upstreams, remotes and git configuration are changed only on request, and every push command it hands over names the remote and branch. Deployed through Bootstrap so every machine gets them, and (for Claude Code) placed at the managed-settings tier so they take precedence over every project, repository, and session setting.
+Always-on, machine-uniform rules for AI coding agents: one rules text every AI app on the machine reads as its global instructions, and, for Claude Code, a managed-settings file that enforces part of it at the tier no project, repository or session setting can override. Rules are one kind of AI artifact: where they live and how they are deployed is the mechanism described on [AI Artifacts](artifacts.md). This page covers what is particular to rules.
 
-CoreAiRules is **opt-in**: the payloads ship with WinuX, but a vanilla bootstrap deploys nothing. Machine-global AI policy is only applied when a fork enables it in `Configuration.local.psd1` (the `BootstrapConfig.Steps.CoreAiRules` toggle plus the `PathTemplates.SymbolicLinks` entries below). The same [AI module](../modules/ai.md) deploys Agent Skills machine-globally the same way - see [AI Skills](skills.md).
+The rules are **opt-in and yours**: WinuX ships a skeleton, never a policy, and a vanilla bootstrap deploys nothing until `AiArtifacts.Deploy` names an app and `BootstrapConfig.Steps.AiArtifacts` is on.
 
-## Design: layers, strongest wins
+## A rules item
 
-The instruction layer is harness-agnostic: one canonical rules file, [`AI/CoreAiRules.md`](https://github.com/IvanPavlak/WinuX/blob/master/AI/CoreAiRules.md), is symlinked into the global instruction file of every harness in use, so the same text governs Claude Code, Codex, Gemini CLI, and anything else that reads one of those files. The enforcement layer is per-harness; today only Claude Code has one (managed settings), and future harness-specific artifacts get their own `AI/<Harness>/` folder next to `AI/Claude/`.
+A rules item is a folder `AI\Rules\<source>\<Name>\` holding:
 
-| Layer           | Artifact in the repo              | Deployed to                                            | Role                                                                                                                                                    |
-| --------------- | --------------------------------- | ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1. Instructions | `AI/CoreAiRules.md`                 | Every harness's global instruction file (table below) | Loaded into every session on the machine, all projects. Tells the agent the rules and the confirmation protocol                                        |
-| 2. Enforcement  | `AI/Claude/managed-settings.json` | Claude Code's managed settings path (table below)      | `permissions.ask` rules plus a PreToolUse hook physically force a prompt on every commit/push-class command and every change to upstream tracking, remotes or push configuration, in every permission mode including bypass |
-| 3. Attribution  | same `managed-settings.json`      | same                                                   | `"attribution": { "commit": "", "pr": "" }` removes the Claude co-author trailer and PR footer everywhere, and no lower-precedence file can re-add it  |
+- `RULES.md` - the instructions, linked into each app's global instruction file (`File` placement).
+- Per-app variants, taken instead of `RULES.md` by the destination that names them: `copilot.md` (Copilot), and Claude Code's `managed-settings.json`.
 
-Claude Code settings precedence: managed settings (admin-owned) > CLI/local > project > user. Managed settings cannot be overridden by any project, repo `.claude/settings.json`, or user file, and Claude Code never writes to them. That is why enforcement lives there.
+Only the item `AiArtifacts.Use.Rules` names is deployed; the last wins and a value may be per machine type. The base ships `AI\Rules\example\CoreAiRules\RULES.md` (a skeleton: section headings and one sample rule, "ask before destructive actions") and `Use = @{ Rules = "CoreAiRules" }`. Write your own in `AI\Rules\own\CoreAiRules\` - `own` wins the name clash - and silence the clash warning with `AiArtifacts.Exclude = @("rules/example/CoreAiRules")`.
 
-Why `ask` and not `deny`: the requirement is "if I ask explicitly, still confirm". `ask` produces exactly that, a permission prompt on every commit/push attempt, so nothing ever lands without a click, but an explicitly requested commit is one approval away. `deny` would force manual terminal work even when wanted.
+## Layers, strongest wins
+
+| Layer | File in the rules item | Deployed to | Role |
+| ----- | ---------------------- | ----------- | ---- |
+| 1. Instructions | `RULES.md` | every app's global instruction file (below) | loaded into every session on the machine, all projects |
+| 2. Enforcement | `managed-settings.json` | Claude Code's managed settings path (below) | admin-owned settings: `permissions.ask` rules, hooks, `attribution`; they outrank every project, repository and user file, and Claude Code never writes to them |
+
+Claude Code settings precedence: managed settings > CLI and local > project > user. That is why enforcement belongs in managed settings. `ask` rules give a permission prompt on every matching command in every permission mode, so an explicitly requested action is one approval away; `deny` would force manual terminal work even when wanted. Hooks run in every permission mode and subagents inherit them; `allowManagedHooksOnly` and `allowManagedPermissionRulesOnly` would disable per-project hooks and allow rules, which an enforcement layer rarely needs.
 
 ## Deployed paths
 
-Instruction layer (all symlinks to `AI/CoreAiRules.md`):
+Instruction layer (links to `RULES.md`, or the app's variant), from the base catalogue:
 
-| Harness     | Windows                    | WSL (in-distro)                  |
-| ----------- | -------------------------- | -------------------------------- |
+| App | Windows | WSL |
+| --- | ------- | --- |
 | Claude Code | `{User}\.claude\CLAUDE.md` | `/home/<user>/.claude/CLAUDE.md` |
-| Codex CLI   | `{User}\.codex\AGENTS.md`  | `/home/<user>/.codex/AGENTS.md`  |
-| Gemini CLI  | `{User}\.gemini\GEMINI.md` | `/home/<user>/.gemini/GEMINI.md` |
+| Codex | `{User}\.codex\AGENTS.md` | `/home/<user>/.codex/AGENTS.md` |
+| Gemini CLI | `{User}\.gemini\GEMINI.md` | `/home/<user>/.gemini/GEMINI.md` |
+| Copilot | `{User}\.copilot\copilot-instructions.md` | `/home/<user>/.copilot/copilot-instructions.md` |
 
-Enforcement layer (symlink to `AI/Claude/managed-settings.json`):
+Enforcement layer (link to `managed-settings.json`, only when the item has one):
 
-| OS      | Managed settings path                                       |
-| ------- | ------------------------------------------------------------ |
-| Windows | `C:\ProgramData\ClaudeCode\managed-settings.json`            |
-| WSL     | `/etc/claude-code/managed-settings.json` (per distribution) |
+| OS | Managed settings path |
+| -- | --------------------- |
+| Windows | `C:\Program Files\ClaudeCode\managed-settings.json` |
+| WSL | `/etc/claude-code/managed-settings.json` (per distribution) |
 
-Linux and macOS deployment arrives with the future Unix bootstrap (their Claude Code managed paths are `/etc/claude-code/` and `/Library/Application Support/ClaudeCode/` respectively).
+Claude Code no longer reads the legacy Windows path `C:\ProgramData\ClaudeCode\managed-settings.json`; a link left there from 1.5 has no effect ([managed settings](https://code.claude.com/docs/en/managed-settings)). The WSL link is the `managed-settings` hook of the `claude-code` destination: `/etc` is root-owned, so `Deploy-AiArtifacts` makes that twin with `wsl -u root` (no sudo prompt). The Windows link needs the administrator rights the whole run asks for.
 
-## How it deploys
-
-- **Windows and WSL home-directory links**: regular `PathTemplates.SymbolicLinks` entries (the commented `AI` opt-in block in `Configuration.psd1` is the template - copy it into `Configuration.local.psd1`), created and self-healed by [SymbolicLinkMaker](../modules/system.md#symboliclinkmaker) on every Bootstrap run. The managed-settings entry uses a literal `C:\ProgramData\...` path (no placeholder exists for ProgramData; literals pass through expansion untouched) with backslashes only, because any forward slash routes an entry to the WSL branch.
-- **WSL `/etc/claude-code`**: created by [Deploy-CoreAiRules](../modules/ai.md#deploy-coreairules), gated behind the opt-in `BootstrapConfig.Steps.CoreAiRules` toggle (OFF by default). It exists because `/etc` is root-owned and SymbolicLinkMaker's WSL branch never elevates, while `Deploy-CoreAiRules` runs its `wsl.exe` calls as root. It no-ops when the configured WSL distribution is not installed.
-
-Enable it in `Configuration.local.psd1`:
+## Deploying
 
 ```powershell
-BootstrapConfig = @{
-    Steps = @{
-        CoreAiRules = $true
+# Configuration.local.psd1
+@{
+    AiArtifacts     = @{
+        Exclude = @("rules/example/CoreAiRules")
+        Use     = @{ Rules = "CoreAiRules" }
+        Deploy  = @{ Default = @("claude-code", "codex", "gemini-cli") }
+    }
+    BootstrapConfig = @{
+        Steps = @{
+            AiArtifacts = $true
+        }
     }
 }
-
-# Plus the SymbolicLinks entries - copy the commented AI block from the base
-# Configuration.psd1 into your PathTemplates.SymbolicLinks and adjust the WSL username.
 ```
 
-## Managed settings notes
-
-- The permission rules are prefix matches per (sub)command; the PreToolUse hook additionally scans the full raw command text on stdin, so compound commands (`git add && git commit && git push`), `git -C <path> push`, and quoting tricks still trigger the prompt. Hooks run in every permission mode, and subagents inherit them.
-- The hook also prompts before anything that decides where a later push lands: creating a branch from a ref with a slash (`git switch -c <branch> origin/master`, `git checkout -b`, `git branch <name> <start>`) unless `--no-track` is given, `--track` / `-t`, `git branch -u` / `--set-upstream-to`, `git remote add` / `set-url` / `rename` / `remove`, and `git config` on a `branch.`, `remote.`, `push.` or `url.` key unless it is a read (`--get`, `--list`, `get`, `list`). Reads such as `git branch -vv`, `git remote -v` and `git config --get remote.origin.url` pass without a prompt. A branch whose upstream points at the default branch would send a later plain `git push`, or an editor's Push or Sync button, straight onto it, past the pull request and past a ruleset an admin role bypasses.
-- The hook is deliberately jq-free (`sed` + `grep` on the stdin JSON) so it works on a fresh Git Bash/macOS/Linux with zero dependencies. The `sed` pass turns JSON `\n`/`\t`/`\r` escapes into spaces first, so a commit on the second line of a multi-line command still triggers, and the regex allows arbitrary tokens between `git` and the subcommand, so `git -C <path> push` triggers too. A false positive (a command that merely mentions "git push" in a string) costs one extra prompt, never a block, which is acceptable for `ask` semantics.
-- `allowManagedHooksOnly` and `allowManagedPermissionRulesOnly` are deliberately NOT set: they would disable per-project hooks and allow rules (project formatter/doc hooks, repo allowlists), which is collateral damage CoreAiRules does not need. Managed `ask`/`deny` already outrank everything.
-- Windows caveat: hooks run through bash when Git Bash is present (it is, via Git, which the bootstrap installs).
-- `attribution` governs Claude Code's built-in commit/PR flow, and `includeCoAuthoredBy: false` covers older versions of the same switch. A confirmation prompt also means the commit message (and any trailer) is visible before anything is created.
+`Deploy-AiArtifacts -Kind Rules` deploys only the rules. The 1.5 setup - `PathTemplates.SymbolicLinks.AI` entries, `Deploy-CoreAiRules` and `BootstrapConfig.Steps.CoreAiRules` - keeps working until 2.0.0; see [Migrating from 1.5](artifacts.md#migrating-from-15).
 
 ## Verification (per machine, after enabling)
 
-1. Run `SymbolicLinkMaker` (or full `Bootstrap`) as admin, then `Deploy-CoreAiRules`.
-2. Check `~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`, and `~/.gemini/GEMINI.md` are symlinks into the repo, and the managed-settings path for the OS resolves.
-3. In a throwaway repo, ask Claude to commit: it must (a) ask for confirmation in chat per CoreAiRules, and (b) even after a yes, surface a permission prompt from the `ask` rule. Any created commit must have no co-author trailer.
+1. Run `Deploy-AiArtifacts -Kind Rules` (or full `Bootstrap`) as admin.
+2. `~\.claude\CLAUDE.md`, `~\.codex\AGENTS.md` and `~\.gemini\GEMINI.md` are links into `AI\Rules\<source>\<Name>\`, and so is the managed-settings path of the OS when the item has a `managed-settings.json`.
+3. In a throwaway repository, ask the agent for an action your rules restrict: it must follow the instruction layer, and Claude Code must surface the prompt your managed settings demand.
 
 ## Known limitations
 
-- **Branch tracking outside Claude Code.** The hook only sees Claude Code's commands; other harnesses, editors and commands typed by hand can still create a branch that tracks `origin/master`. `Git/.gitconfig` closes that gap for every tool with `autoSetupMerge = simple` under `[branch]`: git then sets an upstream automatically only when the remote branch has the same name. Keep the setting when you replace the file with your own.
-- **Cloud sessions (claude.ai/code)** have no `~/.claude` and no managed settings. Coverage there comes from each repository's own committed instruction files; this repo's `AGENTS.md` and `AI/Context/*.md` safety blocks stay in place (they are exactly what covers cloud and repo-scoped sessions), so the rule text intentionally has a repo-scoped home besides `AI/CoreAiRules.md`.
-- Enforcement scope is Claude Code. Other harnesses (Codex, Gemini, Copilot, and so on) only get the instruction layer; their own permission mechanisms are weaker or unstable and can be added later as `AI/<Harness>/` artifacts.
-- Managed paths need admin/sudo once per machine, which is already true for the bootstrap as a whole.
+- **Cloud sessions** (claude.ai/code) have no `~/.claude` and no managed settings. Coverage there comes from each repository's own committed instruction files, so a rule that matters everywhere also belongs in the repository's `AGENTS.md`.
+- **Enforcement scope is Claude Code.** Other apps only get the instruction layer; their own permission mechanisms can be added as further variants of the rules item and destinations of their harness.
+- **Git symbolic links on Windows.** A git symlink in the repository checks out as a small text file holding its target when `core.symlinks` is false; an app that reads such a file sees a path, not rules. Link the apps straight at `RULES.md` with `Deploy-AiArtifacts` (see [Troubleshooting](../reference/troubleshooting.md)).
+
+## Related
+
+- [AI Artifacts](artifacts.md) - the mechanism, the harness catalogue and migrating from 1.5
+- [AI module reference](../modules/ai.md) - `Deploy-AiArtifacts`, `List-AiArtifacts`
+- [Deploy-AiArtifacts configuration guide](../configuration/guides/ai/Deploy-AiArtifacts.md) - the keys, decision by decision
+- [AI Skills](skills.md) - skills deployed into the same apps

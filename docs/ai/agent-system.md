@@ -1,13 +1,11 @@
-# VS Code Agent System
+# Agent System
 
-The `.github/` directory configures the VS Code Copilot agent system. This framework defines:
+WinuX gives AI agents two things, kept apart on purpose:
 
-- **Instructions** - File-type-scoped guidance auto-loaded based on `applyTo` patterns
-- **Custom Agents** - Specialized AI personas for specific workflows
-- **Slash Commands** - Guided workflows for common tasks (`/add-project`, `/research`, etc.)
-- **Prompts** - Reusable templates for consistent interaction
+- **Contributor guidance** - how to work on this repository: `AGENTS.md`, `AI/Context/`, `AI/Instructions/` and the file-type-scoped instructions in `.github/instructions/`, auto-loaded by `applyTo` patterns. It is the project's development process, like `CONTRIBUTING.md`, and ships with WinuX.
+- **AI artifacts** - the skills, mods, rules, prompts and agents a machine's AI apps load in every project. WinuX ships only the mechanism ([AI Artifacts](artifacts.md)) and its two product skills; which prompts, agents and other artifacts a machine gets is the fork's choice.
 
-All of these are **provider-agnostic** and will work with any AI integration (not just Copilot).
+Both are **provider-agnostic**: the instructions are plain Markdown any assistant can read, and the artifacts are deployed into whichever apps `AiArtifacts.Deploy` names (Claude Code, Codex, Gemini CLI, Copilot, or an app of your own).
 
 ---
 
@@ -111,445 +109,40 @@ To add a new instruction file (e.g., for a new language or framework):
 
 ---
 
-## Slash Commands (Prompts)
+## Skills, Prompts and Agents
 
-Slash commands trigger pre-written workflows. Each is a separate file with specific instructions.
+WinuX ships no slash commands and no custom agents of its own. Since 1.6.0 they are artifact kinds, deployed by [Deploy-AiArtifacts](../modules/ai.md#deploy-aiartifacts) into each app's own folder:
 
-### Configuration Helpers
+| Kind | Where a fork keeps it | Where an app reads it (base catalogue) |
+| ---- | --------------------- | -------------------------------------- |
+| Skills | `AI/Skills/<source>/<skill>/SKILL.md` | `~/.claude/skills`, `~/.agents/skills` |
+| Prompts | `AI/Prompts/<source>/<name>/` with `PROMPT.md` or a per-app variant (`claude.md`, `codex.md`, `gemini.toml`) | `~/.claude/commands`, `~/.codex/prompts`, `~/.gemini/commands` |
+| Agents | `AI/Agents/<source>/<name>/` with `AGENT.md` or a per-app variant (`claude.md`, `codex.toml`, `gemini.md`, `copilot.agent.md`) | `~/.claude/agents`, `~/.codex/agents`, `~/.gemini/agents`, `~/.copilot/agents` |
 
-#### /add-project
+Your own go under the `own` source, which no refresh touches and which wins a name clash; vendored ones come from an `AiArtifacts.Sources` entry. Several apps now treat skills as the portable form of a slash command (Claude Code merges custom commands into skills, Codex documents its custom prompts as deprecated), so a new workflow is usually best written as a skill.
 
-**File:** `.github/prompts/add-project.prompt.md`
+### The product skills
 
-**Purpose:** Interactively add a new project to Configuration.psd1.
+WinuX ships two skills in `AI/Skills/winux/`, deployed whenever the AI artifacts are:
 
-**Workflow:**
+- **winux-configurator** - runs the [AI-assisted configuration session](../configuration/winux-configurator.md): it interviews you module by module and writes `Configuration.local.psd1`. It covers what the removed `/add-project`, `/add-workspace`, `/add-browser-group`, `/add-symlink` and `/add-window-layout` prompts did, through the Configuration module writers (`Add-Project`, `Add-Workspace`, `Add-BrowserGroup`, `Add-SymbolicLink`, `Add-WindowLayout`).
+- **document** - turns a function's comment-based help into its man-style entry on `docs/modules/<module>.md` and its configuration guide, following `AI/Instructions/DocumentationStyle.md`, and keeps `FunctionsToExport` and the indexes in step.
 
-1. Prompt for project name
-2. Prompt for root directory (with placeholder expansion suggestions)
-3. Prompt for VS Code project settings (optional)
-4. Prompt for Visual Studio solution path (optional)
-5. Prompt for run command mapping
-6. Prompt for terminal configurations (optional)
-7. Call `Add-Project` function to modify configuration
+Leave one out with `AiArtifacts.Exclude = @("skills/winux/document")`.
 
-**Modifies:** Multiple config sections:
+### Removed in 1.6.0
 
-- `BasePaths.Projects.{ProjectName}.Root`
-- `Projects` array (adds project name)
-- `ProjectActions.{ProjectName}` (with default actions)
-- `VisualStudioSolutions` (if provided)
-- `VSCodeProjects` (if provided)
-- `RunnableProjectMappings` (if provided)
-
-**Example usage:**
-
-```
-/add-project
-→ Project name? OtherProject
-→ Root directory? {Dev}\OtherProject
-→ Setup VS Code? Yes
-→ Solution file? Yes
-→ Run command? dnbr
-→ Create terminals? Yes
-```
-
-#### /add-workspace
-
-**File:** `.github/prompts/add-workspace.prompt.md`
-
-**Purpose:** Interactively add a new workspace with actions.
-
-**Workflow:**
-
-1. Prompt for workspace name
-2. Prompt for actions (multi-select menu):
-    - Open Terminal
-    - Open VS Code
-    - Open Visual Studio
-    - Open Browser
-    - Open Applications (Discord, Obsidian, etc.)
-    - Custom function calls
-3. For each action, prompt for parameters
-4. Create layout template file for window management (optional)
-5. Call `Add-Workspace` function
-
-**Modifies:**
-
-- `Workspaces` array
-- `WorkspaceActions.{WorkspaceName}`
-- Creates `Layouts/{MachineType}/{WorkspaceName}_{MachineType}.psd1` (optional)
-
-#### /add-browser-group
-
-**File:** `.github/prompts/add-browser-group.prompt.md`
-
-**Purpose:** Add a new browser URL group.
-
-**Workflow:**
-
-1. Prompt for group name
-2. Prompt for nesting pattern:
-    - Simple (array of URLs)
-    - Named (array of named URLs)
-    - Nested (hashtable of subgroups)
-    - Mixed (combination)
-3. Prompt for URLs or structure based on pattern
-4. Validate name uniqueness (all names used for idempotency checking)
-5. Call `Add-BrowserGroup` function
-
-**Modifies:** `BrowserGroups`
-
-**Supported patterns:**
-
-- **Simple:** `@("https://github.com", "https://google.com")`
-- **Named:** `@(@{Name="GitHub"; Url="https://github.com"})`
-- **Nested:** `@{Backend=@(...); Frontend=@(...)}`
-- **Mixed:** `@("https://url", @{Name="..."; Url="..."}, @{Sub=@(...)})`
-
-#### /add-symlink
-
-**File:** `.github/prompts/add-symlink.prompt.md`
-
-**Purpose:** Add a symbolic link entry.
-
-**Workflow:**
-
-1. Prompt for symlink name
-2. Prompt for target path (source in WinuX)
-3. Prompt for destination path (where symlink is created)
-4. Detect type: forward slashes `/` → WSL, backslashes `\` → Windows
-5. Call `Add-SymbolicLink` function
-
-**Modifies:** `PathTemplates.SymbolicLinks`
-
-#### /add-window-layout
-
-**File:** `.github/prompts/add-window-layout.prompt.md`
-
-**Purpose:** Create a window layout template file for a workspace.
-
-**Workflow:**
-
-1. Prompt for layout name (usually `{WorkspaceName}_{MachineType}`)
-2. Prompt for machine type
-3. Prompt for monitors (number and arrangement)
-4. Prompt for window placement rules:
-    - Process name (e.g., "Code", "firefox")
-    - Window title pattern
-    - Desktop number
-    - Zone name
-    - Monitor assignment
-5. Generate `.psd1` file in `Layouts/{MachineType}/`
-
-**Creates:** `Layouts/{MachineType}/{LayoutName}.psd1`
+The base no longer carries `.github/prompts/` (`add-*`, `document`, `oneoff`, `research`), `.github/agents/researcher.agent.md`, `AI/Templates/`, `AI/Models/`, `AI/Providers/` or `AI/InitialConfiguration_2026_03_24.md`. A fork that used them copies them into its own tree before merging 1.6.0 - a conversation-note or research workflow becomes an `own` skill with its template inside the skill folder. See [Migrating from 1.5](artifacts.md#migrating-from-15).
 
 ---
 
-### Workflow Commands
-
-#### /document
-
-**File:** `.github/prompts/document.prompt.md`
-
-**Purpose:** Generate Docsify documentation from PowerShell comment-based help.
-
-**Workflow:**
-
-1. Prompt for function name or module path
-2. Extract comment-based help:
-    - `.SYNOPSIS`
-    - `.DESCRIPTION`
-    - `.PARAMETER` entries (with types and descriptions)
-    - `.EXAMPLE` entries (with descriptions)
-3. Format as Docsify-compliant markdown:
-    - Heading with function name
-    - Syntax block
-    - Parameter table (Name | Type | Required | Description)
-    - Examples with code blocks
-4. Output formatted markdown (copy to docs page)
-
-**Input:** Any PowerShell function
-
-**Output:** Formatted markdown section ready to paste into module documentation
-
-**Example:**
-
-````
-Input: Get-ProjectPath
-Output:
-### Get-ProjectPath
-
-Resolves project name to full path from configuration.
-
-**Syntax:**
-```powershell
-Get-ProjectPath -ProjectName <string> [-PathKey <string>]
-````
-
-**Parameters:**
-
-| Parameter   | Type   | Required | Description                          |
-| ----------- | ------ | -------- | ------------------------------------ |
-| ProjectName | String | Yes      | Name of project to resolve           |
-| PathKey     | String | No       | Config key to return (default: Root) |
-
-**Examples:**
-
-```powershell
-Get-ProjectPath -ProjectName "MyProject"
-Get-ProjectPath -ProjectName "MyProject" -PathKey "Solution"
-```
-
-````
-
-#### /oneoff
-
-**File:** `.github/prompts/oneoff.prompt.md`
-
-**Purpose:** Save the current conversation for future continuation.
-
-**Workflow:**
-1. Prompt for topic name
-2. Prompt for optional subtopic
-3. Auto-extract conversation summary:
-   - Objective
-   - Key decisions made
-   - Current state
-   - Remaining work
-4. Create directory: `AI/Conversations/{Topic}/`
-5. Save as `{Subtopic}.md` with frontmatter and content
-
-**Output location:** `AI/Conversations/{Topic}/{Subtopic}.md`
-
-**Output format:**
-
-```markdown
----
-Topic: {Topic}
-Subtopic: {Subtopic}
-Date: {Date}
-Objective: {Extracted objective}
-Status: In Progress
----
-
-## Objective
-{User's stated goal}
-
-## Context
-{Conversation summary}
-
-## Key Decisions
-- Decision 1
-- Decision 2
-
-## Current State
-{What has been completed}
-
-## Remaining Work
-{What still needs to be done}
-
-## Notes
-{Any important context for future sessions}
-````
-
-**Future usage:** Start a new conversation with:
-
-```
-I want to continue work on {Topic} from my /oneoff note
-```
-
-#### /research
-
-**File:** `.github/prompts/research.prompt.md`
-
-**Purpose:** Conduct structured research with automatic comparison and save.
-
-**Workflow:**
-
-1. Clarify research question
-2. Identify candidate solutions (3-5 options)
-3. Research each candidate:
-    - Core features
-    - Pros and cons
-    - Adoption/community
-    - Cost/licensing
-    - Integration effort
-4. Build comparison matrix
-5. Recommend best option with reasoning
-6. Auto-save to `AI/Conversations/Research/{Topic}.md`
-
-**Output location:** `AI/Conversations/Research/{Topic}.md`
-
-**Output format:**
-
-```markdown
----
-Topic: { Research Topic }
-Date: { Date }
-Question: { Original question }
-Recommendation: { Best candidate }
----
-
-## Research Question
-
-{Full question}
-
-## Candidates Evaluated
-
-1. {Option A}
-2. {Option B}
-3. {Option C}
-   ...
-
-## Evaluation Criteria
-
-- Feature set
-- Community/Support
-- Integration effort
-- Cost
-- Performance
-- Maintenance burden
-
-## Comparison Matrix
-
-| Aspect       | Option A | Option B | Option C |
-| ------------ | -------- | -------- | -------- |
-| {Criteria 1} | ...      | ...      | ...      |
-| {Criteria 2} | ...      | ...      | ...      |
-
-...
-
-## Analysis
-
-### {Option A}
-
-**Pros:**
-
-- Pro 1
-- Pro 2
-
-**Cons:**
-
-- Con 1
-- Con 2
-
-### {Option B}
-
-...
-
-## Recommendation
-
-**Best choice: {Option}**
-
-**Reasoning:**
-
-- Reason 1
-- Reason 2
-- Reason 3
-
-**Integration notes:**
-
-- How to implement
-- Gotchas to watch for
-- Next steps
-```
-
----
-
-## Custom Agents
-
-Agents are specialized AI personas with restricted tools for specific workflows.
-
-### researcher
-
-**File:** `.github/agents/researcher.agent.md`
-
-**Purpose:** Structured research agent for technical decisions.
-
-**Tools available:**
-
-- Web search
-- GitHub code search
-- File reading
-- Semantic codebase search
-- Comparison matrix building
-
-**Specialization:**
-
-- Deep research into multiple options
-- Structured comparison methodology
-- Auto-saves findings to `AI/Conversations/Research/`
-
-**Workflow:**
-
-1. **Clarify** - Ask follow-up questions to understand decision criteria
-2. **Research** - Search and document each candidate
-3. **Compare** - Build side-by-side comparison table
-4. **Recommend** - Evaluate against criteria and make recommendation
-5. **Save** - Auto-save research document
-
-**Invocation:** `@researcher <research question>`
-
-**Example:**
-
-```
-@researcher What's the best way to implement OAuth2 in .NET?
-```
-
-Agent will:
-
-1. Ask about: existing auth system, compliance needs, user count, integration scope
-2. Research: Identity Server, Azure AD B2C, Auth0, Keycloak
-3. Compare: Setup complexity, cost, features, community support
-4. Recommend: Based on your specific requirements
-5. Save: Research document to `AI/Conversations/Research/OAuth2-DotNet.md`
-
----
-
-## Creating New Agents
-
-To add a custom agent:
-
-1. **Create file:** `.github/agents/{name}.agent.md`
-
-2. **Define YAML frontmatter:**
-
-    ```yaml
-    ---
-    description: "One-line description of what this agent does"
-    tools: ["tool1", "tool2", ...]
-    invocation: "@{name} <parameter>"
-    ---
-    ```
-
-3. **Write the workflow in markdown:**
-
-    ```markdown
-    # {Agent Name}
-
-    ## Purpose
-
-    Clear explanation of what this agent handles
-
-    ## Workflow
-
-    1. Step 1
-    2. Step 2
-    3. Step 3
-
-    ## Example Invocation
-    ```
-
-    @{name} example query
-
-    ```
-
-    ## Output Format
-    Description of what the agent returns
-    ```
-
-4. **Test:** Invoke with `@{name}` in Copilot Chat
+## Creating a Skill, Prompt or Agent
+
+1. **Create the item folder** under `own`: `AI/Skills/own/<name>/SKILL.md`, `AI/Prompts/own/<name>/PROMPT.md` or `AI/Agents/own/<name>/AGENT.md`.
+2. **Write the frontmatter** the app expects (`name` and `description` for a skill; the app's own format for a prompt or agent), then the workflow in Markdown. The `description` is what `List-AiArtifacts` shows.
+3. **Add per-app variants** only where an app needs another format: a file named as the destination's `Files` list expects (`codex.toml`, `gemini.toml`, `copilot.agent.md`). An app none of the item's files suit simply does not get it.
+4. **Deploy:** `Deploy-AiArtifacts -Kind Skills` (or `Prompts`, `Agents`), then start a new session of the app.
+5. **Check:** `List-AiArtifacts -ListDiscrepancies` reports nothing.
 
 **Examples of useful agents:**
 
@@ -560,83 +153,6 @@ To add a custom agent:
 
 ---
 
-## Creating New Prompts
-
-To add a new slash command:
-
-1. **Create file:** `.github/prompts/{command-name}.prompt.md`
-
-2. **Define YAML frontmatter:**
-
-    ```yaml
-    ---
-    description: "Brief description of what /command-name does"
-    mode: "ask" # or "edit", "agent", optional
-    ---
-    ```
-
-3. **Write the prompt workflow:**
-
-    ```markdown
-    # {Command Name}
-
-    ## Purpose
-
-    What problem does this solve?
-
-    ## Workflow
-
-    1. Clarify...
-    2. Analyze...
-    3. Generate...
-    4. Output...
-
-    ## Example Usage
-    ```
-
-    /{command-name} <example>
-
-    ```
-
-    ## Output Format
-    What will the user receive?
-    ```
-
-4. **Test:** Type `/{command-name}` in Copilot Chat
-
-**Naming conventions:**
-
-- `/add-*` for adding configuration entries
-- `/generate-*` for creating files or code
-- `/fix-*` for debugging or correction
-- `/analyze-*` for investigation or review
-
----
-
-## Integration Example: Adding a New Configuration Type
-
-If you wanted to support a new type of configuration (e.g., "Environments"), here's how the system works together:
-
-1. **Add instruction:** `.github/instructions/environments.instructions.md` (if needed)
-
-2. **Create slash command:** `.github/prompts/add-environment.prompt.md`
-    - Prompts for environment name, settings, etc.
-    - Calls function to modify Configuration.psd1
-
-3. **Update PowerShell instruction:** Add reference to new prompt in `powershell.instructions.md`
-
-4. **Update documentation:**
-    - Add section to `docs/configuration/configuration-reference.md`
-    - Reference in `WINDOWS_CONTEXT.md`
-
-5. **Test workflow:**
-    - Open a `.ps1` file → PowerShell instruction loads → Shows `/add-environment` is available
-    - Use `/add-environment` → Interactively configure
-    - Configuration updated automatically
-    - Ready to use in code
-
----
-
 ## Architecture Principles
 
 The agent system is built on these principles:
@@ -644,10 +160,9 @@ The agent system is built on these principles:
 1. **Progressive disclosure** - Load only what's needed for the current context
 2. **Auto-attachment** - Let file patterns trigger guidance, don't make users remember to load it
 3. **Provider-agnostic** - Works with any AI integration, not just GitHub Copilot
-4. **Self-documenting** - Each agent/prompt/instruction explains its purpose and workflow
-5. **Composable** - Agents and prompts can chain together (e.g., /research output fed to @researcher)
+4. **Mechanism, not content** - WinuX ships how artifacts are kept, vendored and deployed; what a machine gets is configured
+5. **Self-documenting** - Each skill, prompt, agent and instruction explains its purpose and workflow
 6. **Safe defaults** - Critical operations require explicit user approval (checked by instructions)
-7. **Persistent learning** - /oneoff and /research save insights for future reference
 
 ---
 
@@ -659,19 +174,11 @@ The agent system is built on these principles:
 2. Changes apply next Copilot Chat session
 3. No restart required
 
-### Updating Agents
+### Updating Artifacts
 
-1. Edit `.github/agents/{name}.agent.md`
-2. Next invocation of `@{name}` uses updated version
-3. No restart required
-
-### Monitoring Usage
-
-Check `AI/Conversations/` to see which prompts and agents are being used. This helps identify:
-
-- Frequently used workflows (keep them simple)
-- Unused features (remove if not needed)
-- Requests for new workflows (create new prompts)
+1. Edit the item under `AI/<Kind>/own/<name>/`
+2. Deployed items are links into the repository, so the next session of the app reads the change; a `Copy` destination needs `Deploy-AiArtifacts` again
+3. A vendored item is changed upstream and refreshed with `Update-AiArtifacts -Source <name>`
 
 ---
 
@@ -680,7 +187,7 @@ Check `AI/Conversations/` to see which prompts and agents are being used. This h
 This system gives AI models the tools to:
 
 - **Self-guide:** Know exactly what conventions apply by reading loaded instructions
-- **Ask clarifying questions:** Prompts provide templates for interaction
+- **Ask clarifying questions:** Skills and prompts provide templates for interaction
 - **Make changes safely:** Instructions enforce approval gates on destructive operations
-- **Suggest improvements:** Recommend new prompts/agents when patterns emerge
+- **Suggest improvements:** Recommend new skills, prompts or agents when patterns emerge
 - **Link to context:** Reference exact files instead of repeating information

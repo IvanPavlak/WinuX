@@ -1,5 +1,5 @@
 {
-  "Version": "1.5.0",
+  "Version": "1.6.0",
   "Functions": {
     "Add-BrowserGroup": {
       "Module": "Configuration",
@@ -840,6 +840,15 @@
         }
       }
     },
+    "Deploy-AiArtifacts": {
+      "Module": "AI",
+      "Parameters": {
+        "Kind": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
     "Deploy-AiMarketplaces": {
       "Module": "AI",
       "Parameters": {
@@ -1335,6 +1344,32 @@
         },
         "Window": {
           "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-AiArtifactPlan": {
+      "Module": "AI",
+      "Parameters": {
+        "Config": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Kind": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-AiArtifactRoster": {
+      "Module": "AI",
+      "Parameters": {
+        "Config": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Kind": {
+          "Mandatory": true,
           "Aliases": []
         }
       }
@@ -3052,6 +3087,31 @@
         }
       }
     },
+    "List-AiArtifacts": {
+      "Module": "AI",
+      "Parameters": {
+        "Kind": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ListDiscrepancies": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "Name": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Quiet": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Source": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
     "List-AvailableColors": {
       "Module": "Helper",
       "Parameters": {}
@@ -4130,6 +4190,23 @@
           "Aliases": []
         },
         "WindowTitle": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Resolve-AiArtifactsConfig": {
+      "Module": "AI",
+      "Parameters": {
+        "Configuration": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "MachineType": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "RepoRoot": {
           "Mandatory": false,
           "Aliases": []
         }
@@ -6322,6 +6399,19 @@
         }
       }
     },
+    "Update-AiArtifacts": {
+      "Module": "AI",
+      "Parameters": {
+        "Check": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Source": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
     "Update-AiMods": {
       "Module": "AI",
       "Parameters": {
@@ -7022,6 +7112,17 @@
   "Aliases": [],
   "ConfigurationKeys": [
     "AcrobatPdfGroups",
+    "AiArtifacts",
+    "AiArtifacts.Deploy",
+    "AiArtifacts.Exclude",
+    "AiArtifacts.Root",
+    "AiArtifacts.Sources",
+    "AiArtifacts.Use",
+    "AiHarnesses",
+    "AiHarnesses.claude-code",
+    "AiHarnesses.codex",
+    "AiHarnesses.copilot",
+    "AiHarnesses.gemini-cli",
     "AiMarketplaces",
     "AiMarketplaces.Marketplaces",
     "AiMarketplaces.PluginConfigs",
@@ -7282,9 +7383,28 @@
     "ZoneNameMappings.Zero"
   ],
   "Deprecated": {
-    "Functions": {},
+    "Functions": {
+      "Deploy-AiMods": "1.6.0",
+      "Deploy-AiSkills": "1.6.0",
+      "Deploy-CoreAiRules": "1.6.0",
+      "Get-AiModRoster": "1.6.0",
+      "Get-AiSkillRoster": "1.6.0",
+      "List-Skills": "1.6.0",
+      "Resolve-AiModsConfig": "1.6.0",
+      "Resolve-AiSkillsConfig": "1.6.0",
+      "Update-AiMods": "1.6.0",
+      "Update-AiSkills": "1.6.0"
+    },
     "Parameters": {},
     "ConfigurationKeys": {
+      "AiMods": "1.6.0",
+      "AiMods.Harnesses": "1.6.0",
+      "AiMods.Root": "1.6.0",
+      "AiMods.Sources": "1.6.0",
+      "AiSkills": "1.6.0",
+      "AiSkills.Harnesses": "1.6.0",
+      "AiSkills.Root": "1.6.0",
+      "AiSkills.Sources": "1.6.0",
       "BootstrapConfig.WSLSetup": "0.1.26",
       "PathTemplates.ObsidianStartupScript": "0.1.61"
     }

@@ -41,7 +41,9 @@ Describe "Deploy-AiMarketplaces" {
 				default { $null }
 			}
 		}
-		Mock Resolve-AiModsConfig { @{ SettingsPath = $script:Settings; WSLSettingsPath = "" } }
+		# The settings file is derived from the user profile, so the profile points into TestDrive.
+		$script:SavedUserProfile = $env:USERPROFILE
+		$env:USERPROFILE = Join-Path $TestDrive "home"
 		Mock Test-WSLDistributionInstalled { $false }
 
 		# A stand-in CLI: records every call; the two `list --json` calls answer what the test set.
@@ -60,6 +62,7 @@ Describe "Deploy-AiMarketplaces" {
 	}
 
 	AfterEach {
+		$env:USERPROFILE = $script:SavedUserProfile
 		Remove-Item -Path Env:\WINUX_TEST_MARKETPLACE_LIST -ErrorAction SilentlyContinue
 		Remove-Item -Path Env:\WINUX_TEST_PLUGIN_LIST -ErrorAction SilentlyContinue
 	}
@@ -210,7 +213,6 @@ Describe "Deploy-AiMarketplaces" {
 
 	Context "inside WSL" {
 		BeforeEach {
-			Mock Resolve-AiModsConfig { @{ SettingsPath = $script:Settings; WSLSettingsPath = "/home/u/.claude/settings.json" } }
 			Mock Test-WSLDistributionInstalled { $true }
 			Mock Get-ConfigSetting {
 				switch ($Path) {

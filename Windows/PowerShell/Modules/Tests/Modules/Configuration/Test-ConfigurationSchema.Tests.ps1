@@ -196,4 +196,118 @@ Describe "Test-ConfigurationSchema" {
 			{ Test-ConfigurationSchema -Configuration $script:TemplateConfig -Strict } | Should -Throw '*WorkspaceActions.Broken*'
 		}
 	}
+
+	Context "AI artifact sections" {
+		BeforeEach {
+			$script:AiConfig = @{
+				ValidMachineTypes     = @('PC')
+				HostnameToMachineType = @{ 'PC1' = 'PC' }
+				DefaultMachineType    = 'PC'
+				LaptopChassisTypes    = @('9')
+				BasePaths             = @{ Dev = 'C:\Dev' }
+				PathTemplates         = @{ Root = '{Dev}'; Projects = @{ Self = @{ Root = '{RepoRoot}' } }; SymbolicLinks = @{ } }
+				GitConfig             = @{ UserName = 'ExampleUser'; UserEmail = 'x@y.z'; WingetPackageId = 'Git.Git' }
+				BrowserGroups         = @(@{ Work = @('https://example.com') })
+				RepositoryGroups      = @(@{ Private = @(@{ Name = 'WinuX'; UrlPath = 'Universal.GitHub.Private.WinuX'; LocalPath = 'Projects.Self.Root' }) })
+				AiHarnesses           = @{
+					"claude-code" = @{ WSL = $true; Destinations = @(@{ Kind = "Skills"; Placement = "Each"; Files = @("."); Path = "{User}\.claude\skills" }) }
+				}
+				AiArtifacts           = @{
+					Root    = "{RepoRoot}\AI"
+					Exclude = @("skills/tdd", @{ Item = "rules/example/CoreAiRules"; Machine = "PC" })
+					Use     = @{ Rules = "CoreAiRules" }
+					Deploy  = @{ Default = @("claude-code") }
+				}
+			}
+		}
+
+		It "accepts well-formed AiArtifacts and AiHarnesses" {
+			Test-ConfigurationSchema -Configuration $script:AiConfig
+
+			Should -Invoke Write-Warning -Times 0
+		}
+
+		It "reports each malformed entry and throws under -Strict" -TestCases @(
+			@{ Case = "an unknown harness in Deploy"; Change = { param($c) $c.AiArtifacts.Deploy = @{ Default = @("t3") } } }
+			@{ Case = "a Use key that is no kind"; Change = { param($c) $c.AiArtifacts.Use = @{ Widgets = "X" } } }
+			@{ Case = "an Exclude without a kind"; Change = { param($c) $c.AiArtifacts.Exclude = @("tdd") } }
+			@{ Case = "an Exclude with an unknown kind"; Change = { param($c) $c.AiArtifacts.Exclude = @("widgets/tdd") } }
+			@{ Case = "a destination with an unknown Kind"; Change = { param($c) $c.AiHarnesses['claude-code'].Destinations[0].Kind = "Widgets" } }
+			@{ Case = "a destination with an unknown Placement"; Change = { param($c) $c.AiHarnesses['claude-code'].Destinations[0].Placement = "Link" } }
+			@{ Case = "a destination without Files"; Change = { param($c) $c.AiHarnesses['claude-code'].Destinations[0].Files = @() } }
+			@{ Case = "a destination without Path"; Change = { param($c) $c.AiHarnesses['claude-code'].Destinations[0].Remove('Path') } }
+			@{ Case = "a Deploy that is not a hashtable"; Change = { param($c) $c.AiArtifacts.Deploy = @("claude-code") } }
+		) {
+			param($Case, $Change)
+			& $Change $script:AiConfig
+
+			Test-ConfigurationSchema -Configuration $script:AiConfig
+			Should -Invoke Write-Warning -Times 1 -Exactly
+
+			{ Test-ConfigurationSchema -Configuration $script:AiConfig -Strict } | Should -Throw
+		}
+	}
+
+	Context "deprecated configuration" {
+		BeforeEach {
+			$script:DeprecatedConfig = @{
+				ValidMachineTypes     = @('PC')
+				HostnameToMachineType = @{ 'PC1' = 'PC' }
+				DefaultMachineType    = 'PC'
+				LaptopChassisTypes    = @('9')
+				BasePaths             = @{ Dev = 'C:\Dev' }
+				PathTemplates         = @{ Root = '{Dev}'; Projects = @{ Self = @{ Root = '{RepoRoot}' } }; SymbolicLinks = @{ }; ObsidianStartupScript = "" }
+				GitConfig             = @{ UserName = 'ExampleUser'; UserEmail = 'x@y.z'; WingetPackageId = 'Git.Git' }
+				BrowserGroups         = @(@{ Work = @('https://example.com') })
+				RepositoryGroups      = @(@{ Private = @(@{ Name = 'WinuX'; UrlPath = 'Universal.GitHub.Private.WinuX'; LocalPath = 'Projects.Self.Root' }) })
+				# The deprecated keys exactly as the base ships them: present, but at their defaults.
+				AiSkills              = @{ Root = "{RepoRoot}\AI\Skills"; Harnesses = @("{User}\.claude\skills", "{User}\.agents\skills"); Sources = @{} }
+				AiMods                = @{ Root = "{RepoRoot}\AI\Mods"; Harnesses = @("{User}\.claude\mods"); Sources = @{} }
+				BootstrapConfig       = @{ Steps = @{ WSL = $true } }
+			}
+		}
+
+		It "stays silent for the deprecated keys at their shipped defaults" {
+			Test-ConfigurationSchema -Configuration $script:DeprecatedConfig
+
+			Should -Invoke Write-Warning -Times 0
+		}
+
+		It "warns once, listing every deprecated key in use" -TestCases @(
+			@{ Case = "a present key (Present)"; Change = { param($c) $c.BootstrapConfig.WSLSetup = $true } }
+			@{ Case = "a present step name (Present)"; Change = { param($c) $c.BootstrapConfig.Steps.CoreAiRules = $false } }
+			@{ Case = "a present SymbolicLinks.AI (Present)"; Change = { param($c) $c.PathTemplates.SymbolicLinks.AI = @{} } }
+			@{ Case = "a non-empty value (NotEmpty)"; Change = { param($c) $c.AiSkills.Sources = @{ s = @{ Repository = "A/B" } } } }
+			@{ Case = "a non-empty scalar (NotEmpty)"; Change = { param($c) $c.PathTemplates.ObsidianStartupScript = "C:\start.ps1" } }
+			@{ Case = "a changed scalar (NotDefault)"; Change = { param($c) $c.AiMods.Root = "D:\Mods" } }
+			@{ Case = "a changed array (NotDefault)"; Change = { param($c) $c.AiSkills.Harnesses = @("{User}\.claude\skills") } }
+		) {
+			param($Case, $Change)
+			& $Change $script:DeprecatedConfig
+
+			Test-ConfigurationSchema -Configuration $script:DeprecatedConfig
+
+			Should -Invoke Write-Warning -Times 1 -Exactly
+		}
+
+		It "puts several deprecated keys into the one warning" {
+			$script:DeprecatedConfig.BootstrapConfig.Steps.AiSkills = $true
+			$script:DeprecatedConfig.BootstrapConfig.Steps.AiMods = $true
+			$script:DeprecatedConfig.AiMods.Sources = @{ m = @{ Repository = "A/B" } }
+			$script:Warned = @()
+			Mock Write-Warning { $script:Warned += $Message }
+
+			Test-ConfigurationSchema -Configuration $script:DeprecatedConfig
+
+			$script:Warned.Count | Should -Be 1
+			@($script:Warned[0] -split "`n" | Where-Object { $_ -like "  - *" }).Count | Should -Be 3
+		}
+
+		It "never fails under -Strict for a deprecation" {
+			$script:DeprecatedConfig.BootstrapConfig.WSLSetup = $true
+			$script:DeprecatedConfig.AiSkills.Sources = @{ s = @{ Repository = "A/B" } }
+
+			{ Test-ConfigurationSchema -Configuration $script:DeprecatedConfig -Strict } | Should -Not -Throw
+		}
+	}
 }

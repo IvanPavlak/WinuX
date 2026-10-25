@@ -91,7 +91,7 @@ AiMarketplaces = @{
 
 ## Step 3: Enable `BootstrapConfig.Steps.AiMarketplaces`
 
-With the step on, Bootstrap runs `Deploy-AiMarketplaces` right after `Deploy-AiMods`. Give each plugin one loading path: a plugin loaded from a folder by `Deploy-AiMods` and installed from a marketplace would run twice. A folder in `env.CLAUDE_CODE_PLUGIN_DIRS` that holds a plugin a configured marketplace installs is reported as a warning and left in place: Claude Code would load two copies, and the folder copy reads its options from `pluginConfigs.<plugin>`, not `<plugin>@<marketplace>`, so it draws with its defaults. Load a development clone with `claude --plugin-dir <clone>` for one session instead of listing it in the settings.
+With the step on, Bootstrap runs `Deploy-AiMarketplaces` right after `Deploy-AiArtifacts`. Give each plugin one loading path: a plugin loaded from a folder as a mod by `Deploy-AiArtifacts` and installed from a marketplace would run twice. A folder in `env.CLAUDE_CODE_PLUGIN_DIRS` that holds a plugin a configured marketplace installs is reported as a warning and left in place: Claude Code would load two copies, and the folder copy reads its options from `pluginConfigs.<plugin>`, not `<plugin>@<marketplace>`, so it draws with its defaults. Load a development clone with `claude --plugin-dir <clone>` for one session instead of listing it in the settings.
 
 ```powershell
 BootstrapConfig = @{
@@ -161,6 +161,6 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 - [AI configuration guides](README.md) - every guide for this module
 - [`Set-ClaudeSettingsKey`](Set-ClaudeSettingsKey.md) - the settings writer this function uses for the marketplaces and options
 - [`Set-ClaudeSettingsEnv`](Set-ClaudeSettingsEnv.md) - the settings writer this function uses for the `Env` variables
-- [`Deploy-AiMods`](Deploy-AiMods.md) - the folder-loading alternative
+- [`Deploy-AiArtifacts`](Deploy-AiArtifacts.md) - the folder-loading alternative (mods)
 - [WinuXConfigurator](../../winux-configurator.md) - have an AI assistant walk these decisions with you
 - [Configuration reference](../../configuration-reference.md) - every key, section by section

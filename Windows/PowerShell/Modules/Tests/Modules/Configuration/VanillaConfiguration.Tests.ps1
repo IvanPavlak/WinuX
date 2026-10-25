@@ -268,6 +268,10 @@ Describe "Vanilla Configuration (empty-by-default contract)" {
 			foreach ($optIn in @("DefaultLocale", "Locales", "KeyboardLayouts", "Themes", "NerdFonts", "WakeOnLan", "SpecialFolders", "TaskbarConfiguration", "DefaultBrowser")) {
 				$text | Should -Not -Match $optIn -Because "$optIn ships empty by design and must not be a required key"
 			}
+
+			# The base ships the deprecated AiSkills and AiMods keys at their defaults, which must
+			# not warn: only a fork that still sets them hears about it.
+			$text | Should -Not -Match "deprecated"
 		}
 	}
 

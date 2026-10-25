@@ -25,9 +25,11 @@ through two steps:
 1. **Deprecate (MINOR).** The new shape ships and the old one keeps working. The release
    notes list the change under `### Deprecated` with the migration. Where the old shape is a
    configuration key, `Test-ConfigurationSchema` warns on it and names the replacement; the
-   profile runs that check at every load, and the mechanism will also run it at the start of
-   `Bootstrap`. The next deprecation adds the warning mechanism together with its entry and
-   covers the keys carried over from 0.x (below). Where the old shape is a function, the old
+   profile runs that check at every load, and `Bootstrap` at the start of every run. The
+   deprecations it knows are the `$deprecations` table at the top of
+   `Test-ConfigurationSchema`, one entry per key or step name (since, removal, replacement),
+   which is the only thing a later deprecation adds to; a deprecation warns, never fails, and
+   a key the base still ships warns only when it differs from the shipped value. Where the old shape is a function, the old
    name stays as an alias or a thin wrapper that warns once per session. The same change
    records the item in the `Deprecated` map of `Windows/PowerShell/Modules/Tests/ContractBaseline.json`
    with the version the deprecation ships in - that record is what later lets the gate accept
@@ -111,8 +113,8 @@ onward.
 
 Two keys deprecated during 0.x carry over as deprecated: `BootstrapConfig.WSLSetup` (still
 honored when `BootstrapConfig.Steps.WSL` is absent) and `PathTemplates.ObsidianStartupScript`
-(ignored since 0.1.61). Neither warns yet; both are covered when the warning mechanism lands,
-and neither is removed before 2.0.0.
+(ignored since 0.1.61). Both warn since 1.6.0, which brought the warning mechanism with its
+own deprecations, and neither is removed before 2.0.0.
 
 Release candidates, when a MAJOR warrants one, use SemVer pre-release tags: `2.0.0-rc.1`,
 `2.0.0-rc.2`, ...

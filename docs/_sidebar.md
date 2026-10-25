@@ -48,6 +48,7 @@
 - **AI Integration**
     - [Overview](/ai/overview.md)
     - [Agent System](/ai/agent-system.md)
+    - [AI Artifacts](/ai/artifacts.md)
     - [CoreAiRules](/ai/coreairules.md)
     - [AI Skills](/ai/skills.md)
     - [AI Mods](/ai/mods.md)

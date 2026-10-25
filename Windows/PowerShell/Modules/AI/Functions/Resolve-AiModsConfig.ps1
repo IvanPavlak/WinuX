@@ -4,6 +4,9 @@ function Resolve-AiModsConfig {
 		Resolves the AiMods configuration section into expanded, ready-to-use paths.
 
 	.DESCRIPTION
+		Deprecated since 1.6.0 (removed in 2.0.0) - use Resolve-AiArtifactsConfig, which reads AiArtifacts and
+		maps the deprecated keys this function still reads. Nothing in WinuX calls it any more.
+
 		Reads `AiMods` from the merged configuration and returns one hashtable the AI mods
 		functions share, so Deploy-AiMods and Update-AiMods agree on where mods live, where they
 		are linked and which settings file carries the plugin list:

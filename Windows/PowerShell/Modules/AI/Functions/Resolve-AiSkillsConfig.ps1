@@ -4,6 +4,9 @@ function Resolve-AiSkillsConfig {
 		Resolves the AiSkills configuration section into expanded, ready-to-use paths.
 
 	.DESCRIPTION
+		Deprecated since 1.6.0 (removed in 2.0.0) - use Resolve-AiArtifactsConfig, which reads AiArtifacts and
+		maps the deprecated keys this function still reads. Nothing in WinuX calls it any more.
+
 		Reads `AiSkills` from the merged configuration and returns one hashtable the AI skills
 		functions share, so Deploy-AiSkills and Update-AiSkills agree on where skills live and
 		where they are linked:

@@ -5,8 +5,8 @@ function Get-AiSkillDescription {
 
 	.DESCRIPTION
 		Agent Skills declare a `description:` in the YAML frontmatter at the top of SKILL.md.
-		This returns it flattened to a single line for the UPSTREAM.md skill table that
-		Update-AiSkills writes: single-line values, quoted values (with escaped quotes
+		This returns it flattened to a single line for the UPSTREAM.md item table that
+		Update-AiArtifacts writes: single-line values, quoted values (with escaped quotes
 		unescaped), and the folded or literal block forms ("description: >" or "|" followed by
 		indented lines) are all handled, and pipes are escaped so the table stays intact.
 		Returns an empty string when the file has no frontmatter or no description.

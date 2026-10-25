@@ -68,7 +68,7 @@ Detailed documentation for every module and function.
 Built-in AI context system for GitHub Copilot and similar assistants.
 
 - [Overview](ai/overview.md) - How the layered context system works, slash commands, token optimization
-- [CoreAiRules](ai/coreairules.md), [AI Skills](ai/skills.md), [AI Mods](ai/mods.md) - Opt-in machine-global agent guardrails, skills and Claude Code mods
+- [AI Artifacts](ai/artifacts.md), [CoreAiRules](ai/coreairules.md), [AI Skills](ai/skills.md), [AI Mods](ai/mods.md) - Opt-in machine-global AI skills, mods, rules, prompts and agents, and how each kind deploys
 
 ### Reference
 

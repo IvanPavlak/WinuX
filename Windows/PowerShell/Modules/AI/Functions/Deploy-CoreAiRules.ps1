@@ -1,58 +1,33 @@
 function Deploy-CoreAiRules {
 	<#
 	.SYNOPSIS
-		Deploys the CoreAiRules enforcement layer into WSL (root-owned Claude Code managed settings).
+		Deprecated since 1.6.0 (removed in 2.0.0): runs Deploy-AiArtifacts -Kind Rules.
 
 	.DESCRIPTION
-		Symlinks AI/Claude/managed-settings.json to /etc/claude-code/managed-settings.json inside
-		the default WSL distribution, so Claude Code sessions running in WSL are governed by the
-		same managed (admin-owned, highest-precedence) settings as Windows sessions.
+		Deploy-CoreAiRules linked AI/Claude/managed-settings.json to
+		/etc/claude-code/managed-settings.json inside WSL, while SymbolicLinkMaker linked the rules
+		file into every harness through PathTemplates.SymbolicLinks.AI. Rules are one kind of AI
+		artifact now: Deploy-AiArtifacts -Kind Rules links the rules item AiArtifacts.Use.Rules
+		names - its RULES.md into each app's global instruction file and its managed-settings.json
+		variant into Claude Code's managed settings, on Windows and in WSL (the WSL link as root).
+		Migration: keep the rules in AI\Rules\own\<Name>\ (RULES.md, managed-settings.json), set
+		AiArtifacts.Use.Rules and AiArtifacts.Deploy, drop the PathTemplates.SymbolicLinks.AI
+		entries and call Deploy-AiArtifacts.
 
-		This is the one CoreAiRules link SymbolicLinkMaker cannot create: /etc is root-owned and the
-		engine's WSL branch never elevates, while this function runs every wsl.exe call as root
-		(`wsl -u root`, no sudo prompt needed). Every other CoreAiRules link - the per-harness
-		instruction files on Windows and in WSL, and the Windows managed settings under
-		C:\ProgramData\ClaudeCode - is a regular PathTemplates.SymbolicLinks entry handled by
-		SymbolicLinkMaker. See docs/ai/coreairules.md for the full design.
-
-		Does nothing when the configured WSL distribution is not installed, and never links to a
-		missing target. Idempotent (`ln -sfn`) - reruns self-heal the link. Called by Bootstrap
-		when the opt-in BootstrapConfig.Steps.CoreAiRules toggle is enabled (OFF by default:
-		machine-global AI policy is never imposed by a vanilla bootstrap).
+		Warns once per session, then forwards. The deprecated configuration keys are read and
+		mapped by Resolve-AiArtifactsConfig, so a fork that has not migrated keeps working until
+		2.0.0. See docs/ai/coreairules.md.
 
 	.EXAMPLE
 		Deploy-CoreAiRules
-		Creates /etc/claude-code/managed-settings.json inside the default WSL distribution.
+		Warns, then runs Deploy-AiArtifacts -Kind Rules.
 	#>
 
-	Write-LogTitle "Deploying CoreAiRules"
-
-	if (-not (Test-WSLDistributionInstalled)) {
-		Write-LogWarning "WSL distribution not installed - skipping the WSL CoreAiRules enforcement layer!"
-		return
+	if (-not $script:AiDeprecationWarnings) { $script:AiDeprecationWarnings = @{} }
+	if (-not $script:AiDeprecationWarnings.ContainsKey('Deploy-CoreAiRules')) {
+		$script:AiDeprecationWarnings['Deploy-CoreAiRules'] = $true
+		Write-LogWarning "Deploy-CoreAiRules is deprecated since 1.6.0 and removed in 2.0.0 - use Deploy-AiArtifacts -Kind Rules (docs/ai/coreairules.md)!"
 	}
 
-	$distro = Get-ConfigSetting -Path 'DefaultWSLDistribution'
-	$repoRoot = (Get-RepositoryPath).Repo
-
-	# Convert the Windows repo path to its WSL mount (C:\Users\... -> /mnt/c/Users/...).
-	$driveLetter = $repoRoot.Substring(0, 1).ToLower()
-	$wslTarget = "/mnt/$driveLetter" + $repoRoot.Substring(2).Replace('\', '/') + "/AI/Claude/managed-settings.json"
-	$wslLinkDir = "/etc/claude-code"
-	$wslLinkPath = "$wslLinkDir/managed-settings.json"
-
-	wsl -d $distro -u root test -e $wslTarget
-	if ($LASTEXITCODE -ne 0) {
-		Write-LogWarning "Skipped WSL symlink (target does not exist) => [$wslTarget]"
-		return
-	}
-
-	wsl -d $distro -u root mkdir -p $wslLinkDir
-	wsl -d $distro -u root ln -sfn $wslTarget $wslLinkPath
-	if ($LASTEXITCODE -eq 0) {
-		Write-LogSuccess "Created WSL symlink => [$wslLinkPath] => [$wslTarget]"
-	}
-	else {
-		Write-LogError "Failed to create WSL symlink => [$wslLinkPath]"
-	}
+	Deploy-AiArtifacts -Kind Rules
 }

@@ -9,7 +9,7 @@ Opens project-specific Windows Terminal tabs based on `Configuration.ProjectTerm
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`DefaultWSLDistribution`](../../configuration-reference.md#wsl-configuration) | string | empty string | The WSL distribution every WSL-touching function uses. Ships empty, and that is deliberate: `Configure-WSL`, `Initialize-WSLEnvironment`, `Configure-WSLSSH`, `Open-WSLTab`, `Deploy-CoreAiRules` and WSL symlinks all no-op until it is set. |
+| [`DefaultWSLDistribution`](../../configuration-reference.md#wsl-configuration) | string | empty string | The WSL distribution every WSL-touching function uses. Ships empty, and that is deliberate: `Configure-WSL`, `Initialize-WSLEnvironment`, `Configure-WSLSSH`, `Open-WSLTab`, `Deploy-AiArtifacts` and WSL symlinks all no-op until it is set. |
 | [`ProjectTerminals`](../../configuration-reference.md#project-terminals) | array of `@{ Name; BasePath; Paths }` | array of 3 | Which Windows Terminal tabs `Open-ProjectTerminals` creates for a project: one tab per `Paths` entry, titled `<Name>.<Key>`, starting in that path under `BasePath` (or a WSL / plain / explicit-path tab for the special entries). Tabs are created with `--title --suppressApplicationTitle`, so their titles are stable. |
 | [`TerminalGreeting.Onefetch.InProjectTerminals`](../../configuration-reference.md#terminal-greeting-startup-and-the-c-alias) | bool | `$true` | Whether each path tab runs `Invoke-Onefetch` after its `Set-Location`. An explicit `-InvokeOnefetch` on the call wins. |
 
@@ -46,7 +46,7 @@ On this page that bites on `ProjectTerminals` - that key is an array, so whateve
 
 ## Step 1: Set `DefaultWSLDistribution`
 
-The WSL distribution every WSL-touching function uses. Ships empty, and that is deliberate: `Configure-WSL`, `Initialize-WSLEnvironment`, `Configure-WSLSSH`, `Open-WSLTab`, `Deploy-CoreAiRules` and WSL symlinks all no-op until it is set.
+The WSL distribution every WSL-touching function uses. Ships empty, and that is deliberate: `Configure-WSL`, `Initialize-WSLEnvironment`, `Configure-WSLSSH`, `Open-WSLTab`, `Deploy-AiArtifacts` and WSL symlinks all no-op until it is set.
 
 ```powershell
 DefaultWSLDistribution = "Ubuntu"

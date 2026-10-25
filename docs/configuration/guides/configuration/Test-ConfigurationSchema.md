@@ -13,6 +13,8 @@ This validates the shape of a configuration file rather than reading any particu
 
 It also checks workspace templates in whatever configuration it is given: `WorkspaceTemplates` must be a hashtable of templates that each carry `Actions`, the problems `Expand-WorkspaceTemplates` recorded at load (`WorkspaceTemplateErrors`) are reported, and templated `WorkspaceActions` entries that were never expanded are resolved through `Resolve-WorkspaceTemplate` - so an unknown template, a variable without a value, an ambiguous or unmatched override, an unknown `{placeholder}`, a variable cycle or a bad `Before` / `After` anchor is reported with the workspace named. See [Workspace Templates](../../configuration-reference.md#workspace-templates).
 
+It checks the shape of `AiArtifacts` and `AiHarnesses` (every `Deploy` name is an `AiHarnesses` entry, every destination has a known `Kind` and `Placement`, `Files` and `Path`; see [AI Artifacts](../../configuration-reference.md#ai-artifacts)), and it reports every deprecated key or step name your configuration still uses - one warning naming each with its replacement, never an error. To silence it, move the value to its replacement as the [Deprecated Keys](../../configuration-reference.md#deprecated-keys) table says.
+
 ## Decisions
 
 1. Which configuration value are you feeding `Test-ConfigurationSchema`?

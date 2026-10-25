@@ -1,6 +1,6 @@
 # Get-AiSkillManifest
 
-Reads the `UPSTREAM.md` manifest that `Update-AiSkills` writes into a vendored skills source folder, returning the pinned upstream commit and the vendored skill names.
+Reads the `UPSTREAM.md` manifest that `Update-AiArtifacts` writes into a vendored source folder (`<Root>\<Kind>\<source>\`), returning the pinned upstream commit and the vendored item names.
 
 ## Configuration Keys
 

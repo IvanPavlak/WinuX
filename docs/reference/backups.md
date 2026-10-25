@@ -20,7 +20,7 @@ and pruned by one retention function, [`Clear-OldBackups`](../configuration/guid
 
 | Category | Key | Written by | When |
 | -------- | --- | ---------- | ---- |
-| `SymbolicLinks` | The link's dotted config key (e.g. `PowerShell.Profile`) | `New-WindowsSymbolicLink`, `New-WSLSymbolicLink` (via `SymbolicLinkMaker`) | A **real** file or directory sits where a symlink must go. Existing symlinks are replaced without a backup - they carry no content of their own. |
+| `SymbolicLinks` | The link's dotted config key (e.g. `PowerShell.Profile`), or `AiArtifacts.<kind>.<item>` for an AI artifact | `New-WindowsSymbolicLink`, `New-WSLSymbolicLink` (via `SymbolicLinkMaker`), `Deploy-AiArtifacts` (on Windows and, through the `/mnt/<drive>` mount, in WSL) | A **real** file or directory sits where a symlink must go. Existing symlinks are replaced without a backup - they carry no content of their own. |
 | `Config` | `Configuration` | `Add-SymbolicLink`, `Add-BrowserGroup`, `Add-Workspace`, `Add-Project`, `Add-WindowLayout` | Before every write to the tracked base `Configuration.psd1`, so all five writers share one undo history. |
 | `Config` | `Configuration.local` | `Initialize-Configuration -Force` | Before regenerating an existing `Configuration.local.psd1`. Also the path AI assistants use - see below. |
 | `Config` | `<name>.local` (e.g. `WinGetApps.local`) | `Save-AppCsvOverlay` | Before replacing an existing app-list overlay (`-NoBackup` opts out). |

@@ -12,29 +12,18 @@ The system uses progressive disclosure - only load what's needed for the current
 | **Auto-attached instructions** (`.github/instructions/`) | When editing matching files | Thin pointers that trigger based on file type                     |
 | **On-demand context** (`AI/Context/`)                    | When AI detects relevance   | Full architecture map, complete function reference                |
 | **Deep instructions** (`AI/Instructions/`)               | When referenced             | PowerShell conventions, output formatting, configuration patterns |
-| **Slash commands** (`.github/prompts/`)                  | When you type `/command`    | Guided workflows for common tasks                                 |
-| **Custom agents** (`.github/agents/`)                    | When invoked via `@name`    | Specialized agents with restricted tools                          |
+| **AI artifacts** (`AI/<Kind>/<source>/<item>`)           | In every project, once deployed | Skills, prompts and agents (plus mods and rules) linked into each AI app by `Deploy-AiArtifacts` |
 
 This layered approach means simple questions use minimal tokens, while complex tasks automatically pull in deeper context.
 
-## CoreAiRules (machine-global guardrails)
+## AI Artifacts (machine-global)
 
-Separate from the per-repository context system above, [`AI/CoreAiRules.md`](https://github.com/IvanPavlak/WinuX/blob/master/AI/CoreAiRules.md) carries always-on safety rules for AI coding agents (never commit/push/destroy on their own initiative, never set up a branch that pushes past the pull request, no AI attribution) that deploy machine-globally: the file is symlinked into every harness's global instruction file (Claude Code, Codex, Gemini CLI), and `AI/Claude/managed-settings.json` enforces the git rules at Claude Code's managed-settings tier. Deployment is opt-in via `BootstrapConfig.Steps.CoreAiRules` plus `SymbolicLinks` entries - see [CoreAiRules](coreairules.md) for the full design. Its sibling, [AI Skills](skills.md), keeps Agent Skills under `AI/Skills/<source>/` and links them into every harness's skills directory (`Deploy-AiSkills`, opt-in via `BootstrapConfig.Steps.AiSkills`; `Update-AiSkills` vendors upstream skill repositories). The third, [AI Mods](mods.md), keeps Claude Code mods (function-hook plugins) under `AI/Mods/<source>/`, links them into `~/.claude/mods` and lists them in `env.CLAUDE_CODE_PLUGIN_DIRS` of the user settings file (`Deploy-AiMods`, opt-in via `BootstrapConfig.Steps.AiMods`; `Update-AiMods` vendors upstream mod repositories at a pinned commit).
+Separate from the per-repository context system above, the [AI artifacts](artifacts.md) are deployed machine-globally, so every AI app on the machine loads them in every project: skills, Claude Code mods, rules, prompts and agents, kept under `AI/<Kind>/<source>/<item>` and linked by `Deploy-AiArtifacts` into the apps `AiArtifacts.Deploy` names (Claude Code, Codex, Gemini CLI, Copilot, or an app of your own), on Windows and in WSL. `Update-AiArtifacts` vendors upstream repositories at a pinned commit. WinuX ships the mechanism, the inactive harness catalogue, an example rules skeleton and two product skills; the rest is the fork's. Deployment is opt-in via `BootstrapConfig.Steps.AiArtifacts`. The kind specifics are on [CoreAiRules](coreairules.md) (always-on rules and Claude Code's managed settings), [AI Skills](skills.md) and [AI Mods](mods.md).
 
 ## Directory Structure
 
 ```
 AI/
-├── CoreAiRules.md                 # Machine-global agent guardrails (symlinked into every harness)
-├── InitialConfiguration_2026_03_24.md  # Dated design record of how this AI system was planned
-├── Claude/
-│   └── managed-settings.json      # Claude Code enforcement layer (managed settings)
-├── Mods/
-│   └── README.md                  # Claude Code mods root: <source>/<mod>/.claude-plugin/plugin.json, linked into ~/.claude/mods (fork adds sources)
-├── Skills/
-│   ├── README.md                  # Agent Skills root: <source>/<skill>/SKILL.md, linked into every harness (fork adds sources)
-│   └── own/
-│       └── winux-configurator/    # SKILL.md + agents/openai.yaml - the WinuXConfigurator entry point
 ├── Context/
 │   ├── REPOSITORY_CONTEXT.md      # Architecture map for AI consumption
 │   └── WINDOWS_CONTEXT.md         # Full function reference
@@ -44,51 +33,33 @@ AI/
 │   ├── ConfigurationPatterns.md   # How to modify Configuration.psd1
 │   ├── DocumentationStyle.md      # Docsify conventions and page structure
 │   └── ContextBudgeting.md        # Token optimization strategies
-├── Models/
-│   └── ModelSelectionGuide.md     # Decision matrix: which model for which task
-├── Providers/
-│   └── Copilot.md                 # GitHub Copilot modes, model table, best practices
-└── Templates/
-    ├── ConversationTemplate.md    # Structured format for saved conversations
-    └── ResearchTemplate.md        # Comparison matrix for research topics
+├── Mods/
+│   └── README.md                  # Claude Code mods: <source>/<mod>/.claude-plugin/plugin.json (fork adds sources)
+├── Rules/
+│   └── example/
+│       └── CoreAiRules/
+│           └── RULES.md           # Example rules skeleton; a fork writes Rules/own/<Name>/
+└── Skills/
+    ├── README.md                  # Agent Skills: <source>/<skill>/SKILL.md
+    ├── own/                       # Your own skills (ships empty)
+    └── winux/
+        ├── winux-configurator/    # SKILL.md + agents/openai.yaml - the WinuXConfigurator entry point
+        └── document/              # SKILL.md + agents/openai.yaml - docs from comment-based help
 
 .github/
-├── instructions/
-│   ├── powershell.instructions.md  # Auto-attaches to *.ps1, *.psm1, *.psd1
-│   └── documentation.instructions.md  # Auto-attaches to docs/**
-├── prompts/                        # Slash commands (see below)
-└── agents/
-    └── researcher.agent.md         # @researcher agent for structured research
+└── instructions/
+    ├── powershell.instructions.md  # Auto-attaches to *.ps1, *.psm1, *.psd1
+    └── documentation.instructions.md  # Auto-attaches to docs/**
 ```
 
-## Slash Commands
+A fork adds `AI/Prompts/<source>/<name>/` and `AI/Agents/<source>/<name>/` the same way; see [Agent System](agent-system.md).
 
-Type these in Copilot Chat to trigger guided workflows:
+## Product Skills
 
-| Command              | Purpose                                                  |
-| -------------------- | -------------------------------------------------------- |
-| `/add-browser-group` | Add a new browser URL group to Configuration.psd1        |
-| `/add-workspace`     | Add a new workspace with actions                         |
-| `/add-project`       | Add a new project with all optional sections             |
-| `/add-symlink`       | Add a symbolic link entry                                |
-| `/add-window-layout` | Create a window layout template file                     |
-| `/oneoff`            | Save a conversation for future reference                 |
-| `/research`          | Structured research with comparison matrix and auto-save |
-| `/document`          | Generate documentation from code comments                |
-
-The `/add-*` commands use the [Configuration module](../modules/configuration.md) functions to make reliable modifications.
-
-## Custom Agents
-
-### @researcher
-
-A research agent that auto-saves findings to `AI/Conversations/`. Invoke with:
-
-```
-@researcher best SSO solution for .NET
-```
-
-It follows a structured workflow: clarify → research → compare → recommend → save.
+| Skill | What it does |
+| ----- | ------------ |
+| `winux-configurator` | Runs the [AI-assisted configuration session](../configuration/winux-configurator.md) and writes `Configuration.local.psd1`; covers browser groups, projects, symbolic links, window layouts and workspaces through the Configuration module writers |
+| `document` | Generates or updates a function's module page entry and configuration guide from its comment-based help |
 
 ## Context Files (AI/Context/)
 
@@ -213,81 +184,10 @@ These files define specific conventions and patterns for the repository. They ar
 - 7 strategies for maximizing token efficiency
 - When to use references vs inline content
 - Mode selection (Ask, Edit, Agent, Research)
-- How to use `/oneoff` and `/research` commands for context persistence
+- How to keep context across sessions with saved notes
 - Batch operation patterns
 
 **When to use:** When planning AI-assisted work sessions or dealing with large codebases.
-
----
-
-## Model Selection (AI/Models/)
-
-### ModelSelectionGuide.md
-
-**Purpose:** Decision matrix for selecting which AI model to use for different tasks.
-
-**Contains:**
-
-- Model comparison table (Claude Haiku, Claude 3.5 Sonnet, o1, etc.)
-- Task categories (coding, research, documentation, debugging)
-- Recommendations by task type
-- Token budget considerations
-- Trade-offs: speed vs accuracy vs token cost
-
-**When to use:** When deciding which model or provider to use for a task.
-
----
-
-## Providers (AI/Providers/)
-
-### Copilot.md
-
-**Purpose:** GitHub Copilot-specific configuration and best practices.
-
-**Documents:**
-
-- Chat modes: Ask, Edit, Agent, Research
-- When to use each mode
-- Model availability and limitations
-- Copilot-specific syntax and features
-- Troubleshooting common issues
-- Performance optimization for Copilot
-
-**When to use:** When using Copilot Chat or debugging Copilot-specific behavior.
-
----
-
-## Templates (AI/Templates/)
-
-### ConversationTemplate.md
-
-**Purpose:** Standardized format for saved conversations (persistence via `/oneoff`).
-
-**Documents:**
-
-- YAML frontmatter: topic, date, context, outcome
-- Conversation sections: objective, key decisions, resolution
-- How to structure saved conversations for future reference
-- Naming conventions for saved conversation files
-
-**When to use:** When using `/oneoff` to save a conversation for later reference.
-
-**Output location:** `AI/Conversations/{topic}/{subtopic}.md`
-
-### ResearchTemplate.md
-
-**Purpose:** Structured research format with comparison matrix (used by `/research`).
-
-**Documents:**
-
-- Research structure: question → candidates → evaluation criteria → comparison
-- Comparison matrix format
-- How `/research` auto-saves findings
-- Recommendation format
-
-**When to use:** When using `/research` to conduct structured technical research.
-
-**Output location:** `AI/Conversations/Research/{topic}.md`
 
 ---
 
@@ -323,132 +223,6 @@ File-type-scoped instructions that auto-attach based on `applyTo` patterns.
 
 ---
 
-## Configuration Helpers (​.github/prompts/add-\*.prompt.md)
-
-Slash commands that automate common Configuration.psd1 modifications.
-
-### /add-project
-
-**Purpose:** Adds a new project to the configuration.
-
-**Prompts for:**
-
-- Project name
-- Root directory path
-- VS Code project (optional)
-- Visual Studio solution (optional)
-- Run command mapping (optional)
-- Project terminals (optional)
-
-**Modifies:** `BasePaths.Projects`, `Projects` list, `ProjectActions`, `VisualStudioSolutions`, `VSCodeProjects`, `RunnableProjectMappings`
-
-### /add-workspace
-
-**Purpose:** Adds a new workspace with configurable actions.
-
-**Prompts for:**
-
-- Workspace name
-- Actions (Open-Terminal, Open-VSCode, Open-Browser, etc.)
-- Action parameters
-
-**Modifies:** `Workspaces` list, `WorkspaceActions`
-
-### /add-browser-group
-
-**Purpose:** Adds a new browser URL group.
-
-**Prompts for:**
-
-- Group name
-- Nesting pattern (simple, named, nested, mixed)
-- URLs and names
-
-**Modifies:** `BrowserGroups`
-
-**Supported patterns:** All four nesting formats documented in [Configuration Reference](../configuration/configuration-reference.md#browser-groups)
-
-### /add-symlink
-
-**Purpose:** Adds a symbolic link entry.
-
-**Prompts for:**
-
-- Symlink name
-- Path (where symlink is created)
-- Target (what it points to)
-- Type (Windows or WSL - inferred from path slashes)
-
-**Modifies:** `PathTemplates.SymbolicLinks`
-
-### /add-window-layout
-
-**Purpose:** Creates a window layout template file.
-
-**Generates:**
-
-- File: `Layouts/{MachineType}/{LayoutName}_{MachineType}.psd1`
-- Template: Monitors section + Layout array structure
-
-**Modifies:** Creates new file (no config changes)
-
----
-
-## Workflow Commands (​.github/prompts/)
-
-### /document
-
-**Purpose:** Generates Docsify documentation from function comment-based help.
-
-**Input:** Function name or module path
-
-**Output:** Formatted docs section ready to paste into module docs page
-
-**Uses:** PowerShell comment-based help to extract `.SYNOPSIS`, `.DESCRIPTION`, `.PARAMETER`, `.EXAMPLE` and formats as Docsify markdown
-
-### /oneoff
-
-**Purpose:** Persist the current conversation for future continuation.
-
-**Creates:** Directory `AI/Conversations/{topic}/` with structured markdown
-
-**Saves:** Conversation overview, key decisions, resolution
-
-**Future use:** Reference with "I want to continue work on {topic} from my /oneoff note"
-
-### /research
-
-**Purpose:** Structured research with automatic comparison and save.
-
-**Workflow:** Clarify question → research candidates → build comparison matrix → recommend → save
-
-**Output:** `AI/Conversations/Research/{topic}.md` with full comparison table and recommendation
-
----
-
-## Custom Agents (.github/agents/)
-
-### researcher
-
-**Purpose:** Specialized agent for structured technical research.
-
-**Tools available:** Web search, codebase search, file reading, comparison matrix building
-
-**Workflow:**
-
-1. Clarify research question
-2. Identify candidate solutions
-3. Research each candidate (features, pros/cons, adoption)
-4. Build comparison matrix
-5. Recommend based on criteria
-6. Auto-save to `AI/Conversations/Research/`
-
-**Invocation:** `@researcher <your research question>`
-
-**Output:** Structured research document with comparison matrix and recommendation
-
----
-
 ## How the System Integrates
 
 **Scenario: Working on PowerShell functions**
@@ -458,22 +232,14 @@ Slash commands that automate common Configuration.psd1 modifications.
 3. It points to `PowerShellConventions.md` (loaded automatically)
 4. When asking about Output format, `OutputFormatting.md` becomes relevant
 5. When modifying Configuration, `ConfigurationPatterns.md` is referenced
-6. When stuck, use `/add-project` or `/oneoff` to stay on track
+6. To add a project, workspace or browser group, ask the `winux-configurator` skill
 
 **Scenario: Writing documentation**
 
 1. Open `docs/modules/helper.md`
 2. `documentation.instructions.md` auto-attaches via `applyTo` pattern
 3. `DocumentationStyle.md` and `REPOSITORY_CONTEXT.md` become available
-4. Use `/document` command to generate formatted sections
-5. Use `/oneoff` to save progress
-
-**Scenario: Researching a technical decision**
-
-1. Start with `/research Comparing SSO solutions for .NET`
-2. `@researcher` agent conducts structured research
-3. Results auto-save to `AI/Conversations/Research/`
-4. Future reference: "I want to continue from my research on SSO"
+4. Use the `document` skill to generate the entry and guide from the function's help
 
 ---
 
@@ -485,16 +251,10 @@ Slash commands that automate common Configuration.psd1 modifications.
 2. If it's referenced by a `.github/instructions/*.md` file, that file will auto-load it
 3. No restart required - next Copilot Chat session picks up changes
 
-### To create a new command
+### To add a skill, prompt or agent
 
-1. Create `{command-name}.prompt.md` in `.github/prompts/`
-2. Add YAML frontmatter: `description`, optional `mode`
-3. Write the prompt body (markdown + embedded instructions)
-4. It becomes available as `/{command-name}` immediately
+1. Create the item folder under `AI/Skills/own/`, `AI/Prompts/own/` or `AI/Agents/own/` with its `SKILL.md`, `PROMPT.md` or `AGENT.md` (and per-app variants where an app needs another format)
+2. Run `Deploy-AiArtifacts` to link it into every app `AiArtifacts.Deploy` names
+3. Check with `List-AiArtifacts -ListDiscrepancies`
 
-### To create a new custom agent
-
-1. Create `{agent-name}.agent.md` in `.github/agents/`
-2. Define frontmatter: `description`, `tools`, `invocation`
-3. Write the agent workflow in markdown
-4. It becomes available as `@{agent-name}` immediately
+See [AI Artifacts](artifacts.md) and [Agent System](agent-system.md).

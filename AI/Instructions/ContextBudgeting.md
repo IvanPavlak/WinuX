@@ -43,7 +43,7 @@ Start with the cheapest mode. Escalate only when needed.
 
 ## Strategy 4: Save-and-Resume
 
-Use `/oneoff` to save important conversations. This avoids:
+Save important conversations as notes the next session can read (a fork can keep a conversation-note skill under `AI/Skills/own/` for it). This avoids:
 
 - Re-explaining context in future sessions (expensive)
 - Losing decisions and having to re-derive them (expensive)
@@ -78,7 +78,7 @@ When working on multiple independent tasks, handle them in the same session rath
 ## Anti-Patterns to Avoid
 
 1. **Over-context**: Loading all AI/Context files when you only need one section
-2. **Re-research**: Not saving findings with `/oneoff`, then re-asking the same questions later
+2. **Re-research**: Not saving findings, then re-asking the same questions later
 3. **Wrong model**: Using Opus 4.6 to fix a typo
 4. **Unbounded conversations**: 50+ messages in one chat - context degrades, costs spike
 5. **Copy-paste context**: Pasting file contents into the prompt instead of referencing them

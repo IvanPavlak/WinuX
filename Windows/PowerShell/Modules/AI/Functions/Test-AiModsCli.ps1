@@ -16,11 +16,11 @@ function Test-AiModsCli {
 		  Invalid    The mod paths whose validation failed (exit code other than 0, or the call
 		             threw). Empty when the command is missing - nothing could be checked.
 
-		Deploy-AiMods only warns on the result; links and settings are deployed regardless, so
+		Deploy-AiArtifacts only warns on the result; links and settings are deployed regardless, so
 		installing or updating the CLI later is enough.
 
 	.PARAMETER ModPath
-		The mod folders to validate, typically the links Deploy-AiMods just created.
+		The mod folders to validate, typically the links Deploy-AiArtifacts just created.
 
 	.PARAMETER Command
 		The CLI to call. Defaults to `claude`; tests pass a stub script.

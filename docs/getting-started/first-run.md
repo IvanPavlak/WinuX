@@ -91,12 +91,9 @@ Every step is individually toggleable via `BootstrapConfig.Steps` (or per invoca
 │  │   └─ Shell setup inside WSL (Configure-WSL installs the distro)          │
 │  ├─→ SymbolicLinkMaker                                                      │
 │  │   └─ Creates all symlinks from SymbolicLinks config                      │
-│  ├─→ Deploy-CoreAiRules (opt-in via Steps.CoreAiRules)                      │
-│  │   └─ CoreAiRules managed settings inside WSL (/etc/claude-code)          │
-│  ├─→ Deploy-AiSkills (opt-in via Steps.AiSkills)                            │
-│  │   └─ Links AI/Skills/<source>/<skill> into every harness's skills dir    │
-│  ├─→ Deploy-AiMods (opt-in via Steps.AiMods)                                │
-│  │   └─ Links AI/Mods/<source>/<mod> into ~/.claude/mods + plugin list      │
+│  ├─→ Deploy-AiArtifacts (opt-in via Steps.AiArtifacts)                      │
+│  │   └─ Links AI/<Kind>/<source>/<item> into the apps AiArtifacts.Deploy    │
+│  │      names (skills, mods, rules, prompts, agents), Windows and WSL       │
 │  ├─→ Deploy-AiMarketplaces (opt-in via Steps.AiMarketplaces)                │
 │  │   └─ Claude Code plugin marketplaces + their plugins                     │
 │  ├─→ Enable-ObsidianCli (opt-in via Steps.ObsidianCli)                      │
@@ -137,9 +134,7 @@ execution order):
 | `DeveloperMode`      | Enables Developer Mode (symlinks without admin)                 | Off - opt in via `BootstrapConfig.Steps`      |
 | `UpgradeAll`         | `winget upgrade --all` (+ Scoop/Chocolatey), so **every** package already on the machine, not just WinuX's | Off - opt in via `BootstrapConfig.Steps` |
 | `NuGetConfig`        | Writes a NuGet config (prompts for a GitHub PAT)                | Off - opt in via `BootstrapConfig.Steps`      |
-| `CoreAiRules`        | Machine-global AI agent policy                                  | Off - opt in via `BootstrapConfig.Steps`      |
-| `AiSkills`           | Machine-global Agent Skills linked into every AI harness        | Off - opt in via `BootstrapConfig.Steps`      |
-| `AiMods`             | Machine-global Claude Code mods and the plugin list setting     | Off - opt in via `BootstrapConfig.Steps`      |
+| `AiArtifacts`        | Machine-global AI skills, mods, rules, prompts and agents linked into the apps `AiArtifacts.Deploy` names (the deprecated names `CoreAiRules`, `AiSkills`, `AiMods` are its aliases) | Off - opt in via `BootstrapConfig.Steps` |
 | `AiMarketplaces`     | Claude Code plugin marketplaces in the user settings, and their plugins installed through the CLI | Off - opt in via `BootstrapConfig.Steps` |
 | `ObsidianCli`        | Turns the Obsidian command line interface on (per-machine Obsidian app setting) | Off - opt in via `BootstrapConfig.Steps` |
 | `VSCodeProfiles`     | Links VS Code profile files from the repository and installs their extensions | Off - opt in via `BootstrapConfig.Steps` |

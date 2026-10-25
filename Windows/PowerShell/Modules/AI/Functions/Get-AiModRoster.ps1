@@ -4,6 +4,9 @@ function Get-AiModRoster {
 		Enumerates every Claude Code mod under the mods root, flattened by mod name.
 
 	.DESCRIPTION
+		Deprecated since 1.6.0 (removed in 2.0.0) - use Get-AiArtifactRoster -Kind Mods, which reads AiArtifacts and
+		maps the deprecated keys this function still reads. Nothing in WinuX calls it any more.
+
 		Claude Code loads each mod (a function-hook plugin) from its own folder, so the
 		repository's <Root>\<source>\<mod>\.claude-plugin\plugin.json tree has to be flattened
 		into one name per mod before it can be linked - and every reading has to flatten it the

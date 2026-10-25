@@ -4,6 +4,9 @@ function Get-AiSkillRoster {
 		Enumerates every Agent Skill under the skills root, flattened by skill name.
 
 	.DESCRIPTION
+		Deprecated since 1.6.0 (removed in 2.0.0) - use Get-AiArtifactRoster -Kind Skills, which reads AiArtifacts and
+		maps the deprecated keys this function still reads. Nothing in WinuX calls it any more.
+
 		Every harness discovers user-level skills from one flat directory of <skill>/SKILL.md,
 		so the repository's <Root>\<source>\<skill>\SKILL.md tree has to be flattened before it
 		can be linked or listed - and both readings have to flatten it the same way, or

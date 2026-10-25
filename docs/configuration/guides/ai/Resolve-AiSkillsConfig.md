@@ -2,6 +2,9 @@
 
 Resolves the `AiSkills` configuration section into expanded paths (`Root`, `Harnesses`, `WSLHarnesses`) and the configured `Sources`, the one view of that section every AI skills function shares.
 
+> [!WARNING]
+> Deprecated since 1.6.0, removed in 2.0.0 - use [`Resolve-AiArtifactsConfig`](Resolve-AiArtifactsConfig.md). This function reads only the deprecated keys below, which [`Resolve-AiArtifactsConfig`](Resolve-AiArtifactsConfig.md) maps onto `AiArtifacts` until 2.0.0; nothing in WinuX calls it any more. See [Migrating from 1.5](../../../ai/artifacts.md#migrating-from-15).
+
 > [!NOTE]
 > Every value on this page belongs in `Configuration.local.psd1`, never in the base `Configuration.psd1`. The base file is upstream's, it ships empty-by-default, and it is deep-merged with your local file at load time by `Load-PathConfiguration`. See [Fork Model](../../../contributing/fork-model.md).
 
@@ -9,7 +12,7 @@ Resolves the `AiSkills` configuration section into expanded paths (`Root`, `Harn
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`AiSkills`](../../configuration-reference.md#ai-skills) | hashtable | `Root`, `Harnesses` defaults; `Sources = @{}` | The whole section: `Root` (skills root), `Harnesses` (Windows skills directories), `Sources` (upstreams). `{RepoRoot}`, `{User}` and `{AppData}` are expanded in `Root` and `Harnesses`. |
+| [`AiSkills`](../../configuration-reference.md#ai-skills-deprecated) | hashtable | `Root`, `Harnesses` defaults; `Sources = @{}` | The whole section: `Root` (skills root), `Harnesses` (Windows skills directories), `Sources` (upstreams). `{RepoRoot}`, `{User}` and `{AppData}` are expanded in `Root` and `Harnesses`. |
 | [`DefaultWSLUsername`](../../configuration-reference.md#wsl-configuration) | string | empty string | Derives `WSLHarnesses` from the `{User}` harness entries (`/home/<user>/...`). Empty yields none. |
 
 ## Decisions
@@ -17,7 +20,7 @@ Resolves the `AiSkills` configuration section into expanded paths (`Root`, `Harn
 1. Do the defaults need changing at all?
     - Options: Set `AiSkills.Root` or `AiSkills.Harnesses` only when the skills should live elsewhere or a harness should be added or dropped. `Sources` is configured on the [`Update-AiSkills`](Update-AiSkills.md) page.
     - Default: `{RepoRoot}\AI\Skills` and the Claude Code plus `.agents` directories; no sources.
-    - More detail: [`AiSkills`](../../configuration-reference.md#ai-skills)
+    - More detail: [`AiSkills`](../../configuration-reference.md#ai-skills-deprecated)
 2. Should WSL harness paths be derived?
     - Options: Set `DefaultWSLUsername` to get `/home/<user>/<harness>` for every `{User}` entry; leave it empty for Windows only.
     - Default: Empty - no WSL harnesses.

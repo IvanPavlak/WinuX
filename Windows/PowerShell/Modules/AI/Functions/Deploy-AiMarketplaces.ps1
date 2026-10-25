@@ -44,7 +44,7 @@ function Deploy-AiMarketplaces {
 		shell. A `claude` that WSL resolves under /mnt/ is the Windows CLI reached through
 		interop, which would install into the Windows profile, so it counts as missing there.
 
-		Mods loaded from a folder (Deploy-AiMods) and plugins installed from a marketplace are
+		Mods loaded from a folder (Deploy-AiArtifacts) and plugins installed from a marketplace are
 		two ways to load the same plugin: give each plugin one of them, not both. A folder in a
 		settings file's env.CLAUDE_CODE_PLUGIN_DIRS that holds a plugin this function installs
 		is reported (never removed): Claude Code would load that plugin twice, and the folder
@@ -88,8 +88,12 @@ function Deploy-AiMarketplaces {
 		return
 	}
 
-	# The Windows and WSL settings files come from the same resolver the mods use.
-	$paths = Resolve-AiModsConfig
+	# The Windows and WSL Claude Code user settings files.
+	$wslUserName = [string](Get-ConfigSetting -Path 'DefaultWSLUsername' -Default '')
+	$paths = @{
+		SettingsPath    = Join-Path $env:USERPROFILE ".claude\settings.json"
+		WSLSettingsPath = if ($wslUserName) { "/home/$wslUserName/.claude/settings.json" } else { "" }
+	}
 	$targets = @(@{ Label = "Windows"; Path = $paths.SettingsPath })
 	$wsl = $null
 	if ($paths.WSLSettingsPath) {

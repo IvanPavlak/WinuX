@@ -274,11 +274,37 @@ Test-Path "WinuX\Server\.ssh\config"
 wsl mkdir -p /home/you/.ssh
 ```
 
+## AI Artifacts Issues
+
+### "Configuration uses N deprecated key(s)" At Profile Load Or Bootstrap
+
+**Problem:** Every new shell, and the start of every `Bootstrap`, prints a warning such as `Configuration uses 2 deprecated key(s) (see CHANGELOG.md, ### Deprecated)`, followed by lines like `AiSkills.Sources is deprecated since 1.6.0 and removed in 2.0.0 - use AiArtifacts.Sources, Folders renamed to Skills`.
+
+**Why it happens:** `Test-ConfigurationSchema` reports every configuration key or `BootstrapConfig.Steps` name your configuration still uses that a WinuX release has deprecated. The old shape keeps working - it is read and mapped onto its replacement - until the next MAJOR release removes it, and the warning is how a fork finds out before that merge breaks anything. It is never an error.
+
+**Solution:** Move each value to the replacement the line names, in `Configuration.local.psd1`, then reload the profile; the warning disappears once nothing deprecated is left. The [Deprecated Keys](../configuration/configuration-reference.md#deprecated-keys) table lists every entry, and [Migrating from 1.5](../ai/artifacts.md#migrating-from-15) shows the AI keys before and after. `Deploy-AiArtifacts` also prints each deprecated AI key it mapped, so you can check the mapping did what you expected before you migrate.
+
+### Claude Code Ignores The Managed Settings On Windows
+
+**Problem:** `C:\ProgramData\ClaudeCode\managed-settings.json` exists (the 1.5 `PathTemplates.SymbolicLinks.AI.ClaudeManagedSettings` entry linked it), yet Claude Code applies none of its permission rules, hooks or attribution settings on Windows.
+
+**Why it happens:** Claude Code reads managed settings on Windows from `C:\Program Files\ClaudeCode\managed-settings.json` and no longer reads the legacy `C:\ProgramData\ClaudeCode` path ([managed settings](https://code.claude.com/docs/en/managed-settings)).
+
+**Solution:** Keep the file as the `managed-settings.json` variant of your rules item (`AI\Rules\own\<Name>\managed-settings.json`), name the item with `AiArtifacts.Use.Rules`, put `claude-code` in `AiArtifacts.Deploy`, and run `Deploy-AiArtifacts -Kind Rules` as administrator. It links `C:\Program Files\ClaudeCode\managed-settings.json` (and `/etc/claude-code/managed-settings.json` in WSL). Remove the old `ClaudeManagedSettings` entry and the stale link under `C:\ProgramData\ClaudeCode` by hand. Confirm with `/status` in a new Claude Code session, which lists the managed settings source.
+
+### The Global CLAUDE.md Shows A Path Instead Of The Rules
+
+**Problem:** A new Claude Code session reports its user instructions as one short line such as `Rules/own/CoreAiRules/RULES.md` instead of the rules text.
+
+**Why it happens:** `~\.claude\CLAUDE.md` links to a file in the repository that is itself a git symbolic link. With `core.symlinks` false (the Git for Windows default without Developer Mode), git checks a symbolic link out as a small text file holding the link's target, so the app reads that path as the instructions.
+
+**Solution:** Link the apps straight at the rules item: run `Deploy-AiArtifacts -Kind Rules`, which points `CLAUDE.md`, `AGENTS.md`, `GEMINI.md` and `copilot-instructions.md` at `AI\Rules\<source>\<Name>\RULES.md`, a real file. Check with `(Get-Item "$env:USERPROFILE\.claude\CLAUDE.md").LinkTarget`, then start a new session.
+
 ## AI Mods Issues
 
 ### A Mod Does Not Appear In Claude Code
 
-**Problem:** `Deploy-AiMods` ran, but a new Claude Code session shows no band, pane or status entry from the mod.
+**Problem:** `Deploy-AiArtifacts` ran, but a new Claude Code session shows no band, pane or status entry from the mod.
 
 **Solution:**
 
@@ -291,7 +317,7 @@ claude plugin validate "$env:USERPROFILE\.claude\mods\my-mod"
 ```
 
 2. Claude Code reads `CLAUDE_CODE_PLUGIN_DIRS` when a session starts, so close and reopen the session (and restart the desktop app for the Code tab).
-3. If the key is missing although `Deploy-AiMods` set it, something rewrote `settings.json` without it (a manual edit or another tool). Re-run `Deploy-AiMods`; it only ever rewrites that one key.
+3. If the key is missing although `Deploy-AiArtifacts` set it, something rewrote `settings.json` without it (a manual edit or another tool). Re-run `Deploy-AiArtifacts -Kind Mods`; its `claude-plugin-dirs` hook only ever rewrites that one key.
 
 ### A Marketplace Plugin Is Installed But Draws Nothing
 
@@ -306,7 +332,7 @@ claude --version
 (Get-Content "$env:USERPROFILE\.claude\settings.json" -Raw | ConvertFrom-Json).env
 ```
 
-2. Name the variable under the marketplace's `Env` in `Configuration.local.psd1` and re-run `Deploy-AiMarketplaces` (or Bootstrap with `Steps.AiMarketplaces` on); on macOS and Linux, add `env CLAUDE_CODE_ENABLE_FUNCTION_HOOKS 1` to the marketplace's section of `Unix/config/ai-marketplaces.conf` and re-run `deploy-aimarketplaces`. The WSL settings file receives it in the same run.
+2. Name the variable under the marketplace's `Env` in `Configuration.local.psd1` and re-run `Deploy-AiMarketplaces` (or Bootstrap with `Steps.AiMarketplaces` on). The WSL settings file receives it in the same run.
 
 ```powershell
 Marketplaces = @{
@@ -327,23 +353,24 @@ A plugin that loads but ignores one of its options has the same shape of cause o
 **Problem:** The options under `pluginConfigs.<plugin>@<marketplace>` in `~\.claude\settings.json` are set (and `Deploy-AiMarketplaces` reports them up to date), yet the plugin draws with its defaults. `Deploy-AiMarketplaces` may also warn that the plugin "is installed from its marketplace and also loaded from" a folder.
 
 **Solution:** A folder that holds the same plugin is listed in `env.CLAUDE_CODE_PLUGIN_DIRS`, usually a development clone added by hand. Claude Code then loads the plugin twice, and the folder copy reads its options from `pluginConfigs.<plugin>`, not `<plugin>@<marketplace>`. Remove that entry from the `env` block (Windows and, inside WSL, `/home/<user>/.claude/settings.json`), start a new session, and load the clone only for development with `claude --plugin-dir <clone>`.
+
 ### "Claude Code CLI (claude) not found on PATH" Or "claude plugin validate failed"
 
-**Problem:** `Deploy-AiMods` warns that mods are deployed but cannot be used yet.
+**Problem:** `Deploy-AiArtifacts` warns that mods are deployed but cannot be used yet.
 
 **Solution:** The links and the settings key are already in place - the warning is about the CLI only. Install the Claude Code CLI (`winget install Anthropic.ClaudeCode`, or `brew install --cask claude-code` on macOS) or update it: an older CLI that predates the mod API rejects a mod it cannot load. When the CLI is current and validation still fails, run `claude plugin validate <mod folder>` to see what the engine refuses, and fix the mod upstream.
 
 ### The WSL Settings Were Not Updated
 
-**Problem:** `Deploy-AiMods` warns that the `\wsl.localhost\<distro>` share is not reachable.
+**Problem:** `Deploy-AiArtifacts` warns that the `\wsl.localhost\<distro>` share is not reachable.
 
-**Solution:** The WSL links were created; only the WSL user's `~/.claude/settings.json` was skipped. Start the distribution once (`wsl -d Ubuntu`) so the share comes up, confirm `Test-Path \wsl.localhost\Ubuntu\home\you` is true, and re-run `Deploy-AiMods`.
+**Solution:** The WSL links were created; only the WSL user's `~/.claude/settings.json` was skipped. Start the distribution once (`wsl -d Ubuntu`) so the share comes up, confirm `Test-Path \wsl.localhost\Ubuntu\home\you` is true, and re-run `Deploy-AiArtifacts -Kind Mods`.
 
 ### settings.json Could Not Be Parsed
 
-**Problem:** `Deploy-AiMods` (or `Set-ClaudeSettingsEnv`) reports that `settings.json` could not be parsed and left it untouched.
+**Problem:** `Deploy-AiArtifacts` (or `Set-ClaudeSettingsEnv`) reports that `settings.json` could not be parsed and left it untouched.
 
-**Solution:** The file is not valid JSON - usually a trailing comma or a comment added by hand. Fix it (Claude Code itself refuses an invalid settings file too), then re-run `Deploy-AiMods`. The function never overwrites a file it cannot read, so nothing was lost.
+**Solution:** The file is not valid JSON - usually a trailing comma or a comment added by hand. Fix it (Claude Code itself refuses an invalid settings file too), then re-run `Deploy-AiArtifacts -Kind Mods`. The function never overwrites a file it cannot read, so nothing was lost.
 
 ## Application Launch Issues
 
