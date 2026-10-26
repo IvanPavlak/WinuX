@@ -21,7 +21,7 @@ Linking per skill keeps the app folders machine-local: skills installed by other
 
 WinuX ships two skills in `AI\Skills\winux\`:
 
-- `winux-configurator` - the entry point to the [WinuXConfigurator](../configuration/winux-configurator.md) session: it locates the checkout from its own symbolic link, then reads and runs the protocol document. It also covers what the removed `add-*` prompts did (browser groups, projects, symbolic links, window layouts, workspaces).
+- `winux-configurator` - the entry point to the [WinuXConfigurator](../configuration/winux-configurator.md) session: it locates the checkout from its own symbolic link, then reads and runs the protocol document. It also covers what the removed `add-*` prompts did (browser groups, projects, symbolic links, window layouts, workspaces). In a checkout that also holds Foundation, WinuX's macOS counterpart, it writes the Unix counterpart of every entry in the same session (the protocol's ground rule 8).
 - `document` - turns a function's comment-based help into its man-style module page entry and its configuration guide, and keeps the manifest and indexes in step.
 
 `own\` ships empty. Leave a product skill out with `AiArtifacts.Exclude = @("skills/winux/document")`.

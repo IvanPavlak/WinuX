@@ -57,6 +57,23 @@ These are not suggestions. A session that breaks any of them has damaged somethi
 
 7. **Read the guide before you ask its questions.** Do not paraphrase from memory. The decisions in the guides are written to be read out as written, and they carry the defaults and the trade-offs.
 
+8. **A checkout that also holds Foundation is configured on both halves.** Foundation is WinuX's macOS counterpart, and a fork may merge both ([Fork Model](../contributing/fork-model.md), "A second upstream: Foundation"). When `<RepoRoot>/Unix/config/workspaces.conf` exists next to `Windows/PowerShell/Configuration.psd1`, the user runs the same configuration on a Mac, and every entry you write that the Unix half reads too is written into its `Unix/config/<file>.local.conf` counterpart in the same session, so the two halves never drift. Those writes follow the [FoundationConfigurator](https://ivanpavlak.github.io/Foundation/#/unix/foundation-configurator) protocol (`docs/unix/foundation-configurator.md` in the checkout): the overlay, never the base file; a backup before a file's first write; the file's own header comment as its format; its per-file decisions for what to ask. Reuse the Windows answers and ask only what the Mac cannot share - the layout set, zone set and zones of a layout, a bundle id, a path that differs. Say which halves the session writes before the first question, show a counterpart write like any other write, and print the Mac's check (`Test-ConfigurationSchema --quiet`) for the user's next Mac session when you cannot run it. What has no counterpart (FancyZones, WSL, the registry, a Windows-only application) stays Windows-only: say so and move on. A checkout without `Unix/` is WinuX alone: write nothing there and never create the folder.
+
+    | Windows key | Unix counterpart |
+    | ----------- | ---------------- |
+    | `Universal.GitHub`, `RepositoryGroups` | `repositories.conf` |
+    | `Universal.BrowserGroups` | `browser-groups.conf` |
+    | `PathTemplates.Projects.<Name>`, `ProjectActions`, `ProjectTerminals`, `RunnableProjectMappings` | `projects.conf` |
+    | `VSCodeProjects` | `vscode-folders.conf` |
+    | `DefaultVSCodeWorkspaces` | the `default` lines of `vscode-workspaces.conf` |
+    | `WorkspaceActions`, `WorkspaceTemplates` | `workspaces.conf`, `workspace-templates.conf` |
+    | `Modules\Window\Layouts\<Type>\<Workspace>_<Type>.psd1` | `Unix/config/layouts/<Type>/<Workspace>_<Type>.conf`, one per layout set |
+    | `HostnameToMachineType`, `BasePaths` | `machines.conf` |
+    | `WakeOnLanConfig`, `AcrobatPdfGroups`, `CampaignResources`, `Obsidian` | `wake-on-lan.conf`, `pdfs.conf`, `dnd.conf`, `obsidian.conf` |
+    | the app-list overlays (`*.local.csv`) | `Unix/Brewfile.local`, for a package the Mac has a cask or formula for |
+
+    The full file-to-key map is on Foundation's [Unix Configuration](https://ivanpavlak.github.io/Foundation/#/unix/configuration) page.
+
 ## Session Protocol
 
 ### Step 0: Prerequisites
@@ -75,6 +92,7 @@ Establish these before asking a single configuration question. If any of them is
     `Initialize-Configuration` also writes this skeleton if the user would rather it did.
 3. **Establish the machine type.** Ask for the machine's hostname, and check whether `HostnameToMachineType` maps it. If it does not, the machine resolves to `DefaultMachineType` (`Test` in the base configuration), and almost every per-machine-type key will look unconfigured. This is the single most common reason a WinuX setup appears to ignore its own configuration.
 4. **Confirm the profile loads.** If PowerShell is available: `Reload-PowerShellProfile`, then check that `$global:Configuration` and `$global:MachineType` are populated. If they are not, stop and fix that first - there is no point configuring a system that is not loading its configuration.
+5. **Find the other half.** Check whether `<RepoRoot>/Unix/config/workspaces.conf` exists. If it does, the session writes both halves (ground rule 8): read the Unix overlays in scope as well, and tell the user so before the first question.
 
 ### Step 1: Mode
 
@@ -130,6 +148,7 @@ If PowerShell is not available to you, print the commands and ask the user to ru
 
 3. Suggest a smoke test that exercises what was configured - `Open-Browser`, `Open-Workspace`, `Visualize-Layouts` - whichever is relevant.
 4. Remind the user that `Configuration.local.psd1` is theirs. Upstream WinuX gitignores it; a fork may commit it so it syncs across machines. Either way, the values are now on disk and nothing else has to be done to keep them.
+5. In a checkout that holds both halves (ground rule 8), list the counterpart entries written under `Unix/config` and the check to run there.
 
 ## Recommended Module Walk Order
 

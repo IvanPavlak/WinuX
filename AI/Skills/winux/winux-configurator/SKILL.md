@@ -12,6 +12,7 @@ This skill is linked into the harness's user-level skills directory, so the curr
 
 - The skill folder (`~/.claude/skills/winux-configurator` or `~/.agents/skills/winux-configurator`) is a symbolic link to `<RepoRoot>/AI/Skills/winux/winux-configurator/`. Resolve the link and take the folder three levels above it. In PowerShell with the WinuX profile loaded, `(Get-RepositoryPath).Repo` answers directly.
 - Confirm the result by checking that `<RepoRoot>/Windows/PowerShell/Configuration.psd1` exists. If it does not, ask the user for the checkout path.
+- Note whether `<RepoRoot>/Unix/config/workspaces.conf` exists too. If it does, the checkout also holds Foundation, WinuX's macOS counterpart, and the protocol's ground rule 8 has you write the Unix counterpart of every entry in the same session, under `docs/unix/foundation-configurator.md`.
 - If the repository cannot be reached at all, fetch the protocol from `https://raw.githubusercontent.com/IvanPavlak/WinuX/master/docs/configuration/winux-configurator.md` and tell the user that without the checkout you can interview and print fragments, but not write or verify.
 
 ## Step 2 - Read the protocol
@@ -20,4 +21,4 @@ Read `<RepoRoot>/docs/configuration/winux-configurator.md` in full before the fi
 
 ## Step 3 - Run the session
 
-Follow the protocol's Session Protocol steps 0 through 5 in order. The session is done when every module in the chosen scope has been walked, written, and read back out of `$global:Configuration`, and the user has the closing summary of what was set, skipped and left empty.
+Follow the protocol's Session Protocol steps 0 through 5 in order. The session is done when every module in the chosen scope has been walked, written, and read back out of `$global:Configuration` (and, in a checkout of both halves, its Unix counterparts written and their check handed over), and the user has the closing summary of what was set, skipped and left empty.

@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-10-26
+
+### Changed
+
+- **The WinuXConfigurator keeps a fork of both upstreams in step.** Foundation, WinuX's macOS counterpart, reads the same repositories, browser groups, projects, VS Code folders and workspaces, workspaces, templates and layouts from its own `Unix/config` overlays, and a fork that merges both had to configure each half by hand. A new ground rule (8) in `docs/configuration/winux-configurator.md`, with a key-to-file table, has the session write the Unix counterpart of every entry it writes when `Unix/config/workspaces.conf` exists in the checkout, following Foundation's protocol (`docs/unix/foundation-configurator.md`) for the overlay, the backup and the file format, reusing the Windows answers and asking only what the Mac cannot share; a new Step 0 item detects the other half and says so before the first question, and the closing summary lists the counterpart writes. A checkout of WinuX alone is unchanged: nothing is written and no folder is created. The `winux-configurator` skill notes the other half when it locates the checkout. Documentation and skill text only: no configuration key, function or Bootstrap step changed.
+
 ## [1.7.1] - 2026-10-26
 
 ### Fixed
@@ -1704,7 +1710,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v1.7.1...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v1.8.0...HEAD
+[1.8.0]: https://github.com/IvanPavlak/WinuX/compare/v1.7.1...v1.8.0
 [1.7.1]: https://github.com/IvanPavlak/WinuX/compare/v1.7.0...v1.7.1
 [1.7.0]: https://github.com/IvanPavlak/WinuX/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/IvanPavlak/WinuX/compare/v1.5.0...v1.6.0
