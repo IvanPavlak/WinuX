@@ -66,9 +66,11 @@ function Update-Repositories {
 
 	.PARAMETER Quiet
 		One line per repository plus a totals line, and git silenced - the compact form the
-		startup update prints. A run spanning several groups shows a heading per group. The
-		totals line colors each count (Write-LogSegments): updated blue, up to date green, need
-		attention red, skipped yellow.
+		startup update prints. A run spanning several groups shows a heading per group. Each
+		repository line and each count of the totals line is colored by its bucket: updated
+		green, up to date white, need attention red, skipped yellow. A repository that holds
+		stashes lists them under its line ("* Stashes =>" one tab in, each `git stash list`
+		entry two tabs in), in white.
 
 	.EXAMPLE
 		Update-Repositories
@@ -375,23 +377,45 @@ function Update-Repositories {
 		$line = Format-RepositoryUpdateResult -Result $result
 		$counts[$line.Category]++
 		if ($Quiet) {
-			# A blank line separates a group heading from its first repository; the rest of the
-			# group's lines follow without one.
+			# A blank line separates a group heading (or the previous repository's stash list)
+			# from the next repository; the rest of the group's lines follow without one.
 			$noLead = -not $firstLineAfterHeading
-			if ($line.Level -eq "Success") { Write-LogSuccess $line.Message -NoLeadingNewline:$noLead }
-			else { Write-LogWarning $line.Message -NoLeadingNewline:$noLead }
+			# Colored by bucket: updated green, up to date white, need attention red, skipped yellow.
+			switch ($line.Category) {
+				"Updated" { Write-LogSuccess $line.Message -NoLeadingNewline:$noLead }
+				"UpToDate" { Write-LogStep "=> $($line.Message)" -NoLeadingNewline:$noLead }
+				"Skipped" { Write-LogStep "=> $($line.Message)" -Style Warning -NoLeadingNewline:$noLead }
+				default { Write-LogError $line.Message -NoLeadingNewline:$noLead }
+			}
+
+			# The stashes the repository holds, whoever made them, so none is forgotten. Only for a
+			# folder that is its own repository: git -C anywhere else would list the stashes of
+			# whichever repository encloses it.
+			$stashes = @()
+			if ($result.Outcome -notin @("NotConfigured", "NotCloned", "NotARepository") -and $result.LocalPath -and (Test-Path $result.LocalPath)) {
+				$cdup = git -C $result.LocalPath rev-parse --show-cdup 2>$null
+				if ($LASTEXITCODE -eq 0 -and [string]::IsNullOrWhiteSpace("$cdup")) {
+					$stashes = @(git -C $result.LocalPath stash list 2>$null | Where-Object { $_ })
+				}
+			}
+			if ($stashes.Count -gt 0) {
+				Write-LogStep "`t* Stashes =>"
+				foreach ($stash in $stashes) { Write-LogStep "`t`t* $stash" -NoLeadingNewline }
+				$firstLineAfterHeading = $true
+				continue
+			}
 		}
 		$firstLineAfterHeading = $false
 	}
 
 	if ($Quiet) {
-		# Each count in its own color, whatever its value: updated blue, up to date green, need
-		# attention red, skipped yellow.
+		# Each count in the color of its repository lines, whatever its value: updated green, up
+		# to date white, need attention red, skipped yellow.
 		Write-LogSegments @(
 			@{ Text = "=> Repositories => " }
-			@{ Text = "$($counts.Updated) updated"; Style = "Info" }
+			@{ Text = "$($counts.Updated) updated"; Style = "Success" }
 			@{ Text = ", " }
-			@{ Text = "$($counts.UpToDate) up to date"; Style = "Success" }
+			@{ Text = "$($counts.UpToDate) up to date" }
 			@{ Text = ", " }
 			@{ Text = "$($counts.Attention) need attention"; Style = "Error" }
 			@{ Text = ", " }

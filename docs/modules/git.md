@@ -356,7 +356,7 @@ Test-RepositoryUpdateStampFresh -StampFile (Join-Path $global:LoggingState.LogsD
 
 ## [Update-Repositories](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Git/Functions/Update-Repositories.ps1)
 
-- **Description:** Clones or updates one or more git repositories defined in `RepositoryGroups` in `Configuration.psd1`, where repositories are organized into named groups (for example "Private" and "Work") defined in configuration, never in code. With no parameters it shows an interactive menu grouped by group name; otherwise it updates one or more groups (`-Group`), a named repository, everything (`-All`), or a specific URL/path pair. The selection modes are mutually exclusive, enforced by parameter sets. Each existing repository is updated by [`Update-Repository`](#update-repository): local changes are stashed, the checked-out branch is fast-forwarded, and the stash is popped. With `-IncludeDefaultBranch`, or `RepositoryUpdate.IncludeDefaultBranch` in configuration, each repository's default branch is fast-forwarded too, without checking it out. A repository missing locally is cloned, or with `-NoClone` reported and skipped. `-Quiet` prints one line per repository plus a totals line (via [`Format-RepositoryUpdateResult`](#format-repositoryupdateresult)). A run that spans several groups prints a heading per group, in configuration order. Archive mode downloads repository contents without the `.git` directory (to the Desktop by default) via `git clone --depth 1` with `.git` removal. Administrator privileges are required only to clone: in archive mode, and when a selected repository is missing and `-NoClone` is not given. When `$global:GithubPat` is set (`Install-Bootstrap` caches its `-Token` there), clones and archive downloads authenticate with it.
+- **Description:** Clones or updates one or more git repositories defined in `RepositoryGroups` in `Configuration.psd1`, where repositories are organized into named groups (for example "Private" and "Work") defined in configuration, never in code. With no parameters it shows an interactive menu grouped by group name; otherwise it updates one or more groups (`-Group`), a named repository, everything (`-All`), or a specific URL/path pair. The selection modes are mutually exclusive, enforced by parameter sets. Each existing repository is updated by [`Update-Repository`](#update-repository): local changes are stashed, the checked-out branch is fast-forwarded, and the stash is popped. With `-IncludeDefaultBranch`, or `RepositoryUpdate.IncludeDefaultBranch` in configuration, each repository's default branch is fast-forwarded too, without checking it out. A repository missing locally is cloned, or with `-NoClone` reported and skipped. `-Quiet` prints one line per repository plus a totals line (via [`Format-RepositoryUpdateResult`](#format-repositoryupdateresult)), each line and each count colored by its bucket (updated green, up to date white, need attention red, skipped yellow), and lists the stashes a repository holds (`git stash list`) under its line. A run that spans several groups prints a heading per group, in configuration order. Archive mode downloads repository contents without the `.git` directory (to the Desktop by default) via `git clone --depth 1` with `.git` removal. Administrator privileges are required only to clone: in archive mode, and when a selected repository is missing and `-NoClone` is not given. When `$global:GithubPat` is set (`Install-Bootstrap` caches its `-Token` there), clones and archive downloads authenticate with it.
 - **Parameters:** -Repositories, -RepositoryUrl, -LocalPath, -Group, -All, -InCurrentDirectory, -Archive, -IncludeDefaultBranch, -NoClone, -Quiet
 - **Usage:** `Update-Repositories`, `Update-Repositories MyRepo`, `Update-Repositories -Group Private`, `Update-Repositories -Group Private, Work`, `Update-Repositories -All`, `Update-Repositories -RepositoryUrl "https://github.com/user/MyRepo" -LocalPath "<DevRoot>\MyRepo"`, `Update-Repositories -All -Archive`, `Update-Repositories -All -Archive -InCurrentDirectory`, `Update-Repositories -All -IncludeDefaultBranch`, `Update-Repositories MyRepo -IncludeDefaultBranch:$false`, `Update-Repositories -All -NoClone -Quiet`
 
@@ -380,7 +380,7 @@ A repository missing locally is cloned via `Initialize-Repository`, which takes 
 | `-Archive`            | Downloads repository contents without git history. Targets the Desktop by default; combine with `-InCurrentDirectory` to use the current folder. |
 | `-IncludeDefaultBranch` | Also fast-forward each repository's default branch. Not given: `RepositoryUpdate.IncludeDefaultBranch` decides (default off). `-IncludeDefaultBranch:$false` turns it off for one call. |
 | `-NoClone`            | Report and skip repositories missing locally instead of cloning them, so the call never needs Administrator.                                    |
-| `-Quiet`              | One line per repository plus a totals line, with git silenced. The form the startup update prints.                                              |
+| `-Quiet`              | One line per repository plus a totals line, with git silenced, and a repository's stashes listed under its line. The form the startup update prints. |
 
 ```powershell
 # Interactive menu - all configured repositories grouped by type
@@ -422,6 +422,11 @@ What `-Quiet` prints for a run over two groups, with the default branch on (illu
 [Private]
 
 => [MyRepo] master - up to date
+
+	* Stashes =>
+		* stash@{0}: On master: MyStash
+		* stash@{1}: On master: master_2026-10-27_09-15-00
+
 => [OtherProject] feature/login - updated, master fast-forwarded
 
 [Work]
@@ -431,7 +436,7 @@ What `-Quiet` prints for a run over two groups, with the default branch on (illu
 => Repositories => 1 updated, 2 up to date, 0 need attention, 0 skipped
 ```
 
-On the console each count of the totals line has its own color, whatever its value (`Write-LogSegments`): updated blue, up to date green, need attention red, skipped yellow; the rest of the line is white.
+On the console each repository line is colored by its bucket, and each count of the totals line has the color of its lines whatever its value (`Write-LogSegments`): updated green, up to date white, need attention red, skipped yellow; the rest of the totals line is white. A repository that holds stashes, whoever made them, lists them under its line in white: `* Stashes =>` one tab in, each `git stash list` entry two tabs in, and a blank line before the next repository. Only a folder that is the top of its own repository is asked, so a path inside another repository never shows that repository's stashes.
 
 **See also:** [Configuration: Add Repository](../configuration/guides/git/add-new-repository.md), [Modules: Workflow](workflow.md)
 

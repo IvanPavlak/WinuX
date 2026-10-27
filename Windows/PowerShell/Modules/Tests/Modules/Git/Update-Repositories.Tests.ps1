@@ -294,25 +294,32 @@ Describe "Update-Repositories" {
 			Should -Invoke Update-Repository -Times 2 -Exactly -ParameterFilter { $Quiet }
 		}
 
-		It "prints one line per repository and the totals, at the level each one needs" {
+		It "colors each repository line by its bucket: updated green, need attention red, skipped yellow" {
 			Update-Repositories -All -Quiet -NoClone
 
-			# Mike updated (success), Zulu conflict (warning), Kilo not cloned (success), then the
-			# totals line.
-			Should -Invoke Write-LogSuccess -Times 2 -Exactly
-			Should -Invoke Write-LogWarning -Times 1 -Exactly
+			# Mike updated, Zulu conflict, Kilo not cloned, then the totals line.
+			Should -Invoke Write-LogSuccess -Times 1 -Exactly -ParameterFilter { $Message -match "^\[Mike\] master - updated$" }
+			Should -Invoke Write-LogError -Times 1 -Exactly -ParameterFilter { $Message -match "^\[Zulu\] master - could not fast-forward" }
+			Should -Invoke Write-LogStep -Times 1 -Exactly -ParameterFilter { $Message -match "^=> \[Kilo\] not cloned" -and $Style -eq "Warning" }
+			Should -Invoke Write-LogWarning -Times 0 -Exactly
 			Should -Invoke Write-LogSegments -Times 1 -Exactly
 		}
 
-		It "colors each count of the totals line: updated blue, up to date green, need attention red, skipped yellow" {
+		It "prints an up-to-date repository line in white, with the same arrow as the others" {
+			Mock Update-Repository { [pscustomobject]@{ Name = $Name; Branch = "master"; Outcome = "UpToDate"; DefaultBranch = $null; DefaultBranchOutcome = $null; StashName = $null } }
+
+			Update-Repositories -All -Quiet -NoClone
+
+			Should -Invoke Write-LogStep -Times 2 -Exactly -ParameterFilter { $Message -match "^=> \[(Mike|Zulu)\] master - up to date$" -and $Style -in @($null, "", "Step") }
+		}
+
+		It "colors each count of the totals line like its lines: updated green, up to date white, need attention red, skipped yellow" {
 			Mock Write-LogSegments { $script:Totals = $Segments }
 
 			Update-Repositories -All -Quiet -NoClone
 
-			$counts = @($script:Totals | Where-Object { $_.Style })
-			($counts | ForEach-Object { "$($_.Text)=$($_.Style)" }) -join "|" |
-				Should -Be "1 updated=Info|0 up to date=Success|1 need attention=Error|1 skipped=Warning"
-			@($script:Totals | Where-Object { -not $_.Style }).Count | Should -Be 4
+			($script:Totals | ForEach-Object { "$($_.Text)=$($_.Style)" }) -join "|" |
+				Should -Be "=> Repositories => =|1 updated=Success|, =|0 up to date=|, =|1 need attention=Error|, =|1 skipped=Warning"
 		}
 
 		It "prints no summary without -Quiet" {
@@ -362,8 +369,8 @@ Describe "Update-Repositories" {
 
 			Update-Repositories -All -Quiet
 
-			Should -Invoke Write-LogSuccess -Times 2 -Exactly -ParameterFilter { $Message -match "^\[(Mike|Zulu)\]" -and -not $NoLeadingNewline }
-			Should -Invoke Write-LogSuccess -Times 1 -Exactly -ParameterFilter { $Message -match "^\[Kilo\]" -and $NoLeadingNewline }
+			Should -Invoke Write-LogStep -Times 2 -Exactly -ParameterFilter { $Message -match "^=> \[(Mike|Zulu)\]" -and -not $NoLeadingNewline }
+			Should -Invoke Write-LogStep -Times 1 -Exactly -ParameterFilter { $Message -match "^=> \[Kilo\]" -and $NoLeadingNewline }
 		}
 
 		It "prints no group heading when the run covers one group" {
@@ -377,7 +384,59 @@ Describe "Update-Repositories" {
 			Update-Repositories -All -Quiet
 
 			Should -Invoke Write-LogTitle -Times 1 -Exactly
-			Should -Invoke Write-LogSuccess -Times 2 -Exactly -ParameterFilter { $Message -match "^\[(Mike|Kilo)\]" -and $NoLeadingNewline }
+			Should -Invoke Write-LogStep -Times 2 -Exactly -ParameterFilter { $Message -match "^=> \[(Mike|Kilo)\]" -and $NoLeadingNewline }
+		}
+	}
+
+	Context "Quiet stash list" {
+		BeforeEach {
+			Mock Resolve-RepositoryTargets {
+				, @(
+					[PSCustomObject]@{ Name = "Mike"; Group = "Beta"; RepositoryUrl = "https://github.com/acme/Mike"; LocalPath = "C:\Repos\Mike" }
+					[PSCustomObject]@{ Name = "Kilo"; Group = "Beta"; RepositoryUrl = "https://github.com/acme/Kilo"; LocalPath = "C:\Repos\Kilo" }
+				)
+			}
+			Mock Test-Path { $true }
+			Mock Get-RepositoryName { Split-Path $RepositoryUrl -Leaf }
+			Mock Update-Repository { [pscustomobject]@{ Name = $Name; LocalPath = $LocalPath; Branch = "master"; Outcome = "UpToDate"; DefaultBranch = $null; DefaultBranchOutcome = $null; StashName = $null } }
+			# Mike holds two stashes, Kilo none; both are the top of their own repository.
+			Mock git {
+				$global:LASTEXITCODE = 0
+				if ($args -contains "stash" -and $args -contains "C:\Repos\Mike") { "stash@{0}: On master: second"; "stash@{1}: On master: first" }
+			}
+		}
+
+		It "lists a repository's stashes under its line, one tab and two tabs in, in white" {
+			Update-Repositories -All -Quiet -NoClone
+
+			Should -Invoke Write-LogStep -Times 1 -Exactly -ParameterFilter { $Message -eq "`t* Stashes =>" -and -not $NoLeadingNewline -and $Style -in @($null, "", "Step") }
+			Should -Invoke Write-LogStep -Times 1 -Exactly -ParameterFilter { $Message -eq "`t`t* stash@{0}: On master: second" -and $NoLeadingNewline -and $Style -in @($null, "", "Step") }
+			Should -Invoke Write-LogStep -Times 1 -Exactly -ParameterFilter { $Message -eq "`t`t* stash@{1}: On master: first" -and $NoLeadingNewline -and $Style -in @($null, "", "Step") }
+			Should -Invoke Write-LogStep -Times 1 -Exactly -ParameterFilter { $Message -match "Stashes" }
+		}
+
+		It "separates the next repository from a stash list with a blank line" {
+			Update-Repositories -All -Quiet -NoClone
+
+			Should -Invoke Write-LogStep -Times 1 -Exactly -ParameterFilter { $Message -match "^=> \[Kilo\]" -and -not $NoLeadingNewline }
+		}
+
+		It "lists no stashes for a folder that is not the top of its own repository" {
+			Mock git {
+				$global:LASTEXITCODE = 0
+				if ($args -contains "--show-cdup") { "../" }
+				elseif ($args -contains "stash") { "stash@{0}: On master: enclosing" }
+			}
+
+			Update-Repositories -All -Quiet -NoClone
+
+			Should -Invoke Write-LogStep -Times 0 -Exactly -ParameterFilter { $Message -match "Stashes|stash@" }
+		}
+
+		It "lists no stashes without -Quiet" {
+			Update-Repositories -All -NoClone
+
+			Should -Invoke git -Times 0 -Exactly -ParameterFilter { $args -contains "stash" }
 		}
 	}
 
