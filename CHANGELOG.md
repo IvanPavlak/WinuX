@@ -8,6 +8,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-10-27
+
+### Added
+
+- **`Update-Repositories -Quiet` lists the stashes each repository holds.** A stash left behind (a restore that conflicted, one made by hand and forgotten) was invisible in the compact form the startup update prints. Under a repository's line, `-Quiet` now prints `* Stashes =>` one tab in and every `git stash list` entry (`* stash@{0}: On master: MyStash`) two tabs in, all in white, with a blank line before the next repository; a repository without stashes prints nothing extra. Only a folder that is the top of its own repository is asked (`git rev-parse --show-cdup`), so a path inside another repository never shows that repository's stashes, and repositories not cloned, not configured or not a repository are skipped. Without `-Quiet` nothing changes. Tests: `Update-Repositories.Tests.ps1`. Docs: the Git module reference.
+
+### Changed
+
+- **`Update-Repositories -Quiet` colors every repository line, and the totals counts, by bucket: updated green, up to date white, need attention red, skipped yellow.** Before, every line but one needing attention was green and the totals used another palette (updated blue, up to date green), so an updated repository did not stand out from an up-to-date one. Every line now starts with `=>`; one needing attention goes through `Write-LogError` (red, still shown at the `Quiet` log level and recorded in the error log) instead of `Write-LogWarning`, a skipped one is yellow, an up-to-date one white. The line text, the buckets, `Format-RepositoryUpdateResult` and the totals text are unchanged. Tests: `Update-Repositories.Tests.ps1`. Docs: the Git module reference.
+
 ## [1.8.0] - 2026-10-26
 
 ### Changed
@@ -1710,7 +1720,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v1.8.0...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/v1.9.0...HEAD
+[1.9.0]: https://github.com/IvanPavlak/WinuX/compare/v1.8.0...v1.9.0
 [1.8.0]: https://github.com/IvanPavlak/WinuX/compare/v1.7.1...v1.8.0
 [1.7.1]: https://github.com/IvanPavlak/WinuX/compare/v1.7.0...v1.7.1
 [1.7.0]: https://github.com/IvanPavlak/WinuX/compare/v1.6.0...v1.7.0
