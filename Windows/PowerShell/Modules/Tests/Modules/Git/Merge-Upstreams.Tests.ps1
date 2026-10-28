@@ -37,7 +37,7 @@ BeforeAll {
 	# An upstream named winux whose manifest owns Windows/ and mirrors LICENSE, and a fork cloned
 	# from it. -TwoUpstreams gives the fork a second manifest (foundation, owning Unix/).
 	function New-TestPair {
-		param([switch]$TwoUpstreams, [string]$Changelog = "# Changelog`n`n## [Unreleased]`n`n## [2.0.0] - 2026-10-28`n")
+		param([switch]$TwoUpstreams, [string]$Changelog = "# Changelog`n`n## [Unreleased]`n`n## [2.0.0] - 2026-10-28`n", [string]$License = 'MIT')
 		$script:Case++
 		$dir = Join-Path $TestDrive "case$script:Case"
 		$upstream = (Join-Path $dir 'upstream') -replace '\\', '/'
@@ -49,7 +49,7 @@ BeforeAll {
 			'Windows/a.txt'                    = 'a1'
 			'Windows/CHANGELOG.md'             = $Changelog
 			'README.md'                        = 'upstream readme'
-			'LICENSE'                          = 'MIT'
+			'LICENSE'                          = $License
 		} 'initial'
 		& git clone -q $upstream $fork 2>$null
 		if ($TwoUpstreams) {
@@ -174,20 +174,69 @@ Describe "Merge-Upstreams (real git)" -Tag 'Integration' {
 	}
 
 	Context "dry run" {
-		It "merges nothing, lists the declined paths and warns of mirror drift" {
+		It "merges nothing and lists exactly what the real run then stages and puts back" {
 			$pair = New-TestPair -TwoUpstreams
-			Set-TestFiles $pair.Upstream @{ 'Windows/a.txt' = 'a2'; 'README.md' = 'v2'; 'LICENSE' = 'MIT v2' }
+			Set-TestFiles $pair.Upstream @{ 'Windows/a.txt' = 'a2'; 'README.md' = 'v2'; 'Hall/new.md' = 'new' }
 			$head = (& git -C $pair.Fork rev-parse HEAD)
 
-			$result = Merge-Upstreams winux -RepositoryRoot $pair.Fork -DryRun -PassThru
+			$dry = Merge-Upstreams winux -RepositoryRoot $pair.Fork -DryRun -PassThru
 
-			$result.Status | Should -Be 'DryRun'
+			$dry.Status | Should -Be 'DryRun'
 			(& git -C $pair.Fork rev-parse HEAD) | Should -Be $head
 			Test-MergeInProgress $pair.Fork | Should -BeFalse
 			Get-TestFile $pair.Fork 'Windows/a.txt' | Should -Be 'a1'
-			$result.Taken['own'] | Should -Contain 'M Windows/a.txt'
-			$result.Declined | Should -Contain 'M README.md'
-			$result.MirrorDrift | Should -Be @('LICENSE')
+			$dry.Taken['own'] | Should -Be @('M Windows/a.txt')
+			$dry.Declined | Should -Contain 'U README.md' -Because "the fork edited README.md too, so the merge conflicts there, and putting it back resolves it"
+			$dry.Declined | Should -Contain 'A Hall/new.md'
+			$dry.Conflicts.Count | Should -Be 0 -Because "a conflict in a declined path is resolved by putting it back"
+
+			$real = Merge-Upstreams winux -RepositoryRoot $pair.Fork -PassThru
+
+			$real.Status | Should -Be 'Staged'
+			@(& git -C $pair.Fork diff --cached --name-only) | Should -Be @($dry.Taken['own'] | ForEach-Object { ($_ -split ' ', 2)[1] })
+			@($real.Declined | Sort-Object) | Should -Be @($dry.Declined | ForEach-Object { ($_ -split ' ', 2)[1] } | Sort-Object)
+		}
+
+		It "lists nothing the branch already has, however much the upstream changed" {
+			$pair = New-TestPair -TwoUpstreams
+			Set-TestFiles $pair.Fork @{ 'Windows/a.txt' = 'a2'; 'README.md' = 'fork readme v2' }
+			Set-TestFiles $pair.Upstream @{ 'Windows/a.txt' = 'a2'; 'README.md' = 'fork readme v2' }
+
+			$dry = Merge-Upstreams winux -RepositoryRoot $pair.Fork -DryRun -PassThru
+
+			@($dry.Taken.Values | ForEach-Object { $_ }).Count | Should -Be 0
+			$dry.Declined.Count | Should -Be 0
+		}
+
+		It "predicts a conflict in a taken path without starting a merge" {
+			$pair = New-TestPair
+			Set-TestFiles $pair.Fork @{ 'Windows/a.txt' = 'fork side' }
+			Set-TestFiles $pair.Upstream @{ 'Windows/a.txt' = 'upstream side' }
+
+			$dry = Merge-Upstreams winux -RepositoryRoot $pair.Fork -DryRun -PassThru
+
+			$dry.Status | Should -Be 'DryRun'
+			$dry.Conflicts | Should -Be @('Windows/a.txt')
+			Test-MergeInProgress $pair.Fork | Should -BeFalse
+			(Merge-Upstreams winux -RepositoryRoot $pair.Fork -PassThru).Conflicts | Should -Be $dry.Conflicts
+		}
+
+		It "warns of a mirror file whose merged copy would differ from the upstream's" {
+			$pair = New-TestPair -License "line 1`nline 2`nline 3`nline 4`n"
+			Set-TestFiles $pair.Fork @{ 'LICENSE' = "line 1 mine`nline 2`nline 3`nline 4`n" }
+			Set-TestFiles $pair.Upstream @{ 'LICENSE' = "line 1`nline 2`nline 3`nline 4 theirs`n"; 'Windows/a.txt' = 'a2' }
+
+			(Merge-Upstreams winux -RepositoryRoot $pair.Fork -DryRun -PassThru).MirrorDrift | Should -Be @('LICENSE')
+		}
+
+		It "does not warn of a mirror file the merge simply takes" {
+			$pair = New-TestPair
+			Set-TestFiles $pair.Upstream @{ 'LICENSE' = 'MIT v2' }
+
+			$dry = Merge-Upstreams winux -RepositoryRoot $pair.Fork -DryRun -PassThru
+
+			$dry.Taken['mirror'] | Should -Be @('M LICENSE')
+			$dry.MirrorDrift.Count | Should -Be 0
 		}
 
 		It "does not refuse a dirty working tree" {
@@ -198,7 +247,6 @@ Describe "Merge-Upstreams (real git)" -Tag 'Integration' {
 			(Merge-Upstreams winux -RepositoryRoot $pair.Fork -DryRun -PassThru).Status | Should -Be 'DryRun'
 		}
 	}
-
 	Context "refusals and stops" {
 		It "refuses modified tracked files and changes nothing" {
 			$pair = New-TestPair

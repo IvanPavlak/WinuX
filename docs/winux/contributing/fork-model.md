@@ -195,6 +195,10 @@ locations and open a PR. The step-by-step checklist lives in
 Nothing else is configured: no tag refspec, no `--no-tags`, no fork settings file. That is the
 zero-config fork.
 
+A private fork runs no workflow at all: every job of every upstream's workflows is skipped in a
+private repository, so no Actions minutes are spent on it. Run `Run-Tests` locally instead; the public
+upstreams run the same suites on every pull request.
+
 ## Merging upstream updates
 
 ```powershell
@@ -205,8 +209,9 @@ Merge-Upstreams winux
 `--no-commit --no-ff`, applies the ownership rule below to every changed path, and stops with the
 merge staged. It prints what it took, what it declined, the commit message to use
 (`Merge winux master: 2.0.0`) and the push command; it never commits, pushes or rebases. Review with
-`git diff --cached`, then commit - or undo everything with `git merge --abort`. `-DryRun` lists the
-same without merging. A plain `git merge winux/master` still works for a fork of WinuX alone; the
+`git diff --cached`, then commit - or undo everything with `git merge --abort`. `-DryRun` lists exactly what the
+real run would take, put back and stop on as a conflict, without merging: `git merge-tree` computes the same
+merge without touching your index or working tree (git 2.38 or newer). A plain `git merge winux/master` still works for a fork of WinuX alone; the
 command adds the ownership rule, which matters as soon as a fork has two upstreams.
 
 Because your personal settings live in the override (not the tracked base config), your apps live in the
@@ -249,7 +254,7 @@ every changed path is handled by exactly one rule:
 "Put back" deletes nothing, in the upstream or in the fork: it declines to copy the upstream's version
 over yours and lists every declined path. Any declined file is one command away:
 `git show winux/master:README.md`. A new hallway file an upstream adds is declined and listed, and you
-decide - a `take` line adopts it. A `mirror` file the upstream changed whose bytes differ from yours is
+decide - a `take` line adopts it. A `mirror` file whose merged copy would differ from the upstream's is
 flagged by `-DryRun` (the contract is broken somewhere; take it from the upstream that is right).
 
 WinuX's rooms are `Windows/`, `docs/winux/`, its workflows (`winux.yml`, `winux-release.yml`, `lint.yml`,

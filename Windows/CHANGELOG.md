@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.0.1] - 2026-10-28
+
+### Fixed
+
+- **`Merge-Upstreams -DryRun` lists exactly what the merge would do.** It listed everything the upstream changed since the last merge, so a fork that already had a change saw hundreds of paths "taken" and "declined" that the real run never touched, and it could not say which conflicts the real run would stop on. It now has `git merge-tree` (git 2.38 or newer) compute the same merge, with the same attributes and merge drivers, into a tree of its own, touching neither the index nor the working tree. It lists the paths that tree changes against HEAD: what the real run would take, what it would put back (a conflict there included, since putting back resolves it), and the conflicts it would stop on. The mirror drift warning now means what it says: a mirror file whose merged copy would differ from the upstream's. Tests: `Merge-Upstreams.Tests.ps1` (the dry run is checked against the real run). Docs: the Git module reference and the Fork Model.
+- **No workflow job runs in a private repository.** A private fork that merges WinuX carried its workflows too, and every push to it ran the Pester suite on a Windows runner, the lint and the release checks, spending the fork's Actions minutes on suites the public upstream already runs on every pull request. Every job of `winux.yml`, `lint.yml`, `release.yml` and `winux-release.yml` now has `if: ${{ !github.event.repository.private }}`, the guard Foundation's macOS job already had, so a private fork starts none of them; WinuX itself is public, where nothing changes. Docs: the Fork Model.
 ## [2.0.0] - 2026-10-28
 
 ### Added
@@ -1748,7 +1754,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.0.0...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.0.1...HEAD
+[2.0.1]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.0.0...winux/v2.0.1
 [2.0.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v1.9.0...winux/v2.0.0
 [1.9.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v1.8.0...winux/v1.9.0
 [1.8.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v1.7.1...winux/v1.8.0

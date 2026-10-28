@@ -26,6 +26,9 @@ permissions:
 jobs:
   test:
     name: Pester Tests
+    # Never in a private repository: a private fork runs the suites locally through Run-Tests, so no
+    # Actions minutes are spent on it. The public upstream always runs it.
+    if: ${{ !github.event.repository.private }}
     runs-on: windows-latest
     steps:
       - name: Checkout
@@ -109,6 +112,7 @@ jobs:
   # only in the repository the manifest's url names; a fork's mirror files are its own.
   mirror:
     name: Mirror contract
+    if: ${{ !github.event.repository.private }}   # never in a private repository (see the test job)
     runs-on: ubuntu-latest
     env:
       SIBLING: IvanPavlak/Foundation
