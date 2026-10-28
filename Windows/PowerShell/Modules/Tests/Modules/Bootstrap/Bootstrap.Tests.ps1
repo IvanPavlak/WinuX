@@ -173,15 +173,6 @@ Describe "Bootstrap" {
 		Should -Invoke Set-ItemProperty -Times 1 -Exactly -ParameterFilter { $Name -eq 'LockedStartLayout' }
 	}
 
-	It "runs the AI artifacts step for a deprecated step name, once" {
-		$global:MachineType = 'Laptop'
-		$global:Configuration.BootstrapConfig = @{ Steps = @{ CoreAiRules = $true; AiSkills = $true; AiMods = $false } }
-
-		Bootstrap
-
-		Should -Invoke Deploy-AiArtifacts -Times 1 -Exactly
-	}
-
 	It "checks the configuration schema once before the steps run" {
 		$global:MachineType = 'Laptop'
 
@@ -325,9 +316,9 @@ Describe "Bootstrap" {
 		Should -Invoke Update-Repositories -Times 0
 	}
 
-	It "skips WSL steps when BootstrapConfig.WSLSetup disables them for the machine type" {
+	It "skips WSL steps when BootstrapConfig.Steps.WSL disables them for the machine type" {
 		$global:MachineType = 'Test'
-		$global:Configuration.BootstrapConfig = @{ WSLSetup = @{ Default = $true; Test = $false } }
+		$global:Configuration.BootstrapConfig = @{ Steps = @{ WSL = @{ Default = $true; Test = $false } } }
 
 		Bootstrap
 
@@ -338,9 +329,9 @@ Describe "Bootstrap" {
 		Should -Invoke Update-Repositories -Times 0
 	}
 
-	It "runs WSL steps when WSLSetup does not cover the machine type and has no Default" {
+	It "runs WSL steps when Steps.WSL does not cover the machine type and has no Default" {
 		$global:MachineType = 'Laptop'
-		$global:Configuration.BootstrapConfig = @{ WSLSetup = @{ Test = $false } }
+		$global:Configuration.BootstrapConfig = @{ Steps = @{ WSL = @{ Test = $false } } }
 
 		Bootstrap
 

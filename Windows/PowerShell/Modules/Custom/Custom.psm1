@@ -1,4 +1,4 @@
-# Loader for the fork-owned Custom area (see docs/contributing/fork-model.md - the Custom area).
+# Loader for the fork-owned Custom area (see docs/winux/contributing/fork-model.md - the Custom area).
 #
 # Aggregates fork-local function files from the mirror payload directories next to this file:
 #   Modules/Custom/<Module>/Functions/*.ps1   (e.g. Modules/Custom/Application/Functions)

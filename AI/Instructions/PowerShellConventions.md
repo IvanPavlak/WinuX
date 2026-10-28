@@ -202,10 +202,10 @@ The docsify docs under `docs/` are the SINGLE SOURCE OF TRUTH. `README.md` at th
 
 Any function that is added, renamed, removed, or whose parameters or caller-visible behavior change MUST update these surfaces in the same change:
 
-- `docs/modules/<Module>.md` - the function's man-style entry: a `## [FunctionName](<github-source-url>)` heading followed IMMEDIATELY by a contiguous `- **Key:** value` bullet block (Description first, then Parameters / Usage / Alias as applicable; omit a bullet when not applicable). Optional human-only prose, parameter tables, examples, and a `**See also:**` line may follow after a blank line. Entries are alphabetical within the page.
+- `docs/winux/modules/<Module>.md` - the function's man-style entry: a `## [FunctionName](<github-source-url>)` heading followed IMMEDIATELY by a contiguous `- **Key:** value` bullet block (Description first, then Parameters / Usage / Alias as applicable; omit a bullet when not applicable). Optional human-only prose, parameter tables, examples, and a `**See also:**` line may follow after a blank line. Entries are alphabetical within the page.
 - The module's `.psd1` `FunctionsToExport` - keep it in sync with the function's existence/name.
 - After editing, run `List-Functions -ListDiscrepancies` (it PARSES the module pages) and confirm it reports none.
 
-`docs/docs_overview.md` is the internal maintenance reference (process + per-module index); `_sidebar.md` changes only when adding/removing a page. Use genericized example values in docs (placeholders like MyProject, MyRepo, GroupName, Work-PC) - no real personal/work identifiers.
+`docs/winux/docs_overview.md` is the internal maintenance reference (process + per-module index); `_sidebar.md` changes only when adding/removing a page. Use genericized example values in docs (placeholders like MyProject, MyRepo, GroupName, Work-PC) - no real personal/work identifiers.
 
 Keep entries consistent with the function's comment-based help, and mention new cross-function interactions in the entries of both functions involved. Exact formats live in `AI/Instructions/DocumentationStyle.md`. Treat skipped doc updates as an incomplete change - verify the function name appears in `modules/<Module>.md` and `FunctionsToExport`, and that `List-Functions -ListDiscrepancies` is clean, before considering the work done.

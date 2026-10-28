@@ -25,8 +25,13 @@ Describe "Documentation Link Validity" {
 	}
 
 	Context "Sidebar links resolve to existing files" {
-		It "All _sidebar.md links exist on disk" {
-			$sidebarPath = Join-Path $DocsRoot "_sidebar.md"
+		# The site landing (docs/_sidebar.md) and every project's own sidebar (docs/winux/_sidebar.md,
+		# and any other docs/<project>/_sidebar.md) use docsify's site-root links.
+		It "All links of '<_>' exist on disk" -ForEach @(
+			Get-ChildItem -Path (Join-Path (Get-RepositoryPath).Repo "docs") -Recurse -Filter "_sidebar.md" |
+				ForEach-Object { [System.IO.Path]::GetRelativePath((Join-Path (Get-RepositoryPath).Repo "docs"), $_.FullName) }
+		) {
+			$sidebarPath = Join-Path $DocsRoot $_
 			$content = Get-Content $sidebarPath -Raw
 			$links = [regex]::Matches($content, '\(/([^)]+\.md)\)') |
 				ForEach-Object { $_.Groups[1].Value }

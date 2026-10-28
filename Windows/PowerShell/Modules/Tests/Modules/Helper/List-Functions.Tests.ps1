@@ -38,7 +38,7 @@ Describe "List-Functions -ListDiscrepancies" {
 		$script:ModulesRoot = Join-Path $script:FixtureRoot "Modules"
 		$moduleDir = Join-Path $script:ModulesRoot "FakeArea"
 
-		New-Item -ItemType Directory -Path (Join-Path $script:DocsRoot "modules") -Force | Out-Null
+		New-Item -ItemType Directory -Path (Join-Path $script:DocsRoot "winux\modules") -Force | Out-Null
 		New-Item -ItemType Directory -Path $moduleDir -Force | Out-Null
 
 		Set-Content -LiteralPath (Join-Path $moduleDir "FakeArea.psm1") -Value @(
@@ -47,7 +47,7 @@ Describe "List-Functions -ListDiscrepancies" {
 			'Export-ModuleMember -Function Get-FakeDocumented, Get-FakeUndocumented'
 		)
 
-		Set-Content -LiteralPath (Join-Path $script:DocsRoot "modules\fakearea.md") -Value @(
+		Set-Content -LiteralPath (Join-Path $script:DocsRoot "winux\modules\fakearea.md") -Value @(
 			'# FakeArea Module'
 			''
 			'## [Get-FakeDocumented](https://example.invalid/Get-FakeDocumented.ps1)'

@@ -26,16 +26,15 @@ function Bootstrap {
 		3. Execution policy, Developer Mode, power plan, power button actions
 		4. System theme, locale, display language, keyboard layouts
 		5. Nerd Font, PowerShell modules, special folder redirections
-		6. WSL configuration (Steps.WSL; deprecated BootstrapConfig.WSLSetup still honored)
+		6. WSL configuration (Steps.WSL)
 		7. WinGet, Scoop, and Chocolatey - install package managers then apps from CSVs
 		8. Upgrade all packages, fork-defined personal steps (BootstrapConfig.PersonalSteps, optionally machine-gated), .NET EF CLI
 		9. Environment variables, Conda environments, NuGet config, taskbar pins, then
 		   Set-TaskbarSettings and Set-VisualEffects (no step toggle - both no-op until their
 		   configuration sections are set)
 		10. WSL environment initialization, symbolic links, AI artifacts - skills, mods, rules,
-		    prompts and agents, on Windows and in WSL (opt-in via Steps.AiArtifacts; the deprecated
-		    step names CoreAiRules, AiSkills and AiMods are its aliases), Claude Code plugin marketplaces
-		    and their plugins (opt-in via Steps.AiMarketplaces), the MCP servers of Claude Code and
+		    prompts and agents, on Windows and in WSL (opt-in via Steps.AiArtifacts), Claude Code
+		    plugin marketplaces and their plugins (opt-in via Steps.AiMarketplaces), the MCP servers of Claude Code and
 		    Codex (opt-in via Steps.AiMcpServers), Obsidian CLI flag (opt-in via
 		    Steps.ObsidianCli), VS Code profiles (opt-in via Steps.VSCodeProfiles), WSL SSH setup
 		    (WSL steps use the same gate)
@@ -193,9 +192,8 @@ function Bootstrap {
 
 		Restart-Explorer
 
-		# WSL provisioning is config-driven via Steps.WSL (deprecated BootstrapConfig.WSLSetup
-		# is honored when Steps carries no WSL entry - see Resolve-BootstrapSteps). Nothing else
-		# in Bootstrap depends on WSL, so minimal profiles (fresh test VMs) skip the Ubuntu
+		# WSL provisioning is config-driven via Steps.WSL. Nothing else in Bootstrap depends on
+		# WSL, so minimal profiles (fresh test VMs) skip the Ubuntu
 		# download, the interactive first-launch account setup, and the reboot it needs.
 		if ($steps.WSL) {
 			Configure-WSL
@@ -274,18 +272,17 @@ function Bootstrap {
 
 		if ($steps.SymbolicLinks) { SymbolicLinkMaker } else { Write-LogWarning "Symbolic links skipped (BootstrapConfig.Steps.SymbolicLinks)" }
 
-		# Machine-global AI artifacts (docs/ai/artifacts.md) - links the skills, mods, rules, prompts
+		# Machine-global AI artifacts (docs/winux/ai/artifacts.md) - links the skills, mods, rules, prompts
 		# and agents under AiArtifacts.Root into the apps AiArtifacts.Deploy names, on Windows and in WSL.
-		# The base deploys into no app, so this is opt-in. The deprecated step names CoreAiRules,
-		# AiSkills and AiMods resolve to it (Resolve-BootstrapSteps).
+		# The base deploys into no app, so this is opt-in.
 		if ($steps.AiArtifacts) { Deploy-AiArtifacts } else { Write-LogWarning "AI artifacts skipped - opt in via BootstrapConfig.Steps.AiArtifacts" }
 
-		# Claude Code plugin marketplaces (docs/ai/mods.md) - registers every marketplace under
+		# Claude Code plugin marketplaces (docs/winux/ai/mods.md) - registers every marketplace under
 		# AiMarketplaces.Marketplaces in the user settings, seeds the plugins' options and installs the
 		# plugins through the CLI. The base names no marketplaces, so this is opt-in as well.
 		if ($steps.AiMarketplaces) { Deploy-AiMarketplaces } else { Write-LogWarning "AI marketplaces skipped - opt in via BootstrapConfig.Steps.AiMarketplaces" }
 
-		# MCP servers (docs/ai/mcp-servers.md) - adds every server under AiMcpServers.Servers to the
+		# MCP servers (docs/winux/ai/mcp-servers.md) - adds every server under AiMcpServers.Servers to the
 		# apps AiMcpServers.Deploy names (Claude Code through its CLI, Codex in its config.toml), on
 		# Windows and in WSL. The base names no servers, so this is opt-in as well.
 		if ($steps.AiMcpServers) { Deploy-AiMcpServers } else { Write-LogWarning "AI MCP servers skipped - opt in via BootstrapConfig.Steps.AiMcpServers" }
@@ -296,7 +293,7 @@ function Bootstrap {
 		# started on yet. Opt-in: it edits another application's settings file.
 		if ($steps.ObsidianCli) { Enable-ObsidianCli -CreateIfMissing } else { Write-LogWarning "Obsidian CLI skipped - opt in via BootstrapConfig.Steps.ObsidianCli" }
 
-		# VS Code profiles (docs/configuration/guides/application/Deploy-VSCodeProfiles.md) - links
+		# VS Code profiles (docs/winux/configuration/guides/application/Deploy-VSCodeProfiles.md) - links
 		# the profile files of every catalogue entry VSCodeProfiles.Deploy names for this machine
 		# type and installs their extensions. Runs after the package managers so VS Code is
 		# installed. The base catalogue is empty, so this is opt-in as well.

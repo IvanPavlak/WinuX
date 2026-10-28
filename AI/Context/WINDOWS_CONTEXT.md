@@ -16,11 +16,11 @@ Never do these without the user explicitly asking for that exact action in the c
 
 If such an action seems warranted, STOP and ask first, stating exactly what you intend to do, and wait for explicit confirmation. Default to the least destructive path. Creating/editing files for the task at hand and running read-only/verification commands are fine.
 
-## 📌 Authoritative Function Reference: `docs/modules/*.md`
+## 📌 Authoritative Function Reference: `docs/winux/modules/*.md`
 
-The AUTHORITATIVE, always-current function reference is now `docs/modules/<module>.md` - man-style entries (one `## [FunctionName](<source-url>)` heading per function, followed by a contiguous `- **Key:** value` bullet block) that `List-Functions` parses directly. The docsify docs under `docs/` are the SINGLE SOURCE OF TRUTH.
+The AUTHORITATIVE, always-current function reference is now `docs/winux/modules/<module>.md` - man-style entries (one `## [FunctionName](<source-url>)` heading per function, followed by a contiguous `- **Key:** value` bullet block) that `List-Functions` parses directly. The docsify docs under `docs/` are the SINGLE SOURCE OF TRUTH.
 
-**This context document is a convenience snapshot that may lag the actual code.** When the listing below and a module page disagree, DEFER to the module page. Do not rewrite or expand the full function listing here; consult `docs/modules/*.md` for authoritative, up-to-date details.
+**This context document is a convenience snapshot that may lag the actual code.** When the listing below and a module page disagree, DEFER to the module page. Do not rewrite or expand the full function listing here; consult `docs/winux/modules/*.md` for authoritative, up-to-date details.
 
 ## Module Architecture
 
@@ -58,7 +58,7 @@ $Functions | ForEach-Object { Export-ModuleMember -Function $_.BaseName }
 
 The full, current function reference - every function with its parameters, usage, and aliases - lives in the per-module docsify pages and is parsed by `List-Functions`. Those pages are the single source of truth; this context file intentionally does NOT duplicate the function lists, to avoid drift.
 
-- `docs/modules/`: `ai.md`, `application.md`, `bootstrap.md`, `configuration.md`, `git.md`, `helper.md`, `system.md`, `window.md`, `workflow.md`, `tests.md`
+- `docs/winux/modules/`: `ai.md`, `application.md`, `bootstrap.md`, `configuration.md`, `git.md`, `helper.md`, `system.md`, `window.md`, `workflow.md`, `tests.md`
 
 For an in-session view, run `List-Functions` or `List-Functions -Category <Module>`; `List-Functions -ListDiscrepancies` confirms the docs match the loaded functions.
 

@@ -80,7 +80,7 @@
 .PARAMETER UpdateContractBaseline
 	Release step, runs no tests: rewrites ContractBaseline.json from the working tree - the
 	exported functions with their parameters and the shipped Configuration.psd1's keys, stamped
-	with the newest released version in CHANGELOG.md - keeping the Deprecated records that still
+	with the newest released version in Windows/CHANGELOG.md - keeping the Deprecated records that still
 	apply. The Infrastructure-Contract gate holds every later change to it.
 
 .PARAMETER Worker
@@ -490,9 +490,9 @@ if ($UpdateContractBaseline) {
 	}
 	$repoRoot = Split-Path -Path (Split-Path -Path $script:PowerShellRoot -Parent) -Parent
 	$baselineFile = Join-Path -Path $PSScriptRoot -ChildPath 'ContractBaseline.json'
-	$released = @((Get-ChangelogReleases -Path (Join-Path $repoRoot 'CHANGELOG.md')).Releases)
+	$released = @((Get-ChangelogReleases -Path (Join-Path $repoRoot 'Windows\CHANGELOG.md')).Releases)
 	if ($released.Count -eq 0) {
-		Write-Host -ForegroundColor Red "`n=> CHANGELOG.md has no released version to stamp the baseline with."
+		Write-Host -ForegroundColor Red "`n=> Windows/CHANGELOG.md has no released version to stamp the baseline with."
 		exit 2
 	}
 	$previous = $null

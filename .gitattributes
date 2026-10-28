@@ -2,7 +2,7 @@
 #
 # WinuX is meant to be forked. Your fork keeps its own version of the files listed below while still
 # pulling engine, module, and documentation improvements from upstream. The "ours" merge driver makes
-# `git merge upstream/master` keep YOUR copy of a listed file whenever both you and upstream changed it.
+# `git merge winux/master` keep YOUR copy of a listed file whenever both you and upstream changed it.
 # Git only runs a merge driver when both sides changed the file: a listed file you never edited simply
 # follows upstream (it is still the generic one) until you do, and an upstream deletion of a file you
 # edited is a modify/delete conflict you resolve by hand.

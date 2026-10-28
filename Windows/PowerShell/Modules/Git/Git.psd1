@@ -1,9 +1,10 @@
-﻿@{
+@{
 	ModuleVersion     = "1.0"
 	Author            = "Ivan Pavlak"
 	Description       = ""
 	RootModule        = "Git.psm1"
 	FunctionsToExport = @(
+		'ConvertFrom-UpstreamManifest',
 		'Format-RepositoryUpdateResult',
 		'Get-RepositoryUpdateDayStart',
 		'Get-RepositoryUpdateStartupSettings',
@@ -19,9 +20,12 @@
 		'Install-Git',
 		'Invoke-RepositoryUpdatePromptCheck',
 		'Invoke-StartupRepositoryUpdate',
+		'Merge-Upstreams',
 		'Register-RepositoryUpdatePromptCheck',
 		'Resolve-RepositoryDefaultBranch',
 		'Resolve-RepositoryTargets',
+		'Resolve-UpstreamPathClass',
+		'Resolve-UpstreamRemote',
 		'Restore-RepositoryStash',
 		'Set-GitConsoleColor',
 		'Test-GitRepository',

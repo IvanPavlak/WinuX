@@ -12,7 +12,7 @@ Describe "Contract" {
 		deep - plus the Deprecated records. This gate fails a change that:
 
 		- removes an exported function, a parameter or a configuration key, or makes a parameter
-		  mandatory, unless [Unreleased] in CHANGELOG.md sanctions it: a "### Removed" entry naming
+		  mandatory, unless [Unreleased] in Windows/CHANGELOG.md sanctions it: a "### Removed" entry naming
 		  an item deprecated in an earlier release, or a "### Breaking" entry (Test-ContractCompatibility);
 		- releases a version whose bump does not match its changelog section - a removal outside a
 		  MAJOR, a MAJOR that removes nothing, an addition in a PATCH (Test-ChangelogVersionBumps);
@@ -27,7 +27,7 @@ Describe "Contract" {
 
 		$RepoPaths = Get-RepositoryPath
 		$BaselineFile = Join-Path $TestsRoot "ContractBaseline.json"
-		$Changelog = Get-ChangelogReleases -Path (Join-Path $RepoPaths.Repo "CHANGELOG.md")
+		$Changelog = Get-ChangelogReleases -Path (Join-Path $RepoPaths.Repo "Windows\CHANGELOG.md")
 		$Baseline = if (Test-Path -LiteralPath $BaselineFile) { Get-Content -LiteralPath $BaselineFile -Raw | ConvertFrom-Json } else { $null }
 	}
 
@@ -35,7 +35,7 @@ Describe "Contract" {
 		$BaselineFile | Should -Exist -Because "the baseline is what every change is held to; create it with Run-Tests -UpdateContractBaseline"
 	}
 
-	It "has a baseline taken at the newest release in CHANGELOG.md" {
+	It "has a baseline taken at the newest release in Windows/CHANGELOG.md" {
 		$Baseline.Version | Should -Be $Changelog.Releases[0].Version -Because "every release refreshes the baseline in its release commit: Run-Tests -UpdateContractBaseline"
 	}
 

@@ -180,7 +180,7 @@ function Validate-Layout {
 			if ($wt -and $wt -ne 'Browser' -and $wt -match $legacyTitlePattern) { $legacySeen = $true; break }
 		}
 		if ($legacySeen) {
-			$result.Warnings += "Layout uses legacy hardcoded browser-alternation regex for ProcessName/WindowTitle. Consider replacing with the 'Browser' token (e.g. ProcessName = 'Browser') - see docs/modules/window.md."
+			$result.Warnings += "Layout uses legacy hardcoded browser-alternation regex for ProcessName/WindowTitle. Consider replacing with the 'Browser' token (e.g. ProcessName = 'Browser') - see docs/winux/modules/window.md."
 		}
 	}
 

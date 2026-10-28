@@ -26,16 +26,6 @@ function Resolve-BootstrapSteps {
 		(links VS Code profile files, registers profiles in VS Code's state and
 		installs extensions), and LockedStartLayout.
 
-		Legacy alias: when Steps.WSL is absent but the deprecated
-		BootstrapConfig.WSLSetup exists, WSL resolves from WSLSetup, so
-		forks that predate Steps keep working unmodified.
-
-		Deprecated step names (1.6.0, removed in 2.0.0): CoreAiRules, AiSkills
-		and AiMods are aliases of AiArtifacts. When Steps carries no AiArtifacts
-		entry, AiArtifacts resolves on when any of them does; in -Skip and
-		-Include they stand for AiArtifacts. The returned map carries
-		AiArtifacts only.
-
 		Returns an ordered hashtable of step name -> boolean, in Bootstrap
 		execution order. Bootstrap calls this exactly once per invocation.
 		The only side effect is a warning for each step that appears in both
@@ -111,33 +101,7 @@ function Resolve-BootstrapSteps {
 	$bootstrapConfig = Get-ConfigSetting -Path 'BootstrapConfig'
 	if ($bootstrapConfig -is [hashtable]) {
 		$configSteps = $bootstrapConfig.Steps
-
-		# Deprecated-alias fallback: honor WSLSetup only when Steps carries no
-		# WSL entry of its own. Work on a copy so the merged global config is
-		# never mutated.
-		$legacyWslSetup = $bootstrapConfig.WSLSetup
-		if ($null -ne $legacyWslSetup -and -not ($configSteps -is [hashtable] -and $configSteps.ContainsKey('WSL'))) {
-			$configSteps = if ($configSteps -is [hashtable]) { $configSteps.Clone() } else { @{} }
-			$configSteps['WSL'] = $legacyWslSetup
-		}
 	}
-
-	# Deprecated step aliases (1.6.0): CoreAiRules, AiSkills and AiMods stand for AiArtifacts.
-	# In config they count only when Steps carries no AiArtifacts entry; any one of them on turns
-	# it on for this machine type. Work on a copy so the merged global config is never mutated.
-	$aliases = @('CoreAiRules', 'AiSkills', 'AiMods')
-	if ($configSteps -is [hashtable] -and -not $configSteps.ContainsKey('AiArtifacts')) {
-		$present = @($aliases | Where-Object { $configSteps.ContainsKey($_) })
-		if ($present.Count -gt 0) {
-			$aliasDefaults = [ordered]@{}
-			foreach ($alias in $present) { $aliasDefaults[$alias] = $false }
-			$aliasStates = Resolve-Steps -Defaults $aliasDefaults -ConfigSteps $configSteps
-			$configSteps = $configSteps.Clone()
-			$configSteps['AiArtifacts'] = [bool](@($aliasStates.Values) -contains $true)
-		}
-	}
-	if ($Skip) { $Skip = @($Skip | ForEach-Object { if ($aliases -contains $_) { 'AiArtifacts' } else { $_ } }) }
-	if ($Include) { $Include = @($Include | ForEach-Object { if ($aliases -contains $_) { 'AiArtifacts' } else { $_ } }) }
 
 	return Resolve-Steps -Defaults $defaults -ConfigSteps $configSteps -Skip $Skip -Include $Include
 }

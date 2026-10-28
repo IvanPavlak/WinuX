@@ -18,7 +18,7 @@
 # everywhere, so this file is inert until you opt in twice.
 #
 # Get-FastfetchLogoArgument (System module) owns the per-terminal decision, the configuration
-# lookup and the sixel pipeline - see docs/modules/system.md. The short version of why Windows
+# lookup and the sixel pipeline - see docs/winux/modules/system.md. The short version of why Windows
 # Terminal needs one: fastfetch cannot measure a character cell in pixels on Windows, so its own
 # sixel and chafa paths fail to a placeholder, and the image has to be encoded to size beforehand
 # and passed through with --logo-type raw.
@@ -50,7 +50,7 @@
 # appearance cannot be said on its command line either. --text-colors takes ANSI indices 0-15 and
 # rejects everything above, so a true color is unreachable; and the ":" after each field name is
 # hardcoded, with no flag that replaces it. Both are reachable afterwards, in the SGR stream
-# onefetch writes - which is what Format-OnefetchPanel rewrites. See docs/modules/system.md.
+# onefetch writes - which is what Format-OnefetchPanel rewrites. See docs/winux/modules/system.md.
 #
 # The same terminal guard covers it, for a different reason than the image: this is where a fork
 # reaches for a true color, and a true color needs a terminal that renders one.

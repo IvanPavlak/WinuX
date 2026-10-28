@@ -1,0 +1,1956 @@
+# Configuration Reference
+
+**`Configuration.psd1`** is the central hub for the entire WinuX system. It contains all settings, paths, and configurations that control how the PowerShell modules behave.
+
+- **Location:** `Windows/PowerShell/Configuration.psd1`
+- **Loaded during:** Bootstrap, profile initialization, manual load via `Load-PathConfiguration`
+- **Global variables produced:** `$global:Configuration`, `$global:MachineSpecificPaths`, `$global:MachineType`
+- **Placeholder system:** Enables machine-independent configuration via `{Dev}`, `{User}`, `{MachineType}`, `{RepoRoot}`, `{AppData}` tokens; `WorkspaceActions` also takes `{Workspace}`, `{SelectedProjects}` and [workspace template](#workspace-templates) variables
+
+---
+
+## Ordered Sections
+
+Every section whose entries become a menu is an **ordered list**: an array of single-key
+hashtables, one per entry, where the key is the entry name and the value is the entry.
+
+```powershell
+WorkspaceActions = @(
+    @{ Default = @( <actions> ) }
+    @{ WinuX   = @( <actions> ) }
+)
+```
+
+The menu follows the order they are written in, and an entry is defined exactly once - there is no
+separate name list to keep in sync with the definitions. A plain hashtable cannot carry the order:
+`Import-PowerShellDataFile` returns a `System.Collections.Hashtable`, and key order is lost at load
+time, so a hashtable-shaped section renders sorted instead of following the file.
+`Test-ConfigurationSchema` reports a section still written as a hashtable.
+
+Sections shaped this way: `BrowserGroups`, `RepositoryGroups`, `ProjectActions`,
+`WorkspaceActions`, `CampaignResources`, `AcrobatPdfGroups`, `WakeOnLanConfig`, `Locales`,
+`KeyboardLayoutSets` and `NerdFonts`. `RunnableProjectMappings` is an ordered record array (each
+record carries its own `Name`) and reads the same way.
+
+Plain hashtables stay plain where order means nothing - a lookup table keyed by machine type
+(`Themes`, `PowerPlans`) or by name (`KeyboardLayouts`, `DisplayLanguages`).
+
+Reading one from PowerShell:
+
+```powershell
+Get-OrderedNames $global:Configuration.WorkspaceActions            # the names, in menu order
+Get-OrderedEntry $global:Configuration.WorkspaceActions "WinuX"    # one entry, by name
+```
+
+---
+
+## Universal Constants
+
+Machine-independent settings that remain the same across all machines.
+
+### Browser Configuration
+
+Defines executable paths and command-line arguments for each browser.
+
+**Keys:**
+
+- `Browsers` - Hashtable mapping browser names to configurations
+    - Each browser: `Exe` (path), `PrivateArg` (privacy mode flag), `NewWindowArg` (new window flag)
+- `DefaultBrowser` - Browser used by `Open-Browser` when no browser specified. The base ships it
+  empty; `Open-Browser` warns and returns until you set one (any `Browsers` key) in
+  `Configuration.local.psd1`.
+
+**Consumer functions:** `Open-Browser`, `Invoke-Browser`, `Open-SecureBrowser`, `Resolve-LayoutTokens` (expands the `Browser` layout token from this map)
+
+**Example (opt-in via `Configuration.local.psd1`):**
+
+```powershell
+Browsers = @{
+    Firefox = @{
+        Exe          = "C:\Program Files\Mozilla Firefox\firefox.exe"
+        PrivateArg   = "-private-window"
+        NewWindowArg = "-new-window"
+    }
+    Tor = @{
+        Exe = "{User}\Tor Browser\Browser\firefox.exe"
+    }
+}
+DefaultBrowser = "Firefox"
+```
+
+### GitHub Configuration
+
+Repository URLs and authentication base.
+
+**Keys:**
+
+- `GitHub.Base` - Authentication base URL (e.g., `https://MyUser@github.com`)
+- `GitHub.Private.*` - Private repositories (dot-notation, e.g., `Private.Dotfiles`)
+- `GitHub.MyOrg.*` - Work organization repositories
+
+**Consumer functions:** `Initialize-Repository`, `Update-Repositories`, `Git-Obsidian`
+
+### Application Executables
+
+Paths to installed applications used by `Open-*` functions.
+
+**Keys:**
+
+- `FirefoxExe`, `LeagueOfLegendsExe`, `SteamExe`, `RiseupVpnExe`, `DbeaverExe`, `TeamViewerExe`, `FoundryVTTExe`, `NotepadPlusPlusExe`, `VisualStudio2026Exe`, `VirtualBoxExe`, `DockerExe`, `OutlookLauncherExe` (what `Open-Outlook` starts the Outlook app through; ships `C:\Windows\explorer.exe`)
+
+**Consumer functions:** `Open-DBeaver`, `Open-Docker`, `Open-FoundryVTT`, `Open-LeagueOfLegends`, `Open-NotepadPlusPlus`, `Open-Outlook`, `Open-RiseupVPN`, `Open-Steam`, `Open-TeamViewer`, `Open-VirtualBox`, `Open-VisualStudio` (each through `Start-Application -ConfigKey`). `Open-Discord`, `Open-Obsidian` and `Open-Acrobat` read no `*Exe` key, and nothing reads `FirefoxExe` (browsers resolve through `Browsers`).
+
+The base ships the personal executable paths (everything except the framework's own tools) empty;
+each `Open-*` consumer warns and no-ops until you set its path in `Configuration.local.psd1`.
+
+### Universal Paths
+
+Common system paths that do not vary by machine.
+
+**Keys:**
+
+- `Desktop` - User's desktop folder (auto-resolved at runtime)
+- `Fonts` - Windows Fonts directory
+- `TaskbarPinFolder` - Quick Launch taskbar pins folder
+- `IconCacheDb`, `IconCacheFolder` - Windows Explorer icon cache
+- `OhMyPoshThemeFile` - Oh-My-Posh theme location
+- `WhatsAppLocalStoragePath` - WhatsApp cache directory
+- `TrainingFile` - The Word document `Open-Training` opens from `PathTemplates.TrainingDirectory`
+  (ships empty - set both in `Configuration.local.psd1` before using `Open-Training`)
+- `FastFetchImageLogo` - **Opt-in.** An image fastfetch renders instead of its text logo, in the
+  terminals that can display one (WezTerm, Windows Terminal). Ships `$null`, which keeps the text
+  logo everywhere. Takes either a **string** (one image for every machine) or a **hashtable keyed
+  by machine type** (each machine its own; a machine with no entry gets none, so adding one never
+  turns the feature on for the others). Placeholders expand inside the map as they do in a plain
+  string. Also needs the `PathTemplates.SymbolicLinks.PowerShell.AllHostsProfile` link, since that
+  is what deploys the profile which applies it. WinuX ships its own logo at
+  `Windows\WinuX\WinuXLogoTransparent.png` to point it at. See
+  [Get-FastfetchLogoArgument](guides/system/Get-FastfetchLogoArgument.md).
+
+**Consumer functions:** `Get-FastfetchLogoArgument` (`FastFetchImageLogo`), `Initialize-OhMyPosh`,
+`Clear-WhatsAppLocalStorage`, `Rebuild-IconCache`, `Configure-NerdFont` (`Fonts`), `Configure-Taskbar`
+(`TaskbarPinFolder`), `Initialize-WSLEnvironment` (`OhMyPoshThemeFile`)
+
+### Process Cleanup
+
+Process lists consumed by the `Kill-All` desktop cleanup flow.
+
+**Keys:**
+
+- `TerminateProcessNames` - Process names force-terminated by `Terminate-AllProcessesByName`. The base configuration ships a minimal example list (`Code`); keep your real cleanup targets in `Configuration.local.psd1` (the override replaces the array wholesale on merge).
+- `VisibleWindowExclusions` - Process names `Terminate-AllProcessesWithVisibleWindows` never force-kills. Browser processes from `Browsers` are excluded automatically. The PowerToys entries are load-bearing (see the warning in the [System module](../modules/system.md#terminate-allprocesseswithvisiblewindows)); never remove them. The list is also what a plain `Open-Workspace` will not take *ownership* of when it claims the screen for [Close-Workspace](../modules/workflow.md#close-workspace) - so the terminal window you typed the open in, Rainmeter, and the rest are never a workspace's to close simply because they happened to be running. A window an open genuinely created is still recorded, whatever its process is called.
+
+Both functions warn and terminate nothing when their list is absent or empty. To toggle whole `Kill-All` steps on/off (not just their process lists), see [Kill-All Step Toggles](#kill-all-step-toggles).
+
+**Consumer functions:** `Terminate-AllProcessesByName`, `Terminate-AllProcessesWithVisibleWindows`
+
+**Example:**
+
+```powershell
+TerminateProcessNames   = @(
+    "Code"
+    "WhatsApp.Root"
+)
+VisibleWindowExclusions = @(
+    "Rainmeter"
+    "WindowsTerminal"
+    "PowerToys"
+)
+```
+
+---
+
+## Machine Type Detection
+
+### Valid Machine Types
+
+Valid hostname-based machine categories.
+
+**Key:** `ValidMachineTypes` - Array of allowed types (e.g., `@("PC", "Laptop", "Work", "Test")`)
+
+### Hostname to Machine Type Mapping
+
+Maps current hostname to machine type for auto-detection.
+
+**Key:** `HostnameToMachineType` - Hashtable mapping hostname → machine type
+
+**Example:**
+
+```powershell
+HostnameToMachineType = @{
+    "DESKTOP-GAMING"     = "PC"
+    "LAPTOP-PERSONAL" = "Laptop"
+}
+```
+
+**Consumer functions:** `DetermineMachineType` (called during Bootstrap)
+
+**Behavior:** If current hostname not found in this map, `DetermineMachineType` prompts interactively.
+
+### Default Machine Type
+
+Fallback machine type if detection fails.
+
+**Key:** `DefaultMachineType`
+
+### Layout Set Overrides
+
+Which machine type a machine's **window-arrangement** settings are read under: the `Layouts/` subfolder its layouts come from, and the `ResetAllWindowsDefaults` profile `Reset-Windows` applies. These two keys affect those settings only - base paths, symbolic links, wallpapers, themes, and the taskbar always keep using the detected machine type.
+
+**Keys:**
+
+- `LayoutMachineTypeOverrides` - Hashtable mapping a detected machine type → the layout machine type to use instead. A non-empty value redirects layout resolution to `Layouts/<value>/<WorkspaceName>_<value>.psd1`; `""` or an absent entry means no override.
+- `SmallDisplayMachineType` - Layout machine type used when the primary display is at most 3000px wide (a laptop-class screen), regardless of the detected type. `""` disables it.
+
+**Example:**
+
+```powershell
+# The desktop is temporarily on a different monitor setup: read its layouts from Layouts/Temp/
+LayoutMachineTypeOverrides = @{
+    PC     = "Temp"
+    Laptop = ""
+    Work   = ""
+    Test   = ""
+}
+
+SmallDisplayMachineType = "Laptop"
+```
+
+**Consumer function:** `Get-LayoutMachineType`, used by `Set-WorkspaceWindowLayout`, `Reset-Windows`, `Resolve-DisplayAwareProfile` (which picks the [display-aware window sizing](#display-aware-window-sizing) row) and `Resolve-WorkspaceActions` (which matches a `LayoutMachine` scope on a [workspace action](#workspace-actions) against the same set, so an action that produces windows for the layout follows the redirect too)
+
+**Behavior:** `LayoutMachineTypeOverrides` is checked first and wins over `SmallDisplayMachineType`, so an explicit choice is never overruled by display-size detection. The override folder needs its own `<WorkspaceName>_<value>.psd1` file per workspace you open; when one is missing, the "No layout configuration found" warning names the active layout set and the path it expected instead of silently falling back to the machine's own layouts. `ResetAllWindowsDefaults` follows the same resolution, so the profile `Reset-Windows` applies matches the monitor setup actually attached - add an entry for the override name (e.g. `Temp`) or it falls back to `Default`.
+
+**Typical use:** a machine that has to run on a monitor setup its layouts were not authored for. Author the new geometry in its own folder, point the override at it, and clear the entry to switch back - the machine's real layout set is never edited.
+
+---
+
+## Base Paths Per Machine Type
+
+Defines root directories for each machine type. Used to expand `{Dev}` and `{User}` placeholders.
+
+**Key:** `BasePaths` - Nested hashtable: `BasePaths.PC.Dev`, `BasePaths.Laptop.Dev`, etc.
+
+**Example:**
+
+```powershell
+BasePaths = @{
+    PC     = @{ Dev = "%USERPROFILE%\Development\GitHub"; User = "%USERPROFILE%" }
+    Laptop = @{ Dev = "%USERPROFILE%\Development\GitHub"; User = "%USERPROFILE%" }
+    Work   = @{ Dev = "%USERPROFILE%\Development\GitHub"; User = "%USERPROFILE%" }
+    Test   = @{ Dev = "%USERPROFILE%\Development\GitHub"; User = "%USERPROFILE%" }
+}
+```
+
+> [!NOTE]
+> `BasePaths` values *define* the `{Dev}`/`{User}` placeholders, so they cannot use them -
+> only environment variables (`%USERPROFILE%`) are expanded inside `BasePaths`.
+
+**Consumer functions:** `Expand-ConfigPaths` (all path-dependent functions)
+
+**Customization:** To use different development directories per machine, update `BasePaths` for each machine type.
+
+---
+
+## Path Templates & Placeholder System
+
+Common paths and templates using placeholder tokens for machine independence.
+
+**Placeholder tokens:**
+
+- `{Dev}` - Machine's development root (from `BasePaths.Dev`)
+- `{User}` - Machine's user root (from `BasePaths.User`)
+- `{MachineType}` - Current machine type (PC, Laptop, Work, Test)
+- `{RepoRoot}` - Dotfiles repository root path (auto-resolved)
+- `{AppData}` - User's `AppData\Roaming` folder
+
+**Key:** `PathTemplates` - Nested hashtable of template paths
+
+**Example:**
+
+```powershell
+PathTemplates = @{
+    ObsidianDirectory                = "{Dev}\Obsidian"
+    TrainingBackupDirectory          = "{Dev}\Training_Backup"
+
+    Projects = @{
+        OtherProject = @{
+            Root     = "{Dev}\OtherProject"
+            Solution = "{Dev}\OtherProject\OtherProject.sln"
+            Api      = "{Dev}\OtherProject\src\OtherProject.Api"
+            Ui       = "{Dev}\OtherProject\src\OtherProject.UI"
+        }
+    }
+}
+```
+
+**Consumer functions:** `Expand-ConfigPaths`, `Expand-Hashtable`, all path-dependent functions
+
+`PathTemplates.TaskbarLayoutFile` ships filled because it is not personal: it is the
+machine-local destination of the generated taskbar layout XML (`C:\ProgramData\provisioning\taskbar_layout.xml`),
+which `Configure-Taskbar` and `Unpin-TaskbarApps` write and the Explorer `StartLayoutFile` policy
+points at. It is never versioned in the repository.
+
+---
+
+## Project Management
+
+Defines projects and their associated actions, terminals, and run configurations.
+
+### Project Actions
+
+Every project the `Open-Project` menu offers, and what opening each one does. This is an
+[ordered section](#ordered-sections): one single-key hashtable per project, the key being the
+project name and the value its action list. The menu follows the order written here, and a project
+is defined exactly once - there is no separate project list.
+
+**Key:** `ProjectActions` → Ordered list of `@{ <ProjectName> = @( <actions> ) }`
+
+Each action is executed in order.
+
+**Action object format:**
+
+```powershell
+@{
+    Action     = "Function-Name"                    # Function to invoke
+    Parameters = @{ ParamName = "Value"; ... }      # Function parameters
+}
+```
+
+**Special actions:**
+
+- `"Open-ProjectTerminals-Or-RunProject"` - Opens project terminals; if `-RunApp` flag, runs the project
+- `"Return"` - Terminates action sequence
+
+**Consumer function:** `Open-Project` with parameter forwarding via `Get-FilteredParams`
+
+**Example:**
+
+```powershell
+ProjectActions = @(
+    @{ MyProject = @(
+            @{ Action = "Open-VSCode"; Parameters = @{ Folder = "MyProject" } }
+            @{ Action = "Open-Browser"; Parameters = @{ Groups = @("MyProject-Api") } }
+            @{ Action = "Open-ProjectTerminals" }
+        )
+    }
+)
+```
+
+### Project Terminals
+
+Terminal tab configurations for each project. Defines terminal names and their working directories.
+
+**Key:** `ProjectTerminals` → Array of per-project terminal configurations
+
+**Terminal configuration format:**
+
+```powershell
+@{
+    Name     = "MyProject"                # Project name (matched by Open-ProjectTerminals)
+    BasePath = "Projects.MyProject"       # Dot-notation reference into the expanded paths (NOT a literal folder)
+    Paths    = @("ROOT", "API", "UI")     # Subpath keys under that BasePath - one terminal tab each
+}
+```
+
+**Path entry shapes:** every entry in `Paths` is read by `Resolve-ProjectTerminalTab`, the one reader
+both `Open-ProjectTerminals` and `Run-Project` use, so `op` and `rp` open the same set of tabs.
+
+| Entry                                 | Tab                                                                                |
+| ------------------------------------- | ---------------------------------------------------------------------------------- |
+| `"PathKey"`                           | A tab at that subpath under `BasePath`, resolved through `Resolve-ProjectPath`.    |
+| `"ROOT"`                              | A tab at the project root.                                                          |
+| `"DEFAULT"`                           | A plain tab wherever the shell starts, with no `Set-Location` in front of it.       |
+| `"WSL"`                               | A tab on `DefaultWSLDistribution`, at the distribution's home directory.            |
+| `@{ Key = "WSL"; Path = "/mnt/c/x" }` | The same WSL tab, started in that directory - written as WSL sees it, `/mnt/c/...` for a Windows-mounted repository and `/home/...` for a native clone. |
+| `@{ Key = "Name"; Path = "C:\path" }` | A tab at an explicit Windows path, with no matching entry needed in `PathTemplates`. |
+| `@{ Key = "Name" }`                   | A plain tab with a custom title.                                                    |
+
+A WSL tab runs the distribution's shell, not PowerShell, so `Run-Project` opens it and leaves it
+alone: a command configured against a `WSL` key in `RunnableProjectMappings` is reported and skipped
+rather than typed into a shell that cannot run it. Both functions skip WSL tabs entirely while
+`DefaultWSLDistribution` is unset.
+
+**Consumer functions:** `Open-ProjectTerminals`, `Run-Project`, `Close-ProjectTerminals`, `Focus-TerminalTab`, `Resolve-ProjectTerminalTab`, `Resolve-ProjectPath`
+
+### Runnable Project Mappings
+
+Every project the `Run-Project` menu offers, with its run commands and startup configuration.
+The menu follows the order written here - this list is the only definition of a runnable project.
+
+**Key:** `RunnableProjectMappings` → Ordered array of run configurations, each carrying its own `Name`
+
+`Commands` is a hashtable keyed by the `ProjectTerminals` path the command runs in, so a command
+sits next to the path it belongs to instead of lining up with it by position. A path that is not
+named in `Commands` opens its terminal tab with nothing run in it.
+
+`DatabaseProviders` and `UsesDocker` are what pull in `Run-Project`'s Docker step, and they describe
+two different shapes. `DatabaseProviders` names [Docker Compose Files](#docker-compose-files) stacks:
+the project runs on the host and borrows a shared database container. `UsesDocker = $true` (with no
+providers) means the project owns its whole stack, so its own compose file at its `ProjectTerminals`
+root is started instead - `compose.yaml`, `compose.yml`, `docker-compose.yaml` or `docker-compose.yml`,
+probed in that order by `DockerWizard`. A mapping that declares neither never touches Docker.
+
+**Run command strings:**
+
+- `"dnr"` → `dotnet run`
+- `"dnbr"` → `dotnet build && dotnet run`
+- `"nir"` → `npm install && npm start`
+- `"<custom-string>"` → Executed as-is in terminal
+
+**Consumer function:** `Run-Project` (invoked by `rp` alias)
+
+**Example:**
+
+```powershell
+RunnableProjectMappings = @(
+    @{
+        Name              = "OtherProject"
+        Commands          = @{ API = "dnr"; UI = "nir" }   # Keyed by ProjectTerminals path
+        DatabaseProviders = @("PostgreSQL")                # Optional - centralized stack, started via DockerWizard
+    }
+    @{
+        Name       = "MyContainerizedApp"
+        Commands   = @{ ROOT = "docker compose logs -f web" }  # The app runs in the containers, not on the host
+        UsesDocker = $true                                     # Project's own compose file at its ProjectTerminals root
+    }
+)
+```
+
+### Docker Compose Files
+
+The Docker Compose stacks WinuX can start by name.
+
+**Key:** `DockerComposeFiles` → Hashtable of stack name to compose file
+
+A relative value resolves under `MachineSpecificPaths.DockerDirectory` (`{RepoRoot}\Docker` by
+default), so the compose file ships with the repository and every project naming that stack shares
+the same containers. An absolute value is used exactly as written, so a stack whose compose file
+belongs to another repository can be registered too. `Resolve-DockerComposeStackPath` is the single
+place that applies this rule.
+
+The stack name is also the provider name a `RunnableProjectMappings` entry puts in
+[`DatabaseProviders`](#runnable-project-mappings): that is how a project says which stack it needs.
+Names not used by any project are still perfectly valid - `Start-Containers` offers every configured
+stack, and the mechanism is not database-specific.
+
+**Consumer functions:** `Start-Containers`, `Resolve-ProjectDockerCompose` (and through it `Run-Project`), `Resolve-DockerComposeStackPath`
+
+**Example:**
+
+```powershell
+DockerComposeFiles = @{
+    PostgreSQL = "docker-compose.postgresql.yml"   # Relative - under MachineSpecificPaths.DockerDirectory
+    Redis      = "docker-compose.redis.yml"        # Any stack, not just databases
+    MyStack    = "D:\Stacks\compose.yml"           # Absolute - used as-is
+}
+```
+
+### Docker Timeouts
+
+How long `DockerWizard` waits for Docker Desktop before giving up, in seconds. Omitted keys fall back
+to the same built-in defaults.
+
+**Key:** `DockerTimeouts` → Hashtable with `StartSeconds`, `StopSeconds`, `CleanupSeconds`
+
+**Consumer function:** `DockerWizard`
+
+**Example:**
+
+```powershell
+DockerTimeouts = @{
+    StartSeconds   = 180   # Daemon readiness after launching Docker Desktop
+    StopSeconds    = 60    # Graceful shutdown before force-cleanup
+    CleanupSeconds = 30    # Force-cleanup of Docker-owned processes and WSL distros
+}
+```
+
+### Visual Studio Solutions
+
+Maps solution names to `.sln` file paths.
+
+**Key:** `VisualStudioSolutions` → Array of `@{ Name; Solution }` entries, where `Solution` is a
+dot-notation reference into the expanded paths (not a literal `.sln` path)
+
+**Consumer function:** `Open-VisualStudio`
+
+**Example:**
+
+```powershell
+VisualStudioSolutions = @(
+    @{ Name = "ExampleProject"; Solution = "Projects.ExampleProject.Solution" }
+)
+```
+
+### VS Code Projects
+
+Maps project names to folder paths for VS Code.
+
+**Key:** `VSCodeProjects` → Array of `@{ Name; Path }` entries (`Path` is a dot-notation
+reference into the expanded paths, e.g. `"Projects.Self.Root"`)
+
+**Consumer function:** `Open-VSCode`
+
+### VS Code Workspaces Path
+
+Folder holding the `.code-workspace` files that `Open-VSCodeWorkspace` (and the `Open-Workspace -VSCodeWorkspace` override) can open.
+
+**Key:** `PathTemplates.Projects.Self.VSCodeWorkspaces` → `"{RepoRoot}\VSCode\Workspaces"`
+
+**Consumer functions:** `Open-VSCodeWorkspace`, `Get-VSCodeWorkspaceNames`, `Open-Workspace`
+
+Each `*.code-workspace` file in this folder is addressed by its base name (e.g. `Consolidation.code-workspace` → `Consolidation`). This is one of the `Projects.Self` paths (alongside `Root`, `Modules`, `Layouts`, etc.) that point inside the repository via the `{RepoRoot}` placeholder.
+
+---
+
+## Browser Groups
+
+Defines hierarchical URL groups for the `Open-Browser` function. Supports three nesting patterns.
+
+**Key:** `BrowserGroups` → Nested hashtable of group definitions
+
+**Nesting patterns:**
+
+1. **Simple URL list** - Array of URLs
+
+    ```powershell
+    Resources = @(
+        "https://github.com/MyUser/Dotfiles",
+        "https://github.com/MyUser/Obsidian"
+    )
+    ```
+
+2. **Named URLs** - Array of objects with `Name` and `Url`
+
+    ```powershell
+    Documentation = @(
+        @{ Name = "PowerShell Docs"; Url = "https://docs.microsoft.com/powershell/" },
+        @{ Name = "GitHub"; Url = "https://github.com" }
+    )
+    ```
+
+3. **Nested sub-groups** - Hashtable with sub-group objects
+
+    ```powershell
+    Development = @{
+        Frontend = @(
+            @{ Name = "React"; Url = "https://react.dev" }
+        )
+        Backend = @(
+            @{ Name = ".NET Docs"; Url = "https://dotnet.microsoft.com/docs" }
+        )
+    }
+    ```
+
+4. **Mixed arrays** - Single group can contain both named URLs and nested sub-groups
+    ```powershell
+    MyGroup = @(
+        "https://url1.com",
+        @{ Name = "Named"; Url = "https://url2.com" },
+        @{ SubGroup = @( ... ) }
+    )
+    ```
+
+**Consumer functions:** `Open-Browser`, `Test-BrowserGroupAlreadyOpen`, `Resolve-SwaggerBrowserGroup`, `Get-SwaggerCloseTitlePatterns`
+
+**Important:** Names must be unique across all groups (used by `Test-BrowserGroupAlreadyOpen` for idempotency checking).
+
+---
+
+## Acrobat Configuration
+
+PDF document groups for `Open-Acrobat`.
+
+**Key:** `AcrobatPdfGroups` → Ordered list of `@{ <GroupName> = @( <paths> ) }`
+
+An [ordered section](#ordered-sections): the menu offers the groups in the order written here, and
+a group is defined exactly once. Paths are dot-notation references into the expanded paths.
+
+**Consumer function:** `Open-Acrobat`
+
+**Example:**
+
+```powershell
+AcrobatPdfGroups = @(
+    @{ Learning = @("Learning.CSharpInDepth") }
+    @{ MyCampaign = @("Dnd.MyCharacter") }
+)
+```
+
+---
+
+## Obsidian Configuration
+
+How `Open-Obsidian` addresses the vault and which Obsidian workspace a cold start lands on. `Open-Obsidian` drives Obsidian through its official command line interface (Obsidian 1.12.4+, enabled once per machine under Settings > General > Advanced > Command line interface or with `Enable-ObsidianCli`). Inside a workspace open it loads the Obsidian workspace named like the WinuX workspace when the vault has one - the name arrives through the `CurrentWorkspace` parameter `Open-Workspace` injects into every action - and `Parameters = @{ Workspace = "Name" }` on the action overrides that. The vault root itself is `PathTemplates.ObsidianDirectory`.
+
+**Key:** `Obsidian` → Hashtable with three optional string keys
+
+- `DefaultWorkspace` - Obsidian workspace to load on a cold start when neither `-Workspace` nor a same-named match resolves. Empty leaves Obsidian where it was (or to plugins such as Homepage). Never applied to an already-running Obsidian.
+- `Vault` - Vault name for the CLI. Empty means the leaf folder of `PathTemplates.ObsidianDirectory`.
+- `GitEndLocation` - Where the shell ends up after `Git-Obsidian`: `"Current"` (default) returns to the folder it was called from, `"Vault"` stays in the vault directory. An empty or unknown value behaves like `"Current"`.
+
+**Consumer functions:** `Open-Obsidian` (`DefaultWorkspace`, `Vault`), `Git-Obsidian` (`GitEndLocation`)
+
+**Example:**
+
+```powershell
+Obsidian = @{
+    DefaultWorkspace = "Empty"   # cold start lands here unless a workspace resolves
+    Vault            = ""        # folder name is the vault name
+    GitEndLocation   = "Current" # Git-Obsidian returns to the calling folder
+}
+```
+
+Deep-merges: set only the key you need in `Configuration.local.psd1`. Persisting `%LOCALAPPDATA%\Programs\obsidian` in `AutoPathAdditions` keeps the `obsidian` command on PATH for every shell; the function also probes that folder directly.
+
+---
+
+## Workspace Management
+
+Defines workspaces and their associated actions.
+
+### Default Workspace
+
+Workspace opened when Enter is pressed with no input at the `Open-Workspace` menu.
+
+**Key:** `DefaultWorkspace` → Workspace name (`"Default"` out of the box)
+
+**Consumer function:** `Open-Workspace`
+
+The name must have a `WorkspaceActions` entry - `Open-Workspace` only advertises the default in its prompt (`press [Enter] to open default workspace => Default`) when that entry exists. Set it to `""` to drop the offer: the prompt becomes `press [Enter] to cancel` and Enter exits without opening anything. Only the interactive Enter uses this; a mistyped `Open-Workspace Wrkspce` still exits rather than silently opening the default.
+
+### Workspace Benchmark
+
+Opt-in measurement of every workspace open. When enabled, `Open-Workspace` times each configured action, reads back the phase clock `Set-WorkspaceWindowLayout` publishes (`Preamble`, `Desktops`, `FancyZones`, `Wait`, `Normalize`, `Position`, `Snap`, `Verify`, `Retry`, `Save`), appends one row per workspace to `WorkspaceBenchmark.csv` next to the session logs through `Write-WorkspaceBenchmark`, and shows the result at the end of the open. Off by default, so a vanilla install prints exactly what it printed before.
+
+**Key:** `WorkspaceBenchmark` → Hashtable
+
+- `Enabled` - `$false` out of the box. `$true` records the row and shows the result after every open.
+- `Display` - what the end of an open shows: `"Table"` (the workspace's recent runs, exactly as `Get-WorkspaceBenchmark -Workspace <name> -Formatted` prints them - the default), `"Line"` (one `Timing [Workspace] => ...` line listing the phases above 0.05 s, with `retries N` when the layout needed more than one attempt), or `"None"` (record only).
+- `Last` - how many recent runs the `Table` display shows (`10`).
+- `Source` - stamped on every row written while it is set (empty in the base and normally left so). `Measure-WorkspaceOpen` sets it to `Measure-WorkspaceOpen <session>` for the duration of an experiment, which is how `Get-WorkspaceBenchmark` tells the experiment's rows from your everyday opens and leaves them out unless asked (`-IncludeMeasured`).
+
+**Consumer function:** `Open-Workspace` (records through `Write-WorkspaceBenchmark`, shows through `Get-WorkspaceBenchmark`)
+
+Hashtables deep-merge, so opting in from `Configuration.local.psd1` needs only the flag; `Display` and `Last` fall through to the base.
+
+**Example (opt-in via `Configuration.local.psd1`):**
+
+```powershell
+WorkspaceBenchmark = @{
+    Enabled = $true
+}
+```
+
+The history can be read at any time with `Get-WorkspaceBenchmark` (`-Workspace`, `-Last`, `-Summary`, `-Formatted`), whether or not the automatic display is on. The rows are per-machine measurements and the file is git-ignored. To decide between configuration flags, do not compare rows by hand: `Measure-WorkspaceOpen` runs the interleaved experiment (teardown, settle, open, collect, repeat) on the shipped `Example` workspace or one of yours, forces this key on for its duration (with `Display = "None"` and a `Source` tag), restores it afterwards, and its table can be replayed with `Get-WorkspaceOpenMeasurement`.
+
+### Workspace Actions
+
+Every workspace the `Open-Workspace` menu offers, and what opening each one does. This is an
+[ordered section](#ordered-sections): one single-key hashtable per workspace, the key being the
+workspace name and the value its action list. The menu follows the order written here, and a
+workspace is defined exactly once - there is no separate workspace list.
+
+**Key:** `WorkspaceActions` → Ordered list of `@{ <WorkspaceName> = @( <actions> ) }`, or of templated entries `@{ <WorkspaceName> = @{ Template = "<template>"; Variables = @{...}; Overrides = @{...}; Add = @(...) } }` (see [Workspace Templates](#workspace-templates))
+
+**Format:** Same as `ProjectActions` - array of `@{ Action = "...", Parameters = @{ ... } }` objects
+
+**Special actions:** Same as `ProjectActions` (`Open-ProjectTerminals-Or-RunProject`, `Return`).
+
+**Project context (`{SelectedProjects}`):** A parameter whose FULL value is the literal string `"{SelectedProjects}"` resolves at runtime to the explicit `-Project` argument, otherwise to the projects selected by this workspace's `Open-Project` action, otherwise to the projects resolved up front (see the project scope below); when none exists the parameter is dropped so the action can no-op or apply its own default. Declaring consumers after the `Open-Project` action keeps the project that action actually returned in play. The one action that ships using it is `Open-ProjectSwagger`, the opt-in way to open a project's `Swagger` group:
+
+```powershell
+@{ Action = "Open-ProjectSwagger"; Parameters = @{ Project = "{SelectedProjects}" } }
+```
+
+Swagger is never added on its own - a workspace that does not declare that action runs no Swagger logic at all.
+
+**Workspace name (`{Workspace}`):** `"{Workspace}"` anywhere in a value is the workspace's own name, in every workspace - plain ones included - so `@{ Action = "Set-WorkspaceWindowLayout"; Parameters = @{ WorkspaceName = "{Workspace}" } }` needs no editing when an entry is copied. It is substituted once at load by `Expand-WorkspaceTemplates`.
+
+**Workspace context (`CurrentWorkspace`):** Every action that declares a `CurrentWorkspace` parameter receives the name of the workspace being opened; `Get-FilteredParams` drops it from actions that do not, and a configured `Parameters` value of that name wins over the injected one. `Open-Obsidian` uses it to load the Obsidian workspace of the same name when the vault has one, so a bare `@{ Action = "Open-Obsidian" }` under `WorkspaceActions.Server` lands Obsidian on its `Server` workspace with no per-entry configuration; `Parameters = @{ Workspace = "Name" }` overrides that.
+
+**Machine scope and per-machine parameters (`Machine`, `LayoutMachine`, `MachineParameters`, `LayoutMachineParameters`):** An action may say where it runs and what differs per machine, with four optional keys. Every key takes the scope string `Test-MachineTypeScope` understands (`All`, one type, or several separated by `/`) - the same shape as the `TaskbarConfiguration` rows and the app CSVs' `Machine` column. Two axes:
+
+- `Machine`, `MachineParameters` - matched against the **detected** machine type (`$global:MachineType`). Identity-shaped: a Work-only `Open-Outlook`. Tokens must exist in `ValidMachineTypes`.
+- `LayoutMachine`, `LayoutMachineParameters` - matched against the **layout set** `Get-LayoutMachineType` resolves ([Layout Set Overrides](#layout-set-overrides): a non-empty `LayoutMachineTypeOverrides` entry, else `SmallDisplayMachineType` on a small display, else the detected type) - the set `Set-WorkspaceWindowLayout` reads the layout file from. Display-shaped: a window count that has to agree with the layout, such as `Open-Browser -Instances 2`. Tokens may also be any non-empty `LayoutMachineTypeOverrides` value or the `SmallDisplayMachineType` (a layout set such as `Temp` is not a machine type).
+
+The two **scopes** decide whether the action runs: an absent or blank key means every machine, an action runs only when both match, the rest of the list runs unchanged, and a workspace whose every action is scoped to another machine is reported and skipped. The two **tables** vary one action that runs everywhere: `@{ "<scope>" = @{ <parameter overrides> } }`. `Parameters` is the default; every row whose scope covers this machine is deep-merged over a copy of it (nested hashtables merge key by key, everything else is replaced) - the `All` row first, then the other matching rows alphabetically, `MachineParameters` before `LayoutMachineParameters` so the layout set wins - and a parameter a row sets to `$null` is removed. The configured entry is never modified. The list is resolved by `Resolve-WorkspaceActions` before anything runs.
+
+A token that is not a known type (or layout set) is reported with the workspace, action and table named and never matches, so a typo cannot silently skip or keep an action or a row.
+
+**Project scope and per-project parameters (`Project`, `ProjectParameters`):** The project(s) of an open are known before anything launches: `-Project` on the command line, else the project menu (shown up front when the workspace's `Open-Project` action has no fixed project), else the fixed `Open-Project` projects. Two more optional keys follow the machine pattern for them:
+
+- `Project = "MyProject/OtherProject"` - the action runs only when one of those projects is selected; `All` or an absent key means always, and with no project selected only an `All` scope runs.
+- `ProjectParameters = @{ "<project scope>" = @{ <parameter overrides> } }` - rows merged over `Parameters` like `MachineParameters`, after the two machine tables; the `All` row first, then for each selected project in selection order the other rows covering it alphabetically, so with several selected projects the later one wins.
+
+Tokens must be `ProjectActions` names; an unknown token is reported and never matches. The same projects reach `Set-WorkspaceWindowLayout` as `-Project`, which selects the layout file's [`ProjectOverrides`](#workspace-layouts).
+
+```powershell
+@{ Client = @(
+        @{ Action = "Open-Project" }
+        @{ Action = "Open-Browser"; Parameters = @{ Groups = @("AI") }; ProjectParameters = @{ MyProject = @{ Groups = @("AI", "MyProjectDocs") } } }
+        @{ Action = "Open-DBeaver"; Project = "MyProject/OtherProject" }
+        @{ Action = "Set-WorkspaceWindowLayout"; Parameters = @{ WorkspaceName = "{Workspace}" } }
+    )
+}
+```
+
+```powershell
+# One Google window everywhere (fullscreen on the Laptop and Work layouts, and on the PC while
+# LayoutMachineTypeOverrides redirects it to the Work layouts); two on the PC's own layout set
+LeagueOfLegends = @(
+    @{ Action = "Open-LeagueOfLegends" }
+    @{ Action = "Open-Browser"; Parameters = @{ Groups = @("Google") }; LayoutMachineParameters = @{ PC = @{ Instances = 2 } } }
+    @{ Action = "Set-WorkspaceWindowLayout"; Parameters = @{ WorkspaceName = "LeagueOfLegends" } }
+)
+```
+
+**Example:**
+
+```powershell
+WorkspaceActions = @{
+    Training = @(
+        @{ Action = "Open-Terminal"; Parameters = @{} }
+        @{ Action = "Open-VSCode"; Parameters = @{ Folder = "TrainingDirectory" } }
+        @{ Action = "Open-Browser"; Parameters = @{ Groups = @("Learning") } }
+        @{ Action = "Open-Project"; Parameters = @{ Project = "Client"; RunApp = $true }; MachineParameters = @{ "Laptop/Work" = @{ RunApp = $null; Project = "ClientLite" } } }
+        @{ Action = "Open-Outlook"; Machine = "Work" }
+    )
+}
+```
+
+**Consumer functions:** `Open-Workspace`, `Resolve-WorkspaceActions` (the scope filter), `Measure-WorkspaceOpen` (its pre-checks), `Resolve-WorkspaceTemplate` and `Expand-WorkspaceTemplates` (templated entries and `{Workspace}`)
+
+### Workspace Templates
+
+The action list several workspaces share, written once. A `WorkspaceActions` entry `@{ MyProject = @{ Template = "Project" } }` stamps the template out under its own name, so every workspace keeps its own layout file, open/close tracker entry, benchmark rows and Obsidian workspace.
+
+**Key:** `WorkspaceTemplates` → Hashtable of template name → `@{ Variables = @{ <variable> = <default> }; Actions = @( <action entries> ) }` (`Variables` optional; a template action may carry an optional `Id` next to the ordinary keys, a stable name for overrides and anchors). The base ships one generic template, `Project`: the repository's browser group (named like the workspace unless `Repository` says otherwise), its VS Code folder, its layout file, landing on desktop 1 and closing the launching terminal tab. The shipped `WinuX` workspace is `@{ WinuX = @{ Template = "Project" } }`.
+
+**Consumer functions:** `Resolve-WorkspaceTemplate` (expands one entry), `Expand-WorkspaceTemplates` (expands every entry once at load, called by `Load-PathConfiguration`), `Open-Workspace` (expands again when the command line sets a variable), `Test-ConfigurationSchema` (validation), `Add-Workspace -Template`
+
+A templated `WorkspaceActions` entry takes four keys:
+
+| Key | What it does |
+| --- | ------------ |
+| `Template` | The template's name (required). |
+| `Variables` | Sets or replaces the template's variables for this workspace. |
+| `Overrides` | Keyed by template action `Id`, else by action name (which must then be unique in the template - an ambiguous name is an error). The value merges over that action: it takes `Parameters`, `Machine`, `LayoutMachine`, `MachineParameters`, `LayoutMachineParameters`, `Project` and `ProjectParameters`; hashtables merge key by key, lists replace, a parameter or key set to `$null` is removed, and `"<Action>" = $null` drops the action. `Action` and `Id` cannot be overridden. |
+| `Add` | More actions, placed just before the template's first `Set-WorkspaceWindowLayout` (the end of the list when there is none) unless they carry `Before = "<Id or action>"` or `After = "<Id or action>"`. |
+
+**Variables.** `"{Name}"` as the whole value receives the variable's value as it is (a list, a hashtable, `$true`); inside a longer string it is replaced by the text of a scalar value (a list or hashtable there is an error). `{Workspace}` is built in (the entry's name); defaults may reference it and other variables, and a cycle is an error. Values come from the template's `Variables`, overlaid by the entry's `Variables`, overlaid by the command line: `Open-Workspace MyRepo -Repository OtherGroup` sets the variable for one open and is not forwarded to any action. Reserved names, never variables: `Workspace`, `SelectedProjects`, `ProjectName`, `Dev`, `User`, `MachineType`, `RepoRoot`, `AppData`. Any other unknown `{X}` in a templated workspace is an error, so a typo never reaches an action as literal text; a variable used without a value (declared `$null` and never set) is an error too.
+
+**Errors.** An unknown template, a missing variable, an ambiguous or unmatched override, an unknown placeholder, a variable cycle or a bad anchor is logged at load (`... - the workspace opens nothing until this is fixed`) and reported by `Test-ConfigurationSchema`; the workspace stays in the menu and opening it repeats the errors and opens nothing.
+
+**Local overlay.** `Configuration.local.psd1` merges `WorkspaceTemplates` template by template: a local template replaces the base template of the same name whole (no deep merge into it). Templates cannot extend other templates. `Load-PathConfiguration` keeps the raw templated definitions under the runtime key `WorkspaceTemplateEntries` and the load-time problems under `WorkspaceTemplateErrors`; neither is a configuration setting.
+
+**Example:**
+
+```powershell
+WorkspaceTemplates = @{
+    Project = @{
+        Variables = @{ Repository = "{Workspace}" }
+        Actions   = @(
+            @{ Action = "Open-Browser"; Parameters = @{ Groups = @("{Repository}") } }
+            @{ Action = "Open-VSCode"; Parameters = @{ Folder = "{Workspace}" } }
+            @{ Action = "Set-WorkspaceWindowLayout"; Parameters = @{ WorkspaceName = "{Workspace}" } }
+            @{ Action = "Focus-VirtualDesktop"; Parameters = @{ DesktopNumber = 1 } }
+        )
+    }
+}
+
+WorkspaceActions = @(
+    @{ MyProject = @{ Template = "Project" } }
+    @{ MyRepo = @{
+            Template  = "Project"
+            Variables = @{ Repository = "MyRepoDocs" }
+            Overrides = @{ "Open-Browser" = @{ Parameters = @{ Groups = @("{Repository}", "AI") } } }
+            Add       = @( @{ Action = "Open-Obsidian"; After = "Open-VSCode" } )
+        }
+    }
+)
+```
+
+### Default VS Code Workspaces
+
+Optionally maps an `Open-Workspace` name to a `.code-workspace` base name (under `VSCode\Workspaces`). When a workspace has an entry here, running it opens that `.code-workspace` in place of the project folder. (The window layout needs no adjustment for this - VS Code layout entries match by process, so the workspace window lands in the VS Code slot like any other VS Code window.) A command-line `-VSCodeWorkspace <name>` overrides this default; a bare `-VSCodeWorkspace` shows a selection menu. Empty (the default) means normal project-folder behaviour.
+
+**Key:** `DefaultVSCodeWorkspaces` → Hashtable mapping workspace name → `.code-workspace` base name (empty `@{}` by default)
+
+**Consumer functions:** `Open-Workspace`, `Open-VSCodeWorkspace`
+
+**Example:**
+
+```powershell
+DefaultVSCodeWorkspaces = @{
+    dotfiles = "Consolidation"   # `w dotfiles` opens Consolidation.code-workspace instead of the folder
+}
+```
+
+### VS Code Profiles
+
+VS Code profiles kept in the repository, one folder per catalogue entry, deployed by `Deploy-VSCodeProfiles` (opt in via `BootstrapConfig.Steps.VSCodeProfiles`) and captured back by `Export-VSCodeProfile`. A folder carries any of:
+
+| File | Deployed as |
+| ---- | ----------- |
+| `settings.json` | symlink into the profile |
+| `keybindings.json` | symlink; `keybindings.windows.json` wins on Windows when present |
+| `tasks.json` | symlink |
+| `snippets\` | directory symlink |
+| `extensions.txt` | one extension id per line, `#` comments, optional `@version` pin; installed with `code --install-extension` |
+
+**Key:** `VSCodeProfiles` → Hashtable
+
+| Sub-key | Type | Default (base) | What it controls |
+| ------- | ---- | -------------- | ---------------- |
+| `Root` | string | `{RepoRoot}\VSCode\Profiles` | The profile folders; `{RepoRoot}`, `{User}` and `{AppData}` expand. |
+| `Extensions` | string | `{RepoRoot}\VSCode\Extensions` | Local extensions: one unpackaged extension folder (with a `package.json`) each, such as a colour theme of your own. `Deploy-VSCodeProfiles` links every one into VS Code's extensions folder as `<publisher>.<name>-<version>` through `Install-VSCodeLocalExtensions`; they are never installed from the Marketplace and never pruned. A missing folder links nothing. |
+| `UserData` | string | `{AppData}\Code\User` | VS Code's user data folder; its root is the `Default` profile, other profiles live under `profiles\<location>`. |
+| `SettingsSync` | boolean | `$false` | `$false` installs extensions with `--do-not-sync`, so Settings Sync leaves them alone; `$true` installs them normally. Sync itself is never switched on or off. |
+| `Prune` | boolean | `$false` | `$true` uninstalls extensions `extensions.txt` does not name (`-Prune` does it for one run). |
+| `Catalogue` | ordered array | `@()` (empty) | One single-key hashtable per entry; `Target` is the VS Code profile it deploys onto (defaults to the entry name, `"Default"` is VS Code's built-in profile). |
+| `Deploy` | hashtable | `@{ Default = @() }` | Per machine type, the catalogue entries it deploys; `Default` covers any machine type not listed. |
+
+**Consumer functions:** `Resolve-VSCodeProfilesConfig` (and through it `Deploy-VSCodeProfiles`, `Export-VSCodeProfile`, `Get-VSCodeProfileLocation`, `Install-VSCodeLocalExtensions`)
+
+**Example:**
+
+```powershell
+VSCodeProfiles = @{
+    Catalogue = @(
+        @{ MyProfile = @{ Target = "Default" } }
+        @{ Writing = @{} }
+    )
+    Deploy    = @{
+        Default = @("MyProfile")
+        Work    = @("MyProfile", "Writing")
+    }
+}
+```
+
+See [Deploy-VSCodeProfiles](guides/application/Deploy-VSCodeProfiles.md) for the walkthrough.
+
+### Workspace Layouts
+
+Window placement configurations. Defined in `Layouts/{MachineType}/{WorkspaceName}_{MachineType}.psd1` files.
+
+Each layout file specifies:
+
+- **Monitors:** Virtual desktop layout mapping
+- **Layout:** Array of window placement rules with ProcessName, WindowTitle, DesktopNumber, Zone, Monitor
+- **ProjectOverrides** (optional, at the end of the file): project variants of the layout, `@{ "<project scope>" = @{ Monitors = @{...}; Layout = @(...) } }`
+
+**Several windows of one process.** A layout may hold several entries of one process - two VS Code folders in two zones, or titled entries next to one untitled catch-all. Every window is claimed by one entry; the catch-all takes only the windows no titled sibling's title matches, wherever it sits in the file, and a titled entry never falls back to a window another entry's title matches. Anchor VS Code titles on the folder name as VS Code ends its caption (`MyProject - Visual Studio Code$`), since a bare name also matches a sibling folder containing it. Several entries in one zone stack in file order with the last on top, on every run (`Set-StackedWindowOrder`). A single untitled `Code` entry keeps taking every VS Code window.
+
+**Project variants (`ProjectOverrides`).** When the workspace is opened for a covered project (see the project scope under [Workspace Actions](#workspace-actions)), `Merge-LayoutProjectOverrides` merges the block over the loaded layout: `Monitors` key by key (only the listed desktops change their zone layout); the override's `Layout` entries replace every base entry on the same desktop and monitor and are added for a desktop and monitor the base does not use. A key may cover several projects (`"MyProject/OtherProject"`); several selected projects apply in selection order and the later wins on the same desktop and monitor. Clearing a desktop and monitor without a replacement is not supported. Every block is validated on every open, selected or not: a project token that is not a `ProjectActions` name, an entry without `DesktopNumber` / `Monitor`, and a `Zone` missing from the zone layout its desktop and monitor end up with are errors, and a block with errors is not applied (the base layout is used). `Validate-Layout` reports the same errors, `Visualize-Layouts` draws one `PROJECT VARIANT [<key>]` drawing per variant, and `Update-LayoutSectionHeaders` leaves the block verbatim.
+
+```powershell
+# Client_PC.psd1 (end of file)
+ProjectOverrides = @{
+    "MyProject" = @{
+        Monitors = @{ Primary = @{ VirtualDesktopLayouts = @{ 2 = "One" } } }
+        Layout   = @(
+            @{ ProcessName = "Code"; WindowTitle = "MyProject - Visual Studio Code$"; DesktopNumber = 2; Monitor = "Primary"; Zone = "Left" }
+            @{ ProcessName = "Code"; WindowTitle = "MyProjectApi - Visual Studio Code$"; DesktopNumber = 2; Monitor = "Primary"; Zone = "Right" }
+        )
+    }
+}
+```
+
+Which subfolder is read can be redirected per machine - see [Layout Set Overrides](#layout-set-overrides).
+
+**Consumer functions:** `Set-WorkspaceWindowLayout`, `Merge-LayoutProjectOverrides` (`ProjectOverrides`)
+
+---
+
+## System Theme & Wallpaper
+
+### Themes
+
+Per-machine theme configuration (light/dark).
+
+**Key:** `Themes.{MachineType}` → "Light" or "Dark"
+
+**Consumer function:** `Set-SystemTheme`
+
+The base ships `Themes` empty; `Set-SystemTheme -Auto` warns and leaves the theme as-is until you
+set it in `Configuration.local.psd1` (there is no Dark fallback).
+
+### Wallpaper Settings
+
+Machine and theme-specific wallpaper configurations.
+
+**Keys:**
+
+- `WallpaperDarkSettings.{MachineType}` → Dark theme wallpaper paths (per monitor)
+- `WallpaperLightSettings.{MachineType}` → Light theme wallpaper paths (per monitor)
+- `WallpaperStyles` → Maps each `Style` name an entry may use (`Fill`, `Fit`, `Stretch`, `Tile`,
+  `Center`, `Span`) to the registry `WallpaperStyle` value `Set-Wallpaper` writes. Ships complete;
+  there is nothing to change unless you add a style Windows supports under a new name.
+
+**Format:** Per-monitor array (order matters for multi-monitor setups)
+
+**Consumer function:** `Set-Wallpaper`, `Set-SystemTheme`
+
+The base ships both sections empty; `Set-Wallpaper` warns and leaves the wallpaper as-is until you
+set them in `Configuration.local.psd1`.
+
+The array does not have to match the display count. Monitors are paired with entries by index, and a
+monitor past the end of the array **cycles** back to the start - a 2-entry array on 3 displays gives
+the third display the first entry - with one warning when the counts differ. Only an empty array
+leaves a display on the Windows default.
+
+**Example (opt-in via `Configuration.local.psd1`):**
+
+```powershell
+WallpaperDarkSettings = @{
+    # Single-monitor machine: one file + style
+    Test = @{ File = "Black.jpg"; Style = "Fill" }
+    # Multi-monitor machine: one entry per monitor, in monitor order.
+    # Fewer entries than monitors is allowed - they cycle.
+    PC   = @{ Monitors = @(
+        @{ File = "DarkPrimary.jpg"; Style = "Fill" }
+        @{ File = "DarkSecondary.jpg"; Style = "Fill" }
+    )}
+}
+```
+
+File names resolve against the repository's `Wallpapers/` folder.
+
+### Set-SystemTheme Step Toggles
+
+Enables/disables the follow-up steps `Set-SystemTheme` runs after writing the theme registry
+values. `SystemTheme` is a top-level section (not under `Universal`, and separate from the `Themes`
+map above). Each step value is either a plain boolean or a per-machine-type hashtable with a
+`Default` fallback (the `BootstrapConfig.Steps.WSL` shape). The whole section and individual keys
+are optional - missing entries use the built-in defaults.
+
+**Keys:**
+
+- `SystemTheme.Steps.RefreshBrowserTabs` - `Refresh-BrowserTabs` (default: **off**; only runs when the theme actually changed)
+- `SystemTheme.Steps.RestartExplorer` - `Restart-Explorer` (default: on)
+- `SystemTheme.Steps.SetWallpaper` - `Set-Wallpaper -Auto -Theme <theme>` (default: on)
+- `SystemTheme.Steps.SetLockScreenWallpaper` - `Set-LockScreenWallpaper -Theme <theme>` (default: on)
+
+Everything defaults on except `RefreshBrowserTabs`. Restarting Explorer is what makes the new theme
+visible on shell chrome, so it belongs to applying a theme rather than being collateral of it - skip
+it and the taskbar and open Explorer windows keep the old theme until Explorer restarts on its own or
+you sign out. The wallpaper steps are on because both functions no-op when their configuration
+section is empty, so on the empty base config they apply nothing. Reloading every browser tab is the
+one action with real collateral - it takes focus per window and hard-reloads pages, discarding
+unsaved page state - so it is the only opt-in step.
+
+`RestartExplorer` runs *before* the wallpaper steps and must stay there: restarting Explorer
+afterwards can make Windows reload stale wallpaper cache data and revert the desktop image.
+
+Per invocation, `Set-SystemTheme -Skip <steps>` forces steps off and `Set-SystemTheme -Include <steps>`
+forces them on, both overriding this config (`-Skip` wins when a step appears in both).
+
+**Consumer functions:** `Set-SystemTheme`, `Resolve-SystemThemeSteps`
+
+**Example:**
+
+```powershell
+# Configuration.local.psd1 - hashtables deep-merge per key, so only the steps
+# you change need restating:
+SystemTheme = @{
+    Steps = @{
+        RefreshBrowserTabs = $true
+    }
+}
+
+# Per-machine-type value with Default fallback:
+SystemTheme = @{
+    Steps = @{
+        SetLockScreenWallpaper = @{ Default = $true; Work = $false }
+    }
+}
+```
+
+---
+
+## System Configuration
+
+### Locale & Language
+
+**Keys:**
+
+- `Locales` - [Ordered section](#ordered-sections): `@( @{ Croatian = @{ Code = "hr-HR"; GeoId = 108 } } ... )`, offered in the order written
+- `DisplayLanguages` - Hashtable keyed by language name → language code
+- `DefaultLocale` / `DefaultDisplayLanguage` - Select which named entry Bootstrap applies (also the Enter default in the interactive menu)
+
+**Consumer functions:** `Set-Locale`, `Set-DisplayLanguage`
+
+The base ships all four empty; both consumers warn and leave the system language settings as-is
+until you set them in `Configuration.local.psd1`.
+
+### Keyboard Layouts
+
+**Key:** `KeyboardLayouts` → Hashtable mapping layout name → hex layout code
+(e.g. `@{ "Croatian" = "0000041A"; "US" = "00000409" }`); `KeyboardLayoutSets` names layout
+combinations as an [ordered section](#ordered-sections)
+(`@( @{ "Croatian-US" = @("Croatian", "US") } ... )`, offered in the order written) and
+`DefaultKeyboardLayoutSet` selects the set to apply
+
+**Consumer function:** `Set-KeyboardLayouts`
+
+The base ships these empty; `Set-KeyboardLayouts` warns and leaves the layouts as-is until you set
+them in `Configuration.local.psd1`.
+
+### Power Plans
+
+Per-machine power plan configuration.
+
+**Key:** `PowerPlans.{MachineType}` → Power plan name or GUID
+
+**Consumer function:** `Set-PowerPlan`
+
+The base ships `PowerPlans` empty; `Set-PowerPlan -Auto` warns and leaves the active plan as-is
+until you set it in `Configuration.local.psd1` (there is no Balanced fallback).
+
+**Example (opt-in via `Configuration.local.psd1`):**
+
+```powershell
+PowerPlans = @{
+    PC     = "High performance"
+    Laptop = "Balanced"
+}
+```
+
+### Power Button Actions
+
+Power button and lid close behavior per machine type.
+
+**Key:** `PowerButtonActions.{MachineType}` → Hash of power button configurations
+
+**Consumer function:** `Set-PowerButtonActions`
+
+The base ships `PowerButtonActions` empty; `Set-PowerButtonActions -Auto` warns and leaves the
+power settings as-is until you set it in `Configuration.local.psd1` (it no longer applies
+hardcoded defaults).
+
+### Taskbar Configuration
+
+Pinned apps, applied by `Configure-Taskbar`. A flat, ordered array (entry order sets pin order);
+each row is machine-scoped through its `Machine` field.
+
+**Key:** `TaskbarConfiguration` → Array of `@{ Name; Type; Value; Machine }` rows (a `Path` row may add `Aumid`, see below), where `Type`
+is `AUMID` or `Path` and `Machine` is a scope string (`All`, `Test`, `PC/Laptop`, ...) matched
+against the current machine type by `Test-MachineTypeScope` - the same gate the app CSVs use. A
+row without `Machine` (or a blank one) defaults to `All`, so one list can drive every machine.
+Keep your real, machine-tagged list in `Configuration.local.psd1` (it replaces the base array
+wholesale on merge). The base ships the section empty; `Configure-Taskbar` warns and leaves the
+existing pins as-is until it is set (an empty list never clears your pins).
+
+A `Path` row may additionally carry an `Aumid` key for apps that register their own
+AppUserModelID at runtime via `SetCurrentProcessExplicitAppUserModelID` - Eclipse/SWT apps such
+as DBeaver, and some Java and Electron apps. The taskbar groups a pin with a running window only
+when both carry the same identity: without `Aumid`, such an app's pin is identified by the exe
+path while its window is identified by the runtime AUMID, so launching it opens a second,
+separate taskbar icon next to the pin. With `Aumid`, `Configure-Taskbar` pins the row through a
+shortcut stamped with that identity (via `Set-ShortcutAumid`), and the running window docks onto
+the pin:
+
+```powershell
+@{ Name = "DBeaver"; Type = "Path"; Value = "{User}\AppData\Local\DBeaver\dbeaver.exe"; Aumid = "DBeaver"; Machine = "All" }
+```
+
+**Discovering a runtime AUMID.** `Get-StartApps` only shows the identity a shortcut declares -
+for exactly the apps that need this key, that differs from the identity the running process
+registers. To read the runtime identity, launch the app, use it once (open a file/connection so
+Windows records a jump list), then match its jump-list file name against a candidate identity -
+the file name is a CRC64 hash of the uppercased AUMID:
+
+```powershell
+# Hash a candidate AUMID (e.g. "DBeaver") and look for a matching jump-list file:
+#   $env:APPDATA\Microsoft\Windows\Recent\AutomaticDestinations\<hash>.automaticDestinations-ms
+# For SWT/Eclipse apps the AUMID is usually the plain product name ("DBeaver").
+```
+
+Alternatively, right-click the running app's taskbar icon → Pin to taskbar, then read the
+identity the shell recorded on the created pin:
+
+```powershell
+$pin = "$env:APPDATA\Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar\<App>.lnk"
+(New-Object -ComObject Shell.Application).Namespace((Split-Path $pin)).ParseName((Split-Path $pin -Leaf)).ExtendedProperty("System.AppUserModel.ID")
+```
+
+**Consumer functions:** `Configure-Taskbar`, `Clear-TaskbarPins`, `Unpin-TaskbarApps`
+
+### Kill-All Step Toggles
+
+Enables/disables individual `Kill-All` cleanup steps. `KillAll` is a top-level section (not under `Universal`). Each step value is either a plain boolean or a per-machine-type hashtable with a `Default` fallback (the `BootstrapConfig.Steps.WSL` shape). The whole section and individual keys are optional - missing entries use the built-in defaults (everything on except `ReloadProfile`), so an absent section reproduces the classic full run.
+
+**Keys:**
+
+- `KillAll.Steps.VirtualDesktops` - `Remove-VirtualDesktops` (default: on)
+- `KillAll.Steps.Docker` - `DockerWizard -Stop` (default: on)
+- `KillAll.Steps.Browsers` - `Terminate-AllBrowserProcesses` (default: on)
+- `KillAll.Steps.VisibleWindows` - `Terminate-AllProcessesWithVisibleWindows` (default: on)
+- `KillAll.Steps.NamedProcesses` - `Terminate-AllProcessesByName` (default: on)
+- `KillAll.Steps.TerminalTabs` - `Terminate-WindowsTerminalTabs` (default: on)
+- `KillAll.Steps.CenterTerminal` - `Center-Terminal`, only without `-IncludeCurrent` (default: on)
+- `KillAll.Steps.FocusTerminal` - `Focus-TerminalTab`, only without `-IncludeCurrent` (default: on)
+- `KillAll.Steps.ReloadProfile` - `Reload-PowerShellProfile` (default: **off**)
+
+Per invocation, `Kill-All -Skip <steps>` forces steps off and `Kill-All -Include <steps>` forces them on, both overriding this config (`-Skip` wins when a step appears in both).
+
+**Consumer functions:** `Kill-All`, `Resolve-KillAllSteps`
+
+**Example:**
+
+```powershell
+# Configuration.local.psd1 - hashtables deep-merge per key, so only the steps
+# you change need restating:
+KillAll = @{
+    Steps = @{
+        Docker = $false
+    }
+}
+
+# Per-machine-type value with Default fallback:
+KillAll = @{
+    Steps = @{
+        Docker = @{ Default = $true; Laptop = $false }
+    }
+}
+```
+
+---
+
+## Symbolic Links
+
+Defines symbolic links created by `SymbolicLinkMaker`.
+
+**Key:** `PathTemplates.SymbolicLinks` → Nested hashtable of symlink definitions
+
+The base ships only the framework entries: `PowerShell.Profile` and `PowerShell.Configuration`
+(what persists WinuX into every new shell) plus the three PowerToys FancyZones files the window
+layouts need. Everything else (Git, FastFetch, Oh My Posh, Windows Terminal, LazyGit, ...) is a
+commented example - copy the ones you want into `Configuration.local.psd1`.
+
+**Format:**
+
+```powershell
+SymbolicLinks = @{
+    PowerToys = @{
+        Settings = @{
+            Path   = "{AppData}\Microsoft\PowerToys\PowerToys Run\Settings.json"
+            Target = "{RepoRoot}\Windows\PowerToys\Settings.json"
+        }
+    }
+    VSCode = @{
+        Path   = "{AppData}\Code\User\settings.json"
+        Target = "{RepoRoot}\VSCode\settings.json"
+    }
+}
+```
+
+**Path detection:**
+
+- Forward slashes (`/`) in `Target` → Creates WSL symlink
+- Backslashes (`\`) in `Target` → Creates Windows symlink
+
+The global instruction files of the AI apps (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`) and Claude
+Code's managed settings are not symbolic link entries: the rules are an [AI artifact](#ai-artifacts)
+that `Deploy-AiArtifacts` links.
+
+**Consumer function:** `SymbolicLinkMaker`
+
+---
+
+## Git Configuration
+
+**Key:** `GitConfig` → Hashtable of Git settings
+
+**Subkeys:**
+
+- `UserName` - Git commit author name (applied as `git config --global user.name`)
+- `UserEmail` - Git commit author email (applied as `git config --global user.email`)
+- `WingetPackageId` - The WinGet package id used to install Git
+
+**Consumer function:** `Install-Git`
+
+**Applied during:** Bootstrap with `git config --global` commands
+
+---
+
+## Git Status Arguments
+
+**Key:** `GitStatusArguments` → Array of strings, one element per `git status` argument (default `@('--short')`)
+
+The arguments `GitStatus` (alias `gs`) passes to `git status` when it is called with none. An empty array runs a plain `git status`. Arguments given on the call (`gs -v -v -u`) replace the configured ones entirely. An array replaces wholesale in `Configuration.local.psd1`, so supply the whole list there.
+
+**Consumer function:** `GitStatus`
+
+**Example:**
+
+```powershell
+# Configuration.local.psd1 - the verbose output GitStatus showed before it became configurable
+GitStatusArguments = @('-v', '-v', '-u')
+```
+
+---
+
+## NuGet Configuration
+
+**Key:** `PathTemplates.NuGetConfig` → Source and destination paths
+
+**Consumer function:** `Configure-NuGetConfig`
+
+---
+
+## Bootstrap Configuration
+
+Settings used during the Bootstrap process.
+
+### PackageManagers
+
+**Key:** `PackageManagers` → Array of opted-in package managers (`"WinGet"`, `"Scoop"`, `"Chocolatey"`)
+
+**Consumer function:** [`Resolve-PackageManagers`](../modules/bootstrap.md#resolve-packagemanagers), and through it [`Bootstrap`](../modules/bootstrap.md#bootstrap) and [`Upgrade-All`](../modules/system.md#upgrade-all)
+
+The opt-in list of package managers WinuX uses. A manager absent from this list is never installed by Bootstrap and never touched by `Upgrade-All`.
+
+Being listed is necessary but not sufficient: `Resolve-PackageManagers` also drops a listed manager whose effective app list has no entries for the current machine type (overlay included), because installing a package manager that then manages nothing is a download, a PATH entry and a shim directory bought for no apps. The list and the CSVs therefore cannot drift into that state - emptying an overlay is enough to stop installing its manager.
+
+The base ships **WinGet alone**: it carries the framework apps (PowerShell, Windows Terminal, PowerToys), while `ScoopApps.csv` and `ChocolateyApps.csv` ship empty. Add a manager in `Configuration.local.psd1` when your overlay gives it apps - arrays replace wholesale on merge, so name every manager you want, not just the additions:
+
+```powershell
+PackageManagers = @("WinGet", "Scoop")
+```
+
+Anything other than the three valid values is reported as unknown rather than silently ignored.
+
+### BootstrapConfig
+
+**Key:** `BootstrapConfig` → Hashtable of bootstrap process settings
+
+**Subkeys:**
+
+- `LogFileLocation` / `LogFilePrefix` - Where the bootstrap log is written (default: Desktop, `BootstrapLog`).
+- `RepositoryUpdateScope` - **Which** repository groups Bootstrap clones/updates, per machine type.
+  Each value is `"All"` or one or more group names from [`RepositoryGroups`](#repository-groups),
+  written as a comma-separated string (`"Work, Private"`) or an array (`@("Work", "Private")`).
+  Matched case-insensitively and kept in the order given; `Default` covers unlisted types;
+  absent → `"All"`. Resolved by `Resolve-RepositoryUpdateScope`. **Whether** the step runs at
+  all is `Steps.RepositoryUpdate` below - this key has no off value.
+- `Steps` - Per-step toggles for the Bootstrap sequence, resolved by `Resolve-BootstrapSteps`.
+  Each step is either a plain boolean or a per-machine-type hashtable with a `Default` fallback
+  (e.g. `WSL = @{ Default = $true; Test = $false }`). The whole section and individual keys are
+  optional - missing entries use the built-in defaults. Most steps default on because their
+  functions no-op when their configuration section is empty; the steps that act the moment they
+  run default OFF and are opted into here: `MicrosoftActivationScripts`, `Win11Debloat`,
+  `DeveloperMode`, `NuGetConfig` (prompts for a GitHub PAT), `UpgradeAll` (`Upgrade-All` runs
+  `winget upgrade --all` and its Scoop/Chocolatey equivalents, so it upgrades every package
+  already on the machine, not only the ones WinuX installs - the base spells this one out as
+  `$false` rather than leaving it to the default), `AiArtifacts` (machine-global AI skills, mods,
+  rules, prompts and agents linked into the apps [`AiArtifacts.Deploy`](#ai-artifacts) names via
+  `Deploy-AiArtifacts` - see [AI Artifacts](../ai/artifacts.md)), `AiMarketplaces` (Claude Code plugin marketplaces registered in the user's
+  Claude Code settings and their plugins installed through the CLI via `Deploy-AiMarketplaces` - see [AI Mods - Marketplaces](../ai/mods.md#marketplaces)),
+  `AiMcpServers` (the MCP servers of [`AiMcpServers`](#ai-mcp-servers) added to Claude Code through its CLI and to Codex's
+  `config.toml` via `Deploy-AiMcpServers` - see [AI MCP Servers](../ai/mcp-servers.md)),
+  `ObsidianCli` (`Enable-ObsidianCli -CreateIfMissing`
+  writes `"cli": true` into Obsidian's per-machine `%APPDATA%\obsidian\obsidian.json`, which a synced vault never carries,
+  so `Open-Obsidian` can load workspaces - see [Enable-ObsidianCli](guides/application/Enable-ObsidianCli.md)),
+  `VSCodeProfiles` (`Deploy-VSCodeProfiles` links the profile files of the [`VSCodeProfiles`](#vs-code-profiles)
+  entries this machine type deploys, registers missing profiles in VS Code's state and installs their extensions),
+  `RepositoryUpdate` (clones and pulls every repository the machine's `RepositoryUpdateScope`
+  names, which reaches outside this repository the moment it runs - forks that want the previous
+  always-on behaviour set it `$true`; how each repository is updated, including whether the default
+  branch is fast-forwarded too, follows [`RepositoryUpdate`](#repository-update)), `LockedStartLayout`. Per invocation,
+  `Bootstrap -Skip <steps>` / `-Include <steps>` override this config. The full step list in execution
+  order is documented next to the section in `Configuration.psd1`. Every
+  deprecated key or step name still in use is reported by `Test-ConfigurationSchema` at every
+  profile load and at the start of every `Bootstrap` - see [Deprecated Keys](#deprecated-keys).
+- `PersonalSteps` - Fork-defined optional bootstrap steps run right after `Upgrade-All`. Each
+  entry is either a function name string (runs on every machine type) or a hashtable
+  `@{ Function = "Install-MyTool"; Machine = "PC/Laptop" }` gated per machine type exactly like
+  the app CSVs' `Machine` column (`All` covers every machine; tokens are validated via
+  `Test-MachineTypeScope`, so unknown machine types are reported instead of silently never
+  matching). The base ships an empty list, so a vanilla bootstrap runs none; a fork lists its
+  personal tools in `Configuration.local.psd1`. Steps that do not resolve are skipped with a
+  warning.
+- `ExternalScripts` / `LocalScripts` - URLs and vendored script paths used by optional steps
+  (Microsoft Activation Scripts, Win11Debloat; the `MicrosoftActivationScripts` URL entry is not
+  read today, that step uses its built-in URL). The steps themselves are enabled via
+  `Steps.MicrosoftActivationScripts` / `Steps.Win11Debloat` (both off by default).
+- `DataFiles` - Repo-relative paths to the three package CSVs and the Conda environments folder.
+
+**Consumer functions:** `Bootstrap`, `Install-Bootstrap`
+
+### Taskbar Settings
+
+**Key:** `TaskbarSettings` → Hashtable of per-control values; the programmatic equivalent of the
+Settings > Personalisation > Taskbar page. Every key mirrors one control on that page one-to-one:
+the checkboxes and toggles take `$true` / `$false`, the dropdowns take one of the named tokens
+listed below (case insensitive, PascalCase of the dropdown label). Keys left out of the
+configuration are not touched; when the section is absent or empty (the shipped default - it is
+fully commented), Bootstrap changes nothing. A fork opts in via `Configuration.local.psd1`.
+
+The commented lines are not placeholders. They are the taskbar WinuX recommends and its author
+runs on every machine - search hidden, task view off, buttons combined, bar auto-hidden - so the
+window layouts do the work instead of the shell chrome. Uncomment the lot to get exactly that, or
+cherry-pick individual controls.
+
+Every control is a per-user `HKCU` registry value that Explorer only reads on startup, so one
+Explorer restart follows when any of them changed. Most are DWords; `AutomaticallyHideTheTaskbar`
+is one bit inside Explorer's `StuckRects3` binary blob, rewritten in place so the surrounding
+bytes are preserved.
+
+**Valid keys** (the page's controls in PascalCase, in page order):
+
+| Key | Accepted values |
+| --- | --- |
+| `Search` | `Hide`, `SearchIconOnly`, `SearchBox`, `SearchIconAndLabel` |
+| `TaskView` | `$true` / `$false` |
+| `Resume` | `$true` / `$false` |
+| `EmojiAndMore` | `Never`, `WhileTyping`, `Always` |
+| `PenMenu` | `$true` / `$false` |
+| `TouchKeyboard` | `Never`, `Always`, `WhenNoKeyboardAttached` |
+| `TaskbarAlignment` | `Left`, `Centre` (`Center` also accepted) |
+| `AutomaticallyHideTheTaskbar` | `$true` / `$false` |
+| `ShowBadgesOnTaskbarApps` | `$true` / `$false` |
+| `ShowFlashingOnTaskbarApps` | `$true` / `$false` |
+| `ShowTaskbarOnAllDisplays` | `$true` / `$false` |
+| `TaskbarAppsOnMultipleDisplays` | `AllTaskbars`, `MainTaskbarAndTaskbarWhereWindowIsOpen`, `TaskbarWhereWindowIsOpen` |
+| `ShareAnyWindowFromTaskbar` | `$true` / `$false` |
+| `SelectFarCornerToShowDesktop` | `$true` / `$false` |
+| `CombineTaskbarButtonsAndHideLabels` | `Always`, `WhenTaskbarIsFull`, `Never` |
+| `CombineTaskbarButtonsAndHideLabelsOnOtherTaskbars` | `Always`, `WhenTaskbarIsFull`, `Never` |
+| `ShowSmallerTaskbarButtons` | `Always`, `Never`, `WhenTaskbarIsFull` |
+
+**Example:**
+
+```powershell
+TaskbarSettings = @{
+    Search                             = "Hide"
+    TaskView                           = $false
+    TaskbarAlignment                   = "Centre"
+    AutomaticallyHideTheTaskbar        = $true
+    ShowBadgesOnTaskbarApps            = $true
+    CombineTaskbarButtonsAndHideLabels = "Always"
+}
+```
+
+**Consumer function:** `Set-TaskbarSettings`
+
+> [!NOTE]
+> This is the taskbar *settings page*. Which apps are **pinned** to the taskbar is a separate
+> key, `TaskbarConfiguration`, consumed by `Configure-Taskbar`.
+
+### Visual Effects
+
+**Key:** `VisualEffects` → Hashtable of per-effect booleans; the programmatic equivalent of the
+"Custom" profile in System Properties > Performance Options > Visual Effects. Every key mirrors
+one dialog checkbox one-to-one: `$true` = effect on (appearance), `$false` = effect off
+(performance). Keys left out of the configuration are not touched; when the section is absent or
+empty (the shipped default - it is fully commented), Bootstrap changes nothing. A fork opts in
+via `Configuration.local.psd1`. Explorer/DWM-backed effects are written to the registry, the
+rest through `SystemParametersInfo`; when at least one effect is managed the dialog's radio
+button is set to "Custom" (`VisualFXSetting = 3`).
+
+**Valid keys** (the dialog checkboxes in PascalCase): `AnimateControlsAndElementsInsideWindows`,
+`AnimateWindowsWhenMinimisingAndMaximising`, `AnimationsInTheTaskbar`, `EnablePeek`,
+`FadeOrSlideMenusIntoView`, `FadeOrSlideToolTipsIntoView`, `FadeOutMenuItemsAfterClicking`,
+`SaveTaskbarThumbnailPreviews`, `ShowShadowsUnderMousePointer`, `ShowShadowsUnderWindows`,
+`ShowThumbnailsInsteadOfIcons`, `ShowTranslucentSelectionRectangle`,
+`ShowWindowContentsWhileDragging`, `SlideOpenComboBoxes`, `SmoothEdgesOfScreenFonts`,
+`SmoothScrollListBoxes`, `UseDropShadowsForIconLabelsOnTheDesktop`
+
+**Example:**
+
+```powershell
+VisualEffects = @{
+    SmoothEdgesOfScreenFonts        = $true
+    ShowWindowContentsWhileDragging = $true
+    AnimationsInTheTaskbar          = $false
+    EnablePeek                      = $false
+}
+```
+
+**Consumer function:** `Set-VisualEffects`
+
+---
+
+## AI Artifacts
+
+**Key:** `AiArtifacts` → Hashtable: where the AI artifacts (skills, mods, rules, prompts, agents) live, which upstream repositories they are vendored from, which are left out, and which AI apps each machine type deploys them into
+
+**Consumer functions:** [`Deploy-AiArtifacts`](../modules/ai.md#deploy-aiartifacts), [`Update-AiArtifacts`](../modules/ai.md#update-aiartifacts), [`List-AiArtifacts`](../modules/ai.md#list-aiartifacts), [`Get-AiArtifactPlan`](../modules/ai.md#get-aiartifactplan), [`Get-AiArtifactRoster`](../modules/ai.md#get-aiartifactroster), all through [`Resolve-AiArtifactsConfig`](../modules/ai.md#resolve-aiartifactsconfig)
+
+**Subkeys:**
+
+- `Root` - The artifacts root (default `{RepoRoot}\AI`). Items live kind first: `<Root>\<Kind>\<source>\<item>`, `Kind` one of `Skills`, `Mods`, `Rules`, `Prompts`, `Agents`. The source folders read are `own` (read first, so it wins a name clash), `winux` (the product skills), `example` (the example rules) and every `Sources` entry; any other folder is not read.
+- `Sources` - Upstream repositories vendored by `Update-AiArtifacts`, keyed by the source folder name. Each entry: `Repository` (`owner/name`), `Ref` (branch, tag or commit; default `main`; `UPSTREAM.md` records the exact commit), one key per kind naming the upstream folders that hold its items (`Skills`, `Mods`, `Rules`, `Prompts`, `Agents`; `.` is the repository root; no kind key reads `Skills = @("skills")`), `Exclude` (item names not to vendor) and `SkipPaths` (top-level entries of an item not to copy; default `.git`, `.github`, `tests`, `design`, `docs`). Ships empty.
+- `Exclude` - Items not to deploy: `"kind/name"` (every source, e.g. `"skills/tdd"`) or `"kind/source/name"` (one source, e.g. `"rules/example/CoreAiRules"`); an entry may be `@{ Item = "skills/tdd"; Machine = "Work" }` for one machine scope. An array - it replaces wholesale on merge. Ships empty.
+- `Use` - Per kind, the item a `File` destination takes (the rules linked as `CLAUDE.md`, `AGENTS.md`, ...); without one such a destination links nothing. A value may be per machine type: `@{ Default = "CoreAiRules"; Work = "WorkRules" }`. Ships `@{ Rules = "CoreAiRules" }`, the example rules skeleton.
+- `Deploy` - Per machine type, the [`AiHarnesses`](#ai-harnesses) entries this machine deploys into; `Default` covers every machine type without its own key. Ships `@{ Default = @() }`: nothing is deployed.
+
+Only `{RepoRoot}`, `{User}` and `{AppData}` are expanded in this section - it does not go through `PathTemplates`. Deployment is opt-in via `BootstrapConfig.Steps.AiArtifacts`. Design: [AI Artifacts](../ai/artifacts.md).
+
+```powershell
+AiArtifacts = @{
+    Sources = @{
+        mattpocock = @{
+            Repository = "OWNER/skills"
+            Ref        = "main"
+            Skills     = @("skills/engineering", "skills/productivity")
+        }
+    }
+    Exclude = @("rules/example/CoreAiRules")
+    Use     = @{ Rules = "CoreAiRules" }
+    Deploy  = @{
+        Default = @("claude-code", "codex")
+        Work    = @("claude-code")
+    }
+}
+```
+
+---
+
+## AI Harnesses
+
+**Key:** `AiHarnesses` → Hashtable: the AI apps `Deploy-AiArtifacts` can deploy into, and where each one reads each kind
+
+**Consumer functions:** [`Deploy-AiArtifacts`](../modules/ai.md#deploy-aiartifacts), [`List-AiArtifacts`](../modules/ai.md#list-aiartifacts), [`Get-AiArtifactPlan`](../modules/ai.md#get-aiartifactplan), through [`Resolve-AiArtifactsConfig`](../modules/ai.md#resolve-aiartifactsconfig)
+
+The base ships an inactive catalogue - `claude-code`, `codex`, `gemini-cli`, `copilot` - each checked against the app's documentation; `AiArtifacts.Deploy` turns entries on. Per entry:
+
+- `WSL` - `$true`: every destination with a WSL twin is deployed inside the default WSL distribution too (`DefaultWSLDistribution`, as `DefaultWSLUsername`), one `wsl` call per destination.
+- `Destinations` - One hashtable per destination: `Kind` (`Skills`, `Mods`, `Rules`, `Prompts`, `Agents`), `Placement` (`Each`: `Path` is a folder, one link per item; `Copy`: the same, copied; `File`: `Path` is one file, linked to the item `AiArtifacts.Use` names), `Files` (the first one the item has: `.` is the item folder, a file name is that file, linked as `<item>` plus its extension), `Hooks` (optional: `claude-plugin-dirs` lists the links in `env.CLAUDE_CODE_PLUGIN_DIRS` of the Claude Code `settings.json` and validates them; `managed-settings` makes the WSL twin as root), `Path` (the Windows destination), `WSLPath` (optional: the WSL twin, when it is not a `{User}` path mapped onto `/home/<DefaultWSLUsername>`) and `Machine` (optional machine scope, `"PC/Work"`).
+
+A destination two harnesses name is filled once. A fork adds an app with an entry of its own; a same-named entry deep-merges, but `Destinations`, an array, replaces the base list wholesale. The full catalogue with its sources is on [AI Artifacts - The base catalogue](../ai/artifacts.md#the-base-catalogue).
+
+```powershell
+AiHarnesses = @{
+    "my-app" = @{
+        WSL          = $false
+        Destinations = @(
+            @{ Kind = "Skills"; Placement = "Copy"; Files = @("."); Path = "{User}\.my-app\skills" }
+            @{ Kind = "Rules"; Placement = "File"; Files = @("RULES.md"); Path = "{User}\.my-app\RULES.md" }
+        )
+    }
+}
+```
+
+---
+
+## AI Marketplaces
+
+**Key:** `AiMarketplaces` → Hashtable: the Claude Code plugin marketplaces every machine registers, the plugins installed from them, the variables those plugins need Claude Code to read from its settings, and the options seeded for those plugins
+
+**Consumer functions:** [`Deploy-AiMarketplaces`](../modules/ai.md#deploy-aimarketplaces)
+
+A plugin marketplace is a repository carrying `.claude-plugin\marketplace.json`; Claude Code installs its plugins as `<plugin>@<marketplace>` and keeps them updated.
+
+- `Marketplaces` - The marketplaces to register, keyed by the name Claude Code knows them by (the `name` in the marketplace manifest). Each entry: `Repository` (`owner/name` on GitHub), `Plugins` (the plugin names to install from it; optional) and `Env` (optional; a hashtable of environment variables the plugins need Claude Code to read from the `env` block of its settings file, written as strings under `env.<name>`, every other variable kept; a name must be a valid variable name; marketplaces are written in name order, so a variable two of them name ends with the value of the last). `Env` is for a switch a plugin cannot set for itself: Claude Code 2.1.286 loads hooks modules only with `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS = "1"`, and 2.1.287 and later ignore it. Ships empty.
+- `PluginConfigs` - Options written beneath the plugin's `pluginConfigs` entry of the settings file, keyed by plugin name. A plugin a configured marketplace lists is written as Claude Code keys an installed plugin, `pluginConfigs.<plugin>@<marketplace>`; any other name as given. The shape beneath the plugin is the plugin's own (a plugin that reads `options`: `options = @{ ... }`); each child key replaces the same key in the file and leaves the other children alone. Values keep their type (`$true` stays a JSON boolean; the string `"true"` stays a string, which a plugin with a boolean option drops as invalid). Ships empty.
+
+**Side effect:** `Deploy-AiMarketplaces` writes `extraKnownMarketplaces.<name>`, `env.<variable>` and `pluginConfigs.<plugin>@<name>.<key>` of the user's `~\.claude\settings.json` (and of `/home/<DefaultWSLUsername>/.claude/settings.json` in WSL), every other setting kept, and runs `claude plugin marketplace add <owner/name>` for marketplaces the CLI does not list yet and `claude plugin install <plugin>@<name>` for plugins it does not list yet.
+
+Deployment is opt-in via `BootstrapConfig.Steps.AiMarketplaces`. A plugin loaded from a folder (an `AiArtifacts` mod) and installed from a marketplace would run twice: give each plugin one path; `Deploy-AiMarketplaces` warns about a `CLAUDE_CODE_PLUGIN_DIRS` folder that duplicates a marketplace plugin. Design: [AI Mods - Marketplaces](../ai/mods.md#marketplaces).
+
+```powershell
+AiMarketplaces = @{
+    Marketplaces  = @{
+        "my-marketplace" = @{
+            Repository = "MyOrg/MyMarketplace"
+            Plugins    = @("my-plugin")
+            Env        = @{ CLAUDE_CODE_ENABLE_FUNCTION_HOOKS = "1" }
+        }
+    }
+    PluginConfigs = @{
+        "my-plugin" = @{ options = @{ theme = "dark"; pulse = $true } }
+    }
+}
+```
+
+---
+
+## AI MCP Servers
+
+**Key:** `AiMcpServers` → Hashtable: the MCP servers every machine adds to Claude Code and Codex, and which of the two apps each machine type gets them
+
+**Consumer functions:** [`Deploy-AiMcpServers`](../modules/ai.md#deploy-aimcpservers)
+
+An MCP server is not an artifact a link can carry: Claude Code keeps its servers in the user's `~\.claude.json`, Codex in `~\.codex\config.toml`, so they are written there.
+
+- `Deploy` - The apps to add the servers to, per machine type with a `Default` fallback (`@{ Default = @("claude-code", "codex"); Work = @("claude-code") }`), or one array for every machine type. The values are `claude-code` and `codex`; any other is warned about and skipped. Ships empty, so nothing is added until a fork names an app.
+- `Servers` - One entry per server, keyed by its name (letters, digits, `-` and `_`; the name each app lists it under). An entry is either an HTTP server - `Url` (an `http(s)` address), optional `Transport` (`http`, the default, or `sse`, which Codex cannot read, so an `sse` server reaches Claude Code only), optional `Headers` (a hashtable of header names and values) and optional `BearerTokenEnvVar` (the name of the environment variable holding a token: Claude Code gets an `Authorization: Bearer ${VAR}` header it expands when it starts, Codex `bearer_token_env_var`; not together with an `Authorization` header) - or a stdio server: `Command`, optional `Args` (an array) and optional `Env` (a hashtable of variables, as strings). Optional `Machine` scopes an entry to some machine types (`"PC/Work"`, validated by `Test-MachineTypeScope`). An entry with both `Url` and `Command`, neither, or a key the other kind takes is reported and skipped. Ships empty.
+
+**Side effect:** `Deploy-AiMcpServers` runs `claude mcp add --scope user` for every server the `mcpServers` block of `~\.claude.json` does not carry yet, and `claude mcp remove --scope user` followed by `claude mcp add` for one it carries with another definition (on Windows and against the Claude Code CLI inside WSL), and writes each server's `[mcp_servers.<name>]` table into `~\.codex\config.toml` (`$env:CODEX_HOME\config.toml` when set; `/home/<DefaultWSLUsername>/.codex/config.toml` in WSL), every other line of the file kept. Servers are added and updated, never removed.
+
+Deployment is opt-in via `BootstrapConfig.Steps.AiMcpServers`. Never put a secret in the configuration: a token belongs in the environment variable `BearerTokenEnvVar` names. A server that signs in with OAuth needs the sign-in once per machine and app (`/mcp` in Claude Code, `codex mcp login <name>`). Design: [AI MCP Servers](../ai/mcp-servers.md).
+
+```powershell
+AiMcpServers = @{
+    Deploy  = @{ Default = @("claude-code", "codex") }
+    Servers = @{
+        "my-remote" = @{ Url = "https://mcp.example.com/mcp" }
+        "my-keyed"  = @{
+            Url               = "https://api.example.com/mcp"
+            Headers           = @{ "X-Project" = "MyProject" }
+            BearerTokenEnvVar = "MY_API_KEY"
+        }
+        "my-local"  = @{
+            Command = "npx"
+            Args    = @("-y", "my-mcp-server")
+            Env     = @{ LOG_LEVEL = "info" }
+            Machine = "PC/Work"
+        }
+    }
+}
+```
+
+---
+
+## Backups
+
+Retention limits for the unified backup sink at `<Repo>\Backups\Windows` (gitignored), where every WinuX writer keeps a timestamped copy of whatever it replaces - files displaced by symlinks, rewritten configuration files, overwritten system files. See [Backups](../reference/backups.md) for the full policy.
+
+**Keys:**
+
+- `Backups.Retention.MaxAgeDays` - Delete backups older than this many days. Ships `0` (never) - replaced originals are precious, unlike logs.
+- `Backups.Retention.MaxBackupsPerKey` - Keep at most this many timestamped backups per key, newest retained. Ships `10`; also enforced opportunistically after every backup.
+- `Backups.Retention.MaxTotalSizeMB` - Cap the whole sink's combined size, oldest removed first. Ships `500`.
+
+A limit set to `0` is disabled. Whatever the limits, **the newest backup of every key is never deleted**. Enforced by `Clear-OldBackups`, which the idle-time maintenance sweep (`Invoke-LogMaintenance`) runs automatically.
+
+---
+
+## Administrator Elevation
+
+### Auto Elevate
+
+Whether functions that need Administrator privileges relaunch in the Administrator PowerShell without asking first. In a non-elevated shell, `Test-AdminPrivileges` normally asks "Do you want to open the Administrator PowerShell and rerun the command?" and, on Yes, reruns the typed command elevated from the same directory. With `AutoElevate = $true` the question is skipped and the relaunch happens straight away.
+
+**Key:** `AutoElevate` → `$true` or `$false` (`$false` out of the box)
+
+**Consumer function:** `Test-AdminPrivileges`
+
+The Windows UAC consent dialog still appears either way: it is raised by Windows for the elevated relaunch and cannot be suppressed from PowerShell. An explicit `-AutoElevate` or `-AutoElevate:$false` passed to `Test-AdminPrivileges` wins over the key. `Test-AdminPrivileges -CheckOnly` never reads it. Set it in `Configuration.local.psd1`:
+
+```powershell
+AutoElevate = $true
+```
+
+---
+
+## Deprecated Keys
+
+Keys and step names that still work but are removed in the next MAJOR release ([VERSIONING.md](https://github.com/IvanPavlak/WinuX/blob/master/Windows/VERSIONING.md), Deprecation policy). `Test-ConfigurationSchema` reports every one still in use - at every profile load and at the start of every `Bootstrap` - as one warning naming the key, the release that deprecated it, the removal and the replacement. A deprecation is never an error, not even under `-Strict`. A key the base still ships is reported only when it differs from the shipped default, so a vanilla configuration stays silent.
+
+There are none currently. The keys removed by a MAJOR release, with their migration, are listed under its `### Removed` section in the changelog.
+
+---
+
+## More Sections (quick reference)
+
+Sections not detailed above, with their real shapes and consumers:
+
+| Key | Shape | Purpose | Consumer |
+| --- | --- | --- | --- |
+| `MachineOverrides` | `@{ <Type> = @{ ... } }` | Machine-specific values merged over the expanded paths after placeholder expansion - only for what cannot be templated (ships empty) | `Expand-ConfigPaths` |
+| `NerdFonts` + `DefaultNerdFont` | [ordered section](#ordered-sections): `@( @{ <FontName> = @{ FolderName; SearchPattern } } ... )` | Repo-bundled fonts installable by name; `DefaultNerdFont` selects the one Bootstrap installs (ships empty - `Configure-NerdFont` no-ops until set in `Configuration.local.psd1`) | `Configure-NerdFont` |
+| `SpecialFolders` | array of `@{ Path; Name; Value; Description }` registry entries | Special-folder redirections, e.g. Downloads/Screenshots → Desktop (ships empty - `Set-SpecialFolders` no-ops until set in `Configuration.local.psd1`) | `Set-SpecialFolders` |
+| `ExplorerOptions` | array of registry entries (ships empty - Win11Debloat covers the defaults) | File Explorer tweaks applied via the registry | `Set-ExplorerOptions` |
+| `AutoEnvironmentVariables` | name → path (placeholders allowed) | User environment variables written by `Set-EnvironmentVariables -Auto` (ships empty - no-ops until set in `Configuration.local.psd1`) | `Set-EnvironmentVariables` |
+| `AutoPathAdditions` | array of directories | Directories persisted onto the User `PATH`, e.g. Oh My Posh install locations (ships empty - no-ops until set in `Configuration.local.psd1`) | `Set-EnvironmentVariables` |
+| `Logging` | `@{ DefaultLevel; Colors; FileLogging; Maintenance }` | Console verbosity at session start (`Quiet`/`Normal`/`Verbose`), per-level console colors (plus `Info`, Blue, a color that belongs to no level, for `-Style Info` and `Write-LogSegments`), file-logging settings, and automatic idle-time log maintenance | Logging module (`Write-Log*`, `Set-LogLevel`, `Invoke-LogMaintenance`) |
+| `BrowserGroupMatching` | `@{ BrowserProcessNames; KeywordExtraction; Matching; ExactTitle; NegativeMatching }` | Maps browser labels to process names and tunes URL-keyword extraction for detecting already-open browser groups; `ExactTitle` holds the exact-title rules for provider homepages and `NegativeMatching` the shared-provider services excluded when checking a bare provider homepage | `Test-BrowserGroupAlreadyOpen`, `Resolve-SwaggerBrowserGroup` |
+| `LaptopChassisTypes` | array of WMI chassis type codes | The chassis types that count as a laptop (ships `@(8, 9, 10, 11, 14, 30, 31, 32)`), which decides the power plan `Test-PowerPlan` expects | `Test-PowerPlan` |
+| `CampaignResources` | [ordered section](#ordered-sections): `@( @{ <Campaign> = @{ Pdf; Browser } } ... )` | Per-campaign rulebook PDF (an `AcrobatPdfGroups` name) and resource browser group (a `BrowserGroups` name) | `Open-DnD` |
+| `RunProject` | `@{ Steps = @{ Docker = <bool or per-machine-type hashtable> } }` | Optional `Run-Project` steps, resolved like `KillAll.Steps`; `Docker` (on by default) starts the Docker stacks a project mapping declares through `DatabaseProviders` or `UsesDocker` | `Run-Project` (via `Resolve-RunProjectSteps`) |
+| `DockerCleanupActions` | array of `@{ Name; Description; Command; PreviewCommand; ConfirmationMessage }` (`Description`, `PreviewCommand` and `ConfirmationMessage` optional) | The `Docker-Cleanup` menu entries, run in this order (the menu adds an `All` option). `PreviewCommand` lists what the action would stop or remove and an empty list skips it; an entry with a `ConfirmationMessage` runs only after an explicit "Yes". Ships five actions that together wipe containers, images, volumes, unused networks and the build cache. The array replaces wholesale on merge | `Docker-Cleanup` |
+| `DockerCleanupStartMode` | `"Ask"`, `"Always"` or `"Never"` | What `Docker-Cleanup` does when the Docker daemon is not running: ask whether to start it (Enter means Yes; the shipped default, also used for an empty or unknown value), start it without asking, or warn and return. Docker is started through `DockerWizard`, so `DockerTimeouts.StartSeconds` applies | `Docker-Cleanup` |
+| `DotnetProjectsSearchPath` | path string (placeholders allowed) | Where `Determine-DotnetDependencies` searches for .NET projects (ships `"{Dev}"`). The function currently looks the key up under the expanded `PathTemplates` instead of the top level, so the shipped value is not picked up and the search falls back to `{User}\Development`; until that is fixed, set `PathTemplates.DotnetProjectsSearchPath` in your override | `Determine-DotnetDependencies` |
+| `DotnetEFVersion` | version string | The `dotnet-ef` version Bootstrap installs: empty (the shipped value) installs the latest, `"8.*"` or `"8.0.11"` pins one | `Install-DotnetEf` |
+| `PostgreSqlPasswords` | `@{ DefaultOrCurrent; New }` | Current and new PostgreSQL password (ships empty - `Configure-PostgreSqlPasswords` does nothing until set in `Configuration.local.psd1`, and Bootstrap no longer calls it). Never put a real password in the tracked base file | `Configure-PostgreSqlPasswords` |
+| `SimpleLayoutWorkspaces` | array of workspace names | Workspaces handled as simple layouts: `Fullscreen` places every window in its monitor's fullscreen zone, `Empty` places none; neither tracks positioned windows (ships `@("Fullscreen", "Empty")`) | `Set-WorkspaceWindowLayout` (reads), `Add-WindowLayout -Simple` (writes) |
+| `FunctionDiscrepancyExclusions` | array of function names | Names `List-Functions -ListDiscrepancies` never reports (ships `Install-Bootstrap`, `fastfetch`, `Get-PoshStackCount`) | `List-Functions` |
+| `ListFunctionsColors`, `ShowFunctionDetailsColors` | `@{ Border; DiscrepancyError; DiscrepancySuccess }`, `@{ FunctionName; Description; Parameters }` | Console colors of the two function browsers; see [Console Colors](#console-colors) | `List-Functions`, `Show-FunctionDetails` |
+| `DefaultTranslateLanguages` | `@{ OutputLanguage }` | The language `Invoke-GoogleTranslate` (`translate`) translates into when `-OutputLanguage` is not given (ships `"English"`) | `Invoke-GoogleTranslate` |
+
+---
+
+## Wake-on-LAN Configuration
+
+Allows waking machines over LAN via `Send-WakeOnLan`, and checking reachability via `Test-MachineOnline`.
+
+**Keys:**
+
+- `WakeOnLanConfig` → Ordered list of `@{ <MachineName> = @{ MacAddress; SubNetSpecificBroadcastAddress; Port; Address } }`. An [ordered section](#ordered-sections): the menu offers the machines in the order written here (quote a name with spaces, e.g. `"Proxmox Backup Server"`). `Send-WakeOnLan` appends its own `All` and `None` options - they are not machines and are never configured.
+- `DefaultWakeOnLanMachine` - Default target machine
+
+The optional `Address` (IP or hostname) makes Wake-on-LAN reliable: `Send-WakeOnLan` pings it to skip machines that are already on, and polls it after sending to confirm the machine actually woke up. Omit it (or set `""`) for fire-and-forget behaviour with no ping checks.
+
+The base ships both keys empty; `Send-WakeOnLan` and `Test-MachineOnline` warn and no-op until you set them in `Configuration.local.psd1` (no placeholder packet is ever sent).
+
+**Consumer functions:** `Send-WakeOnLan`, `Test-MachineOnline`
+
+**Example (opt-in via `Configuration.local.psd1`):**
+
+```powershell
+WakeOnLanConfig = @(
+    @{ Server = @{
+            MacAddress                     = "AA-BB-CC-DD-EE-FF"
+            SubNetSpecificBroadcastAddress = "192.168.1.255"
+            Address                        = "192.168.1.10"  # IP or hostname; "" to disable ping checks
+            Port                           = 9
+        }
+    }
+)
+```
+
+---
+
+## Repository Groups
+
+Maps Git repository URLs to local paths for `Update-Repositories`, grouped by category.
+
+**Key:** `RepositoryGroups` → Ordered list of repository groups
+
+**Group format:**
+
+```powershell
+RepositoryGroups = @(
+    @{ Private = @(
+            @{
+                Name      = "Dotfiles"                          # Repository name (selection + by-name updates)
+                UrlPath   = "Universal.GitHub.Private.Dotfiles" # Dot-notation path to URL in config
+                LocalPath = "Projects.Self.Root"                # Dot-notation path to local directory
+            }
+        )
+    }
+)
+```
+
+**Group names are freely configurable and never known to code.** Add, rename or remove groups as you like: `Update-Repositories -Group <name>[, <name>]` takes whatever keys you define (matched case-insensitively), `-All` and the interactive menu follow the whole list, and an unknown name is reported with the configured ones rather than guessed at. Repositories are walked in the order the configuration lists them - inside a group and across several requested groups - and a repository listed in more than one selected group is updated only once.
+
+**Consumer functions:** `Resolve-RepositoryTargets` (expands a selection), `Update-Repositories`, `Initialize-Repository`, `Resolve-ProjectPath -ForRepository` (resolves one entry)
+
+---
+
+## Repository Update
+
+**How** the repositories in [`RepositoryGroups`](#repository-groups) are updated, and whether the shell refreshes them on its own. `RepositoryGroups` says which repositories exist; this section changes no list. Everything ships **off**.
+
+**Key:** `RepositoryUpdate` → Hashtable
+
+```powershell
+RepositoryUpdate = @{
+    IncludeDefaultBranch = $false   # also fast-forward the default branch
+    DefaultBranch        = ""       # "" => origin/HEAD => skipped
+    Startup              = @{
+        Enabled       = $false      # automatic update after the first prompt
+        Schedule      = "Daily"     # "Daily" (once a day) or "Interval"
+        DayStartHour  = 6           # Daily: the hour a new day starts
+        IntervalHours = 24          # Interval: minimum hours between automatic runs
+        # Scope       = @{ Default = "All" }   # absent => BootstrapConfig.RepositoryUpdateScope => "All"
+    }
+}
+```
+
+| Key | Type | Default | What it controls |
+| --- | ---- | ------- | ---------------- |
+| `IncludeDefaultBranch` | bool | `$false` | After the checked-out branch is pulled, also fast-forward the repository's default branch with `git fetch origin <default>:<default>`. Git refuses anything but a fast-forward and the working tree and stash are never touched. A default branch that was never checked out locally is skipped, never created. `Update-Repositories -IncludeDefaultBranch` or `-IncludeDefaultBranch:$false` overrides it for one call. The Bootstrap repository step follows it too. |
+| `DefaultBranch` | string | `""` | The default branch's name. Empty uses what the remote reports (`refs/remotes/origin/HEAD`); when the remote reports nothing the step is skipped with a warning. Leave it empty when your repositories do not share one default branch. Replaces `BootstrapConfig.DefaultBranch`, which was removed in 0.1.86 (it was never read). |
+| `Startup.Enabled` | bool | `$false` | Update repositories automatically once the first prompt of a shell is drawn (profile stage `RepositoryUpdate`, deferred until the shell is idle). Never clones a missing repository and never asks for Administrator. Prints one line per repository plus a totals line. |
+| `Startup.Schedule` | string | `"Daily"` | When an automatic run is due, tracked by the stamp file `Logs\.last-repository-update`. `"Daily"`: once per day - the first shell after the day starts runs it, and a shell already open then (a terminal left open overnight, a machine woken from sleep) runs it at its first prompt after the day starts (`Register-RepositoryUpdatePromptCheck`), so it never starts on its own in the middle of the day. `"Interval"`: at most once per `IntervalHours`, counted from the last run and checked only when a shell starts. Anything else reads as `"Daily"`. Either way the stamp records the last run, so a machine that was off for days updates on its first shell back. |
+| `Startup.DayStartHour` | int | `6` | Daily only. The hour (0-23) a new day starts: a shell opened before it still counts as the day before, so late work past midnight never triggers a run. Out of range or not a number reads as `6`. |
+| `Startup.IntervalHours` | int | `24` | Interval only. Minimum hours between two automatic runs; `0` runs it in every shell. |
+| `Startup.Scope` | hashtable | absent | Which groups the automatic run updates, per machine type, in the same shape as [`BootstrapConfig.RepositoryUpdateScope`](#bootstrapconfig): `"All"`, a group name, a comma-separated string or an array, with a `Default` fallback. Absent falls back to `BootstrapConfig.RepositoryUpdateScope`, then to `"All"`. |
+
+**Consumer functions:** `Update-Repositories` (`IncludeDefaultBranch`), `Resolve-RepositoryDefaultBranch` (`DefaultBranch`), `Get-RepositoryUpdateStartupSettings` (`Startup`, for `Invoke-StartupRepositoryUpdate` and `Register-RepositoryUpdatePromptCheck`), `Invoke-StartupRepositoryUpdate` (`Startup.Scope`)
+
+---
+
+## PSReadLine (Interactive Shell Options)
+
+Every editing, history and prediction option the profile applies to PSReadLine on shell start, in one section. Applied by `Initialize-PSReadLine` (System module), which the profile calls after `Import-Module PSReadLine` and **before** `Initialize-OhMyPosh` - `EditMode` installs a whole key map, and applying it after a theme has bound `Enter` for its transient prompt would reset that binding.
+
+Every key is optional. `$null` (or a missing key) means "do not touch it": `Initialize-PSReadLine` makes no call for that key and PSReadLine keeps its own default. The base ships the behaviour the profile always hardcoded and leaves the history limits alone.
+
+**Keys:**
+
+- `EditMode` - `Windows`, `Emacs` or `Vi`. Ships `Windows`. Always applied first.
+- `KeyHandlers` - `@{ <Key> = "<PSReadLine function>" }`, one `Set-PSReadLineKeyHandler` per entry. Ships `UpArrow = "HistorySearchBackward"` and `DownArrow = "HistorySearchForward"` (prefix search instead of plain history walk). Merges per key: add a binding by adding a key; drop a base binding by setting that key to `$null`.
+- `MaximumHistoryCount` - **Opt-in.** Positive integer. Sets **both** PSReadLine's recall cap (arrow keys, `Ctrl+R`) and the session `$MaximumHistoryCount` (`Get-History`, `Invoke-History`); the latter is clamped to PowerShell's 32767 ceiling, so 32767 makes the two agree exactly. Ships `$null` (PSReadLine's own 4096). Anything that is not a positive integer is reported with a warning at shell start and both limits are left alone. PSReadLine never trims its history file - it appends every command and loads the newest `MaximumHistoryCount` lines at startup - so this is what is recallable, not what is stored.
+- `HistorySavePath` - **Opt-in.** Where PSReadLine writes its history file. `%ENV%` variables are expanded. Ships `$null` (PSReadLine's `%APPDATA%\Microsoft\Windows\PowerShell\PSReadLine\ConsoleHost_history.txt`).
+- `HistoryNoDuplicates` - `$true`/`$false`. Ships `$true`. Hides repeated commands during recall and search (each distinct line shown once, at its most recent position); every invocation is still written to the file.
+- `PredictionSource` - `None`, `History`, `Plugin` or `HistoryAndPlugin`. Ships `History`.
+- `PredictionViewStyle` - `InlineView` or `ListView`. Ships `ListView`.
+
+The two prediction keys are applied last and inside a `try`/`catch`: they are the only calls that throw on a console without virtual-terminal support (redirected output, CI, automation hosts), and everything above them has already applied when they do.
+
+**Consumer function:** `Initialize-PSReadLine`
+
+**Example:**
+
+```powershell
+# Configuration.local.psd1 - raise both recall limits, keep everything else
+PSReadLine = @{
+    MaximumHistoryCount = 32767
+}
+```
+
+See [Initialize-PSReadLine](guides/system/Initialize-PSReadLine.md).
+
+---
+
+## Terminal Greeting (startup and the `c` alias)
+
+What a shell greets you with, and what `c` (`Show-TerminalGreeting`, System module) redraws. Three steps, each its own exported function and each switchable on its own: `Clear` (`Clear-Host`, ships on), `Fastfetch` (the fastfetch system info panel, font-fitted, ships on) and `Onefetch` (the onefetch repository panel, ships **off**).
+
+Onefetch is opt-in: it is only meaningful inside a git repository, and not every machine has the binary. Turned on, it is still skipped silently outside a repository, so there is no directory where the greeting errors. Every step skips itself silently when its binary is missing, and `Set-LogLevel Verbose { c }` says why.
+
+Resolved by `Resolve-TerminalGreetingSettings`, per key: an explicit parameter on the `Show-TerminalGreeting` call beats the configured value, which beats the built-in default. A value outside its range, or not an integer, is reported with a warning at the prompt and the built-in default is used for that key; `$null` (or a missing key) means "use the default" silently. The base ships the built-in defaults, so a vanilla install, a missing section and a fork that has not migrated all behave identically.
+
+**Keys:**
+
+- `Clear.Enabled` - Boolean. Whether the screen is cleared. Ships `$true`.
+- `Fastfetch.Enabled` - Boolean. Whether the system info panel is shown. Ships `$true`.
+- `Onefetch.Enabled` - Boolean. Whether the repository panel is shown. Ships `$false`.
+- `Onefetch.IncludeInAutoFit` - Boolean. Whether onefetch's height counts towards the font fit, so both panels are fitted together. Ships `$true`. Off fits fastfetch alone, and onefetch then scrolls the top of the panel away when the two do not both fit.
+- `Onefetch.InProjectTerminals` - Boolean. Whether `Open-ProjectTerminals` appends `Invoke-Onefetch` to each project tab's command, after the `Set-Location`. Ships `$true`. The terminal greeting cannot cover those tabs and no configuration can make it: a tab is spawned as `pwsh -NoExit -EncodedCommand <Set-Location ...>`, and PowerShell runs the profile BEFORE the encoded command, so the greeting tests whatever directory Windows Terminal started the tab in rather than the project it is about to move to. Appending the call after `Set-Location` is the only point at which the tab is standing in the repository. `-InvokeOnefetch` on the call wins over this key.
+- `Onefetch.Arguments` - Array of strings. Extra arguments for the onefetch binary, for example `@("--no-art")` or `@("--no-merges")`. Ships `@()`. **Arrays replace wholesale on merge**, so write the whole list. This is onefetch's only configuration surface: it has no configuration file, so unlike fastfetch there is nothing to dotfile and symlink, and this array is where its whole appearance lives.
+- `Onefetch.Style` - Hashtable. What the command line cannot say, rewritten in onefetch's output afterwards by `Format-OnefetchPanel`. Ships off. Needs the all-hosts profile linked (the global `onefetch` wrapper lives there) and a terminal that renders a true colour - Windows Terminal or WezTerm, the same guard the fastfetch image logo sits behind.
+- `Onefetch.Style.Enabled` - Boolean. Whether the panel is restyled at all. Ships `$false`.
+- `Onefetch.Style.Separator` - String. Replaces the hardcoded `:` after each field name, which no onefetch flag can: in `--text-colors`, "colon" is a *colour* slot rather than a string, and `--number-separator` is the thousands separator inside numbers. `" -> "` reads like a fastfetch separator. Ships `""`, which keeps the colon. A separator wider than the `:` shifts every value right, and the continuation lines are re-padded to follow it.
+- `Onefetch.Style.Colors` - Hashtable keyed by the ANSI index onefetch was told to use, valued by the SGR parameters to paint it with instead, as `@{ "12" = "38;2;30;144;255" }`. Ships `@{}`. This is the only route to a true colour: `--text-colors` takes indices `0-15` and rejects anything above with `33 is not in 0..16`, so `38;2;30;144;255` cannot be passed to the binary at all. Pair it with `Arguments`, which is where you tell onefetch *which* index to use for each slot.
+
+`Fastfetch.AutoFit` is how the panel is fitted into the Windows Terminal window. The function resets the font to the profile default, then presses `Ctrl+Minus` one step at a time - waiting for the terminal to reflow after each - until the panel fits, `MaxShrinkSteps` steps have been taken, or the terminal stops shrinking (its minimum font). Nothing in this branch is per machine: the fit is measured against the live window on every call, so a small laptop display or a high DPI scale needs no value of its own. The image logo follows the font on its own, because `Get-FastfetchLogoArgument` re-reads the cell size at display time.
+
+- `Fastfetch.AutoFit.Enabled` - Boolean. Whether the font is fitted at all. Ships `$true`. Off sends no keystrokes whatsoever and shows the panel at whatever font the tab is on - distinct from `MaxShrinkSteps = 0`, which still presses `Ctrl+0` to reset to the default.
+- `Fastfetch.AutoFit.MaxShrinkSteps` - Integer, 0-50. `Ctrl+Minus` steps allowed below the default font. Ships `10`. `0` resets the font to the default and never shrinks, which shows whether the panel fits at all at the default size.
+- `Fastfetch.AutoFit.ReflowTimeoutMilliseconds` - Any positive integer, no upper bound. How long `Wait-ConsoleReflow` polls the window size after a keystroke before assuming the terminal is not going to change. Ships `10`. This is the knob to tweak and test per terminal and machine: too short and a shrink step reads the old size before the terminal has reflowed, so the loop stops early with `cannot shrink further` in the verbose log; too long and every `c` waits the full value once, because the reset when the font is already at the default changes nothing. Every shrink step that does reflow returns as soon as the change is seen.
+- `Fastfetch.AutoFit.PromptReserve` - Integer, 0-20. Rows kept free below the panel for the upcoming prompt when judging vertical overflow (one further row is always kept for the line the cursor ends on). Ships `1`.
+
+**Consumer functions:** `Show-TerminalGreeting`, `Invoke-Clear`, `Invoke-Fastfetch`, `Invoke-Onefetch`, `Format-OnefetchPanel`, `Resolve-TerminalGreetingSettings`, `Open-ProjectTerminals` (which appends `Invoke-Onefetch` to each project tab, gated on `Onefetch.InProjectTerminals`)
+
+**Example:**
+
+```powershell
+# Configuration.local.psd1 - the repository panel on, at most three shrink steps, two prompt rows
+TerminalGreeting = @{
+    Fastfetch = @{
+        AutoFit = @{
+            MaxShrinkSteps = 3
+            PromptReserve  = 2
+        }
+    }
+    Onefetch  = @{
+        Enabled            = $true
+        InProjectTerminals = $true
+        Arguments          = @("--no-art")
+    }
+}
+```
+
+```powershell
+# Configuration.local.psd1 - the repository panel restyled to match a fastfetch palette exactly.
+# Arguments picks which ANSI index paints each slot; Style.Colors maps those indices to the true
+# colours --text-colors cannot take, and Style.Separator replaces the colon no flag can.
+TerminalGreeting = @{
+    Onefetch = @{
+        Enabled   = $true
+        Arguments = @("--text-colors", "12", "9", "9", "12", "9", "15", "--nerd-fonts", "--no-bold")
+        Style     = @{
+            Enabled   = $true
+            Separator = " -> "
+            Colors    = @{
+                "12" = "38;2;30;144;255"  # dodger blue - fastfetch keyColor
+                "9"  = "38;2;255;0;0"     # neon red    - fastfetch display.color.separator
+            }
+        }
+    }
+}
+```
+
+See [Show-TerminalGreeting](guides/system/Show-TerminalGreeting.md), [Invoke-Fastfetch](guides/system/Invoke-Fastfetch.md), [Invoke-Onefetch](guides/system/Invoke-Onefetch.md), [Format-OnefetchPanel](guides/system/Format-OnefetchPanel.md) and [Resolve-TerminalGreetingSettings](guides/system/Resolve-TerminalGreetingSettings.md).
+
+---
+
+## UI & Display Configuration
+
+### Console Colors
+
+Colors used by various output functions.
+
+**Keys:**
+
+- `ListFunctionsColors` - Colors for `List-Functions`
+- `ShowFunctionDetailsColors` - Colors for `Show-FunctionDetails`
+
+### Loading Spinners
+
+Animation styles for long-running operations.
+
+**Keys:**
+
+- `LoadingSpinners` → Hashtable of style name → `@{ Symbols = @(...); Delay = <ms> }`, deep-merged with the local override
+- `DefaultSpinner` → Style name used only when `Loading-Spinner -Style ""` is passed (the parameter defaults to `Dots`)
+
+**Consumer function:** `Loading-Spinner`
+
+---
+
+## Window Management & FancyZones
+
+### Layout Numbers & Zone Mappings
+
+**Keys:**
+
+- `LayoutNumbers` - Maps layout names (from `custom-layouts.json`) to `Win+Ctrl+Alt+[Number]` hotkey slots. Layout names are arbitrary; up to 10 layouts, values 0-9, each value unique, and every name must exist in `custom-layouts.json`. Each entry must also stay in sync with `layout-hotkeys.json`: the same-numbered hotkey there must point at that layout's uuid, or `Apply-FancyZones` applies the wrong layout.
+- `ZoneNameMappings` → Human-readable zone names to zone indices, per layout. Indices must exist in the layout's `custom-layouts.json` definition (for canvas layouts, a zone's index is its position in the `zones` array); update the mappings in lockstep when adding or reshaping layouts.
+- `FancyZonesApplyMethod` - How `Apply-FancyZones` puts a workspace's zone layouts onto its virtual desktops. `"File"` (the shipped default) writes the entries for every desktop into FancyZones' `applied-layouts.json`, lets FancyZones reload the file and proves the reload with one probe shortcut on the current desktop, so no desktop is switched to; any desktop that does not verify falls back to the shortcut pass automatically. `"Hotkeys"` is the previous behaviour: switch to every desktop and send `Win+Ctrl+Alt+[Number]` there. Set it in `Configuration.local.psd1` when a PowerToys update changes the file format or the file watcher; anything other than these two values is treated as `"File"` with a note in the verbose log.
+- `WorkspaceLayoutPipelining` - Whether `Set-WorkspaceWindowLayout` positions and snaps each virtual desktop as soon as every window on it is stable, while the slower windows on other desktops are still loading (`$true`, the shipped default), or waits for the slowest window of the whole workspace and does all of it afterwards (`$false`). Verification stays global and the in-process retries run the full layout either way; the flag exists to compare the two orders with `Get-WorkspaceBenchmark` and as an escape hatch.
+- `WorkspaceLayoutPrepareEarly` - Whether `Open-Workspace` runs the layout preamble - the RPC probe, the layout file and its validation, the virtual desktop resize and the FancyZones zone layouts (`Set-WorkspaceWindowLayout -PrepareOnly`) - BEFORE the launch actions (`$true`, the shipped default) or leaves all of it to the layout action after them (`$false`). That work depends on no window and ran at 3.4 s under the start-up load of a dozen applications against 0.2 s idle; the layout action then finds the desktops and zone layouts in place and skips them. A window-only retry is never prepared, and a failed preparation leaves the action to do the work as before.
+
+`Test-FancyZonesConfiguration` validates all of these constraints (plus `custom-layouts.json` internal consistency) automatically at the start of every workspace open.
+
+Whether any of the three flags actually makes a workspace open faster on a given machine is a question for `Measure-WorkspaceOpen`, which opens the workspace under each value in interleaved rounds and compares medians, not for two opens compared by eye - the spread between two opens of the same configuration is larger than any flag's effect.
+
+**Consumer functions:** `Apply-FancyZones`, `Get-FancyZone`, `Open-Workspace`, `Set-WorkspaceWindowLayout`, `Test-FancyZonesConfiguration`
+
+### Reset-Windows Defaults
+
+Per-machine defaults for `Reset-Windows`, keyed by machine type (`PC`, `Laptop`, `Work`, `Test`, plus a `Default` fallback). Explicit `-VirtualDesktop` / `-Monitor` parameters override these.
+
+The key used is the one `Get-LayoutMachineType` resolves, not the raw detected type: a [layout set override](#layout-set-overrides) (or a small primary display) selects the matching reset profile, so a machine on a borrowed monitor setup does not consolidate windows onto a monitor it no longer has. Give the override name its own entry when its setup needs different targeting.
+
+**Key:** `ResetAllWindowsDefaults`
+
+Each entry holds:
+
+- `VirtualDesktop` → 1-based desktop to consolidate all windows onto
+- `Monitor` → Target monitor for the move pass - index (`"2"`), label (`"Primary"`/`"Secondary"`), or device name; `""` skips monitor targeting
+
+```powershell
+ResetAllWindowsDefaults = @{
+    PC      = @{ VirtualDesktop = 1; Monitor = "2" }  # consolidate onto monitor 2
+    Laptop  = @{ VirtualDesktop = 1; Monitor = "" }   # single-monitor, no targeting
+    Work    = @{ VirtualDesktop = 1; Monitor = "" }
+    Test    = @{ VirtualDesktop = 1; Monitor = "" }
+    Temp    = @{ VirtualDesktop = 1; Monitor = "" }   # matches a LayoutMachineTypeOverrides value
+    Default = @{ VirtualDesktop = 1; Monitor = "" }
+}
+```
+
+**Consumer function:** `Reset-Windows`
+
+### Display-Aware Window Sizing
+
+Three sections decide how large windows end up. Two of them are **display-aware**: they are hashtables of rows, and the row that applies is resolved in this order.
+
+1. `SmallDisplay` - present **and** the live primary display is at most 3000px wide (laptop-class)
+2. The row named after the machine type `Get-LayoutMachineType` resolves, so a [layout set override](#layout-set-overrides) or `SmallDisplayMachineType` steers these sections too
+3. `Default`
+4. Nothing matched → the function's own built-in value
+
+`SmallDisplay` is checked first because the machine type cannot express it. A laptop reports the machine type `Laptop` both on its own panel and docked to a large external monitor, so a `Laptop` row alone can only be right in one of those two states. `SmallDisplay` is the state-dependent one: it wins while the small panel is primary and disappears the moment a big display takes over. A machine that never uses a laptop-class display simply omits the row - the display is only measured when the row exists.
+
+An invalid value never throws; it falls back to the built-in default, so a typo cannot abort a workspace open mid-loop.
+
+#### `CenterTerminalSizing`
+
+The on-screen pixel size `Center-Terminal` aims the Windows Terminal at. `Center-Terminal` converts it to per-monitor percentages at run time, so **one target already produces the same physical terminal size on every display** - the rows exist to *tune* that target per machine, not to make it uniform.
+
+Each row holds `TargetWidthPx` / `TargetHeightPx` (desired on-screen size) plus `Min*Percent` / `Max*Percent` clamps. The shipped `Default` targets 1376x700 px, which is exactly what the legacy 40% x 50% yields on a 3440x1440 ultrawide.
+
+The **legacy flat shape** - `TargetWidthPx` and friends directly in the section, with no rows - is still accepted and applies to every machine. It is detected first and wins outright, which is what keeps the hybrid case correct: `Configuration.local.psd1` deep-merges over the base, so a flat local override on top of a keyed base leaves both in one hashtable, and the flat keys are the ones the user actually edited.
+
+```powershell
+CenterTerminalSizing = @{
+    Default      = @{ TargetWidthPx = 1376; TargetHeightPx = 700; MinWidthPercent = 25; MaxWidthPercent = 72; MinHeightPercent = 35; MaxHeightPercent = 75 }
+    SmallDisplay = @{ TargetWidthPx = 1152; TargetHeightPx = 624; MinWidthPercent = 25; MaxWidthPercent = 90; MinHeightPercent = 35; MaxHeightPercent = 90 }
+}
+```
+
+**Consumer functions:** `Center-Terminal` (via `Resolve-CenterTerminalSizing`), `Kill-All`
+
+#### `ResizeWindowsPercent`
+
+The percentage `Resize-Windows` shrinks windows by when it is called **without** an explicit `-Percent` - which is how `Set-WorkspaceWindowLayout`'s first-open normalization and its retry passes call it. An explicit `-Percent` always wins.
+
+Valid range is 10-500; a missing section, an unmatched row, or an invalid value all fall back to the built-in `70`. A laptop panel typically wants a gentler shrink than a wide monitor, since it has far less room to give up - that is the `SmallDisplay` row's job.
+
+```powershell
+ResizeWindowsPercent = @{
+    Default      = 70
+    SmallDisplay = 80   # shrink less on a laptop-class panel
+}
+```
+
+**Consumer function:** `Resize-Windows` (via `Resolve-ResizeWindowsPercent`)
+
+#### `SnapInsetPercent`
+
+A plain number, not a keyed section. The fraction of a target zone trimmed off **each side** before a window is handed to FancyZones for snapping, so the snap target stays unambiguous.
+
+Valid range is `0.0`-`0.49` (two insets of `0.5` would leave a zero-width window); an invalid or missing value falls back to the built-in `0.05`. This is the single source of truth for all seven placement paths - previously the same `0.05` was hardcoded in each of them.
+
+```powershell
+SnapInsetPercent = 0.05
+```
+
+**Consumer functions:** `Get-WindowInsetPercent`, read by `Resize-Windows`, `Get-InsetWindowBounds`, `Resize-PositionedWindows`, `Invoke-MultiZoneWindowSnap`, `Invoke-SingleZoneWindowSnap`, `Set-WindowLayouts`, `Snap-AllWindows`
+
+---
+
+## WSL Configuration
+
+**Key:** `DefaultWSLDistribution` → WSL distro name
+
+**Consumer functions:** `Configure-WSL`, `Initialize-WSLEnvironment`, `Test-WSLEnabled`
+
+The base ships it empty; WSL provisioning (`Configure-WSL`, `Initialize-WSLEnvironment`,
+`Configure-WSLSSH`), `Open-WSLTab`, and WSL symlinks all no-op until you set a distribution
+(e.g. `"Ubuntu"`) in `Configuration.local.psd1`. All provisioning targets this distribution
+explicitly (`wsl -d <distro>`) and `Configure-WSL` pins it as the WSL default on every run -
+Docker Desktop and podman machines routinely steal the default distribution, which would
+otherwise silently redirect bare `wsl` commands into the wrong distro.
+
+**Key:** `DefaultWSLUsername` → WSL account username (lowercase)
+
+**Consumer function:** `Configure-WSL`
+
+Optional. When set (e.g. `"ivan"` in `Configuration.local.psd1`), `Configure-WSL` creates the
+account non-interactively on first installation and makes it the distribution's default user
+via `/etc/wsl.conf`; only the sudo password is still prompted - passwords never live in
+configuration. The base ships it empty, which falls back to the distribution's interactive
+first-launch account wizard. Mixed-case values are lowercased automatically (Linux usernames
+are lowercase - note the WSL user routinely differs from the Windows username, e.g. Windows
+`Ivan` vs WSL `ivan`).
+
+---
+
+## Customization Guide
+
+### Adding a New Machine
+
+1. Add hostname → machine type mapping in `HostnameToMachineType`
+2. Add base paths in `BasePaths`
+3. Add machine-specific theme in `Themes`
+4. Add wallpaper settings in `WallpaperDarkSettings` / `WallpaperLightSettings`
+5. Add taskbar apps (optional) in `TaskbarConfiguration`
+6. Create layout files in `Layouts/{MachineType}/` folder
+
+### Adding a New Project
+
+1. Add project path in `PathTemplates.Projects`
+2. Add a `ProjectActions` entry - it defines what opening does AND puts the project in the `Open-Project` menu
+3. (Optional) Add to `VSCodeProjects`, `VisualStudioSolutions`, `ProjectTerminals`, `RunnableProjectMappings`
+
+### Adding a New Browser Group
+
+1. Add group to `BrowserGroups` using one of the four supported formats
+2. Ensure URL names are unique across all groups
+3. Test with `Open-Browser -Groups "GroupName"`
+
+### Adding a New Symbolic Link
+
+1. Add entry to `PathTemplates.SymbolicLinks`
+2. Use `{RepoRoot}` placeholder for source files
+3. Use `/` for WSL symlinks, `\` for Windows symlinks
+4. Run `SymbolicLinkMaker` to create the links

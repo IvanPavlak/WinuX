@@ -640,9 +640,6 @@
 		#   TrainingDirectory       = "{User}\Training\2026"
 		#   Dnd                     = @{ ExampleCharacter = "{Dev}\Obsidian\Campaigns\ExampleCampaign\ExampleCharacter.pdf" }
 		ObsidianDirectory       = ""
-		# DEPRECATED - Open-Obsidian launches Obsidian through its official CLI since 2026-09 and
-		# no longer reads this key. Kept so an existing Configuration.local.psd1 still merges.
-		ObsidianStartupScript   = ""
 		TrainingBackupDirectory = ""
 		LearningBook            = ""
 		TrainingDirectory       = ""
@@ -808,14 +805,6 @@
 			#       Path   = "{AppData}\lazydocker\config.yml"
 			#       Target = "{RepoRoot}\LazyDocker\config.yml"
 			#   }
-			# AI = @{ ... } - DEPRECATED since 1.6.0, removed in 2.0.0. The CoreAiRules entries that
-			# linked one rules file into every harness's global instruction file (and the Claude Code
-			# managed settings) are AiArtifacts rules now: write the rules in
-			# AI\Rules\own\<Name>\RULES.md (plus managed-settings.json), name it with
-			# AiArtifacts.Use.Rules and turn the harnesses on with AiArtifacts.Deploy; Deploy-AiArtifacts
-			# then links them on Windows and inside WSL. A fork's AI entries keep working until 2.0.0
-			# (SymbolicLinkMaker still links them, and a Rules item they target becomes Use.Rules when
-			# none is set); Test-ConfigurationSchema warns while they exist. See docs/ai/coreairules.md.
 			# SSH config symlinking is a natural fit for WinuX, but no example ssh/config
 			# ships in the public repo (it would expose private hosts). To manage your own,
 			# add an entry pointing at a config file you keep in your fork, e.g.:
@@ -839,7 +828,7 @@
 	}
 
 	# ==========================================================================
-	# AI Artifacts (see docs/ai/artifacts.md)
+	# AI Artifacts (see docs/winux/ai/artifacts.md)
 	# ==========================================================================
 	# → Consumers: Deploy-AiArtifacts, Update-AiArtifacts, List-AiArtifacts (through
 	#   Resolve-AiArtifactsConfig)
@@ -892,7 +881,7 @@
 	}
 
 	# ==========================================================================
-	# AI Harnesses (see docs/ai/artifacts.md)
+	# AI Harnesses (see docs/winux/ai/artifacts.md)
 	# ==========================================================================
 	# → Consumers: Deploy-AiArtifacts, List-AiArtifacts (through Resolve-AiArtifactsConfig)
 	#
@@ -964,58 +953,7 @@
 	}
 
 	# ==========================================================================
-	# AI Skills - DEPRECATED since 1.6.0, removed in 2.0.0 (use AiArtifacts)
-	# ==========================================================================
-	# Still read: Sources map onto AiArtifacts.Sources (Folders as Skills), a Root other than
-	# the default onto AiArtifacts.Root, and Test-ConfigurationSchema warns while either is
-	# set. Harnesses is no longer read - the skills destinations are AiHarnesses entries.
-	# Agent Skills (a SKILL.md per folder) kept in the repository and linked into every
-	# AI coding harness's user-level skills directory, so they are available in every project
-	# on every machine. Root holds one subfolder per source: vendored upstreams, plus `own` for
-	# hand-written skills. Only {RepoRoot}, {User} and {AppData} expand here.
-	# Ships with no sources; the shape a fork used, now written as AiArtifacts.Sources:
-	#   Sources = @{
-	#       mattpocock = @{
-	#           Repository = "mattpocock/skills"
-	#           Ref        = "main"
-	#           Folders    = @("skills/engineering", "skills/productivity")
-	#           Exclude    = @()
-	#       }
-	#   }
-	AiSkills                      = @{
-		Root      = "{RepoRoot}\AI\Skills"
-		Harnesses = @("{User}\.claude\skills", "{User}\.agents\skills")
-		Sources   = @{}
-	}
-
-	# ==========================================================================
-	# AI Mods - DEPRECATED since 1.6.0, removed in 2.0.0 (use AiArtifacts)
-	# ==========================================================================
-	# Still read: Sources map onto AiArtifacts.Sources (Folders as Mods, Exclude, SkipPaths),
-	# a Root other than the default onto AiArtifacts.Root, and Test-ConfigurationSchema warns
-	# while either is set. Harnesses is no longer read - the mods destination is the
-	# claude-code entry of AiHarnesses, whose claude-plugin-dirs hook writes
-	# env.CLAUDE_CODE_PLUGIN_DIRS of ~\.claude\settings.json.
-	# Claude Code mods - function-hook plugins (a folder holding .claude-plugin\plugin.json
-	# and a hooks module). Root holds one subfolder per source: vendored upstreams, plus `own`
-	# for hand-written mods. Only {RepoRoot}, {User} and {AppData} expand here. Ships with no
-	# mods and no sources; the shape a fork used, now written as AiArtifacts.Sources:
-	#   Sources = @{
-	#       "my-mod" = @{
-	#           Repository = "MyOrg/MyMod"     # owner/name on GitHub
-	#           Ref        = "v1.0.0"          # branch, tag or commit
-	#           Folders    = @(".")            # "." = the repository root is the mod
-	#           Exclude    = @()               # mod names to leave out
-	#           SkipPaths  = @(".git", ".github", "tests", "design", "docs")  # not vendored
-	#       }
-	#   }
-	AiMods                        = @{
-		Root      = "{RepoRoot}\AI\Mods"
-		Harnesses = @("{User}\.claude\mods")
-		Sources   = @{}
-	}
-	# ==========================================================================
-	# AI Marketplaces (see docs/ai/mods.md)
+	# AI Marketplaces (see docs/winux/ai/mods.md)
 	# ==========================================================================
 	# Claude Code plugins published through a plugin marketplace (a repository carrying
 	# .claude-plugin\marketplace.json) are installed per machine with `claude plugin install
@@ -1045,7 +983,7 @@
 		PluginConfigs = @{}
 	}
 	# ==========================================================================
-	# AI MCP Servers (see docs/ai/mcp-servers.md)
+	# AI MCP Servers (see docs/winux/ai/mcp-servers.md)
 	# ==========================================================================
 	# MCP servers live in each app's own configuration, not in a folder Deploy-AiArtifacts could
 	# link: Claude Code keeps them in the user's ~\.claude.json, Codex in ~\.codex\config.toml.
@@ -1264,16 +1202,13 @@
 		# - SymbolicLinks              : SymbolicLinkMaker
 		# - AiArtifacts                : Deploy-AiArtifacts (OFF by default - links the skills, mods,
 		#                                rules, prompts and agents under AiArtifacts.Root into the
-		#                                AiHarnesses AiArtifacts.Deploy names, see docs/ai/artifacts.md).
-		#                                The deprecated step names CoreAiRules, AiSkills and AiMods
-		#                                are aliases of it until 2.0.0: any of them on (and no
-		#                                AiArtifacts entry) turns it on
+		#                                AiHarnesses AiArtifacts.Deploy names, see docs/winux/ai/artifacts.md)
 		# - AiMarketplaces             : Deploy-AiMarketplaces (OFF by default - registers the Claude Code
 		#                                plugin marketplaces under AiMarketplaces in the user settings and
-		#                                installs their plugins through the CLI, see docs/ai/mods.md)
+		#                                installs their plugins through the CLI, see docs/winux/ai/mods.md)
 		# - AiMcpServers               : Deploy-AiMcpServers (OFF by default - adds the MCP servers under
 		#                                AiMcpServers to Claude Code through its CLI and to Codex's
-		#                                config.toml, see docs/ai/mcp-servers.md)
+		#                                config.toml, see docs/winux/ai/mcp-servers.md)
 		# - ObsidianCli                : Enable-ObsidianCli -CreateIfMissing (OFF by default - sets
 		#                                "cli": true in %APPDATA%\obsidian\obsidian.json, Obsidian's
 		#                                per-machine app settings a synced vault never carries, so
@@ -1285,9 +1220,6 @@
 		#
 		# RepositoryUpdate decides WHETHER the repository step runs; WHICH groups it
 		# then pulls stays RepositoryUpdateScope's job, above.
-		#
-		# The deprecated BootstrapConfig.WSLSetup key (same shape as Steps.WSL) is
-		# still honored when Steps carries no WSL entry, so older forks keep working.
 		#
 		# WSL is an optional comfort layer (Ubuntu shell, fastfetch/oh-my-posh in
 		# WSL, WSL SSH) - no other Bootstrap step depends on it, and `wsl --install`
@@ -1358,7 +1290,7 @@
 	# ==========================================================================
 	# Valid machine types. WinuX ships only the minimal "Test" profile; add your own types
 	# here (plus a Layouts/<Type>/ folder and <name>_<Type> payload variants) - see
-	# docs/configuration/guides/bootstrap/add-new-machine.md.
+	# docs/winux/configuration/guides/bootstrap/add-new-machine.md.
 	ValidMachineTypes             = @(
 		"Test"
 	)
@@ -1380,7 +1312,7 @@
 		# DefaultMachineType. "Test" is the minimal working profile; add your own machines.
 		"Test" = "Test"
 		# Example second machine (first add "PC" to ValidMachineTypes and create its
-		# Layouts/PC/ folder + payload variants - see docs/configuration/guides/bootstrap/add-new-machine.md):
+		# Layouts/PC/ folder + payload variants - see docs/winux/configuration/guides/bootstrap/add-new-machine.md):
 		# "YOUR-PC-HOSTNAME" = "PC"
 	}
 
@@ -2620,13 +2552,13 @@
 	# at runtime (Eclipse/SWT apps like DBeaver, some Java/Electron apps) and therefore open
 	# as a second, separate taskbar icon instead of docking onto their pin. The row is then
 	# pinned through a shortcut stamped with that identity (Set-ShortcutAumid), so the pin
-	# and the running window group as one. See docs/configuration/configuration-reference.md
+	# and the running window group as one. See docs/winux/configuration/configuration-reference.md
 	# (Taskbar Configuration) for how to discover an app's runtime AUMID.
 	#
 	# Ships empty - Configure-Taskbar leaves the taskbar pins exactly as they are
 	# (no clearing, no pinning) until you opt in. Keep your real, machine-tagged
 	# list in Configuration.local.psd1 - it replaces this array wholesale on merge.
-	# See docs/configuration/guides/bootstrap/add-new-machine.md.
+	# See docs/winux/configuration/guides/bootstrap/add-new-machine.md.
 	#
 	# Example:
 	#   TaskbarConfiguration = @(

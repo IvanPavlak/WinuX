@@ -4,7 +4,7 @@ function List-Functions {
         List all PowerShell functions from the docsify documentation with optional filtering.
 
     .DESCRIPTION
-        Parses the per-module documentation pages under docs/modules/*.md - plus the fork-owned
+        Parses the per-module documentation pages under docs/winux/modules/*.md - plus the fork-owned
         Custom area pages under docs/custom/*.md, when present - to extract function names,
         signatures, and descriptions. Each function is documented as a man-style entry whose
         machine-readable summary is the contiguous block of "- **Key:** value" bullets directly beneath
@@ -50,7 +50,9 @@ function List-Functions {
 		if (-not $docsRoot) {
 			$docsRoot = Join-Path -Path $projectRoot -ChildPath 'docs'
 		}
-		$modulesDocsPath = Join-Path -Path $docsRoot -ChildPath 'modules'
+		# WinuX's pages live in its own docs folder (docs/winux); the Custom area stays at the
+		# site root (docs/custom), since it belongs to the fork, not to an upstream.
+		$modulesDocsPath = Join-Path -Path $docsRoot -ChildPath 'winux\modules'
 
 		if (-not (Test-Path -Path $modulesDocsPath -PathType Container)) {
 			throw "Documentation modules folder not found. Looked for it at: $modulesDocsPath"
@@ -82,7 +84,7 @@ function List-Functions {
 		}
 	}
 	catch {
-		Write-Error "Failed to locate the documentation. Please ensure docs/modules/*.md exists. Error: $_"
+		Write-Error "Failed to locate the documentation. Please ensure docs/winux/modules/*.md exists. Error: $_"
 		return
 	}
 

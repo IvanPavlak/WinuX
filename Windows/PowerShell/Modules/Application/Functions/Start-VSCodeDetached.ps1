@@ -14,7 +14,7 @@ function Start-VSCodeDetached {
 		folder to the running instance and exits. The detached launch matters for a cold start
 		from a shell that exits afterwards, such as a workspace ending in
 		Terminate-WindowsTerminalTabs -OnlyCurrent (see "The Workspace Tab Stays Open After
-		[Closing current terminal tab]" in docs/reference/troubleshooting.md).
+		[Closing current terminal tab]" in docs/winux/reference/troubleshooting.md).
 
 	.PARAMETER ArgumentList
 		Arguments for VS Code, as given to Start-Process -ArgumentList, e.g. "-n", "`"<folder>`"".

@@ -43,11 +43,13 @@ Bootstrap Flow:
 | `Windows/PowerShell/Microsoft.PowerShell_profile.ps1` | Entry point - loaded on every shell start   |
 | `Windows/PowerShell/Configuration.psd1`               | Central config hub - ALL settings live here |
 | `Windows/PowerShell/Modules/`                         | PowerShell modules and their functions      |
-| `docs/`                                               | Docsify docs - SINGLE SOURCE OF TRUTH       |
-| `docs/docs_overview.md`                               | Internal docs maintenance reference         |
-| `AGENTS.md`                                           | AI workspace instructions                   |
+| `Windows/PowerShell/Upstream.conf`                    | WinuX's manifest: its rooms, mirror files, URL, tag prefix (read by `Merge-Upstreams`) |
+| `docs/winux/`                                         | WinuX's docsify pages - SINGLE SOURCE OF TRUTH |
+| `docs/winux/docs_overview.md`                         | Internal docs maintenance reference         |
+| `Windows/AGENTS.md`                                   | WinuX's AI workspace instructions (the root `AGENTS.md` is a generic pointer to it) |
+| `Windows/CHANGELOG.md`, `Windows/VERSIONING.md`, `Windows/CONTRIBUTING.md` | WinuX's project documents (the root files of the same names are generic pointers) |
 
-> **Documentation model**: `docs/` (the docsify site) is the single source of truth; `README.md` at the repo root is a minimal pointer (logo + intro + demo-video placeholder + link to the docs) and carries no function reference - never add function entries to it or update it when a function changes.
+> **Documentation model**: `docs/winux/` (WinuX's part of the docsify site) is the single source of truth; the site root (`docs/index.html`, `docs/README.md`, `docs/_sidebar.md`) is the hallway shared with any other project of the repository; `README.md` at the repo root is a minimal pointer (logo + intro + demo-video placeholder + link to the docs) and carries no function reference - never add function entries to it or update it when a function changes.
 
 ## Modules
 

@@ -9,7 +9,7 @@ function Deploy-AiArtifacts {
 		items are every <Root>\<Kind>\<source>\<item> of the sources read (own first, then winux,
 		example and the vendored sources in name order; the first wins an item name two carry,
 		with a warning), minus the AiArtifacts.Exclude entries. Get-AiArtifactPlan joins the two;
-		this function carries the plan out. Design: docs/ai/artifacts.md.
+		this function carries the plan out. Design: docs/winux/ai/artifacts.md.
 
 		Per destination of an app:
 
@@ -47,11 +47,9 @@ function Deploy-AiArtifacts {
 		\\wsl.localhost\<distro> share with ':' as the separator. Skipped when no WSL
 		distribution or username is configured.
 
-		Deprecated keys are read and mapped by Resolve-AiArtifactsConfig; each one mapped is
-		reported as a warning. Requires administrator privileges (Test-AdminPrivileges, like
-		SymbolicLinkMaker) unless -WhatIf is given. Called by Bootstrap when the opt-in
-		BootstrapConfig.Steps.AiArtifacts toggle is enabled (OFF by default). Idempotent -
-		re-runs self-heal.
+		Requires administrator privileges (Test-AdminPrivileges, like SymbolicLinkMaker) unless
+		-WhatIf is given. Called by Bootstrap when the opt-in BootstrapConfig.Steps.AiArtifacts
+		toggle is enabled (OFF by default). Idempotent - re-runs self-heal.
 
 	.PARAMETER Kind
 		Deploys only these kinds: Skills, Mods, Rules, Prompts, Agents. Defaults to every kind.
@@ -79,9 +77,6 @@ function Deploy-AiArtifacts {
 	Write-LogTitle "Deploying AI Artifacts"
 
 	$config = Resolve-AiArtifactsConfig
-	foreach ($message in $config.Legacy) {
-		Write-LogWarning $message
-	}
 
 	if ($config.Deploy.Count -eq 0) {
 		Write-LogWarning "No harness to deploy into - set AiArtifacts.Deploy for this machine type (the catalogue is AiHarnesses)!"

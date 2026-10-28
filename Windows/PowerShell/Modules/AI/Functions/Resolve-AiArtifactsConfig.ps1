@@ -28,17 +28,6 @@ function Resolve-AiArtifactsConfig {
 		              twin.
 		  Unknown     Deploy names that have no AiHarnesses entry.
 		  WSLUser     DefaultWSLUsername, empty when not configured.
-		  Legacy      One message per deprecated key that was mapped (1.6.0, removed in 2.0.0).
-
-		Deprecated keys are read and mapped, so a fork that has not migrated keeps working:
-		AiSkills.Sources become sources with Skills = Folders, AiMods.Sources sources with
-		Mods = Folders (default "."), Exclude and SkipPaths; an AiArtifacts.Sources entry of the
-		same name wins. An AiSkills or AiMods Root other than the shipped default moves Root to
-		its parent folder while Root itself is the default. A Rules item a
-		PathTemplates.SymbolicLinks.AI entry targets becomes Use.Rules when Use names none. When
-		Deploy lists nothing for this machine type but a deprecated step (CoreAiRules, AiSkills,
-		AiMods) is on, or a deprecated Sources key is set, Deploy is claude-code, codex and
-		gemini-cli - the folders the old commands wrote.
 
 		Only the {User}, {RepoRoot} and {AppData} placeholders are expanded here - the sections
 		are machine-type independent apart from the scopes, so they do not go through
@@ -81,7 +70,6 @@ function Resolve-AiArtifactsConfig {
 	}
 
 	$kinds = @('skills', 'mods', 'rules', 'prompts', 'agents')
-	$legacy = [System.Collections.Generic.List[string]]::new()
 
 	$section = Get-ConfigSetting -Path 'AiArtifacts' -Configuration $Configuration
 	if ($section -isnot [hashtable]) { $section = @{} }
@@ -104,23 +92,10 @@ function Resolve-AiArtifactsConfig {
 		return , $value
 	}
 
-	# Root, with a deprecated AiSkills / AiMods Root mapped onto its parent folder.
 	$defaultRoot = "{RepoRoot}\AI"
 	$rootTemplate = if ($section.Root) { [string]$section.Root } else { $defaultRoot }
-	foreach ($old in @(@{ Key = 'AiSkills'; Default = "{RepoRoot}\AI\Skills"; Leaf = 'Skills' }, @{ Key = 'AiMods'; Default = "{RepoRoot}\AI\Mods"; Leaf = 'Mods' })) {
-		$oldRoot = [string](Get-ConfigSetting -Path "$($old.Key).Root" -Default '' -Configuration $Configuration)
-		if (-not $oldRoot -or $oldRoot.TrimEnd('\') -eq $old.Default) { continue }
-		if ($rootTemplate -eq $defaultRoot -and (Split-Path -Path $oldRoot.TrimEnd('\') -Leaf) -eq $old.Leaf) {
-			$rootTemplate = Split-Path -Path $oldRoot.TrimEnd('\') -Parent
-			$legacy.Add("$($old.Key).Root is deprecated - read as AiArtifacts.Root = `"$rootTemplate`"")
-		}
-		else {
-			$legacy.Add("$($old.Key).Root is deprecated and not read - items live under AiArtifacts.Root\$($old.Leaf)")
-		}
-	}
 
-	# Sources: AiArtifacts first, then the deprecated AiSkills and AiMods sources mapped onto
-	# names AiArtifacts does not define.
+	# Sources: name -> repository, ref, kind folders, Exclude and SkipPaths.
 	$sources = [ordered]@{}
 	$configuredSources = if ($section.Sources -is [hashtable]) { $section.Sources } else { @{} }
 	foreach ($name in ($configuredSources.Keys | Sort-Object)) {
@@ -139,35 +114,6 @@ function Resolve-AiArtifactsConfig {
 			Kinds      = $kindMap
 			Exclude    = if ($entry.Exclude) { @($entry.Exclude | ForEach-Object { [string]$_ }) } else { @() }
 			SkipPaths  = if ($entry.ContainsKey('SkipPaths') -and $null -ne $entry.SkipPaths) { @($entry.SkipPaths | ForEach-Object { [string]$_ }) } else { @('.git', '.github', 'tests', 'design', 'docs') }
-		}
-	}
-
-	$legacySources = $false
-	foreach ($old in @(@{ Key = 'AiSkills'; Kind = 'skills'; Folders = @('skills') }, @{ Key = 'AiMods'; Kind = 'mods'; Folders = @('.') })) {
-		$oldSources = Get-ConfigSetting -Path "$($old.Key).Sources" -Configuration $Configuration
-		if ($oldSources -isnot [hashtable] -or $oldSources.Count -eq 0) { continue }
-		foreach ($name in ($oldSources.Keys | Sort-Object)) {
-			$entry = $oldSources[$name]
-			if ($entry -isnot [hashtable]) { continue }
-			if ($configuredSources.ContainsKey($name)) { continue }
-			$legacySources = $true
-			$folders = if ($entry.Folders) { @($entry.Folders | ForEach-Object { [string]$_ }) } else { $old.Folders }
-			if (-not $sources.Contains([string]$name)) {
-				$sources[[string]$name] = @{
-					Repository = [string]$entry.Repository
-					Ref        = if ($entry.Ref) { [string]$entry.Ref } else { 'main' }
-					Kinds      = [ordered]@{}
-					Exclude    = @()
-					SkipPaths  = @('.git', '.github', 'tests', 'design', 'docs')
-				}
-			}
-			$mapped = $sources[[string]$name]
-			$mapped.Kinds[$old.Kind] = $folders
-			if ($entry.Exclude) { $mapped.Exclude = @(@($mapped.Exclude) + @($entry.Exclude | ForEach-Object { [string]$_ }) | Select-Object -Unique) }
-			if ($entry.ContainsKey('SkipPaths') -and $null -ne $entry.SkipPaths) { $mapped.SkipPaths = @($entry.SkipPaths | ForEach-Object { [string]$_ }) }
-			$foldersText = ($folders | ForEach-Object { '"' + $_ + '"' }) -join ', '
-			$kindKey = (Get-Culture).TextInfo.ToTitleCase($old.Kind)
-			$legacy.Add("$($old.Key).Sources.$name is deprecated - read as AiArtifacts.Sources.$name with $kindKey = @($foldersText)")
 		}
 	}
 
@@ -194,21 +140,8 @@ function Resolve-AiArtifactsConfig {
 			}
 		}
 	}
-	if (-not $use.ContainsKey('rules')) {
-		$aiLinks = Get-ConfigSetting -Path 'PathTemplates.SymbolicLinks.AI' -Configuration $Configuration
-		if ($aiLinks -is [hashtable]) {
-			foreach ($link in $aiLinks.Values) {
-				if ($link -is [hashtable] -and ([string]$link.Target) -match '[\\/]AI[\\/]Rules[\\/][^\\/]+[\\/]([^\\/]+)[\\/]') {
-					$use['rules'] = $Matches[1]
-					$legacy.Add("PathTemplates.SymbolicLinks.AI is deprecated - its rules item is read as AiArtifacts.Use.Rules = `"$($Matches[1])`"")
-					break
-				}
-			}
-		}
-	}
 
-	# Deploy: this machine type's harnesses; the deprecated steps and sources imply the
-	# folders the old commands wrote.
+	# Deploy: this machine type's harnesses.
 	$deploy = @()
 	if ($section.Deploy -is [hashtable]) {
 		if ($MachineType -and $section.Deploy.ContainsKey($MachineType)) {
@@ -220,21 +153,6 @@ function Resolve-AiArtifactsConfig {
 	}
 	elseif ($section.Deploy) {
 		$deploy = @($section.Deploy | Where-Object { $_ } | ForEach-Object { [string]$_ })
-	}
-	if ($deploy.Count -eq 0) {
-		$legacySteps = @()
-		$steps = Get-ConfigSetting -Path 'BootstrapConfig.Steps' -Configuration $Configuration
-		if ($steps -is [hashtable]) {
-			foreach ($stepName in @('CoreAiRules', 'AiSkills', 'AiMods')) {
-				if (-not $steps.ContainsKey($stepName)) { continue }
-				if ([bool](& $forMachine $steps[$stepName])) { $legacySteps += $stepName }
-			}
-		}
-		if ($legacySteps.Count -gt 0 -or $legacySources) {
-			$deploy = @('claude-code', 'codex', 'gemini-cli')
-			$reason = if ($legacySteps.Count -gt 0) { "BootstrapConfig.Steps.$($legacySteps -join ', ')" } else { "AiSkills / AiMods Sources" }
-			$legacy.Add("AiArtifacts.Deploy lists no harness for this machine type - deploying into claude-code, codex and gemini-cli (the folders the deprecated $reason used); set AiArtifacts.Deploy")
-		}
 	}
 
 	$wslUser = [string](Get-ConfigSetting -Path 'DefaultWSLUsername' -Default '' -Configuration $Configuration)
@@ -289,6 +207,5 @@ function Resolve-AiArtifactsConfig {
 		Harnesses = $harnesses
 		Unknown   = $unknown
 		WSLUser   = $wslUser
-		Legacy    = [string[]]$legacy.ToArray()
 	}
 }

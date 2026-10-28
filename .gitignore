@@ -13,14 +13,14 @@ Configuration.local.psd1
 # app CSVs. Import-AppCsv layers <name>.local.csv over the committed <name>.csv at read time and
 # Save-AppCsvOverlay writes it, so a fork's own app choices never touch a tracked file. WinuX
 # ships only the base lists, so the overlays are ignored here. A fork that runs several machines
-# can commit its own overlays (see docs/contributing/fork-model.md) - upstream never tracks them,
+# can commit its own overlays (see docs/winux/contributing/fork-model.md) - upstream never tracks them,
 # so committing them downstream never conflicts on a pull.
 Windows/PowerShell/Modules/Bootstrap/Data/*.local.csv
 
 # LEGACY sidecar backups. The writers now back up into Backups/ instead, but older WinuX versions
 # left these beside the files they protected, stale copies still sit on existing machines and in
 # forks, and an AI assistant that cannot create directories still falls back to the .psd1.bak
-# (see docs/reference/backups.md). They hold a real Git identity, so they must stay uncommittable.
+# (see docs/winux/reference/backups.md). They hold a real Git identity, so they must stay uncommittable.
 Configuration.local.psd1.bak
 Windows/PowerShell/Modules/Bootstrap/Data/*.local.csv.bak
 
@@ -30,7 +30,7 @@ Windows/PowerShell/Modules/Bootstrap/Data/*.local.csv.bak
 # by Clear-OldBackups. OS-namespaced (Backups/Windows/ here) so a fork carrying other systems'
 # tooling can give each its own sibling. Kept in the repository so a replaced profile or settings
 # file is easy to find again, but it is your machine's own data (and may hold secrets), so it is
-# never committed. See docs/reference/backups.md for the full policy.
+# never committed. See docs/winux/reference/backups.md for the full policy.
 Backups/*
 !Backups/.gitkeep
 
