@@ -18,6 +18,9 @@ jobs:
     # PSScriptAnalyzer is parse-based static analysis - it never runs the code under
     # review - so Windows-targeted scripts lint identically on Linux, and the ubuntu
     # runners spin up and execute noticeably faster than windows-latest.
+    # Never in a private repository: a private fork runs the suites locally through Run-Tests, so no
+    # Actions minutes are spent on it. The public upstream always runs it.
+    if: ${{ !github.event.repository.private }}
     runs-on: ubuntu-latest
     # Starts non-blocking so style findings don't block merges while the tree is
     # brought into compliance. Flip `continue-on-error` off (and add it to the

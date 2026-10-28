@@ -27,10 +27,11 @@ function Merge-Upstreams {
 		with a branch of its own first when on master or main. It never commits, pushes or rebases.
 
 		A branch already contained in HEAD is up to date. A branch with no common history prints the
-		one-time bridge merge for the owner to run. -DryRun merges nothing: it lists what the merge
-		would take and decline, and warns of every mirror file the upstream changed whose bytes
-		differ from this branch's (the mirror contract is broken; take it from the upstream that is
-		right).
+		one-time bridge merge for the owner to run. -DryRun merges nothing: git merge-tree computes
+		the same merge into a tree of its own, so it lists exactly what the real run would take, put
+		back and stop on as a conflict, and warns of every mirror file whose merged copy would differ
+		from the upstream's (the mirror contract is broken; take it from the upstream that is right).
+		It needs git 2.38 or newer.
 
 		The Mac twin, Unix/modules/Git/bin/Merge-Upstreams, stages the same result.
 
@@ -41,7 +42,8 @@ function Merge-Upstreams {
 		The upstream branch. Defaults to the remote's HEAD branch, then master, then main.
 
 	.PARAMETER DryRun
-		Fetch and list what the merge would take and decline, merging nothing.
+		Fetch and list exactly what the merge would take, decline and conflict on (git merge-tree),
+		merging nothing.
 
 	.PARAMETER RepositoryRoot
 		The repository to merge into. Defaults to the repository this module was loaded from.
@@ -210,25 +212,47 @@ function Merge-Upstreams {
 	Write-LogStep "Merging $ref ($commitCount commits) - root owner: $rootOwner"
 
 	if ($DryRun) {
-		foreach ($line in @(& git -C $root -c core.quotepath=off diff --name-status --no-renames $base $ref)) {
+		# git merge-tree makes the same merge the real run makes - the same merge machinery, the same
+		# attributes and merge drivers - into a tree of its own, touching neither the index nor the
+		# working tree. Comparing that tree with HEAD lists exactly what the real run would stage,
+		# and the conflicted paths it would stop on, rather than everything the upstream changed.
+		$mergeTree = @(& git -C $root -c core.quotepath=off merge-tree --write-tree --name-only --no-messages HEAD $ref 2>$null)
+		if ($LASTEXITCODE -gt 1 -or $mergeTree.Count -eq 0 -or $mergeTree[0] -notmatch '^[0-9a-f]{40,64}$') {
+			Write-LogError "git merge-tree could not compute the merge (it needs git 2.38 or newer)!"
+			return (& $finish 'Failed')
+		}
+		$tree = $mergeTree[0]
+		$changes = [ordered]@{}
+		foreach ($line in @(& git -C $root -c core.quotepath=off diff --name-status --no-renames HEAD $tree)) {
 			if (-not $line) { continue }
 			$status, $path = $line -split "`t", 2
+			$changes[$path] = $status
+		}
+		foreach ($path in @($mergeTree | Select-Object -Skip 1 | Where-Object { $_ })) { $changes[$path] = 'U' }
+
+		foreach ($path in $changes.Keys) {
+			$status = $changes[$path]
 			$class = Resolve-UpstreamPathClass -Path $path -Upstream $upstream -Others $others -Settings $settings -RootOwner $rootOwner
 			if ($class -eq 'declined') { $result.Declined += "$status $path"; continue }
 			$result.Taken[$class] += "$status $path"
+			if ($status -eq 'U') { $result.Conflicts += $path; continue }
 			if ($class -eq 'mirror') {
 				$theirs = (& git -C $root rev-parse -q --verify "${ref}:$path" 2>$null) -join ''
-				$ours = (& git -C $root rev-parse -q --verify "HEAD:$path" 2>$null) -join ''
-				if ($theirs -ne $ours) { $result.MirrorDrift += $path }
+				$merged = (& git -C $root rev-parse -q --verify "${tree}:$path" 2>$null) -join ''
+				if ($theirs -ne $merged) { $result.MirrorDrift += $path }
 			}
 		}
 		Write-LogStep "Would take: $(@($result.Taken.Keys | ForEach-Object { "$($result.Taken[$_].Count) $_" }) -join ', ')"
 		if ($result.Declined.Count -gt 0) {
-			Write-LogStep "Would decline $($result.Declined.Count) (kept as this branch has them; git show ${ref}:PATH reads any):"
+			Write-LogStep "Would decline $($result.Declined.Count) (put back as this branch has them; git show ${ref}:PATH reads any):"
 			Write-LogList $result.Declined
 		}
+		if ($result.Conflicts.Count -gt 0) {
+			Write-LogWarning "Would stop on $($result.Conflicts.Count) conflict(s) to resolve:"
+			Write-LogList $result.Conflicts
+		}
 		foreach ($path in $result.MirrorDrift) {
-			Write-LogWarning "Mirror drift: $path - $Name changed a mirror file and its bytes differ from this branch's; take it from the upstream that is right"
+			Write-LogWarning "Mirror drift: $path - after the merge this branch's copy would differ from $Name's; the mirror contract says every upstream ships the same bytes"
 		}
 		Write-LogSuccess "Dry run - nothing was merged!"
 		return (& $finish 'DryRun')

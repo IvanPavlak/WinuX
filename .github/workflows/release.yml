@@ -29,6 +29,9 @@ permissions:
 jobs:
   installer:
     name: Build and publish WinuX.exe
+    # Never in a private repository: a fork's installer is built locally, and no Actions minutes
+    # are spent on it. winux-release.yml only calls this from the public upstream anyway.
+    if: ${{ !github.event.repository.private }}
     runs-on: windows-latest
     env:
       # The tag: the caller's input, else the tag this run was started by.

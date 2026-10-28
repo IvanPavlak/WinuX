@@ -26,6 +26,8 @@ permissions:
 jobs:
   tag:
     name: Tag the release
+    # Never in a private repository, where no Actions minutes are spent (a fork is never tagged).
+    if: ${{ !github.event.repository.private }}
     runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.tag.outputs.tag }}
