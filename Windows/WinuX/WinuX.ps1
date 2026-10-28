@@ -14,7 +14,7 @@
 #     from WINUX_REPO_URL (default: the public WinuX repository) and hands over to it.
 #     The fetch is tried anonymously first; when that fails (private repository or fork) a
 #     GitHub PAT is prompted for and sent as a Bearer header - the exact flow documented in
-#     docs/getting-started/installation.md. Install-Bootstrap then handles PowerShell 7,
+#     docs/winux/getting-started/installation.md. Install-Bootstrap then handles PowerShell 7,
 #     elevation, clone-or-pull, and Bootstrap -WithInitialSetup.
 #   * From inside a WinuX clone (<root>\Windows\WinuX\) - the machine already has WinuX, so
 #     the download is skipped entirely and an elevated PowerShell 7 is relaunched running

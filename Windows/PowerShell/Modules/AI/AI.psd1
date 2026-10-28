@@ -7,26 +7,16 @@
 		'Deploy-AiArtifacts',
 		'Deploy-AiMarketplaces',
 		'Deploy-AiMcpServers',
-		'Deploy-AiMods',
-		'Deploy-AiSkills',
-		'Deploy-CoreAiRules',
 		'Get-AiArtifactPlan',
 		'Get-AiArtifactRoster',
-		'Get-AiModRoster',
 		'Get-AiSkillDescription',
 		'Get-AiSkillManifest',
-		'Get-AiSkillRoster',
 		'List-AiArtifacts',
-		'List-Skills',
 		'Resolve-AiArtifactsConfig',
-		'Resolve-AiModsConfig',
 		'Resolve-AiModsPluginDirs',
-		'Resolve-AiSkillsConfig',
 		'Set-ClaudeSettingsEnv',
 		'Set-ClaudeSettingsKey',
 		'Test-AiModsCli',
-		'Update-AiArtifacts',
-		'Update-AiMods',
-		'Update-AiSkills'
+		'Update-AiArtifacts'
 	)
 }

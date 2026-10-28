@@ -9,7 +9,7 @@ function Start-ProcessDetached {
 		can attach to it. That is what lets a workspace close its own terminal tab afterwards:
 		Windows Terminal keeps a tab open while any process is still attached to its console
 		(see "The Workspace Tab Stays Open After [Closing current terminal tab]" in
-		docs/reference/troubleshooting.md).
+		docs/winux/reference/troubleshooting.md).
 
 		When no executable is given, or WMI refuses or throws, Start-Process runs with the
 		-Fallback parameters instead and the process it starts shares this shell's console;

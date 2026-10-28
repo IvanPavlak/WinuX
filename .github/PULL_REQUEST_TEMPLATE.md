@@ -1,5 +1,5 @@
 <!--
-Thanks for contributing to WinuX! Please read CONTRIBUTING.md first.
+Thanks for contributing to WinuX! Please read Windows/CONTRIBUTING.md first.
 Non-trivial changes should start as an issue or Discussion so the approach can be agreed.
 The maintainer reviews and authorizes all merges, so a complete PR speeds up review.
 -->
@@ -47,10 +47,10 @@ Run-Tests -TestName "..."
 
 ## Documentation & manifests
 
-- [ ] I updated `docs/modules/<Module>.md` for any added/renamed/removed/changed function.
+- [ ] I updated `docs/winux/modules/<Module>.md` for any added/renamed/removed/changed function.
 - [ ] I updated the module `.psd1` `FunctionsToExport`.
-- [ ] I added/updated the configuration guide under `docs/configuration/guides/<module>/` for every added/renamed/removed function or changed `Configuration.psd1` key (stub upgraded to full if the function now reads configuration), and its module `README.md` index.
-- [ ] I updated `docs/docs_overview.md` (and `docs/_sidebar.md` if a page was added/removed).
+- [ ] I added/updated the configuration guide under `docs/winux/configuration/guides/<module>/` for every added/renamed/removed function or changed `Configuration.psd1` key (stub upgraded to full if the function now reads configuration), and its module `README.md` index.
+- [ ] I updated `docs/winux/docs_overview.md` (and `docs/winux/_sidebar.md` if a page was added/removed).
 - [ ] `List-Functions -ListDiscrepancies` reports no discrepancies and manifest completeness holds.
 - [ ] N/A - no exported function changed.
 

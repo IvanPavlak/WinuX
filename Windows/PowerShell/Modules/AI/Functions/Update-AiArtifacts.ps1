@@ -38,9 +38,8 @@ function Update-AiArtifacts {
 		`gh auth token` when the GitHub CLI is installed and signed in; it is sent only to
 		api.github.com and never logged.
 
-		Deprecated AiSkills.Sources and AiMods.Sources entries are read as sources through
-		Resolve-AiArtifactsConfig. Not a Bootstrap step: the vendored tree is committed, so a fresh
-		machine only needs Deploy-AiArtifacts. A network failure is reported per source and leaves
+		Not a Bootstrap step: the vendored tree is committed, so a fresh machine only needs
+		Deploy-AiArtifacts. A network failure is reported per source and leaves
 		that source's vendored copy untouched. The base configuration ships no sources.
 
 	.PARAMETER Source
@@ -73,9 +72,6 @@ function Update-AiArtifacts {
 	Write-LogTitle "Updating AI Artifacts"
 
 	$config = Resolve-AiArtifactsConfig
-	foreach ($message in @($config.Legacy | Where-Object { $_ -like '*.Sources.*' })) {
-		Write-LogWarning $message
-	}
 	$sources = $config.Sources
 
 	if ($sources.Count -eq 0) {

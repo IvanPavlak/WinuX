@@ -4,7 +4,7 @@ Describe "Configuration Guide Coverage" {
 	<#
 	.SYNOPSIS
 		Verifies the 1:1 mapping between every module's FunctionsToExport and the per-function
-		configuration guides under docs/configuration/guides/<module>/.
+		configuration guides under docs/winux/configuration/guides/<module>/.
 
 	.DESCRIPTION
 		Every exported function has exactly one guide file named after it, in the folder of its
@@ -32,7 +32,7 @@ Describe "Configuration Guide Coverage" {
 	BeforeAll {
 		$RepoPaths = Get-RepositoryPath
 		$ModulesRoot = $RepoPaths.Modules
-		$GuidesRoot = Join-Path -Path $RepoPaths.Repo -ChildPath "docs\configuration\guides"
+		$GuidesRoot = Join-Path -Path $RepoPaths.Repo -ChildPath "docs\winux\configuration\guides"
 
 		# Pages about a task rather than about one function. They live in the module folder they
 		# belong to, so they have to be excluded from the guide-to-function direction.
@@ -54,7 +54,7 @@ Describe "Configuration Guide Coverage" {
 
 	Context "Guides root exists" {
 		It "Has a guides directory" {
-			$GuidesRoot | Should -Exist -Because "the per-function configuration guides live under docs/configuration/guides/"
+			$GuidesRoot | Should -Exist -Because "the per-function configuration guides live under docs/winux/configuration/guides/"
 		}
 	}
 
@@ -75,7 +75,7 @@ Describe "Configuration Guide Coverage" {
 				}
 			}
 
-			$missing | Should -BeNullOrEmpty -Because "every exported function needs docs/configuration/guides/$($moduleName.ToLower())/<Name>.md. Missing: $($missing -join ', ')"
+			$missing | Should -BeNullOrEmpty -Because "every exported function needs docs/winux/configuration/guides/$($moduleName.ToLower())/<Name>.md. Missing: $($missing -join ', ')"
 		}
 
 		It "Module '<_>' has an index page" -ForEach $ExportingModules {
@@ -143,15 +143,15 @@ Describe "Configuration Guide Coverage" {
 
 	Context "The configurator page exists and is registered" {
 		It "winux-configurator.md exists" {
-			$configurator = Join-Path -Path $RepoPaths.Repo -ChildPath "docs\configuration\winux-configurator.md"
+			$configurator = Join-Path -Path $RepoPaths.Repo -ChildPath "docs\winux\configuration\winux-configurator.md"
 			$configurator | Should -Exist -Because "the guides link to it from every page"
 		}
 
 		It "The sidebar lists all ten module index pages" {
-			$sidebar = Get-Content -LiteralPath (Join-Path -Path $RepoPaths.Repo -ChildPath "docs\_sidebar.md") -Raw
+			$sidebar = Get-Content -LiteralPath (Join-Path -Path $RepoPaths.Repo -ChildPath "docs\winux\_sidebar.md") -Raw
 			$missing = @()
 			foreach ($m in @('application', 'bootstrap', 'configuration', 'git', 'helper', 'logging', 'system', 'tests', 'window', 'workflow')) {
-				if ($sidebar -notmatch [regex]::Escape("/configuration/guides/$m/README.md")) { $missing += $m }
+				if ($sidebar -notmatch [regex]::Escape("/winux/configuration/guides/$m/README.md")) { $missing += $m }
 			}
 			$missing | Should -BeNullOrEmpty -Because "the module index pages are the sidebar's entry point into the guides. Missing: $($missing -join ', ')"
 		}

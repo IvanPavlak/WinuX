@@ -19,7 +19,7 @@ Since the 2026-06 documentation refactor, the docsify docs under `docs/` are the
 
 `README.md` at the repo root is now a MINIMAL pointer (logo + intro + demo-video placeholder + link to the docs). It carries NO function reference. NEVER add `#### [Name]` function entries, a function Table of Contents, or per-function content to README, and do NOT update README when a function changes.
 
-The function reference lives in `docs/modules/<module>.md` (`application.md`, `bootstrap.md`, `configuration.md`, `git.md`, `helper.md`, `system.md`, `tests.md`, `window.md`, `workflow.md`). Each function is ONE man-style entry:
+The function reference lives in `docs/winux/modules/<module>.md` (`application.md`, `bootstrap.md`, `configuration.md`, `git.md`, `helper.md`, `system.md`, `tests.md`, `window.md`, `workflow.md`). Each function is ONE man-style entry:
 
 - A `## [FunctionName](<github-source-url>)` heading, followed IMMEDIATELY by a contiguous `- **Key:** value` bullet block - Description first, then Parameters / Usage / Alias as applicable (omit a bullet when not applicable).
 - Optional human-only prose, parameter tables, examples, and a `**See also:**` line may follow after a blank line.
@@ -29,14 +29,14 @@ These are man-style `## [Name](url)` entries - NOT a `## Overview` function tabl
 
 ### Adding / renaming / removing a function
 
-1. Update its entry alphabetically in `docs/modules/<module>.md`.
+1. Update its entry alphabetically in `docs/winux/modules/<module>.md`.
 2. Update the module `.psd1` `FunctionsToExport`.
 3. Run `List-Functions -ListDiscrepancies` (Helper module) - it PARSES the module pages and must report none.
 4. Never remove or rename an exported function or a `Configuration.psd1` key, or change a signature incompatibly, in one step. Deprecate it first (the old shape keeps working - an alias, a wrapper that warns, or the key still read), record it under `### Deprecated` in `CHANGELOG.md` with the migration and in the `Deprecated` map of `Modules/Tests/ContractBaseline.json` with the version it ships in, and leave the removal to the next MAJOR release (see `VERSIONING.md`). The `Infrastructure-Contract` test fails CI on any removed function, parameter or key, any parameter made mandatory, and any release whose bump disagrees with its changelog sections.
 
 Fork-only functions (not yet upstreamed) live under `Modules/Custom/<Module>/Functions/`, are listed in `Custom.psd1`'s `FunctionsToExport` (which is what makes them autoload), and are documented in `docs/custom/<module>.md` using the same entry format. See `Windows/PowerShell/Modules/Custom/README.md`.
 
-`docs/docs_overview.md` is the internal maintenance reference (process + per-module index). `_sidebar.md` changes only when adding/removing a page.
+`docs/winux/docs_overview.md` is the internal maintenance reference (process + per-module index). `_sidebar.md` changes only when adding/removing a page.
 
 ## ⚠️ CRITICAL SAFETY - Never Act Destructively On Your Own
 

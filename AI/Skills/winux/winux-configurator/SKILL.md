@@ -4,7 +4,7 @@ description: Interview the user decision by decision and write their answers int
 argument-hint: "Everything, a module name, a function name, or 'review'"
 ---
 
-The user wants their WinuX configuration filled in by interview. The protocol is not in this file: it lives in the repository, in `docs/configuration/winux-configurator.md`, together with the per-function guides it walks. Read it and run it.
+The user wants their WinuX configuration filled in by interview. The protocol is not in this file: it lives in the repository, in `docs/winux/configuration/winux-configurator.md`, together with the per-function guides it walks. Read it and run it.
 
 ## Step 1 - Locate the repository
 
@@ -12,7 +12,7 @@ This skill is linked into the harness's user-level skills directory, so the curr
 
 - The skill folder (`~/.claude/skills/winux-configurator` or `~/.agents/skills/winux-configurator`) is a symbolic link to `<RepoRoot>/AI/Skills/winux/winux-configurator/`. Resolve the link and take the folder three levels above it. In PowerShell with the WinuX profile loaded, `(Get-RepositoryPath).Repo` answers directly.
 - Confirm the result by checking that `<RepoRoot>/Windows/PowerShell/Configuration.psd1` exists. If it does not, ask the user for the checkout path.
-- Note whether `<RepoRoot>/Unix/config/workspaces.conf` exists too. If it does, the checkout also holds Foundation, WinuX's macOS counterpart, and the protocol's ground rule 8 has you write the Unix counterpart of every entry in the same session, under `docs/unix/foundation-configurator.md`.
+- Note whether `<RepoRoot>/Unix/config/workspaces.conf` exists too. If it does, the checkout also holds Foundation, WinuX's macOS counterpart, and the protocol's ground rule 8 has you write the Unix counterpart of every entry in the same session, under `docs/foundation/foundation-configurator.md`.
 - If the repository cannot be reached at all, fetch the protocol from `https://raw.githubusercontent.com/IvanPavlak/WinuX/master/docs/configuration/winux-configurator.md` and tell the user that without the checkout you can interview and print fragments, but not write or verify.
 
 ## Step 2 - Read the protocol

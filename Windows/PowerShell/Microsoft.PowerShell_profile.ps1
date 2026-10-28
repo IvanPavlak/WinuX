@@ -325,7 +325,7 @@ if ($deferredStartup.Count -gt 0) {
 
 # Integrity checks are intentionally NOT run at startup (they add ~200ms+ and shell launch
 # must stay fast). Run them on-demand instead:
-#   List-Functions -ListDiscrepancies   - functions loaded vs documented in docs/modules
+#   List-Functions -ListDiscrepancies   - functions loaded vs documented in docs/winux/modules
 #   Test-ManifestCompleteness           - function files on disk vs each module's FunctionsToExport
 #   Run-Tests -TestName "Infrastructure" - the hermetic CI versions of both, plus documentation
 #                                          links and the per-function configuration guides

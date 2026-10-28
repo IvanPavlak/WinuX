@@ -223,7 +223,7 @@ Since the 2026-06 documentation refactor, the docsify docs under `docs/` are the
 
 ### Function Reference Entries
 
-The function reference lives in `docs/modules/<module>.md`. Each function is ONE man-style entry: a `## [FunctionName](<github-source-url>)` heading followed IMMEDIATELY by a contiguous `- **Key:** value` bullet block. Order the bullets Description first, then Parameters / Usage / Alias as applicable; omit a bullet when it does not apply.
+The function reference lives in `docs/winux/modules/<module>.md`. Each function is ONE man-style entry: a `## [FunctionName](<github-source-url>)` heading followed IMMEDIATELY by a contiguous `- **Key:** value` bullet block. Order the bullets Description first, then Parameters / Usage / Alias as applicable; omit a bullet when it does not apply.
 
 ```markdown
 ## [Verb-Noun](https://github.com/Owner/MyRepo/blob/master/Windows/Modules/MyModule/Verb-Noun.ps1)
@@ -247,4 +247,4 @@ The function reference lives in `docs/modules/<module>.md`. Each function is ONE
 
 Fork-only (Custom area) functions follow the same entry format in `docs/custom/<module>.md`, and are listed in `Custom.psd1`'s `FunctionsToExport` (the fork-owned manifest) rather than an engine module's.
 
-`docs/docs_overview.md` is the internal maintenance reference (process + per-module index). `_sidebar.md` changes only when adding or removing a page.
+`docs/winux/docs_overview.md` is the internal maintenance reference (process + per-module index). `_sidebar.md` changes only when adding or removing a page.

@@ -51,7 +51,7 @@ Modules/
   engine reads `Configuration.psd1` (see the Fork Model docs).
 - Tests live in `Custom/<Module>/Tests/<FunctionName>.Tests.ps1` and run with `Run-Tests`.
 - Document every function in `docs/custom/<module>.md`, using the same man-style entry format as
-  `docs/modules/<module>.md`. `List-Functions -ListDiscrepancies` checks Custom functions too.
+  `docs/winux/modules/<module>.md`. `List-Functions -ListDiscrepancies` checks Custom functions too.
 
 ## Graduating into WinuX
 
@@ -61,11 +61,11 @@ When a function is stable, tested, and documented, promote it with a focused PR:
 2. `git mv Windows/PowerShell/Modules/Custom/<Module>/Tests/<Fn>.Tests.ps1 Windows/PowerShell/Modules/Tests/Modules/<Module>/`
 3. Move its export line: remove `'<Fn>'` from `Custom.psd1`'s `FunctionsToExport` and add it to the
    target module's `.psd1` `FunctionsToExport`.
-4. Move its doc entry from `docs/custom/<module>.md` into `docs/modules/<module>.md`
+4. Move its doc entry from `docs/custom/<module>.md` into `docs/winux/modules/<module>.md`
    (alphabetically), switching the heading link to the WinuX source URL.
 5. Promote any config keys it reads from `Configuration.local.psd1` into the base
    `Configuration.psd1` with generic placeholder values.
 6. Run `Run-Tests` and `List-Functions -ListDiscrepancies`; both must be clean.
 
 A whole module graduates the same way: `git mv Modules/Custom/<MyModule> Modules/<MyModule>`,
-then move its tests and docs page (add the page to `docs/_sidebar.md` and `docs_overview.md`).
+then move its tests and docs page (add the page to `docs/winux/_sidebar.md` and `docs_overview.md`).

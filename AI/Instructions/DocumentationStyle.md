@@ -290,4 +290,4 @@ manifest) rather than an engine module's.
 `README.md` at the repository root is a MINIMAL pointer (logo + intro + demo-video placeholder + link to the docs). It carries NO function reference.
 
 - NEVER add `#### [Name]` function entries, a function Table of Contents, or any per-function content to `README.md`.
-- Do NOT update `README.md` when a function changes. The function reference lives exclusively in `docs/modules/<module>.md`.
+- Do NOT update `README.md` when a function changes. The function reference lives exclusively in `docs/winux/modules/<module>.md`.

@@ -31,7 +31,7 @@ function Set-ShortcutAumid {
 	.PARAMETER Aumid
 		The explicit AppUserModelID to stamp - the identity the running app registers.
 		Discover it via Get-StartApps, or from the app's jump-list file name (see
-		docs/configuration/configuration-reference.md, Taskbar Configuration).
+		docs/winux/configuration/configuration-reference.md, Taskbar Configuration).
 
 	.EXAMPLE
 		Set-ShortcutAumid -LinkPath "C:\ProgramData\provisioning\TaskbarPins\DBeaver.lnk" -TargetPath "$env:LOCALAPPDATA\DBeaver\dbeaver.exe" -Aumid "DBeaver"

@@ -83,7 +83,7 @@ Describe "Deploy-AiMarketplaces" {
 
 		$document = Get-Content -Path $script:Settings -Raw | ConvertFrom-Json
 		$document.env.CLAUDE_CODE_ENABLE_FUNCTION_HOOKS | Should -Be "1"
-		$document.env.CLAUDE_CODE_PLUGIN_DIRS | Should -Be "C:\mods\x" -Because "the variable Deploy-AiMods writes is a sibling, not ours"
+		$document.env.CLAUDE_CODE_PLUGIN_DIRS | Should -Be "C:\mods\x" -Because "the variable Deploy-AiArtifacts writes is a sibling, not ours"
 		$document.tui | Should -Be "fullscreen"
 	}
 

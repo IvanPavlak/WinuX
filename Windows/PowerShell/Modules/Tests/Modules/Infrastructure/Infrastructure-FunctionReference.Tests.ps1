@@ -4,7 +4,7 @@ Describe "Function Reference Coherence" {
 	<#
 	.SYNOPSIS
 		Verifies the 1:1 mapping between every module's FunctionsToExport and the man-style
-		entries in docs/modules/<module>.md, in both directions.
+		entries in docs/winux/modules/<module>.md, in both directions.
 
 	.DESCRIPTION
 		This is the hermetic CI equivalent of `List-Functions -ListDiscrepancies`. The interactive
@@ -14,7 +14,7 @@ Describe "Function Reference Coherence" {
 		directions, the three surfaces (disk, manifest, reference docs) can only agree or fail.
 
 		Checked per engine module:
-		- every FunctionsToExport entry has a `## [Name](url)` heading in docs/modules/<module>.md
+		- every FunctionsToExport entry has a `## [Name](url)` heading in docs/winux/modules/<module>.md
 		- every heading names an exported function (a leftover heading means a removal or rename
 		  did not take its reference entry with it)
 		- entries are alphabetical within the page, as AGENTS.md mandates
@@ -85,16 +85,16 @@ Describe "Function Reference Coherence" {
 	}
 
 	Context "Every exported function has a reference entry" {
-		It "Module '<_>' documents every exported function in docs/modules" -ForEach $ExportingModules {
+		It "Module '<_>' documents every exported function in docs/winux/modules" -ForEach $ExportingModules {
 			$moduleName = $_
 			$exported = @((Import-PowerShellDataFile -Path (Join-Path $ModulesRoot "$moduleName\$moduleName.psd1")).FunctionsToExport)
-			$pagePath = Join-Path $DocsRoot "modules\$($moduleName.ToLower()).md"
+			$pagePath = Join-Path $DocsRoot "winux\modules\$($moduleName.ToLower()).md"
 			$pagePath | Should -Exist -Because "module $moduleName needs a reference page"
 
 			$documented = Get-DocumentedFunctions $pagePath
 			$missing = @($exported | Where-Object { $documented -notcontains $_ })
 
-			$missing | Should -BeNullOrEmpty -Because "every exported function needs a man-style '## [Name](url)' entry in docs/modules/$($moduleName.ToLower()).md. Missing: $($missing -join ', ')"
+			$missing | Should -BeNullOrEmpty -Because "every exported function needs a man-style '## [Name](url)' entry in docs/winux/modules/$($moduleName.ToLower()).md. Missing: $($missing -join ', ')"
 		}
 	}
 
@@ -102,7 +102,7 @@ Describe "Function Reference Coherence" {
 		It "Module '<_>' has no orphaned reference entries" -ForEach $ExportingModules {
 			$moduleName = $_
 			$exported = @((Import-PowerShellDataFile -Path (Join-Path $ModulesRoot "$moduleName\$moduleName.psd1")).FunctionsToExport)
-			$documented = Get-DocumentedFunctions (Join-Path $DocsRoot "modules\$($moduleName.ToLower()).md")
+			$documented = Get-DocumentedFunctions (Join-Path $DocsRoot "winux\modules\$($moduleName.ToLower()).md")
 
 			$orphans = @($documented | Where-Object { ($exported -notcontains $_) -and ($script:Exclusions -notcontains $_) })
 
@@ -113,7 +113,7 @@ Describe "Function Reference Coherence" {
 	Context "Reference entries are alphabetical within their page" {
 		It "Module '<_>' page lists its entries in alphabetical order" -ForEach $ExportingModules {
 			$moduleName = $_
-			$documented = Get-DocumentedFunctions (Join-Path $DocsRoot "modules\$($moduleName.ToLower()).md")
+			$documented = Get-DocumentedFunctions (Join-Path $DocsRoot "winux\modules\$($moduleName.ToLower()).md")
 
 			$outOfOrder = @()
 			for ($i = 1; $i -lt $documented.Count; $i++) {

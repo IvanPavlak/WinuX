@@ -269,8 +269,8 @@ Describe "Vanilla Configuration (empty-by-default contract)" {
 				$text | Should -Not -Match $optIn -Because "$optIn ships empty by design and must not be a required key"
 			}
 
-			# The base ships the deprecated AiSkills and AiMods keys at their defaults, which must
-			# not warn: only a fork that still sets them hears about it.
+			# A vanilla configuration must not warn about deprecated keys: only a fork that still
+			# sets one hears about it.
 			$text | Should -Not -Match "deprecated"
 		}
 	}
@@ -286,7 +286,6 @@ Describe "Vanilla Configuration (empty-by-default contract)" {
 		It "Should no longer carry the deprecated toggles" {
 			$script:BaseConfig.BootstrapConfig.ContainsKey("PromptForActivation") | Should -BeFalse
 			$script:BaseConfig.BootstrapConfig.ContainsKey("PromptForDebloat") | Should -BeFalse
-			$script:BaseConfig.BootstrapConfig.ContainsKey("WSLSetup") | Should -BeFalse
 		}
 	}
 

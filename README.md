@@ -37,7 +37,7 @@ ___
 
 WinuX is a terminal/keyboard-driven system built for power users - people who keep a dotfiles repository, and who want Windows to be theirs the way their Linux system is!
 
-See the [roadmap](docs/roadmap.md) for what it is and is not.
+See the [roadmap](docs/winux/roadmap.md) for what it is and is not.
 
 ---
 
@@ -64,7 +64,7 @@ From one bootstrap command or a simple executable, all driven by a single config
 module, and a man-style reference for every PowerShell function (each linked to its source).
 
 **Read it live at [ivanpavlak.github.io/WinuX](https://ivanpavlak.github.io/WinuX/)** - or browse it
-in this repository under [**`docs/`**](docs/README.md), or serve the site locally:
+in this repository under [**`docs/`**](docs/winux/README.md), or serve the site locally:
 
 ```powershell
 # From the repository root
@@ -78,7 +78,7 @@ WinuX is released under the [MIT License](LICENSE).
 ### Third-party components
 
 This repository builds on the following, each under its own license
-(see [THIRD-PARTY-LICENSES.md](THIRD-PARTY-LICENSES.md)):
+(see [THIRD-PARTY-LICENSES.md](Windows/THIRD-PARTY-LICENSES.md)):
 
 | Component                                              | Author                       | License      |
 | ------------------------------------------------------ | ---------------------------- | ------------ |
@@ -89,8 +89,8 @@ This repository builds on the following, each under its own license
 ## Contributing
 
 Contributions of all kinds are welcome - code, docs, tests, bug reports, and ideas. Please read
-[CONTRIBUTING.md](CONTRIBUTING.md) and the [Code of Conduct](CODE_OF_CONDUCT.md) first. For security
-issues, follow [SECURITY.md](SECURITY.md).
+[CONTRIBUTING.md](Windows/CONTRIBUTING.md) and the [Code of Conduct](CODE_OF_CONDUCT.md) first. For security
+issues, follow [SECURITY.md](Windows/SECURITY.md).
 
 ---
 
@@ -111,4 +111,4 @@ AI was used throughout this project and is ingrained in it - but everything has 
 tested many times, over a long period, on multiple machines (VMware VMs, a personal PC, and
 personal and work laptops). Regardless, use it at your own discretion.
 
-Known problems and their workarounds live in [Known Issues](docs/reference/known-issues.md).
+Known problems and their workarounds live in [Known Issues](docs/winux/reference/known-issues.md).

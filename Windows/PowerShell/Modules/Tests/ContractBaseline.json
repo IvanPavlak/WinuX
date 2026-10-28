@@ -1,5 +1,5 @@
 {
-  "Version": "1.9.0",
+  "Version": "2.0.0",
   "Functions": {
     "Add-BrowserGroup": {
       "Module": "Configuration",
@@ -700,6 +700,15 @@
         }
       }
     },
+    "ConvertFrom-UpstreamManifest": {
+      "Module": "Git",
+      "Parameters": {
+        "Text": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
     "ConvertFrom-VSCodeExtensionLine": {
       "Module": "Application",
       "Parameters": {
@@ -874,18 +883,6 @@
           "Aliases": []
         }
       }
-    },
-    "Deploy-AiMods": {
-      "Module": "AI",
-      "Parameters": {}
-    },
-    "Deploy-AiSkills": {
-      "Module": "AI",
-      "Parameters": {}
-    },
-    "Deploy-CoreAiRules": {
-      "Module": "AI",
-      "Parameters": {}
     },
     "Deploy-VSCodeProfiles": {
       "Module": "Application",
@@ -1387,15 +1384,6 @@
         }
       }
     },
-    "Get-AiModRoster": {
-      "Module": "AI",
-      "Parameters": {
-        "Root": {
-          "Mandatory": false,
-          "Aliases": []
-        }
-      }
-    },
     "Get-AiSkillDescription": {
       "Module": "AI",
       "Parameters": {
@@ -1410,15 +1398,6 @@
       "Parameters": {
         "Path": {
           "Mandatory": true,
-          "Aliases": []
-        }
-      }
-    },
-    "Get-AiSkillRoster": {
-      "Module": "AI",
-      "Parameters": {
-        "Root": {
-          "Mandatory": false,
           "Aliases": []
         }
       }
@@ -3154,27 +3133,6 @@
         }
       }
     },
-    "List-Skills": {
-      "Module": "AI",
-      "Parameters": {
-        "ListDiscrepancies": {
-          "Mandatory": false,
-          "Aliases": []
-        },
-        "Quiet": {
-          "Mandatory": false,
-          "Aliases": []
-        },
-        "Skill": {
-          "Mandatory": false,
-          "Aliases": []
-        },
-        "Source": {
-          "Mandatory": false,
-          "Aliases": []
-        }
-      }
-    },
     "Load-PathConfiguration": {
       "Module": "Bootstrap",
       "Parameters": {
@@ -3368,6 +3326,31 @@
           "Aliases": []
         },
         "ZoneNameMappings": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Merge-Upstreams": {
+      "Module": "Git",
+      "Parameters": {
+        "Branch": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "DryRun": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Name": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "PassThru": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "RepositoryRoot": {
           "Mandatory": false,
           "Aliases": []
         }
@@ -4225,19 +4208,6 @@
         }
       }
     },
-    "Resolve-AiModsConfig": {
-      "Module": "AI",
-      "Parameters": {
-        "Configuration": {
-          "Mandatory": false,
-          "Aliases": []
-        },
-        "RepoRoot": {
-          "Mandatory": false,
-          "Aliases": []
-        }
-      }
-    },
     "Resolve-AiModsPluginDirs": {
       "Module": "AI",
       "Parameters": {
@@ -4255,19 +4225,6 @@
         },
         "Separator": {
           "Mandatory": true,
-          "Aliases": []
-        }
-      }
-    },
-    "Resolve-AiSkillsConfig": {
-      "Module": "AI",
-      "Parameters": {
-        "Configuration": {
-          "Mandatory": false,
-          "Aliases": []
-        },
-        "RepoRoot": {
-          "Mandatory": false,
           "Aliases": []
         }
       }
@@ -4694,6 +4651,48 @@
         },
         "Record": {
           "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Resolve-UpstreamPathClass": {
+      "Module": "Git",
+      "Parameters": {
+        "Others": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Path": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "RootOwner": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Settings": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Upstream": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Resolve-UpstreamRemote": {
+      "Module": "Git",
+      "Parameters": {
+        "Name": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "Remotes": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Url": {
+          "Mandatory": false,
           "Aliases": []
         }
       }
@@ -6425,32 +6424,6 @@
         }
       }
     },
-    "Update-AiMods": {
-      "Module": "AI",
-      "Parameters": {
-        "Check": {
-          "Mandatory": false,
-          "Aliases": []
-        },
-        "Source": {
-          "Mandatory": false,
-          "Aliases": []
-        }
-      }
-    },
-    "Update-AiSkills": {
-      "Module": "AI",
-      "Parameters": {
-        "Check": {
-          "Mandatory": false,
-          "Aliases": []
-        },
-        "Source": {
-          "Mandatory": false,
-          "Aliases": []
-        }
-      }
-    },
     "Update-DirectoryNames": {
       "Module": "System",
       "Parameters": {
@@ -7142,14 +7115,6 @@
     "AiMcpServers",
     "AiMcpServers.Deploy",
     "AiMcpServers.Servers",
-    "AiMods",
-    "AiMods.Harnesses",
-    "AiMods.Root",
-    "AiMods.Sources",
-    "AiSkills",
-    "AiSkills.Harnesses",
-    "AiSkills.Root",
-    "AiSkills.Sources",
     "AutoElevate",
     "AutoEnvironmentVariables",
     "AutoPathAdditions",
@@ -7278,7 +7243,6 @@
     "PathTemplates.LearningBook",
     "PathTemplates.NuGetConfig",
     "PathTemplates.ObsidianDirectory",
-    "PathTemplates.ObsidianStartupScript",
     "PathTemplates.Projects",
     "PathTemplates.SymbolicLinks",
     "PathTemplates.TaskbarLayoutFile",
@@ -7399,30 +7363,10 @@
     "ZoneNameMappings.Zero"
   ],
   "Deprecated": {
-    "Functions": {
-      "Deploy-AiMods": "1.6.0",
-      "Deploy-AiSkills": "1.6.0",
-      "Deploy-CoreAiRules": "1.6.0",
-      "Get-AiModRoster": "1.6.0",
-      "Get-AiSkillRoster": "1.6.0",
-      "List-Skills": "1.6.0",
-      "Resolve-AiModsConfig": "1.6.0",
-      "Resolve-AiSkillsConfig": "1.6.0",
-      "Update-AiMods": "1.6.0",
-      "Update-AiSkills": "1.6.0"
-    },
+    "Functions": {},
     "Parameters": {},
     "ConfigurationKeys": {
-      "AiMods": "1.6.0",
-      "AiMods.Harnesses": "1.6.0",
-      "AiMods.Root": "1.6.0",
-      "AiMods.Sources": "1.6.0",
-      "AiSkills": "1.6.0",
-      "AiSkills.Harnesses": "1.6.0",
-      "AiSkills.Root": "1.6.0",
-      "AiSkills.Sources": "1.6.0",
-      "BootstrapConfig.WSLSetup": "0.1.26",
-      "PathTemplates.ObsidianStartupScript": "0.1.61"
+      "BootstrapConfig.WSLSetup": "0.1.26"
     }
   }
 }

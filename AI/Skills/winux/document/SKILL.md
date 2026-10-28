@@ -16,7 +16,7 @@ The docs under `docs/` are the single source of truth for WinuX's functions, and
 
 ## 2. The module page entry
 
-On `docs/modules/<module>.md` (a fork-only function: `docs/custom/<module>.md`), one entry per function, alphabetical:
+On `docs/winux/modules/<module>.md` (a fork-only function: `docs/custom/<module>.md`), one entry per function, alphabetical:
 
 - `## [Function-Name](https://github.com/<owner>/<repo>/blob/master/Windows/PowerShell/Modules/<Module>/Functions/Function-Name.ps1)`
 - right under it, a contiguous bullet block: `- **Description:**` first (prose detailed enough that a reader does not need the source, with cross-function interactions), then `- **Parameters:**` (comma-separated, `-` prefixed), `- **Usage:**` (1-N invocations), `- **Alias:**` only when the profile defines one; omit a bullet that does not apply
@@ -26,13 +26,13 @@ On `docs/modules/<module>.md` (a fork-only function: `docs/custom/<module>.md`),
 
 ## 3. The configuration guide
 
-Every exported function has exactly one guide, `docs/configuration/guides/<module>/<Function-Name>.md`, listed in that folder's `README.md`. Use the FULL template of `DocumentationStyle.md` when the function reads configuration (every key it reads in `## Configuration Keys`, the fixed headings in order, three sub-bullets per decision), the STUB template otherwise, with its sentinel sentence verbatim. Generic example values only (`MyProject`, `Work-PC`, `C:\Users\You`), never a value from `Configuration.local.psd1`.
+Every exported function has exactly one guide, `docs/winux/configuration/guides/<module>/<Function-Name>.md`, listed in that folder's `README.md`. Use the FULL template of `DocumentationStyle.md` when the function reads configuration (every key it reads in `## Configuration Keys`, the fixed headings in order, three sub-bullets per decision), the STUB template otherwise, with its sentinel sentence verbatim. Generic example values only (`MyProject`, `Work-PC`, `C:\Users\You`), never a value from `Configuration.local.psd1`.
 
 ## 4. Keep the rest in step
 
-- Added, renamed or removed function: `FunctionsToExport`, the guide file and its index row, `docs/docs_overview.md`, and a test file `Windows/PowerShell/Modules/Tests/Modules/<Module>/<Function>.Tests.ps1`.
+- Added, renamed or removed function: `FunctionsToExport`, the guide file and its index row, `docs/winux/docs_overview.md`, and a test file `Windows/PowerShell/Modules/Tests/Modules/<Module>/<Function>.Tests.ps1`.
 - A removed or renamed function, parameter or configuration key goes through the deprecation policy of `VERSIONING.md` first: a warning wrapper or alias, `### Deprecated` in `CHANGELOG.md` and the `Deprecated` map of `ContractBaseline.json`.
-- A changed configuration key: `docs/configuration/configuration-reference.md` and the guide of every function that reads it.
+- A changed configuration key: `docs/winux/configuration/configuration-reference.md` and the guide of every function that reads it.
 - Links are relative and checked; anchors follow docsify (lower case, punctuation dropped, spaces become hyphens).
 - No em-dashes anywhere: a plain hyphen.
 

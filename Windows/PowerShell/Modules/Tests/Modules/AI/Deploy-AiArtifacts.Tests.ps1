@@ -50,7 +50,7 @@ Describe "Deploy-AiArtifacts" {
 		$env:USERPROFILE = $script:UserDir
 
 		$global:Configuration = @{ DefaultWSLDistribution = "Ubuntu" }
-		$script:Config = @{ Root = $script:Root; Deploy = @("claude-code"); WSLUser = "you"; Legacy = @() }
+		$script:Config = @{ Root = $script:Root; Deploy = @("claude-code"); WSLUser = "you" }
 		$script:Destinations = @(
 			New-PlanDestination "skills" "each" $script:Folder @(
 				New-PlanItem "skills" "alpha" $script:Alpha (Join-Path $script:Folder "alpha")
@@ -235,15 +235,6 @@ Describe "Deploy-AiArtifacts" {
 		Deploy-AiArtifacts
 
 		Should -Invoke Set-ClaudeSettingsEnv -Times 0
-	}
-
-	It "reports every deprecated key the configuration mapped" {
-		$script:Config.Legacy = @("first", "second")
-
-		Deploy-AiArtifacts
-
-		Should -Invoke Write-LogWarning -Times 1 -Exactly -ParameterFilter { $Message -eq "first" }
-		Should -Invoke Write-LogWarning -Times 1 -Exactly -ParameterFilter { $Message -eq "second" }
 	}
 
 	Context "WSL twins" {

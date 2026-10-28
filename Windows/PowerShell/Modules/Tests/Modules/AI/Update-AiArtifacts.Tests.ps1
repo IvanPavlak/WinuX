@@ -50,7 +50,7 @@ Describe "Update-AiArtifacts" {
 			SkipPaths  = @(".git", ".github", "tests", "design", "docs")
 		}
 		$script:Sources = [ordered]@{ demo = $script:Source }
-		Mock Resolve-AiArtifactsConfig { @{ Root = $script:Root; Sources = $script:Sources; Legacy = @() } }
+		Mock Resolve-AiArtifactsConfig { @{ Root = $script:Root; Sources = $script:Sources } }
 
 		# Every test starts anonymous: no token variables and no GitHub CLI.
 		$script:SavedTokens = @{ GITHUB_TOKEN = $env:GITHUB_TOKEN; GH_TOKEN = $env:GH_TOKEN }

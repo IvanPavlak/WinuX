@@ -59,7 +59,7 @@ function Run-Tests {
 
     .PARAMETER UpdateContractBaseline
         Release step, runs no tests: rewrites Modules/Tests/ContractBaseline.json from the working
-        tree, stamped with the newest released version in CHANGELOG.md. Run it in the release
+        tree, stamped with the newest released version in Windows/CHANGELOG.md. Run it in the release
         commit, after the [Unreleased] section has become the new version's section; the
         Infrastructure-Contract gate then holds every later change to that contract (see
         VERSIONING.md). Cannot be combined with any other switch.

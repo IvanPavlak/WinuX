@@ -249,65 +249,23 @@ Describe "Test-ConfigurationSchema" {
 	}
 
 	Context "deprecated configuration" {
-		BeforeEach {
-			$script:DeprecatedConfig = @{
+		It "stays silent for a configuration that uses no deprecated key" {
+			$config = @{
 				ValidMachineTypes     = @('PC')
 				HostnameToMachineType = @{ 'PC1' = 'PC' }
 				DefaultMachineType    = 'PC'
 				LaptopChassisTypes    = @('9')
 				BasePaths             = @{ Dev = 'C:\Dev' }
-				PathTemplates         = @{ Root = '{Dev}'; Projects = @{ Self = @{ Root = '{RepoRoot}' } }; SymbolicLinks = @{ }; ObsidianStartupScript = "" }
+				PathTemplates         = @{ Root = '{Dev}'; Projects = @{ Self = @{ Root = '{RepoRoot}' } }; SymbolicLinks = @{ } }
 				GitConfig             = @{ UserName = 'ExampleUser'; UserEmail = 'x@y.z'; WingetPackageId = 'Git.Git' }
 				BrowserGroups         = @(@{ Work = @('https://example.com') })
 				RepositoryGroups      = @(@{ Private = @(@{ Name = 'WinuX'; UrlPath = 'Universal.GitHub.Private.WinuX'; LocalPath = 'Projects.Self.Root' }) })
-				# The deprecated keys exactly as the base ships them: present, but at their defaults.
-				AiSkills              = @{ Root = "{RepoRoot}\AI\Skills"; Harnesses = @("{User}\.claude\skills", "{User}\.agents\skills"); Sources = @{} }
-				AiMods                = @{ Root = "{RepoRoot}\AI\Mods"; Harnesses = @("{User}\.claude\mods"); Sources = @{} }
 				BootstrapConfig       = @{ Steps = @{ WSL = $true } }
 			}
-		}
 
-		It "stays silent for the deprecated keys at their shipped defaults" {
-			Test-ConfigurationSchema -Configuration $script:DeprecatedConfig
+			Test-ConfigurationSchema -Configuration $config
 
 			Should -Invoke Write-Warning -Times 0
-		}
-
-		It "warns once, listing every deprecated key in use" -TestCases @(
-			@{ Case = "a present key (Present)"; Change = { param($c) $c.BootstrapConfig.WSLSetup = $true } }
-			@{ Case = "a present step name (Present)"; Change = { param($c) $c.BootstrapConfig.Steps.CoreAiRules = $false } }
-			@{ Case = "a present SymbolicLinks.AI (Present)"; Change = { param($c) $c.PathTemplates.SymbolicLinks.AI = @{} } }
-			@{ Case = "a non-empty value (NotEmpty)"; Change = { param($c) $c.AiSkills.Sources = @{ s = @{ Repository = "A/B" } } } }
-			@{ Case = "a non-empty scalar (NotEmpty)"; Change = { param($c) $c.PathTemplates.ObsidianStartupScript = "C:\start.ps1" } }
-			@{ Case = "a changed scalar (NotDefault)"; Change = { param($c) $c.AiMods.Root = "D:\Mods" } }
-			@{ Case = "a changed array (NotDefault)"; Change = { param($c) $c.AiSkills.Harnesses = @("{User}\.claude\skills") } }
-		) {
-			param($Case, $Change)
-			& $Change $script:DeprecatedConfig
-
-			Test-ConfigurationSchema -Configuration $script:DeprecatedConfig
-
-			Should -Invoke Write-Warning -Times 1 -Exactly
-		}
-
-		It "puts several deprecated keys into the one warning" {
-			$script:DeprecatedConfig.BootstrapConfig.Steps.AiSkills = $true
-			$script:DeprecatedConfig.BootstrapConfig.Steps.AiMods = $true
-			$script:DeprecatedConfig.AiMods.Sources = @{ m = @{ Repository = "A/B" } }
-			$script:Warned = @()
-			Mock Write-Warning { $script:Warned += $Message }
-
-			Test-ConfigurationSchema -Configuration $script:DeprecatedConfig
-
-			$script:Warned.Count | Should -Be 1
-			@($script:Warned[0] -split "`n" | Where-Object { $_ -like "  - *" }).Count | Should -Be 3
-		}
-
-		It "never fails under -Strict for a deprecation" {
-			$script:DeprecatedConfig.BootstrapConfig.WSLSetup = $true
-			$script:DeprecatedConfig.AiSkills.Sources = @{ s = @{ Repository = "A/B" } }
-
-			{ Test-ConfigurationSchema -Configuration $script:DeprecatedConfig -Strict } | Should -Not -Throw
 		}
 	}
 }

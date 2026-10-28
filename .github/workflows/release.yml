@@ -5,14 +5,20 @@ name: Release
 # is always available at <repo>/releases/latest/download/WinuX.exe. The binary is never
 # committed; this workflow is its only distribution path.
 #
-# VERSIONING.md steps 1-5 stay manual (hand-curated changelog, the release edits in the pull request, tag); this automates
-# step 6. It works for both release flows: pushing a tag from the CLI creates the release here,
-# and creating the release in the GitHub UI first also pushes its tag, in which case this run
-# only attaches the assets to the existing release.
+# Windows/VERSIONING.md steps 1-4 stay manual (hand-curated changelog, the release edits in the pull request);
+# winux-release.yml creates the winux/vX.Y.Z tag when the release lands on master and calls this workflow
+# for it (a tag pushed by GITHUB_TOKEN starts no workflow of its own). A winux/v* tag pushed by hand runs it
+# too, and creating the release in the GitHub UI first also works: this run then only attaches the assets.
 
 on:
   push:
-    tags: ["v*"]
+    tags: ["winux/v*"]
+  workflow_call:
+    inputs:
+      tag:
+        description: The winux/vX.Y.Z tag to release
+        required: true
+        type: string
   # Manual runs build the executable and publish it as a workflow artifact only - nothing is
   # released. Useful to verify the build before tagging.
   workflow_dispatch:
@@ -24,42 +30,48 @@ jobs:
   installer:
     name: Build and publish WinuX.exe
     runs-on: windows-latest
+    env:
+      # The tag: the caller's input, else the tag this run was started by.
+      TAG: ${{ inputs.tag || github.ref_name }}
+      IS_TAG: ${{ inputs.tag != '' || github.ref_type == 'tag' }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.tag || github.ref }}
 
       - name: Build WinuX.exe
         shell: pwsh
         run: |
           # -RepoUrl compiles the repository this workflow runs in into the executable as its
           # default install source, so a fork's release installs the fork.
-          $version = if ("${{ github.ref_type }}" -eq "tag") { "${{ github.ref_name }}".TrimStart("v") } else { "0.0.0" }
+          $version = if ($env:IS_TAG -eq "true") { $env:TAG -replace '^(.*/)?v', '' } else { "0.0.0" }
           & "$env:GITHUB_WORKSPACE/Windows/WinuX/New-WinuXExecutable.ps1" `
             -Version $version `
             -OutputPath "$env:RUNNER_TEMP/WinuX.exe" `
             -ChecksumPath "$env:RUNNER_TEMP/WinuX.exe.sha256" `
             -RepoUrl "https://github.com/${{ github.repository }}.git"
 
-      - name: Extract release notes from CHANGELOG.md
-        if: github.ref_type == 'tag'
+      - name: Extract release notes from Windows/CHANGELOG.md
+        if: env.IS_TAG == 'true'
         shell: pwsh
         run: |
-          # The release body is the CHANGELOG.md section matching the tag, keeping the file and
-          # the Releases page in sync (VERSIONING.md). Falls back to a changelog pointer when
+          # The release body is the Windows/CHANGELOG.md section matching the tag, keeping the file and
+          # the Releases page in sync (Windows/VERSIONING.md). Falls back to a changelog pointer when
           # no section matches (e.g. a release-candidate tag).
-          $version = "${{ github.ref_name }}".TrimStart("v")
-          $changelog = Get-Content -Path "$env:GITHUB_WORKSPACE/CHANGELOG.md" -Raw
+          $version = $env:TAG -replace '^(.*/)?v', ''
+          $changelog = Get-Content -Path "$env:GITHUB_WORKSPACE/Windows/CHANGELOG.md" -Raw
           $pattern = "(?ms)^## \[$([regex]::Escape($version))\][^\r\n]*\r?\n(.*?)(?=^## \[|\z)"
           $notes = if ($changelog -match $pattern) { $matches[1].Trim() }
-          else { "See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/master/CHANGELOG.md)." }
+          else { "See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/master/Windows/CHANGELOG.md)." }
           Set-Content -Path "$env:RUNNER_TEMP/release-notes.md" -Value $notes
 
       - name: Create the release and attach the installer
-        if: github.ref_type == 'tag'
+        if: env.IS_TAG == 'true'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $tag = "${{ github.ref_name }}"
+          $tag = $env:TAG
           $assets = @("$env:RUNNER_TEMP/WinuX.exe", "$env:RUNNER_TEMP/WinuX.exe.sha256")
           gh release view $tag --repo "${{ github.repository }}" *> $null
           if ($LASTEXITCODE -eq 0) {
@@ -67,12 +79,12 @@ jobs:
           }
           else {
             gh release create $tag @assets --repo "${{ github.repository }}" `
-              --title "WinuX $tag" --notes-file "$env:RUNNER_TEMP/release-notes.md" --verify-tag
+              --title "WinuX v$($tag -replace '^(.*/)?v', '')" --notes-file "$env:RUNNER_TEMP/release-notes.md" --verify-tag
           }
           if ($LASTEXITCODE -ne 0) { exit 1 }
 
       - name: Publish build artifact (manual run)
-        if: github.ref_type != 'tag'
+        if: env.IS_TAG != 'true'
         uses: actions/upload-artifact@v6
         with:
           name: WinuX-installer

@@ -1,0 +1,1186 @@
+# Application Module
+
+The Application module handles **software installation**, **application launching**, and **browser management**.
+
+## [Complete-ObsidianWorkspaceLoad](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Complete-ObsidianWorkspaceLoad.ps1)
+
+- **Description:** Finishes an Obsidian workspace load that `Open-Obsidian -Deferred` handed back to the flow: runs the checked load first, and on a cold start polls the CLI and tries once more only when that first attempt came back "unable to find Obsidian" - the one refusal that means not yet rather than no. Prints the success line the opener itself would have printed. Returns `$true` when the CLI accepted the load, `$false` when it never answered or refused.
+- **Parameters:** -CliPath, -Vault, -Name, -ColdStart, -TimeoutSeconds
+- **Usage:** `Complete-ObsidianWorkspaceLoad -CliPath (Get-ObsidianCliPath) -Vault Obsidian -Name Server -ColdStart`
+
+The second half of the deferred load, and the tail `Open-Obsidian -Deferred` registers through [Register-DeferredAction](helper.md#register-deferredaction) with these arguments; `Open-Obsidian` returns as soon as Obsidian is launched and [Complete-DeferredActions](helper.md#complete-deferredactions) runs this later. Deferring pays because on a cold start the CLI cannot answer until Obsidian has finished starting - measured at 2.7 s for the readiness probe plus 1.0 s for the load - and `Open-Obsidian` used to stand still for all of it while every opener behind it waited its turn. Called once the remaining openers have run, Obsidian has booted in the meantime and only the load is left.
+
+It must run **before** the layout starts waiting on windows, never during it: [Wait-ForWorkspaceWindows](window.md#wait-forworkspacewindows) holds a window stable only while its title and dimensions stop changing, and loading a workspace retitles Obsidian's window. [Open-Workspace](workflow.md#open-workspace) drains the queue immediately before the `Set-WorkspaceWindowLayout` action, and again when an action list ends without one.
+
+| Parameter         | Description                                                                                                                                              |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `-CliPath`        | Path to `Obsidian.com`.                                                                                                                                  |
+| `-Vault`          | The vault the CLI addresses.                                                                                                                             |
+| `-Name`           | The saved Obsidian workspace to load.                                                                                                                    |
+| `-ColdStart`      | Obsidian was launched by the deferring call and may still be starting: a not-yet-up refusal on the first attempt is followed by the readiness poll ([Wait-ObsidianCli](#wait-obsidiancli)) and one more attempt. Omit for an already-running Obsidian, where that refusal is final. |
+| `-TimeoutSeconds` | Budget for that poll. Default `10`. By drain time Obsidian has normally been up for seconds, so the common path pays no poll at all.                     |
+
+```powershell
+Complete-ObsidianWorkspaceLoad -CliPath (Get-ObsidianCliPath) -Vault Obsidian -Name Server -ColdStart
+```
+
+
+## [ConvertFrom-VSCodeExtensionLine](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/ConvertFrom-VSCodeExtensionLine.ps1)
+
+- **Description:** Parses one line of a VS Code profile's `extensions.txt` into `@{ Id; Version }`. An entry is `publisher.name`, optionally pinned as `publisher.name@1.2.3`; `#` starts a comment, on its own line or after an entry. Returns `$null` for a blank or comment-only line, and `Version` is empty when the entry is unpinned. Used by `Deploy-VSCodeProfiles` (which extensions to install) and `Merge-VSCodeExtensionList` (which lines to keep).
+- **Parameters:** -Line (pipeline input)
+- **Usage:** `ConvertFrom-VSCodeExtensionLine "publisher.name@1.2.3"`, `Get-Content extensions.txt | ConvertFrom-VSCodeExtensionLine`
+
+## [Create-CondaEnvironments](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Create-CondaEnvironments.ps1)
+
+- **Description:** Updates Conda and idempotently creates Conda environments from the YAML files in the WinuX `Conda/Environments` folder. Each environment is checked against the existing environment list and only created if it is missing. Requires Miniconda3 to be installed and the `Conda` environment variable (written from `AutoEnvironmentVariables.Conda` by `Set-EnvironmentVariables -Auto`) to point at it. Bootstrap runs it when `BootstrapConfig.Steps.CondaEnvironments` is on (the default).
+- **Usage:** `Create-CondaEnvironments`
+
+Updates the base Conda installation (`conda update -n base -c defaults conda`), then enumerates every `*.yml` file in the configured environments folder (resolved from `BootstrapConfig.DataFiles.CondaEnvironments` in `Configuration.psd1`, relative to the WinuX root). The file name (without extension) is used as the environment name; environments that already exist are skipped, and missing ones are created via `conda env create -f`. Exits early with a clear message if the `Conda` variable is unset, the `conda.exe` executable is not found, the environments folder is missing, or no `.yml` files are present.
+
+```powershell
+# Create all missing Conda environments from Conda/Environments/*.yml
+Create-CondaEnvironments
+```
+
+**See also:** [Modules: Workflow](workflow.md)
+
+## [Deploy-VSCodeProfiles](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Deploy-VSCodeProfiles.ps1)
+
+- **Description:** Brings VS Code to the profiles `VSCodeProfiles.Deploy` selects for the current machine type (or the entries `-Name` gives). First it links every local extension under `VSCodeProfiles.Extensions` into VS Code through `Install-VSCodeLocalExtensions`, also when no profile is selected; local extensions are never installed from the Marketplace and never pruned, whether `extensions.txt` lists them or not, because an uninstall through the link would delete the repository copy. For each `VSCodeProfiles.Catalogue` entry it locates the VS Code profile the entry deploys onto (`Target`, the entry name by default) through `Get-VSCodeProfileLocation -Register`: `Default` is VS Code's user data folder, and any other profile is registered in VS Code's profile list when VS Code does not know it yet, which is refused while VS Code is running. It then symlinks every file the entry's folder carries (`settings.json`, `keybindings.json` or `keybindings.windows.json`, `tasks.json`, `snippets\`; see `Get-VSCodeProfileItems`) through `New-WindowsSymbolicLink`, which backs up a real file it replaces (a link already pointing at the repository file is left as it is), and installs every extension `extensions.txt` lists that the profile lacks with `code --install-extension <id> --profile <Target>`. A pinned extension installed at another version is reinstalled at the pin. With `VSCodeProfiles.SettingsSync` off (the default) installs carry `--do-not-sync`. Extensions the list does not name stay installed unless `-Prune` or `VSCodeProfiles.Prune` is set. A name the catalogue does not carry is an error, an entry with no folder yet is skipped with a warning, and a missing VS Code command line (`Get-VSCodeCliPath`) skips only the extensions. Idempotent. Bootstrap runs it when the opt-in `BootstrapConfig.Steps.VSCodeProfiles` is on.
+- **Parameters:** -Name, -Prune, -Command
+- **Usage:** `Deploy-VSCodeProfiles`, `Deploy-VSCodeProfiles -Name MyProfile -Prune`
+
+The repository side of a profile is a folder per catalogue entry under `VSCodeProfiles.Root` (default `{RepoRoot}\VSCode\Profiles`). The UI state of a profile (history, layout, signed-in accounts) is VS Code's own and is never deployed. VS Code's command line cannot persist a disabled state, so `extensions.txt` lists only the extensions to install.
+
+```powershell
+# Deploy the profiles this machine type selects
+Deploy-VSCodeProfiles
+
+# Deploy one entry and remove the extensions its list does not name
+Deploy-VSCodeProfiles -Name MyProfile -Prune
+```
+
+**See also:** [Export-VSCodeProfile](#export-vscodeprofile), [Resolve-VSCodeProfilesConfig](#resolve-vscodeprofilesconfig)
+
+## [Enable-ObsidianCli](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Enable-ObsidianCli.ps1)
+
+- **Description:** Turns on the Obsidian command line interface for this machine by setting `"cli": true` in `%APPDATA%\obsidian\obsidian.json`, the file Obsidian also keeps its vault list in. Refuses while Obsidian is running (Obsidian rewrites that file on every settings change), warns when the file does not exist yet (Obsidian has never been started here) unless `-CreateIfMissing` writes a minimal `{"cli":true}` for Obsidian to extend on first start, reports an already enabled CLI without rewriting, and honours `-WhatIf`. `Bootstrap` runs it with `-CreateIfMissing` as the opt-in step `BootstrapConfig.Steps.ObsidianCli`.
+- **Parameters:** -SettingsPath, -CreateIfMissing
+- **Usage:** `Enable-ObsidianCli`, `Enable-ObsidianCli -CreateIfMissing`
+
+The toggle is Obsidian application state, not vault state, so it has to be set on every machine `Open-Obsidian` should load workspaces on; the same toggle is Settings > General > Advanced > Command line interface inside Obsidian. `Open-Obsidian` points here when the CLI answers `Command line interface is not enabled`. No PATH step is involved - `Get-ObsidianCliPath` finds `Obsidian.com` beside `Obsidian.exe`.
+
+| Parameter           | Description                                                                                                    |
+| ------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `-SettingsPath`     | The `obsidian.json` to edit. Defaults to `%APPDATA%\obsidian\obsidian.json`.                                   |
+| `-CreateIfMissing`  | Create a minimal `obsidian.json` with the flag when none exists yet (what the Bootstrap step passes).           |
+
+```powershell
+# Obsidian closed
+Enable-ObsidianCli
+
+# Dry run
+Enable-ObsidianCli -WhatIf
+
+# Fresh machine, Obsidian not started yet (the Bootstrap step)
+Enable-ObsidianCli -CreateIfMissing
+```
+
+## [Export-VSCodeProfile](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Export-VSCodeProfile.ps1)
+
+- **Description:** Captures the live VS Code profile a `VSCodeProfiles.Catalogue` entry deploys onto into the entry's folder under `VSCodeProfiles.Root`, creating the folder when missing. The profile is located without registering anything (`Get-VSCodeProfileLocation`); an entry the catalogue does not carry, or a profile VS Code does not have, is an error. A profile file that is already a symbolic link is left alone (a link pointing outside the repository is reported). Every real file is copied into the folder - keybindings land in `keybindings.windows.json` when the folder carries one - and an empty `snippets\` folder is not copied. `extensions.txt` is merged with what the profile has installed through `Merge-VSCodeExtensionList`, so comments and pins survive, uninstalled entries go and new extensions are appended sorted. Disabled extensions are listed like any other, because the command line cannot tell them apart. Run by hand, never by Bootstrap; nothing in VS Code changes.
+- **Parameters:** -Name, -Command
+- **Usage:** `Export-VSCodeProfile -Name MyProfile`
+
+Review the captured folder with `git diff` before committing it.
+
+**See also:** [Deploy-VSCodeProfiles](#deploy-vscodeprofiles)
+
+## [Get-ObsidianCliPath](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Get-ObsidianCliPath.ps1)
+
+- **Description:** Resolves the Obsidian command line interface: the `obsidian` command on PATH (what registering the CLI under Settings > General > Advanced > Command line interface adds), else `Obsidian.com` in the default install folder `%LOCALAPPDATA%\Programs\obsidian`. Returns `$null` when neither exists.
+- **Usage:** `Get-ObsidianCliPath`
+
+Helper for `Open-Obsidian` and `Get-ObsidianExecutablePath`. A `$null` result is what makes `Open-Obsidian` fall back to a plain launch and explain how to register the CLI.
+
+```powershell
+# Where would Open-Obsidian find the CLI?
+Get-ObsidianCliPath
+```
+
+## [Get-ObsidianExecutablePath](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Get-ObsidianExecutablePath.ps1)
+
+- **Description:** Resolves `Obsidian.exe` for a detached launch: beside the CLI (`Get-ObsidianCliPath`), then in `%LOCALAPPDATA%\Programs\obsidian`, then from the `obsidian://` protocol handler registered under `HKCU:\Software\Classes\obsidian`. Returns the first candidate that exists, `$null` otherwise.
+- **Usage:** `Get-ObsidianExecutablePath`
+
+Helper for `Start-ObsidianDetached`, which needs the executable itself because a WMI-created process cannot be started from a URI alone.
+
+```powershell
+Get-ObsidianExecutablePath
+```
+
+## [Get-ObsidianWorkspaceNames](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Get-ObsidianWorkspaceNames.ps1)
+
+- **Description:** Reads the saved Obsidian workspace names (the core Workspaces plugin) from `<VaultDirectory>\.obsidian\workspaces.json`. Returns an empty array for an empty `-VaultDirectory`, a missing file, a file without saved workspaces or a file that does not parse.
+- **Parameters:** -VaultDirectory
+- **Usage:** `Get-ObsidianWorkspaceNames -VaultDirectory $MachineSpecificPaths.ObsidianDirectory`
+
+Helper for `Open-Obsidian`: the source of the implicit same-named match against the WinuX workspace and of the warning an unknown `-Workspace` gets. Reading the file rather than asking the CLI works before Obsidian is running.
+
+| Parameter         | Description                                                    |
+| ----------------- | -------------------------------------------------------------- |
+| `-VaultDirectory` | The vault root - the folder that holds the `.obsidian` folder. |
+
+```powershell
+# The names Open-Obsidian can load
+Get-ObsidianWorkspaceNames -VaultDirectory $MachineSpecificPaths.ObsidianDirectory
+```
+
+## [Get-VSCodeCliPath](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Get-VSCodeCliPath.ps1)
+
+- **Description:** Returns the path of VS Code's command line (`code.cmd`), or `$null` when VS Code is not installed. Prefers `code` on PATH; a session that installed VS Code a moment ago (Bootstrap's WinGet step) does not see the installer's PATH entry yet, so the per-user install (`%LOCALAPPDATA%\Programs\Microsoft VS Code\bin\code.cmd`) and the machine-wide install (`%ProgramFiles%\Microsoft VS Code\bin\code.cmd`) are checked next. Used by `Deploy-VSCodeProfiles` and `Export-VSCodeProfile`.
+- **Usage:** `Get-VSCodeCliPath`
+
+## [Get-VSCodeExecutablePath](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Get-VSCodeExecutablePath.ps1)
+
+- **Description:** Resolves `Code.exe` for `Start-VSCodeDetached`: one folder above the command line that `Get-VSCodeCliPath` returns (`<install>\bin\code.cmd`). Returns `$null` when VS Code is not installed or no `Code.exe` sits beside the command line.
+- **Usage:** `Get-VSCodeExecutablePath`
+
+`Get-VSCodeCliPath` already covers `code` on PATH and both installer locations, so the executable is derived from it rather than probed again. A process created through WMI must be the final executable, and `code.cmd` only runs through `cmd.exe` and the VS Code CLI.
+
+## [Get-VSCodeInstalledExtensions](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Get-VSCodeInstalledExtensions.ps1)
+
+- **Description:** Lists the extensions a VS Code profile has installed as an ordered dictionary of id to version, through `code --list-extensions --show-versions` (plus `--profile <ProfileName>` for any profile but `Default`). Ids match case-insensitively. Returns an empty dictionary when nothing is installed and `$null` when the command fails, for instance for a profile VS Code does not know, so a caller can tell the two apart. Used by `Deploy-VSCodeProfiles` and `Export-VSCodeProfile`.
+- **Parameters:** -Command, -ProfileName
+- **Usage:** `Get-VSCodeInstalledExtensions -Command (Get-VSCodeCliPath) -ProfileName Default`
+
+## [Get-VSCodeLocalExtensions](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Get-VSCodeLocalExtensions.ps1)
+
+- **Description:** Lists the local VS Code extensions under `-Root` (`VSCodeProfiles.Extensions`): every subfolder that holds a `package.json`, an unpackaged extension such as a colour theme of your own. Each result carries `Id` (`<publisher>.<name>`, lowercased), `Version`, `LinkName` (`<Id>-<Version>`, the folder name VS Code expects) and `Source` (the folder). Folders without a `package.json` are ignored; a manifest that is not valid JSON, or lacks `publisher`, `name` or `version`, is skipped with a warning; a missing `-Root` lists nothing. Sorted by folder name, read-only. Used by `Install-VSCodeLocalExtensions` and `Deploy-VSCodeProfiles`.
+- **Parameters:** -Root
+- **Usage:** `Get-VSCodeLocalExtensions -Root (Resolve-VSCodeProfilesConfig).Extensions`
+
+## [Get-VSCodeProfileItems](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Get-VSCodeProfileItems.ps1)
+
+- **Description:** Maps a profile folder in the repository onto the files of a VS Code profile: `settings.json`, `keybindings.json`, `tasks.json` and the `snippets\` folder, in that order, each as `@{ Name; Repo; Live; IsDirectory; InRepo }`. Keybindings are the one per-platform item: on Windows `keybindings.windows.json` is used when the folder carries it, so a profile shared with the Mac can bind different keys. The one list of what a profile carries, shared by `Deploy-VSCodeProfiles` (links) and `Export-VSCodeProfile` (copies); it creates nothing.
+- **Parameters:** -Source, -Location
+- **Usage:** `Get-VSCodeProfileItems -Source C:\Repo\VSCode\Profiles\MyProfile -Location (Get-VSCodeProfileLocation Default)`
+
+## [Get-VSCodeProfileLocation](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Get-VSCodeProfileLocation.ps1)
+
+- **Description:** Returns the folder of a VS Code profile. `Default` is the user data folder (`VSCodeProfiles.UserData`, default `{AppData}\Code\User`); any other name is looked up, case-insensitively, in the `userDataProfiles` list of `User\globalStorage\storage.json` and resolves to `User\profiles\<location>`. An unregistered name returns `$null`, unless `-Register` is given: the profile is then added to the list under its name with the location `winux-<name>` (lowercased, any character but letters, digits and hyphens turned into a hyphen) and its folder created, so the extension commands find it. Registration refuses while a `Code` process runs, because VS Code rewrites that file from memory; the file is backed up through `Backup-RepositoryItem` before it is rewritten, every other key is kept, and a missing file is created.
+- **Parameters:** -Name, -UserData, -Register
+- **Usage:** `Get-VSCodeProfileLocation Default`, `Get-VSCodeProfileLocation -Name Writing -Register`
+
+## [Get-VSCodeWorkspaceNames](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Get-VSCodeWorkspaceNames.ps1)
+
+- **Description:** Lists the available VS Code workspace names by enumerating the `*.code-workspace` files in `PathTemplates.Projects.Self.VSCodeWorkspaces` (`<repo>\VSCode\Workspaces`) and returning each file's base name. Returns an empty array when the folder is missing or holds no workspace files.
+- **Usage:** `Get-VSCodeWorkspaceNames`
+
+Shared discovery helper used by `Open-VSCodeWorkspace` (interactive selection) and `Open-Workspace` (the `-VSCodeWorkspace` override menu), so workspace discovery lives in one place. The folder is resolved through the machine-specific path map, so the same call works across machines.
+
+```powershell
+# List the workspace names available to -VSCodeWorkspace
+Get-VSCodeWorkspaceNames
+```
+
+## [Install-ChocolateyApps](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Install-ChocolateyApps.ps1)
+
+- **Description:** Installs Chocolatey-managed apps from the WinuX CSV, filtered by machine type. Reads the app list through `Import-AppCsv`, which layers the machine-local `ChocolateyApps.local.csv` over the committed `ChocolateyApps.csv`, then installs entries matching the current machine type (plus any "All" entries) and skips the rest. `Machine`-column tokens are validated via `Test-MachineTypeScope` - unknown machine types are reported and never match. Requires administrator privileges and is called automatically by Bootstrap.
+- **Usage:** `Install-ChocolateyApps`
+
+Reads the app list with `Import-AppCsv -DataFileKey ChocolateyApps`, which resolves the committed CSV through `BootstrapConfig.DataFiles.ChocolateyApps` in `Configuration.psd1` and layers the sibling `ChocolateyApps.local.csv` over it when one exists, so this machine's own choices apply without the tracked CSV ever being edited. Each row specifies an app ID and the machine types it applies to ("All", "PC", "Laptop", etc.), and may also carry optional `Version`, `Params`, and `Force` columns that are passed through to `choco install`. An empty `Version` or `Latest` (any case) installs the newest package with no `--version` pin, since choco rejects `--version=latest`; empty columns add no argument at all. Apps for the current machine type and All-type apps are installed; others are skipped. Each install's choco exit code is checked (0, and the reboot-required codes 1641 and 3010, count as success); failures are logged per app and summarized at the end, with a success line when every app installed. Administrator privileges are verified up front via `Test-AdminPrivileges`.
+
+```powershell
+# Install all Chocolatey apps applicable to the current machine type
+Install-ChocolateyApps
+```
+
+**See also:** [Import-AppCsv](bootstrap.md#import-appcsv), [Modules: Workflow](workflow.md)
+
+## [Install-ChocolateyPackageManager](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Install-ChocolateyPackageManager.ps1)
+
+- **Description:** Installs the Chocolatey package manager if not already present. Checks whether the `choco` command is available and, if not, downloads and runs the official install script from chocolatey.org. Does nothing if Chocolatey is already installed. Called automatically by Bootstrap.
+- **Usage:** `Install-ChocolateyPackageManager`
+
+## [Install-DotnetEf](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Install-DotnetEf.ps1)
+
+- **Description:** Installs or updates the EF Core CLI tool (`dotnet-ef`). Installs the `dotnet ef` global tool at the version pinned by the `DotnetEFVersion` key in `Configuration.psd1`; requires the .NET SDK and skips with a warning if it is not found. With `-Update`, installs the latest available version instead of the pinned one. Called automatically by Bootstrap.
+- **Parameters:** -Update
+- **Usage:** `Install-DotnetEf`, `Install-DotnetEf -Update`
+
+If `dotnet-ef` is already installed, the function reports the current version and exits without reinstalling. When `DotnetEFVersion` is empty, it falls back to installing the latest available version.
+
+| Parameter | Description                                                                                                 |
+| --------- | ----------------------------------------------------------------------------------------------------------- |
+| `-Update` | Installs the latest available version of `dotnet-ef` instead of the version pinned in `Configuration.psd1`. |
+
+```powershell
+# Install the pinned dotnet-ef version from Configuration.psd1
+Install-DotnetEf
+
+# Install the latest available dotnet-ef version
+Install-DotnetEf -Update
+```
+
+## [Install-FromExecutable](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Install-FromExecutable.ps1)
+
+- **Description:** Unified, reliable, self-cleaning runner for installer-style executables. Given a download `-Url` or a local `-Path`, it fetches the installer (retrying the download with exponential backoff), runs it, and always removes anything it downloaded. Runs unattended when `-Arguments` (the vendor's silent switches) are supplied - waiting for the installer and gating success on its exit code - or interactively otherwise, launching the GUI and waiting for you to confirm completion. Administrator elevation is opt-in via `-RequireAdmin`. Generalizes the download-run-cleanup pattern that individual installer functions used to duplicate.
+- **Parameters:** -Name, -Url, -InstallerName, -Path, -Arguments, -ValidExitCodes, -DetectionPath, -MaxAttempts, -RequireAdmin
+- **Usage:** `Install-FromExecutable -Name "7-Zip" -Url "https://www.7-zip.org/a/7z2408-x64.exe" -Arguments "/S"`, `Install-FromExecutable -Name "MyApp" -Path "D:\setup.exe"`
+
+Downloads go to a unique, function-owned folder under the temp directory and are deleted afterwards; a caller-supplied `-Path` is run in place and never removed. Because that folder is never derived from `-Name`, cleanup can neither collide with nor destroy existing user data. The download is wrapped in `Invoke-WithOptionalRetry`, and any partial file is discarded between attempts so a flaky network never leaves a corrupt installer behind. Supply `-DetectionPath` to make re-runs idempotent - the function returns early with a warning when that path already exists. Supplying `-Arguments` (even empty) selects unattended mode; exit codes in `-ValidExitCodes` (default `0` and `3010`, reboot-required) count as success and anything else is reported as a failure instead of a false success. Omit `-Arguments` for an interactive GUI install.
+
+| Parameter         | Description                                                                                                                                                                            |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `-Name`           | Display name; drives the log title ("Installing &lt;Name&gt;"). Mandatory.                                                                                                             |
+| `-Url`            | Installer download URL (saved to a temporary folder and cleaned up). Mutually exclusive with `-Path`.                                                                                  |
+| `-InstallerName`  | File name for the download; defaults to the URL's file name when it ends in a recognized installer extension (`.exe`/`.msi`/`.msix`/`.appx`/`.bat`/`.cmd`), otherwise `installer.exe`. |
+| `-Path`           | Existing local installer to run in place (never deleted). Mutually exclusive with `-Url`.                                                                                              |
+| `-Arguments`      | Silent switches; supplying this (even empty) runs the installer unattended with `-Wait` and exit-code gating.                                                                          |
+| `-ValidExitCodes` | Exit codes treated as success in unattended mode. Defaults to `0` and `3010`.                                                                                                          |
+| `-DetectionPath`  | If this path already exists, the software is considered installed and the function returns early.                                                                                      |
+| `-MaxAttempts`    | Number of download attempts with exponential backoff. Defaults to `3`.                                                                                                                 |
+| `-RequireAdmin`   | Require administrator privileges (runs `Test-AdminPrivileges` first, elevating or aborting).                                                                                           |
+
+```powershell
+# Silent install with a retried download; success gated on the installer's exit code
+Install-FromExecutable -Name "7-Zip" -Url "https://www.7-zip.org/a/7z2408-x64.exe" -Arguments "/S"
+
+# Interactive GUI install requiring elevation
+Install-FromExecutable -Name "Visual Studio 2026" -Url "https://c2rsetup.example/vs.exe" -RequireAdmin
+
+# Run a local installer silently, skipping if MyApp is already present
+Install-FromExecutable -Name "MyApp" -Path "D:\installers\myapp-setup.exe" -Arguments "/quiet" -DetectionPath "C:\Program Files\MyApp\myapp.exe"
+```
+
+## [Install-PowerShellModules](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Install-PowerShellModules.ps1)
+
+- **Description:** Installs the required PowerShell modules from PSGallery (Terminal-Icons, PSReadLine, z, VirtualDesktop, ps2exe, Pester). Ensures the NuGet provider and the PSGallery trusted repository are configured first, then installs each module only if it is not already present. Called automatically by Bootstrap.
+- **Usage:** `Install-PowerShellModules`
+
+Ensures the NuGet package provider (minimum 2.8.5.201) is available and that PSGallery is set as a `Trusted` installation policy, then iterates a fixed module list and installs anything missing into the `CurrentUser` scope. VirtualDesktop is pinned to `1.5.11` (via the `$pinnedModules` hashtable) because it wraps undocumented COM interfaces that break between Windows builds, so only tested/verified versions are used; if a different VirtualDesktop version is present it is reinstalled at the pinned version. The tested combination this pin belongs to is tracked in the `TESTED VERSIONS` block in `Modules/Bootstrap/Data/WinGetApps.csv` - update both together. Pester is handled separately: it is pinned repo-wide to the version in `Modules/Tests/RequiredPesterVersion.txt` - the same single source of truth the test harness and the `Tests` CI workflow read - and is installed side-by-side (Windows ships an unupdatable 3.4.0) with `-SkipPublisherCheck`, skipped only when exactly the pinned version is already present. Bumping the pin file and re-running this function on every machine is the whole upgrade procedure. Errors during installation are written in red and rethrown.
+
+| Module           | Purpose                                                             |
+| ---------------- | ------------------------------------------------------------------- |
+| `Terminal-Icons` | File-type icons in the terminal                                     |
+| `PSReadLine`     | Enhanced command-line editing and history                           |
+| `z`              | Frecency-based directory jump shortcut                              |
+| `VirtualDesktop` | Windows virtual desktop COM API wrapper (pinned to 1.5.11)          |
+| `ps2exe`         | PowerShell-to-EXE compiler                                          |
+| `Pester`         | PowerShell testing framework (pinned via `Tests/RequiredPesterVersion.txt`, installed side-by-side with `-SkipPublisherCheck`) |
+
+```powershell
+# Install all required modules that are not already present
+Install-PowerShellModules
+```
+
+**See also:** [Modules: Bootstrap](bootstrap.md), [Modules: Window](window.md)
+
+## [Install-ScoopApps](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Install-ScoopApps.ps1)
+
+- **Description:** Installs Scoop-managed apps from the WinuX CSV, filtered by the current machine type. Reads the app list through `Import-AppCsv`, which layers the machine-local `ScoopApps.local.csv` over the committed `ScoopApps.csv`. Apps matching the current machine type (or marked `All`) are installed; others are skipped. `Machine`-column tokens are validated via `Test-MachineTypeScope` - unknown machine types are reported and never match. Requires administrator privileges and is called automatically by Bootstrap.
+- **Usage:** `Install-ScoopApps`
+
+Reads the app list with `Import-AppCsv -DataFileKey ScoopApps`, which resolves the committed CSV through `BootstrapConfig.DataFiles.ScoopApps` in `Configuration.psd1` and layers the sibling `ScoopApps.local.csv` over it when one exists, so this machine's own choices apply without the tracked CSV ever being edited. Each row (`App,Version,Global,Machine`) specifies an app name, an optional version pin (empty or `latest` installs unpinned), a `Global` flag (`true` adds `--global`), and the machine types it applies to. The function determines the current machine type, queries `scoop export` for already-installed apps, and for each applicable row either installs the app, updates it (when already installed and not version-pinned), or skips it (when already installed with a pinned version).
+
+```powershell
+# Install all Scoop apps applicable to the current machine type
+Install-ScoopApps
+```
+
+**See also:** [Import-AppCsv](bootstrap.md#import-appcsv), [Modules: Workflow](workflow.md)
+
+## [Install-ScoopPackageManager](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Install-ScoopPackageManager.ps1)
+
+- **Description:** Installs the Scoop package manager if not already present. Checks whether the `scoop` command is available; if not, downloads and runs the official Scoop install script from get.scoop.sh with `-RunAsAdmin`. Does nothing if Scoop is already installed. Called automatically by Bootstrap.
+- **Usage:** `Install-ScoopPackageManager`
+
+```powershell
+# Install Scoop, or report that it is already installed
+Install-ScoopPackageManager
+```
+
+## [Install-VSCodeLocalExtensions](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Install-VSCodeLocalExtensions.ps1)
+
+- **Description:** Links the repository's local VS Code extensions (`Get-VSCodeLocalExtensions` over `VSCodeProfiles.Extensions`, or the ones `-Extension` gives) into VS Code's extensions folder as `<publisher>.<name>-<version>`, through `New-WindowsSymbolicLink`. VS Code loads every extension folder it finds there and registers it on its next scan, so the link is a complete install - no VSIX, no Marketplace - and editing a file in the repository changes the live extension on the next `Developer: Reload Window`. A link already pointing at the extension's folder is left alone, and a link under an older version name that points at the same folder is removed (a symbolic link only, never a real folder, never with `-Recurse`), so a version bump in `package.json` never loads the extension twice. Never uninstall a linked extension through `code --uninstall-extension`: VS Code deletes the extension's folder, and through the link that is the repository copy. Needs administrator privileges or Developer Mode. Called first by `Deploy-VSCodeProfiles`.
+- **Parameters:** -Extension, -Destination
+- **Usage:** `Install-VSCodeLocalExtensions`, `Install-VSCodeLocalExtensions -Destination "$env:USERPROFILE\.vscode-insiders\extensions"`
+
+A local extension is a folder with a `package.json` that names `publisher`, `name` and `version` and contributes what the extension carries, for example two colour themes:
+
+```json
+{
+    "name": "themes",
+    "displayName": "Themes",
+    "publisher": "mypublisher",
+    "version": "1.0.0",
+    "engines": { "vscode": "^1.80.0" },
+    "categories": ["Themes"],
+    "contributes": {
+        "themes": [
+            { "label": "My Dark", "uiTheme": "vs-dark", "path": "./themes/Dark.json" },
+            { "label": "My Light", "uiTheme": "vs", "path": "./themes/Light.json" }
+        ]
+    }
+}
+```
+
+## [Install-WingetApps](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Install-WingetApps.ps1)
+
+- **Description:** Installs WinGet-managed apps from the WinuX CSV, filtered by machine type. Reads the app list through `Import-AppCsv`, which layers the machine-local `WinGetApps.local.csv` over the committed CSV named by `BootstrapConfig.DataFiles.WinGetApps` in `Configuration.psd1`; apps matching the current machine type (or marked `All`) are installed, others are skipped. `Machine`-column tokens are validated via `Test-MachineTypeScope` - unknown machine types are reported and never match. Requires administrator privileges and is called automatically by Bootstrap.
+- **Usage:** `Install-WingetApps`
+
+The list is read with `Import-AppCsv -DataFileKey WinGetApps`, so the sibling `WinGetApps.local.csv` is layered over the committed list and this machine's own choices apply without the tracked CSV ever being edited.
+
+Each CSV row specifies an app ID, version, installation scope (`d` default / `m` machine / `u` user), interactive flag, source (`w` winget / `s` msstore), and the machine types it applies to. The machine type is resolved at runtime and rows whose `Machine` column does not include the current type or `All` are skipped. For apps pinned at `Latest`, an existing WinGet pin is removed first so the latest version can install cleanly.
+
+The function is fully unattended. Before touching any app it queries each source (`winget` and `msstore`) with `--accept-source-agreements`, which forces every source agreement to surface and records the acceptance. This matters for the `msstore` source, which shows a hard one-time agreement (including a geographic-region consent) the first time it is queried - a gate the `-s winget` installs never trigger and that `--disable-interactivity` alone does not suppress, so without this priming an unattended run (a VM, or the elevated bootstrap console) blocks the first time msstore is engaged. Every pin check and install then runs with `--disable-interactivity`; installs use `--accept-package-agreements --accept-source-agreements --disable-interactivity`, with `--disable-interactivity` dropped only for a row explicitly marked interactive (`Interactive = y`), since WinGet rejects combining it with `-i`. `--disable-interactivity` requires WinGet 1.6+ (ships with Windows 11).
+
+Every install is verified: a nonzero winget exit code triggers a `winget list --id` ground-truth check (nonzero codes are not uniformly failures - "already installed" variants are benign), and genuinely failed installs are collected and printed as an explicit summary at the end (app id, exit code, and how to retry) instead of scrolling by invisibly in the bootstrap output.
+
+**Data Source:** `WinGetApps.csv`, plus the machine-local `WinGetApps.local.csv` overlay when present
+
+```csv
+App,Version,Scope,Interactive,Source,Machine
+Microsoft.VisualStudioCode,Latest,d,n,w,All
+Mozilla.Firefox,Latest,d,n,w,All
+Valve.Steam,Latest,d,n,w,PC
+```
+
+```powershell
+# Install all WinGet apps applicable to the current machine type
+Install-WingetApps
+```
+
+**See also:** [Import-AppCsv](bootstrap.md#import-appcsv), [Modules: Bootstrap](bootstrap.md)
+
+## [Invoke-Browser](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Invoke-Browser.ps1)
+
+- **Description:** A thin wrapper around `Open-Browser`. Given a query, it joins the words with spaces and runs `Open-Browser -Search` to perform a Google search in the default browser; called with no arguments it falls through to `Open-Browser`, which shows the URL group selection menu.
+- **Parameters:** -Query
+- **Usage:** `Invoke-Browser "search terms"`, `Invoke-Browser`, `b "search terms"`
+- **Alias:** b
+
+`-Query` accepts one or more words via `ValueFromRemainingArguments`, so the terms can be passed unquoted (e.g. `b search terms`) and are joined into a single search string. The alias `b` is defined in the PowerShell profile (`New-Alias -Name b -Value Invoke-Browser`).
+
+```powershell
+# Search Google in the default browser
+Invoke-Browser "search terms"
+
+# Same search via the alias, words passed unquoted
+b search terms
+
+# No query: fall through to Open-Browser's group selection menu
+Invoke-Browser
+```
+
+**See also:** [Open-Browser](../modules/application.md)
+
+## [Invoke-ObsidianCli](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Invoke-ObsidianCli.ps1)
+
+- **Description:** Runs one Obsidian CLI command and returns its output lines (stdout then stderr, blank lines dropped). `Obsidian.com` writes its chatter (argument echo, callback URL, update check) straight to the console it is attached to, past any stream redirection, so the command runs in a hidden console of its own with both streams redirected to temporary files that are read back and removed. A launch failure is returned as a single `CLI call failed: ...` line rather than thrown. A call that has not exited within `-TimeoutSeconds` (default 5) is killed together with its process tree and answered with a leading `CLI call timed out after N s` line, so a CLI that never hears back from Obsidian can no longer stall the caller (and a whole workspace open) indefinitely. A healthy call is never delayed by the timeout.
+- **Parameters:** -CliPath, -Arguments, -TimeoutSeconds
+- **Usage:** `Invoke-ObsidianCli -CliPath (Get-ObsidianCliPath) -Arguments @("vault=Obsidian", "workspaces")`
+
+The one place every CLI call from `Open-Obsidian` and `Wait-ObsidianCli` goes through, and the seam the tests mock. Arguments follow the CLI's own `parameter=value` shape; put `vault=<name>` first.
+
+| Parameter    | Description                                                                  |
+| ------------ | ---------------------------------------------------------------------------- |
+| `-CliPath`   | Path to `Obsidian.com`, normally from `Get-ObsidianCliPath`.                 |
+| `-Arguments` | The CLI tokens, e.g. `@("vault=Obsidian", "workspace:load", "name=Server")`. |
+| `-TimeoutSeconds` | Longest wait for the CLI to exit (0.1 to 600). Default `5`.            |
+
+```powershell
+# List the saved workspaces of the running vault
+Invoke-ObsidianCli -CliPath (Get-ObsidianCliPath) -Arguments @("vault=Obsidian", "workspaces")
+```
+
+## [Invoke-ObsidianWorkspaceLoad](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Invoke-ObsidianWorkspaceLoad.ps1)
+
+- **Description:** Loads a saved Obsidian workspace through the CLI and reports a refusal instead of claiming success. Returns an object: `Loaded` (`$true` when the CLI accepted the load), `Refusal` (the CLI line that refused it, else `$null`) and `Message` (the warning text for that refusal, fix included), so a caller can tell a transient "not yet up" from a permanent "not enabled".
+- **Parameters:** -CliPath, -Vault, -Name, -Silent, -TimeoutSeconds
+- **Usage:** `if ((Invoke-ObsidianWorkspaceLoad -CliPath (Get-ObsidianCliPath) -Vault Obsidian -Name Server).Loaded) { "loaded" }`
+
+The one checked `workspace:load` call, shared by `Open-Obsidian`'s immediate path and by [Complete-ObsidianWorkspaceLoad](#complete-obsidianworkspaceload) when the load was deferred. The CLI answers some requests instead of doing the work - the per-machine toggle being off (`Command line interface is not enabled`), Obsidian gone between the readiness poll and the load (`The CLI is unable to find Obsidian`), and the `CLI call failed` line [Invoke-ObsidianCli](#invoke-obsidiancli) synthesises for a launch failure - and all three are reported as `Obsidian workspace [Name] not loaded => <the CLI's line>` together with the fix, never as a success. The same holds for a name the vault does not have (`Error: Workspace "Name" not found.`, which the CLI answers with exit code 0), for a call that gave no answer at all, and for a call that timed out (`-TimeoutSeconds`, default 5). A timed-out load is double-checked first: the vault's workspace list (`workspaces`) is read once (2 s budget), and when it marks `Name (active)` the load counts as landed.
+
+| Parameter  | Description                                    |
+| ---------- | ---------------------------------------------- |
+| `-CliPath` | Path to `Obsidian.com`.                        |
+| `-Vault`   | The vault the CLI addresses.                   |
+| `-Name`    | The saved Obsidian workspace to load.          |
+| `-Silent`  | Do not write the refusal warning; the caller reads it from `Message`. For an attempt the caller expects may be premature. |
+| `-TimeoutSeconds` | Longest wait for the load call ([Invoke-ObsidianCli](#invoke-obsidiancli) `-TimeoutSeconds`, 0.1 to 600). Default `5`. |
+
+```powershell
+$load = Invoke-ObsidianWorkspaceLoad -CliPath (Get-ObsidianCliPath) -Vault Obsidian -Name Server
+if (-not $load.Loaded) { $load.Refusal }
+```
+
+
+## [Merge-VSCodeExtensionList](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Merge-VSCodeExtensionList.ps1)
+
+- **Description:** Merges the extensions a profile has installed into the lines of its `extensions.txt`: blank and comment lines stay where they are, entries still installed are kept exactly as written (pin and trailing comment included), entries no longer installed are removed and installed extensions the file does not name are appended, sorted. Ids compare case-insensitively and a duplicate entry keeps its first line. Returns the new lines; nothing is written. The capture side of `extensions.txt`, used by `Export-VSCodeProfile`.
+- **Parameters:** -Lines, -Installed
+- **Usage:** `@(Merge-VSCodeExtensionList -Lines (Get-Content extensions.txt) -Installed (& code --list-extensions))`
+
+## [Open-Acrobat](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Open-Acrobat.ps1)
+
+- **Description:** Opens Adobe Acrobat with one or more PDF groups defined in `AcrobatPdfGroups` in `Configuration.psd1`. When a PDF key (or keys) is given it opens the corresponding file(s) directly; called with no arguments it just launches Acrobat (or reports it is already running), and with an empty `-Pdf` it shows an interactive menu of configured groups plus up to 10 recently opened PDFs.
+- **Parameters:** -Pdf
+- **Usage:** `Open-Acrobat`, `Open-Acrobat -Pdf ""`, `Open-Acrobat -Pdf "MyDocs"`, `Open-Acrobat -Pdf "MyDocs","OtherDocs"`
+- **PDFs:** Configured groups from `AcrobatPdfGroups` (+ up to 10 recent PDFs in the interactive menu)
+
+The interactive menu (shown when `-Pdf` is empty) lists the configured groups from `AcrobatPdfGroups`, in configuration order, alongside recently opened PDFs and supports selecting one or more. Recent PDFs are gathered first from the Acrobat registry history at `HKCU:\Software\Adobe\Adobe Acrobat\DC\AVGeneral\cRecentFiles`, then, if fewer than 10 are found, from Windows `Recent` (`.lnk`) shortcuts as a fallback. Group paths are dot-notation references resolved through `$global:MachineSpecificPaths`, so each entry validates the resolved path before launching. An empty `AcrobatPdfGroups` is reported as an error in every mode, a bare call included.
+
+| Parameter | Description                                                                                                                                                     |
+| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `-Pdf`    | One or more PDF group key names from `AcrobatPdfGroups`. Omit to launch Acrobat only; pass an empty string to open the interactive group/recent selection menu. |
+
+```powershell
+# Launch Adobe Acrobat only (no PDFs)
+Open-Acrobat
+
+# Interactive menu of configured groups + recent PDFs
+Open-Acrobat -Pdf ""
+
+# Open one configured group
+Open-Acrobat -Pdf "MyDocs"
+
+# Open multiple configured groups
+Open-Acrobat -Pdf "MyDocs","OtherDocs"
+```
+
+## [Open-Browser](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Open-Browser.ps1)
+
+- **Description:** The primary browser launcher for the entire system. Opens configured URL groups from `BrowserGroups` in `Configuration.psd1` (by name, with dot-notation for nested groups) in the configured browser, performs a Google search with `-Search`, or opens the browser bare / a target number of instances with `-NoMenu`. Before opening a group it matches open browser window titles against the group's URLs and skips groups that already appear open (idempotent) unless `-Override` is set. With no group specified it shows an interactive selection menu.
+- **Parameters:** -Groups, -Private, -NoMenu, -Search, -Browser, -Override, -Instances, -Alongside, -ProtectedWindowHandles
+- **Usage:** `Open-Browser`, `Open-Browser GroupName`, `Open-Browser Parent.ChildGroup`, `Open-Browser GroupA,GroupB`, `Open-Browser -Search "search terms"`, `Open-Browser -Private GroupName`, `Open-Browser GroupName -Override`, `Open-Browser -NoMenu -Browser PreferredBrowser -Instances 2`
+
+The default browser is read from `Configuration.Universal.DefaultBrowser`; the base ships it empty, so the function warns and returns until one is set in `Configuration.local.psd1`. Browser definitions (executable path, private/incognito argument, new-window argument) come from `Configuration.Universal.Browsers`, so any browser key defined there (e.g. Firefox, Chrome, Edge, Brave, Tor) can be passed to `-Browser`. Groups support unlimited hierarchical nesting and are addressed with dot-notation. Private mode cannot be combined with group opening (it falls back to normal mode for groups) but does support `-Search`. `-Instances N` is rerun-safe: it counts how many matching windows already exist and opens only the deficit. The count filters windows by the browser's title pattern ([`Get-BrowserTitlePattern`](system.md#get-browsertitlepattern)), so Firefox and Tor Browser - which share the `firefox.exe` process name - never count each other's windows. Every instance launch passes the browser's configured `NewWindowArg`: a bare launch only opens a window on some browsers (Chrome does; Brave routes it into the existing session as a tab). When the browser is not running yet, the first launch is gated through [`Wait-BrowserWindowReady`](#wait-browserwindowready) before the rest are fired, because launches that arrive while the first instance is still bootstrapping are silently dropped by Chromium's process singleton.
+
+| Parameter    | Description                                                                                                                        |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `-Groups`    | One or more group names to open (dot-notation for nested, e.g. `Parent.ChildGroup`). Omit to show the interactive menu.            |
+| `-Private`   | Opens the browser in private/incognito mode. Cannot be combined with group opening.                                                |
+| `-NoMenu`    | Skips the menu and opens the browser directly with no URLs loaded.                                                                 |
+| `-Search`    | Performs a Google search with the given query, opening directly without the menu.                                                  |
+| `-Browser`   | Browser to use; defaults to `Configuration.Universal.DefaultBrowser`. Valid values are keys in `Configuration.Universal.Browsers`. |
+| `-Override`  | Bypasses idempotency, opening groups even if they appear to already be open.                                                       |
+| `-Instances` | Target number of browser windows to have open; counts existing windows and opens only the deficit. 0 means open exactly one.       |
+| `-Alongside` | Set by `Open-Workspace` for an alongside open. Turns `-Instances N` into "open N **new** windows" - see below.                      |
+| `-ProtectedWindowHandles` | Set by `Open-Workspace` on a plain open that preserves live alongside workspaces. Excludes those windows from every already-open count - see below. |
+
+**`-Instances` in alongside mode.** `-Instances N` normally means "ensure N windows exist", which is right for a normal workspace open: the layout can use windows that were already there. An [alongside open](../modules/window.md#set-workspacewindowlayout) cannot - it lays out only the windows that open created, and refuses every handle captured beforehand. Counting pre-existing windows toward the target therefore hands the layout `N - existing` usable windows and leaves that many zones unfillable, worsening on every rerun as each run adds to the pre-existing count. `Open-Workspace` forwards `-Alongside` to every action that declares it, and `Open-Browser` responds by counting nothing and launching the full `N` as new windows. This is what makes a count-based workspace such as `Example` (33 identical `Browser` layout entries) reopen correctly with `w example -Browser Chrome -Alongside` instead of degrading each time. Pre-existing windows are still consulted for cold-start detection, just not for the target.
+
+**Preserved alongside windows never count either.** On a plain open that preserves live alongside workspaces (see [Get-WorkspaceOpenProtection](workflow.md#get-workspaceopenprotection)), `Open-Workspace` passes `-ProtectedWindowHandles`: those windows are refused by the plain layout pass, so they are excluded from the `-NoMenu -Instances` count and from the group already-open checks (the cached window list handed to [Test-BrowserGroupAlreadyOpen](#test-browsergroupalreadyopen) is filtered, and a cache the filter emptied short-circuits to "not open" instead of letting the check re-enumerate and see them again). The cold-start/warm gates deliberately stay on the unfiltered enumeration - a preserved window genuinely proves the browser process is warm and accepting new-window hand-offs.
+
+```powershell
+# Interactive group selection menu
+Open-Browser
+
+# Open a configured group, or a nested group via dot-notation
+Open-Browser GroupName
+Open-Browser Parent.ChildGroup
+
+# Web search in the default browser
+Open-Browser -Search "search terms"
+
+# Ensure exactly N windows of a group are open (only opens the deficit on rerun)
+Open-Browser GroupName -Instances 3
+
+# Force-open a group even if it looks already open
+Open-Browser GroupName -Override
+```
+
+**See also:** [Add Browser Group](../configuration/guides/application/add-browser-group.md)
+
+## [Open-ClaudeDesktop](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Open-ClaudeDesktop.ps1)
+
+- **Description:** Opens Claude Desktop via `Start-Application` using its local electron launcher under `%LOCALAPPDATA%\AnthropicClaude`. Does nothing if Claude Desktop is already running. The running check is scoped to the Claude Desktop install directory so it is not tripped by the Claude Code CLI, which also runs as a process named `claude`.
+- **Usage:** `Open-ClaudeDesktop`
+
+Launches `claude.exe` from `%LOCALAPPDATA%\AnthropicClaude` via `Start-Application -StartMethod DirectPath`, with no arguments. The `-ProcessPathFilter` restricts the "already running" detection to processes under the Claude Desktop install path, so the desktop app is distinguished from the `claude` CLI.
+
+That launcher is a Squirrel stub executable: it resolves the newest `app-*` install directory on its own, then re-executes the real Electron binary with whatever arguments it was given. Arguments must therefore be omitted - an earlier version passed `--processStart claude.exe` (an `Update.exe` flag the stub does not consume), which was forwarded through to Electron and parsed as a file path, so every launch opened an "Attach `claude.exe` to this session?" prompt.
+
+```powershell
+# Open Claude Desktop (no-op if already running)
+Open-ClaudeDesktop
+```
+
+## [Open-DBeaver](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Open-DBeaver.ps1)
+
+- **Description:** Opens the DBeaver database client via the shared `Start-Application` helper. Does nothing if DBeaver is already running. The executable path is read from the `DbeaverExe` key in the Universal configuration section.
+- **Usage:** `Open-DBeaver`
+
+## [Open-Discord](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Open-Discord.ps1)
+
+- **Description:** Opens Discord. Starts Discord via `Start-Application` using its `Update.exe` launcher; does nothing if Discord is already running.
+- **Usage:** `Open-Discord`
+
+## [Open-Docker](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Open-Docker.ps1)
+
+- **Description:** Starts Docker Desktop minimized to the system tray. Launches it with the `--minimized` flag so it appears in the tray without opening the main window, and suppresses Electron/Bugsnag console output via `-SuppressOutput`. Does nothing if Docker Desktop is already running. The executable path is read from `Universal.DockerExe` by `Start-Application -ConfigKey DockerExe`.
+- **Usage:** `Open-Docker`
+
+The executable path is read from the `DockerExe` key in the `Universal` section of `Configuration.psd1`. Console noise (Electron, Bugsnag, GPU process messages) is silenced automatically so the launch is quiet.
+
+```powershell
+# Start Docker Desktop minimized to the tray (no-op if already running)
+Open-Docker
+```
+
+## [Open-FoundryVTT](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Open-FoundryVTT.ps1)
+
+- **Description:** Opens the FoundryVTT virtual tabletop server by starting the FoundryVTT desktop application via `Start-Application`. Does nothing if FoundryVTT is already running. The executable path is read from the `FoundryVTTExe` key in the `Universal` section of `Configuration.psd1`.
+- **Usage:** `Open-FoundryVTT`
+
+## [Open-LeagueOfLegends](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Open-LeagueOfLegends.ps1)
+
+- **Description:** Opens the League of Legends client via `Start-Application`. Does nothing if the client is already running. The executable path is read from `Configuration.Universal.LeagueOfLegendsExe`.
+- **Usage:** `Open-LeagueOfLegends`
+
+## [Open-NotepadPlusPlus](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Open-NotepadPlusPlus.ps1)
+
+- **Description:** Opens Notepad++, optionally with a specific file. When given a file path it opens that file, but if a Notepad++ window title already contains the file name it warns that the file is already open and does not open a duplicate (the window is not brought to the front). Called without arguments, it opens Notepad++ without any file.
+- **Parameters:** -File
+- **Usage:** `Open-NotepadPlusPlus`, `Open-NotepadPlusPlus .\MyFile.txt`, `Open-NotepadPlusPlus -File "C:\Users\<User>\config.json"`
+
+The Notepad++ executable is resolved from the `Universal.NotepadPlusPlusExe` key in `Configuration.psd1`. When a file is supplied its path is resolved (a missing file is reported as an error), then existing Notepad++ window titles are checked for the file name; a match is reported as already open instead of launching a second copy. With no file argument it falls back to `Start-Application -ConfigKey NotepadPlusPlusExe`, which launches Notepad++ or warns that it is already running.
+
+| Parameter | Description                                                      |
+| --------- | ---------------------------------------------------------------- |
+| `-File`   | Path to the file to open. Omit to open Notepad++ without a file. |
+
+```powershell
+# Open Notepad++ with no file
+Open-NotepadPlusPlus
+
+# Open a specific file (reported, not reopened, if already open)
+Open-NotepadPlusPlus -File "C:\Users\<User>\config.json"
+```
+
+## [Open-Obsidian](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Open-Obsidian.ps1)
+
+- **Description:** Opens Obsidian for the configured vault and, when a workspace resolves, loads that Obsidian workspace through the official Obsidian command line interface (`obsidian vault=<Vault> workspace:load name=<Name>`). With Obsidian already running the workspace is switched in place - no second window; without a workspace an already-running Obsidian is left alone. The workspace comes from `-Workspace`, else from the `-CurrentWorkspace` name `Open-Workspace` injects when the vault has an Obsidian workspace of the same name, else - on a bare interactive call without `-Default` - from a `Resolve-Selection` menu of the saved workspaces, else from `Configuration.Obsidian.DefaultWorkspace` on a cold start only. A cold start launches `Obsidian.exe` detached through WMI so closing the terminal never closes Obsidian, then polls the CLI (10 s at most) before loading. The CLI's answer to the load is checked: a refusal (the per-machine CLI toggle off, `Command line interface is not enabled`) is reported with the fix, never claimed as a loaded workspace.
+- **Parameters:** -Workspace, -Default, -CurrentWorkspace, -Deferred
+- **Usage:** `Open-Obsidian`, `Open-Obsidian -Workspace Server`, `Open-Obsidian -Default`
+
+The Obsidian side of a WinuX workspace. Saved Obsidian workspaces (the core Workspaces plugin) live in `<ObsidianDirectory>\.obsidian\workspaces.json`; `Get-ObsidianWorkspaceNames` reads that file for the implicit match, for the menu and for the warning an unknown `-Workspace` name gets (the load is still attempted). Inside `Open-Workspace` a bare `@{ Action = "Open-Obsidian" }` is enough: `w Server` lands Obsidian on its `Server` workspace as soon as the vault has one, and `Parameters = @{ Workspace = "Name" }` overrides that; the injected `CurrentWorkspace` also suppresses the menu, so a workspace open never prompts. By hand, a bare `Open-Obsidian` shows the menu of saved workspaces exactly like `Open-VSCode` or `Open-VisualStudio` show theirs, `[Enter]` skips it, and `-Default` skips it up front (an action list without the injection, such as `ProjectActions`, must pass `Parameters = @{ Default = $true }` or a `Workspace`). Inside a workspace action `Default = $true` is optional (the injected `CurrentWorkspace` already suppresses the menu) and it never disables the same-named match - it only removes the prompt, so it is safe belt-and-braces for any unattended open. The vault name defaults to the leaf folder of `PathTemplates.ObsidianDirectory` (`Configuration.Obsidian.Vault` overrides it). The CLI ships with Obsidian 1.12.4+ and is enabled once per machine, under Settings > General > Advanced > Command line interface or with `Enable-ObsidianCli` (the flag is Obsidian app state in `%APPDATA%\obsidian\obsidian.json`, so a synced vault does not carry it); `Get-ObsidianCliPath` finds `Obsidian.com` on PATH or beside `Obsidian.exe`, and without it Obsidian still opens while a requested workspace is reported with the registration steps. `Obsidian.com` exists even with the toggle off, which is why the load's answer is checked rather than the path. The launch itself is `Start-ObsidianDetached` (the CLI cannot start Obsidian), the readiness poll is `Wait-ObsidianCli`, the checked `workspace:load` is [Invoke-ObsidianWorkspaceLoad](#invoke-obsidianworkspaceload) and every CLI call goes through `Invoke-ObsidianCli`, which runs `Obsidian.com` in a hidden console so its chatter never reaches the shell. Inside a workspace open the CLI work is deferred: `Open-Workspace` injects `-Deferred`, this function registers a [Complete-ObsidianWorkspaceLoad](#complete-obsidianworkspaceload) call through [Register-DeferredAction](helper.md#register-deferredaction) and returns as soon as Obsidian is launched, and the flow runs every registered tail ([Complete-DeferredActions](helper.md#complete-deferredactions)) once the remaining openers have run and before the layout starts waiting on window titles. On a cold start the CLI cannot answer until Obsidian has finished starting, so those seconds used to be paid by every opener queued behind this one.
+
+| Parameter           | Description                                                                                                      |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `-Workspace`        | The Obsidian workspace to load. Wins over `-CurrentWorkspace` and the configured default.                        |
+| `-Default`          | Skip the menu: open Obsidian (into `Obsidian.DefaultWorkspace` on a cold start) or leave the running one alone. Removes only the prompt; `-Workspace` and the same-named match still apply. |
+| `-CurrentWorkspace` | The WinuX workspace being opened - injected by `Open-Workspace`, used only when a same-named Obsidian one exists. |
+| `-Deferred`         | Queue the workspace load ([Register-DeferredAction](helper.md#register-deferredaction)) and return as soon as Obsidian is launched, leaving the CLI round trip to the flow's drain. Injected by `Open-Workspace`; a bare `Open-Obsidian` loads before it returns, as always. |
+
+```powershell
+# Choose from the vault's saved workspaces ([Enter] skips)
+Open-Obsidian
+
+# Open Obsidian (or leave the running one alone), no menu
+Open-Obsidian -Default
+
+# Open Obsidian into the "Server" workspace, or switch the running instance to it
+Open-Obsidian -Workspace Server
+
+
+# In WorkspaceActions: implicit same-named match, or an explicit name
+@{ Action = "Open-Obsidian" }
+@{ Action = "Open-Obsidian"; Parameters = @{ Default = $true } }     # same match, explicitly unattended
+@{ Action = "Open-Obsidian"; Parameters = @{ Workspace = "DSA" } }
+```
+
+## [Open-Outlook](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Open-Outlook.ps1)
+
+- **Description:** Opens the new Outlook (Microsoft Store app) through the shared `Start-Application` launcher, which starts `Universal.OutlookLauncherExe` (ships `C:\Windows\explorer.exe`) with the fixed `shell:AppsFolder\Microsoft.OutlookForWindows_8wekyb3d8bbwe!Microsoft.OutlookforWindows` argument. Does nothing if Outlook is already running.
+- **Usage:** `Open-Outlook`
+
+If Outlook is already running (the `olk` process), no new instance is launched.
+
+## [Open-RiseupVPN](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Open-RiseupVPN.ps1)
+
+- **Description:** Opens RiseupVPN via `Start-Application`. Does nothing if RiseupVPN is already running. The executable path is read from the `RiseupVpnExe` key in the `Universal` configuration section.
+- **Usage:** `Open-RiseupVPN`
+
+## [Open-SecureBrowser](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Open-SecureBrowser.ps1)
+
+- **Description:** Establishes a VPN-protected Tor Browser session with IP verification. Retrieves and displays the current ISP IP before connecting, starts RiseupVPN and waits for manual connection confirmation, hides the RiseupVPN window to the system tray via the Win32 ShowWindow API (SW_HIDE), opens Tor Browser, then runs `Test-PrivacyStatus` in Tor mode to verify the IP has changed.
+- **Usage:** `Open-SecureBrowser`
+
+Runs a multi-step privacy workflow:
+
+1. Retrieves the current ISP IP address before connecting the VPN.
+2. Starts RiseupVPN.
+3. Waits for manual confirmation that the VPN is connected.
+4. Hides the RiseupVPN window to the system tray (Win32 `ShowWindow` SW_HIDE).
+5. Opens Tor Browser.
+6. Waits 5 seconds for Tor Browser to initialize.
+7. Calls `Test-PrivacyStatus` in Tor mode to verify the IP has changed.
+
+Requires the Window module to be loaded (for Win32 `ShowWindow` access).
+
+> **Requires Tor Browser** - the base bootstrap does not install it. Add a
+> `TorProject.TorBrowser,Latest,d,n,w,All` row to your machine-local
+> [`WinGetApps.local.csv`](../reference/software-list.md#machine-local-overlay) (WinGet installs the
+> portable build onto the Desktop; move the "Tor Browser" folder to `{User}\Tor Browser`, where the
+> default `Universal.Browsers.Tor` entry points), install it manually, or provision it in a fork via
+> `BootstrapConfig.PersonalSteps`.
+
+```powershell
+# Start the full VPN + Tor Browser privacy session
+Open-SecureBrowser
+```
+
+## [Open-Slack](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Open-Slack.ps1)
+
+- **Description:** Opens Slack. Starts Slack via `Start-Application` using its local Electron launcher, and does nothing if Slack is already running.
+- **Usage:** `Open-Slack`
+
+## [Open-Steam](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Open-Steam.ps1)
+
+- **Description:** Opens Steam via `Start-Application`. Does nothing if Steam is already running. The executable path is read from `Configuration.Universal.SteamExe`.
+- **Usage:** `Open-Steam`
+
+## [Open-TeamViewer](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Open-TeamViewer.ps1)
+
+- **Description:** Opens TeamViewer via `Start-Application`. Does nothing if TeamViewer is already running. The executable path is read from the `TeamViewerExe` key in the Universal configuration section.
+- **Usage:** `Open-TeamViewer`
+
+## [Open-Terminal](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Open-Terminal.ps1)
+
+- **Description:** Opens Windows Terminal in a new window or in the current shell, optionally running one or more commands in separate tabs with custom tab titles. Each command runs in its own tab (base64-encoded internally for reliable execution) and titles persist even after running commands that would normally change the window title. Tabs left without a title are named `PowerShell`, exactly like a tab opened by hand from the default profile. All tabs of one call are chained into a single `wt` invocation (`new-tab ... ; new-tab ...`), which Windows Terminal processes strictly in order - guaranteeing tab order without per-tab process spawns and settle sleeps. Supports administrator privileges and an explicit `-WindowId` for grouping tabs from different calls into the same window. When the tabs go to window `0` (the current window), the caller's own window is activated first, because Windows Terminal resolves window `0` to its most recently activated window, not to the caller's.
+- **Parameters:** -Command, -Administrator, -InSameShell, -WindowId, -TabTitles
+- **Usage:** `Open-Terminal`, `Open-Terminal -Administrator`, `Open-Terminal -Command "git status", "npm run dev"`, `Open-Terminal -Command "Set-Location <DevRoot>\MyProject", "Set-Location <DevRoot>\OtherProject" -TabTitles "MyProject", "OtherProject" -InSameShell`, `Open-Terminal -Command "echo hello" -WindowId "my-window-id"`
+- **Alias:** t
+
+Opens a fresh Windows Terminal window by default. Without `-Command` it starts a bare `wt` (elevated with `-Administrator`), and `-InSameShell`, `-WindowId` and `-TabTitles` have no effect. When `-Command` is supplied, each command opens in its own new tab, and all tabs of one call are chained into a single `wt` invocation (`new-tab ... ; new-tab ...`): Windows Terminal processes the subcommands of one command line strictly in order, so tab ordering is guaranteed without per-tab process spawns and settle sleeps. Batches are split defensively when the command line would approach the Windows length limit, and follow-up batches target the same window ID so they join the same window. Tab titles are set via an env var marker and wrapped in a `try/finally` so the title is restored after `Ctrl+C` or long-running commands. A tab with no `-TabTitles` entry is titled `PowerShell` instead: without a title Windows Terminal names such a tab after the command line it was handed (`C:\Program Files\PowerShell\7\pwsh.exe`) and passes that same string to the shell as its console title, so the path showed up as the tab name. That fallback title is a STARTING title only, deliberately without `--suppressApplicationTitle`, so the shell can still retitle its own tab - which `Open-Workspace -Alongside` (identifying its own hosting window) and `Terminate-WindowsTerminalTabs` (marking its own tab) both depend on. Use `-InSameShell` to target the current window (via `$env:WT_WINDOW_ID` when the calling shell knows its own window ID, otherwise window ID 0 - which resolves to the most recently used window), or pass an explicit `-WindowId` (which takes precedence over `-InSameShell`) to group tabs from separate calls into one window. Because window ID 0 is the *most recently used* window, a second terminal window that came forward while the command ran would receive the tabs. So before spawning tabs into window 0 (from `-InSameShell` or an explicit `-WindowId 0`), the caller's own window, found by [Resolve-HostingTerminalTab](helper.md#resolve-hostingterminaltab), is brought to the foreground, which makes it the most recently used one. It uses the plain foreground request, which leaves a maximized window maximized. A window that cannot be identified for certain is left alone, and an elevated (`-Administrator`) spawn skips the step. Spawned tabs run `pwsh` with `-NoProfileLoadTime`, so the "Loading personal and system profiles took NNNms" banner never appears in them regardless of machine speed.
+
+| Parameter        | Description                                                                                            |
+| ---------------- | ------------------------------------------------------------------------------------------------------ |
+| `-Command`       | Array of commands to execute, each in its own tab (base64-encoded internally).                         |
+| `-Administrator` | Opens Windows Terminal with elevated privileges.                                                       |
+| `-InSameShell`   | Opens tabs in the current Windows Terminal window instead of a new window (targets `$env:WT_WINDOW_ID` when the calling shell knows its window, e.g. inside `Open-Workspace -Alongside`; otherwise ID 0 = the most recently used window, after activating the caller's own window so that it is the most recently used one). Default: new window. |
+| `-WindowId`      | Explicit Windows Terminal window ID to open tabs in; overrides `-InSameShell`.                         |
+| `-TabTitles`     | Array of custom tab titles; should match the number of commands. Tabs without an entry are titled `PowerShell`. |
+
+```powershell
+# Open a new Windows Terminal window
+Open-Terminal
+
+# Open elevated
+Open-Terminal -Administrator
+
+# Run commands in separate, titled tabs
+Open-Terminal -Command "git status", "npm run dev" -TabTitles "Git", "Dev"
+
+# Open project tabs in the current window
+Open-Terminal -Command "Set-Location <DevRoot>\MyProject", "Set-Location <DevRoot>\OtherProject" -TabTitles "MyProject", "OtherProject" -InSameShell
+
+# Group tabs from different calls into one window by ID
+Open-Terminal -Command "echo hello" -WindowId "my-window-id"
+```
+
+## [Open-VirtualBox](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Open-VirtualBox.ps1)
+
+- **Description:** Opens Oracle VirtualBox via `Start-Application`. Does nothing if VirtualBox is already running. The executable path is read from the `VirtualBoxExe` key in the Universal configuration section.
+- **Usage:** `Open-VirtualBox`
+
+## [Open-VisualStudio](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Open-VisualStudio.ps1)
+
+- **Description:** Opens one or more Visual Studio solutions configured in `VisualStudioSolutions` in `Configuration.psd1`, where each entry maps a name to a `.sln` file path. Omit `-Solution` to show an interactive selection menu. With no menu selection, or with `-Default` (which skips the menu), it launches Visual Studio bare unless `devenv` is already running. Solutions already open (detected by matching window title) are skipped.
+- **Parameters:** -Default, -Solution
+- **Usage:** `Open-VisualStudio`, `Open-VisualStudio -Solution MySolution`, `Open-VisualStudio -Default`
+
+Reads the solution list from `VisualStudioSolutions` and resolves the Visual Studio executable from `Universal.VisualStudio2026Exe` (it must be set and exist, or the function reports an error and opens nothing). Each solution's `.sln` path is resolved against `MachineSpecificPaths`, so configured solutions follow machine-specific dev roots. If `-Solution` is omitted you get an interactive menu (which also supports multiple selections); if you make no selection, Visual Studio is opened without a solution. `-Default` skips the menu and does the same, ignoring `-Solution`.
+
+| Parameter   | Description                                                                                                    |
+| ----------- | -------------------------------------------------------------------------------------------------------------- |
+| `-Default`  | Skips the menu and opens Visual Studio without a solution (no-op if `devenv` is already running). `-Solution` is ignored. |
+| `-Solution` | One or more solution names as defined in `VisualStudioSolutions`. Omit to show the interactive selection menu. |
+
+```powershell
+# Interactive solution selection menu
+Open-VisualStudio
+
+# Open a specific configured solution by name
+Open-VisualStudio -Solution MySolution
+
+# Open Visual Studio without a solution, without prompting
+Open-VisualStudio -Default
+```
+
+## [Open-VSCode](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Open-VSCode.ps1)
+
+- **Description:** Opens one or more VS Code project folders defined in `VSCodeProjects` in `Configuration.psd1`. Each entry maps a name to a directory path. Omit `-Folder` to show an interactive selection menu. With no menu selection, or with `-Default` (which skips the menu), VS Code is launched without a folder unless `Code` is already running. Folders already open (detected by matching window title) are skipped.
+- **Parameters:** -Default, -Folder
+- **Usage:** `Open-VSCode`, `Open-VSCode MyProject`, `Open-VSCode MyProject, OtherProject`, `Open-VSCode -Folder MyProject`, `Open-VSCode -Default`
+
+Reads the `VSCodeProjects` array from `Configuration.psd1`, building a name-to-path lookup. Each path is resolved through the machine-specific path map, so the same project name works across machines. When `-Folder` is omitted and `-Default` is not set, an interactive menu lists the available folders and supports multiple selections. With no projects selected, or with `-Default` (which also ignores `-Folder`), VS Code is launched bare (skipped if `Code` is already running). For each selected folder the path is validated with `Test-Path`, the folder is opened in a new window through `Start-VSCodeDetached` (`Code.exe -n`, created detached from this shell's console), and `Test-ProjectAlreadyOpen` prevents reopening a folder that already has a window.
+
+| Parameter  | Description                                                                                            |
+| ---------- | ------------------------------------------------------------------------------------------------------ |
+| `-Default` | Skips the menu and opens VS Code without a folder (no-op if `Code` is already running). `-Folder` is ignored. |
+| `-Folder`  | One or more project names as defined in `VSCodeProjects`. Omit to show the interactive selection menu. |
+
+```powershell
+# Interactive folder selection menu (or bare VS Code if nothing selected)
+Open-VSCode
+
+# Open a single configured project folder
+Open-VSCode MyProject
+
+# Open multiple configured project folders at once
+Open-VSCode MyProject, OtherProject
+
+# Open VS Code without a folder, without prompting
+Open-VSCode -Default
+```
+
+## [Open-VSCodeWorkspace](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Open-VSCodeWorkspace.ps1)
+
+- **Description:** Opens a VS Code multi-root workspace (`*.code-workspace`) from `PathTemplates.Projects.Self.VSCodeWorkspaces` (`<repo>\VSCode\Workspaces`). A workspace is addressed by its file base name (e.g. `Consolidation` => `Consolidation.code-workspace`). Omit `-VSCodeWorkspace` to show an interactive selection menu. A workspace already open (detected by its `<name> (Workspace)` window title) is skipped. Returns the names it opened or found already open; a missing folder is an error and an empty one a warning.
+- **Parameters:** -VSCodeWorkspace
+- **Usage:** `Open-VSCodeWorkspace`, `Open-VSCodeWorkspace Consolidation`
+
+The workspace counterpart to `Open-VSCode`: where `Open-VSCode` opens a project FOLDER, this opens a `.code-workspace` FILE. `Open-Workspace` reroutes its `Open-VSCode` action here when a `-VSCodeWorkspace` override is active, so the workspace opens in place of the project folder and the window layout can target it. Names come from `Get-VSCodeWorkspaceNames`, selection uses `Resolve-Selection`, each file is opened through `Start-VSCodeDetached` (`Code.exe -n`, created detached from this shell's console), and `Test-ProjectAlreadyOpen` prevents reopening one that already has a window.
+
+| Parameter          | Description                                                                                                            |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------- |
+| `-VSCodeWorkspace` | One or more workspace names (file base names) from the Workspaces folder. Omit to show the interactive selection menu. |
+
+```powershell
+# Interactive workspace selection menu
+Open-VSCodeWorkspace
+
+# Open a specific workspace file (VSCode/Workspaces/Consolidation.code-workspace)
+Open-VSCodeWorkspace Consolidation
+```
+
+## [Open-WhatsApp](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Open-WhatsApp.ps1)
+
+- **Description:** Opens the WhatsApp Microsoft Store app by activating its UWP package via its AppUserModelID using `Start-Application`. Does nothing if a WhatsApp window is already open. The "already running" check requires a visible main window, so the windowless push notification host Windows keeps alive under the same process name does not suppress the launch.
+- **Usage:** `Open-WhatsApp`
+
+When a WhatsApp notification arrives while the app is closed, Windows COM-activates `WhatsApp.Root.exe -RegisterForBGTaskServer /nowindow /pushnotification` as a background push notification host. It owns no visible window but runs under the same `WhatsApp.Root` process name the UI does, so a plain process-name check reports "already running" with nothing on screen - and it survives `Kill-All`, since Windows respawns it on the next notification. `-RequireMainWindow` scopes the check to processes that actually own a visible main window.
+
+## [Open-WSLTab](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Open-WSLTab.ps1)
+
+- **Description:** Opens a WSL tab in Windows Terminal - by default on the configured distribution, in the caller's window, at the distribution's home directory. The distribution is read from the `DefaultWSLDistribution` key in `Configuration.psd1`; the base ships it empty, so the function warns and no-ops until one is set in `Configuration.local.psd1`. The parameters serve the project terminal flows: `Open-ProjectTerminals` and `Run-Project` both open their WSL tabs through this one function, titled, inside the project directory and in the project's own Windows Terminal window.
+- **Parameters:** -Distribution, -Path, -TabTitle, -WindowId, -Quiet
+- **Usage:** `Open-WSLTab`, `Open-WSLTab -Distribution "Debian"`, `Open-WSLTab -Path "/mnt/c/Users/Me/Development/MyProject" -TabTitle "MyProject.WSL" -Quiet`
+
+The tab is opened with `wt -w <window> new-tab -p <distribution>`, so it relies on the Windows Terminal profile named like the distribution (WSL registers one per installed distribution). `-Path` starts the tab inside a directory by replacing the tab's commandline (`wsl.exe -d <distro> --cd <path>`) rather than by setting a starting directory: `wt -d` sets the Win32 working directory of the profile process, so a WSL path is rejected outright ("Could not access starting directory") and even a Windows path then loses to the profile's own `--cd ~`. The path is passed through untranslated because `wsl --cd` takes it as WSL sees it - `/mnt/c/...` for a Windows-mounted repository, `/home/...` for a native clone.
+
+| Parameter        | Description                                                                                                        |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `-Distribution`  | Distribution to open. Defaults to `Configuration.DefaultWSLDistribution`.                                          |
+| `-Path`          | Directory to start the tab in, written as WSL sees it. Omit for the distribution's home directory.                 |
+| `-TabTitle`      | Tab title. Omit to let Windows Terminal name the tab.                                                              |
+| `-WindowId`      | Windows Terminal window to open the tab in. Omit for the caller's window (`WT_WINDOW_ID`, otherwise window `0`).   |
+| `-Quiet`         | Suppresses the title, success and not-configured lines, for callers that log around a batch of tabs.               |
+
+**See also:** [Open-ProjectTerminals](workflow.md#open-projectterminals), [Run-Project](helper.md#run-project), [Resolve-ProjectTerminalTab](helper.md#resolve-projectterminaltab)
+
+## [Resolve-VSCodeProfilesConfig](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Resolve-VSCodeProfilesConfig.ps1)
+
+- **Description:** Resolves the `VSCodeProfiles` section into the one hashtable `Deploy-VSCodeProfiles` and `Export-VSCodeProfile` share: `Root`, `Extensions` and `UserData` with `{RepoRoot}`, `{User}` and `{AppData}` expanded, `SettingsSync`, `Prune`, `Entries` (catalogue name to `@{ Name; Target; Source }`, in catalogue order, `Target` defaulting to the name), `Selected` (the machine type's own `Deploy` list, else `Default`, else none) and `Unknown` (selected names the catalogue does not carry). Every key falls back to its default, so the empty base configuration resolves to an empty catalogue.
+- **Parameters:** -Configuration, -MachineType, -RepoRoot
+- **Usage:** `(Resolve-VSCodeProfilesConfig).Selected`, `Resolve-VSCodeProfilesConfig -MachineType Work`
+
+## [Start-Application](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Start-Application.ps1)
+
+- **Description:** Common (DRY) helper to start applications with standardized error handling, process checking, and user feedback. Supports four start methods: ConfigPath (resolves `$Configuration.Universal.[ConfigKey]`), AppxPackage (activates UWP/Store apps via their AppUserModelID, resolved from `Get-AppxPackage`), DirectPath (a direct executable path), and Custom (a scriptblock for complex scenarios). Applications are non-blocking by default since `Start-Process` is inherently async; use `-Sync` to wait for the process to exit before continuing.
+- **Parameters:** -AppName, -ProcessName, -StartMethod, -ConfigKey, -PackageName, -ExecutablePath, -Arguments, -NoNewWindow, -SkipProcessCheck, -ProcessPathFilter, -RequireMainWindow, -SkipPathValidation, -Sync, -SuppressOutput, -CustomStartLogic
+- **Usage:** `Start-Application -AppName "VirtualBox" -ProcessName "VirtualBox" -StartMethod ConfigPath -ConfigKey "VirtualBoxExe" -NoNewWindow`, `Start-Application -AppName "WhatsApp" -ProcessName "WhatsApp.Root" -StartMethod AppxPackage -PackageName "WhatsApp" -RequireMainWindow`, `Start-Application -AppName "Docker" -ProcessName "Docker Desktop" -StartMethod DirectPath -ExecutablePath $dockerExe -Sync`, `Start-Application -AppName "Docker Desktop" -ProcessName "Docker Desktop" -StartMethod ConfigPath -ConfigKey "DockerExe" -Arguments "--minimized" -SuppressOutput`
+
+A generic application launcher that consolidates the common patterns of checking whether a process is already running, starting it via one of four methods, and reporting success or failure. Before launching it checks for an existing process (unless `-SkipProcessCheck`) and short-circuits with a notice if the app is already running. When two apps share a process name (e.g. Claude Desktop and the Claude Code CLI both run as `claude`), pass `-ProcessPathFilter` to scope that check to a specific install location so one app is not mistaken for the other. When an app keeps a windowless helper alive under its own process name (WhatsApp's push notification host is the reference case), pass `-RequireMainWindow` so only processes owning a visible main window count as running. The `ConfigPath` and `DirectPath` methods share consistent handling of `-Arguments`, `-Sync` (maps to `-Wait`), `-NoNewWindow`, and `-SuppressOutput` (redirects stdout/stderr to temp files, silencing console noise from chatty apps such as Electron-based Docker Desktop). The `AppxPackage` method activates the package through the shell and ignores those launch options. It caches the resolved AUMID (`PackageFamilyName!AppId`) per package name for the session - the wildcard `Get-AppxPackage` query plus manifest parse costs 0.5-2 s per launch - and a stale cached AUMID (after a package update) is evicted, so the next launch resolves it fresh, and this launch is reported as failed. With `ConfigPath`, an empty or missing `Universal.<ConfigKey>` warns that the key is not configured and returns without launching. Every failure is caught and reported as `Failed to open <AppName>`; nothing is thrown to the caller.
+
+| Method        | Description                                                                                                                                        |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ConfigPath`  | Resolves the executable from `$Configuration.Universal.[ConfigKey]`. Requires `-ConfigKey`.                                                        |
+| `AppxPackage` | Locates a UWP/Store app via `Get-AppxPackage`, resolves its AppUserModelID (`PackageFamilyName!AppId`) from the manifest, and activates it through `shell:AppsFolder`. Requires `-PackageName`. |
+| `DirectPath`  | Launches `-ExecutablePath` directly (validated unless `-SkipPathValidation`).                                                                      |
+| `Custom`      | Invokes the `-CustomStartLogic` scriptblock for complex scenarios.                                                                                 |
+
+| Parameter             | Description                                                                                                                               |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `-AppName`            | Display name of the application (used in messages). Mandatory.                                                                            |
+| `-ProcessName`        | Process name used to check whether the app is already running. Mandatory.                                                                 |
+| `-StartMethod`        | One of `ConfigPath`, `AppxPackage`, `DirectPath`, `Custom`. Mandatory.                                                                    |
+| `-ConfigKey`          | Configuration key under `Universal` for the ConfigPath method (e.g. `VirtualBoxExe`).                                                     |
+| `-PackageName`        | Package name pattern for the AppxPackage method (e.g. `WhatsApp`).                                                                        |
+| `-ExecutablePath`     | Direct path to the executable for the DirectPath method.                                                                                  |
+| `-Arguments`          | Optional arguments passed to `Start-Process`.                                                                                             |
+| `-NoNewWindow`        | Passes `-NoNewWindow` to `Start-Process`.                                                                                                 |
+| `-SkipProcessCheck`   | Skips the "already running" process check.                                                                                                |
+| `-ProcessPathFilter`  | Wildcard pattern scoping the "already running" check to processes launched from a specific location (for apps that share a process name). |
+| `-RequireMainWindow`  | Only counts a process as running when it owns a visible main window (for apps with a windowless background host under the same name).      |
+| `-SkipPathValidation` | Skips the executable path existence check (DirectPath method).                                                                            |
+| `-Sync`               | Waits for the process to exit before returning (uses `-Wait`).                                                                            |
+| `-SuppressOutput`     | Redirects stdout/stderr to temp files, silencing console output from the launched process.                                                |
+| `-CustomStartLogic`   | Scriptblock executed for the Custom start method.                                                                                         |
+
+```powershell
+# Config-driven launch, non-blocking (returns immediately)
+Start-Application -AppName "DBeaver" -ProcessName "dbeaver" `
+    -StartMethod ConfigPath -ConfigKey "DbeaverExe"
+
+# UWP/Store app via AppxPackage (activated by its AppUserModelID)
+Start-Application -AppName "WhatsApp" -ProcessName "WhatsApp.Root" `
+    -StartMethod AppxPackage -PackageName "WhatsApp"
+
+# Direct path launch
+Start-Application -AppName "Discord" -ProcessName "Discord" `
+    -StartMethod DirectPath -ExecutablePath "$env:LOCALAPPDATA\Discord\Update.exe"
+
+# Synchronous launch - wait for the process to exit
+Start-Application -AppName "Docker" -ProcessName "Docker Desktop" `
+    -StartMethod DirectPath -ExecutablePath $dockerExe -Sync
+
+# Suppress stdout/stderr from a noisy (e.g. Electron) app
+Start-Application -AppName "Docker Desktop" -ProcessName "Docker Desktop" `
+    -StartMethod ConfigPath -ConfigKey "DockerExe" `
+    -Arguments "--minimized" -SuppressOutput
+
+# Scope the "already running" check to a specific install location so a
+# same-named process (e.g. the Claude Code CLI) does not block the launch
+Start-Application -AppName "Claude" -ProcessName "claude" `
+    -ProcessPathFilter "$env:LOCALAPPDATA\AnthropicClaude\*" `
+    -StartMethod DirectPath -ExecutablePath "$env:LOCALAPPDATA\AnthropicClaude\claude.exe"
+
+# Require a visible window so a windowless background host under the same
+# process name (e.g. WhatsApp's push notification host) does not block the launch
+Start-Application -AppName "WhatsApp" -ProcessName "WhatsApp.Root" `
+    -StartMethod AppxPackage -PackageName "WhatsApp" -RequireMainWindow
+```
+
+## [Start-FancyZones](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Start-FancyZones.ps1)
+
+- **Description:** Ensures PowerToys FancyZones is running and actually ready before returning success, with RPC health verification. Checks for the `PowerToys.FancyZones` process and, if it is missing or unhealthy, launches PowerToys and waits for FancyZones to initialize - the readiness check runs the moment PowerToys has been launched and then every 100 ms until `-MaxWaitSeconds` (a deadline, not an attempt count), so the process is picked up as soon as it is enumerable rather than at the next half-second boundary. Readiness requires a stable PID (sampled multiple times only while the process is young), healthy RPC services (RpcSs, DcomLaunch, RpcEptMapper), an existing FancyZones configuration directory, and parseable JSON state files when present. It also fixes the problematic state where PowerToys is running without FancyZones by performing a full shutdown through `Stop-PowerToysCompletely` before relaunch, and closes unwanted `PowerToys.Settings` windows to keep startup headless.
+- **Parameters:** -MaxWaitSeconds, -ForceRestart, -PassThru
+- **Usage:** `Start-FancyZones`, `Start-FancyZones -MaxWaitSeconds 15`, `Start-FancyZones -ForceRestart`, `$ready = Start-FancyZones -ForceRestart -MaxWaitSeconds 20 -PassThru`
+- **Notes:** Emits nothing by default - an interactive call leaves only the spinner and its completion mark on screen. With `-PassThru` it outputs `$true` if FancyZones is running and ready, `$false` if it could not be started; programmatic callers that branch on readiness use `-PassThru` and capture the value. A loading spinner stays visible until FancyZones is ready or startup fails; on success it finishes as a bare green `✓` (the label already told the story), on failure the line is erased so no success mark ever precedes the error output. Under `Set-LogLevel Verbose` the spinner is suppressed and detailed diagnostics are shown instead. A call served from the readiness cache prints nothing at all - it does no work, so it does not announce any.
+
+When `-ForceRestart` is given (or readiness checks fail for an existing process), the function calls `Stop-PowerToysCompletely -PreferGracefulExit` to fully shut down PowerToys, then relaunches from a common install location and re-verifies readiness. This guarantees reliability when applying zones rapidly or in close succession, where FancyZones may otherwise not respond correctly.
+
+The PID-stability sampling (4 samples over 750 ms) only runs while the FancyZones process is young (under ~5 s old) - a long-lived process cannot be mid-crash-loop, so a single sample suffices on the happy path. A successful verification is cached for 10 seconds (cleared by `-ForceRestart` and on any failed check), so the several `Start-FancyZones` calls of one workspace open pay for a single readiness pass. The cache is consulted before the spinner is created, so those cached calls are silent rather than each printing a "Starting FancyZones" line for a restart that never happened.
+
+| Parameter         | Description                                                                          |
+| ----------------- | ------------------------------------------------------------------------------------ |
+| `-MaxWaitSeconds` | Maximum time to wait for FancyZones to start (default: 10 seconds).                  |
+| `-ForceRestart`   | Forces a full PowerToys shutdown and relaunch even if FancyZones is already running. |
+| `-PassThru`       | Emits the readiness result (`$true`/`$false`) to the pipeline; without it the function outputs nothing. |
+
+```powershell
+# Ensure FancyZones is running with the default wait time
+Start-FancyZones
+
+# Wait up to 15 seconds for FancyZones to become ready
+Start-FancyZones -MaxWaitSeconds 15
+
+# Force a full restart, wait longer for a cold start, and capture the result
+$ready = Start-FancyZones -ForceRestart -MaxWaitSeconds 20 -PassThru
+
+# Verbose diagnostic output
+Set-LogLevel Verbose { Start-FancyZones }
+```
+
+## [Start-MicrosoftActivationScripts](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Start-MicrosoftActivationScripts.ps1)
+
+- **Description:** Runs the Microsoft Activation Scripts (MAS) to activate Windows and Office. Downloads and runs the official online activation method via `irm https://get.activated.win | iex`. Without `-Override` it checks whether Windows is already activated and whether Office is installed, and skips only when both are true; otherwise it asks a Yes/No question (default No) and runs MAS only on Yes. Use `-Override` to skip the check.
+- **Parameters:** -Selection, -Override
+- **Usage:** `Start-MicrosoftActivationScripts`, `Start-MicrosoftActivationScripts -Override`, `Start-MicrosoftActivationScripts -Selection Yes`
+
+This function is only called automatically during `Bootstrap -WithInitialSetup`, and only when opted in via `BootstrapConfig.Steps.MicrosoftActivationScripts` (off by default - a vanilla bootstrap never runs or prompts for it). It detects current Windows activation state via `slmgr.vbs /xpr` and detects installed Office by inspecting the registered applications under `HKLM:\Software\RegisteredApplications`. When both Windows is already activated and Office is installed, it returns early unless `-Override` is supplied. Otherwise it presents an interactive Yes/No prompt (defaulting to No) before downloading and running MAS. The underlying activation tooling is the [Microsoft-Activation-Scripts](https://github.com/massgravel/Microsoft-Activation-Scripts) project by massgravel.
+
+| Parameter    | Description                                                                                  |
+| ------------ | -------------------------------------------------------------------------------------------- |
+| `-Selection` | Pre-answers the Yes/No prompt, bypassing it: `Yes` runs MAS, `No` skips.                     |
+| `-Override`  | Skips the already-activated check, so the prompt (or `-Selection`) decides even when Windows is activated and Office installed. |
+
+```powershell
+# Check activation status; ask whether to run MAS unless Windows is activated and Office installed
+Start-MicrosoftActivationScripts
+
+# Ask whether to run MAS regardless of current activation status
+Start-MicrosoftActivationScripts -Override
+
+# Pre-select the prompt response and skip the interactive menu
+Start-MicrosoftActivationScripts -Selection Yes
+```
+
+## [Start-ObsidianDetached](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Start-ObsidianDetached.ps1)
+
+- **Description:** Launches Obsidian for a vault without tying it to the current shell: `Obsidian.exe "obsidian://open?vault=<Vault>"` through `Start-ProcessDetached`, with `Start-Process "obsidian://open?vault=<Vault>"` as the fallback when the executable cannot be located or WMI refuses.
+- **Parameters:** -Vault
+- **Usage:** `Start-ObsidianDetached -Vault Obsidian`
+
+Why not a plain `Start-Process`: Electron attaches to the console of the process that launched it, so an Obsidian started from a terminal prints its startup log into that terminal and is closed together with it. The retired Python startup script, launched through `pythonw`, existed for the same reason (`pythonw` owns no console). The Obsidian CLI cannot do the launch either - it refuses to run while Obsidian is down - which is why `Open-Obsidian` starts Obsidian this way and only then talks to the CLI.
+
+| Parameter | Description                                             |
+| --------- | ------------------------------------------------------- |
+| `-Vault`  | The vault name, URI-encoded into the `obsidian://` URI. |
+
+```powershell
+Start-ObsidianDetached -Vault Obsidian
+```
+
+## [Start-ProcessDetached](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Start-ProcessDetached.ps1)
+
+- **Description:** Starts a process that owns no console, or runs a `Start-Process` fallback when it cannot. Creates the process through WMI (`Win32_Process.Create`), whose parent is the WMI provider host, so the new process neither inherits this shell's console nor can attach to it. When no executable is given, or WMI refuses or throws, `Start-Process` runs with the `-Fallback` parameters instead and the process it starts shares this shell's console; without a fallback the function just returns `$null`. Returns the detached process id, `$null` otherwise; the reason goes to the debug log. `Start-VSCodeDetached` and `Start-ObsidianDetached` launch through it.
+- **Parameters:** -FilePath, -ArgumentList, -Fallback
+- **Usage:** `Start-ProcessDetached -FilePath "C:\Apps\Tool\Tool.exe" -ArgumentList "-n", "`"C:\My Project`"" -Fallback @{ FilePath = "tool"; NoNewWindow = $true }`
+
+A detached launch is what lets a workspace close its own terminal tab afterwards: Windows Terminal keeps a tab open while any process is still attached to its console - see [The Workspace Tab Stays Open After [Closing current terminal tab]](../reference/troubleshooting.md#the-workspace-tab-stays-open-after-closing-current-terminal-tab).
+
+| Parameter       | Description                                                                                                                                                              |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `-FilePath`     | The executable to start, quoted into the command line as is. Empty when the caller could not resolve it, which goes straight to the fallback.                           |
+| `-ArgumentList` | Arguments appended to the command line, separated by spaces, exactly as given - quote a value that contains spaces yourself, as with `Start-Process -ArgumentList`.     |
+| `-Fallback`     | `Start-Process` parameters, splatted when the detached launch is not possible - typically the launch the caller used before it went detached. `Start-Process` errors propagate to the caller. |
+
+```powershell
+# Detached when possible, through this shell's console otherwise
+$null = Start-ProcessDetached -FilePath "C:\Apps\Tool\Tool.exe" -ArgumentList "-n", "`"C:\My Project`"" -Fallback @{ FilePath = "tool"; ArgumentList = "-n", "`"C:\My Project`""; NoNewWindow = $true }
+```
+
+## [Start-VSCodeDetached](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Start-VSCodeDetached.ps1)
+
+- **Description:** Launches VS Code without tying it to this shell's console: `Code.exe` (`Get-VSCodeExecutablePath`) through `Start-ProcessDetached`, with `code` through `Start-Process -NoNewWindow` (the previous launch shape, which shares the console) as the fallback when the executable cannot be located or WMI refuses. Used by `Open-VSCode` and `Open-VSCodeWorkspace`.
+- **Parameters:** -ArgumentList
+- **Usage:** `Start-VSCodeDetached`, `Start-VSCodeDetached -ArgumentList "-n", "`"C:\Projects\MyProject`""`
+
+A VS Code that is already running is unaffected either way: `code -n` hands the folder to the running instance and exits. The detached launch matters for a cold start from a shell that exits afterwards, such as a workspace ending in `Terminate-WindowsTerminalTabs -OnlyCurrent` - see the troubleshooting entry linked under `Start-ProcessDetached`.
+
+| Parameter       | Description                                                                                                                                                       |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `-ArgumentList` | Arguments for VS Code, as given to `Start-Process -ArgumentList`, e.g. `"-n", "`"<folder>`""`. Quote a path that may contain spaces yourself. Omit to open an empty window. |
+
+```powershell
+# Open a folder in a new window that outlives this terminal tab
+Start-VSCodeDetached -ArgumentList "-n", "`"C:\Projects\MyProject`""
+
+# Open VS Code without a folder
+Start-VSCodeDetached
+```
+
+## [Start-Win11Debloat](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Start-Win11Debloat.ps1)
+
+- **Description:** Runs the vendored Win11Debloat script from the local repository to remove bloatware, disable telemetry, and apply system tweaks. Validates administrator privileges first, then runs with saved settings if available or shows the interactive Win11Debloat menu, launching the vendored script through Windows PowerShell because it cannot run under PowerShell 7. Called automatically during `Bootstrap -WithInitialSetup`, but only when opted in via `BootstrapConfig.Steps.Win11Debloat` (off by default - a vanilla bootstrap never runs or prompts for it).
+- **Notes:** Saved settings are symlinked into the vendored script's `Config` folder before the menu is shown, but only when `Windows\Win11Debloat\LastUsedSettings.json` already exists and is non-empty - the link points `Config\LastUsedSettings.json` at the WinuX file, so both a `-RunSavedSettings -Silent` run and a plain interactive `Debloat` run read and write it natively. Missing settings files are not created: without that file no link is made, `Use saved settings` is not offered, and Win11Debloat writes its own `vendor\Config\LastUsedSettings.json`, which the vendored `.gitignore` excludes and WinuX never picks up. To start tracking a new machine's choices, copy that file to `Windows\Win11Debloat\LastUsedSettings.json` so the next run links it.
+- **Parameters:** -Selection (pre-selects a menu option: "Use saved settings", "Debloat", or "Don't debloat")
+- **Usage:** `Start-Win11Debloat`, `Start-Win11Debloat -Selection "Debloat"`
+
+The vendored script path comes from `BootstrapConfig.LocalScripts.Win11Debloat` (falling back to `Windows\Win11Debloat\vendor\Win11Debloat.ps1`). If the script is missing, the function reports the expected path and prompts you to download a release into `Windows\Win11Debloat\vendor` first. Elevation is verified with `Test-AdminPrivileges` before invoking, which prevents the upstream self-elevation prompt. The available menu options depend on a single file: `Use saved settings` is only offered when `Windows\Win11Debloat\LastUsedSettings.json` exists and is non-empty, otherwise the menu is just `Debloat` and `Don't debloat`. The current vendored release embeds the custom app selection inside `LastUsedSettings.json` (its `Apps` setting) and reads no separate `CustomAppsList` file, so that one file is everything WinuX manages. The vendored upstream source is the [Win11Debloat](https://github.com/Raphire/Win11Debloat) project by Raphire.
+
+The vendored script is launched through Windows PowerShell (`%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -File`), the same interpreter and flags its own `Run.bat` uses, rather than being called in the WinuX session. Win11Debloat's app removal and restore points depend on Windows PowerShell 5.1-only modules - the `Appx` module's `Get-AppxPackage` / `Remove-AppxPackage`, and `Get-ComputerRestorePoint`, which PowerShell 7 does not ship - so under PowerShell 7 it either removes nothing while reporting success or, from release 2026.07.11 on, detects `Core` edition and refuses to start. The child process inherits the console, so the interactive menu behaves exactly as before, and inherits the elevated token from the session `Test-AdminPrivileges` has already verified, so no second UAC prompt appears. Its exit code is checked: a non-zero code is reported as an error instead of the success message, and a `powershell.exe` that cannot be found skips the step with an error rather than attempting the run.
+
+| Parameter    | Description                                                                                                                                                                      |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `-Selection` | Pre-selects a Win11Debloat menu option by name, bypassing the interactive menu. Valid values: `Use saved settings` (only when saved settings exist), `Debloat`, `Don't debloat`. |
+
+```powershell
+# Run with saved settings if available, otherwise show the interactive menu
+Start-Win11Debloat
+
+# Skip the menu and run a full debloat directly
+Start-Win11Debloat -Selection "Debloat"
+```
+
+**See also:** [Update-Win11DebloatVendor](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Update-Win11DebloatVendor.ps1)
+
+## [Stop-PowerToysCompletely](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Stop-PowerToysCompletely.ps1)
+
+- **Description:** Performs a complete PowerToys shutdown sequence that mirrors manual tray exit behavior, used by FancyZones recovery and restart flows. It optionally requests a tray-like graceful exit via the main PowerToys window and waits briefly for clean shutdown - only when that request was actually delivered - then force-stops any remaining PowerToys processes, waiting on each killed process handle so the kills have landed before survivors are counted, and escalates to `taskkill` process tree termination as a final fallback. Returns `$true` only when no `PowerToys*` process remains.
+- **Parameters:** -PreferGracefulExit, -MaxGracefulWaitMs
+- **Usage:** `Stop-PowerToysCompletely`, `Stop-PowerToysCompletely -PreferGracefulExit`, `Stop-PowerToysCompletely -PreferGracefulExit -MaxGracefulWaitMs 5000`
+
+The shutdown proceeds in escalating stages. When `-PreferGracefulExit` is set it first calls `CloseMainWindow()` on the main PowerToys window (tray-like exit) and polls for up to `-MaxGracefulWaitMs` milliseconds for a clean exit - but only when `CloseMainWindow()` reported that a close message was posted. `PowerToys.exe` is a tray application and normally has no main window (`MainWindowHandle` 0), so nothing is requested and the function proceeds straight to force termination instead of idling for the whole wait; before this guard every forced FancyZones restart spent 3 to 4 s here for nothing. Any surviving processes are then force-stopped with `Stop-Process -Force`, each one waited on through its process handle (bounded to 1 s) so that a process still being torn down is not counted as a survivor and escalated against, falling back to `taskkill /F /PID`. If processes still remain it escalates to a tree kill (`taskkill /F /T /IM PowerToys.exe`) and finally per-PID `taskkill` as a best-effort fallback. Under `Set-LogLevel Verbose` the skipped wait is announced (`PowerToys has no main window to close - skipping the graceful wait`).
+
+| Parameter             | Description                                                                               |
+| --------------------- | ----------------------------------------------------------------------------------------- |
+| `-PreferGracefulExit` | Attempts a tray-like graceful PowerToys shutdown before force termination.                |
+| `-MaxGracefulWaitMs`  | Maximum milliseconds to wait for graceful exit before force termination (default `3000`). |
+
+```powershell
+# Force-stop all PowerToys processes (no graceful attempt)
+Stop-PowerToysCompletely
+
+# Verbose diagnostic output
+Set-LogLevel Verbose { Stop-PowerToysCompletely -PreferGracefulExit }
+
+# Allow a longer graceful window before forcing termination
+Stop-PowerToysCompletely -PreferGracefulExit -MaxGracefulWaitMs 5000
+```
+
+**See also:** [Start-FancyZones](application.md#start-fancyzones)
+
+## [Test-BrowserGroupAlreadyOpen](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Test-BrowserGroupAlreadyOpen.ps1)
+
+- **Description:** Internal idempotency helper for `Open-Browser`. Checks whether a browser URL group is already open by extracting keywords from the group's URLs and matching them against the window titles of running browser processes. With `-ReturnCount` it returns the number of matching windows instead of a boolean (used by `Open-Browser`'s `-Instances`).
+- **Parameters:** -Urls, -Browser, -GroupDisplayName, -CachedBrowserWindows, -ReturnCount
+- **Usage:** `Test-BrowserGroupAlreadyOpen -Urls @("https://github.com") -Browser PreferredBrowser -GroupDisplayName GroupName`, `Test-BrowserGroupAlreadyOpen -Urls $urls -Browser PreferredBrowser -GroupDisplayName GroupName -ReturnCount`
+
+Inspects the window titles of running browser processes and matches them against keywords extracted from the supplied URLs (domain, subdomain, path segments, SPA fragments, and localhost ports). Keyword-extraction and matching rules, including localhost patterns, generic-word filtering, domain simplification, exact-title matching for service homepages, and negative matching to exclude sibling services, are read from the `BrowserGroupMatching` section of `Configuration.psd1`. For groups containing localhost URLs, a failed-load window (title matching the configured problem-loading-page pattern) counts as the group being open only when its title also carries host/port evidence from this group's localhost URLs (Chromium browsers title error tabs with the host); a generic error title like Firefox's bare "Problem loading page" proves nothing about which page failed and no longer counts, so an unrelated failed page cannot suppress opening the group. Returns `$true`/`$false` by default, or an integer count with `-ReturnCount`.
+
+| Parameter               | Description                                                                                                                    |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `-Urls`                 | Array of URL strings to check. Keywords are extracted from these for title matching. (Mandatory)                               |
+| `-Browser`              | Browser name used to resolve which process names to inspect. (Mandatory)                                                       |
+| `-GroupDisplayName`     | Human-readable group name; also used for exact-title matching of service homepages and shown in debug output. (Mandatory)      |
+| `-CachedBrowserWindows` | Pre-fetched window handle list. When provided, skips re-enumerating windows (Open-Browser caches windows once for all groups). |
+| `-ReturnCount`          | Returns an integer count of matching windows instead of a boolean.                                                             |
+
+```powershell
+# Returns $true if a browser window for the group is already open
+Test-BrowserGroupAlreadyOpen -Urls @("https://github.com") -Browser PreferredBrowser -GroupDisplayName GroupName
+
+# Verbose diagnostic output
+Set-LogLevel Verbose { Test-BrowserGroupAlreadyOpen -Urls @("https://example.com/page1", "https://example.com/page2") -Browser PreferredBrowser -GroupDisplayName GroupName }
+
+# Count how many windows already match this group (used by Open-Browser -Instances)
+Test-BrowserGroupAlreadyOpen -Urls $urls -Browser PreferredBrowser -GroupDisplayName GroupName -ReturnCount
+```
+
+**See also:** [Open-Browser](#open-browser), [Add Browser Group](../configuration/guides/application/add-browser-group.md)
+
+## [Test-ProjectAlreadyOpen](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Test-ProjectAlreadyOpen.ps1)
+
+- **Description:** Checks whether a project is already open in a given application by matching the project name against the application's window titles. The name must be a whole ` - ` separated title segment (case-insensitive), so a `MyApp` folder is not reported open by a `myapp-ui` window. Returns `$true` and prints a yellow warning if a match is found, otherwise returns `$false`.
+- **Parameters:** -ProjectName, -ProcessName, -ApplicationName
+- **Usage:** `Test-ProjectAlreadyOpen -ProjectName MyProject -ProcessName "devenv" -ApplicationName "Visual Studio"`, `Test-ProjectAlreadyOpen -ProjectName MyProject -ProcessName "Code" -ApplicationName "VS Code"`
+
+Gets all window handles for the specified process via `Get-WindowHandle`, then checks each window title with [Test-WindowTitleCandidates](helper.md#test-windowtitlecandidates), passing the project name as the only candidate and `-ProcessName` through. The name must be a whole ` - ` separated title segment, so `MyApp` does not match `Program.cs - myapp-ui - Visual Studio Code`. It matches VS Code's folder segment with or without an active editor, the dirty marker or a profile segment around it. For Visual Studio (`devenv`) the solution segment may carry a debugger state such as `MySolution (Debugging)`. The full rule and its limits are described under `Test-WindowTitleCandidates`. A match prints a warning and returns `$true`; no match (or no windows for the process) returns `$false`. Typically used as an idempotency guard before launching a project so it is not opened twice: `Open-VSCode` passes the folder name, `Open-VSCodeWorkspace` passes `<name> (Workspace)` and `Open-VisualStudio` passes the solution file name without its extension.
+
+| Parameter          | Description                                                                                                    |
+| ------------------ | -------------------------------------------------------------------------------------------------------------- |
+| `-ProjectName`     | The project name; it must equal a whole ` - ` separated window title segment. Mandatory.                       |
+| `-ProcessName`     | The process name of the application to check (e.g. `devenv` for Visual Studio, `Code` for VS Code). Mandatory. |
+| `-ApplicationName` | Human-readable application name used in the warning message. Mandatory.                                        |
+
+```powershell
+# Guard against opening a project that is already open in VS Code
+if (-not (Test-ProjectAlreadyOpen -ProjectName MyProject -ProcessName "Code" -ApplicationName "VS Code")) {
+    Open-VSCode MyProject
+}
+```
+
+**See also:** [Test-WindowTitleCandidates](helper.md#test-windowtitlecandidates), [Add New Project](../configuration/guides/workflow/add-new-project.md)
+
+## [Update-Win11DebloatVendor](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Update-Win11DebloatVendor.ps1)
+
+- **Description:** Updates the vendored Win11Debloat files in this repository. Invokes the repository-local updater script at `Windows\Win11Debloat\Update-Win11DebloatVendor.ps1` from the terminal, refreshing the vendored release in `Windows\Win11Debloat\vendor` and its metadata so `Start-Win11Debloat` stays pinned to a known local version. The vendor's own machine-local `Config`, `Logs`, and `Backups` folders (registry snapshots that undo debloat operations) are preserved across the update, mirroring the vendor's own updater.
+- **Parameters:** -ReleaseTag, -Repository
+- **Usage:** `Update-Win11DebloatVendor`, `Update-Win11DebloatVendor -ReleaseTag "2026.05.11"`
+
+Locates the WinuX root (from `MachineSpecificPaths.Projects.Self.Root`, falling back to walking up from the script location), then forwards all bound parameters to the local updater script. If the updater script is not found it reports an error and returns without making changes.
+
+| Parameter     | Description                                                                                                   |
+| ------------- | ------------------------------------------------------------------------------------------------------------- |
+| `-ReleaseTag` | Release tag to vendor (example: `2026.05.11`). Defaults to `latest`, which fetches the newest GitHub release. |
+| `-Repository` | GitHub repository in `owner/name` format. Defaults to `Raphire/Win11Debloat`.                                 |
+
+```powershell
+# Vendor the latest Win11Debloat release
+Update-Win11DebloatVendor
+
+# Pin and vendor a specific release tag
+Update-Win11DebloatVendor -ReleaseTag "2026.05.11"
+```
+
+## [Wait-BrowserWindowReady](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Wait-BrowserWindowReady.ps1)
+
+- **Description:** Polls the window list until at least one window of the given process (optionally narrowed by a title regex) is present, or the timeout expires. Returns `$true` when a window appeared, `$false` on timeout. `Open-Browser`'s `-Instances` mode uses it as a cold-start gate: launches fired while the first browser instance is still bootstrapping are silently dropped (Chromium's process singleton is not accepting hand-offs yet), so waiting for the first window before bursting the remaining launches makes the requested instance count reliable.
+- **Parameters:** -ProcessName, -TitlePattern, -TimeoutSeconds, -Clock
+- **Usage:** `Wait-BrowserWindowReady -ProcessName "brave"`, `Wait-BrowserWindowReady -ProcessName "msedge" -TitlePattern "Microsoft.{0,2}Edge" -TimeoutSeconds 10`
+
+The poll is a `Wait-Until` (Helper module) that reads time and sleeps through the wait clock passed as `-Clock` (a real `New-WaitClock` by default), so a test injects a fake clock and asserts the exact poll count with no real waiting.
+
+| Parameter         | Description                                                                                                                    |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `-ProcessName`    | Process name (without `.exe`) whose windows to wait for, e.g. `"msedge"`.                                                       |
+| `-TitlePattern`   | Optional title regex a window must also match - used to tell apart browsers that share a process name (Firefox vs. Tor Browser). |
+| `-TimeoutSeconds` | Maximum time to wait; defaults to 30 seconds. Fast browsers exit the poll in well under a second (250ms ticks).                  |
+| `-Clock`          | The wait clock (`New-WaitClock`) to read and sleep through. Defaults to a real one; tests hand in a fake.                        |
+
+```powershell
+# Wait until a Brave window exists (or 30s pass)
+Wait-BrowserWindowReady -ProcessName "brave"
+
+# Wait up to 10s for an Edge window
+Wait-BrowserWindowReady -ProcessName "msedge" -TitlePattern "Microsoft.{0,2}Edge" -TimeoutSeconds 10
+```
+
+**See also:** [Open-Browser](#open-browser), [Get-BrowserTitlePattern](system.md#get-browsertitlepattern)
+
+## [Wait-ObsidianCli](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Wait-ObsidianCli.ps1)
+
+- **Description:** Polls the Obsidian CLI (`obsidian vault=<Vault> workspaces`) until it reaches the running vault or the timeout elapses. While Obsidian is still starting the CLI answers `The CLI is unable to find Obsidian`; the first answer without that line means commands will be executed. A probe that timed out or failed to launch counts as "not yet", and each probe's own timeout is the time left to the overall deadline (at least 1 s). Returns `$true` or `$false`.
+- **Parameters:** -CliPath, -Vault, -TimeoutSeconds, -PollMilliseconds
+- **Usage:** `Wait-ObsidianCli -CliPath (Get-ObsidianCliPath) -Vault Obsidian -TimeoutSeconds 10`
+
+The cold-start gate in `Open-Obsidian`: after `Start-ObsidianDetached` the CLI starts answering about half a second after the window appears, and by then the Homepage plugin's startup load has run, so the `workspace:load` that follows is the one that sticks. Returns early on success; the timeout only matters on a slow start.
+
+| Parameter           | Description                            |
+| ------------------- | -------------------------------------- |
+| `-CliPath`          | Path to `Obsidian.com`.                |
+| `-Vault`            | The vault to probe.                    |
+| `-TimeoutSeconds`   | Give up after this long. Default `10`. |
+| `-PollMilliseconds` | Pause between probes. Default `200`.   |
+
+```powershell
+if (Wait-ObsidianCli -CliPath (Get-ObsidianCliPath) -Vault Obsidian) { "CLI ready" }
+```
+
+## Configuration Reference
+
+Application launchers read their executable paths and browser definitions from the `Universal`
+section of `Configuration.psd1`. The base ships the personal executable paths and `DefaultBrowser`
+empty - each launcher warns and no-ops until you set its key in `Configuration.local.psd1`:
+
+```powershell
+Universal = @{
+    # Executable paths consumed by the Open-* launchers
+    DbeaverExe     = "{User}\AppData\Local\DBeaver\dbeaver.exe"
+    VirtualBoxExe  = "C:\Program Files\Oracle\VirtualBox\VirtualBox.exe"
+    # ... one *Exe key per launcher - see the Configuration Reference for the full list
+
+    # Browser definitions consumed by Open-Browser / Open-SecureBrowser
+    Browsers       = @{
+        Firefox = @{ Exe = "C:\Program Files\Mozilla Firefox\firefox.exe"; PrivateArg = "-private-window"; NewWindowArg = "-new-window" }
+        Tor     = @{ Exe = "{User}\Tor Browser\Browser\firefox.exe" }
+    }
+    DefaultBrowser = "Firefox"
+}
+```
+
+See the [Configuration Reference](../configuration/configuration-reference.md) for every key.
+
+## Common Patterns
+
+### Open Project Workflow
+
+```powershell
+# Open project in VS Code if not already open
+if (-not (Test-ProjectAlreadyOpen -ProjectName "MyProject" -ProcessName "Code" -ApplicationName "VS Code")) {
+    Open-VSCode MyProject
+}
+
+# Open related browser group
+Open-Browser MyProject
+```
+
+### Installation Pattern
+
+```powershell
+# Full software installation
+Install-WingetApps
+Install-ScoopApps
+Install-ChocolateyApps
+Install-PowerShellModules
+Create-CondaEnvironments
+```

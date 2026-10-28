@@ -40,8 +40,9 @@ function Test-ConfigurationSchema {
 		deprecations is the $deprecations list at the top of this function - the only thing a
 		later deprecation adds to. A deprecation never counts as a failure, even under -Strict:
 		the old shape keeps working until the next MAJOR. A key that the base Configuration.psd1
-		still ships (AiSkills, AiMods) only warns when it is set to something other than the
-		shipped default, so a vanilla configuration stays silent.
+		still ships only warns when it is set to something other than the shipped default
+		(NotDefault), so a vanilla configuration stays silent. The table is empty while nothing
+		is deprecated.
 
 		Call this function immediately after Load-PathConfiguration during the bootstrap
 		or profile initialization sequence to surface typos and missing entries early; the
@@ -78,20 +79,9 @@ function Test-ConfigurationSchema {
 	# Deprecated configuration: Path (dotted), Since, Removal, Replacement and When - Present
 	# (the key exists), NotEmpty (Test-ConfigValue) or NotDefault (differs from Default, the
 	# value the base Configuration.psd1 ships; an array compares element by element).
-	$deprecations = @(
-		@{ Path = 'BootstrapConfig.WSLSetup'; Since = '0.1.26'; Removal = '2.0.0'; When = 'Present'; Replacement = 'BootstrapConfig.Steps.WSL (same shape)' }
-		@{ Path = 'PathTemplates.ObsidianStartupScript'; Since = '0.1.61'; Removal = '2.0.0'; When = 'NotEmpty'; Replacement = 'nothing - it is ignored; remove it' }
-		@{ Path = 'AiSkills.Sources'; Since = '1.6.0'; Removal = '2.0.0'; When = 'NotEmpty'; Replacement = 'AiArtifacts.Sources, Folders renamed to Skills' }
-		@{ Path = 'AiSkills.Root'; Since = '1.6.0'; Removal = '2.0.0'; When = 'NotDefault'; Default = '{RepoRoot}\AI\Skills'; Replacement = 'AiArtifacts.Root (the folder that holds Skills)' }
-		@{ Path = 'AiSkills.Harnesses'; Since = '1.6.0'; Removal = '2.0.0'; When = 'NotDefault'; Default = @('{User}\.claude\skills', '{User}\.agents\skills'); Replacement = 'AiArtifacts.Deploy (the skills folders are AiHarnesses destinations)' }
-		@{ Path = 'AiMods.Sources'; Since = '1.6.0'; Removal = '2.0.0'; When = 'NotEmpty'; Replacement = 'AiArtifacts.Sources, Folders renamed to Mods' }
-		@{ Path = 'AiMods.Root'; Since = '1.6.0'; Removal = '2.0.0'; When = 'NotDefault'; Default = '{RepoRoot}\AI\Mods'; Replacement = 'AiArtifacts.Root (the folder that holds Mods)' }
-		@{ Path = 'AiMods.Harnesses'; Since = '1.6.0'; Removal = '2.0.0'; When = 'NotDefault'; Default = @('{User}\.claude\mods'); Replacement = 'AiArtifacts.Deploy (the mods folder is a destination of the claude-code harness)' }
-		@{ Path = 'PathTemplates.SymbolicLinks.AI'; Since = '1.6.0'; Removal = '2.0.0'; When = 'Present'; Replacement = 'AiArtifacts.Use.Rules and AiArtifacts.Deploy (the rules item in AI\Rules\own\<Name>\)' }
-		@{ Path = 'BootstrapConfig.Steps.CoreAiRules'; Since = '1.6.0'; Removal = '2.0.0'; When = 'Present'; Replacement = 'BootstrapConfig.Steps.AiArtifacts' }
-		@{ Path = 'BootstrapConfig.Steps.AiSkills'; Since = '1.6.0'; Removal = '2.0.0'; When = 'Present'; Replacement = 'BootstrapConfig.Steps.AiArtifacts' }
-		@{ Path = 'BootstrapConfig.Steps.AiMods'; Since = '1.6.0'; Removal = '2.0.0'; When = 'Present'; Replacement = 'BootstrapConfig.Steps.AiArtifacts' }
-	)
+	# Empty while nothing is deprecated; a later deprecation adds one entry per key, e.g.
+	#   @{ Path = 'Section.OldKey'; Since = '2.1.0'; Removal = '3.0.0'; When = 'Present'; Replacement = 'Section.NewKey' }
+	$deprecations = @()
 
 	$failures = [System.Collections.Generic.List[string]]::new()
 
