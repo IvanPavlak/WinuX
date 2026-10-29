@@ -153,7 +153,7 @@ TerminalTabs = @{
     - Just what changed (preferred): `Run-Tests -TestName "<ChangedFunctionOrPattern>"`
     - Everything (broad changes): `Run-Tests`
 - **Tested Dependencies** (source of truth: the `TESTED VERSIONS` block in `Modules/Bootstrap/Data/WinGetApps.csv`):
-    - Microsoft.PowerToys `0.101.2362.0`, Microsoft.PowerShell `7.6.6.0`, Microsoft.WindowsTerminal `1.25.2733.0` (each pinned by its WinGetApps.csv row; a fork follows Latest by replacing the row in `WinGetApps.local.csv`)
+    - Microsoft.PowerToys `0.102.3001.0`, Microsoft.PowerShell `7.6.9.0`, Microsoft.WindowsTerminal `1.25.2733.0` (each pinned by its WinGetApps.csv row; a fork follows Latest by replacing the row in `WinGetApps.local.csv`)
     - VirtualDesktop PS module `1.5.11` (pinned via `$pinnedModules` in `Install-PowerShellModules.ps1`)
     - Pester `6.1.0` (pinned repo-wide in `Modules/Tests/RequiredPesterVersion.txt`; the test harness, `Install-PowerShellModules`, and CI all read that one file)
     - Windows `26H2` (build 26300; not enforced)

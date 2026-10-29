@@ -374,14 +374,14 @@ Get-InstalledApps
 - **Parameters:** -DataFileKey, -VersionExcludeValue
 - **Usage:** `Get-PinnedApps -DataFileKey WinGetApps`, `Get-PinnedApps -DataFileKey ScoopApps -VersionExcludeValue "latest"`
 
-Apps whose version equals the exclude value (default `"Latest"`) are treated as unpinned and are omitted from the results. Comment and blank rows are dropped: a `#` line containing commas parses into a bogus row with a non-`"Latest"` Version, and feeding that to `winget pin add` once hung an unattended upgrade.
+Apps whose version is empty or equals the exclude value (default `"Latest"`) are treated as unpinned and are omitted from the results. Comment and blank rows are dropped: a `#` line containing commas parses into a bogus row with a non-`"Latest"` Version, and feeding that to `winget pin add` once hung an unattended upgrade.
 
 Reading through `Import-AppCsv` rather than the committed CSV directly is what makes the pin honour the [machine-local overlay](../reference/software-list.md#machine-local-overlay), and it matters in both directions: a version pinned only in the overlay is invisible in the base file, so a direct reader would let `Upgrade-All` upgrade straight past the pin - the exact outcome pinning exists to prevent - and an app the overlay removed would still be reported as pinned.
 
 | Parameter              | Description                                                                                                                                                             |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `-DataFileKey`         | Which list to read: `WinGetApps`, `ScoopApps` or `ChocolateyApps`. Mandatory, positional; resolved through `BootstrapConfig.DataFiles`, the same way the installers resolve it. |
-| `-VersionExcludeValue` | The `Version` value that means "not pinned". Defaults to `"Latest"` (WinGet); Scoop writes `"latest"`, and Chocolatey leaves the cell empty, so its caller passes `$null`.  |
+| `-VersionExcludeValue` | The `Version` value that means "not pinned". Compared case-insensitively. Defaults to `"Latest"` (WinGet); Scoop and Chocolatey write `"latest"`. An empty cell never counts as pinned. `$null` treats every row carrying any version as pinned. |
 
 ```powershell
 # Return WinGet apps locked to a specific version (Version other than "Latest")
@@ -460,6 +460,25 @@ Get-VisibleWindowProcess | Where-Object { $_.WindowTitles.Count -gt 1 }
 ```
 
 **See also:** [Terminate-AllProcessesWithVisibleWindows](#terminate-allprocesseswithvisiblewindows), [Report-KillAllSurvivors](#report-killallsurvivors)
+
+## [Get-WinGetPinnedIds](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Get-WinGetPinnedIds.ps1)
+
+- **Description:** Returns which of the given WinGet app IDs winget currently has a pin for, reading every pin with a single `winget pin list` through [`Invoke-PackageManagerCommand`](#invoke-packagemanagercommand). Each ID is matched as a whole whitespace-delimited token, never by column position. A listing that stalls throws, so it never reads as "no pins". An empty `-AppId` returns nothing without calling winget.
+- **Parameters:** -AppId
+- **Usage:** `Get-WinGetPinnedIds -AppId "Git.Git", "Microsoft.PowerToys"`
+
+Used by [`Sync-AppPins`](#sync-apppins) and [`Install-WingetApps`](application.md#install-wingetapps) in place of one `winget pin list --id <app>` per app: that call prints every pin anyway, and checking each managed app on its own cost about a second per app. The table's columns shift with terminal width and the installed locale, so it is not parsed by position. The whole-token match keeps a pin on `Git.GitLFS` from counting as a pin on `Git.Git`, so a mis-parse can never unpin the wrong app. An ID winget had to shorten to fit its column is not found, which leaves that pin in place, the safe direction.
+
+| Parameter | Description                                                         |
+| --------- | ------------------------------------------------------------------- |
+| `-AppId`  | The WinGet app IDs to look for. Mandatory, positional; may be empty. |
+
+```powershell
+# Which of these two apps winget has pinned
+Get-WinGetPinnedIds -AppId "Git.Git", "Microsoft.PowerToys"
+```
+
+**See also:** [Sync-AppPins](#sync-apppins), [Invoke-PackageManagerCommand](#invoke-packagemanagercommand)
 
 ## [Import-TerminalIcons](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Import-TerminalIcons.ps1)
 
@@ -609,6 +628,35 @@ Set-LogLevel Verbose { Invoke-Onefetch }
 ```
 
 **See also:** [Show-TerminalGreeting](#show-terminalgreeting), [Invoke-Fastfetch](#invoke-fastfetch), [Format-OnefetchPanel](#format-onefetchpanel), [Test-GitRepository](git.md#test-gitrepository), [Invoke-Onefetch configuration guide](../configuration/guides/system/Invoke-Onefetch.md)
+
+## [Invoke-PackageManagerCommand](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Invoke-PackageManagerCommand.ps1)
+
+- **Description:** Runs one short `winget`, `scoop` or `choco` command with a time limit and returns its output lines (stdout then stderr, blank lines dropped). Runs through [`Invoke-ProcessWithTimeout`](helper.md#invoke-processwithtimeout), so no window opens. winget and choco are started directly; scoop, a PowerShell script shim, runs in a fresh `pwsh -NoProfile` process, the way scoop's own `scoop.cmd` runs it. A call that has not exited within `-TimeoutSeconds` (default 60) is killed together with its process tree and answered with a terminating error; a manager that is not installed throws too. A non-zero exit code is not an error: its output is returned and the code is left in `$LASTEXITCODE`, as after an inline call. A healthy call takes a second or two and is never delayed by the limit.
+- **Parameters:** -PackageManager (`WinGet`, `Scoop` or `Chocolatey`), -Arguments, -TimeoutSeconds
+- **Usage:** `Invoke-PackageManagerCommand -PackageManager Chocolatey -Arguments "pin", "list", "-r"`, `Invoke-PackageManagerCommand -PackageManager Scoop -Arguments "hold", "git"`, `Invoke-PackageManagerCommand -PackageManager WinGet -Arguments "pin", "add", "--id", "Git.Git", "--blocking" -TimeoutSeconds 30`
+
+The one place the short, query-style calls to the three package managers go through, and the seam the tests mock: every pin and hold read and write of [`Sync-AppPins`](#sync-apppins) and [`Get-WinGetPinnedIds`](#get-wingetpinnedids), and the source priming, pin removal and presence check of [`Install-WingetApps`](application.md#install-wingetapps) and the `scoop export` of [`Install-ScoopApps`](application.md#install-scoopapps). choco has been seen to stall inside `choco pin list` with no output and no exit, and winget has stalled on a prompt nobody could answer. Either held up the whole unattended [`Upgrade-All`](#upgrade-all), and Bootstrap with it, until the session was killed. A stall throws rather than returning nothing on purpose: an empty answer from a pin listing would read as "no pins", and a pin that never landed would let the next upgrade walk past a version lock.
+
+Installs and the bulk upgrades (`winget upgrade --all`, `scoop update *`, `choco upgrade all`) do not go through it: a large upgrade legitimately takes many minutes, and no limit would fit it.
+
+| Parameter         | Description                                                                                                                       |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `-PackageManager` | Which manager to run: `WinGet` (`winget`), `Scoop` (`scoop`) or `Chocolatey` (`choco`). Mandatory, positional.                   |
+| `-Arguments`      | The sub-command and its options, e.g. `"pin", "list", "-r"` or `"hold", "git"`. Mandatory, positional.                            |
+| `-TimeoutSeconds` | Longest wait for the command to exit, 1 to 3600. Default 60.                                                                      |
+
+```powershell
+# Every Chocolatey pin as a "name|version" line
+Invoke-PackageManagerCommand -PackageManager Chocolatey -Arguments "pin", "list", "-r"
+
+# Hold git in scoop
+Invoke-PackageManagerCommand -PackageManager Scoop -Arguments "hold", "git"
+
+# Pin Git.Git in winget, giving up after 30 seconds
+Invoke-PackageManagerCommand -PackageManager WinGet -Arguments "pin", "add", "--id", "Git.Git", "--blocking" -TimeoutSeconds 30
+```
+
+**See also:** [Sync-AppPins](#sync-apppins), [Upgrade-All](#upgrade-all), [Get-WinGetPinnedIds](#get-wingetpinnedids), [Invoke-ProcessWithTimeout](helper.md#invoke-processwithtimeout)
 
 ## [Invoke-ShellStartupSample](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Invoke-ShellStartupSample.ps1)
 
@@ -1617,7 +1665,7 @@ SymbolicLinkMaker -Name "WindowsTerminal.Settings", "FastFetch*"
 
 | Manager      | Pin                         | Unpin               | Current state read     |
 | ------------ | --------------------------- | ------------------- | ---------------------- |
-| `WinGet`     | `winget pin add --blocking` | `winget pin remove` | `winget pin list --id` |
+| `WinGet`     | `winget pin add --blocking` | `winget pin remove` | `winget pin list`      |
 | `Scoop`      | `scoop hold`                | `scoop unhold`      | `scoop export` (Info)  |
 | `Chocolatey` | `choco pin add`             | `choco pin remove`  | `choco pin list -r`    |
 
@@ -1630,6 +1678,8 @@ Recording the pin **in the manager itself** - rather than merely excluding the a
 
 Only apps WinuX manages are touched - the removal side considers exactly the apps in the effective list that are not pinned, so a pin somebody added by hand for an app outside the list is left alone. Pinned apps come from [`Get-PinnedApps`](#get-pinnedapps) and the managed set from [`Import-AppCsv`](bootstrap.md#import-appcsv), so the machine-local `<name>.local.csv` overlay counts on both sides.
 
+Every call to the three managers goes through [`Invoke-PackageManagerCommand`](#invoke-packagemanagercommand), which stops a call that stalls and throws. The error is not caught: `Sync-AppPins` stops, and [`Upgrade-All`](#upgrade-all) skips that manager's upgrade instead of waiting on the manager for good. The current state is read once per manager, not once per app: WinGet's through [`Get-WinGetPinnedIds`](#get-wingetpinnedids), a single `winget pin list` searched for the managed apps that are back to latest.
+
 Two Scoop specifics, both consequences of how scoop stores a hold (in the installed app's `install.json`):
 
 - A hold only exists on an **installed** app, so a version-locked row that is not installed yet is reported and left to [`Install-ScoopApps`](application.md#install-scoopapps), which installs it at the pinned version. WinGet and Chocolatey accept a pin ahead of installation.
@@ -1637,7 +1687,7 @@ Two Scoop specifics, both consequences of how scoop stores a hold (in the instal
 
 | Parameter         | Description                                                                                                                                                                          |
 | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `-PackageManager` | Which manager's pins to reconcile: `WinGet` (unpinned value is `Latest`), `Scoop` (lower-case `latest`), or `Chocolatey` (an empty `Version` cell means latest, so any version counts as a pin). |
+| `-PackageManager` | Which manager's pins to reconcile: `WinGet` (unpinned value is `Latest`), `Scoop` (lower-case `latest`), or `Chocolatey` (lower-case `latest`). An empty `Version` cell means latest for every manager. |
 
 ```powershell
 # Pin every version-locked WinGet app and clear pins for apps back to "Latest"
@@ -1953,7 +2003,7 @@ For each manager in play the function first confirms the manager's CLI is actual
 1. [`Sync-AppPins`](#sync-apppins) reconciles that manager's own pin mechanism (`winget pin`, `scoop hold`, `choco pin`) with the app list, pinning version-locked apps and clearing pins for apps back to tracking the latest.
 2. The manager's bulk upgrade runs unconditionally - `winget upgrade --all`, `scoop update *`, or `choco upgrade all -y` - and the manager itself skips what it has pinned.
 
-Success or the failing exit code is reported per manager. The pinned set comes from [`Get-PinnedApps`](#get-pinnedapps), which reads the effective list, so a version pinned in a machine-local `<name>.local.csv` overlay counts too.
+Success or the failing exit code is reported per manager. When either step throws - for example a stalled `choco pin list` or `scoop export` that [`Invoke-PackageManagerCommand`](#invoke-packagemanagercommand) stopped - that manager's upgrade is skipped and reported as an error, and the next manager still runs. The pinned set comes from [`Get-PinnedApps`](#get-pinnedapps), which reads the effective list, so a version pinned in a machine-local `<name>.local.csv` overlay counts too.
 
 | Parameter         | Description                                                                                                                      |
 | ----------------- | -------------------------------------------------------------------------------------------------------------------------------- |

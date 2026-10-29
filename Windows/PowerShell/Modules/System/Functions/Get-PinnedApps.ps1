@@ -23,9 +23,9 @@ function Get-PinnedApps {
 		`BootstrapConfig.DataFiles`, the same way the installers resolve it.
 
 	.PARAMETER VersionExcludeValue
-		The `Version` value that means "not pinned". Defaults to "Latest" (WinGet); Scoop writes
-		"latest", and Chocolatey leaves the cell empty, so its caller passes `$null` and every row
-		carrying any version counts as pinned.
+		The `Version` value that means "not pinned", compared case-insensitively. Defaults to "Latest"
+		(WinGet); Scoop and Chocolatey write "latest". An empty cell never counts as pinned. Pass
+		`$null` to treat every row carrying any version as pinned.
 
 	.EXAMPLE
 		Get-PinnedApps -DataFileKey WinGetApps

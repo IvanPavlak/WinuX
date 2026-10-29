@@ -91,6 +91,19 @@ Describe "Upgrade-All" {
 		Should -Invoke Sync-AppPins -ParameterFilter { $PackageManager -eq $expected } -Times 1 -Exactly
 	}
 
+	It "skips a manager's upgrade when its pin reconciliation fails, and still upgrades the next" {
+		# e.g. a stalled `choco pin list` that Invoke-PackageManagerCommand stopped: the bulk upgrade must not
+		# run on pins that were never confirmed, nor wait on the same stuck choco.
+		Mock Resolve-PackageManagers { @('Chocolatey', 'Scoop') }
+		Mock Sync-AppPins { throw 'stalled' } -ParameterFilter { $PackageManager -eq 'Chocolatey' }
+
+		Upgrade-All
+
+		Should -Invoke choco -ParameterFilter { $args -contains 'upgrade' } -Times 0
+		Should -Invoke scoop -ParameterFilter { $args -contains 'update' } -Times 1 -Exactly
+		Should -Invoke Write-LogError -Times 1 -Exactly
+	}
+
 	It "skips a manager whose CLI is not installed instead of failing on it" {
 		Mock Resolve-PackageManagers { @('Chocolatey') }
 		Mock Get-Command { $null } -ParameterFilter { $Name -eq 'choco' }

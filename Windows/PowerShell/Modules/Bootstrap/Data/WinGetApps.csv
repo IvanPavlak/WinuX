@@ -12,7 +12,7 @@ App,Version,Scope,Interactive,Source,Machine
 #
 #   Obsidian.Obsidian,Latest,d,n,w,All           # a new App is added after the rows below
 #   Microsoft.PowerShell,Latest,d,n,w,All        # an App below is replaced (here to follow Latest)
-#   -Microsoft.PowerToys,0.101.2362.0,d,n,w,All  # a leading - opts this machine out of a row below
+#   -Microsoft.PowerToys,0.102.3001.0,d,n,w,All  # a leading - opts this machine out of a row below
 #
 # See docs/winux/reference/software-list.md for the full overlay reference.
 #
@@ -32,8 +32,8 @@ App,Version,Scope,Interactive,Source,Machine
 # together only after re-validating the combination. To follow Latest instead, replace a row in
 # WinGetApps.local.csv.
 #
-#   Microsoft.PowerToys        0.101.2362.0 -> pinned by the row below
-#   Microsoft.PowerShell       7.6.6.0      -> pinned by the row below
+#   Microsoft.PowerToys        0.102.3001.0 -> pinned by the row below
+#   Microsoft.PowerShell       7.6.9.0      -> pinned by the row below
 #   Microsoft.WindowsTerminal  1.25.2733.0  -> pinned by the row below
 #                                              (pinned rows install with --version and are
 #                                              re-pinned in winget by Upgrade-All)
@@ -42,9 +42,9 @@ App,Version,Scope,Interactive,Source,Machine
 #                                              the test harness, Install-PowerShellModules, and CI alike)
 #   Windows 11                 26H2         -> NOT enforced (build 26300; environment, not a package)
 # ===============================================================================================
-Microsoft.PowerShell,7.6.6.0,d,n,w,All
+Microsoft.PowerShell,7.6.9.0,d,n,w,All
 Microsoft.WindowsTerminal,1.25.2733.0,d,n,w,All
-Microsoft.PowerToys,0.101.2362.0,d,n,w,All
+Microsoft.PowerToys,0.102.3001.0,d,n,w,All
 
 # Recommended companions - not required by the framework, so they no longer install by
 # default. Opt in by copying a row into WinGetApps.local.csv (uncommented):

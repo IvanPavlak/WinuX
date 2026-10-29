@@ -28,13 +28,16 @@ function Install-ScoopApps {
 	# own app choices apply without the tracked CSV ever being edited.
 	$scoopApps = @(Import-AppCsv -DataFileKey ScoopApps)
 
+	# Read through Invoke-PackageManagerCommand, so a stalled scoop is stopped after 60 seconds.
+	# Either failure - a stall or an answer that is not JSON - leaves the list empty, and every app
+	# is then installed, which scoop answers for an installed app by saying so.
 	$installedApps = @()
 	try {
-		$scoopExport = scoop export | ConvertFrom-Json
+		$scoopExport = @(Invoke-PackageManagerCommand -PackageManager Scoop -Arguments 'export') -join "`n" | ConvertFrom-Json
 		$installedApps = $scoopExport.apps | ForEach-Object { $_.Name }
 	}
- catch {
-		Write-LogWarning "Could not get list of installed apps!"
+	catch {
+		Write-LogWarning "Could not get list of installed apps! => $_"
 	}
 
 	foreach ($app in $scoopApps) {

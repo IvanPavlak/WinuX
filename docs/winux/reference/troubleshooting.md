@@ -74,6 +74,18 @@ winget search example --source msstore --accept-source-agreements --disable-inte
 Install-WingetApps
 ```
 
+### "Upgrading all WinGet / Scoop / Chocolatey Software skipped => [...] did not finish within 60 s"
+
+**Problem:** `Upgrade-All` (or Bootstrap's `UpgradeAll` step) reports the WinGet, Scoop or Chocolatey upgrade as skipped, and that manager's bulk upgrade did not run.
+
+**Cause:** A pin or hold call (`winget pin`, `scoop export` / `hold` / `unhold`, `choco pin`) stalled - choco has been seen to hang inside `choco pin list` with no output and no exit. [`Invoke-PackageManagerCommand`](../modules/system.md#invoke-packagemanagercommand) stops such a call after 60 seconds. Without the limit the run would wait on the manager until the session was killed. The upgrade is skipped on purpose, because it would run on pins nobody could confirm, on the same stuck manager. The other managers still upgrade.
+
+**Solution:** Usually a one-off: run the upgrade again. If it keeps stalling, run the pin command from the message by hand to see whether the manager itself hangs. For Chocolatey, the end of `C:\ProgramData\chocolatey\logs\chocolatey.log` shows the last thing it did.
+
+```powershell
+Upgrade-All -PackageManager Chocolatey
+```
+
 ## Configuration Issues
 
 ### Machine Type Not Detected

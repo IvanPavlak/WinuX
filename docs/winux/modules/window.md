@@ -2503,9 +2503,9 @@ The Window module relies on specific external software. The **single source of t
 
 | Dependency                           | Version      | Install Method                                          | Pinned?                                              | Notes                                                                                             |
 | ------------------------------------ | ------------ | ------------------------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| **Microsoft PowerToys** (FancyZones) | **0.101.2362.0** | `winget install Microsoft.PowerToys --version 0.101.2362.0` | Yes (via WinGetApps.csv)                       | Core dependency - provides zone layouts, keyboard shortcuts (`Win+Ctrl+Alt+N`), and snap behavior |
+| **Microsoft PowerToys** (FancyZones) | **0.102.3001.0** | `winget install Microsoft.PowerToys --version 0.102.3001.0` | Yes (via WinGetApps.csv)                       | Core dependency - provides zone layouts, keyboard shortcuts (`Win+Ctrl+Alt+N`), and snap behavior |
 | **VirtualDesktop** PS module         | **1.5.11**   | `Install-Module VirtualDesktop -RequiredVersion 1.5.11` | Yes (`$pinnedModules`, Install-PowerShellModules.ps1) | Virtual desktop creation, window moving, desktop switching. Author: Markus Scholtes (PSGallery)   |
-| **PowerShell**                       | **7.6.6.0**  | `winget install Microsoft.PowerShell --version 7.6.6.0` | Yes (via WinGetApps.csv)            | Required for module loading and `Add-Type` compilation                                            |
+| **PowerShell**                       | **7.6.9.0**  | `winget install Microsoft.PowerShell --version 7.6.9.0` | Yes (via WinGetApps.csv)            | Required for module loading and `Add-Type` compilation                                            |
 | **Windows Terminal**                 | **1.25.2733.0** | `winget install Microsoft.WindowsTerminal --version 1.25.2733.0` | Yes (via WinGetApps.csv)     | Not a direct dependency but the expected execution environment                                    |
 | **Pester**                           | **6.1.0**    | `Install-PowerShellModules` (reads the pin file)        | Yes (`Modules/Tests/RequiredPesterVersion.txt`) | Test framework only - the test harness, `Install-PowerShellModules` and CI all read the one pin file |
 | **.NET System.Windows.Forms**        | 10.0.0       | Built-in (.NET 10 runtime of PowerShell 7.6)            | N/A                                 | Monitor enumeration via `[System.Windows.Forms.Screen]::AllScreens`                               |
@@ -2750,14 +2750,14 @@ combination is tracked in the `TESTED VERSIONS` block in
 `Windows/PowerShell/Modules/Bootstrap/Data/WinGetApps.csv`:
 
 ```powershell
-# Check PowerToys version (pinned: 0.101.2362.0 via WinGetApps.csv)
+# Check PowerToys version (pinned: 0.102.3001.0 via WinGetApps.csv)
 winget list --id Microsoft.PowerToys
 
 # Check VirtualDesktop module version (should be 1.5.11)
 Get-InstalledModule -Name VirtualDesktop | Select-Object Name, Version
 
 # Roll PowerToys back to the pinned version if a manually installed newer release misbehaves
-winget install Microsoft.PowerToys --version 0.101.2362.0 --force
+winget install Microsoft.PowerToys --version 0.102.3001.0 --force
 
 # Downgrade VirtualDesktop if needed
 Install-Module -Name VirtualDesktop -RequiredVersion 1.5.11 -Force -Scope CurrentUser

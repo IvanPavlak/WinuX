@@ -12,9 +12,9 @@ BeforeAll {
 	# Same reason for the layered CSV reader the installer now reads through.
 	. (Join-Path (Get-RepositoryPath).Modules "Bootstrap\Functions\Import-AppCsv.ps1")
 
-	# scoop is absent on clean CI runners; a throwing stub makes 'scoop export' fail
-	# deterministically without Mock scoop (which would require scoop to pre-exist).
-	function scoop { throw 'scoop export unavailable (test stub)' }
+	# Dot-sourced so it exists to Mock: `scoop export` goes through it, so the tests never depend on
+	# scoop being installed on the machine running them.
+	. (Join-Path (Get-RepositoryPath).Modules "System\Functions\Invoke-PackageManagerCommand.ps1")
 }
 
 AfterAll {
@@ -28,6 +28,8 @@ Describe "Install-ScoopApps" {
 		Mock Test-AdminPrivileges { }
 		Mock DetermineMachineType { 'Laptop' }
 		Mock Invoke-Expression { }
+		Mock Write-LogWarning { }
+		Mock Invoke-PackageManagerCommand { throw 'scoop export unavailable (test stub)' }
 
 		$global:MachineSpecificPaths = @{ Projects = @{ Self = @{ Root = $TestDrive } } }
 		$global:Configuration = @{ BootstrapConfig = @{ DataFiles = @{ ScoopApps = 'scoop.csv' } } }
@@ -44,5 +46,19 @@ paint,PC,false,latest
 		Install-ScoopApps
 
 		Should -Invoke Invoke-Expression -Times 1 -Exactly -ParameterFilter { $Command -like 'scoop install git*' }
+	}
+
+	It "reads the installed apps through scoop export and updates an installed app instead of installing it" {
+		Mock Invoke-PackageManagerCommand { '{"apps":[', '{"Name":"git","Info":""}', ']}' } -ParameterFilter { $PackageManager -eq 'Scoop' -and $Arguments[0] -eq 'export' }
+		$csv = @'
+App,Machine,Global,Version
+git,Laptop,false,latest
+'@
+		Set-Content -Path (Join-Path $TestDrive 'scoop.csv') -Value $csv
+
+		Install-ScoopApps
+
+		Should -Invoke Invoke-Expression -Times 1 -Exactly -ParameterFilter { $Command -like 'scoop update git*' }
+		Should -Invoke Invoke-Expression -Times 0 -ParameterFilter { $Command -like 'scoop install*' }
 	}
 }
