@@ -49,6 +49,7 @@
 		'Initialize-Directory',
 		'Invoke-GoogleTranslate',
 		'Invoke-PrivacyRequest',
+		'Invoke-ProcessWithTimeout',
 		'Invoke-RerunLastCommandExit',
 		'Invoke-TorRequest',
 		'Invoke-WithRetry',

@@ -8,12 +8,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-10-28
+
+### Added
+
+- **`Invoke-ProcessWithTimeout` (Helper module) runs a program with no window and stops it after a time limit.** It returns the output (stdout, then stderr), the exit code and whether it timed out, and kills the whole process tree of a program still running after `-TimeoutSeconds` (default 60). It starts the process directly rather than through `Start-Process`, so a call costs no more than running the command inline. Tests: `Invoke-ProcessWithTimeout.Tests.ps1` (real processes, Integration tier). Docs: the Helper module reference and its configuration guide.
+- **`Invoke-PackageManagerCommand` (System module) runs one short `winget`, `scoop` or `choco` command with a time limit.** A call still running after `-TimeoutSeconds` (default 60) is stopped and throws, so a stall can never read as an empty answer; a non-zero exit code is returned in `$LASTEXITCODE`, as after an inline call. scoop, a PowerShell script shim that cannot be started as a process, runs in a fresh `pwsh -NoProfile`. A healthy call takes a second or two, so the limit only ever ends a stalled one. Every pin and hold call of `Sync-AppPins`, and the source priming, pin removal and presence check of `Install-WingetApps` and the `scoop export` of `Install-ScoopApps`, now go through it; installs and bulk upgrades do not, since they legitimately run for minutes. Tests: `Invoke-PackageManagerCommand.Tests.ps1`, `Install-WingetApps.Tests.ps1`, `Install-ScoopApps.Tests.ps1`. Docs: the System and Application module references, its configuration guide and Troubleshooting.
+- **`Get-WinGetPinnedIds` (System module) reads every WinGet pin in one `winget pin list` call.** It returns which of the given app IDs have a pin, matching each as a whole token rather than by column position, so a pin on `Git.GitLFS` never counts for `Git.Git`. `Sync-AppPins` and `Install-WingetApps` use it instead of one `winget pin list --id` per managed app, which cost about a second per app. Tests: `Get-WinGetPinnedIds.Tests.ps1`, `Sync-AppPins.Tests.ps1`. Docs: the System module reference and its configuration guide.
+
+### Changed
+
+- **PowerToys is pinned to `0.102.3001.0` (was `0.101.2362.0`) and PowerShell to `7.6.9.0` (was `7.6.6.0`).** The `TESTED VERSIONS` block and the rows of `WinGetApps.csv` now pin Microsoft.PowerToys `0.102.3001.0` and Microsoft.PowerShell `7.6.9.0`; Windows Terminal, VirtualDesktop and Pester are unchanged. Docs: software list, the Window module reference ("Tested Dependency Versions" and the troubleshooting commands), the Bootstrap module reference, prerequisites, `AI/Context/WINDOWS_CONTEXT.md`.
+
+### Fixed
+
+- **A stalled package manager call no longer hangs `Upgrade-All` or `Install-WingetApps`.** choco can stall inside `choco pin list` with no output and no exit, and the unattended upgrade, and Bootstrap with it, waited on it until the session was killed, without the manager's bulk upgrade ever starting. `Sync-AppPins` now stops with an error when a pin or hold call of any of the three managers does not finish in time, and `Upgrade-All` reports that manager's upgrade as skipped and goes on with the next manager. It skips rather than upgrades because the pins could not be confirmed. `Install-WingetApps` warns about a stalled source priming or pin call and goes on installing, and counts an install whose presence check stalled as failed. `winget pin remove` now also passes `--accept-source-agreements`, like the other winget pin calls, in both functions. Tests: `Sync-AppPins.Tests.ps1`, `Upgrade-All.Tests.ps1`, `Install-WingetApps.Tests.ps1`. Docs: the System and Application module references and Troubleshooting.
+- **A Chocolatey row with Version `latest` is no longer pinned.** `Sync-AppPins` treated only an empty Version cell as "not pinned" for Chocolatey, so a `latest` row (which `Install-ChocolateyApps` already accepts) counted as a version and `choco pin add` froze the app at whatever it had installed. `latest` (any case) and an empty cell now both mean unpinned, the same as for WinGet and Scoop, and the next `Upgrade-All` removes a pin left over from that bug. Tests: `Sync-AppPins.Tests.ps1`. Docs: the System module reference (`Get-PinnedApps`, `Sync-AppPins`).
+
 ## [2.0.1] - 2026-10-28
 
 ### Fixed
 
 - **`Merge-Upstreams -DryRun` lists exactly what the merge would do.** It listed everything the upstream changed since the last merge, so a fork that already had a change saw hundreds of paths "taken" and "declined" that the real run never touched, and it could not say which conflicts the real run would stop on. It now has `git merge-tree` (git 2.38 or newer) compute the same merge, with the same attributes and merge drivers, into a tree of its own, touching neither the index nor the working tree. It lists the paths that tree changes against HEAD: what the real run would take, what it would put back (a conflict there included, since putting back resolves it), and the conflicts it would stop on. The mirror drift warning now means what it says: a mirror file whose merged copy would differ from the upstream's. Tests: `Merge-Upstreams.Tests.ps1` (the dry run is checked against the real run). Docs: the Git module reference and the Fork Model.
 - **No workflow job runs in a private repository.** A private fork that merges WinuX carried its workflows too, and every push to it ran the Pester suite on a Windows runner, the lint and the release checks, spending the fork's Actions minutes on suites the public upstream already runs on every pull request. Every job of `winux.yml`, `lint.yml`, `release.yml` and `winux-release.yml` now has `if: ${{ !github.event.repository.private }}`, the guard Foundation's macOS job already had, so a private fork starts none of them; WinuX itself is public, where nothing changes. Docs: the Fork Model.
+
 ## [2.0.0] - 2026-10-28
 
 ### Added
@@ -1754,7 +1772,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.0.1...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.1.0...HEAD
+[2.1.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.0.1...winux/v2.1.0
 [2.0.1]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.0.0...winux/v2.0.1
 [2.0.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v1.9.0...winux/v2.0.0
 [1.9.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v1.8.0...winux/v1.9.0

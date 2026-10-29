@@ -1,5 +1,5 @@
 {
-  "Version": "2.0.1",
+  "Version": "2.1.0",
   "Functions": {
     "Add-BrowserGroup": {
       "Module": "Configuration",
@@ -2156,6 +2156,15 @@
         }
       }
     },
+    "Get-WinGetPinnedIds": {
+      "Module": "System",
+      "Parameters": {
+        "AppId": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
     "Get-WorkspaceBenchmark": {
       "Module": "Workflow",
       "Parameters": {
@@ -2783,6 +2792,23 @@
         }
       }
     },
+    "Invoke-PackageManagerCommand": {
+      "Module": "System",
+      "Parameters": {
+        "Arguments": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "PackageManager": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "TimeoutSeconds": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
     "Invoke-PersonalSteps": {
       "Module": "Bootstrap",
       "Parameters": {}
@@ -2803,6 +2829,23 @@
           "Aliases": []
         },
         "UseTor": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Invoke-ProcessWithTimeout": {
+      "Module": "Helper",
+      "Parameters": {
+        "ArgumentList": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "FilePath": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "TimeoutSeconds": {
           "Mandatory": false,
           "Aliases": []
         }

@@ -566,9 +566,9 @@ Each of the three may have a machine-local `<name>.local.csv` beside it, which [
 
 ```csv
 App,Version,Scope,Interactive,Source,Machine
-Microsoft.PowerShell,7.6.6.0,d,n,w,All
+Microsoft.PowerShell,7.6.9.0,d,n,w,All
 Microsoft.WindowsTerminal,1.25.2733.0,d,n,w,All
-Microsoft.PowerToys,0.101.2362.0,d,n,w,All
+Microsoft.PowerToys,0.102.3001.0,d,n,w,All
 ```
 
 | Column      | Values                       | Description               |

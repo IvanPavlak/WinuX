@@ -840,6 +840,30 @@ Invoke-PrivacyRequest -Uri "https://check.torproject.org/api/ip" -UseTor -Timeou
 
 **See also:** [Invoke-TorRequest](#invoke-torrequest), [Test-PrivacyStatus](#test-privacystatus)
 
+## [Invoke-ProcessWithTimeout](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Invoke-ProcessWithTimeout.ps1)
+
+- **Description:** Runs a program with no window, captures its output, and stops it after a time limit. Returns an object with `Output` (the non-blank lines of stdout, then stderr), `ExitCode` (`$null` after a timeout) and `TimedOut`. A program still running after `-TimeoutSeconds` (default 60) is killed together with its process tree. Never throws for a slow or failing program - the caller decides what a timeout or a non-zero exit code means. Only a program that cannot be started at all throws.
+- **Parameters:** -FilePath, -ArgumentList, -TimeoutSeconds
+- **Usage:** `Invoke-ProcessWithTimeout -FilePath "choco" -ArgumentList "pin", "list", "-r"`, `(Invoke-ProcessWithTimeout -FilePath "git" -ArgumentList "fetch" -TimeoutSeconds 10).TimedOut`
+
+The process is started directly through `System.Diagnostics.Process` rather than `Start-Process`: no console window is created and no temporary file is written, so a call costs no more than running the command inline - which matters to a caller that runs it once per app. Both output streams are drained while the program runs, since a program that fills a pipe nobody reads blocks forever. The whole process tree is killed because a shim such as `choco.exe` starts the real program as a child, and killing only the shim would leave that child running.
+
+| Parameter         | Description                                                                                      |
+| ----------------- | ------------------------------------------------------------------------------------------------ |
+| `-FilePath`       | The program to run, by name on PATH (e.g. `winget`) or by full path. Mandatory, positional.       |
+| `-ArgumentList`   | The arguments, one element per argument, each passed as given and quoted where needed.            |
+| `-TimeoutSeconds` | Longest wait for the program to exit, 1 to 3600. Default 60.                                     |
+
+```powershell
+# List the Chocolatey pins, giving up after 60 seconds
+Invoke-ProcessWithTimeout -FilePath "choco" -ArgumentList "pin", "list", "-r"
+
+# True when the fetch was stopped after 10 seconds
+(Invoke-ProcessWithTimeout -FilePath "git" -ArgumentList "fetch" -TimeoutSeconds 10).TimedOut
+```
+
+**See also:** [Invoke-PackageManagerCommand](system.md#invoke-packagemanagercommand)
+
 ## [Invoke-RerunLastCommandExit](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Invoke-RerunLastCommandExit.ps1)
 
 - **Description:** Executes the scriptable exit seam used by `Rerun-LastCommand` once the fresh shell has been opened and the original window has been closed. Invokes the configured script-scoped exit action when a test seam is present, otherwise exits the current process cleanly with code `0`.

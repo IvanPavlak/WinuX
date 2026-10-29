@@ -96,9 +96,9 @@ The minimal set a WinuX install needs to work end-to-end - the framework apps on
 
 | Software         | WinGet ID                   | Version                     |
 | ---------------- | --------------------------- | --------------------------- |
-| PowerShell 7     | `Microsoft.PowerShell`      | **Pinned to 7.6.6.0**       |
+| PowerShell 7     | `Microsoft.PowerShell`      | **Pinned to 7.6.9.0**       |
 | Windows Terminal | `Microsoft.WindowsTerminal` | **Pinned to 1.25.2733.0**   |
-| PowerToys        | `Microsoft.PowerToys`       | **Pinned to 0.101.2362.0**  |
+| PowerToys        | `Microsoft.PowerToys`       | **Pinned to 0.102.3001.0**  |
 
 All three are pinned to the tested combination: FancyZones is the backbone of the window layout
 system and updates can silently break it, and PowerShell and Windows Terminal host every WinuX

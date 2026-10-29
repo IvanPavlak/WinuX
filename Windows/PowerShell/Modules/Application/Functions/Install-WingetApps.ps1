@@ -10,6 +10,12 @@ function Install-WinGetApps {
 		(machine/user/default), and the machine types it applies to. Apps for the current machine
 		type and All-type apps are installed; others are skipped.
 
+		The short winget calls around the installs - priming the source agreements, reading and
+		removing pins, the presence check after a failed install - go through
+		`Invoke-PackageManagerCommand`, so a stalled winget is stopped after 60 seconds instead of
+		holding up Bootstrap. The installs themselves run without a limit: a large install
+		legitimately takes many minutes.
+
 		Requires administrator privileges. Called automatically by Bootstrap.
 
 	.EXAMPLE
@@ -36,7 +42,25 @@ function Install-WinGetApps {
 	# no-op (matches nothing); acceptance happens before the query runs, so only the side effect matters.
 	# Requires WinGet 1.6+ for --disable-interactivity, which ships with Windows 11.
 	foreach ($wingetSource in @("winget", "msstore")) {
-		winget search "winux-source-agreement-prime" --source $wingetSource --accept-source-agreements --disable-interactivity *> $null
+		try {
+			Invoke-PackageManagerCommand -PackageManager WinGet -Arguments 'search', 'winux-source-agreement-prime', '--source', $wingetSource, '--accept-source-agreements', '--disable-interactivity' | Out-Null
+		}
+		catch {
+			Write-LogWarning "Could not prime the [$wingetSource] source agreement => $_"
+		}
+	}
+
+	# Every pin on an app back to "Latest" is read in one call, before the loop: a leftover pin from
+	# an earlier version lock would block the install from moving the app. A listing that stalls
+	# leaves the pins in place - the install then reports the blocked app - rather than stopping
+	# every install.
+	$latestApps = @($wingetApps | Where-Object { -not $_.Version -or $_.Version -eq "Latest" } | ForEach-Object { "$($_.App)".Trim() } | Where-Object { $_ })
+	$pinnedLatestApps = @()
+	try {
+		$pinnedLatestApps = @(Get-WinGetPinnedIds -AppId $latestApps)
+	}
+	catch {
+		Write-LogWarning "Could not read the WinGet pins - leaving them as they are => $_"
 	}
 
 	# A failed install must never scroll by invisibly inside the wall of bootstrap output -
@@ -67,11 +91,13 @@ function Install-WinGetApps {
 
 		$appName = $app.App
 
-		if (-not $app.Version -or $app.Version -eq "Latest") {
-			$pinOutput = winget pin list --id $appName --accept-source-agreements --disable-interactivity 2>$null
-			if ($pinOutput | Where-Object { $_ -match [regex]::Escape($appName) }) {
-				Write-LogWarning "Removing existing pin for $appName..."
-				winget pin remove --id $appName --disable-interactivity
+		if ($appName -in $pinnedLatestApps) {
+			Write-LogWarning "Removing existing pin for $appName..."
+			try {
+				Invoke-PackageManagerCommand -PackageManager WinGet -Arguments 'pin', 'remove', '--id', $appName, '--accept-source-agreements', '--disable-interactivity' | Out-Null
+			}
+			catch {
+				Write-LogWarning "Could not remove the pin for [$appName] => $_"
 			}
 		}
 
@@ -86,8 +112,16 @@ function Install-WinGetApps {
 		if ($installExitCode -ne 0) {
 			# winget's nonzero exit codes are not uniformly failures (e.g. "already installed" /
 			# "no applicable update" variants), so check ground truth: is the package registered?
-			winget list --id $appName -e --accept-source-agreements --disable-interactivity *> $null
-			if ($LASTEXITCODE -ne 0) {
+			$isInstalled = $false
+			try {
+				Invoke-PackageManagerCommand -PackageManager WinGet -Arguments 'list', '--id', $appName, '-e', '--accept-source-agreements', '--disable-interactivity' | Out-Null
+				$isInstalled = $LASTEXITCODE -eq 0
+			}
+			catch {
+				Write-LogWarning "Could not check whether [$appName] is installed => $_"
+			}
+
+			if (-not $isInstalled) {
 				Write-LogError "Install FAILED for [$appName] (winget exit code => $installExitCode)"
 				$failedApps += [PSCustomObject]@{ App = $appName; ExitCode = $installExitCode }
 			}

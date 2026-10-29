@@ -102,7 +102,10 @@ function Upgrade-All {
 			}
 		}
 		catch {
-			Write-LogError "An error occurred during the upgrade process: $_"
+			# Reaching here skips the rest of this manager's branch, its bulk upgrade included - e.g. a
+			# stalled `choco pin list` or `scoop export` that Invoke-PackageManagerCommand stopped - and moves
+			# on to the next manager.
+			Write-LogError "Upgrading all $manager Software skipped => $_"
 		}
 	}
 }

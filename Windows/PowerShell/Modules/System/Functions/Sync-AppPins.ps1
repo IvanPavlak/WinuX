@@ -10,9 +10,14 @@ function Sync-AppPins {
 
 		| Manager    | Pin                              | Unpin                        | Current state read       |
 		| ---------- | -------------------------------- | ---------------------------- | ------------------------ |
-		| WinGet     | `winget pin add --blocking`      | `winget pin remove`          | `winget pin list --id`   |
+		| WinGet     | `winget pin add --blocking`      | `winget pin remove`          | `winget pin list`        |
 		| Scoop      | `scoop hold`                     | `scoop unhold`               | `scoop export` (Info)    |
 		| Chocolatey | `choco pin add`                  | `choco pin remove`           | `choco pin list -r`      |
+
+		Every call to the three managers goes through `Invoke-PackageManagerCommand`, which stops a
+		call that stalls and throws. The error is not caught here: Sync-AppPins stops, and `Upgrade-All`
+		skips that manager's upgrade instead of waiting on the manager for good. The current state is
+		read once per manager - for WinGet through `Get-WinGetPinnedIds` - not once per app.
 
 		Both halves of the lifecycle matter:
 
@@ -61,10 +66,11 @@ function Sync-AppPins {
 
 	$dataFileKey = @{ WinGet = 'WinGetApps'; Scoop = 'ScoopApps'; Chocolatey = 'ChocolateyApps' }[$PackageManager]
 
-	# The Version value that means "not pinned", per manager: WinGet spells it "Latest", Scoop writes
-	# it lower case, and Chocolatey leaves the cell empty - so for Chocolatey any version at all counts
-	# as a pin.
-	$versionExcludeValue = @{ WinGet = 'Latest'; Scoop = 'latest'; Chocolatey = $null }[$PackageManager]
+	# The Version value that means "not pinned", per manager: WinGet spells it "Latest", Scoop and
+	# Chocolatey write it lower case. Get-PinnedApps compares case-insensitively and also treats an
+	# empty cell as unpinned. Chocolatey once excluded only the empty cell, so a "latest" row was
+	# read as a version and `choco pin add` froze the app at whatever it had installed.
+	$versionExcludeValue = @{ WinGet = 'Latest'; Scoop = 'latest'; Chocolatey = 'latest' }[$PackageManager]
 
 	$pinnedApps = @(Get-PinnedApps -DataFileKey $dataFileKey -VersionExcludeValue $versionExcludeValue)
 
@@ -72,21 +78,27 @@ function Sync-AppPins {
 	$managedApps = @(Import-AppCsv -DataFileKey $dataFileKey | ForEach-Object { "$($_.App)".Trim() } | Where-Object { $_ })
 	$unpinnedApps = @($managedApps | Where-Object { $_ -notin $pinnedApps })
 
-	# Current pin state, read once per manager where the CLI can report it in bulk. WinGet has no
-	# machine-readable bulk pin list, so it is queried per app in the removal loop instead.
+	# Current pin state, read once per manager. WinGet's listing is a table, so only the managed
+	# unpinned apps are looked for in it, each as a whole token (see Get-WinGetPinnedIds).
 	$pinnedNow = @()
 	$scoopInstalled = @()
 	$scoopIsGlobal = @{}
 
 	switch ($PackageManager) {
+		'WinGet' {
+			$pinnedNow = @(Get-WinGetPinnedIds -AppId $unpinnedApps)
+		}
 		'Scoop' {
 			# `scoop export` returns exactly what `scoop list` produces, whose Info column is a
 			# comma-joined set of markers including 'Held package' and 'Global install'. That makes one
 			# call enough to learn what is installed, what is held, and which scope each app lives in -
 			# and the installed scope, not the CSV's Global column, is what hold/unhold must follow,
 			# since an app may have been installed the other way by hand.
+			# A stalled export throws past this point like any other stalled call; only an answer
+			# that is not the expected JSON is reported and skipped.
+			$scoopExport = @(Invoke-PackageManagerCommand -PackageManager Scoop -Arguments 'export') -join "`n"
 			try {
-				$scoopApps = @((scoop export | ConvertFrom-Json).apps)
+				$scoopApps = @(($scoopExport | ConvertFrom-Json).apps)
 			}
 			catch {
 				Write-LogWarning "Could not read the installed Scoop apps - skipping Scoop pin reconciliation!"
@@ -104,35 +116,27 @@ function Sync-AppPins {
 		}
 		'Chocolatey' {
 			# `choco pin list -r` reports every pin as "name|version" in one call.
-			$pinnedNow = @(choco pin list -r 2>$null | ForEach-Object { ("$_" -split '\|')[0].Trim() } | Where-Object { $_ })
+			$pinnedNow = @(Invoke-PackageManagerCommand -PackageManager Chocolatey -Arguments 'pin', 'list', '-r' | ForEach-Object { ("$_" -split '\|')[0].Trim() } | Where-Object { $_ })
 		}
 	}
 
 	foreach ($app in $unpinnedApps) {
+		if ($app -notin $pinnedNow) { continue }
+
 		switch ($PackageManager) {
 			'WinGet' {
-				# Queried per app rather than parsed out of a bare `winget pin list` table, matching
-				# what Install-WinGetApps does: the table's columns shift with terminal width and the
-				# installed locale, and a mis-parse here would silently unpin the wrong app.
-				$pinOutput = winget pin list --id $app --accept-source-agreements --disable-interactivity 2>$null
-				if (-not ($pinOutput | Where-Object { $_ -match [regex]::Escape($app) })) { continue }
-
 				Write-LogWarning "Removing stale pin for [$app] - it is no longer version-pinned"
-				winget pin remove --id $app --disable-interactivity | Out-Null
+				Invoke-PackageManagerCommand -PackageManager WinGet -Arguments 'pin', 'remove', '--id', $app, '--accept-source-agreements', '--disable-interactivity' | Out-Null
 			}
 			'Scoop' {
-				if ($app -notin $pinnedNow) { continue }
-
 				Write-LogWarning "Removing stale hold for [$app] - it is no longer version-pinned"
 				$scoopArgs = @('unhold')
 				if ($scoopIsGlobal[$app]) { $scoopArgs += '-g' }
-				scoop @scoopArgs $app | Out-Null
+				Invoke-PackageManagerCommand -PackageManager Scoop -Arguments ($scoopArgs + $app) | Out-Null
 			}
 			'Chocolatey' {
-				if ($app -notin $pinnedNow) { continue }
-
 				Write-LogWarning "Removing stale pin for [$app] - it is no longer version-pinned"
-				choco pin remove --name=$app | Out-Null
+				Invoke-PackageManagerCommand -PackageManager Chocolatey -Arguments 'pin', 'remove', "--name=$app" | Out-Null
 			}
 		}
 	}
@@ -144,7 +148,7 @@ function Sync-AppPins {
 	foreach ($app in $pinnedApps) {
 		switch ($PackageManager) {
 			'WinGet' {
-				winget pin add --id $app --blocking --accept-source-agreements --disable-interactivity | Out-Null
+				Invoke-PackageManagerCommand -PackageManager WinGet -Arguments 'pin', 'add', '--id', $app, '--blocking', '--accept-source-agreements', '--disable-interactivity' | Out-Null
 			}
 			'Scoop' {
 				# Unlike a WinGet or Chocolatey pin, a hold only exists on an installed app.
@@ -155,10 +159,10 @@ function Sync-AppPins {
 
 				$scoopArgs = @('hold')
 				if ($scoopIsGlobal[$app]) { $scoopArgs += '-g' }
-				scoop @scoopArgs $app | Out-Null
+				Invoke-PackageManagerCommand -PackageManager Scoop -Arguments ($scoopArgs + $app) | Out-Null
 			}
 			'Chocolatey' {
-				choco pin add --name=$app | Out-Null
+				Invoke-PackageManagerCommand -PackageManager Chocolatey -Arguments 'pin', 'add', "--name=$app" | Out-Null
 			}
 		}
 	}
