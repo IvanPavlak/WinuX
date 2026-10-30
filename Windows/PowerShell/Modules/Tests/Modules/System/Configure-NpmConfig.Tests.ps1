@@ -22,7 +22,7 @@ Describe "Configure-NpmConfig" {
 		}
 
 		$script:token = "test-token-1234"
-		Mock Custom-ReadHost { ConvertTo-SecureString $script:token -AsPlainText -Force }
+		Mock Custom-ReadHost { [System.Net.NetworkCredential]::new('', $script:token).SecurePassword }
 		Mock Write-Host { }
 	}
 

@@ -54,11 +54,11 @@ Describe "Configure-NuGetConfig" {
 			$global:MachineSpecificPaths = [PSCustomObject]@{
 				NuGetConfig = [PSCustomObject]@{ SourcePath = $script:template; DestinationPath = $script:target }
 			}
-			Mock Test-Path { Microsoft.PowerShell.Management\Test-Path @PSBoundParameters }
+			Mock Test-Path { Microsoft.PowerShell.Management\Test-Path -Path $Path }
 			$script:tokens = [System.Collections.Generic.Queue[string]]::new()
 			$script:tokens.Enqueue("new-token-1234")
 			Mock Custom-ReadHost { "my-user" } -ParameterFilter { -not $AsSecureString }
-			Mock Custom-ReadHost { ConvertTo-SecureString $script:tokens.Dequeue() -AsPlainText -Force } -ParameterFilter { $AsSecureString }
+			Mock Custom-ReadHost { [System.Net.NetworkCredential]::new('', $script:tokens.Dequeue()).SecurePassword } -ParameterFilter { $AsSecureString }
 		}
 
 		It "backs up the old config with every ClearTextPassword and Password redacted" {
