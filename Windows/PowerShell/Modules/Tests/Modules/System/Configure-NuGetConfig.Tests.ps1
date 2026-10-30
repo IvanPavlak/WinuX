@@ -9,29 +9,34 @@ BeforeAll {
 
 Describe "Configure-NuGetConfig" {
 	BeforeEach {
-		$global:MachineSpecificPaths = [PSCustomObject]@{
-			NuGetConfig = [PSCustomObject]@{
-				SourcePath      = "C:\\WinuX\\NuGet\\nuget.config"
-				DestinationPath = "C:\\Users\\You\\AppData\\Roaming\\NuGet\\NuGet.config"
-			}
-		}
-
-		Mock Test-Path {
-			if ($Path -eq "C:\\WinuX\\NuGet\\nuget.config") {
-				$false
-			}
-			else {
-				$false
-			}
-		}
-		Mock Custom-ReadHost { "ignored" }
 		Mock Write-Host { }
 	}
 
-	It "returns when source nuget.config is missing" {
-		{ Configure-NuGetConfig } | Should -Not -Throw
+	Context "without a template" {
+		BeforeEach {
+			$global:MachineSpecificPaths = [PSCustomObject]@{
+				NuGetConfig = [PSCustomObject]@{
+					SourcePath      = "C:\\WinuX\\NuGet\\nuget.config"
+					DestinationPath = "C:\\Users\\You\\AppData\\Roaming\\NuGet\\NuGet.config"
+				}
+			}
 
-		Should -Invoke Custom-ReadHost -Times 0
+			Mock Test-Path {
+				if ($Path -eq "C:\\WinuX\\NuGet\\nuget.config") {
+					$false
+				}
+				else {
+					$false
+				}
+			}
+			Mock Custom-ReadHost { "ignored" }
+		}
+
+		It "returns when source nuget.config is missing" {
+			{ Configure-NuGetConfig } | Should -Not -Throw
+
+			Should -Invoke Custom-ReadHost -Times 0
+		}
 	}
 
 	Context "with a template and an existing config on disk" {
@@ -54,7 +59,6 @@ Describe "Configure-NuGetConfig" {
 			$global:MachineSpecificPaths = [PSCustomObject]@{
 				NuGetConfig = [PSCustomObject]@{ SourcePath = $script:template; DestinationPath = $script:target }
 			}
-			Mock Test-Path { Microsoft.PowerShell.Management\Test-Path -Path $Path }
 			$script:tokens = [System.Collections.Generic.Queue[string]]::new()
 			$script:tokens.Enqueue("new-token-1234")
 			Mock Custom-ReadHost { "my-user" } -ParameterFilter { -not $AsSecureString }
