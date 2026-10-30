@@ -28,7 +28,7 @@
 # Individual bootstrap steps are toggleable
 # via BootstrapConfig.Steps (see that section); invasive steps such as
 # MicrosoftActivationScripts, Win11Debloat, DeveloperMode, NuGetConfig,
-# UpgradeAll, AiArtifacts, AiMarketplaces, AiMcpServers, ObsidianCli and LockedStartLayout are OFF
+# NpmConfig, UpgradeAll, AiArtifacts, AiMarketplaces, AiMcpServers, ObsidianCli and LockedStartLayout are OFF
 # until you opt in. A vanilla run
 # therefore installs the framework apps but upgrades nothing else already
 # on the machine.
@@ -95,6 +95,7 @@
 # → DotnetProjectsSearchPath            : Determine-DotnetDependencies
 # → PostgreSqlPasswords                 : Configure-PostgreSqlPasswords
 # → NuGetConfig                         : Configure-NuGetConfig
+# → NpmConfig, NpmRegistries            : Configure-NpmConfig
 # → Themes                              : Set-SystemTheme
 # → SystemTheme.Steps                    : Resolve-SystemThemeSteps → Set-SystemTheme
 # → PowerButtonActions                  : Set-PowerButtonActions
@@ -655,6 +656,9 @@
 			DestinationPath = "{AppData}\NuGet\nuget.config"
 		}
 
+		# The user npmrc Configure-NpmConfig writes the registry tokens of NpmRegistries into.
+		NpmConfig               = "{User}\.npmrc"
+
 		# Projects Configuration
 		# Defines paths for each project. These are used by multiple functions:
 		# - Open-VSCode (via VSCodeProjects)
@@ -1113,7 +1117,7 @@
 	# - Set-SpecialFolders, Restart-Explorer
 	# - Configure-WSL, Install package managers and apps
 	# - Upgrade-All, fork-defined PersonalSteps, Install-DotnetEF
-	# - Set-EnvironmentVariables, Create-CondaEnvironments, Configure-NuGetConfig
+	# - Set-EnvironmentVariables, Create-CondaEnvironments, Configure-NuGetConfig, Configure-NpmConfig
 	# - Configure-Taskbar, Initialize-WSLEnvironment, SymbolicLinkMaker, Deploy-AiArtifacts (opt-in),
 	#   Deploy-AiMarketplaces (opt-in), Deploy-AiMcpServers (opt-in), Enable-ObsidianCli (opt-in),
 	#   Deploy-VSCodeProfiles (opt-in)
@@ -1154,7 +1158,7 @@
 		# config an enabled step applies nothing. Steps that act the moment they
 		# run have no empty state to detect and default OFF - opt in here:
 		# MicrosoftActivationScripts, Win11Debloat, DeveloperMode, NuGetConfig
-		# (prompts for a GitHub PAT), UpgradeAll (upgrades every package already
+		# (prompts for a GitHub PAT), NpmConfig (prompts for a GitHub PAT), UpgradeAll (upgrades every package already
 		# on the machine, not just WinuX's own), AiArtifacts (machine-global AI skills,
 		# mods, rules, prompts and agents), AiMarketplaces
 		# (Claude Code plugin marketplaces in the user settings and `claude plugin install`), AiMcpServers
@@ -1198,6 +1202,8 @@
 		# - EnvironmentVariables       : Set-EnvironmentVariables -Auto
 		# - CondaEnvironments          : Create-CondaEnvironments
 		# - NuGetConfig                : Configure-NuGetConfig (OFF by default)
+		# - NpmConfig                  : Configure-NpmConfig (OFF by default - asks for the token of
+		#                                the NpmRegistries and writes it into PathTemplates.NpmConfig)
 		# - Taskbar                    : Configure-Taskbar -FromBootstrap
 		# - SymbolicLinks              : SymbolicLinkMaker
 		# - AiArtifacts                : Deploy-AiArtifacts (OFF by default - links the skills, mods,
@@ -1620,6 +1626,25 @@
 	DotnetProjectsSearchPath      = "{Dev}"
 	# Ships empty = install latest; pin a version in Configuration.local.psd1 (e.g. "8.*").
 	DotnetEFVersion               = ""
+
+	# ==========================================================================
+	# npm Registries
+	# ==========================================================================
+	# Private npm registries Configure-NpmConfig authenticates in the user npmrc
+	# (PathTemplates.NpmConfig). Per entry:
+	#   Url   - the registry URL (required); its token line is //<host><path>:_authToken
+	#   Scope - optional package scope (e.g. "@my-org"); when set, <Scope>:registry=<Url>
+	#           is written too, so that scope's packages come from this registry
+	# One token (a GitHub personal access token with read:packages for GitHub Packages) is
+	# asked on the terminal and used for every entry. The base ships GitHub Packages without a
+	# scope - name your organization's scope in Configuration.local.psd1, e.g.:
+	#   NpmRegistries = @(
+	#       @{ Url = "https://npm.pkg.github.com/"; Scope = "@my-org" }
+	#   )
+	# ==========================================================================
+	NpmRegistries                 = @(
+		@{ Url = "https://npm.pkg.github.com/"; Scope = "" }
+	)
 
 	# ==========================================================================
 	# PostgreSQL Configuration

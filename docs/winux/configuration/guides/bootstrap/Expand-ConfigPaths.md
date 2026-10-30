@@ -11,7 +11,7 @@ Expands placeholder tokens (`{Dev}`, `{User}`, `{MachineType}`, `{RepoRoot}`, `{
 | --- | ---- | -------------- | ---------------- |
 | [`BasePaths`](../../configuration-reference.md#base-paths-per-machine-type) | hashtable of machine type to `@{ Dev; User }` | hashtable, 2 keys (`Machine`, `Test`) | The two root directories every placeholder path is built from, per machine type. `{Dev}` expands to `Dev`, `{User}` to `User`. This is the single most load-bearing key: get it wrong and every templated path is wrong. |
 | [`MachineOverrides`](../../configuration-reference.md#more-sections-quick-reference) | hashtable of machine type to value map | `@{ Machine = @{}; Test = @{} }` | Values merged over the expanded paths *after* placeholder expansion - the escape hatch for the handful of things that cannot be templated. Ships empty. |
-| [`PathTemplates`](../../configuration-reference.md#path-templates--placeholder-system) | hashtable, 11 keys | hashtable, 11 keys (several ship empty) | Every templated path in WinuX, expanded per machine by `Expand-ConfigPaths` into `$global:MachineSpecificPaths`. Includes `Projects` (per-project roots, including `Projects.Self` - the WinuX checkout itself), `SymbolicLinks`, `DockerDirectory`, `NuGetConfig`, `TaskbarLayoutFile`, and the personal paths that ship empty (`ObsidianDirectory`, `TrainingDirectory`, `LearningBook`, `Dnd`). |
+| [`PathTemplates`](../../configuration-reference.md#path-templates--placeholder-system) | hashtable, 12 keys | hashtable, 12 keys (several ship empty) | Every templated path in WinuX, expanded per machine by `Expand-ConfigPaths` into `$global:MachineSpecificPaths`. Includes `Projects` (per-project roots, including `Projects.Self` - the WinuX checkout itself), `SymbolicLinks`, `DockerDirectory`, `NuGetConfig`, `NpmConfig`, `TaskbarLayoutFile`, and the personal paths that ship empty (`ObsidianDirectory`, `TrainingDirectory`, `LearningBook`, `Dnd`). |
 
 ## Decisions
 
@@ -83,7 +83,7 @@ MachineOverrides = @{
 
 ## Step 3: Set `PathTemplates`
 
-Every templated path in WinuX, expanded per machine by `Expand-ConfigPaths` into `$global:MachineSpecificPaths`. Includes `Projects` (per-project roots, including `Projects.Self` - the WinuX checkout itself), `SymbolicLinks`, `DockerDirectory`, `NuGetConfig`, `TaskbarLayoutFile`, and the personal paths that ship empty (`ObsidianDirectory`, `TrainingDirectory`, `LearningBook`, `Dnd`).
+Every templated path in WinuX, expanded per machine by `Expand-ConfigPaths` into `$global:MachineSpecificPaths`. Includes `Projects` (per-project roots, including `Projects.Self` - the WinuX checkout itself), `SymbolicLinks`, `DockerDirectory`, `NuGetConfig`, `NpmConfig`, `TaskbarLayoutFile`, and the personal paths that ship empty (`ObsidianDirectory`, `TrainingDirectory`, `LearningBook`, `Dnd`).
 
 ```powershell
 PathTemplates = @{

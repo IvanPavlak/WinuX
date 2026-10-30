@@ -12,7 +12,7 @@ function Bootstrap {
 		no-op on their own when their configuration section is empty, so an enabled step on
 		the empty base config applies nothing. Opt-in steps that act the moment they run
 		default off: MicrosoftActivationScripts, Win11Debloat, RepositoryUpdate, DeveloperMode,
-		NuGetConfig, UpgradeAll, AiArtifacts, AiMarketplaces, AiMcpServers, ObsidianCli,
+		NuGetConfig, NpmConfig, UpgradeAll, AiArtifacts, AiMarketplaces, AiMcpServers, ObsidianCli,
 		VSCodeProfiles, LockedStartLayout.
 
 		Execution sequence:
@@ -29,7 +29,7 @@ function Bootstrap {
 		6. WSL configuration (Steps.WSL)
 		7. WinGet, Scoop, and Chocolatey - install package managers then apps from CSVs
 		8. Upgrade all packages, fork-defined personal steps (BootstrapConfig.PersonalSteps, optionally machine-gated), .NET EF CLI
-		9. Environment variables, Conda environments, NuGet config, taskbar pins, then
+		9. Environment variables, Conda environments, NuGet config, npm config, taskbar pins, then
 		   Set-TaskbarSettings and Set-VisualEffects (no step toggle - both no-op until their
 		   configuration sections are set)
 		10. WSL environment initialization, symbolic links, AI artifacts - skills, mods, rules,
@@ -255,6 +255,7 @@ function Bootstrap {
 		# PostgreSQL is provisioned via the Docker compose library, so password setup is redundant.
 		#Configure-PostgreSqlPasswords
 		if ($steps.NuGetConfig) { Configure-NuGetConfig } else { Write-LogWarning "NuGet config skipped - opt in via BootstrapConfig.Steps.NuGetConfig" }
+		if ($steps.NpmConfig) { Configure-NpmConfig } else { Write-LogWarning "npm config skipped - opt in via BootstrapConfig.Steps.NpmConfig" }
 
 		if ($steps.Taskbar) { Configure-Taskbar -FromBootstrap } else { Write-LogWarning "Taskbar pins skipped (BootstrapConfig.Steps.Taskbar)" }
 

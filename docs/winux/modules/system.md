@@ -78,9 +78,28 @@ Configure-NerdFont
 Configure-NerdFont -FontName "JetBrainsMono"
 ```
 
+## [Configure-NpmConfig](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Configure-NpmConfig.ps1)
+
+- **Description:** Authenticates npm against the private registries in `NpmRegistries` (GitHub Packages) by writing their token lines into the user npmrc (`MachineSpecificPaths.NpmConfig`, the expanded `PathTemplates.NpmConfig`, default `{User}\.npmrc`), so `npm install` of a private scoped package works. Per registry it writes `//<host><path>:_authToken=<token>` and, for an entry with a `Scope`, `<Scope>:registry=<Url>`. A registry whose token line has a value (and whose scope line points at its URL) is left alone unless `-Override` is set; when every registry is configured nothing changes and nothing is asked. Otherwise it asks once, as a secure string, for a GitHub personal access token with `read:packages` (the same token [Configure-NuGetConfig](#configure-nugetconfig) asks for works) and writes it for every registry that needs it; an empty token, or one with whitespace in it (GitHub tokens have none), writes nothing. The token is never read from the GitHub CLI, put on a command line or shown. Every other line of the npmrc is kept in order, an existing line of a registry is replaced in place and a missing one appended; the file keeps its line endings and is written as UTF-8 without a BOM. An existing real (non-symlink) npmrc is first copied into the unified backup sink (`Backups\Windows\System\NpmConfig\<timestamp>\`, gitignored) with every credential value (`_authToken`, `_auth`, `_password`) replaced by `<redacted>`, so the copy keeps the other settings but no token; when that backup fails the write is skipped. An empty `NpmRegistries` warns and returns.
+- **Parameters:** -Override, -BackupRoot
+- **Usage:** `Configure-NpmConfig`, `Configure-NpmConfig -Override`
+
+| Parameter   | Description |
+| ----------- | ----------- |
+| `-Override` | Ask for the token and rewrite the lines of every registry even when they are already set, e.g. after rotating the token. |
+| `-BackupRoot` | Root of the backup sink an existing real npmrc is copied into before it is changed (under `System\NpmConfig\<timestamp>`). Defaults to `<Repo>\Backups\Windows`. |
+
+```powershell
+# Authenticate the registries in NpmRegistries that are not configured yet
+Configure-NpmConfig
+
+# Replace the token of every registry after rotating it
+Configure-NpmConfig -Override
+```
+
 ## [Configure-NuGetConfig](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Configure-NuGetConfig.ps1)
 
-- **Description:** Configures NuGet package source settings for the GitHub Package Registry by copying a NuGet.config template from the WinuX repository to the user's AppData NuGet folder. Source and destination paths are read from `MachineSpecificPaths.NuGetConfig`. If the destination already exists, it compares package sources against the repository template and reconfigures only on a mismatch; otherwise it skips the copy unless `-Override` is set. When a copy is performed it prompts securely for the GitHub username and personal access token (PAT), substituting them into the template. An existing real (non-symlink) config at the destination is first copied into the unified backup sink (`Backups\Windows\System\NuGetConfig\<timestamp>\`, gitignored); when that backup fails the write is skipped.
+- **Description:** Configures NuGet package source settings for the GitHub Package Registry by copying a NuGet.config template from the WinuX repository to the user's AppData NuGet folder. Source and destination paths are read from `MachineSpecificPaths.NuGetConfig`. If the destination already exists, it compares package sources against the repository template and reconfigures only on a mismatch; otherwise it skips the copy unless `-Override` is set. When a copy is performed it prompts securely for the GitHub username and personal access token (PAT), substituting them into the template. An existing real (non-symlink) config at the destination is first copied into the unified backup sink (`Backups\Windows\System\NuGetConfig\<timestamp>\`, gitignored) with every `ClearTextPassword` and `Password` value replaced by `REDACTED`, so the copy keeps the sources but no token; when that backup fails the write is skipped. A token with whitespace in it is asked again: GitHub tokens have none, so it is something else pasted by mistake (a command pasted with the token).
 - **Parameters:** -Override, -BackupRoot
 - **Usage:** `Configure-NuGetConfig`, `Configure-NuGetConfig -Override`
 

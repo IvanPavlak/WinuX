@@ -1199,6 +1199,27 @@ GitStatusArguments = @('-v', '-v', '-u')
 
 ---
 
+## npm Configuration
+
+**Keys:**
+
+- `PathTemplates.NpmConfig` → The user npmrc the registry tokens are written into (default `"{User}\.npmrc"`)
+- `NpmRegistries` → Array of private npm registries, one hashtable per registry:
+    - `Url` - the registry URL (required, `http://` or `https://`; one trailing slash is added). Its token line in the npmrc is `//<host><path>:_authToken=<token>`.
+    - `Scope` - optional package scope (`"@my-org"`). When set, `<Scope>:registry=<Url>` is written too, so the scope's packages come from this registry.
+
+The base ships one entry, GitHub Packages without a scope. One token (for GitHub Packages a personal access token with `read:packages`) is asked on the terminal and written for every registry that is not configured yet. An array replaces wholesale in `Configuration.local.psd1`, so list every registry there:
+
+```powershell
+NpmRegistries = @(
+    @{ Url = "https://npm.pkg.github.com/"; Scope = "@my-org" }
+)
+```
+
+**Consumer function:** `Configure-NpmConfig`
+
+---
+
 ## Bootstrap Configuration
 
 Settings used during the Bootstrap process.
@@ -1240,7 +1261,8 @@ Anything other than the three valid values is reported as unknown rather than si
   optional - missing entries use the built-in defaults. Most steps default on because their
   functions no-op when their configuration section is empty; the steps that act the moment they
   run default OFF and are opted into here: `MicrosoftActivationScripts`, `Win11Debloat`,
-  `DeveloperMode`, `NuGetConfig` (prompts for a GitHub PAT), `UpgradeAll` (`Upgrade-All` runs
+  `DeveloperMode`, `NuGetConfig` (prompts for a GitHub PAT), `NpmConfig` (prompts for a GitHub
+  PAT and writes it into the user npmrc for [`NpmRegistries`](#npm-configuration)), `UpgradeAll` (`Upgrade-All` runs
   `winget upgrade --all` and its Scoop/Chocolatey equivalents, so it upgrades every package
   already on the machine, not only the ones WinuX installs - the base spells this one out as
   `$false` rather than leaving it to the default), `AiArtifacts` (machine-global AI skills, mods,

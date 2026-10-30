@@ -94,6 +94,7 @@ decisions behind them, and where the values go. Each module's `README.md` indexe
 | `TaskbarConfiguration`                             | `Configure-Taskbar`                                |
 | `TaskbarSettings`                                  | `Set-TaskbarSettings`                              |
 | `VisualEffects`                                    | `Set-VisualEffects`                                |
+| `NpmRegistries`, `PathTemplates.NpmConfig`         | `Configure-NpmConfig`                              |
 | `LayoutNumbers`, `ZoneNameMappings`, `FancyZonesApplyMethod` | `Apply-FancyZones`, `Get-FancyZone`, `Test-FancyZonesConfiguration`, `Visualize-Layouts` (`LayoutNumbers`, `ZoneNameMappings`), `Generate-LayoutVisualization`, `Update-LayoutSectionHeaders`, `Merge-LayoutProjectOverrides` (`ZoneNameMappings`) |
 | `WorkspaceLayoutPipelining`, `SimpleLayoutWorkspaces` | `Set-WorkspaceWindowLayout` (`SimpleLayoutWorkspaces` is written by `Add-WindowLayout -Simple`) |
 | `WorkspaceLayoutPrepareEarly`                      | `Open-Workspace`                                   |
@@ -181,7 +182,7 @@ Phase 4 (Packages):              Resolve-PackageManagers (base => WinGet alone)
                                  (each manager runs only if in play: PackageManagers + non-empty app list)
 Phase 5 (Dev Tools):             PersonalSteps (fork-defined; base runs none) → Install-DotnetEf
 Phase 6 (Environment):           Set-EnvironmentVariables -Auto → Create-CondaEnvironments
-                                 → Configure-NuGetConfig
+                                 → Configure-NuGetConfig → Configure-NpmConfig
 Phase 7 (Taskbar):               Configure-Taskbar -FromBootstrap → Set-TaskbarSettings → Set-VisualEffects
 Phase 8 (WSL & Symlinks):        Initialize-WSLEnvironment → SymbolicLinkMaker
                                  → Deploy-AiArtifacts (opt-in via BootstrapConfig.Steps.AiArtifacts)

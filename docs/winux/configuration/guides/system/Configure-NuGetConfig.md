@@ -6,7 +6,7 @@ Configures NuGet package source settings by copying the repository's `nuget.conf
 > Every value on this page belongs in `Configuration.local.psd1`, never in the base `Configuration.psd1`. The base file is upstream's, it ships empty-by-default, and it is deep-merged with your local file at load time by `Load-PathConfiguration`. See [Fork Model](../../../contributing/fork-model.md).
 
 > [!NOTE]
-> An existing real `NuGet.Config` at the destination (which may carry credentials for feeds the template knows nothing about) is copied into the unified [backup sink](../../../reference/backups.md) (`Backups/Windows/System/NuGetConfig/<timestamp>/`, gitignored) before it is overwritten; if the backup cannot be taken the write is aborted.
+> An existing real `NuGet.Config` at the destination (which may carry credentials for feeds the template knows nothing about) is copied into the unified [backup sink](../../../reference/backups.md) (`Backups/Windows/System/NuGetConfig/<timestamp>/`, gitignored) before it is overwritten, with every `ClearTextPassword` and `Password` value replaced by `REDACTED`, so the copy keeps the sources but no token; if the backup cannot be taken the write is aborted.
 
 ## Configuration Keys
 

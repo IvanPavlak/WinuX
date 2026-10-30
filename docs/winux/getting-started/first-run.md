@@ -78,7 +78,8 @@ Every step is individually toggleable via `BootstrapConfig.Steps` (or per invoca
 │  ├─→ Set-EnvironmentVariables -Auto                                         │
 │  │   └─ From AutoEnvironmentVariables config                                │
 │  ├─→ Create-CondaEnvironments                                               │
-│  └─→ Configure-NuGetConfig (opt-in via Steps)                               │
+│  ├─→ Configure-NuGetConfig (opt-in via Steps)                               │
+│  └─→ Configure-NpmConfig (opt-in via Steps)                                 │
 │                                                                             │
 │  PHASE 7: TASKBAR & VISUAL CONFIGURATION                                    │
 │  ├─→ Configure-Taskbar -FromBootstrap                                       │
@@ -136,6 +137,7 @@ execution order):
 | `DeveloperMode`      | Enables Developer Mode (symlinks without admin)                 | Off - opt in via `BootstrapConfig.Steps`      |
 | `UpgradeAll`         | `winget upgrade --all` (+ Scoop/Chocolatey), so **every** package already on the machine, not just WinuX's | Off - opt in via `BootstrapConfig.Steps` |
 | `NuGetConfig`        | Writes a NuGet config (prompts for a GitHub PAT)                | Off - opt in via `BootstrapConfig.Steps`      |
+| `NpmConfig`          | Writes the npm registry tokens into the user npmrc (prompts for a GitHub PAT) | Off - opt in via `BootstrapConfig.Steps` |
 | `AiArtifacts`        | Machine-global AI skills, mods, rules, prompts and agents linked into the apps `AiArtifacts.Deploy` names | Off - opt in via `BootstrapConfig.Steps` |
 | `AiMarketplaces`     | Claude Code plugin marketplaces in the user settings, and their plugins installed through the CLI | Off - opt in via `BootstrapConfig.Steps` |
 | `AiMcpServers`       | MCP servers added to Claude Code through its CLI and to Codex's `config.toml` | Off - opt in via `BootstrapConfig.Steps` |

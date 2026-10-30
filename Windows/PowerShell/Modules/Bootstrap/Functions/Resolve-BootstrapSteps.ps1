@@ -16,7 +16,8 @@ function Resolve-BootstrapSteps {
 		because they have no configuration to be empty and act the moment
 		they run: MicrosoftActivationScripts, Win11Debloat, RepositoryUpdate
 		(clones and pulls every repository the machine's scope names),
-		DeveloperMode, NuGetConfig (prompts for a GitHub PAT), UpgradeAll
+		DeveloperMode, NuGetConfig (prompts for a GitHub PAT), NpmConfig
+		(prompts for a GitHub PAT for the npm registries), UpgradeAll
 		(upgrades every package already on the machine, not just WinuX's own),
 		AiArtifacts (machine-global AI skills, mods, rules, prompts and agents
 		links), AiMarketplaces (Claude Code plugin
@@ -87,6 +88,7 @@ function Resolve-BootstrapSteps {
 		EnvironmentVariables       = $true
 		CondaEnvironments          = $true
 		NuGetConfig                = $false
+		NpmConfig                  = $false
 		Taskbar                    = $true
 		SymbolicLinks              = $true
 		AiArtifacts                = $false

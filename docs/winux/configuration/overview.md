@@ -57,6 +57,7 @@ the [Configuration Reference](configuration-reference.md).
 | `AutoEnvironmentVariables` | Environment variables            | `Set-EnvironmentVariables`      |
 | `PostgreSqlPasswords`      | Database credentials             | `Configure-PostgreSqlPasswords` |
 | `PathTemplates.NuGetConfig` | NuGet source/destination        | `Configure-NuGetConfig`         |
+| `NpmRegistries`, `PathTemplates.NpmConfig` | npm registries and the user npmrc | `Configure-NpmConfig` |
 | `Themes`                   | Dark/Light per machine           | `Set-SystemTheme`               |
 | `PowerButtonActions`       | Button & lid actions per machine | `Set-PowerButtonActions`        |
 | `WallpaperStyles`          | Fill, Fit, Stretch, etc.         | `Set-Wallpaper`                 |
