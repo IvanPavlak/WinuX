@@ -11,6 +11,7 @@ Vendors AI skills, mods, rules, prompts and agents from the upstream repositorie
 | --- | ---- | -------------- | ---------------- |
 | [`AiArtifacts.Sources`](../../configuration-reference.md#ai-artifacts) | hashtable | `@{}` (empty) | One entry per upstream: `Repository` (`owner/name`), `Ref` (default `main`), per kind the upstream folders (`Skills`, `Mods`, `Rules`, `Prompts`, `Agents`; none: `Skills = @("skills")`), `Exclude` (items not to vendor), `SkipPaths` (top-level entries of an item not to copy). |
 | [`AiArtifacts.Root`](../../configuration-reference.md#ai-artifacts) | string | `{RepoRoot}\AI` | Where the vendored source folders are written. |
+| [`AiArtifacts.Manifests`](../../configuration-reference.md#ai-artifacts) | hashtable | `@{}` (empty) | Manifest sources: their missing pinned refs are cloned into `%LOCALAPPDATA%\WinuX\ai-manifests`, and `-Check` reports rows whose upstream moved on. Nothing is vendored into the repository for them. |
 
 ## Decisions
 

@@ -11,7 +11,7 @@ A rules item is a folder `AI\Rules\<source>\<Name>\` holding:
 - `RULES.md` - the instructions, linked into each app's global instruction file (`File` placement).
 - Per-app variants, taken instead of `RULES.md` by the destination that names them: `copilot.md` (Copilot), and Claude Code's `managed-settings.json`.
 
-Only the item `AiArtifacts.Use.Rules` names is deployed; the last wins and a value may be per machine type. The base ships `AI\Rules\example\CoreAiRules\RULES.md` (a skeleton: section headings and one sample rule, "ask before destructive actions") and `Use = @{ Rules = "CoreAiRules" }`. Write your own in `AI\Rules\own\CoreAiRules\` - `own` wins the name clash - and silence the clash warning with `AiArtifacts.Exclude = @("rules/example/CoreAiRules")`.
+Only the item `AiArtifacts.Use.Rules` names is deployed (with an [AI profile](profiles.md) active, the item the profile's `Rules` names instead, so each profile has its own rules); the last wins and a value may be per machine type. A rules item may also carry a `hooks\` folder: scripts its `managed-settings.json` calls as `bash "{ManagedDir}/hooks/<script>"`, deployed next to the managed settings copy. The base ships `AI\Rules\example\CoreAiRules\RULES.md` (a skeleton: section headings and one sample rule, "ask before destructive actions") and `Use = @{ Rules = "CoreAiRules" }`. Write your own in `AI\Rules\own\CoreAiRules\` - `own` wins the name clash - and silence the clash warning with `AiArtifacts.Exclude = @("rules/example/CoreAiRules")`.
 
 ## Layers, strongest wins
 
@@ -33,14 +33,29 @@ Instruction layer (links to `RULES.md`, or the app's variant), from the base cat
 | Gemini CLI | `{User}\.gemini\GEMINI.md` | `/home/<user>/.gemini/GEMINI.md` |
 | Copilot | `{User}\.copilot\copilot-instructions.md` | `/home/<user>/.copilot/copilot-instructions.md` |
 
-Enforcement layer (link to `managed-settings.json`, only when the item has one):
+Enforcement layer (a rendered copy of `managed-settings.json`, only when the item has one):
 
 | OS | Managed settings path |
 | -- | --------------------- |
 | Windows | `C:\Program Files\ClaudeCode\managed-settings.json` |
 | WSL | `/etc/claude-code/managed-settings.json` (per distribution) |
 
-Claude Code no longer reads the legacy Windows path `C:\ProgramData\ClaudeCode\managed-settings.json`; a link left there from 1.5 has no effect ([managed settings](https://code.claude.com/docs/en/managed-settings)). The WSL link is the `managed-settings` hook of the `claude-code` destination: `/etc` is root-owned, so `Deploy-AiArtifacts` makes that twin with `wsl -u root` (no sudo prompt). The Windows link needs the administrator rights the whole run asks for.
+Claude Code no longer reads the legacy Windows path `C:\ProgramData\ClaudeCode\managed-settings.json`; a link left there from 1.5 has no effect ([managed settings](https://code.claude.com/docs/en/managed-settings)).
+
+## Managed settings copy
+
+The managed settings are never a link: a link into the repository would let anything allowed to write the repository loosen the policy. The `managed-settings` hook of the `claude-code` destination hands the destination to [Deploy-AiManagedSettings](../modules/ai.md#deploy-aimanagedsettings), which writes an administrator-owned copy into the managed folder (`C:\Program Files\ClaudeCode\`, and `/etc/claude-code/` through `wsl -u root`, `root:root`, mode 644):
+
+| File | Content |
+| ---- | ------- |
+| `managed-settings.json` | the item's file rendered by [ConvertTo-AiManagedSettings](../modules/ai.md#convertto-aimanagedsettings): every `{ManagedDir}` token becomes the managed folder (forward slashes); with an [AI profile](profiles.md) active, `forceLoginOrgUUID` is set from the profile's Plan (one UUID or an array), and the ownership guard is appended to `hooks.UserPromptSubmit` and `hooks.PreToolUse` (matcher `*`) as `bash "<folder>/ai-ownership-guard.sh" <Event>` |
+| `hooks\` | the rules item's `hooks\` folder, file by file, scripts with LF line endings |
+| `ai-ownership-guard.sh` | the engine's guard (`AI/Hooks/ai-ownership-guard.sh`, a mirror file of WinuX and Foundation), with a profile active |
+| `ai-profile.conf` | the profile, its Plan and the ownership patterns the guard reads, with a profile active |
+
+A file is rewritten only when its rendered content differs from the deployed one, so a changed rules item or profile reaches the machine with the next deploy and an unchanged one writes nothing. A link left from the earlier link-style deploy is replaced; a real file that differs is first backed up into `Backups\Windows\SymbolicLinks\`. Files in the folder this function did not render are left alone. The Windows copy needs the administrator rights the whole run asks for; the WSL copy needs no sudo prompt.
+
+With `forceLoginOrgUUID` pinned, Claude Code refuses a login of any other organization at startup, and a session authenticated by `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN` or `apiKeyHelper` is refused too. [Test-AiProfile](../modules/ai.md#test-aiprofile) checks the copy pins the expected Plan.
 
 ## Deploying
 
@@ -65,7 +80,7 @@ Claude Code no longer reads the legacy Windows path `C:\ProgramData\ClaudeCode\m
 ## Verification (per machine, after enabling)
 
 1. Run `Deploy-AiArtifacts -Kind Rules` (or full `Bootstrap`) as admin.
-2. `~\.claude\CLAUDE.md`, `~\.codex\AGENTS.md` and `~\.gemini\GEMINI.md` are links into `AI\Rules\<source>\<Name>\`, and so is the managed-settings path of the OS when the item has a `managed-settings.json`.
+2. `~\.claude\CLAUDE.md`, `~\.codex\AGENTS.md` and `~\.gemini\GEMINI.md` are links into `AI\Rules\<source>\<Name>\`; the managed-settings path of the OS is a real file (no `LinkTarget`) when the item has a `managed-settings.json`, and `List-AiArtifacts -ListDiscrepancies` reports no difference from the rendered copy.
 3. In a throwaway repository, ask the agent for an action your rules restrict: it must follow the instruction layer, and Claude Code must surface the prompt your managed settings demand.
 
 ## Known limitations
@@ -77,6 +92,7 @@ Claude Code no longer reads the legacy Windows path `C:\ProgramData\ClaudeCode\m
 ## Related
 
 - [AI Artifacts](artifacts.md) - the mechanism and the harness catalogue
+- [AI Profiles](profiles.md) - the rules item, Plan pin and ownership guard per machine
 - [AI module reference](../modules/ai.md) - `Deploy-AiArtifacts`, `List-AiArtifacts`
 - [Deploy-AiArtifacts configuration guide](../configuration/guides/ai/Deploy-AiArtifacts.md) - the keys, decision by decision
 - [AI Skills](skills.md) - skills deployed into the same apps

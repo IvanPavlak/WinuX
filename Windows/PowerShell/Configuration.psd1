@@ -28,7 +28,7 @@
 # Individual bootstrap steps are toggleable
 # via BootstrapConfig.Steps (see that section); invasive steps such as
 # MicrosoftActivationScripts, Win11Debloat, DeveloperMode, NuGetConfig,
-# NpmConfig, UpgradeAll, AiArtifacts, AiMarketplaces, AiMcpServers, ObsidianCli and LockedStartLayout are OFF
+# NpmConfig, UpgradeAll, AiArtifacts, AiMarketplaces, AiMcpServers, AiProfileInit, ObsidianCli and LockedStartLayout are OFF
 # until you opt in. A vanilla run
 # therefore installs the framework apps but upgrades nothing else already
 # on the machine.
@@ -863,25 +863,94 @@
 	#           links nothing. A value may be per machine type: @{ Default = "A"; Work = "B" }
 	# Deploy  : per machine type, the AiHarnesses entries it deploys into; Default covers any
 	#           machine type not listed (none: nothing is deployed)
+	# Checkouts : one entry per local repository whose items are linked straight from its
+	#           working tree (never copied, no UPSTREAM.md); read right after `own`:
+	#             Path        the repository folder ({Dev}, {User}, {RepoRoot} expand)
+	#             Skills, Mods, Rules, Prompts, Agents
+	#                         its folders holding items of that kind (no kind key:
+	#                         Skills = @("skills"))
+	# Manifests : one entry per manifest file (tab-separated: name, kind, scope, source, ref,
+	#           path, install - docs/winux/ai/artifacts.md#manifest-sources) whose pinned rows are
+	#           cloned once into %LOCALAPPDATA%\WinuX\ai-manifests\<owner>\<repo>\<ref>\ and
+	#           linked from there; read last. @{ Path = "..." }
+	# With an AI profile (AiProfiles below) its Rules, Deploy, Include and Exclude win over or
+	# join Use.Rules, Deploy and Exclude here.
 	#
 	# Ships deploying nothing - a fork turns harnesses on in Configuration.local.psd1, e.g.:
 	#   AiArtifacts = @{
 	#       Sources = @{
 	#           mattpocock = @{ Repository = "OWNER/skills"; Skills = @("skills/engineering") }
 	#       }
+	#       Checkouts = @{ my-skills = @{ Path = "{Dev}\MySkills"; Skills = @("skills") } }
+	#       Manifests = @{ my-skills = @{ Path = "{Dev}\MySkills\third-party\manifest.tsv" } }
 	#       Exclude = @("rules/example/CoreAiRules")
 	#       Deploy  = @{ Default = @("claude-code", "codex"); Work = @("claude-code") }
 	#   }
 	AiArtifacts                   = @{
-		Root    = "{RepoRoot}\AI"
-		Sources = @{}
-		Exclude = @()
-		Use     = @{
+		Root      = "{RepoRoot}\AI"
+		Sources   = @{}
+		Checkouts = @{}
+		Manifests = @{}
+		Exclude   = @()
+		Use       = @{
 			Rules = "CoreAiRules"
 		}
-		Deploy  = @{
+		Deploy    = @{
 			Default = @()
 		}
+	}
+
+	# ==========================================================================
+	# AI Profiles (see docs/winux/ai/profiles.md)
+	# ==========================================================================
+	# → Consumers: Resolve-AiProfile, and through it Deploy-AiArtifacts, Deploy-AiMcpServers,
+	#   Deploy-AiMarketplaces, List-AiArtifacts, Test-AiProfile, Initialize-AiProfile
+	#
+	# One AI profile per machine: which rules, which Plan the managed settings pin, which apps,
+	# artifacts, MCP servers and marketplaces, whether unattended runs are allowed, and which
+	# repositories it owns. Picked once per command: the WINUX_AI_PROFILE environment variable,
+	# then this host's Hosts entry, then Default. With no profile (the base) profiles are off and
+	# every AI function behaves as before, scoped by machine type.
+	#
+	# Hosts        : hostname -> profile name
+	# Default      : the profile of a host Hosts does not name
+	# Profiles     : one entry per profile:
+	#     Rules        the rules item (AI/Rules/<source>/<item>); wins over AiArtifacts.Use.Rules
+	#     Plan         @{ Name = "Max"; OrgUuid = "<uuid>" } or an array of them; the deployed
+	#                  managed settings pin it through forceLoginOrgUUID
+	#     Deploy       the AiHarnesses it deploys into; wins over AiArtifacts.Deploy
+	#     Include      artifacts it takes, "skills/tdd" or "skills/<source>/*": a kind named here
+	#                  deploys only the matching items (empty: everything)
+	#     Exclude      artifacts it leaves out, added to AiArtifacts.Exclude
+	#     McpServers   the AiMcpServers.Servers it registers (left out: all; @(): none)
+	#     Marketplaces the AiMarketplaces.Marketplaces it registers (left out: all; @(): none)
+	#     Unattended   $true when unattended agent runs are allowed on its machines
+	#     Owns         origin patterns of the repositories it owns ("github.com/my-org/*")
+	#     Autonomous   origin patterns of its repositories agents may work on unattended
+	#     EnvVars      environment variable names its tools need (Initialize-AiProfile checks
+	#                  they are set; values never go in the repository)
+	# Shared       : origin patterns every profile may work on
+	# DefaultOwner : the profile owning a repository no pattern matches (empty: Default)
+	# Patterns match the origin remote as host/owner/name, lowercase, no scheme, no user, no .git.
+	#
+	# Ships with no profile - a fork defines them in Configuration.local.psd1, e.g.:
+	#   AiProfiles = @{
+	#       Hosts    = @{ "WORKSTATION-01" = "Work" }
+	#       Default  = "Personal"
+	#       Profiles = @{
+	#           Personal = @{ Rules = "MyRules"; Plan = @{ Name = "Max"; OrgUuid = "00000000-0000-0000-0000-000000000000" }
+	#                         Unattended = $true; Autonomous = @("github.com/MyUser/MyProject") }
+	#           Work     = @{ Rules = "MyWorkRules"; Plan = @{ Name = "Team"; OrgUuid = "11111111-1111-1111-1111-111111111111" }
+	#                         McpServers = @(); Owns = @("github.com/my-org/*") }
+	#       }
+	#       Shared   = @("github.com/MyUser/Dotfiles")
+	#   }
+	AiProfiles                    = @{
+		Hosts        = @{}
+		Default      = ""
+		Profiles     = @{}
+		Shared       = @()
+		DefaultOwner = ""
 	}
 
 	# ==========================================================================
@@ -1119,7 +1188,8 @@
 	# - Upgrade-All, fork-defined PersonalSteps, Install-DotnetEF
 	# - Set-EnvironmentVariables, Create-CondaEnvironments, Configure-NuGetConfig, Configure-NpmConfig
 	# - Configure-Taskbar, Initialize-WSLEnvironment, SymbolicLinkMaker, Deploy-AiArtifacts (opt-in),
-	#   Deploy-AiMarketplaces (opt-in), Deploy-AiMcpServers (opt-in), Enable-ObsidianCli (opt-in),
+	#   Deploy-AiMarketplaces (opt-in), Deploy-AiMcpServers (opt-in), Initialize-AiProfile (opt-in),
+	#   Enable-ObsidianCli (opt-in),
 	#   Deploy-VSCodeProfiles (opt-in)
 	# - Configure-WSLSSH, Lock taskbar layout, Restart-Machine
 	#
@@ -1162,7 +1232,8 @@
 		# on the machine, not just WinuX's own), AiArtifacts (machine-global AI skills,
 		# mods, rules, prompts and agents), AiMarketplaces
 		# (Claude Code plugin marketplaces in the user settings and `claude plugin install`), AiMcpServers
-		# (MCP servers added to Claude Code and Codex), ObsidianCli
+		# (MCP servers added to Claude Code and Codex), AiProfileInit (walks the AI profile's
+		# sign-ins at the terminal; leave it off for an unattended run), ObsidianCli
 		# (edits Obsidian's per-machine app settings), VSCodeProfiles (links VS Code profile files,
 		# registers profiles in VS Code's state and installs extensions), LockedStartLayout.
 		#
@@ -1215,6 +1286,12 @@
 		# - AiMcpServers               : Deploy-AiMcpServers (OFF by default - adds the MCP servers under
 		#                                AiMcpServers to Claude Code through its CLI and to Codex's
 		#                                config.toml, see docs/winux/ai/mcp-servers.md)
+		# - AiProfileInit              : Initialize-AiProfile (OFF by default - with an AI profile
+		#                                active, walks its one-time sign-ins: the Claude login of its
+		#                                Plan, gh, the OAuth MCP servers, its environment variables,
+		#                                then Test-AiProfile; it waits at the terminal, so an
+		#                                unattended run leaves it off and only names it, see
+		#                                docs/winux/ai/profiles.md)
 		# - ObsidianCli                : Enable-ObsidianCli -CreateIfMissing (OFF by default - sets
 		#                                "cli": true in %APPDATA%\obsidian\obsidian.json, Obsidian's
 		#                                per-machine app settings a synced vault never carries, so
@@ -1771,6 +1848,25 @@
 	# Ships empty - Set-PowerPlan -Auto leaves the active plan as-is until you opt in
 	# via Configuration.local.psd1 (see the example above).
 	PowerPlans                    = @{}
+
+	# ==========================================================================
+	# Power Timeouts
+	# ==========================================================================
+	# Sleep, hibernate and display timeouts per machine type, in minutes (0 = never).
+	# Used by Set-PowerPlan -Auto, which writes them into every power scheme so a plan
+	# switch keeps them. A key left out is not managed.
+	# Keys: SleepPluggedIn, SleepOnBattery, HibernatePluggedIn, HibernateOnBattery,
+	#       DisplayPluggedIn, DisplayOnBattery
+	#
+	# Example - a machine that runs unattended jobs: never sleeps on mains power, while
+	# the display still turns off on its own timeout:
+	#   PowerTimeouts = @{
+	#       "PC" = @{ SleepPluggedIn = 0; HibernatePluggedIn = 0 }
+	#   }
+	# ==========================================================================
+	# Ships empty - Set-PowerPlan -Auto changes no timeout until you opt in via
+	# Configuration.local.psd1.
+	PowerTimeouts                 = @{}
 
 	# ==========================================================================
 	# SetWallpaper Configuration

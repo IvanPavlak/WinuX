@@ -7,6 +7,7 @@ BeforeAll {
 	. "$FunctionsPath\Update-AiArtifacts.ps1"
 	. "$FunctionsPath\Get-AiSkillManifest.ps1"
 	. "$FunctionsPath\Get-AiSkillDescription.ps1"
+	. "$FunctionsPath\Sync-AiManifestCache.ps1"
 
 	function New-FixtureFile([string]$Relative, [string]$Value = "content") {
 		$path = Join-Path $script:Fixture $Relative
@@ -179,5 +180,42 @@ Describe "Update-AiArtifacts" {
 
 		Should -Invoke Invoke-RestMethod -Times 1 -ParameterFilter { $Headers.Count -eq 0 }
 		Should -Invoke Invoke-WebRequest -Times 1 -ParameterFilter { $Uri -eq "https://github.com/MyOrg/MyRepo/archive/abc123def456.zip" }
+	}
+
+	Context "manifest sources" {
+		BeforeEach {
+			$script:Manifests = [ordered]@{ thirdparty = @{ Name = "thirdparty"; Path = "C:\nowhere\manifest.tsv" } }
+			Mock Resolve-AiArtifactsConfig { @{ Root = $script:Root; Sources = $script:Sources; Manifests = $script:Manifests } }
+			$script:Sync = @{ Fetched = @("C:\cache\MyOrg\skills\ref"); Present = @(); Failed = @(); Behind = @(); Problems = @() }
+			Mock Sync-AiManifestCache { $script:Sync }
+		}
+
+		It "fetches the manifest refs after vendoring, and with only manifests configured" {
+			Update-AiArtifacts
+			Should -Invoke Sync-AiManifestCache -Times 1 -Exactly -ParameterFilter { -not $Check -and (@($Source) -join ',') -eq 'thirdparty' }
+
+			$script:Sources = [ordered]@{}
+			Update-AiArtifacts
+			Should -Invoke Sync-AiManifestCache -Times 2 -Exactly
+		}
+
+		It "sends -Source to the vendored or the manifest side by name" {
+			Update-AiArtifacts -Source thirdparty
+
+			Should -Invoke Invoke-RestMethod -Times 0
+			Should -Invoke Sync-AiManifestCache -Times 1 -Exactly
+			Should -Invoke Write-LogError -Times 0
+		}
+
+		It "-Check reports manifest rows behind their upstream, and counts a failed fetch" {
+			$script:Sync.Behind = @(@{ Manifest = "thirdparty"; Name = "tdd"; Kind = "skills"; Source = "https://github.com/MyOrg/skills"; Ref = "0123456789abcdef0123456789abcdef01234567"; Head = "fedcba9876543210fedcba9876543210fedcba98" })
+			Update-AiArtifacts -Source thirdparty -Check
+			Should -Invoke Sync-AiManifestCache -Times 1 -Exactly -ParameterFilter { $Check }
+			Should -Invoke Write-LogWarning -ParameterFilter { $Message -like "*skills/tdd pinned at 0123456*" }
+
+			$script:Sync.Failed = @("https://github.com/MyOrg/skills@ref => git clone failed")
+			Update-AiArtifacts -Source thirdparty
+			Should -Invoke Write-LogError -ParameterFilter { $Message -like "*finished with 1 failure*" }
+		}
 	}
 }

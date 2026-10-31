@@ -9,6 +9,11 @@ function Set-PowerPlan {
 		With `-Auto`, reads the power plan for the current machine type from
 		`PowerPlans[MachineType]` in Configuration.psd1 and applies it.
 		With no entry for the machine type, -Auto leaves the active plan as-is.
+		-Auto also applies `PowerTimeouts[MachineType]`: SleepPluggedIn, SleepOnBattery,
+		HibernatePluggedIn, HibernateOnBattery, DisplayPluggedIn, DisplayOnBattery, in minutes
+		(0 = never), written into every power scheme so a plan switch keeps them; a key left out
+		is not managed (a machine that must never sleep on mains power but may turn its display
+		off sets SleepPluggedIn = 0 and HibernatePluggedIn = 0 only).
 		Without `-Auto`, accepts a `-Mode` parameter (Balanced, HighPerformance, UltimatePerformance);
 		with neither, prompts for a mode (Enter = Balanced).
 		Skips when the plan is already active; UltimatePerformance duplicates the hidden scheme
@@ -55,13 +60,15 @@ function Set-PowerPlan {
 
 			# Empty-by-default contract: unconfigured means the user never opted
 			# into power plan management, so -Auto changes nothing.
-			if (-not (Confirm-ConfigValue $configMode "No power plan configured for [$MachineType] (PowerPlans) - leaving power plan as-is!")) {
-				return
+			if (Confirm-ConfigValue $configMode "No power plan configured for [$MachineType] (PowerPlans) - leaving power plan as-is!") {
+				$Mode = $configMode
+				Write-LogStep " Power plan from configuration => [$Mode]"
 			}
-
-			$Mode = $configMode
-			Write-LogStep " Power plan from configuration => [$Mode]"
 		}
+
+		# Sleep timeouts follow the plan, so they land in the scheme that is active then.
+		$powerTimeouts = Get-ConfigSetting -Path 'PowerTimeouts'
+		$timeouts = if ((Test-ConfigValue $powerTimeouts) -and $powerTimeouts -is [hashtable]) { $powerTimeouts[$MachineType] } else { $null }
 	}
 	elseif (-not $Mode) {
 		$selection = Resolve-Selection `
@@ -76,6 +83,55 @@ function Set-PowerPlan {
 		else {
 			$Mode = "Balanced"
 		}
+	}
+
+	# --- Sleep, hibernate and display timeouts (-Auto, PowerTimeouts) ---
+	# Minutes, 0 = never; written into every power scheme (as Set-PowerButtonActions does), so
+	# switching plans keeps them. A key left out is not managed.
+	if ($Auto -and $timeouts -is [hashtable] -and $timeouts.Count -gt 0) {
+		$timeoutMap = [ordered]@{
+			SleepPluggedIn     = @{ Group = "SUB_SLEEP"; Setting = "STANDBYIDLE"; Type = "AC" }
+			SleepOnBattery     = @{ Group = "SUB_SLEEP"; Setting = "STANDBYIDLE"; Type = "DC" }
+			HibernatePluggedIn = @{ Group = "SUB_SLEEP"; Setting = "HIBERNATEIDLE"; Type = "AC" }
+			HibernateOnBattery = @{ Group = "SUB_SLEEP"; Setting = "HIBERNATEIDLE"; Type = "DC" }
+			DisplayPluggedIn   = @{ Group = "SUB_VIDEO"; Setting = "VIDEOIDLE"; Type = "AC" }
+			DisplayOnBattery   = @{ Group = "SUB_VIDEO"; Setting = "VIDEOIDLE"; Type = "DC" }
+		}
+		foreach ($key in $timeouts.Keys) {
+			if (-not $timeoutMap.Contains([string]$key)) {
+				Write-LogWarning "PowerTimeouts.$MachineType.$key is not a known timeout ($($timeoutMap.Keys -join ', ')) - skipped!"
+			}
+		}
+		$schemeGuids = @(powercfg /list | ForEach-Object { if ($_ -match "([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})") { $matches[1] } })
+		$changedTimeouts = $false
+		foreach ($key in $timeoutMap.Keys) {
+			if (-not $timeouts.ContainsKey($key)) { continue }
+			$minutes = $timeouts[$key] -as [int]
+			if ($null -eq $minutes -or $minutes -lt 0) {
+				Write-LogWarning "PowerTimeouts.$MachineType.$key must be a number of minutes (0 = never) - skipped!"
+				continue
+			}
+			$entry = $timeoutMap[$key]
+			foreach ($guid in $schemeGuids) {
+				if ($entry.Type -eq "AC") {
+					powercfg /SETACVALUEINDEX $guid $entry.Group $entry.Setting ($minutes * 60) 2>&1 | Out-Null
+				}
+				else {
+					powercfg /SETDCVALUEINDEX $guid $entry.Group $entry.Setting ($minutes * 60) 2>&1 | Out-Null
+				}
+			}
+			$changedTimeouts = $true
+			Write-LogStep " $key => $(if ($minutes -eq 0) { 'never' } else { "$minutes min" })"
+		}
+		if ($changedTimeouts) {
+			# Re-activate the current scheme so the new values apply now.
+			powercfg /SETACTIVE SCHEME_CURRENT 2>&1 | Out-Null
+			Write-LogSuccess "Power timeouts set in $($schemeGuids.Count) power scheme(s)"
+		}
+	}
+
+	if (-not $Mode) {
+		return
 	}
 
 	# --- Map mode names to powercfg match patterns ---

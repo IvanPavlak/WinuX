@@ -12,6 +12,8 @@ Resolves the `AiArtifacts` and `AiHarnesses` sections into the expanded values e
 | [`AiArtifacts`](../../configuration-reference.md#ai-artifacts) | hashtable | `Root = "{RepoRoot}\AI"`, empty `Sources`, `Exclude` and `Deploy`, `Use = @{ Rules = "CoreAiRules" }` | The artifacts root, the vendored sources, the exclusions, the item each `File` destination takes and the harnesses per machine type. |
 | [`AiHarnesses`](../../configuration-reference.md#ai-harnesses) | hashtable | `claude-code`, `codex`, `gemini-cli`, `copilot` | The apps and their destinations, expanded for the harnesses `Deploy` names. |
 | [`DefaultWSLUsername`](../../configuration-reference.md#wsl-configuration) | string | empty string | Maps each `{User}` destination onto `/home/<user>/` for its WSL twin. Empty means no WSL twins. |
+| [`AiProfiles`](../../configuration-reference.md#ai-profiles) | hashtable | no profile | The active profile's `Rules`, `Deploy`, `Include` and `Exclude`, resolved through [`Resolve-AiProfile`](Resolve-AiProfile.md). |
+| [`BasePaths`](../../configuration-reference.md#base-paths-per-machine-type) | hashtable | per machine type | `{Dev}` in `Checkouts` and `Manifests` paths is `BasePaths.<MachineType>.Dev`, else the folder holding the repository. |
 
 ## Decisions
 

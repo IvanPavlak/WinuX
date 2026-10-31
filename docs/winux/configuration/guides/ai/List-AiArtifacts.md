@@ -9,7 +9,8 @@ Lists the AI skills, mods, rules, prompts and agents the repository carries, gro
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`AiArtifacts`](../../configuration-reference.md#ai-artifacts) | hashtable | see the reference | `Root`, `Sources` and `Exclude` decide the roster; `Deploy`, `Use` and `AiHarnesses` decide what `-ListDiscrepancies` expects. Read through [`Resolve-AiArtifactsConfig`](Resolve-AiArtifactsConfig.md). |
+| [`AiArtifacts`](../../configuration-reference.md#ai-artifacts) | hashtable | see the reference | `Root`, `Sources`, `Checkouts`, `Manifests` and `Exclude` decide the roster; `Deploy`, `Use` and `AiHarnesses` decide what `-ListDiscrepancies` expects. Read through [`Resolve-AiArtifactsConfig`](Resolve-AiArtifactsConfig.md). |
+| [`AiProfiles`](../../configuration-reference.md#ai-profiles) | hashtable | no profile | The active profile's includes, excludes, rules item and harnesses, and the Plan the managed settings copy is checked against. |
 | [`ShowFunctionDetailsColors`](../../configuration-reference.md#console-colors) | hashtable | the shipped palette | The colours of each entry, shared with `List-Functions`. |
 
 ## Decisions

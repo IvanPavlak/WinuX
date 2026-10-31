@@ -11,20 +11,23 @@ The [AI module reference](../../../modules/ai.md) is the authority on what each 
 
 | Function | Configuration keys | Guide |
 | -------- | ------------------ | ----- |
-| `Deploy-AiArtifacts` | `AiArtifacts`, `AiHarnesses`, `BootstrapConfig.Steps.AiArtifacts`, `DefaultWSLDistribution`, `DefaultWSLUsername` | [Deploy-AiArtifacts](Deploy-AiArtifacts.md) |
-| `Deploy-AiMarketplaces` | `AiMarketplaces`, `BootstrapConfig.Steps.AiMarketplaces`, `DefaultWSLDistribution`, `DefaultWSLUsername` | [Deploy-AiMarketplaces](Deploy-AiMarketplaces.md) |
-| `Deploy-AiMcpServers` | `AiMcpServers`, `BootstrapConfig.Steps.AiMcpServers`, `DefaultWSLDistribution`, `DefaultWSLUsername`, `ValidMachineTypes` | [Deploy-AiMcpServers](Deploy-AiMcpServers.md) |
-| `Get-AiArtifactPlan` | `AiArtifacts.Deploy`, `AiArtifacts.Use`, `AiHarnesses` | [Get-AiArtifactPlan](Get-AiArtifactPlan.md) |
-| `Get-AiArtifactRoster` | `AiArtifacts.Root`, `AiArtifacts.Sources`, `AiArtifacts.Exclude` | [Get-AiArtifactRoster](Get-AiArtifactRoster.md) |
-| `List-AiArtifacts` | `AiArtifacts`, `AiHarnesses`, `ShowFunctionDetailsColors` | [List-AiArtifacts](List-AiArtifacts.md) |
-| `Resolve-AiArtifactsConfig` | `AiArtifacts`, `AiHarnesses`, `DefaultWSLUsername` | [Resolve-AiArtifactsConfig](Resolve-AiArtifactsConfig.md) |
-| `Update-AiArtifacts` | `AiArtifacts.Sources`, `AiArtifacts.Root` | [Update-AiArtifacts](Update-AiArtifacts.md) |
+| `Deploy-AiArtifacts` | `AiArtifacts` (incl. `Checkouts`, `Manifests`), `AiHarnesses`, `AiProfiles`, `BootstrapConfig.Steps.AiArtifacts`, `DefaultWSLDistribution`, `DefaultWSLUsername` | [Deploy-AiArtifacts](Deploy-AiArtifacts.md) |
+| `Deploy-AiMarketplaces` | `AiMarketplaces`, `AiProfiles`, `BootstrapConfig.Steps.AiMarketplaces`, `DefaultWSLDistribution`, `DefaultWSLUsername` | [Deploy-AiMarketplaces](Deploy-AiMarketplaces.md) |
+| `Deploy-AiMcpServers` | `AiMcpServers`, `AiProfiles`, `BootstrapConfig.Steps.AiMcpServers`, `DefaultWSLDistribution`, `DefaultWSLUsername`, `ValidMachineTypes` | [Deploy-AiMcpServers](Deploy-AiMcpServers.md) |
+| `Get-AiArtifactPlan` | `AiArtifacts.Deploy`, `AiArtifacts.Use`, `AiHarnesses`, `RepositoryGroups` | [Get-AiArtifactPlan](Get-AiArtifactPlan.md) |
+| `Get-AiArtifactRoster` | `AiArtifacts.Root`, `AiArtifacts.Sources`, `AiArtifacts.Checkouts`, `AiArtifacts.Manifests`, `AiArtifacts.Exclude`, `AiProfiles` | [Get-AiArtifactRoster](Get-AiArtifactRoster.md) |
+| `Initialize-AiProfile` | `AiProfiles`, `AiMcpServers.Servers`, `BootstrapConfig.Steps.AiProfileInit` | [Initialize-AiProfile](Initialize-AiProfile.md) |
+| `List-AiArtifacts` | `AiArtifacts`, `AiHarnesses`, `AiProfiles`, `ShowFunctionDetailsColors` | [List-AiArtifacts](List-AiArtifacts.md) |
+| `Resolve-AiArtifactsConfig` | `AiArtifacts`, `AiHarnesses`, `AiProfiles`, `BasePaths`, `DefaultWSLUsername` | [Resolve-AiArtifactsConfig](Resolve-AiArtifactsConfig.md) |
+| `Resolve-AiProfile` | `AiProfiles` | [Resolve-AiProfile](Resolve-AiProfile.md) |
+| `Test-AiProfile` | `AiProfiles`, `AiHarnesses`, `AiMcpServers.Servers` | [Test-AiProfile](Test-AiProfile.md) |
+| `Update-AiArtifacts` | `AiArtifacts.Sources`, `AiArtifacts.Manifests`, `AiArtifacts.Root` | [Update-AiArtifacts](Update-AiArtifacts.md) |
 
 ## Functions With No Configuration
 
 These read no `Configuration.psd1` keys. Their guides record that fact and show how to call them.
 
-[Get-AiSkillDescription](Get-AiSkillDescription.md), [Get-AiSkillManifest](Get-AiSkillManifest.md), [Resolve-AiModsPluginDirs](Resolve-AiModsPluginDirs.md), [Set-ClaudeSettingsEnv](Set-ClaudeSettingsEnv.md), [Set-ClaudeSettingsKey](Set-ClaudeSettingsKey.md), [Test-AiModsCli](Test-AiModsCli.md)
+[ConvertTo-AiManagedSettings](ConvertTo-AiManagedSettings.md), [Deploy-AiManagedSettings](Deploy-AiManagedSettings.md), [Get-AiArtifactManifest](Get-AiArtifactManifest.md), [Get-AiSkillDescription](Get-AiSkillDescription.md), [Get-AiSkillManifest](Get-AiSkillManifest.md), [Resolve-AiModsPluginDirs](Resolve-AiModsPluginDirs.md), [Set-ClaudeSettingsEnv](Set-ClaudeSettingsEnv.md), [Set-ClaudeSettingsKey](Set-ClaudeSettingsKey.md), [Sync-AiManifestCache](Sync-AiManifestCache.md), [Test-AiModsCli](Test-AiModsCli.md)
 
 ## Related
 

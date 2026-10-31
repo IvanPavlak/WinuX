@@ -12,6 +12,7 @@ Builds the deployment plan of the AI artifacts - every destination of the harnes
 | [`AiArtifacts.Deploy`](../../configuration-reference.md#ai-artifacts) | hashtable | `@{ Default = @() }` | Which harnesses are planned for this machine type. |
 | [`AiArtifacts.Use`](../../configuration-reference.md#ai-artifacts) | hashtable | `@{ Rules = "CoreAiRules" }` | The item each `File` destination takes. |
 | [`AiHarnesses`](../../configuration-reference.md#ai-harnesses) | hashtable | the shipped catalogue | The destinations of each harness. |
+| [`RepositoryGroups`](../../configuration-reference.md#repository-groups) | array | the repository itself | Where a `repo:<name>` manifest row's repository is, by name; its skills are planned into `<repository>\.claude\skills`. |
 
 All of them are read through [`Resolve-AiArtifactsConfig`](Resolve-AiArtifactsConfig.md); the items come from [`Get-AiArtifactRoster`](Get-AiArtifactRoster.md).
 

@@ -13,6 +13,9 @@ Links the repository's AI skills, mods, rules, prompts and agents into the AI ap
 | [`AiArtifacts.Root`](../../configuration-reference.md#ai-artifacts) | string | `{RepoRoot}\AI` | The artifacts root: `<Root>\<Kind>\<source>\<item>`. |
 | [`AiArtifacts.Exclude`](../../configuration-reference.md#ai-artifacts) | array | `@()` | Items not to deploy: `skills/tdd` (every source) or `rules/example/CoreAiRules` (one source); an entry may be `@{ Item = "..."; Machine = "Work" }`. |
 | [`AiArtifacts.Use`](../../configuration-reference.md#ai-artifacts) | hashtable | `@{ Rules = "CoreAiRules" }` | Per kind, the item a `File` destination takes (the rules linked as `CLAUDE.md`, `AGENTS.md`, ...); a value may be per machine type. |
+| [`AiArtifacts.Checkouts`](../../configuration-reference.md#ai-artifacts) | hashtable | `@{}` | Local repositories whose items are linked straight from their working tree (`Path`, per kind its folders). |
+| [`AiArtifacts.Manifests`](../../configuration-reference.md#ai-artifacts) | hashtable | `@{}` | Manifest files of pinned third-party items, cloned into `%LOCALAPPDATA%\WinuX\ai-manifests` and linked from there. |
+| [`AiProfiles`](../../configuration-reference.md#ai-profiles) | hashtable | no profile | With a profile active: its `Rules`, `Deploy`, `Include` and `Exclude`, the Plan pinned in the managed settings copy, and the ownership patterns written next to it. |
 | [`AiHarnesses`](../../configuration-reference.md#ai-harnesses) | hashtable | `claude-code`, `codex`, `gemini-cli`, `copilot` | The catalogue of apps and their destinations. Inactive until `Deploy` names an entry; add your own app with an entry of its own. |
 | [`BootstrapConfig.Steps.AiArtifacts`](../../configuration-reference.md#bootstrapconfig) | boolean | `$false` | Whether Bootstrap runs this function. |
 | [`DefaultWSLDistribution`](../../configuration-reference.md#wsl-configuration) | string | empty string | The WSL distribution the WSL twins are deployed in. Empty means Windows only. |
@@ -44,6 +47,14 @@ Links the repository's AI skills, mods, rules, prompts and agents into the AI ap
     - Options: Set both `DefaultWSLDistribution` and `DefaultWSLUsername`; every harness with `WSL = $true` then gets its WSL twins.
     - Default: Empty - Windows only.
     - More detail: [`DefaultWSLUsername`](../../configuration-reference.md#wsl-configuration)
+7. Do you develop skills in a repository of their own, or adopt pinned third-party ones?
+    - Options: A `Checkouts` entry links a local repository's items straight from its working tree; a `Manifests` entry names a manifest file whose rows are cloned at their pinned commit into the manifest cache.
+    - Default: Neither - only the folders under `AI\` are read.
+    - More detail: [AI Artifacts - Checkout sources](../../../ai/artifacts.md#checkout-sources)
+8. Do your machines need different rules, apps or artifacts, or a pinned Claude Plan?
+    - Options: Define [AI profiles](Resolve-AiProfile.md); a profile's `Rules`, `Deploy`, `Include` and `Exclude` then win over or join the keys above, and its `Plan` is pinned in the managed settings copy.
+    - Default: No profile - the machine-type keys above apply.
+    - More detail: [`AiProfiles`](../../configuration-reference.md#ai-profiles)
 
 ## Where to Put Values
 
@@ -124,7 +135,10 @@ Deploy-AiArtifacts -WhatIf
 List-AiArtifacts -ListDiscrepancies
 (Get-Item "$env:USERPROFILE\.claude\CLAUDE.md").LinkTarget
 Resolve-BootstrapSteps | Where-Object Name -eq "AiArtifacts"
+Test-AiProfile
 ```
+
+With an AI profile, `Test-AiProfile` exits `0` once the managed settings copy pins the profile's Plan.
 
 `Deploy-AiArtifacts -WhatIf` ends with a success line or lists every `MISSING`, `WRONG`, `DIFFERS` and `STALE` entry. If a value reads back as empty, the two usual causes are a parse error in `Configuration.local.psd1` (run `Test-ConfigurationSchema`) and a key placed at the wrong nesting level.
 
@@ -138,11 +152,19 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
     DefaultWSLDistribution = "Ubuntu"
     DefaultWSLUsername     = "you"
     AiArtifacts            = @{
-        Exclude = @("rules/example/CoreAiRules")
-        Use     = @{ Rules = "CoreAiRules" }
-        Deploy  = @{
+        Checkouts = @{ "my-skills" = @{ Path = "{Dev}\MySkills"; Skills = @("skills") } }
+        Manifests = @{ "my-skills" = @{ Path = "{Dev}\MySkills\third-party\manifest.tsv" } }
+        Exclude   = @("rules/example/CoreAiRules")
+        Use       = @{ Rules = "CoreAiRules" }
+        Deploy    = @{
             Default = @("claude-code", "codex", "my-app")
             Work    = @("claude-code")
+        }
+    }
+    AiProfiles             = @{
+        Default  = "Personal"
+        Profiles = @{
+            Personal = @{ Rules = "MyRules"; Plan = @{ Name = "Max"; OrgUuid = "00000000-0000-0000-0000-000000000000" } }
         }
     }
     AiHarnesses            = @{

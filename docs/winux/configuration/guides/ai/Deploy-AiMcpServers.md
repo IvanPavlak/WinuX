@@ -11,6 +11,7 @@ Adds the configured MCP servers to Claude Code (through its CLI, at user scope) 
 | --- | ---- | -------------- | ---------------- |
 | [`AiMcpServers.Deploy`](../../configuration-reference.md#ai-mcp-servers) | hashtable or array | empty | The apps to add the servers to, per machine type with a `Default` fallback, or one array for every machine type: `claude-code`, `codex`. |
 | [`AiMcpServers.Servers`](../../configuration-reference.md#ai-mcp-servers) | hashtable | empty | The servers, keyed by name: a `Url` (with optional `Transport`, `Headers`, `BearerTokenEnvVar`) or a `Command` (with optional `Args`, `Env`), and an optional `Machine` scope. |
+| [`AiProfiles`](../../configuration-reference.md#ai-profiles) | hashtable | no profile | With a profile active, its `McpServers` list picks the servers this machine registers (left out: all; `@()`: none); a server registered earlier that the list no longer names is removed. |
 | [`BootstrapConfig.Steps.AiMcpServers`](../../configuration-reference.md#bootstrapconfig) | boolean | `$false` | Whether Bootstrap runs this function. OFF by default - the base names no servers. |
 | [`DefaultWSLDistribution`](../../configuration-reference.md#wsl-configuration) | string | empty string | The WSL distribution whose user also receives the servers. Empty means Windows only. |
 | [`DefaultWSLUsername`](../../configuration-reference.md#wsl-configuration) | string | empty string | The WSL account whose `~/.claude.json` and `~/.codex/config.toml` also receive the servers. Empty means Windows only. |
@@ -36,7 +37,11 @@ The apps' files are not configuration keys: Claude Code's is the user's `~\.clau
     - Options: `Machine = "PC/Work"` on its entry; leave it out for every machine type.
     - Default: Every machine type.
     - More detail: [`AiMcpServers.Servers`](../../configuration-reference.md#ai-mcp-servers)
-5. Should Bootstrap add the servers on every run?
+5. Do machines of different AI profiles need different servers?
+    - Options: List each profile's servers in its `McpServers` (`@()` for none); the catalogue under `Servers` stays one. A server this function registered and the profile no longer lists is removed on the next run (recorded in `%LOCALAPPDATA%\WinuX\ai-mcp-servers.state`); one added by hand is never touched.
+    - Default: No profile, or a profile without `McpServers`: every server.
+    - More detail: [AI MCP Servers - Per AI Profile](../../../ai/mcp-servers.md#per-ai-profile)
+6. Should Bootstrap add the servers on every run?
     - Options: `$true` to add and update the servers on every Bootstrap (a server already configured is left alone); `$false` to run `Deploy-AiMcpServers` by hand.
     - Default: `$false`.
     - More detail: [`BootstrapConfig.Steps`](../../configuration-reference.md#bootstrapconfig)
@@ -159,6 +164,14 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
                 Env     = @{ LOG_LEVEL = "info" }
                 Machine = "PC/Work"
             }
+        }
+    }
+    AiProfiles             = @{
+        Hosts    = @{ "WORKSTATION-01" = "Work" }
+        Default  = "Personal"
+        Profiles = @{
+            Personal = @{ McpServers = @("my-remote", "my-keyed", "my-local") }
+            Work     = @{ McpServers = @() }
         }
     }
     BootstrapConfig        = @{

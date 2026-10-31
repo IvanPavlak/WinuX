@@ -8,6 +8,10 @@ BeforeAll {
 	. "$FunctionsPath\Deploy-AiArtifacts.ps1"
 	# The pure merge of the plugin list is exercised for real; the settings writer is mocked.
 	. "$FunctionsPath\Resolve-AiModsPluginDirs.ps1"
+	# The managed settings copy runs for real (into TestDrive), so its wsl call meets the mock.
+	. "$FunctionsPath\Deploy-AiManagedSettings.ps1"
+	. "$FunctionsPath\ConvertTo-AiManagedSettings.ps1"
+	. "$FunctionsPath\Sync-AiManifestCache.ps1"
 
 	function New-PlanDestination([string]$Kind, [string]$Placement, [string]$Path, [object[]]$Items, [string[]]$Hooks = @(), [string]$WSLPath = "", [string]$Harness = "claude-code") {
 		@{ Harness = $Harness; Kind = $Kind; Placement = $Placement; Hooks = $Hooks; Path = $Path; WSLPath = $WSLPath; Items = $Items }
@@ -235,6 +239,53 @@ Describe "Deploy-AiArtifacts" {
 		Deploy-AiArtifacts
 
 		Should -Invoke Set-ClaudeSettingsEnv -Times 0
+	}
+
+	It "hands a managed-settings destination to Deploy-AiManagedSettings, which writes a copy, never a link" {
+		$rulesSource = Join-Path $script:Root "Rules\own\MyRules\managed-settings.json"
+		New-Item -ItemType Directory -Path (Split-Path $rulesSource) -Force | Out-Null
+		Set-Content -Path $rulesSource -Value '{ "forceLoginMethod": "claudeai" }'
+		$managed = Join-Path $script:UserDir "managed\managed-settings.json"
+		$script:Destinations = @(New-PlanDestination "rules" "file" $managed @(
+				New-PlanItem "rules" "MyRules" $rulesSource $managed
+			) -Hooks @("managed-settings"))
+
+		Deploy-AiArtifacts
+
+		Should -Invoke New-WindowsSymbolicLink -Times 0
+		(Get-Item -LiteralPath $managed).Attributes -band [IO.FileAttributes]::ReparsePoint | Should -Be 0
+		(Get-Content -LiteralPath $managed -Raw | ConvertFrom-Json).forceLoginMethod | Should -Be "claudeai"
+	}
+
+	It "fetches the missing manifest refs before planning, and never under -WhatIf" {
+		Mock Sync-AiManifestCache { @{ Fetched = @(); Present = @(); Failed = @(); Behind = @(); Problems = @() } }
+		$script:Config.Manifests = [ordered]@{ thirdparty = @{ Name = "thirdparty"; Path = "C:\nowhere\manifest.tsv" } }
+
+		Deploy-AiArtifacts
+		Should -Invoke Sync-AiManifestCache -Times 1 -Exactly
+
+		Deploy-AiArtifacts -WhatIf
+		Should -Invoke Sync-AiManifestCache -Times 1 -Exactly
+	}
+
+	It "lists the links of a repository-scoped destination in that repository's .git\info\exclude, once" {
+		$repository = Join-Path $TestDrive "MyProject"
+		if (Test-Path -Path $repository) { Remove-Item -Path $repository -Recurse -Force }
+		New-Item -ItemType Directory -Path (Join-Path $repository ".git\info") -Force | Out-Null
+		Set-Content -Path (Join-Path $repository ".git\info\exclude") -Value "# git ls-files --others --exclude-from=.git/info/exclude"
+		$skills = Join-Path $repository ".claude\skills"
+		$destination = New-PlanDestination "skills" "each" $skills @(
+			New-PlanItem "skills" "alpha" $script:Alpha (Join-Path $skills "alpha")
+		) -Hooks @("git-exclude") -Harness "repo:MyProject"
+		$destination.Repository = $repository
+		$script:Destinations = @($destination)
+
+		Deploy-AiArtifacts
+		Deploy-AiArtifacts
+
+		$lines = @(Get-Content -Path (Join-Path $repository ".git\info\exclude"))
+		@($lines | Where-Object { $_ -eq "/.claude/skills/alpha" }).Count | Should -Be 1
+		$lines[0] | Should -BeLike "# git*" -Because "the existing lines are kept"
 	}
 
 	Context "WSL twins" {

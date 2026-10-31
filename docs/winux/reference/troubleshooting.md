@@ -302,7 +302,7 @@ wsl mkdir -p /home/you/.ssh
 
 **Why it happens:** Claude Code reads managed settings on Windows from `C:\Program Files\ClaudeCode\managed-settings.json` and no longer reads the legacy `C:\ProgramData\ClaudeCode` path ([managed settings](https://code.claude.com/docs/en/managed-settings)).
 
-**Solution:** Keep the file as the `managed-settings.json` variant of your rules item (`AI\Rules\own\<Name>\managed-settings.json`), name the item with `AiArtifacts.Use.Rules`, put `claude-code` in `AiArtifacts.Deploy`, and run `Deploy-AiArtifacts -Kind Rules` as administrator. It links `C:\Program Files\ClaudeCode\managed-settings.json` (and `/etc/claude-code/managed-settings.json` in WSL). Remove the old `ClaudeManagedSettings` entry and the stale link under `C:\ProgramData\ClaudeCode` by hand. Confirm with `/status` in a new Claude Code session, which lists the managed settings source.
+**Solution:** Keep the file as the `managed-settings.json` variant of your rules item (`AI\Rules\own\<Name>\managed-settings.json`), name the item with `AiArtifacts.Use.Rules`, put `claude-code` in `AiArtifacts.Deploy`, and run `Deploy-AiArtifacts -Kind Rules` as administrator. It writes an administrator-owned copy to `C:\Program Files\ClaudeCode\managed-settings.json` (and `/etc/claude-code/managed-settings.json` in WSL). Remove the old `ClaudeManagedSettings` entry and the stale link under `C:\ProgramData\ClaudeCode` by hand. Confirm with `/status` in a new Claude Code session, which lists the managed settings source.
 
 ### The Global CLAUDE.md Shows A Path Instead Of The Rules
 
@@ -311,6 +311,46 @@ wsl mkdir -p /home/you/.ssh
 **Why it happens:** `~\.claude\CLAUDE.md` links to a file in the repository that is itself a git symbolic link. With `core.symlinks` false (the Git for Windows default without Developer Mode), git checks a symbolic link out as a small text file holding the link's target, so the app reads that path as the instructions.
 
 **Solution:** Link the apps straight at the rules item: run `Deploy-AiArtifacts -Kind Rules`, which points `CLAUDE.md`, `AGENTS.md`, `GEMINI.md` and `copilot-instructions.md` at `AI\Rules\<source>\<Name>\RULES.md`, a real file. Check with `(Get-Item "$env:USERPROFILE\.claude\CLAUDE.md").LinkTarget`, then start a new session.
+
+### Claude Code Refuses To Start After A Deploy ("organization" Or "login" Error)
+
+**Problem:** After `Deploy-AiArtifacts` with an [AI profile](../ai/profiles.md), `claude` exits at startup saying the login or organization is not allowed, or a session that used an API key is refused.
+
+**Why it happens:** The managed settings copy now pins the profile's Plan with `forceLoginOrgUUID`, and Claude Code refuses a credential of any other organization, and every `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN` or `apiKeyHelper` session, once a managed `forceLoginOrgUUID` or `forceLoginMethod` is set. Either the machine is logged in to another Plan, the profile's `Plan.OrgUuid` is wrong, or the host resolved to another profile.
+
+**Solution:** Run `Test-AiProfile`: it prints the profile and how it was picked, the expected and the logged-in Plan, the pin and every pay-per-use credential. Log in to the expected Plan (`claude`, `/logout`, `/login`), remove the credential it names, or fix `AiProfiles` and run `Deploy-AiArtifacts -Kind Rules` again. `WINUX_AI_PROFILE` overrides the hostname map for a quick check of another profile.
+
+### Work In A Repository Is Refused With "AI profile guard"
+
+**Problem:** A prompt or a tool call is blocked with `AI profile guard: <host/owner/name> belongs to the <Profile> AI profile, and this machine runs <Profile>`.
+
+**Why it happens:** With an AI profile active, the managed settings copy wires `ai-ownership-guard.sh` into `UserPromptSubmit` and `PreToolUse`. It reads the repository's `origin` remote and `ai-profile.conf` next to the managed settings: a `shared` pattern allows every profile, an `owns` pattern names the owner, anything else belongs to `default-owner`. The repository matched another profile's `Owns` (or nothing, with another profile as the default owner).
+
+**Solution:** Work on it from a machine of its owner, or classify it: add its pattern to `AiProfiles.Shared` or to this profile's `Owns`, then run `Deploy-AiArtifacts -Kind Rules` so `ai-profile.conf` is rewritten. Verdicts are cached per session (under `${TMPDIR:-/tmp}/ai-ownership-guard/` of the bash that runs the hook), so start a new session after the change. A folder outside any repository, or a repository without `origin`, is always allowed.
+
+### Deploy-AiArtifacts Seems To Stop After "AI profile"
+
+**Problem:** On a machine's first deploy with a manifest source, `Deploy-AiArtifacts` prints the artifacts root, the harnesses and the AI profile, then a series of `Fetching manifest ref => [...]` lines that take a while each.
+
+**Why it happens:** Before it plans, the deploy fetches every pinned ref its rows need into `%LOCALAPPDATA%\WinuX\ai-manifests\` ([Sync-AiManifestCache](../modules/ai.md#sync-aimanifestcache)). Only the pinned commit is fetched, never the history, but a large upstream is still tens of megabytes. A clone that is in the cache is never fetched again, so later deploys skip this.
+
+**Solution:** Let it finish; each line is one upstream. To fetch ahead of a deploy, run `Update-AiArtifacts`. A stopped run leaves at most a `<ref>.partial` folder, which the next run removes and fetches again.
+
+### "Has A Plan That Cannot Be Used" And The Managed Settings Are Not Deployed
+
+**Problem:** `Deploy-AiArtifacts` warns `AiProfiles.Profiles.<Profile>.Plan has an OrgUuid that is not a UUID` and `... the managed settings were not rendered, so the deployed copy keeps its pin`, and `Test-AiProfile` reports a mismatch.
+
+**Why it happens:** The profile's `Plan` is configured but its `OrgUuid` is not a UUID (a character missing or extra, a stray space). A managed settings copy without `forceLoginOrgUUID` would let any Plan sign in, so the deploy fails closed: it writes nothing and the copy already in `C:\Program Files\ClaudeCode\` keeps the last good pin.
+
+**Solution:** Fix the `OrgUuid` in `Configuration.local.psd1` (the logged-in one is in `Test-AiProfile`'s `Logged-in Plan` line) and run `Deploy-AiArtifacts -Kind Rules` again as administrator. To test the pin on purpose, use a valid UUID of another organization instead: Claude Code then refuses to start.
+
+### A Manifest Item Is Missing After A Deploy
+
+**Problem:** A skill a manifest source lists does not appear in `List-AiArtifacts`, and `Deploy-AiArtifacts` warns `... is not in the manifest cache yet` or names a manifest line.
+
+**Why it happens:** Each pinned ref is cloned into `%LOCALAPPDATA%\WinuX\ai-manifests\<owner>\<repo>\<ref>\` the first time a row needs it; a clone that failed (no network, a private repository without a signed-in `git`, a ref that is not a commit of that repository) leaves the row out. A row whose scope names another AI profile is skipped on purpose, and a row that breaks the format is reported with its line number and skipped.
+
+**Solution:** Run `Update-AiArtifacts`: it clones every missing ref and prints why one fails. For a private source, make sure `git clone <source>` works in the same shell. Check the row's `scope` against `(Resolve-AiProfile).Name`. A broken clone never looks complete (it is made in `<ref>.partial`), so a re-run retries it.
 
 ## AI Mods Issues
 
@@ -390,7 +430,15 @@ A plugin that loads but ignores one of its options has the same shape of cause o
 
 **Problem:** `Deploy-AiMcpServers` reports the server added or already configured and `claude mcp list` lists it, yet a new Claude Code or Codex session has none of its tools, or the list says the server needs authentication.
 
-**Solution:** The configuration carries the server, not its credentials. A server that signs in with OAuth needs the sign-in once per machine and app, because the tokens stay in the machine's credential store: run `/mcp` in Claude Code and pick the server, and `codex mcp login <name>` for Codex (inside WSL, once more for the WSL user). A server with `BearerTokenEnvVar` needs that variable set in the environment the app starts from: set it as a user environment variable, then open a new terminal (or restart the desktop app). Claude Code warns about an unset variable and sends the `${VAR}` text unexpanded, so the server rejects the request.
+**Solution:** The configuration carries the server, not its credentials. A server that signs in with OAuth needs the sign-in once per machine and app, because the tokens stay in the machine's credential store: run `/mcp` in Claude Code and pick the server, and `codex mcp login <name>` for Codex (inside WSL, once more for the WSL user). A server with `BearerTokenEnvVar` needs that variable set in the environment the app starts from: set it as a user environment variable, then open a new terminal (or restart the desktop app). Claude Code warns about an unset variable and sends the `${VAR}` text unexpanded, so the server rejects the request. A stdio server started through `npx` on native Windows that fails to connect: run its `Command` and `Args` by hand in a new terminal to see the error (an old Node, a package that needs a newer one), and check `claude mcp get <name>`; if it only starts as `cmd /c npx ...`, define that server with `Command = "cmd"` and `Args = @("/c", "npx", ...)` and scope a separate WSL entry, since `cmd` does not exist inside WSL.
+
+### An MCP Server Disappeared After A Deploy
+
+**Problem:** A server that used to be in `claude mcp list` or `config.toml` is gone after `Deploy-AiMcpServers`, which reported `Removed ... (no longer listed)`.
+
+**Why it happens:** The machine's [AI profile](../ai/profiles.md) does not list it in `McpServers`, and WinuX had registered it (it is recorded in `%LOCALAPPDATA%\WinuX\ai-mcp-servers.state`, or the app carried it exactly as `AiMcpServers.Servers` defines it). Only such a server is removed; one added by hand with another definition never is.
+
+**Solution:** Add the server to the profile's `McpServers` (or leave `McpServers` out for all of them) and deploy again. To keep a server of your own outside WinuX's control, register it under another name than the `Servers` entries.
 
 ### A Codex MCP Server Lost an Option Added by Hand
 

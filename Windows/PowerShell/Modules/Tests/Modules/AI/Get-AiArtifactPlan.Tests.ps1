@@ -5,6 +5,8 @@ BeforeAll {
 	. "$FunctionsPath\Get-AiArtifactPlan.ps1"
 	# The real roster, so the plan is built from the same walk Deploy-AiArtifacts uses.
 	. "$FunctionsPath\Get-AiArtifactRoster.ps1"
+	# Dot-sourced so the repository lookup of repo:<name> rows exists to Mock.
+	. (Join-Path (Get-RepositoryPath).Modules "Git\Functions\Resolve-RepositoryTargets.ps1")
 
 	function New-ArtifactFile([string]$Relative, [string]$File) {
 		$dir = Join-Path $script:Root $Relative
@@ -136,5 +138,49 @@ Describe "Get-AiArtifactPlan" {
 
 		$plan.Destinations | Should -BeNullOrEmpty
 		$plan.Warnings.Count | Should -Be 2
+	}
+
+	Context "repository-scoped skills" {
+		BeforeEach {
+			$script:Repository = Join-Path $TestDrive "MyProject"
+			if (Test-Path -Path $script:Repository) { Remove-Item -Path $script:Repository -Recurse -Force }
+			New-Item -ItemType Directory -Path $script:Repository -Force | Out-Null
+			$script:Config.Deploy = @("claude-code")
+			$script:Harnesses['claude-code'] = @{ Name = "claude-code"; Destinations = @(New-Destination "skills" "each" @(".") "$script:UserDir\.claude\skills") }
+			$script:Design = Join-Path $TestDrive "cache\design"
+			Mock Get-AiArtifactRoster {
+				@{ Items = [ordered]@{}; Duplicates = @(); Problems = @(); Repo = @(@{ Repository = "MyProject"; Name = "design"; Path = $script:Design; Source = "thirdparty"; SourceKind = "manifest"; Kind = "skills" }) }
+			}
+			Mock Resolve-RepositoryTargets { , @([pscustomobject]@{ Name = "MyProject"; Group = "Private"; RepositoryUrl = "https://github.com/MyUser/MyProject.git"; LocalPath = $script:Repository }) }
+		}
+
+		It "plans a repo:<name> row into that repository's .claude\skills with the git-exclude hook" {
+			$plan = Get-AiArtifactPlan -Config $script:Config
+
+			$repo = @($plan.Destinations | Where-Object { $_.Harness -eq "repo:MyProject" })
+			$repo.Count | Should -Be 1
+			$repo[0].Path | Should -Be (Join-Path $script:Repository ".claude\skills")
+			$repo[0].Hooks | Should -Be @("git-exclude")
+			$repo[0].Repository | Should -Be $script:Repository
+			$repo[0].Items[0].Source | Should -Be $script:Design
+			$repo[0].Items[0].Target | Should -Be (Join-Path $script:Repository ".claude\skills\design")
+		}
+
+		It "warns about a repository RepositoryGroups does not name, and plans nothing for it" {
+			Mock Resolve-RepositoryTargets { , @() }
+
+			$plan = Get-AiArtifactPlan -Config $script:Config
+
+			@($plan.Destinations | Where-Object { $_.Harness -like "repo:*" }).Count | Should -Be 0
+			@($plan.Warnings | Where-Object { $_ -like "*MyProject*not in RepositoryGroups*" }).Count | Should -Be 1
+		}
+
+		It "plans no repository destination when claude-code is not deployed" {
+			$script:Config.Deploy = @("codex")
+
+			$plan = Get-AiArtifactPlan -Config $script:Config
+
+			@($plan.Destinations | Where-Object { $_.Harness -like "repo:*" }).Count | Should -Be 0
+		}
 	}
 }

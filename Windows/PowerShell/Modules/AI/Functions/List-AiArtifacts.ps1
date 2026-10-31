@@ -8,9 +8,12 @@ function List-AiArtifacts {
 		machine have, and are they actually deployed into the apps?" without deploying anything.
 
 		The roster is read from disk the way Deploy-AiArtifacts reads it (Get-AiArtifactRoster
-		per kind: own first, then winux, example and the vendored sources in name order, the
-		first winning an item name two carry, minus AiArtifacts.Exclude), not from the
-		documentation, so a vendored refresh shows up at once. Each item's summary is the
+		per kind: own, the checkout sources, winux, example, the vendored sources and the
+		manifest sources, the first winning an item name two carry, minus AiArtifacts.Exclude
+		and the AI profile's excludes), not from the documentation, so a vendored refresh shows
+		up at once. Each group header names the source and, when it differs from the name, its
+		kind (checkout, product, vendored, manifest); a repository-scoped manifest item is
+		listed in a group of its own (manifest, repo:<name>). Each item's summary is the
 		`description:` of its frontmatter (SKILL.md, or the first Markdown file of a rules,
 		prompt or agent item) or the description of a mod's plugin.json.
 
@@ -21,7 +24,9 @@ function List-AiArtifacts {
 		-ListDiscrepancies compares the roster with what is deployed into the Windows
 		destinations of the harnesses AiArtifacts.Deploy names (Get-AiArtifactPlan): an item that
 		is not linked (or copied), an entry that shadows one with a real file or points
-		elsewhere, a dangling link into the artifacts root, and an item name two sources carry.
+		elsewhere, a dangling link into the artifacts root, the manifest cache or a checkout
+		source, an item name two sources carry, and managed settings that differ from the copy
+		a deploy would render (ConvertTo-AiManagedSettings).
 		WSL twins are out of scope - reading them means shelling into the distribution, which is
 		too slow for a listing; re-run Deploy-AiArtifacts to reconcile those.
 
@@ -99,6 +104,7 @@ function List-AiArtifacts {
 		# with its title only when there is something to report and -Quiet can stay silent.
 		$findings = @()
 		$root = $config.Root.TrimEnd('\')
+		$managedRoots = @("$root\") + @(if ($config.CacheRoot) { ([string]$config.CacheRoot).TrimEnd('\') + '\' }) + @(if ($config.Checkouts) { $config.Checkouts.Values | ForEach-Object { ([string]$_.Path).TrimEnd('\') + '\' } })
 		foreach ($destination in $plan.Destinations) {
 			$notDeployed = @()
 			$shadowed = @()
@@ -110,6 +116,18 @@ function List-AiArtifacts {
 				$current = Get-Item -LiteralPath $item.Target -Force -ErrorAction SilentlyContinue
 				if (-not $current) {
 					$notDeployed += $item.Name
+					continue
+				}
+				# The managed settings are a rendered copy: compare with what a deploy would write.
+				if (@($destination.Hooks) -contains 'managed-settings') {
+					$isLink = $current.Attributes -band [IO.FileAttributes]::ReparsePoint
+					$rendered = ConvertTo-AiManagedSettings -Template ([IO.File]::ReadAllText($item.Source)) -ManagedDir (Split-Path -Parent $item.Target) -AiProfile $config.Profile
+					if ($isLink) {
+						$shadowed += "$($item.Name) (a link sits where the managed settings copy goes)"
+					}
+					elseif ($rendered.Settings -and [IO.File]::ReadAllText($item.Target) -cne $rendered.Settings) {
+						$shadowed += "$($item.Name) (the deployed managed settings differ from the rendered copy)"
+					}
 					continue
 				}
 				$isLink = $current.Attributes -band [IO.FileAttributes]::ReparsePoint
@@ -133,7 +151,7 @@ function List-AiArtifacts {
 					if (-not ($child.Attributes -band [IO.FileAttributes]::ReparsePoint)) { continue }
 					$target = [string]$child.LinkTarget
 					if (-not $target) { $target = [string](@($child.Target)[0]) }
-					if (-not $target -or -not $target.StartsWith("$root\", [StringComparison]::OrdinalIgnoreCase)) { continue }
+					if (-not $target -or @($managedRoots | Where-Object { $target.StartsWith($_, [StringComparison]::OrdinalIgnoreCase) }).Count -eq 0) { continue }
 					if (-not (Test-Path -LiteralPath $target)) {
 						$stale += "$($child.Name) (target is gone)"
 					}
@@ -225,11 +243,16 @@ function List-AiArtifacts {
 	$shown = 0
 	foreach ($kindName in $rosters.Keys) {
 		$bySource = [ordered]@{}
-		foreach ($item in $rosters[$kindName].Items.Values) {
+		# One group per source and source kind (a checkout and a manifest source may share a name);
+		# repository-scoped manifest items get a group per repository.
+		$entries = @($rosters[$kindName].Items.Values) + @($rosters[$kindName].Repo | Where-Object { $_ })
+		foreach ($item in $entries) {
 			if ($selectedSources -and $selectedSources -notcontains $item.Source) { continue }
 			if ($namePatterns -and -not @($namePatterns | Where-Object { $item.Name -like $_ }).Count) { continue }
-			if (-not $bySource.Contains($item.Source)) { $bySource[$item.Source] = @() }
-			$bySource[$item.Source] += $item
+			$group = $item.Source
+			if ($item.SourceKind -and ($item.SourceKind -ne $item.Source -or $item.Repository)) { $group = "$($item.Source) ($($item.SourceKind)$(if ($item.Repository) { ", repo:$($item.Repository)" }))" }
+			if (-not $bySource.Contains($group)) { $bySource[$group] = @() }
+			$bySource[$group] += $item
 		}
 
 		foreach ($sourceName in $bySource.Keys) {

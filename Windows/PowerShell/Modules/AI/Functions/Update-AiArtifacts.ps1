@@ -32,6 +32,12 @@ function Update-AiArtifacts {
 		-Check compares each manifest's pinned commit with the current upstream head of Ref and
 		reports whether the vendored copy is behind, without downloading or writing anything.
 
+		Manifest sources (AiArtifacts.Manifests) are not vendored: every pinned ref their rows
+		need on this machine that is not in the manifest cache yet is cloned there
+		(Sync-AiManifestCache, %LOCALAPPDATA%\WinuX\ai-manifests); a ref already there is never
+		fetched again. With -Check, each row whose upstream default branch has moved past its
+		pinned ref is reported and nothing is fetched. -Source may name manifest sources too.
+
 		Private repositories: when a GitHub token is available, both requests authenticate with
 		it and the archive is fetched through the API's zipball endpoint, which accepts a token.
 		The token is the GITHUB_TOKEN environment variable, else GH_TOKEN, else the output of
@@ -72,14 +78,29 @@ function Update-AiArtifacts {
 	Write-LogTitle "Updating AI Artifacts"
 
 	$config = Resolve-AiArtifactsConfig
-	$sources = $config.Sources
+	$sources = if ($config.Sources) { $config.Sources } else { @{} }
+	$manifests = if ($config.Manifests) { $config.Manifests } else { @{} }
 
-	if ($sources.Count -eq 0) {
+	if ($sources.Count -eq 0 -and $manifests.Count -eq 0) {
 		Write-LogWarning "No AI artifact sources configured (AiArtifacts.Sources) - nothing to vendor!"
 		return
 	}
 
-	$names = if ($Source) { @($Source) } else { @($sources.Keys | Sort-Object) }
+	# -Source may name vendored sources, manifest sources or both.
+	$manifestNames = @()
+	$names = @()
+	if ($Source) {
+		foreach ($requested in $Source) {
+			$isManifest = @($manifests.Keys | Where-Object { $_ -eq $requested }).Count -gt 0
+			$isVendored = @($sources.Keys | Where-Object { $_ -eq $requested }).Count -gt 0
+			if ($isManifest) { $manifestNames += @($manifests.Keys | Where-Object { $_ -eq $requested })[0] }
+			if ($isVendored -or -not $isManifest) { $names += $requested }
+		}
+	}
+	else {
+		$names = @($sources.Keys | Sort-Object)
+		$manifestNames = @($manifests.Keys)
+	}
 	$failures = 0
 
 	# One token for every source, so a private upstream resolves and downloads; never logged.
@@ -328,6 +349,28 @@ function Update-AiArtifacts {
 			if (Test-Path -Path $tempRoot) {
 				Remove-Item -Path $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
 			}
+		}
+	}
+
+	# Manifest sources: their pinned refs are cloned into the manifest cache, never vendored.
+	if ($manifestNames.Count -gt 0) {
+		$sync = Sync-AiManifestCache -Config $config -Source $manifestNames -Check:$Check
+		foreach ($problem in @($sync.Problems)) { Write-LogWarning $problem }
+		foreach ($failure in @($sync.Failed)) {
+			Write-LogError "Manifest ref not fetched => $failure"
+			$failures++
+		}
+		if ($Check) {
+			foreach ($row in @($sync.Behind)) {
+				Write-LogWarning "[$($row.Manifest)] $($row.Kind)/$($row.Name) pinned at $($row.Ref.Substring(0, 7)), upstream default branch at $($row.Head.Substring(0, 7)) => $($row.Source)"
+			}
+			if (@($sync.Behind).Count -eq 0 -and @($sync.Failed).Count -eq 0) {
+				Write-LogSuccess "Manifest sources [$($manifestNames -join ', ')] pin their upstream heads"
+			}
+		}
+		else {
+			foreach ($folder in @($sync.Fetched)) { Write-LogSuccess "Fetched manifest ref => [$folder]" }
+			if (@($sync.Present).Count -gt 0) { Write-LogStep "$(@($sync.Present).Count) manifest ref(s) already in the cache" }
 		}
 	}
 

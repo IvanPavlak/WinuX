@@ -16,7 +16,13 @@ function Get-AiArtifactPlan {
 		    plus that file's extension (claude.md as <item>.md, copilot.agent.md as
 		    <item>.agent.md). An item with none of them is left out of that destination.
 		  - A File destination gets the item AiArtifacts.Use names for its kind, if it has one
-		    of the destination's files; without a Use entry it links nothing.
+		    of the destination's files; without a Use entry it links nothing. With an AI
+		    profile active, the profile's Rules item is the rules Use entry.
+		  - Repository-scoped skills (manifest rows scoped repo:<name>) get one destination per
+		    repository when claude-code is deployed: <repository>\.claude\skills, harness
+		    "repo:<name>", hook git-exclude (Deploy-AiArtifacts lists the links in that
+		    repository's .git\info\exclude). The repository is found by name in
+		    RepositoryGroups (Resolve-RepositoryTargets); an unknown one is a warning.
 
 		Returns:
 
@@ -108,6 +114,7 @@ function Get-AiArtifactPlan {
 			foreach ($duplicate in $roster.Duplicates) {
 				$plan.Warnings += "Duplicate $($kindName.TrimEnd('s')) [$($duplicate.Name)] in source [$($duplicate.Source)] - keeping the one from [$($duplicate.KeptFrom)]"
 			}
+			foreach ($problem in @($roster.Problems)) { $plan.Warnings += $problem }
 			$rosters[$kindName] = $roster.Items
 		}
 		$items = $rosters[$kindName]
@@ -170,6 +177,53 @@ function Get-AiArtifactPlan {
 			$planDestination.Items += @{ Kind = $kindName; Name = $item.Name; Source = $source; Target = (Join-Path $destination.Path $linkName); WSLTarget = $wslTarget }
 		}
 		$plan.Destinations += $planDestination
+	}
+
+	# Repository-scoped skills: linked into each repository's own .claude\skills.
+	if ($wanted -contains 'skills' -and @($Config.Deploy) -contains 'claude-code') {
+		$repoRoster = Get-AiArtifactRoster -Kind 'skills' -Config $Config
+		if (-not $rosters.ContainsKey('skills')) {
+			foreach ($problem in @($repoRoster.Problems)) { $plan.Warnings += $problem }
+		}
+		$byRepository = [ordered]@{}
+		foreach ($item in @($repoRoster.Repo)) {
+			if (-not $byRepository.Contains($item.Repository)) { $byRepository[$item.Repository] = @() }
+			$byRepository[$item.Repository] += $item
+		}
+		foreach ($repository in $byRepository.Keys) {
+			# Resolve-RepositoryTargets returns its list comma-wrapped; the assignment unwraps it.
+			$targets = Resolve-RepositoryTargets -Repositories $repository
+			$target = @($targets) | Where-Object { $_ -and $_.Name -eq $repository } | Select-Object -First 1
+			if (-not $target -or -not $target.LocalPath) {
+				$plan.Warnings += "Repository [$repository] of a repo:$repository manifest row is not in RepositoryGroups - its skills were left out"
+				continue
+			}
+			if (-not (Test-Path -LiteralPath $target.LocalPath -PathType Container)) {
+				$plan.Notes += "Repository [$repository] is not cloned at [$($target.LocalPath)] - its skills were left out"
+				continue
+			}
+			$path = Join-Path $target.LocalPath '.claude\skills'
+			$planDestination = @{
+				Harness    = "repo:$repository"
+				Kind       = 'skills'
+				Placement  = 'each'
+				Hooks      = @('git-exclude')
+				Path       = $path
+				WSLPath    = ''
+				Repository = [string]$target.LocalPath
+				Items      = @()
+			}
+			$seen = @{}
+			foreach ($item in $byRepository[$repository]) {
+				if ($seen.ContainsKey($item.Name.ToLowerInvariant())) {
+					$plan.Warnings += "Duplicate skill [$($item.Name)] for repository [$repository] in source [$($item.Source)] - keeping the first"
+					continue
+				}
+				$seen[$item.Name.ToLowerInvariant()] = $true
+				$planDestination.Items += @{ Kind = 'skills'; Name = $item.Name; Source = $item.Path; Target = (Join-Path $path $item.Name); WSLTarget = '' }
+			}
+			$plan.Destinations += $planDestination
+		}
 	}
 
 	return $plan

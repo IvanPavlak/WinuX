@@ -5,11 +5,18 @@ function Deploy-AiArtifacts {
 
 	.DESCRIPTION
 		The apps are the AiHarnesses entries AiArtifacts.Deploy names for this machine type (the
-		base catalogue: claude-code, codex, gemini-cli, copilot, all inactive until named); the
-		items are every <Root>\<Kind>\<source>\<item> of the sources read (own first, then winux,
-		example and the vendored sources in name order; the first wins an item name two carry,
-		with a warning), minus the AiArtifacts.Exclude entries. Get-AiArtifactPlan joins the two;
-		this function carries the plan out. Design: docs/winux/ai/artifacts.md.
+		base catalogue: claude-code, codex, gemini-cli, copilot, all inactive until named; with
+		an AI profile active, the profile's Deploy list); the items are those of the sources
+		read, in precedence order own, the checkout sources, winux, example, the vendored
+		sources, the manifest sources (the first wins an item name two carry, with a warning),
+		minus the AiArtifacts.Exclude entries and the profile's. Get-AiArtifactPlan joins the
+		two; this function carries the plan out. Design: docs/winux/ai/artifacts.md.
+
+		Before planning, the pinned refs of the manifest sources that are not in the manifest
+		cache yet are cloned (Sync-AiManifestCache); a clone that is there is never fetched
+		again. A manifest row scoped repo:<name> is linked into that repository's
+		.claude\skills\ and its link names are added to the repository's .git\info\exclude
+		(the git-exclude hook).
 
 		Per destination of an app:
 
@@ -27,7 +34,8 @@ function Deploy-AiArtifacts {
 		file or folder in the way into Backups\Windows\SymbolicLinks\AiArtifacts.<kind>.<item>
 		and skips the item when that copy fails; a link in the way (a wrong one, or one whose
 		target is gone) holds no content and is simply replaced. Only dangling links that point into the
-		artifacts root are pruned; a link to anything else is never touched.
+		artifacts root, the manifest cache or a checkout source are pruned; a link to anything
+		else is never touched.
 
 		Hooks of a destination:
 
@@ -35,8 +43,14 @@ function Deploy-AiArtifacts {
 		  links (';'-separated), then every entry added by hand (Resolve-AiModsPluginDirs and
 		  Set-ClaudeSettingsEnv, every other setting kept), and Test-AiModsCli runs
 		  `claude plugin validate` on each; a missing or rejecting CLI only warns.
-		- managed-settings: the WSL twin is made as root (/etc/claude-code is root-owned). The
-		  Windows link needs the administrator rights this function asks for anyway.
+		- managed-settings: the destination is an administrator-owned copy, never a link,
+		  written by Deploy-AiManagedSettings: the rendered managed-settings.json ({ManagedDir}
+		  replaced, forceLoginOrgUUID from the AI profile's Plan, the ownership guard wired
+		  in), the rules item's hooks\ folder, and with a profile active the engine's
+		  ai-ownership-guard.sh and ai-profile.conf; each file only when its content differs.
+		  The WSL twin (/etc/claude-code) is written as root.
+		- git-exclude: the links of a repository-scoped destination are listed in that
+		  repository's .git\info\exclude.
 
 		WSL: a harness with WSL = $true deploys every destination that has a WSL twin (a {User}
 		path mapped onto /home/<DefaultWSLUsername>, or the destination's WSLPath) inside the
@@ -85,8 +99,26 @@ function Deploy-AiArtifacts {
 
 	$root = $config.Root.TrimEnd('\')
 	$repoRoot = (Get-RepositoryPath).Repo.TrimEnd('\')
+	$aiProfile = $config.Profile
 	Write-LogStep "Artifacts root : $root"
 	Write-LogStep "Harnesses      : $($config.Deploy -join ', ')"
+	if ($aiProfile -and $aiProfile.Enabled) {
+		Write-LogStep "AI profile     : $($aiProfile.Name) ($($aiProfile.Source))"
+	}
+	if ($aiProfile) {
+		foreach ($message in @($aiProfile.Warnings)) { Write-LogWarning $message }
+	}
+
+	# Manifest sources: their pinned refs are cloned once into the cache; a clone that is
+	# there is never fetched again.
+	if ($config.Manifests -and $config.Manifests.Count -gt 0 -and -not $whatIf) {
+		$sync = Sync-AiManifestCache -Config $config
+		foreach ($folder in @($sync.Fetched)) { Write-LogStep "Fetched manifest ref => [$folder]" }
+		foreach ($failure in @($sync.Failed)) { Write-LogError "Manifest ref not fetched => $failure" }
+	}
+
+	# Links pointing into one of these are WinuX's own, so a dangling one is pruned.
+	$managedRoots = @("$root\") + @(if ($config.CacheRoot) { ([string]$config.CacheRoot).TrimEnd('\') + '\' }) + @(if ($config.Checkouts) { $config.Checkouts.Values | ForEach-Object { ([string]$_.Path).TrimEnd('\') + '\' } })
 
 	$planParams = @{ Config = $config }
 	if ($Kind) { $planParams.Kind = $Kind }
@@ -134,6 +166,31 @@ function Deploy-AiArtifacts {
 
 		if ($destination.Items.Count -gt 0) {
 			Write-LogStep "[$($destination.Harness)] $($destination.Kind) => $path"
+		}
+
+		# --- Managed settings: an administrator-owned copy, never a link -----------------------
+		if ($hooks -contains 'managed-settings') {
+			if ($destination.Items.Count -eq 0) { continue }
+			$distribution = ''
+			if ($destination.WSLPath -and -not $whatIf) {
+				if (-not $wslChecked) {
+					$wslChecked = $true
+					if (Test-WSLDistributionInstalled) {
+						$wsl = @{
+							Distro = [string](Get-ConfigSetting -Path 'DefaultWSLDistribution')
+							User   = $config.WSLUser
+						}
+					}
+					else {
+						Write-LogWarning "WSL distribution not installed - skipping the WSL artifact links!"
+					}
+				}
+				if ($wsl) { $distribution = $wsl.Distro }
+			}
+			$managed = Deploy-AiManagedSettings -Destination $destination -AiProfile $aiProfile -Distribution $distribution -BackupRepoRoot $repoRoot -WhatIf:$whatIf
+			$deployed += $managed.Deployed
+			$failures += $managed.Failures
+			continue
 		}
 
 		# --- Windows ---------------------------------------------------------------------------
@@ -242,7 +299,8 @@ function Deploy-AiArtifacts {
 			foreach ($child in Get-ChildItem -LiteralPath $path -Force -ErrorAction SilentlyContinue) {
 				if (-not ($child.Attributes -band [IO.FileAttributes]::ReparsePoint)) { continue }
 				$target = & $linkTarget $child
-				if (-not $target -or -not $target.StartsWith("$root\", [StringComparison]::OrdinalIgnoreCase) -or (Test-Path -LiteralPath $target)) { continue }
+				if (-not $target -or (Test-Path -LiteralPath $target)) { continue }
+				if (@($managedRoots | Where-Object { $target.StartsWith($_, [StringComparison]::OrdinalIgnoreCase) }).Count -eq 0) { continue }
 				if ($whatIf) {
 					Write-LogStep "STALE   $($child.FullName) (dangling link into the artifacts root)"
 					$failures++
@@ -250,6 +308,32 @@ function Deploy-AiArtifacts {
 				else {
 					$child.Delete()
 					Write-LogStep "Removed dangling link => [$($child.Name)]"
+				}
+			}
+		}
+
+		# git-exclude: the links live in a repository's working tree, so they go into its
+		# .git\info\exclude and are never committed.
+		if ($ready -and $hooks -contains 'git-exclude' -and $destination.Repository) {
+			$gitDir = Join-Path $destination.Repository '.git'
+			if (-not (Test-Path -LiteralPath $gitDir -PathType Container)) {
+				Write-LogWarning "[$($destination.Repository)] has no .git folder - its .claude\skills links were not added to .git\info\exclude!"
+			}
+			else {
+				$excludeFile = Join-Path $gitDir 'info\exclude'
+				$present = if (Test-Path -LiteralPath $excludeFile) { @(Get-Content -LiteralPath $excludeFile) } else { @() }
+				$wantedLines = @($destination.Items | ForEach-Object { "/.claude/skills/$($_.Name)" } | Where-Object { $present -notcontains $_ })
+				if ($wantedLines.Count -gt 0) {
+					if ($whatIf) {
+						Write-LogStep "MISSING $excludeFile => $($wantedLines -join ', ')"
+						$failures++
+					}
+					else {
+						New-Item -ItemType Directory -Path (Split-Path -Parent $excludeFile) -Force | Out-Null
+						$prefix = if ($present.Count -gt 0 -and -not ([IO.File]::ReadAllText($excludeFile)).EndsWith("`n")) { "`n" } else { "" }
+						[IO.File]::AppendAllText($excludeFile, $prefix + (($wantedLines -join "`n") + "`n"), [Text.UTF8Encoding]::new($false))
+						Write-LogStep "Excluded from git => [$($wantedLines -join ', ')]"
+					}
 				}
 			}
 		}

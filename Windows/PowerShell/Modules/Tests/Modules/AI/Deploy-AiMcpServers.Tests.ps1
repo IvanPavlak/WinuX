@@ -3,6 +3,7 @@
 BeforeAll {
 	$FunctionsPath = Join-Path (Get-RepositoryPath).Modules "AI\Functions"
 	. "$FunctionsPath\Deploy-AiMcpServers.ps1"
+	. "$FunctionsPath\Resolve-AiProfile.ps1"
 	# The machine-scope gate is dot-sourced so the Machine key is exercised for real.
 	. (Join-Path (Get-RepositoryPath).Modules "Bootstrap\Functions\Test-MachineTypeScope.ps1")
 }
@@ -26,6 +27,12 @@ Describe "Deploy-AiMcpServers" {
 		$script:SavedCodexHome = $env:CODEX_HOME
 		$script:SavedClaudeConfigDir = $env:CLAUDE_CONFIG_DIR
 		$env:USERPROFILE = $script:TestHome
+		# The state file lives under LOCALAPPDATA, so that points into TestDrive as well.
+		$script:SavedLocalAppData = $env:LOCALAPPDATA
+		$env:LOCALAPPDATA = Join-Path $script:TestHome "AppData\Local"
+		$script:StateFile = Join-Path $env:LOCALAPPDATA "WinuX\ai-mcp-servers.state"
+		# Profiles off unless a test turns one on.
+		Mock Resolve-AiProfile { @{ Enabled = $false; Warnings = @() } }
 		Remove-Item -Path Env:\CODEX_HOME -ErrorAction SilentlyContinue
 		Remove-Item -Path Env:\CLAUDE_CONFIG_DIR -ErrorAction SilentlyContinue
 
@@ -60,6 +67,7 @@ Describe "Deploy-AiMcpServers" {
 	AfterEach {
 		$global:MachineType = $script:SavedMachineType
 		$env:USERPROFILE = $script:SavedUserProfile
+		$env:LOCALAPPDATA = $script:SavedLocalAppData
 		if ($script:SavedCodexHome) { $env:CODEX_HOME = $script:SavedCodexHome } else { Remove-Item -Path Env:\CODEX_HOME -ErrorAction SilentlyContinue }
 		if ($script:SavedClaudeConfigDir) { $env:CLAUDE_CONFIG_DIR = $script:SavedClaudeConfigDir } else { Remove-Item -Path Env:\CLAUDE_CONFIG_DIR -ErrorAction SilentlyContinue }
 	}
@@ -313,6 +321,69 @@ Describe "Deploy-AiMcpServers" {
 			Test-Path -Path $script:Log | Should -BeFalse
 			Test-Path -Path $script:CodexConfig | Should -BeFalse
 			Should -Invoke Write-LogWarning -ParameterFilter { $Message -like "AiMcpServers.Deploy names no app*" }
+		}
+	}
+
+	Context "AI profile and the state file" {
+		BeforeEach {
+			$script:Section.Servers.mobbin = @{ Url = "https://mcp.example.com/mcp" }
+			$script:Listed = @("linear")
+			Mock Resolve-AiProfile { @{ Enabled = $true; Name = "Personal"; Profile = @{ McpServers = $script:Listed }; Warnings = @() } }
+		}
+
+		It "registers only the servers the profile lists and records them per app" {
+			Deploy-AiMcpServers -Command $script:Stub
+
+			@(Get-Content -Path $script:Log) | Should -Be @("mcp|add|--scope|user|--transport|http|linear|https://mcp.linear.app/mcp")
+			Get-Content -Path $script:CodexConfig -Raw | Should -Not -Match "mobbin"
+			$state = @(Get-Content -Path $script:StateFile | Where-Object { $_ -and -not $_.StartsWith('#') })
+			$state | Should -Be @("claude-code`tlinear", "codex`tlinear")
+		}
+
+		It "removes a recorded server the profile no longer lists, from Claude Code and Codex" {
+			Deploy-AiMcpServers -Command $script:Stub
+			Set-Content -Path $script:ClaudeState -Value '{"mcpServers":{"linear":{"type":"http","url":"https://mcp.linear.app/mcp"}}}'
+			Remove-Item -Path $script:Log
+			$script:Listed = @()
+
+			Deploy-AiMcpServers -Command $script:Stub
+
+			@(Get-Content -Path $script:Log) | Should -Be @("mcp|remove|--scope|user|linear")
+			Get-Content -Path $script:CodexConfig -Raw | Should -Not -Match "linear"
+			@(Get-Content -Path $script:StateFile | Where-Object { $_ -and -not $_.StartsWith('#') }).Count | Should -Be 0
+		}
+
+		It "never removes a server the user added by hand with another definition" {
+			Set-Content -Path $script:ClaudeState -Value '{"mcpServers":{"mobbin":{"type":"http","url":"https://my-own.example.com/mcp"},"mine":{"type":"http","url":"https://mine.example.com/mcp"}}}'
+			New-Item -ItemType Directory -Path (Split-Path -Parent $script:CodexConfig) -Force | Out-Null
+			Set-Content -Path $script:CodexConfig -Value @('[mcp_servers.mobbin]', 'url = "https://my-own.example.com/mcp"')
+
+			Deploy-AiMcpServers -Command $script:Stub
+
+			@(Get-Content -Path $script:Log) | Should -Not -Contain "mcp|remove|--scope|user|mobbin"
+			@(Get-Content -Path $script:Log) | Should -Not -Contain "mcp|remove|--scope|user|mine"
+			Get-Content -Path $script:CodexConfig -Raw | Should -Match "my-own.example.com"
+		}
+
+		It "counts a configured server carried exactly as configured as its own, so it is removed when not listed" {
+			Set-Content -Path $script:ClaudeState -Value '{"mcpServers":{"mobbin":{"type":"http","url":"https://mcp.example.com/mcp"}}}'
+			New-Item -ItemType Directory -Path (Split-Path -Parent $script:CodexConfig) -Force | Out-Null
+			Set-Content -Path $script:CodexConfig -Value @('model = "gpt-5"', '', '[mcp_servers.mobbin]', 'url = "https://mcp.example.com/mcp"')
+
+			Deploy-AiMcpServers -Command $script:Stub
+
+			@(Get-Content -Path $script:Log) | Should -Contain "mcp|remove|--scope|user|mobbin"
+			$codex = Get-Content -Path $script:CodexConfig -Raw
+			$codex | Should -Not -Match "mobbin"
+			$codex | Should -Match 'model = "gpt-5"'
+		}
+
+		It "registers every server when the profile leaves McpServers out" {
+			$script:Listed = $null
+
+			Deploy-AiMcpServers -Command $script:Stub
+
+			@(Get-Content -Path $script:Log).Count | Should -Be 2
 		}
 	}
 

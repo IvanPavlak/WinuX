@@ -22,7 +22,9 @@ function Resolve-BootstrapSteps {
 		AiArtifacts (machine-global AI skills, mods, rules, prompts and agents
 		links), AiMarketplaces (Claude Code plugin
 		marketplaces in the user settings and `claude plugin install`), AiMcpServers
-		(MCP servers added to Claude Code and Codex), ObsidianCli (turns the Obsidian command line
+		(MCP servers added to Claude Code and Codex), AiProfileInit (walks the
+		AI profile's sign-ins with Initialize-AiProfile, waiting at the terminal, so an
+		unattended run leaves it off), ObsidianCli (turns the Obsidian command line
 		interface on in Obsidian's per-machine app settings), VSCodeProfiles
 		(links VS Code profile files, registers profiles in VS Code's state and
 		installs extensions), and LockedStartLayout.
@@ -94,6 +96,7 @@ function Resolve-BootstrapSteps {
 		AiArtifacts                = $false
 		AiMarketplaces             = $false
 		AiMcpServers               = $false
+		AiProfileInit              = $false
 		ObsidianCli                = $false
 		VSCodeProfiles             = $false
 		LockedStartLayout          = $false

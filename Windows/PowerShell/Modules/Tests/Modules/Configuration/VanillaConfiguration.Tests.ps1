@@ -22,6 +22,7 @@ Describe "Vanilla Configuration (empty-by-default contract)" {
 			@{ Key = "WallpaperDarkSettings" }
 			@{ Key = "WallpaperLightSettings" }
 			@{ Key = "PowerPlans" }
+			@{ Key = "PowerTimeouts" }
 			@{ Key = "PowerButtonActions" }
 			@{ Key = "KeyboardLayouts" }
 			@{ Key = "DisplayLanguages" }
@@ -76,6 +77,19 @@ Describe "Vanilla Configuration (empty-by-default contract)" {
 
 		It "Should ship an empty PersonalSteps list" {
 			@($script:BaseConfig.BootstrapConfig.PersonalSteps).Count | Should -Be 0
+		}
+
+		It "Should ship AI profiles off (no profile, host, default, owner or shared repository)" {
+			$script:BaseConfig.AiProfiles.Profiles.Count | Should -Be 0
+			$script:BaseConfig.AiProfiles.Hosts.Count | Should -Be 0
+			$script:BaseConfig.AiProfiles.Default | Should -BeNullOrEmpty
+			$script:BaseConfig.AiProfiles.DefaultOwner | Should -BeNullOrEmpty
+			@($script:BaseConfig.AiProfiles.Shared).Count | Should -Be 0
+		}
+
+		It "Should ship no checkout or manifest AI artifact source" {
+			$script:BaseConfig.AiArtifacts.Checkouts.Count | Should -Be 0
+			$script:BaseConfig.AiArtifacts.Manifests.Count | Should -Be 0
 		}
 
 		It "Should ship blank Git identity" {

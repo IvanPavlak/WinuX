@@ -10,6 +10,17 @@ function Resolve-AiArtifactsConfig {
 
 		  Root        The artifacts root on disk (default {RepoRoot}\AI). Items live kind first:
 		              <Root>\<Kind>\<source>\<item>.
+		  Profile     The AI profile this machine runs (Resolve-AiProfile). With a profile
+		              active its Rules wins over Use.Rules, its Deploy over AiArtifacts.Deploy,
+		              its Exclude entries join the global ones and its Include entries limit
+		              the kinds they name.
+		  Include     The active profile's Include entries, lowercased (empty: everything).
+		  Checkouts   The checkout sources, name -> @{ Name; Path; Kinds }: a local repository
+		              whose items are linked straight from it (Kinds as for Sources, default
+		              skills = @("skills")).
+		  Manifests   The manifest sources, name -> @{ Name; Path }: a manifest file whose rows
+		              are cloned into CacheRoot and linked from there.
+		  CacheRoot   Where manifest refs are cloned: %LOCALAPPDATA%\WinuX\ai-manifests.
 		  Sources     The vendored sources, name -> @{ Repository; Ref; Kinds; Exclude;
 		              SkipPaths }, Kinds an ordered map of kind (skills, mods, rules, prompts,
 		              agents) -> upstream folders. A source without a kind key gets
@@ -29,7 +40,8 @@ function Resolve-AiArtifactsConfig {
 		  Unknown     Deploy names that have no AiHarnesses entry.
 		  WSLUser     DefaultWSLUsername, empty when not configured.
 
-		Only the {User}, {RepoRoot} and {AppData} placeholders are expanded here - the sections
+		Only the {User}, {RepoRoot}, {AppData} and {Dev} placeholders are expanded here ({Dev}
+		is BasePaths.<MachineType>.Dev, else the folder holding the repository) - the sections
 		are machine-type independent apart from the scopes, so they do not go through
 		Expand-ConfigPaths. Every key falls back to the built-in default when missing, so the
 		empty base configuration resolves to a usable setup that deploys nothing.
@@ -43,6 +55,10 @@ function Resolve-AiArtifactsConfig {
 	.PARAMETER MachineType
 		The machine type whose Deploy, Exclude, Use and destination scopes apply. Defaults to
 		$global:MachineType.
+
+	.PARAMETER AiProfile
+		A resolved AI profile (Resolve-AiProfile). Defaults to resolving it from the same
+		configuration.
 
 	.EXAMPLE
 		(Resolve-AiArtifactsConfig).Deploy
@@ -62,7 +78,10 @@ function Resolve-AiArtifactsConfig {
 		[string]$RepoRoot,
 
 		[Parameter()]
-		[string]$MachineType = $global:MachineType
+		[string]$MachineType = $global:MachineType,
+
+		[Parameter()]
+		[hashtable]$AiProfile
 	)
 
 	if (-not $RepoRoot) {
@@ -76,10 +95,20 @@ function Resolve-AiArtifactsConfig {
 	$harnessSection = Get-ConfigSetting -Path 'AiHarnesses' -Configuration $Configuration
 	if ($harnessSection -isnot [hashtable]) { $harnessSection = @{} }
 
+	if (-not $AiProfile) {
+		$AiProfile = Resolve-AiProfile -Configuration $Configuration
+	}
+	$active = if ($AiProfile.Enabled) { $AiProfile.Profile } else { $null }
+
 	$userProfile = $env:USERPROFILE
+	$devRoot = ''
+	if ($MachineType) {
+		$devRoot = [Environment]::ExpandEnvironmentVariables([string](Get-ConfigSetting -Path "BasePaths.$MachineType.Dev" -Default '' -Configuration $Configuration))
+	}
+	if (-not $devRoot) { $devRoot = Split-Path -Path $RepoRoot.TrimEnd('\') -Parent }
 	$expand = {
 		param($value)
-		([string]$value).Replace('{RepoRoot}', $RepoRoot).Replace('{User}', $userProfile).Replace('{AppData}', $env:APPDATA)
+		([string]$value).Replace('{RepoRoot}', $RepoRoot).Replace('{User}', $userProfile).Replace('{AppData}', $env:APPDATA).Replace('{Dev}', $devRoot)
 	}
 
 	# A value that may be written per machine type: @{ Default = ...; Work = ... }.
@@ -129,6 +158,45 @@ function Resolve-AiArtifactsConfig {
 		}
 		if ([string]$entry) { $exclude += ([string]$entry).ToLowerInvariant() }
 	}
+	if ($active) {
+		$exclude += @($active.Exclude)
+	}
+	$include = if ($active) { @($active.Include) } else { @() }
+
+	# Checkout sources: a local repository linked straight from its folders.
+	$checkouts = [ordered]@{}
+	$configuredCheckouts = if ($section.Checkouts -is [hashtable]) { $section.Checkouts } else { @{} }
+	foreach ($name in ($configuredCheckouts.Keys | ForEach-Object { [string]$_ } | Sort-Object)) {
+		$entry = $configuredCheckouts[$name]
+		if ($entry -isnot [hashtable] -or -not $entry.Path) { continue }
+		$kindMap = [ordered]@{}
+		foreach ($kind in $kinds) {
+			foreach ($key in @($entry.Keys)) {
+				if ([string]$key -eq $kind -and $null -ne $entry[$key]) { $kindMap[$kind] = @($entry[$key] | ForEach-Object { [string]$_ }) }
+			}
+		}
+		if ($kindMap.Count -eq 0) { $kindMap['skills'] = @('skills') }
+		$checkouts[$name] = @{
+			Name  = $name
+			Path  = (& $expand $entry.Path).TrimEnd('\')
+			Kinds = $kindMap
+		}
+	}
+
+	# Manifest sources: a manifest file whose pinned rows are cloned into the cache.
+	$manifests = [ordered]@{}
+	$configuredManifests = if ($section.Manifests -is [hashtable]) { $section.Manifests } else { @{} }
+	foreach ($name in ($configuredManifests.Keys | ForEach-Object { [string]$_ } | Sort-Object)) {
+		$entry = $configuredManifests[$name]
+		$manifestPath = if ($entry -is [hashtable]) { [string]$entry.Path } else { [string]$entry }
+		if (-not $manifestPath) { continue }
+		$manifests[$name] = @{
+			Name = $name
+			Path = & $expand $manifestPath
+		}
+	}
+	$localAppData = if ($env:LOCALAPPDATA) { $env:LOCALAPPDATA } else { Join-Path $userProfile 'AppData\Local' }
+	$cacheRoot = Join-Path $localAppData 'WinuX\ai-manifests'
 
 	# Use: kind -> item name, each value optionally per machine type.
 	$use = @{}
@@ -141,9 +209,17 @@ function Resolve-AiArtifactsConfig {
 		}
 	}
 
-	# Deploy: this machine type's harnesses.
+	# The active profile's rules item wins over Use.Rules.
+	if ($active -and $active.Rules) {
+		$use['rules'] = [string]$active.Rules
+	}
+
+	# Deploy: the active profile's harnesses, else this machine type's.
 	$deploy = @()
-	if ($section.Deploy -is [hashtable]) {
+	if ($active -and $null -ne $active.Deploy) {
+		$deploy = @($active.Deploy | Where-Object { $_ } | ForEach-Object { [string]$_ })
+	}
+	elseif ($section.Deploy -is [hashtable]) {
 		if ($MachineType -and $section.Deploy.ContainsKey($MachineType)) {
 			$deploy = @($section.Deploy[$MachineType] | Where-Object { $_ } | ForEach-Object { [string]$_ })
 		}
@@ -201,11 +277,16 @@ function Resolve-AiArtifactsConfig {
 	return @{
 		Root      = & $expand $rootTemplate
 		Sources   = $sources
+		Checkouts = $checkouts
+		Manifests = $manifests
+		CacheRoot = $cacheRoot
 		Exclude   = $exclude
+		Include   = $include
 		Use       = $use
 		Deploy    = $deploy
 		Harnesses = $harnesses
 		Unknown   = $unknown
 		WSLUser   = $wslUser
+		Profile   = $AiProfile
 	}
 }
