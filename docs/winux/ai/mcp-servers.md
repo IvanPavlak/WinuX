@@ -53,7 +53,26 @@ Nothing secret belongs in the repository, and nothing secret has to:
 - **Added** when an app does not carry the server.
 - **Updated** when it carries it with another definition: Claude Code's entry is removed and added again, Codex's table is replaced in place.
 - **Left alone** when it carries it as configured, so a run changes nothing on a machine that is up to date.
-- **Never removed.** A server taken out of the configuration stays until it is removed by hand (`claude mcp remove --scope user <name>`, and its table in `config.toml`), the same as a plugin taken out of `AiMarketplaces`.
+- **Removed only when WinuX registered it.** Every server `Deploy-AiMcpServers` added, updated or found carried exactly as configured is recorded per app (`claude-code`, `codex`, `wsl:claude-code`, `wsl:codex`) in `%LOCALAPPDATA%\WinuX\ai-mcp-servers.state`. A recorded server the [AI profile](profiles.md) no longer lists is removed: `claude mcp remove --scope user <name>`, or its `config.toml` table taken out. A server the user added by hand, or one an app carries with another definition, is never recorded and never removed. Without profiles every configured server is wanted, so nothing is removed; a server taken out of `Servers` altogether stays until it is removed by hand, the same as a plugin taken out of `AiMarketplaces`.
+
+## Per AI Profile
+
+With an [AI profile](profiles.md) active, its `McpServers` list picks which of the `Servers` the machine registers: left out, all of them; `@()`, none. One catalogue in `Servers` therefore serves every machine, and a machine that changes profile drops the servers it no longer lists on its next deploy:
+
+```powershell
+AiProfiles = @{
+    Profiles = @{
+        Personal = @{ McpServers = @("my-remote", "my-local") }
+        Work     = @{ McpServers = @() }
+    }
+}
+```
+
+[Test-AiProfile](../modules/ai.md#test-aiprofile) lists the profile's OAuth servers as "sign in once with /mcp, not checked" (it never runs `claude mcp list`, which would start every stdio server), and [Initialize-AiProfile](../modules/ai.md#initialize-aiprofile) walks their `/mcp` sign-in.
+
+## Stdio Servers on Windows
+
+A stdio server's `Command` and `Args` are written as given, to the Windows and the WSL Claude Code alike, so a `Command = "npx"` entry works in both. Pin the package version in `Args` (`"-y", "my-mcp-server@1.2.3"`) so every machine runs the same server. Older Claude Code documentation asked for `cmd /c npx` on native Windows; the current MCP page no longer does, and `cmd` would not exist inside WSL. When a native-Windows `npx` server fails to start, see [Troubleshooting](../reference/troubleshooting.md#an-mcp-server-is-listed-but-its-tools-are-missing).
 
 Inside WSL (`DefaultWSLDistribution` and `DefaultWSLUsername` set), the Codex tables go to the WSL user's `config.toml` through the `\\wsl.localhost` share, and the Claude Code steps run against the Claude Code CLI installed inside WSL. A `claude` that WSL resolves under `/mnt/` is the Windows CLI reached through interop, which would write the Windows profile, so it counts as missing.
 

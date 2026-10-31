@@ -10,6 +10,7 @@ Sets the Windows power plan to Balanced, HighPerformance, or UltimatePerformance
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
 | [`PowerPlans`](../../configuration-reference.md#power-plans) | hashtable of machine type to plan mode | `@{}` (empty) | The plan `Set-PowerPlan -Auto` activates on each machine type: `Balanced`, `HighPerformance` or `UltimatePerformance`. Ships empty. |
+| [`PowerTimeouts`](../../configuration-reference.md#power-timeouts) | hashtable of machine type to timeouts | `@{}` (empty) | The sleep, hibernate and display timeouts `-Auto` writes into every power scheme, in minutes (`0` = never): `SleepPluggedIn`, `SleepOnBattery`, `HibernatePluggedIn`, `HibernateOnBattery`, `DisplayPluggedIn`, `DisplayOnBattery`. A key left out is not managed. Ships empty. |
 
 ## Decisions
 
@@ -17,6 +18,10 @@ Sets the Windows power plan to Balanced, HighPerformance, or UltimatePerformance
     - Options: Machine type to one of `Balanced`, `HighPerformance`, `UltimatePerformance` (the hidden Ultimate Performance scheme is duplicated on first use). No GUIDs - the function maps the mode name to the scheme itself.
     - Default: Empty - `Set-PowerPlan -Auto` warns and leaves the active plan as-is.
     - More detail: [`PowerPlans`](../../configuration-reference.md#power-plans)
+2. Should a machine type stay awake on mains power (it runs unattended jobs), or change any sleep or display timeout?
+    - Options: `PowerTimeouts` per machine type: `SleepPluggedIn = 0; HibernatePluggedIn = 0` keeps it awake on mains power while the display still turns off on its own timeout; any of the six keys in minutes.
+    - Default: Empty - no timeout is changed.
+    - More detail: [`PowerTimeouts`](../../configuration-reference.md#power-timeouts)
 
 ## Where to Put Values
 
@@ -28,7 +33,8 @@ All of it goes in `Configuration.local.psd1`, at the repository's `Windows/Power
 ## Steps Overview
 
 1. Set `PowerPlans`
-2. Reload and confirm the merge landed
+2. Set `PowerTimeouts`
+3. Reload and confirm the merge landed
 
 ## Step 1: Set `PowerPlans`
 
@@ -41,7 +47,17 @@ PowerPlans = @{
 }
 ```
 
-## Step 2: Reload and confirm the merge landed
+## Step 2: Set `PowerTimeouts`
+
+The timeouts `Set-PowerPlan -Auto` writes into every power scheme of each machine type. Ships empty.
+
+```powershell
+PowerTimeouts = @{
+    Machine = @{ SleepPluggedIn = 0; HibernatePluggedIn = 0 }
+}
+```
+
+## Step 3: Reload and confirm the merge landed
 
 Reload the profile, then read the merged value back. `$global:Configuration` after a reload is the ground truth - if what you set is not there, the local file did not parse or the key is nested one level away from where you put it.
 
@@ -57,7 +73,8 @@ Read-only checks. None of these change anything.
 ```powershell
 Reload-PowerShellProfile
 $global:Configuration.PowerPlans
-powercfg /getactivescheme
+$global:Configuration.PowerTimeouts
+powercfg /query SCHEME_CURRENT SUB_SLEEP STANDBYIDLE
 ```
 
 If a value reads back as empty, the two usual causes are a parse error in `Configuration.local.psd1` (run `Test-ConfigurationSchema`) and a key placed at the wrong nesting level.
@@ -69,9 +86,12 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 ```powershell
 # Configuration.local.psd1
 @{
-    PowerPlans = @{
+    PowerPlans    = @{
         Machine = "UltimatePerformance"
         Laptop  = "HighPerformance"
+    }
+    PowerTimeouts = @{
+        Machine = @{ SleepPluggedIn = 0; HibernatePluggedIn = 0 }
     }
 }
 ```

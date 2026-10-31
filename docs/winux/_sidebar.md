@@ -54,6 +54,7 @@
     - [AI Skills](/winux/ai/skills.md)
     - [AI Mods](/winux/ai/mods.md)
     - [AI MCP Servers](/winux/ai/mcp-servers.md)
+    - [AI Profiles](/winux/ai/profiles.md)
 
 - **Contributing**
     - [Fork Model](/winux/contributing/fork-model.md)

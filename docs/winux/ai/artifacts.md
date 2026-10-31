@@ -21,9 +21,13 @@ Formats are never translated: an item is linked as it is. An item folder may car
 The sources read, in this order, the first winning an item name two of them carry (with a warning):
 
 1. `own` - your own items, never touched by a refresh. WinuX ships it empty.
-2. Then, in name order: `winux` (the product skills WinuX ships: [winux-configurator](../configuration/winux-configurator.md) and `document`, which turns a function's comment-based help into its module page entry and configuration guide), `example` (the example rules) and every vendored source, an `AiArtifacts.Sources` entry filled by [Update-AiArtifacts](../modules/ai.md#update-aiartifacts).
+2. Checkout sources (`AiArtifacts.Checkouts`, in name order) - a local repository whose items are linked straight from its working tree (see [Checkout sources](#checkout-sources)).
+3. `winux` - the product skills WinuX ships: [winux-configurator](../configuration/winux-configurator.md) and `document`, which turns a function's comment-based help into its module page entry and configuration guide.
+4. `example` - the example rules.
+5. Vendored sources (`AiArtifacts.Sources`, in name order), filled by [Update-AiArtifacts](../modules/ai.md#update-aiartifacts).
+6. Manifest sources (`AiArtifacts.Manifests`, in name order) - pinned third-party items cloned into a cache outside the repository (see [Manifest sources](#manifest-sources)).
 
-Any other source folder is not read. Leave an item out with an `AiArtifacts.Exclude` entry: `"skills/tdd"` drops it from every source, `"skills/winux/document"` from one, and `@{ Item = "skills/tdd"; Machine = "Work" }` on one machine type.
+Any other source folder is not read. Leave an item out with an `AiArtifacts.Exclude` entry: `"skills/tdd"` drops it from every source, `"skills/winux/document"` from one, `"skills/my-source/*"` every item of one source (wildcards work), and `@{ Item = "skills/tdd"; Machine = "Work" }` on one machine type. An [AI profile](profiles.md) adds its own `Exclude` entries, and its `Include` entries limit a kind they name to the matching items. The `source` of an item is its folder name (`own`, `winux`, `example`, a vendored source), the checkout source's name for a checkout item, and the lowercased upstream owner for a manifest item (the `<owner>` of its `https://github.com/<owner>/<repo>`, not the manifest source's name): `"skills/my-checkout/*"` matches only that checkout's items, `"skills/some-owner/tdd"` only the manifest row from that owner's repository.
 
 Prompts and agents ship no items: they are kinds a fork fills, under `AI\Prompts\own\` and `AI\Agents\own\` or from a vendored source.
 
@@ -47,7 +51,7 @@ Each harness has `WSL` (`$true`: WSL twins, below) and `Destinations`, one hasht
 | `Kind` | `Skills`, `Mods`, `Rules`, `Prompts` or `Agents` |
 | `Placement` | `Each`: `Path` is a folder, one link per item; `Copy`: the same, copied (for an app that does not follow links), a copy that differs from the repository's is replaced; `File`: `Path` is one file, linked to the item `AiArtifacts.Use` names for the kind |
 | `Files` | the first one the item has: `.` is the item folder itself (linked as `<item>`), a file name is that file (linked as `<item>` plus the file's extension: `claude.md` as `<item>.md`, `copilot.agent.md` as `<item>.agent.md`); an item with none of them is left out of this destination |
-| `Hooks` | `claude-plugin-dirs`: sets `env.CLAUDE_CODE_PLUGIN_DIRS` of `~\.claude\settings.json` to the links, **joined with `;`** (`:` in WSL), then every entry added by hand, and runs `claude plugin validate` on each (a missing or rejecting CLI only warns); `managed-settings`: the WSL twin is made as root |
+| `Hooks` | `claude-plugin-dirs`: sets `env.CLAUDE_CODE_PLUGIN_DIRS` of `~\.claude\settings.json` to the links, **joined with `;`** (`:` in WSL), then every entry added by hand, and runs `claude plugin validate` on each (a missing or rejecting CLI only warns); `managed-settings`: the destination is an administrator-owned rendered copy, never a link, and the WSL twin is written as root (see [CoreAiRules - Managed settings copy](coreairules.md#managed-settings-copy)) |
 | `Path` | the Windows destination; `{User}`, `{RepoRoot}` and `{AppData}` expand |
 | `WSLPath` | the WSL twin, when it is not derived from a `{User}` path |
 | `Machine` | optional machine scope (`"PC/Work"`); absent means every machine type |
@@ -93,7 +97,7 @@ A harness with `WSL = $true` deploys every destination that has a WSL twin insid
 
 ## Selection
 
-Every item of every source read goes to every active app that accepts its kind, minus the `Exclude` entries. A `File` destination takes the one item `AiArtifacts.Use` names for its kind; without a `Use` entry it links nothing. A `Use` value may be per machine type:
+Every item of every source read goes to every active app that accepts its kind, minus the `Exclude` entries. A `File` destination takes the one item `AiArtifacts.Use` names for its kind; without a `Use` entry it links nothing. With an [AI profile](profiles.md) active, the profile's `Rules` is the rules entry and its `Deploy` the harness list. A `Use` value may be per machine type:
 
 ```powershell
 AiArtifacts = @{
@@ -115,7 +119,7 @@ BootstrapConfig = @{
 }
 ```
 
-Behaviour kept for every kind: a folder destination that is itself a link into the repository is replaced by a real folder, one that links elsewhere (or a file in its place) is skipped; a real file or folder where a link or copy goes is first copied into `Backups\Windows\SymbolicLinks\AiArtifacts.<kind>.<item>\<timestamp>\` (see [Backups](../reference/backups.md)), and when that copy fails the item is skipped; only dangling links that point into the artifacts root are pruned, a link to anything else is never touched. The run needs administrator rights (symbolic links and `C:\Program Files`), like `SymbolicLinkMaker`.
+Behaviour kept for every kind: a folder destination that is itself a link into the repository is replaced by a real folder, one that links elsewhere (or a file in its place) is skipped; a real file or folder where a link or copy goes is first copied into `Backups\Windows\SymbolicLinks\AiArtifacts.<kind>.<item>\<timestamp>\` (see [Backups](../reference/backups.md)), and when that copy fails the item is skipped; only dangling links that point into the artifacts root, the manifest cache or a checkout source are pruned, a link to anything else is never touched. The run needs administrator rights (symbolic links and `C:\Program Files`), like `SymbolicLinkMaker`.
 
 [List-AiArtifacts](../modules/ai.md#list-aiartifacts) lists what the repository carries, and `-ListDiscrepancies` checks every Windows destination against it.
 
@@ -138,6 +142,65 @@ AiArtifacts = @{
 
 `Update-AiArtifacts` downloads the pinned archive and copies the items found under each kind's folders into `AI\<Kind>\<source>\`, writing an `UPSTREAM.md` per kind folder and the upstream license. A source without a kind key reads `Skills = @("skills")`; `SkipPaths` (default `.git`, `.github`, `tests`, `design`, `docs`) are top-level entries of an item not copied; a private repository needs a GitHub token (`GITHUB_TOKEN`, `GH_TOKEN` or a signed-in `gh`). The vendored tree is committed, so a fresh machine needs only `Deploy-AiArtifacts`.
 
+## Checkout sources
+
+A checkout source is a local repository you develop artifacts in. Its items are linked straight from its working tree - never copied, no `UPSTREAM.md` - so a `git pull` of that repository updates every machine's linked items at once:
+
+```powershell
+AiArtifacts = @{
+    Checkouts = @{
+        "my-skills" = @{
+            Path   = "{Dev}\MySkills"     # {Dev}, {User}, {RepoRoot} expand
+            Skills = @("skills")          # per kind, its folders holding items (no kind key: Skills = @("skills"))
+        }
+    }
+}
+```
+
+A checkout source is read right after `own`, so it wins a name clash with everything else. A missing folder only yields fewer items.
+
+## Manifest sources
+
+A manifest source is a manifest file, typically kept in a checkout source, that pins third-party items to a commit:
+
+```powershell
+AiArtifacts = @{
+    Manifests = @{ "my-skills" = @{ Path = "{Dev}\MySkills\third-party\manifest.tsv" } }
+}
+```
+
+The format (shared with Foundation, read by [Get-AiArtifactManifest](../modules/ai.md#get-aiartifactmanifest)):
+
+- UTF-8, tab-separated, one header row, `#` starts a comment line, blank lines are ignored.
+- Columns, in order:
+
+| Column | Meaning |
+| ------ | ------- |
+| `name` | the item's folder name in its source; also its installed name unless `install` gives `rename=` |
+| `kind` | `skills`, `mods`, `rules`, `prompts` or `agents` |
+| `scope` | `*` (every profile), one or more [AI profile](profiles.md) names separated by commas, or `repo:<name>` for an item linked into one repository only |
+| `source` | `https://github.com/<owner>/<repo>` |
+| `ref` | a full 40-character commit SHA, never a branch |
+| `path` | the item's folder inside the source |
+| `install` | `clone`, optionally followed by `rename=<new-name>` and/or `strip-invocation-guard` |
+
+```text
+name	kind	scope	source	ref	path	install
+tdd	skills	*	https://github.com/MyOrg/skills	0123456789abcdef0123456789abcdef01234567	skills/tdd	clone
+grill	skills	Personal	https://github.com/MyOrg/skills	0123456789abcdef0123456789abcdef01234567	skills/grill	clone rename=grill-me strip-invocation-guard
+design	skills	repo:MyProject	https://github.com/MyOrg/skills	0123456789abcdef0123456789abcdef01234567	skills/design	clone
+```
+
+How the rows are deployed:
+
+- Each `source` + `ref` a row that applies here needs is cloned once into the manifest cache, outside every repository: `%LOCALAPPDATA%\WinuX\ai-manifests\<owner>\<repo>\<ref>\` ([Sync-AiManifestCache](../modules/ai.md#sync-aimanifestcache), run by `Deploy-AiArtifacts` before it plans and by `Update-AiArtifacts`). Only the pinned commit is fetched (a shallow fetch by id, no history; the full clone only when the server refuses that), each fetch is announced as it starts, and git's credential prompts are off, so a private or renamed upstream fails at once instead of waiting. A ref is immutable, so a clone that is there is never fetched again; a clone is made in `<ref>.partial` and renamed only when its checkout succeeded.
+- A row applies when its scope is `*` or names the active AI profile; with profiles off, only `*` and `repo:` rows apply.
+- A manifest item's source label is its upstream owner, lowercased: it is listed as `<owner> (manifest)` and matched by `Exclude` and `Include` entries as `kind/<owner>/name`. instead of the clone's folder: `<ref>.derived\<link-name>\` in the cache (the `rename=` name, else the row's name), made once. `rename=` rewrites the frontmatter `name:` of its `SKILL.md` to the new name, since Claude Code names a skill by its frontmatter, not its folder; `strip-invocation-guard` removes its `disable-model-invocation` line, so agents can call the skill.
+- A `repo:<name>` row (skills only) is linked into that repository's `.claude\skills\`, the repository found by name in `RepositoryGroups`, when `claude-code` is deployed; its link names are added to that repository's `.git\info\exclude`, so nothing is committed.
+- A row that breaks the format is reported with its line number and skipped; the others deploy.
+
+`Update-AiArtifacts` clones the refs that are missing, and `Update-AiArtifacts -Check` reports every row whose upstream default branch has moved past its pinned ref (`git ls-remote <source> HEAD`), changing nothing. Moving a row to a newer commit is an edit of the manifest; the next deploy clones the new ref. Upstream licences of adapted items belong in the manifest repository's `licenses/`.
+
 ## Marketplaces
 
 Marketplaces are not an artifact kind: their plugins install through Claude Code's own CLI. [Deploy-AiMarketplaces](../modules/ai.md#deploy-aimarketplaces) reads `AiMarketplaces` and is the Bootstrap step `AiMarketplaces`; see [AI Mods - Marketplaces](mods.md#marketplaces). A plugin installed from a marketplace must not also be a mod in `AI\Mods`: Claude Code would load it twice.
@@ -146,9 +209,10 @@ Marketplaces are not an artifact kind: their plugins install through Claude Code
 
 1. `Deploy-AiArtifacts -WhatIf` ends with a success line or names what is missing.
 2. `List-AiArtifacts -ListDiscrepancies` reports nothing: every item is deployed into every destination of the harnesses turned on.
-3. The rules: `(Get-Item ~\.claude\CLAUDE.md).LinkTarget` and `(Get-Item "C:\Program Files\ClaudeCode\managed-settings.json").LinkTarget` print paths inside `AI\Rules\`; in WSL, `readlink ~/.claude/CLAUDE.md /etc/claude-code/managed-settings.json` prints `/mnt/<drive>/...` paths.
-4. The mods: `(Get-Content ~\.claude\settings.json | ConvertFrom-Json).env.CLAUDE_CODE_PLUGIN_DIRS` lists the links under `~\.claude\mods`, `;`-separated; `claude plugin validate ~\.claude\mods\<mod>` passes.
-5. In a throwaway folder outside the repository, start a new session of each app and confirm the skills (`/`), the mods and the rules appear.
+3. The rules: `(Get-Item ~\.claude\CLAUDE.md).LinkTarget` prints a path inside `AI\Rules\`, and `(Get-Item "C:\Program Files\ClaudeCode\managed-settings.json").LinkTarget` prints nothing (a copy, not a link); in WSL, `readlink ~/.claude/CLAUDE.md` prints a `/mnt/<drive>/...` path and `ls -l /etc/claude-code/` shows root-owned files. With an AI profile, `Test-AiProfile` exits 0.
+4. The sources: `List-AiArtifacts` shows each group with its source kind (`checkout`, `product`, `vendored`, `manifest`, `manifest, repo:<name>`); a manifest item's group is named by its upstream owner.
+5. The mods: `(Get-Content ~\.claude\settings.json | ConvertFrom-Json).env.CLAUDE_CODE_PLUGIN_DIRS` lists the links under `~\.claude\mods`, `;`-separated; `claude plugin validate ~\.claude\mods\<mod>` passes.
+6. In a throwaway folder outside the repository, start a new session of each app and confirm the skills (`/`), the mods and the rules appear.
 
 When one of these fails, see [Troubleshooting](../reference/troubleshooting.md).
 

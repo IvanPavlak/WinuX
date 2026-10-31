@@ -30,8 +30,16 @@ function Deploy-AiMcpServers {
 		sign-in once per machine and app (/mcp in Claude Code, `codex mcp login <name>`), because
 		the tokens stay in the machine's own credential store.
 
-		Servers are added and updated, never removed: a server taken out of the configuration stays
-		in the apps until it is removed by hand.
+		With an AI profile active (Resolve-AiProfile), only the servers its McpServers list
+		names are registered (absent: every server, as without profiles; an empty list: none).
+
+		Removal is limited to what this function registered: every server it added, updated or
+		found already configured is recorded per app (claude-code, codex, wsl:claude-code,
+		wsl:codex) in %LOCALAPPDATA%\WinuX\ai-mcp-servers.state, and a recorded server the
+		profile no longer lists is removed (`claude mcp remove --scope user`, or its Codex
+		table taken out). A configured server an app carries exactly as configured counts as
+		registered (an earlier run made it, before the state file existed). A server the user
+		added by hand, or one carried with another definition, is never removed.
 
 		Inside WSL (DefaultWSLDistribution and DefaultWSLUsername set) the same servers reach the
 		WSL user: the Codex tables are written to /home/<DefaultWSLUsername>/.codex/config.toml
@@ -265,14 +273,44 @@ function Deploy-AiMcpServers {
 		}
 	}
 
-	if ($valid.Count -eq 0) {
+	# The state file: every server this function registered, per app, so a server the AI
+	# profile stops listing can be removed again - and only such a server.
+	$localAppData = if ($env:LOCALAPPDATA) { $env:LOCALAPPDATA } else { Join-Path $env:USERPROFILE 'AppData\Local' }
+	$statePath = Join-Path $localAppData 'WinuX\ai-mcp-servers.state'
+	$registered = @{}
+	if (Test-Path -LiteralPath $statePath -PathType Leaf) {
+		foreach ($line in [IO.File]::ReadAllLines($statePath)) {
+			if (-not $line.Trim() -or $line.TrimStart().StartsWith('#')) { continue }
+			$fields = $line.Split("`t")
+			if ($fields.Count -lt 2 -or -not $fields[0] -or -not $fields[1]) { continue }
+			if (-not $registered.ContainsKey($fields[0])) { $registered[$fields[0]] = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal) }
+			[void]$registered[$fields[0]].Add($fields[1])
+		}
+	}
+	$stateBefore = (@($registered.Keys | Sort-Object | ForEach-Object { $app = $_; @($registered[$app] | Sort-Object) | ForEach-Object { "$app`t$_" } }) -join "`n")
+
+	# The servers the AI profile registers: its McpServers list (absent: every server).
+	$wanted = @($valid.Keys)
+	$aiProfile = Resolve-AiProfile
+	if ($aiProfile.Enabled -and $null -ne $aiProfile.Profile.McpServers) {
+		$listed = @($aiProfile.Profile.McpServers)
+		foreach ($name in $listed) {
+			if (@($servers.Keys | Where-Object { [string]$_ -eq $name }).Count -eq 0) {
+				Write-LogWarning "AI profile [$($aiProfile.Name)] lists MCP server [$name], which AiMcpServers.Servers does not define - skipped!"
+			}
+		}
+		$wanted = @($valid.Keys | Where-Object { $listed -contains $_ })
+		Write-LogStep "AI profile [$($aiProfile.Name)] registers $(if ($wanted.Count -gt 0) { $wanted -join ', ' } else { 'no MCP server' })"
+	}
+
+	if ($wanted.Count -eq 0 -and $registered.Count -eq 0 -and $valid.Count -eq 0) {
 		Write-LogWarning "No MCP server to deploy on this machine type!"
 		return
 	}
 
 	$codexNames = @()
 	if ($deploy -contains 'codex') {
-		foreach ($name in $valid.Keys) {
+		foreach ($name in $wanted) {
 			if ($valid[$name].Transport -eq 'sse') {
 				Write-LogWarning "MCP server [$name] is an sse server, which Codex does not read (stdio and streamable HTTP only) - not added to Codex!"
 				continue
@@ -302,17 +340,52 @@ function Deploy-AiMcpServers {
 	# exit code in $LASTEXITCODE, $ReadState returns the text of that user's ~/.claude.json (empty
 	# when there is none), so Windows and WSL share every check and message.
 	$deployClaude = {
-		param([string]$Label, [string]$Where, [scriptblock]$ReadState, [scriptblock]$Invoke)
+		param([string]$Label, [string]$Where, [scriptblock]$ReadState, [scriptblock]$Invoke, [string]$App)
 
 		$current = & $parseClaudeServers ((@(& $ReadState) | ForEach-Object { [string]$_ }) -join "`n")
 		if ($null -eq $current) {
 			Write-LogError "${Label}The Claude Code user configuration (.claude.json) does not parse - its MCP servers were not deployed!"
 			return
 		}
+		if (-not $registered.ContainsKey($App)) { $registered[$App] = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal) }
+		$record = $registered[$App]
+
+		# A configured server the app carries exactly as configured is this function's own
+		# registration (an earlier run, before the state file existed), so it counts as
+		# registered. One the user added by hand with another definition never does.
 		foreach ($name in $valid.Keys) {
+			if ($wanted -notcontains $name -and $current.Contains($name) -and (& $canonical $current[$name]) -eq $valid[$name].ClaudeCanonical) {
+				[void]$record.Add($name)
+			}
+		}
+
+		# Registered earlier, no longer listed by the AI profile: removed.
+		foreach ($name in @($record | Where-Object { $wanted -notcontains $_ } | Sort-Object)) {
+			if (-not $current.Contains($name)) {
+				[void]$record.Remove($name)
+				continue
+			}
+			try {
+				$global:LASTEXITCODE = 0
+				& $Invoke mcp remove --scope user $name *> $null
+				if ($LASTEXITCODE -eq 0) {
+					[void]$record.Remove($name)
+					Write-LogSuccess "${Label}Removed Claude Code MCP server [$name] (no longer listed)"
+				}
+				else {
+					Write-LogError "${Label}claude mcp remove --scope user [$name] failed (exit code $LASTEXITCODE) - run it by hand$Where to see why!"
+				}
+			}
+			catch {
+				Write-LogError "${Label}claude mcp remove [$name] threw => $($_.Exception.Message)"
+			}
+		}
+
+		foreach ($name in $wanted) {
 			$present = $current.Contains($name)
 			if ($present -and (& $canonical $current[$name]) -eq $valid[$name].ClaudeCanonical) {
 				Write-LogStep "${Label}Claude Code MCP server [$name] already configured"
+				[void]$record.Add($name)
 				continue
 			}
 			try {
@@ -330,6 +403,7 @@ function Deploy-AiMcpServers {
 				if ($LASTEXITCODE -eq 0) {
 					$verb = if ($present) { "Updated" } else { "Added" }
 					Write-LogSuccess "${Label}$verb Claude Code MCP server [$name]"
+					[void]$record.Add($name)
 				}
 				else {
 					Write-LogError "${Label}claude mcp add [$name] failed (exit code $LASTEXITCODE) - run it by hand$Where to see why!"
@@ -345,7 +419,7 @@ function Deploy-AiMcpServers {
 	# the next table header and its subtables) is replaced in place or appended. Comment lines in
 	# that stretch stay where they are, since they usually introduce the next table.
 	$deployCodex = {
-		param([string]$Label, [string]$Path)
+		param([string]$Label, [string]$Path, [string]$App)
 
 		try {
 			$text = if (Test-Path -LiteralPath $Path) { [System.IO.File]::ReadAllText($Path) } else { "" }
@@ -355,9 +429,58 @@ function Deploy-AiMcpServers {
 				foreach ($line in ($text -split "`r?`n")) { $lines.Add($line) }
 				if ($lines[$lines.Count - 1] -eq "") { $lines.RemoveAt($lines.Count - 1) }
 			}
+			if (-not $registered.ContainsKey($App)) { $registered[$App] = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal) }
+			$record = $registered[$App]
+
+			# One server's table (header, body and subtables, comment lines left in place):
+			# the lines outside it, where it started, and its non-comment body.
+			$splitTable = {
+				param($Lines, [string]$Name)
+				$escapedName = [regex]::Escape($Name)
+				$header = '^\s*\[\s*mcp_servers\s*\.\s*(?:' + $escapedName + '|"' + $escapedName + '")\s*(?:\.[^\]]*)?\]\s*(?:#.*)?$'
+				$kept = [System.Collections.Generic.List[string]]::new()
+				$body = @()
+				$start = -1
+				$inside = $false
+				foreach ($line in $Lines) {
+					if ($line -match '^\s*\[') {
+						$inside = $line -match $header
+						if ($inside -and $start -lt 0) { $start = $kept.Count }
+					}
+					if (-not $inside -or $line -match '^\s*#') {
+						$kept.Add($line)
+					}
+					elseif ($line.Trim()) {
+						$body += $line.Trim()
+					}
+				}
+				return @{ Kept = $kept; Start = $start; Body = $body }
+			}
 
 			$messages = @()
+
+			# Adopted: a configured server whose table matches its configuration exactly.
+			foreach ($name in $valid.Keys) {
+				if ($codexNames -contains $name -or $valid[$name].Transport -eq 'sse') { continue }
+				$table = & $splitTable $lines $name
+				if ($table.Start -ge 0 -and ($table.Body -join "`n") -eq (@($valid[$name].CodexBlock) -join "`n")) {
+					[void]$record.Add($name)
+				}
+			}
+			# Registered earlier, no longer listed: the table goes.
+			foreach ($name in @($record | Where-Object { $codexNames -notcontains $_ } | Sort-Object)) {
+				$table = & $splitTable $lines $name
+				[void]$record.Remove($name)
+				if ($table.Start -lt 0) { continue }
+				# The table's blank lines go with it; keep one between the neighbours it separated.
+				$kept = $table.Kept
+				if ($table.Start -gt 0 -and $table.Start -lt $kept.Count -and $kept[$table.Start - 1].Trim()) { $kept.Insert($table.Start, "") }
+				$lines = $kept
+				$messages += @{ Kind = 'Success'; Text = "${Label}Removed Codex MCP server [$name] (no longer listed)" }
+			}
+
 			foreach ($name in $codexNames) {
+				[void]$record.Add($name)
 				$escapedName = [regex]::Escape($name)
 				$header = '^\s*\[\s*mcp_servers\s*\.\s*(?:' + $escapedName + '|"' + $escapedName + '")\s*(?:\.[^\]]*)?\]\s*(?:#.*)?$'
 				$kept = [System.Collections.Generic.List[string]]::new()
@@ -414,14 +537,14 @@ function Deploy-AiMcpServers {
 	if ($deploy -contains 'claude-code') {
 		if (Get-Command -Name $Command -ErrorAction SilentlyContinue) {
 			$readWindows = { if (Test-Path -LiteralPath $claudeState) { [System.IO.File]::ReadAllText($claudeState) } else { "" } }
-			& $deployClaude -Label "" -Where "" -ReadState $readWindows -Invoke { & $Command @args }
+			& $deployClaude -Label "" -Where "" -ReadState $readWindows -Invoke { & $Command @args } -App "claude-code"
 		}
 		else {
 			Write-LogWarning "Claude Code CLI (claude) not found on PATH - its MCP servers are added once the Claude Code CLI is installed and this runs again!"
 		}
 	}
-	if ($codexNames.Count -gt 0) {
-		& $deployCodex -Label "" -Path $codexConfig
+	if ($deploy -contains 'codex') {
+		& $deployCodex -Label "" -Path $codexConfig -App "codex"
 	}
 
 	# WSL: the Codex file through the \\wsl.localhost share, the Claude Code CLI installed inside
@@ -429,10 +552,10 @@ function Deploy-AiMcpServers {
 	$distro = [string](Get-ConfigSetting -Path 'DefaultWSLDistribution' -Default '')
 	$wslUser = [string](Get-ConfigSetting -Path 'DefaultWSLUsername' -Default '')
 	if ($distro -and $wslUser -and (Test-WSLDistributionInstalled)) {
-		if ($codexNames.Count -gt 0) {
+		if ($deploy -contains 'codex') {
 			$wslHome = "\\wsl.localhost\$distro\home\$wslUser"
 			if (Test-Path -LiteralPath $wslHome) {
-				& $deployCodex -Label "[WSL] " -Path (Join-Path $wslHome ".codex\config.toml")
+				& $deployCodex -Label "[WSL] " -Path (Join-Path $wslHome ".codex\config.toml") -App "wsl:codex"
 			}
 			else {
 				Write-LogWarning "WSL share for [$distro] unreachable - the Codex MCP servers were not added inside WSL!"
@@ -451,8 +574,22 @@ function Deploy-AiMcpServers {
 				Write-LogWarning "WSL [$distro] resolves claude to the Windows CLI [$resolved], which would write the Windows profile - install the Claude Code CLI inside WSL so its MCP servers are added there!"
 			}
 			else {
-				& $deployClaude -Label "[WSL] " -Where " inside WSL" -ReadState $readWsl -Invoke $invokeWsl
+				& $deployClaude -Label "[WSL] " -Where " inside WSL" -ReadState $readWsl -Invoke $invokeWsl -App "wsl:claude-code"
 			}
+		}
+	}
+
+	# The state file is rewritten only when what it records changed.
+	$stateAfter = (@($registered.Keys | Sort-Object | ForEach-Object { $app = $_; @($registered[$app] | Sort-Object) | ForEach-Object { "$app`t$_" } }) -join "`n")
+	if ($stateAfter -ne $stateBefore) {
+		try {
+			New-Item -ItemType Directory -Path (Split-Path -Parent $statePath) -Force | Out-Null
+			$stateText = "# Written by Deploy-AiMcpServers: the MCP servers it registered, per app (app<TAB>server). Do not edit.`n"
+			if ($stateAfter) { $stateText += $stateAfter + "`n" }
+			[IO.File]::WriteAllText($statePath, $stateText, [Text.UTF8Encoding]::new($false))
+		}
+		catch {
+			Write-LogError "The MCP server state file [$statePath] was not written => $($_.Exception.Message)" -Exception $_
 		}
 	}
 

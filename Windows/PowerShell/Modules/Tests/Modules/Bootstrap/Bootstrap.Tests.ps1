@@ -107,7 +107,40 @@ Describe "Bootstrap" {
 		Mock Test-ConfigurationSchema { }
 		Mock Deploy-AiMarketplaces { }
 		Mock Deploy-AiMcpServers { }
+		Mock Resolve-AiProfile { @{ Enabled = $false; Name = '' } }
+		Mock Initialize-AiProfile { }
 		Mock Deploy-VSCodeProfiles { }
+	}
+
+	It "keeps the AI profile sign-ins off by default and only names Initialize-AiProfile, so a run stays unattended" {
+		$global:MachineType = 'Laptop'
+		Mock Resolve-AiProfile { @{ Enabled = $true; Name = 'Personal' } }
+
+		Bootstrap
+
+		Should -Invoke Initialize-AiProfile -Times 0
+		Should -Invoke Write-LogWarning -Times 1 -Exactly -ParameterFilter { $Message -like "*Initialize-AiProfile*AiProfileInit*" }
+	}
+
+	It "walks the AI profile sign-ins when BootstrapConfig.Steps.AiProfileInit is on and a profile is active" {
+		$global:MachineType = 'Laptop'
+		$global:Configuration.BootstrapConfig = @{ Steps = @{ AiProfileInit = $true } }
+		Mock Resolve-AiProfile { @{ Enabled = $true; Name = 'Personal' } }
+
+		Bootstrap
+
+		Should -Invoke Initialize-AiProfile -Times 1 -Exactly
+	}
+
+	It "neither walks nor names the sign-ins without an active AI profile" {
+		$global:MachineType = 'Laptop'
+		$global:Configuration.BootstrapConfig = @{ Steps = @{ AiProfileInit = $true } }
+		Mock Resolve-AiProfile { @{ Enabled = $false; Name = '' } }
+
+		Bootstrap
+
+		Should -Invoke Initialize-AiProfile -Times 0
+		Should -Invoke Write-LogWarning -Times 0 -ParameterFilter { $Message -like "*Initialize-AiProfile*" }
 	}
 
 	It "runs initial-setup steps and leaves the repository update off until it is opted into" {

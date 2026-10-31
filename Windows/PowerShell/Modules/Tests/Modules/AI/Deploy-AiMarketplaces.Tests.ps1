@@ -6,6 +6,7 @@ BeforeAll {
 	# The settings writers are dot-sourced so these tests exercise the real file edits.
 	. "$FunctionsPath\Set-ClaudeSettingsKey.ps1"
 	. "$FunctionsPath\Set-ClaudeSettingsEnv.ps1"
+	. "$FunctionsPath\Resolve-AiProfile.ps1"
 }
 
 Describe "Deploy-AiMarketplaces" {
@@ -45,6 +46,8 @@ Describe "Deploy-AiMarketplaces" {
 		$script:SavedUserProfile = $env:USERPROFILE
 		$env:USERPROFILE = Join-Path $TestDrive "home"
 		Mock Test-WSLDistributionInstalled { $false }
+		# Profiles off unless a test turns one on.
+		Mock Resolve-AiProfile { @{ Enabled = $false; Warnings = @() } }
 
 		# A stand-in CLI: records every call; the two `list --json` calls answer what the test set.
 		$script:Log = Join-Path $TestDrive "calls.log"
@@ -282,5 +285,28 @@ Describe "Deploy-AiMarketplaces" {
 
 		Test-Path -Path $script:Settings | Should -BeFalse
 		Should -Invoke Write-LogWarning -ParameterFilter { $Message -like "No marketplaces configured*" }
+	}
+
+	Context "AI profile" {
+		It "deploys only the marketplaces the profile lists, with the options of their plugins only" {
+			$script:Section.Marketplaces.'other-marketplace' = @{ Repository = "MyOrg/Other"; Plugins = @("other-plugin") }
+			$script:Section.PluginConfigs.'other-plugin' = @{ options = @{ size = "big" } }
+			Mock Resolve-AiProfile { @{ Enabled = $true; Name = "Personal"; Profile = @{ Marketplaces = @("other-marketplace") }; Warnings = @() } }
+
+			Deploy-AiMarketplaces -Command $script:Stub
+
+			$document = Get-Content -Path $script:Settings -Raw | ConvertFrom-Json
+			$document.extraKnownMarketplaces.PSObject.Properties.Name | Should -Be @("other-marketplace")
+			$document.pluginConfigs.PSObject.Properties.Name | Should -Be @("other-plugin@other-marketplace")
+		}
+
+		It "deploys nothing when the profile lists no marketplace" {
+			Mock Resolve-AiProfile { @{ Enabled = $true; Name = "Work"; Profile = @{ Marketplaces = @() }; Warnings = @() } }
+
+			Deploy-AiMarketplaces -Command $script:Stub
+
+			Test-Path -Path $script:Settings | Should -BeFalse
+			Test-Path -Path $script:Log | Should -BeFalse
+		}
 	}
 }

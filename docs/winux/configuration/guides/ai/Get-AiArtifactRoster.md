@@ -12,8 +12,11 @@ Walks one kind of the artifacts root and returns the flattened roster - item nam
 | [`AiArtifacts.Root`](../../configuration-reference.md#ai-artifacts) | string | `{RepoRoot}\AI` | The folder walked: `<Root>\<Kind>\<source>\<item>`. |
 | [`AiArtifacts.Sources`](../../configuration-reference.md#ai-artifacts) | hashtable | `@{}` (empty) | Which source folders besides `own`, `winux` and `example` are read. |
 | [`AiArtifacts.Exclude`](../../configuration-reference.md#ai-artifacts) | array | `@()` | Items left out of the roster. |
+| [`AiArtifacts.Checkouts`](../../configuration-reference.md#ai-artifacts) | hashtable | `@{}` | Local repositories read right after `own`, items linked from their working tree. |
+| [`AiArtifacts.Manifests`](../../configuration-reference.md#ai-artifacts) | hashtable | `@{}` | Manifest files read last; their rows come from the manifest cache. |
+| [`AiProfiles`](../../configuration-reference.md#ai-profiles) | hashtable | no profile | The active profile's `Exclude` and `Include` entries, and the profile name manifest rows are scoped to. |
 
-All three are read through [`Resolve-AiArtifactsConfig`](Resolve-AiArtifactsConfig.md). What counts as an item and how a name collision is resolved (`own` first, then name order) are fixed rules, not settings, because the listing and the deployment must agree.
+All of them are read through [`Resolve-AiArtifactsConfig`](Resolve-AiArtifactsConfig.md). What counts as an item and how a name collision is resolved (`own`, checkouts, `winux`, `example`, vendored, manifests; the first wins) are fixed rules, not settings, because the listing and the deployment must agree.
 
 ## Decisions
 

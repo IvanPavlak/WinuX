@@ -1016,6 +1016,24 @@ PowerPlans = @{
 }
 ```
 
+### Power Timeouts
+
+Per-machine sleep, hibernate and display timeouts, in minutes (`0` = never).
+
+**Key:** `PowerTimeouts.{MachineType}` → Hashtable of `SleepPluggedIn`, `SleepOnBattery`, `HibernatePluggedIn`, `HibernateOnBattery`, `DisplayPluggedIn`, `DisplayOnBattery`
+
+**Consumer function:** `Set-PowerPlan` (`-Auto`)
+
+`Set-PowerPlan -Auto` writes each configured timeout into every power scheme (so a plan switch keeps it) and re-activates the current scheme; a key left out is not managed, an unknown key or a negative value is warned about and skipped. The base ships `PowerTimeouts` empty, so no timeout changes until you set one in `Configuration.local.psd1`.
+
+**Example (a machine that runs unattended jobs: never sleeps on mains power, the display still turns off):**
+
+```powershell
+PowerTimeouts = @{
+    PC = @{ SleepPluggedIn = 0; HibernatePluggedIn = 0 }
+}
+```
+
 ### Power Button Actions
 
 Power button and lid close behavior per machine type.
@@ -1152,7 +1170,7 @@ SymbolicLinks = @{
 
 The global instruction files of the AI apps (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`) and Claude
 Code's managed settings are not symbolic link entries: the rules are an [AI artifact](#ai-artifacts)
-that `Deploy-AiArtifacts` links.
+that `Deploy-AiArtifacts` links (the managed settings as an administrator-owned copy, never a link).
 
 **Consumer function:** `SymbolicLinkMaker`
 
@@ -1271,6 +1289,9 @@ Anything other than the three valid values is reported as unknown rather than si
   Claude Code settings and their plugins installed through the CLI via `Deploy-AiMarketplaces` - see [AI Mods - Marketplaces](../ai/mods.md#marketplaces)),
   `AiMcpServers` (the MCP servers of [`AiMcpServers`](#ai-mcp-servers) added to Claude Code through its CLI and to Codex's
   `config.toml` via `Deploy-AiMcpServers` - see [AI MCP Servers](../ai/mcp-servers.md)),
+  `AiProfileInit` (with an [`AiProfiles`](#ai-profiles) profile active, `Initialize-AiProfile` walks its
+  one-time sign-ins at the terminal and waits for each, so an unattended run leaves it off; off with a
+  profile active, Bootstrap only warns and names the function - see [AI Profiles](../ai/profiles.md#setting-up-a-machine)),
   `ObsidianCli` (`Enable-ObsidianCli -CreateIfMissing`
   writes `"cli": true` into Obsidian's per-machine `%APPDATA%\obsidian\obsidian.json`, which a synced vault never carries,
   so `Open-Obsidian` can load workspaces - see [Enable-ObsidianCli](guides/application/Enable-ObsidianCli.md)),
@@ -1402,13 +1423,15 @@ VisualEffects = @{
 
 **Subkeys:**
 
-- `Root` - The artifacts root (default `{RepoRoot}\AI`). Items live kind first: `<Root>\<Kind>\<source>\<item>`, `Kind` one of `Skills`, `Mods`, `Rules`, `Prompts`, `Agents`. The source folders read are `own` (read first, so it wins a name clash), `winux` (the product skills), `example` (the example rules) and every `Sources` entry; any other folder is not read.
+- `Root` - The artifacts root (default `{RepoRoot}\AI`). Items live kind first: `<Root>\<Kind>\<source>\<item>`, `Kind` one of `Skills`, `Mods`, `Rules`, `Prompts`, `Agents`. The sources are read in precedence order, the first winning an item name two carry (with a warning): `own`, the `Checkouts` entries, `winux` (the product skills), `example` (the example rules), every `Sources` entry, the `Manifests` entries; any other folder under the root is not read.
+- `Checkouts` - Local repositories whose items are linked straight from their working tree, never copied and without `UPSTREAM.md`, keyed by source name. Each entry: `Path` (the repository folder; `{Dev}`, `{User}`, `{RepoRoot}` expand) and one key per kind naming its folders that hold items of that kind (no kind key reads `Skills = @("skills")`). A pull of the repository updates the linked items at once. Ships empty.
+- `Manifests` - Manifest files of pinned third-party items, keyed by source name: `@{ Path = "..." }` (or the path as a string). The format (tab-separated `name`, `kind`, `scope`, `source`, `ref`, `path`, `install`) is on [AI Artifacts - Manifest sources](../ai/artifacts.md#manifest-sources). Each `source` + `ref` a row that applies here needs is cloned once into `%LOCALAPPDATA%\WinuX\ai-manifests\<owner>\<repo>\<ref>\` (by `Deploy-AiArtifacts` and `Update-AiArtifacts`) and linked from there, labelled by its lowercased upstream owner (`kind/<owner>/name` in `Exclude` and `Include`); a row scoped to another AI profile is skipped; a `repo:<name>` row is linked into that repository's `.claude\skills\`. Ships empty.
 - `Sources` - Upstream repositories vendored by `Update-AiArtifacts`, keyed by the source folder name. Each entry: `Repository` (`owner/name`), `Ref` (branch, tag or commit; default `main`; `UPSTREAM.md` records the exact commit), one key per kind naming the upstream folders that hold its items (`Skills`, `Mods`, `Rules`, `Prompts`, `Agents`; `.` is the repository root; no kind key reads `Skills = @("skills")`), `Exclude` (item names not to vendor) and `SkipPaths` (top-level entries of an item not to copy; default `.git`, `.github`, `tests`, `design`, `docs`). Ships empty.
-- `Exclude` - Items not to deploy: `"kind/name"` (every source, e.g. `"skills/tdd"`) or `"kind/source/name"` (one source, e.g. `"rules/example/CoreAiRules"`); an entry may be `@{ Item = "skills/tdd"; Machine = "Work" }` for one machine scope. An array - it replaces wholesale on merge. Ships empty.
+- `Exclude` - Items not to deploy: `"kind/name"` (every source, e.g. `"skills/tdd"`) or `"kind/source/name"` (one source, e.g. `"rules/example/CoreAiRules"`; the source of a checkout item is the checkout source's name, of a manifest item its lowercased upstream owner, e.g. `"skills/some-owner/tdd"`; wildcards allowed); an entry may be `@{ Item = "skills/tdd"; Machine = "Work" }` for one machine scope. An array - it replaces wholesale on merge. Ships empty.
 - `Use` - Per kind, the item a `File` destination takes (the rules linked as `CLAUDE.md`, `AGENTS.md`, ...); without one such a destination links nothing. A value may be per machine type: `@{ Default = "CoreAiRules"; Work = "WorkRules" }`. Ships `@{ Rules = "CoreAiRules" }`, the example rules skeleton.
 - `Deploy` - Per machine type, the [`AiHarnesses`](#ai-harnesses) entries this machine deploys into; `Default` covers every machine type without its own key. Ships `@{ Default = @() }`: nothing is deployed.
 
-Only `{RepoRoot}`, `{User}` and `{AppData}` are expanded in this section - it does not go through `PathTemplates`. Deployment is opt-in via `BootstrapConfig.Steps.AiArtifacts`. Design: [AI Artifacts](../ai/artifacts.md).
+With an [AI profile](#ai-profiles) active, the profile's `Rules` wins over `Use.Rules`, its `Deploy` over `Deploy`, its `Exclude` entries join `Exclude`, and its `Include` entries limit the kinds they name. Only `{RepoRoot}`, `{User}`, `{AppData}` and `{Dev}` (`BasePaths.<MachineType>.Dev`, else the folder holding the repository) are expanded in this section - it does not go through `PathTemplates`. Deployment is opt-in via `BootstrapConfig.Steps.AiArtifacts`. Design: [AI Artifacts](../ai/artifacts.md).
 
 ```powershell
 AiArtifacts = @{
@@ -1419,11 +1442,67 @@ AiArtifacts = @{
             Skills     = @("skills/engineering", "skills/productivity")
         }
     }
+    Checkouts = @{ "my-skills" = @{ Path = "{Dev}\MySkills"; Skills = @("skills") } }
+    Manifests = @{ "my-skills" = @{ Path = "{Dev}\MySkills\third-party\manifest.tsv" } }
     Exclude = @("rules/example/CoreAiRules")
     Use     = @{ Rules = "CoreAiRules" }
     Deploy  = @{
         Default = @("claude-code", "codex")
         Work    = @("claude-code")
+    }
+}
+```
+
+---
+
+## AI Profiles
+
+**Key:** `AiProfiles` → Hashtable: the AI profile each machine runs - its rules, the Plan the managed settings pin, its apps, artifacts, MCP servers and marketplaces, whether unattended runs are allowed, and which repositories it owns
+
+**Consumer functions:** [`Resolve-AiProfile`](../modules/ai.md#resolve-aiprofile), and through it [`Deploy-AiArtifacts`](../modules/ai.md#deploy-aiartifacts), [`Deploy-AiMcpServers`](../modules/ai.md#deploy-aimcpservers), [`Deploy-AiMarketplaces`](../modules/ai.md#deploy-aimarketplaces), [`List-AiArtifacts`](../modules/ai.md#list-aiartifacts), [`Test-AiProfile`](../modules/ai.md#test-aiprofile), [`Initialize-AiProfile`](../modules/ai.md#initialize-aiprofile)
+
+One profile per machine, picked once per command: the `WINUX_AI_PROFILE` environment variable (one naming no profile is warned about and ignored), then this host's `Hosts` entry, then `Default`. With no profile (the base), or none that resolves, profiles are off and every AI function behaves as before, scoped by machine type: the machine-type forms `AiArtifacts.Use`, `AiArtifacts.Deploy`, `AiArtifacts.Exclude` and the MCP server `Machine` scope keep working with profiles on too.
+
+- `Hosts` - Hostname (`$env:COMPUTERNAME`, case-insensitive) to profile name. Ships empty.
+- `Default` - The profile of a host `Hosts` does not name. Ships empty.
+- `Profiles` - One entry per profile, keyed by its name:
+  - `Rules` - The rules item (`AI/Rules/<source>/<item>`) its CLAUDE.md, AGENTS.md, GEMINI.md and managed settings take; wins over `AiArtifacts.Use.Rules`.
+  - `Plan` - `@{ Name = "Max"; OrgUuid = "<uuid>" }`, or an array of them. The deployed managed settings copy sets `forceLoginOrgUUID` to it (one UUID as a string, several as an array), so Claude Code refuses any other login; `Test-AiProfile` checks it. A Plan that is configured but unusable (an `OrgUuid` that is not a UUID) fails closed: the deploy writes no managed settings copy and leaves the deployed one, pin included, as it is, and `Test-AiProfile` reports a mismatch; a copy without the pin would let any Plan sign in.
+  - `Deploy` - The `AiHarnesses` entries it deploys into; wins over `AiArtifacts.Deploy`. Left out: `AiArtifacts.Deploy` applies.
+  - `Include` - Artifacts it takes: `"kind/name"` or `"kind/source/name"`, wildcards allowed (`"skills/my-skills/*"`). A kind named here deploys only the matching items; a kind not named is unaffected. Empty: everything.
+  - `Exclude` - Artifacts it leaves out, in the `AiArtifacts.Exclude` form (wildcards allowed), added to the global excludes.
+  - `McpServers` - The `AiMcpServers.Servers` entries it registers. Left out: all of them; `@()`: none. A server `Deploy-AiMcpServers` registered earlier that the list no longer names is removed.
+  - `Marketplaces` - The `AiMarketplaces.Marketplaces` entries it registers. Left out: all; `@()`: none.
+  - `Unattended` - `$true` when unattended agent runs are allowed on its machines (written to `ai-profile.conf` as `unattended on`).
+  - `Owns` - `origin` patterns of the repositories it owns (`"github.com/my-org/*"`).
+  - `Autonomous` - `origin` patterns of its repositories agents may work on unattended; only the active profile's reach `ai-profile.conf`.
+  - `EnvVars` - Environment variable names its tools need; `Initialize-AiProfile` checks that each is set (never its value). Values never go in the repository.
+- `Shared` - `origin` patterns every profile may work on. Ships empty.
+- `DefaultOwner` - The profile owning a repository no pattern matches. Empty: `Default`.
+
+Patterns match the `origin` remote normalised to `host/owner/name`: lowercase, no scheme, no user, no `.git`; `*` is a glob. With a profile active, `Deploy-AiArtifacts` writes them into `ai-profile.conf` next to the managed settings copy, where the `ai-ownership-guard.sh` hook reads them: work in a repository another profile owns is refused at prompt submit and at every tool call. Design: [AI Profiles](../ai/profiles.md).
+
+```powershell
+AiProfiles = @{
+    Hosts        = @{ "WORKSTATION-01" = "Work" }
+    Default      = "Personal"
+    DefaultOwner = "Personal"
+    Shared       = @("github.com/MyUser/Dotfiles")
+    Profiles     = @{
+        Personal = @{
+            Rules      = "MyRules"
+            Plan       = @{ Name = "Max"; OrgUuid = "00000000-0000-0000-0000-000000000000" }
+            Unattended = $true
+            Autonomous = @("github.com/MyUser/MyProject")
+            EnvVars    = @("MY_API_KEY")
+        }
+        Work     = @{
+            Rules      = "MyWorkRules"
+            Plan       = @{ Name = "Team"; OrgUuid = "11111111-1111-1111-1111-111111111111" }
+            Exclude    = @("skills/my-personal-skill")
+            McpServers = @()
+            Owns       = @("github.com/my-org/*")
+        }
     }
 }
 ```
@@ -1439,7 +1518,7 @@ AiArtifacts = @{
 The base ships an inactive catalogue - `claude-code`, `codex`, `gemini-cli`, `copilot` - each checked against the app's documentation; `AiArtifacts.Deploy` turns entries on. Per entry:
 
 - `WSL` - `$true`: every destination with a WSL twin is deployed inside the default WSL distribution too (`DefaultWSLDistribution`, as `DefaultWSLUsername`), one `wsl` call per destination.
-- `Destinations` - One hashtable per destination: `Kind` (`Skills`, `Mods`, `Rules`, `Prompts`, `Agents`), `Placement` (`Each`: `Path` is a folder, one link per item; `Copy`: the same, copied; `File`: `Path` is one file, linked to the item `AiArtifacts.Use` names), `Files` (the first one the item has: `.` is the item folder, a file name is that file, linked as `<item>` plus its extension), `Hooks` (optional: `claude-plugin-dirs` lists the links in `env.CLAUDE_CODE_PLUGIN_DIRS` of the Claude Code `settings.json` and validates them; `managed-settings` makes the WSL twin as root), `Path` (the Windows destination), `WSLPath` (optional: the WSL twin, when it is not a `{User}` path mapped onto `/home/<DefaultWSLUsername>`) and `Machine` (optional machine scope, `"PC/Work"`).
+- `Destinations` - One hashtable per destination: `Kind` (`Skills`, `Mods`, `Rules`, `Prompts`, `Agents`), `Placement` (`Each`: `Path` is a folder, one link per item; `Copy`: the same, copied; `File`: `Path` is one file, linked to the item `AiArtifacts.Use` names), `Files` (the first one the item has: `.` is the item folder, a file name is that file, linked as `<item>` plus its extension), `Hooks` (optional: `claude-plugin-dirs` lists the links in `env.CLAUDE_CODE_PLUGIN_DIRS` of the Claude Code `settings.json` and validates them; `managed-settings` deploys the destination as an administrator-owned rendered copy instead of a link - `{ManagedDir}` replaced, the AI profile's Plan pinned, the ownership guard wired in, the rules item's `hooks\` folder, `ai-ownership-guard.sh` and `ai-profile.conf` next to it - and writes the WSL twin as root), `Path` (the Windows destination), `WSLPath` (optional: the WSL twin, when it is not a `{User}` path mapped onto `/home/<DefaultWSLUsername>`) and `Machine` (optional machine scope, `"PC/Work"`).
 
 A destination two harnesses name is filled once. A fork adds an app with an entry of its own; a same-named entry deep-merges, but `Destinations`, an array, replaces the base list wholesale. The full catalogue with its sources is on [AI Artifacts - The base catalogue](../ai/artifacts.md#the-base-catalogue).
 
@@ -1500,7 +1579,7 @@ An MCP server is not an artifact a link can carry: Claude Code keeps its servers
 - `Deploy` - The apps to add the servers to, per machine type with a `Default` fallback (`@{ Default = @("claude-code", "codex"); Work = @("claude-code") }`), or one array for every machine type. The values are `claude-code` and `codex`; any other is warned about and skipped. Ships empty, so nothing is added until a fork names an app.
 - `Servers` - One entry per server, keyed by its name (letters, digits, `-` and `_`; the name each app lists it under). An entry is either an HTTP server - `Url` (an `http(s)` address), optional `Transport` (`http`, the default, or `sse`, which Codex cannot read, so an `sse` server reaches Claude Code only), optional `Headers` (a hashtable of header names and values) and optional `BearerTokenEnvVar` (the name of the environment variable holding a token: Claude Code gets an `Authorization: Bearer ${VAR}` header it expands when it starts, Codex `bearer_token_env_var`; not together with an `Authorization` header) - or a stdio server: `Command`, optional `Args` (an array) and optional `Env` (a hashtable of variables, as strings). Optional `Machine` scopes an entry to some machine types (`"PC/Work"`, validated by `Test-MachineTypeScope`). An entry with both `Url` and `Command`, neither, or a key the other kind takes is reported and skipped. Ships empty.
 
-**Side effect:** `Deploy-AiMcpServers` runs `claude mcp add --scope user` for every server the `mcpServers` block of `~\.claude.json` does not carry yet, and `claude mcp remove --scope user` followed by `claude mcp add` for one it carries with another definition (on Windows and against the Claude Code CLI inside WSL), and writes each server's `[mcp_servers.<name>]` table into `~\.codex\config.toml` (`$env:CODEX_HOME\config.toml` when set; `/home/<DefaultWSLUsername>/.codex/config.toml` in WSL), every other line of the file kept. Servers are added and updated, never removed.
+**Side effect:** `Deploy-AiMcpServers` runs `claude mcp add --scope user` for every server the `mcpServers` block of `~\.claude.json` does not carry yet, and `claude mcp remove --scope user` followed by `claude mcp add` for one it carries with another definition (on Windows and against the Claude Code CLI inside WSL), and writes each server's `[mcp_servers.<name>]` table into `~\.codex\config.toml` (`$env:CODEX_HOME\config.toml` when set; `/home/<DefaultWSLUsername>/.codex/config.toml` in WSL), every other line of the file kept. With an [AI profile](#ai-profiles) active, only the servers its `McpServers` list names are registered. Every server it registered (or found carried exactly as configured) is recorded per app in `%LOCALAPPDATA%\WinuX\ai-mcp-servers.state`, and a recorded server the profile no longer lists is removed (`claude mcp remove --scope user`, or its Codex table taken out); a server the user added by hand, or one carried with another definition, is never removed.
 
 Deployment is opt-in via `BootstrapConfig.Steps.AiMcpServers`. Never put a secret in the configuration: a token belongs in the environment variable `BearerTokenEnvVar` names. A server that signs in with OAuth needs the sign-in once per machine and app (`/mcp` in Claude Code, `codex mcp login <name>`). Design: [AI MCP Servers](../ai/mcp-servers.md).
 

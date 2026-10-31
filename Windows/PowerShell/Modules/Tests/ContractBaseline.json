@@ -1,5 +1,5 @@
 {
-  "Version": "2.2.0",
+  "Version": "2.3.0",
   "Functions": {
     "Add-BrowserGroup": {
       "Module": "Configuration",
@@ -744,6 +744,23 @@
         }
       }
     },
+    "ConvertTo-AiManagedSettings": {
+      "Module": "AI",
+      "Parameters": {
+        "AiProfile": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ManagedDir": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "Template": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
     "ConvertTo-InternalDesktopIndex": {
       "Module": "Window",
       "Parameters": {
@@ -866,6 +883,31 @@
       "Module": "AI",
       "Parameters": {
         "Kind": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Deploy-AiManagedSettings": {
+      "Module": "AI",
+      "Parameters": {
+        "AiProfile": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "BackupRepoRoot": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Destination": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "Distribution": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "GuardPath": {
           "Mandatory": false,
           "Aliases": []
         }
@@ -1367,6 +1409,15 @@
         },
         "Window": {
           "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-AiArtifactManifest": {
+      "Module": "AI",
+      "Parameters": {
+        "Path": {
+          "Mandatory": true,
           "Aliases": []
         }
       }
@@ -2418,6 +2469,19 @@
       "Module": "Window",
       "Parameters": {
         "Silent": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Initialize-AiProfile": {
+      "Module": "AI",
+      "Parameters": {
+        "Command": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "GhCommand": {
           "Mandatory": false,
           "Aliases": []
         }
@@ -4250,6 +4314,10 @@
     "Resolve-AiArtifactsConfig": {
       "Module": "AI",
       "Parameters": {
+        "AiProfile": {
+          "Mandatory": false,
+          "Aliases": []
+        },
         "Configuration": {
           "Mandatory": false,
           "Aliases": []
@@ -4281,6 +4349,23 @@
         },
         "Separator": {
           "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Resolve-AiProfile": {
+      "Module": "AI",
+      "Parameters": {
+        "Configuration": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "HostName": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Override": {
+          "Mandatory": false,
           "Aliases": []
         }
       }
@@ -5877,6 +5962,23 @@
         }
       }
     },
+    "Sync-AiManifestCache": {
+      "Module": "AI",
+      "Parameters": {
+        "Check": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Config": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Source": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
     "Sync-AppPins": {
       "Module": "System",
       "Parameters": {
@@ -5951,6 +6053,19 @@
           "Aliases": []
         },
         "ModPath": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Test-AiProfile": {
+      "Module": "AI",
+      "Parameters": {
+        "PassThru": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ShellProfile": {
           "Mandatory": false,
           "Aliases": []
         }
@@ -7155,8 +7270,10 @@
   "ConfigurationKeys": [
     "AcrobatPdfGroups",
     "AiArtifacts",
+    "AiArtifacts.Checkouts",
     "AiArtifacts.Deploy",
     "AiArtifacts.Exclude",
+    "AiArtifacts.Manifests",
     "AiArtifacts.Root",
     "AiArtifacts.Sources",
     "AiArtifacts.Use",
@@ -7171,6 +7288,12 @@
     "AiMcpServers",
     "AiMcpServers.Deploy",
     "AiMcpServers.Servers",
+    "AiProfiles",
+    "AiProfiles.Default",
+    "AiProfiles.DefaultOwner",
+    "AiProfiles.Hosts",
+    "AiProfiles.Profiles",
+    "AiProfiles.Shared",
     "AutoElevate",
     "AutoEnvironmentVariables",
     "AutoPathAdditions",
@@ -7309,6 +7432,7 @@
     "PostgreSqlPasswords",
     "PowerButtonActions",
     "PowerPlans",
+    "PowerTimeouts",
     "ProjectActions",
     "ProjectTerminals",
     "PSReadLine",

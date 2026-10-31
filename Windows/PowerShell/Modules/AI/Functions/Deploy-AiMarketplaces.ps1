@@ -51,6 +51,11 @@ function Deploy-AiMarketplaces {
 		copy reads its options from pluginConfigs.<plugin>, not <plugin>@<marketplace>. A
 		development clone belongs in `claude --plugin-dir <clone>` for one session instead.
 
+		With an AI profile active (Resolve-AiProfile), only the marketplaces its Marketplaces
+		list names are deployed (absent: every one, as without profiles; an empty list: none),
+		and the PluginConfigs of the plugins a left-out marketplace lists are left out too.
+		A marketplace is never removed.
+
 		Idempotent: a marketplace already known and a plugin already installed are reported and
 		left alone. Called by Bootstrap when the opt-in BootstrapConfig.Steps.AiMarketplaces
 		toggle is enabled (OFF by default); the base configuration names no marketplaces, so a
@@ -135,6 +140,29 @@ function Deploy-AiMarketplaces {
 			Write-LogError "Marketplace [$name] has an Env that is not a hashtable - its variables were skipped!"
 		}
 		$valid[$name] = @{ Repository = $repository; Plugins = $plugins; Env = $variables }
+	}
+
+	# The marketplaces the AI profile registers: its Marketplaces list (absent: every one).
+	# The options of a plugin whose marketplace is left out are left out with it.
+	$skippedPlugins = @()
+	$aiProfile = Resolve-AiProfile
+	if ($aiProfile.Enabled -and $null -ne $aiProfile.Profile.Marketplaces) {
+		$listed = @($aiProfile.Profile.Marketplaces)
+		foreach ($name in $listed) {
+			if (@($marketplaces.Keys | Where-Object { [string]$_ -eq $name }).Count -eq 0) {
+				Write-LogWarning "AI profile [$($aiProfile.Name)] lists marketplace [$name], which AiMarketplaces.Marketplaces does not define - skipped!"
+			}
+		}
+		foreach ($name in @($valid.Keys)) {
+			if ($listed -notcontains $name) {
+				$skippedPlugins += @($valid[$name].Plugins)
+				$valid.Remove($name)
+			}
+		}
+		if ($valid.Count -eq 0) {
+			Write-LogWarning "AI profile [$($aiProfile.Name)] registers no marketplace - nothing to deploy!"
+			return
+		}
 	}
 
 	# A plugin a configured marketplace lists is keyed <plugin>@<marketplace> in pluginConfigs,
@@ -278,6 +306,7 @@ function Deploy-AiMarketplaces {
 			}
 		}
 		foreach ($plugin in ($pluginConfigs.Keys | Sort-Object)) {
+			if ($skippedPlugins -contains $plugin) { continue }
 			$options = $pluginConfigs[$plugin]
 			if ($options -isnot [hashtable]) {
 				Write-LogError "AiMarketplaces.PluginConfigs.$plugin is not a hashtable - skipped!"

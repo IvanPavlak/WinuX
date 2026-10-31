@@ -35,7 +35,9 @@ function Bootstrap {
 		10. WSL environment initialization, symbolic links, AI artifacts - skills, mods, rules,
 		    prompts and agents, on Windows and in WSL (opt-in via Steps.AiArtifacts), Claude Code
 		    plugin marketplaces and their plugins (opt-in via Steps.AiMarketplaces), the MCP servers of Claude Code and
-		    Codex (opt-in via Steps.AiMcpServers), Obsidian CLI flag (opt-in via
+		    Codex (opt-in via Steps.AiMcpServers), the AI profile's one-time sign-ins through
+		    Initialize-AiProfile (opt-in via Steps.AiProfileInit; it waits at the terminal, so an
+		    unattended run leaves it off and the run only names it), Obsidian CLI flag (opt-in via
 		    Steps.ObsidianCli), VS Code profiles (opt-in via Steps.VSCodeProfiles), WSL SSH setup
 		    (WSL steps use the same gate)
 		11. Lock taskbar layout, restart Explorer, restart machine
@@ -287,6 +289,19 @@ function Bootstrap {
 		# apps AiMcpServers.Deploy names (Claude Code through its CLI, Codex in its config.toml), on
 		# Windows and in WSL. The base names no servers, so this is opt-in as well.
 		if ($steps.AiMcpServers) { Deploy-AiMcpServers } else { Write-LogWarning "AI MCP servers skipped - opt in via BootstrapConfig.Steps.AiMcpServers" }
+
+		# The sign-ins an AI profile needs (the Claude login of its Plan, gh, the OAuth MCP servers)
+		# happen in the tools themselves and wait at the terminal, so the step that walks them is
+		# opt-in: without it a run stays unattended and only names Initialize-AiProfile. It comes
+		# after the AI steps, so the Plan pin is deployed before the Claude login is checked.
+		$aiProfile = Resolve-AiProfile
+		if ($steps.AiProfileInit) {
+			if ($aiProfile.Enabled) { Initialize-AiProfile }
+			else { Write-LogWarning "AI profile sign-ins skipped - no AI profile is active (AiProfiles)" }
+		}
+		elseif ($aiProfile.Enabled) {
+			Write-LogWarning "AI profile [$($aiProfile.Name)] sign-ins skipped - run Initialize-AiProfile once on this machine, or opt in via BootstrapConfig.Steps.AiProfileInit"
+		}
 
 		# Obsidian's command line interface toggle is per-machine app state ("cli": true in
 		# %APPDATA%\obsidian\obsidian.json), never carried by a synced vault - Open-Obsidian cannot

@@ -3,6 +3,8 @@
 BeforeAll {
 	$FunctionsPath = Join-Path (Get-RepositoryPath).Modules "AI\Functions"
 	. "$FunctionsPath\Resolve-AiArtifactsConfig.ps1"
+	# Profiles resolve for real from the synthetic configurations (none: profiles off).
+	. "$FunctionsPath\Resolve-AiProfile.ps1"
 
 	# A small catalogue in the base shape: Claude Code with a {User} folder, a {User} file and an
 	# explicit WSL path; Codex with one Work-only destination.
@@ -119,5 +121,53 @@ Describe "Resolve-AiArtifactsConfig" {
 		$config = @{ AiArtifacts = @{ Sources = @{ plain = @{ Repository = "A/B" } } } }
 
 		(Resolve-AiArtifactsConfig -Configuration $config -RepoRoot "C:\Repo" -MachineType PC).Sources['plain'].Kinds['skills'] | Should -Be @("skills")
+	}
+
+	It "resolves checkout and manifest sources, expanding {Dev} to the folder holding the repository" {
+		$config = @{ AiArtifacts = @{
+				Checkouts = @{ myskills = @{ Path = "{Dev}\MySkills" }; agents = @{ Path = "{Dev}\MyAgents"; Agents = @("agents") } }
+				Manifests = @{ thirdparty = @{ Path = "{Dev}\MySkills\third-party\manifest.tsv" }; plain = "{RepoRoot}\manifest.tsv" }
+			}
+		}
+
+		$result = Resolve-AiArtifactsConfig -Configuration $config -RepoRoot "C:\Dev\Repo" -MachineType PC
+
+		$result.Checkouts['myskills'].Path | Should -Be "C:\Dev\MySkills"
+		$result.Checkouts['myskills'].Kinds['skills'] | Should -Be @("skills")
+		$result.Checkouts['agents'].Kinds.Contains('skills') | Should -BeFalse
+		$result.Manifests['thirdparty'].Path | Should -Be "C:\Dev\MySkills\third-party\manifest.tsv"
+		$result.Manifests['plain'].Path | Should -Be "C:\Dev\Repo\manifest.tsv"
+		$result.CacheRoot | Should -BeLike "*\WinuX\ai-manifests"
+	}
+
+	It "expands {Dev} from BasePaths of the machine type when it is set" {
+		$config = @{ BasePaths = @{ PC = @{ Dev = "D:\Code" } }; AiArtifacts = @{ Checkouts = @{ myskills = @{ Path = "{Dev}\MySkills" } } } }
+
+		(Resolve-AiArtifactsConfig -Configuration $config -RepoRoot "C:\Dev\Repo" -MachineType PC).Checkouts['myskills'].Path | Should -Be "D:\Code\MySkills"
+	}
+
+	It "lets an active AI profile's Rules and Deploy win, add its excludes and carry its includes" {
+		$config = @{ AiHarnesses = New-Harnesses; AiArtifacts = @{ Use = @{ Rules = "CoreAiRules" }; Exclude = @("skills/tdd"); Deploy = @{ Default = @("claude-code", "codex") } } }
+		$aiProfile = @{ Enabled = $true; Name = "Work"; Profile = @{ Rules = "MyWorkRules"; Deploy = @("codex"); Exclude = @("skills/grill"); Include = @("skills/own/*") } }
+
+		$result = Resolve-AiArtifactsConfig -Configuration $config -RepoRoot "C:\Repo" -MachineType PC -AiProfile $aiProfile
+
+		$result.Use['rules'] | Should -Be "MyWorkRules"
+		$result.Deploy | Should -Be @("codex")
+		$result.Exclude | Should -Be @("skills/tdd", "skills/grill")
+		$result.Include | Should -Be @("skills/own/*")
+		$result.Profile.Name | Should -Be "Work"
+	}
+
+	It "keeps the machine-type forms when the profile sets no Deploy or Rules, and when profiles are off" {
+		$config = @{ AiHarnesses = New-Harnesses; AiArtifacts = @{ Use = @{ Rules = "CoreAiRules" }; Deploy = @{ Default = @("claude-code") } } }
+		$aiProfile = @{ Enabled = $true; Name = "Personal"; Profile = @{ Rules = ""; Deploy = $null; Exclude = @(); Include = @() } }
+
+		$withProfile = Resolve-AiArtifactsConfig -Configuration $config -RepoRoot "C:\Repo" -MachineType PC -AiProfile $aiProfile
+		$withProfile.Use['rules'] | Should -Be "CoreAiRules"
+		$withProfile.Deploy | Should -Be @("claude-code")
+
+		$off = Resolve-AiArtifactsConfig -Configuration $config -RepoRoot "C:\Repo" -MachineType PC -AiProfile @{ Enabled = $false }
+		$off.Use['rules'] | Should -Be "CoreAiRules"
 	}
 }
