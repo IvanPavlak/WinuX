@@ -1,5 +1,5 @@
 {
-  "Version": "2.4.1",
+  "Version": "2.5.0",
   "Functions": {
     "Add-BrowserGroup": {
       "Module": "Configuration",
@@ -3905,6 +3905,10 @@
       "Module": "Application",
       "Parameters": {}
     },
+    "Open-T3Code": {
+      "Module": "Application",
+      "Parameters": {}
+    },
     "Open-TeamViewer": {
       "Module": "Application",
       "Parameters": {}
@@ -4837,6 +4841,15 @@
           "Aliases": []
         },
         "Url": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Resolve-VisibleWindowExclusions": {
+      "Module": "System",
+      "Parameters": {
+        "MachineType": {
           "Mandatory": false,
           "Aliases": []
         }
