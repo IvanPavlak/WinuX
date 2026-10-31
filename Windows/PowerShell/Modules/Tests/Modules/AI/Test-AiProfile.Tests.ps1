@@ -68,6 +68,26 @@ Describe "Test-AiProfile" {
 		$result.Pinned | Should -Be @($script:Uuid)
 	}
 
+	It "lists the default policy and each configured pattern's level, without changing the exit code" {
+		$script:Selected.DefaultPolicy = "readonly"
+		$script:Selected.Policies = [ordered]@{ autonomous = @("github.com/myuser/myproject"); branch = @(); draft = @(); readonly = @(); blocked = @("github.com/my-org/*") }
+		$script:Selected.MergeWithoutChecks = @("github.com/myuser/myproject")
+
+		$result = Test-AiProfile -ShellProfile @() -PassThru
+
+		$result.ExitCode | Should -Be 0
+		$result.DefaultPolicy | Should -Be "readonly"
+		@($result.Policies | ForEach-Object { "$($_.Level) $($_.Pattern)" }) | Should -Be @("autonomous github.com/myuser/myproject", "blocked github.com/my-org/*")
+		Should -Invoke Write-LogStep -ParameterFilter { $Message -like "No-CI merges*github.com/myuser/myproject*" }
+	}
+
+	It "reports branch as the default policy of a profile that sets none" {
+		$result = Test-AiProfile -ShellProfile @() -PassThru
+
+		$result.DefaultPolicy | Should -Be "branch"
+		@($result.Policies).Count | Should -Be 0
+	}
+
 	It "exits 1 when another Plan is logged in" {
 		Set-Content -Path (Join-Path $script:TestHome ".claude.json") -Value '{ "oauthAccount": { "organizationUuid": "11111111-1111-1111-1111-111111111111", "organizationName": "Other" } }'
 

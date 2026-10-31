@@ -56,10 +56,38 @@ Describe "ConvertTo-AiManagedSettings" {
 		$document = $result.Settings | ConvertFrom-Json -AsHashtable
 
 		$document.forceLoginOrgUUID | Should -Be "00000000-0000-0000-0000-00000000000a"
-		@($document.hooks.PreToolUse).Count | Should -Be 2 -Because "the guard is appended after the item's own hook"
+		@($document.hooks.PreToolUse).Count | Should -Be 3 -Because "the guard and the policy hook are appended after the item's own hook"
 		$document.hooks.PreToolUse[1].matcher | Should -Be "*"
 		$document.hooks.PreToolUse[1].hooks[0].command | Should -Be 'bash "/etc/claude-code/ai-ownership-guard.sh" PreToolUse'
+		$document.hooks.PreToolUse[2].matcher | Should -Be "*" -Because "readonly also stops the file tools"
+		$document.hooks.PreToolUse[2].hooks[0].command | Should -Be 'bash "/etc/claude-code/ai-repository-policy.sh"'
+		@($document.hooks.UserPromptSubmit).Count | Should -Be 1
 		$document.hooks.UserPromptSubmit[0].hooks[0].command | Should -Be 'bash "/etc/claude-code/ai-ownership-guard.sh" UserPromptSubmit'
+	}
+
+	It "writes the repository policy lines: default-policy, every level's patterns most trust first, and merge-without-checks" {
+		$aiProfile = New-ActiveProfile @(@{ Name = "Max"; OrgUuid = "00000000-0000-0000-0000-00000000000a" })
+		$policies = [ordered]@{ autonomous = @("github.com/myuser/myproject"); branch = @("github.com/myuser/*"); draft = @(); readonly = @("github.com/myuser/legacy"); blocked = @() }
+		$aiProfile.Profile.Policies = $policies
+		$aiProfile.Profile.DefaultPolicy = "readonly"
+		$aiProfile.Profile.MergeWithoutChecks = @("github.com/myuser/myproject")
+
+		$lines = @((ConvertTo-AiManagedSettings -Template $script:Template -ManagedDir "/etc/claude-code" -AiProfile $aiProfile).ProfileConf -split "`n" | Where-Object { $_ })
+
+		$lines | Should -Contain "default-policy readonly"
+		$lines | Should -Contain "merge-without-checks github.com/myuser/myproject"
+		$policyLines = @($lines | Where-Object { $_ -like "policy *" })
+		$policyLines | Should -Be @("policy autonomous github.com/myuser/myproject", "policy branch github.com/myuser/*", "policy readonly github.com/myuser/legacy") -Because "the hooks take the last matching line, so the least trusting level must come last"
+		[array]::IndexOf($lines, "autonomous github.com/myuser/myproject") | Should -BeLessThan ([array]::IndexOf($lines, $policyLines[0])) -Because "an autonomous line after a policy line would win over it"
+	}
+
+	It "writes default-policy branch for a profile that sets no repository policy" {
+		$aiProfile = New-ActiveProfile @(@{ Name = "Max"; OrgUuid = "00000000-0000-0000-0000-00000000000a" })
+
+		$lines = (ConvertTo-AiManagedSettings -Template $script:Template -ManagedDir "/etc/claude-code" -AiProfile $aiProfile).ProfileConf -split "`n"
+
+		$lines | Should -Contain "default-policy branch"
+		@($lines | Where-Object { $_ -like "merge-without-checks *" }).Count | Should -Be 0
 	}
 
 	It "pins several Plans as an array" {

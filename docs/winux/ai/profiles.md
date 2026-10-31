@@ -1,6 +1,6 @@
 # AI Profiles
 
-How one WinuX configuration gives each machine its own AI setup: which rules its agents follow, which Claude Plan it may log in to, which apps, skills, MCP servers and marketplaces it gets, whether it may run agents unattended, and which repositories its agents may touch. WinuX ships the mechanism and no profile; the profiles are the fork's, in `Configuration.local.psd1`. The keys are on the [configuration reference](../configuration/configuration-reference.md#ai-profiles), and the commands on the [AI module page](../modules/ai.md).
+How one WinuX configuration gives each machine its own AI setup: which rules its agents follow, which Claude Plan it may log in to, which apps, skills, MCP servers and marketplaces it gets, whether it may run agents unattended, which repositories its agents may touch, and how far they may go in each. WinuX ships the mechanism and no profile; the profiles are the fork's, in `Configuration.local.psd1`. The keys are on the [configuration reference](../configuration/configuration-reference.md#ai-profiles), and the commands on the [AI module page](../modules/ai.md).
 
 ## One Profile Per Machine
 
@@ -24,15 +24,19 @@ AiProfiles = @{
             Plan       = @{ Name = "Max"; OrgUuid = "00000000-0000-0000-0000-000000000000" }
             McpServers = @("my-remote", "my-local")
             Unattended = $true
-            Autonomous = @("github.com/MyUser/MyProject")
+            Policies   = @{
+                autonomous = @("github.com/MyUser/MyProject")
+                branch     = @("github.com/MyUser/Dotfiles")
+            }
         }
         Work     = @{
-            Rules      = "MyWorkRules"
-            Plan       = @{ Name = "Team"; OrgUuid = "11111111-1111-1111-1111-111111111111" }
-            Exclude    = @("skills/my-personal-skill")
-            McpServers = @()
-            Unattended = $false
-            Owns       = @("github.com/my-org/*")
+            Rules         = "MyWorkRules"
+            Plan          = @{ Name = "Team"; OrgUuid = "11111111-1111-1111-1111-111111111111" }
+            Exclude       = @("skills/my-personal-skill")
+            McpServers    = @()
+            Unattended    = $false
+            Owns          = @("github.com/my-org/*")
+            DefaultPolicy = "draft"
         }
     }
 }
@@ -48,8 +52,9 @@ AiProfiles = @{
 | `Include`, `Exclude` | which artifacts: `Include` limits a kind it names, `Exclude` joins the global excludes | [Get-AiArtifactRoster](../modules/ai.md#get-aiartifactroster) |
 | `McpServers` | which `AiMcpServers.Servers` are registered (left out: all; `@()`: none); a server WinuX registered earlier and no longer listed is removed | [Deploy-AiMcpServers](../modules/ai.md#deploy-aimcpservers) |
 | `Marketplaces` | which `AiMarketplaces.Marketplaces` are registered (left out: all; `@()`: none) | [Deploy-AiMarketplaces](../modules/ai.md#deploy-aimarketplaces) |
-| `Unattended` | whether unattended agent runs are allowed (`unattended on` or `unattended off` in `ai-profile.conf`) | the rules item's hooks, orchestration |
-| `Owns`, `Autonomous` | the repositories it owns, and those of them agents may work on unattended | the ownership guard |
+| `Unattended` | whether unattended agent runs are allowed (`unattended on` or `unattended off` in `ai-profile.conf`) | the ownership guard, orchestration |
+| `Owns` | the repositories it owns | the ownership guard |
+| `Policies`, `DefaultPolicy`, `MergeWithoutChecks` | the trust level of each repository it works on (see [Repository Policies](#repository-policies)); `Autonomous` is a synonym of `Policies.autonomous` | the repository policy hook, the ownership guard, [Test-AiProfile](../modules/ai.md#test-aiprofile) |
 | `EnvVars` | the environment variables its tools need | [Initialize-AiProfile](../modules/ai.md#initialize-aiprofile) |
 
 Manifest rows can be scoped to profiles too (`scope` = profile names): see [AI Artifacts - Manifest sources](artifacts.md#manifest-sources).
@@ -79,9 +84,37 @@ plan Max 00000000-0000-0000-0000-000000000000
 shared github.com/myuser/dotfiles
 owns Work github.com/my-org/*
 autonomous github.com/myuser/myproject
+default-policy branch
+policy autonomous github.com/myuser/myproject
+policy branch github.com/myuser/dotfiles
 ```
 
-`autonomous` lines are the active profile's only.
+`autonomous`, `default-policy`, `policy` and `merge-without-checks` lines are the active profile's only.
+
+## Repository Policies
+
+A profile gives each repository it works on a trust level, and one hook enforces the level of the repository a session works in. The levels are a closed set, from most to least trust:
+
+| Level | Agents may | Agents may not |
+| --- | --- | --- |
+| `autonomous` | everything `branch` allows, plus `gh pr merge` when every CI check of the pull request passed | merge with a failing or pending check, or with no check reported (unless the repository is in `MergeWithoutChecks`) |
+| `branch` | commit, push a non-default branch, open and ready pull requests | merge |
+| `draft` | commit, push a non-default branch, open draft pull requests (`gh pr create --draft`) | `gh pr ready`, merge, a pull request without `--draft` |
+| `readonly` | read, search and explain: the reading tools | any Bash or PowerShell call, and the Edit, Write, MultiEdit and NotebookEdit tools |
+| `blocked` | nothing: the ownership guard refuses the prompt and every tool call | |
+
+Every level keeps the always-denied list: a push to the default branch (an explicit `master`/`main`/default refspec, or a plain push while it is checked out), a force push (`--force`, `--force-with-lease`, `-f`, `+refspec`), deleting a branch, changing remotes, upstream tracking or git configuration, and a branch cut from a remote branch without `--no-track`.
+
+- `Policies` maps a level to `origin` patterns, normalised like `Owns`. `Autonomous` is a synonym of `Policies.autonomous`, and both may be set. A level name outside the set is warned about and its patterns skipped, so a typo cannot invent a looser level.
+- `DefaultPolicy` is the level of a repository no pattern matches, and of a folder outside any repository or without `origin`. Left out it is `branch`; a value that is not a level is warned about and becomes `readonly`.
+- Where patterns of several levels match one repository, the least trusting level wins: `ai-profile.conf` lists the levels most trust first, and the hooks take the last matching line.
+- `MergeWithoutChecks` lists `autonomous` repositories that may merge a pull request when `gh pr checks` reports no check at all. Left out, "no checks reported" is not green: a repository without CI never merges on its own. A failing or pending check refuses the merge everywhere.
+
+The hook is `AI/Hooks/ai-repository-policy.sh`, one file for WinuX and Foundation (a `mirror` line in both manifests), deployed next to the managed settings copy and wired into `PreToolUse` with matcher `*`, so the file tools are stopped too. It matches a command as a whole, with prose taken out first: the body of a heredoc fed to `cat` or to a `-F -` option, and a quoted value with whitespace given to a message option (`-m`, `--message`, `-t`, `--title`, `-b`, `--body`, `--notes`, `--subject`, a PowerShell here-string included). A commit message that mentions "configuration" or "git push --force" passes; a refspec or flag never holds whitespace, so nothing can be hidden that way. Any review a merge also needs (a judge score, say) is the agent's own check, not the hook's.
+
+**Unattended runs.** The launcher of an unattended run (the orchestrator) sets the `AI_UNATTENDED` environment variable (`1`, `on`, `true` or `yes`). The ownership guard then refuses the run when the profile has `Unattended = $false`, and in a repository at `draft` or `readonly`: unattended work needs `autonomous` or `branch`. An attended session is not affected.
+
+[Test-AiProfile](../modules/ai.md#test-aiprofile) lists the default level, every configured pattern with its level and the `MergeWithoutChecks` patterns; the list never changes its exit code.
 
 ## Setting Up A Machine
 
@@ -93,6 +126,7 @@ Once per machine, after Bootstrap, run [Initialize-AiProfile](../modules/ai.md#i
 2. `Deploy-AiArtifacts -Kind Rules -WhatIf` reports nothing missing after a deploy.
 3. `Test-AiProfile` exits `0`.
 4. In a repository another profile owns, a prompt in Claude Code is refused by the guard; in a shared one it is not.
+5. In a `branch` repository an agent pushes a feature branch and opens a pull request, but `gh pr merge` is refused; in an `autonomous` one with every check green it merges; in a `readonly` one it cannot run a shell command or edit a file.
 
 ## Related
 

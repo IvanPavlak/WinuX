@@ -926,7 +926,16 @@
 	#     Marketplaces the AiMarketplaces.Marketplaces it registers (left out: all; @(): none)
 	#     Unattended   $true when unattended agent runs are allowed on its machines
 	#     Owns         origin patterns of the repositories it owns ("github.com/my-org/*")
-	#     Autonomous   origin patterns of its repositories agents may work on unattended
+	#     Autonomous   origin patterns of its repositories agents may work on unattended; a
+	#                  synonym of Policies.autonomous
+	#     Policies     the repository policy: level -> origin patterns, the levels being
+	#                  autonomous (also merge a PR whose CI checks all passed), branch (commit,
+	#                  push a feature branch, open PRs), draft (draft PRs only), readonly (no
+	#                  shell, no file edits) and blocked (no work at all). Where patterns of
+	#                  several levels match a repository, the least trusting one wins
+	#     DefaultPolicy the level of a repository no pattern matches (default "branch")
+	#     MergeWithoutChecks  origin patterns of autonomous repositories that may merge a PR
+	#                  with no CI check reported (left out: a merge needs passing checks)
 	#     EnvVars      environment variable names its tools need (Initialize-AiProfile checks
 	#                  they are set; values never go in the repository)
 	# Shared       : origin patterns every profile may work on
@@ -939,9 +948,9 @@
 	#       Default  = "Personal"
 	#       Profiles = @{
 	#           Personal = @{ Rules = "MyRules"; Plan = @{ Name = "Max"; OrgUuid = "00000000-0000-0000-0000-000000000000" }
-	#                         Unattended = $true; Autonomous = @("github.com/MyUser/MyProject") }
+	#                         Unattended = $true; Policies = @{ autonomous = @("github.com/MyUser/MyProject") } }
 	#           Work     = @{ Rules = "MyWorkRules"; Plan = @{ Name = "Team"; OrgUuid = "11111111-1111-1111-1111-111111111111" }
-	#                         McpServers = @(); Owns = @("github.com/my-org/*") }
+	#                         McpServers = @(); Owns = @("github.com/my-org/*"); DefaultPolicy = "readonly" }
 	#       }
 	#       Shared   = @("github.com/MyUser/Dotfiles")
 	#   }

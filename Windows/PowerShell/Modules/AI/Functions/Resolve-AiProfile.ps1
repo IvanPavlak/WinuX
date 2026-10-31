@@ -7,12 +7,14 @@ function Resolve-AiProfile {
 		An AI profile is the per-machine set of AI choices every AI deploy function honours: the
 		rules item, the Plan the managed settings pin, the harnesses, the artifacts it includes
 		and excludes, the MCP servers and marketplaces it registers, whether unattended runs are
-		allowed, and the repositories it owns. They live under AiProfiles in the configuration:
+		allowed, the repositories it owns and the trust level of each repository it works on.
+		They live under AiProfiles in the configuration:
 
 		  Hosts         hostname -> profile name
 		  Default       the profile of a host the map does not name
 		  Profiles      name -> @{ Rules; Plan; Deploy; Include; Exclude; McpServers;
-		                Marketplaces; Unattended; Owns; Autonomous; EnvVars }
+		                Marketplaces; Unattended; Owns; Autonomous; Policies; DefaultPolicy;
+		                MergeWithoutChecks; EnvVars }
 		  Shared        repository patterns every profile may work on
 		  DefaultOwner  the profile owning a repository no pattern matches (default: Default)
 
@@ -22,16 +24,27 @@ function Resolve-AiProfile {
 		that resolves, profiles are off: Enabled is $false and every AI function behaves as
 		before, scoped by machine type.
 
-		Repository patterns (Owns, Autonomous, Shared) are normalised the way the ownership guard
-		normalises an origin remote: lowercase, no scheme, no user, no .git
-		(github.com/my-org/*). Plan is one @{ Name; OrgUuid } or an array of them.
-		McpServers and Marketplaces left out mean "all of them"; an empty list means none.
+		Repository patterns (Owns, Autonomous, Policies, MergeWithoutChecks, Shared) are
+		normalised the way the ownership guard normalises an origin remote: lowercase, no scheme,
+		no user, no .git (github.com/my-org/*). Plan is one @{ Name; OrgUuid } or an array of
+		them. McpServers and Marketplaces left out mean "all of them"; an empty list means none.
+
+		Repository policy (docs/winux/ai/profiles.md, Repository policies): Policies maps a level
+		(autonomous, branch, draft, readonly, blocked - a closed set) to origin patterns, and
+		Autonomous is a synonym of Policies.autonomous. The normalised Policies is ordered from
+		most to least trust, so where patterns of several levels match one repository the least
+		trusting one wins. A level outside the set is reported and its patterns skipped.
+		DefaultPolicy is the level of a repository no pattern matches (default branch; a value
+		outside the set is reported and becomes readonly, so a typo never loosens it).
+		MergeWithoutChecks lists autonomous repositories that may merge a pull request with no
+		CI check reported.
 
 		Returns @{ Enabled; Name; Source; HostName; Profile; Profiles; Shared; DefaultOwner;
 		Warnings }. Source is override, hostname or default (empty when off). Profile is the
 		normalised active profile (Name; Rules; Plans; Deploy; Include; Exclude; McpServers;
-		Marketplaces; Unattended; Owns; Autonomous; EnvVars), $null when off; Deploy,
-		McpServers and Marketplaces are $null when the profile does not set them.
+		Marketplaces; Unattended; Owns; Autonomous; Policies; DefaultPolicy;
+		MergeWithoutChecks; EnvVars), $null when off; Deploy, McpServers and Marketplaces are
+		$null when the profile does not set them.
 
 	.PARAMETER Configuration
 		The configuration hashtable to read. Defaults to $global:Configuration.
@@ -125,20 +138,51 @@ function Resolve-AiProfile {
 			$plans += @{ Name = $planName; OrgUuid = $uuid.ToLowerInvariant() }
 		}
 		foreach ($planError in $planErrors) { $result.Warnings += $planError }
+
+		# The repository policy levels, most trust first; Autonomous joins Policies.autonomous.
+		$levels = @('autonomous', 'branch', 'draft', 'readonly', 'blocked')
+		$policies = [ordered]@{}
+		foreach ($level in $levels) { $policies[$level] = @() }
+		$policies['autonomous'] = @(& $patterns $entry.Autonomous)
+		if ($null -ne $entry.Policies -and $entry.Policies -isnot [hashtable]) {
+			$result.Warnings += "AiProfiles.Profiles.$name.Policies is not a hashtable - skipped"
+		}
+		elseif ($entry.Policies -is [hashtable]) {
+			foreach ($key in ($entry.Policies.Keys | ForEach-Object { [string]$_ } | Sort-Object)) {
+				$level = $key.Trim().ToLowerInvariant()
+				if ($levels -notcontains $level) {
+					$result.Warnings += "AiProfiles.Profiles.$name.Policies names an unknown level => [$key] - its patterns are skipped (levels: $($levels -join ', '))"
+					continue
+				}
+				$policies[$level] = @(@($policies[$level]) + @(& $patterns $entry.Policies[$key]) | Select-Object -Unique)
+			}
+		}
+		$defaultPolicy = 'branch'
+		if ($entry.DefaultPolicy) {
+			$defaultPolicy = ([string]$entry.DefaultPolicy).Trim().ToLowerInvariant()
+			if ($levels -notcontains $defaultPolicy) {
+				$result.Warnings += "AiProfiles.Profiles.$name.DefaultPolicy is not a level => [$($entry.DefaultPolicy)] - readonly is used (levels: $($levels -join ', '))"
+				$defaultPolicy = 'readonly'
+			}
+		}
+
 		$result.Profiles[$name] = @{
-			Name         = $name
-			Rules        = [string]$entry.Rules
-			Plans        = $plans
-			PlanErrors   = $planErrors
-			Deploy       = if ($entry.ContainsKey('Deploy') -and $null -ne $entry.Deploy) { , @(& $strings $entry.Deploy) } else { $null }
-			Include      = @(& $strings $entry.Include | ForEach-Object { $_.ToLowerInvariant() })
-			Exclude      = @(& $strings $entry.Exclude | ForEach-Object { $_.ToLowerInvariant() })
-			McpServers   = if ($entry.ContainsKey('McpServers') -and $null -ne $entry.McpServers) { , @(& $strings $entry.McpServers) } else { $null }
-			Marketplaces = if ($entry.ContainsKey('Marketplaces') -and $null -ne $entry.Marketplaces) { , @(& $strings $entry.Marketplaces) } else { $null }
-			Unattended   = [bool]$entry.Unattended
-			Owns         = @(& $patterns $entry.Owns)
-			Autonomous   = @(& $patterns $entry.Autonomous)
-			EnvVars      = @(& $strings $entry.EnvVars)
+			Name               = $name
+			Rules              = [string]$entry.Rules
+			Plans              = $plans
+			PlanErrors         = $planErrors
+			Deploy             = if ($entry.ContainsKey('Deploy') -and $null -ne $entry.Deploy) { , @(& $strings $entry.Deploy) } else { $null }
+			Include            = @(& $strings $entry.Include | ForEach-Object { $_.ToLowerInvariant() })
+			Exclude            = @(& $strings $entry.Exclude | ForEach-Object { $_.ToLowerInvariant() })
+			McpServers         = if ($entry.ContainsKey('McpServers') -and $null -ne $entry.McpServers) { , @(& $strings $entry.McpServers) } else { $null }
+			Marketplaces       = if ($entry.ContainsKey('Marketplaces') -and $null -ne $entry.Marketplaces) { , @(& $strings $entry.Marketplaces) } else { $null }
+			Unattended         = [bool]$entry.Unattended
+			Owns               = @(& $patterns $entry.Owns)
+			Autonomous         = @($policies['autonomous'])
+			Policies           = $policies
+			DefaultPolicy      = $defaultPolicy
+			MergeWithoutChecks = @(& $patterns $entry.MergeWithoutChecks)
+			EnvVars            = @(& $strings $entry.EnvVars)
 		}
 	}
 

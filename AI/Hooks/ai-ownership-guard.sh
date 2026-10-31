@@ -18,6 +18,11 @@
 # any repository, or a repository without an `origin`, is allowed. PATTERN is a shell glob
 # (github.com/my-org/*). A missing or empty ai-profile.conf allows everything (no profiles in use).
 #
+# The guard is also the one place that blocks a session for the repository policy
+# (ai-repository-policy.sh holds the levels): it refuses a repository whose level is `blocked`, and,
+# in an unattended run (the AI_UNATTENDED environment variable set to 1, on, true or yes by the
+# launcher), a profile with `unattended off` and a repository at `draft` or `readonly`.
+#
 # Verdicts are cached per session and folder under ${TMPDIR:-/tmp}/ai-ownership-guard/, so a tool
 # call costs one file read after the first.
 
@@ -72,6 +77,36 @@ owner_of() {
 	conf_value default-owner
 }
 
+valid_level() {
+	case "$1" in autonomous | branch | draft | readonly | blocked) return 0 ;; esac
+	return 1
+}
+
+policy_level() {
+	# The repository policy level of $1 (empty: no origin), read the way ai-repository-policy.sh
+	# reads it: the last matching policy or autonomous line, else default-policy, else branch.
+	local repo="$1" level kind first rest pattern
+	level="$(conf_value default-policy)"
+	[ -n "$level" ] || level="branch"
+	valid_level "$level" || level="readonly"
+	[ -n "$repo" ] || { printf '%s' "$level"; return; }
+	set -f
+	while read -r kind first rest; do
+		case "$kind" in
+		policy) valid_level "$first" || continue; set -- $rest ;;
+		autonomous) set -- $first $rest; first="autonomous" ;;
+		*) continue ;;
+		esac
+		for pattern in "$@"; do
+			case "$pattern" in '#'*) break ;; esac
+			# shellcheck disable=SC2254
+			case "$repo" in $(printf '%s' "$pattern" | tr '[:upper:]' '[:lower:]')) level="$first" ;; esac
+		done
+	done <"$conf"
+	set +f
+	printf '%s' "$level"
+}
+
 refuse() {
 	local reason="$1"
 	if [ "$event" = "UserPromptSubmit" ]; then
@@ -102,11 +137,31 @@ if [ -f "$cache_file" ]; then
 fi
 
 verdict="allow"
+repo=""
 if remote="$(git -C "$cwd" remote get-url origin 2>/dev/null)" && [ -n "$remote" ]; then
 	repo="$(normalise_remote "$remote")"
 	owner="$(owner_of "$repo")"
 	if [ "$owner" != "*" ] && [ -n "$owner" ] && [ "$owner" != "$profile" ]; then
 		verdict="refuse:AI profile guard: $repo belongs to the $owner AI profile, and this machine runs $profile. Work on it from a $owner machine, or classify it in the AI profile configuration and redeploy."
+	fi
+fi
+if [ "$verdict" = "allow" ]; then
+	level="$(policy_level "$repo")"
+	if [ "$level" = "blocked" ]; then
+		verdict="refuse:AI repository policy: ${repo:-this folder} is blocked for AI agents under the $profile AI profile. Change its level in the AI profile configuration and redeploy."
+	else
+		case "$(printf '%s' "${AI_UNATTENDED:-}" | tr '[:upper:]' '[:lower:]')" in
+		1 | on | true | yes)
+			case "$(conf_value unattended)" in
+			on | yes | true | 1)
+				case "$level" in
+				draft | readonly) verdict="refuse:AI repository policy: unattended runs need a repository at the autonomous or branch level, and ${repo:-this folder} is at $level." ;;
+				esac
+				;;
+			*) verdict="refuse:AI repository policy: unattended runs are off for the $profile AI profile." ;;
+			esac
+			;;
+		esac
 	fi
 fi
 

@@ -122,4 +122,45 @@ Describe "Resolve-AiProfile" {
 		@($result.Profile.PlanErrors).Count | Should -Be 0
 		$result.Profile.Plans[0].OrgUuid | Should -Be "00000000-0000-0000-0000-00000000000a"
 	}
+
+	It "defaults the repository policy to branch, with Autonomous as the autonomous level's patterns" {
+		$result = Resolve-AiProfile -Configuration (New-ProfileConfig) -HostName "DESKTOP-GAMING" -Override ""
+
+		$result.Profile.DefaultPolicy | Should -Be "branch"
+		@($result.Profile.Policies.Keys) | Should -Be @("autonomous", "branch", "draft", "readonly", "blocked") -Because "the levels are ordered from most to least trust, so the least trusting match is rendered last"
+		$result.Profile.Policies["autonomous"] | Should -Be @("github.com/myuser/myproject")
+		@($result.Profile.MergeWithoutChecks).Count | Should -Be 0
+	}
+
+	It "merges Policies with Autonomous, normalises their patterns and level names, and reads MergeWithoutChecks" {
+		$config = New-ProfileConfig
+		$config.AiProfiles.Profiles.Personal.Policies = @{
+			Autonomous = @("https://github.com/MyUser/Other.git")
+			readonly   = @("github.com/My-Org/*")
+		}
+		$config.AiProfiles.Profiles.Personal.DefaultPolicy = "Draft"
+		$config.AiProfiles.Profiles.Personal.MergeWithoutChecks = @("github.com/MyUser/Other")
+
+		$result = Resolve-AiProfile -Configuration $config -HostName "DESKTOP-GAMING" -Override ""
+
+		$result.Profile.Policies["autonomous"] | Should -Be @("github.com/myuser/myproject", "github.com/myuser/other")
+		$result.Profile.Autonomous | Should -Be @("github.com/myuser/myproject", "github.com/myuser/other")
+		$result.Profile.Policies["readonly"] | Should -Be @("github.com/my-org/*")
+		$result.Profile.DefaultPolicy | Should -Be "draft"
+		$result.Profile.MergeWithoutChecks | Should -Be @("github.com/myuser/other")
+		$result.Warnings | Should -BeNullOrEmpty
+	}
+
+	It "skips an unknown level with a warning and fails closed to readonly for a DefaultPolicy that is not a level" {
+		$config = New-ProfileConfig
+		$config.AiProfiles.Profiles.Personal.Policies = @{ autonomus = @("github.com/myuser/typo") }
+		$config.AiProfiles.Profiles.Personal.DefaultPolicy = "autonomus"
+
+		$result = Resolve-AiProfile -Configuration $config -HostName "DESKTOP-GAMING" -Override ""
+
+		@($result.Profile.Policies.Values | ForEach-Object { $_ }) | Should -Not -Contain "github.com/myuser/typo"
+		$result.Profile.DefaultPolicy | Should -Be "readonly" -Because "a typo must never invent a looser level"
+		@($result.Warnings | Where-Object { $_ -like "*Policies names an unknown level*" }).Count | Should -Be 1
+		@($result.Warnings | Where-Object { $_ -like "*DefaultPolicy is not a level*" }).Count | Should -Be 1
+	}
 }

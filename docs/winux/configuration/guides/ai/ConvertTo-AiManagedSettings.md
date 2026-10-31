@@ -1,6 +1,6 @@
 # ConvertTo-AiManagedSettings
 
-Renders a rules item's `managed-settings.json` for one managed-settings folder (`{ManagedDir}` replaced, the AI profile's Plan pinned through `forceLoginOrgUUID`, the ownership guard wired into `UserPromptSubmit` and `PreToolUse`) and the `ai-profile.conf` the guard reads next to it. It takes everything as parameters - the AI profile comes from `Resolve-AiProfile`, configured on its own page.
+Renders a rules item's `managed-settings.json` for one managed-settings folder (`{ManagedDir}` replaced, the AI profile's Plan pinned through `forceLoginOrgUUID`, the ownership guard wired into `UserPromptSubmit` and `PreToolUse`, the repository policy hook into `PreToolUse`) and the `ai-profile.conf` both read next to it. It takes everything as parameters - the AI profile comes from `Resolve-AiProfile`, configured on its own page.
 
 ## Configuration Keys
 
