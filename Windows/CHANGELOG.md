@@ -15,6 +15,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **`Open-T3Code` (Application module) opens T3 Code**, from its per-user install `%LOCALAPPDATA%\Programs\t3code\T3 Code (Beta).exe` through `Start-Application`, and does nothing when it already runs. A workspace action like `Open-ClaudeDesktop`; a layout entry matches its window with `ProcessName = "T3 Code*"`. Covered by `Modules/Tests/Modules/Application/Open-T3Code.Tests.ps1`; documented in the Application module reference and the Open-T3Code guide.
 - **`Universal.VisibleWindowExclusions` entries can be scoped to machine types**: next to a plain process name, `@{ Name = "<process>"; Machine = "PC/Work" }` applies only on those machine types, so an app can outlive `Kill-All` on one machine and not on another. The new `Resolve-VisibleWindowExclusions` (System module) is the one reader of the list, used by `Terminate-AllProcessesWithVisibleWindows`, `Report-KillAllSurvivors` and `Get-WorkspaceOpenDelta`; an unknown machine type in a scope is reported and the entry never applies. Plain names behave as before. Covered by `Modules/Tests/Modules/System/Resolve-VisibleWindowExclusions.Tests.ps1`; documented in the System module reference, the configuration reference and the Resolve-VisibleWindowExclusions guide.
 
+## [2.4.1] - 2026-10-31
+
+### Security
+
+- **The repository policy hook closes seven ways around its default-branch and merge rules.** `ai-repository-policy.sh` let through, at every level: a push to `refs/heads/master` (`git push origin HEAD:refs/heads/master`), a push of every branch (`--all`, `--mirror`, a glob refspec), `git -c push.default=matching push`, a merge, ref update or file commit through `gh api` (`pulls/N/merge`, `merges`, `git/refs`, `contents/` and the GraphQL merge and ref mutations), and `gh repo sync`/`edit` and `gh alias set`; with the default branch checked out, `git push origin HEAD`; after a `cd` or `git -C`, a push naming no branch; and a `gh pr merge` written with a flag before the subcommand (`gh -R x pr merge`, `gh pr --repo x merge`), or naming another repository (`-R`, a pull request URL, `GH_REPO`, a `cd`), which was then judged by the level and checks of the folder the session ran in, so an `autonomous` folder could merge a pull request of a `branch` repository. Each is now denied with a reason; `gh api` reads, comments and commit statuses, `git -c` settings unrelated to pushes and a push naming its branch from any folder still pass. The hook reads the command text, so a script file an agent writes and runs is not covered; GitHub branch protection stays the backstop where the plan offers it. Covered by `AiRepositoryPolicy.Tests.ps1`; documented in [AI profiles - Repository policies](../docs/winux/ai/profiles.md) and Troubleshooting.
+
 ## [2.4.0] - 2026-10-31
 
 ### Added
@@ -1813,7 +1819,8 @@ The first public release of WinuX.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
 [Unreleased]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.5.0...HEAD
-[2.5.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.4.0...winux/v2.5.0
+[2.5.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.4.1...winux/v2.5.0
+[2.4.1]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.4.0...winux/v2.4.1
 [2.4.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.3.0...winux/v2.4.0
 [2.3.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.2.0...winux/v2.3.0
 [2.2.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.1.0...winux/v2.2.0

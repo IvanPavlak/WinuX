@@ -112,6 +112,21 @@ Describe "ai-repository-policy.sh" -Tag 'Integration' -Skip:$script:NoBash {
 			@{ Name = 'a +refspec push'; Command = 'git push origin +feature'; Reason = '*force pushes*' }
 			@{ Name = 'a push to master'; Command = 'git push origin master'; Reason = '*default branch*' }
 			@{ Name = 'a push to HEAD:main'; Command = 'git push origin HEAD:main'; Reason = '*default branch*' }
+			@{ Name = 'a push to HEAD:refs/heads/master'; Command = 'git push origin HEAD:refs/heads/master'; Reason = '*default branch*' }
+			@{ Name = 'a push to feature:refs/heads/main'; Command = 'git push origin feature:refs/heads/main'; Reason = '*default branch*' }
+			@{ Name = 'a push of every branch'; Command = 'git push --all origin'; Reason = '*every branch*' }
+			@{ Name = 'a mirror push'; Command = 'git push --mirror origin'; Reason = '*every branch*' }
+			@{ Name = 'a glob refspec push'; Command = "git push origin 'refs/heads/*:refs/heads/*'"; Reason = '*every branch*' }
+			@{ Name = 'a push with a push setting given to -c'; Command = 'git -c push.default=matching push'; Reason = '*git configuration*' }
+			@{ Name = 'a pull request merge through the API'; Command = 'gh api -X PUT repos/MyUser/MyProject/pulls/12/merge'; Reason = '*GitHub API*' }
+			@{ Name = 'a branch merge through the API'; Command = 'gh api repos/MyUser/MyProject/merges -f base=master -f head=feature'; Reason = '*GitHub API*' }
+			@{ Name = 'a ref update through the API'; Command = 'gh api --method PATCH repos/MyUser/MyProject/git/refs/heads/master -f sha=abc'; Reason = '*GitHub API*' }
+			@{ Name = 'a file commit through the API'; Command = 'gh api -X PUT repos/MyUser/MyProject/contents/README.md -f message=x -f content=eA=='; Reason = '*GitHub API*' }
+			@{ Name = 'a GraphQL merge mutation'; Command = "gh api graphql -f query='mutation { mergePullRequest(input: {pullRequestId: `"x`"}) { clientMutationId } }'"; Reason = '*GitHub API*' }
+			@{ Name = 'a GraphQL query read from a file'; Command = 'gh api graphql -F query=@merge.graphql'; Reason = '*GitHub API*' }
+			@{ Name = 'a fork sync'; Command = 'gh repo sync MyUser/MyFork'; Reason = '*GitHub repository*' }
+			@{ Name = 'a default branch change'; Command = 'gh repo edit --default-branch feature'; Reason = '*GitHub repository*' }
+			@{ Name = 'a gh alias'; Command = "gh alias set m 'pr merge'"; Reason = '*gh configuration*' }
 			@{ Name = 'a branch deletion'; Command = 'git branch -D old'; Reason = '*deleting branches*' }
 			@{ Name = 'a remote branch deletion'; Command = 'git push origin --delete old'; Reason = '*deleting branches*' }
 			@{ Name = 'a :branch push'; Command = 'git push origin :old'; Reason = '*deleting branches*' }
@@ -140,6 +155,16 @@ Describe "ai-repository-policy.sh" -Tag 'Integration' -Skip:$script:NoBash {
 			@{ Name = 'a git config read'; Command = 'git config --get user.name' }
 			@{ Name = 'a git config list'; Command = 'git config --list' }
 			@{ Name = 'a read-only command'; Command = 'git status && git log --oneline -5' }
+			@{ Name = 'a push to refs/heads/feature'; Command = 'git push origin feature:refs/heads/feature' }
+			@{ Name = 'a HEAD push from a feature branch'; Command = 'git push origin HEAD' }
+			@{ Name = 'a -c setting that is not about pushes'; Command = 'git -c core.pager=cat log -1' }
+			@{ Name = 'an API read of a pull request'; Command = 'gh api repos/MyUser/MyProject/pulls/12' }
+			@{ Name = 'an API read of a ref'; Command = 'gh api repos/MyUser/MyProject/git/refs/heads/master' }
+			@{ Name = 'an API read of a file'; Command = 'gh api repos/MyUser/MyProject/contents/README.md' }
+			@{ Name = 'an API search with -X GET and a field'; Command = 'gh api -X GET search/issues -f q=repo:MyUser/MyProject' }
+			@{ Name = 'an API comment'; Command = 'gh api repos/MyUser/MyProject/issues/12/comments -f body=Done' }
+			@{ Name = 'an API commit status'; Command = 'gh api repos/MyUser/MyProject/statuses/abc -f state=success -f context=local/tests' }
+			@{ Name = 'a repository view'; Command = 'gh repo view MyUser/MyProject' }
 		) {
 			$tool = if ($Tool) { $Tool } else { 'Bash' }
 			Invoke-PolicyHook -Command $Command -Tool $tool | Should -Be 'allow'
@@ -155,7 +180,22 @@ Describe "ai-repository-policy.sh" -Tag 'Integration' -Skip:$script:NoBash {
 		Set-PolicyConf @('profile Personal', 'default-policy branch')
 
 		Invoke-PolicyHook -Command 'git push' -Cwd $script:OnMaster | Should -BeLike 'deny: *checked-out branch is the default branch*'
+		Invoke-PolicyHook -Command 'git push origin HEAD' -Cwd $script:OnMaster | Should -BeLike 'deny: *checked-out branch is the default branch*'
+		Invoke-PolicyHook -Command 'git push -u origin @' -Cwd $script:OnMaster | Should -BeLike 'deny: *checked-out branch is the default branch*'
 		Invoke-PolicyHook -Command 'git push origin feature' -Cwd $script:OnMaster | Should -Be 'allow'
+	}
+
+	It "<Expected>: <Command> (a push from another folder must name its branch)" -ForEach @(
+		@{ Command = 'cd ../onmaster && git push'; Expected = 'deny: *must name its branch*' }
+		@{ Command = 'git -C ../onmaster push origin HEAD'; Expected = 'deny: *must name its branch*' }
+		@{ Command = 'Set-Location ../onmaster; git push'; Tool = 'PowerShell'; Expected = 'deny: *must name its branch*' }
+		@{ Command = 'cd ../onmaster && git push origin feature'; Expected = 'allow' }
+		@{ Command = 'git -C ../onmaster push -u origin feature'; Expected = 'allow' }
+	) {
+		Set-PolicyConf @('profile Personal', 'default-policy branch')
+		$tool = if ($Tool) { $Tool } else { 'Bash' }
+
+		Invoke-PolicyHook -Command $Command -Tool $tool | Should -BeLike $Expected
 	}
 
 	Context "pull requests per level" {
@@ -170,6 +210,29 @@ Describe "ai-repository-policy.sh" -Tag 'Integration' -Skip:$script:NoBash {
 			Set-FakeGh $Checks
 
 			Invoke-PolicyHook -Command 'gh pr merge 12 --squash' | Should -BeLike $Expected
+		}
+
+		It "autonomous: <Expected> for <Command> (a merge runs in the folder of the repository it merges)" -ForEach @(
+			@{ Command = 'gh pr merge 12 --squash -R MyUser/MyProject'; Expected = 'allow' }
+			@{ Command = 'gh pr merge https://github.com/MyUser/MyProject/pull/12 --squash'; Expected = 'allow' }
+			@{ Command = 'gh pr merge 12 --repo MyUser/OtherProject'; Expected = 'deny: *another repository*' }
+			@{ Command = 'gh -R MyUser/OtherProject pr merge 12'; Expected = 'deny: *another repository*' }
+			@{ Command = 'gh pr merge https://github.com/MyUser/OtherProject/pull/12'; Expected = 'deny: *another repository*' }
+			@{ Command = 'GH_REPO=MyUser/OtherProject gh pr merge 12'; Expected = 'deny: *another repository*' }
+			@{ Command = 'cd ../other && gh pr merge 12'; Expected = 'deny: *another repository*' }
+		) {
+			Set-PolicyConf @('profile Personal', 'default-policy autonomous')
+			Set-FakeGh 'green'
+
+			Invoke-PolicyHook -Command $Command | Should -BeLike $Expected
+		}
+
+		It "branch: flags before the subcommand do not hide a merge" {
+			Set-PolicyConf @('profile Personal', 'default-policy branch')
+			Set-FakeGh 'green'
+
+			Invoke-PolicyHook -Command 'gh -R MyUser/MyProject pr merge 12' | Should -BeLike 'deny: *autonomous repository*'
+			Invoke-PolicyHook -Command 'gh pr --repo MyUser/MyProject merge 12' | Should -BeLike 'deny: *autonomous repository*'
 		}
 
 		It "autonomous: allows opening and readying a pull request" {
