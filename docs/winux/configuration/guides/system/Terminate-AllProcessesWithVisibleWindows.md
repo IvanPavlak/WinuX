@@ -9,7 +9,7 @@ Forcefully terminates all processes that own a visible, titled top-level window 
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`Universal.VisibleWindowExclusions`](../../configuration-reference.md#process-cleanup) | array of process names | `Rainmeter`, `WindowsTerminal`, `Docker Desktop`, `obs64`, `PowerToys`, `PowerToys.FancyZones`, `PowerToys.Settings` | The processes never force-killed. An empty list makes the function warn and terminate nothing, since it would otherwise kill `WindowsTerminal` - the shell running the cleanup. The PowerToys entries are load-bearing. |
+| [`Universal.VisibleWindowExclusions`](../../configuration-reference.md#process-cleanup) | array of process names or `@{ Name; Machine }` entries (see [Resolve-VisibleWindowExclusions](Resolve-VisibleWindowExclusions.md)) | `Rainmeter`, `WindowsTerminal`, `Docker Desktop`, `obs64`, `PowerToys`, `PowerToys.FancyZones`, `PowerToys.Settings` | The processes never force-killed. An empty list makes the function warn and terminate nothing, since it would otherwise kill `WindowsTerminal` - the shell running the cleanup. The PowerToys entries are load-bearing. |
 | [`Universal.Browsers`](../../configuration-reference.md#browser-configuration) | hashtable of browser name to `@{ Exe; ... }` | `Firefox`, `Tor`, `Chrome`, `Edge`, `Brave` | Every entry's `Exe` file name (without `.exe`) is added to the exclusions, because `Terminate-AllBrowserProcesses` closes those windows gracefully instead. |
 
 ## Decisions

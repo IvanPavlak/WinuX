@@ -645,6 +645,11 @@ Open-SecureBrowser
 - **Description:** Opens Steam via `Start-Application`. Does nothing if Steam is already running. The executable path is read from `Configuration.Universal.SteamExe`.
 - **Usage:** `Open-Steam`
 
+## [Open-T3Code](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Open-T3Code.ps1)
+
+- **Description:** Opens T3 Code via `Start-Application` from its per-user install, `%LOCALAPPDATA%\Programs\t3code\T3 Code (Beta).exe`. Does nothing if T3 Code is already running (process `T3 Code (Beta)`). Both names carry the release channel, so a channel change updates them here and in any layout entry (match the window with `ProcessName = "T3 Code*"`, which both the window matcher and the window wait accept).
+- **Usage:** `Open-T3Code`
+
 ## [Open-TeamViewer](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Open-TeamViewer.ps1)
 
 - **Description:** Opens TeamViewer via `Start-Application`. Does nothing if TeamViewer is already running. The executable path is read from the `TeamViewerExe` key in the Universal configuration section.

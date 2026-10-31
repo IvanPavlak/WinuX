@@ -47,7 +47,7 @@ function Terminate-AllProcessesWithVisibleWindows {
 	# key's comment there - the PowerToys entries in particular are load-bearing). Refuse
 	# to run without them: with no exclusions this would force-kill WindowsTerminal,
 	# taking down the very shell (and Kill-All run) executing this function.
-	$configuredExclusions = @(Get-ConfigSetting -Path 'Universal.VisibleWindowExclusions' -Default @())
+	$configuredExclusions = @(Resolve-VisibleWindowExclusions)
 
 	if (-not $configuredExclusions) {
 		Write-LogWarning "No exclusions configured (Universal.VisibleWindowExclusions) - terminating nothing!"

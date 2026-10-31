@@ -4,6 +4,7 @@ BeforeAll {
 	$ModuleRoot = (Get-RepositoryPath).Modules
 
 	. (Join-Path $ModuleRoot "Workflow\Functions\Get-WorkspaceOpenDelta.ps1")
+	. (Join-Path $ModuleRoot "System\Functions\Resolve-VisibleWindowExclusions.ps1")
 
 	function Get-WindowHandle { param($ProcessName, $WindowTitle) @() }
 	function Get-TerminalTabSnapshot { param([switch]$EnsureVisible) @{} }

@@ -59,6 +59,7 @@
 		'Resolve-KillAllSteps',
 		'Resolve-SystemThemeSteps',
 		'Resolve-TerminalGreetingSettings',
+		'Resolve-VisibleWindowExclusions',
 		'Restart-Explorer',
 		'Restart-Machine',
 		'Send-TerminalFontKey',

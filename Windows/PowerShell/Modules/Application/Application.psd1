@@ -38,6 +38,7 @@
 		'Open-SecureBrowser',
 		'Open-Slack',
 		'Open-Steam',
+		'Open-T3Code',
 		'Open-TeamViewer',
 		'Open-Terminal',
 		'Open-VirtualBox',

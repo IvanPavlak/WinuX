@@ -1094,6 +1094,17 @@ Resolve-TerminalGreetingSettings -Settings @{ Fastfetch = @{ AutoFit = @{ MaxShr
 
 **See also:** [Show-TerminalGreeting](#show-terminalgreeting), [Invoke-Fastfetch](#invoke-fastfetch), [Invoke-Onefetch](#invoke-onefetch), [Resolve-TerminalGreetingSettings configuration guide](../configuration/guides/system/Resolve-TerminalGreetingSettings.md)
 
+## [Resolve-VisibleWindowExclusions](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Resolve-VisibleWindowExclusions.ps1)
+
+- **Description:** Returns the process names of `Universal.VisibleWindowExclusions` that apply to this machine - the one reader of that list for `Terminate-AllProcessesWithVisibleWindows` (never force-killed), `Report-KillAllSurvivors` (never reported) and `Get-WorkspaceOpenDelta` (never adopted). An entry is a process name, which applies everywhere, or `@{ Name = "<process>"; Machine = "PC/Work" }`, which applies only on the machine types its `Machine` scope names (through `Test-MachineTypeScope`, so an unknown type is reported and never matches). A hashtable without `Machine` applies everywhere and one without `Name` is skipped; blanks are dropped and duplicates collapse case-insensitively, in configuration order.
+- **Parameters:** `[-MachineType]`
+- **Usage:** `Resolve-VisibleWindowExclusions`, `Resolve-VisibleWindowExclusions -MachineType Laptop`
+
+```powershell
+# What Kill-All leaves alone on this machine
+Resolve-VisibleWindowExclusions
+```
+
 ## [Restart-Explorer](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Restart-Explorer.ps1)
 
 - **Description:** Restarts Windows Explorer by stopping the `explorer.exe` process and waiting for it to auto-restart. An optional message is shown with an animated loading spinner during the wait. Useful after theme, icon, or taskbar changes. When the session has VirtualDesktop COM types loaded, it proactively reconnects them afterwards via `Reset-VirtualDesktopState` - an Explorer restart severs those cached proxies, and without the reconnect every later VirtualDesktop call in the session would fail with "The RPC server is unavailable" (`0x800706BA`).
