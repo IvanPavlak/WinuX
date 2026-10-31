@@ -324,6 +324,8 @@
 		# killing only the visible PowerToys.Settings window leaves the supervisor in a "running
 		# but FancyZones absent" half-state that breaks subsequent workspace layout application
 		# and forces an expensive Start-FancyZones -ForceRestart. Never remove them.
+		# An entry may also be @{ Name = "<process>"; Machine = "PC/Work" } to apply only on
+		# those machine types (Resolve-VisibleWindowExclusions); the base ships none.
 		VisibleWindowExclusions  = @(
 			"Rainmeter"
 			"WindowsTerminal"

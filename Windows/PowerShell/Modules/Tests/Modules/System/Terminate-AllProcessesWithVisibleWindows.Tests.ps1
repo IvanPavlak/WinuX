@@ -8,6 +8,7 @@ BeforeAll {
 	# Candidate discovery lives in Get-VisibleWindowProcess; load it so Mock can attach - the
 	# tests below never let it enumerate the developer's real desktop.
 	. "$FunctionsPath\Get-VisibleWindowProcess.ps1"
+	. "$FunctionsPath\Resolve-VisibleWindowExclusions.ps1"
 
 	# Stub Test-WindowTitleMatch since it's from the same module
 	function Test-WindowTitleMatch { param($ProcessName, $WindowTitle, $Patterns) $false }

@@ -159,7 +159,7 @@ function Get-WorkspaceOpenDelta {
 	# workspace's to close. Matched on the exact process name, case-insensitively.
 	$adoptionExclusions = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
 	if ($AdoptUnclaimed) {
-		foreach ($exclusion in @(Get-ConfigSetting -Path 'Universal.VisibleWindowExclusions' -Default @()) + @(Get-ShellProcessName)) {
+		foreach ($exclusion in @(Resolve-VisibleWindowExclusions) + @(Get-ShellProcessName)) {
 			if (-not [string]::IsNullOrWhiteSpace($exclusion)) { [void]$adoptionExclusions.Add([string]$exclusion) }
 		}
 	}

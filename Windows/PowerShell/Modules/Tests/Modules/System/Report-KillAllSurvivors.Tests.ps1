@@ -9,6 +9,7 @@ BeforeAll {
 	# never let the discovery touch the real desktop.
 	. "$FunctionsPath\Get-VisibleWindowProcess.ps1"
 	. "$FunctionsPath\Test-WindowTitleMatch.ps1"
+	. "$FunctionsPath\Resolve-VisibleWindowExclusions.ps1"
 
 	$script:OriginalConfiguration = $global:Configuration
 }

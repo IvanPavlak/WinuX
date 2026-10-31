@@ -9,7 +9,7 @@ The closing audit of `Kill-All`: lists every visible application window still st
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`Universal.VisibleWindowExclusions`](../../configuration-reference.md#process-cleanup) | array of process names | `Rainmeter`, `WindowsTerminal`, `Docker Desktop`, `obs64`, `PowerToys`, `PowerToys.FancyZones`, `PowerToys.Settings` | The processes whose windows are expected to outlive a `Kill-All` and are therefore never reported (matched case-insensitively on the process name). The same list `Terminate-AllProcessesWithVisibleWindows` spares. Browsers are NOT exempt here. Empty means every window still standing is reported. |
+| [`Universal.VisibleWindowExclusions`](../../configuration-reference.md#process-cleanup) | array of process names or `@{ Name; Machine }` entries (see [Resolve-VisibleWindowExclusions](Resolve-VisibleWindowExclusions.md)) | `Rainmeter`, `WindowsTerminal`, `Docker Desktop`, `obs64`, `PowerToys`, `PowerToys.FancyZones`, `PowerToys.Settings` | The processes whose windows are expected to outlive a `Kill-All` and are therefore never reported (matched case-insensitively on the process name). The same list `Terminate-AllProcessesWithVisibleWindows` spares. Browsers are NOT exempt here. Empty means every window still standing is reported. |
 
 ## Decisions
 

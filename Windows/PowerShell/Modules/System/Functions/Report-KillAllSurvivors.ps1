@@ -38,7 +38,7 @@ function Report-KillAllSurvivors {
 	)
 
 	$configuredExclusions = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-	foreach ($exclusion in @(Get-ConfigSetting -Path 'Universal.VisibleWindowExclusions' -Default @())) {
+	foreach ($exclusion in @(Resolve-VisibleWindowExclusions)) {
 		$null = $configuredExclusions.Add($exclusion)
 	}
 
