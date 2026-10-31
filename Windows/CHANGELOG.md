@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.4.1] - 2026-10-31
+
+### Security
+
+- **The repository policy hook closes seven ways around its default-branch and merge rules.** `ai-repository-policy.sh` let through, at every level: a push to `refs/heads/master` (`git push origin HEAD:refs/heads/master`), a push of every branch (`--all`, `--mirror`, a glob refspec), `git -c push.default=matching push`, a merge, ref update or file commit through `gh api` (`pulls/N/merge`, `merges`, `git/refs`, `contents/` and the GraphQL merge and ref mutations), and `gh repo sync`/`edit` and `gh alias set`; with the default branch checked out, `git push origin HEAD`; after a `cd` or `git -C`, a push naming no branch; and a `gh pr merge` written with a flag before the subcommand (`gh -R x pr merge`, `gh pr --repo x merge`), or naming another repository (`-R`, a pull request URL, `GH_REPO`, a `cd`), which was then judged by the level and checks of the folder the session ran in, so an `autonomous` folder could merge a pull request of a `branch` repository. Each is now denied with a reason; `gh api` reads, comments and commit statuses, `git -c` settings unrelated to pushes and a push naming its branch from any folder still pass. The hook reads the command text, so a script file an agent writes and runs is not covered; GitHub branch protection stays the backstop where the plan offers it. Covered by `AiRepositoryPolicy.Tests.ps1`; documented in [AI profiles - Repository policies](../docs/winux/ai/profiles.md) and Troubleshooting.
+
 ## [2.4.0] - 2026-10-31
 
 ### Added
@@ -1805,7 +1811,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.4.0...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.4.1...HEAD
+[2.4.1]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.4.0...winux/v2.4.1
 [2.4.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.3.0...winux/v2.4.0
 [2.3.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.2.0...winux/v2.3.0
 [2.2.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.1.0...winux/v2.2.0

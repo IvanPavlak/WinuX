@@ -28,14 +28,26 @@
 # Every level denies, with a reason the agent sees:
 #   - force pushes (--force, --force-with-lease, -f, +refspec), which is what rewriting pushed
 #     history needs
-#   - a push to the default branch (an explicit master/main/default refspec, or a push while the
-#     checked-out branch is the default one)
+#   - a push to the default branch (an explicit master/main/default refspec, refs/heads/ or not; a
+#     push naming no branch, or HEAD, while the checked-out branch is the default one; a push naming
+#     no branch after a folder change, cd or git -C, whose branch the hook cannot see)
+#   - a push of every branch (--all, --mirror, a glob refspec)
 #   - deleting branches (git branch -d/-D, git push --delete, git push REMOTE :branch)
 #   - remotes, upstreams and git configuration (git remote add/set-url/..., git branch -u,
-#     --set-upstream-to, --track, git config writes, a branch created off a remote branch without
-#     --no-track)
-# Everything else passes untouched, so unattended runs never stall on a prompt. Any review a merge
-# also needs (a judge score, say) is the agent's own check, not this hook's.
+#     --set-upstream-to, --track, git config writes, push, remote, branch or url settings given to
+#     git -c, a branch created off a remote branch without --no-track)
+#   - merges, ref updates and file commits through the GitHub API (a gh api call that writes to
+#     pulls/N/merge, merges, merge-upstream, git/refs, contents/, branches/, rulesets or the default
+#     branch, or a GraphQL merge or ref mutation, or a GraphQL query read from a file), and
+#     repository and gh changes (gh repo sync/edit/rename/delete/archive, gh alias set, gh config set)
+#   - a gh pr merge that names another repository than the folder's (-R, --repo, a pull request
+#     URL, GH_REPO, a cd), whose own level would not be the one checked
+# gh pr calls are matched with flags before the subcommand too (gh -R x pr merge, gh pr --repo x
+# merge). Everything else passes untouched, so unattended runs never stall on a prompt. Any review a
+# merge also needs (a judge score, say) is the agent's own check, not this hook's. The hook reads the
+# command text, so it stops the ways an agent would reach a default branch by accident or habit, not
+# a determined one (a script file it runs is not read): GitHub branch protection, where the plan has
+# it, is the backstop.
 #
 # A command is matched as a whole, each of its lines ending like a `;`, with two kinds of text taken
 # out first so prose never reads as git arguments: the body of a heredoc fed to `cat` or to a
@@ -247,9 +259,18 @@ has() { printf '%s' "$in" | grep -qiE "$1"; }
 # A git command and its arguments up to the end of that command.
 G='(^|[^a-z])git([" ]+[^" &|;]+)*[" ]+'
 E='[^&|;]*'
+# Flags, each with an optional value (gh -R x pr, gh pr --repo x merge).
+F='([" ]+-[^" &|;]+([" ]+[^" &|;-][^" &|;]*)?)*'
+
+changes_folder() {
+	has '(^|[^a-z])(cd|pushd|chdir|set-location|push-location)([" ;]|$)'
+}
 
 if has "${G}push${E}(--force|--force-with-lease|[\" ]-f([\" ;]|$)|[\" ]\+[^\" ]+)"; then
 	deny "force pushes are not allowed; pushed history is never rewritten"
+fi
+if has "${G}push${E}[\" ](--all|--branches|--mirror)([\" =;]|$)" || has "${G}push${E}[\" ][^\" ;]*\*"; then
+	deny "pushing every branch (--all, --mirror or a glob refspec) is not allowed; push one named branch"
 fi
 if has "${G}push${E}(--delete|[\" ]-d([\" ;]|$)|[\" ]:[^\" ]+)" || has "${G}branch${E}[\" ](-d|-D|--delete)([\" ;]|$)"; then
 	deny "deleting branches is not allowed"
@@ -266,6 +287,27 @@ fi
 if has "${G}config([\" ;]|$)" && ! has "${G}config${E}(--get|--list|[\" ]-l([\" ;]|$)|[\" ](get|list)[\" ;]|--show)"; then
 	deny "changing git configuration is not allowed"
 fi
+if has "(^|[^a-z])git${E}[\" ](-c|--config-env)[\" =]*(push|remote|branch|url)\."; then
+	deny "changing git configuration is not allowed, git -c push, remote, branch and url settings included"
+fi
+
+gh_api_writes() {
+	# The gh api calls of the command that write, one per line: a method other than GET, or a field
+	# or --input (which make gh send a POST) without -X GET.
+	printf '%s' "$in" | grep -oiE "(^|[^a-z])gh${F}[\" ]+api[\" ][^&|;]*" |
+		grep -iE '[" ](-X|--method)[" =]*(post|put|patch|delete)|[" ](-f|--field|--raw-field|--input)([" =]|$)' |
+		grep -viE '[" ](-X|--method)[" =]*get([" ]|$)'
+}
+
+if gh_api_writes | grep -qiE '/pulls/[^/" ]+/merge|/merges([" /?]|$)|/merge-upstream|/git/refs|/contents/|/branches/|/rulesets|default_branch|mergePullRequest|mergeBranch|updateRefs?[^a-z]|createRef|deleteRef|createCommitOnBranch|PullRequestAutoMerge|updateRepository|query=@|graphql.*--input|--input.*graphql'; then
+	deny "merges, ref updates and file commits through the GitHub API (gh api) are not allowed; push a feature branch and merge with gh pr merge"
+fi
+if has "(^|[^a-z])gh${F}[\" ]+repo${F}[\" ]+(sync|edit|rename|delete|archive|unarchive)([\" ;]|$)"; then
+	deny "changing a GitHub repository (gh repo sync, edit, rename, delete, archive) is not allowed; the owner does"
+fi
+if has "(^|[^a-z])gh${F}[\" ]+(alias[\" ]+(set|import|delete)|config[\" ]+set)([\" ;]|$)"; then
+	deny "changing gh configuration (gh alias, gh config set) is not allowed"
+fi
 
 default_branch() {
 	local ref
@@ -275,28 +317,70 @@ default_branch() {
 
 if has "${G}push([\" ;]|$)"; then
 	def="$(default_branch)"
-	if has "${G}push${E}[\" :](${def}|master|main|HEAD:(${def}|master|main))([\" ;]|$)"; then
+	if has "${G}push${E}[\" :](refs/heads/)?(${def}|master|main|HEAD:(refs/heads/)?(${def}|master|main))([\" ;]|$)"; then
 		deny "pushing to the default branch ($def) is not allowed; it only changes through a merged pull request"
 	fi
-	current="$(git -C "$cwd" branch --show-current 2>/dev/null)"
-	if [ -n "$current" ] && { [ "$current" = "$def" ] || [ "$current" = "master" ] || [ "$current" = "main" ]; } &&
-		! has "${G}push${E}[\" ][^\" -][^\" ]*[\" ]+[^\" -]"; then
-		deny "the checked-out branch is the default branch ($current); push a feature branch instead"
+	# A push naming no branch, or HEAD, goes to the branch checked out where it runs.
+	if ! has "${G}push${E}[\" ][^\" -][^\" ]*[\" ]+[^\" -]" || has "${G}push${E}[\" ][^\" -][^\" ]*[\" ]+(HEAD|@)([\" ;]|$)"; then
+		if changes_folder || has "(^|[^a-z])git[\" ]${E}(-C|--git-dir|--work-tree)([\" =]|$)${E}[\" ]push([\" ;]|$)"; then
+			deny "a push from another folder (cd, git -C) must name its branch (git push origin <branch>); the hook cannot see the branch checked out there"
+		fi
+		current="$(git -C "$cwd" branch --show-current 2>/dev/null)"
+		if [ -n "$current" ] && { [ "$current" = "$def" ] || [ "$current" = "master" ] || [ "$current" = "main" ]; }; then
+			deny "the checked-out branch is the default branch ($current); push a feature branch instead"
+		fi
 	fi
 fi
 
-pr_selector() {
-	# The pull request a `gh pr merge` names: its first argument that is not a flag (a number, URL
-	# or branch), empty for the current branch's pull request.
-	printf '%s' "$in" | sed -n -E 's/.*(^|[^a-z])gh[" ]+pr[" ]+merge(([" ]+-[^" &|;]+)*)[" ]+([^" &|;{}-][^" &|;{}]*).*/\4/p' | head -n 1
+# gh with its flags, then pr with its flags, then the subcommand.
+GH="(^|[^a-z])gh${F}[\" ]+pr${F}[\" ]+"
+
+gh_pr_call() {
+	# The words of the first gh pr $1 call of the command, from gh on, quotes removed (an empty
+	# quoted value kept as _, so it still takes its flag's place).
+	printf '%s' "$in" | grep -oiE "${GH}$1([\" ][^&|;]*)?" | head -n 1 | sed -E -e 's/^[^gG]*//' -e "s/\"\"|''/_/g" | tr -d "\"'"
+}
+
+pr_target() {
+	# Sets selector (the pull request the gh pr $1 call names, empty for the current branch's) and
+	# target (the repository it names by -R, --repo or a pull request URL, normalised; empty: none).
+	local word stage=0 value=""
+	selector="" target=""
+	set -f
+	for word in $(gh_pr_call "$1"); do
+		if [ -n "$value" ]; then
+			[ "$value" = "repo" ] && target="$word"
+			value=""
+			continue
+		fi
+		case "$word" in
+		-R | --repo) value="repo" ;;
+		--repo=*) target="${word#--repo=}" ;;
+		-R?*) target="${word#-R}" ;;
+		-A | --author-email | -b | --body | -F | --body-file | --match-head-commit | -t | --subject) value="skip" ;;
+		-*) ;;
+		*)
+			case "$stage" in
+			0) [ "$word" = "pr" ] && stage=1 ;;
+			1) stage=2 ;;
+			*) [ -n "$selector" ] || selector="$word" ;;
+			esac
+			;;
+		esac
+	done
+	set +f
+	case "$selector" in */pull/*) target="${selector%%/pull/*}" ;; esac
+	[ -n "$target" ] || return 0
+	target="$(normalise_remote "$target")"
+	case "$target" in */*/*) ;; *) target="github.com/$target" ;; esac
 }
 
 checks_state() {
 	# green when every check passed, none when no check is reported, red otherwise. gh pr checks
 	# exits 0 only when every check passed (8 while pending, 1 on a failure or with no check).
-	local selector output
+	local output
 	command -v gh >/dev/null 2>&1 || { printf 'red'; return; }
-	selector="$(pr_selector)"
+	pr_target merge
 	# shellcheck disable=SC2086
 	if output="$(cd "$cwd" 2>/dev/null && gh pr checks $selector 2>&1)"; then
 		printf 'green'
@@ -305,7 +389,13 @@ checks_state() {
 	fi
 }
 
-GH='(^|[^a-z])gh[" ]+pr[" ]+'
+if has "${GH}merge([\" ;]|$)"; then
+	pr_target merge
+	if { [ -n "$target" ] && [ "$target" != "$repo" ]; } || has 'GH_REPO' || changes_folder; then
+		deny "gh pr merge acts on another repository (${target:-GH_REPO or a cd}); run it in that repository's own folder, with no -R, --repo, URL, GH_REPO or cd pointing elsewhere, so its own level applies"
+	fi
+fi
+
 case "$level" in
 autonomous)
 	if has "${GH}merge([\" ;]|$)"; then
