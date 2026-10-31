@@ -1475,12 +1475,15 @@ One profile per machine, picked once per command: the `WINUX_AI_PROFILE` environ
   - `Marketplaces` - The `AiMarketplaces.Marketplaces` entries it registers. Left out: all; `@()`: none.
   - `Unattended` - `$true` when unattended agent runs are allowed on its machines (written to `ai-profile.conf` as `unattended on`).
   - `Owns` - `origin` patterns of the repositories it owns (`"github.com/my-org/*"`).
-  - `Autonomous` - `origin` patterns of its repositories agents may work on unattended; only the active profile's reach `ai-profile.conf`.
+  - `Autonomous` - `origin` patterns of its repositories agents may work on unattended; a synonym of `Policies.autonomous` (both may be set). Only the active profile's reach `ai-profile.conf`.
+  - `Policies` - The repository policy: a level (`autonomous`, `branch`, `draft`, `readonly`, `blocked`) to its `origin` patterns. `autonomous` also merges a pull request whose CI checks all passed, `branch` commits, pushes feature branches and opens pull requests, `draft` opens draft pull requests only, `readonly` allows no shell and no file edit, `blocked` no work at all. Where patterns of several levels match, the least trusting wins; a level outside the set is warned about and skipped. See [AI Profiles - Repository Policies](../ai/profiles.md#repository-policies).
+  - `DefaultPolicy` - The level of a repository no `Policies` pattern matches, and of a folder without `origin`. Left out: `branch`; a value that is not a level becomes `readonly` with a warning.
+  - `MergeWithoutChecks` - `origin` patterns of `autonomous` repositories that may merge a pull request when no CI check is reported. Left out: a merge needs every check passed, and a repository without CI never merges.
   - `EnvVars` - Environment variable names its tools need; `Initialize-AiProfile` checks that each is set (never its value). Values never go in the repository.
 - `Shared` - `origin` patterns every profile may work on. Ships empty.
 - `DefaultOwner` - The profile owning a repository no pattern matches. Empty: `Default`.
 
-Patterns match the `origin` remote normalised to `host/owner/name`: lowercase, no scheme, no user, no `.git`; `*` is a glob. With a profile active, `Deploy-AiArtifacts` writes them into `ai-profile.conf` next to the managed settings copy, where the `ai-ownership-guard.sh` hook reads them: work in a repository another profile owns is refused at prompt submit and at every tool call. Design: [AI Profiles](../ai/profiles.md).
+Patterns match the `origin` remote normalised to `host/owner/name`: lowercase, no scheme, no user, no `.git`; `*` is a glob. With a profile active, `Deploy-AiArtifacts` writes them into `ai-profile.conf` next to the managed settings copy, where the `ai-ownership-guard.sh` hook reads them: work in a repository another profile owns is refused at prompt submit and at every tool call. The `ai-repository-policy.sh` hook reads the active profile's levels from the same file and applies the level of the repository a session works in. Design: [AI Profiles](../ai/profiles.md).
 
 ```powershell
 AiProfiles = @{
@@ -1493,15 +1496,19 @@ AiProfiles = @{
             Rules      = "MyRules"
             Plan       = @{ Name = "Max"; OrgUuid = "00000000-0000-0000-0000-000000000000" }
             Unattended = $true
-            Autonomous = @("github.com/MyUser/MyProject")
+            Policies   = @{
+                autonomous = @("github.com/MyUser/MyProject")
+                branch     = @("github.com/MyUser/Dotfiles")
+            }
             EnvVars    = @("MY_API_KEY")
         }
         Work     = @{
-            Rules      = "MyWorkRules"
-            Plan       = @{ Name = "Team"; OrgUuid = "11111111-1111-1111-1111-111111111111" }
-            Exclude    = @("skills/my-personal-skill")
-            McpServers = @()
-            Owns       = @("github.com/my-org/*")
+            Rules         = "MyWorkRules"
+            Plan          = @{ Name = "Team"; OrgUuid = "11111111-1111-1111-1111-111111111111" }
+            Exclude       = @("skills/my-personal-skill")
+            McpServers    = @()
+            Owns          = @("github.com/my-org/*")
+            DefaultPolicy = "draft"
         }
     }
 }

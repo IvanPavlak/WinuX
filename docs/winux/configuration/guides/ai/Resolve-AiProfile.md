@@ -1,6 +1,6 @@
 # Resolve-AiProfile
 
-Resolves which AI profile this machine runs - the rules, Plan, apps, artifacts, MCP servers, marketplaces and repository ownership every AI command then honours - from `AiProfiles`.
+Resolves which AI profile this machine runs - the rules, Plan, apps, artifacts, MCP servers, marketplaces, repository ownership and repository policy every AI command then honours - from `AiProfiles`.
 
 > [!NOTE]
 > Every value on this page belongs in `Configuration.local.psd1`, never in the base `Configuration.psd1`. The base file is upstream's, it ships empty-by-default, and it is deep-merged with your local file at load time by `Load-PathConfiguration`. See [Fork Model](../../../contributing/fork-model.md).
@@ -9,7 +9,7 @@ Resolves which AI profile this machine runs - the rules, Plan, apps, artifacts, 
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`AiProfiles.Profiles`](../../configuration-reference.md#ai-profiles) | hashtable | `@{}` (empty: profiles off) | One entry per profile: `Rules`, `Plan`, `Deploy`, `Include`, `Exclude`, `McpServers`, `Marketplaces`, `Unattended`, `Owns`, `Autonomous`, `EnvVars`. |
+| [`AiProfiles.Profiles`](../../configuration-reference.md#ai-profiles) | hashtable | `@{}` (empty: profiles off) | One entry per profile: `Rules`, `Plan`, `Deploy`, `Include`, `Exclude`, `McpServers`, `Marketplaces`, `Unattended`, `Owns`, `Autonomous`, `Policies`, `DefaultPolicy`, `MergeWithoutChecks`, `EnvVars`. |
 | [`AiProfiles.Hosts`](../../configuration-reference.md#ai-profiles) | hashtable | `@{}` | Hostname to profile name. |
 | [`AiProfiles.Default`](../../configuration-reference.md#ai-profiles) | string | `""` | The profile of a host `Hosts` does not name. Empty: such a host runs no profile. |
 | [`AiProfiles.Shared`](../../configuration-reference.md#ai-profiles) | array | `@()` | `origin` patterns every profile may work on. |
@@ -35,8 +35,12 @@ The environment variable `WINUX_AI_PROFILE`, when it names a configured profile,
     - Options: `Owns` patterns per profile (`"github.com/my-org/*"`), `Shared` patterns, a `DefaultOwner`.
     - Default: Nothing is owned explicitly; every repository belongs to the `Default` profile.
     - More detail: [AI Profiles - Repository Ownership](../../../ai/profiles.md#repository-ownership)
-5. What else differs per profile: rules item, harnesses, artifacts, MCP servers, marketplaces, unattended runs, environment variables?
-    - Options: `Rules`, `Deploy`, `Include`, `Exclude`, `McpServers` (`@()` for none), `Marketplaces`, `Unattended`, `Autonomous`, `EnvVars`; leave a key out to keep the global value.
+5. How far may agents go in each repository a profile works on?
+    - Options: `Policies` maps a level to `origin` patterns - `autonomous` (also merge a pull request whose CI checks all passed), `branch` (commit, push a feature branch, open pull requests), `draft` (draft pull requests only), `readonly` (no shell, no file edits), `blocked` (no work); `DefaultPolicy` for every other repository; `MergeWithoutChecks` for `autonomous` repositories without CI that may still merge. `Autonomous` is a synonym of `Policies.autonomous`.
+    - Default: Every repository is at `branch`; nothing merges on its own.
+    - More detail: [AI Profiles - Repository Policies](../../../ai/profiles.md#repository-policies)
+6. What else differs per profile: rules item, harnesses, artifacts, MCP servers, marketplaces, unattended runs, environment variables?
+    - Options: `Rules`, `Deploy`, `Include`, `Exclude`, `McpServers` (`@()` for none), `Marketplaces`, `Unattended`, `EnvVars`; leave a key out to keep the global value.
     - Default: The global `AiArtifacts`, `AiMcpServers` and `AiMarketplaces` settings apply unchanged.
     - More detail: [AI Profiles - What A Profile Decides](../../../ai/profiles.md#what-a-profile-decides)
 
@@ -52,7 +56,8 @@ All of it goes in `Configuration.local.psd1`, at the repository's `Windows/Power
 1. Define the profiles
 2. Map the hosts and set the default
 3. Classify the repositories
-4. Reload and confirm the merge landed
+4. Set the repository policy
+5. Reload and confirm the merge landed
 
 ## Step 1: Define the profiles
 
@@ -91,13 +96,31 @@ AiProfiles = @{
     Shared       = @("github.com/MyUser/Dotfiles")
     DefaultOwner = "Personal"
     Profiles     = @{
-        Personal = @{ Autonomous = @("github.com/MyUser/MyProject") }
         Work     = @{ Owns = @("github.com/my-org/*") }
     }
 }
 ```
 
-## Step 4: Reload and confirm the merge landed
+## Step 4: Set the repository policy
+
+```powershell
+AiProfiles = @{
+    Profiles = @{
+        Personal = @{
+            Policies           = @{
+                autonomous = @("github.com/MyUser/MyProject", "github.com/MyUser/MyPrototype")
+                branch     = @("github.com/MyUser/Dotfiles")
+            }
+            MergeWithoutChecks = @("github.com/MyUser/MyPrototype")
+        }
+        Work     = @{ DefaultPolicy = "draft" }
+    }
+}
+```
+
+A level name outside `autonomous`, `branch`, `draft`, `readonly`, `blocked` is warned about and its patterns skipped; a `DefaultPolicy` that is not a level becomes `readonly`.
+
+## Step 5: Reload and confirm the merge landed
 
 ```powershell
 Reload-PowerShellProfile
@@ -115,6 +138,8 @@ Read-only checks. None of these change anything.
 Resolve-AiProfile | Select-Object Enabled, Name, Source, HostName, DefaultOwner
 (Resolve-AiProfile -HostName "WORKSTATION-01").Name
 (Resolve-AiProfile -Override "Work").Profile.Plans
+(Resolve-AiProfile).Profile.Policies
+(Resolve-AiProfile).Profile.DefaultPolicy
 ```
 
 An empty `Warnings` list means every name `Hosts`, `Default` and `DefaultOwner` use is a configured profile and every Plan UUID is valid. Then run [`Test-AiProfile`](Test-AiProfile.md).
@@ -137,17 +162,22 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
                 Plan       = @{ Name = "Max"; OrgUuid = "00000000-0000-0000-0000-000000000000" }
                 McpServers = @("my-remote", "my-local")
                 Unattended = $true
-                Autonomous = @("github.com/MyUser/MyProject")
+                Policies   = @{
+                    autonomous = @("github.com/MyUser/MyProject", "github.com/MyUser/MyPrototype")
+                    branch     = @("github.com/MyUser/Dotfiles")
+                }
+                MergeWithoutChecks = @("github.com/MyUser/MyPrototype")
                 EnvVars    = @("MY_API_KEY")
             }
             Work     = @{
-                Rules      = "MyWorkRules"
-                Plan       = @{ Name = "Team"; OrgUuid = "11111111-1111-1111-1111-111111111111" }
-                Deploy     = @("claude-code")
-                Exclude    = @("skills/my-personal-skill")
-                McpServers = @()
-                Unattended = $false
-                Owns       = @("github.com/my-org/*")
+                Rules         = "MyWorkRules"
+                Plan          = @{ Name = "Team"; OrgUuid = "11111111-1111-1111-1111-111111111111" }
+                Deploy        = @("claude-code")
+                Exclude       = @("skills/my-personal-skill")
+                McpServers    = @()
+                Unattended    = $false
+                Owns          = @("github.com/my-org/*")
+                DefaultPolicy = "draft"
             }
         }
     }

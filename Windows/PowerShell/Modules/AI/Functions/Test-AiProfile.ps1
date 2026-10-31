@@ -9,6 +9,10 @@ function Test-AiProfile {
 		  - the AI profile (Resolve-AiProfile) and how it was picked: override
 		    (WINUX_AI_PROFILE), hostname (AiProfiles.Hosts) or default;
 		  - the expected Plan (the profile's Plan: name and org UUID, one or several);
+		  - the repository policy: the default level (DefaultPolicy, branch when unset), then
+		    every configured pattern with its level, most trust first, and the patterns that
+		    may merge with no CI check (MergeWithoutChecks). Informational: it does not change
+		    the exit code;
 		  - the logged-in Plan: oauthAccount.organizationUuid and organizationName of the
 		    Claude Code user state (~\.claude.json, or $env:CLAUDE_CONFIG_DIR\.claude.json);
 		  - whether the deployed managed settings (the managed-settings destination of
@@ -34,8 +38,9 @@ function Test-AiProfile {
 		$PROFILE and the bash and zsh start-up files in the user's home folder.
 
 	.PARAMETER PassThru
-		Returns @{ ExitCode; Profile; Source; Expected; LoggedIn; Pinned; Credentials;
-		OAuthMcp; Problems }.
+		Returns @{ ExitCode; Profile; Source; Expected; DefaultPolicy; Policies; LoggedIn;
+		Pinned; Credentials; OAuthMcp; Problems }. Policies is one @{ Level; Pattern } per
+		configured pattern.
 
 	.EXAMPLE
 		Test-AiProfile
@@ -57,15 +62,17 @@ function Test-AiProfile {
 	Write-LogTitle "AI Profile Check"
 
 	$findings = @{
-		ExitCode    = 0
-		Profile     = ''
-		Source      = ''
-		Expected    = @()
-		LoggedIn    = $null
-		Pinned      = @()
-		Credentials = @()
-		OAuthMcp    = @()
-		Problems    = @()
+		ExitCode      = 0
+		Profile       = ''
+		Source        = ''
+		Expected      = @()
+		DefaultPolicy = ''
+		Policies      = @()
+		LoggedIn      = $null
+		Pinned        = @()
+		Credentials   = @()
+		OAuthMcp      = @()
+		Problems      = @()
 	}
 
 	$aiProfile = Resolve-AiProfile
@@ -92,6 +99,22 @@ function Test-AiProfile {
 	}
 	else {
 		Write-LogStep "Expected Plan  : $((@($selected.Plans | ForEach-Object { "$($_.Name) $($_.OrgUuid)" })) -join ', ')"
+	}
+
+	# --- Repository policy: listed, never a mismatch ----------------------------------------------
+	$findings.DefaultPolicy = if ($selected.DefaultPolicy) { [string]$selected.DefaultPolicy } else { 'branch' }
+	if ($selected.Policies -is [System.Collections.IDictionary]) {
+		foreach ($level in @($selected.Policies.Keys)) {
+			foreach ($pattern in @($selected.Policies[$level] | Where-Object { $_ })) { $findings.Policies += @{ Level = [string]$level; Pattern = [string]$pattern } }
+		}
+	}
+	Write-LogStep "Default policy : $($findings.DefaultPolicy)"
+	foreach ($policy in $findings.Policies) {
+		Write-LogStep "Policy         : $($policy.Level.PadRight(10)) $($policy.Pattern)"
+	}
+	$noCheckMerges = @($selected.MergeWithoutChecks | Where-Object { $_ })
+	if ($noCheckMerges.Count -gt 0) {
+		Write-LogStep "No-CI merges   : $($noCheckMerges -join ', ')"
 	}
 
 	# --- Logged-in Plan ----------------------------------------------------------------------

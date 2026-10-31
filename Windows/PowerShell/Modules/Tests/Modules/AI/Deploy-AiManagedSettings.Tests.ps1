@@ -26,6 +26,8 @@ Describe "Deploy-AiManagedSettings" {
 		$script:Guard = Join-Path $TestDrive "guard\ai-ownership-guard.sh"
 		New-Item -ItemType Directory -Path (Split-Path $script:Guard) -Force | Out-Null
 		[IO.File]::WriteAllText($script:Guard, "#!/usr/bin/env bash`nexit 0`n")
+		$script:PolicyHook = Join-Path $TestDrive "guard\ai-repository-policy.sh"
+		[IO.File]::WriteAllText($script:PolicyHook, "#!/usr/bin/env bash`r`n# policy`r`nexit 0`r`n")
 
 		$script:Managed = Join-Path $TestDrive "managed"
 		$script:Target = Join-Path $script:Managed "managed-settings.json"
@@ -72,11 +74,30 @@ Describe "Deploy-AiManagedSettings" {
 		$script:WSLCalls.Count | Should -Be 0 -Because "the WSL copy is not rewritten either"
 	}
 
+	It "writes the repository policy hook with LF line endings, and wires it into PreToolUse" {
+		$result = Deploy-AiManagedSettings -Destination $script:Destination -AiProfile $script:AiProfile -GuardPath $script:Guard -PolicyHookPath $script:PolicyHook
+
+		$result.Failures | Should -Be 0
+		[IO.File]::ReadAllText((Join-Path $script:Managed "ai-repository-policy.sh")) | Should -BeExactly "#!/usr/bin/env bash`n# policy`nexit 0`n"
+		$settings = Get-Content -LiteralPath $script:Target -Raw | ConvertFrom-Json -AsHashtable
+		@($settings.hooks.PreToolUse | ForEach-Object { $_.hooks[0].command }) | Should -Contain "bash `"$($script:Managed.Replace('\', '/'))/ai-repository-policy.sh`""
+	}
+
+	It "warns, and still deploys the rest, when the repository policy hook is missing" {
+		$result = Deploy-AiManagedSettings -Destination $script:Destination -AiProfile $script:AiProfile -GuardPath $script:Guard -PolicyHookPath (Join-Path $TestDrive "missing\ai-repository-policy.sh")
+
+		$result.Failures | Should -Be 0
+		Test-Path -LiteralPath (Join-Path $script:Managed "ai-repository-policy.sh") | Should -BeFalse
+		Test-Path -LiteralPath (Join-Path $script:Managed "ai-profile.conf") | Should -BeTrue
+		Should -Invoke Write-LogWarning -ParameterFilter { $Message -like "*repository policy hook is missing*" }
+	}
+
 	It "writes neither the guard nor ai-profile.conf with profiles off" {
-		Deploy-AiManagedSettings -Destination $script:Destination -AiProfile @{ Enabled = $false } -GuardPath $script:Guard | Out-Null
+		Deploy-AiManagedSettings -Destination $script:Destination -AiProfile @{ Enabled = $false } -GuardPath $script:Guard -PolicyHookPath $script:PolicyHook | Out-Null
 
 		Test-Path -LiteralPath $script:Target | Should -BeTrue
 		Test-Path -LiteralPath (Join-Path $script:Managed "ai-ownership-guard.sh") | Should -BeFalse
+		Test-Path -LiteralPath (Join-Path $script:Managed "ai-repository-policy.sh") | Should -BeFalse
 		Test-Path -LiteralPath (Join-Path $script:Managed "ai-profile.conf") | Should -BeFalse
 	}
 
@@ -102,10 +123,10 @@ Describe "Deploy-AiManagedSettings" {
 	}
 
 	It "changes nothing under -WhatIf and reports every missing file as a failure" {
-		$result = Deploy-AiManagedSettings -Destination $script:Destination -AiProfile $script:AiProfile -GuardPath $script:Guard -Distribution "Ubuntu" -WhatIf
+		$result = Deploy-AiManagedSettings -Destination $script:Destination -AiProfile $script:AiProfile -GuardPath $script:Guard -PolicyHookPath $script:PolicyHook -Distribution "Ubuntu" -WhatIf
 
 		Test-Path -LiteralPath $script:Managed | Should -BeFalse
-		$result.Failures | Should -Be 4
+		$result.Failures | Should -Be 5 -Because "the settings, the item hook, the guard, the policy hook and ai-profile.conf are all missing"
 		Should -Invoke wsl -Times 0
 	}
 

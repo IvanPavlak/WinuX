@@ -107,7 +107,7 @@ decisions behind them, and where the values go. Each module's `README.md` indexe
 | `KillAll.Steps`                                    | `Kill-All`, `Resolve-KillAllSteps`                 |
 | `BootstrapConfig.Steps`                            | `Bootstrap`, `Resolve-BootstrapSteps` (incl. the opt-in `AiArtifacts` step → `Deploy-AiArtifacts`, the `AiMarketplaces` step → `Deploy-AiMarketplaces`, the `AiMcpServers` step → `Deploy-AiMcpServers`, and the `AiProfileInit` step → `Initialize-AiProfile`) |
 | `AiArtifacts`, `AiHarnesses`                       | `Deploy-AiArtifacts`, `Update-AiArtifacts`, `List-AiArtifacts`, `Get-AiArtifactPlan`, `Get-AiArtifactRoster` (via `Resolve-AiArtifactsConfig`); the `claude-plugin-dirs` hook of `Deploy-AiArtifacts` writes `env.CLAUDE_CODE_PLUGIN_DIRS` of `~\.claude\settings.json` through `Resolve-AiModsPluginDirs` and `Set-ClaudeSettingsEnv`, and checks the CLI with `Test-AiModsCli` |
-| `AiProfiles`                                       | `Resolve-AiProfile`, and through it `Deploy-AiArtifacts` (rules item, harnesses, includes and excludes; the `managed-settings` destination rendered by `ConvertTo-AiManagedSettings` and written by `Deploy-AiManagedSettings` with `ai-profile.conf` and the ownership guard), `Deploy-AiMcpServers`, `Deploy-AiMarketplaces`, `List-AiArtifacts`, `Test-AiProfile`, `Initialize-AiProfile` |
+| `AiProfiles`                                       | `Resolve-AiProfile`, and through it `Deploy-AiArtifacts` (rules item, harnesses, includes and excludes; the `managed-settings` destination rendered by `ConvertTo-AiManagedSettings` and written by `Deploy-AiManagedSettings` with `ai-profile.conf`, the ownership guard and the repository policy hook), `Deploy-AiMcpServers`, `Deploy-AiMarketplaces`, `List-AiArtifacts`, `Test-AiProfile`, `Initialize-AiProfile` |
 | `AiArtifacts.Checkouts`, `AiArtifacts.Manifests`  | `Get-AiArtifactRoster` (checkout and manifest sources), `Get-AiArtifactManifest` (the manifest format), `Sync-AiManifestCache` (the `%LOCALAPPDATA%\WinuX\ai-manifests` cache, run by `Deploy-AiArtifacts` and `Update-AiArtifacts`) |
 | `AiMarketplaces`                                   | `Deploy-AiMarketplaces`; writes `extraKnownMarketplaces` and `pluginConfigs` of `~\.claude\settings.json` through `Set-ClaudeSettingsKey` and each marketplace's `Env` variables into its `env` block through `Set-ClaudeSettingsEnv`, then adds the marketplaces and installs the plugins through the Claude Code CLI |
 | `AiMcpServers`                                     | `Deploy-AiMcpServers`; adds the servers to Claude Code through `claude mcp add --scope user` (reading `mcpServers` of `~\.claude.json`) and writes their `[mcp_servers.<name>]` tables into Codex's `config.toml`; `Machine` scopes go through `Test-MachineTypeScope` |
@@ -289,7 +289,7 @@ docs/winux/                                 # WinuX's pages (published at #/winu
 │   ├── skills.md                           # Machine-global Agent Skills (opt-in)
 │   ├── mods.md                             # Machine-global Claude Code mods (opt-in)
 │   ├── mcp-servers.md                      # MCP servers added to Claude Code and Codex (opt-in)
-│   └── profiles.md                         # AI profiles: one per machine, Plan pin, ownership guard (opt-in)
+│   └── profiles.md                         # AI profiles: one per machine, Plan pin, ownership guard, repository policies (opt-in)
 │
 ├── contributing/
 │   └── fork-model.md                       # Fork model, config + app-list overrides, merge=ours

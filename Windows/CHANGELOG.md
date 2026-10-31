@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.4.0] - 2026-10-31
+
+### Added
+
+- **Repository policies: a trust level per repository for AI agents, enforced by one hook.** An AI profile's new `Policies` key maps a level to `origin` patterns, `DefaultPolicy` sets the level of every other repository (default `branch`, today's behaviour) and `MergeWithoutChecks` names `autonomous` repositories that may merge with no CI check reported; `Autonomous` stays as a synonym of `Policies.autonomous`. The levels are a closed set: `autonomous` (also `gh pr merge` when every CI check of the pull request passed), `branch` (commit, push a feature branch, open and ready pull requests), `draft` (draft pull requests only), `readonly` (no Bash or PowerShell call and no file edit) and `blocked` (no work). Every level denies default-branch pushes, force pushes, branch deletion and remote, upstream and git configuration changes. A level name outside the set is warned about and skipped, a `DefaultPolicy` that is not a level becomes `readonly`, and where patterns of several levels match, the least trusting wins. The new engine hook `AI/Hooks/ai-repository-policy.sh` (a mirror file Foundation ships at the same path) is deployed next to the managed settings copy by `Deploy-AiManagedSettings` (new `-PolicyHookPath`) and wired into `PreToolUse` with matcher `*` by `ConvertTo-AiManagedSettings`, which also writes `default-policy`, `policy <level> <pattern>` and `merge-without-checks` lines into `ai-profile.conf`. It matches a command with prose taken out (a heredoc fed to `cat` or `-F -`, a quoted value with whitespace given to `-m`, `--title`, `--body` and the other message options, a PowerShell here-string included), so a commit message that mentions git commands is not mistaken for one. `ai-ownership-guard.sh` refuses a `blocked` repository, and an unattended run (the launcher sets `AI_UNATTENDED`) when the profile has `Unattended = $false` or the repository is at `draft` or `readonly`. `Resolve-AiProfile` returns `Policies` (ordered most trust first), `DefaultPolicy` and `MergeWithoutChecks`; `Test-AiProfile` lists the default level, every configured pattern with its level and the no-CI merge patterns (informational) and returns them with `-PassThru`. Tests: the new `AiRepositoryPolicy.Tests.ps1` (the policy matrix over every level, fed hook JSON through Git's bash; `Integration`), and the `Resolve-AiProfile`, `ConvertTo-AiManagedSettings`, `Deploy-AiManagedSettings` and `Test-AiProfile` suites. Docs: [AI Profiles - Repository Policies](../docs/winux/ai/profiles.md#repository-policies), the configuration reference, the AI module reference and guides, CoreAiRules and troubleshooting.
+
 ## [2.3.0] - 2026-10-31
 
 ### Added
@@ -1799,7 +1805,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.3.0...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.4.0...HEAD
+[2.4.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.3.0...winux/v2.4.0
 [2.3.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.2.0...winux/v2.3.0
 [2.2.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.1.0...winux/v2.2.0
 [2.1.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.0.1...winux/v2.1.0

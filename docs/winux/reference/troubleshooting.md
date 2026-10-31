@@ -328,6 +328,14 @@ wsl mkdir -p /home/you/.ssh
 
 **Solution:** Work on it from a machine of its owner, or classify it: add its pattern to `AiProfiles.Shared` or to this profile's `Owns`, then run `Deploy-AiArtifacts -Kind Rules` so `ai-profile.conf` is rewritten. Verdicts are cached per session (under `${TMPDIR:-/tmp}/ai-ownership-guard/` of the bash that runs the hook), so start a new session after the change. A folder outside any repository, or a repository without `origin`, is always allowed.
 
+### A Command Or Edit Is Denied With "AI repository policy"
+
+**Problem:** A Bash or PowerShell call, or an Edit or Write, is denied with `AI repository policy (<host/owner/name>, <level>): ...`, or a prompt is blocked with `AI repository policy: ... is blocked` or `unattended runs ...`.
+
+**Why it happens:** With an AI profile active, `ai-repository-policy.sh` applies the trust level of the repository the session works in, read from the `policy`, `autonomous` and `default-policy` lines of `ai-profile.conf` (the last matching line wins). Every level denies default-branch pushes, force pushes, branch deletion and remote, upstream or git configuration changes; `branch` also denies `gh pr merge`, `draft` denies `gh pr ready` and a pull request without `--draft`, `readonly` denies every shell call and file edit, and `blocked` (refused by the ownership guard) denies everything. At `autonomous` a merge needs every CI check passed: "no checks reported" counts as not green unless the repository is in `MergeWithoutChecks`. An unattended run (`AI_UNATTENDED` set) is refused when the profile has `Unattended = $false` or the repository is at `draft` or `readonly`.
+
+**Solution:** Run `Test-AiProfile` to see the level of each configured pattern and the default. Change `Policies`, `DefaultPolicy` or `MergeWithoutChecks` of the profile, then run `Deploy-AiArtifacts -Kind Rules` so `ai-profile.conf` is rewritten, and start a new session (levels are cached per session under `${TMPDIR:-/tmp}/ai-repository-policy/`). A commit message or pull request body that mentions git commands is not matched when it is given to `-m`, `--title` or `--body` with whitespace in it, or through a heredoc fed to `cat`; a command wrapped in `bash -c "..."` still is, on purpose.
+
 ### Deploy-AiArtifacts Seems To Stop After "AI profile"
 
 **Problem:** On a machine's first deploy with a manifest source, `Deploy-AiArtifacts` prints the artifacts root, the harnesses and the AI profile, then a series of `Fetching manifest ref => [...]` lines that take a while each.

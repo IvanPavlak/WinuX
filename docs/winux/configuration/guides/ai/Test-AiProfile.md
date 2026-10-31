@@ -9,7 +9,7 @@ Checks that this machine runs Claude Code on the Plan its AI profile expects, pi
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`AiProfiles`](../../configuration-reference.md#ai-profiles) | hashtable | no profile | The profile checked and its expected `Plan`. No profile: exit code `2`. |
+| [`AiProfiles`](../../configuration-reference.md#ai-profiles) | hashtable | no profile | The profile checked and its expected `Plan`. No profile: exit code `2`. Its `DefaultPolicy`, `Policies` and `MergeWithoutChecks` are listed (informational, never a mismatch). |
 | [`AiHarnesses`](../../configuration-reference.md#ai-harnesses) | hashtable | `claude-code` managed settings at `C:\Program Files\ClaudeCode\managed-settings.json` | Where the deployed managed settings are read from (the destination with the `managed-settings` hook). |
 | [`AiMcpServers.Servers`](../../configuration-reference.md#ai-mcp-servers) | hashtable | `@{}` | The OAuth servers (a `Url` without `BearerTokenEnvVar` or `Authorization` header) the profile registers, listed as "sign in once with /mcp, not checked" (no sign-in is checked, and the list does not change the exit code). |
 
@@ -19,7 +19,11 @@ Checks that this machine runs Claude Code on the Plan its AI profile expects, pi
     - Options: The profile's `Plan` (one entry, or several when more than one organization is allowed).
     - Default: None: the check fails until the profile names a Plan.
     - More detail: [`AiProfiles`](../../configuration-reference.md#ai-profiles)
-2. Has the managed settings copy been deployed since the profile last changed?
+2. Is each repository at the level you expect?
+    - Options: Read the `Default policy` and `Policy` lines it prints; change `Policies` or `DefaultPolicy` and redeploy.
+    - Default: Every repository at `branch`.
+    - More detail: [AI Profiles - Repository Policies](../../../ai/profiles.md#repository-policies)
+3. Has the managed settings copy been deployed since the profile last changed?
     - Options: Run `Deploy-AiArtifacts -Kind Rules` as administrator after any `AiProfiles` or rules item change.
     - Default: A stale or missing copy is reported as a mismatch.
     - More detail: [CoreAiRules - Managed settings copy](../../../ai/coreairules.md#managed-settings-copy)
@@ -67,7 +71,8 @@ $LASTEXITCODE
 Read-only checks. None of these change anything.
 
 ```powershell
-Test-AiProfile -PassThru | Select-Object ExitCode, Profile, Source, Pinned, Credentials, OAuthMcp
+Test-AiProfile -PassThru | Select-Object ExitCode, Profile, Source, Pinned, Credentials, OAuthMcp, DefaultPolicy
+(Test-AiProfile -PassThru).Policies
 (Test-AiProfile -PassThru).Problems
 ```
 
@@ -84,7 +89,7 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
         Hosts    = @{ "WORKSTATION-01" = "Work" }
         Default  = "Personal"
         Profiles = @{
-            Personal = @{ Rules = "MyRules"; Plan = @{ Name = "Max"; OrgUuid = "00000000-0000-0000-0000-000000000000" }; McpServers = @("my-remote") }
+            Personal = @{ Rules = "MyRules"; Plan = @{ Name = "Max"; OrgUuid = "00000000-0000-0000-0000-000000000000" }; McpServers = @("my-remote"); Policies = @{ autonomous = @("github.com/MyUser/MyProject") } }
             Work     = @{ Rules = "MyWorkRules"; Plan = @{ Name = "Team"; OrgUuid = "11111111-1111-1111-1111-111111111111" }; McpServers = @() }
         }
     }

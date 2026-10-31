@@ -19,7 +19,8 @@ function ConvertTo-AiManagedSettings {
 		    (an OrgUuid that is not a UUID) renders nothing, so the deployed copy keeps its pin.
 		  - With an AI profile active, the ownership guard is appended to hooks.UserPromptSubmit
 		    and to hooks.PreToolUse (matcher *) as
-		    bash "<ManagedDir>/ai-ownership-guard.sh" <Event>.
+		    bash "<ManagedDir>/ai-ownership-guard.sh" <Event>, and the repository policy hook
+		    to hooks.PreToolUse (matcher *) as bash "<ManagedDir>/ai-repository-policy.sh".
 
 		The result is two-space indented JSON with LF line endings and a final newline, so the
 		same input always renders the same text and a deploy can compare it with the deployed
@@ -34,6 +35,14 @@ function ConvertTo-AiManagedSettings {
 		  shared <pattern>               one line per AiProfiles.Shared pattern
 		  owns <profile> <pattern>       one line per pattern, every profile in name order
 		  autonomous <pattern>           the active profile's autonomous repositories only
+		  default-policy <level>         the active profile's DefaultPolicy (default branch)
+		  policy <level> <pattern>       one line per pattern of the active profile's Policies,
+		                                 most trust first, so the least trusting level wins
+		                                 where several match (the hooks take the last match)
+		  merge-without-checks <pattern> the active profile's MergeWithoutChecks
+
+		The autonomous lines come before the policy lines: the hooks read them as policy
+		autonomous lines, and a rules item's own hook may still read them.
 
 		Returns @{ Settings; ProfileConf; Problems }: ProfileConf is empty with profiles off,
 		Problems lists what could not be rendered (an unparseable template and an unusable
@@ -113,7 +122,7 @@ function ConvertTo-AiManagedSettings {
 
 		if ($null -eq $document['hooks']) { $document['hooks'] = [ordered]@{} }
 		if ($document['hooks'] -isnot [System.Collections.IDictionary]) {
-			$result.Problems += "The template's hooks is not an object - the ownership guard was not wired"
+			$result.Problems += "The template's hooks is not an object - the ownership guard and the repository policy hook were not wired"
 		}
 		else {
 			foreach ($hookEvent in @('UserPromptSubmit', 'PreToolUse')) {
@@ -123,6 +132,11 @@ function ConvertTo-AiManagedSettings {
 				$existing = @($document['hooks'][$hookEvent] | Where-Object { $null -ne $_ })
 				$document['hooks'][$hookEvent] = @($existing + $entry)
 			}
+			$policyEntry = [ordered]@{
+				matcher = '*'
+				hooks   = @([ordered]@{ type = 'command'; command = "bash `"$dir/ai-repository-policy.sh`"" })
+			}
+			$document['hooks']['PreToolUse'] = @(@($document['hooks']['PreToolUse']) + $policyEntry)
 		}
 
 		$lines = @(
@@ -137,6 +151,13 @@ function ConvertTo-AiManagedSettings {
 			foreach ($pattern in @($AiProfile.Profiles[$name].Owns)) { $lines += "owns $name $pattern" }
 		}
 		foreach ($pattern in @($selected.Autonomous)) { $lines += "autonomous $pattern" }
+		$lines += "default-policy $(if ($selected.DefaultPolicy) { $selected.DefaultPolicy } else { 'branch' })"
+		if ($selected.Policies -is [System.Collections.IDictionary]) {
+			foreach ($level in @($selected.Policies.Keys)) {
+				foreach ($pattern in @($selected.Policies[$level] | Where-Object { $_ })) { $lines += "policy $level $pattern" }
+			}
+		}
+		foreach ($pattern in @($selected.MergeWithoutChecks | Where-Object { $_ })) { $lines += "merge-without-checks $pattern" }
 		$result.ProfileConf = ($lines -join "`n") + "`n"
 	}
 

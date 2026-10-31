@@ -1,7 +1,7 @@
 function Deploy-AiManagedSettings {
 	<#
 	.SYNOPSIS
-		Deploys a rules item's managed settings as an administrator-owned copy, with its hooks, the ownership guard and ai-profile.conf, on Windows and in WSL.
+		Deploys a rules item's managed settings as an administrator-owned copy, with its hooks, the ownership guard, the repository policy hook and ai-profile.conf, on Windows and in WSL.
 
 	.DESCRIPTION
 		The managed-settings destination of a harness (the one with the managed-settings hook:
@@ -12,11 +12,14 @@ function Deploy-AiManagedSettings {
 
 		  managed-settings.json    rendered by ConvertTo-AiManagedSettings ({ManagedDir}
 		                           replaced, forceLoginOrgUUID from the AI profile's Plan, the
-		                           ownership guard wired into UserPromptSubmit and PreToolUse)
+		                           ownership guard wired into UserPromptSubmit and PreToolUse,
+		                           the repository policy hook into PreToolUse)
 		  hooks\                   the rules item's hooks folder, file by file (scripts with
 		                           LF line endings)
 		  ai-ownership-guard.sh    the engine's guard (AI\Hooks of the repository), profiles only
-		  ai-profile.conf          the profile, Plan and ownership patterns, profiles only
+		  ai-repository-policy.sh  the engine's repository policy hook (AI\Hooks), profiles only
+		  ai-profile.conf          the profile, Plan, ownership patterns and repository levels,
+		                           profiles only
 
 		A file is rewritten only when its rendered content differs from the deployed one. A
 		link in the way (the earlier link-style deploy) is replaced; a real file that differs
@@ -46,6 +49,10 @@ function Deploy-AiManagedSettings {
 		The ownership guard script. Defaults to AI\Hooks\ai-ownership-guard.sh of the repository, the file
 		WinuX and Foundation ship as one mirror file.
 
+	.PARAMETER PolicyHookPath
+		The repository policy hook. Defaults to AI\Hooks\ai-repository-policy.sh of the repository,
+		the file WinuX and Foundation ship as one mirror file.
+
 	.PARAMETER BackupRepoRoot
 		The repository whose Backups folder receives the WSL backups. Defaults to Get-RepositoryPath.
 
@@ -67,6 +74,9 @@ function Deploy-AiManagedSettings {
 
 		[Parameter()]
 		[string]$GuardPath = (Join-Path (Get-RepositoryPath).Repo 'AI\Hooks\ai-ownership-guard.sh'),
+
+		[Parameter()]
+		[string]$PolicyHookPath = (Join-Path (Get-RepositoryPath).Repo 'AI\Hooks\ai-repository-policy.sh'),
 
 		[Parameter()]
 		[string]$BackupRepoRoot
@@ -103,6 +113,12 @@ function Deploy-AiManagedSettings {
 			}
 			else {
 				Write-LogWarning "The ownership guard is missing => [$GuardPath] - the managed settings call a script that is not deployed!"
+			}
+			if (Test-Path -LiteralPath $PolicyHookPath -PathType Leaf) {
+				$files['ai-repository-policy.sh'] = ([IO.File]::ReadAllText($PolicyHookPath)) -replace "`r`n", "`n"
+			}
+			else {
+				Write-LogWarning "The repository policy hook is missing => [$PolicyHookPath] - the managed settings call a script that is not deployed!"
 			}
 			$files['ai-profile.conf'] = $rendered.ProfileConf
 		}

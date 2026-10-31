@@ -48,10 +48,11 @@ The managed settings are never a link: a link into the repository would let anyt
 
 | File | Content |
 | ---- | ------- |
-| `managed-settings.json` | the item's file rendered by [ConvertTo-AiManagedSettings](../modules/ai.md#convertto-aimanagedsettings): every `{ManagedDir}` token becomes the managed folder (forward slashes); with an [AI profile](profiles.md) active, `forceLoginOrgUUID` is set from the profile's Plan (one UUID or an array), and the ownership guard is appended to `hooks.UserPromptSubmit` and `hooks.PreToolUse` (matcher `*`) as `bash "<folder>/ai-ownership-guard.sh" <Event>` |
+| `managed-settings.json` | the item's file rendered by [ConvertTo-AiManagedSettings](../modules/ai.md#convertto-aimanagedsettings): every `{ManagedDir}` token becomes the managed folder (forward slashes); with an [AI profile](profiles.md) active, `forceLoginOrgUUID` is set from the profile's Plan (one UUID or an array), and the ownership guard is appended to `hooks.UserPromptSubmit` and `hooks.PreToolUse` (matcher `*`) as `bash "<folder>/ai-ownership-guard.sh" <Event>`, then the repository policy hook to `hooks.PreToolUse` (matcher `*`) as `bash "<folder>/ai-repository-policy.sh"` |
 | `hooks\` | the rules item's `hooks\` folder, file by file, scripts with LF line endings |
 | `ai-ownership-guard.sh` | the engine's guard (`AI/Hooks/ai-ownership-guard.sh`, a mirror file of WinuX and Foundation), with a profile active |
-| `ai-profile.conf` | the profile, its Plan and the ownership patterns the guard reads, with a profile active |
+| `ai-repository-policy.sh` | the engine's repository policy hook (`AI/Hooks/ai-repository-policy.sh`, a mirror file of WinuX and Foundation), with a profile active; see [AI Profiles - Repository Policies](profiles.md#repository-policies) |
+| `ai-profile.conf` | the profile, its Plan, the ownership patterns and the repository levels the hooks read, with a profile active |
 
 A file is rewritten only when its rendered content differs from the deployed one, so a changed rules item or profile reaches the machine with the next deploy and an unchanged one writes nothing. A link left from the earlier link-style deploy is replaced; a real file that differs is first backed up into `Backups\Windows\SymbolicLinks\`. Files in the folder this function did not render are left alone. The Windows copy needs the administrator rights the whole run asks for; the WSL copy needs no sudo prompt.
 
