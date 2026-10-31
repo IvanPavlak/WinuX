@@ -8,6 +8,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-10-30
+
+### Added
+
+- **`Configure-NpmConfig` (System module) authenticates npm against private registries, and the new opt-in Bootstrap step `NpmConfig` runs it.** `npm install` of a private scoped package (GitHub Packages) needs a token in the user npmrc, and nothing wrote it, so every machine was set up by hand. The function writes `//<host><path>:_authToken=<token>` for every registry in the new `NpmRegistries` (`Url`, optional `Scope`, which also writes `<Scope>:registry=<Url>`) into the npmrc of the new `PathTemplates.NpmConfig` (default `{User}\.npmrc`). The token, a GitHub personal access token with `read:packages` (the one `Configure-NuGetConfig` asks for works), is asked once as a secure string, only when a registry is not configured yet or with `-Override`; it is never taken from the GitHub CLI, put on a command line or shown, and an empty token writes nothing. Every other line of the npmrc is kept in order, a registry's existing line is replaced in place, the file keeps its line endings and is written as UTF-8 without a BOM, and an existing real npmrc is first backed up (`Backup-RepositoryItem`, category `System`, key `NpmConfig`; `-BackupRoot`) with every credential value (`_authToken`, `_auth`, `_password`) replaced by `<redacted>`, so the undo never holds a token, the write skipped when that fails. The base ships GitHub Packages without a scope and the step OFF, like `NuGetConfig`, because it prompts; it runs right after `NuGetConfig`. Tests: `Configure-NpmConfig.Tests.ps1` (new file, kept lines and order, in-place token replacement, added scope line, already configured, `-Override`, CRLF kept, several registries with one prompt, empty token, backup taken, redacted and failed, empty and invalid registries, the token in no output), and the `NpmConfig` step in `Bootstrap.Tests.ps1` and `Resolve-BootstrapSteps.Tests.ps1`. Documented in `docs/modules/system.md`, the new guide `docs/configuration/guides/system/Configure-NpmConfig.md`, `docs/configuration/configuration-reference.md` (npm Configuration, `BootstrapConfig.Steps`), `docs/configuration/overview.md`, `docs/modules/bootstrap.md`, `docs/getting-started/first-run.md`, `docs/reference/backups.md` and `docs/docs_overview.md`.
+
+### Security
+
+- **`Configure-NuGetConfig` no longer keeps a token in its backup, and both token prompts refuse an answer with whitespace in it.** The backup taken before an existing `NuGet.Config` is overwritten was a full copy, `ClearTextPassword` included, so every rerun left one more plaintext copy of the old token in `Backups\Windows\System\NuGetConfig\` for the retention to keep. The copy is now made with every `ClearTextPassword` and `Password` value replaced by `REDACTED` (either attribute order), in a temporary folder removed afterwards; the sources survive, and the token is asked again anyway. A token with whitespace in it is refused: `Configure-NuGetConfig` asks again, `Configure-NpmConfig` writes nothing. GitHub tokens have none, and a command pasted together with the token was otherwise written into the config as the token. Tests: `Configure-NuGetConfig.Tests.ps1` (redacted backup with both attribute orders and no temporary folder left, a pasted command asked again) and `Configure-NpmConfig.Tests.ps1` (a token with whitespace writes nothing). Documented in `docs/modules/system.md`, the Configure-NuGetConfig guide and `docs/reference/backups.md`.
+
 ## [2.1.0] - 2026-10-28
 
 ### Added
@@ -1772,7 +1782,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.1.0...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.2.0...HEAD
+[2.2.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.1.0...winux/v2.2.0
 [2.1.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.0.1...winux/v2.1.0
 [2.0.1]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.0.0...winux/v2.0.1
 [2.0.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v1.9.0...winux/v2.0.0

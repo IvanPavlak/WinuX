@@ -26,7 +26,8 @@ and pruned by one retention function, [`Clear-OldBackups`](../configuration/guid
 | `Config` | `<name>.local` (e.g. `WinGetApps.local`) | `Save-AppCsvOverlay` | Before replacing an existing app-list overlay (`-NoBackup` opts out). |
 | `Config` | `WindowLayouts.<name>` | `Visualize-Layouts -Update` | Before rewriting a window-layout `.psd1`. |
 | `System` | `TaskbarLayout` | `Configure-Taskbar`, `Unpin-TaskbarApps` | Before overwriting the machine's taskbar layout XML in `C:\ProgramData\provisioning\`. |
-| `System` | `NuGetConfig` | `Configure-NuGetConfig` | Before overwriting an existing real `NuGet.Config` at the destination. |
+| `System` | `NuGetConfig` | `Configure-NuGetConfig` | Before overwriting an existing real `NuGet.Config` at the destination, with every `ClearTextPassword` and `Password` value replaced by `REDACTED`, so the copy keeps the sources but no token. |
+| `System` | `NpmConfig` | `Configure-NpmConfig` | Before changing an existing real user npmrc (`.npmrc`), with every credential value (`_authToken`, `_auth`, `_password`) replaced by `<redacted>`, so the copy keeps the other settings but no token. |
 
 ## The contract: skip, never destroy
 

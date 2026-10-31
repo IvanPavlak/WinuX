@@ -13,6 +13,7 @@ The [System module reference](../../../modules/system.md) is the authority on wh
 | -------- | ------------------ | ----- |
 | `Clear-WhatsAppLocalStorage` | `Universal.WhatsAppLocalStoragePath` | [Clear-WhatsAppLocalStorage](Clear-WhatsAppLocalStorage.md) |
 | `Configure-NerdFont` | `DefaultNerdFont`, `NerdFonts`, `Universal.Fonts` | [Configure-NerdFont](Configure-NerdFont.md) |
+| `Configure-NpmConfig` | `NpmRegistries`, `PathTemplates.NpmConfig` | [Configure-NpmConfig](Configure-NpmConfig.md) |
 | `Configure-NuGetConfig` | `PathTemplates.NuGetConfig` | [Configure-NuGetConfig](Configure-NuGetConfig.md) |
 | `Configure-PostgreSqlPasswords` | `PostgreSqlPasswords` | [Configure-PostgreSqlPasswords](Configure-PostgreSqlPasswords.md) |
 | `Configure-Taskbar` | `HostnameToMachineType`, `TaskbarConfiguration`, `Universal.TaskbarPinFolder`, `PathTemplates.TaskbarLayoutFile` | [Configure-Taskbar](Configure-Taskbar.md) |

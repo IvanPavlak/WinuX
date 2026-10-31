@@ -9,6 +9,7 @@
 		'Clear-TaskbarPins',
 		'Clear-WhatsAppLocalStorage',
 		'Configure-NerdFont',
+		'Configure-NpmConfig',
 		'Configure-NuGetConfig',
 		'Configure-PostgreSqlPasswords',
 		'Configure-Taskbar',

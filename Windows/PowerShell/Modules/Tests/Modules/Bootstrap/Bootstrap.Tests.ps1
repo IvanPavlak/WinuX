@@ -95,6 +95,7 @@ Describe "Bootstrap" {
 		Mock Set-EnvironmentVariables { }
 		Mock Create-CondaEnvironments { }
 		Mock Configure-NuGetConfig { }
+		Mock Configure-NpmConfig { }
 		Mock Configure-Taskbar { }
 		Mock Initialize-WSLEnvironment { }
 		Mock SymbolicLinkMaker { }
@@ -139,13 +140,15 @@ Describe "Bootstrap" {
 		Should -Invoke Start-Win11Debloat -Times 1 -Exactly
 	}
 
-	It "keeps the other opt-in steps off by default (DeveloperMode, NuGetConfig, AiArtifacts, AiMarketplaces, AiMcpServers, ObsidianCli, VSCodeProfiles, LockedStartLayout)" {
+	It "keeps the other opt-in steps off by default (DeveloperMode, NuGetConfig, NpmConfig, AiArtifacts, AiMarketplaces, AiMcpServers, ObsidianCli, VSCodeProfiles, LockedStartLayout)" {
 		$global:MachineType = 'Laptop'
 
 		Bootstrap
 
 		Should -Invoke Enable-DeveloperMode -Times 0
 		Should -Invoke Configure-NuGetConfig -Times 0
+		Should -Invoke Configure-NpmConfig -Times 0
+		Should -Invoke Write-LogWarning -ParameterFilter { $Message -eq "npm config skipped - opt in via BootstrapConfig.Steps.NpmConfig" }
 		Should -Invoke Enable-ObsidianCli -Times 0
 		Should -Invoke Deploy-AiArtifacts -Times 0
 		Should -Invoke Deploy-AiMarketplaces -Times 0
@@ -159,12 +162,13 @@ Describe "Bootstrap" {
 
 	It "runs the opt-in steps when BootstrapConfig.Steps enables them" {
 		$global:MachineType = 'Laptop'
-		$global:Configuration.BootstrapConfig = @{ Steps = @{ DeveloperMode = $true; NuGetConfig = $true; AiArtifacts = $true; AiMarketplaces = $true; AiMcpServers = $true; ObsidianCli = $true; VSCodeProfiles = $true; LockedStartLayout = $true } }
+		$global:Configuration.BootstrapConfig = @{ Steps = @{ DeveloperMode = $true; NuGetConfig = $true; NpmConfig = $true; AiArtifacts = $true; AiMarketplaces = $true; AiMcpServers = $true; ObsidianCli = $true; VSCodeProfiles = $true; LockedStartLayout = $true } }
 
 		Bootstrap
 
 		Should -Invoke Enable-DeveloperMode -Times 1 -Exactly
 		Should -Invoke Configure-NuGetConfig -Times 1 -Exactly
+		Should -Invoke Configure-NpmConfig -Times 1 -Exactly
 		Should -Invoke Enable-ObsidianCli -Times 1 -Exactly -ParameterFilter { $CreateIfMissing }
 		Should -Invoke Deploy-AiArtifacts -Times 1 -Exactly
 		Should -Invoke Deploy-AiMarketplaces -Times 1 -Exactly

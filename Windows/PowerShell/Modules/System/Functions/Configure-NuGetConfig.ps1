@@ -17,7 +17,10 @@ function Configure-NuGetConfig {
         secure string), substitutes them for the `[Username]` and `[Token]` placeholders in the
         template, and writes the result as UTF-8. An existing real (non-symlink) destination
         file is first copied into the backup sink (Backup-RepositoryItem, category System, key
-        NuGetConfig); if that backup fails the write is skipped.
+        NuGetConfig) with every ClearTextPassword and Password value replaced by REDACTED, so the
+        undo keeps the sources but never a token; if that backup fails the write is skipped. A
+        token with whitespace in it is asked again: GitHub tokens have none, so it is something
+        else pasted by mistake.
 
     .PARAMETER Override
         Force reconfiguration of NuGet settings even if already configured.
@@ -138,6 +141,11 @@ function Configure-NuGetConfig {
 			if ([string]::IsNullOrWhiteSpace($token)) {
 				Write-LogError "Token cannot be empty! Try again!"
 			}
+			elseif ($token -match '\s') {
+				# GitHub tokens have no whitespace: one that does is something else pasted by mistake.
+				Write-LogError "A token has no spaces - that looks like something else pasted! Try again!"
+				$token = ""
+			}
 		}
 		finally {
 			[System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($BSTR)
@@ -154,18 +162,30 @@ function Configure-NuGetConfig {
 		New-Item -Path $destinationDir -ItemType Directory -Force | Out-Null
 	}
 
-	# An existing real config may carry credentials for feeds this template knows nothing about;
-	# keep an undo in the unified backup sink before overwriting it (the sink is gitignored, so
-	# the token in the copy never reaches git). A backup that cannot be taken aborts the write.
+	# An existing real config may carry sources this template knows nothing about; keep an undo in
+	# the unified backup sink before overwriting it. A backup that cannot be taken aborts the write.
+	# Its tokens are redacted (every ClearTextPassword and Password value, either attribute order):
+	# a copy of a token is a second place it leaks from, and the token is asked again anyway. The
+	# redacted copy is made in a temporary folder and removed after.
 	$existingConfig = Get-Item -LiteralPath $destinationPath -Force -ErrorAction SilentlyContinue
 	if ($existingConfig -and -not $existingConfig.LinkType) {
+		$redactedDir = Join-Path ([System.IO.Path]::GetTempPath()) ("nuget-" + [guid]::NewGuid().ToString("N"))
 		try {
-			$backupDir = Backup-RepositoryItem -Path $destinationPath -Category "System" -Key "NuGetConfig" -BackupRoot $BackupRoot
-			Write-LogWarning "Backed up existing NuGet config => [$destinationPath] => [$backupDir]"
+			New-Item -Path $redactedDir -ItemType Directory -Force | Out-Null
+			$redactedPath = Join-Path $redactedDir (Split-Path $destinationPath -Leaf)
+			$redacted = [System.IO.File]::ReadAllText($destinationPath)
+			$redacted = [regex]::Replace($redacted, '(<add\b[^>]*\bkey="(?:ClearTextPassword|Password)"[^>]*\bvalue=")[^"]*(")', '${1}REDACTED${2}')
+			$redacted = [regex]::Replace($redacted, '(<add\b[^>]*\bvalue=")[^"]*("[^>]*\bkey="(?:ClearTextPassword|Password)")', '${1}REDACTED${2}')
+			[System.IO.File]::WriteAllText($redactedPath, $redacted, [System.Text.UTF8Encoding]::new($false))
+			$backupDir = Backup-RepositoryItem -Path $redactedPath -Category "System" -Key "NuGetConfig" -BackupRoot $BackupRoot
+			Write-LogWarning "Backed up existing NuGet config, tokens redacted => [$destinationPath] => [$backupDir]"
 		}
 		catch {
 			Write-LogError "Skipped NuGet config (could not back up the existing file) => [$destinationPath] => $($_.Exception.Message)"
 			return
+		}
+		finally {
+			Remove-Item -LiteralPath $redactedDir -Recurse -Force -ErrorAction SilentlyContinue
 		}
 	}
 

@@ -1,5 +1,5 @@
 {
-  "Version": "2.1.0",
+  "Version": "2.2.0",
   "Functions": {
     "Add-BrowserGroup": {
       "Module": "Configuration",
@@ -561,6 +561,19 @@
       "Module": "System",
       "Parameters": {
         "FontName": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Configure-NpmConfig": {
+      "Module": "System",
+      "Parameters": {
+        "BackupRoot": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Override": {
           "Mandatory": false,
           "Aliases": []
         }
@@ -7275,6 +7288,7 @@
     "MachinePathMappings.Default",
     "MachinePathMappings.Test",
     "NerdFonts",
+    "NpmRegistries",
     "Obsidian",
     "Obsidian.DefaultWorkspace",
     "Obsidian.GitEndLocation",
@@ -7284,6 +7298,7 @@
     "PathTemplates.Dnd",
     "PathTemplates.DockerDirectory",
     "PathTemplates.LearningBook",
+    "PathTemplates.NpmConfig",
     "PathTemplates.NuGetConfig",
     "PathTemplates.ObsidianDirectory",
     "PathTemplates.Projects",
