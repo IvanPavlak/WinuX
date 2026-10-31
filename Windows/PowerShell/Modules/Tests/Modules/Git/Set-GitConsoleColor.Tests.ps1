@@ -17,7 +17,12 @@ Describe "Set-GitConsoleColor" {
 	}
 
 	AfterEach {
-		foreach ($name in $script:Names) { [Environment]::SetEnvironmentVariable($name, $script:Saved[$name]) }
+		# Unset stays unset: PowerShell passes $null to SetEnvironmentVariable as "", which would
+		# leave an empty variable behind for every later test in the worker.
+		foreach ($name in $script:Names) {
+			if ($null -eq $script:Saved[$name]) { Remove-Item -LiteralPath "Env:$name" -ErrorAction SilentlyContinue }
+			else { [Environment]::SetEnvironmentVariable($name, $script:Saved[$name]) }
+		}
 	}
 
 	It "forces color.ui=always through git's environment configuration, unless the output is redirected" {

@@ -75,8 +75,12 @@ BeforeAll {
 }
 
 AfterAll {
+	# A variable that was not set is removed again, not set to "": PowerShell passes $null to a .NET
+	# string parameter as an empty string, and an empty GIT_AUTHOR_NAME overrides every user.name,
+	# so every later real-git test in the same worker would fail to commit.
 	foreach ($variable in $script:SavedIdentity.Keys) {
-		[Environment]::SetEnvironmentVariable($variable, $script:SavedIdentity[$variable])
+		if ($null -eq $script:SavedIdentity[$variable]) { Remove-Item -LiteralPath "Env:$variable" -ErrorAction SilentlyContinue }
+		else { [Environment]::SetEnvironmentVariable($variable, $script:SavedIdentity[$variable]) }
 	}
 }
 
