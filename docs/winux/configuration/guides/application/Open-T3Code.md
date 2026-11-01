@@ -1,6 +1,6 @@
 # Open-T3Code
 
-Opens T3 Code via `Start-Application` from its per-user install under `%LOCALAPPDATA%\Programs\t3code`.
+Opens T3 Code via `Start-Application` from its per-user install under `%LOCALAPPDATA%\Programs\t3code`, with `-Detached` so it outlives the terminal.
 
 ## Configuration Keys
 
