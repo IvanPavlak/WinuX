@@ -65,6 +65,13 @@ function Start-Application {
         Redirect stdout and stderr to temporary files, suppressing all console output from the launched process.
         Useful for applications like Docker Desktop (Electron) that dump verbose output to the parent console.
 
+    .PARAMETER Detached
+        Start the application through Start-ProcessDetached, so it owns no console, logs nothing into
+        this terminal and outlives it. For Electron applications, which attach to the console of the
+        process that launched them. When WMI refuses, Start-Process runs as it would without this
+        switch and shares the console. DirectPath method only; cannot be combined with -Sync or
+        -SuppressOutput, because a detached process can be neither waited on nor redirected.
+
     .PARAMETER CustomStartLogic
         Scriptblock for Custom start method.
 
@@ -80,6 +87,10 @@ function Start-Application {
     .EXAMPLE
         Start-Application -AppName "Docker" -ProcessName "Docker Desktop" -StartMethod DirectPath -ExecutablePath $dockerExe -Sync
         # Starts Docker and waits for the process to exit
+
+    .EXAMPLE
+        Start-Application -AppName "MyApp" -ProcessName "MyApp" -StartMethod DirectPath -ExecutablePath "C:\Apps\MyApp\MyApp.exe" -Detached
+        # Starts MyApp without a console, so closing this terminal leaves it running
     #>
 	[CmdletBinding()]
 	param(
@@ -127,6 +138,9 @@ function Start-Application {
 		[switch]$SuppressOutput,
 
 		[Parameter()]
+		[switch]$Detached,
+
+		[Parameter()]
 		[scriptblock]$CustomStartLogic
 	)
 
@@ -157,6 +171,10 @@ function Start-Application {
 	}
 
 	try {
+		if ($Detached -and ($StartMethod -ne 'DirectPath' -or $Sync -or $SuppressOutput)) {
+			throw "-Detached needs the DirectPath method and cannot be combined with -Sync or -SuppressOutput"
+		}
+
 		switch ($StartMethod) {
 			'ConfigPath' {
 				if ([string]::IsNullOrWhiteSpace($ConfigKey)) {
@@ -262,7 +280,12 @@ function Start-Application {
 					}
 				}
 
-				Start-Process @startParams
+				if ($Detached) {
+					$null = Start-ProcessDetached -FilePath $ExecutablePath -ArgumentList $Arguments -Fallback $startParams
+				}
+				else {
+					Start-Process @startParams
+				}
 			}
 
 			'Custom' {

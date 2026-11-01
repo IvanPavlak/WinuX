@@ -16,14 +16,15 @@ Describe "Open-T3Code" {
 		Mock Start-Application { }
 	}
 
-	It "delegates to Start-Application with the per-user T3 Code executable" {
+	It "delegates to Start-Application with the per-user T3 Code executable, detached" {
 		Open-T3Code
 
 		Should -Invoke Start-Application -Times 1 -Exactly -ParameterFilter {
 			$AppName -eq 'T3 Code' -and
 			$ProcessName -eq 'T3 Code (Beta)' -and
 			$StartMethod -eq 'DirectPath' -and
-			$ExecutablePath -eq 'C:\Users\You\AppData\Local\Programs\t3code\T3 Code (Beta).exe'
+			$ExecutablePath -eq 'C:\Users\You\AppData\Local\Programs\t3code\T3 Code (Beta).exe' -and
+			$Detached -eq $true
 		}
 	}
 }

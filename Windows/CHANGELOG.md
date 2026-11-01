@@ -8,6 +8,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.6.0] - 2026-11-01
+
+### Added
+
+- **`Start-Application -Detached` starts an application that outlives the terminal**: with the `DirectPath` method it launches through `Start-ProcessDetached`, for Electron applications that would otherwise attach to the console of the shell that launched them. When WMI refuses, `Start-Process` runs as it would without the switch. With `-Sync`, with `-SuppressOutput` or with another start method it launches nothing and reports the failure. Covered by `Modules/Tests/Modules/Application/Start-Application.Tests.ps1`; documented in the Application module reference.
+
+### Fixed
+
+- **`Open-T3Code` no longer ties T3 Code to the terminal that ran it.** T3 Code attached to the console of the shell that launched it, so it logged into that terminal and closed with it. It now starts with `Start-Application -Detached`. Covered by `Modules/Tests/Modules/Application/Open-T3Code.Tests.ps1`; documented in the Application module reference and the Open-T3Code guide.
+
 ## [2.5.0] - 2026-10-31
 
 ### Added
@@ -1818,7 +1828,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.5.0...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.6.0...HEAD
+[2.6.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.5.0...winux/v2.6.0
 [2.5.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.4.1...winux/v2.5.0
 [2.4.1]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.4.0...winux/v2.4.1
 [2.4.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.3.0...winux/v2.4.0

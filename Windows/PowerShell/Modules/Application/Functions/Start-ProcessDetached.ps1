@@ -14,7 +14,8 @@ function Start-ProcessDetached {
 		When no executable is given, or WMI refuses or throws, Start-Process runs with the
 		-Fallback parameters instead and the process it starts shares this shell's console;
 		without a fallback the function just returns $null. The reason goes to the debug log
-		either way. Start-VSCodeDetached and Start-ObsidianDetached are the callers.
+		either way. Start-VSCodeDetached, Start-ObsidianDetached and Start-Application -Detached
+		are the callers.
 
 	.PARAMETER FilePath
 		The executable to start, quoted into the command line as is. Empty when the caller could

@@ -1,5 +1,5 @@
 {
-  "Version": "2.5.0",
+  "Version": "2.6.0",
   "Functions": {
     "Add-BrowserGroup": {
       "Module": "Configuration",
@@ -5780,6 +5780,10 @@
           "Aliases": []
         },
         "CustomStartLogic": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Detached": {
           "Mandatory": false,
           "Aliases": []
         },

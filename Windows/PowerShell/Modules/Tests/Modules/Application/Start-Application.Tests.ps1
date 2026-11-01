@@ -3,6 +3,7 @@
 BeforeAll {
 	$AppFunctionsPath = Join-Path (Get-RepositoryPath).Modules "Application\Functions"
 	. "$AppFunctionsPath\Start-Application.ps1"
+	. "$AppFunctionsPath\Start-ProcessDetached.ps1"
 }
 
 Describe "Start-Application" {
@@ -190,6 +191,57 @@ Describe "Start-Application" {
 			Should -Invoke Start-Process -Times 1 -ParameterFilter {
 				$Wait -eq $true
 			}
+		}
+
+		It "Should start through Start-ProcessDetached when Detached is specified" {
+			Mock Start-Process { }
+			Mock Start-ProcessDetached { 4242 }
+
+			Start-Application -AppName "TestApp" -ProcessName "nonexistent_test_proc_xyz" `
+				-StartMethod DirectPath -ExecutablePath "C:\test.exe" -Arguments @("--arg1") -Detached -SkipPathValidation
+
+			Should -Invoke Start-Process -Times 0
+			Should -Invoke Start-ProcessDetached -Times 1 -Exactly -ParameterFilter {
+				$FilePath -eq "C:\test.exe" -and
+				$ArgumentList -contains "--arg1" -and
+				$Fallback.FilePath -eq "C:\test.exe" -and
+				$Fallback.ArgumentList -contains "--arg1" -and
+				$Fallback.ErrorAction -eq 'Stop'
+			}
+		}
+
+		It "Should still validate the executable path when Detached is specified" {
+			Mock Start-ProcessDetached { 4242 }
+
+			Start-Application -AppName "TestApp" -ProcessName "nonexistent_test_proc_xyz" `
+				-StartMethod DirectPath -ExecutablePath "C:\NonExistent\app.exe" -Detached 2>&1
+
+			Should -Invoke Start-ProcessDetached -Times 0
+		}
+
+		It "Should launch nothing when Detached is combined with <Name>" -ForEach @(
+			@{ Name = 'Sync'; Extra = @{ Sync = $true } }
+			@{ Name = 'SuppressOutput'; Extra = @{ SuppressOutput = $true } }
+		) {
+			Mock Start-Process { }
+			Mock Start-ProcessDetached { 4242 }
+
+			Start-Application -AppName "TestApp" -ProcessName "nonexistent_test_proc_xyz" `
+				-StartMethod DirectPath -ExecutablePath "C:\test.exe" -Detached -SkipPathValidation @Extra 2>&1
+
+			Should -Invoke Start-Process -Times 0
+			Should -Invoke Start-ProcessDetached -Times 0
+		}
+	}
+
+	Context "Detached Outside DirectPath" {
+		It "Should launch nothing when Detached is used with the Custom method" {
+			$script:customLogicExecuted = $false
+
+			Start-Application -AppName "TestApp" -ProcessName "nonexistent_test_proc_xyz" `
+				-StartMethod Custom -CustomStartLogic { $script:customLogicExecuted = $true } -Detached 2>&1
+
+			$script:customLogicExecuted | Should -Be $false
 		}
 	}
 
