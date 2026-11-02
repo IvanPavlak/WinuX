@@ -19,15 +19,18 @@
 # The last matching line wins. The levels, a closed set from most to least trust:
 #   autonomous  everything branch allows, plus `gh pr merge` when every CI check of the pull request
 #               passed (`gh pr checks`); with no check reported only in a merge-without-checks
-#               repository
-#   branch      commit, push a non-default branch, open and ready pull requests; no merge
+#               repository; and the one force push the list below excepts
+#   branch     commit, push a non-default branch, open and ready pull requests; no merge
 #   draft       as branch, but pull requests are opened with --draft, never readied or merged
 #   readonly    no Bash or PowerShell call and no Edit, Write, MultiEdit or NotebookEdit call
 #   blocked     nothing: the ownership guard refuses the prompt and every tool call (this hook also
 #               denies the tools it sees)
 # Every level denies, with a reason the agent sees:
 #   - force pushes (--force, --force-with-lease, -f, +refspec), which is what rewriting pushed
-#     history needs
+#     history needs. One exception, at autonomous only: exactly
+#     `git push --force-with-lease --force-if-includes origin BRANCH` (the flags in either order), for
+#     one local non-default BRANCH, run in the repository's own folder. --force-if-includes keeps the
+#     lease meaningful after a fetch, which moves the remote-tracking ref the lease compares against
 #   - a push to the default branch (an explicit master/main/default refspec, refs/heads/ or not; a
 #     push naming no branch, or HEAD, while the checked-out branch is the default one; a push naming
 #     no branch after a folder change, cd or git -C, whose branch the hook cannot see)
@@ -56,34 +59,57 @@
 # here-string included). A refspec or flag never holds whitespace, so neither can hide one.
 #
 # A missing or empty ai-profile.conf, or one without a `profile` line, allows everything (no
-# profiles in use). Levels are cached per session and folder under ${TMPDIR:-/tmp}/ai-repository-policy/.
+# profiles in use). Levels and repository names are cached per session and folder under
+# ${TMPDIR:-/tmp}/ai-repository-policy/.
 
 set -u
 
-here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# This runs before every tool call and a process costs about 30 ms under Git for Windows, so the path
+# most calls take starts one (the awk below): helpers set variables instead of printing into $(...).
+nl=$'\n'
+here="${BASH_SOURCE[0]%/*}"
+[ "$here" != "${BASH_SOURCE[0]}" ] || here="."
 conf="${AI_PROFILE_CONF:-$here/ai-profile.conf}"
-input="$(cat)"
 
-[ -s "$conf" ] || exit 0
+# The input is read even when it is ignored, so the caller's write to this hook never fails.
+[ -s "$conf" ] || exec cat >/dev/null
 
-json_field() {
-	# The first string value of key $1 in the hook input, for values that never hold a quote (paths,
-	# ids, tool names); a Windows path's backslashes become forward slashes (C:/Users/...).
-	printf '%s' "$input" | sed -n -E 's/.*"'"$1"'"[[:space:]]*:[[:space:]]*"([^"]*)".*/\1/p' | head -n 1 | tr '\\' '/' | sed -E 's#/+#/#g'
+lower() {
+	# Sets lowered to $1 with A-Z lowercased (bash 3.2 has no ${x,,}).
+	local i upper=ABCDEFGHIJKLMNOPQRSTUVWXYZ small=abcdefghijklmnopqrstuvwxyz
+	lowered="$1"
+	for ((i = 0; i < 26; i++)); do
+		lowered="${lowered//${upper:i:1}/${small:i:1}}"
+	done
 }
 
 normalise_remote() {
-	# https://user@github.com/Owner/Name.git, git@github.com:Owner/Name.git, ssh://git@host/Owner/Name
-	printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | sed -E \
-		-e 's#^[a-z+]+://##' \
-		-e 's#^[^@/]+@##' \
-		-e 's#^([^/:]+):([^0-9])#\1/\2#' \
-		-e 's#\.git/?$##' \
-		-e 's#/+$##'
+	# Sets normalised from https://user@github.com/Owner/Name.git, git@github.com:Owner/Name.git or
+	# ssh://git@host/Owner/Name.
+	local scheme='^[a-z+]+://' user='^[^@/]+@' scp='^([^/:]+):([^0-9].*)$' suffix='\.git/?$'
+	lower "$1"
+	normalised="$lowered"
+	if [[ $normalised =~ $scheme ]]; then normalised="${normalised#*://}"; fi
+	if [[ $normalised =~ $user ]]; then normalised="${normalised#*@}"; fi
+	if [[ $normalised =~ $scp ]]; then normalised="${BASH_REMATCH[1]}/${BASH_REMATCH[2]}"; fi
+	if [[ $normalised =~ $suffix ]]; then
+		normalised="${normalised%/}"
+		normalised="${normalised%.git}"
+	fi
+	while [ "${normalised%/}" != "$normalised" ]; do normalised="${normalised%/}"; done
 }
 
 conf_value() {
-	sed -n -E "s/^$1[[:space:]]+([^[:space:]#]+).*/\1/p" "$conf" | tail -n 1
+	# Sets value to the value of the last $1 line of ai-profile.conf (a line starting with $1).
+	local line
+	value=""
+	while IFS= read -r line || [ -n "$line" ]; do
+		case "$line" in "$1"[[:space:]]*) ;; *) continue ;; esac
+		line="${line#"$1"}"
+		line="${line#"${line%%[![:space:]]*}"}"
+		line="${line%%[[:space:]#]*}"
+		[ -z "$line" ] || value="$line"
+	done <"$conf"
 }
 
 valid_level() {
@@ -92,13 +118,14 @@ valid_level() {
 }
 
 policy_level() {
-	# The level of repository $1 (empty: no origin): the last matching policy or autonomous line,
+	# Sets level for repository $1 (empty: no origin): the last matching policy or autonomous line,
 	# else default-policy, else branch.
-	local repo="$1" level kind first rest pattern
-	level="$(conf_value default-policy)"
+	local repo="$1" kind first rest pattern
+	conf_value default-policy
+	level="$value"
 	[ -n "$level" ] || level="branch"
 	valid_level "$level" || level="readonly"
-	[ -n "$repo" ] || { printf '%s' "$level"; return; }
+	[ -n "$repo" ] || return 0
 	set -f
 	while read -r kind first rest; do
 		case "$kind" in
@@ -108,12 +135,12 @@ policy_level() {
 		esac
 		for pattern in "$@"; do
 			case "$pattern" in '#'*) break ;; esac
+			lower "$pattern"
 			# shellcheck disable=SC2254
-			case "$repo" in $(printf '%s' "$pattern" | tr '[:upper:]' '[:lower:]')) level="$first" ;; esac
+			case "$repo" in $lowered) level="$first" ;; esac
 		done
 	done <"$conf"
 	set +f
-	printf '%s' "$level"
 }
 
 merges_without_checks() {
@@ -124,80 +151,49 @@ merges_without_checks() {
 		[ "$kind" = "merge-without-checks" ] || continue
 		for pattern in $rest; do
 			case "$pattern" in '#'*) break ;; esac
+			lower "$pattern"
 			# shellcheck disable=SC2254
-			case "$repo" in $(printf '%s' "$pattern" | tr '[:upper:]' '[:lower:]')) set +f; return 0 ;; esac
+			case "$repo" in $lowered) set +f; return 0 ;; esac
 		done
 	done <"$conf"
 	set +f
 	return 1
 }
 
-[ -n "$(conf_value profile)" ] || exit 0
+conf_value profile
+[ -n "$value" ] || exec cat >/dev/null
 
-tool="$(json_field tool_name)"
-case "$tool" in
-Bash | PowerShell) kind="shell" ;;
-Edit | Write | MultiEdit | NotebookEdit) kind="edit" ;;
-*) exit 0 ;;
-esac
-
-cwd="$(json_field cwd)"
-[ -n "$cwd" ] || cwd="$PWD"
-session="$(json_field session_id)"
-[ -n "$session" ] || session="nosession"
-
-repo=""
-if remote="$(git -C "$cwd" remote get-url origin 2>/dev/null)" && [ -n "$remote" ]; then
-	repo="$(normalise_remote "$remote")"
-fi
-
-cache_dir="${TMPDIR:-/tmp}/ai-repository-policy"
-cache_file="$cache_dir/$(printf '%s' "$session" | tr -c 'A-Za-z0-9_-' '_')"
-key="$(printf '%s' "$cwd" | tr '\t\n' '  ')"
-level=""
-if [ -f "$cache_file" ]; then
-	level="$(awk -F '\t' -v k="$key" '$1 == k { v = $2 } END { print v }' "$cache_file")"
-fi
-if ! valid_level "$level"; then
-	level="$(policy_level "$repo")"
-	mkdir -p "$cache_dir" 2>/dev/null && printf '%s\t%s\n' "$key" "$level" >>"$cache_file" 2>/dev/null
-fi
-
-deny() {
-	printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"AI repository policy (%s, %s): %s"}}\n' "${repo:-no origin}" "$level" "$1"
-	exit 0
+# The hook input, parsed by the one process most calls start: the tool, the session, the folder, and
+# for a shell tool the command, its JSON string decoded and its prose taken out (see the header), each
+# line ending like a `;`, so a match never spans two commands or two lines.
+parsed="$(awk '
+function field(key,    value) {
+	# The string value of key, for values that never hold a quote (paths, ids, tool names); a Windows
+	# path'"'"'s backslashes become forward slashes (C:/Users/...).
+	if (!match(json, ".*\"" key "\"[[:space:]]*:[[:space:]]*\"[^\"]*\"")) return ""
+	value = substr(json, 1, RLENGTH - 1)
+	sub(/.*"/, "", value)
+	gsub(/\\/, "/", value)
+	gsub(/\/+/, "/", value)
+	return value
 }
-
-case "$level" in
-blocked) deny "this repository is blocked for AI agents" ;;
-readonly)
-	if [ "$kind" = "edit" ]; then deny "the repository is read-only for AI agents; files are not edited"; fi
-	deny "the repository is read-only for AI agents; Bash and PowerShell calls are not allowed"
-	;;
-esac
-[ "$kind" = "shell" ] || exit 0
-
-# The command: the JSON string decoded, prose taken out (see the header), each line ending like a
-# `;`, so a match never spans two commands or two lines.
-raw="$(printf '%s' "$input" | sed -n -E 's/.*"command"[[:space:]]*:[[:space:]]*"((\\.|[^"\\])*)".*/\1/p' | head -n 1)"
-decoded="$(printf '%s' "$raw" | awk '
-{
-	s = $0; out = ""; n = length(s)
-	for (i = 1; i <= n; i++) {
-		c = substr(s, i, 1)
-		if (c == "\\" && i < n) {
-			d = substr(s, ++i, 1)
-			if (d == "n") out = out "\n"
-			else if (d == "t" || d == "r") out = out " "
-			else if (d == "u") { out = out " "; i += 4 }
-			else out = out d
-		}
-		else out = out c
+function command_text(    value, at, next_char, out) {
+	if (!match(json, /.*"command"[[:space:]]*:[[:space:]]*"(\\.|[^"\\])*"/)) return ""
+	value = substr(json, 1, RLENGTH - 1)
+	sub(/.*"command"[[:space:]]*:[[:space:]]*"/, "", value)
+	out = ""
+	while ((at = index(value, "\\")) > 0) {
+		out = out substr(value, 1, at - 1)
+		next_char = substr(value, at + 1, 1)
+		if (next_char == "n") out = out "\n"
+		else if (next_char == "t" || next_char == "r") out = out " "
+		else if (next_char == "u") { out = out " "; at += 4 }
+		else out = out next_char
+		value = substr(value, at + 2)
 	}
-	printf "%s", out
-}')"
-in="$(printf '%s\n' "$decoded" | awk '
-function heredoc_word(line,    start, word) {
+	return out value
+}
+function heredoc_word(line, start, word) {
 	# The terminator of a heredoc opened on line (not a <<< here-string), empty when none.
 	start = 1
 	while (match(substr(line, start), /<<-?[ \t]*["\047]?[A-Za-z_][A-Za-z0-9_]*/)) {
@@ -211,19 +207,24 @@ function heredoc_word(line,    start, word) {
 	}
 	return ""
 }
-{
-	if (word != "") {
-		check = $0
-		sub(/^\t+/, "", check)
-		if (check == word) { word = ""; text = text $0 "\n" }
-		else text = text (prose ? "" : $0) "\n"
-		next
+function without_prose(command, count, lines, l, line, check, text, n, out, i, c, d, j, here, content, message) {
+	sub(/\n+$/, "", command)
+	count = split(command, lines, "\n")
+	text = ""
+	word = ""
+	for (l = 1; l <= count; l++) {
+		line = lines[l]
+		if (word != "") {
+			check = line
+			sub(/^\t+/, "", check)
+			if (check == word) { word = ""; text = text line "\n" }
+			else text = text (prose ? "" : line) "\n"
+			continue
+		}
+		text = text line "\n"
+		word = heredoc_word(line)
+		prose = (line ~ /(^|[^A-Za-z0-9_])cat[ \t]*<</ || line ~ /(-F|--file|--body-file)[ \t=]+-([ \t]|$)/)
 	}
-	text = text $0 "\n"
-	word = heredoc_word($0)
-	prose = ($0 ~ /(^|[^A-Za-z0-9_])cat[ \t]*<</ || $0 ~ /(-F|--file|--body-file)[ \t=]+-([ \t]|$)/)
-}
-END {
 	# Quoted values with whitespace given to a message option become empty quotes.
 	n = length(text); out = ""; i = 1
 	while (i <= n) {
@@ -251,10 +252,91 @@ END {
 	}
 	gsub(/\n/, ";", out)
 	gsub(/\t/, " ", out)
-	printf "%s", out
+	return out
+}
+{ json = json (NR > 1 ? "\n" : "") $0 }
+END {
+	tool = field("tool_name")
+	shell = (tool == "Bash" || tool == "PowerShell") ? without_prose(command_text()) : ""
+	printf "%s\n%s\n%s\n%s.", tool, field("session_id"), field("cwd"), shell
 }')"
+tool=${parsed%%$nl*}
+parsed=${parsed#*$nl}
+session=${parsed%%$nl*}
+parsed=${parsed#*$nl}
+cwd=${parsed%%$nl*}
+in=${parsed#*$nl}
+in=${in%.}
 
-has() { printf '%s' "$in" | grep -qiE "$1"; }
+case "$tool" in
+Bash | PowerShell) kind="shell" ;;
+Edit | Write | MultiEdit | NotebookEdit) kind="edit" ;;
+*) exit 0 ;;
+esac
+
+[ -n "$cwd" ] || cwd="$PWD"
+[ -n "$session" ] || session="nosession"
+
+cache_dir="${TMPDIR:-/tmp}/ai-repository-policy"
+cache_file="$cache_dir/${session//[!A-Za-z0-9_-]/_}"
+tab=$'\t'
+key="${cwd//$tab/ }"
+level=""
+repo=""
+if [ -f "$cache_file" ]; then
+	# A line is folder, level and repository (- for no origin).
+	while IFS="$tab" read -r cached_key cached_level cached_repo; do
+		if [ "$cached_key" = "$key" ] && [ -n "$cached_repo" ]; then
+			level="$cached_level"
+			repo="$cached_repo"
+		fi
+	done <"$cache_file"
+	[ "$repo" != "-" ] || repo=""
+fi
+if ! valid_level "$level"; then
+	repo=""
+	if remote="$(git -C "$cwd" remote get-url origin 2>/dev/null)" && [ -n "$remote" ]; then
+		normalise_remote "$remote"
+		repo="$normalised"
+	fi
+	policy_level "$repo"
+	[ -d "$cache_dir" ] || mkdir -p "$cache_dir" 2>/dev/null
+	printf '%s\t%s\t%s\n' "$key" "$level" "${repo:--}" 2>/dev/null >>"$cache_file"
+fi
+
+deny() {
+	printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"AI repository policy (%s, %s): %s"}}\n' "${repo:-no origin}" "$level" "$1"
+	exit 0
+}
+
+case "$level" in
+blocked) deny "this repository is blocked for AI agents" ;;
+readonly)
+	if [ "$kind" = "edit" ]; then deny "the repository is read-only for AI agents; files are not edited"; fi
+	deny "the repository is read-only for AI agents; Bash and PowerShell calls are not allowed"
+	;;
+esac
+[ "$kind" = "shell" ] || exit 0
+
+# Everything below is about git or gh.
+case "$in" in
+*[gG][iI][tT]* | *[gG][hH]*) ;;
+*) exit 0 ;;
+esac
+
+has() {
+	# Bash's own match, which starts no process, while the command is short; grep for a long one, whose
+	# matcher does not slow down with length, and when bash could not run the match (status 2).
+	local status=2
+	if [ "${#in}" -le 4096 ]; then
+		shopt -s nocasematch
+		[[ $in =~ $1 ]]
+		status=$?
+		shopt -u nocasematch
+	fi
+	[ "$status" -eq 2 ] || return "$status"
+	printf '%s' "$in" | grep -qiE "$1"
+}
 
 # A git command and its arguments up to the end of that command.
 G='(^|[^a-z])git([" ]+[^" &|;]+)*[" ]+'
@@ -266,8 +348,60 @@ changes_folder() {
 	has '(^|[^a-z])(cd|pushd|chdir|set-location|push-location)([" ;]|$)'
 }
 
-if has "${G}push${E}(--force|--force-with-lease|[\" ]-f([\" ;]|$)|[\" ]\+[^\" ]+)"; then
-	deny "force pushes are not allowed; pushed history is never rewritten"
+default_branch() {
+	local ref
+	ref="$(git -C "$cwd" symbolic-ref --quiet refs/remotes/origin/HEAD 2>/dev/null)" && { printf '%s' "${ref##*/}"; return; }
+	printf 'master'
+}
+
+force_push_refusal() {
+	# What the force push $1 (a git push call, from just before git on) gets wrong, empty when it is
+	# the one form an autonomous repository allows. A word that is no plain name fails the
+	# local-branch check, so a variable, a refspec, a tag or a quote never passes.
+	local name def
+	if changes_folder || has '(^|[^a-z_])GIT_[a-z_]+[" ]*='; then
+		printf 'it must run in the repository'"'"'s own folder, with no cd or GIT_ variable, so its own level applies'
+		return
+	fi
+	set -f
+	# shellcheck disable=SC2046
+	set -- $(printf '%s' "$1" | sed -E 's/^[^gG]*//')
+	set +f
+	if [ "${1:-} ${2:-}" != "git push" ]; then
+		printf 'it must start with exactly git push, with no -C, -c or other option before push'
+		return
+	fi
+	case "${3:-} ${4:-}" in
+	"--force-with-lease --force-if-includes" | "--force-if-includes --force-with-lease") ;;
+	*)
+		printf 'it needs both flags, --force-with-lease and --force-if-includes, with no value and no other flag'
+		return
+		;;
+	esac
+	if [ "$#" -ne 6 ] || [ "$5" != "origin" ]; then
+		printf 'it must name the remote origin and one branch, and nothing else'
+		return
+	fi
+	name="$(printf '%s' "$6" | tr '[:upper:]' '[:lower:]')"
+	def="$(default_branch | tr '[:upper:]' '[:lower:]')"
+	case "$name" in
+	"$def" | master | main)
+		printf 'it must not target the default branch'
+		return
+		;;
+	esac
+	if ! git -C "$cwd" show-ref --verify --quiet "refs/heads/$6"; then
+		printf 'its target must be a local branch of this repository, by its plain name (not HEAD, a refspec, a tag or a variable)'
+	fi
+}
+
+force_push="${G}push${E}(--force|[\" ]-f([\" ;]|$)|[\" ]\+[^\" ]+)"
+if has "$force_push"; then
+	[ "$level" = "autonomous" ] || deny "force pushes are not allowed; pushed history is never rewritten"
+	while IFS= read -r call; do
+		refusal="$(force_push_refusal "$call")"
+		[ -z "$refusal" ] || deny "force pushes are not allowed here except git push --force-with-lease --force-if-includes origin BRANCH; $refusal"
+	done <<<"$(printf '%s' "$in" | grep -oiE "${force_push}${E}")"
 fi
 if has "${G}push${E}[\" ](--all|--branches|--mirror)([\" =;]|$)" || has "${G}push${E}[\" ][^\" ;]*\*"; then
 	deny "pushing every branch (--all, --mirror or a glob refspec) is not allowed; push one named branch"
@@ -299,7 +433,7 @@ gh_api_writes() {
 		grep -viE '[" ](-X|--method)[" =]*get([" ]|$)'
 }
 
-if gh_api_writes | grep -qiE '/pulls/[^/" ]+/merge|/merges([" /?]|$)|/merge-upstream|/git/refs|/contents/|/branches/|/rulesets|default_branch|mergePullRequest|mergeBranch|updateRefs?[^a-z]|createRef|deleteRef|createCommitOnBranch|PullRequestAutoMerge|updateRepository|query=@|graphql.*--input|--input.*graphql'; then
+if has "(^|[^a-z])gh${F}[\" ]+api[\" ]" && gh_api_writes | grep -qiE '/pulls/[^/" ]+/merge|/merges([" /?]|$)|/merge-upstream|/git/refs|/contents/|/branches/|/rulesets|default_branch|mergePullRequest|mergeBranch|updateRefs?[^a-z]|createRef|deleteRef|createCommitOnBranch|PullRequestAutoMerge|updateRepository|query=@|graphql.*--input|--input.*graphql'; then
 	deny "merges, ref updates and file commits through the GitHub API (gh api) are not allowed; push a feature branch and merge with gh pr merge"
 fi
 if has "(^|[^a-z])gh${F}[\" ]+repo${F}[\" ]+(sync|edit|rename|delete|archive|unarchive)([\" ;]|$)"; then
@@ -308,12 +442,6 @@ fi
 if has "(^|[^a-z])gh${F}[\" ]+(alias[\" ]+(set|import|delete)|config[\" ]+set)([\" ;]|$)"; then
 	deny "changing gh configuration (gh alias, gh config set) is not allowed"
 fi
-
-default_branch() {
-	local ref
-	ref="$(git -C "$cwd" symbolic-ref --quiet refs/remotes/origin/HEAD 2>/dev/null)" && { printf '%s' "${ref##*/}"; return; }
-	printf 'master'
-}
 
 if has "${G}push([\" ;]|$)"; then
 	def="$(default_branch)"
@@ -371,7 +499,8 @@ pr_target() {
 	set +f
 	case "$selector" in */pull/*) target="${selector%%/pull/*}" ;; esac
 	[ -n "$target" ] || return 0
-	target="$(normalise_remote "$target")"
+	normalise_remote "$target"
+	target="$normalised"
 	case "$target" in */*/*) ;; *) target="github.com/$target" ;; esac
 }
 

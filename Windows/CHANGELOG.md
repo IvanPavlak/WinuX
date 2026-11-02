@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.7.0] - 2026-11-02
+
+### Changed
+
+- **At `autonomous`, the repository policy hook allows one form of force push, so a worker can rebase the feature branch it owns.** `ai-repository-policy.sh` lets through exactly `git push --force-with-lease --force-if-includes origin <branch>`, the flags in either order, for a local non-default branch named plainly, run in the repository's own folder. Everything else stays denied: `--force`, `-f`, `+refspec`, `--force-with-lease` without `--force-if-includes`, any other flag, a refspec, `HEAD`, a tag, a variable, no branch or several, another remote, a `cd`, `git -C`, `git -c` or `GIT_` variable, and every force push at `branch` and below. The reason names the part that failed. Every force push in a command is checked. Merging the default branch into the feature branch stays allowed. Covered by `Modules/Tests/Modules/AI/AiRepositoryPolicy.Tests.ps1`; documented in the AI profiles page and Troubleshooting.
+- **The repository policy hook starts one process on most calls instead of dozens.** It runs before every tool call and took about 1.4 s under Git for Windows, mostly starting `printf | grep` pairs. One `awk` now parses the input, bash's own regex match does the checks (grep only for a command over 4096 characters), a command without `git` or `gh` leaves early, and the repository name is cached with the level. The decisions are unchanged. `AiRepositoryPolicy.Tests.ps1` runs the full always-denied list at `branch` and one case of each kind at `autonomous` and `draft`, because those rules run before the hook looks at the level.
+- **The ownership guard starts one process on a cached call too.** `ai-ownership-guard.sh` runs before every tool call and started about a dozen. One `awk` now reads the session and the folder, and bash builtins do the rest; `git` and `mkdir` run only for a folder's first call in a session. The verdicts and the cache format are unchanged. Covered by `Modules/Tests/Modules/AI/AiRepositoryPolicy.Tests.ps1`.
+
 ## [2.6.0] - 2026-11-01
 
 ### Added
@@ -1828,7 +1836,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.6.0...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.7.0...HEAD
+[2.7.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.6.0...winux/v2.7.0
 [2.6.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.5.0...winux/v2.6.0
 [2.5.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.4.1...winux/v2.5.0
 [2.4.1]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.4.0...winux/v2.4.1
