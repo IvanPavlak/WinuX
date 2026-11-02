@@ -7,6 +7,7 @@ BeforeAll {
 
 	. "$HelperFunctionsPath\Initialize-Directory.ps1"
 	. "$HelperFunctionsPath\Get-RepositoryName.ps1"
+	. "$HelperFunctionsPath\Resolve-ProjectPath.ps1"
 	. "$FunctionsPath\Initialize-Repository.ps1"
 	. "$FunctionsPath\Update-Repository.ps1"
 }
@@ -20,6 +21,7 @@ Describe "Initialize-Repository" {
 		Mock git { }
 		Mock Write-Host { }
 		Mock takeown { } -ErrorAction SilentlyContinue
+		$global:Configuration = @{ RepositoryGroups = @() }
 	}
 
 	Context "When repository doesn't exist yet" {
@@ -69,12 +71,28 @@ Describe "Initialize-Repository" {
 			Should -Invoke git -Times 0 -ParameterFilter { $args -contains "set-url" }
 		}
 
-		It "Should use shallow clone for Obsidian repositories" {
-			$obsidianPath = Join-Path $TestDrive "repos\Obsidian"
+		It "Should clone shallow a URL an entry marks Shallow, however the URL is spelled" {
+			$global:Configuration = @{ RepositoryGroups = @(@{ Notes = @(@{ Name = "Vault"; UrlPath = "u"; LocalPath = "l"; Shallow = $true }) }) }
+			Mock Resolve-ProjectPath { [PSCustomObject]@{ RepositoryUrl = "https://MyUser@github.com/user/Vault.git"; LocalPath = "l" } }
 
-			Initialize-Repository -RepositoryUrl "https://github.com/user/Obsidian.git" -LocalPath $obsidianPath
+			Initialize-Repository -RepositoryUrl "https://github.com/USER/vault/" -LocalPath (Join-Path $TestDrive "repos\MarkedRepo")
 
 			Should -Invoke git -ParameterFilter { $args[0] -eq "clone" -and $args[1] -eq "--depth" -and $args[2] -eq "1" }
+		}
+
+		It "Should clone in full a repository named Obsidian that no entry marks, and an unmarked entry's URL" {
+			$global:Configuration = @{ RepositoryGroups = @(@{ Notes = @(
+						@{ Name = "Obsidian"; UrlPath = "u"; LocalPath = "l" }
+						@{ Name = "Vault"; UrlPath = "v"; LocalPath = "m"; Shallow = $true }
+					)
+				}) }
+			Mock Resolve-ProjectPath { [PSCustomObject]@{ RepositoryUrl = "https://github.com/user/Vault.git"; LocalPath = "m" } }
+
+			Initialize-Repository -RepositoryUrl "https://github.com/user/Obsidian.git" -LocalPath (Join-Path $TestDrive "repos\Obsidian")
+
+			Should -Invoke git -ParameterFilter { $args[0] -eq "clone" -and $args[1] -eq "https://github.com/user/Obsidian.git" }
+			Should -Invoke git -Times 0 -ParameterFilter { $args -contains "--depth" }
+			Should -Invoke Resolve-ProjectPath -Times 1 -Exactly
 		}
 	}
 

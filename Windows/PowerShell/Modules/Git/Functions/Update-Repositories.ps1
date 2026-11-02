@@ -26,7 +26,11 @@ function Update-Repositories {
 		given, in which case it is reported and skipped.
 
 		Archive mode: downloads repository contents without the `.git` directory, via
-		`git clone --depth 1` followed by `.git` directory removal.
+		`git clone --depth 1` followed by `.git` directory removal. Each copy lands in
+		<root>\<ArchiveFolder>\<repository>: the root is the Desktop, or
+		RepositoryUpdate.ArchiveRoot (absolute, or relative to the Desktop), and an entry's
+		ArchiveFolder in RepositoryGroups is a relative path of any depth, absent meaning the
+		root itself.
 
 		Administrator privileges are required only to clone: in archive mode, and when a
 		selected repository is missing locally and -NoClone is not given. Updating repositories
@@ -53,8 +57,9 @@ function Update-Repositories {
 		Clones repositories into the current working directory instead of the configured paths.
 
 	.PARAMETER Archive
-		Downloads repository contents without git history. Targets the Desktop by default;
-		combine with -InCurrentDirectory to use the current folder.
+		Downloads repository contents without git history, under RepositoryUpdate.ArchiveRoot
+		(the Desktop by default) and each entry's ArchiveFolder. Combine with -InCurrentDirectory
+		to use the current folder as the root; the ArchiveFolder of each entry still applies.
 
 	.PARAMETER IncludeDefaultBranch
 		Also fast-forward each repository's default branch when another branch is checked out.
@@ -257,12 +262,17 @@ function Update-Repositories {
 			(Get-Location).Path
 		}
 		else {
-			[Environment]::GetFolderPath('Desktop')
+			# Combine returns the root alone when it is absolute, and the Desktop alone when it is empty.
+			[System.IO.Path]::Combine([Environment]::GetFolderPath('Desktop'), [string](Get-ConfigSetting -Path 'RepositoryUpdate.ArchiveRoot' -Default ''))
 		}
 
 		foreach ($repo in $repositoriesToUpdate) {
 			$repositoryName = Get-RepositoryName -RepositoryUrl $repo.RepositoryUrl
-			$repo.LocalPath = Join-Path -Path $baseDirectory -ChildPath $repositoryName
+			$archiveDirectory = $baseDirectory
+			if (-not [string]::IsNullOrWhiteSpace($repo.ArchiveFolder)) {
+				$archiveDirectory = Join-Path -Path $baseDirectory -ChildPath ($repo.ArchiveFolder -replace '[\\/]', [System.IO.Path]::DirectorySeparatorChar)
+			}
+			$repo.LocalPath = Join-Path -Path $archiveDirectory -ChildPath $repositoryName
 		}
 	}
 	elseif ($InCurrentDirectory) {

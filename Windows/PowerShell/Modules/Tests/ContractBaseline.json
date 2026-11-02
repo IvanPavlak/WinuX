@@ -1,5 +1,5 @@
 {
-  "Version": "2.8.0",
+  "Version": "2.9.0",
   "Functions": {
     "Add-BrowserGroup": {
       "Module": "Configuration",
@@ -7470,6 +7470,7 @@
     "PSReadLine.PredictionViewStyle",
     "RepositoryGroups",
     "RepositoryUpdate",
+    "RepositoryUpdate.ArchiveRoot",
     "RepositoryUpdate.DefaultBranch",
     "RepositoryUpdate.IncludeDefaultBranch",
     "RepositoryUpdate.Startup",

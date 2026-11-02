@@ -8,6 +8,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.9.0] - 2026-11-02
+
+### Added
+
+- **`Update-Repositories -Archive` can rebuild a whole folder tree.** `RepositoryUpdate.ArchiveRoot` names where a run lands, absolute or relative to the Desktop, and `ArchiveFolder` on a `RepositoryGroups` entry names that repository's folder under it, a relative path of any depth. The copy lands in `<root>\<ArchiveFolder>\<repository>`; with neither set it lands on the Desktop as before, and `-InCurrentDirectory` replaces the root and keeps the folders. `Resolve-RepositoryTargets` returns `ArchiveFolder`.
+- **`Shallow = $true` on a `RepositoryGroups` entry clones that repository `--depth 1`**, in `Update-Repositories` and `Initialize-Repository` alike. The clone keeps its `.git` and can still commit and push.
+
+### Changed
+
+- **`Initialize-Repository` no longer clones a repository shallow because it is named Obsidian.** Which repositories clone shallow is now configuration, and a repository named Obsidian that no entry marks gets its full history. Migration: add `Shallow = $true` to the entry. An existing clone is not affected.
+
 ## [2.8.0] - 2026-11-02
 
 ### Added
@@ -1849,7 +1860,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.8.0...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.9.0...HEAD
+[2.9.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.8.0...winux/v2.9.0
 [2.8.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.7.0...winux/v2.8.0
 [2.7.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.6.0...winux/v2.7.0
 [2.6.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.5.0...winux/v2.6.0
