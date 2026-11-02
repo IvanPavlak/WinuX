@@ -100,7 +100,7 @@ function Resolve-RepositoryTargets {
 			if (@($repositoryGroup.Keys)[0] -ne $groupName) { continue }
 
 			foreach ($repository in $repositoryGroup[$groupName]) {
-				$targets += @{ Name = $repository.Name; Group = $groupName }
+				$targets += @{ Name = $repository.Name; Group = $groupName; Entry = $repository }
 			}
 		}
 	}
@@ -108,33 +108,38 @@ function Resolve-RepositoryTargets {
 	foreach ($repositoryName in $Repositories) {
 		if ([string]::IsNullOrWhiteSpace($repositoryName)) { continue }
 
-		$owningGroup = $null
+		# Every entry of that name: two that only share a name are two repositories, and one listed
+		# in two groups comes down to one below, by its LocalPath.
+		$found = $false
 		foreach ($repositoryGroup in $repositoryGroups) {
 			$groupName = @($repositoryGroup.Keys)[0]
 
 			foreach ($repository in $repositoryGroup[$groupName]) {
-				if ($repository.Name -eq $repositoryName) {
-					$owningGroup = $groupName
-					break
+				if ($repository.Name -eq $repositoryName.Trim()) {
+					$targets += @{ Name = $repositoryName.Trim(); Group = $groupName; Entry = $repository }
+					$found = $true
 				}
 			}
-
-			if ($owningGroup) { break }
 		}
 
-		$targets += @{ Name = $repositoryName.Trim(); Group = $owningGroup }
+		# No entry: Resolve-ProjectPath reports the unknown name, and the others still run.
+		if (-not $found) { $targets += @{ Name = $repositoryName.Trim(); Group = $null; Entry = $null } }
 	}
 
 	$resolvedTargets = @()
 	$seenLocalPaths = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
 
 	foreach ($target in $targets) {
-		$resolvedRepo = Resolve-ProjectPath -ProjectName $target.Name -ForRepository
+		$resolveParams = @{ ProjectName = $target.Name; ForRepository = $true }
+		if ($target.Entry) { $resolveParams.RepositoryEntry = $target.Entry }
+		$resolvedRepo = Resolve-ProjectPath @resolveParams
 		if ($null -eq $resolvedRepo) { continue }
 
 		# A repository listed in two groups resolves to the same LocalPath; updating it twice
-		# would stash, pull and unstash the same working tree again for no reason.
-		if (-not $seenLocalPaths.Add([string]$resolvedRepo.LocalPath)) { continue }
+		# would stash, pull and unstash the same working tree again for no reason. Without a path
+		# on this machine the name is the key.
+		$seenKey = if ([string]::IsNullOrWhiteSpace($resolvedRepo.LocalPath)) { "name:$($target.Name)" } else { [string]$resolvedRepo.LocalPath }
+		if (-not $seenLocalPaths.Add($seenKey)) { continue }
 
 		$resolvedTargets += [PSCustomObject]@{
 			Name          = $target.Name

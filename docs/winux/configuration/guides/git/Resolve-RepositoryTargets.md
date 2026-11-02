@@ -22,7 +22,7 @@ Expands repository names, group names, or every configured group into resolved r
     - Default: The shipped order.
     - More detail: [`RepositoryGroups`](../../configuration-reference.md#repository-groups)
 3. Should a repository belong to more than one group?
-    - Options: Yes - list the same entry under several groups. Selecting both groups still updates it once, because the result is deduplicated by resolved `LocalPath`.
+    - Options: Yes - list the same entry under several groups. Selecting both groups still updates it once, because the result is deduplicated by resolved `LocalPath`. Two entries that only share a name, with different folders, are two repositories and both run.
     - Default: Each shipped repository belongs to one group.
     - More detail: [`RepositoryGroups`](../../configuration-reference.md#repository-groups)
 

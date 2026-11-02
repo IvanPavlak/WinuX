@@ -128,6 +128,65 @@ Describe "Resolve-RepositoryTargets" {
 		@($targets).Group -join "," | Should -Be "Gamma,Alpha"
 	}
 
+	Context "Entries that share a name" {
+		BeforeEach {
+			$global:Configuration.RepositoryGroups = @(
+				@{ One = @(@{ Name = "Twin"; UrlPath = "Universal.GitHub.Private.Zulu"; LocalPath = "Repos.Zulu" }) }
+				@{ Two = @(@{ Name = "Twin"; UrlPath = "Universal.GitHub.Private.Alfa"; LocalPath = "Repos.Alfa" }) }
+			)
+		}
+
+		It "Should keep both, each with its own URL, path and group, for -All" {
+			$targets = Resolve-RepositoryTargets -All
+
+			@($targets).LocalPath -join "," | Should -Be "C:\Repos\Zulu,C:\Repos\Alfa"
+			@($targets).RepositoryUrl -join "," | Should -Be "https://github.com/acme/Zulu,https://github.com/acme/Alfa"
+			@($targets).Group -join "," | Should -Be "One,Two"
+		}
+
+		It "Should resolve a group's own entry, not the first of that name" {
+			$targets = Resolve-RepositoryTargets -Group Two
+
+			@($targets).LocalPath | Should -Be "C:\Repos\Alfa"
+		}
+
+		It "Should resolve every entry of a requested name" {
+			$targets = Resolve-RepositoryTargets -Repositories "Twin"
+
+			@($targets).LocalPath -join "," | Should -Be "C:\Repos\Zulu,C:\Repos\Alfa"
+		}
+	}
+
+	It "Should resolve a name shared by two groups with one folder only once, under the first group" {
+		$targets = Resolve-RepositoryTargets -Repositories "Mike"
+
+		@($targets).Count | Should -Be 1
+		@($targets)[0].Group | Should -Be "Beta"
+	}
+
+	It "Should report an unknown repository name and still resolve the others" {
+		$targets = Resolve-RepositoryTargets -Repositories "Nope", "Golf"
+
+		@($targets).Name | Should -Be "Golf"
+		Should -Invoke Write-LogError -Times 1 -Exactly -ParameterFilter { $Message -match "\[Nope\] not found" }
+	}
+
+	It "Should keep every repository without a path on this machine, with a null LocalPath" {
+		$global:Configuration.RepositoryGroups = @(
+			@{ One = @(
+					@{ Name = "First"; UrlPath = "Universal.GitHub.Private.Zulu"; LocalPath = "Repos.NotHere" }
+					@{ Name = "Second"; UrlPath = "Universal.GitHub.Private.Alfa"; LocalPath = "Missing.NotHere" }
+				)
+			}
+		)
+
+		$targets = Resolve-RepositoryTargets -All
+
+		@($targets).Name -join "," | Should -Be "First,Second"
+		@($targets) | ForEach-Object { $_.LocalPath | Should -BeNullOrEmpty }
+		Should -Invoke Write-LogError -Times 0 -Exactly
+	}
+
 	It "Should skip null and whitespace repository names" {
 		Mock Resolve-ProjectPath { [PSCustomObject]@{ RepositoryUrl = "u"; LocalPath = $ProjectName } }
 

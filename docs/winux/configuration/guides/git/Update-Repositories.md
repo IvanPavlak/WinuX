@@ -23,7 +23,7 @@ Clones or updates one or more git repositories defined in `RepositoryGroups` in 
     - Default: The shipped path.
     - More detail: [`RepositoryGroups`](../../configuration-reference.md#repository-groups)
 3. In what order should a group's repositories be updated?
-    - Options: Whatever order you write them in - the list is walked as configured and never sorted. A repository listed in two groups is still updated only once.
+    - Options: Whatever order you write them in - the list is walked as configured and never sorted. A repository listed in two groups is still updated only once; two entries that only share a name both run, each in its own folder.
     - Default: The shipped order.
     - More detail: [`RepositoryGroups`](../../configuration-reference.md#repository-groups)
 4. Should the default branch be kept current while you work on another branch?

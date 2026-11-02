@@ -211,6 +211,22 @@ Describe "Update-Repositories" {
 			Should -Invoke Update-Repository -Times 1 -Exactly -ParameterFilter { $LocalPath -eq "C:\Repos\Mike" }
 		}
 
+		It "counts a clone that left no repository behind as needing attention" {
+			Mock Test-Path { $false }
+
+			Update-Repositories -All -Quiet
+
+			Should -Invoke Write-LogError -Times 2 -Exactly -ParameterFilter { $Message -match "failed$" }
+		}
+
+		It "counts a clone that left a repository behind as updated" {
+			Mock Test-Path { $Path -like "*\.git" }
+
+			Update-Repositories -All -Quiet
+
+			Should -Invoke Write-LogSuccess -Times 2 -Exactly -ParameterFilter { $Message -match "cloned$" }
+		}
+
 		It "with -NoClone skips missing repositories without cloning or asking" {
 			Update-Repositories -All -NoClone
 
@@ -322,6 +338,20 @@ Describe "Update-Repositories" {
 				Should -Be "=> Repositories => =|1 updated=Success|, =|0 up to date=|, =|1 need attention=Error|, =|1 skipped=Warning"
 		}
 
+		It "reports a repository without a path on this machine as skipped and goes on" {
+			Mock Resolve-RepositoryTargets {
+				, @(
+					[PSCustomObject]@{ Name = "Kilo"; Group = "Beta"; RepositoryUrl = "https://github.com/acme/Kilo"; LocalPath = $null }
+					[PSCustomObject]@{ Name = "Mike"; Group = "Beta"; RepositoryUrl = "https://github.com/acme/Mike"; LocalPath = "C:\Repos\Mike" }
+				)
+			}
+
+			Update-Repositories -All -Quiet -NoClone
+
+			Should -Invoke Write-LogStep -Times 1 -Exactly -ParameterFilter { $Message -match "^=> \[Kilo\] no local path" -and $Style -eq "Warning" }
+			Should -Invoke Update-Repository -Times 1 -Exactly -ParameterFilter { $Name -eq "Mike" }
+		}
+
 		It "prints no summary without -Quiet" {
 			Update-Repositories -All -NoClone
 
@@ -384,7 +414,21 @@ Describe "Update-Repositories" {
 			Update-Repositories -All -Quiet
 
 			Should -Invoke Write-LogTitle -Times 1 -Exactly
-			Should -Invoke Write-LogStep -Times 2 -Exactly -ParameterFilter { $Message -match "^=> \[(Mike|Kilo)\]" -and $NoLeadingNewline }
+		}
+
+		It "separates the title from the first line of a one-group run, with a blank line" {
+			Mock Resolve-RepositoryTargets {
+				, @(
+					[PSCustomObject]@{ Name = "Mike"; Group = "Beta"; RepositoryUrl = "https://github.com/acme/Mike"; LocalPath = "C:\Repos\Mike" }
+					[PSCustomObject]@{ Name = "Kilo"; Group = "Beta"; RepositoryUrl = "https://github.com/acme/Kilo"; LocalPath = "C:\Repos\Kilo" }
+				)
+			}
+
+			Update-Repositories -Repositories "Mike", "Kilo" -Quiet
+
+			Should -Invoke Write-LogTitle -Times 1 -Exactly -ParameterFilter { $Message -eq "Updating Selected Repositories" }
+			Should -Invoke Write-LogStep -Times 1 -Exactly -ParameterFilter { $Message -match "^=> \[Mike\]" -and -not $NoLeadingNewline }
+			Should -Invoke Write-LogStep -Times 1 -Exactly -ParameterFilter { $Message -match "^=> \[Kilo\]" -and $NoLeadingNewline }
 		}
 	}
 

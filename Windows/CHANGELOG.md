@@ -8,6 +8,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.8.0] - 2026-11-02
+
+### Added
+
+- **`Resolve-ProjectPath -RepositoryEntry` resolves one given `RepositoryGroups` entry.** With `-ForRepository` it takes that entry instead of looking up the first one named `-ProjectName`, so two entries that share a name each keep their own URL and path. `-ForRepository` now also returns an empty `LocalPath`, with no error, for a repository this machine has no path for.
+
+### Fixed
+
+- **`Update-Repositories -Quiet` sets the first repository line off from the title with a blank line.** A run over one group or over named repositories printed the first line right under `[Updating Selected Repositories]`; only a run with a heading per group had the blank line.
+- **`Update-Repositories` no longer counts a failed clone as cloned.** A clone that left no repository behind printed `cloned` and counted as updated. It now prints `failed` and counts as needing attention, as on macOS.
+- **`Update-Repositories` runs every entry of a name.** Two `RepositoryGroups` entries that only share a name both resolved to the first one, so the second was silently skipped; `-Group` could even update another group's entry. Each entry now keeps its own URL and path (new `Resolve-ProjectPath -RepositoryEntry`), and a name in `-Repositories` selects all of them. An entry listed in two groups with one folder still runs once.
+- **An unknown repository or a missing path no longer ends the whole `Update-Repositories` run.** `Resolve-ProjectPath -ForRepository` used `break`, which ended the caller's loop, so every repository after it was dropped. An unknown name now logs its error and the others run, and a repository without a path on this machine is reported as skipped (`no local path on this machine - skipped`), as on macOS.
+
 ## [2.7.0] - 2026-11-02
 
 ### Changed
@@ -1836,7 +1849,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.7.0...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.8.0...HEAD
+[2.8.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.7.0...winux/v2.8.0
 [2.7.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.6.0...winux/v2.7.0
 [2.6.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.5.0...winux/v2.6.0
 [2.5.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.4.1...winux/v2.5.0
