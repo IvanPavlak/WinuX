@@ -1,5 +1,5 @@
 {
-  "Version": "2.7.0",
+  "Version": "2.8.0",
   "Functions": {
     "Add-BrowserGroup": {
       "Module": "Configuration",
@@ -4575,6 +4575,10 @@
         },
         "ProjectName": {
           "Mandatory": true,
+          "Aliases": []
+        },
+        "RepositoryEntry": {
+          "Mandatory": false,
           "Aliases": []
         }
       }

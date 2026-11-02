@@ -7,10 +7,12 @@ function Resolve-ProjectPath {
 		Looks up the project in Configuration.ProjectTerminals (by Name) and walks its dot-notation
 		BasePath through MachineSpecificPaths, returning the path for -PathKey or every path listed in
 		the entry's Paths. With -ForRepository it looks the name up in Configuration.RepositoryGroups
-		instead, resolves LocalPath through MachineSpecificPaths and UrlPath through
-		Universal.GitHub, and returns a [PSCustomObject] with RepositoryUrl (Universal.GitHub.Base +
-		the resolved UrlPath) and LocalPath. An unknown name, an unknown -PathKey, or a null path
-		segment logs an error and stops.
+		instead (or takes -RepositoryEntry), resolves LocalPath through MachineSpecificPaths and
+		UrlPath through Universal.GitHub, and returns a [PSCustomObject] with RepositoryUrl
+		(Universal.GitHub.Base + the resolved UrlPath) and LocalPath, which is $null when this machine
+		has no path for the repository. An unknown name, an unknown -PathKey, or a null path segment
+		logs an error and stops; with -ForRepository it returns nothing instead, so a caller's loop
+		goes on with its next repository.
 
 	.PARAMETER ProjectName
 		Project name (ProjectTerminals Name) or, with -ForRepository, repository name
@@ -24,6 +26,10 @@ function Resolve-ProjectPath {
 	.PARAMETER ForRepository
 		If specified, use RepositoryGroups instead of ProjectTerminals and return RepositoryUrl
 		and LocalPath.
+
+	.PARAMETER RepositoryEntry
+		With -ForRepository, the RepositoryGroups entry to resolve instead of the first one named
+		-ProjectName: two entries may share a name and each keeps its own URL and path.
 
 	.EXAMPLE
 		$path = Resolve-ProjectPath -ProjectName "MyProject" -PathKey "Api"
@@ -41,34 +47,39 @@ function Resolve-ProjectPath {
 		[string]$PathKey,
 
 		[Parameter(Mandatory = $false)]
-		[switch]$ForRepository
+		[switch]$ForRepository,
+
+		[Parameter(Mandatory = $false)]
+		[object]$RepositoryEntry
 	)
 
 	if ($ForRepository) {
-		$mapping = $null
-		$repositoryGroups = @(Get-ConfigSetting -Path 'RepositoryGroups' -Default @())
-		foreach ($repositoryGroup in $repositoryGroups) {
-			$groupName = @($repositoryGroup.Keys)[0]
-			foreach ($repository in $repositoryGroup[$groupName]) {
-				if ($repository.Name -eq $ProjectName) {
-					$mapping = $repository
-					break
+		$mapping = $RepositoryEntry
+		if ($null -eq $mapping) {
+			$repositoryGroups = @(Get-ConfigSetting -Path 'RepositoryGroups' -Default @())
+			foreach ($repositoryGroup in $repositoryGroups) {
+				$groupName = @($repositoryGroup.Keys)[0]
+				foreach ($repository in $repositoryGroup[$groupName]) {
+					if ($repository.Name -eq $ProjectName) {
+						$mapping = $repository
+						break
+					}
 				}
+				if ($null -ne $mapping) { break }
 			}
-			if ($null -ne $mapping) { break }
 		}
 
+		# return, not break: a break here would end the caller's loop over its repositories.
 		if ($null -eq $mapping) {
 			Write-LogError "Error: Repository [$ProjectName] not found in configuration!"
-			break
+			return
 		}
 
+		# A path this machine does not have is no error: the caller reports the repository as not
+		# configured and goes on.
 		$currentLocal = $MachineSpecificPaths
 		foreach ($property in $mapping.LocalPath.Split('.')) {
-			if ($null -eq $currentLocal) {
-				Write-LogError "Error: Could not resolve LocalPath [$($mapping.LocalPath)] for repository [$ProjectName]. Path segment [$property] is null!"
-				break
-			}
+			if ($null -eq $currentLocal) { break }
 			$currentLocal = $currentLocal.$property
 		}
 
@@ -89,13 +100,9 @@ function Resolve-ProjectPath {
 			$currentUrl = $currentUrl.$property
 		}
 
-		if ($null -eq $currentLocal) {
-			Write-LogError "Error: Resolved LocalPath for repository [$ProjectName] is null!"
-			break
-		}
 		if ($null -eq $currentUrl) {
 			Write-LogError "Error: Resolved UrlPath for repository [$ProjectName] is null!"
-			break
+			return
 		}
 
 		$fullUrl = $githubBase + $currentUrl

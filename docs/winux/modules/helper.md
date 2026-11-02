@@ -1216,7 +1216,7 @@ foreach ($tab in $tabs) {
 ## [Resolve-ProjectPath](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Resolve-ProjectPath.ps1)
 
 - **Description:** Resolves a project's file paths from the configuration mappings. Looks the project up in `Configuration.ProjectTerminals` (or `Configuration.RepositoryGroups` with `-ForRepository`) and walks the dot-notation reference through `MachineSpecificPaths` to produce the actual path(s). Can return a single named path or the full collection of paths for a project.
-- **Parameters:** -ProjectName, -PathKey, -ForRepository
+- **Parameters:** -ProjectName, -PathKey, -ForRepository, -RepositoryEntry
 - **Usage:** `Resolve-ProjectPath -ProjectName MyProject`, `Resolve-ProjectPath -ProjectName MyProject -PathKey "Api"`, `Resolve-ProjectPath -ProjectName MyRepo -ForRepository`
 
 In project mode (the default), the function finds the matching entry in `Configuration.ProjectTerminals`, resolves its `BasePath` against `MachineSpecificPaths`, then returns either the value of the requested `-PathKey` or every path listed under the project's `Paths`. In repository mode (`-ForRepository`), it instead reads `Configuration.RepositoryGroups`, resolves the `LocalPath` against `MachineSpecificPaths`, builds the remote URL from `Configuration.Universal.GitHub.Base` plus the value `UrlPath` resolves to inside `Configuration.Universal.GitHub` (a leading `Universal.GitHub.` in `UrlPath` is stripped first), and returns a `PSCustomObject` with `RepositoryUrl` and `LocalPath`. Unknown projects, missing path keys, or unresolvable (null) path segments log an error through `Write-LogError` and abort with `break`.
@@ -1225,7 +1225,8 @@ In project mode (the default), the function finds the matching entry in `Configu
 | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `-ProjectName`   | Project (or repository) key from configuration. Required.                                                                                            |
 | `-PathKey`       | Optional single path key to return - one of the project's `ProjectTerminals` `Paths` entries (e.g. `Api`, `Root`). Omit to return all paths defined for the project. Ignored in repository mode. |
-| `-ForRepository` | Switch. Resolve against `RepositoryGroups` and return a `PSCustomObject` with `RepositoryUrl` and `LocalPath` instead of plain project paths.        |
+| `-ForRepository` | Switch. Resolve against `RepositoryGroups` and return a `PSCustomObject` with `RepositoryUrl` and `LocalPath` instead of plain project paths. `LocalPath` is empty when this machine has no path for the repository; an unknown name logs an error and returns nothing, without ending the caller's loop. |
+| `-RepositoryEntry` | With `-ForRepository`, the `RepositoryGroups` entry to resolve instead of the first one named `-ProjectName`, so two entries that share a name each keep their own URL and path. |
 
 ```powershell
 # Resolve a single named path for a project

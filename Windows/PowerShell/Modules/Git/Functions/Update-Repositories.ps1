@@ -14,7 +14,8 @@ function Update-Repositories {
 		explicit URL/path pair - the modes are mutually exclusive, enforced by parameter sets.
 
 		Repositories are updated in the order the configuration lists them, and a repository
-		that appears in more than one selected group is still updated only once.
+		that appears in more than one selected group is still updated only once. Two entries that
+		only share a name are two repositories: both run, each in its own folder.
 
 		Each existing repository is updated by Update-Repository: local changes are stashed, the
 		checked-out branch is fast-forwarded, and the stash is popped. With
@@ -245,7 +246,8 @@ function Update-Repositories {
 			# each resolver call dedupes itself, so only the overlap across the two is left.
 			$seenLocalPaths = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
 			foreach ($target in $selectedTargets) {
-				if ($seenLocalPaths.Add([string]$target.LocalPath)) { $repositoriesToUpdate += $target }
+				$seenKey = if ([string]::IsNullOrWhiteSpace($target.LocalPath)) { "name:$($target.Name)" } else { [string]$target.LocalPath }
+				if ($seenLocalPaths.Add($seenKey)) { $repositoriesToUpdate += $target }
 			}
 		}
 	}
@@ -341,7 +343,8 @@ function Update-Repositories {
 	$distinctGroups = @($repositoriesToUpdate | ForEach-Object { $_.Group } | Where-Object { $_ } | Select-Object -Unique)
 	$showGroups = $distinctGroups.Count -gt 1
 	$currentGroup = $null
-	$firstLineAfterHeading = $false
+	# The title printed above counts as a heading: the first line is set off from it.
+	$firstLineAfterHeading = $true
 
 	$counts = [ordered]@{ Updated = 0; UpToDate = 0; Attention = 0; Skipped = 0 }
 	foreach ($repo in $repositoriesToUpdate) {
@@ -367,7 +370,9 @@ function Update-Repositories {
 			else {
 				Write-LogWarning "Repository [$RepositoryName] not found at [$($repo.LocalPath)]"
 				Initialize-Repository -RepositoryUrl $repo.RepositoryUrl -LocalPath $repo.LocalPath -Token $global:GithubPat
-				$result = [pscustomobject]@{ Name = $RepositoryName; LocalPath = $repo.LocalPath; Branch = $null; Outcome = "Cloned"; DefaultBranch = $null; DefaultBranchOutcome = $null; StashName = $null }
+				# A clone that failed left no repository behind and must not count as updated.
+				$cloneOutcome = if (Test-Path (Join-Path $repo.LocalPath ".git")) { "Cloned" } else { "Error" }
+				$result = [pscustomobject]@{ Name = $RepositoryName; LocalPath = $repo.LocalPath; Branch = $null; Outcome = $cloneOutcome; DefaultBranch = $null; DefaultBranchOutcome = $null; StashName = $null }
 			}
 		}
 		else {
@@ -377,8 +382,8 @@ function Update-Repositories {
 		$line = Format-RepositoryUpdateResult -Result $result
 		$counts[$line.Category]++
 		if ($Quiet) {
-			# A blank line separates a group heading (or the previous repository's stash list)
-			# from the next repository; the rest of the group's lines follow without one.
+			# A blank line separates the title, a group heading or the previous repository's stash
+			# list from the next repository; the rest of the group's lines follow without one.
 			$noLead = -not $firstLineAfterHeading
 			# Colored by bucket: updated green, up to date white, need attention red, skipped yellow.
 			switch ($line.Category) {
