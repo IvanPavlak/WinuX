@@ -1998,6 +1998,10 @@
 	#    - Name:      Repository name used for selection and by-name updates
 	#    - UrlPath:   Dot-notation path to URL (e.g., "Universal.GitHub.Private.MyRepo")
 	#    - LocalPath: Dot-notation path to local directory (e.g., "Projects.MyProject.Root")
+	#    - ArchiveFolder: Optional. Relative folder, any depth, the -Archive copy lands in under
+	#                 RepositoryUpdate.ArchiveRoot ("Projects\Tools"). Absent => the root itself.
+	#    - Shallow:   Optional. $true clones it with --depth 1 (a large history); it can still
+	#                 commit and push.
 	#
 	# HOW TO UPDATE REPOSITORIES:
 	# - Update-Repositories -Group Private          # Updates all repos in the "Private" group
@@ -2060,6 +2064,9 @@
 	#                          (refs/remotes/origin/HEAD), then skipped with a warning. Leave it
 	#                          empty when your repositories do not share one default branch.
 	#                          (Replaces BootstrapConfig.DefaultBranch, removed in 0.1.86.)
+	# - ArchiveRoot          : Where `Update-Repositories -Archive` lands: absolute, or relative to
+	#                          the Desktop. Empty => the Desktop. -InCurrentDirectory replaces it;
+	#                          an entry's ArchiveFolder (RepositoryGroups) nests below either.
 	# - Startup.Enabled      : Update repositories automatically once the first prompt of a shell
 	#                          is drawn (profile stage "RepositoryUpdate", deferred until the shell
 	#                          is idle). Never clones a missing repository and never asks for
@@ -2094,6 +2101,7 @@
 	RepositoryUpdate              = @{
 		IncludeDefaultBranch = $false
 		DefaultBranch        = ""
+		ArchiveRoot          = ""
 		Startup              = @{
 			Enabled       = $false
 			Schedule      = "Daily"

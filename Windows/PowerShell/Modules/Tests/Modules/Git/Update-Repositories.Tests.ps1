@@ -162,6 +162,50 @@ Describe "Update-Repositories" {
 			Should -Invoke git -Times 1 -Exactly -ParameterFilter { $args -contains 'C:\Work\DSA' }
 		}
 
+		It "Should nest a copy under ArchiveRoot and the entry's ArchiveFolder, whichever slash it is written with" {
+			$global:Configuration = @{ RepositoryGroups = @(); RepositoryUpdate = @{ ArchiveRoot = "repos" } }
+			Mock Resolve-RepositoryTargets {
+				, @([PSCustomObject]@{ Name = "DSA"; Group = "Beta"; RepositoryUrl = "u"; LocalPath = "C:\Repos\DSA"; ArchiveFolder = "Deep/er\Still" })
+			}
+
+			Update-Repositories -Repositories "DSA" -Archive
+
+			$expected = [System.IO.Path]::Combine([Environment]::GetFolderPath('Desktop'), 'repos', 'Deep', 'er', 'Still', 'DSA')
+			Should -Invoke git -Times 1 -Exactly -ParameterFilter { $args -contains $expected }
+		}
+
+		It "Should take an absolute ArchiveRoot as it is, and put an entry without a folder directly in it" {
+			$global:Configuration = @{ RepositoryGroups = @(); RepositoryUpdate = @{ ArchiveRoot = "C:\Mirror" } }
+
+			Update-Repositories -Repositories "DSA" -Archive
+
+			Should -Invoke git -Times 1 -Exactly -ParameterFilter { $args -contains 'C:\Mirror\DSA' }
+		}
+
+		It "Should keep the ArchiveFolder but not the ArchiveRoot with -InCurrentDirectory" {
+			$global:Configuration = @{ RepositoryGroups = @(); RepositoryUpdate = @{ ArchiveRoot = "repos" } }
+			Mock Get-Location { [PSCustomObject]@{ Path = "C:\Work" } }
+			Mock Resolve-RepositoryTargets {
+				, @([PSCustomObject]@{ Name = "DSA"; Group = "Beta"; RepositoryUrl = "u"; LocalPath = "C:\Repos\DSA"; ArchiveFolder = "Deep" })
+			}
+
+			Update-Repositories -Repositories "DSA" -Archive -InCurrentDirectory
+
+			Should -Invoke git -Times 1 -Exactly -ParameterFilter { $args -contains 'C:\Work\Deep\DSA' }
+		}
+
+		It "Should ignore the ArchiveFolder outside archive mode" {
+			Mock Update-Repository { [pscustomobject]@{ Name = $Name; Branch = "master"; Outcome = "UpToDate"; DefaultBranch = $null; DefaultBranchOutcome = $null; StashName = $null } }
+			Mock Test-Path { $true }
+			Mock Resolve-RepositoryTargets {
+				, @([PSCustomObject]@{ Name = "DSA"; Group = "Beta"; RepositoryUrl = "u"; LocalPath = "C:\Repos\DSA"; ArchiveFolder = "Deep" })
+			}
+
+			Update-Repositories -Repositories "DSA"
+
+			Should -Invoke Update-Repository -Times 1 -Exactly -ParameterFilter { $LocalPath -eq "C:\Repos\DSA" }
+		}
+
 		It "Should report a failed clone and not strip anything" {
 			Mock git { $global:LASTEXITCODE = 128 }
 

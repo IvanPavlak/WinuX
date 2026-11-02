@@ -17,7 +17,8 @@ function Initialize-Repository {
 		`.git/config` for the life of the clone. Future fetches authenticate via the
 		Git credential manager.
 
-		The Obsidian repository is cloned with `--depth 1` (shallow) due to its large history.
+		A URL that a RepositoryGroups entry marks `Shallow = $true` is cloned with `--depth 1`, a
+		clone that keeps its .git and can still commit and push (a repository with a large history).
 		All cloned repositories have `takeown` applied to set the current user as owner.
 
 		Parent directories are created automatically via Initialize-Directory.
@@ -69,7 +70,19 @@ function Initialize-Repository {
 
 		Write-LogStep "  Cloning [$RepositoryName] to [$LocalPath]"
 
-		if ($RepositoryName -eq "Obsidian") {
+		# Compared without case, a user name, a trailing slash or `.git`: the configured URL and the
+		# one this function was handed need not be spelled alike. Only marked entries are resolved.
+		$urlKey = { param($Url) $Url -replace '^(\w+://)[^/]*@', '$1' -replace '/$' -replace '\.git$' }
+		$shallow = $false
+		foreach ($repositoryGroup in @(Get-ConfigSetting -Path 'RepositoryGroups' -Default @())) {
+			foreach ($repository in $repositoryGroup[@($repositoryGroup.Keys)[0]]) {
+				if (-not $repository.Shallow) { continue }
+				$resolvedRepo = Resolve-ProjectPath -ProjectName $repository.Name -ForRepository -RepositoryEntry $repository
+				if ($resolvedRepo -and (& $urlKey $resolvedRepo.RepositoryUrl) -eq (& $urlKey $RepositoryUrl)) { $shallow = $true }
+			}
+		}
+
+		if ($shallow) {
 			git clone --depth 1 $CloneUrl $LocalPath
 			try { takeown /f $LocalPath /r /d y | Out-Null } catch {}
 		}

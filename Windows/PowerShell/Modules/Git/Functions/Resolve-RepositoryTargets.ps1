@@ -32,7 +32,8 @@ function Resolve-RepositoryTargets {
 		Expands every configured group, in configuration order.
 
 	.OUTPUTS
-		[object[]] - one PSCustomObject per repository: Name, Group, RepositoryUrl, LocalPath.
+		[object[]] - one PSCustomObject per repository: Name, Group, RepositoryUrl, LocalPath,
+		ArchiveFolder (the entry's folder under the archive root, $null when it names none).
 		The array is returned comma-wrapped, so an empty selection stays an empty array;
 		$null is reserved for a requested group name that is not configured.
 
@@ -146,6 +147,7 @@ function Resolve-RepositoryTargets {
 			Group         = $target.Group
 			RepositoryUrl = $resolvedRepo.RepositoryUrl
 			LocalPath     = $resolvedRepo.LocalPath
+			ArchiveFolder = $target.Entry.ArchiveFolder
 		}
 	}
 

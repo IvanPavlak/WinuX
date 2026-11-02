@@ -55,6 +55,8 @@ RepositoryGroups = @(
 | `Name`      | Repository name (selection and by-name updates)         | `MyNewRepo`                          |
 | `UrlPath`   | Dot-notation path to URL in `Universal.GitHub`          | `Universal.GitHub.Private.MyNewRepo` |
 | `LocalPath` | Dot-notation path to local directory in `PathTemplates` | `Projects.MyNewRepo.Root`            |
+| `ArchiveFolder` | Optional. Where `Update-Repositories -Archive` puts it under `RepositoryUpdate.ArchiveRoot`, a relative path of any depth | `Projects\Tools` |
+| `Shallow`   | Optional. `$true` clones it `--depth 1` (a large history); it can still commit and push | `$true` |
 | Group key   | Category the entry lives under (freely configurable)    | `Private` or `Work`                  |
 
 ## Step 3: Add Local Path (if needed)

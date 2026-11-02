@@ -11,6 +11,7 @@ Clones or updates one or more git repositories defined in `RepositoryGroups` in 
 | --- | ---- | -------------- | ---------------- |
 | [`RepositoryGroups`](../../configuration-reference.md#repository-groups) | array of single-key hashtables | array of 1 | The repository groups `Update-Repositories` walks and `Initialize-Repository` can clone into. Group name to an array of repository entries. |
 | [`RepositoryUpdate.IncludeDefaultBranch`](../../configuration-reference.md#repository-update) | bool | `$false` | Also fast-forward each repository's default branch (for example `master`) when another branch is checked out, without checking it out. `-IncludeDefaultBranch` / `-IncludeDefaultBranch:$false` overrides it for one call. |
+| [`RepositoryUpdate.ArchiveRoot`](../../configuration-reference.md#repository-update) | string | `""` (empty) | Where `-Archive` lands: an absolute path, or a path relative to the Desktop. Empty is the Desktop. `-InCurrentDirectory` replaces it for one call. |
 
 ## Decisions
 
@@ -30,6 +31,14 @@ Clones or updates one or more git repositories defined in `RepositoryGroups` in 
     - Options: `$true` fast-forwards each repository's default branch after the checked-out branch, with `git fetch origin <default>:<default>` - git refuses anything but a fast-forward, the working tree and the stash are never touched, a default branch with local commits is left alone, and one never checked out locally is skipped. `$false` updates only the checked-out branch, as before. Which branch counts as the default is [`Resolve-RepositoryDefaultBranch`](Resolve-RepositoryDefaultBranch.md)'s decision.
     - Default: `$false`.
     - More detail: [`RepositoryUpdate`](../../configuration-reference.md#repository-update)
+5. Where should `-Archive` put its copies?
+    - Options: `RepositoryUpdate.ArchiveRoot` for the root (`"repos"` for a folder on the Desktop, or an absolute path), and `ArchiveFolder` on a `RepositoryGroups` entry for that repository's folder under it, a relative path of any depth (`"Projects\Tools"`). The copy lands in `<root>\<ArchiveFolder>\<repository>`, so a whole tree can be rebuilt in one `Update-Repositories -All -Archive`. `ArchiveFolder` only affects `-Archive`, never `LocalPath`.
+    - Default: Every copy directly on the Desktop.
+    - More detail: [`RepositoryUpdate`](../../configuration-reference.md#repository-update)
+6. Which repositories should be cloned without their history?
+    - Options: `Shallow = $true` on the `RepositoryGroups` entry of a repository with a large history (an Obsidian vault); it is cloned `--depth 1` and can still commit and push. No repository name is special.
+    - Default: Full history. An archive copy is always shallow.
+    - More detail: [`RepositoryGroups`](../../configuration-reference.md#repository-groups)
 
 ## Where to Put Values
 
@@ -44,7 +53,8 @@ On this page that bites on `RepositoryGroups` - that key is an array, so whateve
 
 1. Set `RepositoryGroups`
 2. Set `RepositoryUpdate.IncludeDefaultBranch`
-3. Reload and confirm the merge landed
+3. Lay out the archive tree
+4. Reload and confirm the merge landed
 
 ## Step 1: Set `RepositoryGroups`
 
@@ -69,7 +79,26 @@ RepositoryUpdate = @{
 }
 ```
 
-## Step 3: Reload and confirm the merge landed
+## Step 3: Lay out the archive tree
+
+Name the root once and give each repository its folder. Here `-All -Archive` writes `Desktop\repos\MyRepo`, `Desktop\repos\Projects\Tools\MyTool` and `Desktop\repos\Vault\MyNotes`; a normal clone of `MyNotes` is shallow too.
+
+```powershell
+RepositoryUpdate = @{
+    ArchiveRoot = "repos"
+}
+
+RepositoryGroups = @(
+    @{ Personal = @(
+            @{ Name = "MyRepo"; UrlPath = "Universal.GitHub.Private.MyRepo"; LocalPath = "Projects.MyRepo.Root" }
+            @{ Name = "MyTool"; UrlPath = "Universal.GitHub.Private.MyTool"; LocalPath = "Projects.MyTool.Root"; ArchiveFolder = "Projects\Tools" }
+            @{ Name = "MyNotes"; UrlPath = "Universal.GitHub.Private.MyNotes"; LocalPath = "Projects.MyNotes.Root"; ArchiveFolder = "Vault"; Shallow = $true }
+        )
+    }
+)
+```
+
+## Step 4: Reload and confirm the merge landed
 
 Reload the profile, then read the merged value back. `$global:Configuration` after a reload is the ground truth - if what you set is not there, the local file did not parse or the key is nested one level away from where you put it.
 
@@ -77,6 +106,7 @@ Reload the profile, then read the merged value back. `$global:Configuration` aft
 Reload-PowerShellProfile
 $global:Configuration.RepositoryGroups
 $global:Configuration.RepositoryUpdate.IncludeDefaultBranch
+$global:Configuration.RepositoryUpdate.ArchiveRoot
 ```
 
 ## Verification
@@ -89,7 +119,7 @@ $global:Configuration.RepositoryGroups
 $global:Configuration.RepositoryGroups | ConvertTo-Json -Depth 4
 
 # What each selection mode would actually update, without updating anything
-Resolve-RepositoryTargets -All | Format-Table Name, Group, RepositoryUrl, LocalPath
+Resolve-RepositoryTargets -All | Format-Table Name, Group, RepositoryUrl, LocalPath, ArchiveFolder
 Resolve-RepositoryTargets -Group Work | Format-Table Name, LocalPath
 ```
 
@@ -113,13 +143,14 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 
     RepositoryGroups = @(
         @{ Personal = @(
-                @{ Name = "MyRepo"; UrlPath = "Universal.GitHub.Private.MyRepo"; LocalPath = "Projects.MyRepo.Root" }
+                @{ Name = "MyRepo"; UrlPath = "Universal.GitHub.Private.MyRepo"; LocalPath = "Projects.MyRepo.Root"; ArchiveFolder = "Projects\Tools" }
             )
         }
     )
 
     RepositoryUpdate = @{
         IncludeDefaultBranch = $true
+        ArchiveRoot          = "repos"
     }
 }
 ```
@@ -133,6 +164,7 @@ Update-Repositories -All                         # every group
 Update-Repositories                              # interactive menu
 Update-Repositories -All -IncludeDefaultBranch:$false   # this once, the checked-out branch only
 Update-Repositories -All -NoClone -Quiet         # what is on disk, one line each, no Administrator
+Update-Repositories -All -Archive                # history-less copies under Desktop\repos\Projects\Tools
 ```
 
 ## Related

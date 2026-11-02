@@ -9,7 +9,7 @@ Expands repository names, group names, or every configured group into resolved r
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`RepositoryGroups`](../../configuration-reference.md#repository-groups) | array of single-key hashtables | array of 1 | The groups this function expands, their names, and the order repositories come back in. Group name to an array of repository entries, each carrying `Name`, `UrlPath` and `LocalPath`. |
+| [`RepositoryGroups`](../../configuration-reference.md#repository-groups) | array of single-key hashtables | array of 1 | The groups this function expands, their names, and the order repositories come back in. Group name to an array of repository entries, each carrying `Name`, `UrlPath` and `LocalPath`, and optionally `ArchiveFolder`, returned as it is for `Update-Repositories -Archive`. |
 
 ## Decisions
 

@@ -187,6 +187,22 @@ Describe "Resolve-RepositoryTargets" {
 		Should -Invoke Write-LogError -Times 0 -Exactly
 	}
 
+	It "Should carry each entry's ArchiveFolder, null when it names none" {
+		Mock Resolve-ProjectPath { [PSCustomObject]@{ RepositoryUrl = "u"; LocalPath = $RepositoryEntry.LocalPath } }
+		$global:Configuration.RepositoryGroups = @(
+			@{ Alpha = @(
+					@{ Name = "Nested"; UrlPath = "u"; LocalPath = "Nested"; ArchiveFolder = "Deep/er" }
+					@{ Name = "Flat"; UrlPath = "u"; LocalPath = "Flat" }
+				)
+			}
+		)
+
+		$targets = Resolve-RepositoryTargets -All
+
+		$targets[0].ArchiveFolder | Should -Be "Deep/er"
+		$targets[1].ArchiveFolder | Should -BeNullOrEmpty
+	}
+
 	It "Should skip null and whitespace repository names" {
 		Mock Resolve-ProjectPath { [PSCustomObject]@{ RepositoryUrl = "u"; LocalPath = $ProjectName } }
 
