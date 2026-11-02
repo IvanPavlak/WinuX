@@ -34,7 +34,16 @@ BeforeAll {
 	foreach ($pair in @(@($script:Feature, 'feature'), @($script:OnMaster, 'master'))) {
 		git init -q -b $pair[1] $pair[0] 2>$null | Out-Null
 		git -C $pair[0] remote add origin 'https://github.com/MyUser/MyProject.git' 2>$null | Out-Null
+		git -C $pair[0] -c user.name=Test -c user.email=test@example.com -c commit.gpgsign=false commit -q --allow-empty -m Start 2>$null | Out-Null
 	}
+	git -C $script:Feature tag v1 2>$null | Out-Null
+	# A third, whose origin/HEAD names a default branch that is neither master nor main.
+	$script:OnDevelop = (Join-Path $TestDrive 'ondevelop').Replace('\', '/')
+	git init -q -b topic $script:OnDevelop 2>$null | Out-Null
+	git -C $script:OnDevelop remote add origin 'https://github.com/MyUser/MyProject.git' 2>$null | Out-Null
+	git -C $script:OnDevelop -c user.name=Test -c user.email=test@example.com -c commit.gpgsign=false commit -q --allow-empty -m Start 2>$null | Out-Null
+	git -C $script:OnDevelop branch develop 2>$null | Out-Null
+	git -C $script:OnDevelop symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/develop 2>$null | Out-Null
 	$script:Outside = (Join-Path $TestDrive 'outside').Replace('\', '/')
 	New-Item -ItemType Directory -Path $script:Outside -Force | Out-Null
 
@@ -60,10 +69,11 @@ BeforeAll {
 			[string]$Cwd = $script:Feature,
 			[string]$Hook = $script:PolicyHook,
 			[string]$HookEvent = '',
-			[string]$Unattended = ''
+			[string]$Unattended = '',
+			[string]$Session = [guid]::NewGuid().ToString()
 		)
 		$hookInput = @{
-			session_id = [guid]::NewGuid().ToString()
+			session_id = $Session
 			cwd        = $Cwd
 			tool_name  = $Tool
 			tool_input = @{ command = $Command }
@@ -91,15 +101,94 @@ BeforeAll {
 	}
 }
 
+AfterAll {
+	# Git makes its object files read-only, and Pester's removal of a file-level TestDrive refuses
+	# those (it uses Directory.Delete; a Describe's TestDrive is cleared with Remove-Item -Force).
+	foreach ($repository in @($script:Feature, $script:OnMaster, $script:OnDevelop)) {
+		Remove-Item -LiteralPath $repository -Recurse -Force -ErrorAction SilentlyContinue
+	}
+}
+
 Describe "ai-repository-policy.sh" -Tag 'Integration' -Skip:$script:NoBash {
 	BeforeEach {
 		Set-FakeGh 'red'
 	}
 
-	Context "the always-denied list, at every level that runs commands" -ForEach @(
+	# These rules run before the hook looks at the level, so the other levels get one case per kind.
+	Context "one case of each always-denied kind at the other levels" -ForEach @(
 		@{ Level = 'autonomous' }
-		@{ Level = 'branch' }
 		@{ Level = 'draft' }
+	) {
+		BeforeEach {
+			Set-PolicyConf @('profile Personal', "default-policy $Level")
+		}
+
+		It "<Level>: <Expected> for <Command>" -ForEach @(
+			@{ Command = 'git push --force origin feature'; Expected = 'deny: *force pushes*' }
+			@{ Command = 'git push origin master'; Expected = 'deny: *default branch*' }
+			@{ Command = 'git push --all origin'; Expected = 'deny: *every branch*' }
+			@{ Command = 'git branch -D old'; Expected = 'deny: *deleting branches*' }
+			@{ Command = 'git config user.name Someone'; Expected = 'deny: *git configuration*' }
+			@{ Command = 'gh api -X PUT repos/MyUser/MyProject/pulls/12/merge'; Expected = 'deny: *GitHub API*' }
+			@{ Command = 'gh repo sync MyUser/MyFork'; Expected = 'deny: *GitHub repository*' }
+			@{ Command = 'git add -A && git commit -m "Add the thing"'; Expected = 'allow' }
+			@{ Command = 'git push -u origin feature'; Expected = 'allow' }
+		) {
+			Invoke-PolicyHook -Command $Command | Should -BeLike $Expected
+		}
+
+		It "<Level>: allows the file tools" {
+			Invoke-PolicyHook -Command '' -Tool 'Edit' | Should -Be 'allow'
+		}
+	}
+
+	Context "the hook's parsing" {
+		BeforeAll {
+			$script:Long = 'x' * 5000
+		}
+
+		It "<Expected> for <Name> at branch" -ForEach @(
+			@{ Name = 'a command without git or gh'; Command = 'ls -la'; Expected = 'allow' }
+			@{ Name = 'a word holding git'; Command = 'echo gitlab'; Expected = 'allow' }
+			@{ Name = 'an upper-case force push'; Command = 'GIT PUSH --FORCE origin feature'; Expected = 'deny: *force pushes*' }
+			@{ Name = 'a long command without git'; Command = 'echo {0}'; Expected = 'allow' }
+			@{ Name = 'a long harmless git command'; Command = 'echo {0} && git status'; Expected = 'allow' }
+			@{ Name = 'a long force push'; Command = 'echo {0} && git push --force origin feature'; Expected = 'deny: *force pushes*' }
+			@{ Name = 'a long push to the default branch'; Command = 'echo {0} && git push origin master'; Expected = 'deny: *default branch*' }
+		) {
+			Set-PolicyConf @('profile Personal', 'default-policy branch')
+
+			Invoke-PolicyHook -Command ($Command -f $script:Long) | Should -BeLike $Expected
+		}
+
+		It "reads a long command at autonomous" {
+			Set-PolicyConf @('profile Personal', 'default-policy autonomous')
+
+			Invoke-PolicyHook -Command "echo $($script:Long) && git push --force-with-lease --force-if-includes origin feature" | Should -Be 'allow'
+			Invoke-PolicyHook -Command "echo $($script:Long) && git push --force origin feature" | Should -BeLike 'deny: *both flags*'
+		}
+
+		It "ignores a tool it does not police" {
+			Set-PolicyConf @('profile Personal', 'default-policy branch')
+
+			Invoke-PolicyHook -Command 'git push --force' -Tool 'Read' | Should -Be 'allow'
+		}
+
+		It "gives the same decision from a level and repository cached for the session" {
+			$session = [guid]::NewGuid().ToString()
+			Set-PolicyConf @('profile Personal', 'policy draft github.com/myuser/*')
+			Invoke-PolicyHook -Command 'git push origin master' -Session $session | Should -BeLike 'deny: *(github.com/myuser/myproject, draft)*'
+
+			Set-PolicyConf @('profile Personal', 'policy branch github.com/myuser/*')
+			Invoke-PolicyHook -Command 'git push origin master' -Session $session | Should -BeLike 'deny: *(github.com/myuser/myproject, draft)*' -Because "the conf changed, the cached level did not"
+			Invoke-PolicyHook -Command 'gh pr create --title "Add it"' -Session $session | Should -BeLike 'deny: *--draft*'
+			Invoke-PolicyHook -Command 'git push origin master' -Cwd $script:Outside -Session $session | Should -BeLike 'deny: *(no origin, branch)*'
+			Invoke-PolicyHook -Command 'git push origin master' -Cwd $script:Outside -Session $session | Should -BeLike 'deny: *(no origin, branch)*'
+		}
+	}
+
+	Context "the always-denied list, at branch" -ForEach @(
+		@{ Level = 'branch' }
 	) {
 		BeforeEach {
 			Set-PolicyConf @('profile Personal', "default-policy $Level")
@@ -173,6 +262,69 @@ Describe "ai-repository-policy.sh" -Tag 'Integration' -Skip:$script:NoBash {
 		It "<Level>: allows the file tools" {
 			Invoke-PolicyHook -Command '' -Tool 'Edit' | Should -Be 'allow'
 			Invoke-PolicyHook -Command '' -Tool 'Write' | Should -Be 'allow'
+		}
+	}
+
+	Context "the one force push allowed, at autonomous only" {
+		It "autonomous: <Expected> for <Command>" -ForEach @(
+			@{ Command = 'git push --force-with-lease --force-if-includes origin feature'; Expected = 'allow' }
+			@{ Command = 'git push --force-if-includes --force-with-lease origin feature'; Expected = 'allow' }
+			@{ Command = 'git push --force-with-lease --force-if-includes origin feature'; Tool = 'PowerShell'; Expected = 'allow' }
+			@{ Command = 'git fetch origin && git push --force-with-lease --force-if-includes origin feature'; Expected = 'allow' }
+			@{ Command = 'git push --force-with-lease origin feature'; Expected = 'deny: *both flags*' }
+			@{ Command = 'git push --force-if-includes origin feature'; Expected = 'deny: *both flags*' }
+			@{ Command = 'git push --force origin feature'; Expected = 'deny: *both flags*' }
+			@{ Command = 'git push -f origin feature'; Expected = 'deny: *both flags*' }
+			@{ Command = 'git push origin +feature'; Expected = 'deny: *both flags*' }
+			@{ Command = 'git push --force-with-lease=feature:abc --force-if-includes origin feature'; Expected = 'deny: *both flags*' }
+			@{ Command = 'git push -u --force-with-lease --force-if-includes origin feature'; Expected = 'deny: *both flags*' }
+			@{ Command = 'git push --force-with-lease --force-if-includes --no-force-if-includes origin feature'; Expected = 'deny: *one branch*' }
+			@{ Command = 'bash -c "git push --force origin feature"'; Expected = 'deny: *both flags*' }
+			@{ Command = 'git push --force-with-lease --force-if-includes origin master'; Expected = 'deny: *default branch*' }
+			@{ Command = 'git push --force-with-lease --force-if-includes origin MASTER'; Expected = 'deny: *default branch*' }
+			@{ Command = 'git push --force-with-lease --force-if-includes origin main'; Expected = 'deny: *default branch*' }
+			@{ Command = 'git push --force-with-lease --force-if-includes origin HEAD:master'; Expected = 'deny: *local branch*' }
+			@{ Command = 'git push --force-with-lease --force-if-includes origin feature:master'; Expected = 'deny: *local branch*' }
+			@{ Command = 'git push --force-with-lease --force-if-includes origin refs/heads/master'; Expected = 'deny: *local branch*' }
+			@{ Command = 'git push --force-with-lease --force-if-includes origin heads/master'; Expected = 'deny: *local branch*' }
+			@{ Command = 'git push --force-with-lease --force-if-includes origin HEAD'; Expected = 'deny: *local branch*' }
+			@{ Command = 'git push --force-with-lease --force-if-includes origin $branch'; Expected = 'deny: *local branch*' }
+			@{ Command = 'git push --force-with-lease --force-if-includes origin v1'; Expected = 'deny: *local branch*' }
+			@{ Command = 'git push --force-with-lease --force-if-includes origin +feature'; Expected = 'deny: *local branch*' }
+			@{ Command = 'git push --force-with-lease --force-if-includes'; Expected = 'deny: *one branch*' }
+			@{ Command = 'git push --force-with-lease --force-if-includes origin'; Expected = 'deny: *one branch*' }
+			@{ Command = 'git push --force-with-lease --force-if-includes origin feature other'; Expected = 'deny: *one branch*' }
+			@{ Command = 'git push --force-with-lease --force-if-includes fork feature'; Expected = 'deny: *one branch*' }
+			@{ Command = 'git push --force-with-lease --force-if-includes --all origin'; Expected = 'deny: *one branch*' }
+			@{ Command = 'cd ../other && git push --force-with-lease --force-if-includes origin feature'; Expected = 'deny: *own folder*' }
+			@{ Command = 'GIT_DIR=../other/.git git push --force-with-lease --force-if-includes origin feature'; Expected = 'deny: *own folder*' }
+			@{ Command = 'git -C ../other push --force-with-lease --force-if-includes origin feature'; Expected = 'deny: *exactly git push*' }
+			@{ Command = 'git -c core.sshCommand=x push --force-with-lease --force-if-includes origin feature'; Expected = 'deny: *exactly git push*' }
+			@{ Command = 'git push --force-with-lease --force-if-includes origin feature; git push --force origin other'; Expected = 'deny: *both flags*' }
+			@{ Command = 'git push --force-with-lease --force-if-includes origin feature && git push --force-with-lease --force-if-includes origin master'; Expected = 'deny: *default branch*' }
+		) {
+			Set-PolicyConf @('profile Personal', 'default-policy autonomous')
+			$tool = if ($Tool) { $Tool } else { 'Bash' }
+
+			Invoke-PolicyHook -Command $Command -Tool $tool | Should -BeLike $Expected
+		}
+
+		It "autonomous: reads the default branch from origin/HEAD" {
+			Set-PolicyConf @('profile Personal', 'default-policy autonomous')
+
+			Invoke-PolicyHook -Command 'git push --force-with-lease --force-if-includes origin topic' -Cwd $script:OnDevelop | Should -Be 'allow'
+			Invoke-PolicyHook -Command 'git push --force-with-lease --force-if-includes origin develop' -Cwd $script:OnDevelop | Should -BeLike 'deny: *default branch*'
+		}
+
+		It "<Level>: denies it" -ForEach @(
+			@{ Level = 'branch'; Expected = 'deny: *pushed history is never rewritten*' }
+			@{ Level = 'draft'; Expected = 'deny: *pushed history is never rewritten*' }
+			@{ Level = 'readonly'; Expected = 'deny: *, readonly)*' }
+			@{ Level = 'blocked'; Expected = 'deny: *, blocked)*' }
+		) {
+			Set-PolicyConf @('profile Personal', "default-policy $Level")
+
+			Invoke-PolicyHook -Command 'git push --force-with-lease --force-if-includes origin feature' | Should -BeLike $Expected
 		}
 	}
 
@@ -359,5 +511,38 @@ Describe "ai-ownership-guard.sh, repository policy" -Tag 'Integration' -Skip:$sc
 		Set-PolicyConf @('profile Personal', 'default-owner Personal', 'owns Work github.com/myuser/*', 'autonomous github.com/myuser/myproject')
 
 		Invoke-PolicyHook -Command '' -Hook $script:Guard -HookEvent 'UserPromptSubmit' | Should -BeLike 'block: *belongs to the Work AI profile*'
+	}
+
+	It "<Expected> with <Name>" -ForEach @(
+		@{ Name = 'another default owner'; Lines = @('profile Personal', 'default-owner Work'); Expected = 'deny: *belongs to the Work AI profile*' }
+		@{ Name = 'a shared line over an owns line, in any case'; Lines = @('profile Personal', 'default-owner Work', 'owns Work github.com/myuser/*', 'shared github.com/MYUSER/*'); Expected = 'allow' }
+		@{ Name = 'the first owns line winning for this profile'; Lines = @('profile Personal', 'owns Personal github.com/myuser/myproject', 'owns Work github.com/myuser/*'); Expected = 'allow' }
+		@{ Name = 'the first owns line winning for another profile'; Lines = @('profile Personal', 'owns Work github.com/myuser/*', 'owns Personal github.com/myuser/myproject'); Expected = 'deny: *belongs to the Work AI profile*' }
+		@{ Name = 'the last profile line, its comment left out'; Lines = @('profile Work', 'profile Personal # now', 'default-owner Personal'); Expected = 'allow' }
+		@{ Name = 'an indented profile line, which is not read'; Lines = @('  profile Personal', 'default-owner Work'); Expected = 'allow' }
+	) {
+		Set-PolicyConf $Lines
+
+		Invoke-PolicyHook -Command '' -Hook $script:Guard -HookEvent 'PreToolUse' | Should -BeLike $Expected
+	}
+
+	It "allows a folder without an origin, whoever owns the rest" {
+		Set-PolicyConf @('profile Personal', 'default-owner Work')
+
+		Invoke-PolicyHook -Command '' -Cwd $script:Outside -Hook $script:Guard -HookEvent 'PreToolUse' | Should -Be 'allow'
+	}
+
+	It "keeps a verdict cached for the session and folder after the conf changes" {
+		$session = [guid]::NewGuid().ToString()
+		Set-PolicyConf @('profile Personal', 'default-owner Work')
+		Invoke-PolicyHook -Command '' -Hook $script:Guard -HookEvent 'PreToolUse' -Session $session | Should -BeLike 'deny: *belongs to the Work AI profile*'
+
+		Set-PolicyConf @('profile Personal', 'default-owner Personal')
+		Invoke-PolicyHook -Command '' -Hook $script:Guard -HookEvent 'PreToolUse' -Session $session | Should -BeLike 'deny: *belongs to the Work AI profile*'
+		Invoke-PolicyHook -Command '' -Hook $script:Guard -HookEvent 'UserPromptSubmit' -Session $session | Should -BeLike 'block: *belongs to the Work AI profile*'
+
+		Invoke-PolicyHook -Command '' -Cwd $script:Outside -Hook $script:Guard -HookEvent 'PreToolUse' -Session $session | Should -Be 'allow' -Because "another folder has its own verdict"
+		Set-PolicyConf @('profile Personal', 'default-policy blocked')
+		Invoke-PolicyHook -Command '' -Cwd $script:Outside -Hook $script:Guard -HookEvent 'PreToolUse' -Session $session | Should -Be 'allow' -Because "that verdict is cached in turn"
 	}
 }
