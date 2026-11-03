@@ -7,7 +7,7 @@ BeforeAll {
 	# PSReadLine ships with PowerShell 7, but an automation host may run without it loaded. Stub
 	# the two cmdlets when absent so Mock has commands to attach to (no-op where they exist).
 	if (-not (Get-Command Set-PSReadLineOption -ErrorAction SilentlyContinue)) {
-		function Set-PSReadLineOption { param($EditMode, $MaximumHistoryCount, $HistorySavePath, [switch]$HistoryNoDuplicates, $PredictionSource, $PredictionViewStyle) }
+		function Set-PSReadLineOption { param($EditMode, $MaximumHistoryCount, $HistorySavePath, [switch]$HistoryNoDuplicates, $PredictionSource, $PredictionViewStyle, $Colors) }
 	}
 	if (-not (Get-Command Set-PSReadLineKeyHandler -ErrorAction SilentlyContinue)) {
 		function Set-PSReadLineKeyHandler { param($Key, $Function) }
@@ -63,6 +63,7 @@ Describe "Initialize-PSReadLine" {
 				HistoryNoDuplicates = $null
 				PredictionSource    = $null
 				PredictionViewStyle = $null
+				Colors              = $null
 				KeyHandlers         = @{ UpArrow = $null }
 			}
 			Should -Invoke Set-PSReadLineOption -Times 0 -Exactly
@@ -213,6 +214,103 @@ Describe "Initialize-PSReadLine" {
 			Should -Invoke Set-PSReadLineOption -Times 0 -Exactly -ParameterFilter { $PesterBoundParameters.ContainsKey("PredictionViewStyle") }
 			Should -Invoke Write-LogDebug -Times 1 -Exactly -ParameterFilter { $Message -like "*prediction options skipped*" }
 			Should -Invoke Write-LogWarning -Times 0 -Exactly
+		}
+
+		It "does not rethrow when PSReadLine refuses the colours" {
+			# The PSReadLine of Windows PowerShell (2.0.0) has no list colours.
+			Mock Set-PSReadLineOption { throw "not a valid color property" } -ParameterFilter { $PesterBoundParameters.ContainsKey("Colors") }
+
+			{ Initialize-PSReadLine -Settings @{ Colors = @{ Emphasis = "red" } } } | Should -Not -Throw
+
+			Should -Invoke Write-LogDebug -Times 1 -Exactly -ParameterFilter { $Message -like "*prediction options skipped*" }
+			Should -Invoke Write-LogWarning -Times 0 -Exactly
+		}
+	}
+
+	Context "Colors" {
+		BeforeAll {
+			$script:Esc = [string][char]27
+		}
+
+		It "applies <Name>" -ForEach @(
+			@{ Name = "ListPrediction" }
+			@{ Name = "ListPredictionSelected" }
+			@{ Name = "Emphasis" }
+		) {
+			Initialize-PSReadLine -Settings @{ Colors = @{ $Name = 208 } }
+			Should -Invoke Set-PSReadLineOption -Times 1 -Exactly -ParameterFilter { $Colors.Count -eq 1 -and $Colors.ContainsKey($Name) }
+		}
+
+		It "converts <Value> for the foreground of a row" -ForEach @(
+			@{ Value = "red"; Sequence = "[31m" }
+			@{ Value = "RED"; Sequence = "[31m" }
+			@{ Value = "white"; Sequence = "[37m" }
+			@{ Value = "default"; Sequence = "[39m" }
+			@{ Value = 208; Sequence = "[38;5;208m" }
+			@{ Value = "0"; Sequence = "[38;5;0m" }
+			@{ Value = 255; Sequence = "[38;5;255m" }
+			@{ Value = "#1E90FF"; Sequence = "[38;2;30;144;255m" }
+			@{ Value = "#1e90ff"; Sequence = "[38;2;30;144;255m" }
+		) {
+			Initialize-PSReadLine -Settings @{ Colors = @{ ListPrediction = $Value; Emphasis = $Value } }
+			$expected = "$script:Esc$Sequence"
+			Should -Invoke Set-PSReadLineOption -Times 1 -Exactly -ParameterFilter { $Colors.ListPrediction -ceq $expected -and $Colors.Emphasis -ceq $expected }
+		}
+
+		It "converts <Value> for the background of the selected row" -ForEach @(
+			@{ Value = "red"; Sequence = "[41m" }
+			@{ Value = "default"; Sequence = "[49m" }
+			@{ Value = 238; Sequence = "[48;5;238m" }
+			@{ Value = "#1E90FF"; Sequence = "[48;2;30;144;255m" }
+		) {
+			Initialize-PSReadLine -Settings @{ Colors = @{ ListPredictionSelected = $Value } }
+			$expected = "$script:Esc$Sequence"
+			Should -Invoke Set-PSReadLineOption -Times 1 -Exactly -ParameterFilter { $Colors.ListPredictionSelected -ceq $expected }
+		}
+
+		It "skips a null or empty colour without a warning" {
+			Initialize-PSReadLine -Settings @{ Colors = @{ ListPrediction = $null; Emphasis = "" } }
+			Should -Invoke Set-PSReadLineOption -Times 0 -Exactly
+			Should -Invoke Write-LogWarning -Times 0 -Exactly
+		}
+
+		It "warns about <Label> and still applies the rest" -ForEach @(
+			@{ Label = "an unknown name"; Value = "orange" }
+			@{ Label = "a number above 255"; Value = 256 }
+			@{ Label = "a negative number"; Value = -1 }
+			@{ Label = "a fraction"; Value = 1.5 }
+			@{ Label = "a short hex value"; Value = "#FFF" }
+			@{ Label = "hex without its hash"; Value = "1E90FF" }
+			@{ Label = "a list"; Value = @("red", "blue") }
+		) {
+			Initialize-PSReadLine -Settings @{ Colors = @{ ListPrediction = $Value; Emphasis = "red" } }
+			$expected = "$script:Esc[31m"
+			Should -Invoke Set-PSReadLineOption -Times 1 -Exactly -ParameterFilter { $Colors.Count -eq 1 -and $Colors.Emphasis -ceq $expected }
+			Should -Invoke Write-LogWarning -Times 1 -Exactly -ParameterFilter { $Message -like "*Colors.ListPrediction*" }
+		}
+
+		It "makes no call when every colour is bad" {
+			Initialize-PSReadLine -Settings @{ Colors = @{ Emphasis = "orange" } }
+			Should -Invoke Set-PSReadLineOption -Times 0 -Exactly
+			Should -Invoke Write-LogWarning -Times 1 -Exactly
+		}
+
+		It "warns about a Colors value that is not a hashtable" {
+			{ Initialize-PSReadLine -Settings @{ Colors = "red" } } | Should -Not -Throw
+			Should -Invoke Set-PSReadLineOption -Times 0 -Exactly
+			Should -Invoke Write-LogWarning -Times 1 -Exactly -ParameterFilter { $Message -like "*PSReadLine.Colors*" }
+		}
+
+		It "applies the colours after the prediction options" {
+			$script:Calls = [System.Collections.Generic.List[string]]::new()
+			Mock Set-PSReadLineOption {
+				if ($PesterBoundParameters.ContainsKey("PredictionViewStyle")) { $script:Calls.Add("PredictionViewStyle") }
+				if ($PesterBoundParameters.ContainsKey("Colors")) { $script:Calls.Add("Colors") }
+			}
+
+			Initialize-PSReadLine -Settings @{ Colors = @{ Emphasis = "red" }; PredictionViewStyle = "ListView" }
+
+			$script:Calls | Should -Be @("PredictionViewStyle", "Colors")
 		}
 	}
 }

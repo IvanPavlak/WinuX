@@ -9,7 +9,7 @@ Applies every PSReadLine editing, history and prediction option from the `PSRead
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`PSReadLine`](../../configuration-reference.md#psreadline-interactive-shell-options) | hashtable, 7 keys | Windows edit mode, prefix-search arrows, `HistoryNoDuplicates` on, history predictions in a list, history limits untouched | Everything the profile applies to PSReadLine on shell start. Any key set to `$null` is skipped and PSReadLine keeps its own default. |
+| [`PSReadLine`](../../configuration-reference.md#psreadline-interactive-shell-options) | hashtable, 8 keys | Windows edit mode, prefix-search arrows, `HistoryNoDuplicates` on, history predictions in a list, history limits and list colours untouched | Everything the profile applies to PSReadLine on shell start. Any key set to `$null` is skipped and PSReadLine keeps its own default. |
 
 ## Decisions
 
@@ -28,6 +28,10 @@ Applies every PSReadLine editing, history and prediction option from the `PSRead
 4. Do you want a different edit mode or prediction style?
     - Options: `EditMode` is `Windows`, `Emacs` or `Vi`. `PredictionSource` is `None`, `History`, `Plugin` or `HistoryAndPlugin`. `PredictionViewStyle` is `InlineView` or `ListView`.
     - Default: `Windows`, `History`, `ListView`.
+    - More detail: [`PSReadLine`](../../configuration-reference.md#psreadline-interactive-shell-options)
+5. Do you want different colours in the prediction list?
+    - Options: Set any of `ListPrediction`, `ListPredictionSelected` and `Emphasis` under `PSReadLine.Colors`, each a colour name (`black`, `red`, `green`, `yellow`, `blue`, `magenta`, `cyan`, `white`, `default`), 0-255 or `#RRGGBB`. See [Differences from Foundation's list](#differences-from-foundations-list) for what each one reaches.
+    - Default: `$null` - PSReadLine's own colours.
     - More detail: [`PSReadLine`](../../configuration-reference.md#psreadline-interactive-shell-options)
 
 ## Where to Put Values
@@ -68,14 +72,28 @@ Read-only checks. None of these change anything.
 
 ```powershell
 $global:Configuration.PSReadLine
-Get-PSReadLineOption | Select-Object EditMode, MaximumHistoryCount, HistorySavePath, HistoryNoDuplicates, PredictionSource, PredictionViewStyle
+Get-PSReadLineOption | Select-Object EditMode, MaximumHistoryCount, HistorySavePath, HistoryNoDuplicates, PredictionSource, PredictionViewStyle, ListPredictionColor, ListPredictionSelectedColor, EmphasisColor
 $MaximumHistoryCount
 Get-PSReadLineKeyHandler -Bound | Where-Object Key -in UpArrow, DownArrow
 ```
 
-`MaximumHistoryCount` reads back as `0` in `Get-PSReadLineOption` when the base `$null` is in effect - that is PSReadLine's own way of saying "defer to `$MaximumHistoryCount`". A value that is not a positive integer produces a `Configuration.PSReadLine.MaximumHistoryCount must be a positive integer` warning at shell start and leaves both limits alone. In a console without virtual-terminal support (redirected output, automation hosts) the two prediction options are skipped silently and everything else still applies.
+`MaximumHistoryCount` reads back as `0` in `Get-PSReadLineOption` when the base `$null` is in effect - that is PSReadLine's own way of saying "defer to `$MaximumHistoryCount`". A value that is not a positive integer produces a `Configuration.PSReadLine.MaximumHistoryCount must be a positive integer` warning at shell start and leaves both limits alone. A colour in another form produces a `Configuration.PSReadLine.Colors.<Name> must be a colour name` warning and is skipped. In a console without virtual-terminal support (redirected output, automation hosts) the prediction options and colours are skipped silently and everything else still applies. So are the colours on a PSReadLine older than the list, such as the 2.0.0 of Windows PowerShell.
 
 PSReadLine never trims its history file: it appends every command and loads the newest `MaximumHistoryCount` lines at startup. The cap is what is recallable, not what is stored. `HistoryNoDuplicates` likewise hides repeated commands during recall only - every invocation is still written to the file.
+
+## Differences from Foundation's list
+
+Foundation draws its own prediction list and takes the same colour values, but they do not reach all the same places. PSReadLine fixes these parts of its list, and they are deliberate differences:
+
+| Part | WinuX (PSReadLine) | Foundation |
+| --- | --- | --- |
+| Row colour | `ListPrediction` colours the `>` and the source name; the command stays in the terminal's default colour | Colours the whole row |
+| What starts a row | Always `>` | Configurable |
+| Other uses of the emphasis colour | `Emphasis` also colours other PSReadLine matches, such as the `Ctrl+R` search | The list only |
+| List width | At most 100 columns | The full window |
+| Narrowest window for the list | 50 columns | 20 columns |
+
+The selected row's background and the typed text match, and both lists show at most 10 history rows.
 
 ## Complete Example
 
@@ -89,6 +107,11 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
         HistorySavePath     = "%USERPROFILE%\Sync\PowerShell\ConsoleHost_history.txt"
         KeyHandlers         = @{
             Tab = "MenuComplete"
+        }
+        Colors              = @{
+            ListPrediction         = "#1E90FF"
+            ListPredictionSelected = 238
+            Emphasis               = "red"
         }
     }
 }

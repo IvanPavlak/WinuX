@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.10.0] - 2026-11-03
+
+### Added
+
+- **`PSReadLine.Colors` sets the prediction list's colours.** `Initialize-PSReadLine` reads `ListPrediction` (a row's `>` and source name), `ListPredictionSelected` (the selected row's background) and `Emphasis` (the typed text), each a colour name, 0-255 or `#RRGGBB`. A value of another form warns and is skipped, and the others still apply. The base ships `$null`, so a fork that sets nothing keeps PSReadLine's colours. The parts of the list PSReadLine fixes, such as the `>` and the command's own colour, are listed in the `Initialize-PSReadLine` configuration guide. Covered by `Modules/Tests/Modules/System/Initialize-PSReadLine.Tests.ps1`.
+
 ## [2.9.0] - 2026-11-02
 
 ### Added
@@ -1860,7 +1866,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.9.0...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.10.0...HEAD
+[2.10.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.9.0...winux/v2.10.0
 [2.9.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.8.0...winux/v2.9.0
 [2.8.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.7.0...winux/v2.8.0
 [2.7.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.6.0...winux/v2.7.0

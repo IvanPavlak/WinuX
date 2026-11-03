@@ -1,5 +1,5 @@
 {
-  "Version": "2.9.0",
+  "Version": "2.10.0",
   "Functions": {
     "Add-BrowserGroup": {
       "Module": "Configuration",
@@ -7461,6 +7461,7 @@
     "ProjectActions",
     "ProjectTerminals",
     "PSReadLine",
+    "PSReadLine.Colors",
     "PSReadLine.EditMode",
     "PSReadLine.HistoryNoDuplicates",
     "PSReadLine.HistorySavePath",

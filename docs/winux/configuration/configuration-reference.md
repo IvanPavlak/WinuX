@@ -1793,8 +1793,12 @@ Every key is optional. `$null` (or a missing key) means "do not touch it": `Init
 - `HistoryNoDuplicates` - `$true`/`$false`. Ships `$true`. Hides repeated commands during recall and search (each distinct line shown once, at its most recent position); every invocation is still written to the file.
 - `PredictionSource` - `None`, `History`, `Plugin` or `HistoryAndPlugin`. Ships `History`.
 - `PredictionViewStyle` - `InlineView` or `ListView`. Ships `ListView`.
+- `Colors` - **Opt-in.** `@{ ListPrediction = ...; ListPredictionSelected = ...; Emphasis = ... }`, each optional. Ships `$null` (PSReadLine's own colours). A value is a colour name (`black`, `red`, `green`, `yellow`, `blue`, `magenta`, `cyan`, `white`, `default`), 0-255 or `#RRGGBB`, converted to the escape sequence PSReadLine stores. Anything else is reported with a warning at shell start and skipped, and the other colours still apply.
+    - `ListPrediction` - a row's `>` and its source name, such as `History`. PSReadLine draws the command itself in the terminal's default colour, and no option changes that.
+    - `ListPredictionSelected` - the selected row's background.
+    - `Emphasis` - the typed text inside the rows. PSReadLine also uses this colour for other matches, such as the `Ctrl+R` search.
 
-The two prediction keys are applied last and inside a `try`/`catch`: they are the only calls that throw on a console without virtual-terminal support (redirected output, CI, automation hosts), and everything above them has already applied when they do.
+The prediction keys and `Colors` are applied last and inside a `try`/`catch`: the prediction options throw on a console without virtual-terminal support (redirected output, CI, automation hosts), the list colours throw on a PSReadLine older than the list (Windows PowerShell's 2.0.0), and everything above them has already applied when they do.
 
 **Consumer function:** `Initialize-PSReadLine`
 
