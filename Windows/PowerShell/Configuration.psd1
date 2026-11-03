@@ -459,9 +459,15 @@
 	# not what is stored. HistoryNoDuplicates hides repeated commands during recall
 	# only - every invocation is still written to the file. HistorySavePath accepts
 	# %ENV% variables. KeyHandlers merges per key: a fork adds a binding by adding a
-	# key and drops a base binding by setting that key to $null.
+	# key and drops a base binding by setting that key to $null. Colors sets the
+	# prediction list, each a colour name, 0-255 or #RRGGBB:
+	#
+	#   PSReadLine = @{ Colors = @{ ListPrediction = "#1E90FF"; ListPredictionSelected = 238; Emphasis = "red" } }
+	#
+	# ListPrediction colours only a row's > and its source name, not the command.
 	# ==========================================================================
 	PSReadLine                    = @{
+		Colors              = $null
 		EditMode            = "Windows"
 		KeyHandlers         = @{
 			UpArrow   = "HistorySearchBackward"

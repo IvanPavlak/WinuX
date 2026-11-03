@@ -148,6 +148,11 @@ Describe "Vanilla Configuration (empty-by-default contract)" {
 			$script:BaseConfig.PSReadLine.HistorySavePath | Should -BeNullOrEmpty
 		}
 
+		It "Should leave the PSReadLine list colours untouched in the base" {
+			$script:BaseConfig.PSReadLine.ContainsKey("Colors") | Should -BeTrue
+			$script:BaseConfig.PSReadLine.Colors | Should -BeNullOrEmpty
+		}
+
 		It "Should ship the TerminalGreeting section with the resolver's built-in defaults" {
 			# Resolve-TerminalGreetingSettings falls back to these values when the section is
 			# missing; the base must ship the same ones or the documented defaults become a
