@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.10.1] - 2026-11-04
+
+### Fixed
+
+- **`Open-Browser` with an invalid group name no longer opens a bare browser, and no longer drops the valid names beside it.** One invalid name made the whole selection fail, so it opened an empty window instead of any named group and reported success. Now `Open-Browser AI Nope` opens `AI` and reports `Nope`, and with no valid name nothing opens. An empty Enter at the menu still opens the browser bare. `Resolve-Selection -GroupsConfig -InputObject` now reports invalid items and returns the valid ones, as its flat mode already did. Covered by `Modules/Tests/Modules/Application/Open-Browser.Tests.ps1` and `Modules/Tests/Modules/Helper/Resolve-Selection.Tests.ps1`.
+
 ## [2.10.0] - 2026-11-03
 
 ### Added
@@ -1866,7 +1872,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.10.0...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.10.1...HEAD
+[2.10.1]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.10.0...winux/v2.10.1
 [2.10.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.9.0...winux/v2.10.0
 [2.9.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.8.0...winux/v2.9.0
 [2.8.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.7.0...winux/v2.8.0

@@ -84,6 +84,15 @@ Describe "Resolve-Selection" {
 			$result | Should -Not -BeNullOrEmpty
 		}
 
+		It "Should return the valid selections when others are invalid in hierarchical mode" {
+			Mock Write-Host { }
+
+			$result = @(Resolve-Selection -InputObject @("Swagger", "NoSuchGroup") -GroupsConfig $testGroupsConfig)
+
+			$result.Count | Should -Be 1
+			$result[0].PathNames | Should -Contain "Swagger"
+		}
+
 		It "Should return `$null for an invalid hierarchical selection instead of breaking the caller's loop" {
 			Mock Write-Host { }
 

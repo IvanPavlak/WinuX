@@ -20,7 +20,8 @@ function Resolve-Selection {
 		Flat list of options to display. Defaults to @("Yes", "No"). Ignored when GroupsConfig is provided.
 
 	.PARAMETER InputObject
-		Pre-selected option(s) from pipeline. Skips the interactive menu if provided.
+		Pre-selected option(s) from pipeline. Skips the interactive menu if provided. Invalid
+		items are reported and the valid ones returned.
 
 	.PARAMETER MenuTitle
 		Title displayed at the top of the menu. Defaults to "[Available Options]".
@@ -159,9 +160,12 @@ function Resolve-Selection {
 			if ($invalidSelections.Count -gt 0) {
 				$caller = (Get-PSCallStack)[1].Command
 				Write-Host -ForegroundColor Red "`n=> The following selection(s) were invalid in [$caller] => $($invalidSelections -join "', '")"
-				# A bare `break` here propagates OUT of this function to the nearest loop in the
-				# CALLER (e.g. Open-Workspace's action loop) and silently aborts it - return
-				# instead so callers can handle the failed resolution themselves.
+			}
+
+			# The valid selections still go through, as in flat mode. With none left, return
+			# `$null`: a bare `break` here would propagate OUT of this function to the nearest
+			# loop in the CALLER (e.g. Open-Workspace's action loop) and silently abort it.
+			if ($resolved.Count -eq 0) {
 				return $null
 			}
 
