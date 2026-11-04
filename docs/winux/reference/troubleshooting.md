@@ -1256,7 +1256,7 @@ Show-TerminalGreeting -MaxShrinkSteps 20
 Get-Command firefox -ErrorAction SilentlyContinue
 ```
 
-2. Check browser groups exist:
+2. Check browser groups exist. An invalid group name is reported and opens nothing, so a workspace action naming only invalid groups leaves its layout a window short:
 
 ```powershell
 $Configuration.BrowserGroups
