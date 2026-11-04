@@ -115,6 +115,26 @@ Describe "Open-Browser" {
 		Should -Invoke Start-Process -Times 1 -Exactly
 	}
 
+	Context "When selection resolves to nothing" {
+		BeforeEach {
+			Mock Resolve-Selection { $null }
+		}
+
+		It "opens nothing when the named groups are invalid" {
+			Open-Browser -Groups Nope -Browser Chrome
+
+			Should -Invoke Start-Process -Times 0
+		}
+
+		It "opens a bare browser on an empty answer at the menu" {
+			Open-Browser -Browser Chrome
+
+			Should -Invoke Start-Process -Times 1 -Exactly -ParameterFilter {
+				$FilePath -eq 'C:\\Tools\\chrome.exe' -and -not $ArgumentList
+			}
+		}
+	}
+
 	Context "NoMenu Instances mode" {
 		It "opens each missing instance with the browser new-window argument" {
 			# A bare launch only opens a window on some browsers (Brave routes it

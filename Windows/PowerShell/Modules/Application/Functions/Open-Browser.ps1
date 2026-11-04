@@ -21,7 +21,8 @@ function Open-Browser {
 
 	.PARAMETER Groups
 		One or more group names to open, using dot-notation for nested groups
-		(e.g. "Work.Backend"). Omit to show the interactive group selection menu.
+		(e.g. "Work.Backend"). Omit to show the interactive group selection menu. An invalid
+		name is reported and the valid ones still open; with none valid, nothing opens.
 
 	.PARAMETER Private
 		Opens the browser in private/incognito mode. Cannot be combined with group opening.
@@ -249,6 +250,12 @@ function Open-Browser {
 		$resolvedGroups = Resolve-Selection @resolveParams
 
 		if (-not $resolvedGroups) {
+			# Groups were named and none resolved: Resolve-Selection has reported them, so
+			# nothing opens. Only an empty answer at the menu means a bare browser.
+			if ($resolveParams.ContainsKey('InputObject')) {
+				return
+			}
+
 			Write-LogStep "Opening $Browser..."
 			if ($isTor) {
 				Start-Process $browserPath -NoNewWindow -ErrorAction Stop
