@@ -1,5 +1,5 @@
 {
-  "Version": "2.10.2",
+  "Version": "2.11.0",
   "Functions": {
     "Add-BrowserGroup": {
       "Module": "Configuration",
@@ -815,7 +815,24 @@
     },
     "Create-CondaEnvironments": {
       "Module": "Application",
-      "Parameters": {}
+      "Parameters": {
+        "DryRun": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "List": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Name": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Recreate": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
     },
     "Create-Executable": {
       "Module": "Helper",
@@ -7346,6 +7363,7 @@
     "CampaignResources",
     "CenterTerminalSizing",
     "CenterTerminalSizing.Default",
+    "CondaUpdateBase",
     "DefaultDatabaseProvider",
     "DefaultDisplayLanguage",
     "DefaultKeyboardLayoutSet",

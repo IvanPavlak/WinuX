@@ -1722,6 +1722,20 @@
 	DotnetEFVersion               = ""
 
 	# ==========================================================================
+	# Conda Configuration
+	# ==========================================================================
+	# CondaUpdateBase: whether Create-CondaEnvironments first runs
+	# `conda update -n base -c defaults conda -y` (only on a run over every
+	# environment, never with -Name). Ships off: the update reaches the defaults
+	# channel, whose Terms of Service conda asks to be accepted. Turn it on in
+	# Configuration.local.psd1:
+	#   CondaUpdateBase = $true
+	# The environment files themselves: BootstrapConfig.DataFiles.CondaEnvironments.
+	# → Consumer: Create-CondaEnvironments
+	# ==========================================================================
+	CondaUpdateBase               = $false
+
+	# ==========================================================================
 	# npm Registries
 	# ==========================================================================
 	# Private npm registries Configure-NpmConfig authenticates in the user npmrc

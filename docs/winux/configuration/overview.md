@@ -89,6 +89,7 @@ the [Configuration Reference](configuration-reference.md).
 | `VSCodeProjects`           | VS Code projects (name + path)  | `Open-VSCode`           |
 | `DotnetProjectsSearchPath` | .NET project search root (currently read as `PathTemplates.DotnetProjectsSearchPath`, see the reference) | `Determine-DotnetDependencies` |
 | `DotnetEFVersion`          | EF Core tools version           | `Install-DotnetEf`      |
+| `CondaUpdateBase`          | Update conda in base before a full run (off) | `Create-CondaEnvironments` |
 
 ### Workspace Management
 

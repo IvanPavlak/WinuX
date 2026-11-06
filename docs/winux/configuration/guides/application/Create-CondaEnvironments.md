@@ -1,6 +1,6 @@
 # Create-CondaEnvironments
 
-Updates Conda and idempotently creates Conda environments from the YAML files in the WinuX `Conda/Environments` folder.
+Creates Conda environments from the YAML files in the WinuX `Conda/Environments` folder, all of them or the named ones, and optionally updates conda in the base environment first. Bootstrap runs it as the `CondaEnvironments` step.
 
 > [!NOTE]
 > Every value on this page belongs in `Configuration.local.psd1`, never in the base `Configuration.psd1`. The base file is upstream's, it ships empty-by-default, and it is deep-merged with your local file at load time by `Load-PathConfiguration`. See [Fork Model](../../../contributing/fork-model.md).
@@ -10,6 +10,7 @@ Updates Conda and idempotently creates Conda environments from the YAML files in
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
 | [`BootstrapConfig.DataFiles.CondaEnvironments`](../../configuration-reference.md#bootstrapconfig) | string (repository-relative path) | `Conda\Environments` | The folder whose `*.yml` files are the environments; each file's name is the environment name. Joined onto `PathTemplates.Projects.Self.Root`. |
+| [`CondaUpdateBase`](../../configuration-reference.md#more-sections-quick-reference) | boolean | `$false` | Whether a run over every environment first updates conda in the base environment (`conda update -n base -c defaults conda -y`). A run with `-Name` never does. |
 | [`PathTemplates.Projects.Self.Root`](../../configuration-reference.md#path-templates--placeholder-system) | path template | `{RepoRoot}` | The repository root the folder above is resolved against (read from `$global:MachineSpecificPaths.Projects.Self.Root`). |
 | [`AutoEnvironmentVariables.Conda`](../../configuration-reference.md#more-sections-quick-reference) | path | not set (`AutoEnvironmentVariables` ships `@{}`) | Not read directly: the function reads the `Conda` user environment variable, which `Set-EnvironmentVariables -Auto` writes from this entry. Without it the function warns and skips; `conda.exe` is expected at `<Conda>\Scripts\conda.exe`. |
 | [`BootstrapConfig.Steps.CondaEnvironments`](../../configuration-reference.md#bootstrapconfig) | boolean or per-machine-type hashtable | `$true` (built-in default) | Whether `Bootstrap` runs this function. |
@@ -24,8 +25,12 @@ Updates Conda and idempotently creates Conda environments from the YAML files in
     - Options: A repository-relative folder path under `BootstrapConfig.DataFiles.CondaEnvironments`.
     - Default: `Conda\Environments`. Almost nobody changes this.
     - More detail: [`BootstrapConfig`](../../configuration-reference.md#bootstrapconfig)
-3. Should Bootstrap run this step?
-    - Options: `$true`, `$false`, or a per-machine-type hashtable with a `Default` fallback under `BootstrapConfig.Steps.CondaEnvironments`.
+3. Should conda itself be updated before the environments are created?
+    - Options: `CondaUpdateBase = $true` or `$false`. On reaches the defaults channel, whose Anaconda Terms of Service conda asks to be accepted once (`conda tos accept`).
+    - Default: `$false`.
+    - More detail: [`CondaUpdateBase`](../../configuration-reference.md#more-sections-quick-reference)
+4. Should Bootstrap run this step?
+    - Options: `$true`, `$false`, or a per-machine-type hashtable with a `Default` fallback under `BootstrapConfig.Steps.CondaEnvironments`. Bootstrap makes a bare call (every environment, the base update when `CondaUpdateBase` is on).
     - Default: `$true` - and the missing `Conda` variable already makes it a no-op on machines without Conda.
     - More detail: [`BootstrapConfig`](../../configuration-reference.md#bootstrapconfig)
 
@@ -40,7 +45,8 @@ All of it goes in `Configuration.local.psd1`, at the repository's `Windows/Power
 
 1. Set `AutoEnvironmentVariables.Conda`
 2. Set `BootstrapConfig`
-3. Reload and confirm the merge landed
+3. Set `CondaUpdateBase`
+4. Reload and confirm the merge landed
 
 ## Step 1: Set `AutoEnvironmentVariables.Conda`
 
@@ -67,13 +73,22 @@ BootstrapConfig = @{
 }
 ```
 
-## Step 3: Reload and confirm the merge landed
+## Step 3: Set `CondaUpdateBase`
+
+Only needed to update conda in the base environment before a run over every environment. `Create-CondaEnvironments -Name ...` never updates it.
+
+```powershell
+CondaUpdateBase = $true
+```
+
+## Step 4: Reload and confirm the merge landed
 
 Reload the profile, then read the merged value back. `$global:Configuration` after a reload is the ground truth - if what you set is not there, the local file did not parse or the key is nested one level away from where you put it.
 
 ```powershell
 Reload-PowerShellProfile
 $global:Configuration.BootstrapConfig.DataFiles.CondaEnvironments
+$global:Configuration.CondaUpdateBase
 ```
 
 ## Verification
@@ -85,6 +100,8 @@ Reload-PowerShellProfile
 $env:Conda
 Join-Path $global:MachineSpecificPaths.Projects.Self.Root $global:Configuration.BootstrapConfig.DataFiles.CondaEnvironments
 Resolve-BootstrapSteps | Where-Object Name -eq "CondaEnvironments"
+Create-CondaEnvironments -List
+Create-CondaEnvironments -DryRun
 ```
 
 If a value reads back as empty, the two usual causes are a parse error in `Configuration.local.psd1` (run `Test-ConfigurationSchema`) and a key placed at the wrong nesting level.
@@ -99,6 +116,7 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
     AutoEnvironmentVariables = @{
         Conda = "{User}\miniconda3"
     }
+    CondaUpdateBase          = $true
     BootstrapConfig          = @{
         DataFiles = @{
             CondaEnvironments = "Conda\Environments"

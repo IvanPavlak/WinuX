@@ -33,14 +33,23 @@ Complete-ObsidianWorkspaceLoad -CliPath (Get-ObsidianCliPath) -Vault Obsidian -N
 
 ## [Create-CondaEnvironments](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Create-CondaEnvironments.ps1)
 
-- **Description:** Updates Conda and idempotently creates Conda environments from the YAML files in the WinuX `Conda/Environments` folder. Each environment is checked against the existing environment list and only created if it is missing. Requires Miniconda3 to be installed and the `Conda` environment variable (written from `AutoEnvironmentVariables.Conda` by `Set-EnvironmentVariables -Auto`) to point at it. Bootstrap runs it when `BootstrapConfig.Steps.CondaEnvironments` is on (the default).
-- **Usage:** `Create-CondaEnvironments`
+- **Description:** Creates Conda environments from the YAML files in the WinuX `Conda/Environments` folder, each named after its file. An environment that already exists is left alone unless `-Recreate` is given, which removes it and creates it again from its file. `-Name` takes only the named environments; a name without a file is reported as an error and the other names still run. With `CondaUpdateBase` on (off in the base) a run without `-Name` first updates conda in the base environment. `-List` shows each environment as `exists` or `missing`, and `-DryRun` prints the conda commands; neither changes anything. Requires Miniconda3 to be installed and the `Conda` environment variable (written from `AutoEnvironmentVariables.Conda` by `Set-EnvironmentVariables -Auto`) to point at it. Bootstrap runs it when `BootstrapConfig.Steps.CondaEnvironments` is on (the default). The Foundation twin is `Install-CondaEnvironments`.
+- **Parameters:** -Name, -Recreate, -List, -DryRun
+- **Usage:** `Create-CondaEnvironments`, `Create-CondaEnvironments MyEnvironment -Recreate`, `Create-CondaEnvironments -List`
 
-Updates the base Conda installation (`conda update -n base -c defaults conda`), then enumerates every `*.yml` file in the configured environments folder (resolved from `BootstrapConfig.DataFiles.CondaEnvironments` in `Configuration.psd1`, relative to the WinuX root). The file name (without extension) is used as the environment name; environments that already exist are skipped, and missing ones are created via `conda env create -f`. Exits early with a clear message if the `Conda` variable is unset, the `conda.exe` executable is not found, the environments folder is missing, or no `.yml` files are present.
+Enumerates every `*.yml` file in the configured environments folder (resolved from `BootstrapConfig.DataFiles.CondaEnvironments` in `Configuration.psd1`, relative to the WinuX root). The file name (without extension) is the environment name, matched in any case when given to `-Name` (several names may be given, separated by spaces or commas; a trailing `.yml` is accepted). Missing environments are created with `conda env create -n <Name> -f <file>`; with `-Recreate` an existing one is first removed with `conda env remove -n <Name> -y`, and an environment whose removal failed is not created again. When `CondaUpdateBase` is `$true`, a run over every environment starts with `conda update -n base -c defaults conda -y`; a run with `-Name` never does, so creating one environment stays quick. A failed conda command is counted and the run ends with the number of failures. Exits early with a clear message if the `Conda` variable is unset, the `conda.exe` executable is not found, the environments folder is missing, or no `.yml` files are present.
 
 ```powershell
 # Create all missing Conda environments from Conda/Environments/*.yml
 Create-CondaEnvironments
+
+# Create only MyEnvironment, or build it again from MyEnvironment.yml
+Create-CondaEnvironments MyEnvironment
+Create-CondaEnvironments MyEnvironment -Recreate
+
+# See what exists, or what a run would do, without changing anything
+Create-CondaEnvironments -List
+Create-CondaEnvironments -Recreate -DryRun
 ```
 
 **See also:** [Modules: Workflow](workflow.md)
