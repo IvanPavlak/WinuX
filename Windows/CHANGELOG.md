@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.10.2] - 2026-11-06
+
+### Fixed
+
+- **A new shell no longer sometimes ignores all typing and Ctrl+C.** The profile's one `PowerShell.OnIdle` action, which runs the deferred startup stages, ended by unregistering its own subscription. When another `OnIdle` was queued while it ran, which is likely when a workspace opens several tabs at once, `Unregister-Event` waited for the running action, which was the caller itself, so the tab hung for good. The subscription now uses `-MaxTriggerCount 1`, PowerShell removes it after the action returns, and the action takes the queue before it runs it. Covered by `Modules/Tests/Modules/System/ProfileDeferredStartup.Tests.ps1`.
+
 ## [2.10.1] - 2026-11-04
 
 ### Fixed
@@ -1872,7 +1878,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.10.1...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.10.2...HEAD
+[2.10.2]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.10.1...winux/v2.10.2
 [2.10.1]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.10.0...winux/v2.10.1
 [2.10.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.9.0...winux/v2.10.0
 [2.9.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.8.0...winux/v2.9.0

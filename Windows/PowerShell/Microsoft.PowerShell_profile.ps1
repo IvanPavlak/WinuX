@@ -300,13 +300,24 @@ if (Test-StartupStage -Name "RepositoryUpdate") {
 # swallowed: Write-LogError puts the exception in the session log and, with its stack trace, in the
 # error log, prints the one red line under the prompt, and Restore-ShellPrompt draws the prompt
 # again below it (an import that fails silently leaves nothing that points at the cause). The
-# action's pipeline output goes to the event system, never the console, and it unregisters itself
-# so it fires at most once per session; -SupportEvent keeps the subscription and its event job out
-# of Get-Job / Get-EventSubscriber (which is also why unregistering needs -Force).
+# action's pipeline output goes to the event system, never the console. -SupportEvent keeps the
+# subscription and its event job out of Get-Job / Get-EventSubscriber.
+#
+# It fires at most once per session through -MaxTriggerCount 1: the engine stops taking new OnIdle
+# events once the action is triggered and removes the subscription itself, AFTER the action has
+# returned. The action must NEVER call Unregister-Event on its own subscription: when a second
+# OnIdle is queued while the action runs (PSReadLine raises one every ~300 ms of idle time, and the
+# queue is slow when a workspace starts several shells at once), Unregister-Event drains the
+# subscriber's pending actions by sleeping until the executing action finishes - which is the
+# caller itself - so the shell's main thread polls forever, PSReadLine never reads another key
+# and the tab ignores typing and Ctrl+C. The queue is taken and cleared first, so even an event
+# that slipped in before the trigger count ran out finds nothing to run.
 if ($deferredStartup.Count -gt 0) {
 	$global:WinuXDeferredStartup = $deferredStartup
-	Register-EngineEvent -SourceIdentifier PowerShell.OnIdle -SupportEvent -Action {
-		foreach ($deferredEntry in $global:WinuXDeferredStartup) {
+	Register-EngineEvent -SourceIdentifier PowerShell.OnIdle -SupportEvent -MaxTriggerCount 1 -Action {
+		$deferredQueue = $global:WinuXDeferredStartup
+		Remove-Variable -Name WinuXDeferredStartup -Scope Global -ErrorAction SilentlyContinue
+		foreach ($deferredEntry in $deferredQueue) {
 			try {
 				& $deferredEntry.Action
 			}
@@ -318,8 +329,6 @@ if ($deferredStartup.Count -gt 0) {
 				catch { }
 			}
 		}
-		Remove-Variable -Name WinuXDeferredStartup -Scope Global -ErrorAction SilentlyContinue
-		Unregister-Event -SourceIdentifier PowerShell.OnIdle -Force -ErrorAction SilentlyContinue
 	}
 }
 
