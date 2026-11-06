@@ -1399,6 +1399,14 @@ A listing typed within the first ~300 ms of a new shell prints without icons by 
 
 **Solution:** The line carries the exception; the session log (`Logs\Session_<date>_<time>_<pid>.log`) has it under `[ERROR]`, and `Logs\Errors.log` adds the stack trace. Run the stage by hand to reproduce it: `Import-TerminalIcons`, `Invoke-LogMaintenance` or `Invoke-StartupRepositoryUpdate -Force`. To start one shell without the stage: `$env:WINUX_STARTUP_SKIP = "Terminal-Icons"; pwsh` (see [Slow Profile Load](#slow-profile-load) for the stage names).
 
+### A Terminal Tab Ignores Typing And Ctrl+C
+
+**Problem:** One tab of a workspace (`Open-Workspace`, `w`) shows its greeting and prompt but accepts no input at all: keys and Ctrl+C do nothing, while the tabs opened beside it work. Only closing the tab helps.
+
+**Why it happens:** Before the fix, the action of the profile's `PowerShell.OnIdle` subscription ended with `Unregister-Event` on its own subscription. PSReadLine raises another `OnIdle` every ~300 ms of idle time, and when one was queued while the deferred startup still ran (likely when a workspace starts several shells at once and the Terminal-Icons import is slow), `Unregister-Event` waited for the executing action to finish. That action was the caller itself, so the wait never ended: the shell's main thread kept polling, PSReadLine never read another key, and Ctrl+C reached PSReadLine as an ordinary key that nothing read.
+
+**Solution:** Fixed: the subscription is registered with `-MaxTriggerCount 1`, so PowerShell removes it after the action returns, and the action never unregisters itself. A tab that hung before the fix stays hung; close it and open a new one. An event action must never call `Unregister-Event` on its own subscription.
+
 ## Performance Issues
 
 ### Slow Profile Load
