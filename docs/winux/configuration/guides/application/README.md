@@ -11,7 +11,7 @@ The [Application module reference](../../../modules/application.md) is the autho
 
 | Function | Configuration keys | Guide |
 | -------- | ------------------ | ----- |
-| `Create-CondaEnvironments` | `BootstrapConfig.DataFiles.CondaEnvironments`, `PathTemplates.Projects.Self.Root`, `AutoEnvironmentVariables.Conda`, `BootstrapConfig.Steps` | [Create-CondaEnvironments](Create-CondaEnvironments.md) |
+| `Create-CondaEnvironments` | `BootstrapConfig.DataFiles.CondaEnvironments`, `CondaUpdateBase`, `PathTemplates.Projects.Self.Root`, `AutoEnvironmentVariables.Conda`, `BootstrapConfig.Steps` | [Create-CondaEnvironments](Create-CondaEnvironments.md) |
 | `Deploy-VSCodeProfiles` | `VSCodeProfiles`, `BootstrapConfig.Steps` | [Deploy-VSCodeProfiles](Deploy-VSCodeProfiles.md) |
 | `Export-VSCodeProfile` | `VSCodeProfiles` | [Export-VSCodeProfile](Export-VSCodeProfile.md) |
 | `Get-VSCodeProfileLocation` | `VSCodeProfiles.UserData` | [Get-VSCodeProfileLocation](Get-VSCodeProfileLocation.md) |

@@ -8,6 +8,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.11.0] - 2026-11-06
+
+### Added
+
+- **`Create-CondaEnvironments` builds one environment, or rebuilds it.** `-Name` takes only the named environments (`Create-CondaEnvironments MyEnvironment`; several by spaces or commas, any case, a trailing `.yml` accepted), and a name without a file is reported while the other names still run. `-Recreate` removes an environment that already exists (`conda env remove -n <Name> -y`) and creates it again from its file; one whose removal failed is not created again. `-List` shows each environment as `exists` or `missing`, and `-DryRun` prints the conda commands; neither changes anything. The Foundation twin `Install-CondaEnvironments` takes the same NAME arguments and `--recreate`. Covered by `Modules/Tests/Modules/Application/Create-CondaEnvironments.Tests.ps1`.
+- **`CondaUpdateBase` decides whether `Create-CondaEnvironments` updates conda in the base environment first**, as `update-base` does in Foundation's `conda-environments.conf`. Only a run over every environment updates it; a run with `-Name` never does, so creating one environment stays quick. The base ships `$false`. Covered by `Modules/Tests/Modules/Configuration/VanillaConfiguration.Tests.ps1`.
+
+### Changed
+
+- **`Create-CondaEnvironments` no longer updates conda in the base environment on every run.** The update reaches the defaults channel, whose Terms of Service conda asks to be accepted, and it made every run slow. Migration: set `CondaUpdateBase = $true` in `Configuration.local.psd1` to keep the update. The Bootstrap step `CondaEnvironments` is unchanged apart from this.
+- **`Create-CondaEnvironments` names each environment after its file** (`conda env create -n <Name> -f <file>`), as the existence check already did. Before, the environment took the `name:` inside the file, so a file whose `name:` differed was created again on every run. The run now ends with a count of failed conda commands instead of always reporting success, and says so when every environment already exists.
+
 ## [2.10.2] - 2026-11-06
 
 ### Fixed
@@ -1878,7 +1890,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.10.2...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.11.0...HEAD
+[2.11.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.10.2...winux/v2.11.0
 [2.10.2]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.10.1...winux/v2.10.2
 [2.10.1]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.10.0...winux/v2.10.1
 [2.10.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.9.0...winux/v2.10.0

@@ -67,6 +67,11 @@ Describe "Vanilla Configuration (empty-by-default contract)" {
 			$script:BaseConfig.Universal.DefaultBrowser | Should -BeNullOrEmpty
 		}
 
+		It "Should ship CondaUpdateBase off" {
+			$script:BaseConfig.CondaUpdateBase | Should -BeFalse
+			$script:BaseConfig.ContainsKey("CondaUpdateBase") | Should -BeTrue
+		}
+
 		It "Should ship the personal executable paths blank" {
 			foreach ($key in @(
 					"TrainingFile", "LeagueOfLegendsExe", "SteamExe", "RiseupVpnExe", "DbeaverExe",
