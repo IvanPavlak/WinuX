@@ -92,6 +92,8 @@ Every step is individually toggleable via `BootstrapConfig.Steps` (or per invoca
 │  │   └─ Shell setup inside WSL (Configure-WSL installs the distro)          │
 │  ├─→ SymbolicLinkMaker                                                      │
 │  │   └─ Creates all symlinks from SymbolicLinks config                      │
+│  ├─→ Set-StartupTasks                                                       │
+│  │   └─ Scheduled tasks of the configured startup tasks (none by default)   │
 │  ├─→ Deploy-AiArtifacts (opt-in via Steps.AiArtifacts)                      │
 │  │   └─ Links AI/<Kind>/<source>/<item> into the apps AiArtifacts.Deploy    │
 │  │      names (skills, mods, rules, prompts, agents), Windows and WSL       │
@@ -148,12 +150,9 @@ execution order):
 | `VSCodeProfiles`     | Links VS Code profile files from the repository and installs their extensions | Off - opt in via `BootstrapConfig.Steps` |
 | `LockedStartLayout`  | Locks the taskbar layout via registry policy                    | Off - opt in via `BootstrapConfig.Steps`      |
 
-Every other step defaults on, because its function no-ops while its configuration section is
-empty: `RenameMachine`, `ExecutionPolicy`, `PowerPlan`, `PowerButtonActions`, `SystemTheme`,
-`Locale`, `DisplayLanguage`, `KeyboardLayouts`, `NerdFont`, `PowerShellModules`, `SpecialFolders`,
-`WSL`, `WinGetApps`, `ScoopApps`, `ChocolateyApps`, `DotnetEf`, `EnvironmentVariables`,
-`CondaEnvironments`, `Taskbar` and `SymbolicLinks`. The base `Configuration.psd1` spells
-`RepositoryUpdate` and `UpgradeAll` out as `$false` and sets `WSL` per machine type.
+Every other step defaults on, because its function no-ops while its configuration section is empty: `RenameMachine`, `ExecutionPolicy`, `PowerPlan`, `PowerButtonActions`, `SystemTheme`, `Locale`, `DisplayLanguage`, `KeyboardLayouts`, `NerdFont`, `PowerShellModules`, `SpecialFolders`, `WSL`, `WinGetApps`, `ScoopApps`, `ChocolateyApps`, `DotnetEf`, `EnvironmentVariables`, `CondaEnvironments`, `Taskbar`, `SymbolicLinks` and `StartupTasks`. The base `Configuration.psd1` spells `RepositoryUpdate` and `UpgradeAll` out as `$false` and sets `WSL` per machine type.
+
+`StartupTasks` runs right after `SymbolicLinks`: `Set-StartupTasks` registers the Windows scheduled tasks that run your [startup tasks](../configuration/guides/workflow/Invoke-StartupTasks.md) at sign-in, unlock and wake, and removes the ones nothing needs any more. `Startup.Tasks` ships empty, so a vanilla run registers nothing. Keeping the repositories current between Bootstrap runs is one such task, if you add it: `Update-Repositories -All -NoClone -Quiet`, once a day, when a terminal opens.
 
 ## What Gets Installed
 

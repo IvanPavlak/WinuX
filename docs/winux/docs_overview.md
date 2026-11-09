@@ -81,7 +81,8 @@ decisions behind them, and where the values go. Each module's `README.md` indexe
 | `Logging`                                          | `Initialize-LoggingState`                          |
 | `Logging.Maintenance`                              | `Invoke-LogMaintenance`                            |
 | `Logging.FileLogging.Retention`                    | `Clear-OldLogs`                                    |
-| `RepositoryUpdate`                                 | `Update-Repositories`, `Resolve-RepositoryDefaultBranch`, `Get-RepositoryUpdateStartupSettings`, `Invoke-StartupRepositoryUpdate` |
+| `RepositoryUpdate`                                 | `Update-Repositories`, `Resolve-RepositoryDefaultBranch`; the deprecated `RepositoryUpdate.Startup` keys by `Get-StartupTaskDefinitions` (carried over as the startup task `RepositoryUpdate`) and by the deprecated `Get-RepositoryUpdateStartupSettings` (for `Register-RepositoryUpdatePromptCheck`) |
+| `Startup` (`Tasks`, `Conditions`, `FailureReport`) | `Get-StartupTaskDefinitions` (reads and validates `Tasks`), `Invoke-StartupTasks` (runs one trigger's tasks; `FailureReport`), `Invoke-StartupTask` (runs one task; `Conditions`), `Test-StartupCondition` (`Conditions`), `Set-StartupTasks` (the scheduled tasks behind `SignIn` / `Unlock` / `Wake`), `Register-StartupTaskPromptCheck` and `Invoke-StartupTaskPromptCheck` (once-a-day `TerminalOpen` tasks in a shell left open); their helpers read no key: `Test-StartupTaskDue`, `Start-StartupTaskShell`, `Wait-StartupTaskResult`, `New-StartupTaskShellCommand`; shape checked by `Test-ConfigurationSchema` |
 | `BrowserGroups`                                    | `Open-Browser`, `Test-BrowserGroupAlreadyOpen`, `Resolve-SwaggerBrowserGroup`, `Get-SwaggerCloseTitlePatterns` |
 | `PathTemplates.Projects`, `ProjectActions`         | `Open-Project` (`ProjectActions` also by `Close-Project`, `Open-Workspace`, `Resolve-WorkspaceActions`, `Merge-LayoutProjectOverrides`) |
 | `DefaultWorkspace`, `WorkspaceActions`, `WorkspaceBenchmark` | `Open-Workspace`                         |
@@ -106,7 +107,7 @@ decisions behind them, and where the values go. Each module's `README.md` indexe
 | `TerminalGreeting`                                 | `Show-TerminalGreeting` (alias `c`, and shell startup), `Invoke-Clear`, `Invoke-Fastfetch`, `Invoke-Onefetch`, `Format-OnefetchPanel` (via `Resolve-TerminalGreetingSettings`); `Onefetch.InProjectTerminals` also drives `Open-ProjectTerminals` |
 | `KillAll.Steps`                                    | `Kill-All`, `Resolve-KillAllSteps`                 |
 | `Universal.VisibleWindowExclusions`                | `Terminate-AllProcessesWithVisibleWindows`, `Report-KillAllSurvivors`, `Get-WorkspaceOpenDelta` (via `Resolve-VisibleWindowExclusions`) |
-| `BootstrapConfig.Steps`                            | `Bootstrap`, `Resolve-BootstrapSteps` (incl. the opt-in `AiArtifacts` step → `Deploy-AiArtifacts`, the `AiMarketplaces` step → `Deploy-AiMarketplaces`, the `AiMcpServers` step → `Deploy-AiMcpServers`, and the `AiProfileInit` step → `Initialize-AiProfile`) |
+| `BootstrapConfig.Steps`                            | `Bootstrap`, `Resolve-BootstrapSteps` (incl. the default-on `StartupTasks` step → `Set-StartupTasks`, the opt-in `AiArtifacts` step → `Deploy-AiArtifacts`, the `AiMarketplaces` step → `Deploy-AiMarketplaces`, the `AiMcpServers` step → `Deploy-AiMcpServers`, and the `AiProfileInit` step → `Initialize-AiProfile`) |
 | `AiArtifacts`, `AiHarnesses`                       | `Deploy-AiArtifacts`, `Update-AiArtifacts`, `List-AiArtifacts`, `Get-AiArtifactPlan`, `Get-AiArtifactRoster` (via `Resolve-AiArtifactsConfig`); the `claude-plugin-dirs` hook of `Deploy-AiArtifacts` writes `env.CLAUDE_CODE_PLUGIN_DIRS` of `~\.claude\settings.json` through `Resolve-AiModsPluginDirs` and `Set-ClaudeSettingsEnv`, and checks the CLI with `Test-AiModsCli` |
 | `AiProfiles`                                       | `Resolve-AiProfile`, and through it `Deploy-AiArtifacts` (rules item, harnesses, includes and excludes; the `managed-settings` destination rendered by `ConvertTo-AiManagedSettings` and written by `Deploy-AiManagedSettings` with `ai-profile.conf`, the ownership guard and the repository policy hook), `Deploy-AiMcpServers`, `Deploy-AiMarketplaces`, `List-AiArtifacts`, `Test-AiProfile`, `Initialize-AiProfile` |
 | `AiArtifacts.Checkouts`, `AiArtifacts.Manifests`  | `Get-AiArtifactRoster` (checkout and manifest sources), `Get-AiArtifactManifest` (the manifest format), `Sync-AiManifestCache` (the `%LOCALAPPDATA%\WinuX\ai-manifests` cache, run by `Deploy-AiArtifacts` and `Update-AiArtifacts`) |
@@ -148,12 +149,13 @@ The profile (`Microsoft.PowerShell_profile.ps1`) executes this exact sequence. E
 10. Stage Aliases - register aliases
 11. Stage PowerPlan - dot-source System\Functions\{Get-ChassisType, Test-PowerPlan}.ps1, then Test-PowerPlan (chassis type from a per-machine cache)
 12. Stage LogMaintenance - QUEUED
-13. Stage RepositoryUpdate - QUEUED; one PowerShell.OnIdle subscription then runs the queue once the prompt is rendered and the shell
+13. Stage StartupTasks (RepositoryUpdate before 2.12.0) - QUEUED; one PowerShell.OnIdle subscription then runs the queue once the prompt is rendered and the shell
     has been idle ~300 ms: Import-TerminalIcons -RedrawPrompt (Import-Module Terminal-Icons -Global; a torn theme cache file is
-    moved aside and the import retried), Invoke-LogMaintenance, Invoke-StartupRepositoryUpdate
-    (no-op unless RepositoryUpdate.Startup.Enabled; once a day from Startup.DayStartHour, or once per
-    Startup.IntervalHours with Schedule "Interval"), then Register-RepositoryUpdatePromptCheck (Daily only:
-    wraps the prompt so a shell still open the next day runs it at its first prompt). An entry that throws is reported
+    moved aside and the import retried), Invoke-LogMaintenance, Register-StartupTaskPromptCheck (only when a
+    TerminalOpen task runs OncePerDay: wraps the prompt so a shell still open the next day runs it at its first
+    prompt), then Invoke-StartupTasks -Trigger TerminalOpen -RedrawPrompt (every Startup.Tasks entry with the
+    TerminalOpen trigger, inline, each when its Frequency says it is due; no-op while Startup.Tasks is empty and
+    the deprecated RepositoryUpdate.Startup.Enabled is off). An entry that throws is reported
     through Write-LogError (console, session log and error log) and the prompt is drawn again (Restore-ShellPrompt)
 ```
 
@@ -188,6 +190,8 @@ Phase 6 (Environment):           Set-EnvironmentVariables -Auto → Create-Conda
                                  → Configure-NuGetConfig → Configure-NpmConfig
 Phase 7 (Taskbar):               Configure-Taskbar -FromBootstrap → Set-TaskbarSettings → Set-VisualEffects
 Phase 8 (WSL & Symlinks):        Initialize-WSLEnvironment → SymbolicLinkMaker
+                                 → Set-StartupTasks (BootstrapConfig.Steps.StartupTasks, on by default;
+                                   registers nothing while Startup.Tasks is empty)
                                  → Deploy-AiArtifacts (opt-in via BootstrapConfig.Steps.AiArtifacts)
                                  → Deploy-AiMarketplaces (opt-in via BootstrapConfig.Steps.AiMarketplaces)
                                  → Deploy-AiMcpServers (opt-in via BootstrapConfig.Steps.AiMcpServers)

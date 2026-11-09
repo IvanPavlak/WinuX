@@ -4,6 +4,9 @@ function Get-RepositoryUpdateDayStart {
 		Returns when the current day began, for a day that starts at a given hour.
 
 	.DESCRIPTION
+		DEPRECATED since 2.12.0, removed in 3.0.0: the automatic repository update is a startup
+		task now, and Test-StartupTaskDue replaces this function. It keeps working unchanged until then.
+
 		The day boundary of the Daily schedule of the automatic repository update: the most
 		recent moment at -DayStartHour:00 local time that is not later than -At. Before that hour
 		the day is still yesterday's, so work past midnight never counts as a new day.

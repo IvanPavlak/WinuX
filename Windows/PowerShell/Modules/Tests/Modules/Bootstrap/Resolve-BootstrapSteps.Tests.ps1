@@ -32,7 +32,7 @@ Describe "Resolve-BootstrapSteps" {
 					"RenameMachine", "ExecutionPolicy", "PowerPlan", "PowerButtonActions", "SystemTheme",
 					"Locale", "DisplayLanguage", "KeyboardLayouts", "NerdFont", "PowerShellModules",
 					"SpecialFolders", "WSL", "WinGetApps", "ScoopApps", "ChocolateyApps",
-					"DotnetEf", "EnvironmentVariables", "CondaEnvironments", "Taskbar", "SymbolicLinks")) {
+					"DotnetEf", "EnvironmentVariables", "CondaEnvironments", "Taskbar", "SymbolicLinks", "StartupTasks")) {
 				$states[$name] | Should -BeTrue -Because "step [$name] defaults to on"
 			}
 			foreach ($name in @("MicrosoftActivationScripts", "Win11Debloat", "RepositoryUpdate", "DeveloperMode", "NuGetConfig", "NpmConfig", "UpgradeAll", "AiArtifacts", "AiMarketplaces", "AiMcpServers", "AiProfileInit", "ObsidianCli", "VSCodeProfiles", "LockedStartLayout")) {
@@ -60,10 +60,21 @@ Describe "Resolve-BootstrapSteps" {
 			(Resolve-BootstrapSteps)["UpgradeAll"] | Should -BeTrue
 		}
 
+		It "Should keep StartupTasks on until it is switched off" {
+			# Set-StartupTasks registers nothing while Startup.Tasks is empty, so the step is safe
+			# to run on a vanilla configuration and is on like SymbolicLinks.
+			(Resolve-BootstrapSteps)["StartupTasks"] | Should -BeTrue
+
+			$global:Configuration.BootstrapConfig = @{ Steps = @{ StartupTasks = $false } }
+
+			(Resolve-BootstrapSteps)["StartupTasks"] | Should -BeFalse
+			(Resolve-BootstrapSteps -Include @("StartupTasks"))["StartupTasks"] | Should -BeTrue
+		}
+
 		It "Should list the steps in Bootstrap execution order" {
 			$states = Resolve-BootstrapSteps
 
-			@($states.Keys) -join "," | Should -Be "RenameMachine,MicrosoftActivationScripts,Win11Debloat,RepositoryUpdate,ExecutionPolicy,DeveloperMode,PowerPlan,PowerButtonActions,SystemTheme,Locale,DisplayLanguage,KeyboardLayouts,NerdFont,PowerShellModules,SpecialFolders,WSL,WinGetApps,ScoopApps,ChocolateyApps,UpgradeAll,DotnetEf,EnvironmentVariables,CondaEnvironments,NuGetConfig,NpmConfig,Taskbar,SymbolicLinks,AiArtifacts,AiMarketplaces,AiMcpServers,AiProfileInit,ObsidianCli,VSCodeProfiles,LockedStartLayout"
+			@($states.Keys) -join "," | Should -Be "RenameMachine,MicrosoftActivationScripts,Win11Debloat,RepositoryUpdate,ExecutionPolicy,DeveloperMode,PowerPlan,PowerButtonActions,SystemTheme,Locale,DisplayLanguage,KeyboardLayouts,NerdFont,PowerShellModules,SpecialFolders,WSL,WinGetApps,ScoopApps,ChocolateyApps,UpgradeAll,DotnetEf,EnvironmentVariables,CondaEnvironments,NuGetConfig,NpmConfig,Taskbar,SymbolicLinks,StartupTasks,AiArtifacts,AiMarketplaces,AiMcpServers,AiProfileInit,ObsidianCli,VSCodeProfiles,LockedStartLayout"
 		}
 
 		It "Should return the defaults when Configuration itself is null" {

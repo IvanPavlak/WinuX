@@ -1,6 +1,6 @@
 # Workflow Module
 
-The Workflow module **orchestrates complex operations** like opening workspaces and projects with all their associated tools.
+The Workflow module **orchestrates complex operations** like opening workspaces and projects with all their associated tools, and runs the **startup tasks**: commands a machine runs on its own at sign-in, at unlock, after waking from sleep, or when a terminal opens.
 
 ## [Close-BrowserTabsByPattern](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Workflow/Functions/Close-BrowserTabsByPattern.ps1)
 
@@ -330,6 +330,34 @@ Set-Content -LiteralPath (Get-WorkspaceStatePath) -Value (Format-WorkspaceStateC
 
 **See also:** [Save-WorkspaceState](#save-workspacestate), [Get-WorkspaceState](#get-workspacestate)
 
+## [Get-StartupTaskDefinitions](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Workflow/Functions/Get-StartupTaskDefinitions.ps1)
+
+- **Description:** Reads the startup tasks of the configuration (`Startup.Tasks`), validated and with every default filled in. The one place that knows the shape of an entry, so [Invoke-StartupTasks](#invoke-startuptasks) (what runs), [Set-StartupTasks](bootstrap.md#set-startuptasks) (what Windows is told) and [Register-StartupTaskPromptCheck](#register-startuptaskpromptcheck) (which open shells look again) can never disagree. Returns one object per task, in configuration order: `Name`, `Trigger` (an array, in canonical spelling whatever the file's casing), `InScope` (whether the task's `Machine` scope, checked by [Test-MachineTypeScope](bootstrap.md#test-machinetypescope), and its `Hostname` list cover this machine - a task with neither runs on every machine, and with both, both must match), `Valid`, `Errors`, `Legacy` and `Parameters`, the hashtable to splat onto [Invoke-StartupTask](#invoke-startuptask) (every option with its default filled in, without `Trigger`). An entry that breaks a rule comes back with `Valid = $false` and its `Errors`, and is never run - `Invoke-StartupTasks` reports it at every run: an entry that is not a hashtable, an unknown key, a missing, malformed or repeated `Name`, a missing or unknown `Trigger` (`Boot` is refused by name, because nothing can run before sign-in with a desktop and the user's saved credentials), an unknown `Window`, `KeepOpen`, `Frequency` or `Elevation`, `Elevation` `Prompt` or `Silent` on a task that has the `TerminalOpen` trigger (an inline run cannot be elevated), a `DayStartHour` outside 0-23, an `IntervalHours` that is not a number, a `Timeout` that is not a number of seconds of 0 or more, or a `Requires` name with no `Startup.Conditions` entry. The deprecated automatic repository update is carried over: while `RepositoryUpdate.Startup.Enabled` is `$true` and no task is named `RepositoryUpdate`, one is appended that does what the old hook did - `Update-Repositories -All -NoClone -Quiet`, or `-Group` with the groups [Resolve-RepositoryUpdateScope](bootstrap.md#resolve-repositoryupdatescope) reads from `RepositoryUpdate.Startup.Scope` (else `BootstrapConfig.RepositoryUpdateScope`), on the `TerminalOpen` trigger, `OncePerDay` or, with `Startup.Schedule = "Interval"`, `Interval`, with the old keys' `DayStartHour` and `IntervalHours` - and marked `Legacy`. `-IncludeLegacyDisabled` appends it, disabled, even when the key is off; `Invoke-StartupTask RepositoryUpdate -Force` and the deprecated [Invoke-StartupRepositoryUpdate](git.md#invoke-startuprepositoryupdate) `-Force` rely on it.
+- **Parameters:** -Name, -Trigger (SignIn, Unlock, Wake, TerminalOpen), -Configuration, -IncludeLegacyDisabled
+- **Usage:** `Get-StartupTaskDefinitions | Format-Table Name, Trigger, InScope, Valid`, `Get-StartupTaskDefinitions -Trigger SignIn | Where-Object { $_.Valid -and $_.InScope }`, `(Get-StartupTaskDefinitions -Name MyTask).Errors`
+
+The options of an entry, their values and their defaults are listed under [Invoke-StartupTasks](#invoke-startuptasks). Two defaults depend on the entry itself: `KeepOpen` is `OnFailure`, or `Always` for a task without a `Command` (a plain terminal that closed at once would be no terminal), and an absent or empty `Elevation` is `None`.
+
+| Parameter                | Type          | Default                 | Description                                                                                         |
+| ------------------------ | ------------- | ----------------------- | --------------------------------------------------------------------------------------------------- |
+| `-Name`                  | `string[]`    | -                       | Return only the tasks with these names.                                                             |
+| `-Trigger`               | `string`      | -                       | Return only the tasks that have this trigger: `SignIn`, `Unlock`, `Wake` or `TerminalOpen`.         |
+| `-Configuration`         | `object`      | `$global:Configuration` | The configuration to read `Startup` and `RepositoryUpdate.Startup` from. The machine scope (`Test-MachineTypeScope`) and the groups of the carried-over repository update (`Resolve-RepositoryUpdateScope`) are always resolved against the loaded configuration. |
+| `-IncludeLegacyDisabled` | `switch`      | off                     | Add the carried-over `RepositoryUpdate` task even when `RepositoryUpdate.Startup.Enabled` is not `$true`. |
+
+```powershell
+# Every configured startup task, and whether it applies to this machine
+Get-StartupTaskDefinitions | Format-Table Name, Trigger, InScope, Valid
+
+# Why is MyTask never started?
+(Get-StartupTaskDefinitions -Name MyTask).Errors
+
+# The options MyTask runs with, defaults filled in
+(Get-StartupTaskDefinitions -Name MyTask).Parameters
+```
+
+**See also:** [Invoke-StartupTasks](#invoke-startuptasks), [Invoke-StartupTask](#invoke-startuptask), [Set-StartupTasks](bootstrap.md#set-startuptasks), [Test-StartupCondition](#test-startupcondition), [Get-StartupTaskDefinitions configuration guide](../configuration/guides/workflow/Get-StartupTaskDefinitions.md)
+
 ## [Get-SwaggerCloseTitlePatterns](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Workflow/Functions/Get-SwaggerCloseTitlePatterns.ps1)
 
 - **Description:** Returns the Swagger-specific browser tab title patterns to close for a project. Maps the project name to its entry in the `BrowserGroups` `Swagger` group (case-insensitive match on the entry's `Name`) and returns the regex patterns `Close-Project` hands to `Close-BrowserTabsByPattern`. A project with no `Swagger` entry (or a setup with no `Swagger` group at all) returns nothing, so Swagger closing is inert without Swagger configuration.
@@ -534,6 +562,141 @@ Get-Content (Get-WorkspaceStatePath)
 
 **See also:** [Get-WorkspaceState](#get-workspacestate), [Save-WorkspaceState](#save-workspacestate), [Get-RepositoryPath](helper.md#get-repositorypath)
 
+## [Invoke-StartupTask](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Workflow/Functions/Invoke-StartupTask.ps1)
+
+- **Description:** Runs one startup task: any command, with conditions, a frequency, a window and an elevation. It is the generic runner behind startup tasks - every option of a `Startup.Tasks` entry is a parameter here, so an entry is exactly a set of parameters for this function and the same call works by hand. Called with a `-Name` and no `-Command` it runs the configured task of that name ([Get-StartupTaskDefinitions](#get-startuptaskdefinitions)) in the current shell: parameters given on the command line win over the entry's, the entry's `Window`, `KeepOpen` and `Parallel` are left out (a task typed at a prompt runs in that shell unless `-Window` says otherwise), and a name that is not configured, or whose entry is not valid, is `Failed`. First come the gates: a task with `-Enabled:$false` is `Disabled`, one whose `-Machine` scope ([Test-MachineTypeScope](bootstrap.md#test-machinetypescope)) or `-Hostname` list does not cover this machine is `OutOfScope`, and one whose `-Frequency` says it already ran is `NotDue` ([Test-StartupTaskDue](#test-startuptaskdue)); `-Force` passes the Enabled and frequency gates, never the scope. Then where it runs: `-Window Current` (default) runs the task in this shell, while `Tab` or `Hidden` starts a shell for it ([Start-StartupTaskShell](#start-startuptaskshell)), which runs this function again inline, and waits for its result up to `-Timeout` seconds ([Wait-StartupTaskResult](#wait-startuptaskresult)) - or, with `-Parallel`, returns at once with the status `Started`. The inline run takes the task's lock (`Logs\.startup-task-<Name>.lock`, held open for the whole run, so the same task never runs twice at once whichever trigger or shell asks: the loser is `AlreadyRunning`, and a lock left by a shell that died mid-run is cleared), checks the frequency again under it, waits for every `-Requires` condition ([Test-StartupCondition](#test-startupcondition); one that is not met in time makes the task `Skipped`, with a warning) and runs `-Command`. With `-NoConditionWait` each condition is tested once and a task whose condition is not met is skipped without a word - what a newly opened terminal does, so a shell opened offline is never held up. The command runs as typed at a prompt, so aliases and functions work; it has `Failed` when it throws, errors it only writes do not count, and its `$LASTEXITCODE` never leaks into the calling shell. Without a `-Command` the task only passes its gates and conditions - in a tab, that is a plain terminal. Only a run that `Succeeded` writes the stamp (`Logs\.startup-task-<Name>.stamp`) the frequency is measured from, so a failed or skipped task is due again at the next trigger; a task that closes its own shell counts as finished (`Ended`) and its stamp is written by the waiting side. With `-Elevation None` (default) the task runs unelevated, and a command that asks for Administrator privileges through [Test-AdminPrivileges](helper.md#test-adminprivileges) fails at once with a message naming this option, instead of showing a question nobody is there to answer. `Relaunch` lets that request through: the task starts again in an Administrator tab (Windows asks for consent) and this run ends as `HandedOff`. `Prompt` starts the task's shell elevated from the beginning, with one consent dialog, and tracks it like any other; a `Current` run that needs it moves to a tab. `Silent` is `Prompt` without the dialog, and only when [Set-StartupTasks](bootstrap.md#set-startuptasks) registered the task's own elevated scheduled task - started any other way it asks like `Prompt`. `-WhatIf` is the rehearsal: once the gates are passed it runs nothing and returns `WouldRun`, the reason naming the conditions the task would have to wait for. Returns one object with `Name`, `Status`, `Reason`, `Trigger`, `Window`, `Duration` and `ResultFile`.
+- **Parameters:** -Name, -Command, -Trigger (Manual, SignIn, Unlock, Wake, TerminalOpen), -Machine, -Hostname, -Requires, -ConditionDefinitions, -NoConditionWait, -Window (Current, Tab, Hidden), -KeepOpen (OnFailure, Always, Never), -Parallel, -Frequency (EveryTime, OncePerBoot, OncePerDay, Interval), -DayStartHour, -IntervalHours, -Elevation (None, Relaunch, Prompt, Silent), -Timeout, -Enabled, -Force, -ResultFile, -WhatIf
+- **Usage:** `Invoke-StartupTask -Name MyTask -Command "Open-Workspace MyWorkspace" -Requires MyVpn -Window Tab`, `Invoke-StartupTask MyTask`, `Invoke-StartupTask MyTask -Force`, `Invoke-StartupTask -Name MyTask -Command "Clear-MyCache" -Window Hidden -Frequency Interval -IntervalHours 4 -WhatIf`
+
+**Statuses.** `Status` is one of:
+
+| Status           | Meaning                                                                                                                                                        | Stamp written |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| `Succeeded`      | The command ran and did not throw (or the task has no command and passed its gates and conditions).                                                             | Yes           |
+| `Failed`         | The command threw, was stopped before it finished, the task's shell could not be started, its lock could not be taken, or the configured task is missing or not valid. | No            |
+| `Skipped`        | A `-Requires` condition was not met in time (or, with `-NoConditionWait`, is not met right now).                                                                | No            |
+| `TimedOut`       | A `Tab` or `Hidden` run reported no result within `-Timeout` seconds. The task is left running and may still finish and write its own stamp.                    | No            |
+| `Ended`          | The task's shell closed before it reported a result - a task that closes its own tab. Counts as finished.                                                       | Yes           |
+| `Started`        | `-Parallel`: the shell was started and nobody waited. `Invoke-StartupTasks` collects the result at the end of its run.                                          | By the task   |
+| `HandedOff`      | `-Elevation Relaunch`: the command asked for Administrator privileges and was started again in an Administrator tab.                                            | By that tab   |
+| `NotDue`         | The frequency says the task already ran.                                                                                                                       | No            |
+| `OutOfScope`     | `-Machine` or `-Hostname` does not cover this machine.                                                                                                         | No            |
+| `Disabled`       | `-Enabled:$false`.                                                                                                                                             | No            |
+| `AlreadyRunning` | Another shell holds the task's lock.                                                                                                                           | No            |
+| `WouldRun`       | `-WhatIf`: the task would run now. `Reason` lists the conditions it would wait for.                                                                            | No            |
+
+**Elevation and the calling shell.** [Test-AdminPrivileges](helper.md#test-adminprivileges) stops the pipeline it was called from, as it always does, whether it refuses (`None`) or relaunches (`Relaunch`). The task's result file, stamp and lock are settled first, but an inline run then returns nothing and whatever called it stops with it. A task in its own tab or hidden shell is unaffected: only that shell stops, and the result file tells the waiting side. While the command runs, the task is described in `$global:WinuXStartupTask` (`Name`, `Elevation` and, for `Relaunch`, `RelaunchCommand` - the self-contained, forced call built by [New-StartupTaskShellCommand](#new-startuptaskshellcommand) that the Administrator tab runs); that variable is what tells `Test-AdminPrivileges` it is inside a startup task. `Prompt` and `Silent` need no new shell when the calling shell is elevated already.
+
+**Files.** All three live in the Logs folder ([Get-LogPath](logging.md#get-logpath) `-Directory`): `.startup-task-<Name>.stamp` (the last success), `.startup-task-<Name>.lock` (held while the task runs) and `.startup-task-<Name>.result` (what a `Tab` or `Hidden` run reports to the shell that waits for it).
+
+| Parameter               | Type          | Default              | Description                                                                                                         |
+| ----------------------- | ------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `-Name`                 | `string`      | required             | The task's name: letters, digits, `-` and `_`. Names its stamp, lock and result files. Positional.                    |
+| `-Command`              | `string`      | -                    | The command line to run. Not passed at all: the configured task of that name supplies it. Positional.                |
+| `-Trigger`              | `string`      | `Manual`             | What caused this run: `Manual`, `SignIn`, `Unlock`, `Wake` or `TerminalOpen`. Reported in the result.                |
+| `-Machine`              | `string`      | -                    | Machine scope (`"PC/Laptop"`) the task is limited to.                                                               |
+| `-Hostname`             | `string[]`    | -                    | Computer names the task is limited to.                                                                              |
+| `-Requires`             | `string[]`    | -                    | Names of the conditions to wait for before the command runs.                                                        |
+| `-ConditionDefinitions` | `IDictionary` | `Startup.Conditions` | The conditions `-Requires` names: name => `@{ Test; Timeout; Interval }`.                                           |
+| `-NoConditionWait`      | `switch`      | off                  | Test each condition once instead of waiting for it, and skip quietly when one is not met.                           |
+| `-Window`               | `string`      | `Current`            | `Current`, `Tab` or `Hidden`.                                                                                       |
+| `-KeepOpen`             | `string`      | `OnFailure`          | `OnFailure`, `Always` or `Never`: whether a tab stays open when the task is over.                                   |
+| `-Parallel`             | `switch`      | off                  | With `Tab` or `Hidden`: return as soon as the shell is started.                                                     |
+| `-Frequency`            | `string`      | `EveryTime`          | `EveryTime`, `OncePerBoot`, `OncePerDay` or `Interval`.                                                             |
+| `-DayStartHour`         | `int`         | `6`                  | The hour (0-23) a new day starts, for `OncePerDay`.                                                                 |
+| `-IntervalHours`        | `double`      | `24`                 | Minimum hours between two successful runs, for `Interval`.                                                          |
+| `-Elevation`            | `string`      | `None`               | `None`, `Relaunch`, `Prompt` or `Silent`.                                                                           |
+| `-Timeout`              | `double`      | `600`                | Seconds to wait for a `Tab` or `Hidden` run; `0` waits without limit. The task itself is never stopped.             |
+| `-Enabled`              | `bool`        | `$true`              | `$false` parks the task.                                                                                            |
+| `-Force`                | `switch`      | off                  | Run even when the task is disabled or not due. With the name `RepositoryUpdate` it also runs the carried-over task of the deprecated `RepositoryUpdate.Startup` keys while they are off. |
+| `-ResultFile`           | `string`      | -                    | Where an inline run reports to the shell that started it. Handed to the task's shell by this function; not set by hand. |
+
+```powershell
+# Open a tab, wait there for MyVpn, open the workspace and close the tab
+Invoke-StartupTask -Name MyTask -Command "Open-Workspace MyWorkspace" -Requires MyVpn -Window Tab
+
+# Run the configured task MyTask here and now, whatever its frequency says
+Invoke-StartupTask MyTask -Force
+
+# Would it run now? Runs nothing
+Invoke-StartupTask -Name MyTask -Command "Clear-MyCache" -Window Hidden -Frequency Interval -IntervalHours 4 -WhatIf
+
+# When did MyTask last succeed?
+Get-Item (Join-Path (Get-LogPath -Directory) ".startup-task-MyTask.stamp") -Force | Select-Object LastWriteTime
+```
+
+**See also:** [Invoke-StartupTasks](#invoke-startuptasks), [Get-StartupTaskDefinitions](#get-startuptaskdefinitions), [Test-StartupTaskDue](#test-startuptaskdue), [Test-StartupCondition](#test-startupcondition), [Start-StartupTaskShell](#start-startuptaskshell), [Wait-StartupTaskResult](#wait-startuptaskresult), [Set-StartupTasks](bootstrap.md#set-startuptasks), [Test-AdminPrivileges](helper.md#test-adminprivileges), [Invoke-StartupTask configuration guide](../configuration/guides/workflow/Invoke-StartupTask.md)
+
+## [Invoke-StartupTaskPromptCheck](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Workflow/Functions/Invoke-StartupTaskPromptCheck.ps1)
+
+- **Description:** The prompt function [Register-StartupTaskPromptCheck](#register-startuptaskpromptcheck) installs: the original prompt, plus the once-a-day startup tasks when a new day starts. Runs the original prompt first - as its very first statement, so the original still sees the last command's `$?` (the Oh My Posh error indicator) - and keeps its text. Once the next day boundary recorded in `$global:WinuXStartupTaskPrompt` has passed, it runs [Invoke-StartupTasks](#invoke-startuptasks) `-Trigger TerminalOpen` - each task checks its stamp and its lock itself, so a shell that loses the race to another one prints nothing - puts `$LASTEXITCODE` back so nothing a task ran shows up as the exit code of your last command, and has `Register-StartupTaskPromptCheck` move the boundary on. The boundary is pushed a day ahead before the tasks run, so a run that throws is not tried again at every prompt. The tasks print before the prompt text is returned, so the prompt is drawn below them. Never throws: a failure is swallowed and the prompt text is still returned; without a recorded original it returns PowerShell's default prompt text. Replaces the deprecated [Invoke-RepositoryUpdatePromptCheck](git.md#invoke-repositoryupdatepromptcheck).
+- **Usage:** `Invoke-StartupTaskPromptCheck` - not called by hand; it is the body of the wrapped `prompt` function.
+
+**See also:** [Register-StartupTaskPromptCheck](#register-startuptaskpromptcheck), [Invoke-StartupTasks](#invoke-startuptasks)
+
+## [Invoke-StartupTasks](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Workflow/Functions/Invoke-StartupTasks.ps1)
+
+- **Description:** Runs the configured startup tasks of one trigger: sign-in, unlock, wake or a newly opened terminal. It is the runner Windows and the profile call: it reads `Startup.Tasks` ([Get-StartupTaskDefinitions](#get-startuptaskdefinitions)), takes the tasks that have `-Trigger`, in the order they are written, and hands each to [Invoke-StartupTask](#invoke-startuptask) with the entry's own options - so the gates (enabled, machine and hostname scope, frequency), the conditions, the lock and the stamp written only after a success are that function's. The list is read at every run, so an edited configuration takes effect at the next trigger with nothing to register again. `SignIn`, `Unlock` and `Wake` are started by the scheduled tasks [Set-StartupTasks](bootstrap.md#set-startuptasks) registers, in a shell with no window: each task runs in its own tab or hidden shell (`Window`), the runner waits for a task before it starts the next (up to the task's `Timeout`), except one marked `Parallel`, which is started and collected at the end, and one task failing never stops the next. `TerminalOpen` is started by the profile (startup stage `StartupTasks`) once the first prompt is drawn: every task runs inline, in that shell, whatever its `Window` says, and prints under the prompt; `-RedrawPrompt` draws the prompt again below the output when anything ran ([Restore-ShellPrompt](helper.md#restore-shellprompt)). There a condition is tested once, never waited for: a task whose condition is not met is skipped silently and, having written no stamp, is due again in the next shell. Nothing runs in a shell that itself belongs to a startup task. A task with `Elevation = "Silent"` is not run from here on `SignIn`, `Unlock` or `Wake` - its own elevated scheduled task does that - and is listed as `Delegated`, or as `Failed` when that scheduled task is missing (run `Set-StartupTasks`). A task that is not valid is reported at every run, whichever trigger it names, and never started. After a `SignIn`, `Unlock` or `Wake` run in which a task failed, was skipped for a condition or timed out, one terminal tab opens with the list, unless `Startup.FailureReport` is `"None"`; every line is also in the session log ([Get-LogPath](logging.md#get-logpath)). `-WhatIf` is the rehearsal: it runs nothing and returns, per task, what would happen now - `WouldRun` (with the conditions it would wait for), `NotDue`, `OutOfScope` or `Disabled` - which is the way to try a trigger without signing out. Returns nothing, or with `-PassThru` (and always with `-WhatIf`) one result object per task: `Name`, `Status`, `Reason`, `Trigger`, `Window`, `Duration`, `ResultFile`.
+- **Parameters:** -Trigger (SignIn, Unlock, Wake, TerminalOpen), -Name, -RedrawPrompt, -PassThru, -WhatIf
+- **Usage:** `Invoke-StartupTasks -Trigger SignIn -WhatIf`, `Invoke-StartupTasks -Trigger SignIn`, `Invoke-StartupTasks -Trigger TerminalOpen -Name MyTask -PassThru`
+
+A `Startup.Tasks` entry is a hashtable. `Name` and `Trigger` are required, everything else is optional, and an unknown key makes the entry invalid:
+
+| Option          | Values                                                        | Default                                       | What it does                                                                                                                                                                                             |
+| --------------- | ------------------------------------------------------------- | --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Name`          | Letters, digits, `-` and `_`                                  | required                                      | Unique. Names the task's stamp, lock and result files and, for `Elevation = "Silent"`, its scheduled task.                                                                                                |
+| `Command`       | A command line                                                | none                                          | What runs, as typed at a prompt (aliases work). Without one the task only opens a terminal.                                                                                                               |
+| `Trigger`       | `SignIn`, `Unlock`, `Wake`, `TerminalOpen` - one or several   | required                                      | When the task runs. `Boot` is refused: nothing runs before sign-in.                                                                                                                                       |
+| `Machine`       | A machine scope such as `"PC/Laptop"`                         | every machine                                 | Limits the task to those machine types.                                                                                                                                                                  |
+| `Hostname`      | One or several computer names                                 | every machine                                 | Limits the task to those computers. With `Machine`, both must match.                                                                                                                                      |
+| `Requires`      | Names of `Startup.Conditions` entries                         | none                                          | The conditions the task waits for ([Test-StartupCondition](#test-startupcondition)). A `TerminalOpen` run tests them once and never waits.                                                                |
+| `Window`        | `Tab`, `Hidden`                                               | `Tab`                                         | Where a `SignIn`, `Unlock` or `Wake` run happens. A `TerminalOpen` run is always inline, in the shell that just opened.                                                                                    |
+| `KeepOpen`      | `OnFailure`, `Always`, `Never`                                | `OnFailure` (`Always` without a `Command`)    | Whether the task's tab stays open when the task is over.                                                                                                                                                 |
+| `Parallel`      | `$true`, `$false`                                             | `$false`                                      | `$true` starts the task and moves on to the next without waiting for it.                                                                                                                                  |
+| `Frequency`     | `EveryTime`, `OncePerBoot`, `OncePerDay`, `Interval`          | `EveryTime`                                   | How often the task runs ([Test-StartupTaskDue](#test-startuptaskdue)). Only a run that succeeded counts, so a failed or skipped task is due again.                                                        |
+| `DayStartHour`  | `0` to `23`                                                   | `6`                                           | For `OncePerDay`: the hour a new day starts.                                                                                                                                                             |
+| `IntervalHours` | A number                                                      | `24`                                          | For `Interval`: the minimum hours between two successful runs.                                                                                                                                           |
+| `Elevation`     | `None`, `Relaunch`, `Prompt`, `Silent`                        | `None` (absent)                               | `None`: unelevated, and a command that asks for Administrator fails at once. `Relaunch`: such a command reruns itself in an Administrator tab. `Prompt`: the task starts elevated, one Windows consent dialog. `Silent`: no dialog, through an elevated scheduled task `Set-StartupTasks` registers. `Prompt` and `Silent` are refused on a task that has the `TerminalOpen` trigger. |
+| `Timeout`       | Seconds, `0` for no limit                                     | `600`                                         | How long the runner waits for the task before it moves on. The task itself is never stopped.                                                                                                              |
+| `Enabled`       | `$true`, `$false`                                             | `$true`                                       | `$false` parks the task.                                                                                                                                                                                 |
+
+```powershell
+# Configuration.local.psd1 - Startup.Tasks ships empty, so nothing runs until a task is listed
+Startup = @{
+    Conditions = @{
+        MyVpn = @{ Test = 'myvpn status *> $null; $LASTEXITCODE -eq 0'; Timeout = 120 }
+    }
+    Tasks      = @(
+        @{ Name = "RepositoryUpdate"; Command = "Update-Repositories -All -NoClone -Quiet"; Trigger = @("SignIn", "TerminalOpen"); Frequency = "OncePerDay"; Requires = @("Network"); Window = "Hidden"; Parallel = $true }
+        @{ Name = "MyTask"; Command = "Open-Workspace MyWorkspace"; Trigger = "SignIn"; Hostname = "LAPTOP-PERSONAL"; Requires = @("MyVpn") }
+    )
+}
+
+# Rehearse the next sign-in on this machine: what would run, and why the rest would not
+Invoke-StartupTasks -Trigger SignIn -WhatIf
+
+# Run the sign-in tasks now, exactly as the scheduled task does
+Invoke-StartupTasks -Trigger SignIn
+
+# Run only MyTask of a newly opened terminal, if it is due, and return its result
+Invoke-StartupTasks -Trigger TerminalOpen -Name MyTask -PassThru
+```
+
+**Where things show up.** The tabs of one `SignIn`, `Unlock` or `Wake` run share one Windows Terminal window (`WinuXStartup`), and so does the failure report, which is also kept as `Logs\.startup-report-<Trigger>.txt`. The runner itself has no window, so each task gets one line in its session log: finished, failed, timed out, skipped, handed off or delegated. A `TerminalOpen` run prints as it goes - the command's own output, a failure - and a silent skip moves no prompt.
+
+**Silent tasks.** A `Silent` task is delegated only when the runner is unelevated, the task is valid, enabled and in scope: its scheduled task is looked up as `\WinuX\StartupTask-Silent-<Name>-<Trigger>`. A `-WhatIf` rehearsal shows it like any other task.
+
+**The profile.** The startup stage `StartupTasks` queues two calls for the moment the first prompt is idle: [Register-StartupTaskPromptCheck](#register-startuptaskpromptcheck), then `Invoke-StartupTasks -Trigger TerminalOpen -RedrawPrompt`. The prompt check is registered first because a task whose command asks for Administrator privileges stops the action it runs in. Skip the stage for one shell with `$env:WINUX_STARTUP_SKIP = "StartupTasks"` ([Test-StartupStage](helper.md#test-startupstage)). The deprecated `RepositoryUpdate.Startup` keys still work here: `Get-StartupTaskDefinitions` turns them into a task named `RepositoryUpdate`.
+
+| Parameter       | Type       | Default  | Description                                                                             |
+| --------------- | ---------- | -------- | --------------------------------------------------------------------------------------- |
+| `-Trigger`      | `string`   | required | `SignIn`, `Unlock`, `Wake` or `TerminalOpen`. Positional.                               |
+| `-Name`         | `string[]` | -        | Run only the tasks with these names.                                                    |
+| `-RedrawPrompt` | `switch`   | off      | After a `TerminalOpen` run that printed something, draw the prompt again below it.      |
+| `-PassThru`     | `switch`   | off      | Return one result object per task. `-WhatIf` returns them without it.                   |
+
+**See also:** [Invoke-StartupTask](#invoke-startuptask), [Get-StartupTaskDefinitions](#get-startuptaskdefinitions), [Set-StartupTasks](bootstrap.md#set-startuptasks), [Register-StartupTaskPromptCheck](#register-startuptaskpromptcheck), [Test-StartupCondition](#test-startupcondition), [Restore-ShellPrompt](helper.md#restore-shellprompt), [Invoke-StartupTasks configuration guide](../configuration/guides/workflow/Invoke-StartupTasks.md), [Configuration Reference: Startup Tasks](../configuration/configuration-reference.md#startup-tasks)
+
 ## [Measure-WorkspaceOpen](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Workflow/Functions/Measure-WorkspaceOpen.ps1)
 
 - **Description:** The controlled experiment behind the `Open-Workspace` speed work: opens one workspace many times under alternating configuration variants and compares them. A single benchmark row cannot say whether a flag made an open faster, because the spread between two opens of the same configuration (a cold browser start against a warm one, a layout retry) is larger than any flag's effect, and comparing by hand means remembering which flag was on for which row and tearing down the same way every time. This function does the whole protocol itself. For every run it puts the variant's values into the live configuration, tears the machine down (`Kill-All -Skip Docker` by default, `-Teardown` for anything else), waits `-SettleSeconds`, opens the workspace through the real [Open-Workspace](#open-workspace) and takes the benchmark row that open appended ([Read-WorkspaceBenchmark](#read-workspacebenchmark)). Runs are **interleaved** by default - round 1 of every variant, then round 2 - so a slow hour hits every variant alike; `-Order Shuffled` randomizes each round (`-Seed` for reproducibility) and `-Order Sequential` is the order humans use and the one the experiment exists to avoid. `-WarmUp` opens (one by default) run first under the baseline and are recorded but never counted. Every configuration key the experiment touched is restored when it ends, finished or interrupted. Which variants run: without `-Variant`, the one-factor-at-a-time set over `-Setting` (all three layout flags by default) - the current configuration as `Baseline` plus one variant per setting with only that setting flipped; `-FullFactorial` runs every combination instead; `-Variant` runs exactly the hashtables given (configuration key to value, optional `Name`; any key, not only the three flags). Every open is appended to `WorkspaceOpenMeasurements.csv` beside the benchmark file ([Get-WorkspaceOpenMeasurementPath](#get-workspaceopenmeasurementpath)) with the session id, variant, round, project, the three flags in effect and the whole benchmark row - an open that produced no row is kept as `NoRow`, one that threw as `Error` - and the benchmark rows the opens append to `WorkspaceBenchmark.csv` carry `Source` `Measure-WorkspaceOpen <session>`, so [Get-WorkspaceBenchmark](#get-workspacebenchmark) leaves them out of the everyday history unless asked (`-IncludeMeasured`). The result is one summary per variant ([ConvertTo-WorkspaceOpenSummary](#convertto-workspaceopensummary)), printed and returned: measured runs, `Clean` (ended `Applied` on the first attempt), `Retries`, `NotApplied`, median/min/max total, the median total over the clean runs only, the medians of the phases the flags control (`Layout`, `FancyZones`, `Wait`, `Position+Snap`, `Verify`), and against the first variant `Effect` (seconds, negative is faster), `Spread` (the variant's own clean-run range) and a `Verdict` - `Noise` when the effect is inside the within-variant scatter, `Faster` or `Slower` otherwise - with a closing line that says how many variants are within the noise of the baseline. Medians, not averages, so one 40-second outlier does not decide the experiment; read `Retries` and `Clean` before the seconds, because a variant that wins the median by needing a retry every third run has not won. The table can be replayed any time with [Get-WorkspaceOpenMeasurement](#get-workspaceopenmeasurement). The workspace defaults to `Example`, which ships with WinuX (its `WorkspaceActions` entry and layout files), so a fresh install can run the experiment without defining a workspace first. Refuses a workspace whose actions include `Terminate-WindowsTerminalTabs -OnlyCurrent`/`-IncludeCurrent` (it would end the calling process and the experiment with it) and one whose `Open-Project` action has no project when `-Project` was not given (every open would stop at the project menu); a workspace that needs a project takes it positionally, like `Open-Workspace` does (`Measure-WorkspaceOpen Client MyProject`), and anything else on the command line is forwarded to `Open-Workspace` unchanged. Both checks look at the actions that will actually run here - the list goes through [Resolve-WorkspaceActions](#resolve-workspaceactions) first (with `-Project`, so `Project` scopes and `ProjectParameters` rows resolve for the measured projects), so a shell-exiting or project-less action scoped to another machine (`Machine` / `LayoutMachine`) or another project does not refuse the experiment, and a workspace whose every action is scoped elsewhere is refused instead of measured as a no-op. `-MaxMinutes` stops starting opens once the budget is spent and summarizes what ran. `-DryRun` prints the plan and changes nothing. Run it from a terminal you can leave alone: every open launches and lays out the whole workspace.
@@ -591,6 +754,33 @@ Read-WorkspaceOpenMeasurement | Group-Object Session, Variant
 ```
 
 **See also:** [Get-WorkspaceOpenMeasurement](#get-workspaceopenmeasurement), [ConvertTo-WorkspaceOpenSummary](#convertto-workspaceopensummary), [Read-WorkspaceOpenMeasurement](#read-workspaceopenmeasurement), [Get-WorkspaceBenchmark](#get-workspacebenchmark), [Read-WorkspaceBenchmark](#read-workspacebenchmark), [Write-WorkspaceBenchmark](#write-workspacebenchmark), [Open-Workspace](#open-workspace), [Kill-All](system.md#kill-all), [Apply-FancyZones](window.md#apply-fancyzones), [Set-WorkspaceWindowLayout](window.md#set-workspacewindowlayout)
+
+## [New-StartupTaskShellCommand](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Workflow/Functions/New-StartupTaskShellCommand.ps1)
+
+- **Description:** Builds the command line a new shell runs for a startup task, or for the startup runner. Startup tasks cross process borders - the scheduled task starts the runner, the runner starts a shell per task, and an elevation starts an Administrator one - and every one of those shells gets its work as one self-contained piece of PowerShell text, built here so the three callers ([Start-StartupTaskShell](#start-startuptaskshell), [Invoke-StartupTask](#invoke-startuptask) and [Set-StartupTasks](bootstrap.md#set-startuptasks)) agree on it. The text is, in order: with `-LoadProfile`, a prelude for a shell started with `pwsh -NoProfile`, which sets `WINUX_STARTUP_SKIP` to `-SkipStage`, dot-sources the profiles PowerShell itself would have loaded and removes the variable again so shells started later are not affected - that gives the shell the configuration, the modules and the aliases without the greeting, the prompt theme and the other interactive stages; with `-TaskShell`, a marker (`$global:WinuXStartupTaskShell`) that tells `Invoke-StartupTasks -Trigger TerminalOpen` and [Register-StartupTaskPromptCheck](#register-startuptaskpromptcheck) this shell belongs to a startup task, so the tasks of a newly opened terminal do not run in it; the work itself, which is `-Command` verbatim or, with `-Arguments`, a call of `Invoke-StartupTask` with exactly those parameters, travelling as JSON inside the text so nothing depends on a variable or a configuration value of the calling shell; and with `-ExitOn`, `exit` when the task's status is one of those named - how a task's tab closes itself - or with `-ExitAlways`, `exit` whatever the status. `-Encoded` returns the text as the Base64 string `pwsh -EncodedCommand` takes. Builds text only: it starts nothing.
+- **Parameters:** -Arguments, -Command, -LoadProfile, -SkipStage, -TaskShell, -ExitOn, -ExitAlways, -Encoded
+- **Usage:** `New-StartupTaskShellCommand -Arguments @{ Name = "MyTask"; Command = "Open-Workspace MyWorkspace" } -TaskShell -ExitOn Succeeded`, `New-StartupTaskShellCommand -Command "Invoke-StartupTasks -Trigger SignIn" -LoadProfile -ExitAlways -Encoded`
+
+| Parameter      | Type          | Default                  | Description                                                                                                              |
+| -------------- | ------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| `-Arguments`   | `IDictionary` | -                        | Parameters for `Invoke-StartupTask`. Values must survive JSON: strings, numbers, booleans, arrays and hashtables of those. Either this or `-Command`. |
+| `-Command`     | `string`      | -                        | PowerShell text to run in place of an `Invoke-StartupTask` call.                                                         |
+| `-LoadProfile` | `switch`      | off                      | Add the prelude for a shell started with `-NoProfile`.                                                                   |
+| `-SkipStage`   | `string[]`    | every interactive stage  | The profile stages the prelude skips: `Schema`, `Greeting`, `PSReadLine`, `Terminal-Icons`, `PSReadLineOptions`, `OhMyPosh`, `PowerPlan`, `LogMaintenance`, `StartupTasks`. `Aliases` stays, so a task's command can use them. |
+| `-TaskShell`   | `switch`      | off                      | Mark the shell as belonging to a startup task.                                                                           |
+| `-ExitOn`      | `string[]`    | -                        | Statuses after which the shell exits. Only with `-Arguments`.                                                            |
+| `-ExitAlways`  | `switch`      | off                      | Exit after the work whatever happened.                                                                                   |
+| `-Encoded`     | `switch`      | off                      | Return the Base64 form for `pwsh -EncodedCommand`.                                                                       |
+
+```powershell
+# The text of a tab that runs MyTask and closes itself when it succeeded
+New-StartupTaskShellCommand -Arguments @{ Name = "MyTask"; Command = "Open-Workspace MyWorkspace" } -TaskShell -ExitOn Succeeded
+
+# What the sign-in scheduled task hands to pwsh
+New-StartupTaskShellCommand -Command "Invoke-StartupTasks -Trigger SignIn" -LoadProfile -ExitAlways -Encoded
+```
+
+**See also:** [Start-StartupTaskShell](#start-startuptaskshell), [Invoke-StartupTask](#invoke-startuptask), [Set-StartupTasks](bootstrap.md#set-startuptasks), [Test-StartupStage](helper.md#test-startupstage)
 
 ## [Open-DnD](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Workflow/Functions/Open-DnD.ps1)
 
@@ -841,6 +1031,21 @@ Set-LogLevel Verbose { w MyWorkspace }
 
 **See also:** [Get-WorkspaceOpenMeasurement](#get-workspaceopenmeasurement), [ConvertTo-WorkspaceOpenSummary](#convertto-workspaceopensummary), [Measure-WorkspaceOpen](#measure-workspaceopen), [Read-WorkspaceBenchmark](#read-workspacebenchmark)
 
+## [Register-StartupTaskPromptCheck](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Workflow/Functions/Register-StartupTaskPromptCheck.ps1)
+
+- **Description:** Makes an open shell run its once-a-day startup tasks at its first prompt after the day starts. A startup task with the `TerminalOpen` trigger and `Frequency = "OncePerDay"` runs in the first shell opened each day; a shell that was already open when the day began - a terminal left open overnight, a machine woken from sleep - never opens again, and this function makes such a shell look again at its next prompt. It wraps the current global `prompt` function (the Oh My Posh prompt, or whatever the profile defined) with [Invoke-StartupTaskPromptCheck](#invoke-startuptaskpromptcheck) and records the original plus the next day boundary in `$global:WinuXStartupTaskPrompt`: the earliest moment at which one of those tasks starts a new day (its `DayStartHour`, today or tomorrow). Until then every prompt costs one time comparison; the first prompt after it runs [Invoke-StartupTasks](#invoke-startuptasks) `-Trigger TerminalOpen`, which decides for real (stamp, lock), and moves the boundary on. Does nothing when no valid, enabled task in this machine's scope ([Get-StartupTaskDefinitions](#get-startuptaskdefinitions)) has `TerminalOpen` with `OncePerDay` - every other frequency is only checked when a shell starts - and nothing in a shell that belongs to a startup task. Calling it again (`Reload-PowerShellProfile`) never wraps the prompt twice: an already wrapped prompt only gets its boundary refreshed, and a prompt the profile defined again is wrapped afresh. The profile calls it from the idle-time hook (startup stage `StartupTasks`), right before `Invoke-StartupTasks -Trigger TerminalOpen`. Replaces the deprecated [Register-RepositoryUpdatePromptCheck](git.md#register-repositoryupdatepromptcheck), doing for every once-a-day `TerminalOpen` task what that one did for the repository update.
+- **Usage:** `Register-StartupTaskPromptCheck`
+
+```powershell
+# From now on, the first prompt after the next day starts runs the once-a-day tasks
+Register-StartupTaskPromptCheck
+
+# When will this shell look again?
+$global:WinuXStartupTaskPrompt.NextCheck
+```
+
+**See also:** [Invoke-StartupTaskPromptCheck](#invoke-startuptaskpromptcheck), [Invoke-StartupTasks](#invoke-startuptasks), [Test-StartupTaskDue](#test-startuptaskdue), [Reload-PowerShellProfile](system.md#reload-powershellprofile)
+
 ## [Resolve-DockerComposeStackPath](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Workflow/Functions/Resolve-DockerComposeStackPath.ps1)
 
 - **Description:** The one place a `Configuration.DockerComposeFiles` entry becomes a file path: a rooted value is used as-is, a relative one is joined under `MachineSpecificPaths.DockerDirectory`. Returns `$null` for a name that is not a configured stack, so callers can branch without reading the map themselves, and it deliberately does not check that the file exists - [Start-Containers](#start-containers) reports a missing file per stack and [DockerWizard](#dockerwizard) turns a missing file into a failed start, and those two messages are not interchangeable.
@@ -1061,6 +1266,79 @@ Start-Containers -Stop -Down
 
 **See also:** [DockerWizard](#dockerwizard), [Docker-Cleanup](#docker-cleanup), [Resolve-DockerComposeStackPath](#resolve-dockercomposestackpath), [Resolve-ProjectDockerCompose](#resolve-projectdockercompose), [Run-Project](helper.md#run-project)
 
+## [Start-StartupTaskShell](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Workflow/Functions/Start-StartupTaskShell.ps1)
+
+- **Description:** Starts the shell a startup task runs in: a terminal tab, or a hidden shell. [Invoke-StartupTask](#invoke-startuptask) calls this for a task whose `Window` is `Tab` or `Hidden`; the new shell runs `Invoke-StartupTask` again with `-Arguments`, this time inline, and reports through the task's result file ([Wait-StartupTaskResult](#wait-startuptaskresult)). This function only starts the shell and never waits for it. `Tab`: [Open-Terminal](application.md#open-terminal) opens a tab in the Windows Terminal window named by `-WindowId`, so the tabs of one startup share a window, and the tab's shell loads the profile as any terminal does. When the task is over the tab closes itself according to `-KeepOpen`: `OnFailure` (default) closes it unless the task failed, was skipped or was handed off, `Never` always closes it, and `Always` leaves it. A task without a `Command` is a plain terminal: its shell is not marked as a task shell, so the tasks of a newly opened terminal run in it as in any other. `Hidden`: `pwsh` starts with no window and `-NonInteractive`, loads the profile without its interactive stages ([New-StartupTaskShellCommand](#new-startuptaskshellcommand) `-LoadProfile`) and exits when the task is over, so nothing in it can ask a question. `-Administrator` starts the shell elevated - `Open-Terminal -Administrator` for a tab, `Start-Process -Verb RunAs` for a hidden shell - which raises the Windows consent dialog unless the caller is elevated already; a declined dialog throws, and `Invoke-StartupTask` reports it as the task's failure.
+- **Parameters:** -Name, -Arguments, -Window (Tab, Hidden), -KeepOpen (OnFailure, Always, Never), -Administrator, -WindowId
+- **Usage:** `Start-StartupTaskShell -Name MyTask -Arguments @{ Name = "MyTask"; Command = "Open-Workspace MyWorkspace"; Window = "Current"; ResultFile = $resultFile }`, `Start-StartupTaskShell -Name MyTask -Arguments $arguments -Window Hidden`
+
+| Parameter        | Type          | Default        | Description                                                                                                                    |
+| ---------------- | ------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `-Name`          | `string`      | required       | The task's name, for messages.                                                                                                 |
+| `-Arguments`     | `IDictionary` | required       | The parameters the new shell passes to `Invoke-StartupTask`. Must hold `Window = "Current"` and the `ResultFile` the caller waits on. |
+| `-Window`        | `string`      | `Tab`          | `Tab` or `Hidden`.                                                                                                             |
+| `-KeepOpen`      | `string`      | `OnFailure`    | `OnFailure`, `Always` or `Never`. Only a tab can stay open.                                                                    |
+| `-Administrator` | `switch`      | off            | Start the shell elevated.                                                                                                      |
+| `-WindowId`      | `string`      | `WinuXStartup` | The Windows Terminal window the tab opens in.                                                                                  |
+
+An `OnFailure` tab closes on `Succeeded`, `NotDue`, `Disabled`, `OutOfScope` and `AlreadyRunning`; any other status leaves it open so its output can be read.
+
+**See also:** [Invoke-StartupTask](#invoke-startuptask), [Wait-StartupTaskResult](#wait-startuptaskresult), [New-StartupTaskShellCommand](#new-startuptaskshellcommand), [Open-Terminal](application.md#open-terminal)
+
+## [Test-StartupCondition](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Workflow/Functions/Test-StartupCondition.ps1)
+
+- **Description:** Waits until a named startup condition is met, or its timeout passes, and returns whether it was met in time. A startup task lists the conditions it needs in `Requires` (the network, a VPN, a service), and each name is an entry of `Startup.Conditions`: `@{ Test; Timeout; Interval }`. `Test` is a command line, and the condition is met when its output is truthy, exactly like the condition of an `if`: `$true`, a non-empty string, a process object. A command that throws, or prints nothing, has not met it; for a program whose exit code is the answer, end the test with `$LASTEXITCODE -eq 0`. Errors the test writes are not shown, and the caller's `$LASTEXITCODE` is put back afterwards. The test runs every `Interval` seconds (default 2) until it is met or `Timeout` seconds (default 60) have passed, announcing the wait once; a `Timeout` of 0 tests once. `-NoWait` tests once whatever the timeout says - what a `TerminalOpen` run does and what `Invoke-StartupTasks -WhatIf` shows. A name with no entry, an entry without `Test` or a test that does not parse is reported and counts as not met, so a typo never lets a task run early. [Invoke-StartupTask](#invoke-startuptask) calls it for every `-Requires` name; the base configuration ships `Network` as the example condition.
+- **Parameters:** -Name, -Definitions, -NoWait
+- **Usage:** `Test-StartupCondition -Name Network`, `Test-StartupCondition -Name MyVpn -NoWait`
+
+| Parameter      | Type          | Default              | Description                                                                              |
+| -------------- | ------------- | -------------------- | ---------------------------------------------------------------------------------------- |
+| `-Name`        | `string`      | required             | The condition's name, as written in a task's `Requires`. Positional.                     |
+| `-Definitions` | `IDictionary` | `Startup.Conditions` | The conditions to look the name up in: name => `@{ Test; Timeout; Interval }`.           |
+| `-NoWait`      | `switch`      | off                  | Test once and return, without waiting for the timeout.                                   |
+
+```powershell
+# Configuration.local.psd1 - a condition of your own, next to the shipped Network
+Startup = @{
+    Conditions = @{
+        MyVpn = @{ Test = 'myvpn status *> $null; $LASTEXITCODE -eq 0'; Timeout = 120; Interval = 2 }
+    }
+}
+
+# Wait up to the configured timeout for the network, and return whether it came up
+Test-StartupCondition -Name Network
+
+# Is MyVpn up right now?
+Test-StartupCondition -Name MyVpn -NoWait
+```
+
+**See also:** [Invoke-StartupTask](#invoke-startuptask), [Invoke-StartupTasks](#invoke-startuptasks), [Get-StartupTaskDefinitions](#get-startuptaskdefinitions), [Test-StartupCondition configuration guide](../configuration/guides/workflow/Test-StartupCondition.md)
+
+## [Test-StartupTaskDue](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Workflow/Functions/Test-StartupTaskDue.ps1)
+
+- **Description:** Tells whether a startup task should run now, given its frequency and its stamp file - the frequency check of [Invoke-StartupTask](#invoke-startuptask), which asks twice: at its gates, and again once it holds the task's lock, because another shell may have finished a run in between. A task writes its stamp file only after a run that succeeded, so a run that failed, was skipped for a condition or never finished is due again at the next trigger, and a missing stamp is always due. `EveryTime` (default) is always due and the stamp is not read. `OncePerBoot` is due when the stamp is older than `-BootTime`; with Windows Fast Startup a shutdown is a hibernation, so the boot time only moves on a restart. `OncePerDay` is due when the stamp is older than the start of the current day - today at `-DayStartHour`:00, or yesterday at that hour while it is still earlier than that - so work past midnight never counts as a new day. `Interval` is due when the stamp is at least `-IntervalHours` old, and an interval of 0 or less is always due. Replaces the deprecated [Test-RepositoryUpdateStampFresh](git.md#test-repositoryupdatestampfresh) and [Get-RepositoryUpdateDayStart](git.md#get-repositoryupdatedaystart).
+- **Parameters:** -StampFile, -Frequency (EveryTime, OncePerBoot, OncePerDay, Interval), -DayStartHour, -IntervalHours, -Now, -BootTime
+- **Usage:** `Test-StartupTaskDue -StampFile (Join-Path (Get-LogPath -Directory) ".startup-task-MyTask.stamp") -Frequency OncePerDay`, `Test-StartupTaskDue -StampFile $stamp -Frequency Interval -IntervalHours 4`
+
+| Parameter        | Type       | Default                              | Description                                                                          |
+| ---------------- | ---------- | ------------------------------------ | ------------------------------------------------------------------------------------ |
+| `-StampFile`     | `string`   | required                             | Full path of the task's stamp file (`Logs\.startup-task-<Name>.stamp`).              |
+| `-Frequency`     | `string`   | `EveryTime`                          | `EveryTime`, `OncePerBoot`, `OncePerDay` or `Interval`.                              |
+| `-DayStartHour`  | `int`      | `6`                                  | The hour (0-23) a new day starts, for `OncePerDay`.                                  |
+| `-IntervalHours` | `double`   | `24`                                 | Minimum hours between two successful runs, for `Interval`.                           |
+| `-Now`           | `datetime` | the current time                     | The moment to decide for; a parameter so tests need no clock.                        |
+| `-BootTime`      | `datetime` | the current time minus the uptime    | When the machine started, for `OncePerBoot`.                                         |
+
+```powershell
+# $false when MyTask already succeeded since 06:00 today (or since 06:00 yesterday, before 06:00)
+Test-StartupTaskDue -StampFile (Join-Path (Get-LogPath -Directory) ".startup-task-MyTask.stamp") -Frequency OncePerDay
+
+# $true when the last successful run is four hours old or older
+Test-StartupTaskDue -StampFile $stamp -Frequency Interval -IntervalHours 4
+```
+
+**See also:** [Invoke-StartupTask](#invoke-startuptask), [Register-StartupTaskPromptCheck](#register-startuptaskpromptcheck), [Get-LogPath](logging.md#get-logpath)
+
 ## [Test-TerminalTabsAlreadyOpen](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Workflow/Functions/Test-TerminalTabsAlreadyOpen.ps1)
 
 - **Description:** Checks which expected terminal tabs are already open by reading every Windows Terminal window's tab titles via UI Automation - no focus changes, no keystrokes. When UI Automation cannot read a window's tabs, the legacy pass takes over and cycles that window with Ctrl+Tab. Returns a PSCustomObject with `AllOpen` (bool) and `FoundTabs` (array) so callers can decide whether to skip entirely or open only the missing tabs. Reports partially open projects with a list of missing tab names.
@@ -1103,6 +1381,29 @@ The backup script and its directory live outside this WinuX repository, so the a
 # Run the training backup script
 Training-Backup
 ```
+
+## [Wait-StartupTaskResult](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Workflow/Functions/Wait-StartupTaskResult.ps1)
+
+- **Description:** Waits for a startup task that runs in another shell, and returns how it ended. A startup task started in its own tab or hidden shell reports through its result file (`Logs\.startup-task-<Name>.result`, JSON): [Invoke-StartupTask](#invoke-startuptask) writes a `Running` record with the shell's process id once it holds the task's lock, and the final record when the task is over. This function reads that file until one of three things happens. A final record is there: its `Status` and `Reason` are returned. The record says `Running` but the shell is gone: the task closed its own shell - a workspace that ends by closing its terminal tab does exactly that - so it counts as finished, the status is `Ended`, and with `-StampFile` the task's stamp is written, as after a success. Or `-Timeout` seconds pass: the status is `TimedOut`, nothing is stopped, and the task may still finish later and write its own stamp. A record that cannot be read yet (the file is being written) is simply read again. Returns one object with `Name`, `Status`, `Reason` and `ResultFile`. `Invoke-StartupTask` calls it for a `Tab` or `Hidden` run, and [Invoke-StartupTasks](#invoke-startuptasks) at the end of its run for every task it started with `Parallel`.
+- **Parameters:** -Name, -ResultFile, -Timeout, -StampFile, -PollMilliseconds
+- **Usage:** `Wait-StartupTaskResult -Name MyTask -ResultFile $resultFile -Timeout 120`
+
+The shell counts as alive when a process with the recorded id exists and started when the record says it did (within two seconds) - the start time guards against Windows handing the id to another process.
+
+| Parameter           | Type     | Default  | Description                                                                         |
+| ------------------- | -------- | -------- | ----------------------------------------------------------------------------------- |
+| `-Name`             | `string` | required | The task's name, for the returned object.                                           |
+| `-ResultFile`       | `string` | required | Full path of the task's result file.                                                |
+| `-Timeout`          | `double` | `600`    | Seconds to wait; `0` waits without limit.                                           |
+| `-StampFile`        | `string` | -        | The task's stamp file, written when the task's shell ended without a final record.  |
+| `-PollMilliseconds` | `int`    | `250`    | How often the result file is read (1-60000).                                        |
+
+```powershell
+# Wait up to two minutes for MyTask and return its final status
+Wait-StartupTaskResult -Name MyTask -ResultFile (Join-Path (Get-LogPath -Directory) ".startup-task-MyTask.result") -Timeout 120
+```
+
+**See also:** [Invoke-StartupTask](#invoke-startuptask), [Invoke-StartupTasks](#invoke-startuptasks), [Start-StartupTaskShell](#start-startuptaskshell)
 
 ## [Write-WorkspaceBenchmark](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Workflow/Functions/Write-WorkspaceBenchmark.ps1)
 

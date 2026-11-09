@@ -1301,7 +1301,8 @@ Anything other than the three valid values is reported as unknown rather than si
   `RepositoryUpdate` (clones and pulls every repository the machine's `RepositoryUpdateScope`
   names, which reaches outside this repository the moment it runs - forks that want the previous
   always-on behaviour set it `$true`; how each repository is updated, including whether the default
-  branch is fast-forwarded too, follows [`RepositoryUpdate`](#repository-update)), `LockedStartLayout`. Per invocation,
+  branch is fast-forwarded too, follows [`RepositoryUpdate`](#repository-update)), `LockedStartLayout`.
+  `StartupTasks` is one of the steps that default on: right after `SymbolicLinks` it runs `Set-StartupTasks`, which registers the scheduled tasks behind the [startup tasks](#startup-tasks) of the `SignIn`, `Unlock` and `Wake` triggers and removes the ones nothing needs any more - nothing at all while `Startup.Tasks` is empty. Per invocation,
   `Bootstrap -Skip <steps>` / `-Include <steps>` override this config. The full step list in execution
   order is documented next to the section in `Configuration.psd1`. Every
   deprecated key or step name still in use is reported by `Test-ConfigurationSchema` at every
@@ -1649,7 +1650,11 @@ AutoElevate = $true
 
 Keys and step names that still work but are removed in the next MAJOR release ([VERSIONING.md](https://github.com/IvanPavlak/WinuX/blob/master/Windows/VERSIONING.md), Deprecation policy). `Test-ConfigurationSchema` reports every one still in use - at every profile load and at the start of every `Bootstrap` - as one warning naming the key, the release that deprecated it, the removal and the replacement. A deprecation is never an error, not even under `-Strict`. A key the base still ships is reported only when it differs from the shipped default, so a vanilla configuration stays silent.
 
-There are none currently. The keys removed by a MAJOR release, with their migration, are listed under its `### Removed` section in the changelog.
+| Key | Deprecated since | Removed in | Replacement |
+| --- | ---------------- | ---------- | ----------- |
+| `RepositoryUpdate.Startup` (`Enabled`, `Schedule`, `DayStartHour`, `IntervalHours`, `Scope`) | 2.12.0 | 3.0.0 | One [`Startup.Tasks`](#startup-tasks) entry: `@{ Name = "RepositoryUpdate"; Command = "Update-Repositories -All -NoClone -Quiet"; Trigger = "TerminalOpen"; Frequency = "OncePerDay" }`. `Schedule = "Interval"` becomes `Frequency = "Interval"` with `IntervalHours`; a per-machine `Scope` becomes one task per scope, with `Machine` and `-Group`. The warning is raised for `RepositoryUpdate.Startup.Enabled` once it is `$true`. Migration: [Repository Update](#repository-update). |
+
+The keys removed by a MAJOR release, with their migration, are listed under its `### Removed` section in the changelog.
 
 ---
 
@@ -1745,7 +1750,7 @@ RepositoryGroups = @(
 
 ## Repository Update
 
-**How** the repositories in [`RepositoryGroups`](#repository-groups) are updated, and whether the shell refreshes them on its own. `RepositoryGroups` says which repositories exist; this section changes no list. Everything ships **off**.
+**How** the repositories in [`RepositoryGroups`](#repository-groups) are updated. `RepositoryGroups` says which repositories exist; this section changes no list. Everything ships **off**. Whether the machine refreshes them on its own is a startup task since 2.12.0 - see [Startup Tasks](#startup-tasks); the `Startup` keys below are the deprecated way to say it.
 
 **Key:** `RepositoryUpdate` → Hashtable
 
@@ -1754,7 +1759,7 @@ RepositoryUpdate = @{
     IncludeDefaultBranch = $false   # also fast-forward the default branch
     DefaultBranch        = ""       # "" => origin/HEAD => skipped
     ArchiveRoot          = ""       # where -Archive lands: "" => the Desktop
-    Startup              = @{
+    Startup              = @{       # DEPRECATED since 2.12.0, removed in 3.0.0 - use a Startup.Tasks entry
         Enabled       = $false      # automatic update after the first prompt
         Schedule      = "Daily"     # "Daily" (once a day) or "Interval"
         DayStartHour  = 6           # Daily: the hour a new day starts
@@ -1769,13 +1774,117 @@ RepositoryUpdate = @{
 | `IncludeDefaultBranch` | bool | `$false` | After the checked-out branch is pulled, also fast-forward the repository's default branch with `git fetch origin <default>:<default>`. Git refuses anything but a fast-forward and the working tree and stash are never touched. A default branch that was never checked out locally is skipped, never created. `Update-Repositories -IncludeDefaultBranch` or `-IncludeDefaultBranch:$false` overrides it for one call. The Bootstrap repository step follows it too. |
 | `DefaultBranch` | string | `""` | The default branch's name. Empty uses what the remote reports (`refs/remotes/origin/HEAD`); when the remote reports nothing the step is skipped with a warning. Leave it empty when your repositories do not share one default branch. Replaces `BootstrapConfig.DefaultBranch`, which was removed in 0.1.86 (it was never read). |
 | `ArchiveRoot` | string | `""` | Where `Update-Repositories -Archive` lands: an absolute path, or a path relative to the Desktop (`"repos"`). Empty is the Desktop. No placeholders. `-InCurrentDirectory` replaces it for one call. An entry's `ArchiveFolder` in [`RepositoryGroups`](#repository-groups) nests below it, a relative path of any depth with either slash; without one the copy lands in the root itself. |
-| `Startup.Enabled` | bool | `$false` | Update repositories automatically once the first prompt of a shell is drawn (profile stage `RepositoryUpdate`, deferred until the shell is idle). Never clones a missing repository and never asks for Administrator. Prints one line per repository plus a totals line. |
-| `Startup.Schedule` | string | `"Daily"` | When an automatic run is due, tracked by the stamp file `Logs\.last-repository-update`. `"Daily"`: once per day - the first shell after the day starts runs it, and a shell already open then (a terminal left open overnight, a machine woken from sleep) runs it at its first prompt after the day starts (`Register-RepositoryUpdatePromptCheck`), so it never starts on its own in the middle of the day. `"Interval"`: at most once per `IntervalHours`, counted from the last run and checked only when a shell starts. Anything else reads as `"Daily"`. Either way the stamp records the last run, so a machine that was off for days updates on its first shell back. |
-| `Startup.DayStartHour` | int | `6` | Daily only. The hour (0-23) a new day starts: a shell opened before it still counts as the day before, so late work past midnight never triggers a run. Out of range or not a number reads as `6`. |
-| `Startup.IntervalHours` | int | `24` | Interval only. Minimum hours between two automatic runs; `0` runs it in every shell. |
-| `Startup.Scope` | hashtable | absent | Which groups the automatic run updates, per machine type, in the same shape as [`BootstrapConfig.RepositoryUpdateScope`](#bootstrapconfig): `"All"`, a group name, a comma-separated string or an array, with a `Default` fallback. Absent falls back to `BootstrapConfig.RepositoryUpdateScope`, then to `"All"`. |
+| `Startup` | hashtable | see below | **Deprecated since 2.12.0, removed in 3.0.0.** The automatic update is a [startup task](#startup-tasks) now. Still honoured until then: while `Startup.Enabled` is `$true` and no startup task is named `RepositoryUpdate`, `Get-StartupTaskDefinitions` adds one that does what the keys below describe. |
+| `Startup.Enabled` | bool | `$false` | Deprecated. Update repositories automatically once the first prompt of a shell is drawn (profile stage `StartupTasks`, deferred until the shell is idle). Never clones a missing repository and never asks for Administrator. Prints one line per repository plus a totals line. Setting it `$true` is what `Test-ConfigurationSchema` warns about. |
+| `Startup.Schedule` | string | `"Daily"` | Deprecated. `"Daily"` (carried over as `Frequency = "OncePerDay"`): once per day - the first shell after the day starts runs it, and a shell already open then (a terminal left open overnight, a machine woken from sleep) runs it at its first prompt after the day starts. `"Interval"` (carried over as `Frequency = "Interval"`): at most once per `IntervalHours`, checked only when a shell starts. Anything else reads as `"Daily"`. Either way a machine that was off for days updates on its first shell back. The run is tracked by the startup task's stamp, `Logs\.startup-task-RepositoryUpdate.stamp`, written only after a run that succeeded; `Logs\.last-repository-update` is no longer written. |
+| `Startup.DayStartHour` | int | `6` | Deprecated. Daily only. The hour (0-23) a new day starts: a shell opened before it still counts as the day before. Out of range or not a number reads as `6`. |
+| `Startup.IntervalHours` | int | `24` | Deprecated. Interval only. Minimum hours between two automatic runs; `0` runs it in every shell. |
+| `Startup.Scope` | hashtable | absent | Deprecated. Which groups the automatic run updates, per machine type, in the same shape as [`BootstrapConfig.RepositoryUpdateScope`](#bootstrapconfig): `"All"`, a group name, a comma-separated string or an array, with a `Default` fallback. Absent falls back to `BootstrapConfig.RepositoryUpdateScope`, then to `"All"`. |
 
-**Consumer functions:** `Update-Repositories` (`IncludeDefaultBranch`, `ArchiveRoot`), `Resolve-RepositoryDefaultBranch` (`DefaultBranch`), `Get-RepositoryUpdateStartupSettings` (`Startup`, for `Invoke-StartupRepositoryUpdate` and `Register-RepositoryUpdatePromptCheck`), `Invoke-StartupRepositoryUpdate` (`Startup.Scope`)
+**Migrating `Startup`:** replace the block with one [`Startup.Tasks`](#startup-tasks) entry, then delete it.
+
+```powershell
+# Before (deprecated)
+RepositoryUpdate = @{
+    Startup = @{ Enabled = $true; Schedule = "Daily"; DayStartHour = 6 }
+}
+
+# After
+Startup = @{
+    Tasks = @(
+        @{ Name = "RepositoryUpdate"; Command = "Update-Repositories -All -NoClone -Quiet"; Trigger = "TerminalOpen"; Frequency = "OncePerDay" }
+    )
+}
+```
+
+`Schedule = "Interval"` becomes `Frequency = "Interval"` with `IntervalHours`. A per-machine `Scope` becomes one task per scope: `Machine` says where the task runs, and its command names the groups (`Update-Repositories -Group Private -NoClone -Quiet`). Keep one task named `RepositoryUpdate` - that name is what switches the carry-over of the old keys off. The full walk is on the [Invoke-StartupRepositoryUpdate](guides/git/Invoke-StartupRepositoryUpdate.md) guide.
+
+**Consumer functions:** `Update-Repositories` (`IncludeDefaultBranch`, `ArchiveRoot`), `Resolve-RepositoryDefaultBranch` (`DefaultBranch`), `Get-StartupTaskDefinitions` (`Startup`, deprecated: carried over as the startup task `RepositoryUpdate`), and the deprecated `Get-RepositoryUpdateStartupSettings` (`Startup`, for `Register-RepositoryUpdatePromptCheck`)
+
+---
+
+## Startup Tasks
+
+Commands this machine runs on its own: at sign-in, at unlock, after waking from sleep, or when a terminal opens. `Tasks` ships **empty**, so nothing runs until `Configuration.local.psd1` lists a task. Nothing runs before sign-in: a task needs your desktop and your saved credentials.
+
+**Key:** `Startup` → Hashtable
+
+```powershell
+Startup = @{
+    Tasks         = @()             # the startup tasks, run in the order written
+    Conditions    = @{              # named tests a task can require
+        Network = @{
+            Test     = '[bool](Get-NetConnectionProfile -ErrorAction SilentlyContinue | Where-Object { $_.IPv4Connectivity -eq "Internet" -or $_.IPv6Connectivity -eq "Internet" })'
+            Timeout  = 60
+            Interval = 2
+        }
+    }
+    FailureReport = "Tab"           # "Tab" or "None"
+}
+```
+
+Hashtables deep-merge, so a `Conditions` entry of yours is added beside `Network`; the `Tasks` array replaces wholesale, so your local file holds the complete list.
+
+### Tasks
+
+**Key:** `Startup.Tasks` → Array of hashtables, run in the order they are written. Each entry is exactly a set of parameters for `Invoke-StartupTask`. An entry that breaks a rule (an unknown key, a missing or repeated `Name`, an unknown value, a number out of range, a `Requires` name with no condition) is reported at every run and never started.
+
+| Key | Type | Default | What it controls |
+| --- | ---- | ------- | ---------------- |
+| `Name` | string | required | Unique. Letters, digits, `-` and `_`, starting with a letter or digit. Names the task's state files in the Logs directory (`.startup-task-<Name>.stamp`, `.lock`, `.result`) and, for `Elevation = "Silent"`, its scheduled task. |
+| `Command` | string | none | The command line to run, as typed at a prompt (aliases and functions work). Without one the task just opens a terminal. A command has failed only when it throws: an error it merely writes, or a non-zero exit code, does not count. |
+| `Trigger` | string or array | required | One or several of `"SignIn"` (this user signs in), `"Unlock"` (this user unlocks the workstation), `"Wake"` (the machine resumes from sleep; listens for the System log's Power-Troubleshooter event 1), `"TerminalOpen"` (the first prompt of a new shell is drawn). `"Boot"` is rejected. The first three are fired by the scheduled tasks `Set-StartupTasks` registers; `TerminalOpen` by the profile stage `StartupTasks`. |
+| `Machine` | string | absent (every machine) | Machine scope such as `"PC/Laptop"`, matched by `Test-MachineTypeScope` like everywhere else; an unknown token is reported and never matches. |
+| `Hostname` | string or array | absent (every machine) | One or several computer names (`$env:COMPUTERNAME`). With `Machine`, both must match. |
+| `Requires` | array of strings | `@()` | Names of [`Conditions`](#conditions) entries the task waits for. One that is not met in time makes the task `Skipped`. |
+| `Window` | string | `"Tab"` | Where a SignIn, Unlock or Wake run happens: `"Tab"` (a tab of the Windows Terminal window `WinuXStartup`, profile and greeting included) or `"Hidden"` (a shell with no window that cannot ask a question). A TerminalOpen run is always inline, in the shell that just opened. |
+| `KeepOpen` | string | `"OnFailure"`; `"Always"` without a `Command` | Whether the task's tab stays when the task is over: `"OnFailure"` closes it unless the task failed, was skipped or was handed off to an Administrator tab; `"Always"`; `"Never"`. |
+| `Parallel` | bool | `$false` | `$true` starts the task and goes on to the next without waiting; it is collected when the others are done. |
+| `Frequency` | string | `"EveryTime"` | `"EveryTime"`, `"OncePerBoot"` (with Windows Fast Startup only a restart counts), `"OncePerDay"` or `"Interval"`. Measured from the stamp file, which is written only after a run that succeeded, so a failed or skipped task is due again at the next trigger. A TerminalOpen task with `"OncePerDay"` also runs in a shell left open overnight, at its first prompt after the day starts. |
+| `DayStartHour` | int | `6` | `OncePerDay` only. The hour (0-23) a new day starts; before it the day is still yesterday's, so work past midnight never counts as a new day. |
+| `IntervalHours` | number | `24` | `Interval` only. Minimum hours between two successful runs; `0` or less is always due. |
+| `Elevation` | string | absent (unelevated) | Absent (or `"None"`): the task runs unelevated, and a command that asks for Administrator fails at once with a message naming this key. `"Relaunch"`: such a command reruns itself in an Administrator tab (Windows asks for consent). `"Prompt"`: the task starts elevated, one Windows consent dialog. `"Silent"`: no dialog - `Set-StartupTasks` copies the command, its options and the conditions it requires into an elevated scheduled task of its own, frozen until `Set-StartupTasks` runs again. **`Silent` is a standing way to run that command as Administrator; use it deliberately.** `"Prompt"` and `"Silent"` are refused on a task that has the `TerminalOpen` trigger. |
+| `Timeout` | number | `600` | Seconds the runner waits for the task before it moves on; `0` waits without limit. The task itself is never stopped. |
+| `Enabled` | bool | `$true` | `$false` parks the task. |
+
+Every task takes a lock for the length of its run, so the same task never runs twice at once, whichever trigger or shell asks.
+
+### Conditions
+
+**Key:** `Startup.Conditions` → Hashtable of `<Name> = @{ Test; Timeout; Interval }`. A task names the ones it needs in `Requires`.
+
+| Key | Type | Default | What it controls |
+| --- | ---- | ------- | ---------------- |
+| `Test` | string | required | A command line. The condition is met when its output is truthy, like the condition of an `if`. A test that throws, prints nothing or does not parse has not met it. For a program whose exit code is the answer, end the test with `$LASTEXITCODE -eq 0`. |
+| `Timeout` | number | `60` | Seconds to keep testing. `0` tests once. A TerminalOpen run tests once and never waits, whatever this says. |
+| `Interval` | number | `2` | Seconds between two tests. |
+
+`Network` ships as the example: met when a network connection profile reports Internet connectivity.
+
+### FailureReport
+
+**Key:** `Startup.FailureReport` → `"Tab"` (default) or `"None"`. With `"Tab"`, after a SignIn, Unlock or Wake run in which a task failed, was skipped for a condition or timed out, one terminal tab lists them. With `"None"` they are only in the runner's session log. A TerminalOpen run prints its problems in the shell it runs in.
+
+**Consumer functions:** `Invoke-StartupTasks` and `Invoke-StartupTask` (run the tasks), `Get-StartupTaskDefinitions` (reads and validates `Tasks`), `Test-StartupCondition` (`Conditions`), `Set-StartupTasks` (the scheduled tasks behind SignIn, Unlock and Wake - run it, or Bootstrap, when the first task of one of those triggers is added, and after every change to a `Silent` task), `Register-StartupTaskPromptCheck` (TerminalOpen tasks that run once per day), `Test-ConfigurationSchema` (the shape of the section only)
+
+**Example (opt-in via `Configuration.local.psd1`):**
+
+```powershell
+Startup = @{
+    Conditions = @{
+        MyVpn = @{ Test = 'myvpn status *> $null; $LASTEXITCODE -eq 0'; Timeout = 120 }
+    }
+    Tasks      = @(
+        @{ Name = "RepositoryUpdate"; Command = "Update-Repositories -All -NoClone -Quiet"
+           Trigger = @("SignIn", "TerminalOpen"); Frequency = "OncePerDay"
+           Requires = @("Network"); Window = "Hidden"; Parallel = $true }
+        @{ Name = "MyWorkspace"; Command = "Open-Workspace MyWorkspace"; Trigger = "SignIn"
+           Hostname = "LAPTOP-PERSONAL"; Requires = @("MyVpn") }
+    )
+}
+```
+
+See [Invoke-StartupTasks](guides/workflow/Invoke-StartupTasks.md) for the walkthrough, from a first task to checking that it ran, and [Set-StartupTasks](guides/bootstrap/Set-StartupTasks.md) for the scheduled tasks.
 
 ---
 

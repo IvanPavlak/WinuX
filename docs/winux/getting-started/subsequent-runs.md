@@ -28,6 +28,7 @@ Bootstrap is **idempotent** - safe to run multiple times:
 | **Package Installation**  | Installs new apps from CSV, skips existing     |
 | **Upgrade-All**           | Updates packages of every manager in play (opt-in via `Steps.UpgradeAll`) |
 | **Symbolic Links**        | Re-creates (safe if already exist)             |
+| **Startup Tasks**         | `Set-StartupTasks` registers the scheduled tasks the configured startup tasks need and removes the ones nothing needs any more (step `StartupTasks`, on by default; nothing while `Startup.Tasks` is empty) |
 | **Environment Variables** | Re-applies (no-op if already set)              |
 | **Taskbar**               | Reconfigures pinned apps                       |
 
@@ -84,6 +85,23 @@ Install-ChocolateyApps
 SymbolicLinkMaker
 ```
 
+### Startup Tasks
+
+Commands the machine runs on its own - at sign-in, at unlock, after waking from sleep, or when a terminal opens - are entries of `Startup.Tasks` in `Configuration.local.psd1`. The automatic repository update is one of them: `@{ Name = "RepositoryUpdate"; Command = "Update-Repositories -All -NoClone -Quiet"; Trigger = "TerminalOpen"; Frequency = "OncePerDay" }`. See [Invoke-StartupTasks](../configuration/guides/workflow/Invoke-StartupTasks.md) for the walkthrough.
+
+```powershell
+# What the next sign-in (or a new terminal) would run on this machine - runs nothing
+Invoke-StartupTasks -Trigger SignIn -WhatIf
+Invoke-StartupTasks -Trigger TerminalOpen -WhatIf
+
+# Run one configured task now, whatever its frequency says
+Invoke-StartupTask RepositoryUpdate -Force
+
+# Register the scheduled tasks behind SignIn / Unlock / Wake (Bootstrap does this too), and inspect them
+Set-StartupTasks
+Set-StartupTasks -List
+```
+
 ### Configuration Reload
 
 After editing `Configuration.psd1`:
@@ -134,13 +152,15 @@ Every time you open PowerShell, the profile (`Microsoft.PowerShell_profile.ps1`)
 │     └─→ Misc: translate                                         │
 │  10. Stage PowerPlan → Test-PowerPlan (chassis type cached)     │
 │  11. Stage LogMaintenance → queued                              │
-│  12. Stage RepositoryUpdate → queued                            │
+│  12. Stage StartupTasks → queued                                │
 │                                                                 │
 │  ── first prompt ──                                             │
 │  13. PowerShell.OnIdle (once, ~300 ms after the prompt)         │
 │     ├─→ Import-TerminalIcons (theme cache repaired)             │
 │     ├─→ Invoke-LogMaintenance                                   │
-│     └─→ Invoke-StartupRepositoryUpdate (opt-in, once a day)     │
+│     ├─→ Register-StartupTaskPromptCheck (once-a-day tasks)      │
+│     └─→ Invoke-StartupTasks -Trigger TerminalOpen               │
+│         (the startup tasks of a new terminal; none by default)  │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -148,7 +168,9 @@ Every time you open PowerShell, the profile (`Microsoft.PowerShell_profile.ps1`)
 > WinuX modules are **not imported at startup**. Each `.psd1` manifest declares `FunctionsToExport`, enabling PowerShell autoload. A module loads automatically - and silently - the first time one of its exported functions is called; this includes the fork-owned `Custom` module, whose `FunctionsToExport` the fork maintains (empty on a pure-upstream setup). Only `Logging` and `Bootstrap` (imported explicitly by the profile, in that order) are in memory at the first prompt. The few Helper, Configuration, System and Git functions the profile itself needs are dot-sourced from their files, because importing a whole module costs 4-6 ms per function file (Helper and System were measured at 330-500 ms each); the module's own copy replaces the dot-sourced one the first time the module autoloads.
 
 > [!NOTE]
-> `Terminal-Icons`, the log maintenance and the opt-in repository update run after the first prompt, from a one-shot `PowerShell.OnIdle` event. The only visible difference is a directory listing typed within the first ~300 ms of a new shell, which prints without icons - and, on the one shell a day where the repository update runs (`RepositoryUpdate.Startup`, off by default), its compact summary printed below the prompt, with typing held until the fetches finish. A shell that stays open into the next day runs it at its first prompt after the day starts (`Startup.DayStartHour`, default 06:00), the summary printed just above that prompt. An entry of the queue that throws is reported with one red line under the prompt (and in the session and error logs), and the prompt is drawn again under it.
+> `Terminal-Icons`, the log maintenance and the startup tasks of a newly opened terminal run after the first prompt, from a one-shot `PowerShell.OnIdle` event. The only visible difference is a directory listing typed within the first ~300 ms of a new shell, which prints without icons - and, in a shell where a startup task with the `TerminalOpen` trigger is due (`Startup.Tasks`, empty by default), what the task prints below the prompt, with typing held until it is done. The automatic repository update is such a task: on the one shell a day where it runs, its compact summary is printed below the prompt. A shell that stays open into the next day runs its once-a-day tasks at its first prompt after the day starts (the task's `DayStartHour`, default 06:00), the output printed just above that prompt. An entry of the queue that throws is reported with one red line under the prompt (and in the session and error logs), and the prompt is drawn again under it.
+>
+> The stage is named `StartupTasks` (it was `RepositoryUpdate` before 2.12.0, which is the name to replace in a `WINUX_STARTUP_SKIP` list). The deprecated `RepositoryUpdate.Startup` keys still work until 3.0.0: they are turned into a startup task named `RepositoryUpdate`.
 
 > [!TIP]
 > A slow start is measured, not guessed: `Measure-ShellStartup` starts child shells with one stage added at a time and prints min / median / max per configuration. See [Slow Profile Load](../reference/troubleshooting.md#slow-profile-load).
@@ -232,6 +254,9 @@ Upgrade-All
 
 # Only symlinks
 SymbolicLinkMaker
+
+# Only the scheduled tasks of the startup tasks
+Set-StartupTasks
 
 # Only taskbar
 Configure-Taskbar

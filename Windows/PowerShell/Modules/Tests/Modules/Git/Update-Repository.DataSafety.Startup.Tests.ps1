@@ -50,7 +50,10 @@ Describe "Repository update data safety (real git): the startup update and Initi
 			Get-LossViolations -Repo $repo -Before $before -After $after -Outcome 'n/a' -AnyOutcome | Should -BeNullOrEmpty
 			"$repo\up.txt" | Should -Exist
 			$after.Index['a.txt'] | Should -Be $before.Index['a.txt']
-			"$dir\logs\.repository-update.lock" | Should -Not -Exist
+			# The stamp is written only after a run that succeeded, so it proves the update went
+			# through the startup task and was not skipped on the way.
+			"$dir\logs\.startup-task-RepositoryUpdate.stamp" | Should -Exist
+			"$dir\logs\.startup-task-RepositoryUpdate.lock" | Should -Not -Exist
 		}
 
 		It "S35 Initialize-Repository on an existing repository never overwrites an ignored file" {

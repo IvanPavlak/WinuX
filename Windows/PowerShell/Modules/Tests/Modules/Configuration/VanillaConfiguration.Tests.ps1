@@ -275,6 +275,56 @@ Describe "Vanilla Configuration (empty-by-default contract)" {
 		}
 	}
 
+	Context "Startup tasks" {
+		# A vanilla install runs nothing on its own: Tasks ships empty, and Network is only the
+		# example condition a fork's task can require.
+		It "Should ship no startup task" {
+			$script:BaseConfig.Startup | Should -BeOfType [hashtable]
+			$script:BaseConfig.Startup.ContainsKey('Tasks') | Should -BeTrue
+			@($script:BaseConfig.Startup.Tasks).Count | Should -Be 0 -Because "Startup.Tasks must stay empty in the tracked base"
+		}
+
+		It "Should ship exactly one condition, Network" {
+			$conditions = $script:BaseConfig.Startup.Conditions
+			$conditions | Should -BeOfType [hashtable]
+			@($conditions.Keys) | Should -Be @('Network')
+			$conditions.Network | Should -BeOfType [hashtable]
+		}
+
+		It "Should ship a Network test that is a command line PowerShell can parse" {
+			$test = $script:BaseConfig.Startup.Conditions.Network.Test
+			$test | Should -BeOfType [string]
+			[string]::IsNullOrWhiteSpace($test) | Should -BeFalse -Because "a condition without a Test can never be met"
+
+			$tokens = $null
+			$parseErrors = $null
+			$null = [System.Management.Automation.Language.Parser]::ParseInput($test, [ref]$tokens, [ref]$parseErrors)
+			@($parseErrors).Count | Should -Be 0 -Because "Test-StartupCondition runs the text as PowerShell: $(@($parseErrors | ForEach-Object { $_.Message }) -join '; ')"
+		}
+
+		It "Should ship the Network condition waiting 60 seconds and looking every 2, matching Test-StartupCondition's defaults" {
+			$script:BaseConfig.Startup.Conditions.Network.Timeout | Should -Be 60
+			$script:BaseConfig.Startup.Conditions.Network.Interval | Should -Be 2
+		}
+
+		It "Should ship FailureReport as Tab" {
+			$script:BaseConfig.Startup.FailureReport | Should -Be 'Tab'
+		}
+
+		It "Should carry no Startup key the startup tasks do not read" {
+			@($script:BaseConfig.Startup.Keys) | Sort-Object | Should -Be @("Conditions", "FailureReport", "Tasks")
+		}
+
+		It "Should keep the deprecated RepositoryUpdate.Startup keys, switched off" {
+			# Deprecated in 2.12.0 and read until 3.0.0, so the keys stay (the contract gate fails
+			# a removed key); off, so a vanilla shell updates nothing and hears no deprecation.
+			$legacy = $script:BaseConfig.RepositoryUpdate.Startup
+			$legacy | Should -BeOfType [hashtable]
+			$legacy.ContainsKey('Enabled') | Should -BeTrue
+			$legacy.Enabled | Should -BeFalse
+		}
+	}
+
 	Context "Schema validation of the untouched base" {
 		# The vanilla base must be a VALID configuration, not a broken one: the schema
 		# validator may only require framework keys. The two GitConfig entries are the

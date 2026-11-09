@@ -1,9 +1,14 @@
 function Register-RepositoryUpdatePromptCheck {
 	<#
 	.SYNOPSIS
-		Makes an open shell run the daily repository update at its first prompt after the day starts.
+		Deprecated. Makes an open shell run the daily repository update at its first prompt after the day starts - use Register-StartupTaskPromptCheck.
 
 	.DESCRIPTION
+		DEPRECATED since 2.12.0, removed in 3.0.0. The automatic repository update is a startup
+		task now, and Register-StartupTaskPromptCheck does this for every startup task that runs
+		once per day in a newly opened terminal; the profile calls that one. This function still
+		works on its own and warns once per session.
+
 		The Daily schedule of the automatic repository update runs once per day. A new shell
 		covers it through Invoke-StartupRepositoryUpdate, but a shell that was already open when
 		the day began - a terminal left open overnight, a machine woken from sleep - never starts
@@ -21,7 +26,8 @@ function Register-RepositoryUpdatePromptCheck {
 		already wrapped prompt only gets its boundary refreshed, and a prompt the profile
 		redefined is wrapped afresh.
 
-		The profile calls it from the idle-time hook, right after Invoke-StartupRepositoryUpdate.
+		The profile no longer calls it. It reads only the deprecated `RepositoryUpdate.Startup`
+		keys, so it does nothing for a RepositoryUpdate task written under `Startup.Tasks`.
 
 	.OUTPUTS
 		None. Sets $global:WinuXRepositoryUpdatePrompt (the original prompt, the day start hour
@@ -33,6 +39,12 @@ function Register-RepositoryUpdatePromptCheck {
 	#>
 	[CmdletBinding()]
 	param()
+
+	if (-not ($global:WinuXDeprecationWarned -is [System.Collections.IDictionary])) { $global:WinuXDeprecationWarned = @{} }
+	if (-not $global:WinuXDeprecationWarned['Register-RepositoryUpdatePromptCheck']) {
+		$global:WinuXDeprecationWarned['Register-RepositoryUpdatePromptCheck'] = $true
+		Write-LogWarning "Register-RepositoryUpdatePromptCheck is deprecated since 2.12.0 and removed in 3.0.0 - use Register-StartupTaskPromptCheck"
+	}
 
 	$settings = Get-RepositoryUpdateStartupSettings
 	if (-not $settings.Enabled -or $settings.Schedule -ne 'Daily') { return }

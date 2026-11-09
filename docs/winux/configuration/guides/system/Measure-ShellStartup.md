@@ -8,6 +8,8 @@ This function reads no `Configuration.psd1` keys. There is nothing to configure.
 
 The stages it walks are the ones the profile guards with `Test-StartupStage`; it drives them through the `WINUX_STARTUP_SKIP` and `WINUX_STARTUP_TRACE` environment variables of the child shells it starts, never through configuration.
 
+The stage names are `Schema`, `Greeting`, `FastfetchImageLogo`, `OnefetchStyle`, `PSReadLine`, `Terminal-Icons`, `PSReadLineOptions`, `OhMyPosh`, `Aliases`, `PowerPlan`, `LogMaintenance` and `StartupTasks` (`Core` is always present). `StartupTasks` is the stage that was named `RepositoryUpdate` before 2.12.0: it queues the [startup tasks](../workflow/Invoke-StartupTasks.md) of a newly opened terminal, the automatic repository update among them. A script that passes `-Stages RepositoryUpdate`, or sets `WINUX_STARTUP_SKIP` to that name, has to use the new one.
+
 ## Usage
 
 ```powershell

@@ -394,6 +394,22 @@ This creates machine-specific symlinks:
 - Laptop → `config_Laptop.jsonc`
 - Work → `config_Work.jsonc`
 
+## Startup Tasks
+
+A [startup task](configuration-reference.md#startup-tasks) - a command the machine runs on its own at sign-in, unlock, wake or when a terminal opens - can be limited to some machines with two keys. `Machine` is the same scope as a taskbar row (`"PC/Laptop"`, matched by `Test-MachineTypeScope`, unknown tokens reported). `Hostname` names one or several computers, for a difference between two machines of the same type that a machine type cannot express. A task with neither runs on every machine; with both, both must match.
+
+```powershell
+Startup = @{
+    Tasks = @(
+        @{ Name = "MyTask";      Command = "Clear-MyCache";              Trigger = "SignIn"; Machine = "PC/Laptop" }
+        @{ Name = "MyWorkspace"; Command = "Open-Workspace MyWorkspace"; Trigger = "SignIn"; Hostname = "LAPTOP-PERSONAL" }
+        @{ Name = "MyBuild";     Command = "Open-Workspace MyBuild";     Trigger = "SignIn"; Machine = "Work"; Hostname = @("WORKSTATION-01") }
+    )
+}
+```
+
+`Get-StartupTaskDefinitions | Format-Table Name, Trigger, InScope, Valid` shows which tasks apply to the machine you are on, and `Set-StartupTasks` registers scheduled tasks only for those. See [Invoke-StartupTasks](guides/workflow/Invoke-StartupTasks.md).
+
 ## Checking Machine Type
 
 ```powershell

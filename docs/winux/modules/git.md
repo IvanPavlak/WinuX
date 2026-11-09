@@ -23,7 +23,7 @@ Format-RepositoryUpdateResult -Result (Update-Repository -Name MyRepo -LocalPath
 
 ## [Get-RepositoryUpdateDayStart](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Git/Functions/Get-RepositoryUpdateDayStart.ps1)
 
-- **Description:** The day boundary of the Daily schedule of the automatic repository update: returns the most recent moment at `-DayStartHour`:00 local time that is not later than `-At` - today at that hour, or yesterday at it while it is still earlier, so work past midnight stays on the day before. Add one day for the next boundary.
+- **Description:** **Deprecated since 2.12.0, removed in 3.0.0** - the automatic repository update is a startup task now, and [Test-StartupTaskDue](workflow.md#test-startuptaskdue) (`-Frequency OncePerDay -DayStartHour`) replaces this function. It keeps working unchanged until then. The day boundary of the Daily schedule of the automatic repository update: returns the most recent moment at `-DayStartHour`:00 local time that is not later than `-At` - today at that hour, or yesterday at it while it is still earlier, so work past midnight stays on the day before. Add one day for the next boundary. Only the other deprecated functions still call it: `Test-RepositoryUpdateStampFresh`, `Register-RepositoryUpdatePromptCheck` and `Invoke-RepositoryUpdatePromptCheck`.
 - **Parameters:** -DayStartHour, -At
 - **Usage:** `Get-RepositoryUpdateDayStart -DayStartHour 6`
 
@@ -32,14 +32,14 @@ Format-RepositoryUpdateResult -Result (Update-Repository -Name MyRepo -LocalPath
 Get-RepositoryUpdateDayStart -DayStartHour 6 -At ([datetime]'2026-10-08 05:30')
 ```
 
-**See also:** [Test-RepositoryUpdateStampFresh](#test-repositoryupdatestampfresh), [Register-RepositoryUpdatePromptCheck](#register-repositoryupdatepromptcheck)
+**See also:** [Test-StartupTaskDue](workflow.md#test-startuptaskdue) (replacement), [Test-RepositoryUpdateStampFresh](#test-repositoryupdatestampfresh), [Register-RepositoryUpdatePromptCheck](#register-repositoryupdatepromptcheck)
 
 ## [Get-RepositoryUpdateStartupSettings](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Git/Functions/Get-RepositoryUpdateStartupSettings.ps1)
 
-- **Description:** Reads `RepositoryUpdate.Startup` with every default filled in and returns `Enabled` (default `$false`), `Schedule` (`Daily` by default, or `Interval`; anything else is `Daily`), `DayStartHour` (0-23, default 6) and `IntervalHours` (default 24). A `DayStartHour` out of range or not a number falls back to 6, and an `IntervalHours` that is not a number falls back to 24 (any number is kept; 0 or less makes the update run in every shell). The one place that knows these keys, so `Invoke-StartupRepositoryUpdate` and `Register-RepositoryUpdatePromptCheck` never disagree.
+- **Description:** **Deprecated since 2.12.0, removed in 3.0.0** - the automatic repository update is a startup task now, and [Get-StartupTaskDefinitions](workflow.md#get-startuptaskdefinitions) replaces this function: it reads the same deprecated `RepositoryUpdate.Startup` keys and returns them as the startup task named `RepositoryUpdate`. It keeps working unchanged until then. Reads `RepositoryUpdate.Startup` with every default filled in and returns `Enabled` (default `$false`), `Schedule` (`Daily` by default, or `Interval`; anything else is `Daily`), `DayStartHour` (0-23, default 6) and `IntervalHours` (default 24). A `DayStartHour` out of range or not a number falls back to 6, and an `IntervalHours` that is not a number falls back to 24 (any number is kept; 0 or less makes the update run in every shell). Of the functions that used it, only the deprecated `Register-RepositoryUpdatePromptCheck` still does: `Invoke-StartupRepositoryUpdate` now takes the task from `Get-StartupTaskDefinitions`.
 - **Usage:** `Get-RepositoryUpdateStartupSettings`
 
-**See also:** [Invoke-StartupRepositoryUpdate](#invoke-startuprepositoryupdate), [Get-RepositoryUpdateStartupSettings configuration guide](../configuration/guides/git/Get-RepositoryUpdateStartupSettings.md)
+**See also:** [Get-StartupTaskDefinitions](workflow.md#get-startuptaskdefinitions) (replacement), [Invoke-StartupRepositoryUpdate](#invoke-startuprepositoryupdate), [Get-RepositoryUpdateStartupSettings configuration guide](../configuration/guides/git/Get-RepositoryUpdateStartupSettings.md)
 
 ## [Git-Diff](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Git/Functions/Git-Diff.ps1)
 
@@ -209,39 +209,40 @@ Install-Git
 
 ## [Invoke-RepositoryUpdatePromptCheck](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Git/Functions/Invoke-RepositoryUpdatePromptCheck.ps1)
 
-- **Description:** The prompt function [`Register-RepositoryUpdatePromptCheck`](#register-repositoryupdatepromptcheck) installs. Runs the original prompt first - as its very first statement, so the original still sees the last command's `$?` (the Oh My Posh error indicator) - and keeps its text. Once the next day boundary recorded in `$global:WinuXRepositoryUpdatePrompt` has passed, it runs `Invoke-StartupRepositoryUpdate` (which checks the stamp and lock itself), puts `$LASTEXITCODE` back so the update's git calls never show up as your last command's exit code, and moves the boundary to the next day. The update's summary prints before the prompt is drawn. Never throws; without a recorded original it returns PowerShell's default prompt text.
+- **Description:** **Deprecated since 2.12.0, removed in 3.0.0** - the automatic repository update is a startup task now, and [Invoke-StartupTaskPromptCheck](workflow.md#invoke-startuptaskpromptcheck) replaces this function, doing the same for every once-a-day startup task of a newly opened terminal. It keeps working until then. The prompt function the deprecated [`Register-RepositoryUpdatePromptCheck`](#register-repositoryupdatepromptcheck) installs. Runs the original prompt first - as its very first statement, so the original still sees the last command's `$?` (the Oh My Posh error indicator) - and keeps its text. Once the next day boundary recorded in `$global:WinuXRepositoryUpdatePrompt` has passed, it runs `Invoke-StartupRepositoryUpdate` (now a wrapper around the startup task `RepositoryUpdate`, which checks its stamp and lock itself), puts `$LASTEXITCODE` back so the update's git calls never show up as your last command's exit code, and moves the boundary to the next day. The update's summary prints before the prompt is drawn. Never throws; without a recorded original it returns PowerShell's default prompt text.
 - **Usage:** `Invoke-RepositoryUpdatePromptCheck` - not called by hand; it is the body of the wrapped `prompt` function.
 
-**See also:** [Register-RepositoryUpdatePromptCheck](#register-repositoryupdatepromptcheck), [Invoke-StartupRepositoryUpdate](#invoke-startuprepositoryupdate)
+**See also:** [Invoke-StartupTaskPromptCheck](workflow.md#invoke-startuptaskpromptcheck) (replacement), [Register-RepositoryUpdatePromptCheck](#register-repositoryupdatepromptcheck), [Invoke-StartupRepositoryUpdate](#invoke-startuprepositoryupdate)
 
 ## [Invoke-StartupRepositoryUpdate](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Git/Functions/Invoke-StartupRepositoryUpdate.ps1)
 
-- **Description:** The automatic repository update, queued by the profile as the startup stage `RepositoryUpdate` so it runs after the first prompt is drawn - shell start pays nothing. Off unless `RepositoryUpdate.Startup.Enabled` is `$true`, and throttled by a stamp file (`Logs\.last-repository-update`): with `RepositoryUpdate.Startup.Schedule = "Daily"` (the default) to once per day, the day starting at `Startup.DayStartHour` (default 6); with `"Interval"` to once per `Startup.IntervalHours` (default 24). On the Daily schedule the profile then calls [`Register-RepositoryUpdatePromptCheck`](#register-repositoryupdatepromptcheck), so a shell that stays open into the next day runs it at its first prompt after the day starts. Updates the groups `RepositoryUpdate.Startup.Scope` names (falling back to `BootstrapConfig.RepositoryUpdateScope`, then every group) with `Update-Repositories -NoClone -Quiet`: missing repositories are listed as skipped and never cloned, so it never asks for Administrator, and it prints one line per repository plus a totals line. Never throws.
+- **Description:** **Deprecated since 2.12.0, removed in 3.0.0** - use `Invoke-StartupTask RepositoryUpdate` ([Invoke-StartupTask](workflow.md#invoke-startuptask)), or `Invoke-StartupTasks -Trigger TerminalOpen` ([Invoke-StartupTasks](workflow.md#invoke-startuptasks)), which is what the profile calls now. The automatic repository update is a startup task (`Startup.Tasks`) and this function only forwards to it, warning once per session. It runs the startup task named `RepositoryUpdate` in the current shell through `Invoke-StartupTask`, the way a newly opened terminal does: inline, with a condition tested once instead of waited for. That task is either the one the configuration defines under that name or - while the deprecated `RepositoryUpdate.Startup.Enabled` is `$true` and no task has the name - the one [Get-StartupTaskDefinitions](workflow.md#get-startuptaskdefinitions) builds from the `RepositoryUpdate.Startup` keys: `Update-Repositories -All -NoClone -Quiet` (or `-Group` with the groups of `RepositoryUpdate.Startup.Scope`), once per day or per interval. With neither, or with a task of that name that is not valid, it does nothing. Two things differ from the function this replaces: the stamp is the startup task's (`Logs\.startup-task-RepositoryUpdate.stamp`) and is written only after a run that succeeded, so a run that threw is tried again at the next chance; and the lock is the startup task's (`Logs\.startup-task-RepositoryUpdate.lock`). `-Force` runs it now, ignoring whether the task is enabled and whether it is due - with the deprecated keys also when `RepositoryUpdate.Startup.Enabled` is not `$true`. `-RedrawPrompt` draws the prompt again below the output after a run ([Restore-ShellPrompt](helper.md#restore-shellprompt)). Never throws: an error is logged and the shell carries on. The one thing it cannot contain is a configured `RepositoryUpdate` task whose command asks for Administrator privileges: [Test-AdminPrivileges](helper.md#test-adminprivileges) stops the pipeline, and the caller with it. The command built from the deprecated keys never asks.
 - **Parameters:** -Force, -RedrawPrompt
 - **Usage:** `Invoke-StartupRepositoryUpdate`, `Invoke-StartupRepositoryUpdate -Force`
 
-The Daily schedule is the one to pick for "update when I start working": the first shell after login runs it, a shell opened past midnight still counts as the day before (so late work never triggers it), and an existing shell picks it up at its first prompt after the day starts - a machine woken from sleep updates at the first command you run, never on its own in the middle of the day. The Interval schedule counts from the last run instead, so its runs drift through the day; it is only checked when a shell starts.
+**Migration.** Write the update as a startup task in `Configuration.local.psd1` and turn the old key off (set `RepositoryUpdate.Startup.Enabled = $false`, or drop the `RepositoryUpdate.Startup` block): add `@{ Name = "RepositoryUpdate"; Command = "Update-Repositories -All -NoClone -Quiet"; Trigger = "TerminalOpen"; Frequency = "OncePerDay" }` to `Startup.Tasks`. `Schedule = "Interval"` becomes `Frequency = "Interval"` with `IntervalHours`, `DayStartHour` keeps its name, and a `Scope` that differs per machine type becomes one task per scope, each with `Machine` and `Update-Repositories -Group`. In code, call `Invoke-StartupTask RepositoryUpdate` (add `-Force` to run it now) or `Invoke-StartupTasks -Trigger TerminalOpen`. Until the key is migrated, [Test-ConfigurationSchema](configuration.md#test-configurationschema) lists `RepositoryUpdate.Startup.Enabled` as deprecated at every load.
 
-The stamp records when the last run happened, so a machine that was off for days updates on its first shell back - nothing is scheduled, so nothing can be missed. It is written before the update starts, so a run that failed (offline, for example) is not retried until the next day (or interval). `-Force` runs it now, ignoring `Enabled` and the schedule.
+What the update does is unchanged: once per day the first shell runs it, a shell opened past midnight still counts as the day before, a shell left open overnight picks it up at its first prompt after the day starts (now through [Register-StartupTaskPromptCheck](workflow.md#register-startuptaskpromptcheck)), a machine that was off for days updates on its first shell back, and several shells opened at once run it exactly once, because the task's lock is held open for the whole run. What changed is the stamp: it used to be written before the update started, so a failed run was not retried until the next day or interval; now only a success writes it. The first shell after upgrading therefore updates once more that day, because the old stamp (`Logs\.last-repository-update`) is no longer read or written. As a startup task the update can also wait for a condition: with `Requires = @("Network")` an offline shell skips it without trying.
 
-Several shells opened at once (a workspace opening its terminals) run it exactly once. The run is claimed with a lock file, `Logs\.repository-update.lock`, created atomically and held open for the whole run, and the stamp is checked again once the lock is held ([`Test-RepositoryUpdateStampFresh`](#test-repositoryupdatestampfresh)). A shell that loses the claim returns silently, even with `-Force`. A lock left by a shell that died mid-run can be deleted - a live holder's open handle prevents that on Windows - so the next shell clears it and runs.
+The profile no longer calls this function. Its startup stage is `StartupTasks` now (it was `RepositoryUpdate`), so skipping the update for one shell is `$env:WINUX_STARTUP_SKIP = "StartupTasks"`, which skips every startup task of a newly opened terminal.
 
-The run happens inside the shell after the prompt is already drawn, so its summary pushes the prompt away and typing waits until the fetches finish. The profile passes `-RedrawPrompt`, which draws the prompt again below the summary through [Restore-ShellPrompt](helper.md#restore-shellprompt) (PSReadLine's `InvokePrompt`) - without it PSReadLine keeps waiting on a blank line. Skip it for one shell with `$env:WINUX_STARTUP_SKIP = "RepositoryUpdate"`.
-
-| Parameter       | Type     | Default | Description                                                                                             |
-| --------------- | -------- | ------- | ------------------------------------------------------------------------------------------------------- |
-| `-Force`        | `switch` | off     | Run now, ignoring `Enabled` and the schedule.                                                           |
-| `-RedrawPrompt` | `switch` | off     | After a run, draw the prompt again below the summary. Does nothing when no update ran or outside PSReadLine. |
+| Parameter       | Type     | Default | Description                                                                                                                    |
+| --------------- | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `-Force`        | `switch` | off     | Run now, ignoring whether the task is enabled and whether it is due. With the deprecated keys, also when `Enabled` is not `$true`. |
+| `-RedrawPrompt` | `switch` | off     | After a run that succeeded or failed, draw the prompt again below its output. Does nothing when no update ran or outside PSReadLine. |
 
 ```powershell
-# What a new shell would do, right now
+# Deprecated: run the RepositoryUpdate startup task right now
 Invoke-StartupRepositoryUpdate -Force
 
-# When did it last run?
-Get-Item (Join-Path $global:LoggingState.LogsDir ".last-repository-update") -Force | Select-Object LastWriteTime
+# The replacement
+Invoke-StartupTask RepositoryUpdate -Force
+
+# When did it last succeed?
+Get-Item (Join-Path (Get-LogPath -Directory) ".startup-task-RepositoryUpdate.stamp") -Force | Select-Object LastWriteTime
 ```
 
-**See also:** [Update-Repositories](#update-repositories), [Resolve-RepositoryUpdateScope](bootstrap.md#resolve-repositoryupdatescope), [Restore-ShellPrompt](helper.md#restore-shellprompt), [Invoke-StartupRepositoryUpdate configuration guide](../configuration/guides/git/Invoke-StartupRepositoryUpdate.md)
+**See also:** [Invoke-StartupTask](workflow.md#invoke-startuptask) and [Invoke-StartupTasks](workflow.md#invoke-startuptasks) (replacements), [Get-StartupTaskDefinitions](workflow.md#get-startuptaskdefinitions), [Update-Repositories](#update-repositories), [Resolve-RepositoryUpdateScope](bootstrap.md#resolve-repositoryupdatescope), [Restore-ShellPrompt](helper.md#restore-shellprompt), [Invoke-StartupRepositoryUpdate configuration guide](../configuration/guides/git/Invoke-StartupRepositoryUpdate.md)
 
 ## [Merge-Upstreams](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Git/Functions/Merge-Upstreams.ps1)
 
@@ -259,10 +260,10 @@ Merge-Upstreams foundation
 See the [Fork Model](../contributing/fork-model.md) for rooms, the hallway, `root-owner` and `take`.
 ## [Register-RepositoryUpdatePromptCheck](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Git/Functions/Register-RepositoryUpdatePromptCheck.ps1)
 
-- **Description:** Makes a shell that stays open into the next day - a terminal left open overnight, a machine woken from sleep - run the Daily repository update at its first prompt after the day starts. Wraps the current global `prompt` function (the Oh My Posh prompt, or whatever the profile defined) with [`Invoke-RepositoryUpdatePromptCheck`](#invoke-repositoryupdatepromptcheck) and records the original plus the next day boundary in `$global:WinuXRepositoryUpdatePrompt`. Until that moment a prompt costs one time comparison. Does nothing unless `RepositoryUpdate.Startup.Enabled` is `$true` with the `Daily` schedule. Calling it again never wraps twice: an already wrapped prompt only gets its boundary refreshed, and a prompt the profile defined again (a profile reload) is wrapped afresh. The profile calls it from the idle-time hook, right after `Invoke-StartupRepositoryUpdate`.
+- **Description:** **Deprecated since 2.12.0, removed in 3.0.0** - the automatic repository update is a startup task now, and [Register-StartupTaskPromptCheck](workflow.md#register-startuptaskpromptcheck) replaces this function: it does the same for every startup task that runs once per day in a newly opened terminal, and it is the one the profile calls. This function still works on its own and warns once per session. Makes a shell that stays open into the next day - a terminal left open overnight, a machine woken from sleep - run the Daily repository update at its first prompt after the day starts. Wraps the current global `prompt` function (the Oh My Posh prompt, or whatever the profile defined) with [`Invoke-RepositoryUpdatePromptCheck`](#invoke-repositoryupdatepromptcheck) and records the original plus the next day boundary in `$global:WinuXRepositoryUpdatePrompt`. Until that moment a prompt costs one time comparison. Does nothing unless the deprecated `RepositoryUpdate.Startup.Enabled` is `$true` with the `Daily` schedule ([`Get-RepositoryUpdateStartupSettings`](#get-repositoryupdatestartupsettings)) - it does not see a `RepositoryUpdate` task written under `Startup.Tasks`. Calling it again never wraps twice: an already wrapped prompt only gets its boundary refreshed, and a prompt the profile defined again (a profile reload) is wrapped afresh. The profile no longer calls it.
 - **Usage:** `Register-RepositoryUpdatePromptCheck`
 
-**See also:** [Invoke-StartupRepositoryUpdate](#invoke-startuprepositoryupdate), [Get-RepositoryUpdateDayStart](#get-repositoryupdatedaystart)
+**See also:** [Register-StartupTaskPromptCheck](workflow.md#register-startuptaskpromptcheck) (replacement), [Invoke-StartupRepositoryUpdate](#invoke-startuprepositoryupdate), [Get-RepositoryUpdateDayStart](#get-repositoryupdatedaystart)
 
 ## [Resolve-RepositoryDefaultBranch](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Git/Functions/Resolve-RepositoryDefaultBranch.ps1)
 
@@ -372,16 +373,19 @@ if (Test-GitRepository) { onefetch }
 
 ## [Test-RepositoryUpdateStampFresh](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Git/Functions/Test-RepositoryUpdateStampFresh.ps1)
 
-- **Description:** The throttle check of `Invoke-StartupRepositoryUpdate`. A missing stamp is never fresh. With `-Schedule Daily` (the default) the stamp is fresh when it was written since the current day began at `-DayStartHour` (default 6; [`Get-RepositoryUpdateDayStart`](#get-repositoryupdatedaystart)), however late the previous run was. With `-Schedule Interval` it is fresh when it was written less than `-IntervalHours` (default 24) ago, and an interval of 0 or less is never fresh, so the update then runs in every shell. `Invoke-StartupRepositoryUpdate` asks twice - before claiming the run, and again once its lock is held, because another shell may have finished a run in between.
+- **Description:** **Deprecated since 2.12.0, removed in 3.0.0** - the automatic repository update is a startup task now, and [Test-StartupTaskDue](workflow.md#test-startuptaskdue) replaces this function (it answers the opposite question: due, where this one says fresh). It keeps working unchanged until then, but nothing calls it any more: `Invoke-StartupRepositoryUpdate` goes through the startup task, whose stamp is `Logs\.startup-task-RepositoryUpdate.stamp`, and the old stamp `Logs\.last-repository-update` is no longer written. Tells whether a stamp file is recent enough to skip a run. A missing stamp is never fresh. With `-Schedule Daily` (the default) the stamp is fresh when it was written since the current day began at `-DayStartHour` (default 6; [`Get-RepositoryUpdateDayStart`](#get-repositoryupdatedaystart)), however late the previous run was. With `-Schedule Interval` it is fresh when it was written less than `-IntervalHours` (default 24) ago, and an interval of 0 or less is never fresh.
 - **Parameters:** -StampFile, -Schedule, -DayStartHour, -IntervalHours
-- **Usage:** `Test-RepositoryUpdateStampFresh -StampFile (Join-Path $global:LoggingState.LogsDir ".last-repository-update") -DayStartHour 6`, `Test-RepositoryUpdateStampFresh -StampFile (Join-Path $global:LoggingState.LogsDir ".last-repository-update") -Schedule Interval -IntervalHours 24`
+- **Usage:** `Test-RepositoryUpdateStampFresh -StampFile (Join-Path (Get-LogPath -Directory) ".startup-task-RepositoryUpdate.stamp") -DayStartHour 6`, `Test-RepositoryUpdateStampFresh -StampFile (Join-Path (Get-LogPath -Directory) ".startup-task-RepositoryUpdate.stamp") -Schedule Interval -IntervalHours 24`
 
 ```powershell
-# Would a new shell skip the startup update right now?
-Test-RepositoryUpdateStampFresh -StampFile (Join-Path $global:LoggingState.LogsDir ".last-repository-update") -DayStartHour 6
+# Deprecated: did the RepositoryUpdate startup task succeed since the day began at 06:00?
+Test-RepositoryUpdateStampFresh -StampFile (Join-Path (Get-LogPath -Directory) ".startup-task-RepositoryUpdate.stamp") -DayStartHour 6
+
+# The replacement (the answer is inverted: $true means due)
+Test-StartupTaskDue -StampFile (Join-Path (Get-LogPath -Directory) ".startup-task-RepositoryUpdate.stamp") -Frequency OncePerDay -DayStartHour 6
 ```
 
-**See also:** [Invoke-StartupRepositoryUpdate](#invoke-startuprepositoryupdate), [Get-RepositoryUpdateDayStart](#get-repositoryupdatedaystart)
+**See also:** [Test-StartupTaskDue](workflow.md#test-startuptaskdue) (replacement), [Invoke-StartupRepositoryUpdate](#invoke-startuprepositoryupdate), [Get-RepositoryUpdateDayStart](#get-repositoryupdatedaystart)
 
 ## [Update-Repositories](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Git/Functions/Update-Repositories.ps1)
 
@@ -409,7 +413,7 @@ A repository missing locally is cloned via `Initialize-Repository`, which takes 
 | `-Archive`            | Downloads repository contents without git history, under `RepositoryUpdate.ArchiveRoot` (the Desktop by default) and each entry's `ArchiveFolder`. |
 | `-IncludeDefaultBranch` | Also fast-forward each repository's default branch. Not given: `RepositoryUpdate.IncludeDefaultBranch` decides (default off). `-IncludeDefaultBranch:$false` turns it off for one call. |
 | `-NoClone`            | Report and skip repositories missing locally instead of cloning them, so the call never needs Administrator.                                    |
-| `-Quiet`              | One line per repository plus a totals line, with git silenced, and a repository's stashes listed under its line. The form the startup update prints. |
+| `-Quiet`              | One line per repository plus a totals line, with git silenced, and a repository's stashes listed under its line. The form the automatic update prints - the `RepositoryUpdate` [startup task](workflow.md#invoke-startuptasks). |
 
 ```powershell
 # Interactive menu - all configured repositories grouped by type

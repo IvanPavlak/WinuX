@@ -13,7 +13,9 @@ This validates the shape of a configuration file rather than reading any particu
 
 It also checks workspace templates in whatever configuration it is given: `WorkspaceTemplates` must be a hashtable of templates that each carry `Actions`, the problems `Expand-WorkspaceTemplates` recorded at load (`WorkspaceTemplateErrors`) are reported, and templated `WorkspaceActions` entries that were never expanded are resolved through `Resolve-WorkspaceTemplate` - so an unknown template, a variable without a value, an ambiguous or unmatched override, an unknown `{placeholder}`, a variable cycle or a bad `Before` / `After` anchor is reported with the workspace named. See [Workspace Templates](../../configuration-reference.md#workspace-templates).
 
-It checks the shape of `AiArtifacts` and `AiHarnesses` (every `Deploy` name is an `AiHarnesses` entry, every destination has a known `Kind` and `Placement`, `Files` and `Path`; see [AI Artifacts](../../configuration-reference.md#ai-artifacts)), and it reports every deprecated key or step name your configuration still uses - one warning naming each with its replacement, never an error. To silence it, move the value to its replacement as the [Deprecated Keys](../../configuration-reference.md#deprecated-keys) table says.
+It checks the shape of `AiArtifacts` and `AiHarnesses` (every `Deploy` name is an `AiHarnesses` entry, every destination has a known `Kind` and `Placement`, `Files` and `Path`; see [AI Artifacts](../../configuration-reference.md#ai-artifacts)), and it reports every deprecated key or step name your configuration still uses - one warning naming each with its replacement, never an error. To silence it, move the value to its replacement as the [Deprecated Keys](../../configuration-reference.md#deprecated-keys) table says. The one key deprecated today is `RepositoryUpdate.Startup.Enabled` (since 2.12.0, removed in 3.0.0): it is reported once it is set to `$true`, the shipped `$false` stays silent, and its replacement is a `Startup.Tasks` entry - `@{ Name = "RepositoryUpdate"; Command = "Update-Repositories -All -NoClone -Quiet"; Trigger = "TerminalOpen"; Frequency = "OncePerDay" }`, see [`Invoke-StartupRepositoryUpdate`](../git/Invoke-StartupRepositoryUpdate.md).
+
+It checks the shape of the [`Startup`](../../configuration-reference.md#startup-tasks) section: `Startup` and `Startup.Conditions` must be hashtables, every condition a hashtable, and every `Startup.Tasks` entry a hashtable. That is all it checks there. What a task may hold - its keys, triggers, frequencies, the conditions it requires - is validated by [`Get-StartupTaskDefinitions`](../workflow/Get-StartupTaskDefinitions.md), which reports a task that is not valid whenever the startup tasks run; this function runs before the first prompt and must not load the module that knows. So a clean `Test-ConfigurationSchema` does not mean every startup task is valid: `Get-StartupTaskDefinitions | Where-Object { -not $_.Valid }` does.
 
 ## Decisions
 
@@ -55,6 +57,9 @@ Read-only checks. None of these change anything.
 Reload-PowerShellProfile
 Test-ConfigurationSchema
 $global:Configuration.WorkspaceTemplateErrors
+
+# The startup tasks this function does not look inside
+Get-StartupTaskDefinitions | Where-Object { -not $_.Valid } | Format-List Name, Errors
 ```
 
 If a value reads back as empty, the two usual causes are a parse error in `Configuration.local.psd1` (run `Test-ConfigurationSchema`) and a key placed at the wrong nesting level.

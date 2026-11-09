@@ -10,7 +10,7 @@ Resolves which repository groups Bootstrap clones and updates on this machine.
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
 | [`BootstrapConfig`](../../configuration-reference.md#bootstrapconfig) | hashtable, 8 keys | hashtable, 8 keys | Two keys matter here: `RepositoryUpdateScope` says **which** repository groups this machine type pulls, and `Steps.RepositoryUpdate` says **whether** the repository step runs at all. |
-| [`RepositoryUpdate.Startup.Scope`](../../configuration-reference.md#repository-update) | hashtable | absent | Read instead when `-Path 'RepositoryUpdate.Startup.Scope'` is passed, which the startup update ([`Invoke-StartupRepositoryUpdate`](../git/Invoke-StartupRepositoryUpdate.md)) does when the key is set. Same shape and fallbacks. |
+| [`RepositoryUpdate.Startup.Scope`](../../configuration-reference.md#repository-update) | hashtable | absent | **Deprecated since 2.12.0, removed in 3.0.0**, with the rest of `RepositoryUpdate.Startup`. Read instead when `-Path 'RepositoryUpdate.Startup.Scope'` is passed, which [`Get-StartupTaskDefinitions`](../workflow/Get-StartupTaskDefinitions.md) does when the key is set, to build the carried-over `RepositoryUpdate` startup task. Same shape and fallbacks. In a `Startup.Tasks` entry the scope is the task's `Machine` key plus `-Group` in its command - see [`Invoke-StartupRepositoryUpdate`](../git/Invoke-StartupRepositoryUpdate.md). |
 
 ## Decisions
 

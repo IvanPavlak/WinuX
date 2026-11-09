@@ -45,6 +45,12 @@ foreach ($function in 'Resolve-RepositoryDefaultBranch', 'Update-RepositoryDefau
 	. "$DataSafetyModuleRoot\Git\Functions\$function.ps1"
 }
 . "$DataSafetyModuleRoot\Bootstrap\Functions\Resolve-RepositoryUpdateScope.ps1"
+# The startup update is a startup task now: Invoke-StartupRepositoryUpdate only forwards to these,
+# and they have to run from here (not from the imported Workflow module) so the task's command
+# reaches the Update-Repositories loaded above and the mocks around it.
+foreach ($function in 'Get-StartupTaskDefinitions', 'Invoke-StartupTask', 'Test-StartupTaskDue', 'Test-StartupCondition') {
+	. "$DataSafetyModuleRoot\Workflow\Functions\$function.ps1"
+}
 
 function Initialize-RepositoryDataSafety {
 	<#
@@ -52,7 +58,7 @@ function Initialize-RepositoryDataSafety {
 		Saves the global state the tests change, sets a git identity, and builds the template
 		origin every test clones. Call once from BeforeAll, after dot-sourcing this file.
 	#>
-	$script:DataSafetySaved = @{ Configuration = $global:Configuration; LoggingState = $global:LoggingState; MachineType = $global:MachineType; Env = @{} }
+	$script:DataSafetySaved = @{ Configuration = $global:Configuration; LoggingState = $global:LoggingState; MachineType = $global:MachineType; DeprecationWarned = $global:WinuXDeprecationWarned; Env = @{} }
 	foreach ($name in 'GIT_AUTHOR_NAME', 'GIT_AUTHOR_EMAIL', 'GIT_COMMITTER_NAME', 'GIT_COMMITTER_EMAIL') {
 		$script:DataSafetySaved.Env[$name] = [Environment]::GetEnvironmentVariable($name)
 		[Environment]::SetEnvironmentVariable($name, $(if ($name -like '*EMAIL') { 'test@example.com' } else { 'Test' }))
@@ -84,6 +90,8 @@ function Restore-RepositoryDataSafety {
 	$global:Configuration = $script:DataSafetySaved.Configuration
 	$global:LoggingState = $script:DataSafetySaved.LoggingState
 	$global:MachineType = $script:DataSafetySaved.MachineType
+	# The deprecated Invoke-StartupRepositoryUpdate flags the session as warned; hand it back as found.
+	$global:WinuXDeprecationWarned = $script:DataSafetySaved.DeprecationWarned
 	# A variable that was not set is removed again, not set to "": PowerShell passes $null to a .NET
 	# string parameter as an empty string, and an empty GIT_AUTHOR_NAME overrides every user.name,
 	# which made every later real-git test in the same worker fail to commit.

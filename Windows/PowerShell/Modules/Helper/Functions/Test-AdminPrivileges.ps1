@@ -10,6 +10,13 @@ function Test-AdminPrivileges {
 		and the command is rerun in the Administrator PowerShell straight away. The Windows UAC
 		consent dialog still appears either way - only the confirmation question is removed.
 
+		Inside a startup task nobody is there to answer. While Invoke-StartupTask runs a task's
+		command it sets $global:WinuXStartupTask (Name, Elevation, RelaunchCommand), and this
+		function then never asks: unless the task has Elevation = "Relaunch" it reports that the
+		task needs Administrator privileges, names the option and stops; with Relaunch it reruns
+		without the confirmation question, and what it reruns is the task itself
+		(RelaunchCommand), not a line of the call stack.
+
 	.PARAMETER CheckOnly
 		If specified, only return boolean without prompting or elevating.
 
@@ -49,6 +56,15 @@ function Test-AdminPrivileges {
 			$AutoElevate = [bool](Get-ConfigSetting -Path 'AutoElevate' -Default $false)
 		}
 
+		# A startup task's command (see Invoke-StartupTask): no question can be answered, so it
+		# either stops here, naming the option that allows the relaunch, or relaunches unasked.
+		$startupTask = $global:WinuXStartupTask
+		if ($startupTask -and "$($startupTask.Elevation)" -ne 'Relaunch') {
+			Write-LogError "Startup task [$($startupTask.Name)] needs Administrator privileges - set Elevation = `"Relaunch`", `"Prompt`" or `"Silent`" on the task"
+			throw [System.Management.Automation.PipelineStoppedException]::new()
+		}
+		if ($startupTask) { $AutoElevate = $true }
+
 		$currentDirectory = (Get-Location).Path
 		# Replay the command the user actually typed. Each frame's InvocationInfo.Line is the
 		# source line that invoked that frame, so the OUTERMOST frame that recorded a line holds
@@ -61,6 +77,11 @@ function Test-AdminPrivileges {
 		for ($frameIndex = $callStack.Count - 1; $frameIndex -ge 1; $frameIndex--) {
 			$triggeringCommand = "$($callStack[$frameIndex].InvocationInfo.Line)".Trim()
 			if ($triggeringCommand) { break }
+		}
+		# The task's own self-contained command: the call stack's line names variables that
+		# exist only in the shell the task was started from.
+		if ($startupTask -and $startupTask.RelaunchCommand) {
+			$triggeringCommand = [string]$startupTask.RelaunchCommand
 		}
 
 		Write-LogError "This must be run with Administrator privileges!"

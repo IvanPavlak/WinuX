@@ -23,7 +23,7 @@ This is the widest configuration surface in WinuX - `Bootstrap` reads the step t
 
 1. Which bootstrap steps should run on this machine?
     - Options: Each entry under `BootstrapConfig.Steps` is either a boolean or a per-machine-type hashtable with a `Default` fallback. Most steps ship **on**, because they no-op when their own configuration section is empty. The fourteen that act the moment they run ship **off**: `MicrosoftActivationScripts`, `Win11Debloat`, `RepositoryUpdate`, `DeveloperMode`, `NuGetConfig`, `NpmConfig`, `UpgradeAll`, `AiArtifacts`, `AiMarketplaces`, `AiMcpServers`, `AiProfileInit`, `ObsidianCli`, `VSCodeProfiles`, `LockedStartLayout`.
-    - Default: The shipped `Steps` map (`UpgradeAll = $false`, `RepositoryUpdate = $false`, plus `WSL` on everywhere except the `Test` type). Change only the steps you actually want to flip. Switching `UpgradeAll` on lets a Bootstrap run `winget upgrade --all` and its Scoop/Chocolatey equivalents, which upgrade every package already on the machine, not only the ones WinuX installs.
+    - Default: The shipped `Steps` map (`UpgradeAll = $false`, `RepositoryUpdate = $false`, plus `WSL` on everywhere except the `Test` type). Change only the steps you actually want to flip. Switching `UpgradeAll` on lets a Bootstrap run `winget upgrade --all` and its Scoop/Chocolatey equivalents, which upgrade every package already on the machine, not only the ones WinuX installs. `StartupTasks` is on by default and runs right after `SymbolicLinks`: it calls [`Set-StartupTasks`](Set-StartupTasks.md), which registers the scheduled tasks behind your [startup tasks](../workflow/Invoke-StartupTasks.md) and removes the ones nothing needs any more - nothing at all while `Startup.Tasks` is empty.
     - More detail: [`BootstrapConfig`](../../configuration-reference.md#bootstrapconfig)
 2. Do you need to change where the app-list CSVs live?
     - Options: Repository-relative paths under `BootstrapConfig.DataFiles`, keyed `WinGetApps`, `ScoopApps`, `ChocolateyApps`.
@@ -211,5 +211,6 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 - [`Start-Win11Debloat`](../application/Start-Win11Debloat.md) - reads the same configuration
 - [`Update-Win11DebloatVendor`](../application/Update-Win11DebloatVendor.md) - reads the same configuration
 - [`Invoke-PersonalSteps`](Invoke-PersonalSteps.md) - reads the same configuration
+- [`Set-StartupTasks`](Set-StartupTasks.md) - what the `StartupTasks` step runs
 - [WinuXConfigurator](../../winux-configurator.md) - have an AI assistant walk these decisions with you
 - [Configuration reference](../../configuration-reference.md) - every key, section by section

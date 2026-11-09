@@ -17,6 +17,7 @@
 		'Resolve-BootstrapSteps',
 		'Resolve-PackageManagers',
 		'Resolve-RepositoryUpdateScope',
+		'Set-StartupTasks',
 		'Test-MachineTypeScope'
 	)
 }

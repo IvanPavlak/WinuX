@@ -1,58 +1,32 @@
 # Invoke-StartupRepositoryUpdate
 
-Updates the configured repositories automatically, once a day (or once per interval), after the first prompt of a shell is drawn - and, on the daily schedule, at the first prompt after the day starts in a shell that was already open. Off by default.
+Deprecated wrapper that runs the startup task named `RepositoryUpdate` - the automatic repository update is a startup task now.
 
-> [!NOTE]
-> Every value on this page belongs in `Configuration.local.psd1`, never in the base `Configuration.psd1`. The base file is upstream's, it ships empty-by-default, and it is deep-merged with your local file at load time by `Load-PathConfiguration`. See [Fork Model](../../../contributing/fork-model.md).
+> [!WARNING]
+> **Deprecated since 2.12.0, removed in 3.0.0.** Use [`Invoke-StartupTasks`](../workflow/Invoke-StartupTasks.md) `-Trigger TerminalOpen` (what the profile calls) or [`Invoke-StartupTask`](../workflow/Invoke-StartupTask.md) `RepositoryUpdate -Force` (run it now), and replace the `RepositoryUpdate.Startup` keys with one `Startup.Tasks` entry as shown under [Migration](#migration). The function keeps working until 3.0.0 and warns once per session.
 
 ## Configuration Keys
 
-| Key | Type | Default (base) | What it controls |
-| --- | ---- | -------------- | ---------------- |
-| [`RepositoryUpdate.Startup.Enabled`](../../configuration-reference.md#repository-update) | bool | `$false` | Whether a new shell updates the repositories at all. |
-| [`RepositoryUpdate.Startup.Schedule`](../../configuration-reference.md#repository-update) | string | `"Daily"` | `"Daily"`: once per day. `"Interval"`: at most once per `IntervalHours`. The stamp file `Logs\.last-repository-update` records the last run. |
-| [`RepositoryUpdate.Startup.DayStartHour`](../../configuration-reference.md#repository-update) | int | `6` | Daily only: the hour (0-23) a new day starts. |
-| [`RepositoryUpdate.Startup.IntervalHours`](../../configuration-reference.md#repository-update) | int | `24` | Interval only: minimum hours between two automatic runs. |
-| [`RepositoryUpdate.Startup.Scope`](../../configuration-reference.md#repository-update) | hashtable | absent | Which groups the automatic run updates, per machine type. Absent falls back to `BootstrapConfig.RepositoryUpdateScope`, then to every group. |
+This function reads no `Configuration.psd1` keys. There is nothing to configure. It only forwards to the startup task `RepositoryUpdate`, which is configured as a [`Startup.Tasks`](../../configuration-reference.md#startup-tasks) entry on the [`Invoke-StartupTasks`](../workflow/Invoke-StartupTasks.md) guide. The deprecated [`RepositoryUpdate.Startup`](../../configuration-reference.md#repository-update) keys this page used to own are now read by [`Get-StartupTaskDefinitions`](../workflow/Get-StartupTaskDefinitions.md), which turns them into that task.
 
-The run itself is `Update-Repositories -NoClone -Quiet`, so it also follows [`RepositoryUpdate.IncludeDefaultBranch`](../../configuration-reference.md#repository-update), configured through [`Update-Repositories`](Update-Repositories.md).
+## Usage
 
-## Decisions
+```powershell
+# Deprecated: runs the RepositoryUpdate startup task in this shell, if it is due
+Invoke-StartupRepositoryUpdate
+Invoke-StartupRepositoryUpdate -Force
+Invoke-StartupRepositoryUpdate -Force -RedrawPrompt
 
-1. Should a new shell update your repositories on its own?
-    - Options: `$true` runs the update once per interval, after the first prompt is drawn - shell start itself pays nothing, but the summary prints below the prompt and typing waits until the fetches finish. Repositories missing on this machine are listed as skipped, never cloned, so it never asks for Administrator. `$false` leaves updating to you (`Update-Repositories`) and to Bootstrap.
-    - Default: `$false`.
-    - More detail: [`RepositoryUpdate`](../../configuration-reference.md#repository-update)
-2. When should it run - once a day, or every so many hours?
-    - Options: `"Daily"` runs it once per day: the first shell after login, or - when a shell was already open, a machine woken from sleep - its first prompt after the day starts, so it never starts on its own in the middle of the day. `"Interval"` runs it at most once per `IntervalHours`, counted from the last run and checked only when a shell starts, so the run drifts through the day (`8` roughly twice a working day, `0` every shell). Either way several shells opened at once run it only once - the run is claimed with a lock file (`Logs\.repository-update.lock`), and a lock left by a shell that died mid-run is cleared by the next one. The stamp records the last run, so a machine that was off for days updates on its first shell back. A run that failed (offline, for example) is not retried until the next day (or interval) - `Invoke-StartupRepositoryUpdate -Force` reruns it by hand.
-    - Default: `"Daily"`.
-    - More detail: [`RepositoryUpdate`](../../configuration-reference.md#repository-update)
-3. When does your day start? (Daily only.)
-    - Options: An hour from `0` to `23`. A shell opened before it still counts as the day before, so late work past midnight never triggers a run; pick an hour after your latest working night and before you usually start. `0` is plain midnight. With `"Interval"`, set `IntervalHours` instead.
-    - Default: `6`.
-    - More detail: [`RepositoryUpdate`](../../configuration-reference.md#repository-update)
-4. Which groups should it update?
-    - Options: Leave `Scope` out to update whatever Bootstrap updates on this machine type (`BootstrapConfig.RepositoryUpdateScope`), or set `Scope` in the same shape - `"All"`, a group name, a comma-separated string or an array, per machine type with a `Default` fallback - when the daily update should cover less (or more) than Bootstrap.
-    - Default: Absent - the Bootstrap scope, which itself defaults to every group.
-    - More detail: [`RepositoryUpdate`](../../configuration-reference.md#repository-update)
+# The replacements
+Invoke-StartupTasks -Trigger TerminalOpen
+Invoke-StartupTask RepositoryUpdate -Force
+```
 
-## Where to Put Values
+### Migration
 
-All of it goes in `Configuration.local.psd1`, at the repository's `Windows/PowerShell/` directory, beside the base `Configuration.psd1`. Create the file if it does not exist yet - a minimal one is a single `@{}` hashtable - or let `Initialize-Configuration` write the skeleton for you.
+Replace the `RepositoryUpdate.Startup` block in `Configuration.local.psd1` with one entry of `Startup.Tasks`, then delete the block.
 
-> [!WARNING]
-> The merge is not uniform. **Hashtables deep-merge per key**, so adding one entry to a hashtable leaves every other entry alone. **Arrays and scalars replace wholesale**, so supplying an array key in your local file discards the entire base array. When you want to *add* to a shipped array, copy the whole base array out of `Configuration.psd1` first and add your entry to the copy.
-
-`RepositoryUpdate` and `Startup` are hashtables, so writing only `Startup.Enabled` keeps the shipped daily schedule and its 06:00 day start. A `Scope` value written as an array replaces the whole array, as any array does.
-
-## Steps Overview
-
-1. Set `RepositoryUpdate.Startup`
-2. Reload and confirm the merge landed
-
-## Step 1: Set `RepositoryUpdate.Startup`
-
-Turn it on, choose the schedule, and optionally narrow the groups per machine type.
+Before:
 
 ```powershell
 RepositoryUpdate = @{
@@ -60,72 +34,78 @@ RepositoryUpdate = @{
         Enabled      = $true
         Schedule     = "Daily"
         DayStartHour = 6
-        Scope        = @{ Default = "All"; Test = "Private" }
     }
 }
 ```
 
-For the interval instead: `Schedule = "Interval"` and `IntervalHours = 8`.
-
-## Step 2: Reload and confirm the merge landed
-
-Reload the profile, then read the merged value back. `$global:Configuration` after a reload is the ground truth - if what you set is not there, the local file did not parse or the key is nested one level away from where you put it.
+After:
 
 ```powershell
-Reload-PowerShellProfile
-$global:Configuration.RepositoryUpdate.Startup
-```
-
-## Verification
-
-Read-only checks. None of these change anything.
-
-```powershell
-Reload-PowerShellProfile
-$global:Configuration.RepositoryUpdate.Startup
-
-# Which groups the startup update would pull on this machine
-Resolve-RepositoryUpdateScope -Path 'RepositoryUpdate.Startup.Scope'
-
-# The schedule as the update reads it, defaults filled in
-Get-RepositoryUpdateStartupSettings
-
-# Has it run today? ($true = a new shell skips it until the next day starts)
-Test-RepositoryUpdateStampFresh -StampFile (Join-Path $global:LoggingState.LogsDir ".last-repository-update") -DayStartHour 6
-
-# When this shell looks again at its prompt (Daily only)
-$global:WinuXRepositoryUpdatePrompt.NextCheck
-```
-
-To see a run without waiting for the next day, `Invoke-StartupRepositoryUpdate -Force -RedrawPrompt` does exactly what a new shell would, including drawing the prompt again under the summary (it updates repositories, so it is not read-only). To skip it for one shell, start it with `$env:WINUX_STARTUP_SKIP = "RepositoryUpdate"`.
-
-## Complete Example
-
-A `Configuration.local.psd1` that configures everything on this page. Values are illustrative - substitute your own.
-
-```powershell
-# Configuration.local.psd1
-@{
-    RepositoryUpdate = @{
-        IncludeDefaultBranch = $true
-        Startup              = @{
-            Enabled      = $true
-            Schedule     = "Daily"
-            DayStartHour = 6
-            Scope        = @{ Default = "All"; Test = "Private" }
+Startup = @{
+    Tasks = @(
+        @{
+            Name      = "RepositoryUpdate"
+            Command   = "Update-Repositories -All -NoClone -Quiet"
+            Trigger   = "TerminalOpen"
+            Frequency = "OncePerDay"
         }
-    }
+    )
 }
+```
+
+Key by key:
+
+| Deprecated key | Replacement in the `Startup.Tasks` entry |
+| -------------- | ---------------------------------------- |
+| `Startup.Enabled = $true` | The entry itself. `Enabled = $false` on the entry parks it. |
+| `Startup.Schedule = "Daily"` | `Frequency = "OncePerDay"` |
+| `Startup.DayStartHour` | `DayStartHour` (default `6`) |
+| `Startup.Schedule = "Interval"` | `Frequency = "Interval"` |
+| `Startup.IntervalHours` | `IntervalHours` (default `24`) |
+| `Startup.Scope` (per machine type) | One task per scope: `Machine` says where it runs, and the command names the groups with `-Group`. |
+
+A per-machine `Scope` such as `@{ Default = "All"; Test = "Private" }` becomes two tasks. `Machine` has no `Default`, so the first one lists the machine types it covers:
+
+```powershell
+Startup = @{
+    Tasks = @(
+        @{ Name = "RepositoryUpdate"; Command = "Update-Repositories -All -NoClone -Quiet"; Trigger = "TerminalOpen"; Frequency = "OncePerDay"; Machine = "PC/Laptop/Work" }
+        @{ Name = "RepositoryUpdate-Test"; Command = "Update-Repositories -Group Private -NoClone -Quiet"; Trigger = "TerminalOpen"; Frequency = "OncePerDay"; Machine = "Test" }
+    )
+}
+```
+
+What a startup task adds over the old keys: it can also run hidden at sign-in (`Trigger = @("SignIn", "TerminalOpen")`, `Window = "Hidden"`), and it can wait for the network (`Requires = @("Network")`). Keep one task named `RepositoryUpdate`: that name is what switches the legacy carry-over off, and what this wrapper runs.
+
+### The legacy keys still work until 3.0.0
+
+Nothing breaks if you do not migrate yet. While `RepositoryUpdate.Startup.Enabled` is `$true` and no startup task is named `RepositoryUpdate`, `Get-StartupTaskDefinitions` adds one that does what the keys describe: the `TerminalOpen` trigger, once per day or per interval, `Update-Repositories -All -NoClone -Quiet` or `-Group` with the groups `Startup.Scope` (then `BootstrapConfig.RepositoryUpdateScope`) names for this machine type. `Test-ConfigurationSchema` reports the key as deprecated at every profile load and at the start of every `Bootstrap`; it is a warning, never an error.
+
+Three things differ from before 2.12.0, with or without the migration:
+
+- The stamp and the lock are the startup task's: `Logs\.startup-task-RepositoryUpdate.stamp` and `Logs\.startup-task-RepositoryUpdate.lock`. `Logs\.last-repository-update` is no longer written, so the first shell after the upgrade runs the update once more.
+- The stamp is written only after a run that succeeded. A run that threw is tried again in the next shell, not on the next day.
+- The profile stage is named `StartupTasks`, not `RepositoryUpdate`: to start one shell without it, `$env:WINUX_STARTUP_SKIP = "StartupTasks"`.
+
+Read-only checks for either shape:
+
+```powershell
+# The task, whether it comes from Startup.Tasks or from the legacy keys (Legacy = True)
+Get-StartupTaskDefinitions -Name RepositoryUpdate | Format-List Name, Trigger, InScope, Valid, Legacy
+(Get-StartupTaskDefinitions -Name RepositoryUpdate).Parameters
+
+# Would a new terminal run it now?
+Invoke-StartupTasks -Trigger TerminalOpen -Name RepositoryUpdate -WhatIf
 ```
 
 ## Related
 
 - [`Invoke-StartupRepositoryUpdate` in the Git module reference](../../../modules/git.md#invoke-startuprepositoryupdate) - parameters, usage and behaviour
 - [Git configuration guides](README.md) - every guide for this module
-- [`Update-Repositories`](Update-Repositories.md) - what each run calls, and the default-branch setting
-- [`Get-RepositoryUpdateStartupSettings`](Get-RepositoryUpdateStartupSettings.md) - reads the `Startup` keys with their defaults
-- [`Register-RepositoryUpdatePromptCheck`](Register-RepositoryUpdatePromptCheck.md) - the prompt check of the daily schedule
-- [`Resolve-RepositoryUpdateScope`](../bootstrap/Resolve-RepositoryUpdateScope.md) - resolves the scope
-- [`Measure-ShellStartup`](../system/Measure-ShellStartup.md) - the startup stages, `RepositoryUpdate` among them
-- [WinuXConfigurator](../../winux-configurator.md) - have an AI assistant walk these decisions with you
+- [`Invoke-StartupTasks`](../workflow/Invoke-StartupTasks.md) - the replacement, and the startup tasks walkthrough
+- [`Invoke-StartupTask`](../workflow/Invoke-StartupTask.md) - runs the `RepositoryUpdate` task by name
+- [`Get-StartupTaskDefinitions`](../workflow/Get-StartupTaskDefinitions.md) - reads the legacy keys and builds the carried-over task
+- [`Update-Repositories`](Update-Repositories.md) - what the task runs, and the default-branch setting
+- [`Resolve-RepositoryUpdateScope`](../bootstrap/Resolve-RepositoryUpdateScope.md) - resolves the legacy `Startup.Scope`
+- [`Measure-ShellStartup`](../system/Measure-ShellStartup.md) - the startup stages, `StartupTasks` among them
 - [Configuration reference](../../configuration-reference.md) - every key, section by section

@@ -34,6 +34,9 @@ BeforeAll {
 	. "$ModuleRoot\AI\Functions\Deploy-AiMcpServers.ps1"
 	# The opt-in VS Code profiles step, likewise.
 	. "$ModuleRoot\Application\Functions\Deploy-VSCodeProfiles.ps1"
+	# The startup tasks step, on by default; dot-sourced so it exists to Mock in every session.
+	# It must ALWAYS be mocked here: unmocked, a Bootstrap run would register real scheduled tasks.
+	. "$BootstrapFunctionsPath\Set-StartupTasks.ps1"
 }
 
 AfterAll {
@@ -99,6 +102,7 @@ Describe "Bootstrap" {
 		Mock Configure-Taskbar { }
 		Mock Initialize-WSLEnvironment { }
 		Mock SymbolicLinkMaker { }
+		Mock Set-StartupTasks { }
 		Mock Configure-WSLSSH { }
 		Mock Set-ItemProperty { }
 		Mock Restart-Machine { }
@@ -208,6 +212,42 @@ Describe "Bootstrap" {
 		Should -Invoke Deploy-AiMcpServers -Times 1 -Exactly
 		Should -Invoke Deploy-VSCodeProfiles -Times 1 -Exactly
 		Should -Invoke Set-ItemProperty -Times 1 -Exactly -ParameterFilter { $Name -eq 'LockedStartLayout' }
+	}
+
+	It "registers the startup tasks by default, with no switch of its own" {
+		$global:MachineType = 'Laptop'
+
+		Bootstrap
+
+		Should -Invoke Set-StartupTasks -Times 1 -Exactly -ParameterFilter { -not $List -and -not $Remove }
+	}
+
+	It "skips the startup tasks when BootstrapConfig.Steps.StartupTasks is off, and says so" {
+		$global:MachineType = 'Laptop'
+		$global:Configuration.BootstrapConfig = @{ Steps = @{ StartupTasks = $false } }
+
+		Bootstrap
+
+		Should -Invoke Set-StartupTasks -Times 0 -Exactly
+		Should -Invoke Write-LogWarning -Times 1 -Exactly -ParameterFilter { $Message -like "*BootstrapConfig.Steps.StartupTasks*" }
+		Should -Invoke SymbolicLinkMaker -Times 1 -Exactly
+	}
+
+	It "skips the startup tasks with -Skip StartupTasks" {
+		$global:MachineType = 'Laptop'
+
+		Bootstrap -Skip StartupTasks
+
+		Should -Invoke Set-StartupTasks -Times 0 -Exactly
+	}
+
+	It "honours a machine-type map for the startup tasks step" {
+		$global:MachineType = 'Test'
+		$global:Configuration.BootstrapConfig = @{ Steps = @{ StartupTasks = @{ Default = $true; Test = $false } } }
+
+		Bootstrap
+
+		Should -Invoke Set-StartupTasks -Times 0 -Exactly
 	}
 
 	It "checks the configuration schema once before the steps run" {
