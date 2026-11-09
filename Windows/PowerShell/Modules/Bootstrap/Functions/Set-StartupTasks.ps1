@@ -141,10 +141,12 @@ function Set-StartupTasks {
 
 	if (-not $WhatIfPreference) { Test-AdminPrivileges }
 
-	Write-LogTitle "[Startup Tasks]"
+	Write-LogTitle "Startup Tasks"
 
 	$user = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
 	$failed = 0
+	# The first line under the title keeps its leading blank line; the rest follow it directly.
+	$listed = $false
 
 	foreach ($taskName in $desired.Keys) {
 		$entry = $desired[$taskName]
@@ -174,12 +176,13 @@ function Set-StartupTasks {
 			$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -MultipleInstances IgnoreNew -ExecutionTimeLimit ([timespan]::Zero)
 
 			Register-ScheduledTask -TaskPath $taskPath -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Description $entry.Description -Force -ErrorAction Stop | Out-Null
-			Write-LogSuccess "Registered [$taskName]" -NoLeadingNewline
+			Write-LogSuccess "Registered [$taskName]" -NoLeadingNewline:$listed
 		}
 		catch {
 			$failed++
-			Write-LogError "Could not register [$taskName] => $($_.Exception.Message)" -Exception $_
+			Write-LogError "Could not register [$taskName] => $($_.Exception.Message)" -Exception $_ -NoLeadingNewline:$listed
 		}
+		$listed = $true
 	}
 
 	foreach ($taskName in $stale) {
@@ -187,12 +190,13 @@ function Set-StartupTasks {
 
 		try {
 			Unregister-ScheduledTask -TaskPath $taskPath -TaskName $taskName -Confirm:$false -ErrorAction Stop
-			Write-LogSuccess "Removed [$taskName] (no startup task needs it any more)" -NoLeadingNewline
+			Write-LogSuccess "Removed [$taskName] (no startup task needs it any more)" -NoLeadingNewline:$listed
 		}
 		catch {
 			$failed++
-			Write-LogError "Could not remove [$taskName] => $($_.Exception.Message)" -Exception $_
+			Write-LogError "Could not remove [$taskName] => $($_.Exception.Message)" -Exception $_ -NoLeadingNewline:$listed
 		}
+		$listed = $true
 	}
 
 	if ($failed -gt 0) {
