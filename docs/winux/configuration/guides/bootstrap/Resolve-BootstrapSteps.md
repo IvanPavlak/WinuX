@@ -15,7 +15,7 @@ Resolves which Bootstrap provisioning steps should run, in a single pass.
 
 1. Which bootstrap steps should run on this machine?
     - Options: Each entry under `BootstrapConfig.Steps` is either a boolean or a per-machine-type hashtable with a `Default` fallback. Most steps ship **on**, because they no-op when their own configuration section is empty. The fourteen that act the moment they run have no empty state to detect and ship **off**: `MicrosoftActivationScripts`, `Win11Debloat`, `RepositoryUpdate`, `DeveloperMode`, `NuGetConfig`, `NpmConfig`, `UpgradeAll`, `AiArtifacts`, `AiMarketplaces`, `AiMcpServers`, `AiProfileInit`, `ObsidianCli`, `VSCodeProfiles`, `LockedStartLayout`.
-    - Default: The shipped `Steps` map (`UpgradeAll = $false`, `RepositoryUpdate = $false`, plus `WSL` on everywhere except the `Test` type). Change only the steps you actually want to flip. `UpgradeAll` is the one worth a deliberate decision: switching it on lets Bootstrap run `winget upgrade --all` and its Scoop/Chocolatey equivalents, which upgrade every package already on the machine, not only the ones WinuX installs. `RepositoryUpdate` is the other: switching it on lets Bootstrap clone and pull every repository the machine's `RepositoryUpdateScope` names - see [`Resolve-RepositoryUpdateScope`](Resolve-RepositoryUpdateScope.md).
+    - Default: The shipped `Steps` map (`UpgradeAll = $false`, `RepositoryUpdate = $false`, plus `WSL` on everywhere except the `Test` type). Change only the steps you actually want to flip. `UpgradeAll` is the one worth a deliberate decision: switching it on lets Bootstrap run `winget upgrade --all` and its Scoop/Chocolatey equivalents, which upgrade every package already on the machine, not only the ones WinuX installs. `RepositoryUpdate` is the other: switching it on lets Bootstrap clone and pull every repository the machine's `RepositoryUpdateScope` names - see [`Resolve-RepositoryUpdateScope`](Resolve-RepositoryUpdateScope.md). `StartupTasks` (resolved right after `SymbolicLinks`, which is also where Bootstrap runs it) is on by default: it calls [`Set-StartupTasks`](Set-StartupTasks.md), which registers nothing while `Startup.Tasks` is empty. Turn it off, for example `StartupTasks = @{ Default = $true; Test = $false }`, on a machine where you register the scheduled tasks by hand or not at all.
     - More detail: [`BootstrapConfig`](../../configuration-reference.md#bootstrapconfig)
 2. Do you need to change where the app-list CSVs live?
     - Options: Repository-relative paths under `BootstrapConfig.DataFiles`, keyed `WinGetApps`, `ScoopApps`, `ChocolateyApps`.
@@ -68,6 +68,10 @@ Read-only checks. None of these change anything.
 Reload-PowerShellProfile
 $global:Configuration.BootstrapConfig
 Resolve-BootstrapSteps | Format-Table
+
+# One step: StartupTasks is True unless your configuration or -Skip says otherwise
+(Resolve-BootstrapSteps).StartupTasks
+(Resolve-BootstrapSteps -Skip StartupTasks).StartupTasks
 ```
 
 If a value reads back as empty, the two usual causes are a parse error in `Configuration.local.psd1` (run `Test-ConfigurationSchema`) and a key placed at the wrong nesting level.
@@ -97,5 +101,6 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 - [`Start-Win11Debloat`](../application/Start-Win11Debloat.md) - reads the same configuration
 - [`Update-Win11DebloatVendor`](../application/Update-Win11DebloatVendor.md) - reads the same configuration
 - [`Bootstrap`](Bootstrap.md) - reads the same configuration
+- [`Set-StartupTasks`](Set-StartupTasks.md) - what the `StartupTasks` step runs
 - [WinuXConfigurator](../../winux-configurator.md) - have an AI assistant walk these decisions with you
 - [Configuration reference](../../configuration-reference.md) - every key, section by section

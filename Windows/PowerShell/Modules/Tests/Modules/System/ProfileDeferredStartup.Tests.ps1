@@ -14,6 +14,7 @@ BeforeAll {
 	$tokens = $null
 	$parseErrors = $null
 	$profileAst = [System.Management.Automation.Language.Parser]::ParseFile($profilePath, [ref]$tokens, [ref]$parseErrors)
+	$script:ProfileAst = $profileAst
 
 	$script:Registration = $profileAst.FindAll({
 			param($node)
@@ -37,6 +38,28 @@ Describe "Profile deferred startup (PowerShell.OnIdle)" -Tag 'Integration' {
 			}, $true)
 
 		@($unregisterCalls).Count | Should -Be 0
+	}
+
+	It "queues the startup tasks of a new terminal: the prompt check first, then the TerminalOpen run" {
+		# The stage that was "RepositoryUpdate". The prompt check is registered before the tasks
+		# run because a task whose command asks for Administrator privileges stops the action it
+		# runs in, and must not take the prompt check with it.
+		$startupCalls = @($script:ProfileAst.FindAll({
+					param($node)
+					$node -is [System.Management.Automation.Language.CommandAst] -and
+					$node.GetCommandName() -in 'Register-StartupTaskPromptCheck', 'Invoke-StartupTasks', 'Invoke-StartupRepositoryUpdate', 'Register-RepositoryUpdatePromptCheck'
+				}, $true))
+
+		@($startupCalls | ForEach-Object { $_.GetCommandName() }) | Should -Be @('Register-StartupTaskPromptCheck', 'Invoke-StartupTasks')
+		$startupCalls[1].Extent.Text | Should -Match '-Trigger\s+TerminalOpen\b'
+		$startupCalls[1].Extent.Text | Should -Match '-RedrawPrompt\b'
+
+		$stageNames = @($script:ProfileAst.FindAll({
+					param($node)
+					$node -is [System.Management.Automation.Language.CommandAst] -and $node.GetCommandName() -eq 'Test-StartupStage'
+				}, $true) | ForEach-Object { $_.Extent.Text })
+		@($stageNames | Where-Object { $_ -match '-Name\s+"StartupTasks"' }).Count | Should -Be 1
+		@($stageNames | Where-Object { $_ -match '-Name\s+"RepositoryUpdate"' }).Count | Should -Be 0
 	}
 
 	It "runs the queue once and returns when another OnIdle arrives while it runs" {

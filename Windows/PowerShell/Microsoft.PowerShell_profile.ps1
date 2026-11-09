@@ -48,7 +48,7 @@ if (-not (Test-Path $ModulesPath)) {
 # same reason: Load-PathConfiguration expands the workspace templates (and the Schema stage reads
 # the result) before the first prompt. Restore-ShellPrompt rides along so the work queued for after
 # the prompt (below) can draw the prompt again without importing Helper from idle time: the
-# Terminal-Icons import, the repository update's -RedrawPrompt and the deferred-failure report all
+# Terminal-Icons import, the startup tasks' -RedrawPrompt and the deferred-failure report all
 # call it.
 foreach ($stageFunction in "Test-StartupStage", "Complete-StartupStage", "Get-ConfigSetting", "Test-ConfigValue", "Resolve-WorkspaceTemplate", "Expand-WorkspaceTemplates", "Restore-ShellPrompt") {
 	. (Join-Path $ModulesPath "Helper\Functions\$stageFunction.ps1")
@@ -271,21 +271,24 @@ if (Test-StartupStage -Name "LogMaintenance") {
 	Complete-StartupStage
 }
 
-# Automatic repository update - pulls the configured repositories once a day (the day starts at
-# Configuration.RepositoryUpdate.Startup.DayStartHour) or, with Startup.Schedule = "Interval", at
-# most once per Startup.IntervalHours; off unless Startup.Enabled is $true. Deferred like
-# LogMaintenance, and queued after it, so the prompt is already drawn when it runs; its compact
-# summary prints below the prompt, typing waits until the fetches finish, and -RedrawPrompt draws
-# the prompt again under the summary (without it PSReadLine waits on a blank line). Disabled or
-# already done today, the fired action returns in about a millisecond and redraws nothing.
-# Register-RepositoryUpdatePromptCheck then wraps the prompt (Daily schedule only), so a shell that
-# stays open into the next day - a machine woken from sleep - runs it at its first prompt then.
-if (Test-StartupStage -Name "RepositoryUpdate") {
+# Startup tasks of a newly opened terminal - every Configuration.Startup.Tasks entry with the
+# TerminalOpen trigger, each run inline by Invoke-StartupTasks when its Frequency says it is due
+# (the automatic repository update is one: once a day). Deferred like LogMaintenance, and queued
+# after it, so the prompt is already drawn when they run; what a task prints lands below the
+# prompt, typing waits until it is done, and -RedrawPrompt draws the prompt again under the output
+# (without it PSReadLine waits on a blank line). With no such task, or none due, the fired action
+# prints nothing and redraws nothing. Register-StartupTaskPromptCheck wraps the prompt when a
+# TerminalOpen task runs once per day, so a shell that stays open into the next day - a machine
+# woken from sleep - runs it at its first prompt then. It is registered first: a task whose
+# command asks for Administrator privileges stops the action it runs in, and must not take the
+# prompt check with it. The deprecated RepositoryUpdate.Startup keys still work:
+# Get-StartupTaskDefinitions turns them into such a task.
+if (Test-StartupStage -Name "StartupTasks") {
 	$deferredStartup.Add(@{
-			Name   = "RepositoryUpdate"
+			Name   = "StartupTasks"
 			Action = {
-				Invoke-StartupRepositoryUpdate -RedrawPrompt
-				Register-RepositoryUpdatePromptCheck
+				Register-StartupTaskPromptCheck
+				Invoke-StartupTasks -Trigger TerminalOpen -RedrawPrompt
 			}
 		})
 	Complete-StartupStage

@@ -1294,6 +1294,9 @@
 		#                                the NpmRegistries and writes it into PathTemplates.NpmConfig)
 		# - Taskbar                    : Configure-Taskbar -FromBootstrap
 		# - SymbolicLinks              : SymbolicLinkMaker
+		# - StartupTasks               : Set-StartupTasks (registers the scheduled tasks behind the
+		#                                SignIn / Unlock / Wake startup tasks and removes the ones no
+		#                                longer needed; nothing while Startup.Tasks is empty)
 		# - AiArtifacts                : Deploy-AiArtifacts (OFF by default - links the skills, mods,
 		#                                rules, prompts and agents under AiArtifacts.Root into the
 		#                                AiHarnesses AiArtifacts.Deploy names, see docs/winux/ai/artifacts.md)
@@ -2069,8 +2072,7 @@
 	# Everything ships OFF - opt in from Configuration.local.psd1 (hashtables deep-merge, so a
 	# single key there is enough).
 	# → Consumer: Update-Repositories (IncludeDefaultBranch), Resolve-RepositoryDefaultBranch
-	#   (DefaultBranch), Invoke-StartupRepositoryUpdate and Register-RepositoryUpdatePromptCheck
-	#   (Startup, read through Get-RepositoryUpdateStartupSettings)
+	#   (DefaultBranch), Get-StartupTaskDefinitions (Startup, deprecated - see below)
 	#
 	# KEYS:
 	# - IncludeDefaultBranch : Also fast-forward the repository's default branch when another
@@ -2087,20 +2089,25 @@
 	# - ArchiveRoot          : Where `Update-Repositories -Archive` lands: absolute, or relative to
 	#                          the Desktop. Empty => the Desktop. -InCurrentDirectory replaces it;
 	#                          an entry's ArchiveFolder (RepositoryGroups) nests below either.
+	# - Startup              : DEPRECATED since 2.12.0, removed in 3.0.0 - write the automatic update
+	#                          as a Startup.Tasks entry instead (Startup Tasks Configuration, below):
+	#                          @{ Name = "RepositoryUpdate"; Command = "Update-Repositories -All -NoClone -Quiet"
+	#                             Trigger = "TerminalOpen"; Frequency = "OncePerDay" }
+	#                          Still honored until then: while Startup.Enabled is $true and no
+	#                          startup task is named RepositoryUpdate, Get-StartupTaskDefinitions
+	#                          adds one that does what the keys below describe.
 	# - Startup.Enabled      : Update repositories automatically once the first prompt of a shell
-	#                          is drawn (profile stage "RepositoryUpdate", deferred until the shell
-	#                          is idle). Never clones a missing repository and never asks for
+	#                          is drawn. Never clones a missing repository and never asks for
 	#                          Administrator; prints one line per repository plus a totals line.
-	# - Startup.Schedule     : When the automatic run is due (stamp file: Logs\.last-repository-update).
-	#                          "Daily" (default) => once per day: the first shell after the day
-	#                          starts runs it, and a shell already open then (a machine woken from
-	#                          sleep, a terminal left open overnight) runs it at its next prompt.
-	#                          "Interval" => at most once per IntervalHours, counted from the last
-	#                          run and checked only when a shell starts. Either way a machine that
-	#                          was off for days updates on its first shell back.
+	# - Startup.Schedule     : "Daily" (default) => once per day (Frequency = "OncePerDay"): the
+	#                          first shell after the day starts runs it, and a shell already open
+	#                          then (a machine woken from sleep, a terminal left open overnight)
+	#                          runs it at its next prompt. "Interval" => at most once per
+	#                          IntervalHours (Frequency = "Interval"), checked only when a shell
+	#                          starts. Either way a machine that was off for days updates on its
+	#                          first shell back.
 	# - Startup.DayStartHour : Daily only. The hour (0-23) a new day starts; a shell opened before
-	#                          it still counts as the day before, so late-night work never triggers
-	#                          a run. Default 6.
+	#                          it still counts as the day before. Default 6.
 	# - Startup.IntervalHours: Interval only. Minimum hours between two automatic runs. Default 24.
 	# - Startup.Scope        : Which groups the automatic run updates, per machine type - the same
 	#                          shape as BootstrapConfig.RepositoryUpdateScope. Absent => that key,
@@ -2110,12 +2117,6 @@
 	#   RepositoryUpdate = @{
 	#       IncludeDefaultBranch = $true
 	#       DefaultBranch        = "master"
-	#       Startup              = @{
-	#           Enabled       = $true
-	#           Schedule      = "Daily"
-	#           DayStartHour  = 6
-	#           Scope         = @{ Default = "All"; Test = "Private" }
-	#       }
 	#   }
 	# ==========================================================================
 	RepositoryUpdate              = @{
@@ -2128,6 +2129,80 @@
 			DayStartHour  = 6
 			IntervalHours = 24
 		}
+	}
+
+	# ==========================================================================
+	# Startup Tasks Configuration
+	# ==========================================================================
+	# Commands this machine runs on its own: at sign-in, at unlock, after waking from sleep, or
+	# when a terminal opens. Tasks ships EMPTY, so nothing runs until Configuration.local.psd1
+	# lists a task. Hashtables deep-merge (a Conditions entry of yours is added to Network below);
+	# the Tasks array replaces wholesale.
+	# → Consumer: Invoke-StartupTasks and Invoke-StartupTask (run the tasks),
+	#   Get-StartupTaskDefinitions (reads and validates Tasks), Test-StartupCondition (Conditions),
+	#   Set-StartupTasks (the scheduled tasks behind SignIn / Unlock / Wake - run it, or Bootstrap,
+	#   when the first task of one of those triggers is added), Register-StartupTaskPromptCheck
+	#   (TerminalOpen tasks that run once per day)
+	#
+	# KEYS:
+	# - Tasks         : The startup tasks, run in the order they are written. Each is a hashtable -
+	#                   its keys are exactly the parameters of Invoke-StartupTask:
+	#     Name          : Required, unique. Letters, digits, "-" and "_".
+	#     Command       : The command line to run, as typed at a prompt (aliases work). Without
+	#                     one the task just opens a terminal.
+	#     Trigger       : Required. One or several of "SignIn", "Unlock", "Wake", "TerminalOpen".
+	#                     Nothing runs before sign-in.
+	#     Machine       : Machine scope ("PC/Laptop"), as everywhere else. Absent => every machine.
+	#     Hostname      : One or several computer names. With Machine, both must match.
+	#     Requires      : Names of Conditions entries the task waits for.
+	#     Window        : "Tab" (default) or "Hidden". A TerminalOpen run is always inline, in the
+	#                     shell that just opened.
+	#     KeepOpen      : "OnFailure" (default), "Always" or "Never" - whether the task's tab stays.
+	#     Parallel      : $true => start it and go on to the next task without waiting.
+	#     Frequency     : "EveryTime" (default), "OncePerBoot", "OncePerDay" or "Interval", with
+	#                     DayStartHour (0-23, default 6) and IntervalHours (default 24). Only a run
+	#                     that succeeded counts, so a failed or skipped task is due again.
+	#     Elevation     : Absent => unelevated; a command that asks for Administrator fails at once.
+	#                     "Relaunch" => such a command reruns itself in an Administrator tab.
+	#                     "Prompt"   => the task starts elevated (one Windows consent dialog).
+	#                     "Silent"   => no dialog: Set-StartupTasks copies the command into an
+	#                                   elevated scheduled task. It is a standing way to run that
+	#                                   command as Administrator - use it deliberately.
+	#     Timeout       : Seconds the runner waits before it moves on (default 600, 0 => no limit).
+	#     Enabled       : $false parks the task.
+	# - Conditions    : Named tests a task can require: Name = @{ Test; Timeout; Interval }. Test is
+	#                   a command line that is met when its output is truthy, like an `if`; for a
+	#                   program whose exit code is the answer, end it with `$LASTEXITCODE -eq 0`.
+	#                   Timeout (default 60) and Interval (default 2) are seconds. A TerminalOpen
+	#                   run tests once and never waits. Network ships as the example.
+	# - FailureReport : "Tab" (default) => after a SignIn / Unlock / Wake run in which a task
+	#                   failed, was skipped or timed out, one terminal tab lists them. "None" => only
+	#                   the log.
+	#
+	# Example (Configuration.local.psd1):
+	#   Startup = @{
+	#       Conditions = @{
+	#           MyVpn = @{ Test = 'myvpn status *> $null; $LASTEXITCODE -eq 0'; Timeout = 120 }
+	#       }
+	#       Tasks      = @(
+	#           @{ Name = "RepositoryUpdate"; Command = "Update-Repositories -All -NoClone -Quiet"
+	#              Trigger = @("SignIn", "TerminalOpen"); Frequency = "OncePerDay"
+	#              Requires = @("Network"); Window = "Hidden"; Parallel = $true }
+	#           @{ Name = "MyWorkspace"; Command = "Open-Workspace MyWorkspace"; Trigger = "SignIn"
+	#              Hostname = "LAPTOP-PERSONAL"; Requires = @("MyVpn") }
+	#       )
+	#   }
+	# ==========================================================================
+	Startup                       = @{
+		Tasks         = @()
+		Conditions    = @{
+			Network = @{
+				Test     = '[bool](Get-NetConnectionProfile -ErrorAction SilentlyContinue | Where-Object { $_.IPv4Connectivity -eq "Internet" -or $_.IPv6Connectivity -eq "Internet" })'
+				Timeout  = 60
+				Interval = 2
+			}
+		}
+		FailureReport = "Tab"
 	}
 
 	# ==========================================================================

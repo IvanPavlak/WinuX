@@ -4,6 +4,9 @@ function Get-RepositoryUpdateStartupSettings {
 		Reads RepositoryUpdate.Startup with every default filled in.
 
 	.DESCRIPTION
+		DEPRECATED since 2.12.0, removed in 3.0.0: the automatic repository update is a startup
+		task now, and Get-StartupTaskDefinitions replaces this function. It keeps working unchanged until then.
+
 		The one place that knows the automatic repository update's keys and their defaults, so
 		Invoke-StartupRepositoryUpdate (whether a run is due) and Register-RepositoryUpdatePromptCheck
 		(whether open shells watch for a new day) can never disagree.

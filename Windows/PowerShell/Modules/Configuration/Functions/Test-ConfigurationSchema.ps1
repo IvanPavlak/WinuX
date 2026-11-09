@@ -41,8 +41,13 @@ function Test-ConfigurationSchema {
 		later deprecation adds to. A deprecation never counts as a failure, even under -Strict:
 		the old shape keeps working until the next MAJOR. A key that the base Configuration.psd1
 		still ships only warns when it is set to something other than the shipped default
-		(NotDefault), so a vanilla configuration stays silent. The table is empty while nothing
-		is deprecated.
+		(NotDefault), so a vanilla configuration stays silent.
+
+		It checks the shape of the Startup section: Startup, Startup.Conditions and every
+		condition must be hashtables, and Startup.Tasks an array of hashtables. What a task may
+		hold is Get-StartupTaskDefinitions' business - it reports an invalid task whenever the
+		startup tasks run - because this function runs before the first prompt and must not load
+		the module that knows.
 
 		Call this function immediately after Load-PathConfiguration during the bootstrap
 		or profile initialization sequence to surface typos and missing entries early; the
@@ -79,9 +84,11 @@ function Test-ConfigurationSchema {
 	# Deprecated configuration: Path (dotted), Since, Removal, Replacement and When - Present
 	# (the key exists), NotEmpty (Test-ConfigValue) or NotDefault (differs from Default, the
 	# value the base Configuration.psd1 ships; an array compares element by element).
-	# Empty while nothing is deprecated; a later deprecation adds one entry per key, e.g.
+	# A later deprecation adds one entry per key, e.g.
 	#   @{ Path = 'Section.OldKey'; Since = '2.1.0'; Removal = '3.0.0'; When = 'Present'; Replacement = 'Section.NewKey' }
-	$deprecations = @()
+	$deprecations = @(
+		@{ Path = 'RepositoryUpdate.Startup.Enabled'; Since = '2.12.0'; Removal = '3.0.0'; When = 'NotDefault'; Default = $false; Replacement = 'a Startup.Tasks entry: @{ Name = "RepositoryUpdate"; Command = "Update-Repositories -All -NoClone -Quiet"; Trigger = "TerminalOpen"; Frequency = "OncePerDay" }' }
+	)
 
 	$failures = [System.Collections.Generic.List[string]]::new()
 
@@ -276,6 +283,36 @@ function Test-ConfigurationSchema {
 				$parts = $item.Split('/')
 				if ($parts.Count -lt 2 -or $parts.Count -gt 3 -or $aiKinds -notcontains $parts[0].ToLowerInvariant() -or @($parts | Where-Object { -not $_ }).Count -gt 0) {
 					$failures.Add("AiArtifacts.Exclude has [$item] - expected KIND/NAME or KIND/SOURCE/NAME, e.g. skills/tdd")
+				}
+			}
+		}
+	}
+
+	# Startup tasks: only the shape. The keys of a task are validated by Get-StartupTaskDefinitions
+	# when the tasks run - this function is dot-sourced before the first prompt and must stay free
+	# of anything that loads a module.
+	$startup = $Configuration['Startup']
+	if ($null -ne $startup) {
+		if (-not ($startup -is [System.Collections.IDictionary])) {
+			$failures.Add("Startup must be a hashtable (Tasks, Conditions, FailureReport)")
+		}
+		else {
+			$index = 0
+			foreach ($task in @($startup['Tasks'])) {
+				$index++
+				if ($null -ne $task -and -not ($task -is [System.Collections.IDictionary])) {
+					$failures.Add("Startup.Tasks[$index] must be a hashtable, e.g. @{ Name = `"MyTask`"; Command = `"...`"; Trigger = `"SignIn`" }")
+				}
+			}
+			$startupConditions = $startup['Conditions']
+			if ($null -ne $startupConditions -and -not ($startupConditions -is [System.Collections.IDictionary])) {
+				$failures.Add("Startup.Conditions must be a hashtable of condition name => @{ Test = `"...`"; Timeout = 60 }")
+			}
+			elseif ($null -ne $startupConditions) {
+				foreach ($conditionName in $startupConditions.Keys) {
+					if (-not ($startupConditions[$conditionName] -is [System.Collections.IDictionary])) {
+						$failures.Add("Startup.Conditions.$conditionName must be a hashtable with a Test command")
+					}
 				}
 			}
 		}

@@ -1,5 +1,5 @@
 {
-  "Version": "2.11.0",
+  "Version": "2.12.0",
   "Functions": {
     "Add-BrowserGroup": {
       "Module": "Configuration",
@@ -2033,6 +2033,27 @@
       "Module": "Helper",
       "Parameters": {}
     },
+    "Get-StartupTaskDefinitions": {
+      "Module": "Workflow",
+      "Parameters": {
+        "Configuration": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "IncludeLegacyDisabled": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Name": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Trigger": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
     "Get-SwaggerCloseTitlePatterns": {
       "Module": "Workflow",
       "Parameters": {
@@ -3082,6 +3103,112 @@
         }
       }
     },
+    "Invoke-StartupTask": {
+      "Module": "Workflow",
+      "Parameters": {
+        "Command": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ConditionDefinitions": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "DayStartHour": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Elevation": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Enabled": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Force": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Frequency": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Hostname": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "IntervalHours": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "KeepOpen": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Machine": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Name": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "NoConditionWait": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Parallel": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Requires": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ResultFile": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Timeout": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Trigger": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Window": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Invoke-StartupTaskPromptCheck": {
+      "Module": "Workflow",
+      "Parameters": {}
+    },
+    "Invoke-StartupTasks": {
+      "Module": "Workflow",
+      "Parameters": {
+        "Name": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "PassThru": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "RedrawPrompt": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Trigger": {
+          "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
     "Invoke-TerminateWindowsTerminalTabsExit": {
       "Module": "System",
       "Parameters": {}
@@ -3590,6 +3717,43 @@
         },
         "Path": {
           "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "New-StartupTaskShellCommand": {
+      "Module": "Workflow",
+      "Parameters": {
+        "Arguments": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "Command": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "Encoded": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ExitAlways": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ExitOn": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "LoadProfile": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "SkipStage": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "TaskShell": {
+          "Mandatory": false,
           "Aliases": []
         }
       }
@@ -4152,6 +4316,10 @@
     },
     "Register-RepositoryUpdatePromptCheck": {
       "Module": "Git",
+      "Parameters": {}
+    },
+    "Register-StartupTaskPromptCheck": {
+      "Module": "Workflow",
       "Parameters": {}
     },
     "Reload-PowerShellProfile": {
@@ -5454,6 +5622,19 @@
         }
       }
     },
+    "Set-StartupTasks": {
+      "Module": "Bootstrap",
+      "Parameters": {
+        "List": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Remove": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
     "Set-SystemTheme": {
       "Module": "System",
       "Parameters": {
@@ -5926,6 +6107,35 @@
           "Aliases": []
         },
         "FilePath": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Start-StartupTaskShell": {
+      "Module": "Workflow",
+      "Parameters": {
+        "Administrator": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Arguments": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "KeepOpen": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Name": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "Window": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "WindowId": {
           "Mandatory": false,
           "Aliases": []
         }
@@ -6483,6 +6693,23 @@
         }
       }
     },
+    "Test-StartupCondition": {
+      "Module": "Workflow",
+      "Parameters": {
+        "Definitions": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Name": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "NoWait": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
     "Test-StartupStage": {
       "Module": "Helper",
       "Parameters": {
@@ -6496,6 +6723,35 @@
         },
         "Skip": {
           "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Test-StartupTaskDue": {
+      "Module": "Workflow",
+      "Parameters": {
+        "BootTime": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "DayStartHour": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Frequency": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "IntervalHours": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Now": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "StampFile": {
+          "Mandatory": true,
           "Aliases": []
         }
       }
@@ -6951,6 +7207,31 @@
         },
         "Vault": {
           "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Wait-StartupTaskResult": {
+      "Module": "Workflow",
+      "Parameters": {
+        "Name": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "PollMilliseconds": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "ResultFile": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "StampFile": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Timeout": {
+          "Mandatory": false,
           "Aliases": []
         }
       }
@@ -7509,6 +7790,10 @@
     "SmallDisplayMachineType",
     "SnapInsetPercent",
     "SpecialFolders",
+    "Startup",
+    "Startup.Conditions",
+    "Startup.FailureReport",
+    "Startup.Tasks",
     "SystemTheme",
     "SystemTheme.Steps",
     "TaskbarConfiguration",
@@ -7590,10 +7875,18 @@
     "ZoneNameMappings.Zero"
   ],
   "Deprecated": {
-    "Functions": {},
+    "Functions": {
+      "Get-RepositoryUpdateDayStart": "2.12.0",
+      "Get-RepositoryUpdateStartupSettings": "2.12.0",
+      "Invoke-RepositoryUpdatePromptCheck": "2.12.0",
+      "Invoke-StartupRepositoryUpdate": "2.12.0",
+      "Register-RepositoryUpdatePromptCheck": "2.12.0",
+      "Test-RepositoryUpdateStampFresh": "2.12.0"
+    },
     "Parameters": {},
     "ConfigurationKeys": {
-      "BootstrapConfig.WSLSetup": "0.1.26"
+      "BootstrapConfig.WSLSetup": "0.1.26",
+      "RepositoryUpdate.Startup": "2.12.0"
     }
   }
 }

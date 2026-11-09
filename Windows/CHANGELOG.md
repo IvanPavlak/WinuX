@@ -8,6 +8,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.12.0] - 2026-11-09
+
+### Added
+
+- **Startup tasks: a machine can run any command on its own at sign-in, at unlock, after waking from sleep, or when a terminal opens.** `Startup.Tasks` lists them, and each entry is exactly the parameter set of the new `Invoke-StartupTask`: a `Name`, a `Command` as typed at a prompt, one or several `Trigger` values (`SignIn`, `Unlock`, `Wake`, `TerminalOpen`), a `Machine` scope or `Hostname`, the conditions it `Requires`, a `Window` (`Tab` or `Hidden`), `KeepOpen`, `Parallel`, a `Frequency` (`EveryTime`, `OncePerBoot`, `OncePerDay`, `Interval`), an `Elevation` (`Relaunch`, `Prompt`, `Silent`), a `Timeout` and `Enabled`. `Invoke-StartupTasks -Trigger <Trigger>` runs the tasks of one trigger in the order they are written, each in its own tab or hidden shell, and reads the list at every run, so an edited configuration takes effect at the next trigger; `-WhatIf` lists what would run and why the rest would not. A task is stamped only after it succeeded, so a failed or skipped one is due again, and the same task never runs twice at once. The base ships `Tasks` empty. Docs: the `Invoke-StartupTasks` configuration guide. Covered by `Modules/Tests/Modules/Workflow/Invoke-StartupTask.Tests.ps1`, `Invoke-StartupTasks.Tests.ps1` and `Get-StartupTaskDefinitions.Tests.ps1`.
+- **`Startup.Conditions` names the things a startup task can wait for.** A condition is a `Test` command line that is met when its output is truthy, with a `Timeout` and an `Interval` in seconds; `Test-StartupCondition` waits for one. The base ships `Network` as the example. A task whose condition is not met in time is skipped and reported; a `TerminalOpen` run tests once and never waits, so a shell opened offline is not held up. Covered by `Modules/Tests/Modules/Workflow/Test-StartupCondition.Tests.ps1`.
+- **`Set-StartupTasks` registers the Windows scheduled tasks behind `SignIn`, `Unlock` and `Wake`, and removes the ones nothing needs any more.** It keeps one scheduled task per trigger in use under `\WinuX\`, not one per startup task, each starting `Invoke-StartupTasks` in a shell with no window. A task with `Elevation = "Silent"` gets an elevated scheduled task of its own with its command copied in at registration, so a later configuration edit cannot run as Administrator without `Set-StartupTasks` running again. `-List` shows what is registered, missing and stale; `-Remove` removes everything. The new Bootstrap step `StartupTasks` runs it, on by default; it registers nothing while `Startup.Tasks` is empty. Covered by `Modules/Tests/Modules/Bootstrap/Set-StartupTasks.Tests.ps1`.
+- **`Startup.FailureReport` decides how a failed startup run is shown.** With `"Tab"` (shipped), one terminal tab lists the tasks that failed, were skipped or timed out after a `SignIn`, `Unlock` or `Wake` run; `"None"` leaves only the session log.
+- **Helper functions of the startup tasks**: `Get-StartupTaskDefinitions` (reads and validates `Startup.Tasks`; an invalid task is reported at every run and never started), `Test-StartupTaskDue`, `Start-StartupTaskShell`, `Wait-StartupTaskResult`, `New-StartupTaskShellCommand`, `Register-StartupTaskPromptCheck` and `Invoke-StartupTaskPromptCheck` (a shell left open overnight runs its once-a-day tasks at the first prompt of the new day).
+
+### Changed
+
+- **The profile stage `RepositoryUpdate` is now `StartupTasks`.** It runs every `TerminalOpen` startup task, the automatic repository update among them. Migration: write `StartupTasks` where `WINUX_STARTUP_SKIP` or `Measure-ShellStartup -Stages` named `RepositoryUpdate`.
+- **The automatic repository update runs as a startup task.** What it does is unchanged, with two differences: its stamp is `Logs\.startup-task-RepositoryUpdate.stamp` and is written only after a run that did not throw, so the first shell after upgrading updates once more that day and a run that threw is tried again; and with `Requires = @("Network")` on the task an offline shell skips it without trying.
+- **`Test-AdminPrivileges` never asks inside a startup task.** A task's command that needs Administrator privileges stops with a message naming the `Elevation` option, unless the task has `Elevation = "Relaunch"`, in which case it starts again in an Administrator tab without the confirmation question. Outside a startup task nothing changes. Covered by `Modules/Tests/Modules/Helper/Test-AdminPrivileges.Tests.ps1`.
+- **`Test-ConfigurationSchema` checks the shape of `Startup`**: the section, `Startup.Conditions` and every condition must be hashtables, and `Startup.Tasks` an array of hashtables.
+
+### Deprecated
+
+All of these keep working until 3.0.0. `Test-ConfigurationSchema` reports the key; `Invoke-StartupRepositoryUpdate` and `Register-RepositoryUpdatePromptCheck` warn once per session.
+
+- **`RepositoryUpdate.Startup` (`Enabled`, `Schedule`, `DayStartHour`, `IntervalHours`, `Scope`).** While `Enabled` is `$true` and no startup task is named `RepositoryUpdate`, `Get-StartupTaskDefinitions` builds that task from the keys, so an existing configuration behaves as before. Migration: set `Enabled = $false` (or drop the block from `Configuration.local.psd1`) and add `@{ Name = "RepositoryUpdate"; Command = "Update-Repositories -All -NoClone -Quiet"; Trigger = "TerminalOpen"; Frequency = "OncePerDay" }` to `Startup.Tasks`. `Schedule = "Interval"` becomes `Frequency = "Interval"` with `IntervalHours`; `DayStartHour` keeps its name; a `Scope` that differs per machine type becomes one task per scope, each with `Machine` and `Update-Repositories -Group`.
+- **`Invoke-StartupRepositoryUpdate`** is a wrapper that runs the startup task named `RepositoryUpdate`. Migration: `Invoke-StartupTask RepositoryUpdate` (add `-Force` to run it now), or `Invoke-StartupTasks -Trigger TerminalOpen`.
+- **`Register-RepositoryUpdatePromptCheck` and `Invoke-RepositoryUpdatePromptCheck`.** Migration: `Register-StartupTaskPromptCheck` and `Invoke-StartupTaskPromptCheck`, which do the same for every once-a-day `TerminalOpen` task.
+- **`Get-RepositoryUpdateStartupSettings`, `Test-RepositoryUpdateStampFresh` and `Get-RepositoryUpdateDayStart`.** Migration: `Get-StartupTaskDefinitions` for the settings, `Test-StartupTaskDue` for the frequency check.
+
 ## [2.11.0] - 2026-11-06
 
 ### Added
@@ -1890,7 +1916,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.11.0...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.12.0...HEAD
+[2.12.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.11.0...winux/v2.12.0
 [2.11.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.10.2...winux/v2.11.0
 [2.10.2]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.10.1...winux/v2.10.2
 [2.10.1]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.10.0...winux/v2.10.1

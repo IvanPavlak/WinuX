@@ -1,10 +1,12 @@
 #Requires -Modules Pester
 
 BeforeAll {
-	# Put back the prompt, the configuration and the prompt-check state this file found.
+	# Put back the prompt, the configuration, the prompt-check state and the deprecation flags this
+	# file found.
 	$script:SavedConfiguration = $global:Configuration
 	$script:SavedPrompt = ${function:global:prompt}
 	$script:SavedState = $global:WinuXRepositoryUpdatePrompt
+	$script:SavedDeprecationWarned = $global:WinuXDeprecationWarned
 
 	$ModuleRoot = (Get-RepositoryPath).Modules
 
@@ -17,14 +19,19 @@ AfterAll {
 	$global:Configuration = $script:SavedConfiguration
 	Set-Item -LiteralPath function:global:prompt -Value $script:SavedPrompt
 	$global:WinuXRepositoryUpdatePrompt = $script:SavedState
+	$global:WinuXDeprecationWarned = $script:SavedDeprecationWarned
 }
 
 Describe "Register-RepositoryUpdatePromptCheck" {
 	BeforeEach {
 		$global:Configuration = @{ RepositoryUpdate = @{ Startup = @{ Enabled = $true } } }
 		$global:WinuXRepositoryUpdatePrompt = $null
+		# A fresh session as far as the once-per-session deprecation warning goes.
+		$global:WinuXDeprecationWarned = $null
 		$script:OriginalPrompt = { "original> " }
 		Set-Item -LiteralPath function:global:prompt -Value $script:OriginalPrompt
+
+		Mock Write-LogWarning { }
 	}
 
 	It "does nothing while the startup update is disabled" {
@@ -77,5 +84,42 @@ Describe "Register-RepositoryUpdatePromptCheck" {
 
 		${function:global:prompt}.ToString().Trim() | Should -Be "Invoke-RepositoryUpdatePromptCheck"
 		$global:WinuXRepositoryUpdatePrompt.Original.ToString() | Should -Be $reloadedPrompt.ToString()
+	}
+
+	Context "deprecation warning" {
+		It "warns once per session, however often it is called" {
+			Register-RepositoryUpdatePromptCheck
+			Register-RepositoryUpdatePromptCheck
+			Register-RepositoryUpdatePromptCheck
+
+			Should -Invoke Write-LogWarning -Times 1 -Exactly
+		}
+
+		It "warns even while the startup update is disabled" {
+			$global:Configuration.RepositoryUpdate.Startup.Enabled = $false
+
+			Register-RepositoryUpdatePromptCheck
+
+			Should -Invoke Write-LogWarning -Times 1 -Exactly
+		}
+
+		It "stays quiet in a session that was already warned, and still wraps the prompt" {
+			$global:WinuXDeprecationWarned = @{ 'Register-RepositoryUpdatePromptCheck' = $true }
+
+			Register-RepositoryUpdatePromptCheck
+
+			Should -Invoke Write-LogWarning -Times 0 -Exactly
+			${function:global:prompt}.ToString().Trim() | Should -Be "Invoke-RepositoryUpdatePromptCheck"
+		}
+
+		It "keeps the flags other deprecated functions set" {
+			$global:WinuXDeprecationWarned = @{ 'Invoke-StartupRepositoryUpdate' = $true }
+
+			Register-RepositoryUpdatePromptCheck
+
+			Should -Invoke Write-LogWarning -Times 1 -Exactly
+			$global:WinuXDeprecationWarned['Invoke-StartupRepositoryUpdate'] | Should -BeTrue
+			$global:WinuXDeprecationWarned['Register-RepositoryUpdatePromptCheck'] | Should -BeTrue
+		}
 	}
 }

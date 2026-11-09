@@ -32,7 +32,8 @@ function Bootstrap {
 		9. Environment variables, Conda environments, NuGet config, npm config, taskbar pins, then
 		   Set-TaskbarSettings and Set-VisualEffects (no step toggle - both no-op until their
 		   configuration sections are set)
-		10. WSL environment initialization, symbolic links, AI artifacts - skills, mods, rules,
+		10. WSL environment initialization, symbolic links, the scheduled tasks of the configured
+		    startup tasks (Set-StartupTasks; nothing while Startup.Tasks is empty), AI artifacts - skills, mods, rules,
 		    prompts and agents, on Windows and in WSL (opt-in via Steps.AiArtifacts), Claude Code
 		    plugin marketplaces and their plugins (opt-in via Steps.AiMarketplaces), the MCP servers of Claude Code and
 		    Codex (opt-in via Steps.AiMcpServers), the AI profile's one-time sign-ins through
@@ -274,6 +275,11 @@ function Bootstrap {
 		}
 
 		if ($steps.SymbolicLinks) { SymbolicLinkMaker } else { Write-LogWarning "Symbolic links skipped (BootstrapConfig.Steps.SymbolicLinks)" }
+
+		# Startup tasks (Startup.Tasks) - registers the scheduled tasks that run them at sign-in,
+		# unlock and wake, and removes the ones nothing needs any more. The base lists no startup
+		# task, so on a vanilla configuration this registers nothing.
+		if ($steps.StartupTasks) { Set-StartupTasks } else { Write-LogWarning "Startup tasks skipped (BootstrapConfig.Steps.StartupTasks)" }
 
 		# Machine-global AI artifacts (docs/winux/ai/artifacts.md) - links the skills, mods, rules, prompts
 		# and agents under AiArtifacts.Root into the apps AiArtifacts.Deploy names, on Windows and in WSL.

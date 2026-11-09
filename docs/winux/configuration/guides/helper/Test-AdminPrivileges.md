@@ -13,6 +13,8 @@ Verifies or requests Administrator privileges, and decides whether a non-elevate
 
 The Windows UAC consent dialog appears in both cases: it is raised by Windows for the elevated relaunch and cannot be suppressed from PowerShell. `AutoElevate` removes only the WinuX question in front of it. An explicit `-AutoElevate` or `-AutoElevate:$false` passed to `Test-AdminPrivileges` wins over the key, and `-CheckOnly` never reads it.
 
+Inside a startup task nobody is there to answer, so the function never asks there and `AutoElevate` plays no part: the task's own [`Elevation`](../../configuration-reference.md#startup-tasks) key decides. Without `Elevation = "Relaunch"` a command that needs Administrator privileges stops at once with `Startup task [<Name>] needs Administrator privileges - set Elevation = "Relaunch", "Prompt" or "Silent" on the task`. With `"Relaunch"` it reruns without the question, and what it reruns in the Administrator tab is the task itself, not the line that happened to call it. Either way the pipeline it was called from stops, as it always does - so an inline task (the `TerminalOpen` trigger) that asks for Administrator also ends the rest of that terminal's startup tasks. See [`Invoke-StartupTasks`](../workflow/Invoke-StartupTasks.md).
+
 ## Decisions
 
 1. Should admin-only commands relaunch elevated without asking first?
@@ -79,5 +81,6 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 
 - [`Test-AdminPrivileges` in the Helper module reference](../../../modules/helper.md#test-adminprivileges) - parameters, usage and behaviour
 - [`Open-Terminal`](../application/Open-Terminal.md) - opens the elevated Windows Terminal tab the command is rerun in
+- [`Invoke-StartupTask`](../workflow/Invoke-StartupTask.md) - sets the startup-task context this function reads, and its `-Elevation` options
 - [Helper configuration guides](README.md) - every guide for this module
 - [WinuXConfigurator](../../winux-configurator.md)

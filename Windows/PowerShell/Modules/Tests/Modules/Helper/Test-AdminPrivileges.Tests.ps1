@@ -23,22 +23,26 @@ BeforeAll {
 	# throw only stops that runspace, whose InvocationStateInfo then reports State = Stopped. The
 	# collaborators are replaced by recording stubs (functions take precedence over cmdlets, so
 	# Get-PSCallStack is replaced too) and every call lands in $Calls for the assertions.
+	# -StartupTask is what Invoke-StartupTask leaves in $global:WinuXStartupTask while a task's
+	# command runs; without it the global is cleared, so no test inherits a task from another.
 	$script:InvokeIsolated = {
 		param(
 			[hashtable]$ConfigurationValue = @{},
 			[hashtable]$Parameters = @{},
 			[object]$SelectionAnswer = "Yes",
-			[string[]]$CallStackLines = @("", "Install-Something -Foo")
+			[string[]]$CallStackLines = @("", "Install-Something -Foo"),
+			[hashtable]$StartupTask = $null
 		)
 
 		$calls = [System.Collections.Concurrent.ConcurrentQueue[object]]::new()
 		$powershell = [powershell]::Create()
 		try {
 			$null = $powershell.AddScript({
-					param($FunctionFiles, $ConfigurationValue, $Parameters, $SelectionAnswer, $CallStackLines, $Calls)
+					param($FunctionFiles, $ConfigurationValue, $Parameters, $SelectionAnswer, $CallStackLines, $Calls, $StartupTask)
 
 					foreach ($functionFile in $FunctionFiles) { . $functionFile }
 					$global:Configuration = $ConfigurationValue
+					$global:WinuXStartupTask = $StartupTask
 
 					function Get-PSCallStack {
 						foreach ($line in $CallStackLines) {
@@ -65,7 +69,7 @@ BeforeAll {
 
 					Test-AdminPrivileges @Parameters
 					$Calls.Enqueue([pscustomobject]@{ Name = "Returned" })
-				}).AddArgument($script:FunctionFiles).AddArgument($ConfigurationValue).AddArgument($Parameters).AddArgument($SelectionAnswer).AddArgument($CallStackLines).AddArgument($calls)
+				}).AddArgument($script:FunctionFiles).AddArgument($ConfigurationValue).AddArgument($Parameters).AddArgument($SelectionAnswer).AddArgument($CallStackLines).AddArgument($calls).AddArgument($StartupTask)
 
 			$output = $powershell.Invoke()
 
@@ -105,6 +109,16 @@ Describe "Test-AdminPrivileges" {
 			& $script:CallCount $result "Resolve-Selection" | Should -Be 0
 			& $script:CallCount $result "Open-Terminal" | Should -Be 0
 		}
+
+		It "only answers in CheckOnly mode inside a startup task too" {
+			$result = & $script:InvokeIsolated -Parameters @{ CheckOnly = $true } -StartupTask @{ Name = "MyTask"; Elevation = "None" }
+
+			$result.State | Should -Be "Completed"
+			$result.Output.Count | Should -Be 1
+			$result.Output[0] | Should -Be $script:IsElevated
+			& $script:CallCount $result "Write-LogError" | Should -Be 0
+			& $script:CallCount $result "Open-Terminal" | Should -Be 0
+		}
 	}
 
 	Context "When the session is already elevated" {
@@ -134,6 +148,23 @@ Describe "Test-AdminPrivileges" {
 			$result.State | Should -Be "Completed"
 			& $script:CallCount $result "Returned" | Should -Be 1
 			& $script:CallCount $result "Open-Terminal" | Should -Be 0
+		}
+
+		It "returns inside a startup task whatever its Elevation is (<Elevation>)" -ForEach @(
+			@{ Elevation = "None" }
+			@{ Elevation = "Relaunch" }
+		) {
+			if (-not $script:IsElevated) {
+				Set-ItResult -Skipped -Because "this session is not elevated; run Run-Tests from an elevated terminal to cover this branch"
+				return
+			}
+
+			$result = & $script:InvokeIsolated -StartupTask @{ Name = "MyTask"; Elevation = $Elevation; RelaunchCommand = "Invoke-MyTaskAgain -Marker" }
+
+			$result.State | Should -Be "Completed"
+			& $script:CallCount $result "Returned" | Should -Be 1
+			& $script:CallCount $result "Open-Terminal" | Should -Be 0
+			& $script:CallCount $result "Write-LogError" | Should -Be 0
 		}
 	}
 
@@ -240,6 +271,102 @@ Describe "Test-AdminPrivileges" {
 			$relaunch.Count | Should -Be 1
 			$relaunch[0].Command | Should -BeLike "Set-Location -Path '*'; Install-Something -Foo"
 			$relaunch[0].Command | Should -Not -BeLike '*$stepName*'
+		}
+	}
+
+	# Invoke-StartupTask sets $global:WinuXStartupTask while a task's command runs: nobody is there
+	# to answer a question, so the function never asks.
+	Context "Inside a startup task, when the session is not elevated" {
+		It "stops at once without asking or opening a terminal when the task's Elevation is <Label>" -ForEach @(
+			@{ Label = "None"; Task = @{ Name = "MyTask"; Elevation = "None" } }
+			@{ Label = "absent"; Task = @{ Name = "MyTask" } }
+			@{ Label = "Prompt"; Task = @{ Name = "MyTask"; Elevation = "Prompt" } }
+			@{ Label = "None, with a RelaunchCommand"; Task = @{ Name = "MyTask"; Elevation = "None"; RelaunchCommand = "Invoke-MyTaskAgain -Marker" } }
+		) {
+			if ($script:IsElevated) {
+				Set-ItResult -Skipped -Because "this session is elevated; run Run-Tests from a normal terminal to cover this branch"
+				return
+			}
+
+			$result = & $script:InvokeIsolated -ConfigurationValue @{} -StartupTask $Task
+
+			$result.State | Should -Be "Stopped" -Because "errors: $($result.Errors -join '; ')"
+			$result.Reason | Should -BeOfType ([System.Management.Automation.PipelineStoppedException])
+			& $script:CallCount $result "Write-LogError" | Should -Be 1
+			& $script:CallCount $result "Resolve-Selection" | Should -Be 0
+			& $script:CallCount $result "Open-Terminal" | Should -Be 0
+			& $script:CallCount $result "Write-LogSuccess" | Should -Be 0
+			& $script:CallCount $result "Returned" | Should -Be 0
+		}
+
+		It "does not relaunch a task without Relaunch even when AutoElevate is on (<Case>)" -ForEach @(
+			@{ Case = "configuration"; ConfigurationValue = @{ AutoElevate = $true }; Parameters = @{} }
+			@{ Case = "parameter"; ConfigurationValue = @{}; Parameters = @{ AutoElevate = $true } }
+		) {
+			if ($script:IsElevated) {
+				Set-ItResult -Skipped -Because "this session is elevated; run Run-Tests from a normal terminal to cover this branch"
+				return
+			}
+
+			$result = & $script:InvokeIsolated -ConfigurationValue $ConfigurationValue -Parameters $Parameters -StartupTask @{ Name = "MyTask"; Elevation = "None" }
+
+			$result.State | Should -Be "Stopped" -Because "errors: $($result.Errors -join '; ')"
+			& $script:CallCount $result "Resolve-Selection" | Should -Be 0
+			& $script:CallCount $result "Open-Terminal" | Should -Be 0
+		}
+
+		It "relaunches a Relaunch task without asking and replays the task's own command, not the call stack" {
+			if ($script:IsElevated) {
+				Set-ItResult -Skipped -Because "this session is elevated; run Run-Tests from a normal terminal to cover this branch"
+				return
+			}
+
+			# AutoElevate is off everywhere: outside a startup task this configuration asks first.
+			$result = & $script:InvokeIsolated -ConfigurationValue @{ AutoElevate = $false } -StartupTask @{
+				Name            = "MyTask"
+				Elevation       = "Relaunch"
+				RelaunchCommand = "Invoke-MyTaskAgain -Marker"
+			}
+
+			$result.State | Should -Be "Stopped" -Because "errors: $($result.Errors -join '; ')"
+			$result.Reason | Should -BeOfType ([System.Management.Automation.PipelineStoppedException])
+			& $script:CallCount $result "Resolve-Selection" | Should -Be 0
+			$relaunch = @($result.Calls | Where-Object { $_.Name -eq "Open-Terminal" })
+			$relaunch.Count | Should -Be 1
+			$relaunch[0].Administrator | Should -BeTrue
+			$relaunch[0].Command | Should -BeLike "Set-Location -Path '*'; Invoke-MyTaskAgain -Marker"
+			$relaunch[0].Command | Should -Not -BeLike "*Install-Something*"
+			& $script:CallCount $result "Returned" | Should -Be 0
+		}
+
+		It "relaunches a Relaunch task without asking even when -AutoElevate:`$false is passed" {
+			if ($script:IsElevated) {
+				Set-ItResult -Skipped -Because "this session is elevated; run Run-Tests from a normal terminal to cover this branch"
+				return
+			}
+
+			$result = & $script:InvokeIsolated -ConfigurationValue @{} -Parameters @{ AutoElevate = $false } -StartupTask @{
+				Name            = "MyTask"
+				Elevation       = "Relaunch"
+				RelaunchCommand = "Invoke-MyTaskAgain -Marker"
+			}
+
+			& $script:CallCount $result "Resolve-Selection" | Should -Be 0
+			& $script:CallCount $result "Open-Terminal" | Should -Be 1
+		}
+
+		It "falls back to the typed command when a Relaunch task carries no RelaunchCommand" {
+			if ($script:IsElevated) {
+				Set-ItResult -Skipped -Because "this session is elevated; run Run-Tests from a normal terminal to cover this branch"
+				return
+			}
+
+			$result = & $script:InvokeIsolated -ConfigurationValue @{} -StartupTask @{ Name = "MyTask"; Elevation = "Relaunch" }
+
+			& $script:CallCount $result "Resolve-Selection" | Should -Be 0
+			$relaunch = @($result.Calls | Where-Object { $_.Name -eq "Open-Terminal" })
+			$relaunch.Count | Should -Be 1
+			$relaunch[0].Command | Should -BeLike "Set-Location -Path '*'; Install-Something -Foo"
 		}
 	}
 }

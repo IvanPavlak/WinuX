@@ -1,6 +1,6 @@
 # Bootstrap Module Configuration Guides
 
-One configuration guide per exported function of the `Bootstrap` module, which covers the provisioning entry point and the configuration loader: machine detection, path expansion, step resolution, and the app-list read path.
+One configuration guide per exported function of the `Bootstrap` module, which covers the provisioning entry point and the configuration loader: machine detection, path expansion, step resolution, the app-list read path, and the scheduled tasks behind the startup tasks.
 
 The [Bootstrap module reference](../../../modules/bootstrap.md) is the authority on what each function *does*. These guides cover what to *configure* for it.
 
@@ -20,6 +20,7 @@ The [Bootstrap module reference](../../../modules/bootstrap.md) is the authority
 | `Resolve-BootstrapSteps` | `BootstrapConfig` | [Resolve-BootstrapSteps](Resolve-BootstrapSteps.md) |
 | `Resolve-PackageManagers` | `PackageManagers` | [Resolve-PackageManagers](Resolve-PackageManagers.md) |
 | `Resolve-RepositoryUpdateScope` | `BootstrapConfig`, `RepositoryUpdate` (with `-Path`) | [Resolve-RepositoryUpdateScope](Resolve-RepositoryUpdateScope.md) |
+| `Set-StartupTasks` | `Startup.Tasks`, `Startup.Conditions`, `BootstrapConfig.Steps.StartupTasks` | [Set-StartupTasks](Set-StartupTasks.md) |
 | `Test-MachineTypeScope` | `ValidMachineTypes` | [Test-MachineTypeScope](Test-MachineTypeScope.md) |
 
 ## Task Guides

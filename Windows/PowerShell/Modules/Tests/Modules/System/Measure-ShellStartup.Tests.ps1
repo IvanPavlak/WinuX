@@ -79,6 +79,25 @@ Describe "Measure-ShellStartup" {
 
 			@($rows | ForEach-Object Runs) | Should -Be @(4, 4, 4)
 		}
+
+		It "walks every stage the profile guards by default, the startup tasks last" {
+			# The default -Stages must name the stages as the profile does: a stage it misspells
+			# (or still calls by an old name, like RepositoryUpdate) is skipped by nothing and
+			# measured as zero.
+			$profilePath = Join-Path (Get-RepositoryPath).PowerShell "Microsoft.PowerShell_profile.ps1"
+			$guarded = @([regex]::Matches((Get-Content -LiteralPath $profilePath -Raw), 'Test-StartupStage\s+-Name\s+"([^"]+)"') |
+					ForEach-Object { $_.Groups[1].Value } | Where-Object { $_ -ne 'Core' })
+
+			$rows = @(Measure-ShellStartup -Runs 1 -PassThru)
+			$walked = @($rows | ForEach-Object { $_.Configuration -replace '^\+ ', '' })
+
+			$guarded.Count | Should -BeGreaterThan 0
+			foreach ($stage in $guarded) {
+				$walked | Should -Contain $stage -Because "the profile guards a stage named [$stage]"
+			}
+			$walked[-1] | Should -Be 'StartupTasks'
+			$walked | Should -Not -Contain 'RepositoryUpdate'
+		}
 	}
 
 	Context "Isolated mode" {

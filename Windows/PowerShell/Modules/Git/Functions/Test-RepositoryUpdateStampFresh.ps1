@@ -4,6 +4,9 @@ function Test-RepositoryUpdateStampFresh {
 		Tells whether the startup repository update ran recently enough to skip it.
 
 	.DESCRIPTION
+		DEPRECATED since 2.12.0, removed in 3.0.0: the automatic repository update is a startup
+		task now, and Test-StartupTaskDue replaces this function. It keeps working unchanged until then.
+
 		The throttle check of Invoke-StartupRepositoryUpdate. A missing stamp is never fresh, so a
 		first run, or a run after the stamp was deleted, always goes ahead. Otherwise it depends on
 		-Schedule:

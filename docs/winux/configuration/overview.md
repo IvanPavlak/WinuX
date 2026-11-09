@@ -97,6 +97,7 @@ the [Configuration Reference](configuration-reference.md).
 | ------------------ | ---------------------------- | ----------------- |
 | `DefaultWorkspace` | Workspace opened by `[Enter]` | `Open-Workspace`  |
 | `WorkspaceActions` | Every workspace and what opening it does (ordered - this is the menu) | `Open-Workspace`  |
+| `Startup` | Startup tasks: commands the machine runs on its own at sign-in, unlock, wake or when a terminal opens, with the conditions they wait for (`Tasks` ships empty) | `Invoke-StartupTasks`, `Invoke-StartupTask`, `Set-StartupTasks` |
 
 ### Application Configuration
 

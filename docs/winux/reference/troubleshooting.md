@@ -1333,17 +1333,17 @@ Private = @{
 
 **Problem:** The automatic repository update starts in a terminal you open mid-morning, although it already ran when you started work.
 
-**Cause:** `RepositoryUpdate.Startup.Schedule` is `"Interval"`: the next run is due `IntervalHours` after the last one, so with 24 hours a run at 10:15 yesterday makes the first shell after 10:15 today run it again, and the time drifts with every run. Before 0.1.88 this was the only schedule.
+**Cause:** The `RepositoryUpdate` startup task has `Frequency = "Interval"` (or the deprecated `RepositoryUpdate.Startup.Schedule` is `"Interval"`): the next run is due `IntervalHours` after the last one, so with 24 hours a run at 10:15 yesterday makes the first shell after 10:15 today run it again, and the time drifts with every run.
 
-**Solution:** Use the `"Daily"` schedule (the default since 0.1.88) - it runs once per day, at the first shell after `Startup.DayStartHour` (default 6), or at the first prompt of a shell already open then. Remove `Schedule = "Interval"` from `Configuration.local.psd1`, or set `Schedule = "Daily"`, then reload. `Get-RepositoryUpdateStartupSettings` shows the schedule in effect.
+**Solution:** Use `Frequency = "OncePerDay"` on the task - it runs once per day, at the first shell after its `DayStartHour` (default 6), or at the first prompt of a shell already open then. With the deprecated keys, remove `Schedule = "Interval"` from `Configuration.local.psd1` or set `Schedule = "Daily"`. Then reload. `(Get-StartupTaskDefinitions -Name RepositoryUpdate).Parameters` shows the frequency in effect.
 
 ### No Prompt After The Startup Repository Update
 
 **Problem:** A new shell prints the repository summary and then shows no prompt; pressing Enter brings it back.
 
-**Cause:** The update runs after the prompt is already drawn, so its output pushes the prompt away while PSReadLine keeps waiting for input. The profile's `RepositoryUpdate` stage calls `Invoke-StartupRepositoryUpdate -RedrawPrompt`, which draws the prompt again; a profile from before that switch existed does not.
+**Cause:** The update runs after the prompt is already drawn, so its output pushes the prompt away while PSReadLine keeps waiting for input. The profile's `StartupTasks` stage (named `RepositoryUpdate` before 2.12.0) calls `Invoke-StartupTasks -Trigger TerminalOpen -RedrawPrompt`, which draws the prompt again when a task printed something; a profile from before that switch existed does not.
 
-**Solution:** Update the profile (the stage must pass `-RedrawPrompt`), then open a new tab. To check the redraw without waiting for the next day, run `Invoke-StartupRepositoryUpdate -Force -RedrawPrompt`.
+**Solution:** Update the profile (the stage must pass `-RedrawPrompt`), then open a new tab. To check the redraw without waiting for the next day, the deprecated wrapper still does both in one call: `Invoke-StartupRepositoryUpdate -Force -RedrawPrompt`.
 
 ### Update-Repositories Asks For Administrator
 
@@ -1365,6 +1365,117 @@ Private = @{
 - **"could not fast-forward, nothing changed"** - either the branch has local commits that origin does not (rebase or merge them yourself), or the fast-forward would overwrite an ignored local file at a path upstream now tracks. In the second case, `git status --ignored` shows the file. Move it aside, update, and put your version back if you still need it.
 - **"local changes could not be restored cleanly and are kept in stash [name]"** - an upstream change overlaps your local edit. The working tree holds conflict markers, and the stash still holds your original changes. Resolve the markers, or reset the files and `git stash apply` the named stash. Until then, the next update reports the repository as busy and leaves it alone.
 - **"its stash was taken by another git command"** - another git command applied or dropped the update's stash while it ran. Check `git status` and `git stash list`; the changes are wherever that command put them.
+
+## Startup Tasks
+
+Startup tasks are the commands a machine runs on its own at sign-in, unlock, wake or when a terminal opens (`Startup.Tasks`, see [Invoke-StartupTasks](../configuration/guides/workflow/Invoke-StartupTasks.md)). Three read-only commands answer most questions before anything below is needed:
+
+```powershell
+# Is the task valid, and does it apply to this machine?
+Get-StartupTaskDefinitions | Format-Table Name, Trigger, InScope, Valid
+(Get-StartupTaskDefinitions | Where-Object { -not $_.Valid }).Errors
+
+# What would the trigger do right now? (WouldRun, NotDue, OutOfScope, Disabled)
+Invoke-StartupTasks -Trigger SignIn -WhatIf | Format-Table Name, Status, Reason
+
+# Does Windows know to call the runner? (Registered, Missing, Stale)
+Set-StartupTasks -List | Format-Table TaskName, Trigger, RunLevel, State
+```
+
+The runner of a sign-in, unlock or wake has no window; what it did is in its own session log:
+
+```powershell
+Get-ChildItem (Get-LogPath -Directory) -Filter "Session_*.log" | Sort-Object LastWriteTime -Descending | Select-Object -First 5 | Select-String "Startup task"
+```
+
+### A Startup Task Never Runs At Sign-In
+
+**Problem:** A task with the `SignIn` trigger (or `Unlock`, or `Wake`) is configured and `Invoke-StartupTasks -Trigger SignIn -WhatIf` reports it as `WouldRun`, but nothing happens when you sign in. A task with the `TerminalOpen` trigger works.
+
+**Cause:** The scheduled task that makes Windows call the runner was never registered. Writing a task into `Startup.Tasks` registers nothing: only `Set-StartupTasks` does (by hand, or as the Bootstrap step `StartupTasks`), and it is needed whenever the first task of one of those three triggers is added on a machine. `TerminalOpen` needs no registration, which is why it works without.
+
+**Solution:** Check, then register. Registering needs Administrator privileges.
+
+```powershell
+Set-StartupTasks -List    # StartupTasks-SignIn with State = Missing
+Set-StartupTasks
+```
+
+If the scheduled task is `Registered` and the task still does not run, the `-WhatIf` line says why (`OutOfScope`: `Machine` or `Hostname` does not cover this machine; `NotDue`: its `Frequency` says it already ran; `Disabled`), and a task that is not valid is named with its errors in the failure report tab and the runner's session log.
+
+### A Silent Task Is Reported As Delegated, Or Its Elevated Task Is Missing
+
+**Problem:** After a sign-in the log says `Startup task [MyTask] delegated (SignIn) - Runs from its own elevated scheduled task`, or the failure report lists `[MyTask] Failed - Its elevated scheduled task is missing - run Set-StartupTasks`. Or you changed the task's command and the old one still runs.
+
+**Cause:** A task with `Elevation = "Silent"` is not run by the runner. It has a scheduled task of its own per trigger (`StartupTask-Silent-<Name>-<Trigger>`) that runs with the highest privileges, and its command, its options and the conditions it requires are copied into that scheduled task when `Set-StartupTasks` runs. `Delegated` is therefore the normal, healthy status. `missing` means the task was added, renamed or given a new trigger since the last registration. And an edit never reaches the frozen copy on its own - by design, so that editing the configuration cannot change what runs as Administrator without an elevated step.
+
+**Solution:** Run `Set-StartupTasks` again after every change to a `Silent` task or to a condition it requires. `Set-StartupTasks -List` shows the task with `RunLevel = Highest`; `Registered` there means the scheduled task exists, not that its copy is current.
+
+### "Startup task [...] needs Administrator privileges"
+
+**Problem:** A task fails with `Startup task [MyTask] needs Administrator privileges - set Elevation = "Relaunch", "Prompt" or "Silent" on the task`. When it was a task of a newly opened terminal, the tasks written after it did not run in that terminal either.
+
+**Cause:** The task's command called something that needs Administrator privileges. At a prompt `Test-AdminPrivileges` would ask whether to rerun elevated; inside a startup task nobody is there to answer, so without an `Elevation` on the task it stops at once instead. Stopping means what it always means for `Test-AdminPrivileges`: the pipeline it was called from ends. A task in its own tab or hidden shell takes only that shell with it. A task with the `TerminalOpen` trigger runs inline, in the terminal's own startup action, so the rest of that terminal's startup tasks end with it - they wrote no stamp and are due again in the next terminal.
+
+**Solution:** Say on the task how it gets its privileges:
+
+```powershell
+@{ Name = "MyTask"; Command = "Install-MyTool"; Trigger = "SignIn"; Elevation = "Prompt" }
+```
+
+`"Relaunch"` lets the command rerun itself in an Administrator tab and is the only value a `TerminalOpen` task accepts; `"Prompt"` starts the task elevated with one Windows consent dialog; `"Silent"` shows no dialog and is a standing way to run that command as Administrator, so use it deliberately. For a `TerminalOpen` task, the better fix is usually a command that does not need Administrator at all (`Update-Repositories -NoClone` never asks), or moving the task to `SignIn`. Until it is fixed, write such a task last, so it cannot take the others with it.
+
+### A Startup Task Runs Again At Every Trigger
+
+**Problem:** A task with `Frequency = "OncePerDay"` (or `"OncePerBoot"`, or `"Interval"`) runs at every sign-in, every unlock or in every new terminal.
+
+**Cause:** The frequency is measured from the task's stamp file (`Logs\.startup-task-<Name>.stamp`), and the stamp is written only after a run that succeeded. A task that failed (its command threw), was skipped because a condition was not met in time, or was stopped before it finished wrote none, so it is due again at the next trigger - that is the retry, and it is on purpose. A task with no `Frequency` at all is `"EveryTime"`.
+
+**Solution:** Find out why the run does not succeed, then fix that. The session log has one line per task and run; running the task in your own shell shows the error directly.
+
+```powershell
+Get-ChildItem (Get-LogPath -Directory) -Filter "Session_*.log" | Sort-Object LastWriteTime -Descending | Select-Object -First 5 | Select-String "Startup task \[MyTask\]"
+Get-ChildItem (Get-LogPath -Directory) -Filter ".startup-task-*.stamp" | Format-Table Name, LastWriteTime
+Invoke-StartupTask MyTask -Force
+```
+
+A condition that never comes up in time needs a longer `Timeout` under `Startup.Conditions`, or a test that actually turns true: `Test-StartupCondition -Name MyVpn -NoWait` says what it returns right now.
+
+### The Wake Trigger Never Fires
+
+**Problem:** A task with the `Wake` trigger never runs after the machine wakes up, although `Set-StartupTasks -List` shows `StartupTasks-Wake` as `Registered`.
+
+**Cause:** The scheduled task listens for one event: event 1 of `Microsoft-Windows-Power-Troubleshooter` in the System log, which Windows writes when it resumes from classic sleep (S3) or hibernation. A modern-standby machine (S0 low power idle - most current laptops) does not go through that resume and usually writes no such event when its screen comes back on.
+
+**Solution:** Use the `Unlock` trigger instead, or both (`Trigger = @("Unlock", "Wake")`), with a `Frequency` if the command should not run at every unlock. To see which kind of machine this is:
+
+```powershell
+powercfg /a    # "Standby (S0 Low Power Idle)" is modern standby
+Get-WinEvent -FilterHashtable @{ LogName = 'System'; ProviderName = 'Microsoft-Windows-Power-Troubleshooter'; Id = 1 } -MaxEvents 3 -ErrorAction SilentlyContinue
+```
+
+No events after a sleep you just woke the machine from means the trigger has nothing to fire on.
+
+### Set-StartupTasks Registered The Tasks For Another Account
+
+**Problem:** `Set-StartupTasks` reported `Registered [StartupTasks-SignIn]`, but nothing runs when you sign in - or the tasks run when a different user signs in.
+
+**Cause:** The scheduled tasks are registered for the account the elevated shell runs as: the sign-in and unlock triggers are that user's, and the tasks run as that user. On an account that is itself an administrator, elevation is a consent dialog and the elevated shell is still you. On a standard account, elevation asks for another administrator's credentials, the elevated shell runs as that administrator, and the tasks are registered for them.
+
+**Solution:** Register from an account that is an administrator itself. To see who the tasks belong to, and to clear tasks registered for the wrong account (run the removal from the same elevation that created them):
+
+```powershell
+Get-ScheduledTask -TaskPath '\WinuX\' -ErrorAction SilentlyContinue | Select-Object TaskName, @{ Name = 'User'; Expression = { $_.Principal.UserId } }
+Set-StartupTasks -Remove
+```
+
+### Nothing Runs Before Sign-In
+
+**Problem:** A task should run when the machine starts, before anyone signs in, but `Trigger = "Boot"` is reported as not supported and the task never runs.
+
+**Cause:** By design. A startup task runs as you, on your desktop, with your saved credentials - a terminal tab, a workspace, a `git fetch` over your credential manager, a VPN client. None of that exists before sign-in, so there is no `Boot` trigger and no startup task runs until a user has signed in.
+
+**Solution:** Use `Trigger = "SignIn"`. It fires once the desktop session exists, and `Requires = @("Network")` makes the task wait for the connection. Whether a machine signs in on its own after a restart is a Windows setting outside WinuX.
 
 ## Shell Startup Issues
 
@@ -1393,11 +1504,11 @@ A listing typed within the first ~300 ms of a new shell prints without icons by 
 
 ### A Red Deferred Startup Failure Line Under The First Prompt
 
-**Problem:** A new shell prints `=> Deferred startup [Terminal-Icons] failed => ...` (or `[LogMaintenance]`, `[RepositoryUpdate]`) in red right after the first prompt, and the prompt is drawn again under it.
+**Problem:** A new shell prints `=> Deferred startup [Terminal-Icons] failed => ...` (or `[LogMaintenance]`, `[StartupTasks]`) in red right after the first prompt, and the prompt is drawn again under it.
 
-**Why it happens:** The three startup stages that run after the first prompt - the Terminal-Icons import, the log maintenance and the opt-in repository update - are queued and run by one `PowerShell.OnIdle` event. An entry that throws is reported this way instead of being swallowed, so a stage that stopped working is noticed at once rather than weeks later.
+**Why it happens:** The three startup stages that run after the first prompt - the Terminal-Icons import, the log maintenance and the startup tasks of a newly opened terminal (the automatic repository update among them) - are queued and run by one `PowerShell.OnIdle` event. An entry that throws is reported this way instead of being swallowed, so a stage that stopped working is noticed at once rather than weeks later.
 
-**Solution:** The line carries the exception; the session log (`Logs\Session_<date>_<time>_<pid>.log`) has it under `[ERROR]`, and `Logs\Errors.log` adds the stack trace. Run the stage by hand to reproduce it: `Import-TerminalIcons`, `Invoke-LogMaintenance` or `Invoke-StartupRepositoryUpdate -Force`. To start one shell without the stage: `$env:WINUX_STARTUP_SKIP = "Terminal-Icons"; pwsh` (see [Slow Profile Load](#slow-profile-load) for the stage names).
+**Solution:** The line carries the exception; the session log (`Logs\Session_<date>_<time>_<pid>.log`) has it under `[ERROR]`, and `Logs\Errors.log` adds the stack trace. Run the stage by hand to reproduce it: `Import-TerminalIcons`, `Invoke-LogMaintenance` or `Invoke-StartupTasks -Trigger TerminalOpen` (one task, whatever its frequency says: `Invoke-StartupTask <Name> -Force`). To start one shell without the stage: `$env:WINUX_STARTUP_SKIP = "Terminal-Icons"; pwsh` (see [Slow Profile Load](#slow-profile-load) for the stage names).
 
 ### A Terminal Tab Ignores Typing And Ctrl+C
 
@@ -1433,7 +1544,7 @@ To start one shell without a stage (for example to see whether the greeting is w
 $env:WINUX_STARTUP_SKIP = "Greeting"; pwsh
 ```
 
-Stage names: `Schema`, `Greeting`, `FastfetchImageLogo`, `OnefetchStyle`, `PSReadLine`, `Terminal-Icons`, `PSReadLineOptions`, `OhMyPosh`, `Aliases`, `PowerPlan`, `LogMaintenance`, `RepositoryUpdate` (or `All`; `Core` always runs).
+Stage names: `Schema`, `Greeting`, `FastfetchImageLogo`, `OnefetchStyle`, `PSReadLine`, `Terminal-Icons`, `PSReadLineOptions`, `OhMyPosh`, `Aliases`, `PowerPlan`, `LogMaintenance`, `StartupTasks` (or `All`; `Core` always runs). `StartupTasks` was named `RepositoryUpdate` before 2.12.0; the old name is no longer a stage, so a skip list that still says `RepositoryUpdate` skips nothing.
 
 **What the numbers usually mean:**
 

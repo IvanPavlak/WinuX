@@ -11,12 +11,11 @@ The [Git module reference](../../../modules/git.md) is the authority on what eac
 
 | Function | Configuration keys | Guide |
 | -------- | ------------------ | ----- |
-| `Get-RepositoryUpdateStartupSettings` | `RepositoryUpdate` | [Get-RepositoryUpdateStartupSettings](Get-RepositoryUpdateStartupSettings.md) |
+| `Get-RepositoryUpdateStartupSettings` | `RepositoryUpdate.Startup` (deprecated since 2.12.0, like the function; replaced by `Get-StartupTaskDefinitions`) | [Get-RepositoryUpdateStartupSettings](Get-RepositoryUpdateStartupSettings.md) |
 | `Git-Obsidian` | `PathTemplates.ObsidianDirectory`, `Obsidian.GitEndLocation` | [Git-Obsidian](Git-Obsidian.md) |
 | `GitStatus` | `GitStatusArguments` | [GitStatus](GitStatus.md) |
 | `Initialize-Repository` | `RepositoryGroups` | [Initialize-Repository](Initialize-Repository.md) |
 | `Install-Git` | `GitConfig` | [Install-Git](Install-Git.md) |
-| `Invoke-StartupRepositoryUpdate` | `RepositoryUpdate` | [Invoke-StartupRepositoryUpdate](Invoke-StartupRepositoryUpdate.md) |
 | `Resolve-RepositoryDefaultBranch` | `RepositoryUpdate` | [Resolve-RepositoryDefaultBranch](Resolve-RepositoryDefaultBranch.md) |
 | `Resolve-RepositoryTargets` | `RepositoryGroups` | [Resolve-RepositoryTargets](Resolve-RepositoryTargets.md) |
 | `Update-Repositories` | `RepositoryGroups`, `RepositoryUpdate` | [Update-Repositories](Update-Repositories.md) |
@@ -31,7 +30,10 @@ Longer walkthroughs that cut across several functions and keys.
 
 These read no `Configuration.psd1` keys. Their guides record that fact and show how to call them.
 
-[ConvertFrom-UpstreamManifest](ConvertFrom-UpstreamManifest.md), [Format-RepositoryUpdateResult](Format-RepositoryUpdateResult.md), [Get-RepositoryUpdateDayStart](Get-RepositoryUpdateDayStart.md), [Git-Diff](Git-Diff.md), [GitBranch](GitBranch.md), [GitBranchDeleteAndPrune](GitBranchDeleteAndPrune.md), [GitMergeM](GitMergeM.md), [GitPull](GitPull.md), [GitSwitch](GitSwitch.md), [Invoke-RepositoryUpdatePromptCheck](Invoke-RepositoryUpdatePromptCheck.md), [Merge-Upstreams](Merge-Upstreams.md), [Register-RepositoryUpdatePromptCheck](Register-RepositoryUpdatePromptCheck.md), [Resolve-UpstreamPathClass](Resolve-UpstreamPathClass.md), [Resolve-UpstreamRemote](Resolve-UpstreamRemote.md), [Restore-RepositoryStash](Restore-RepositoryStash.md), [Set-GitConsoleColor](Set-GitConsoleColor.md), [Test-GitRepository](Test-GitRepository.md), [Test-RepositoryUpdateStampFresh](Test-RepositoryUpdateStampFresh.md), [Update-Repository](Update-Repository.md), [Update-RepositoryDefaultBranch](Update-RepositoryDefaultBranch.md)
+[ConvertFrom-UpstreamManifest](ConvertFrom-UpstreamManifest.md), [Format-RepositoryUpdateResult](Format-RepositoryUpdateResult.md), [Get-RepositoryUpdateDayStart](Get-RepositoryUpdateDayStart.md), [Git-Diff](Git-Diff.md), [GitBranch](GitBranch.md), [GitBranchDeleteAndPrune](GitBranchDeleteAndPrune.md), [GitMergeM](GitMergeM.md), [GitPull](GitPull.md), [GitSwitch](GitSwitch.md), [Invoke-RepositoryUpdatePromptCheck](Invoke-RepositoryUpdatePromptCheck.md), [Invoke-StartupRepositoryUpdate](Invoke-StartupRepositoryUpdate.md), [Merge-Upstreams](Merge-Upstreams.md), [Register-RepositoryUpdatePromptCheck](Register-RepositoryUpdatePromptCheck.md), [Resolve-UpstreamPathClass](Resolve-UpstreamPathClass.md), [Resolve-UpstreamRemote](Resolve-UpstreamRemote.md), [Restore-RepositoryStash](Restore-RepositoryStash.md), [Set-GitConsoleColor](Set-GitConsoleColor.md), [Test-GitRepository](Test-GitRepository.md), [Test-RepositoryUpdateStampFresh](Test-RepositoryUpdateStampFresh.md), [Update-Repository](Update-Repository.md), [Update-RepositoryDefaultBranch](Update-RepositoryDefaultBranch.md)
+
+> [!NOTE]
+> The automatic repository update is a startup task since 2.12.0. `Invoke-StartupRepositoryUpdate`, `Register-RepositoryUpdatePromptCheck`, `Invoke-RepositoryUpdatePromptCheck`, `Get-RepositoryUpdateStartupSettings`, `Test-RepositoryUpdateStampFresh` and `Get-RepositoryUpdateDayStart` are deprecated and removed in 3.0.0; each guide names its replacement. Configure the update as a `Startup.Tasks` entry on the [`Invoke-StartupTasks`](../workflow/Invoke-StartupTasks.md) guide; the migration is on the [`Invoke-StartupRepositoryUpdate`](Invoke-StartupRepositoryUpdate.md) guide.
 
 ## Related
 

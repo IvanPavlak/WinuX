@@ -4,6 +4,11 @@ function Invoke-RepositoryUpdatePromptCheck {
 		The prompt installed by Register-RepositoryUpdatePromptCheck: the original prompt, plus the daily update once a day.
 
 	.DESCRIPTION
+		DEPRECATED since 2.12.0, removed in 3.0.0: the automatic repository update is a startup
+		task now, and Invoke-StartupTaskPromptCheck replaces this function. It keeps working until
+		then, through the deprecated Invoke-StartupRepositoryUpdate, which runs the startup task
+		RepositoryUpdate and warns once per session.
+
 		Runs the original prompt function first and keeps its text. That call is the first
 		statement on purpose: a prompt reads the last command's success from `$?`, and any
 		statement before it would reset that (the Oh My Posh error indicator would never show).

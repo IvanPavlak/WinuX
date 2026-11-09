@@ -93,6 +93,7 @@ function Resolve-BootstrapSteps {
 		NpmConfig                  = $false
 		Taskbar                    = $true
 		SymbolicLinks              = $true
+		StartupTasks               = $true
 		AiArtifacts                = $false
 		AiMarketplaces             = $false
 		AiMcpServers               = $false
