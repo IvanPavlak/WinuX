@@ -132,7 +132,7 @@ for when that is absent:
 │                         INSTALL-BOOTSTRAP PROCESS                           │
 ├───────────────────────────────────────────────────────────────────────────-─┤
 │  Step 1: Check PowerShell version                                           │
-│  ├─→ If PowerShell 5.x: install PowerShell 7 via WinGet                     │
+│  ├─→ If PowerShell 5.x: install the pinned PowerShell 7 via WinGet          │
 │  └─→ Relaunch elevated in PowerShell 7 (carrying WINUX_* + branch + PAT)    │
 │                                                                             │
 │  Step 2: Verify Administrator privileges                                    │

@@ -201,7 +201,7 @@ Initialize-Configuration -GitName "Jane Doe" -GitEmail "jane@example.com" -DevPa
 
 ## [Install-Bootstrap](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Bootstrap/Install-Bootstrap.ps1)
 
-- **Description:** The self-contained Stage 1 first-run script. Ensures PowerShell 7 is installed (relaunching as Administrator if needed), installs and configures Git, clones the WinuX repository for the specified branch (on a re-run, where the clone already exists, it only fast-forwards it with `git fetch` and `git merge --ff-only --no-overwrite-ignore @{upstream}`, which refuses rather than touch local changes or overwrite an ignored local file, and leaves the clone as it is with a warning), resolves your Git identity from the cloned configuration, then imports the full Bootstrap module and hands off to `Bootstrap -WithInitialSetup`.
+- **Description:** The self-contained Stage 1 first-run script. Ensures PowerShell 7 is installed (relaunching as Administrator if needed; a missing one is installed at the exact version the committed `WinGetApps.csv` pins, the script's `$PinnedPowerShellVersion`, so the app list never adds a second install), installs and configures Git, clones the WinuX repository for the specified branch (on a re-run, where the clone already exists, it only fast-forwards it with `git fetch` and `git merge --ff-only --no-overwrite-ignore @{upstream}`, which refuses rather than touch local changes or overwrite an ignored local file, and leaves the clone as it is with a warning), resolves your Git identity from the cloned configuration, then imports the full Bootstrap module and hands off to `Bootstrap -WithInitialSetup`.
 - **Parameters:** -Branch, -Token
 - **Usage:** `Install-Bootstrap`, `Install-Bootstrap -Branch master`, `irm '.../Install-Bootstrap.ps1' -Headers @{ Authorization = "Bearer $Pat" } | iex`
 
@@ -602,7 +602,7 @@ Each of the three may have a machine-local `<name>.local.csv` beside it, which [
 
 ```csv
 App,Version,Scope,Interactive,Source,Machine
-Microsoft.PowerShell,7.6.9.0,d,n,w,All
+Microsoft.PowerShell,7.7.0.0,d,n,w,All
 Microsoft.WindowsTerminal,1.25.2733.0,d,n,w,All
 Microsoft.PowerToys,0.102.3001.0,d,n,w,All
 ```

@@ -86,6 +86,20 @@ Install-WingetApps
 Upgrade-All -PackageManager Chocolatey
 ```
 
+### Two PowerShell 7 Installs, Or The Shell Still Reports The Old Version
+
+**Problem:** After the PowerShell pin moved to 7.7.0.0, `$PSVersionTable.PSVersion` in a new shell still shows 7.6, or Settings > Apps lists both "PowerShell 7-x64" and "PowerShell". `winget upgrade Microsoft.PowerShell` answers `No installed package found matching input criteria`.
+
+**Cause:** From 7.7.0 winget ships PowerShell only as an MSIX package, and an MSIX package never replaces the MSI install earlier versions used. The two live side by side, and `pwsh` (and a Windows Terminal profile running `pwsh.exe`) keeps starting the MSI, because its folder is on the machine PATH and the MSIX alias folder only on the user PATH. `winget upgrade` finds nothing to upgrade because no MSI of 7.7.0 exists.
+
+**Solution:** Install the MSIX next to the MSI, close every PowerShell 7.6 window, uninstall "PowerShell 7-x64" in Settings > Apps, then open a new shell (its `$PSHOME` is under `WindowsApps`) and register the startup tasks again from it, elevated. To stay on the MSI instead, pin it in `WinGetApps.local.csv` with `Microsoft.PowerShell,7.6.9.0,d,n,w,All`. A brand-new machine of a fork that pins a version other than the base is the one case where the first run (which installs the base pin) and the app list disagree; uninstall the extra install the same way.
+
+```powershell
+winget install --id Microsoft.PowerShell --exact --version 7.7.0.0 --source winget
+# then, in a new elevated shell of the MSIX PowerShell:
+Set-StartupTasks
+```
+
 ## Configuration Issues
 
 ### Machine Type Not Detected

@@ -1,3 +1,8 @@
+# The PowerShell version the first run installs. It must equal the Microsoft.PowerShell row of
+# Bootstrap\Data\WinGetApps.csv (Install-Bootstrap.Tests.ps1 checks it): this script runs before the
+# repository is cloned, so it cannot read that file.
+$PinnedPowerShellVersion = '7.7.0.0'
+
 function Loading-Spinner {
 	param(
 		[Parameter(Mandatory = $true)]
@@ -38,11 +43,13 @@ function Install-PowerShell {
 
 	if (-not $pwshPath) {
 		Write-Host -ForegroundColor Yellow "`n PowerShell 7 not found. Installing..."
-		Write-Host -ForegroundColor DarkCyan "`n[Installing PowerShell 7]"
+		Write-Host -ForegroundColor DarkCyan "`n[Installing PowerShell 7 ($PinnedPowerShellVersion)]"
 
-		Loading-Spinner -Function {
-			winget install Microsoft.PowerShell --source winget --accept-package-agreements --accept-source-agreements
-		} -Label "Installing..."
+		# The version the app list installs later, so a fresh machine never ends up with two
+		# PowerShell installs side by side. Built as text because the spinner runs it as a job,
+		# which cannot see this script's variables.
+		$installCommand = [scriptblock]::Create("winget install --id Microsoft.PowerShell --exact --version $PinnedPowerShellVersion --source winget --accept-package-agreements --accept-source-agreements")
+		Loading-Spinner -Function $installCommand -Label "Installing..."
 
 		$env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
 
@@ -396,7 +403,7 @@ function Install-Bootstrap {
 			) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
 			if (-not $pwshPath) {
 				Write-Host -ForegroundColor Red "PowerShell 7 installation failed or pwsh.exe not found. Install manually and try again!"
-				Write-Host -ForegroundColor DarkCyan "Use this command => winget install Microsoft.PowerShell --source winget --accept-package-agreements --accept-source-agreements"
+				Write-Host -ForegroundColor DarkCyan "Use this command => winget install --id Microsoft.PowerShell --exact --version $PinnedPowerShellVersion --source winget --accept-package-agreements --accept-source-agreements"
 				return
 			}
 		}

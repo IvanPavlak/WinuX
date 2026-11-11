@@ -33,7 +33,10 @@ App,Version,Scope,Interactive,Source,Machine
 # WinGetApps.local.csv.
 #
 #   Microsoft.PowerToys        0.102.3001.0 -> pinned by the row below
-#   Microsoft.PowerShell       7.6.9.0      -> pinned by the row below
+#   Microsoft.PowerShell       7.7.0.0      -> pinned by the row below (the MSIX package, the only
+#                                              installer winget ships from 7.7.0), and installed at
+#                                              this version by Install-PowerShell in
+#                                              Install-Bootstrap.ps1 ($PinnedPowerShellVersion)
 #   Microsoft.WindowsTerminal  1.25.2733.0  -> pinned by the row below
 #                                              (pinned rows install with --version and are
 #                                              re-pinned in winget by Upgrade-All)
@@ -42,7 +45,7 @@ App,Version,Scope,Interactive,Source,Machine
 #                                              the test harness, Install-PowerShellModules, and CI alike)
 #   Windows 11                 26H2         -> NOT enforced (build 26300; environment, not a package)
 # ===============================================================================================
-Microsoft.PowerShell,7.6.9.0,d,n,w,All
+Microsoft.PowerShell,7.7.0.0,d,n,w,All
 Microsoft.WindowsTerminal,1.25.2733.0,d,n,w,All
 Microsoft.PowerToys,0.102.3001.0,d,n,w,All
 

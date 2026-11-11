@@ -15,10 +15,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **`Get-PwshPath` returns a `pwsh.exe` path that survives PowerShell updates, for the MSI and the MSIX install alike.** In a shell of the MSI (or any install outside `WindowsApps`) it is that install's own `pwsh.exe`; in a shell of the MSIX package that winget ships from PowerShell 7.7.0 it is the package's version-free app execution alias `%LOCALAPPDATA%\Microsoft\WindowsApps\<PackageFamilyName>\pwsh.exe`, then the shared alias, then the first `pwsh` on PATH. Covered by `Modules/Tests/Modules/Helper/Get-PwshPath.Tests.ps1`.
 - **`Set-StartupTasks -List` reports a registered scheduled task that starts another `pwsh.exe` than the current shell resolves as `Outdated`**, so a task left behind by a PowerShell update or by moving between the MSI and the MSIX is visible; the next `Set-StartupTasks` registers it again.
 
+### Changed
+
+- **PowerShell is pinned to `7.7.0.0` (was `7.6.9.0`).** From 7.7.0 winget ships PowerShell only as an MSIX package, so a machine on the MSI 7.6.9.0 that follows the base pin gets the MSIX next to the MSI; uninstall the MSI to move over, or pin `7.6.9.0` in `WinGetApps.local.csv` to stay. The `TESTED VERSIONS` block and the row of `WinGetApps.csv` name the new version. Docs: software list, the Window module reference ("Tested Dependency Versions", including .NET 11 for System.Windows.Forms), the Bootstrap module reference, prerequisites, installation, troubleshooting ("Two PowerShell 7 Installs, Or The Shell Still Reports The Old Version"), `AI/Context/WINDOWS_CONTEXT.md`.
+
 ### Fixed
 
 - **The startup scheduled tasks keep running after a PowerShell update when PowerShell is installed as the MSIX package.** `Set-StartupTasks` built each task's `pwsh.exe` path from `$PSHOME`, which under the MSIX install is a versioned `WindowsApps` folder that the next update removes, so every `SignIn`, `Unlock` and `Wake` task stopped silently. It now stores the path `Get-PwshPath` returns. Covered by `Modules/Tests/Modules/Bootstrap/Set-StartupTasks.Tests.ps1`.
-- **`Install-Bootstrap` finds PowerShell 7 after installing it as the MSIX package.** When `pwsh` is not yet on PATH it now also looks for the MSIX package's app execution alias, not only the MSI's `C:\Program Files\PowerShell\7\pwsh.exe`.
+- **The first run installs PowerShell at its pinned version and finds it as the MSIX package.** `Install-Bootstrap` ran an unpinned `winget install Microsoft.PowerShell`, so a fresh machine got the newest PowerShell, and the app list then added the pinned one next to it. It now installs `--id Microsoft.PowerShell --exact --version` with the version the committed `WinGetApps.csv` pins, and when `pwsh` is not yet on PATH it also looks for the MSIX package's app execution alias, not only the MSI's `C:\Program Files\PowerShell\7\pwsh.exe`. Covered by `Modules/Tests/Modules/Bootstrap/Install-Bootstrap.Tests.ps1`, which also fails when the script and the CSV pin different versions.
 
 ## [2.13.0] - 2026-11-11
 
