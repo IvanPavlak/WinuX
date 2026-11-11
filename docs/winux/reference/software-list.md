@@ -96,7 +96,7 @@ The minimal set a WinuX install needs to work end-to-end - the framework apps on
 
 | Software         | WinGet ID                   | Version                     |
 | ---------------- | --------------------------- | --------------------------- |
-| PowerShell 7     | `Microsoft.PowerShell`      | **Pinned to 7.6.9.0**       |
+| PowerShell 7     | `Microsoft.PowerShell`      | **Pinned to 7.7.0.0**       |
 | Windows Terminal | `Microsoft.WindowsTerminal` | **Pinned to 1.25.2733.0**   |
 | PowerToys        | `Microsoft.PowerToys`       | **Pinned to 0.102.3001.0**  |
 

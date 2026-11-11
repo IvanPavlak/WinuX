@@ -9,6 +9,10 @@ BeforeAll {
 	# Dot-sourced so they exist to Mock whatever the session's imported modules hold.
 	. "$ModuleRoot\Workflow\Functions\Get-StartupTaskDefinitions.ps1"
 	. "$ModuleRoot\Workflow\Functions\New-StartupTaskShellCommand.ps1"
+	. "$ModuleRoot\Helper\Functions\Get-PwshPath.ps1"
+
+	# What Get-PwshPath returns for a shell of the MSIX install: the version-free alias.
+	$script:PwshAlias = 'C:\Users\TestUser\AppData\Local\Microsoft\WindowsApps\Microsoft.PowerShell_8wekyb3d8bbwe\pwsh.exe'
 
 	# Stand-ins for the Task Scheduler and CIM commands, so the mocks below attach to these and
 	# the real Task Scheduler is never read or written. They shadow the real commands for this
@@ -122,6 +126,7 @@ Describe "Set-StartupTasks" {
 			if ($Arguments) { "encoded-task-$($Arguments.Name)-$($Arguments.Trigger)" } else { "encoded-runner-$($Command -replace '\W', '_')" }
 		}
 		Mock Get-ScheduledTask { $script:Existing }
+		Mock Get-PwshPath { $script:PwshAlias }
 		Mock Register-ScheduledTask {
 			$script:Registered.Add(@{
 					TaskPath    = $TaskPath
@@ -216,10 +221,25 @@ Describe "Set-StartupTasks" {
 			$action = $script:Registered[0].Action
 			$action.Execute | Should -BeLike '*\conhost.exe'
 			$action.Argument | Should -BeLike '--headless *'
-			$action.Argument.Contains((Join-Path $PSHOME 'pwsh.exe')) | Should -BeTrue
 			$action.Argument | Should -BeLike '* -NoProfile *'
 			$action.Argument | Should -BeLike '* -NonInteractive *'
 			$action.Argument | Should -BeLike '* -EncodedCommand encoded-runner-Invoke_StartupTasks__Trigger_SignIn'
+		}
+
+		It "starts the pwsh.exe Get-PwshPath resolves, so a PowerShell update cannot break it" {
+			$script:Definitions = @(
+				New-TestStartupDefinition -Name A -Trigger SignIn
+				New-TestStartupDefinition -Name S -Trigger Wake -Options @{ Elevation = 'Silent' }
+			)
+
+			Set-StartupTasks
+
+			$script:Registered.Count | Should -Be 2
+			foreach ($entry in $script:Registered) {
+				$entry.Action.Argument | Should -BeLike "--headless `"$($script:PwshAlias)`" *"
+				$entry.Action.Argument | Should -Not -BeLike "*$PSHOME*"
+			}
+			Should -Invoke Get-PwshPath -Times 1 -Exactly
 		}
 
 		It "runs the runner as the signed-in user, unelevated" {
@@ -566,6 +586,39 @@ Describe "Set-StartupTasks" {
 			$listed = @(Set-StartupTasks -List)
 
 			(($listed | ForEach-Object { "$($_.TaskName)=$($_.State)" }) -join ',') | Should -Be 'StartupTasks-SignIn=Registered,StartupTasks-Wake=Missing,StartupTask-Silent-S-Wake=Missing,StartupTasks-Unlock=Stale'
+		}
+
+		It "reports a registered task that starts another pwsh.exe as outdated, and one that starts this one as registered" {
+			$script:Existing = @(
+				[pscustomobject]@{
+					TaskName = 'StartupTasks-SignIn'
+					Actions  = @([pscustomobject]@{ Arguments = '--headless "C:\Program Files\WindowsApps\Microsoft.PowerShell_7.7.0.0_x64__8wekyb3d8bbwe\pwsh.exe" -NoLogo -EncodedCommand x' })
+				}
+				[pscustomobject]@{
+					TaskName = 'StartupTasks-Wake'
+					Actions  = @([pscustomobject]@{ Arguments = "--headless `"$($script:PwshAlias)`" -NoLogo -EncodedCommand x" })
+				}
+			)
+
+			$listed = @(Set-StartupTasks -List)
+
+			($listed | Where-Object { $_.TaskName -eq 'StartupTasks-SignIn' }).State | Should -Be 'Outdated'
+			($listed | Where-Object { $_.TaskName -eq 'StartupTasks-Wake' }).State | Should -Be 'Registered'
+		}
+
+		It "re-registers an outdated task with the resolved pwsh.exe on the next run" {
+			$script:Existing = @(
+				[pscustomobject]@{
+					TaskName = 'StartupTasks-SignIn'
+					Actions  = @([pscustomobject]@{ Arguments = '--headless "C:\Program Files\PowerShell\7\pwsh.exe" -NoLogo -EncodedCommand x' })
+				}
+			)
+
+			Set-StartupTasks
+
+			$signIn = $script:Registered | Where-Object { $_.TaskName -eq 'StartupTasks-SignIn' }
+			$signIn.Action.Argument | Should -BeLike "--headless `"$($script:PwshAlias)`" *"
+			$signIn.Force | Should -BeTrue
 		}
 
 		It "says which trigger and run level each needed task has, and neither for a stale one" {

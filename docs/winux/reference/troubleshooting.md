@@ -86,6 +86,20 @@ Install-WingetApps
 Upgrade-All -PackageManager Chocolatey
 ```
 
+### Two PowerShell 7 Installs, Or The Shell Still Reports The Old Version
+
+**Problem:** After the PowerShell pin moved to 7.7.0.0, `$PSVersionTable.PSVersion` in a new shell still shows 7.6, or Settings > Apps lists both "PowerShell 7-x64" and "PowerShell". `winget upgrade Microsoft.PowerShell` answers `No installed package found matching input criteria`.
+
+**Cause:** From 7.7.0 winget ships PowerShell only as an MSIX package, and an MSIX package never replaces the MSI install earlier versions used. The two live side by side, and `pwsh` (and a Windows Terminal profile running `pwsh.exe`) keeps starting the MSI, because its folder is on the machine PATH and the MSIX alias folder only on the user PATH. `winget upgrade` finds nothing to upgrade because no MSI of 7.7.0 exists.
+
+**Solution:** Install the MSIX next to the MSI, close every PowerShell 7.6 window, uninstall "PowerShell 7-x64" in Settings > Apps, then open a new shell (its `$PSHOME` is under `WindowsApps`) and register the startup tasks again from it, elevated. To stay on the MSI instead, pin it in `WinGetApps.local.csv` with `Microsoft.PowerShell,7.6.9.0,d,n,w,All`. A brand-new machine of a fork that pins a version other than the base is the one case where the first run (which installs the base pin) and the app list disagree; uninstall the extra install the same way.
+
+```powershell
+winget install --id Microsoft.PowerShell --exact --version 7.7.0.0 --source winget
+# then, in a new elevated shell of the MSIX PowerShell:
+Set-StartupTasks
+```
+
 ## Configuration Issues
 
 ### Machine Type Not Detected
@@ -1402,6 +1416,20 @@ Set-StartupTasks
 ```
 
 If the scheduled task is `Registered` and the task still does not run, the `-WhatIf` line says why (`OutOfScope`: `Machine` or `Hostname` does not cover this machine; `NotDue`: its `Frequency` says it already ran; `Disabled`), and a task that is not valid is named with its errors in the failure report tab and the runner's session log.
+
+### Startup Tasks Stopped Running After A PowerShell Update Or Install
+
+**Problem:** Sign-in, unlock or wake tasks ran before and now nothing happens, right after PowerShell was updated, installed from winget, or the MSI was uninstalled. Or `Set-StartupTasks -List` shows a task as `Outdated`.
+
+**Cause:** Each scheduled task stores the full path of the `pwsh.exe` it starts. From PowerShell 7.7.0 winget installs PowerShell as an MSIX package, next to an existing MSI install rather than in its place, and an MSIX package lives in a versioned `C:\Program Files\WindowsApps\Microsoft.PowerShell_<version>_x64__8wekyb3d8bbwe` folder that the next update removes. Tasks registered before WinuX resolved a stable path from such a shell, or tasks still pointing at an MSI that has since been uninstalled, start a `pwsh.exe` that no longer exists. While both installs are present, `pwsh` on PATH and the Windows Terminal profile still start the MSI, because the MSI folder is on the machine PATH and the MSIX alias folder only on the user PATH.
+
+**Solution:** Open a shell of the PowerShell the tasks should use (check `$PSHOME`) and register again; `Set-StartupTasks` now stores the MSI's fixed path or the MSIX package's version-free alias ([Get-PwshPath](../modules/helper.md#get-pwshpath)). To settle on one install, uninstall the other one first.
+
+```powershell
+$PSHOME                   # C:\Program Files\PowerShell\7 (MSI) or ...\WindowsApps\Microsoft.PowerShell_... (MSIX)
+Set-StartupTasks -List    # Outdated = built for another pwsh.exe
+Set-StartupTasks
+```
 
 ### A Silent Task Is Reported As Delegated, Or Its Elevated Task Is Missing
 

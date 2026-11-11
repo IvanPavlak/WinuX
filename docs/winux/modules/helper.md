@@ -612,6 +612,26 @@ Get-PowerShellFunctionDependencies -FunctionName "MyFunction"
 Get-PowerShellFunctionDependencies -FunctionName "MyFunction" -Recursive
 ```
 
+## [Get-PwshPath](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Get-PwshPath.ps1)
+
+- **Description:** Returns a `pwsh.exe` path that keeps working after PowerShell updates, for the PowerShell that runs the current shell. Installed from the MSI (or a zip, or anywhere outside `WindowsApps`) that is its own `pwsh.exe` under `$PSHOME`. Installed as the MSIX package, it is the package's version-free app execution alias `%LOCALAPPDATA%\Microsoft\WindowsApps\<PackageFamilyName>\pwsh.exe`, then the shared alias `%LOCALAPPDATA%\Microsoft\WindowsApps\pwsh.exe`. Falls back to the first `pwsh` on PATH, and last to `pwsh.exe` under `-PowerShellHome`.
+- **Parameters:** -PowerShellHome
+- **Usage:** `Get-PwshPath`, `Get-PwshPath -PowerShellHome 'C:\Program Files\PowerShell\7'`
+
+From PowerShell 7.7.0 winget ships PowerShell only as an MSIX package. Its `$PSHOME` is a versioned folder such as `C:\Program Files\WindowsApps\Microsoft.PowerShell_7.7.0.0_x64__8wekyb3d8bbwe`, which the next update removes, so a path built from `$PSHOME` and stored somewhere (a scheduled task) stops working after the update. The family alias names the package but no version: it survives updates, and it never starts the PowerShell LTS package or the MSI by mistake when several are installed side by side. A process started right away (a new tab, a hidden shell) can keep using `$PSHOME`; anything registered to run later should use this function. [Set-StartupTasks](bootstrap.md#set-startuptasks) builds its scheduled tasks with it.
+
+| Parameter         | Description                                                                     |
+| ----------------- | ------------------------------------------------------------------------------- |
+| `-PowerShellHome` | The installation folder to resolve from. Defaults to `$PSHOME`.                  |
+
+```powershell
+# C:\Program Files\PowerShell\7\pwsh.exe in an MSI shell,
+# ...\AppData\Local\Microsoft\WindowsApps\Microsoft.PowerShell_8wekyb3d8bbwe\pwsh.exe in an MSIX shell
+Get-PwshPath
+```
+
+**See also:** [Set-StartupTasks](bootstrap.md#set-startuptasks), [Get-ShellProcessName](#get-shellprocessname)
+
 ## [Get-RepositoryName](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Get-RepositoryName.ps1)
 
 - **Description:** Extracts the repository name from a Git URL. Parses `http(s)://`, `git://`, `git@host:` SSH and other `user@host:` SCP-style Git URLs, stripping any `.git` suffix to return just the repo name (`ssh://` URLs are not recognized). A helper used by `Initialize-Repository` and `Update-Repositories` (the standalone `Install-Bootstrap.ps1` carries its own copy); returns an empty string (with a `Write-LogError` message) on empty input or an unsupported URL format.

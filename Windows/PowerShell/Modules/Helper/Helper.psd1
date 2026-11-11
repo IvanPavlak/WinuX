@@ -40,6 +40,7 @@
 		'Get-OrderedNames',
 		'Get-FilteredParams',
 		'Get-PowerShellFunctionDependencies',
+		'Get-PwshPath',
 		'Get-RepositoryName',
 		'Get-RepositoryPath',
 		'Get-ShellProcessName',

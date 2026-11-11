@@ -201,7 +201,7 @@ Initialize-Configuration -GitName "Jane Doe" -GitEmail "jane@example.com" -DevPa
 
 ## [Install-Bootstrap](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Bootstrap/Install-Bootstrap.ps1)
 
-- **Description:** The self-contained Stage 1 first-run script. Ensures PowerShell 7 is installed (relaunching as Administrator if needed), installs and configures Git, clones the WinuX repository for the specified branch (on a re-run, where the clone already exists, it only fast-forwards it with `git fetch` and `git merge --ff-only --no-overwrite-ignore @{upstream}`, which refuses rather than touch local changes or overwrite an ignored local file, and leaves the clone as it is with a warning), resolves your Git identity from the cloned configuration, then imports the full Bootstrap module and hands off to `Bootstrap -WithInitialSetup`.
+- **Description:** The self-contained Stage 1 first-run script. Ensures PowerShell 7 is installed (relaunching as Administrator if needed; a missing one is installed at the exact version the committed `WinGetApps.csv` pins, the script's `$PinnedPowerShellVersion`, so the app list never adds a second install), installs and configures Git, clones the WinuX repository for the specified branch (on a re-run, where the clone already exists, it only fast-forwards it with `git fetch` and `git merge --ff-only --no-overwrite-ignore @{upstream}`, which refuses rather than touch local changes or overwrite an ignored local file, and leaves the clone as it is with a warning), resolves your Git identity from the cloned configuration, then imports the full Bootstrap module and hands off to `Bootstrap -WithInitialSetup`.
 - **Parameters:** -Branch, -Token
 - **Usage:** `Install-Bootstrap`, `Install-Bootstrap -Branch master`, `irm '.../Install-Bootstrap.ps1' -Headers @{ Authorization = "Bearer $Pat" } | iex`
 
@@ -400,10 +400,11 @@ Resolve-RepositoryUpdateScope -Path 'RepositoryUpdate.Startup.Scope'
 | State        | Meaning                                                                                   |
 | ------------ | ----------------------------------------------------------------------------------------- |
 | `Registered` | The configuration needs the scheduled task and it exists.                                  |
+| `Outdated`   | It exists but starts another `pwsh.exe` than this shell resolves - run `Set-StartupTasks`. |
 | `Missing`    | The configuration needs it and it does not exist yet - run `Set-StartupTasks`.             |
 | `Stale`      | It exists and nothing needs it any more - the next `Set-StartupTasks` removes it.          |
 
-Every scheduled task starts `pwsh` through `conhost --headless`, so the shell has a console without a window and nothing flashes on screen when the trigger fires; the shell loads the profile without its interactive stages ([New-StartupTaskShellCommand](workflow.md#new-startuptaskshellcommand) `-LoadProfile`) and exits when the run is over. A second firing of a trigger while its run is still going is ignored, and a run has no execution time limit. A scheduled task that could not be registered or removed is logged and counted in a closing warning; the others are still handled.
+Every scheduled task starts the `pwsh.exe` that [Get-PwshPath](helper.md#get-pwshpath) returns for the shell running `Set-StartupTasks`: the MSI's fixed `C:\Program Files\PowerShell\7\pwsh.exe`, or the MSIX package's version-free app execution alias, never the versioned `WindowsApps` package folder the next PowerShell update removes. Run it from the PowerShell the tasks should use, and again after moving between the MSI and the MSIX; `-List` marks a task built for the other one `Outdated`. It starts that shell through `conhost --headless`, so the shell has a console without a window and nothing flashes on screen when the trigger fires; the shell loads the profile without its interactive stages ([New-StartupTaskShellCommand](workflow.md#new-startuptaskshellcommand) `-LoadProfile`) and exits when the run is over. A second firing of a trigger while its run is still going is ignored, and a run has no execution time limit. A scheduled task that could not be registered or removed is logged and counted in a closing warning; the others are still handled.
 
 | Parameter | Type     | Default | Description                                                                                                       |
 | --------- | -------- | ------- | ----------------------------------------------------------------------------------------------------------------- |
@@ -601,7 +602,7 @@ Each of the three may have a machine-local `<name>.local.csv` beside it, which [
 
 ```csv
 App,Version,Scope,Interactive,Source,Machine
-Microsoft.PowerShell,7.6.9.0,d,n,w,All
+Microsoft.PowerShell,7.7.0.0,d,n,w,All
 Microsoft.WindowsTerminal,1.25.2733.0,d,n,w,All
 Microsoft.PowerToys,0.102.3001.0,d,n,w,All
 ```
