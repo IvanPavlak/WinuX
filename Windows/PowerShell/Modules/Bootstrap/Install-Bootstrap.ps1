@@ -388,8 +388,13 @@ function Install-Bootstrap {
 		Install-PowerShell
 		$pwshPath = (Get-Command pwsh -ErrorAction SilentlyContinue).Source
 		if (-not $pwshPath) {
-			$pwshPath = "C:\Program Files\PowerShell\7\pwsh.exe"
-			if (-not (Test-Path $pwshPath)) {
+			# The MSI's fixed folder, then the app execution alias of the MSIX package winget
+			# ships from PowerShell 7.7.0.
+			$pwshPath = @(
+				"C:\Program Files\PowerShell\7\pwsh.exe",
+				(Join-Path $env:LOCALAPPDATA "Microsoft\WindowsApps\Microsoft.PowerShell_8wekyb3d8bbwe\pwsh.exe")
+			) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+			if (-not $pwshPath) {
 				Write-Host -ForegroundColor Red "PowerShell 7 installation failed or pwsh.exe not found. Install manually and try again!"
 				Write-Host -ForegroundColor DarkCyan "Use this command => winget install Microsoft.PowerShell --source winget --accept-package-agreements --accept-source-agreements"
 				return

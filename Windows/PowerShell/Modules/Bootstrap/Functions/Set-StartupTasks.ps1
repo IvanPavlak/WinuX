@@ -33,12 +33,18 @@ function Set-StartupTasks {
 		so a machine whose last startup task was deleted ends up with none. Running it again
 		changes nothing but the registration time.
 
+		Every scheduled task starts the pwsh.exe Get-PwshPath returns for this shell: the MSI's
+		fixed folder, or the version-free app execution alias of the MSIX package, never the
+		versioned package folder the next PowerShell update removes. Run this function from the
+		PowerShell the tasks should use, again after switching between the MSI and the MSIX.
+
 		Registering and removing need Administrator privileges (Test-AdminPrivileges); -List and
 		a run that finds nothing to do do not. Bootstrap calls this as the step StartupTasks.
 
 	.PARAMETER List
 		Show what would be registered and what is, and change nothing: one object per scheduled
-		task with TaskName, Trigger, RunLevel and State (Registered, Missing or Stale).
+		task with TaskName, Trigger, RunLevel and State (Registered, Outdated, Missing or Stale).
+		Outdated: the scheduled task exists but starts another pwsh.exe than Get-PwshPath returns.
 
 	.PARAMETER Remove
 		Remove every startup scheduled task, whatever the configuration says.
@@ -70,7 +76,8 @@ function Set-StartupTasks {
 
 	$taskPath = '\WinuX\'
 	$osTriggers = @('SignIn', 'Unlock', 'Wake')
-	$pwshPath = Join-Path -Path $PSHOME -ChildPath 'pwsh.exe'
+	# Not $PSHOME: under the MSIX install it is a versioned folder the next update removes.
+	$pwshPath = Get-PwshPath
 
 	# What this machine needs: one runner per trigger in use, one elevated task per Silent task
 	# and trigger.
@@ -121,11 +128,20 @@ function Set-StartupTasks {
 
 	if ($List) {
 		foreach ($taskName in $desired.Keys) {
+			$state = 'Missing'
+			$task = $existing | Where-Object { $_.TaskName -eq $taskName } | Select-Object -First 1
+			if ($task) {
+				$state = 'Registered'
+				# The pwsh.exe its action starts, when it can be read: one that is not the path
+				# this shell resolves (another install, or a versioned MSIX folder) is outdated.
+				$arguments = [string](@($task.Actions) | Select-Object -First 1).Arguments
+				if ($arguments -match '^--headless "(?<Pwsh>[^"]+)"' -and $Matches.Pwsh -ne $pwshPath) { $state = 'Outdated' }
+			}
 			[pscustomobject]@{
 				TaskName = $taskName
 				Trigger  = $desired[$taskName].Trigger
 				RunLevel = $desired[$taskName].RunLevel
-				State    = if ($existingNames -contains $taskName) { 'Registered' } else { 'Missing' }
+				State    = $state
 			}
 		}
 		foreach ($taskName in $stale) {

@@ -8,6 +8,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.14.0] - 2026-11-11
+
+### Added
+
+- **`Get-PwshPath` returns a `pwsh.exe` path that survives PowerShell updates, for the MSI and the MSIX install alike.** In a shell of the MSI (or any install outside `WindowsApps`) it is that install's own `pwsh.exe`; in a shell of the MSIX package that winget ships from PowerShell 7.7.0 it is the package's version-free app execution alias `%LOCALAPPDATA%\Microsoft\WindowsApps\<PackageFamilyName>\pwsh.exe`, then the shared alias, then the first `pwsh` on PATH. Covered by `Modules/Tests/Modules/Helper/Get-PwshPath.Tests.ps1`.
+- **`Set-StartupTasks -List` reports a registered scheduled task that starts another `pwsh.exe` than the current shell resolves as `Outdated`**, so a task left behind by a PowerShell update or by moving between the MSI and the MSIX is visible; the next `Set-StartupTasks` registers it again.
+
+### Fixed
+
+- **The startup scheduled tasks keep running after a PowerShell update when PowerShell is installed as the MSIX package.** `Set-StartupTasks` built each task's `pwsh.exe` path from `$PSHOME`, which under the MSIX install is a versioned `WindowsApps` folder that the next update removes, so every `SignIn`, `Unlock` and `Wake` task stopped silently. It now stores the path `Get-PwshPath` returns. Covered by `Modules/Tests/Modules/Bootstrap/Set-StartupTasks.Tests.ps1`.
+- **`Install-Bootstrap` finds PowerShell 7 after installing it as the MSIX package.** When `pwsh` is not yet on PATH it now also looks for the MSIX package's app execution alias, not only the MSI's `C:\Program Files\PowerShell\7\pwsh.exe`.
+
 ## [2.13.0] - 2026-11-11
 
 ### Added
@@ -1927,7 +1939,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.13.0...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.14.0...HEAD
+[2.14.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.13.0...winux/v2.14.0
 [2.13.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.12.0...winux/v2.13.0
 [2.12.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.11.0...winux/v2.12.0
 [2.11.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.10.2...winux/v2.11.0

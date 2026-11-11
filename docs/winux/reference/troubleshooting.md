@@ -1403,6 +1403,20 @@ Set-StartupTasks
 
 If the scheduled task is `Registered` and the task still does not run, the `-WhatIf` line says why (`OutOfScope`: `Machine` or `Hostname` does not cover this machine; `NotDue`: its `Frequency` says it already ran; `Disabled`), and a task that is not valid is named with its errors in the failure report tab and the runner's session log.
 
+### Startup Tasks Stopped Running After A PowerShell Update Or Install
+
+**Problem:** Sign-in, unlock or wake tasks ran before and now nothing happens, right after PowerShell was updated, installed from winget, or the MSI was uninstalled. Or `Set-StartupTasks -List` shows a task as `Outdated`.
+
+**Cause:** Each scheduled task stores the full path of the `pwsh.exe` it starts. From PowerShell 7.7.0 winget installs PowerShell as an MSIX package, next to an existing MSI install rather than in its place, and an MSIX package lives in a versioned `C:\Program Files\WindowsApps\Microsoft.PowerShell_<version>_x64__8wekyb3d8bbwe` folder that the next update removes. Tasks registered before WinuX resolved a stable path from such a shell, or tasks still pointing at an MSI that has since been uninstalled, start a `pwsh.exe` that no longer exists. While both installs are present, `pwsh` on PATH and the Windows Terminal profile still start the MSI, because the MSI folder is on the machine PATH and the MSIX alias folder only on the user PATH.
+
+**Solution:** Open a shell of the PowerShell the tasks should use (check `$PSHOME`) and register again; `Set-StartupTasks` now stores the MSI's fixed path or the MSIX package's version-free alias ([Get-PwshPath](../modules/helper.md#get-pwshpath)). To settle on one install, uninstall the other one first.
+
+```powershell
+$PSHOME                   # C:\Program Files\PowerShell\7 (MSI) or ...\WindowsApps\Microsoft.PowerShell_... (MSIX)
+Set-StartupTasks -List    # Outdated = built for another pwsh.exe
+Set-StartupTasks
+```
+
 ### A Silent Task Is Reported As Delegated, Or Its Elevated Task Is Missing
 
 **Problem:** After a sign-in the log says `Startup task [MyTask] delegated (SignIn) - Runs from its own elevated scheduled task`, or the failure report lists `[MyTask] Failed - Its elevated scheduled task is missing - run Set-StartupTasks`. Or you changed the task's command and the old one still runs.

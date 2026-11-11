@@ -1,5 +1,5 @@
 {
-  "Version": "2.13.0",
+  "Version": "2.14.0",
   "Functions": {
     "Add-BrowserGroup": {
       "Module": "Configuration",
@@ -1968,6 +1968,15 @@
           "Aliases": []
         },
         "Recursive": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-PwshPath": {
+      "Module": "Helper",
+      "Parameters": {
+        "PowerShellHome": {
           "Mandatory": false,
           "Aliases": []
         }
