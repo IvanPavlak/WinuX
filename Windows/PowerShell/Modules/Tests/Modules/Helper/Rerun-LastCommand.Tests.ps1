@@ -6,6 +6,7 @@ BeforeAll {
 
 	. "$FunctionsPath\Invoke-RerunLastCommandExit.ps1"
 	. "$FunctionsPath\ReRun-LastCommand.ps1"
+	. (Join-Path $ModuleRoot "Helper\Functions\Get-WindowsTerminalWindow.ps1")
 
 	# The graceful close goes through the Window module's Close-Window seam. Stubbed so Mock can
 	# attach without the Window module and so no WM_CLOSE is ever posted from a test.

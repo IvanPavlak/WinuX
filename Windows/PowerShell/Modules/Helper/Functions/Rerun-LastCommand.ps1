@@ -157,7 +157,7 @@ function ReRun-LastCommand {
 	}
 
 	# Capture the original window handle BEFORE opening new terminal
-	$originalWindow = Get-WindowHandle -ProcessName "WindowsTerminal" -ErrorAction SilentlyContinue | Select-Object -First 1
+	$originalWindow = Get-WindowsTerminalWindow | Select-Object -First 1
 	$originalWindowHandle = if ($originalWindow) { $originalWindow.Handle } else { $null }
 
 	Terminate-WindowsTerminalTabs

@@ -53,7 +53,7 @@ function Get-TerminalTabSnapshot {
 	$restoreDesktopIndex = $null
 
 	try {
-		foreach ($terminalWindow in @(Get-WindowHandle -ProcessName "WindowsTerminal" -ErrorAction SilentlyContinue)) {
+		foreach ($terminalWindow in @(Get-WindowsTerminalWindow)) {
 			if (-not $terminalWindow) { continue }
 
 			$handle = [IntPtr]$terminalWindow.Handle

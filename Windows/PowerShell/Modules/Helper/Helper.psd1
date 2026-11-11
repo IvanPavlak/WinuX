@@ -45,6 +45,7 @@
 		'Get-ShellProcessName',
 		'Get-WindowTitleCandidates',
 		'Get-WindowsTerminalTabTitles',
+		'Get-WindowsTerminalWindow',
 		'Get-RpcRetryPolicy',
 		'Initialize-Directory',
 		'Invoke-GoogleTranslate',

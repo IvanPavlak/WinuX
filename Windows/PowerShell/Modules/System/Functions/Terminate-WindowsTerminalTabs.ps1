@@ -125,7 +125,7 @@ function Terminate-WindowsTerminalTabs {
 
 		# Restrict the "initial" (hosting) window to the resolved WT process so we
 		# never mistake another WT window for ours when several are running.
-		$allWtWindows = @(Get-WindowHandle -ProcessName "WindowsTerminal" -ErrorAction SilentlyContinue)
+		$allWtWindows = @(Get-WindowsTerminalWindow)
 		$initialWindow = $allWtWindows | Where-Object { $_.ProcessId -eq $wtProcess.Id } | Select-Object -First 1
 		if (-not $initialWindow) { $initialWindow = $allWtWindows | Select-Object -First 1 }
 		$startingTitle = if ($initialWindow) { $initialWindow.Title } else { $null }
@@ -152,16 +152,20 @@ function Terminate-WindowsTerminalTabs {
 		if (Test-LogVerbose) {
 			Write-LogDebug "Marked current tab with unique ID => [$uniqueId]" -Style Success
 			if (-not $markerVisible) {
-				Write-LogDebug "Marker not reflected in tab titles (suppressApplicationTitle active), using original title [$startingTitle] as identifier" -Style Warning
+				Write-LogDebug "Marker not seen in the tab titles (the tabs could not be read, or the tab suppresses title changes), using the window title [$startingTitle] as identifier" -Style Warning
 			}
 		}
 
 		$closedTabs = @()
 		$closeFailures = @()
 
+		# A title carrying the marker is always ours, whatever the starting title was: the marker
+		# is new on every run, so only this tab can show it. Without that, a wrong starting title
+		# made the legacy pass send Ctrl+C to this very tab, which stopped the function silently.
 		$isOurTabTitle = {
 			param([string]$Title)
-			if ($markerVisible) { $Title -like "*$uniqueId*" } else { $Title -eq $startingTitle }
+			if ($Title -like "*$uniqueId*") { return $true }
+			if ($markerVisible) { $false } else { $Title -eq $startingTitle }
 		}
 
 		# --- UIA-first pass over the current window: close every non-marked tab via its
@@ -214,7 +218,7 @@ function Terminate-WindowsTerminalTabs {
 				[System.Windows.Forms.SendKeys]::SendWait("^{TAB}")
 				Start-Sleep -Milliseconds 25
 
-				$currentWindow = Get-WindowHandle -ProcessName "WindowsTerminal" -ErrorAction SilentlyContinue | Select-Object -First 1
+				$currentWindow = Get-WindowsTerminalWindow | Select-Object -First 1
 				$currentTitle = if ($currentWindow) { $currentWindow.Title } else { $null }
 
 				if (-not $currentTitle) {
@@ -246,7 +250,7 @@ function Terminate-WindowsTerminalTabs {
 				[System.Windows.Forms.SendKeys]::SendWait("^w")
 				Start-Sleep -Milliseconds 25
 
-				$postCloseWindow = Get-WindowHandle -ProcessName "WindowsTerminal" -ErrorAction SilentlyContinue | Select-Object -First 1
+				$postCloseWindow = Get-WindowsTerminalWindow | Select-Object -First 1
 				$postCloseTitle = if ($postCloseWindow) { $postCloseWindow.Title } else { $null }
 
 				if ($postCloseTitle -and $postCloseTitle -eq $currentTitle) {
@@ -261,7 +265,7 @@ function Terminate-WindowsTerminalTabs {
 
 		# Close tabs in other Windows Terminal windows
 		# Ctrl+Tab only cycles within the current window, so other WT windows must be handled separately
-		$otherWtWindows = @(Get-WindowHandle -ProcessName "WindowsTerminal" -ErrorAction SilentlyContinue |
+		$otherWtWindows = @(Get-WindowsTerminalWindow |
 				Where-Object { $_.Handle -ne $currentWindowHandle })
 
 		if ($otherWtWindows.Count -gt 0) {
@@ -297,7 +301,7 @@ function Terminate-WindowsTerminalTabs {
 						# fresh enumeration (the window cache may still hold the dead handle).
 						Start-Sleep -Milliseconds 75
 						Clear-WindowCache
-						$uiaSurvivor = Get-WindowHandle -ProcessName "WindowsTerminal" -ErrorAction SilentlyContinue |
+						$uiaSurvivor = Get-WindowsTerminalWindow |
 							Where-Object { $_.Handle -eq $otherWin.Handle } |
 							Select-Object -First 1
 						if ($uiaSurvivor) {
@@ -321,7 +325,7 @@ function Terminate-WindowsTerminalTabs {
 					$maxCloseAttempts = 30
 					for ($c = 0; $c -lt $maxCloseAttempts; $c++) {
 						# Check if the window still exists
-						$stillExists = Get-WindowHandle -ProcessName "WindowsTerminal" -ErrorAction SilentlyContinue |
+						$stillExists = Get-WindowsTerminalWindow |
 							Where-Object { $_.Handle -eq $otherWin.Handle }
 
 						if (-not $stillExists) {
@@ -337,7 +341,7 @@ function Terminate-WindowsTerminalTabs {
 						[System.Windows.Forms.SendKeys]::SendWait("^w")
 						Start-Sleep -Milliseconds 25
 
-						$postCloseWindow = Get-WindowHandle -ProcessName "WindowsTerminal" -ErrorAction SilentlyContinue |
+						$postCloseWindow = Get-WindowsTerminalWindow |
 							Where-Object { $_.Handle -eq $otherWin.Handle } |
 							Select-Object -First 1
 
@@ -356,7 +360,7 @@ function Terminate-WindowsTerminalTabs {
 						}
 					}
 
-					$survivingWindow = Get-WindowHandle -ProcessName "WindowsTerminal" -ErrorAction SilentlyContinue |
+					$survivingWindow = Get-WindowsTerminalWindow |
 						Where-Object { $_.Handle -eq $otherWin.Handle } |
 						Select-Object -First 1
 					if ($survivingWindow) {
@@ -377,7 +381,7 @@ function Terminate-WindowsTerminalTabs {
 		# guaranteed ~0.3-0.5s of Ctrl+Tab cycling to every clean invocation.
 		Start-Sleep -Milliseconds 50
 		Clear-WindowCache
-		$remainingAfterMainPass = @(Get-WindowHandle -ProcessName "WindowsTerminal" -ErrorAction SilentlyContinue |
+		$remainingAfterMainPass = @(Get-WindowsTerminalWindow |
 				Where-Object { $_.Handle -ne $currentWindowHandle })
 		$currentTitlesAfterPass = Get-WindowsTerminalTabTitles -WindowHandle $currentWindowHandle
 		$currentWindowLeftovers = @()
@@ -401,7 +405,7 @@ function Terminate-WindowsTerminalTabs {
 			Start-Sleep -Milliseconds $retryDelayMs
 
 			# Check for remaining other WT windows
-			$remainingOtherWindows = @(Get-WindowHandle -ProcessName "WindowsTerminal" -ErrorAction SilentlyContinue |
+			$remainingOtherWindows = @(Get-WindowsTerminalWindow |
 					Where-Object { $_.Handle -ne $currentWindowHandle })
 
 			foreach ($remainingWin in $remainingOtherWindows) {
@@ -410,7 +414,7 @@ function Terminate-WindowsTerminalTabs {
 					Start-Sleep -Milliseconds $retryDelayMs
 
 					for ($c = 0; $c -lt 30; $c++) {
-						$stillExists = Get-WindowHandle -ProcessName "WindowsTerminal" -ErrorAction SilentlyContinue |
+						$stillExists = Get-WindowsTerminalWindow |
 							Where-Object { $_.Handle -eq $remainingWin.Handle }
 
 						if (-not $stillExists) { break }
@@ -422,7 +426,7 @@ function Terminate-WindowsTerminalTabs {
 						[System.Windows.Forms.SendKeys]::SendWait("^w")
 						Start-Sleep -Milliseconds $retryDelayMs
 
-						$postCloseWindow = Get-WindowHandle -ProcessName "WindowsTerminal" -ErrorAction SilentlyContinue |
+						$postCloseWindow = Get-WindowsTerminalWindow |
 							Where-Object { $_.Handle -eq $remainingWin.Handle } |
 							Select-Object -First 1
 
@@ -457,19 +461,12 @@ function Terminate-WindowsTerminalTabs {
 				[System.Windows.Forms.SendKeys]::SendWait("^{TAB}")
 				Start-Sleep -Milliseconds $retryDelayMs
 
-				$verifyWindow = Get-WindowHandle -ProcessName "WindowsTerminal" -ErrorAction SilentlyContinue | Select-Object -First 1
+				$verifyWindow = Get-WindowsTerminalWindow | Select-Object -First 1
 				$verifyTitle = if ($verifyWindow) { $verifyWindow.Title } else { $null }
 
 				if (-not $verifyTitle) { break }
 
-				$isOurTab = if ($markerVisible) {
-					$verifyTitle -like "*$uniqueId*"
-				}
-				else {
-					$verifyTitle -eq $startingTitle
-				}
-
-				if ($isOurTab) {
+				if (& $isOurTabTitle $verifyTitle) {
 					$retryConsecutiveHits++
 					if ($retryConsecutiveHits -ge 2) { break }
 					continue
@@ -485,7 +482,7 @@ function Terminate-WindowsTerminalTabs {
 				[System.Windows.Forms.SendKeys]::SendWait("^w")
 				Start-Sleep -Milliseconds $retryDelayMs
 
-				$postCloseVerifyWindow = Get-WindowHandle -ProcessName "WindowsTerminal" -ErrorAction SilentlyContinue | Select-Object -First 1
+				$postCloseVerifyWindow = Get-WindowsTerminalWindow | Select-Object -First 1
 				$postCloseVerifyTitle = if ($postCloseVerifyWindow) { $postCloseVerifyWindow.Title } else { $null }
 
 				if ($postCloseVerifyTitle -and $postCloseVerifyTitle -eq $verifyTitle) {
@@ -497,7 +494,7 @@ function Terminate-WindowsTerminalTabs {
 				}
 			}
 
-			$stillRemainingWindows = @(Get-WindowHandle -ProcessName "WindowsTerminal" -ErrorAction SilentlyContinue |
+			$stillRemainingWindows = @(Get-WindowsTerminalWindow |
 					Where-Object { $_.Handle -ne $currentWindowHandle })
 
 			if (-not $hasRemainingTabs -and $stillRemainingWindows.Count -eq 0) {
@@ -515,7 +512,7 @@ function Terminate-WindowsTerminalTabs {
 			}
 		}
 
-		$remainingOtherWindows = @(Get-WindowHandle -ProcessName "WindowsTerminal" -ErrorAction SilentlyContinue |
+		$remainingOtherWindows = @(Get-WindowsTerminalWindow |
 				Where-Object { $_.Handle -ne $currentWindowHandle })
 		if ($remainingOtherWindows.Count -gt 0 -or $closeFailures.Count -gt 0) {
 			Write-LogWarning "Warning: Windows Terminal cleanup left one or more tabs or windows open."

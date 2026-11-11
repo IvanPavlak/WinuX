@@ -55,7 +55,7 @@ function Close-ProjectTerminals {
 	$restoreDesktopIndex = $null
 
 	try {
-		$terminalWindows = @(Get-WindowHandle -ProcessName "WindowsTerminal" -ErrorAction SilentlyContinue)
+		$terminalWindows = @(Get-WindowsTerminalWindow)
 		if ($TerminalWindowHandle -ne [System.IntPtr]::Zero) {
 			$terminalWindows = @($terminalWindows | Where-Object { $_.Handle -eq $TerminalWindowHandle })
 		}

@@ -5,6 +5,7 @@ BeforeAll {
 	$FunctionsPath = Join-Path $ModuleRoot "Workflow\Functions"
 
 	. "$FunctionsPath\Open-ProjectTerminals.ps1"
+	. (Join-Path $ModuleRoot "Helper\Functions\Get-WindowsTerminalWindow.ps1")
 
 	# The real entry reader, dot-sourced so it resolves against the stubs below exactly as the
 	# function under test does - which tab shape means what is its contract, not this function's.

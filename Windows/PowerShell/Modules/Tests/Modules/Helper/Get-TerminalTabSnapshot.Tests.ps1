@@ -4,6 +4,7 @@ BeforeAll {
 	$ModuleRoot = (Get-RepositoryPath).Modules
 
 	. (Join-Path $ModuleRoot "Helper\Functions\Get-TerminalTabSnapshot.ps1")
+	. (Join-Path $ModuleRoot "Helper\Functions\Get-WindowsTerminalWindow.ps1")
 
 	function Get-WindowHandle { param($ProcessName, $WindowTitle) @() }
 	function Get-WindowsTerminalTabTitles { param($WindowHandle) $null }

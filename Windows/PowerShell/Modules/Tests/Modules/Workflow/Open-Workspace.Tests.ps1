@@ -11,6 +11,7 @@ BeforeAll {
 	. (Join-Path $ModuleRoot "Helper\Functions\Get-OrderedEntry.ps1")
 	. (Join-Path $ModuleRoot "Helper\Functions\Resolve-WorkspaceTemplate.ps1")
 	. "$SystemFunctionsPath\Terminate-WindowsTerminalTabs.ps1"
+	. (Join-Path $ModuleRoot "Helper\Functions\Get-WindowsTerminalWindow.ps1")
 
 	$script:OriginalMachineType = $global:MachineType
 

@@ -394,7 +394,7 @@ function Wait-ForWorkspaceWindows {
 	# because by this point browsers/apps have already been opened and stolen focus.
 	$terminalHandle = [IntPtr]::Zero
 	$terminalSetTopmost = $false
-	$terminalWindow = Get-WindowHandle -ProcessName "WindowsTerminal" -ErrorAction SilentlyContinue | Select-Object -First 1
+	$terminalWindow = Get-WindowsTerminalWindow | Select-Object -First 1
 	if ($terminalWindow) {
 		$terminalHandle = $terminalWindow.Handle
 		$terminalSetTopmost = [WindowModule.Native]::SetWindowTopmost($terminalHandle, $true)

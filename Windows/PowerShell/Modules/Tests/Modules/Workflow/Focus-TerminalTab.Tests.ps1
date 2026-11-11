@@ -5,6 +5,7 @@ BeforeAll {
 	$FunctionsPath = Join-Path $ModuleRoot "Workflow\Functions"
 
 	. "$FunctionsPath\Focus-TerminalTab.ps1"
+	. (Join-Path $ModuleRoot "Helper\Functions\Get-WindowsTerminalWindow.ps1")
 
 	# Stub before mocking: Confirm-WindowForeground lives in the Window module, which this file
 	# never loads, and Mock cannot attach to a command that does not exist.

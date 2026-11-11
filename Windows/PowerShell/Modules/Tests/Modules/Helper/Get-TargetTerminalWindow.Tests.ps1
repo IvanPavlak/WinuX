@@ -5,6 +5,7 @@ BeforeAll {
 	$FunctionsPath = Join-Path $ModuleRoot "Helper\Functions"
 
 	. "$FunctionsPath\Get-TargetTerminalWindow.ps1"
+	. (Join-Path $ModuleRoot "Helper\Functions\Get-WindowsTerminalWindow.ps1")
 }
 
 Describe "Get-TargetTerminalWindow" {

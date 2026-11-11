@@ -6,6 +6,7 @@ BeforeAll {
 	$HelperFunctionsPath = Join-Path $ModuleRoot "Helper\Functions"
 
 	. "$HelperFunctionsPath\Countdown.ps1"
+	. "$HelperFunctionsPath\Get-WindowsTerminalWindow.ps1"
 	. "$FunctionsPath\Invoke-TerminateWindowsTerminalTabsExit.ps1"
 	. "$FunctionsPath\Invoke-TerminateWindowsTerminalTabsIncludeCurrentCleanup.ps1"
 	. "$FunctionsPath\Terminate-WindowsTerminalTabs.ps1"
@@ -98,6 +99,69 @@ Describe "Terminate-WindowsTerminalTabs" {
 			Terminate-WindowsTerminalTabs
 
 			Should -Invoke Get-WindowHandle -Times 0
+		}
+	}
+
+	Context "Windows Terminal helper windows" {
+		BeforeEach {
+			Mock Add-Type { }
+			Mock Clear-WindowCache { }
+			Mock Close-WindowsTerminalTab { $true }
+			Mock Get-Process {
+				[PSCustomObject]@{
+					ProcessName = 'pwsh'
+					Id          = $PID
+					Parent      = [PSCustomObject]@{ ProcessName = 'WindowsTerminal'; Id = 4321; Parent = $null }
+				}
+			} -ParameterFilter { $Id -eq $PID }
+			Mock Get-Process { [PSCustomObject]@{ ProcessName = 'WindowsTerminal'; Id = 4321 } } -ParameterFilter { $Id -eq 4321 }
+		}
+
+		It "never takes the PopupHost window for its own window, even when it is listed first" {
+			Mock Get-WindowHandle {
+				@(
+					[PSCustomObject]@{ Handle = [IntPtr]1; Title = 'PopupHost'; ProcessName = 'WindowsTerminal'; ProcessId = 4321 },
+					[PSCustomObject]@{ Handle = [IntPtr]2; Title = 'PowerShell'; ProcessName = 'WindowsTerminal'; ProcessId = 4321 }
+				)
+			}
+			# The tab strip of the real window: only the calling tab, so nothing is closed and the
+			# keystroke fallback never runs.
+			Mock Get-WindowsTerminalTabTitles { @('PowerShell') }
+
+			Terminate-WindowsTerminalTabs
+
+			Should -Invoke Get-WindowsTerminalTabTitles -ParameterFilter { $WindowHandle -eq [IntPtr]2 }
+			Should -Invoke Get-WindowsTerminalTabTitles -Times 0 -ParameterFilter { $WindowHandle -eq [IntPtr]1 }
+			Should -Invoke Close-WindowsTerminalTab -Times 0
+		}
+
+		It "does not treat the PopupHost window as another terminal window to close" {
+			Mock Get-WindowHandle {
+				@(
+					[PSCustomObject]@{ Handle = [IntPtr]2; Title = 'PowerShell'; ProcessName = 'WindowsTerminal'; ProcessId = 4321 },
+					[PSCustomObject]@{ Handle = [IntPtr]1; Title = 'PopupHost'; ProcessName = 'WindowsTerminal'; ProcessId = 4321 }
+				)
+			}
+			Mock Get-WindowsTerminalTabTitles { @('PowerShell') }
+
+			Terminate-WindowsTerminalTabs
+
+			Should -Invoke Get-WindowsTerminalTabTitles -Times 0 -ParameterFilter { $WindowHandle -eq [IntPtr]1 }
+			Should -Invoke Close-WindowsTerminalTab -Times 0
+		}
+
+		It "closes no tab when only a PopupHost window is listed" {
+			Mock Get-WindowHandle {
+				@([PSCustomObject]@{ Handle = [IntPtr]1; Title = 'PopupHost'; ProcessName = 'WindowsTerminal'; ProcessId = 4321 })
+			}
+			Mock Get-WindowsTerminalTabTitles { throw 'no tab strip may be read without a real terminal window' }
+			Mock Write-LogError { }
+
+			Terminate-WindowsTerminalTabs
+
+			Should -Invoke Write-LogError -Times 1 -Exactly -ParameterFilter { $Message -like '*could not read the Windows Terminal window title*' }
+			Should -Invoke Get-WindowsTerminalTabTitles -Times 0
+			Should -Invoke Close-WindowsTerminalTab -Times 0
 		}
 	}
 

@@ -55,7 +55,7 @@ function Focus-TerminalTab {
 	# tab - read through UI Automation, without focusing anything. Activating the first process's
 	# main window instead would cycle tabs in a window the tab may not even be in.
 	if ($TargetTitle -and $WindowHandle -eq [IntPtr]::Zero -and (Get-Command Get-WindowsTerminalTabTitles -ErrorAction SilentlyContinue)) {
-		foreach ($terminalWindow in @(Get-WindowHandle -ProcessName "WindowsTerminal" -ErrorAction SilentlyContinue)) {
+		foreach ($terminalWindow in @(Get-WindowsTerminalWindow)) {
 			$tabTitles = Get-WindowsTerminalTabTitles -WindowHandle ([IntPtr]$terminalWindow.Handle)
 			if ($tabTitles -contains $TargetTitle) {
 				$WindowHandle = [IntPtr]$terminalWindow.Handle
@@ -97,7 +97,7 @@ function Focus-TerminalTab {
 		}
 		catch {
 			# Process may have exited or lacks a visible window - fall back to window handle
-			$wtWindow = Get-WindowHandle -ProcessName "WindowsTerminal" -ErrorAction SilentlyContinue | Select-Object -First 1
+			$wtWindow = Get-WindowsTerminalWindow | Select-Object -First 1
 			if ($wtWindow) {
 				[void](Set-WindowForeground -Handle $wtWindow.Handle)
 			}
@@ -129,7 +129,7 @@ function Focus-TerminalTab {
 	# Judge the cycling by the window that was actually activated. Reading back whichever terminal
 	# window is enumerated first would cycle tabs in one window and check the title of another.
 	$readTerminalTitle = {
-		$candidates = @(Get-WindowHandle -ProcessName "WindowsTerminal" -ErrorAction SilentlyContinue)
+		$candidates = @(Get-WindowsTerminalWindow)
 		if ($WindowHandle -ne [IntPtr]::Zero) {
 			$candidates = @($candidates | Where-Object { $_.Handle -eq $WindowHandle })
 		}

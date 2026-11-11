@@ -78,7 +78,7 @@ function Resolve-HostingTerminalTab {
 		return $null
 	}
 
-	$hostingWindows = @(Get-WindowHandle -ProcessName "WindowsTerminal" -ErrorAction SilentlyContinue |
+	$hostingWindows = @(Get-WindowsTerminalWindow |
 			Where-Object { $_.ProcessId -eq $hostingTerminalPid })
 
 	if ($hostingWindows.Count -eq 0) {
@@ -117,7 +117,7 @@ function Resolve-HostingTerminalTab {
 
 				[void](Wait-Until -TimeoutMs 500 -PollIntervalMs 25 -Condition {
 						Clear-WindowCache
-						$probeResult.Window = @(Get-WindowHandle -ProcessName "WindowsTerminal" -ErrorAction SilentlyContinue |
+						$probeResult.Window = @(Get-WindowsTerminalWindow |
 								Where-Object { $_.ProcessId -eq $hostingTerminalPid -and $_.Title -like "*$probe*" })[0]
 						$null -ne $probeResult.Window
 					})

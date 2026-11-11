@@ -263,7 +263,7 @@ function Open-Workspace {
 				$Host.UI.RawUI.WindowTitle = $titleProbe
 				Start-Sleep -Milliseconds 50
 
-				$ownTerminalWindow = Get-WindowHandle -ProcessName "WindowsTerminal" -ErrorAction SilentlyContinue |
+				$ownTerminalWindow = Get-WindowsTerminalWindow |
 					Where-Object { $_.Title -like "*$titleProbe*" } |
 					Select-Object -First 1
 

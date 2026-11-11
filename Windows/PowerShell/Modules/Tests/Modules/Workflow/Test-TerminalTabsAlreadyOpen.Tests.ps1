@@ -5,6 +5,7 @@ BeforeAll {
 	$FunctionsPath = Join-Path $ModuleRoot "Workflow\Functions"
 
 	. "$FunctionsPath\Test-TerminalTabsAlreadyOpen.ps1"
+	. (Join-Path $ModuleRoot "Helper\Functions\Get-WindowsTerminalWindow.ps1")
 
 	# Module-private keystroke wrapper (defined alongside Open-ProjectTerminals) and the
 	# Helper UIA reader - stub both so mocks can attach in this dot-sourced context and no
