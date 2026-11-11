@@ -8,6 +8,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.13.0] - 2026-11-11
+
+### Added
+
+- **`Get-WindowsTerminalWindow` lists the Windows Terminal windows that hold tabs.** It returns what `Get-WindowHandle -ProcessName WindowsTerminal` returns, in the same order, minus the helper windows Windows Terminal opens for itself (titled exactly `PopupHost`). Every function that looks up Windows Terminal windows now uses it: `Terminate-WindowsTerminalTabs`, `Get-TargetTerminalWindow`, `Get-TerminalTabSnapshot`, `Resolve-HostingTerminalTab`, `Run-Project`, `Rerun-LastCommand`, `Focus-TerminalTab`, `Open-ProjectTerminals`, `Close-ProjectTerminals`, `Test-TerminalTabsAlreadyOpen`, `Open-Workspace`, `Close-Workspace` and `Wait-ForWorkspaceWindows`. Covered by `Modules/Tests/Modules/Helper/Get-WindowsTerminalWindow.Tests.ps1`.
+
+### Fixed
+
+- **`Kill-All` and `Terminate-WindowsTerminalTabs` no longer stop silently in their own tab.** When Windows Terminal's `PopupHost` helper window was listed before the real terminal window, the function took it for its own window, could not read the tab strip, and fell back to walking the tabs by keystrokes with the helper window's title as the name of its own tab. Its own tab then looked like someone else's, received `Ctrl+C`, and the command stopped there with no message and a failed prompt. The helper window is now never used, and a tab that shows the function's own marker is always treated as the current tab, whatever the starting title was. The verbose log line for an unseen marker no longer blames `suppressApplicationTitle` alone. Covered by `Modules/Tests/Modules/System/Terminate-WindowsTerminalTabs.Tests.ps1`.
+- **The other Windows Terminal lookups no longer take the `PopupHost` helper window for a terminal window**, so focusing, reading and closing tabs, and keeping the workspace terminal on top, act on a real terminal window.
+
 ## [2.12.0] - 2026-11-09
 
 ### Added
@@ -1916,7 +1927,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.12.0...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.13.0...HEAD
+[2.13.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.12.0...winux/v2.13.0
 [2.12.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.11.0...winux/v2.12.0
 [2.11.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.10.2...winux/v2.11.0
 [2.10.2]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.10.1...winux/v2.10.2

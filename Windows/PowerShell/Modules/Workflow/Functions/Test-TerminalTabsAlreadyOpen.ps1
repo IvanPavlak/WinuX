@@ -45,7 +45,7 @@ function Test-TerminalTabsAlreadyOpen {
 
 		# Get ALL Windows Terminal windows - tabs in other WT windows would be missed
 		# if we only checked the first one (Ctrl+Tab only cycles within one window)
-		$allWtWindows = @(Get-WindowHandle -ProcessName "WindowsTerminal" -ErrorAction SilentlyContinue)
+		$allWtWindows = @(Get-WindowsTerminalWindow)
 
 		if (-not $allWtWindows -or $allWtWindows.Count -eq 0) {
 			return [PSCustomObject]@{
@@ -83,7 +83,7 @@ function Test-TerminalTabsAlreadyOpen {
 			Start-Sleep -Milliseconds 50
 
 			# Re-read title after activation (may have changed)
-			$startWindow = Get-WindowHandle -ProcessName "WindowsTerminal" -ErrorAction SilentlyContinue |
+			$startWindow = Get-WindowsTerminalWindow |
 				Where-Object { $_.Handle -eq $wtWindow.Handle }
 			$startingTitle = if ($startWindow) { $startWindow.Title } else { $null }
 
@@ -107,7 +107,7 @@ function Test-TerminalTabsAlreadyOpen {
 				Send-TerminalKeys "^{TAB}"
 				Start-Sleep -Milliseconds 10
 
-				$currentWindow = Get-WindowHandle -ProcessName "WindowsTerminal" -ErrorAction SilentlyContinue |
+				$currentWindow = Get-WindowsTerminalWindow |
 					Where-Object { $_.Handle -eq $wtWindow.Handle }
 				$currentTitle = if ($currentWindow) { $currentWindow.Title } else { $null }
 

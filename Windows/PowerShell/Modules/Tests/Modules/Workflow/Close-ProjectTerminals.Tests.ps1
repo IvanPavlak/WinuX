@@ -5,6 +5,7 @@ BeforeAll {
 	$FunctionsPath = Join-Path $ModuleRoot "Workflow\Functions"
 
 	. "$FunctionsPath\Close-ProjectTerminals.ps1"
+	. (Join-Path $ModuleRoot "Helper\Functions\Get-WindowsTerminalWindow.ps1")
 
 	# Stub before mocking: these live in the Helper and Window modules, which this file never loads.
 	function Get-WindowHandle { param($ProcessName) }

@@ -5,6 +5,7 @@ BeforeAll {
 	$FunctionsPath = Join-Path $ModuleRoot "Helper\Functions"
 
 	. "$FunctionsPath\Run-Project.ps1"
+	. (Join-Path $ModuleRoot "Helper\Functions\Get-WindowsTerminalWindow.ps1")
 
 	# The real entry reader, dot-sourced so it resolves against this file's mocks the way the
 	# function under test does - `rp` and `op` read a project's tabs through this one function.

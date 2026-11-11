@@ -186,7 +186,7 @@ function Open-ProjectTerminals {
 	# same window so tabs join the existing instance
 	$projectTerminals = @(Get-ConfigSetting -Path 'ProjectTerminals' -Default @())
 	if (-not $PSBoundParameters.ContainsKey('InSameShell')) {
-		$allWtWindows = @(Get-WindowHandle -ProcessName "WindowsTerminal" -ErrorAction SilentlyContinue)
+		$allWtWindows = @(Get-WindowsTerminalWindow)
 		if ($allWtWindows.Count -eq 1) {
 			# Build a regex that matches any known project tab title (e.g. "WinuX.Root")
 			$projectNames = @($projectTerminals.Name)
@@ -216,7 +216,7 @@ function Open-ProjectTerminals {
 					[void](Set-WindowForeground -Handle $wtHandle)
 					Start-Sleep -Milliseconds 50
 
-					$startWindow = Get-WindowHandle -ProcessName "WindowsTerminal" -ErrorAction SilentlyContinue |
+					$startWindow = Get-WindowsTerminalWindow |
 						Where-Object { $_.Handle -eq $wtHandle }
 					$startingTitle = if ($startWindow) { $startWindow.Title } else { $null }
 
@@ -233,7 +233,7 @@ function Open-ProjectTerminals {
 								Send-TerminalKeys "^{TAB}"
 								Start-Sleep -Milliseconds 10
 
-								$currentWindow = Get-WindowHandle -ProcessName "WindowsTerminal" -ErrorAction SilentlyContinue |
+								$currentWindow = Get-WindowsTerminalWindow |
 									Where-Object { $_.Handle -eq $wtHandle }
 								$currentTitle = if ($currentWindow) { $currentWindow.Title } else { $null }
 
@@ -250,7 +250,7 @@ function Open-ProjectTerminals {
 						# Navigate back to the starting tab if we moved away
 						if ($checkedTitles.Count -gt 1) {
 							for ($i = 0; $i -lt 20; $i++) {
-								$currentWindow = Get-WindowHandle -ProcessName "WindowsTerminal" -ErrorAction SilentlyContinue |
+								$currentWindow = Get-WindowsTerminalWindow |
 									Where-Object { $_.Handle -eq $wtHandle }
 								$currentTitle = if ($currentWindow) { $currentWindow.Title } else { $null }
 								if ($currentTitle -eq $startingTitle) { break }
@@ -562,7 +562,7 @@ function Open-ProjectTerminals {
 					}
 					catch {
 						# Process may have exited or lacks a visible window - fall back to window handle
-						$wtWindow = Get-WindowHandle -ProcessName "WindowsTerminal" -ErrorAction SilentlyContinue | Select-Object -First 1
+						$wtWindow = Get-WindowsTerminalWindow | Select-Object -First 1
 						if ($wtWindow) {
 							[void](Set-WindowForeground -Handle $wtWindow.Handle)
 						}

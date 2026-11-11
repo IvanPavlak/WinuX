@@ -21,7 +21,7 @@ function Get-TargetTerminalWindow {
 		[System.IntPtr]$TerminalWindowHandle = [System.IntPtr]::Zero
 	)
 
-	$wtWindows = @(Get-WindowHandle -ProcessName "WindowsTerminal" -ErrorAction SilentlyContinue)
+	$wtWindows = @(Get-WindowsTerminalWindow)
 
 	if ($TerminalWindowHandle -ne [System.IntPtr]::Zero) {
 		$matchedWindow = $wtWindows | Where-Object { $_.Handle -eq $TerminalWindowHandle } | Select-Object -First 1

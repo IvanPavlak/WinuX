@@ -564,7 +564,7 @@ function Close-Workspace {
 	# window the tab pass already emptied is not messaged again.
 	if ($ownedTerminalWindows.Count -gt 0) {
 		if (Get-Command Clear-WindowCache -ErrorAction SilentlyContinue) { Clear-WindowCache }
-		$terminalsAfterTabPass = @(Get-WindowHandle -ProcessName "WindowsTerminal" -ErrorAction SilentlyContinue)
+		$terminalsAfterTabPass = @(Get-WindowsTerminalWindow)
 
 		foreach ($ownedTerminal in $ownedTerminalWindows) {
 			# The window hosting the deferred tab is excluded: the exit seam closes that tab and the

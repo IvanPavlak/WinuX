@@ -90,7 +90,7 @@ function Run-Project {
 	Write-LogDebug "Resolved projects: $($resolvedProjects -join ', ')" -Style Step -NoLeadingNewline
 
 	# Capture the starting tab title so we can refocus after opening project tabs
-	$startingWindow = Get-WindowHandle -ProcessName "WindowsTerminal" -ErrorAction SilentlyContinue | Select-Object -First 1
+	$startingWindow = Get-WindowsTerminalWindow | Select-Object -First 1
 	$startingTitle = if ($startingWindow) { $startingWindow.Title } else { $null }
 
 	foreach ($Name in $resolvedProjects) {

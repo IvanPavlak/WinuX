@@ -4,6 +4,7 @@ BeforeAll {
 	$ModuleRoot = (Get-RepositoryPath).Modules
 
 	. (Join-Path $ModuleRoot "Helper\Functions\Resolve-HostingTerminalTab.ps1")
+	. (Join-Path $ModuleRoot "Helper\Functions\Get-WindowsTerminalWindow.ps1")
 	# The title probe polls through the real Wait-Until; its first check succeeds or the test
 	# mocks it, so no test waits for real.
 	. (Join-Path $ModuleRoot "Helper\Functions\Wait-Until.ps1")

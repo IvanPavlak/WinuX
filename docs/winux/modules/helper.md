@@ -690,7 +690,7 @@ $rpcPolicy = Get-RpcRetryPolicy -Probe
 - **Parameters:** -TerminalWindowHandle
 - **Usage:** `Get-TargetTerminalWindow`, `Get-TargetTerminalWindow -TerminalWindowHandle $handle`
 
-Enumerates `WindowsTerminal` process windows via `Get-WindowHandle`. If `-TerminalWindowHandle` is provided and a window with that handle exists, that window object is returned; otherwise the function falls back to the first Windows Terminal window found. No other WinuX function currently calls it; it is exported for interactive and script use.
+Enumerates the Windows Terminal windows via [Get-WindowsTerminalWindow](#get-windowsterminalwindow), so Windows Terminal's own helper windows are never returned. If `-TerminalWindowHandle` is provided and a window with that handle exists, that window object is returned; otherwise the function falls back to the first Windows Terminal window found. No other WinuX function currently calls it; it is exported for interactive and script use.
 
 | Parameter               | Description                                                                                                                                 |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -752,6 +752,23 @@ if ($null -eq $titles) { Write-Verbose "fall back to Ctrl+Tab cycling" }
 ```
 
 **See also:** [Close-WindowsTerminalTab](helper.md#close-windowsterminaltab), [Select-WindowsTerminalTab](helper.md#select-windowsterminaltab), [Test-TerminalTabsAlreadyOpen](workflow.md#test-terminaltabsalreadyopen), [Terminate-WindowsTerminalTabs](system.md#terminate-windowsterminaltabs)
+
+## [Get-WindowsTerminalWindow](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Get-WindowsTerminalWindow.ps1)
+
+- **Description:** Lists the Windows Terminal windows that hold tabs, leaving out the helper windows Windows Terminal opens for itself. Returns the window records of `Get-WindowHandle -ProcessName WindowsTerminal`, in the same order, without any window titled exactly `PopupHost`; returns nothing when no terminal window is open.
+- **Usage:** `Get-WindowsTerminalWindow`, `Get-WindowsTerminalWindow | Select-Object -First 1`
+
+The one lookup every WinuX function uses to find Windows Terminal windows. A Windows Terminal helper window is visible and has a title, so the window enumeration lists it beside the real terminal windows, sometimes first. It has no tab strip: a caller that took it for "the" terminal window could not read its tabs, and `Terminate-WindowsTerminalTabs`, walking the tabs by keystrokes from the wrong starting title, once closed its own tab that way. The title match is exact and case-sensitive, so a terminal tab that merely mentions the word is kept.
+
+```powershell
+# The first real Windows Terminal window
+$terminalWindow = Get-WindowsTerminalWindow | Select-Object -First 1
+
+# Every terminal window except the current one
+@(Get-WindowsTerminalWindow | Where-Object { $_.Handle -ne $currentHandle })
+```
+
+**See also:** [Get-WindowHandle](window.md#get-windowhandle), [Get-WindowsTerminalTabTitles](#get-windowsterminaltabtitles), [Get-TargetTerminalWindow](#get-targetterminalwindow)
 
 ## [Get-WindowTitleCandidates](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Get-WindowTitleCandidates.ps1)
 

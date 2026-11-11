@@ -5,6 +5,7 @@ BeforeAll {
 	$FunctionsPath = Join-Path $ModuleRoot "Window\Functions"
 
 	. "$FunctionsPath\Wait-ForWorkspaceWindows.ps1"
+	. (Join-Path $ModuleRoot "Helper\Functions\Get-WindowsTerminalWindow.ps1")
 	# The claim set the wait derives its pre-existing and excluded sets from.
 	. "$FunctionsPath\New-WindowClaimSet.ps1"
 	. (Join-Path $ModuleRoot "Helper\Functions\New-WaitClock.ps1")
