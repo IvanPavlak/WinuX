@@ -1,5 +1,5 @@
 {
-  "Version": "2.14.0",
+  "Version": "2.14.1",
   "Functions": {
     "Add-BrowserGroup": {
       "Module": "Configuration",
