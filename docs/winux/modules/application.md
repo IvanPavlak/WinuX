@@ -507,10 +507,10 @@ Open-Browser GroupName -Override
 
 ## [Open-ClaudeDesktop](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Open-ClaudeDesktop.ps1)
 
-- **Description:** Opens Claude Desktop via `Start-Application` using its local electron launcher under `%LOCALAPPDATA%\AnthropicClaude`. Does nothing if Claude Desktop is already running. The running check is scoped to the Claude Desktop install directory so it is not tripped by the Claude Code CLI, which also runs as a process named `claude`.
+- **Description:** Opens Claude Desktop via `Start-Application` using its local electron launcher under `%LOCALAPPDATA%\AnthropicClaude`. Does nothing if Claude Desktop is already running. The running check is scoped to the Claude Desktop install directory so it is not tripped by the Claude Code CLI, which also runs as a process named `claude`, and it requires a visible main window (`-RequireMainWindow`), because Claude Desktop keeps windowless background processes alive after its window is closed.
 - **Usage:** `Open-ClaudeDesktop`
 
-Launches `claude.exe` from `%LOCALAPPDATA%\AnthropicClaude` via `Start-Application -StartMethod DirectPath`, with no arguments. The `-ProcessPathFilter` restricts the "already running" detection to processes under the Claude Desktop install path, so the desktop app is distinguished from the `claude` CLI.
+Launches `claude.exe` from `%LOCALAPPDATA%\AnthropicClaude` via `Start-Application -StartMethod DirectPath`, with no arguments. The `-ProcessPathFilter` restricts the "already running" detection to processes under the Claude Desktop install path, so the desktop app is distinguished from the `claude` CLI. `-RequireMainWindow` further limits it to a process that owns a visible window: after its window is closed, Claude Desktop keeps several `claude.exe` processes running under that same path with no window, which used to report "Claude is already running!" while nothing was on screen. Starting the launcher while those processes run hands over to the existing instance, which shows its window again.
 
 That launcher is a Squirrel stub executable: it resolves the newest `app-*` install directory on its own, then re-executes the real Electron binary with whatever arguments it was given. Arguments must therefore be omitted - an earlier version passed `--processStart claude.exe` (an `Update.exe` flag the stub does not consume), which was forwarded through to Electron and parsed as a file path, so every launch opened an "Attach `claude.exe` to this session?" prompt.
 

@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.14.1] - 2026-11-12
+
+### Fixed
+
+- **`Open-ClaudeDesktop` (and the workspaces that open Claude Desktop) open the app when only its background processes are left.** After its window is closed, Claude Desktop keeps windowless `claude.exe` processes running under its install directory, and the "already running" check counted them, so it reported "Claude is already running!" with no window on screen. It now passes `-RequireMainWindow` to `Start-Application`, so only a process with a visible window counts, and the launcher brings the existing instance's window back. Covered by `Modules/Tests/Modules/Application/Open-ClaudeDesktop.Tests.ps1`.
+
 ## [2.14.0] - 2026-11-11
 
 ### Added
@@ -1943,7 +1949,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.14.0...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.14.1...HEAD
+[2.14.1]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.14.0...winux/v2.14.1
 [2.14.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.13.0...winux/v2.14.0
 [2.13.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.12.0...winux/v2.13.0
 [2.12.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.11.0...winux/v2.12.0

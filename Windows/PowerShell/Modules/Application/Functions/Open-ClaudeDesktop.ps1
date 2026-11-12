@@ -8,7 +8,10 @@ function Open-ClaudeDesktop {
 		Does nothing if Claude Desktop is already running.
 
 		The running check is scoped to the Claude Desktop install directory so it is not tripped
-		by the Claude Code CLI, which also runs as a process named "claude".
+		by the Claude Code CLI, which also runs as a process named "claude". It also requires a
+		visible main window (-RequireMainWindow): Claude Desktop keeps its Electron processes alive
+		in the background after its window is closed, so without it a closed app counted as running.
+		Starting the launcher while those background processes run brings the window back.
 
 		The launcher is invoked without arguments on purpose. It is a Squirrel stub executable that
 		resolves the newest "app-*" install directory on its own, and it forwards any arguments it
@@ -25,5 +28,6 @@ function Open-ClaudeDesktop {
 		-ProcessName "claude" `
 		-ProcessPathFilter "$env:LOCALAPPDATA\AnthropicClaude\*" `
 		-StartMethod DirectPath `
-		-ExecutablePath "$env:LOCALAPPDATA\AnthropicClaude\claude.exe"
+		-ExecutablePath "$env:LOCALAPPDATA\AnthropicClaude\claude.exe" `
+		-RequireMainWindow
 }
