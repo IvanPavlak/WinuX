@@ -1,4 +1,4 @@
-﻿# Changelog
+# Changelog
 
 All notable changes to **WinuX** are documented here.
 
@@ -7,6 +7,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 <!-- Sections, in order (omit any that are empty in a tagged release): Added · Changed · Breaking · Deprecated · Removed · Fixed · Security -->
 
 ## [Unreleased]
+
+## [2.15.0] - 2026-11-13
+
+### Added
+
+- **`Switch-AiProfile` moves a machine to another AI profile in one call.** Running another profile than the hostname maps to took setting `WINUX_AI_PROFILE` and running `Deploy-AiArtifacts -Kind Rules` in an elevated shell, and lasted only as long as that shell: the next deploy from another shell went back to the hostname's profile. `Switch-AiProfile <Name>` writes the profile name into a switch file, `ai-profile.switch` in the administrator-owned folder of the `managed-settings` destination (`C:\Program Files\ClaudeCode` in the base), runs `Deploy-AiArtifacts -Kind Rules` and then `Test-AiProfile`; `-Full` also redeploys every artifact kind, the MCP servers and the marketplaces, `-Reset` removes the switch file and redeploys the hostname's profile, and without arguments it reports the current profile and how it was picked, then offers the configured profiles in a `Resolve-Selection` menu, by the names `AiProfiles.Profiles` gives them (any key is a profile), plus `Reset` while a switch is in effect; Enter changes nothing. `Resolve-AiProfile` reads the switch file after `WINUX_AI_PROFILE` and before `AiProfiles.Hosts` (new `Source` value `switched`, new result keys `SwitchPath` and `Switched`, new optional parameter `-SwitchPath`), so every AI function in every shell runs the switched profile; a switch file naming no configured profile is warned about and ignored. The administrator rights are checked first, before the menu and anything written, `-WhatIf` writes nothing and previews the deploy as the picked profile, and a `WINUX_AI_PROFILE` set in the session is reported and removed from it so the switch deploys the profile it was given. Covered by `Modules/Tests/Modules/AI/Switch-AiProfile.Tests.ps1` and `Resolve-AiProfile.Tests.ps1`. Docs: AI Profiles ("Switching A Machine"), the AI module reference, the Switch-AiProfile and Resolve-AiProfile guides, the configuration reference, troubleshooting.
+
+### Changed
+
+- **`Deploy-AiArtifacts` and `Test-AiProfile` print their status lines as `Label => [value]`, the form the rest of WinuX uses**, instead of colon-aligned columns: `Artifacts root => [...]`, `Harnesses => [...]`, `AI profile => [Name] (picked by <source>)`, and in the profile check `Profile`, `Expected Plan`, `Default policy`, `Policy => [level] for [pattern]`, `No-CI merges`, `Logged-in Plan`, `Managed pin`, `Credentials` and `MCP sign-ins => [...] (sign in once with /mcp, not checked)`. Only the wording of the console lines changed: the checks, `$LASTEXITCODE` and the `-PassThru` result are the same. A script that parsed the old lines should read `Test-AiProfile -PassThru` instead.
 
 ## [2.14.1] - 2026-11-12
 
@@ -1949,7 +1959,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.14.1...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.15.0...HEAD
+[2.15.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.14.1...winux/v2.15.0
 [2.14.1]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.14.0...winux/v2.14.1
 [2.14.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.13.0...winux/v2.14.0
 [2.13.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.12.0...winux/v2.13.0

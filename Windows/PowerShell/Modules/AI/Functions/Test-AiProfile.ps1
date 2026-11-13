@@ -7,7 +7,8 @@ function Test-AiProfile {
 		Prints, read-only:
 
 		  - the AI profile (Resolve-AiProfile) and how it was picked: override
-		    (WINUX_AI_PROFILE), hostname (AiProfiles.Hosts) or default;
+		    (WINUX_AI_PROFILE), switched (Switch-AiProfile), hostname (AiProfiles.Hosts) or
+		    default;
 		  - the expected Plan (the profile's Plan: name and org UUID, one or several);
 		  - the repository policy: the default level (DefaultPolicy, branch when unset), then
 		    every configured pattern with its level, most trust first, and the patterns that
@@ -89,16 +90,16 @@ function Test-AiProfile {
 	$findings.Profile = $aiProfile.Name
 	$findings.Source = $aiProfile.Source
 	$findings.Expected = @($selected.Plans)
-	Write-LogStep "Profile        : $($aiProfile.Name) (picked by $($aiProfile.Source), host $($aiProfile.HostName))"
+	Write-LogStep "Profile => [$($aiProfile.Name)] (picked by $($aiProfile.Source), host $($aiProfile.HostName))"
 
 	$expectedUuids = @($selected.Plans | ForEach-Object { $_.OrgUuid })
 	foreach ($planError in @($selected.PlanErrors | Where-Object { $_ })) { $findings.Problems += $planError }
 	if ($expectedUuids.Count -eq 0) {
 		$findings.Problems += "The profile names no Plan (AiProfiles.Profiles.$($aiProfile.Name).Plan)"
-		Write-LogStep "Expected Plan  : none configured"
+		Write-LogStep "Expected Plan => none configured"
 	}
 	else {
-		Write-LogStep "Expected Plan  : $((@($selected.Plans | ForEach-Object { "$($_.Name) $($_.OrgUuid)" })) -join ', ')"
+		Write-LogStep "Expected Plan => [$((@($selected.Plans | ForEach-Object { "$($_.Name) $($_.OrgUuid)" })) -join ', ')]"
 	}
 
 	# --- Repository policy: listed, never a mismatch ----------------------------------------------
@@ -108,13 +109,13 @@ function Test-AiProfile {
 			foreach ($pattern in @($selected.Policies[$level] | Where-Object { $_ })) { $findings.Policies += @{ Level = [string]$level; Pattern = [string]$pattern } }
 		}
 	}
-	Write-LogStep "Default policy : $($findings.DefaultPolicy)"
+	Write-LogStep "Default policy => [$($findings.DefaultPolicy)]"
 	foreach ($policy in $findings.Policies) {
-		Write-LogStep "Policy         : $($policy.Level.PadRight(10)) $($policy.Pattern)"
+		Write-LogStep "Policy => [$($policy.Level)] for [$($policy.Pattern)]"
 	}
 	$noCheckMerges = @($selected.MergeWithoutChecks | Where-Object { $_ })
 	if ($noCheckMerges.Count -gt 0) {
-		Write-LogStep "No-CI merges   : $($noCheckMerges -join ', ')"
+		Write-LogStep "No-CI merges => [$($noCheckMerges -join ', ')]"
 	}
 
 	# --- Logged-in Plan ----------------------------------------------------------------------
@@ -136,11 +137,11 @@ function Test-AiProfile {
 	}
 	$findings.LoggedIn = $account
 	if (-not $account -or -not $account.OrgUuid) {
-		Write-LogStep "Logged-in Plan : none (no oauthAccount in [$statePath])"
+		Write-LogStep "Logged-in Plan => none (no oauthAccount in [$statePath])"
 		$findings.Problems += "Claude Code is not logged in with a Plan - run claude and /login"
 	}
 	else {
-		Write-LogStep "Logged-in Plan : $($account.OrgName) $($account.OrgUuid)"
+		Write-LogStep "Logged-in Plan => [$($account.OrgName) $($account.OrgUuid)]"
 		if ($expectedUuids.Count -gt 0 -and $expectedUuids -notcontains $account.OrgUuid) {
 			$findings.Problems += "Claude Code is logged in to [$($account.OrgName)], not the expected Plan - /logout, then /login with the expected one"
 		}
@@ -160,11 +161,11 @@ function Test-AiProfile {
 	}
 	$managedItem = Get-Item -LiteralPath $managedPath -Force -ErrorAction SilentlyContinue
 	if (-not $managedItem) {
-		Write-LogStep "Managed pin    : no managed settings at [$managedPath]"
+		Write-LogStep "Managed pin => none (no managed settings at [$managedPath])"
 		$findings.Problems += "No managed settings deployed - run Deploy-AiArtifacts"
 	}
 	elseif ($managedItem.Attributes -band [IO.FileAttributes]::ReparsePoint) {
-		Write-LogStep "Managed pin    : [$managedPath] is a link"
+		Write-LogStep "Managed pin => none ([$managedPath] is a link)"
 		$findings.Problems += "The managed settings are a link, not the administrator-owned copy - run Deploy-AiArtifacts"
 	}
 	else {
@@ -172,7 +173,7 @@ function Test-AiProfile {
 			$managed = [IO.File]::ReadAllText($managedPath) | ConvertFrom-Json -AsHashtable -ErrorAction Stop
 			$pinned = @($managed['forceLoginOrgUUID'] | Where-Object { $_ } | ForEach-Object { ([string]$_).ToLowerInvariant() })
 			$findings.Pinned = $pinned
-			Write-LogStep "Managed pin    : $(if ($pinned.Count -gt 0) { $pinned -join ', ' } else { 'none' })"
+			Write-LogStep "Managed pin => $(if ($pinned.Count -gt 0) { "[$($pinned -join ', ')]" } else { 'none' })"
 			$same = ($pinned.Count -eq $expectedUuids.Count) -and @($pinned | Where-Object { $expectedUuids -notcontains $_ }).Count -eq 0
 			if (-not $same) {
 				$findings.Problems += "The managed settings do not pin the expected Plan - run Deploy-AiArtifacts"
@@ -228,7 +229,7 @@ function Test-AiProfile {
 		if ([IO.File]::ReadAllText($file) -match '"apiKeyHelper"\s*:') { $findings.Credentials += "apiKeyHelper in [$file]" }
 	}
 	if ($findings.Credentials.Count -eq 0) {
-		Write-LogStep "Credentials    : none found"
+		Write-LogStep "Credentials => none found"
 	}
 	else {
 		Write-LogWarning "Pay-per-use credentials found (remove them - a Plan login is the only one allowed):"
@@ -248,7 +249,7 @@ function Test-AiProfile {
 		$findings.OAuthMcp += $name
 	}
 	if ($findings.OAuthMcp.Count -gt 0) {
-		Write-LogStep "MCP sign-ins   : sign in once with /mcp, not checked => [$($findings.OAuthMcp -join ', ')]"
+		Write-LogStep "MCP sign-ins => [$($findings.OAuthMcp -join ', ')] (sign in once with /mcp, not checked)"
 	}
 
 	if ($findings.Credentials.Count -gt 0) {

@@ -100,10 +100,10 @@ function Deploy-AiArtifacts {
 	$root = $config.Root.TrimEnd('\')
 	$repoRoot = (Get-RepositoryPath).Repo.TrimEnd('\')
 	$aiProfile = $config.Profile
-	Write-LogStep "Artifacts root : $root"
-	Write-LogStep "Harnesses      : $($config.Deploy -join ', ')"
+	Write-LogStep "Artifacts root => [$root]"
+	Write-LogStep "Harnesses => [$($config.Deploy -join ', ')]"
 	if ($aiProfile -and $aiProfile.Enabled) {
-		Write-LogStep "AI profile     : $($aiProfile.Name) ($($aiProfile.Source))"
+		Write-LogStep "AI profile => [$($aiProfile.Name)] (picked by $($aiProfile.Source))"
 	}
 	if ($aiProfile) {
 		foreach ($message in @($aiProfile.Warnings)) { Write-LogWarning $message }

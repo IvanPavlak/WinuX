@@ -15,7 +15,7 @@ Resolves which AI profile this machine runs - the rules, Plan, apps, artifacts, 
 | [`AiProfiles.Shared`](../../configuration-reference.md#ai-profiles) | array | `@()` | `origin` patterns every profile may work on. |
 | [`AiProfiles.DefaultOwner`](../../configuration-reference.md#ai-profiles) | string | `""` (the `Default` profile) | The profile owning a repository no pattern matches. |
 
-The environment variable `WINUX_AI_PROFILE`, when it names a configured profile, wins over `Hosts` and `Default` for the shell it is set in.
+Two things outside the configuration win over `Hosts` and `Default`: the environment variable `WINUX_AI_PROFILE`, when it names a configured profile, for the shell it is set in; then the profile [`Switch-AiProfile`](Switch-AiProfile.md) set, for the whole machine until `Switch-AiProfile -Reset`.
 
 ## Decisions
 
@@ -190,5 +190,6 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 - [AI Profiles](../../../ai/profiles.md) - the design
 - [AI configuration guides](README.md) - every guide for this module
 - [`Test-AiProfile`](Test-AiProfile.md) and [`Initialize-AiProfile`](Initialize-AiProfile.md) - check and set up a machine
+- [`Switch-AiProfile`](Switch-AiProfile.md) - move a machine to another profile
 - [WinuXConfigurator](../../winux-configurator.md) - have an AI assistant walk these decisions with you
 - [Configuration reference](../../configuration-reference.md) - every key, section by section

@@ -7,8 +7,9 @@ How one WinuX configuration gives each machine its own AI setup: which rules its
 Each machine runs exactly one AI profile, resolved once per command by [Resolve-AiProfile](../modules/ai.md#resolve-aiprofile):
 
 1. the `WINUX_AI_PROFILE` environment variable, when it names a configured profile (one that names none is warned about and ignored);
-2. this host's entry in `AiProfiles.Hosts` (`$env:COMPUTERNAME`, case-insensitive);
-3. `AiProfiles.Default`.
+2. the profile [Switch-AiProfile](../modules/ai.md#switch-aiprofile) set on this machine, when it names a configured profile (see [Switching A Machine](#switching-a-machine));
+3. this host's entry in `AiProfiles.Hosts` (`$env:COMPUTERNAME`, case-insensitive);
+4. `AiProfiles.Default`.
 
 With no profile configured, or none that resolves, profiles are off: every AI command behaves exactly as without them, scoped by machine type (`AiArtifacts.Use`, `AiArtifacts.Deploy`, `AiArtifacts.Exclude`, the MCP server `Machine` key). Those forms keep working with profiles on too; a profile value wins where it sets one.
 
@@ -122,9 +123,30 @@ The hook is `AI/Hooks/ai-repository-policy.sh`, one file for WinuX and Foundatio
 
 Once per machine, after Bootstrap, run [Initialize-AiProfile](../modules/ai.md#initialize-aiprofile) at the keyboard, or let Bootstrap run it as its opt-in step `AiProfileInit` (`BootstrapConfig.Steps.AiProfileInit = $true`), right after the AI MCP servers so the Plan pin is deployed before the login is checked. The step waits at the terminal, so it ships off and a run with it off stays unattended, only warning that the sign-ins were skipped. It never asks for a secret: it compares the logged-in Plan with the profile's and says which Plan to `/login` to, runs `gh auth login` when the GitHub CLI is not signed in, lists the profile's OAuth MCP servers for their `/mcp` sign-in, checks the profile's `EnvVars` are set (by name, never by value) and prints the command to set a missing one yourself, then runs `Test-AiProfile`. A machine whose profile allows unattended runs also wants `PowerTimeouts` so it never sleeps on mains power (see [Set-PowerPlan](../modules/system.md#set-powerplan)).
 
+## Switching A Machine
+
+A machine that must run another profile than its hostname maps to (a personal machine used for work for a while, say) is moved with one call, in an elevated PowerShell:
+
+```powershell
+Switch-AiProfile Work          # switch, redeploy the rules and the managed settings, check
+Switch-AiProfile Work -Full    # also the skills, MCP servers and marketplaces
+Switch-AiProfile -Reset        # back to the profile of the hostname, or the default
+Switch-AiProfile               # what runs now and how it was picked, then a menu of the profiles
+```
+
+Without arguments the configured profiles are offered in a menu, by the names `AiProfiles.Profiles` gives them, plus `Reset` while a switch is in effect; Enter changes nothing. A profile name is any key of `AiProfiles.Profiles`: `Personal` and `Work` are examples, not fixed names.
+
+[Switch-AiProfile](../modules/ai.md#switch-aiprofile) writes the profile name into the switch file, `ai-profile.switch` next to the managed settings copy (`C:\Program Files\ClaudeCode` in the base), then runs `Deploy-AiArtifacts -Kind Rules` and `Test-AiProfile`. Every later command in every shell resolves the switched profile, Bootstrap and the deploy functions included, until `-Reset` removes the file.
+
+- The switch file is in the administrator-owned folder, like the Plan pin it moves: a process without administrator rights, an agent included, cannot change which profile the machine runs. The administrator rights are checked first, before the menu and anything written, so a refused switch leaves the machine as it was.
+- `WINUX_AI_PROFILE` still outranks the switch file, as a per-shell override. A switch run in a shell that has it set deploys the profile it was given and removes the variable from that session.
+- Without `-Full` the skills, MCP servers and marketplaces stay the previous profile's; the rules, the Plan pin, the ownership patterns and the repository levels are the new profile's at once.
+- A session keeps the login and the managed settings it started with: restart every open Claude Code session, and log in to the Plan `Test-AiProfile` names (`/logout`, `/login`).
+- A switch file naming a profile the configuration no longer has is warned about and ignored.
+
 ## Verification (per machine)
 
-1. `(Resolve-AiProfile).Name` names the expected profile; `$env:WINUX_AI_PROFILE = "<Other>"; (Resolve-AiProfile).Source` says `override`.
+1. `(Resolve-AiProfile).Name` names the expected profile; `$env:WINUX_AI_PROFILE = "<Other>"; (Resolve-AiProfile).Source` says `override`, and after `Switch-AiProfile <Other>` it says `switched` in every shell.
 2. `Deploy-AiArtifacts -Kind Rules -WhatIf` reports nothing missing after a deploy.
 3. `Test-AiProfile` exits `0`.
 4. In a repository another profile owns, a prompt in Claude Code is refused by the guard; in a shared one it is not.

@@ -21,6 +21,7 @@
 		'Resolve-AiProfile',
 		'Set-ClaudeSettingsEnv',
 		'Set-ClaudeSettingsKey',
+		'Switch-AiProfile',
 		'Sync-AiManifestCache',
 		'Test-AiModsCli',
 		'Test-AiProfile',
