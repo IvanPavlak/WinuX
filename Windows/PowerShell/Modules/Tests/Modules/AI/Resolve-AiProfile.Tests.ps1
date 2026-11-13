@@ -68,6 +68,64 @@ Describe "Resolve-AiProfile" {
 		@($ignored.Warnings | Where-Object { $_ -like "*WINUX_AI_PROFILE*" }).Count | Should -Be 1
 	}
 
+	It "picks the switched profile over the hostname entry, and the override over the switch" {
+		$switchFile = Join-Path $TestDrive "switch\ai-profile.switch"
+		New-Item -ItemType Directory -Path (Split-Path -Parent $switchFile) -Force | Out-Null
+		Set-Content -Path $switchFile -Value "personal"
+
+		$result = Resolve-AiProfile -Configuration (New-ProfileConfig) -HostName "WORKSTATION-01" -Override "" -SwitchPath $switchFile
+		$result.Name | Should -Be "Personal" -Because "the switch file names the profile in any case, and the configured spelling is returned"
+		$result.Source | Should -Be "switched"
+		$result.Switched | Should -Be "personal"
+		$result.SwitchPath | Should -Be $switchFile
+
+		$overridden = Resolve-AiProfile -Configuration (New-ProfileConfig) -HostName "DESKTOP-GAMING" -Override "Work" -SwitchPath $switchFile
+		$overridden.Name | Should -Be "Work"
+		$overridden.Source | Should -Be "override"
+	}
+
+	It "ignores a switch file naming no configured profile, with a warning, and an empty or missing one silently" {
+		$switchFile = Join-Path $TestDrive "stale\ai-profile.switch"
+		New-Item -ItemType Directory -Path (Split-Path -Parent $switchFile) -Force | Out-Null
+		Set-Content -Path $switchFile -Value "Nobody"
+
+		$stale = Resolve-AiProfile -Configuration (New-ProfileConfig) -HostName "WORKSTATION-01" -Override "" -SwitchPath $switchFile
+		$stale.Name | Should -Be "Work"
+		$stale.Source | Should -Be "hostname"
+		@($stale.Warnings | Where-Object { $_ -like "*switch file names no configured profile*" }).Count | Should -Be 1
+
+		Set-Content -Path $switchFile -Value ""
+		$empty = Resolve-AiProfile -Configuration (New-ProfileConfig) -HostName "WORKSTATION-01" -Override "" -SwitchPath $switchFile
+		$empty.Source | Should -Be "hostname"
+		$empty.Warnings | Should -BeNullOrEmpty
+
+		$missing = Resolve-AiProfile -Configuration (New-ProfileConfig) -HostName "WORKSTATION-01" -Override "" -SwitchPath (Join-Path $TestDrive "none\ai-profile.switch")
+		$missing.Source | Should -Be "hostname"
+		$missing.Switched | Should -BeNullOrEmpty
+	}
+
+	It "derives the switch file from the managed-settings destination of AiHarnesses, and has none without one" {
+		$config = New-ProfileConfig
+		(Resolve-AiProfile -Configuration $config -HostName "WORKSTATION-01" -Override "").SwitchPath | Should -BeNullOrEmpty
+
+		$managedDir = Join-Path $TestDrive "managed"
+		New-Item -ItemType Directory -Path $managedDir -Force | Out-Null
+		$config.AiHarnesses = @{
+			"my-harness" = @{
+				Destinations = @(
+					@{ Kind = "Skills"; Placement = "Each"; Path = (Join-Path $TestDrive "skills") }
+					@{ Kind = "Rules"; Placement = "File"; Files = @("managed-settings.json"); Hooks = @("managed-settings"); Path = (Join-Path $managedDir "managed-settings.json") }
+				)
+			}
+		}
+		Set-Content -Path (Join-Path $managedDir "ai-profile.switch") -Value "Personal"
+
+		$result = Resolve-AiProfile -Configuration $config -HostName "WORKSTATION-01" -Override ""
+		$result.SwitchPath | Should -Be (Join-Path $managedDir "ai-profile.switch")
+		$result.Name | Should -Be "Personal"
+		$result.Source | Should -Be "switched"
+	}
+
 	It "is off when no default is set and the host is unmapped" {
 		$config = New-ProfileConfig
 		$config.AiProfiles.Default = ""

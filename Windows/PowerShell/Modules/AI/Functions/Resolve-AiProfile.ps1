@@ -1,7 +1,7 @@
 function Resolve-AiProfile {
 	<#
 	.SYNOPSIS
-		Resolves the AI profile this machine runs: the WINUX_AI_PROFILE override, then the hostname map, then the default profile.
+		Resolves the AI profile this machine runs: the WINUX_AI_PROFILE override, then the profile Switch-AiProfile set, then the hostname map, then the default profile.
 
 	.DESCRIPTION
 		An AI profile is the per-machine set of AI choices every AI deploy function honours: the
@@ -19,10 +19,17 @@ function Resolve-AiProfile {
 		  DefaultOwner  the profile owning a repository no pattern matches (default: Default)
 
 		The profile is picked once per call: the WINUX_AI_PROFILE environment variable (an
-		override naming no configured profile is reported and ignored), then this host's entry
-		in Hosts, then Default. With no profile configured (the base configuration), or none
-		that resolves, profiles are off: Enabled is $false and every AI function behaves as
-		before, scoped by machine type.
+		override naming no configured profile is reported and ignored), then the profile
+		Switch-AiProfile set on this machine (the switch file; one naming no configured profile
+		is reported and ignored), then this host's entry in Hosts, then Default. With no profile
+		configured (the base configuration), or none that resolves, profiles are off: Enabled is
+		$false and every AI function behaves as before, scoped by machine type.
+
+		The switch file is ai-profile.switch in the folder of the managed-settings destination
+		of AiHarnesses (C:\Program Files\ClaudeCode in the base): one line, the profile name.
+		The folder is administrator-owned, so only an elevated Switch-AiProfile changes it, and
+		every shell reads the same pick. A configuration without a managed-settings destination
+		has no switch file.
 
 		Repository patterns (Owns, Autonomous, Policies, MergeWithoutChecks, Shared) are
 		normalised the way the ownership guard normalises an origin remote: lowercase, no scheme,
@@ -40,7 +47,9 @@ function Resolve-AiProfile {
 		CI check reported.
 
 		Returns @{ Enabled; Name; Source; HostName; Profile; Profiles; Shared; DefaultOwner;
-		Warnings }. Source is override, hostname or default (empty when off). Profile is the
+		SwitchPath; Switched; Warnings }. Source is override, switched, hostname or default
+		(empty when off). SwitchPath is the switch file (empty without a managed-settings
+		destination) and Switched the name it holds (empty without one). Profile is the
 		normalised active profile (Name; Rules; Plans; Deploy; Include; Exclude; McpServers;
 		Marketplaces; Unattended; Owns; Autonomous; Policies; DefaultPolicy;
 		MergeWithoutChecks; EnvVars), $null when off; Deploy, McpServers and Marketplaces are
@@ -54,6 +63,10 @@ function Resolve-AiProfile {
 
 	.PARAMETER Override
 		The profile override. Defaults to $env:WINUX_AI_PROFILE.
+
+	.PARAMETER SwitchPath
+		The switch file Switch-AiProfile writes. Defaults to ai-profile.switch next to the
+		managed-settings destination of AiHarnesses; an empty string reads no switch file.
 
 	.EXAMPLE
 		(Resolve-AiProfile).Name
@@ -74,11 +87,31 @@ function Resolve-AiProfile {
 
 		[Parameter()]
 		[AllowEmptyString()]
-		[string]$Override = $env:WINUX_AI_PROFILE
+		[string]$Override = $env:WINUX_AI_PROFILE,
+
+		[Parameter()]
+		[AllowEmptyString()]
+		[string]$SwitchPath
 	)
 
 	$section = Get-ConfigSetting -Path 'AiProfiles' -Configuration $Configuration
 	if ($section -isnot [hashtable]) { $section = @{} }
+
+	# The switch file sits next to the managed settings copy, in the administrator-owned folder.
+	if (-not $PSBoundParameters.ContainsKey('SwitchPath')) {
+		$SwitchPath = ''
+		$harnesses = Get-ConfigSetting -Path 'AiHarnesses' -Configuration $Configuration
+		if ($harnesses -is [hashtable]) {
+			foreach ($harnessName in ($harnesses.Keys | ForEach-Object { [string]$_ } | Sort-Object)) {
+				if ($harnesses[$harnessName] -isnot [hashtable]) { continue }
+				foreach ($destination in @($harnesses[$harnessName].Destinations)) {
+					if (-not $SwitchPath -and $destination -is [hashtable] -and @($destination.Hooks) -contains 'managed-settings' -and $destination.Path) {
+						$SwitchPath = Join-Path (Split-Path -Parent ([string]$destination.Path)) 'ai-profile.switch'
+					}
+				}
+			}
+		}
+	}
 	$configured = if ($section.Profiles -is [hashtable]) { $section.Profiles } else { @{} }
 	$hosts = if ($section.Hosts -is [hashtable]) { $section.Hosts } else { @{} }
 
@@ -110,6 +143,8 @@ function Resolve-AiProfile {
 		Profiles     = [ordered]@{}
 		Shared       = @(& $patterns $section.Shared)
 		DefaultOwner = ''
+		SwitchPath   = [string]$SwitchPath
+		Switched     = ''
 		Warnings     = @()
 	}
 
@@ -217,6 +252,24 @@ function Resolve-AiProfile {
 		}
 		else {
 			$result.Warnings += "WINUX_AI_PROFILE names no configured profile => [$Override] - ignored"
+		}
+	}
+	# The profile Switch-AiProfile set: the first line of the switch file.
+	if ($SwitchPath -and (Test-Path -LiteralPath $SwitchPath -PathType Leaf)) {
+		try {
+			$result.Switched = ([string](@(Get-Content -LiteralPath $SwitchPath -ErrorAction Stop | Where-Object { $_ -and $_.Trim() })[0])).Trim()
+		}
+		catch {
+			$result.Warnings += "The AI profile switch file cannot be read => [$SwitchPath] - ignored"
+		}
+	}
+	if (-not $picked -and $result.Switched) {
+		$picked = & $find $result.Switched
+		if ($picked) {
+			$result.Source = 'switched'
+		}
+		else {
+			$result.Warnings += "The AI profile switch file names no configured profile => [$($result.Switched)] - ignored (Switch-AiProfile -Reset removes it)"
 		}
 	}
 	if (-not $picked -and $HostName) {

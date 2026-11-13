@@ -912,13 +912,15 @@
 	# AI Profiles (see docs/winux/ai/profiles.md)
 	# ==========================================================================
 	# → Consumers: Resolve-AiProfile, and through it Deploy-AiArtifacts, Deploy-AiMcpServers,
-	#   Deploy-AiMarketplaces, List-AiArtifacts, Test-AiProfile, Initialize-AiProfile
+	#   Deploy-AiMarketplaces, List-AiArtifacts, Test-AiProfile, Initialize-AiProfile,
+	#   Switch-AiProfile
 	#
 	# One AI profile per machine: which rules, which Plan the managed settings pin, which apps,
 	# artifacts, MCP servers and marketplaces, whether unattended runs are allowed, and which
 	# repositories it owns. Picked once per command: the WINUX_AI_PROFILE environment variable,
-	# then this host's Hosts entry, then Default. With no profile (the base) profiles are off and
-	# every AI function behaves as before, scoped by machine type.
+	# then the profile Switch-AiProfile set on this machine, then this host's Hosts entry, then
+	# Default. With no profile (the base) profiles are off and every AI function behaves as
+	# before, scoped by machine type.
 	#
 	# Hosts        : hostname -> profile name
 	# Default      : the profile of a host Hosts does not name

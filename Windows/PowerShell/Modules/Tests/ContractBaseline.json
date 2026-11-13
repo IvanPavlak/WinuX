@@ -1,5 +1,5 @@
 {
-  "Version": "2.14.1",
+  "Version": "2.15.0",
   "Functions": {
     "Add-BrowserGroup": {
       "Module": "Configuration",
@@ -4573,6 +4573,10 @@
         "Override": {
           "Mandatory": false,
           "Aliases": []
+        },
+        "SwitchPath": {
+          "Mandatory": false,
+          "Aliases": []
         }
       }
     },
@@ -6184,6 +6188,23 @@
           "Aliases": []
         },
         "PreferGracefulExit": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Switch-AiProfile": {
+      "Module": "AI",
+      "Parameters": {
+        "Full": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Name": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Reset": {
           "Mandatory": false,
           "Aliases": []
         }

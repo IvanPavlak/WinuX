@@ -27,7 +27,7 @@ The [AI module reference](../../../modules/ai.md) is the authority on what each 
 
 These read no `Configuration.psd1` keys. Their guides record that fact and show how to call them.
 
-[ConvertTo-AiManagedSettings](ConvertTo-AiManagedSettings.md), [Deploy-AiManagedSettings](Deploy-AiManagedSettings.md), [Get-AiArtifactManifest](Get-AiArtifactManifest.md), [Get-AiSkillDescription](Get-AiSkillDescription.md), [Get-AiSkillManifest](Get-AiSkillManifest.md), [Resolve-AiModsPluginDirs](Resolve-AiModsPluginDirs.md), [Set-ClaudeSettingsEnv](Set-ClaudeSettingsEnv.md), [Set-ClaudeSettingsKey](Set-ClaudeSettingsKey.md), [Sync-AiManifestCache](Sync-AiManifestCache.md), [Test-AiModsCli](Test-AiModsCli.md)
+[ConvertTo-AiManagedSettings](ConvertTo-AiManagedSettings.md), [Deploy-AiManagedSettings](Deploy-AiManagedSettings.md), [Get-AiArtifactManifest](Get-AiArtifactManifest.md), [Get-AiSkillDescription](Get-AiSkillDescription.md), [Get-AiSkillManifest](Get-AiSkillManifest.md), [Resolve-AiModsPluginDirs](Resolve-AiModsPluginDirs.md), [Set-ClaudeSettingsEnv](Set-ClaudeSettingsEnv.md), [Set-ClaudeSettingsKey](Set-ClaudeSettingsKey.md), [Switch-AiProfile](Switch-AiProfile.md), [Sync-AiManifestCache](Sync-AiManifestCache.md), [Test-AiModsCli](Test-AiModsCli.md)
 
 ## Related
 

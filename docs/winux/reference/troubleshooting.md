@@ -332,7 +332,7 @@ wsl mkdir -p /home/you/.ssh
 
 **Why it happens:** The managed settings copy now pins the profile's Plan with `forceLoginOrgUUID`, and Claude Code refuses a credential of any other organization, and every `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN` or `apiKeyHelper` session, once a managed `forceLoginOrgUUID` or `forceLoginMethod` is set. Either the machine is logged in to another Plan, the profile's `Plan.OrgUuid` is wrong, or the host resolved to another profile.
 
-**Solution:** Run `Test-AiProfile`: it prints the profile and how it was picked, the expected and the logged-in Plan, the pin and every pay-per-use credential. Log in to the expected Plan (`claude`, `/logout`, `/login`), remove the credential it names, or fix `AiProfiles` and run `Deploy-AiArtifacts -Kind Rules` again. `WINUX_AI_PROFILE` overrides the hostname map for a quick check of another profile.
+**Solution:** Run `Test-AiProfile`: it prints the profile and how it was picked, the expected and the logged-in Plan, the pin and every pay-per-use credential. Log in to the expected Plan (`claude`, `/logout`, `/login`), remove the credential it names, or fix `AiProfiles` and run `Deploy-AiArtifacts -Kind Rules` again. `WINUX_AI_PROFILE` overrides the hostname map for a quick check of another profile in one shell; `Switch-AiProfile <Name>` moves the whole machine to it, and a profile line that says `picked by switched` on a machine that should follow its hostname is undone with `Switch-AiProfile -Reset`.
 
 ### Work In A Repository Is Refused With "AI profile guard"
 
