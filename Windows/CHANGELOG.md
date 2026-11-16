@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.15.1] - 2026-11-16
+
+### Fixed
+
+- **A torn `Terminal-Icons` theme cache file that still parses is moved aside too, so directory listings get their icons back.** Two shells writing the same cache file at once order its hashtable keys differently, and their writes can splice into well-formed XML that repeats objects and reads back without a table the module indexes; every import then failed with "Terminal-Icons failed to import [3] times, and its theme cache parses => Cannot index into a null array", because the repair only quarantined files that failed to parse. `Test-TerminalIconsCacheFile` now also rejects a file whose object `RefId` appears twice, and a theme file (`*_color.xml`, `*_icon.xml`) without its `Types.Directories` or `Types.Files` table, so `Repair-TerminalIconsThemeCache` moves it aside and the module regenerates it. The messages of both functions say "readable" / "unreadable" in place of "parses", and `Import-TerminalIcons` reports a cache that "reads whole". Covered by `Modules/Tests/Modules/System/Test-TerminalIconsCacheFile.Tests.ps1`, `Repair-TerminalIconsThemeCache.Tests.ps1` and `Import-TerminalIcons.Tests.ps1`. Docs: the System module reference, the Test-TerminalIconsCacheFile and Repair-TerminalIconsThemeCache guides, troubleshooting ("Directory Listings Print Without Icons").
+
 ## [2.15.0] - 2026-11-13
 
 ### Added
@@ -1959,7 +1965,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.15.0...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.15.1...HEAD
+[2.15.1]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.15.0...winux/v2.15.1
 [2.15.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.14.1...winux/v2.15.0
 [2.14.1]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.14.0...winux/v2.14.1
 [2.14.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.13.0...winux/v2.14.0

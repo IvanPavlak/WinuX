@@ -1,6 +1,6 @@
 # Repair-TerminalIconsThemeCache
 
-Moves aside every `Terminal-Icons` theme cache file that still does not parse after a short settle pause - renamed to `<name>.corrupt-<timestamp>-<pid>` beside the original, never deleted - so the module can import again and regenerate the file from its built-in themes.
+Moves aside every `Terminal-Icons` theme cache file that is still unreadable after a short settle pause - renamed to `<name>.corrupt-<timestamp>-<pid>` beside the original, never deleted - so the module can import again and regenerate the file from its built-in themes.
 
 ## Configuration Keys
 

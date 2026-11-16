@@ -1,6 +1,6 @@
 # Test-TerminalIconsCacheFile
 
-Reports whether one `Terminal-Icons` theme cache file parses as Clixml, never throwing; `Repair-TerminalIconsThemeCache` runs it on every cache file to find the torn ones.
+Reports whether one `Terminal-Icons` theme cache file parses as Clixml and is whole (no object spliced in twice, the theme tables the module indexes present), never throwing; `Repair-TerminalIconsThemeCache` runs it on every cache file to find the torn ones.
 
 ## Configuration Keys
 

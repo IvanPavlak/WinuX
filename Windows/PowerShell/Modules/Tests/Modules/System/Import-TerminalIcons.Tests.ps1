@@ -90,7 +90,7 @@ Describe "Import-TerminalIcons" {
 
 		Should -Invoke Import-Module -Times 3 -Exactly -ParameterFilter { $Name -eq "Terminal-Icons" }
 		Should -Invoke Repair-TerminalIconsThemeCache -Times 2 -Exactly
-		Should -Invoke Write-LogError -Times 1 -Exactly -ParameterFilter { $null -ne $Exception -and $Message -match "theme cache parses" }
+		Should -Invoke Write-LogError -Times 1 -Exactly -ParameterFilter { $null -ne $Exception -and $Message -match "theme cache reads whole" }
 		Should -Invoke Write-LogSuccess -Times 0
 	}
 

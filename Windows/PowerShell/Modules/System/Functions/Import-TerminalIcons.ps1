@@ -84,7 +84,7 @@ function Import-TerminalIcons {
 		Write-LogSuccess "Terminal-Icons imported after moving [$($quarantined.Count)] unreadable theme cache file(s) aside"
 	}
 	elseif (-not $imported -and $quarantined.Count -eq 0) {
-		Write-LogError "Terminal-Icons failed to import [$maxAttempts] times, and its theme cache parses => $($lastError.Exception.Message)" -Exception $lastError
+		Write-LogError "Terminal-Icons failed to import [$maxAttempts] times, and its theme cache reads whole => $($lastError.Exception.Message)" -Exception $lastError
 	}
 	elseif (-not $imported) {
 		Write-LogError "Terminal-Icons still fails to import after its theme cache was repaired => $($lastError.Exception.Message)" -Exception $lastError
