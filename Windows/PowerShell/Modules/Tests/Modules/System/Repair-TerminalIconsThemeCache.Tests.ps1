@@ -21,7 +21,8 @@ Describe "Repair-TerminalIconsThemeCache" {
 		New-Item -ItemType Directory -Path $script:cache -Force | Out-Null
 		$script:theme = Join-Path $script:cache "devblackops_color.xml"
 		$script:prefs = Join-Path $script:cache "prefs.xml"
-		@{ Name = "devblackops"; Types = @{ Directories = @{ ".git" = "FF4500" } } } | Export-Clixml -Path $script:theme
+		# A whole theme carries both tables Terminal-Icons indexes (Test-TerminalIconsCacheFile checks them).
+		@{ Name = "devblackops"; Types = @{ Directories = @{ ".git" = "FF4500" }; Files = @{ ".ps1" = "00BFFF" } } } | Export-Clixml -Path $script:theme
 		@{ CurrentColorTheme = "devblackops"; CurrentIconTheme = "devblackops" } | Export-Clixml -Path $script:prefs
 		$script:torn = Join-Path $script:cache "devblackops_light_color.xml"
 	}
@@ -51,6 +52,17 @@ Describe "Repair-TerminalIconsThemeCache" {
 		Test-Path -LiteralPath $script:torn | Should -BeFalse
 		Test-Path -LiteralPath $result[0].FullName | Should -BeTrue
 		Should -Invoke Start-Sleep -Times 1 -Exactly
+		Should -Invoke Write-LogWarning -Times 1 -Exactly
+	}
+
+	It "moves aside a theme that parses but lost a table Terminal-Icons indexes" {
+		@{ Name = "devblackops_light"; Types = @{ Files = @{ ".ps1" = "00BFFF" } } } | Export-Clixml -Path $script:torn
+
+		$result = @(Repair-TerminalIconsThemeCache -Path $script:cache)
+
+		$result.Count | Should -Be 1
+		$result[0].Name | Should -Match '^devblackops_light_color\.xml\.corrupt-'
+		Test-Path -LiteralPath $script:theme | Should -BeTrue
 		Should -Invoke Write-LogWarning -Times 1 -Exactly
 	}
 
