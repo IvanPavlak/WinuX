@@ -10,6 +10,8 @@ BeforeAll {
 	. "$FunctionsPath\Resolve-RepositoryTargets.ps1"
 	. "$FunctionsPath\Update-Repository.ps1"
 	. "$FunctionsPath\Format-RepositoryUpdateResult.ps1"
+	. "$FunctionsPath\Get-RepositoryHooksState.ps1"
+	. "$FunctionsPath\Sync-RepositoryHooks.ps1"
 }
 
 Describe "Update-Repositories" {
@@ -24,6 +26,8 @@ Describe "Update-Repositories" {
 		Mock Get-RepositoryName { "repo" }
 		Mock Test-Path { $false }
 		Mock Initialize-Repository { }
+		# Never the real one: it reads the machine's own hooks record.
+		Mock Sync-RepositoryHooks { }
 		Mock Push-Location { }
 		Mock Pop-Location { }
 		Mock Write-Host { }
@@ -525,6 +529,96 @@ Describe "Update-Repositories" {
 			Update-Repositories -All -NoClone
 
 			Should -Invoke git -Times 0 -Exactly -ParameterFilter { $args -contains "stash" }
+		}
+	}
+
+	Context "Tracked hooks" {
+		BeforeEach {
+			Mock Test-Path { $true }
+			Mock Get-RepositoryName { Split-Path $RepositoryUrl -Leaf }
+			Mock Update-Repository { [pscustomobject]@{ Name = $Name; LocalPath = $LocalPath; Branch = "master"; Outcome = "UpToDate"; DefaultBranch = $null; DefaultBranchOutcome = $null; StashName = $null } }
+			Mock Resolve-RepositoryTargets {
+				, @(
+					[PSCustomObject]@{ Name = "Mike"; Group = "Beta"; RepositoryUrl = "https://github.com/acme/Mike"; LocalPath = "C:\Repos\Mike"; Hooks = ".githooks" }
+					[PSCustomObject]@{ Name = "Kilo"; Group = "Beta"; RepositoryUrl = "https://github.com/acme/Kilo"; LocalPath = "C:\Repos\Kilo"; Hooks = $null }
+				)
+			}
+		}
+
+		It "hands each updated repository's Hooks folder to Sync-RepositoryHooks, empty for one that is not marked" {
+			Update-Repositories -All -Quiet
+
+			Should -Invoke Sync-RepositoryHooks -Times 1 -Exactly -ParameterFilter { $LocalPath -eq "C:\Repos\Mike" -and $HooksPath -eq ".githooks" -and $Quiet }
+			Should -Invoke Sync-RepositoryHooks -Times 1 -Exactly -ParameterFilter { $LocalPath -eq "C:\Repos\Kilo" -and [string]::IsNullOrEmpty($HooksPath) }
+		}
+
+		It "runs it after a clone that left a repository behind" {
+			Mock Test-Path { $Path -like "*\.git" }
+
+			Update-Repositories -All
+
+			Should -Invoke Initialize-Repository -Times 2 -Exactly
+			Should -Invoke Sync-RepositoryHooks -Times 2 -Exactly
+		}
+
+		It "skips it for a repository that is <Case>" -ForEach @(
+			@{ Case = "not cloned"; Outcome = $null; Exists = $false }
+			@{ Case = "not its own repository"; Outcome = "NotARepository"; Exists = $true }
+			@{ Case = "failed with an error"; Outcome = "Error"; Exists = $true }
+		) {
+			Mock Test-Path { $Exists }
+			Mock Update-Repository { [pscustomobject]@{ Name = $Name; LocalPath = $LocalPath; Branch = $null; Outcome = $Outcome; DefaultBranch = $null; DefaultBranchOutcome = $null; StashName = $null } }
+
+			Update-Repositories -All -NoClone
+
+			Should -Invoke Sync-RepositoryHooks -Times 0 -Exactly
+		}
+
+		It "skips it for a repository without a path on this machine" {
+			Mock Resolve-RepositoryTargets {
+				, @([PSCustomObject]@{ Name = "Mike"; Group = "Beta"; RepositoryUrl = "https://github.com/acme/Mike"; LocalPath = $null; Hooks = ".githooks" })
+			}
+
+			Update-Repositories -All
+
+			Should -Invoke Sync-RepositoryHooks -Times 0 -Exactly
+		}
+
+		It "still runs it for a repository whose update needs attention" {
+			Mock Update-Repository { [pscustomobject]@{ Name = $Name; LocalPath = $LocalPath; Branch = "master"; Outcome = "Conflict"; DefaultBranch = $null; DefaultBranchOutcome = $null; StashName = $null } }
+
+			Update-Repositories -All
+
+			Should -Invoke Sync-RepositoryHooks -Times 2 -Exactly
+		}
+
+		It "never runs it in archive mode" {
+			Mock Test-Path { $false }
+
+			Update-Repositories -All -Archive
+
+			Should -Invoke Sync-RepositoryHooks -Times 0 -Exactly
+		}
+
+		It "never runs it for an explicit URL and path, which name no entry" {
+			Update-Repositories -RepositoryUrl "https://github.com/acme/Mike" -LocalPath "C:\Repos\Mike"
+
+			Should -Invoke Update-Repository -Times 1 -Exactly
+			Should -Invoke Sync-RepositoryHooks -Times 0 -Exactly
+		}
+
+		It "adds what happened to the quiet line without changing its bucket" {
+			Mock Sync-RepositoryHooks {
+				if ($HooksPath) { [pscustomobject]@{ Name = $Name; LocalPath = $LocalPath; HooksPath = $HooksPath; Found = $null; Outcome = "MissingFolder" } }
+				else { [pscustomobject]@{ Name = $Name; LocalPath = $LocalPath; HooksPath = $null; Found = $null; Outcome = "None" } }
+			}
+			Mock Write-LogSegments { $script:Totals = $Segments }
+
+			Update-Repositories -All -Quiet
+
+			Should -Invoke Write-LogStep -Times 1 -Exactly -ParameterFilter { $Message -match "^=> \[Mike\] master - up to date, hooks folder \[\.githooks\] missing$" -and $Style -in @($null, "", "Step") }
+			Should -Invoke Write-LogStep -Times 1 -Exactly -ParameterFilter { $Message -match "^=> \[Kilo\] master - up to date$" }
+			($script:Totals | ForEach-Object { $_.Text }) -join "" | Should -Match "2 up to date, 0 need attention"
 		}
 	}
 

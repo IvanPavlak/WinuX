@@ -203,6 +203,22 @@ Describe "Resolve-RepositoryTargets" {
 		$targets[1].ArchiveFolder | Should -BeNullOrEmpty
 	}
 
+	It "Should carry each entry's Hooks folder, null when it is not marked" {
+		Mock Resolve-ProjectPath { [PSCustomObject]@{ RepositoryUrl = "u"; LocalPath = $RepositoryEntry.LocalPath } }
+		$global:Configuration.RepositoryGroups = @(
+			@{ Alpha = @(
+					@{ Name = "Hooked"; UrlPath = "u"; LocalPath = "Hooked"; Hooks = ".githooks" }
+					@{ Name = "Plain"; UrlPath = "u"; LocalPath = "Plain" }
+				)
+			}
+		)
+
+		$targets = Resolve-RepositoryTargets -All
+
+		$targets[0].Hooks | Should -Be ".githooks"
+		$targets[1].Hooks | Should -BeNullOrEmpty
+	}
+
 	It "Should skip null and whitespace repository names" {
 		Mock Resolve-ProjectPath { [PSCustomObject]@{ RepositoryUrl = "u"; LocalPath = $ProjectName } }
 

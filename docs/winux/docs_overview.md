@@ -75,7 +75,7 @@ decisions behind them, and where the values go. Each module's `README.md` indexe
 | `HostnameToMachineType`, `ValidMachineTypes`       | `DetermineMachineType`, `Test-MachineTypeScope`    |
 | `BasePaths`, `PathTemplates`                       | `Expand-ConfigPaths`, all path-dependent functions |
 | `PathTemplates.SymbolicLinks`                      | `SymbolicLinkMaker`                                |
-| `RepositoryGroups`                                 | `Update-Repositories`, `Resolve-RepositoryTargets` |
+| `RepositoryGroups`                                 | `Update-Repositories`, `Resolve-RepositoryTargets`, `Initialize-Repository`, `Get-RepositoryHooks` (`Hooks`) |
 | `PathTemplates.ObsidianDirectory`                  | `Open-Obsidian`, `Git-Obsidian`                    |
 | `Obsidian` (DefaultWorkspace, Vault, GitEndLocation) | `Open-Obsidian`, `Git-Obsidian` (`GitEndLocation`) |
 | `Logging`                                          | `Initialize-LoggingState`                          |

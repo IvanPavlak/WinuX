@@ -28,9 +28,15 @@ function Format-RepositoryUpdateResult {
 		line names it and says what happened ("master up to date", "no local master"), so
 		silence never has to be interpreted. A default branch that has no local branch is not a
 		problem and does not count as needing attention.
+		When the result carries HooksOutcome (Update-Repositories adds what Sync-RepositoryHooks
+		returned), the line ends with what happened to the repository's tracked hooks: set,
+		removed, folder missing, folder not inside the repository, a value set by hand left
+		alone, or not written. That note never changes Level or Category; a hooks path that was
+		already right, or a repository that is not marked, adds nothing.
 
 	.PARAMETER Result
-		One update result: Name, Branch, Outcome, DefaultBranch, DefaultBranchOutcome, StashName.
+		One update result: Name, Branch, Outcome, DefaultBranch, DefaultBranchOutcome, StashName,
+		and optionally HooksOutcome, HooksPath and HooksFound.
 
 	.OUTPUTS
 		[pscustomobject] with Message (string), Level (Success or Warning) and Category
@@ -93,6 +99,25 @@ function Format-RepositoryUpdateResult {
 		"[$($Result.Name)] $($Result.Branch) - $outcomeText"
 	}
 	if ($defaultText) { $message += ", $defaultText" }
+
+	# What happened to the repository's tracked hooks (Sync-RepositoryHooks), when the caller
+	# recorded it. A note only: it never changes the bucket, so a branch without the hooks
+	# folder does not turn the daily run red. A result without these properties says nothing.
+	$hooksOutcome = $Result.PSObject.Properties['HooksOutcome']
+	if ($hooksOutcome) {
+		$hooksPath = $Result.PSObject.Properties['HooksPath']
+		$hooksFound = $Result.PSObject.Properties['HooksFound']
+		$hooksText = switch ($hooksOutcome.Value) {
+			"Set" { "hooks path set to [$($hooksPath.Value)]" }
+			"Removed" { "hooks path removed" }
+			"MissingFolder" { "hooks folder [$($hooksPath.Value)] missing" }
+			"Invalid" { "hooks folder [$($hooksPath.Value)] is not a folder inside the repository" }
+			"Kept" { "hooks path [$($hooksFound.Value)] was set by hand, left alone" }
+			"Error" { "hooks path could not be written" }
+			default { $null }
+		}
+		if ($hooksText) { $message += ", $hooksText" }
+	}
 
 	return [pscustomobject]@{
 		Message  = $message

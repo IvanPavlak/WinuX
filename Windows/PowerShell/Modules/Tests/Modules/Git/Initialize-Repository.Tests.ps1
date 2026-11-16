@@ -10,6 +10,8 @@ BeforeAll {
 	. "$HelperFunctionsPath\Resolve-ProjectPath.ps1"
 	. "$FunctionsPath\Initialize-Repository.ps1"
 	. "$FunctionsPath\Update-Repository.ps1"
+	. "$FunctionsPath\Get-RepositoryHooksState.ps1"
+	. "$FunctionsPath\Sync-RepositoryHooks.ps1"
 }
 
 Describe "Initialize-Repository" {
@@ -21,6 +23,8 @@ Describe "Initialize-Repository" {
 		Mock git { }
 		Mock Write-Host { }
 		Mock takeown { } -ErrorAction SilentlyContinue
+		# Never the real one: it reads the machine's own hooks record.
+		Mock Sync-RepositoryHooks { }
 		$global:Configuration = @{ RepositoryGroups = @() }
 	}
 
@@ -105,6 +109,55 @@ Describe "Initialize-Repository" {
 
 			Should -Invoke Update-Repository -Times 1 -Exactly -ParameterFilter { $Name -eq "TestRepo" -and $LocalPath -eq $TestRepoPath }
 			Should -Invoke git -Times 0 -ParameterFilter { $args[0] -in @("clone", "pull") }
+		}
+	}
+
+	Context "Tracked hooks" {
+		BeforeEach {
+			$global:Configuration = @{ RepositoryGroups = @(@{ Tools = @(
+						@{ Name = "Hooked"; UrlPath = "u"; LocalPath = "l"; Hooks = ".githooks" }
+						@{ Name = "Plain"; UrlPath = "v"; LocalPath = "m" }
+					)
+				}) }
+			Mock Resolve-ProjectPath { [PSCustomObject]@{ RepositoryUrl = "https://MyUser@github.com/user/Hooked.git"; LocalPath = "l" } }
+			Mock Update-Repository { }
+		}
+
+		It "turns the hooks on after cloning a URL an entry marks with Hooks, however the URL is spelled" {
+			Mock git { if ($args[0] -eq "clone") { New-Item -ItemType Directory -Path (Join-Path "$($args[-1])" ".git") -Force | Out-Null } }
+			$hookedPath = Join-Path $TestDrive "repos\HookedClone"
+
+			Initialize-Repository -RepositoryUrl "https://github.com/USER/hooked/" -LocalPath $hookedPath
+
+			Should -Invoke Sync-RepositoryHooks -Times 1 -Exactly -ParameterFilter { $LocalPath -eq $hookedPath -and $HooksPath -eq ".githooks" }
+			Should -Invoke git -Times 0 -ParameterFilter { $args -contains "--depth" }
+		}
+
+		It "does not turn them on when the clone left no repository behind" {
+			Initialize-Repository -RepositoryUrl "https://github.com/user/Hooked.git" -LocalPath (Join-Path $TestDrive "repos\FailedClone")
+
+			Should -Invoke Sync-RepositoryHooks -Times 0 -Exactly
+		}
+
+		It "turns them on after updating an existing clone of a marked URL" {
+			$existingPath = Join-Path $TestDrive "repos\HookedExisting"
+			New-Item -ItemType Directory -Path $existingPath -Force | Out-Null
+
+			Initialize-Repository -RepositoryUrl "https://github.com/user/Hooked.git" -LocalPath $existingPath
+
+			Should -Invoke Update-Repository -Times 1 -Exactly
+			Should -Invoke Sync-RepositoryHooks -Times 1 -Exactly -ParameterFilter { $LocalPath -eq $existingPath -and $HooksPath -eq ".githooks" }
+		}
+
+		It "never touches the hooks of a URL no entry marks, cloned or existing" {
+			Mock git { if ($args[0] -eq "clone") { New-Item -ItemType Directory -Path (Join-Path "$($args[-1])" ".git") -Force | Out-Null } }
+			$existingPath = Join-Path $TestDrive "repos\PlainExisting"
+			New-Item -ItemType Directory -Path $existingPath -Force | Out-Null
+
+			Initialize-Repository -RepositoryUrl "https://github.com/user/Plain.git" -LocalPath (Join-Path $TestDrive "repos\PlainClone")
+			Initialize-Repository -RepositoryUrl "https://github.com/user/Plain.git" -LocalPath $existingPath
+
+			Should -Invoke Sync-RepositoryHooks -Times 0 -Exactly
 		}
 	}
 }

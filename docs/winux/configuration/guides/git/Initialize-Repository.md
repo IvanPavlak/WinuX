@@ -9,7 +9,7 @@ Clones a repository to a local path, or, if it already exists there, updates it 
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`RepositoryGroups`](../../configuration-reference.md#repository-groups) | array of single-key hashtables | array of 1, no entry `Shallow` | `Shallow = $true` on an entry clones that entry's URL `--depth 1`. The URLs are compared without case, a user name, a trailing slash or `.git`. |
+| [`RepositoryGroups`](../../configuration-reference.md#repository-groups) | array of single-key hashtables | array of 1, no entry `Shallow` or `Hooks` | `Shallow = $true` on an entry clones that entry's URL `--depth 1`. `Hooks = "<folder>"` on an entry turns the tracked git hooks of that entry's URL on after the clone, and after the update of an existing clone. The URLs are compared without case, a user name, a trailing slash or `.git`. |
 
 ## Decisions
 
@@ -17,6 +17,10 @@ Clones a repository to a local path, or, if it already exists there, updates it 
     - Options: `Shallow = $true` on the entry of a repository with a large history (an Obsidian vault). The clone keeps its `.git` and can still commit and push. No repository name is special.
     - Default: Full history.
     - More detail: [`RepositoryGroups`](../../configuration-reference.md#repository-groups)
+2. Which repositories track their git hooks in a folder?
+    - Options: `Hooks = ".githooks"` on the entry. A clone of that URL then gets `core.hooksPath` pointed at the folder ([`Sync-RepositoryHooks`](Sync-RepositoryHooks.md)). This function only ever turns hooks on; taking the value back after the key is removed is [`Update-Repositories`](Update-Repositories.md)' job.
+    - Default: No repository is marked, and a URL no entry marks is never touched.
+    - More detail: [`Get-RepositoryHooks`](Get-RepositoryHooks.md)
 
 ## Where to Put Values
 
@@ -63,7 +67,7 @@ $global:Configuration.RepositoryGroups | ForEach-Object { $_.Values } | ForEach-
 @{
     RepositoryGroups = @(
         @{ Personal = @(
-                @{ Name = "MyRepo"; UrlPath = "Universal.GitHub.Private.MyRepo"; LocalPath = "Projects.MyRepo.Root" }
+                @{ Name = "MyRepo"; UrlPath = "Universal.GitHub.Private.MyRepo"; LocalPath = "Projects.MyRepo.Root"; Hooks = ".githooks" }
                 @{ Name = "MyNotes"; UrlPath = "Universal.GitHub.Private.MyNotes"; LocalPath = "Projects.MyNotes.Root"; Shallow = $true }
             )
         }
@@ -71,7 +75,7 @@ $global:Configuration.RepositoryGroups | ForEach-Object { $_.Values } | ForEach-
 }
 ```
 
-With that in place, `Update-Repositories MyNotes` clones `MyNotes` shallow while its folder is missing, and so does `Initialize-Repository` for the same URL.
+With that in place, `Update-Repositories MyNotes` clones `MyNotes` shallow while its folder is missing, and so does `Initialize-Repository` for the same URL; a clone of `MyRepo` made either way has its `core.hooksPath` set to `.githooks`.
 
 ```powershell
 Initialize-Repository -RepositoryUrl "https://github.com/user/MyNotes" -LocalPath "<DevRoot>\MyNotes"

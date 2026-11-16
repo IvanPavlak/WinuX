@@ -39,6 +39,10 @@ Clones or updates one or more git repositories defined in `RepositoryGroups` in 
     - Options: `Shallow = $true` on the `RepositoryGroups` entry of a repository with a large history (an Obsidian vault); it is cloned `--depth 1` and can still commit and push. No repository name is special.
     - Default: Full history. An archive copy is always shallow.
     - More detail: [`RepositoryGroups`](../../configuration-reference.md#repository-groups)
+7. Which repositories track their git hooks in a folder?
+    - Options: `Hooks = ".githooks"` (the folder, relative to the repository root) on the `RepositoryGroups` entry. Git does not share hooks through a clone, so they run only once `core.hooksPath` names the folder in that clone; with the key, every clone and update writes it when it differs, and removing the key takes back the value that was written, leaving one you set by hand alone. Mark only repositories whose hooks you have read: a hook is code that runs on this machine at every commit. A folder missing from the working tree is reported and never created.
+    - Default: No repository is marked, and none is touched, whatever folders it holds.
+    - More detail: [`Get-RepositoryHooks`](Get-RepositoryHooks.md), which lists every marked repository with the value found in its clone
 
 ## Where to Put Values
 
@@ -54,7 +58,8 @@ On this page that bites on `RepositoryGroups` - that key is an array, so whateve
 1. Set `RepositoryGroups`
 2. Set `RepositoryUpdate.IncludeDefaultBranch`
 3. Lay out the archive tree
-4. Reload and confirm the merge landed
+4. Turn on a repository's tracked hooks
+5. Reload and confirm the merge landed
 
 ## Step 1: Set `RepositoryGroups`
 
@@ -98,7 +103,20 @@ RepositoryGroups = @(
 )
 ```
 
-## Step 4: Reload and confirm the merge landed
+## Step 4: Turn on a repository's tracked hooks
+
+Add `Hooks` to the entry of a repository that tracks its hooks in a folder. The next clone or update of `MyRepo` runs `git config --local core.hooksPath .githooks` in its clone when the value differs.
+
+```powershell
+RepositoryGroups = @(
+    @{ Personal = @(
+            @{ Name = "MyRepo"; UrlPath = "Universal.GitHub.Private.MyRepo"; LocalPath = "Projects.MyRepo.Root"; Hooks = ".githooks" }
+        )
+    }
+)
+```
+
+## Step 5: Reload and confirm the merge landed
 
 Reload the profile, then read the merged value back. `$global:Configuration` after a reload is the ground truth - if what you set is not there, the local file did not parse or the key is nested one level away from where you put it.
 
@@ -119,8 +137,11 @@ $global:Configuration.RepositoryGroups
 $global:Configuration.RepositoryGroups | ConvertTo-Json -Depth 4
 
 # What each selection mode would actually update, without updating anything
-Resolve-RepositoryTargets -All | Format-Table Name, Group, RepositoryUrl, LocalPath, ArchiveFolder
+Resolve-RepositoryTargets -All | Format-Table Name, Group, RepositoryUrl, LocalPath, ArchiveFolder, Hooks
 Resolve-RepositoryTargets -Group Work | Format-Table Name, LocalPath
+
+# Every repository marked with Hooks, and the core.hooksPath found in its clone
+Get-RepositoryHooks
 ```
 
 If a value reads back as empty, the two usual causes are a parse error in `Configuration.local.psd1` (run `Test-ConfigurationSchema`) and a key placed at the wrong nesting level.
@@ -143,7 +164,7 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 
     RepositoryGroups = @(
         @{ Personal = @(
-                @{ Name = "MyRepo"; UrlPath = "Universal.GitHub.Private.MyRepo"; LocalPath = "Projects.MyRepo.Root"; ArchiveFolder = "Projects\Tools" }
+                @{ Name = "MyRepo"; UrlPath = "Universal.GitHub.Private.MyRepo"; LocalPath = "Projects.MyRepo.Root"; ArchiveFolder = "Projects\Tools"; Hooks = ".githooks" }
             )
         }
     )
@@ -174,6 +195,8 @@ Update-Repositories -All -Archive                # history-less copies under Des
 - [Add New Repository](add-new-repository.md) - repository groups and what `Update-Repositories` walks
 - [`Resolve-RepositoryTargets`](Resolve-RepositoryTargets.md) - expands every selection mode this function offers
 - [`Update-Repository`](Update-Repository.md) - updates each repository
+- [`Sync-RepositoryHooks`](Sync-RepositoryHooks.md) - turns each marked repository's tracked hooks on
+- [`Get-RepositoryHooks`](Get-RepositoryHooks.md) - lists the marked repositories and what their clones say
 - [`Resolve-RepositoryDefaultBranch`](Resolve-RepositoryDefaultBranch.md) - which branch counts as the default
 - [`Resolve-ProjectPath`](../helper/Resolve-ProjectPath.md) - reads the same configuration
 - [`Resolve-RepositoryUpdateScope`](../bootstrap/Resolve-RepositoryUpdateScope.md) - which groups Bootstrap pulls

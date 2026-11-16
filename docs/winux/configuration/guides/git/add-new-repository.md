@@ -57,6 +57,7 @@ RepositoryGroups = @(
 | `LocalPath` | Dot-notation path to local directory in `PathTemplates` | `Projects.MyNewRepo.Root`            |
 | `ArchiveFolder` | Optional. Where `Update-Repositories -Archive` puts it under `RepositoryUpdate.ArchiveRoot`, a relative path of any depth | `Projects\Tools` |
 | `Shallow`   | Optional. `$true` clones it `--depth 1` (a large history); it can still commit and push | `$true` |
+| `Hooks`     | Optional. The folder the repository tracks its git hooks in, relative to its root. Every clone and update then points the clone's `core.hooksPath` at it; removing the key takes that back | `.githooks` |
 | Group key   | Category the entry lives under (freely configurable)    | `Private` or `Work`                  |
 
 ## Step 3: Add Local Path (if needed)
@@ -162,7 +163,10 @@ For each repository:
 6. Restore exactly that stash, staged changes staged again
    └─→ Restore-RepositoryStash (kept when it conflicts)
 
-7. Report status
+7. Turn the tracked hooks on (entries marked with Hooks only)
+   └─→ Sync-RepositoryHooks (git config --local core.hooksPath <folder>)
+
+8. Report status
    └─→ Success, already up-to-date, or what needs attention
 ```
 

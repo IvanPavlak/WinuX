@@ -1380,6 +1380,21 @@ Private = @{
 - **"local changes could not be restored cleanly and are kept in stash [name]"** - an upstream change overlaps your local edit. The working tree holds conflict markers, and the stash still holds your original changes. Resolve the markers, or reset the files and `git stash apply` the named stash. Until then, the next update reports the repository as busy and leaves it alone.
 - **"its stash was taken by another git command"** - another git command applied or dropped the update's stash while it ran. Check `git status` and `git stash list`; the changes are wherever that command put them.
 
+### A Repository's Tracked Git Hook Does Not Run
+
+**Problem:** A repository tracks its hooks in a folder (for example `.githooks/pre-commit`), but a commit in its clone runs none of them.
+
+**Cause:** Git does not share hooks through a clone: they run only when `core.hooksPath` names the folder in that clone's own configuration. `Update-Repositories` and `Initialize-Repository` write it, but only for a repository whose `RepositoryGroups` entry carries `Hooks = "<folder>"`, and only when the folder exists in the working tree.
+
+**Solution:** Run `Get-RepositoryHooks`; it lists every marked repository with the value found in its clone.
+
+- **The repository is not listed** - its entry has no `Hooks` key. Add `Hooks = ".githooks"` to it in `Configuration.local.psd1`, reload, and run `Update-Repositories <name>`. A repository is never marked automatically, whatever folders it holds.
+- **`NotSet` or `Different`** - run `Update-Repositories <name>`; it writes the configured folder.
+- **`MissingFolder`**, or the update line ends with **"hooks folder [...] missing"** - the configured folder is not in the working tree: a typo in the key, or a checked-out branch that does not have it. Nothing is written until it exists, and it is never created.
+- **"hooks folder [...] is not a folder inside the repository"** - the key is an absolute path, starts with `~` or has a `..` segment. Write the folder relative to the repository root.
+- **"hooks path [...] was set by hand, left alone"** - the `Hooks` key was removed, but the clone's value is no longer the one the update wrote, so it was not taken back. Unset it yourself if you want it gone: `git -C <path> config --local --unset core.hooksPath`.
+- **`Active`, and the hook still does not run** - the hook file itself is at fault. Git for Windows runs hooks through its own shell, so the file needs a first line such as `#!/bin/sh` and a name git knows (`pre-commit`, not `pre-commit.sh`); a tool the hook calls must be on the `PATH` that shell sees. `git commit --no-verify` and a `core.hooksPath` in the global configuration both bypass it.
+
 ## Startup Tasks
 
 Startup tasks are the commands a machine runs on its own at sign-in, unlock, wake or when a terminal opens (`Startup.Tasks`, see [Invoke-StartupTasks](../configuration/guides/workflow/Invoke-StartupTasks.md)). Three read-only commands answer most questions before anything below is needed:
