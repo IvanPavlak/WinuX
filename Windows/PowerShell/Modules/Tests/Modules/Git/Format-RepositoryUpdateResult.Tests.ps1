@@ -124,4 +124,52 @@ Describe "Format-RepositoryUpdateResult" {
 			(Format-RepositoryUpdateResult -Result $script:Result).Message | Should -Match "feature_2026-01-01_09-00-00"
 		}
 	}
+
+	Context "tracked hooks note" {
+		It "says nothing for a result that carries no hooks outcome" {
+			(Format-RepositoryUpdateResult -Result $script:Result).Message | Should -Not -Match "hooks"
+		}
+
+		It "says nothing when the hooks outcome is <HooksOutcome>" -ForEach @(
+			@{ HooksOutcome = "None" }
+			@{ HooksOutcome = "AlreadySet" }
+			@{ HooksOutcome = "NotARepository" }
+		) {
+			$script:Result | Add-Member -NotePropertyName HooksOutcome -NotePropertyValue $HooksOutcome
+			$script:Result | Add-Member -NotePropertyName HooksPath -NotePropertyValue ".githooks"
+			$script:Result | Add-Member -NotePropertyName HooksFound -NotePropertyValue ".githooks"
+
+			(Format-RepositoryUpdateResult -Result $script:Result).Message | Should -Not -Match "hooks"
+		}
+
+		It "ends the line with a note for <HooksOutcome> and keeps the category" -ForEach @(
+			@{ HooksOutcome = "Set"; Names = "\.githooks" }
+			@{ HooksOutcome = "Removed"; Names = "removed" }
+			@{ HooksOutcome = "MissingFolder"; Names = "\.githooks" }
+			@{ HooksOutcome = "Invalid"; Names = "\.githooks" }
+			@{ HooksOutcome = "Kept"; Names = "my-own-hooks" }
+			@{ HooksOutcome = "Error"; Names = "hooks" }
+		) {
+			$script:Result | Add-Member -NotePropertyName HooksOutcome -NotePropertyValue $HooksOutcome
+			$script:Result | Add-Member -NotePropertyName HooksPath -NotePropertyValue ".githooks"
+			$script:Result | Add-Member -NotePropertyName HooksFound -NotePropertyValue "my-own-hooks"
+
+			$line = Format-RepositoryUpdateResult -Result $script:Result
+
+			$line.Message | Should -Match "^\[MyRepo\] feature - up to date, .*hooks"
+			$line.Message | Should -Match $Names
+			$line.Category | Should -Be "UpToDate"
+			$line.Level | Should -Be "Success"
+		}
+
+		It "puts the note after the default branch" {
+			$script:Result.DefaultBranch = "master"
+			$script:Result.DefaultBranchOutcome = "UpToDate"
+			$script:Result | Add-Member -NotePropertyName HooksOutcome -NotePropertyValue "Set"
+			$script:Result | Add-Member -NotePropertyName HooksPath -NotePropertyValue ".githooks"
+			$script:Result | Add-Member -NotePropertyName HooksFound -NotePropertyValue ".githooks"
+
+			(Format-RepositoryUpdateResult -Result $script:Result).Message | Should -Match "master up to date, hooks path set to \[\.githooks\]$"
+		}
+	}
 }

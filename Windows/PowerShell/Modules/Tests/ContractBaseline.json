@@ -1,5 +1,5 @@
 {
-  "Version": "2.15.1",
+  "Version": "2.16.0",
   "Functions": {
     "Add-BrowserGroup": {
       "Module": "Configuration",
@@ -1981,6 +1981,19 @@
           "Aliases": []
         }
       }
+    },
+    "Get-RepositoryHooks": {
+      "Module": "Git",
+      "Parameters": {
+        "PassThru": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "Get-RepositoryHooksState": {
+      "Module": "Git",
+      "Parameters": {}
     },
     "Get-RepositoryName": {
       "Module": "Helper",
@@ -6270,6 +6283,27 @@
       "Parameters": {
         "PackageManager": {
           "Mandatory": true,
+          "Aliases": []
+        }
+      }
+    },
+    "Sync-RepositoryHooks": {
+      "Module": "Git",
+      "Parameters": {
+        "HooksPath": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "LocalPath": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "Name": {
+          "Mandatory": true,
+          "Aliases": []
+        },
+        "Quiet": {
+          "Mandatory": false,
           "Aliases": []
         }
       }

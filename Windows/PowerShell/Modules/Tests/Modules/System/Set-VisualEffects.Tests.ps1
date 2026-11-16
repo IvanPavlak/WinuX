@@ -5,6 +5,14 @@ BeforeAll {
 	$FunctionsPath = Join-Path $ModuleRoot "System\Functions"
 
 	. "$FunctionsPath\Set-VisualEffects.ps1"
+
+	# Every test replaces the global configuration with a synthetic object; the next file on the
+	# same worker gets back the one this file found.
+	$script:SavedConfiguration = $global:Configuration
+}
+
+AfterAll {
+	$global:Configuration = $script:SavedConfiguration
 }
 
 Describe "Set-VisualEffects" {

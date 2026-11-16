@@ -6,6 +6,8 @@
 	FunctionsToExport = @(
 		'ConvertFrom-UpstreamManifest',
 		'Format-RepositoryUpdateResult',
+		'Get-RepositoryHooks',
+		'Get-RepositoryHooksState',
 		'Get-RepositoryUpdateDayStart',
 		'Get-RepositoryUpdateStartupSettings',
 		'Git-Diff',
@@ -28,6 +30,7 @@
 		'Resolve-UpstreamRemote',
 		'Restore-RepositoryStash',
 		'Set-GitConsoleColor',
+		'Sync-RepositoryHooks',
 		'Test-GitRepository',
 		'Test-RepositoryUpdateStampFresh',
 		'Update-Repositories',

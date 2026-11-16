@@ -33,7 +33,8 @@ function Resolve-RepositoryTargets {
 
 	.OUTPUTS
 		[object[]] - one PSCustomObject per repository: Name, Group, RepositoryUrl, LocalPath,
-		ArchiveFolder (the entry's folder under the archive root, $null when it names none).
+		ArchiveFolder (the entry's folder under the archive root, $null when it names none),
+		Hooks (the entry's tracked hooks folder, $null when it is not marked).
 		The array is returned comma-wrapped, so an empty selection stays an empty array;
 		$null is reserved for a requested group name that is not configured.
 
@@ -148,6 +149,7 @@ function Resolve-RepositoryTargets {
 			RepositoryUrl = $resolvedRepo.RepositoryUrl
 			LocalPath     = $resolvedRepo.LocalPath
 			ArchiveFolder = $target.Entry.ArchiveFolder
+			Hooks         = $target.Entry.Hooks
 		}
 	}
 

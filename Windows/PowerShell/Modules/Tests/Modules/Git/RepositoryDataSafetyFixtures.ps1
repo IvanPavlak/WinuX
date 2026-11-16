@@ -41,7 +41,7 @@ foreach ($function in 'Get-ConfigSetting', 'Initialize-Directory', 'Get-Reposito
 }
 foreach ($function in 'Resolve-RepositoryDefaultBranch', 'Update-RepositoryDefaultBranch', 'Restore-RepositoryStash', 'Update-Repository',
 	'Format-RepositoryUpdateResult', 'Update-Repositories', 'Resolve-RepositoryTargets', 'Initialize-Repository',
-	'Test-RepositoryUpdateStampFresh', 'Invoke-StartupRepositoryUpdate') {
+	'Test-RepositoryUpdateStampFresh', 'Invoke-StartupRepositoryUpdate', 'Get-RepositoryHooksState', 'Sync-RepositoryHooks') {
 	. "$DataSafetyModuleRoot\Git\Functions\$function.ps1"
 }
 . "$DataSafetyModuleRoot\Bootstrap\Functions\Resolve-RepositoryUpdateScope.ps1"

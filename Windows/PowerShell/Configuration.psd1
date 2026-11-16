@@ -2027,6 +2027,11 @@
 	#                 RepositoryUpdate.ArchiveRoot ("Projects\Tools"). Absent => the root itself.
 	#    - Shallow:   Optional. $true clones it with --depth 1 (a large history); it can still
 	#                 commit and push.
+	#    - Hooks:     Optional. The folder the repository tracks its git hooks in, relative to its
+	#                 root (".githooks"). Update-Repositories and Initialize-Repository then point
+	#                 the clone's core.hooksPath at it, and take that back once the key is removed.
+	#                 Opt-in per repository: a hook is code that runs on this machine at every
+	#                 commit, so a repository without the key is never touched.
 	#
 	# HOW TO UPDATE REPOSITORIES:
 	# - Update-Repositories -Group Private          # Updates all repos in the "Private" group

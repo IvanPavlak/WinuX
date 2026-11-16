@@ -1736,6 +1736,7 @@ RepositoryGroups = @(
                 LocalPath = "Projects.Self.Root"                # Dot-notation path to local directory
                 # ArchiveFolder = "Projects\Tools"            # Optional: where -Archive puts it under RepositoryUpdate.ArchiveRoot, any depth
                 # Shallow = $true                             # Optional: clone it --depth 1 (a large history)
+                # Hooks = ".githooks"                         # Optional: the folder it tracks its git hooks in; turns them on in every clone
             }
         )
     }
@@ -1744,7 +1745,9 @@ RepositoryGroups = @(
 
 **Group names are freely configurable and never known to code.** Add, rename or remove groups as you like: `Update-Repositories -Group <name>[, <name>]` takes whatever keys you define (matched case-insensitively), `-All` and the interactive menu follow the whole list, and an unknown name is reported with the configured ones rather than guessed at. Repositories are walked in the order the configuration lists them - inside a group and across several requested groups - and a repository listed in more than one selected group is updated only once.
 
-**Consumer functions:** `Resolve-RepositoryTargets` (expands a selection), `Update-Repositories`, `Initialize-Repository`, `Resolve-ProjectPath -ForRepository` (resolves one entry)
+**`Hooks` turns a repository's tracked git hooks on.** Git does not share hooks through a clone: a repository can track them in a folder (by convention `.githooks`), but they run only after `git config core.hooksPath <folder>` in each clone. An entry with `Hooks = "<folder>"` (relative to the repository root, either slash) has that done by `Update-Repositories` and `Initialize-Repository` after every clone and update, written only when the value differs and only into the clone's local configuration. Removing the key unsets the value on the next update, but only where this mechanism wrote it and it is still that value (the writes are recorded in `%LOCALAPPDATA%\WinuX\repository-hooks.state`); a value set by hand is left alone and reported. A folder that is missing from the working tree is reported and never created, and a folder that is absolute or leaves the repository is refused. A repository without the key is never touched: a hook is code that runs on this machine at every commit, so it is opt-in per repository. `Get-RepositoryHooks` lists every marked repository with the value found in its clone.
+
+**Consumer functions:** `Resolve-RepositoryTargets` (expands a selection), `Update-Repositories`, `Initialize-Repository`, `Get-RepositoryHooks` (`Hooks`), `Resolve-ProjectPath -ForRepository` (resolves one entry)
 
 ---
 

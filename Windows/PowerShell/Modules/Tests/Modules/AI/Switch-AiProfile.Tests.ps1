@@ -4,10 +4,21 @@ BeforeAll {
 	$FunctionsPath = Join-Path (Get-RepositoryPath).Modules "AI\Functions"
 	. "$FunctionsPath\Resolve-AiProfile.ps1"
 	. "$FunctionsPath\Switch-AiProfile.ps1"
+
+	$script:SavedConfiguration = $global:Configuration
+}
+
+AfterAll {
+	$global:Configuration = $script:SavedConfiguration
 }
 
 Describe "Switch-AiProfile" {
 	BeforeEach {
+		# Resolve-AiProfile binds $global:Configuration to a [hashtable] parameter, and an earlier
+		# file on the same worker may have left a synthetic object of another type there. Every
+		# value these tests read comes from the Get-ConfigSetting mock below, so an empty table does.
+		$global:Configuration = @{}
+
 		Mock Write-LogTitle { }
 		Mock Write-LogStep { }
 		Mock Write-LogSuccess { }

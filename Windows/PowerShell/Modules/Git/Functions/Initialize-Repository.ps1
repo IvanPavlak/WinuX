@@ -21,6 +21,10 @@ function Initialize-Repository {
 		clone that keeps its .git and can still commit and push (a repository with a large history).
 		All cloned repositories have `takeown` applied to set the current user as owner.
 
+		A URL that a RepositoryGroups entry marks `Hooks = "<folder>"` has its tracked git hooks
+		turned on after the clone, and after the update of an existing clone: Sync-RepositoryHooks
+		points the clone's `core.hooksPath` at that folder. A URL no entry marks is never touched.
+
 		Parent directories are created automatically via Initialize-Directory.
 
 	.PARAMETER RepositoryUrl
@@ -53,6 +57,24 @@ function Initialize-Repository {
 
 	$RepositoryName = Get-RepositoryName -RepositoryUrl $RepositoryUrl
 
+	# What the RepositoryGroups entry of this URL asks for: a shallow clone, tracked hooks.
+	# Compared without case, a user name, a trailing slash or `.git`: the configured URL and the
+	# one this function was handed need not be spelled alike. Only marked entries are resolved.
+	$urlKey = { param($Url) $Url -replace '^(\w+://)[^/]*@', '$1' -replace '/$' -replace '\.git$' }
+	$shallow = $false
+	$hooksPath = $null
+	foreach ($repositoryGroup in @(Get-ConfigSetting -Path 'RepositoryGroups' -Default @())) {
+		foreach ($repository in $repositoryGroup[@($repositoryGroup.Keys)[0]]) {
+			if (-not $repository.Shallow -and [string]::IsNullOrWhiteSpace($repository.Hooks)) { continue }
+			$resolvedRepo = Resolve-ProjectPath -ProjectName $repository.Name -ForRepository -RepositoryEntry $repository
+			if ($resolvedRepo -and (& $urlKey $resolvedRepo.RepositoryUrl) -eq (& $urlKey $RepositoryUrl)) {
+				if ($repository.Shallow) { $shallow = $true }
+				if (-not [string]::IsNullOrWhiteSpace($repository.Hooks)) { $hooksPath = $repository.Hooks }
+			}
+		}
+	}
+	$hooksName = if ([string]::IsNullOrWhiteSpace($RepositoryName)) { Split-Path $LocalPath -Leaf } else { $RepositoryName }
+
 	if (-not (Test-Path $LocalPath)) {
 		Write-LogTitle "Initializing [$RepositoryName] Repository"
 
@@ -69,18 +91,6 @@ function Initialize-Repository {
 		}
 
 		Write-LogStep "  Cloning [$RepositoryName] to [$LocalPath]"
-
-		# Compared without case, a user name, a trailing slash or `.git`: the configured URL and the
-		# one this function was handed need not be spelled alike. Only marked entries are resolved.
-		$urlKey = { param($Url) $Url -replace '^(\w+://)[^/]*@', '$1' -replace '/$' -replace '\.git$' }
-		$shallow = $false
-		foreach ($repositoryGroup in @(Get-ConfigSetting -Path 'RepositoryGroups' -Default @())) {
-			foreach ($repository in $repositoryGroup[@($repositoryGroup.Keys)[0]]) {
-				if (-not $repository.Shallow) { continue }
-				$resolvedRepo = Resolve-ProjectPath -ProjectName $repository.Name -ForRepository -RepositoryEntry $repository
-				if ($resolvedRepo -and (& $urlKey $resolvedRepo.RepositoryUrl) -eq (& $urlKey $RepositoryUrl)) { $shallow = $true }
-			}
-		}
 
 		if ($shallow) {
 			git clone --depth 1 $CloneUrl $LocalPath
@@ -99,6 +109,11 @@ function Initialize-Repository {
 			git -C $LocalPath remote set-url origin $SanitizedUrl
 			Write-LogStep "  Token removed from the saved remote (credential manager handles future auth)"
 		}
+
+		# A fresh clone of a repository marked with Hooks gets its tracked hooks turned on.
+		if ($hooksPath -and (Test-Path (Join-Path $LocalPath ".git"))) {
+			Sync-RepositoryHooks -Name $hooksName -LocalPath $LocalPath -HooksPath $hooksPath | Out-Null
+		}
 	}
 	else {
 		Write-LogTitle "Updating [$RepositoryName] repository"
@@ -106,7 +121,12 @@ function Initialize-Repository {
 		# Not a plain `git pull`: that merges whatever it fetched and silently overwrites an ignored
 		# local file at a path upstream starts tracking. Update-Repository stashes and restores
 		# local work, fast-forwards only, and refuses anything it cannot do without loss.
-		$name = if ([string]::IsNullOrWhiteSpace($RepositoryName)) { Split-Path $LocalPath -Leaf } else { $RepositoryName }
-		Update-Repository -Name $name -LocalPath $LocalPath | Out-Null
+		Update-Repository -Name $hooksName -LocalPath $LocalPath | Out-Null
+
+		# Set only: a URL no entry marks is left exactly as it is. Taking a value back when a
+		# mark is removed is Update-Repositories' job, which knows the entry.
+		if ($hooksPath) {
+			Sync-RepositoryHooks -Name $hooksName -LocalPath $LocalPath -HooksPath $hooksPath | Out-Null
+		}
 	}
 }

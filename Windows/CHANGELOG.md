@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.16.0] - 2026-11-16
+
+### Added
+
+- **A repository's tracked git hooks are turned on automatically: `Hooks = "<folder>"` on a `RepositoryGroups` entry.** Git does not share hooks through a clone: a repository can track them in a folder (by convention `.githooks`), but they run only after `git config core.hooksPath <folder>` in every clone, on every machine, which was a manual step. An entry that names its hooks folder (relative to the repository root, either slash) now has it done by `Update-Repositories` after every clone and update, the startup update and the Bootstrap repository step included, and by `Initialize-Repository` for a clone of a marked URL. The new `Sync-RepositoryHooks` is the per-repository step: it reads `git config --local core.hooksPath`, writes only when the value differs, and never touches the global or system configuration or `.git/hooks`. Every write is recorded in `%LOCALAPPDATA%\WinuX\repository-hooks.state` (read by the new `Get-RepositoryHooksState`), so removing the key unsets the value on the next update only where the mechanism wrote it and it is still that value; a value set by hand is left alone and reported once. A folder missing from the working tree is reported and never created, and a folder that is absolute or leaves the repository is refused. The mechanism is opt-in per repository, because a hook is code that runs on the machine at every commit: a repository without the key is never touched, whatever folders it holds. With `-Quiet` the repository's line ends with what happened (`hooks path set to [.githooks]`, `hooks folder [.githooks] missing`); a hooks note never changes the line's bucket or color. The step is skipped in archive mode and for an explicit `-RepositoryUrl` / `-LocalPath` pair. `Resolve-RepositoryTargets` returns the new `Hooks` property, and `Format-RepositoryUpdateResult` reads the optional `HooksOutcome`, `HooksPath` and `HooksFound` of a result. Covered by `Modules/Tests/Modules/Git/Sync-RepositoryHooks.Tests.ps1`, `Get-RepositoryHooksState.Tests.ps1`, `Update-Repositories.Tests.ps1`, `Initialize-Repository.Tests.ps1`, `Format-RepositoryUpdateResult.Tests.ps1` and `Resolve-RepositoryTargets.Tests.ps1`. Docs: the Git module reference, the Update-Repositories, Initialize-Repository, Resolve-RepositoryTargets, Sync-RepositoryHooks and Get-RepositoryHooksState guides, Add New Repository, the configuration reference ("Repository Groups"), troubleshooting ("A Repository's Tracked Git Hook Does Not Run").
+- **`Get-RepositoryHooks` lists every repository marked with `Hooks` and the `core.hooksPath` found in its clone**, so a clone where the hooks are not on is seen, not assumed: `Active`, `NotSet`, `Different`, `MissingFolder`, `NotCloned`, `NotConfigured` or `NotARepository`, plus `Stale` for a clone the state file still records although its entry is no longer marked. It is read-only; `-PassThru` returns the rows. Covered by `Modules/Tests/Modules/Git/Get-RepositoryHooks.Tests.ps1`. Docs: the Git module reference, the Get-RepositoryHooks guide.
+
 ## [2.15.1] - 2026-11-16
 
 ### Fixed
@@ -1965,7 +1972,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.15.1...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.16.0...HEAD
+[2.16.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.15.1...winux/v2.16.0
 [2.15.1]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.15.0...winux/v2.15.1
 [2.15.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.14.1...winux/v2.15.0
 [2.14.1]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.14.0...winux/v2.14.1

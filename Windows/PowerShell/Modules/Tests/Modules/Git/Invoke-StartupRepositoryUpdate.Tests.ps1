@@ -18,6 +18,8 @@ BeforeAll {
 	. "$ModuleRoot\Workflow\Functions\Test-StartupTaskDue.ps1"
 	. "$ModuleRoot\Workflow\Functions\Test-StartupCondition.ps1"
 	. "$ModuleRoot\Git\Functions\Update-Repositories.ps1"
+	. "$ModuleRoot\Git\Functions\Get-RepositoryHooksState.ps1"
+	. "$ModuleRoot\Git\Functions\Sync-RepositoryHooks.ps1"
 	. "$ModuleRoot\Bootstrap\Functions\Resolve-RepositoryUpdateScope.ps1"
 	. "$ModuleRoot\Helper\Functions\Restore-ShellPrompt.ps1"
 }

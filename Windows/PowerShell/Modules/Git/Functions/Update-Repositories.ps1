@@ -25,6 +25,14 @@ function Update-Repositories {
 		A repository missing locally is cloned via Initialize-Repository, unless -NoClone is
 		given, in which case it is reported and skipped.
 
+		A repository whose RepositoryGroups entry carries `Hooks = "<folder>"` has its tracked
+		git hooks turned on: after it is cloned or updated, Sync-RepositoryHooks points the
+		clone's `core.hooksPath` at that folder, and takes the value back once the entry no
+		longer carries the key. A repository that is not marked is never touched, whatever
+		folders it holds. With -Quiet the repository's line says what happened ("hooks path set
+		to [.githooks]", "hooks folder [.githooks] missing"); a hooks note never changes the
+		line's bucket or color. Not in archive mode, and not for an explicit URL/path pair.
+
 		Archive mode: downloads repository contents without the `.git` directory, via
 		`git clone --depth 1` followed by `.git` directory removal. Each copy lands in
 		<root>\<ArchiveFolder>\<repository>: the root is the Desktop, or
@@ -387,6 +395,18 @@ function Update-Repositories {
 		}
 		else {
 			$result = Update-Repository -Name $RepositoryName -LocalPath $repo.LocalPath -IncludeDefaultBranch:$includeDefaultBranch -Quiet:$Quiet
+		}
+
+		# The tracked hooks of a repository on disk: turned on for an entry marked with Hooks,
+		# taken back for one that no longer is. Only for configured repositories - an explicit
+		# URL/path pair names no entry, so there is no mark to follow.
+		if ($result -and $PSCmdlet.ParameterSetName -ne 'Custom' -and $result.Outcome -notin @("NotConfigured", "NotCloned", "NotARepository", "Error")) {
+			$hooks = Sync-RepositoryHooks -Name $RepositoryName -LocalPath $repo.LocalPath -HooksPath $repo.Hooks -Quiet:$Quiet
+			if ($hooks) {
+				$result | Add-Member -NotePropertyName HooksOutcome -NotePropertyValue $hooks.Outcome -Force
+				$result | Add-Member -NotePropertyName HooksPath -NotePropertyValue $hooks.HooksPath -Force
+				$result | Add-Member -NotePropertyName HooksFound -NotePropertyValue $hooks.Found -Force
+			}
 		}
 
 		$line = Format-RepositoryUpdateResult -Result $result

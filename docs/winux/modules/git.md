@@ -9,7 +9,7 @@ The Git module provides **repository management**, **Git workflow automation**, 
 - **Usage:** `ConvertFrom-UpstreamManifest -Text (Get-Content -Raw Windows\PowerShell\Upstream.conf)`
 ## [Format-RepositoryUpdateResult](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Git/Functions/Format-RepositoryUpdateResult.ps1)
 
-- **Description:** Turns one repository update result (what `Update-Repository` returns, or what `Update-Repositories` records for a repository it cloned or skipped) into the one-line summary `Update-Repositories -Quiet` prints. Returns the message, the level to print it at (`Success` or `Warning`) and the totals bucket it counts towards (`Updated`, `UpToDate`, `Attention` or `Skipped`). Pure: it prints nothing. Whenever the default branch differs from the checked-out one, the line says what happened to it (`master up to date`, `master fast-forwarded`, `no local master`), so silence never has to be interpreted. A result needs attention when the fetch failed, the fast-forward was refused, the repository is busy (an operation in progress) or not its own repository, local changes could not be stashed or restored, their stash was taken by another git command, an error occurred, or the default branch diverged, could not be fetched or could not be named. A detached HEAD, a branch that is not on origin, and a repository not cloned or with no local path on this machine count as skipped.
+- **Description:** Turns one repository update result (what `Update-Repository` returns, or what `Update-Repositories` records for a repository it cloned or skipped) into the one-line summary `Update-Repositories -Quiet` prints. Returns the message, the level to print it at (`Success` or `Warning`) and the totals bucket it counts towards (`Updated`, `UpToDate`, `Attention` or `Skipped`). Pure: it prints nothing. Whenever the default branch differs from the checked-out one, the line says what happened to it (`master up to date`, `master fast-forwarded`, `no local master`), so silence never has to be interpreted. A result needs attention when the fetch failed, the fast-forward was refused, the repository is busy (an operation in progress) or not its own repository, local changes could not be stashed or restored, their stash was taken by another git command, an error occurred, or the default branch diverged, could not be fetched or could not be named. A detached HEAD, a branch that is not on origin, and a repository not cloned or with no local path on this machine count as skipped. When the result carries `HooksOutcome`, `HooksPath` and `HooksFound` (`Update-Repositories` adds what [`Sync-RepositoryHooks`](#sync-repositoryhooks) returned), the line ends with what happened to the repository's tracked hooks (`hooks path set to [.githooks]`, `hooks path removed`, `hooks folder [.githooks] missing`, a folder that is not inside the repository, a value set by hand left alone, a write git refused); that note never changes the level or the bucket, and a hooks path that was already right adds nothing.
 - **Parameters:** -Result
 - **Usage:** `Format-RepositoryUpdateResult -Result (Update-Repository -Name MyRepo -LocalPath "<DevRoot>\MyRepo" -Quiet)`
 
@@ -20,6 +20,29 @@ Format-RepositoryUpdateResult -Result (Update-Repository -Name MyRepo -LocalPath
 ```
 
 **See also:** [Update-Repositories](#update-repositories), [Update-Repository](#update-repository)
+
+## [Get-RepositoryHooks](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Git/Functions/Get-RepositoryHooks.ps1)
+
+- **Description:** Lists every repository whose `RepositoryGroups` entry is marked with `Hooks` and the `core.hooksPath` found in its clone, so a clone where the tracked hooks are not on is seen, not assumed. Read-only: it never writes git configuration or the state file. Each row has one state: `Active` (the value is the configured folder and the folder exists), `NotSet` (no value; the next `Update-Repositories` writes it), `Different` (another value, set by hand; the next `Update-Repositories` replaces it), `MissingFolder` (the configured folder is not in the working tree, so no hook runs), `NotCloned`, `NotConfigured` (no local path on this machine) or `NotARepository`. A clone that [`Get-RepositoryHooksState`](#get-repositoryhooksstate) still records although its entry is no longer marked is listed as `Stale`: the next `Update-Repositories` of that repository takes the value back. An `Active` row is printed green, every other row yellow with what to do. `-PassThru` returns the rows (`Name`, `Group`, `LocalPath`, `HooksPath`, `Found`, `State`).
+- **Parameters:** -PassThru
+- **Usage:** `Get-RepositoryHooks`, `Get-RepositoryHooks -PassThru`
+
+```powershell
+# One line per marked repository
+Get-RepositoryHooks
+
+# The marked repositories whose hooks do not run on this machine
+Get-RepositoryHooks -PassThru | Where-Object State -ne Active
+```
+
+**See also:** [Sync-RepositoryHooks](#sync-repositoryhooks), [Update-Repositories](#update-repositories), [Get-RepositoryHooks configuration guide](../configuration/guides/git/Get-RepositoryHooks.md)
+
+## [Get-RepositoryHooksState](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Git/Functions/Get-RepositoryHooksState.ps1)
+
+- **Description:** Reads the record of every `core.hooksPath` that [`Sync-RepositoryHooks`](#sync-repositoryhooks) wrote on this machine: `%LOCALAPPDATA%\WinuX\repository-hooks.state`, one `<repository path><TAB><hooks folder>` line per clone below a comment line. The record is what lets a removed `Hooks` mark take back exactly the value the mechanism wrote, and nothing a person set by hand. Returns `Path` (the state file, whether or not it exists) and `Entries` (a hashtable from repository path to folder, compared without case). A missing file, a comment, a blank line and a line without both parts read as nothing recorded. It never writes the file.
+- **Usage:** `Get-RepositoryHooksState`, `(Get-RepositoryHooksState).Entries`
+
+**See also:** [Sync-RepositoryHooks](#sync-repositoryhooks), [Get-RepositoryHooks](#get-repositoryhooks)
 
 ## [Get-RepositoryUpdateDayStart](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Git/Functions/Get-RepositoryUpdateDayStart.ps1)
 
@@ -166,7 +189,7 @@ gsw feature/my-feature
 
 ## [Initialize-Repository](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Git/Functions/Initialize-Repository.ps1)
 
-- **Description:** Clones a repository to a local path, or, if it already exists there, updates it with [`Update-Repository`](#update-repository), which keeps local work safe. When a `Token` is provided, it is injected into the HTTPS clone URL for authenticated access to private repositories; after a successful clone the origin remote is reset to the credential-free URL, so the token never persists in `.git/config`. A URL that a `RepositoryGroups` entry marks `Shallow = $true` is cloned `--depth 1`.
+- **Description:** Clones a repository to a local path, or, if it already exists there, updates it with [`Update-Repository`](#update-repository), which keeps local work safe. When a `Token` is provided, it is injected into the HTTPS clone URL for authenticated access to private repositories; after a successful clone the origin remote is reset to the credential-free URL, so the token never persists in `.git/config`. A URL that a `RepositoryGroups` entry marks `Shallow = $true` is cloned `--depth 1`. A URL that an entry marks `Hooks = "<folder>"` has its tracked git hooks turned on after the clone, and after the update of an existing clone ([`Sync-RepositoryHooks`](#sync-repositoryhooks)); a URL no entry marks is never touched.
 - **Parameters:** -RepositoryUrl, -LocalPath, -Token
 - **Usage:** `Initialize-Repository -RepositoryUrl "https://github.com/user/MyRepo" -LocalPath "<DevRoot>\MyRepo"`, `Initialize-Repository -RepositoryUrl "https://github.com/user/MyRepo" -LocalPath "<DevRoot>\MyRepo" -Token $pat`
 
@@ -186,7 +209,7 @@ Initialize-Repository -RepositoryUrl "https://github.com/user/MyRepo" -LocalPath
 Initialize-Repository -RepositoryUrl "https://github.com/user/MyRepo" -LocalPath "<DevRoot>\MyRepo" -Token $pat
 ```
 
-**See also:** [Update-Repositories](#update-repositories), [Update-Repository](#update-repository)
+**See also:** [Update-Repositories](#update-repositories), [Update-Repository](#update-repository), [Sync-RepositoryHooks](#sync-repositoryhooks)
 
 ## [Install-Git](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Git/Functions/Install-Git.ps1)
 
@@ -293,7 +316,7 @@ Resolve-RepositoryDefaultBranch -LocalPath "<DevRoot>\MyRepo"
 - **Parameters:** -Repositories, -Group, -All
 - **Usage:** `Resolve-RepositoryTargets -Group Work`, `Resolve-RepositoryTargets -Group Work, OpenSource`, `Resolve-RepositoryTargets -All`, `Resolve-RepositoryTargets -Repositories MyRepo`
 
-Returns one `PSCustomObject` per repository with `Name`, `Group`, `RepositoryUrl`, `LocalPath` and `ArchiveFolder` (`$null` when the entry names none). `$null` is reserved for "a requested group name is not configured"; a group that exists but is empty yields an empty array. `Update-Repositories` delegates every selection mode to this function, including the interactive menu, which is why menu entries carry real URLs.
+Returns one `PSCustomObject` per repository with `Name`, `Group`, `RepositoryUrl`, `LocalPath`, `ArchiveFolder` (`$null` when the entry names none) and `Hooks` (the entry's tracked hooks folder, `$null` when it is not marked). `$null` is reserved for "a requested group name is not configured"; a group that exists but is empty yields an empty array. `Update-Repositories` delegates every selection mode to this function, including the interactive menu, which is why menu entries carry real URLs.
 
 | Parameter        | Description                                                                                              |
 | ---------------- | -------------------------------------------------------------------------------------------------------- |
@@ -346,6 +369,36 @@ Restore-RepositoryStash -StashCommit $stash
 
 **See also:** [Update-Repository](#update-repository)
 
+## [Sync-RepositoryHooks](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Git/Functions/Sync-RepositoryHooks.ps1)
+
+- **Description:** Turns one clone's tracked git hooks on or off, to match its `RepositoryGroups` entry. Git does not share hooks through a clone: a repository can track them in a folder (by convention `.githooks`), but they run only once `core.hooksPath` names that folder in the clone's own configuration. With `-HooksPath` (the entry carries `Hooks`) it reads `git config --local core.hooksPath` and writes the folder only when the value differs, then records what it wrote ([`Get-RepositoryHooksState`](#get-repositoryhooksstate)). Without `-HooksPath` (the entry is not marked) it does nothing at all, and runs no git, unless an earlier call recorded a value for this clone: a value that is still the recorded one is unset, and one changed by hand since is left alone and reported once. Only the clone's local configuration is ever written - never the global or system level, never `.git/hooks`. A folder that does not exist in the working tree is reported and never created; a folder that is absolute, starts with `~` or has a `..` segment is refused; a value set by hand to the configured folder is kept and not recorded; a path that is not the top of its own working tree is refused. Returns `Name`, `LocalPath`, `HooksPath`, `Found` and `Outcome`: `None`, `Set`, `AlreadySet`, `MissingFolder`, `Invalid`, `Removed`, `Kept`, `NotARepository` or `Error`. `-Quiet` logs nothing. Called by `Update-Repositories` for every repository it clones or updates and by `Initialize-Repository` for a marked URL.
+- **Parameters:** -Name, -LocalPath, -HooksPath, -Quiet
+- **Usage:** `Sync-RepositoryHooks -Name MyRepo -LocalPath "<DevRoot>\MyRepo" -HooksPath ".githooks"`, `Sync-RepositoryHooks -Name MyRepo -LocalPath "<DevRoot>\MyRepo"`
+
+A hook is code the repository runs on this machine at every commit, so the mechanism is opt-in per repository: nothing is turned on for a repository the configuration does not mark, whatever folders it holds.
+
+| Outcome | What happened |
+| ------- | ------------- |
+| `None` | Not marked and nothing recorded for this clone. Nothing read or written. |
+| `Set` | `core.hooksPath` was written (it was unset or had another value) and recorded. |
+| `AlreadySet` | The value was already the configured folder. Nothing written. |
+| `MissingFolder` | The configured folder is not in the working tree (a branch without it, a typo). Nothing written. |
+| `Invalid` | The configured folder is not a folder inside the repository. Nothing written. |
+| `Removed` | The entry is no longer marked; the recorded value was unset (or was already gone) and the record dropped. |
+| `Kept` | The entry is no longer marked, but the value was changed by hand since it was written. Left alone, the record dropped. |
+| `NotARepository` | The path is not the top of its own working tree. Nothing written. |
+| `Error` | git refused the write. |
+
+```powershell
+# Point core.hooksPath of one clone at its tracked hooks folder
+Sync-RepositoryHooks -Name MyRepo -LocalPath "<DevRoot>\MyRepo" -HooksPath ".githooks"
+
+# Take it back, when an earlier call wrote it and it was not changed since
+Sync-RepositoryHooks -Name MyRepo -LocalPath "<DevRoot>\MyRepo"
+```
+
+**See also:** [Update-Repositories](#update-repositories), [Initialize-Repository](#initialize-repository), [Get-RepositoryHooks](#get-repositoryhooks)
+
 ## [Test-GitRepository](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Git/Functions/Test-GitRepository.ps1)
 
 - **Description:** Tells whether a path is inside a git repository, by walking up to the root looking for a `.git` entry. Both shapes count: the ordinary `.git` DIRECTORY of a normal clone, and the `.git` FILE a worktree or a submodule carries (a one-line `gitdir: ...` pointer). Neither is opened; the test is `Test-Path` and nothing else. A path that does not exist is not an error - the walk simply finds no `.git` above it and returns `$false` - so a caller can pass a stale `$PWD` without guarding it.
@@ -389,7 +442,7 @@ Test-StartupTaskDue -StampFile (Join-Path (Get-LogPath -Directory) ".startup-tas
 
 ## [Update-Repositories](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Git/Functions/Update-Repositories.ps1)
 
-- **Description:** Clones or updates one or more git repositories defined in `RepositoryGroups` in `Configuration.psd1`, where repositories are organized into named groups (for example "Private" and "Work") defined in configuration, never in code. With no parameters it shows an interactive menu grouped by group name; otherwise it updates one or more groups (`-Group`), a named repository, everything (`-All`), or a specific URL/path pair. The selection modes are mutually exclusive, enforced by parameter sets. Each existing repository is updated by [`Update-Repository`](#update-repository): local changes are stashed, the checked-out branch is fast-forwarded, and the stash is popped. With `-IncludeDefaultBranch`, or `RepositoryUpdate.IncludeDefaultBranch` in configuration, each repository's default branch is fast-forwarded too, without checking it out. A repository missing locally is cloned, or with `-NoClone` reported and skipped; a clone that left no repository behind needs attention. `-Quiet` prints the title, a blank line, then one line per repository plus a totals line (via [`Format-RepositoryUpdateResult`](#format-repositoryupdateresult)), each line and each count colored by its bucket (updated green, up to date white, need attention red, skipped yellow), and lists the stashes a repository holds (`git stash list`) under its line. A run that spans several groups prints a heading per group, in configuration order. Archive mode downloads repository contents without the `.git` directory (to the Desktop by default) via `git clone --depth 1` with `.git` removal. Administrator privileges are required only to clone: in archive mode, and when a selected repository is missing and `-NoClone` is not given. When `$global:GithubPat` is set (`Install-Bootstrap` caches its `-Token` there), clones and archive downloads authenticate with it.
+- **Description:** Clones or updates one or more git repositories defined in `RepositoryGroups` in `Configuration.psd1`, where repositories are organized into named groups (for example "Private" and "Work") defined in configuration, never in code. With no parameters it shows an interactive menu grouped by group name; otherwise it updates one or more groups (`-Group`), a named repository, everything (`-All`), or a specific URL/path pair. The selection modes are mutually exclusive, enforced by parameter sets. Each existing repository is updated by [`Update-Repository`](#update-repository): local changes are stashed, the checked-out branch is fast-forwarded, and the stash is popped. With `-IncludeDefaultBranch`, or `RepositoryUpdate.IncludeDefaultBranch` in configuration, each repository's default branch is fast-forwarded too, without checking it out. A repository missing locally is cloned, or with `-NoClone` reported and skipped; a clone that left no repository behind needs attention. A repository whose entry carries `Hooks = "<folder>"` has its tracked git hooks turned on after it is cloned or updated, and turned off again once the key is removed ([`Sync-RepositoryHooks`](#sync-repositoryhooks)); a repository that is not marked is never touched. `-Quiet` prints the title, a blank line, then one line per repository plus a totals line (via [`Format-RepositoryUpdateResult`](#format-repositoryupdateresult)), each line and each count colored by its bucket (updated green, up to date white, need attention red, skipped yellow), and lists the stashes a repository holds (`git stash list`) under its line. A run that spans several groups prints a heading per group, in configuration order. Archive mode downloads repository contents without the `.git` directory (to the Desktop by default) via `git clone --depth 1` with `.git` removal. Administrator privileges are required only to clone: in archive mode, and when a selected repository is missing and `-NoClone` is not given. When `$global:GithubPat` is set (`Install-Bootstrap` caches its `-Token` there), clones and archive downloads authenticate with it.
 - **Parameters:** -Repositories, -RepositoryUrl, -LocalPath, -Group, -All, -InCurrentDirectory, -Archive, -IncludeDefaultBranch, -NoClone, -Quiet
 - **Usage:** `Update-Repositories`, `Update-Repositories MyRepo`, `Update-Repositories -Group Private`, `Update-Repositories -Group Private, Work`, `Update-Repositories -All`, `Update-Repositories -RepositoryUrl "https://github.com/user/MyRepo" -LocalPath "<DevRoot>\MyRepo"`, `Update-Repositories -All -Archive`, `Update-Repositories -All -Archive -InCurrentDirectory`, `Update-Repositories -All -IncludeDefaultBranch`, `Update-Repositories MyRepo -IncludeDefaultBranch:$false`, `Update-Repositories -All -NoClone -Quiet`
 
@@ -398,6 +451,8 @@ Repository URL and local-path mappings are read from `RepositoryGroups` in `Conf
 The default-branch step ([`Resolve-RepositoryDefaultBranch`](#resolve-repositorydefaultbranch), then [`Update-RepositoryDefaultBranch`](#update-repositorydefaultbranch)) runs `git fetch origin <default>:<default>`: git refuses anything but a fast-forward, and the working tree and the stash are never touched. It runs before the stash is popped and also after a pull that could not fast-forward. A default branch with local commits origin does not have is left exactly as it is, and one that was never checked out locally is skipped, never created. The Bootstrap repository step calls this function, so it follows the same configuration.
 
 A repository missing locally is cloned via `Initialize-Repository`, which takes ownership of the new folder and is the only reason Administrator is needed; updating repositories that already exist works in any shell. The Administrator check happens once, after the selection and before the first clone. In archive mode it produces plain source (no git history): a `git clone --depth 1` whose `.git` directory is then removed, skipping any target that already exists. Each copy lands in `<root>\<ArchiveFolder>\<repository>`: the root is the Desktop, or `RepositoryUpdate.ArchiveRoot` (absolute, or relative to the Desktop), and `ArchiveFolder` on a `RepositoryGroups` entry is a relative path of any depth, absent meaning the root itself, so one run can rebuild a whole folder tree. `-InCurrentDirectory` replaces the root and keeps the folders.
+
+Git does not share hooks through a clone, so a repository that tracks its hooks in a folder (by convention `.githooks`) needs `git config core.hooksPath <folder>` in every clone on every machine. An entry marked `Hooks = ".githooks"` has that done for it: after the repository is cloned or updated, [`Sync-RepositoryHooks`](#sync-repositoryhooks) writes the clone's local `core.hooksPath` when it differs and records the write, and once the key is removed it unsets the value it wrote, leaving a value set by hand alone. It is opt-in per repository because a hook is code that runs on this machine at every commit. With `-Quiet` the repository's line ends with what happened (`hooks path set to [.githooks]`, `hooks folder [.githooks] missing`); such a note never changes the line's bucket or color. The step is skipped in archive mode, for an explicit `-RepositoryUrl` / `-LocalPath` pair (it names no entry), and for a repository that is not on disk or not its own repository. [`Get-RepositoryHooks`](#get-repositoryhooks) lists every marked repository with the value found in its clone.
 
 > [!NOTE]
 > Archive mode does **not** use `git archive --remote`. That asks the server to run the `git-upload-archive` service, which GitHub serves on no protocol - it answers HTTP 422 and git exits 128. Since every URL this function builds comes from `Universal.GitHub`, the attempt could never succeed; it only cost two failed round trips per repository (one for `main`, one for `master`) and printed a misleading "git archive not supported" warning on every single download.
