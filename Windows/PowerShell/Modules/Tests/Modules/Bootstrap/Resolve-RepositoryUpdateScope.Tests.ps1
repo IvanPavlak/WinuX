@@ -84,9 +84,9 @@ Describe "Resolve-RepositoryUpdateScope" {
 	Context "-Path" {
 		It "Should read the scope from the given key instead of the Bootstrap one" {
 			$global:Configuration.BootstrapConfig.RepositoryUpdateScope = @{ Default = "Work" }
-			$global:Configuration.RepositoryUpdate = @{ Startup = @{ Scope = @{ Test = "Private, OpenSource" } } }
+			$global:Configuration.MyFork = @{ RepositoryScope = @{ Test = "Private, OpenSource" } }
 
-			$scope = Resolve-RepositoryUpdateScope -Path 'RepositoryUpdate.Startup.Scope'
+			$scope = Resolve-RepositoryUpdateScope -Path 'MyFork.RepositoryScope'
 
 			$scope.All | Should -BeFalse
 			$scope.Groups -join "," | Should -Be "Private,OpenSource"
@@ -94,15 +94,15 @@ Describe "Resolve-RepositoryUpdateScope" {
 
 		It "Should apply the same Default fallback to the given key" {
 			$global:MachineType = "Laptop"
-			$global:Configuration.RepositoryUpdate = @{ Startup = @{ Scope = @{ Default = "Work"; Test = "Private" } } }
+			$global:Configuration.MyFork = @{ RepositoryScope = @{ Default = "Work"; Test = "Private" } }
 
-			(Resolve-RepositoryUpdateScope -Path 'RepositoryUpdate.Startup.Scope').Groups -join "," | Should -Be "Work"
+			(Resolve-RepositoryUpdateScope -Path 'MyFork.RepositoryScope').Groups -join "," | Should -Be "Work"
 		}
 
 		It "Should fall back to All when the given key is absent, without reading the Bootstrap key" {
 			$global:Configuration.BootstrapConfig.RepositoryUpdateScope = @{ Default = "Work" }
 
-			(Resolve-RepositoryUpdateScope -Path 'RepositoryUpdate.Startup.Scope').All | Should -BeTrue
+			(Resolve-RepositoryUpdateScope -Path 'MyFork.RepositoryScope').All | Should -BeTrue
 		}
 	}
 }

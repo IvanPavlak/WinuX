@@ -19,8 +19,7 @@ function Resolve-RepositoryUpdateScope {
 		`BootstrapConfig.Steps.RepositoryUpdate` (opt-in, default off) like every other
 		Bootstrap step.
 
-		-Path reads a scope of the same shape from another key - the startup update passes
-		`RepositoryUpdate.Startup.Scope`. The fallbacks are the same.
+		-Path reads a scope of the same shape from another key. The fallbacks are the same.
 
 	.PARAMETER Path
 		The configuration key holding the per-machine-type scope. Defaults to
@@ -38,8 +37,8 @@ function Resolve-RepositoryUpdateScope {
 		@{ All = $false; Groups = @("Work", "Private") } when the machine's scope is "Work, Private".
 
 	.EXAMPLE
-		Resolve-RepositoryUpdateScope -Path 'RepositoryUpdate.Startup.Scope'
-		The scope the startup update uses on this machine.
+		Resolve-RepositoryUpdateScope -Path 'MyFork.RepositoryScope'
+		The scope of the same shape a fork keeps under its own key, on this machine.
 	#>
 	[CmdletBinding()]
 	[OutputType([hashtable])]

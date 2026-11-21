@@ -1046,20 +1046,13 @@ Describe "Invoke-StartupTask" {
 			Should -Invoke Test-MachineTypeScope -Times 0 -Exactly
 		}
 
-		It "asks for the deprecated RepositoryUpdate task, disabled or not, only with -Force" {
+		It "asks for the configured task by its name alone, with or without -Force" {
 			Mock Get-StartupTaskDefinitions { }
 
 			Invoke-StartupTask RepositoryUpdate -Force | Out-Null
-			Should -Invoke Get-StartupTaskDefinitions -Times 1 -Exactly -ParameterFilter { $IncludeLegacyDisabled -and ($Name -join ',') -eq 'RepositoryUpdate' }
-
 			Invoke-StartupTask RepositoryUpdate | Out-Null
-			Should -Invoke Get-StartupTaskDefinitions -Times 1 -Exactly -ParameterFilter { -not $IncludeLegacyDisabled -and ($Name -join ',') -eq 'RepositoryUpdate' }
-		}
 
-		It "does not ask for the deprecated task under any other name" {
-			Invoke-StartupTask MyTask -Force | Out-Null
-
-			Should -Invoke Get-StartupTaskDefinitions -Times 1 -Exactly -ParameterFilter { -not $IncludeLegacyDisabled }
+			Should -Invoke Get-StartupTaskDefinitions -Times 2 -Exactly -ParameterFilter { ($Name -join ',') -eq 'RepositoryUpdate' }
 		}
 	}
 

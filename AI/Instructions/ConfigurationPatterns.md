@@ -96,7 +96,7 @@ WorkspaceActions = @{
 - `Open-Browser` - with `@{ Groups = @("...") }`
 - `Set-WorkspaceWindowLayout` - with `@{ WorkspaceName = "..." }`
 - `Open-Obsidian`, `Open-DBeaver`, `Open-Outlook`, `Open-Discord`
-- `Send-WakeOnLan`, `Training-Backup`, `Test-PrivacyStatus`
+- `Send-WakeOnLan`
 - `Return` - **special**: stops processing remaining actions
 
 **Parameter forwarding**: Command-line parameters passed to `Open-Workspace` are automatically forwarded to actions that accept them (via `Get-FilteredParams`).

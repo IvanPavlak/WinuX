@@ -50,7 +50,7 @@
 # there is no separate name list to keep in sync with the definitions. A plain hashtable
 # cannot carry the order: Import-PowerShellDataFile returns a System.Collections.Hashtable,
 # and key order is lost at load time. Sections shaped this way: BrowserGroups,
-# RepositoryGroups, ProjectActions, WorkspaceActions, CampaignResources, AcrobatPdfGroups,
+# RepositoryGroups, ProjectActions, WorkspaceActions, AcrobatPdfGroups,
 # WakeOnLanConfig, Locales, KeyboardLayoutSets and NerdFonts. RunnableProjectMappings is
 # an ordered record list (each record carries its own Name) and reads the same way.
 #
@@ -93,7 +93,6 @@
 # → TaskbarSettings                     : Set-TaskbarSettings
 # → AutoEnvironmentVariables            : Set-EnvironmentVariables
 # → DotnetProjectsSearchPath            : Determine-DotnetDependencies
-# → PostgreSqlPasswords                 : Configure-PostgreSqlPasswords
 # → NuGetConfig                         : Configure-NuGetConfig
 # → NpmConfig, NpmRegistries            : Configure-NpmConfig
 # → Themes                              : Set-SystemTheme
@@ -129,7 +128,6 @@
 # Application Configuration:
 # → BrowserGroups                   : Open-Browser, Test-BrowserGroupAlreadyOpen
 # → AcrobatPdfGroups                : Open-Acrobat
-# → CampaignResources               : Open-DnD
 # → Universal executable paths      : Open-* functions (DBeaver, VirtualBox, etc.)
 #
 # Bootstrap Process:
@@ -261,10 +259,6 @@
 		IconCacheDb              = "{User}\AppData\Local\IconCache.db"
 		IconCacheFolder          = "{User}\AppData\Local\Microsoft\Windows\Explorer"
 		OhMyPoshThemeFile        = "{User}\AppData\Local\Programs\oh-my-posh\themes\WinuX.omp.json"
-		# TrainingFile (Open-Training) and WhatsAppLocalStoragePath (Clear-WhatsAppLocalStorage):
-		# DEPRECATED since 2.17.0, removed in 3.0.0 with their functions.
-		TrainingFile             = ""
-		WhatsAppLocalStoragePath = "{User}\AppData\Local\Packages\5319275A.WhatsAppDesktop_cv1g1gvanyjgm\LocalState\shared\transfers"
 
 		# OPT-IN. An image fastfetch renders instead of the text logo, in the terminals that can
 		# display one - WezTerm and Windows Terminal. Read by Get-FastfetchLogoArgument, which the
@@ -287,26 +281,18 @@
 
 		# Application executable paths consumed by Start-Application (Open-* functions).
 		# These ship empty - an unconfigured path makes its Open-* function warn (Open-Steam
-		# and Open-LeagueOfLegends log an error) and return instead of launching anything.
+		# logs an error) and return instead of launching anything.
 		# Set the ones you use in
 		# Configuration.local.psd1, e.g.:
-		#   LeagueOfLegendsExe  = "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Riot Games\League of Legends"
 		#   SteamExe            = "C:\Program Files (x86)\Steam\steam.exe"
-		#   RiseupVpnExe        = "C:\Program Files (x86)\RiseupVPN\riseup-vpn.exe"
 		#   DbeaverExe          = "{User}\AppData\Local\DBeaver\dbeaver.exe"
 		#   TeamViewerExe       = "C:\Program Files\TeamViewer\TeamViewer.exe"
-		#   FoundryVTTExe       = "C:\Program Files\Foundry Virtual Tabletop\Foundry Virtual Tabletop.exe"
 		#   NotepadPlusPlusExe  = "C:\Program Files\Notepad++\notepad++.exe"
 		#   VisualStudio2026Exe = "C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE\devenv.exe"
 		#   VirtualBoxExe       = "C:\Program Files\Oracle\VirtualBox\VirtualBox.exe"
-		# LeagueOfLegendsExe, RiseupVpnExe and FoundryVTTExe: DEPRECATED since 2.17.0, removed in
-		# 3.0.0 with Open-LeagueOfLegends, Open-RiseupVPN and Open-FoundryVTT.
-		LeagueOfLegendsExe       = ""
 		SteamExe                 = ""
-		RiseupVpnExe             = ""
 		DbeaverExe               = ""
 		TeamViewerExe            = ""
-		FoundryVTTExe            = ""
 		NotepadPlusPlusExe       = ""
 		VisualStudio2026Exe      = ""
 		VirtualBoxExe            = ""
@@ -648,17 +634,8 @@
 		# Personal path templates ship empty - the functions that consume them warn and
 		# return until you set them in Configuration.local.psd1, e.g.:
 		#   ObsidianDirectory       = "{Dev}\Obsidian"
-		#   TrainingBackupDirectory = "{Dev}\ExampleBackup"
-		#   LearningBook            = "{User}\Learning\ExampleBook.pdf"
-		#   TrainingDirectory       = "{User}\Training\2026"
-		#   Dnd                     = @{ ExampleCharacter = "{Dev}\Obsidian\Campaigns\ExampleCampaign\ExampleCharacter.pdf" }
-		# TrainingBackupDirectory, LearningBook, TrainingDirectory and Dnd: DEPRECATED since
-		# 2.17.0, removed in 3.0.0 with Training-Backup, Open-Training and Open-DnD.
+		#   Books                   = @{ ExampleRulebook = "{User}\Books\ExampleRulebook.pdf" }
 		ObsidianDirectory       = ""
-		TrainingBackupDirectory = ""
-		LearningBook            = ""
-		TrainingDirectory       = ""
-		Dnd                     = @{}
 		# Machine-local destination for the generated taskbar layout XML (the StartLayoutFile the
 		# Explorer Group Policy points at). Written directly by Configure-Taskbar / Unpin-TaskbarApps;
 		# never versioned in the repo. Each machine keeps its own copy under C:\ProgramData.
@@ -1124,11 +1101,11 @@
 	# Example:
 	#   PC = @{
 	#       Learning          = "E:\Books\ProgrammingBook.pdf"
-	#       TrainingDirectory = "E:\Training\2026"
+	#       NotesDirectory    = "E:\Notes"
 	#   }
 	#   Laptop = @{
 	#       Learning          = "C:\Users\John\Books\ProgrammingBook.pdf"
-	#       TrainingDirectory = "C:\Users\John\Documents\Training"
+	#       NotesDirectory    = "C:\Users\John\Documents\Notes"
 	#   }
 	# ==========================================================================
 	MachineOverrides              = @{
@@ -1766,23 +1743,6 @@
 	)
 
 	# ==========================================================================
-	# PostgreSQL Configuration
-	# ==========================================================================
-	# PostgreSQL password settings for Configure-PostgreSqlPassword function.
-	#
-	# Example:
-	#   PostgreSqlPasswords = @{
-	#       DefaultOrCurrent = "postgres"        # Current/default password
-	#       New              = "SecurePass123!"  # New password to set
-	#   }
-	# ==========================================================================
-	# Ships empty - Configure-PostgreSqlPasswords does nothing until you opt in via
-	# Configuration.local.psd1 (see the example above). Never put a real/production
-	# password in the tracked base file.
-	# DEPRECATED since 2.17.0, removed in 3.0.0 with Configure-PostgreSqlPasswords.
-	PostgreSqlPasswords           = @{}
-
-	# ==========================================================================
 	# Theme Settings
 	# ==========================================================================
 	# System theme per machine type. Used by Set-SystemTheme -Auto.
@@ -2086,7 +2046,7 @@
 	# Everything ships OFF - opt in from Configuration.local.psd1 (hashtables deep-merge, so a
 	# single key there is enough).
 	# → Consumer: Update-Repositories (IncludeDefaultBranch), Resolve-RepositoryDefaultBranch
-	#   (DefaultBranch), Get-StartupTaskDefinitions (Startup, deprecated - see below)
+	#   (DefaultBranch)
 	#
 	# KEYS:
 	# - IncludeDefaultBranch : Also fast-forward the repository's default branch when another
@@ -2103,29 +2063,6 @@
 	# - ArchiveRoot          : Where `Update-Repositories -Archive` lands: absolute, or relative to
 	#                          the Desktop. Empty => the Desktop. -InCurrentDirectory replaces it;
 	#                          an entry's ArchiveFolder (RepositoryGroups) nests below either.
-	# - Startup              : DEPRECATED since 2.12.0, removed in 3.0.0 - write the automatic update
-	#                          as a Startup.Tasks entry instead (Startup Tasks Configuration, below):
-	#                          @{ Name = "RepositoryUpdate"; Command = "Update-Repositories -All -NoClone -Quiet"
-	#                             Trigger = "TerminalOpen"; Frequency = "OncePerDay" }
-	#                          Still honored until then: while Startup.Enabled is $true and no
-	#                          startup task is named RepositoryUpdate, Get-StartupTaskDefinitions
-	#                          adds one that does what the keys below describe.
-	# - Startup.Enabled      : Update repositories automatically once the first prompt of a shell
-	#                          is drawn. Never clones a missing repository and never asks for
-	#                          Administrator; prints one line per repository plus a totals line.
-	# - Startup.Schedule     : "Daily" (default) => once per day (Frequency = "OncePerDay"): the
-	#                          first shell after the day starts runs it, and a shell already open
-	#                          then (a machine woken from sleep, a terminal left open overnight)
-	#                          runs it at its next prompt. "Interval" => at most once per
-	#                          IntervalHours (Frequency = "Interval"), checked only when a shell
-	#                          starts. Either way a machine that was off for days updates on its
-	#                          first shell back.
-	# - Startup.DayStartHour : Daily only. The hour (0-23) a new day starts; a shell opened before
-	#                          it still counts as the day before. Default 6.
-	# - Startup.IntervalHours: Interval only. Minimum hours between two automatic runs. Default 24.
-	# - Startup.Scope        : Which groups the automatic run updates, per machine type - the same
-	#                          shape as BootstrapConfig.RepositoryUpdateScope. Absent => that key,
-	#                          then "All".
 	#
 	# Example:
 	#   RepositoryUpdate = @{
@@ -2137,12 +2074,6 @@
 		IncludeDefaultBranch = $false
 		DefaultBranch        = ""
 		ArchiveRoot          = ""
-		Startup              = @{
-			Enabled       = $false
-			Schedule      = "Daily"
-			DayStartHour  = 6
-			IntervalHours = 24
-		}
 	}
 
 	# ==========================================================================
@@ -2576,12 +2507,8 @@
 	#   - Open-WhatsApp               : Opens WhatsApp Desktop
 	#   - Open-Outlook                : Opens Outlook email client
 	#   - Open-Discord                : Opens Discord
-	#   - Open-DnD                    : Opens D&D campaign tools (deprecated since 2.17.0)
-	#   - Open-SecureBrowser          : Opens Tor browser with RiseupVPN (deprecated since 2.17.0)
 	#   - Send-WakeOnLan              : Wakes a machine via Wake-on-LAN
-	#   - Training-Backup             : Runs Training-Backup command (deprecated since 2.17.0)
 	#   - Set-WorkspaceWindowLayout   : Applies window layout for the workspace
-	#   - Test-PrivacyStatus          : Tests browser privacy status (deprecated since 2.17.0)
 	#   - Return                      : Exits workspace processing immediately
 	#
 	# Parameter Format:
@@ -2657,7 +2584,7 @@
 	# Special Cases:
 	#   - Fullscreen: Applies full-screen FancyZone layout to all windows
 	#   - Default: Actions when no workspace is selected (null/Enter selection)
-	#   - Return action: Stops processing and exits (e.g., Training workspace)
+	#   - Return action: Stops processing and exits (e.g., a workspace that ends after its first actions)
 	#
 	# TEMPLATED ENTRIES (WorkspaceTemplates below):
 	#   Instead of an action list an entry may stamp out a template under its own name - every
@@ -2769,19 +2696,10 @@
 	}
 
 	# ==========================================================================
-	# D&D Configuration
-	# ==========================================================================
-	# Per-campaign resources consumed by Open-DnD (rulebook PDF + resource browser group).
-	# DEPRECATED since 2.17.0, removed in 3.0.0 with Open-DnD.
-	CampaignResources             = @(
-		@{ ExampleCampaign = @{ Pdf = "ExampleRulebook"; Browser = "Reference" } }
-	)
-
-	# ==========================================================================
 	# Acrobat Configuration
 	# ==========================================================================
 	AcrobatPdfGroups              = @(
-		@{ "ExampleRulebook" = @("Dnd.ExampleCharacter") }
+		@{ "ExampleRulebook" = @("Books.ExampleRulebook") }
 	)
 
 	# ==========================================================================

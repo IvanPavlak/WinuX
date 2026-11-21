@@ -28,18 +28,6 @@ Clear-TaskbarPins
 Clear-TaskbarPins -SkipExplorerRestart
 ```
 
-## [Clear-WhatsAppLocalStorage](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Clear-WhatsAppLocalStorage.ps1)
-
-- **Description:** **Deprecated since 2.17.0, removed in 3.0.0** - it serves one personal setup rather than the framework; to keep it, copy the function file (and its test) into your fork's Custom area under `Windows/PowerShell/Modules/Custom/<Module>/Functions/`, list it in `Custom.psd1`, and keep its keys in `Configuration.local.psd1`, where the copy goes on reading them. It keeps working until then and warns once per session. Clears WhatsApp Desktop local storage to resolve startup issues. Stops WhatsApp if it is running, lists the contents and total size of the storage directory, then (after confirmation) deletes everything under the path configured in `Configuration.Universal.WhatsAppLocalStoragePath`. Requires administrator privileges.
-- **Usage:** `Clear-WhatsAppLocalStorage`
-
-Runs `Test-AdminPrivileges` first, so it must be invoked from an elevated session. If WhatsApp is running it is force-stopped; if the configured storage path no longer exists the function reports that storage is already cleared and returns. Before deleting, it prints a per-directory size breakdown (MB/GB) plus a total, then prompts for confirmation (Enter defaults to Yes). Choosing Yes removes the directory recursively; any other response cancels the operation.
-
-```powershell
-# Stop WhatsApp and clear its local storage directory (run elevated)
-Clear-WhatsAppLocalStorage
-```
-
 ## [Close-BrowserWindows](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Close-BrowserWindows.ps1)
 
 - **Description:** Gracefully closes previously discovered browser windows by posting `WM_CLOSE` directly to each supplied native window handle. Operates on the window objects collected by `Get-BrowserWindowsByTarget`, and is used by `Terminate-AllBrowserProcesses` after exclusion filtering has been applied.
@@ -116,31 +104,6 @@ Configure-NuGetConfig
 
 # Force a full reconfigure, overwriting the existing config
 Configure-NuGetConfig -Override
-```
-
-## [Configure-PostgreSqlPasswords](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Configure-PostgreSqlPasswords.ps1)
-
-- **Description:** **Deprecated since 2.17.0, removed in 3.0.0** - it serves one personal setup rather than the framework; to keep it, copy the function file (and its test) into your fork's Custom area under `Windows/PowerShell/Modules/Custom/<Module>/Functions/`, list it in `Custom.psd1`, and keep its keys in `Configuration.local.psd1`, where the copy goes on reading them. It keeps working until then and warns once per session. Changes the `postgres` user password across every installed PostgreSQL version found on the machine. Nothing is prompted for: the current and new passwords are either passed together as `-DefaultOrCurrentPassword` / `-NewPassword`, or - with `-Auto`, or when neither is passed - read from `PostgreSqlPasswords` (`DefaultOrCurrent`, `New`) in `Configuration.psd1`. Already-configured installations are detected and skipped (idempotent); a manual-instructions file is written to the Desktop only for installations that fail.
-- **Parameters:** -DefaultOrCurrentPassword, -NewPassword, -Auto
-- **Usage:** `Configure-PostgreSqlPasswords`, `Configure-PostgreSqlPasswords -Auto`, `Configure-PostgreSqlPasswords -DefaultOrCurrentPassword foo -NewPassword bar`
-
-Scans `C:\Program Files\PostgreSQL` and `C:\Program Files (x86)\PostgreSQL` for every version's `bin\psql.exe`. For each installation it tries ports 5432, 5433, 5434, and 5435: it first checks whether the new password already authenticates (skip if so), otherwise runs `ALTER USER postgres WITH PASSWORD '<new>'` via a temporary SQL file. A call with no arguments defaults to the configuration values (same as `-Auto`), and an unconfigured `PostgreSqlPasswords` makes it warn and return. Passing both `-DefaultOrCurrentPassword` and `-NewPassword` (without `-Auto`) bypasses the configuration; passing only one of them is an error, and `-Auto` always takes the configuration values, replacing any password passed alongside it. If any version fails on all attempted ports (or an unexpected error occurs), step-by-step manual instructions are written to the Desktop via `Write-ManualInstructionsToDesktop`.
-
-| Parameter                   | Description                                                                                                 |
-| --------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `-DefaultOrCurrentPassword` | The current PostgreSQL password, used to authenticate before the change.                                    |
-| `-NewPassword`              | The new password to set on the `postgres` user.                                                             |
-| `-Auto`                     | Reads `DefaultOrCurrent` and `New` from `PostgreSqlPasswords` in `Configuration.psd1`, replacing any password passed explicitly. |
-
-```powershell
-# Use the passwords from Configuration.psd1 (PostgreSqlPasswords key)
-Configure-PostgreSqlPasswords -Auto
-
-# Equivalent: no arguments defaults to the configuration values
-Configure-PostgreSqlPasswords
-
-# Override the configuration with explicit current/new passwords
-Configure-PostgreSqlPasswords -DefaultOrCurrentPassword foo -NewPassword bar
 ```
 
 ## [Configure-Taskbar](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Configure-Taskbar.ps1)

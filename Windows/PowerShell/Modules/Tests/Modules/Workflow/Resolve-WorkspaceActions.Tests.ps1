@@ -37,7 +37,7 @@ Describe "Resolve-WorkspaceActions" {
 
 		# The shape this exists for: one workspace, two browser openers, one per layout set.
 		$script:leagueActions = @(
-			@{ Action = 'Open-LeagueOfLegends' }
+			@{ Action = 'Open-Steam' }
 			@{ Action = 'Open-Browser'; Parameters = @{ Groups = @('Google'); Instances = 2 }; LayoutMachine = 'PC' }
 			@{ Action = 'Open-Browser'; Parameters = @{ Groups = @('Google') }; LayoutMachine = 'Laptop/Work' }
 			@{ Action = 'Set-WorkspaceWindowLayout'; Parameters = @{ WorkspaceName = 'LeagueOfLegends' } }

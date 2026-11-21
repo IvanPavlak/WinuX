@@ -7965,7 +7965,6 @@
     },
     "Parameters": {},
     "ConfigurationKeys": {
-      "BootstrapConfig.WSLSetup": "0.1.26",
       "CampaignResources": "2.17.0",
       "PathTemplates.Dnd": "2.17.0",
       "PathTemplates.LearningBook": "2.17.0",

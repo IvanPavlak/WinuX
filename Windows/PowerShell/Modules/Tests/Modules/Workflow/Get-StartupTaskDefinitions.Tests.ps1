@@ -6,18 +6,15 @@ BeforeAll {
 	. "$ModuleRoot\Workflow\Functions\Get-StartupTaskDefinitions.ps1"
 	# Dot-sourced so they exist to Mock whatever the session's imported modules hold.
 	. "$ModuleRoot\Bootstrap\Functions\Test-MachineTypeScope.ps1"
-	. "$ModuleRoot\Bootstrap\Functions\Resolve-RepositoryUpdateScope.ps1"
 }
 
 Describe "Get-StartupTaskDefinitions" {
 	BeforeEach {
 		# Every test hands its own configuration over with -Configuration; the global one is
-		# never read. The machine scope and the repository scope belong to their own tests.
+		# never read. The machine scope belongs to its own tests.
 		$script:MachineInScope = $true
-		$script:RepositoryScope = @{ All = $true; Groups = @() }
 
 		Mock Test-MachineTypeScope { $script:MachineInScope }
-		Mock Resolve-RepositoryUpdateScope { $script:RepositoryScope }
 	}
 
 	Context "what is read" {
@@ -40,7 +37,6 @@ Describe "Get-StartupTaskDefinitions" {
 			$definition.InScope | Should -BeTrue
 			$definition.Valid | Should -BeTrue
 			$definition.Errors.Count | Should -Be 0
-			$definition.Legacy | Should -BeFalse
 
 			$parameters = $definition.Parameters
 			$parameters.Name | Should -Be 'MyTask'
@@ -485,194 +481,20 @@ Describe "Get-StartupTaskDefinitions" {
 		}
 	}
 
-	Context "the deprecated RepositoryUpdate.Startup keys" {
-		It "adds no task while RepositoryUpdate.Startup is <Case>" -ForEach @(
-			@{ Case = 'absent'; RepositoryUpdate = @{} }
-			@{ Case = 'without Enabled'; RepositoryUpdate = @{ Startup = @{ Schedule = 'Daily' } } }
-			@{ Case = 'switched off'; RepositoryUpdate = @{ Startup = @{ Enabled = $false } } }
-		) {
-			@(Get-StartupTaskDefinitions -Configuration @{ RepositoryUpdate = $RepositoryUpdate }).Count | Should -Be 0
-			Should -Invoke Resolve-RepositoryUpdateScope -Times 0 -Exactly
+	Context "the RepositoryUpdate.Startup keys 3.0.0 removed" {
+		It "turns none of them into a task, whatever they say" {
+			@(Get-StartupTaskDefinitions -Configuration @{ RepositoryUpdate = @{ Startup = @{ Enabled = $true; Schedule = 'Interval'; IntervalHours = 8 } } }).Count | Should -Be 0
 		}
 
-		It "adds the RepositoryUpdate task while Startup.Enabled is on" {
-			$definition = Get-StartupTaskDefinitions -Configuration @{ RepositoryUpdate = @{ Startup = @{ Enabled = $true } } }
-
-			@($definition).Count | Should -Be 1
-			$definition.Name | Should -Be 'RepositoryUpdate'
-			$definition.Legacy | Should -BeTrue
-			$definition.Valid | Should -BeTrue
-			$definition.InScope | Should -BeTrue
-			($definition.Trigger -join ',') | Should -Be 'TerminalOpen'
-			$definition.Parameters.Enabled | Should -BeTrue
-			$definition.Parameters.Frequency | Should -Be 'OncePerDay'
-			$definition.Parameters.DayStartHour | Should -Be 6
-			$definition.Parameters.Elevation | Should -Be 'None'
-		}
-
-		It "updates every group when the scope says all" {
-			$script:RepositoryScope = @{ All = $true; Groups = @() }
-
-			$definition = Get-StartupTaskDefinitions -Configuration @{ RepositoryUpdate = @{ Startup = @{ Enabled = $true } } }
-
-			$definition.Parameters.Command | Should -Be 'Update-Repositories -All -NoClone -Quiet'
-		}
-
-		It "updates every group when no scope can be resolved" {
-			$script:RepositoryScope = $null
-
-			$definition = Get-StartupTaskDefinitions -Configuration @{ RepositoryUpdate = @{ Startup = @{ Enabled = $true } } }
-
-			$definition.Parameters.Command | Should -Be 'Update-Repositories -All -NoClone -Quiet'
-		}
-
-		It "updates only the groups of the scope" {
-			$script:RepositoryScope = @{ All = $false; Groups = @('A', 'B') }
-
-			$definition = Get-StartupTaskDefinitions -Configuration @{ RepositoryUpdate = @{ Startup = @{ Enabled = $true } } }
-
-			$definition.Parameters.Command | Should -Be "Update-Repositories -Group 'A', 'B' -NoClone -Quiet"
-		}
-
-		It "quotes a group name that holds a quote, so the command still parses" {
-			$script:RepositoryScope = @{ All = $false; Groups = @("Team's") }
-
-			$definition = Get-StartupTaskDefinitions -Configuration @{ RepositoryUpdate = @{ Startup = @{ Enabled = $true } } }
-
-			$definition.Parameters.Command | Should -Be "Update-Repositories -Group 'Team''s' -NoClone -Quiet"
-			{ [scriptblock]::Create($definition.Parameters.Command) } | Should -Not -Throw
-		}
-
-		It "resolves the Bootstrap scope when Startup.Scope is absent" {
-			Get-StartupTaskDefinitions -Configuration @{ RepositoryUpdate = @{ Startup = @{ Enabled = $true } } } | Out-Null
-
-			Should -Invoke Resolve-RepositoryUpdateScope -Times 1 -Exactly -ParameterFilter { $Path -eq 'BootstrapConfig.RepositoryUpdateScope' }
-		}
-
-		It "resolves Startup.Scope when it is set" {
-			Get-StartupTaskDefinitions -Configuration @{ RepositoryUpdate = @{ Startup = @{ Enabled = $true; Scope = @{ Default = 'Work' } } } } | Out-Null
-
-			Should -Invoke Resolve-RepositoryUpdateScope -Times 1 -Exactly -ParameterFilter { $Path -eq 'RepositoryUpdate.Startup.Scope' }
-		}
-
-		It "runs once per day on the Daily schedule and carries DayStartHour" {
-			$definition = Get-StartupTaskDefinitions -Configuration @{ RepositoryUpdate = @{ Startup = @{ Enabled = $true; Schedule = 'Daily'; DayStartHour = 4 } } }
-
-			$definition.Parameters.Frequency | Should -Be 'OncePerDay'
-			$definition.Parameters.DayStartHour | Should -Be 4
-		}
-
-		It "runs per interval on the Interval schedule and carries IntervalHours" {
-			$definition = Get-StartupTaskDefinitions -Configuration @{ RepositoryUpdate = @{ Startup = @{ Enabled = $true; Schedule = 'interval'; IntervalHours = 8 } } }
-
-			$definition.Parameters.Frequency | Should -Be 'Interval'
-			$definition.Parameters.IntervalHours | Should -Be 8
-		}
-
-		It "runs once per day for a schedule it does not know" {
-			$definition = Get-StartupTaskDefinitions -Configuration @{ RepositoryUpdate = @{ Startup = @{ Enabled = $true; Schedule = 'Weekly' } } }
-
-			$definition.Valid | Should -BeTrue
-			$definition.Parameters.Frequency | Should -Be 'OncePerDay'
-		}
-
-		It "falls back to 6 instead of failing for a DayStartHour of <Hour>" -ForEach @(
-			@{ Hour = 24 }
-			@{ Hour = -1 }
-			@{ Hour = 'morning' }
-		) {
-			$definition = Get-StartupTaskDefinitions -Configuration @{ RepositoryUpdate = @{ Startup = @{ Enabled = $true; DayStartHour = $Hour } } }
-
-			$definition.Valid | Should -BeTrue
-			$definition.Parameters.DayStartHour | Should -Be 6
-		}
-
-		It "falls back to 24 instead of failing for IntervalHours that are no number" {
-			$definition = Get-StartupTaskDefinitions -Configuration @{ RepositoryUpdate = @{ Startup = @{ Enabled = $true; Schedule = 'Interval'; IntervalHours = 'daily' } } }
-
-			$definition.Valid | Should -BeTrue
-			$definition.Parameters.IntervalHours | Should -Be 24
-		}
-
-		It "does not fall back for a configured task: the same DayStartHour is an error there" {
-			$definition = Get-StartupTaskDefinitions -Configuration @{ Startup = @{ Tasks = @(@{ Name = 'MyTask'; Trigger = 'TerminalOpen'; DayStartHour = 24 }) } }
-
-			$definition.Valid | Should -BeFalse
-		}
-
-		It "adds the task after the configured ones" {
+		It "returns a configured RepositoryUpdate task as it stands" {
 			$definitions = @(Get-StartupTaskDefinitions -Configuration @{
-					Startup          = @{ Tasks = @(@{ Name = 'MyTask'; Trigger = 'SignIn' }) }
 					RepositoryUpdate = @{ Startup = @{ Enabled = $true } }
-				})
-
-			($definitions.Name -join ',') | Should -Be 'MyTask,RepositoryUpdate'
-			$definitions[0].Legacy | Should -BeFalse
-			$definitions[1].Legacy | Should -BeTrue
-		}
-
-		It "adds nothing when a task named <Spelling> is configured" -ForEach @(
-			@{ Spelling = 'RepositoryUpdate' }
-			@{ Spelling = 'repositoryupdate' }
-		) {
-			$definitions = @(Get-StartupTaskDefinitions -Configuration @{
-					Startup          = @{ Tasks = @(@{ Name = $Spelling; Command = "Update-Repositories -Group 'Mine' -NoClone -Quiet"; Trigger = 'SignIn' }) }
-					RepositoryUpdate = @{ Startup = @{ Enabled = $true } }
+					Startup          = @{ Tasks = @(@{ Name = 'RepositoryUpdate'; Command = 'Update-Repositories -All -NoClone -Quiet'; Trigger = 'TerminalOpen' }) }
 				})
 
 			$definitions.Count | Should -Be 1
-			$definitions[0].Legacy | Should -BeFalse
-			$definitions[0].Valid | Should -BeTrue
-			$definitions[0].Parameters.Command | Should -Be "Update-Repositories -Group 'Mine' -NoClone -Quiet"
-			Should -Invoke Resolve-RepositoryUpdateScope -Times 0 -Exactly
-		}
-
-		It "is found by -Trigger TerminalOpen and -Name, and by no other trigger" {
-			$source = @{ RepositoryUpdate = @{ Startup = @{ Enabled = $true } } }
-
-			@(Get-StartupTaskDefinitions -Configuration $source -Trigger TerminalOpen).Count | Should -Be 1
-			@(Get-StartupTaskDefinitions -Configuration $source -Name RepositoryUpdate).Count | Should -Be 1
-			@(Get-StartupTaskDefinitions -Configuration $source -Trigger SignIn).Count | Should -Be 0
-		}
-
-		Context "-IncludeLegacyDisabled" {
-			It "adds the task, disabled, while Startup.Enabled is off" {
-				$definition = Get-StartupTaskDefinitions -IncludeLegacyDisabled -Configuration @{ RepositoryUpdate = @{ Startup = @{ Enabled = $false; Schedule = 'Interval'; IntervalHours = 8 } } }
-
-				@($definition).Count | Should -Be 1
-				$definition.Name | Should -Be 'RepositoryUpdate'
-				$definition.Legacy | Should -BeTrue
-				$definition.Valid | Should -BeTrue
-				$definition.Parameters.Enabled | Should -BeFalse
-				$definition.Parameters.Frequency | Should -Be 'Interval'
-				$definition.Parameters.IntervalHours | Should -Be 8
-			}
-
-			It "adds the task, disabled, when the RepositoryUpdate section is absent" {
-				$definition = Get-StartupTaskDefinitions -IncludeLegacyDisabled -Configuration @{}
-
-				@($definition).Count | Should -Be 1
-				$definition.Name | Should -Be 'RepositoryUpdate'
-				$definition.Parameters.Enabled | Should -BeFalse
-				$definition.Parameters.Frequency | Should -Be 'OncePerDay'
-				$definition.Parameters.Command | Should -Be 'Update-Repositories -All -NoClone -Quiet'
-			}
-
-			It "keeps the task enabled while Startup.Enabled is on" {
-				$definition = Get-StartupTaskDefinitions -IncludeLegacyDisabled -Configuration @{ RepositoryUpdate = @{ Startup = @{ Enabled = $true } } }
-
-				@($definition).Count | Should -Be 1
-				$definition.Parameters.Enabled | Should -BeTrue
-			}
-
-			It "still adds nothing when a task named RepositoryUpdate is configured" {
-				$definitions = @(Get-StartupTaskDefinitions -IncludeLegacyDisabled -Configuration @{
-						Startup = @{ Tasks = @(@{ Name = 'RepositoryUpdate'; Command = 'Do-Something'; Trigger = 'SignIn' }) }
-					})
-
-				$definitions.Count | Should -Be 1
-				$definitions[0].Legacy | Should -BeFalse
-			}
+			$definitions[0].Parameters.Command | Should -Be 'Update-Repositories -All -NoClone -Quiet'
+			$definitions[0].PSObject.Properties.Name | Should -Not -Contain 'Legacy'
 		}
 	}
 }

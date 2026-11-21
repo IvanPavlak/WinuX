@@ -9,9 +9,9 @@ Common (DRY) helper to start applications with standardized error handling, proc
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`Universal.<ConfigKey>`](../../configuration-reference.md#application-executables) | string (path) | per key: `DockerExe` and `OutlookLauncherExe` ship set; `DbeaverExe`, `FoundryVTTExe`, `NotepadPlusPlusExe`, `RiseupVpnExe`, `TeamViewerExe` and `VirtualBoxExe` ship `""` (empty) | The executable the `ConfigPath` start method launches, named by `-ConfigKey`. Empty or missing, the launch warns (`[<ConfigKey>] is not configured (Universal section)`) and returns; the path itself is not checked before `Start-Process`. Placeholders such as `{User}` expand. The other start methods read no configuration. |
+| [`Universal.<ConfigKey>`](../../configuration-reference.md#application-executables) | string (path) | per key: `DockerExe` and `OutlookLauncherExe` ship set; `DbeaverExe`, `NotepadPlusPlusExe`, `TeamViewerExe` and `VirtualBoxExe` ship `""` (empty) | The executable the `ConfigPath` start method launches, named by `-ConfigKey`. Empty or missing, the launch warns (`[<ConfigKey>] is not configured (Universal section)`) and returns; the path itself is not checked before `Start-Process`. Placeholders such as `{User}` expand. The other start methods read no configuration. |
 
-The `ConfigPath` launchers and the key each needs: `Open-DBeaver` (`DbeaverExe`), `Open-Docker` (`DockerExe`), `Open-FoundryVTT` (`FoundryVTTExe`), `Open-NotepadPlusPlus` without a file (`NotepadPlusPlusExe`), `Open-Outlook` (`OutlookLauncherExe`), `Open-RiseupVPN` (`RiseupVpnExe`), `Open-TeamViewer` (`TeamViewerExe`), `Open-VirtualBox` (`VirtualBoxExe`).
+The `ConfigPath` launchers and the key each needs: `Open-DBeaver` (`DbeaverExe`), `Open-Docker` (`DockerExe`), `Open-NotepadPlusPlus` without a file (`NotepadPlusPlusExe`), `Open-Outlook` (`OutlookLauncherExe`), `Open-TeamViewer` (`TeamViewerExe`), `Open-VirtualBox` (`VirtualBoxExe`).
 
 ## Decisions
 
@@ -83,6 +83,6 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 - [`Start-Application` in the Application module reference](../../../modules/application.md#start-application) - parameters, usage and behaviour
 - [Application configuration guides](README.md) - every guide for this module
 - [`Open-NotepadPlusPlus`](Open-NotepadPlusPlus.md) - reads `NotepadPlusPlusExe` itself as well
-- The `ConfigPath` launchers, whose key lives here: [`Open-DBeaver`](Open-DBeaver.md), [`Open-Docker`](Open-Docker.md), [`Open-FoundryVTT`](Open-FoundryVTT.md), [`Open-Outlook`](Open-Outlook.md), [`Open-RiseupVPN`](Open-RiseupVPN.md), [`Open-TeamViewer`](Open-TeamViewer.md), [`Open-VirtualBox`](Open-VirtualBox.md)
+- The `ConfigPath` launchers, whose key lives here: [`Open-DBeaver`](Open-DBeaver.md), [`Open-Docker`](Open-Docker.md), [`Open-Outlook`](Open-Outlook.md), [`Open-TeamViewer`](Open-TeamViewer.md), [`Open-VirtualBox`](Open-VirtualBox.md)
 - [WinuXConfigurator](../../winux-configurator.md) - have an AI assistant walk these decisions with you
 - [Configuration reference](../../configuration-reference.md) - every key, section by section

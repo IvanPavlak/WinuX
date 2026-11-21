@@ -308,7 +308,7 @@ wsl mkdir -p /home/you/.ssh
 
 **Why it happens:** `Test-ConfigurationSchema` reports every configuration key or `BootstrapConfig.Steps` name your configuration still uses that a WinuX release has deprecated. The old shape keeps working - it is read and mapped onto its replacement - until the next MAJOR release removes it, and the warning is how a fork finds out before that merge breaks anything. It is never an error.
 
-**Solution:** Move each value to the replacement the line names, in `Configuration.local.psd1`, then reload the profile; the warning disappears once nothing deprecated is left. The [Deprecated Keys](../configuration/configuration-reference.md#deprecated-keys) table lists every entry, and the release's `### Deprecated` entry in the changelog shows the migration.
+**Solution:** Move each value to the replacement the line names, in `Configuration.local.psd1`, then reload the profile; the warning disappears once nothing deprecated is left. The [Deprecated Keys](../configuration/configuration-reference.md#deprecated-keys) section lists every entry, and the release's `### Deprecated` entry in the changelog shows the migration.
 
 ### Claude Code Ignores The Managed Settings On Windows
 
@@ -1347,9 +1347,9 @@ Private = @{
 
 **Problem:** The automatic repository update starts in a terminal you open mid-morning, although it already ran when you started work.
 
-**Cause:** The `RepositoryUpdate` startup task has `Frequency = "Interval"` (or the deprecated `RepositoryUpdate.Startup.Schedule` is `"Interval"`): the next run is due `IntervalHours` after the last one, so with 24 hours a run at 10:15 yesterday makes the first shell after 10:15 today run it again, and the time drifts with every run.
+**Cause:** The `RepositoryUpdate` startup task has `Frequency = "Interval"`: the next run is due `IntervalHours` after the last one, so with 24 hours a run at 10:15 yesterday makes the first shell after 10:15 today run it again, and the time drifts with every run.
 
-**Solution:** Use `Frequency = "OncePerDay"` on the task - it runs once per day, at the first shell after its `DayStartHour` (default 6), or at the first prompt of a shell already open then. With the deprecated keys, remove `Schedule = "Interval"` from `Configuration.local.psd1` or set `Schedule = "Daily"`. Then reload. `(Get-StartupTaskDefinitions -Name RepositoryUpdate).Parameters` shows the frequency in effect.
+**Solution:** Use `Frequency = "OncePerDay"` on the task - it runs once per day, at the first shell after its `DayStartHour` (default 6), or at the first prompt of a shell already open then. Then reload. `(Get-StartupTaskDefinitions -Name RepositoryUpdate).Parameters` shows the frequency in effect.
 
 ### No Prompt After The Startup Repository Update
 
@@ -1357,7 +1357,7 @@ Private = @{
 
 **Cause:** The update runs after the prompt is already drawn, so its output pushes the prompt away while PSReadLine keeps waiting for input. The profile's `StartupTasks` stage (named `RepositoryUpdate` before 2.12.0) calls `Invoke-StartupTasks -Trigger TerminalOpen -RedrawPrompt`, which draws the prompt again when a task printed something; a profile from before that switch existed does not.
 
-**Solution:** Update the profile (the stage must pass `-RedrawPrompt`), then open a new tab. To check the redraw without waiting for the next day, the deprecated wrapper still does both in one call: `Invoke-StartupRepositoryUpdate -Force -RedrawPrompt`.
+**Solution:** Update the profile (the stage must pass `-RedrawPrompt`), then open a new tab.
 
 ### Update-Repositories Asks For Administrator
 

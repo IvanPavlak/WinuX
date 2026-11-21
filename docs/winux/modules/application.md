@@ -541,16 +541,6 @@ The executable path is read from the `DockerExe` key in the `Universal` section 
 Open-Docker
 ```
 
-## [Open-FoundryVTT](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Open-FoundryVTT.ps1)
-
-- **Description:** **Deprecated since 2.17.0, removed in 3.0.0** - it serves one personal setup rather than the framework; to keep it, copy the function file (and its test) into your fork's Custom area under `Windows/PowerShell/Modules/Custom/<Module>/Functions/`, list it in `Custom.psd1`, and keep its keys in `Configuration.local.psd1`, where the copy goes on reading them. It keeps working until then and warns once per session. Opens the FoundryVTT virtual tabletop server by starting the FoundryVTT desktop application via `Start-Application`. Does nothing if FoundryVTT is already running. The executable path is read from the `FoundryVTTExe` key in the `Universal` section of `Configuration.psd1`.
-- **Usage:** `Open-FoundryVTT`
-
-## [Open-LeagueOfLegends](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Open-LeagueOfLegends.ps1)
-
-- **Description:** **Deprecated since 2.17.0, removed in 3.0.0** - it serves one personal setup rather than the framework; to keep it, copy the function file (and its test) into your fork's Custom area under `Windows/PowerShell/Modules/Custom/<Module>/Functions/`, list it in `Custom.psd1`, and keep its keys in `Configuration.local.psd1`, where the copy goes on reading them. It keeps working until then and warns once per session. Opens the League of Legends client via `Start-Application`. Does nothing if the client is already running. The executable path is read from `Configuration.Universal.LeagueOfLegendsExe`.
-- **Usage:** `Open-LeagueOfLegends`
-
 ## [Open-NotepadPlusPlus](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Open-NotepadPlusPlus.ps1)
 
 - **Description:** Opens Notepad++, optionally with a specific file. When given a file path it opens that file, but if a Notepad++ window title already contains the file name it warns that the file is already open and does not open a duplicate (the window is not brought to the front). Called without arguments, it opens Notepad++ without any file.
@@ -609,40 +599,6 @@ Open-Obsidian -Workspace Server
 - **Usage:** `Open-Outlook`
 
 If Outlook is already running (the `olk` process), no new instance is launched.
-
-## [Open-RiseupVPN](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Open-RiseupVPN.ps1)
-
-- **Description:** **Deprecated since 2.17.0, removed in 3.0.0** - it serves one personal setup rather than the framework; to keep it, copy the function file (and its test) into your fork's Custom area under `Windows/PowerShell/Modules/Custom/<Module>/Functions/`, list it in `Custom.psd1`, and keep its keys in `Configuration.local.psd1`, where the copy goes on reading them. It keeps working until then and warns once per session. Opens RiseupVPN via `Start-Application`. Does nothing if RiseupVPN is already running. The executable path is read from the `RiseupVpnExe` key in the `Universal` configuration section.
-- **Usage:** `Open-RiseupVPN`
-
-## [Open-SecureBrowser](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Open-SecureBrowser.ps1)
-
-- **Description:** **Deprecated since 2.17.0, removed in 3.0.0** - it serves one personal setup rather than the framework; to keep it, copy the function file (and its test) into your fork's Custom area under `Windows/PowerShell/Modules/Custom/<Module>/Functions/`, list it in `Custom.psd1`, and keep its keys in `Configuration.local.psd1`, where the copy goes on reading them. It keeps working until then and warns once per session. Establishes a VPN-protected Tor Browser session with IP verification. Retrieves and displays the current ISP IP before connecting, starts RiseupVPN and waits for manual connection confirmation, hides the RiseupVPN window to the system tray via the Win32 ShowWindow API (SW_HIDE), opens Tor Browser, then runs `Test-PrivacyStatus` in Tor mode to verify the IP has changed.
-- **Usage:** `Open-SecureBrowser`
-
-Runs a multi-step privacy workflow:
-
-1. Retrieves the current ISP IP address before connecting the VPN.
-2. Starts RiseupVPN.
-3. Waits for manual confirmation that the VPN is connected.
-4. Hides the RiseupVPN window to the system tray (Win32 `ShowWindow` SW_HIDE).
-5. Opens Tor Browser.
-6. Waits 5 seconds for Tor Browser to initialize.
-7. Calls `Test-PrivacyStatus` in Tor mode to verify the IP has changed.
-
-Requires the Window module to be loaded (for Win32 `ShowWindow` access).
-
-> **Requires Tor Browser** - the base bootstrap does not install it. Add a
-> `TorProject.TorBrowser,Latest,d,n,w,All` row to your machine-local
-> [`WinGetApps.local.csv`](../reference/software-list.md#machine-local-overlay) (WinGet installs the
-> portable build onto the Desktop; move the "Tor Browser" folder to `{User}\Tor Browser`, where the
-> default `Universal.Browsers.Tor` entry points), install it manually, or provision it in a fork via
-> `BootstrapConfig.PersonalSteps`.
-
-```powershell
-# Start the full VPN + Tor Browser privacy session
-Open-SecureBrowser
-```
 
 ## [Open-Slack](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Open-Slack.ps1)
 
@@ -1164,7 +1120,7 @@ Universal = @{
     VirtualBoxExe  = "C:\Program Files\Oracle\VirtualBox\VirtualBox.exe"
     # ... one *Exe key per launcher - see the Configuration Reference for the full list
 
-    # Browser definitions consumed by Open-Browser / Open-SecureBrowser
+    # Browser definitions consumed by Open-Browser
     Browsers       = @{
         Firefox = @{ Exe = "C:\Program Files\Mozilla Firefox\firefox.exe"; PrivateArg = "-private-window"; NewWindowArg = "-new-window" }
         Tor     = @{ Exe = "{User}\Tor Browser\Browser\firefox.exe" }

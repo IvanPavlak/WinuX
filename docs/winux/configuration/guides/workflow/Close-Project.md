@@ -217,6 +217,6 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 - [`Add-Project`](../configuration/Add-Project.md) - reads the same configuration
 - [`Open-Project`](Open-Project.md) - reads the same configuration
 - [`Open-Browser`](../application/Open-Browser.md) - reads the same configuration
-- [`Open-LeagueOfLegends`](../application/Open-LeagueOfLegends.md) - reads the same configuration
+- [`Open-Steam`](../application/Open-Steam.md) - reads the same configuration
 - [WinuXConfigurator](../../winux-configurator.md) - have an AI assistant walk these decisions with you
 - [Configuration reference](../../configuration-reference.md) - every key, section by section

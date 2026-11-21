@@ -85,13 +85,13 @@ Describe "Test-ConfigurationSchema" {
 		}
 
 		It "reports an entry that is not a single-key hashtable" {
-			$script:ValidConfig.CampaignResources = @(
-				@{ Habajec = @{ Pdf = 'Wilius' }; Hrkovac = @{ Pdf = 'Jin' } }
+			$script:ValidConfig.AcrobatPdfGroups = @(
+				@{ Habajec = @('Books.Wilius'); Hrkovac = @('Books.Jin') }
 			)
 
 			Test-ConfigurationSchema -Configuration $script:ValidConfig
 
-			Should -Invoke Write-Warning -Times 1 -Exactly -ParameterFilter { $Message -match 'CampaignResources has 1 entr' }
+			Should -Invoke Write-Warning -Times 1 -Exactly -ParameterFilter { $Message -match 'AcrobatPdfGroups has 1 entr' }
 		}
 
 		It "says nothing about an ordered section that ships empty" {
@@ -268,69 +268,23 @@ Describe "Test-ConfigurationSchema" {
 			Should -Invoke Write-Warning -Times 0
 		}
 
-		Context "RepositoryUpdate.Startup.Enabled" {
-			BeforeEach {
-				$script:DeprecationConfig = @{
-					ValidMachineTypes     = @('PC')
-					HostnameToMachineType = @{ 'PC1' = 'PC' }
-					DefaultMachineType    = 'PC'
-					LaptopChassisTypes    = @('9')
-					BasePaths             = @{ Dev = 'C:\Dev' }
-					PathTemplates         = @{ Root = '{Dev}'; Projects = @{ Self = @{ Root = '{RepoRoot}' } }; SymbolicLinks = @{ } }
-					GitConfig             = @{ UserName = 'ExampleUser'; UserEmail = 'x@y.z'; WingetPackageId = 'Git.Git' }
-					BrowserGroups         = @(@{ Work = @('https://example.com') })
-					RepositoryGroups      = @(@{ Private = @(@{ Name = 'WinuX'; UrlPath = 'Universal.GitHub.Private.WinuX'; LocalPath = 'Projects.Self.Root' }) })
-					RepositoryUpdate      = @{ IncludeDefaultBranch = $false; Startup = @{ Enabled = $false; Schedule = 'Daily'; DayStartHour = 6; IntervalHours = 24 } }
-				}
+		It "says nothing about the RepositoryUpdate.Startup keys 3.0.0 removed" {
+			$config = @{
+				ValidMachineTypes     = @('PC')
+				HostnameToMachineType = @{ 'PC1' = 'PC' }
+				DefaultMachineType    = 'PC'
+				LaptopChassisTypes    = @('9')
+				BasePaths             = @{ Dev = 'C:\Dev' }
+				PathTemplates         = @{ Root = '{Dev}'; Projects = @{ Self = @{ Root = '{RepoRoot}' } }; SymbolicLinks = @{ } }
+				GitConfig             = @{ UserName = 'ExampleUser'; UserEmail = 'x@y.z'; WingetPackageId = 'Git.Git' }
+				BrowserGroups         = @(@{ Work = @('https://example.com') })
+				RepositoryGroups      = @(@{ Private = @(@{ Name = 'WinuX'; UrlPath = 'Universal.GitHub.Private.WinuX'; LocalPath = 'Projects.Self.Root' }) })
+				RepositoryUpdate      = @{ Startup = @{ Enabled = $true } }
 			}
 
-			It "stays silent while the key keeps the shipped default" {
-				Test-ConfigurationSchema -Configuration $script:DeprecationConfig
+			Test-ConfigurationSchema -Configuration $config
 
-				Should -Invoke Write-Warning -Times 0
-			}
-
-			It "stays silent when <Case>" -TestCases @(
-				@{ Case = "the Startup block has no Enabled key"; Change = { param($c) $c.RepositoryUpdate.Startup.Remove('Enabled') } }
-				@{ Case = "RepositoryUpdate has no Startup block"; Change = { param($c) $c.RepositoryUpdate.Remove('Startup') } }
-				@{ Case = "there is no RepositoryUpdate section"; Change = { param($c) $c.Remove('RepositoryUpdate') } }
-				@{ Case = "only the other Startup keys differ from the base"; Change = { param($c) $c.RepositoryUpdate.Startup.Schedule = 'Interval'; $c.RepositoryUpdate.Startup.IntervalHours = 4 } }
-			) {
-				param($Case, $Change)
-				& $Change $script:DeprecationConfig
-
-				Test-ConfigurationSchema -Configuration $script:DeprecationConfig
-
-				Should -Invoke Write-Warning -Times 0
-			}
-
-			It "warns once when the key is switched on" {
-				$script:DeprecationConfig.RepositoryUpdate.Startup.Enabled = $true
-
-				Test-ConfigurationSchema -Configuration $script:DeprecationConfig
-
-				Should -Invoke Write-Warning -Times 1 -Exactly
-				Should -Invoke Write-Warning -Times 1 -Exactly -ParameterFilter { $Message -match 'RepositoryUpdate\.Startup\.Enabled' }
-			}
-
-			It "never counts the deprecated key as a failure, even with -Strict" {
-				$script:DeprecationConfig.RepositoryUpdate.Startup.Enabled = $true
-
-				{ Test-ConfigurationSchema -Configuration $script:DeprecationConfig -Strict } | Should -Not -Throw
-
-				Should -Invoke Write-Warning -Times 1 -Exactly
-			}
-
-			It "reports the deprecated key on its own, next to a real failure" {
-				$script:DeprecationConfig.RepositoryUpdate.Startup.Enabled = $true
-				$script:DeprecationConfig.Remove('BasePaths')
-
-				Test-ConfigurationSchema -Configuration $script:DeprecationConfig
-
-				Should -Invoke Write-Warning -Times 2 -Exactly
-				Should -Invoke Write-Warning -Times 1 -Exactly -ParameterFilter { $Message -match 'RepositoryUpdate\.Startup\.Enabled' }
-				{ Test-ConfigurationSchema -Configuration $script:DeprecationConfig -Strict } | Should -Throw
-			}
+			Should -Invoke Write-Warning -Times 0
 		}
 	}
 

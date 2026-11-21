@@ -94,7 +94,6 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 - [Window configuration guides](README.md) - every guide for this module
 - [Configure Window Layout](configure-window-layout.md) - the 3-layer layout system, zones and visualization
 - [`Open-Browser`](../application/Open-Browser.md) - reads the same configuration
-- [`Open-LeagueOfLegends`](../application/Open-LeagueOfLegends.md) - reads the same configuration
 - [`Open-NotepadPlusPlus`](../application/Open-NotepadPlusPlus.md) - reads the same configuration
 - [`Open-Steam`](../application/Open-Steam.md) - reads the same configuration
 - [WinuXConfigurator](../../winux-configurator.md) - have an AI assistant walk these decisions with you

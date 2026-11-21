@@ -55,7 +55,6 @@ the [Configuration Reference](configuration-reference.md).
 | `ExplorerOptions`          | Windows Explorer settings        | `Set-ExplorerOptions`           |
 | `VisualEffects`            | Visual effects (Performance tab) | `Set-VisualEffects`             |
 | `AutoEnvironmentVariables` | Environment variables            | `Set-EnvironmentVariables`      |
-| `PostgreSqlPasswords`      | Database credentials             | `Configure-PostgreSqlPasswords` |
 | `PathTemplates.NuGetConfig` | NuGet source/destination        | `Configure-NuGetConfig`         |
 | `NpmRegistries`, `PathTemplates.NpmConfig` | npm registries and the user npmrc | `Configure-NpmConfig` |
 | `Themes`                   | Dark/Light per machine           | `Set-SystemTheme`               |
@@ -105,7 +104,6 @@ the [Configuration Reference](configuration-reference.md).
 | ------------------ | ----------------------- | ----------------- |
 | `BrowserGroups`    | Hierarchical URL groups | `Open-Browser`    |
 | `AcrobatPdfGroups` | PDF groups and their files (ordered - this is the menu) | `Open-Acrobat`    |
-| `CampaignResources` | D&D campaigns and their resources (ordered - this is the menu) | `Open-DnD`        |
 
 ### Bootstrap Process
 

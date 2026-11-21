@@ -30,8 +30,6 @@ A startup task is a command this machine runs on its own. You write it once as a
 | [`Startup.Conditions`](../../configuration-reference.md#startup-tasks) | hashtable | one entry, `Network` | Named tests a task can require: `<Name> = @{ Test; Timeout; Interval }`. Evaluated by [`Test-StartupCondition`](Test-StartupCondition.md). |
 | [`Startup.FailureReport`](../../configuration-reference.md#startup-tasks) | string | `"Tab"` | `"Tab"`: after a SignIn, Unlock or Wake run in which a task failed, was skipped or timed out, one terminal tab lists them. `"None"`: only the log. |
 
-The deprecated [`RepositoryUpdate.Startup`](../../configuration-reference.md#repository-update) keys still count: while `RepositoryUpdate.Startup.Enabled` is `$true` and no task is named `RepositoryUpdate`, one is added that does what those keys describe. See [`Invoke-StartupRepositoryUpdate`](../git/Invoke-StartupRepositoryUpdate.md) for the migration.
-
 ## Decisions
 
 1. What should this machine run on its own, and what do you call it?
@@ -245,7 +243,6 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 - [`Register-StartupTaskPromptCheck`](Register-StartupTaskPromptCheck.md) - makes a shell left open overnight run its once-a-day tasks
 - [`Set-StartupTasks`](../bootstrap/Set-StartupTasks.md) - registers the scheduled tasks behind SignIn, Unlock and Wake
 - [`Test-AdminPrivileges`](../helper/Test-AdminPrivileges.md) - what a command that asks for Administrator does inside a startup task
-- [`Invoke-StartupRepositoryUpdate`](../git/Invoke-StartupRepositoryUpdate.md) - the deprecated automatic repository update and its migration to a startup task
 - [Startup tasks troubleshooting](../../../reference/troubleshooting.md#startup-tasks) - a task that never runs, runs again, or asks for Administrator
 - [WinuXConfigurator](../../winux-configurator.md) - have an AI assistant walk these decisions with you
 - [Configuration reference](../../configuration-reference.md) - every key, section by section

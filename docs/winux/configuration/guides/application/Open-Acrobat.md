@@ -9,8 +9,8 @@ Opens Adobe Acrobat with one or more PDF groups defined in `AcrobatPdfGroups` in
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`AcrobatPdfGroups`](../../configuration-reference.md#acrobat-configuration) | ordered list of groups (one single-key hashtable each) | list of 1 (`ExampleRulebook`) | Every PDF group `Open-Acrobat` offers: the group name is the key, its PDF references are the value. The menu follows the order you write them in. Each reference is not a file path but a dot-notation path into the expanded `PathTemplates` (`$global:MachineSpecificPaths`), e.g. `"Dnd.ExampleCharacter"`. |
-| [`PathTemplates`](../../configuration-reference.md#path-templates--placeholder-system) | hashtable of path templates | `Dnd = @{}` and the other shipped templates | Where each reference resolves to - the PDF file itself. Placeholders such as `{User}` and `{Dev}` belong here. |
+| [`AcrobatPdfGroups`](../../configuration-reference.md#acrobat-configuration) | ordered list of groups (one single-key hashtable each) | list of 1 (`ExampleRulebook`) | Every PDF group `Open-Acrobat` offers: the group name is the key, its PDF references are the value. The menu follows the order you write them in. Each reference is not a file path but a dot-notation path into the expanded `PathTemplates` (`$global:MachineSpecificPaths`), e.g. `"Books.ExampleRulebook"`. |
+| [`PathTemplates`](../../configuration-reference.md#path-templates--placeholder-system) | hashtable of path templates | the shipped templates; none for the example (`Books` is only a commented example) | Where each reference resolves to - the PDF file itself. Placeholders such as `{User}` and `{Dev}` belong here. |
 
 ## Decisions
 
@@ -20,7 +20,7 @@ Opens Adobe Acrobat with one or more PDF groups defined in `AcrobatPdfGroups` in
     - More detail: [`AcrobatPdfGroups`](../../configuration-reference.md#acrobat-configuration)
 2. Which PDF files belong to each group?
     - Options: Define each file under `PathTemplates` (absolute or placeholder paths like `{User}\Documents\Manuals\Router.pdf`) and list its dot-notation reference, e.g. `"Manuals.Router"`, in the group. A file path written straight into the group does not resolve.
-    - Default: Skip - the shipped `ExampleRulebook` group references `Dnd.ExampleCharacter`, which the base leaves unset, so `Open-Acrobat` reports an empty path rather than opening anything.
+    - Default: Skip - the shipped `ExampleRulebook` group references `Books.ExampleRulebook`, which the base leaves unset, so `Open-Acrobat` reports an empty path rather than opening anything.
     - More detail: [`AcrobatPdfGroups`](../../configuration-reference.md#acrobat-configuration)
 
 ## Where to Put Values

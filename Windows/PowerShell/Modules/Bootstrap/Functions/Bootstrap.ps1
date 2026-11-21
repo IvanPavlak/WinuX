@@ -255,8 +255,6 @@ function Bootstrap {
 		if ($steps.EnvironmentVariables) { Set-EnvironmentVariables -Auto } else { Write-LogWarning "Environment variables skipped (BootstrapConfig.Steps.EnvironmentVariables)" }
 
 		if ($steps.CondaEnvironments) { Create-CondaEnvironments } else { Write-LogWarning "Conda environments skipped (BootstrapConfig.Steps.CondaEnvironments)" }
-		# PostgreSQL is provisioned via the Docker compose library, so password setup is redundant.
-		#Configure-PostgreSqlPasswords
 		if ($steps.NuGetConfig) { Configure-NuGetConfig } else { Write-LogWarning "NuGet config skipped - opt in via BootstrapConfig.Steps.NuGetConfig" }
 		if ($steps.NpmConfig) { Configure-NpmConfig } else { Write-LogWarning "npm config skipped - opt in via BootstrapConfig.Steps.NpmConfig" }
 

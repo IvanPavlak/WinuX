@@ -102,7 +102,6 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 - [Add New Workspace](add-new-workspace.md) - workspaces, action ordering and layouts
 - [`Terminate-AllProcessesWithVisibleWindows`](../system/Terminate-AllProcessesWithVisibleWindows.md) - reads the same `VisibleWindowExclusions` list
 - [`Open-Browser`](../application/Open-Browser.md) - reads the same configuration
-- [`Open-LeagueOfLegends`](../application/Open-LeagueOfLegends.md) - reads the same configuration
 - [`Open-NotepadPlusPlus`](../application/Open-NotepadPlusPlus.md) - reads the same configuration
 - [`Open-Steam`](../application/Open-Steam.md) - reads the same configuration
 - [WinuXConfigurator](../../winux-configurator.md) - have an AI assistant walk these decisions with you

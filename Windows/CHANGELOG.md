@@ -8,6 +8,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [3.0.0] - 2026-11-21
+
+3.0.0 removes every shape that was deprecated: the personal functions of 2.17.0, the automatic repository update of 2.12.0 that the startup tasks replaced, and their configuration keys. Nothing else changes. A fork whose warnings were at zero on 2.17.0 merges it without edits; one still calling a removed function finds its migration below, and it is the one each function's warning named.
+
+### Breaking
+
+- **`Get-StartupTaskDefinitions -IncludeLegacyDisabled` is gone, and the definitions no longer carry a `Legacy` property.** Both existed only to carry the `RepositoryUpdate.Startup` keys over as a startup task; with the keys removed there is nothing to carry. `Invoke-StartupTask RepositoryUpdate -Force` runs the configured `RepositoryUpdate` task like any other. Migration: drop the switch from a call; nothing reads `Legacy`.
+
+### Removed
+
+- **The personal functions deprecated in 2.17.0:** `Open-LeagueOfLegends`, `Open-FoundryVTT`, `Open-RiseupVPN`, `Open-SecureBrowser`, `Open-DnD`, `Open-Training`, `Training-Backup`, `Test-PrivacyStatus`, `Invoke-PrivacyRequest`, `Invoke-TorRequest`, `Clear-WhatsAppLocalStorage` and `Configure-PostgreSqlPasswords`, with their guides and tests, and the keys only they read: `Universal.LeagueOfLegendsExe`, `Universal.FoundryVTTExe`, `Universal.RiseupVpnExe`, `Universal.TrainingFile`, `Universal.WhatsAppLocalStoragePath`, `PathTemplates.TrainingDirectory`, `PathTemplates.TrainingBackupDirectory`, `PathTemplates.LearningBook`, `PathTemplates.Dnd`, `CampaignResources` and `PostgreSqlPasswords`. `Test-ConfigurationSchema` no longer treats `CampaignResources` as an ordered section. Migration: copy the function file (and its test) from the 2.17.0 tag into your fork's Custom area under `Windows/PowerShell/Modules/Custom/<Module>/Functions/`, drop its once-per-session deprecation warning, list it in `Custom.psd1`, and keep its keys in `Configuration.local.psd1`, where the copy goes on reading them. The base `AcrobatPdfGroups` example now points at a `Books.ExampleRulebook` path template instead of `Dnd.ExampleCharacter`.
+- **The automatic repository update deprecated in 2.12.0:** `Invoke-StartupRepositoryUpdate`, `Register-RepositoryUpdatePromptCheck`, `Invoke-RepositoryUpdatePromptCheck`, `Get-RepositoryUpdateStartupSettings`, `Test-RepositoryUpdateStampFresh` and `Get-RepositoryUpdateDayStart`, and the `RepositoryUpdate.Startup` keys (`Enabled`, `Schedule`, `DayStartHour`, `IntervalHours`, `Scope`), which `Get-StartupTaskDefinitions` no longer turns into a task. Migration, as in 2.12.0: add `@{ Name = "RepositoryUpdate"; Command = "Update-Repositories -All -NoClone -Quiet"; Trigger = "TerminalOpen"; Frequency = "OncePerDay" }` to `Startup.Tasks` (`Frequency = "Interval"` with `IntervalHours` for the old `Schedule = "Interval"`, one task per scope with `Machine` and `Update-Repositories -Group` for a per-machine `Scope`), and call `Invoke-StartupTask RepositoryUpdate` (add `-Force` to run it now), `Invoke-StartupTasks -Trigger TerminalOpen`, `Register-StartupTaskPromptCheck`, `Invoke-StartupTaskPromptCheck`, `Get-StartupTaskDefinitions` or `Test-StartupTaskDue` in place of the removed functions.
+- **The deprecation table of `Test-ConfigurationSchema` is empty.** The mechanism stays for the next deprecation; no key is deprecated at present. The contract baseline's stale `BootstrapConfig.WSLSetup` record, whose key left the base long ago, is dropped too.
+
+Docs: the Application, Workflow, Helper, System and Git module references and guide indexes, the configuration reference ("Application Executables", "Universal Paths", "Path Templates", "Repository Update", "Deprecated Keys"), and every page that named a removed function or key. Tests: the removed functions' suites are gone; `Get-StartupTaskDefinitions.Tests.ps1`, `Invoke-StartupTask.Tests.ps1`, `Test-ConfigurationSchema.Tests.ps1`, `VanillaConfiguration.Tests.ps1`, `Resolve-RepositoryUpdateScope.Tests.ps1` and the startup data-safety case (now `Invoke-StartupTask RepositoryUpdate -Force` against a configured task) cover the shapes that remain.
+
 ## [2.17.0] - 2026-11-21
 
 ### Deprecated
@@ -1987,7 +2003,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.17.0...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/winux/v3.0.0...HEAD
+[3.0.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.17.0...winux/v3.0.0
 [2.17.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.16.0...winux/v2.17.0
 [2.16.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.15.1...winux/v2.16.0
 [2.15.1]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.15.0...winux/v2.15.1

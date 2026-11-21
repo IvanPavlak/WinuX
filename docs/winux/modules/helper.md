@@ -589,7 +589,7 @@ Get-Item @filtered
 
 - **Description:** Returns the entry names of an ordered configuration section, in configuration order - the read side of the repository's one ordering rule, "order is where you write it". An ordered section is an array of single-key hashtables where each item's single key is the entry name and its value is the entry; the section cannot be a plain hashtable and keep its order, because `Import-PowerShellDataFile` returns a `System.Collections.Hashtable` and key order is lost at load time. A plain hashtable is still accepted so an unmigrated fork keeps working, and its keys come back sorted. A bare non-empty string item in the array names itself (an entry with no value); `$null` returns an empty array. Nothing is warned about here: `Test-ConfigurationSchema` is the one place that reports an ordered section written as a hashtable, once at load, instead of every menu repeating it.
 - **Parameters:** -Section (accepts `$null`)
-- **Usage:** `Get-OrderedNames $Configuration.WorkspaceActions`, `OptionList = @(Get-OrderedNames $Configuration.CampaignResources)`
+- **Usage:** `Get-OrderedNames $Configuration.WorkspaceActions`, `OptionList = @(Get-OrderedNames $Configuration.AcrobatPdfGroups)`
 
 ## [Get-PowerShellFunctionDependencies](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Get-PowerShellFunctionDependencies.ps1)
 
@@ -854,29 +854,6 @@ Invoke-GoogleTranslate -InputLanguage German -OutputLanguage English -Text guten
 
 **See also:** [Configuration Reference](../configuration/configuration-reference.md)
 
-## [Invoke-PrivacyRequest](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Invoke-PrivacyRequest.ps1)
-
-- **Description:** **Deprecated since 2.17.0, removed in 3.0.0** - it serves one personal setup rather than the framework; to keep it, copy the function file (and its test) into your fork's Custom area under `Windows/PowerShell/Modules/Custom/<Module>/Functions/`, list it in `Custom.psd1`, and keep its keys in `Configuration.local.psd1`, where the copy goes on reading them. It keeps working until then and warns once per session. Helper that makes an HTTP request either directly via `Invoke-RestMethod` or, when `-UseTor` is specified, through the Tor SOCKS5 proxy via `Invoke-TorRequest`. Used by `Test-PrivacyStatus` to perform privacy verification checks in both VPN and Tor modes.
-- **Parameters:** -Uri, -UseTor, -TimeoutSec, -RetryCount
-- **Usage:** `Invoke-PrivacyRequest -Uri "https://api.ipify.org?format=json"`, `Invoke-PrivacyRequest -Uri "https://check.torproject.org/api/ip" -UseTor`
-
-| Parameter     | Description                                                                   |
-| ------------- | ----------------------------------------------------------------------------- |
-| `-Uri`        | The URI to request. Mandatory.                                                |
-| `-UseTor`     | Switch. Routes the request through the Tor proxy instead of a direct request. |
-| `-TimeoutSec` | Request timeout in seconds. Default `3`.                                      |
-| `-RetryCount` | Number of retry attempts for Tor requests. Default `1`.                       |
-
-```powershell
-# Direct (VPN) request returning the current public IP
-Invoke-PrivacyRequest -Uri "https://api.ipify.org?format=json"
-
-# Same check routed through the Tor proxy, with a longer timeout and extra retries
-Invoke-PrivacyRequest -Uri "https://check.torproject.org/api/ip" -UseTor -TimeoutSec 5 -RetryCount 2
-```
-
-**See also:** [Invoke-TorRequest](#invoke-torrequest), [Test-PrivacyStatus](#test-privacystatus)
-
 ## [Invoke-ProcessWithTimeout](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Invoke-ProcessWithTimeout.ps1)
 
 - **Description:** Runs a program with no window, captures its output, and stops it after a time limit. Returns an object with `Output` (the non-blank lines of stdout, then stderr), `ExitCode` (`$null` after a timeout) and `TimedOut`. A program still running after `-TimeoutSeconds` (default 60) is killed together with its process tree. Never throws for a slow or failing program - the caller decides what a timeout or a non-zero exit code means. Only a program that cannot be started at all throws.
@@ -909,29 +886,6 @@ Invoke-ProcessWithTimeout -FilePath "choco" -ArgumentList "pin", "list", "-r"
 This helper centralizes the process-exit step of the rerun path so it can be overridden in tests. When `$script:RerunLastCommandExitAction` is set it runs that action; otherwise it calls `[Environment]::Exit(0)`. `Exit` skips every `finally` block in the process, so `Rerun-LastCommand` releases stuck keyboard modifiers via `Reset-KeyboardModifiers` immediately before calling this - stuck-modifier state is OS-global and would otherwise survive the process. Keeping the exit behind this seam is what lets the close-and-respawn tail of the rerun be exercised without terminating the calling test session. `Invoke-TerminateWindowsTerminalTabsExit` is the same arrangement for `Terminate-WindowsTerminalTabs`.
 
 **See also:** [Rerun-LastCommand](helper.md#rerun-lastcommand), [Invoke-TerminateWindowsTerminalTabsExit](system.md#invoke-terminatewindowsterminaltabsexit), [Reset-KeyboardModifiers](window.md#reset-keyboardmodifiers)
-
-## [Invoke-TorRequest](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Invoke-TorRequest.ps1)
-
-- **Description:** **Deprecated since 2.17.0, removed in 3.0.0** - it serves one personal setup rather than the framework; to keep it, copy the function file (and its test) into your fork's Custom area under `Windows/PowerShell/Modules/Custom/<Module>/Functions/`, list it in `Custom.psd1`, and keep its keys in `Configuration.local.psd1`, where the copy goes on reading them. It keeps working until then and warns once per session. Makes an HTTP request through Tor for anonymity. Routes `Invoke-RestMethod` through the Tor SOCKS5 proxy with automatic port discovery (9150 for Tor Browser, 9050 for the Tor service) and built-in retry logic for connection failures. Used by privacy-focused queries such as `Test-PrivacyStatus` to verify Tor connectivity.
-- **Parameters:** -Uri, -TimeoutSec, -RetryCount
-- **Usage:** `Invoke-TorRequest -Uri "https://check.torproject.org/api/ip"`, `Invoke-TorRequest -Uri "https://api.example.com/data" -TimeoutSec 30 -RetryCount 3`
-
-Tries each Tor SOCKS5 port (`socks5://127.0.0.1:9150` then `9050`) in turn, attempting the request up to `-RetryCount` times per port. Connection-refused / proxy-unavailable errors short-circuit to the next port, while other transient network errors are retried with a brief pause. Returns the deserialized response object on success, or `$null` if no port responds.
-
-| Parameter     | Description                               |
-| ------------- | ----------------------------------------- |
-| `-Uri`        | HTTP(S) URL to fetch (required).          |
-| `-TimeoutSec` | Request timeout in seconds (default: 15). |
-| `-RetryCount` | Number of retries per port (default: 2).  |
-
-```powershell
-# Check Tor exit-node IP via the Tor Project check API
-$response = Invoke-TorRequest -Uri "https://check.torproject.org/api/ip"
-Write-Host "Response: $($response.IsTor)"
-
-# Fetch JSON through Tor with a longer timeout and more retries
-$data = Invoke-TorRequest -Uri "https://api.example.com/data" -TimeoutSec 30 -RetryCount 3
-```
 
 ## [Invoke-WithOptionalRetry](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Invoke-WithOptionalRetry.ps1)
 
@@ -1390,7 +1344,7 @@ $templates = @{ Project = @{
 
 ## [Restore-ShellPrompt](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Restore-ShellPrompt.ps1)
 
-- **Description:** Draws the prompt again after something printed below it while PSReadLine was already waiting for input. Work that runs at an idle prompt - the deferred startup queue the profile runs from its one `PowerShell.OnIdle` event, or anything else printing from an event action - pushes the prompt up the screen and PSReadLine keeps waiting on a blank line. The function reads the cursor row, writes a carriage return (output written during ReadLine leaves the cursor past column 0) and asks PSReadLine to draw the prompt at that row through `InvokePrompt`. Returns `$true` when it did; `$false`, without throwing, when there is no line editor (a plain host, a test runner), the console has no cursor, or the redraw failed, so a caller runs it unconditionally after printing. The profile dot-sources it before the first prompt, so a redraw never imports the Helper module from idle time. [Invoke-StartupTasks](workflow.md#invoke-startuptasks) `-RedrawPrompt` (the startup tasks of a newly opened terminal), [Import-TerminalIcons](system.md#import-terminalicons) `-RedrawPrompt`, the profile's deferred startup failure report and the deprecated [Invoke-StartupRepositoryUpdate](git.md#invoke-startuprepositoryupdate) `-RedrawPrompt` use it.
+- **Description:** Draws the prompt again after something printed below it while PSReadLine was already waiting for input. Work that runs at an idle prompt - the deferred startup queue the profile runs from its one `PowerShell.OnIdle` event, or anything else printing from an event action - pushes the prompt up the screen and PSReadLine keeps waiting on a blank line. The function reads the cursor row, writes a carriage return (output written during ReadLine leaves the cursor past column 0) and asks PSReadLine to draw the prompt at that row through `InvokePrompt`. Returns `$true` when it did; `$false`, without throwing, when there is no line editor (a plain host, a test runner), the console has no cursor, or the redraw failed, so a caller runs it unconditionally after printing. The profile dot-sources it before the first prompt, so a redraw never imports the Helper module from idle time. [Invoke-StartupTasks](workflow.md#invoke-startuptasks) `-RedrawPrompt` (the startup tasks of a newly opened terminal), [Import-TerminalIcons](system.md#import-terminalicons) `-RedrawPrompt` and the profile's deferred startup failure report use it.
 - **Parameters:** -ReadLine (the line editor type whose static `InvokePrompt` draws; defaults to PSReadLine's `PSConsoleReadLine` when loaded, else `$null`; a parameter so tests can pass a stand-in)
 - **Usage:** `$null = Restore-ShellPrompt`
 
@@ -1543,36 +1497,6 @@ Test-ConfigValue @("x")    # $true
 - **Description:** Startup integrity check that warns about function files not exported by their module manifest. For every module under the WinuX Modules root that ships a matching `<Name>.psd1` manifest and a `Functions/` directory, it compares the `.ps1` files on disk against the manifest's `FunctionsToExport` and warns about any function present on disk but missing from its module manifest (i.e. a function that "isn't in its corresponding module" manifest). The fork-owned Custom area (`Modules/Custom`) is checked the same way - its mirror-payload functions must appear in `Custom.psd1`, and a whole fork module is checked against its own manifest. It is the runtime counterpart of the "Manifest Completeness" Pester test, resolving the Modules root from `MachineSpecificPaths.Projects.Self.Modules` (a missing root logs an error and returns). Prints a single `Write-LogSuccess` line naming the number of checked manifests when every function is exported, or a single warning listing each unexported function as `<Module>\<Function>` (`Custom\<Module>\<Function>` for the Custom area) otherwise.
 - **Parameters:** (none)
 - **Usage:** `Test-ManifestCompleteness`
-
-## [Test-PrivacyStatus](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Test-PrivacyStatus.ps1)
-
-- **Description:** **Deprecated since 2.17.0, removed in 3.0.0** - it serves one personal setup rather than the framework; to keep it, copy the function file (and its test) into your fork's Custom area under `Windows/PowerShell/Modules/Custom/<Module>/Functions/`, list it in `Custom.psd1`, and keep its keys in `Configuration.local.psd1`, where the copy goes on reading them. It keeps working until then and warns once per session. Performs comprehensive privacy verification for VPN connections with optional Tor support. Validates VPN adapter status, VPN routing (OpenVPN split routes `0.0.0.0/1 + 128.0.0.0/1` and standard `0.0.0.0/0` default routes), current IP visibility, DNS leak detection, and IP geolocation. Reports SECURE only when no check errored and all required checks pass; in VPN mode (default) that means VPN connected, IP hidden or traffic routed through the VPN, and DNS secure, while Tor mode (`-UseTor`) requires VPN connected, Tor exit-node routing confirmed, IP hidden (VPN routing alone is not enough), and DNS secure. The VPN check looks for an active adapter whose name or description matches TAP/OpenVPN/WireGuard/VPN/TUN/Tailscale (a running `riseup-vpn` process without such an adapter is reported as an error). Can run silently to surface output only when issues are detected.
-- **Parameters:** -ISPIPAddress, -UseTor, -Silent
-- **Usage:** `Test-PrivacyStatus`, `Test-PrivacyStatus -UseTor`, `Test-PrivacyStatus -Silent`, `Test-PrivacyStatus -ISPIPAddress 192.0.2.10`
-
-Auto-retrieves your original ISP IP (via `api.ipify.org`, falling back to `ifconfig.me`) when `-ISPIPAddress` is not supplied, then runs a sequence of checks: VPN process/adapter detection, VPN default-route verification, current public IP, Tor status (Tor mode only), DNS leak detection, and GeoIP location. It prints a color-coded Privacy Status Report ending in an overall `[SECURE]` or `[NOT SECURE]` verdict with specific remediation guidance. Geolocation is informational only and does not affect the verdict. Network requests route through Tor when `-UseTor` is set, via the helper `Invoke-PrivacyRequest`.
-
-| Parameter       | Description                                                                                                           |
-| --------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `-ISPIPAddress` | Your original ISP IP for comparison against the current public IP. Optional; retrieved automatically if omitted.      |
-| `-UseTor`       | Routes checks through Tor and additionally validates Tor exit-node connectivity.                                      |
-| `-Silent`       | Suppresses output entirely when the status is SECURE; only reports when NOT SECURE. Ideal for profile startup checks. |
-
-```powershell
-# Full privacy verification in VPN mode (default)
-Test-PrivacyStatus
-
-# Verify Tor routing in addition to VPN checks
-Test-PrivacyStatus -UseTor
-
-# Quiet startup check: only prints if something is wrong
-Test-PrivacyStatus -Silent
-
-# Compare against a known ISP IP instead of auto-detecting
-Test-PrivacyStatus -ISPIPAddress 192.0.2.10
-```
-
-**See also:** [Invoke-PrivacyRequest](#invoke-privacyrequest), [Invoke-TorRequest](#invoke-torrequest)
 
 ## [Test-RegistryValue](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Test-RegistryValue.ps1)
 
