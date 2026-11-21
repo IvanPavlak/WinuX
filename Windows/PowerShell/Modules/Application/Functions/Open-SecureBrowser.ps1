@@ -4,6 +4,10 @@ function Open-SecureBrowser {
 		Establishes a VPN-protected Tor Browser session with IP verification.
 
 	.DESCRIPTION
+		DEPRECATED since 2.17.0, removed in 3.0.0: it serves one personal setup rather than
+		the framework. It keeps working unchanged until then and warns once per session; to keep
+		it, copy it into your fork's Custom area (Windows/PowerShell/Modules/Custom).
+
 		Runs a multi-step privacy workflow:
 		1. Retrieves the current ISP IP address before connecting the VPN
 		2. Starts RiseupVPN
@@ -19,6 +23,13 @@ function Open-SecureBrowser {
 		Open-SecureBrowser
 		Starts the full VPN + Tor Browser privacy session.
 	#>
+
+	if (-not ($global:WinuXDeprecationWarned -is [System.Collections.IDictionary])) { $global:WinuXDeprecationWarned = @{} }
+	if (-not $global:WinuXDeprecationWarned['Open-SecureBrowser']) {
+		$global:WinuXDeprecationWarned['Open-SecureBrowser'] = $true
+		Write-LogWarning "Open-SecureBrowser is deprecated since 2.17.0 and removed in 3.0.0 - copy it into your fork's Custom area (Windows/PowerShell/Modules/Custom) to keep using it"
+	}
+
 	Write-LogTitle "Initializing Secure Browsing"
 
 	# Get ISP IP BEFORE connecting VPN

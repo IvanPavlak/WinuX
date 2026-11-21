@@ -4,6 +4,10 @@ function Test-PrivacyStatus {
 		Performs comprehensive privacy verification for VPN and Tor connections.
 
 	.DESCRIPTION
+		DEPRECATED since 2.17.0, removed in 3.0.0: it serves one personal setup rather than
+		the framework. It keeps working unchanged until then and warns once per session; to keep
+		it, copy it into your fork's Custom area (Windows/PowerShell/Modules/Custom).
+
 		Validates VPN adapter status, current IP visibility, Tor routing (if enabled),
 		DNS leak detection, and IP geolocation. Reports SECURE status only when all
 		required checks pass. Can run silently to only show output when issues are detected.
@@ -23,6 +27,12 @@ function Test-PrivacyStatus {
 		[switch]$UseTor,
 		[switch]$Silent
 	)
+
+	if (-not ($global:WinuXDeprecationWarned -is [System.Collections.IDictionary])) { $global:WinuXDeprecationWarned = @{} }
+	if (-not $global:WinuXDeprecationWarned['Test-PrivacyStatus']) {
+		$global:WinuXDeprecationWarned['Test-PrivacyStatus'] = $true
+		Write-LogWarning "Test-PrivacyStatus is deprecated since 2.17.0 and removed in 3.0.0 - copy it into your fork's Custom area (Windows/PowerShell/Modules/Custom) to keep using it"
+	}
 
 	# Constants for speed optimization - 3 second timeout, minimal retries
 	$TimeoutSec = 3

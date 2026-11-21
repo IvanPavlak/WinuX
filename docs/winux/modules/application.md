@@ -543,12 +543,12 @@ Open-Docker
 
 ## [Open-FoundryVTT](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Open-FoundryVTT.ps1)
 
-- **Description:** Opens the FoundryVTT virtual tabletop server by starting the FoundryVTT desktop application via `Start-Application`. Does nothing if FoundryVTT is already running. The executable path is read from the `FoundryVTTExe` key in the `Universal` section of `Configuration.psd1`.
+- **Description:** **Deprecated since 2.17.0, removed in 3.0.0** - it serves one personal setup rather than the framework; to keep it, copy the function file (and its test) into your fork's Custom area under `Windows/PowerShell/Modules/Custom/<Module>/Functions/`, list it in `Custom.psd1`, and keep its keys in `Configuration.local.psd1`, where the copy goes on reading them. It keeps working until then and warns once per session. Opens the FoundryVTT virtual tabletop server by starting the FoundryVTT desktop application via `Start-Application`. Does nothing if FoundryVTT is already running. The executable path is read from the `FoundryVTTExe` key in the `Universal` section of `Configuration.psd1`.
 - **Usage:** `Open-FoundryVTT`
 
 ## [Open-LeagueOfLegends](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Open-LeagueOfLegends.ps1)
 
-- **Description:** Opens the League of Legends client via `Start-Application`. Does nothing if the client is already running. The executable path is read from `Configuration.Universal.LeagueOfLegendsExe`.
+- **Description:** **Deprecated since 2.17.0, removed in 3.0.0** - it serves one personal setup rather than the framework; to keep it, copy the function file (and its test) into your fork's Custom area under `Windows/PowerShell/Modules/Custom/<Module>/Functions/`, list it in `Custom.psd1`, and keep its keys in `Configuration.local.psd1`, where the copy goes on reading them. It keeps working until then and warns once per session. Opens the League of Legends client via `Start-Application`. Does nothing if the client is already running. The executable path is read from `Configuration.Universal.LeagueOfLegendsExe`.
 - **Usage:** `Open-LeagueOfLegends`
 
 ## [Open-NotepadPlusPlus](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Open-NotepadPlusPlus.ps1)
@@ -612,12 +612,12 @@ If Outlook is already running (the `olk` process), no new instance is launched.
 
 ## [Open-RiseupVPN](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Open-RiseupVPN.ps1)
 
-- **Description:** Opens RiseupVPN via `Start-Application`. Does nothing if RiseupVPN is already running. The executable path is read from the `RiseupVpnExe` key in the `Universal` configuration section.
+- **Description:** **Deprecated since 2.17.0, removed in 3.0.0** - it serves one personal setup rather than the framework; to keep it, copy the function file (and its test) into your fork's Custom area under `Windows/PowerShell/Modules/Custom/<Module>/Functions/`, list it in `Custom.psd1`, and keep its keys in `Configuration.local.psd1`, where the copy goes on reading them. It keeps working until then and warns once per session. Opens RiseupVPN via `Start-Application`. Does nothing if RiseupVPN is already running. The executable path is read from the `RiseupVpnExe` key in the `Universal` configuration section.
 - **Usage:** `Open-RiseupVPN`
 
 ## [Open-SecureBrowser](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Open-SecureBrowser.ps1)
 
-- **Description:** Establishes a VPN-protected Tor Browser session with IP verification. Retrieves and displays the current ISP IP before connecting, starts RiseupVPN and waits for manual connection confirmation, hides the RiseupVPN window to the system tray via the Win32 ShowWindow API (SW_HIDE), opens Tor Browser, then runs `Test-PrivacyStatus` in Tor mode to verify the IP has changed.
+- **Description:** **Deprecated since 2.17.0, removed in 3.0.0** - it serves one personal setup rather than the framework; to keep it, copy the function file (and its test) into your fork's Custom area under `Windows/PowerShell/Modules/Custom/<Module>/Functions/`, list it in `Custom.psd1`, and keep its keys in `Configuration.local.psd1`, where the copy goes on reading them. It keeps working until then and warns once per session. Establishes a VPN-protected Tor Browser session with IP verification. Retrieves and displays the current ISP IP before connecting, starts RiseupVPN and waits for manual connection confirmation, hides the RiseupVPN window to the system tray via the Win32 ShowWindow API (SW_HIDE), opens Tor Browser, then runs `Test-PrivacyStatus` in Tor mode to verify the IP has changed.
 - **Usage:** `Open-SecureBrowser`
 
 Runs a multi-step privacy workflow:

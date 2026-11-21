@@ -4,6 +4,10 @@ function Clear-WhatsAppLocalStorage {
 		Clears WhatsApp local storage to resolve startup issues.
 
 	.DESCRIPTION
+		DEPRECATED since 2.17.0, removed in 3.0.0: it serves one personal setup rather than
+		the framework. It keeps working unchanged until then and warns once per session; to keep
+		it, copy it into your fork's Custom area (Windows/PowerShell/Modules/Custom).
+
 		Stops WhatsApp if running, then deletes the local storage directory at the path
 		configured in `Configuration.Universal.WhatsAppLocalStoragePath`.
 		Requires administrator privileges.
@@ -12,6 +16,13 @@ function Clear-WhatsAppLocalStorage {
 		Clear-WhatsAppLocalStorage
 		Stops WhatsApp and clears its local storage directory.
 	#>
+
+	if (-not ($global:WinuXDeprecationWarned -is [System.Collections.IDictionary])) { $global:WinuXDeprecationWarned = @{} }
+	if (-not $global:WinuXDeprecationWarned['Clear-WhatsAppLocalStorage']) {
+		$global:WinuXDeprecationWarned['Clear-WhatsAppLocalStorage'] = $true
+		Write-LogWarning "Clear-WhatsAppLocalStorage is deprecated since 2.17.0 and removed in 3.0.0 - copy it into your fork's Custom area (Windows/PowerShell/Modules/Custom) to keep using it"
+	}
+
 	Test-AdminPrivileges
 
 	Write-LogTitle "Clearing Local WhatsApp Storage"

@@ -4,6 +4,10 @@ function Open-DnD {
 		Opens the D&D campaign workspace: Obsidian vault, browser resources, and Acrobat rulebooks.
 
 	.DESCRIPTION
+		DEPRECATED since 2.17.0, removed in 3.0.0: it serves one personal setup rather than
+		the framework. It keeps working unchanged until then and warns once per session; to keep
+		it, copy it into your fork's Custom area (Windows/PowerShell/Modules/Custom).
+
 		Opens all tools for a tabletop RPG session. The campaign is selected from the
 		`CampaignResources` section of Configuration.psd1 (in its order) via an interactive
 		menu if not specified.
@@ -39,6 +43,12 @@ function Open-DnD {
 		[Parameter()]
 		[switch]$FoundryVTT = $false
 	)
+
+	if (-not ($global:WinuXDeprecationWarned -is [System.Collections.IDictionary])) { $global:WinuXDeprecationWarned = @{} }
+	if (-not $global:WinuXDeprecationWarned['Open-DnD']) {
+		$global:WinuXDeprecationWarned['Open-DnD'] = $true
+		Write-LogWarning "Open-DnD is deprecated since 2.17.0 and removed in 3.0.0 - copy it into your fork's Custom area (Windows/PowerShell/Modules/Custom) to keep using it"
+	}
 
 	$campaignResources = @(Get-ConfigSetting -Path 'CampaignResources' -Default @())
 
