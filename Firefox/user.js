@@ -245,11 +245,11 @@ user_pref("browser.safebrowsing.downloads.remote.enabled", false);
 
 /** MOZILLA ***/
 // Blocks all notification requests by default (value: 2)
-// (Overridden in WINUX OVERRIDES to 0 = ask permission)
+// (Overridden in SHARED OVERRIDES to 0 = ask permission)
 user_pref("permissions.default.desktop-notification", 2);
 
 // Blocks all location requests by default (value: 2)
-// (Overridden in WINUX OVERRIDES to 0 = ask permission)
+// (Overridden in SHARED OVERRIDES to 0 = ask permission)
 user_pref("permissions.default.geo", 2);
 
 // Uses BeaconDB instead of Google for geolocation API
@@ -409,8 +409,8 @@ user_pref("findbar.highlightAll", true);
 user_pref("layout.word_select.eat_space_to_next_word", false);
 
 /****************************************************************************
- * START: WINUX OVERRIDES                                                   *
- * WinuX defaults that override Betterfox; a fork changes them here         *
+ * START: SHARED OVERRIDES                                                  *
+ * Shared defaults that override Betterfox; a fork changes them here        *
  ****************************************************************************/
 // visit https://github.com/yokoffing/Betterfox/wiki/Common-Overrides
 // visit https://github.com/yokoffing/Betterfox/wiki/Optional-Hardening
