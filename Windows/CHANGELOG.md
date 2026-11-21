@@ -8,6 +8,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [3.2.0] - 2026-11-21
+
+### Added
+
+- **`GitWorktreeRemoveAndPrune` (`gwd`) removes linked worktrees and offers to delete their branches, the worktree twin of `gbd`.** Cleaning up after `git worktree add` took `git worktree list`, a copied path, `git worktree remove` and a separate `gbd` per branch. It runs `git worktree prune` first, so a folder deleted by hand is dropped and never offered, then `git worktree remove` on each worktree named by its branch or its path (`-Worktree`, one or more); without `-Worktree` it lists the linked worktrees as `branch -> path` through `Resolve-Selection`, which takes one or more, and Enter removes nothing. The main worktree, the one the shell is in and a locked one are never removed (reported in red; the others still go ahead). The removal is plain, so git refuses a worktree with uncommitted changes or untracked files; `-Force` passes `--force` and discards them. When a removed worktree had a branch it asks once, Enter meaning No: `Yes` hands the branches to `GitBranchDeleteAndPrune`, `Force` to `GitBranchDeleteAndPrune -Force`. New alias `gwd` in the profile. Covered by `GitWorktreeRemoveAndPrune.Tests.ps1`; documented in the Git module reference (with a Worktree Workflow) and the new GitWorktreeRemoveAndPrune guide.
+
+### Changed
+
+- **`GitBranchDeleteAndPrune` (`gbd`) deletes with a plain `git branch -d` by default, takes several names and has a `-Force` switch.** It used `git branch -D`, which deletes unmerged work without a word. Now git refuses a branch that is not fully merged into its upstream or HEAD (a squash-merged branch included); the refused branches are named and offered once for `git branch -D` through a red Yes/No question where Enter means No, so finishing the job still takes one call. `-Force` deletes with `-D` straight away and asks nothing, as `gbd` did before. `-BranchName` is now `[string[]]` and positional (`gbd feature/a, feature/b`); origin is still pruned once, only when at least one branch was deleted. A script that relied on `gbd NAME` deleting an unmerged branch without asking passes `-Force`. Covered by `GitBranchDeleteAndPrune.Tests.ps1`; documented in the Git module reference and the GitBranchDeleteAndPrune guide.
+
 ## [3.1.0] - 2026-11-21
 
 ### Added
@@ -2028,7 +2038,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/winux/v3.1.0...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/winux/v3.2.0...HEAD
+[3.2.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v3.1.0...winux/v3.2.0
 [3.1.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v3.0.1...winux/v3.1.0
 [3.0.1]: https://github.com/IvanPavlak/WinuX/compare/winux/v3.0.0...winux/v3.0.1
 [3.0.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.17.0...winux/v3.0.0

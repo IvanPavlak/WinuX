@@ -16,6 +16,7 @@
 		'GitPull',
 		'GitStatus',
 		'GitSwitch',
+		'GitWorktreeRemoveAndPrune',
 		'Initialize-Repository',
 		'Install-Git',
 		'Merge-Upstreams',

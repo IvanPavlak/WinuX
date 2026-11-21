@@ -538,7 +538,7 @@ When PowerShell starts, `Microsoft.PowerShell_profile.ps1` runs:
 │     └─→ Terminal-Icons (file/folder icons)                      │
 │                                                                 │
 │  5. Register Aliases                                            │
-│     ├─→ Git: gb, gbd, gsw, gp, gmm, gs, gdf                     │
+│     ├─→ Git: gb, gbd, gwd, gsw, gp, gmm, gs, gdf                │
 │     ├─→ Workflow: w, cw, b, efm, rp, t, translate               │
 │     └─→ Dev tools: dnr, dnbr, dnp, nir, c, l                    │
 │                                                                 │

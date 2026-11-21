@@ -11,6 +11,7 @@ BeforeAll {
 Describe "GitBranchDeleteAndPrune" {
 	BeforeEach {
 		Mock git { $global:LASTEXITCODE = 0 }
+		Mock Write-Host { }
 	}
 
 	Context "When no branch is named" {
@@ -41,13 +42,13 @@ Describe "GitBranchDeleteAndPrune" {
 			Should -Invoke git -Times 0 -ParameterFilter { $args[0] -eq "remote" }
 		}
 
-		It "Should delete every selected branch and prune once" {
+		It "Should delete every selected branch with a plain -d and prune once" {
 			Mock Resolve-Selection { "feature/a", "feature/b" }
 
 			GitBranchDeleteAndPrune
 
-			Should -Invoke git -Times 1 -Exactly -ParameterFilter { $args[0] -eq "branch" -and $args[1] -eq "-D" -and $args[2] -eq "feature/a" }
-			Should -Invoke git -Times 1 -Exactly -ParameterFilter { $args[0] -eq "branch" -and $args[1] -eq "-D" -and $args[2] -eq "feature/b" }
+			Should -Invoke git -Times 1 -Exactly -ParameterFilter { $args[0] -eq "branch" -and $args[1] -ceq "-d" -and $args[2] -eq "feature/a" }
+			Should -Invoke git -Times 1 -Exactly -ParameterFilter { $args[0] -eq "branch" -and $args[1] -ceq "-d" -and $args[2] -eq "feature/b" }
 			Should -Invoke git -Times 1 -Exactly -ParameterFilter { $args[0] -eq "remote" -and $args[1] -eq "prune" -and $args[2] -eq "origin" }
 		}
 
@@ -58,7 +59,6 @@ Describe "GitBranchDeleteAndPrune" {
 				if ($args[0] -eq "symbolic-ref") { "refs/heads/master" }
 			}
 			Mock Resolve-Selection { }
-			Mock Write-Host { }
 
 			GitBranchDeleteAndPrune
 
@@ -68,25 +68,76 @@ Describe "GitBranchDeleteAndPrune" {
 	}
 
 	Context "When deleting a branch" {
-		It "Should force-delete the branch and prune remote" {
+		It "Should delete the branch with a plain -d and prune remote" {
 			GitBranchDeleteAndPrune -BranchName "feature/old-branch"
 
 			Should -Invoke git -Times 2 -Exactly
-			Should -Invoke git -ParameterFilter { $args[0] -eq "branch" -and $args[1] -eq "-D" -and $args[2] -eq "feature/old-branch" }
+			Should -Invoke git -ParameterFilter { $args[0] -eq "branch" -and $args[1] -ceq "-d" -and $args[2] -eq "feature/old-branch" }
 			Should -Invoke git -ParameterFilter { $args[0] -eq "remote" -and $args[1] -eq "prune" -and $args[2] -eq "origin" }
 		}
 
-		It "Should call both git branch -D and git remote prune in sequence" {
-			$callOrder = @()
+		It "Should take several names positionally and prune once" {
+			GitBranchDeleteAndPrune "feature/a", "feature/b"
+
+			Should -Invoke git -Times 1 -Exactly -ParameterFilter { $args[0] -eq "branch" -and $args[1] -ceq "-d" -and $args[2] -eq "feature/a" }
+			Should -Invoke git -Times 1 -Exactly -ParameterFilter { $args[0] -eq "branch" -and $args[1] -ceq "-d" -and $args[2] -eq "feature/b" }
+			Should -Invoke git -Times 1 -Exactly -ParameterFilter { $args[0] -eq "remote" }
+		}
+
+		It "Should delete with -D and ask nothing when -Force is given" {
+			Mock Resolve-Selection { }
+
+			GitBranchDeleteAndPrune -BranchName "feature/old-branch" -Force
+
+			Should -Invoke git -Times 1 -Exactly -ParameterFilter { $args[0] -eq "branch" -and $args[1] -ceq "-D" -and $args[2] -eq "feature/old-branch" }
+			Should -Invoke git -Times 0 -ParameterFilter { $args[1] -ceq "-d" }
+			Should -Invoke Resolve-Selection -Times 0
+		}
+	}
+
+	Context "When git refuses a plain delete" {
+		BeforeEach {
+			# feature/unmerged is refused by -d; everything else succeeds.
 			Mock git {
-				$global:LASTEXITCODE = 0
-				if ($args[0] -eq "branch") { $callOrder += "branch" }
-				if ($args[0] -eq "remote") { $callOrder += "remote" }
+				$global:LASTEXITCODE = if ($args[0] -eq "branch" -and $args[1] -ceq "-d" -and $args[2] -eq "feature/unmerged") { 1 } else { 0 }
 			}
+		}
 
-			GitBranchDeleteAndPrune -BranchName "bugfix/123"
+		It "Should ask once, red with Enter meaning No, about the refused branches only" {
+			Mock Resolve-Selection { "No" }
 
-			Should -Invoke git -Times 2 -Exactly
+			GitBranchDeleteAndPrune "feature/merged", "feature/unmerged"
+
+			Should -Invoke Resolve-Selection -Times 1 -Exactly -ParameterFilter {
+				$ConfirmationMessage -like "*feature/unmerged*" -and $ConfirmationMessage -notlike "*feature/merged*"
+			}
+		}
+
+		It "Should force-delete only the refused branches on Yes and prune once" {
+			Mock Resolve-Selection { "Yes" }
+
+			GitBranchDeleteAndPrune "feature/merged", "feature/unmerged"
+
+			Should -Invoke git -Times 1 -Exactly -ParameterFilter { $args[0] -eq "branch" -and $args[1] -ceq "-D" -and $args[2] -eq "feature/unmerged" }
+			Should -Invoke git -Times 0 -ParameterFilter { $args[1] -ceq "-D" -and $args[2] -eq "feature/merged" }
+			Should -Invoke git -Times 1 -Exactly -ParameterFilter { $args[0] -eq "remote" }
+		}
+
+		It "Should keep the refused branch on No and still prune for the one deleted" {
+			Mock Resolve-Selection { "No" }
+
+			GitBranchDeleteAndPrune "feature/merged", "feature/unmerged"
+
+			Should -Invoke git -Times 0 -ParameterFilter { $args[1] -ceq "-D" }
+			Should -Invoke git -Times 1 -Exactly -ParameterFilter { $args[0] -eq "remote" }
+		}
+
+		It "Should not prune when nothing was deleted" {
+			Mock Resolve-Selection { "No" }
+
+			GitBranchDeleteAndPrune "feature/unmerged"
+
+			Should -Invoke git -Times 0 -ParameterFilter { $args[0] -eq "remote" }
 		}
 	}
 }
