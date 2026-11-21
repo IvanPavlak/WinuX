@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [3.1.0] - 2026-11-21
+
+### Added
+
+- **`GitBranchDeleteAndPrune` (`gbd`) without `-BranchName` offers the local branches in a menu.** Deleting several finished branches took one call per name, typed out. Called without a name it now lists the local branches, the checked-out one left out, through `Resolve-Selection`, which takes one or more by number or name; each picked branch is force-deleted on its own, so one that fails keeps the others, and `git remote prune origin` runs once, only when at least one was deleted. Enter deletes nothing. A named branch behaves as before. Covered by `GitBranchDeleteAndPrune.Tests.ps1`; documented in the Git module reference and the GitBranchDeleteAndPrune guide.
+
 ## [3.0.1] - 2026-11-21
 
 ### Fixed
@@ -2022,7 +2028,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/winux/v3.0.1...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/winux/v3.1.0...HEAD
+[3.1.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v3.0.1...winux/v3.1.0
 [3.0.1]: https://github.com/IvanPavlak/WinuX/compare/winux/v3.0.0...winux/v3.0.1
 [3.0.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.17.0...winux/v3.0.0
 [2.17.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.16.0...winux/v2.17.0

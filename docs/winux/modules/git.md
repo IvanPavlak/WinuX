@@ -92,14 +92,14 @@ gb feature/my-feature
 
 ## [GitBranchDeleteAndPrune](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Git/Functions/GitBranchDeleteAndPrune.ps1)
 
-- **Description:** Force-deletes a local branch and prunes stale remote-tracking refs for origin. Runs `git branch -D <BranchName>` to remove the specified local branch, then `git remote prune origin` to clear any remote-tracking refs that no longer exist on the remote.
+- **Description:** Force-deletes a local branch and prunes stale remote-tracking refs for origin. Runs `git branch -D <BranchName>` to remove the specified local branch, then `git remote prune origin` to clear any remote-tracking refs that no longer exist on the remote. Without `-BranchName` it lists the local branches (the checked-out one left out) through `Resolve-Selection`, which takes one or more by number or name; each picked branch is deleted on its own, origin is pruned once when at least one was deleted, and Enter deletes nothing.
 - **Parameters:** -BranchName
-- **Usage:** `GitBranchDeleteAndPrune feature/done`, `GitBranchDeleteAndPrune -BranchName "feature/done"`
+- **Usage:** `GitBranchDeleteAndPrune feature/done`, `GitBranchDeleteAndPrune -BranchName "feature/done"`, `gbd`
 - **Alias:** gbd
 
-| Parameter     | Description                         |
-| ------------- | ----------------------------------- |
-| `-BranchName` | Name of the local branch to delete. |
+| Parameter     | Description                                                       |
+| ------------- | ----------------------------------------------------------------- |
+| `-BranchName` | Name of the local branch to delete. Omit it to pick from a menu. |
 
 ```powershell
 # Force-delete a local branch and prune stale origin refs
@@ -107,6 +107,9 @@ GitBranchDeleteAndPrune feature/done
 
 # Deletes the local branch with git branch -D
 # Then runs git remote prune origin to drop stale remote-tracking refs
+
+# Pick one or more local branches from a menu; Enter deletes none
+gbd
 ```
 
 ## [GitMergeM](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Git/Functions/GitMergeM.ps1)
