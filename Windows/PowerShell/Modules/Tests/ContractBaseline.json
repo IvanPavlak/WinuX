@@ -1,5 +1,5 @@
 {
-  "Version": "2.17.0",
+  "Version": "3.0.0",
   "Functions": {
     "Add-BrowserGroup": {
       "Module": "Configuration",
@@ -415,10 +415,6 @@
         }
       }
     },
-    "Clear-WhatsAppLocalStorage": {
-      "Module": "System",
-      "Parameters": {}
-    },
     "Clear-WindowCache": {
       "Module": "Window",
       "Parameters": {}
@@ -587,23 +583,6 @@
           "Aliases": []
         },
         "Override": {
-          "Mandatory": false,
-          "Aliases": []
-        }
-      }
-    },
-    "Configure-PostgreSqlPasswords": {
-      "Module": "System",
-      "Parameters": {
-        "Auto": {
-          "Mandatory": false,
-          "Aliases": []
-        },
-        "DefaultOrCurrentPassword": {
-          "Mandatory": false,
-          "Aliases": []
-        },
-        "NewPassword": {
           "Mandatory": false,
           "Aliases": []
         }
@@ -2013,23 +1992,6 @@
         }
       }
     },
-    "Get-RepositoryUpdateDayStart": {
-      "Module": "Git",
-      "Parameters": {
-        "At": {
-          "Mandatory": false,
-          "Aliases": []
-        },
-        "DayStartHour": {
-          "Mandatory": true,
-          "Aliases": []
-        }
-      }
-    },
-    "Get-RepositoryUpdateStartupSettings": {
-      "Module": "Git",
-      "Parameters": {}
-    },
     "Get-RpcRetryPolicy": {
       "Module": "Helper",
       "Parameters": {
@@ -2059,10 +2021,6 @@
       "Module": "Workflow",
       "Parameters": {
         "Configuration": {
-          "Mandatory": false,
-          "Aliases": []
-        },
-        "IncludeLegacyDisabled": {
           "Mandatory": false,
           "Aliases": []
         },
@@ -2958,27 +2916,6 @@
       "Module": "Bootstrap",
       "Parameters": {}
     },
-    "Invoke-PrivacyRequest": {
-      "Module": "Helper",
-      "Parameters": {
-        "RetryCount": {
-          "Mandatory": false,
-          "Aliases": []
-        },
-        "TimeoutSec": {
-          "Mandatory": false,
-          "Aliases": []
-        },
-        "Uri": {
-          "Mandatory": true,
-          "Aliases": []
-        },
-        "UseTor": {
-          "Mandatory": false,
-          "Aliases": []
-        }
-      }
-    },
     "Invoke-ProcessWithTimeout": {
       "Module": "Helper",
       "Parameters": {
@@ -3020,10 +2957,6 @@
           "Aliases": []
         }
       }
-    },
-    "Invoke-RepositoryUpdatePromptCheck": {
-      "Module": "Git",
-      "Parameters": {}
     },
     "Invoke-RerunLastCommandExit": {
       "Module": "Helper",
@@ -3111,19 +3044,6 @@
           "Aliases": []
         },
         "WindowTitle": {
-          "Mandatory": false,
-          "Aliases": []
-        }
-      }
-    },
-    "Invoke-StartupRepositoryUpdate": {
-      "Module": "Git",
-      "Parameters": {
-        "Force": {
-          "Mandatory": false,
-          "Aliases": []
-        },
-        "RedrawPrompt": {
           "Mandatory": false,
           "Aliases": []
         }
@@ -3256,23 +3176,6 @@
         },
         "StartingTitle": {
           "Mandatory": false,
-          "Aliases": []
-        }
-      }
-    },
-    "Invoke-TorRequest": {
-      "Module": "Helper",
-      "Parameters": {
-        "RetryCount": {
-          "Mandatory": false,
-          "Aliases": []
-        },
-        "TimeoutSec": {
-          "Mandatory": false,
-          "Aliases": []
-        },
-        "Uri": {
-          "Mandatory": true,
           "Aliases": []
         }
       }
@@ -3974,28 +3877,7 @@
       "Module": "Application",
       "Parameters": {}
     },
-    "Open-DnD": {
-      "Module": "Workflow",
-      "Parameters": {
-        "Campaign": {
-          "Mandatory": false,
-          "Aliases": []
-        },
-        "FoundryVTT": {
-          "Mandatory": false,
-          "Aliases": []
-        }
-      }
-    },
     "Open-Docker": {
-      "Module": "Application",
-      "Parameters": {}
-    },
-    "Open-FoundryVTT": {
-      "Module": "Application",
-      "Parameters": {}
-    },
-    "Open-LeagueOfLegends": {
       "Module": "Application",
       "Parameters": {}
     },
@@ -4096,14 +3978,6 @@
         }
       }
     },
-    "Open-RiseupVPN": {
-      "Module": "Application",
-      "Parameters": {}
-    },
-    "Open-SecureBrowser": {
-      "Module": "Application",
-      "Parameters": {}
-    },
     "Open-Slack": {
       "Module": "Application",
       "Parameters": {}
@@ -4144,10 +4018,6 @@
           "Aliases": []
         }
       }
-    },
-    "Open-Training": {
-      "Module": "Workflow",
-      "Parameters": {}
     },
     "Open-VirtualBox": {
       "Module": "Application",
@@ -4339,10 +4209,6 @@
           "Aliases": []
         }
       }
-    },
-    "Register-RepositoryUpdatePromptCheck": {
-      "Module": "Git",
-      "Parameters": {}
     },
     "Register-StartupTaskPromptCheck": {
       "Module": "Workflow",
@@ -6650,23 +6516,6 @@
         }
       }
     },
-    "Test-PrivacyStatus": {
-      "Module": "Helper",
-      "Parameters": {
-        "ISPIPAddress": {
-          "Mandatory": false,
-          "Aliases": []
-        },
-        "Silent": {
-          "Mandatory": false,
-          "Aliases": []
-        },
-        "UseTor": {
-          "Mandatory": false,
-          "Aliases": []
-        }
-      }
-    },
     "Test-ProjectAlreadyOpen": {
       "Module": "Application",
       "Parameters": {
@@ -6696,27 +6545,6 @@
           "Aliases": []
         },
         "Path": {
-          "Mandatory": true,
-          "Aliases": []
-        }
-      }
-    },
-    "Test-RepositoryUpdateStampFresh": {
-      "Module": "Git",
-      "Parameters": {
-        "DayStartHour": {
-          "Mandatory": false,
-          "Aliases": []
-        },
-        "IntervalHours": {
-          "Mandatory": false,
-          "Aliases": []
-        },
-        "Schedule": {
-          "Mandatory": false,
-          "Aliases": []
-        },
-        "StampFile": {
           "Mandatory": true,
           "Aliases": []
         }
@@ -6925,10 +6753,6 @@
     },
     "Test-WSLEnabled": {
       "Module": "Helper",
-      "Parameters": {}
-    },
-    "Training-Backup": {
-      "Module": "Workflow",
       "Parameters": {}
     },
     "Unpin-TaskbarApps": {
@@ -7709,7 +7533,6 @@
     "BrowserGroupMatching.Matching",
     "BrowserGroupMatching.NegativeMatching",
     "BrowserGroups",
-    "CampaignResources",
     "CenterTerminalSizing",
     "CenterTerminalSizing.Default",
     "CondaUpdateBase",
@@ -7810,18 +7633,13 @@
     "Obsidian.Vault",
     "PackageManagers",
     "PathTemplates",
-    "PathTemplates.Dnd",
     "PathTemplates.DockerDirectory",
-    "PathTemplates.LearningBook",
     "PathTemplates.NpmConfig",
     "PathTemplates.NuGetConfig",
     "PathTemplates.ObsidianDirectory",
     "PathTemplates.Projects",
     "PathTemplates.SymbolicLinks",
     "PathTemplates.TaskbarLayoutFile",
-    "PathTemplates.TrainingBackupDirectory",
-    "PathTemplates.TrainingDirectory",
-    "PostgreSqlPasswords",
     "PowerButtonActions",
     "PowerPlans",
     "PowerTimeouts",
@@ -7841,7 +7659,6 @@
     "RepositoryUpdate.ArchiveRoot",
     "RepositoryUpdate.DefaultBranch",
     "RepositoryUpdate.IncludeDefaultBranch",
-    "RepositoryUpdate.Startup",
     "ResetAllWindowsDefaults",
     "ResetAllWindowsDefaults.Default",
     "ResetAllWindowsDefaults.Test",
@@ -7880,24 +7697,19 @@
     "Universal.FastFetchImageLogo",
     "Universal.FirefoxExe",
     "Universal.Fonts",
-    "Universal.FoundryVTTExe",
     "Universal.GitHub",
     "Universal.IconCacheDb",
     "Universal.IconCacheFolder",
-    "Universal.LeagueOfLegendsExe",
     "Universal.NotepadPlusPlusExe",
     "Universal.OhMyPoshThemeFile",
     "Universal.OutlookLauncherExe",
-    "Universal.RiseupVpnExe",
     "Universal.SteamExe",
     "Universal.TaskbarPinFolder",
     "Universal.TeamViewerExe",
     "Universal.TerminateProcessNames",
-    "Universal.TrainingFile",
     "Universal.VirtualBoxExe",
     "Universal.VisibleWindowExclusions",
     "Universal.VisualStudio2026Exe",
-    "Universal.WhatsAppLocalStoragePath",
     "Universal.WindowsTerminalHome",
     "ValidMachineTypes",
     "VisualEffects",
@@ -7943,40 +7755,8 @@
     "ZoneNameMappings.Zero"
   ],
   "Deprecated": {
-    "Functions": {
-      "Clear-WhatsAppLocalStorage": "2.17.0",
-      "Configure-PostgreSqlPasswords": "2.17.0",
-      "Get-RepositoryUpdateDayStart": "2.12.0",
-      "Get-RepositoryUpdateStartupSettings": "2.12.0",
-      "Invoke-PrivacyRequest": "2.17.0",
-      "Invoke-RepositoryUpdatePromptCheck": "2.12.0",
-      "Invoke-StartupRepositoryUpdate": "2.12.0",
-      "Invoke-TorRequest": "2.17.0",
-      "Open-DnD": "2.17.0",
-      "Open-FoundryVTT": "2.17.0",
-      "Open-LeagueOfLegends": "2.17.0",
-      "Open-RiseupVPN": "2.17.0",
-      "Open-SecureBrowser": "2.17.0",
-      "Open-Training": "2.17.0",
-      "Register-RepositoryUpdatePromptCheck": "2.12.0",
-      "Test-PrivacyStatus": "2.17.0",
-      "Test-RepositoryUpdateStampFresh": "2.12.0",
-      "Training-Backup": "2.17.0"
-    },
+    "Functions": {},
     "Parameters": {},
-    "ConfigurationKeys": {
-      "CampaignResources": "2.17.0",
-      "PathTemplates.Dnd": "2.17.0",
-      "PathTemplates.LearningBook": "2.17.0",
-      "PathTemplates.TrainingBackupDirectory": "2.17.0",
-      "PathTemplates.TrainingDirectory": "2.17.0",
-      "PostgreSqlPasswords": "2.17.0",
-      "RepositoryUpdate.Startup": "2.12.0",
-      "Universal.FoundryVTTExe": "2.17.0",
-      "Universal.LeagueOfLegendsExe": "2.17.0",
-      "Universal.RiseupVpnExe": "2.17.0",
-      "Universal.TrainingFile": "2.17.0",
-      "Universal.WhatsAppLocalStoragePath": "2.17.0"
-    }
+    "ConfigurationKeys": {}
   }
 }
