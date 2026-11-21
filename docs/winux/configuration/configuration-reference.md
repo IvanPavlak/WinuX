@@ -97,6 +97,7 @@ Paths to installed applications used by `Open-*` functions.
 **Keys:**
 
 - `FirefoxExe`, `LeagueOfLegendsExe`, `SteamExe`, `RiseupVpnExe`, `DbeaverExe`, `TeamViewerExe`, `FoundryVTTExe`, `NotepadPlusPlusExe`, `VisualStudio2026Exe`, `VirtualBoxExe`, `DockerExe`, `OutlookLauncherExe` (what `Open-Outlook` starts the Outlook app through; ships `C:\Windows\explorer.exe`)
+- `LeagueOfLegendsExe`, `RiseupVpnExe` and `FoundryVTTExe` are deprecated since 2.17.0 with their functions, see [Deprecated Keys](#deprecated-keys)
 
 **Consumer functions:** `Open-DBeaver`, `Open-Docker`, `Open-FoundryVTT`, `Open-LeagueOfLegends`, `Open-NotepadPlusPlus`, `Open-Outlook`, `Open-RiseupVPN`, `Open-Steam`, `Open-TeamViewer`, `Open-VirtualBox`, `Open-VisualStudio` (each through `Start-Application -ConfigKey`). `Open-Discord`, `Open-Obsidian` and `Open-Acrobat` read no `*Exe` key, and nothing reads `FirefoxExe` (browsers resolve through `Browsers`).
 
@@ -114,9 +115,11 @@ Common system paths that do not vary by machine.
 - `TaskbarPinFolder` - Quick Launch taskbar pins folder
 - `IconCacheDb`, `IconCacheFolder` - Windows Explorer icon cache
 - `OhMyPoshThemeFile` - Oh-My-Posh theme location
-- `WhatsAppLocalStoragePath` - WhatsApp cache directory
+- `WhatsAppLocalStoragePath` - WhatsApp cache directory (deprecated since 2.17.0 with
+  `Clear-WhatsAppLocalStorage`, see [Deprecated Keys](#deprecated-keys))
 - `TrainingFile` - The Word document `Open-Training` opens from `PathTemplates.TrainingDirectory`
-  (ships empty - set both in `Configuration.local.psd1` before using `Open-Training`)
+  (ships empty - set both in `Configuration.local.psd1` before using `Open-Training`; deprecated
+  since 2.17.0 with `Open-Training`, see [Deprecated Keys](#deprecated-keys))
 - `FastFetchImageLogo` - **Opt-in.** An image fastfetch renders instead of its text logo, in the
   terminals that can display one (WezTerm, Windows Terminal). Ships `$null`, which keeps the text
   logo everywhere. Takes either a **string** (one image for every machine) or a **hashtable keyed
@@ -1648,10 +1651,11 @@ AutoElevate = $true
 
 ## Deprecated Keys
 
-Keys and step names that still work but are removed in the next MAJOR release ([VERSIONING.md](https://github.com/IvanPavlak/WinuX/blob/master/Windows/VERSIONING.md), Deprecation policy). `Test-ConfigurationSchema` reports every one still in use - at every profile load and at the start of every `Bootstrap` - as one warning naming the key, the release that deprecated it, the removal and the replacement. A deprecation is never an error, not even under `-Strict`. A key the base still ships is reported only when it differs from the shipped default, so a vanilla configuration stays silent.
+Keys and step names that still work but are removed in the next MAJOR release ([VERSIONING.md](https://github.com/IvanPavlak/WinuX/blob/master/Windows/VERSIONING.md), Deprecation policy). `Test-ConfigurationSchema` reports every one still in use - at every profile load and at the start of every `Bootstrap` - as one warning naming the key, the release that deprecated it, the removal and the replacement. A deprecation is never an error, not even under `-Strict`. A key the base still ships is reported only when it differs from the shipped default, so a vanilla configuration stays silent. The keys of the personal functions deprecated in 2.17.0 are the exception: only those functions read them, so the function's own once-per-session warning stands for its keys, and `Test-ConfigurationSchema` does not report them.
 
 | Key | Deprecated since | Removed in | Replacement |
 | --- | ---------------- | ---------- | ----------- |
+| `Universal.LeagueOfLegendsExe`, `Universal.FoundryVTTExe`, `Universal.RiseupVpnExe`, `Universal.TrainingFile`, `Universal.WhatsAppLocalStoragePath`, `PathTemplates.TrainingDirectory`, `PathTemplates.TrainingBackupDirectory`, `PathTemplates.LearningBook`, `PathTemplates.Dnd`, `CampaignResources`, `PostgreSqlPasswords` | 2.17.0 | 3.0.0 | None in the base. The base stops shipping them together with the personal functions that read them (`Open-LeagueOfLegends`, `Open-FoundryVTT`, `Open-RiseupVPN`, `Open-SecureBrowser`, `Open-DnD`, `Open-Training`, `Training-Backup`, `Test-PrivacyStatus`, `Invoke-PrivacyRequest`, `Invoke-TorRequest`, `Clear-WhatsAppLocalStorage`, `Configure-PostgreSqlPasswords`; `PathTemplates.LearningBook` has no reader). A fork that copies a function into its Custom area keeps its keys in `Configuration.local.psd1`, unchanged. |
 | `RepositoryUpdate.Startup` (`Enabled`, `Schedule`, `DayStartHour`, `IntervalHours`, `Scope`) | 2.12.0 | 3.0.0 | One [`Startup.Tasks`](#startup-tasks) entry: `@{ Name = "RepositoryUpdate"; Command = "Update-Repositories -All -NoClone -Quiet"; Trigger = "TerminalOpen"; Frequency = "OncePerDay" }`. `Schedule = "Interval"` becomes `Frequency = "Interval"` with `IntervalHours`; a per-machine `Scope` becomes one task per scope, with `Machine` and `-Group`. The warning is raised for `RepositoryUpdate.Startup.Enabled` once it is `$true`. Migration: [Repository Update](#repository-update). |
 
 The keys removed by a MAJOR release, with their migration, are listed under its `### Removed` section in the changelog.

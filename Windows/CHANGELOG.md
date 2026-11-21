@@ -8,6 +8,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.17.0] - 2026-11-21
+
+### Deprecated
+
+All of these keep working until 3.0.0, and each function warns once per session. They serve one personal setup (a game launcher, a tabletop campaign, a training log, one VPN provider, one app's cache fix, one database chore) rather than the framework, so they leave the base. Migration for every one: copy the function file (and its test) into your fork's Custom area under `Windows/PowerShell/Modules/Custom/<Module>/Functions/`, list it in `Custom.psd1`, and keep its keys in `Configuration.local.psd1`, where the copy goes on reading them.
+
+- **`Open-LeagueOfLegends`** and its key `Universal.LeagueOfLegendsExe`.
+- **`Open-DnD` and `Open-FoundryVTT`**, with `CampaignResources`, `PathTemplates.Dnd` and `Universal.FoundryVTTExe`. `Open-Acrobat` and `AcrobatPdfGroups` stay: they are a general PDF-group mechanism.
+- **`Open-Training` and `Training-Backup`**, with `Universal.TrainingFile`, `PathTemplates.TrainingDirectory` and `PathTemplates.TrainingBackupDirectory`. `PathTemplates.LearningBook`, which nothing reads, goes with them.
+- **`Open-RiseupVPN`, `Open-SecureBrowser`, `Test-PrivacyStatus`, `Invoke-PrivacyRequest` and `Invoke-TorRequest`**, with `Universal.RiseupVpnExe`. The privacy check is built around the RiseupVPN process; Tor Browser itself stays reachable through `Open-Browser` and `Universal.Browsers.Tor`.
+- **`Clear-WhatsAppLocalStorage`**, with `Universal.WhatsAppLocalStoragePath`. `Open-WhatsApp` stays.
+- **`Configure-PostgreSqlPasswords`**, with `PostgreSqlPasswords`.
+
+The keys are recorded as deprecated in the contract baseline but `Test-ConfigurationSchema` does not report them: only their functions read them, so the function's warning stands for its keys, and a fork that keeps a function in its Custom area keeps its keys unchanged. Covered by the existing tests of each function (which no longer count the warning) and the new deprecation-warning tests in `Modules/Tests/Modules/Application/Open-LeagueOfLegends.Tests.ps1`, `Open-FoundryVTT.Tests.ps1` and `Open-RiseupVPN.Tests.ps1`. Docs: the Application, Workflow, Helper and System module references and guide indexes, each function's guide, the configuration reference ("Application Executables", "Universal Paths", "Deprecated Keys").
+
 ## [2.16.0] - 2026-11-16
 
 ### Added
@@ -1972,7 +1987,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.16.0...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.17.0...HEAD
+[2.17.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.16.0...winux/v2.17.0
 [2.16.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.15.1...winux/v2.16.0
 [2.15.1]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.15.0...winux/v2.15.1
 [2.15.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.14.1...winux/v2.15.0

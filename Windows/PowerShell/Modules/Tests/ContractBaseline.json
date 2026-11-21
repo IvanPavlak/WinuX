@@ -1,5 +1,5 @@
 {
-  "Version": "2.16.0",
+  "Version": "2.17.0",
   "Functions": {
     "Add-BrowserGroup": {
       "Module": "Configuration",
@@ -7944,17 +7944,40 @@
   ],
   "Deprecated": {
     "Functions": {
+      "Clear-WhatsAppLocalStorage": "2.17.0",
+      "Configure-PostgreSqlPasswords": "2.17.0",
       "Get-RepositoryUpdateDayStart": "2.12.0",
       "Get-RepositoryUpdateStartupSettings": "2.12.0",
+      "Invoke-PrivacyRequest": "2.17.0",
       "Invoke-RepositoryUpdatePromptCheck": "2.12.0",
       "Invoke-StartupRepositoryUpdate": "2.12.0",
+      "Invoke-TorRequest": "2.17.0",
+      "Open-DnD": "2.17.0",
+      "Open-FoundryVTT": "2.17.0",
+      "Open-LeagueOfLegends": "2.17.0",
+      "Open-RiseupVPN": "2.17.0",
+      "Open-SecureBrowser": "2.17.0",
+      "Open-Training": "2.17.0",
       "Register-RepositoryUpdatePromptCheck": "2.12.0",
-      "Test-RepositoryUpdateStampFresh": "2.12.0"
+      "Test-PrivacyStatus": "2.17.0",
+      "Test-RepositoryUpdateStampFresh": "2.12.0",
+      "Training-Backup": "2.17.0"
     },
     "Parameters": {},
     "ConfigurationKeys": {
       "BootstrapConfig.WSLSetup": "0.1.26",
-      "RepositoryUpdate.Startup": "2.12.0"
+      "CampaignResources": "2.17.0",
+      "PathTemplates.Dnd": "2.17.0",
+      "PathTemplates.LearningBook": "2.17.0",
+      "PathTemplates.TrainingBackupDirectory": "2.17.0",
+      "PathTemplates.TrainingDirectory": "2.17.0",
+      "PostgreSqlPasswords": "2.17.0",
+      "RepositoryUpdate.Startup": "2.12.0",
+      "Universal.FoundryVTTExe": "2.17.0",
+      "Universal.LeagueOfLegendsExe": "2.17.0",
+      "Universal.RiseupVpnExe": "2.17.0",
+      "Universal.TrainingFile": "2.17.0",
+      "Universal.WhatsAppLocalStoragePath": "2.17.0"
     }
   }
 }

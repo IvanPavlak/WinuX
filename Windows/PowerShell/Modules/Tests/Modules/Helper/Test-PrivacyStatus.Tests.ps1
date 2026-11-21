@@ -1,6 +1,11 @@
 #Requires -Modules Pester
 
 BeforeAll {
+	# Deprecated since 2.17.0: count no once-per-session deprecation warning in these tests, and
+	# put back the flags this file found.
+	$script:SavedDeprecationWarned = $global:WinuXDeprecationWarned
+	$global:WinuXDeprecationWarned = @{ 'Open-LeagueOfLegends' = $true; 'Open-FoundryVTT' = $true; 'Open-RiseupVPN' = $true; 'Open-SecureBrowser' = $true; 'Open-DnD' = $true; 'Open-Training' = $true; 'Training-Backup' = $true; 'Test-PrivacyStatus' = $true; 'Invoke-PrivacyRequest' = $true; 'Invoke-TorRequest' = $true; 'Clear-WhatsAppLocalStorage' = $true; 'Configure-PostgreSqlPasswords' = $true }
+
 	$ModuleRoot = (Get-RepositoryPath).Modules
 	$FunctionsPath = Join-Path $ModuleRoot "Helper\Functions"
 
@@ -10,6 +15,10 @@ BeforeAll {
 	# modules, whose import alone cost several seconds per run. The real cmdlets are never wanted.
 	function Get-NetAdapter { [CmdletBinding()] param() }
 	function Get-NetRoute { [CmdletBinding()] param($DestinationPrefix) }
+}
+
+AfterAll {
+	$global:WinuXDeprecationWarned = $script:SavedDeprecationWarned
 }
 
 Describe "Test-PrivacyStatus" {

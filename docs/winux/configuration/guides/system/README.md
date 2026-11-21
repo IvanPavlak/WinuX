@@ -11,11 +11,11 @@ The [System module reference](../../../modules/system.md) is the authority on wh
 
 | Function | Configuration keys | Guide |
 | -------- | ------------------ | ----- |
-| `Clear-WhatsAppLocalStorage` | `Universal.WhatsAppLocalStoragePath` | [Clear-WhatsAppLocalStorage](Clear-WhatsAppLocalStorage.md) |
+| `Clear-WhatsAppLocalStorage` (deprecated since 2.17.0) | `Universal.WhatsAppLocalStoragePath` | [Clear-WhatsAppLocalStorage](Clear-WhatsAppLocalStorage.md) |
 | `Configure-NerdFont` | `DefaultNerdFont`, `NerdFonts`, `Universal.Fonts` | [Configure-NerdFont](Configure-NerdFont.md) |
 | `Configure-NpmConfig` | `NpmRegistries`, `PathTemplates.NpmConfig` | [Configure-NpmConfig](Configure-NpmConfig.md) |
 | `Configure-NuGetConfig` | `PathTemplates.NuGetConfig` | [Configure-NuGetConfig](Configure-NuGetConfig.md) |
-| `Configure-PostgreSqlPasswords` | `PostgreSqlPasswords` | [Configure-PostgreSqlPasswords](Configure-PostgreSqlPasswords.md) |
+| `Configure-PostgreSqlPasswords` (deprecated since 2.17.0) | `PostgreSqlPasswords` | [Configure-PostgreSqlPasswords](Configure-PostgreSqlPasswords.md) |
 | `Configure-Taskbar` | `HostnameToMachineType`, `TaskbarConfiguration`, `Universal.TaskbarPinFolder`, `PathTemplates.TaskbarLayoutFile` | [Configure-Taskbar](Configure-Taskbar.md) |
 | `Configure-WSL` | `DefaultWSLDistribution`, `DefaultWSLUsername` | [Configure-WSL](Configure-WSL.md) |
 | `Configure-WSLSSH` | `DefaultWSLDistribution` | [Configure-WSLSSH](Configure-WSLSSH.md) |

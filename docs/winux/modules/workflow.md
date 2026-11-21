@@ -784,7 +784,7 @@ New-StartupTaskShellCommand -Command "Invoke-StartupTasks -Trigger SignIn" -Load
 
 ## [Open-DnD](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Workflow/Functions/Open-DnD.ps1)
 
-- **Description:** Opens the full D&D campaign workspace for a tabletop RPG session: the Obsidian vault with campaign notes, the rulebook PDF in Acrobat, and the spell/resource URLs in the browser. The campaign is chosen from `CampaignResources` in `Configuration.psd1`, in configuration order, via an interactive menu when not specified, and `-FoundryVTT` additionally launches the FoundryVTT game server.
+- **Description:** **Deprecated since 2.17.0, removed in 3.0.0** - it serves one personal setup rather than the framework; to keep it, copy the function file (and its test) into your fork's Custom area under `Windows/PowerShell/Modules/Custom/<Module>/Functions/`, list it in `Custom.psd1`, and keep its keys in `Configuration.local.psd1`, where the copy goes on reading them. It keeps working until then and warns once per session. Opens the full D&D campaign workspace for a tabletop RPG session: the Obsidian vault with campaign notes, the rulebook PDF in Acrobat, and the spell/resource URLs in the browser. The campaign is chosen from `CampaignResources` in `Configuration.psd1`, in configuration order, via an interactive menu when not specified, and `-FoundryVTT` additionally launches the FoundryVTT game server.
 - **Parameters:** -Campaign, -FoundryVTT
 - **Usage:** `Open-DnD`, `Open-DnD -Campaign "ExampleCampaign"`, `Open-DnD -Campaign "AnotherCampaign" -FoundryVTT`
 - **Campaigns:** ExampleCampaign, AnotherCampaign
@@ -951,7 +951,7 @@ Open-ProjectTerminals -Project "MyProject" -Force
 
 ## [Open-Training](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Workflow/Functions/Open-Training.ps1)
 
-- **Description:** Opens the training Word document in Microsoft Word. Launches the file configured at `Universal.TrainingFile` from the machine-specific `PathTemplates.TrainingDirectory`. Only warns (and opens nothing) if Word (`WINWORD`) is already running, whatever document it has open.
+- **Description:** **Deprecated since 2.17.0, removed in 3.0.0** - it serves one personal setup rather than the framework; to keep it, copy the function file (and its test) into your fork's Custom area under `Windows/PowerShell/Modules/Custom/<Module>/Functions/`, list it in `Custom.psd1`, and keep its keys in `Configuration.local.psd1`, where the copy goes on reading them. It keeps working until then and warns once per session. Opens the training Word document in Microsoft Word. Launches the file configured at `Universal.TrainingFile` from the machine-specific `PathTemplates.TrainingDirectory`. Only warns (and opens nothing) if Word (`WINWORD`) is already running, whatever document it has open.
 - **Usage:** `Open-Training`
 
 ## [Open-Workspace](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Workflow/Functions/Open-Workspace.ps1)
@@ -1372,7 +1372,7 @@ elseif ($result.FoundTabs.Count -gt 0) {
 
 ## [Training-Backup](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Workflow/Functions/Training-Backup.ps1)
 
-- **Description:** Runs the external training backup batch script in its configured directory. Navigates to `$MachineSpecificPaths.TrainingBackupDirectory`, executes `TrainingBackup.bat` (which backs up the training document to its configured destinations), and restores the original working directory on exit.
+- **Description:** **Deprecated since 2.17.0, removed in 3.0.0** - it serves one personal setup rather than the framework; to keep it, copy the function file (and its test) into your fork's Custom area under `Windows/PowerShell/Modules/Custom/<Module>/Functions/`, list it in `Custom.psd1`, and keep its keys in `Configuration.local.psd1`, where the copy goes on reading them. It keeps working until then and warns once per session. Runs the external training backup batch script in its configured directory. Navigates to `$MachineSpecificPaths.TrainingBackupDirectory`, executes `TrainingBackup.bat` (which backs up the training document to its configured destinations), and restores the original working directory on exit.
 - **Usage:** `Training-Backup`
 
 The backup script and its directory live outside this WinuX repository, so the actual backup destinations and processing are defined there. The function wraps the call so the original working directory is always restored via a `finally` block, and reports success or the captured error message.

@@ -4,6 +4,10 @@ function Configure-PostgreSqlPasswords {
         Changes the PostgreSQL default database user password.
 
     .DESCRIPTION
+        DEPRECATED since 2.17.0, removed in 3.0.0: it serves one personal setup rather than
+        the framework. It keeps working unchanged until then and warns once per session; to keep
+        it, copy it into your fork's Custom area (Windows/PowerShell/Modules/Custom).
+
         Updates the `postgres` user password on every PostgreSQL installation found under
         `C:\Program Files\PostgreSQL` and `C:\Program Files (x86)\PostgreSQL`, trying ports
         5432-5435 and skipping an installation the new password already authenticates against.
@@ -39,6 +43,12 @@ function Configure-PostgreSqlPasswords {
 		[Parameter(Mandatory = $false)]
 		[switch]$Auto
 	)
+
+	if (-not ($global:WinuXDeprecationWarned -is [System.Collections.IDictionary])) { $global:WinuXDeprecationWarned = @{} }
+	if (-not $global:WinuXDeprecationWarned['Configure-PostgreSqlPasswords']) {
+		$global:WinuXDeprecationWarned['Configure-PostgreSqlPasswords'] = $true
+		Write-LogWarning "Configure-PostgreSqlPasswords is deprecated since 2.17.0 and removed in 3.0.0 - copy it into your fork's Custom area (Windows/PowerShell/Modules/Custom) to keep using it"
+	}
 
 	Write-LogTitle "Configuring PostgreSQL password"
 

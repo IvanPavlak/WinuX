@@ -261,6 +261,8 @@
 		IconCacheDb              = "{User}\AppData\Local\IconCache.db"
 		IconCacheFolder          = "{User}\AppData\Local\Microsoft\Windows\Explorer"
 		OhMyPoshThemeFile        = "{User}\AppData\Local\Programs\oh-my-posh\themes\WinuX.omp.json"
+		# TrainingFile (Open-Training) and WhatsAppLocalStoragePath (Clear-WhatsAppLocalStorage):
+		# DEPRECATED since 2.17.0, removed in 3.0.0 with their functions.
 		TrainingFile             = ""
 		WhatsAppLocalStoragePath = "{User}\AppData\Local\Packages\5319275A.WhatsAppDesktop_cv1g1gvanyjgm\LocalState\shared\transfers"
 
@@ -297,6 +299,8 @@
 		#   NotepadPlusPlusExe  = "C:\Program Files\Notepad++\notepad++.exe"
 		#   VisualStudio2026Exe = "C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE\devenv.exe"
 		#   VirtualBoxExe       = "C:\Program Files\Oracle\VirtualBox\VirtualBox.exe"
+		# LeagueOfLegendsExe, RiseupVpnExe and FoundryVTTExe: DEPRECATED since 2.17.0, removed in
+		# 3.0.0 with Open-LeagueOfLegends, Open-RiseupVPN and Open-FoundryVTT.
 		LeagueOfLegendsExe       = ""
 		SteamExe                 = ""
 		RiseupVpnExe             = ""
@@ -648,6 +652,8 @@
 		#   LearningBook            = "{User}\Learning\ExampleBook.pdf"
 		#   TrainingDirectory       = "{User}\Training\2026"
 		#   Dnd                     = @{ ExampleCharacter = "{Dev}\Obsidian\Campaigns\ExampleCampaign\ExampleCharacter.pdf" }
+		# TrainingBackupDirectory, LearningBook, TrainingDirectory and Dnd: DEPRECATED since
+		# 2.17.0, removed in 3.0.0 with Training-Backup, Open-Training and Open-DnD.
 		ObsidianDirectory       = ""
 		TrainingBackupDirectory = ""
 		LearningBook            = ""
@@ -1773,6 +1779,7 @@
 	# Ships empty - Configure-PostgreSqlPasswords does nothing until you opt in via
 	# Configuration.local.psd1 (see the example above). Never put a real/production
 	# password in the tracked base file.
+	# DEPRECATED since 2.17.0, removed in 3.0.0 with Configure-PostgreSqlPasswords.
 	PostgreSqlPasswords           = @{}
 
 	# ==========================================================================
@@ -2569,12 +2576,12 @@
 	#   - Open-WhatsApp               : Opens WhatsApp Desktop
 	#   - Open-Outlook                : Opens Outlook email client
 	#   - Open-Discord                : Opens Discord
-	#   - Open-DnD                    : Opens D&D campaign tools
-	#   - Open-SecureBrowser          : Opens Tor browser with RiseupVPN
+	#   - Open-DnD                    : Opens D&D campaign tools (deprecated since 2.17.0)
+	#   - Open-SecureBrowser          : Opens Tor browser with RiseupVPN (deprecated since 2.17.0)
 	#   - Send-WakeOnLan              : Wakes a machine via Wake-on-LAN
-	#   - Training-Backup             : Runs Training-Backup command
+	#   - Training-Backup             : Runs Training-Backup command (deprecated since 2.17.0)
 	#   - Set-WorkspaceWindowLayout   : Applies window layout for the workspace
-	#   - Test-PrivacyStatus          : Tests browser privacy status
+	#   - Test-PrivacyStatus          : Tests browser privacy status (deprecated since 2.17.0)
 	#   - Return                      : Exits workspace processing immediately
 	#
 	# Parameter Format:
@@ -2765,6 +2772,7 @@
 	# D&D Configuration
 	# ==========================================================================
 	# Per-campaign resources consumed by Open-DnD (rulebook PDF + resource browser group).
+	# DEPRECATED since 2.17.0, removed in 3.0.0 with Open-DnD.
 	CampaignResources             = @(
 		@{ ExampleCampaign = @{ Pdf = "ExampleRulebook"; Browser = "Reference" } }
 	)
