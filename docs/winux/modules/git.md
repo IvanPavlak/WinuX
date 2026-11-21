@@ -92,25 +92,31 @@ gb feature/my-feature
 
 ## [GitBranchDeleteAndPrune](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Git/Functions/GitBranchDeleteAndPrune.ps1)
 
-- **Description:** Force-deletes a local branch and prunes stale remote-tracking refs for origin. Runs `git branch -D <BranchName>` to remove the specified local branch, then `git remote prune origin` to clear any remote-tracking refs that no longer exist on the remote. Without `-BranchName` it lists the local branches (the checked-out one left out) through `Resolve-Selection`, which takes one or more by number or name; each picked branch is deleted on its own, origin is pruned once when at least one was deleted, and Enter deletes nothing.
-- **Parameters:** -BranchName
-- **Usage:** `GitBranchDeleteAndPrune feature/done`, `GitBranchDeleteAndPrune -BranchName "feature/done"`, `gbd`
+- **Description:** Deletes local branches and prunes stale remote-tracking refs for origin. Runs `git branch -d` on each named branch, then `git remote prune origin` to clear any remote-tracking refs that no longer exist on the remote. `git branch -d` refuses a branch that is not fully merged into its upstream or HEAD, which includes a squash-merged branch: the refused branches are named and offered once for a force delete (`git branch -D`) through a red Yes/No `Resolve-Selection` where Enter means No. `-Force` deletes with `-D` straight away and asks nothing. Without `-BranchName` it lists the local branches (the checked-out one left out) through `Resolve-Selection`, which takes one or more by number or name, and Enter deletes nothing. Each branch is deleted on its own, so one that fails keeps the others, and origin is pruned once, only when at least one was deleted.
+- **Parameters:** -BranchName, -Force
+- **Usage:** `GitBranchDeleteAndPrune feature/done`, `GitBranchDeleteAndPrune -BranchName "feature/a", "feature/b"`, `gbd feature/done -Force`, `gbd`
 - **Alias:** gbd
 
-| Parameter     | Description                                                       |
-| ------------- | ----------------------------------------------------------------- |
-| `-BranchName` | Name of the local branch to delete. Omit it to pick from a menu. |
+| Parameter     | Description                                                               |
+| ------------- | ------------------------------------------------------------------------- |
+| `-BranchName` | Name(s) of the local branch(es) to delete. Omit it to pick from a menu.   |
+| `-Force`      | Deletes with `git branch -D`, unmerged branches included, without asking. |
 
 ```powershell
-# Force-delete a local branch and prune stale origin refs
+# Delete a merged local branch and prune stale origin refs
 GitBranchDeleteAndPrune feature/done
 
-# Deletes the local branch with git branch -D
-# Then runs git remote prune origin to drop stale remote-tracking refs
+# A branch git refuses (not fully merged, squash-merged) is offered once for git branch -D
+gbd feature/a, feature/b
+
+# Force-delete straight away, asking nothing
+gbd feature/abandoned -Force
 
 # Pick one or more local branches from a menu; Enter deletes none
 gbd
 ```
+
+**See also:** [GitWorktreeRemoveAndPrune](#gitworktreeremoveandprune)
 
 ## [GitMergeM](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Git/Functions/GitMergeM.ps1)
 
@@ -169,6 +175,31 @@ GitSwitch feature/my-feature
 # Same, using the alias
 gsw feature/my-feature
 ```
+
+## [GitWorktreeRemoveAndPrune](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Git/Functions/GitWorktreeRemoveAndPrune.ps1)
+
+- **Description:** Removes linked worktrees and offers to delete their branches. Runs `git worktree prune` first, so a worktree whose folder was deleted by hand is dropped and never offered, then `git worktree remove <path>` on each named worktree, which refuses one with uncommitted changes or untracked files; `-Force` passes `--force` and discards them. A worktree is named by the branch checked out in it or by its path (a relative path resolves against the current folder). The main worktree, the one the shell is in and a locked one are never removed: each is reported in red and the others still go ahead (unlock a locked one with `git worktree unlock` first). Without `-Worktree` it lists the linked worktrees as `branch -> path` (`(detached abc1234) -> path` without a branch) through `Resolve-Selection`, which takes one or more by number or name; locked ones are listed apart in yellow and not offered, and Enter removes nothing. When a removed worktree had a branch, it asks once whether to delete those branches, Enter meaning No: `Yes` runs [`GitBranchDeleteAndPrune`](#gitbranchdeleteandprune), which offers to force the unmerged ones, and `Force` runs `GitBranchDeleteAndPrune -Force`. `-Force` of this function never answers that question.
+- **Parameters:** -Worktree, -Force
+- **Usage:** `GitWorktreeRemoveAndPrune feature/done`, `GitWorktreeRemoveAndPrune -Worktree "..\MyRepo-hotfix"`, `gwd feature/a, feature/b -Force`, `gwd`
+- **Alias:** gwd
+
+| Parameter   | Description                                                                                     |
+| ----------- | ----------------------------------------------------------------------------------------------- |
+| `-Worktree` | Branch name(s) or path(s) of the worktree(s) to remove. Omit it to pick from a menu.            |
+| `-Force`    | Removes with `git worktree remove --force`, discarding uncommitted changes and untracked files. |
+
+```powershell
+# Remove the worktree that has feature/done checked out, then answer Yes/No/Force for its branch
+gwd feature/done
+
+# Remove a worktree by path, even with uncommitted changes in it
+gwd ..\MyRepo-hotfix -Force
+
+# Pick one or more worktrees from a menu; Enter removes none
+gwd
+```
+
+**See also:** [GitBranchDeleteAndPrune](#gitbranchdeleteandprune)
 
 ## [Initialize-Repository](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Git/Functions/Initialize-Repository.ps1)
 
@@ -618,4 +649,14 @@ gmm
 
 # Clean up
 gbd feature/new-feature
+```
+
+### Worktree Workflow
+
+```powershell
+# Work on a second branch in its own folder
+git worktree add -b feature/hotfix ..\MyRepo-hotfix
+
+# Done with it: remove the folder, then answer Yes to delete the branch too
+gwd feature/hotfix
 ```

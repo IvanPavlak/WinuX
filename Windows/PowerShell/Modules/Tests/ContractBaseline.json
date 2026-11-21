@@ -1,5 +1,5 @@
 {
-  "Version": "3.1.0",
+  "Version": "3.2.0",
   "Functions": {
     "Add-BrowserGroup": {
       "Module": "Configuration",
@@ -2445,6 +2445,10 @@
         "BranchName": {
           "Mandatory": false,
           "Aliases": []
+        },
+        "Force": {
+          "Mandatory": false,
+          "Aliases": []
         }
       }
     },
@@ -2464,6 +2468,19 @@
       "Module": "Git",
       "Parameters": {
         "BranchName": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
+    "GitWorktreeRemoveAndPrune": {
+      "Module": "Git",
+      "Parameters": {
+        "Force": {
+          "Mandatory": false,
+          "Aliases": []
+        },
+        "Worktree": {
           "Mandatory": false,
           "Aliases": []
         }

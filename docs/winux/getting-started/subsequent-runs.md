@@ -146,7 +146,7 @@ Every time you open PowerShell, the profile (`Microsoft.PowerShell_profile.ps1`)
 │  7. Stage PSReadLineOptions → history, predictions, key binds   │
 │  8. Stage OhMyPosh   → Initialize-OhMyPosh (prompt theme)       │
 │  9. Stage Aliases                                               │
-│     ├─→ Git: gb, gbd, gsw, gp, gmm, gs, gdf                     │
+│     ├─→ Git: gb, gbd, gwd, gsw, gp, gmm, gs, gdf                │
 │     ├─→ Workflow: w, cw, b, efm, rp, t                          │
 │     ├─→ Dev tools: dnr, dnbr, dnp, nir, c, l                    │
 │     └─→ Misc: translate                                         │

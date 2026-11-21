@@ -211,6 +211,8 @@ if (Test-StartupStage -Name "Aliases") {
 
 	New-Alias -Name gbd -Value GitBranchDeleteAndPrune -Force -Option AllScope
 
+	New-Alias -Name gwd -Value GitWorktreeRemoveAndPrune -Force -Option AllScope
+
 	New-Alias -Name gsw -Value GitSwitch -Force -Option AllScope
 
 	New-Alias -Name gp -Value GitPull -Force -Option AllScope
