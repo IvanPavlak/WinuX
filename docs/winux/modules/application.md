@@ -467,7 +467,7 @@ Open-Acrobat -Pdf "MyDocs","OtherDocs"
 - **Parameters:** -Groups, -Private, -NoMenu, -Search, -Browser, -Override, -Instances, -Alongside, -ProtectedWindowHandles
 - **Usage:** `Open-Browser`, `Open-Browser GroupName`, `Open-Browser Parent.ChildGroup`, `Open-Browser GroupA,GroupB`, `Open-Browser -Search "search terms"`, `Open-Browser -Private GroupName`, `Open-Browser GroupName -Override`, `Open-Browser -NoMenu -Browser PreferredBrowser -Instances 2`
 
-The default browser is read from `Configuration.Universal.DefaultBrowser`; the base ships it empty, so the function warns and returns until one is set in `Configuration.local.psd1`. Browser definitions (executable path, private/incognito argument, new-window argument) come from `Configuration.Universal.Browsers`, so any browser key defined there (e.g. Firefox, Chrome, Edge, Brave, Tor) can be passed to `-Browser`. Groups support unlimited hierarchical nesting and are addressed with dot-notation. Private mode cannot be combined with group opening (it falls back to normal mode for groups) but does support `-Search`. `-Instances N` is rerun-safe: it counts how many matching windows already exist and opens only the deficit. The count filters windows by the browser's title pattern ([`Get-BrowserTitlePattern`](system.md#get-browsertitlepattern)), so Firefox and Tor Browser - which share the `firefox.exe` process name - never count each other's windows. Every instance launch passes the browser's configured `NewWindowArg`: a bare launch only opens a window on some browsers (Chrome does; Brave routes it into the existing session as a tab). When the browser is not running yet, the first launch is gated through [`Wait-BrowserWindowReady`](#wait-browserwindowready) before the rest are fired, because launches that arrive while the first instance is still bootstrapping are silently dropped by Chromium's process singleton.
+The default browser is read from `Configuration.Universal.DefaultBrowser`; the base ships it empty, so the function warns and returns until one is set in `Configuration.local.psd1`. Browser definitions (executable path, private/incognito argument, new-window argument) come from `Configuration.Universal.Browsers`, so any browser key defined there (e.g. Firefox, Chrome, Edge, Brave) can be passed to `-Browser`. Groups support unlimited hierarchical nesting and are addressed with dot-notation. Private mode cannot be combined with group opening (it falls back to normal mode for groups) but does support `-Search`. `-Instances N` is rerun-safe: it counts how many matching windows already exist and opens only the deficit. The count filters windows by the browser's title pattern ([`Get-BrowserTitlePattern`](system.md#get-browsertitlepattern)), so helper windows of the same process (a Picture-in-Picture player, a dialog) never count as instances. Every instance launch passes the browser's configured `NewWindowArg`: a bare launch only opens a window on some browsers (Chrome does; Brave routes it into the existing session as a tab). When the browser is not running yet, the first launch is gated through [`Wait-BrowserWindowReady`](#wait-browserwindowready) before the rest are fired, because launches that arrive while the first instance is still bootstrapping are silently dropped by Chromium's process singleton.
 
 | Parameter    | Description                                                                                                                        |
 | ------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
@@ -1074,7 +1074,7 @@ The poll is a `Wait-Until` (Helper module) that reads time and sleeps through th
 | Parameter         | Description                                                                                                                    |
 | ----------------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | `-ProcessName`    | Process name (without `.exe`) whose windows to wait for, e.g. `"msedge"`.                                                       |
-| `-TitlePattern`   | Optional title regex a window must also match - used to tell apart browsers that share a process name (Firefox vs. Tor Browser). |
+| `-TitlePattern`   | Optional title regex a window must also match - used to count only the browser's own windows, not helper windows of the same process. |
 | `-TimeoutSeconds` | Maximum time to wait; defaults to 30 seconds. Fast browsers exit the poll in well under a second (250ms ticks).                  |
 | `-Clock`          | The wait clock (`New-WaitClock`) to read and sleep through. Defaults to a real one; tests hand in a fake.                        |
 
@@ -1123,7 +1123,6 @@ Universal = @{
     # Browser definitions consumed by Open-Browser
     Browsers       = @{
         Firefox = @{ Exe = "C:\Program Files\Mozilla Firefox\firefox.exe"; PrivateArg = "-private-window"; NewWindowArg = "-new-window" }
-        Tor     = @{ Exe = "{User}\Tor Browser\Browser\firefox.exe" }
     }
     DefaultBrowser = "Firefox"
 }

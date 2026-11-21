@@ -5,20 +5,18 @@ function Terminate-AllBrowserProcesses {
 
 	.DESCRIPTION
 		Iterates over every browser declared in `Configuration.Universal.Browsers`
-		(Firefox, Tor, Chrome, Edge, Brave) and posts WM_CLOSE messages to each
+		(Firefox, Chrome, Edge, Brave) and posts WM_CLOSE messages to each
 		browser's visible top-level windows for graceful shutdown.
 
 		Browser identification is two-staged:
 		  1. Process name derived from the configured executable filename
 		     (e.g. firefox.exe -> "firefox", chrome.exe -> "chrome").
-		  2. Window title regex tied to the browser brand - used to attribute a
-		     window to a brand for logging when browsers share a process name
-		     (Firefox vs. Tor Browser, both "firefox.exe"). It no longer gates
+		  2. Window title regex tied to the browser brand (Get-BrowserTitlePattern);
+		     a configured browser without one is skipped. It no longer gates
 		     which windows are closed: EVERY visible, titled window of a targeted
 		     browser process is closed, including the ones without the brand
 		     suffix (undocked DevTools, Picture-in-Picture, installed web apps,
-		     dialogs) that used to be left standing. A window reachable through
-		     two targets is closed once.
+		     dialogs) that used to be left standing.
 
 		When `-Exclude` is provided, WM_CLOSE is posted only to non-matching
 		windows. Excluded windows are kept open. WM_CLOSE is posted per window
@@ -103,10 +101,8 @@ function Terminate-AllBrowserProcesses {
 	}
 
 	# Every window WM_CLOSE was posted to, across all browsers, so the wait below can check them
-	# in one go. Handles are tracked so a window reached through two targets sharing a process
-	# name (Firefox and Tor Browser are both firefox.exe) is closed and counted once.
+	# in one go.
 	$allWindowsToClose = @()
-	$seenHandles = [System.Collections.Generic.HashSet[long]]::new()
 
 	foreach ($target in $browserTargets) {
 		Write-LogDebug " [$($target.Name)] Found [$(@($target.ProcessIds).Count)] process(es)" -Style Step
@@ -118,10 +114,6 @@ function Terminate-AllBrowserProcesses {
 		$excludedTitles = @()
 
 		foreach ($window in $browserWindows) {
-			if (-not $seenHandles.Add([long]$window.Handle)) {
-				continue
-			}
-
 			if ($Exclude -and (Test-WindowTitleMatch -WindowTitle $window.Title -Patterns $Exclude)) {
 				if ($window.Title -notin $excludedTitles) {
 					$excludedTitles += $window.Title

@@ -317,10 +317,8 @@
 		# An entry may also be @{ Name = "<process>"; Machine = "PC/Work" } to apply only on
 		# those machine types (Resolve-VisibleWindowExclusions); the base ships none.
 		VisibleWindowExclusions  = @(
-			"Rainmeter"
 			"WindowsTerminal"
 			"Docker Desktop"
-			"obs64"
 			"PowerToys"
 			"PowerToys.FancyZones"
 			"PowerToys.Settings"
@@ -335,9 +333,6 @@
 				Exe          = "C:\Program Files\Mozilla Firefox\firefox.exe"
 				PrivateArg   = "-private-window"
 				NewWindowArg = "-new-window"
-			}
-			Tor     = @{
-				Exe = "{User}\Tor Browser\Browser\firefox.exe"
 			}
 			Chrome  = @{
 				Exe          = "C:\Program Files\Google\Chrome\Application\chrome.exe"
@@ -392,7 +387,7 @@
 	# default user via /etc/wsl.conf; only the sudo password is still prompted -
 	# passwords never live in configuration. Ships empty - the distribution's
 	# interactive first-launch account setup runs instead. Opt in via
-	# Configuration.local.psd1, e.g. DefaultWSLUsername = "ivan".
+	# Configuration.local.psd1, e.g. DefaultWSLUsername = "alice".
 	DefaultWSLUsername            = ""
 
 	# ==========================================================================
@@ -401,7 +396,7 @@
 	# Wake-on-LAN machine configurations. Used by Send-WakeOnLan and Test-MachineOnline.
 	#
 	# An ordered list of machines: one single-key hashtable per machine, the key being the
-	# machine name (quote names that contain spaces, e.g. "Proxmox Backup Server"). The menu
+	# machine name (quote names that contain spaces, e.g. "Backup Server"). The menu
 	# follows this order, and Send-WakeOnLan appends its own "All" and "None" options - they
 	# are not machines, so they are not configured here.
 	#
@@ -634,7 +629,7 @@
 		# Personal path templates ship empty - the functions that consume them warn and
 		# return until you set them in Configuration.local.psd1, e.g.:
 		#   ObsidianDirectory       = "{Dev}\Obsidian"
-		#   Books                   = @{ ExampleRulebook = "{User}\Books\ExampleRulebook.pdf" }
+		#   Manuals                 = @{ ExampleManual = "{User}\Documents\Manuals\ExampleManual.pdf" }
 		ObsidianDirectory       = ""
 		# Machine-local destination for the generated taskbar layout XML (the StartLayoutFile the
 		# Explorer Group Policy points at). Written directly by Configure-Taskbar / Unpin-TaskbarApps;
@@ -945,7 +940,7 @@
 	#           Work     = @{ Rules = "MyWorkRules"; Plan = @{ Name = "Team"; OrgUuid = "11111111-1111-1111-1111-111111111111" }
 	#                         McpServers = @(); Owns = @("github.com/my-org/*"); DefaultPolicy = "readonly" }
 	#       }
-	#       Shared   = @("github.com/MyUser/Dotfiles")
+	#       Shared   = @("github.com/MyUser/MyFork")
 	#   }
 	AiProfiles                    = @{
 		Hosts        = @{}
@@ -1100,11 +1095,11 @@
 	#
 	# Example:
 	#   PC = @{
-	#       Learning          = "E:\Books\ProgrammingBook.pdf"
+	#       ObsidianDirectory = "E:\Obsidian"
 	#       NotesDirectory    = "E:\Notes"
 	#   }
 	#   Laptop = @{
-	#       Learning          = "C:\Users\John\Books\ProgrammingBook.pdf"
+	#       ObsidianDirectory = "C:\Users\John\Obsidian"
 	#       NotesDirectory    = "C:\Users\John\Documents\Notes"
 	#   }
 	# ==========================================================================
@@ -1443,19 +1438,19 @@
 	#
 	# Example:
 	#   Locales = @(
-	#       @{ "Croatian" = @{ Code = "hr-HR"; GeoId = 108 } }
+	#       @{ "German" = @{ Code = "de-DE"; GeoId = 94 } }
 	#       @{ "English (US)" = @{ Code = "en-US"; GeoId = 244 } }
 	#   )
-	#   DefaultLocale = "Croatian"
-	#   KeyboardLayouts = @{ "Croatian" = "0000041A"; "US" = "00000409" }
+	#   DefaultLocale = "German"
+	#   KeyboardLayouts = @{ "German" = "00000407"; "US" = "00000409" }
 	#   KeyboardLayoutSets = @(
-	#       @{ "Croatian-US" = @("Croatian", "US") }
-	#       @{ "US-Croatian" = @("US", "Croatian") }
+	#       @{ "German-US" = @("German", "US") }
+	#       @{ "US-German" = @("US", "German") }
 	#   )
-	#   DefaultKeyboardLayoutSet = "Croatian-US"
+	#   DefaultKeyboardLayoutSet = "German-US"
 	#   DisplayLanguages = @{
 	#       "English (US)" = "en-US"
-	#       "Croatian"     = "hr-HR"
+	#       "German"       = "de-DE"
 	#   }
 	#   DefaultDisplayLanguage = "English (US)"
 	# ==========================================================================
@@ -2699,7 +2694,7 @@
 	# Acrobat Configuration
 	# ==========================================================================
 	AcrobatPdfGroups              = @(
-		@{ "ExampleRulebook" = @("Books.ExampleRulebook") }
+		@{ "ExampleManuals" = @("Manuals.ExampleManual") }
 	)
 
 	# ==========================================================================
@@ -2749,7 +2744,8 @@
 	# HOW TO USE THIS SECTION:
 	# - BrowserProcessNames:
 	#   Add or override entries when the browser label passed to Open-Browser
-	#   does not match the real process name. Example: Tor uses firefox.exe.
+	#   does not match the real process name (a browser you add whose executable
+	#   is not named after it).
 	# - KeywordExtraction.GenericWords:
 	#   Add words that are too generic to identify a page reliably.
 	# - KeywordExtraction.GenericSubdomains:
@@ -2779,7 +2775,6 @@
 			Chrome  = "chrome"
 			Firefox = "firefox"
 			Edge    = "msedge"
-			Tor     = "firefox"
 			Brave   = "brave"
 		}
 
@@ -2969,10 +2964,10 @@
 	# 4. Mixed array (named URLs alongside nested sub-groups):
 	#    @{ Server = @(
 	#        @{ Name = "Homepage"; Url = "https://homepage.example.com" }
-	#        @{ Name = "Proxmox"; Url = "https://proxmox.example.com" }
-	#        @{ ArrStack = @(
-	#            @{ Name = "Sonarr"; Url = "https://sonarr.example.com" }
-	#            @{ Name = "Radarr"; Url = "https://radarr.example.com" }
+	#        @{ Name = "Hypervisor"; Url = "https://hypervisor.example.com" }
+	#        @{ MediaStack = @(
+	#            @{ Name = "ServiceB"; Url = "https://serviceb.example.com" }
+	#            @{ Name = "ServiceA"; Url = "https://servicea.example.com" }
 	#        )}
 	#    )}
 	#
@@ -2990,11 +2985,6 @@
 	BrowserGroups                 = @(
 		@{ Google = @(
 				"https://www.google.com/"
-			)
-		}
-
-		@{ WhatsAppWeb = @(
-				"https://web.whatsapp.com/"
 			)
 		}
 
@@ -3033,36 +3023,14 @@
 			)
 		}
 
-		@{ Email = @(
-				"https://mail.google.com/mail/u/0/#inbox"
-			)
-		}
-
-		@{ Calendar = @(
-				"https://calendar.google.com/calendar/u/0/r/week"
-			)
-		}
-
 		@{ GitHub = @(
 				@{ Name = "Profile"; Url = "https://github.com/YourUsername" }
 				@{ Name = "WinuX"; Url = "https://github.com/YourUsername/WinuX" }
 			)
 		}
 
-		@{ News = @(
-				"https://www.reuters.com/",
-				"https://apnews.com/",
-				"https://www.bbc.com/news"
-			)
-		}
-
 		@{ YouTube = @(
 				"https://www.youtube.com/"
-			)
-		}
-
-		@{ Reddit = @(
-				"https://www.reddit.com/"
 			)
 		}
 
@@ -3335,8 +3303,8 @@
 	#   }
 	#
 	# Usage:
-	#   translate kako si                                                           → "how are you"
-	#   translate -InputLanguage English -OutputLanguage Croatian -Text hello world → "pozdrav svijete"
+	#   translate wie geht es dir                                                 → "how are you"
+	#   translate -InputLanguage English -OutputLanguage German -Text hello world → "hallo welt"
 	# ==========================================================================
 	DefaultTranslateLanguages     = @{
 		OutputLanguage = "English"

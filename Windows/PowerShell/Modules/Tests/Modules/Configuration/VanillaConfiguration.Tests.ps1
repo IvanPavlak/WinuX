@@ -121,8 +121,8 @@ Describe "Vanilla Configuration (empty-by-default contract)" {
 			@($script:BaseConfig.PathTemplates.SymbolicLinks.Keys) | Sort-Object | Should -Be @("PowerShell", "PowerToys")
 		}
 
-		It "Should keep all five browser definitions" {
-			@($script:BaseConfig.Universal.Browsers.Keys) | Sort-Object | Should -Be @("Brave", "Chrome", "Edge", "Firefox", "Tor")
+		It "Should keep all four browser definitions" {
+			@($script:BaseConfig.Universal.Browsers.Keys) | Sort-Object | Should -Be @("Brave", "Chrome", "Edge", "Firefox")
 		}
 
 		It "Should keep the Kill-All defaults" {

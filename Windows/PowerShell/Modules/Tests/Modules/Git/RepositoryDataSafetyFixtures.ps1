@@ -44,7 +44,6 @@ foreach ($function in 'Resolve-RepositoryDefaultBranch', 'Update-RepositoryDefau
 	'Get-RepositoryHooksState', 'Sync-RepositoryHooks') {
 	. "$DataSafetyModuleRoot\Git\Functions\$function.ps1"
 }
-. "$DataSafetyModuleRoot\Bootstrap\Functions\Resolve-RepositoryUpdateScope.ps1"
 # The startup update is the startup task RepositoryUpdate, run through these, and they have to
 # run from here (not from the imported Workflow module) so the task's command
 # reaches the Update-Repositories loaded above and the mocks around it.

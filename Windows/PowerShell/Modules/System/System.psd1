@@ -92,7 +92,6 @@
 		'Test-TerminalIconsCacheFile',
 		'Test-WindowTitleMatch',
 		'Unpin-TaskbarApps',
-		'Update-DirectoryNames',
 		'Upgrade-All',
 		'Wait-BrowserWindowsClosed',
 		'Wait-ConsoleReflow'

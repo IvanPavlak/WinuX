@@ -24,7 +24,7 @@ function Resolve-WorkspaceActions {
 		                            for the two-zone PC layout - one entry instead of one per layout set.
 		                            When the PC is redirected to the Work layouts the PC row does not
 		                            apply, so the open produces exactly the windows
-		                            LeagueOfLegends_Work.psd1 expects.
+		                            Gaming_Work.psd1 expects.
 
 		Scopes and row keys take the machine-scope string Test-MachineTypeScope understands, exactly
 		like the TaskbarConfiguration rows and the app CSVs' Machine column: "All", one type, or several
@@ -112,7 +112,7 @@ function Resolve-WorkspaceActions {
 		[object[]] The entries that apply, in configured order, with their parameters resolved.
 
 	.EXAMPLE
-		$actions = Resolve-WorkspaceActions -Actions (Get-OrderedEntry $Configuration.WorkspaceActions 'LeagueOfLegends') -Workspace 'LeagueOfLegends'
+		$actions = Resolve-WorkspaceActions -Actions (Get-OrderedEntry $Configuration.WorkspaceActions 'Gaming') -Workspace 'Gaming'
 		# The entry @{ Action = "Open-Browser"; Parameters = @{ Groups = @("Google") }; LayoutMachineParameters = @{ PC = @{ Instances = 2 } } }
 		# comes back with Instances = 2 on the PC's own layout set and without Instances on Laptop, Work,
 		# and on the PC while it is redirected to the Work layouts.

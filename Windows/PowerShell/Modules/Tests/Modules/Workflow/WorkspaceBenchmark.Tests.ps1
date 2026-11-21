@@ -93,7 +93,7 @@ Describe "Write-WorkspaceBenchmark" {
 	It "writes numbers culture-invariant so the file reads the same on a comma-decimal machine" {
 		$originalCulture = [System.Threading.Thread]::CurrentThread.CurrentCulture
 		try {
-			[System.Threading.Thread]::CurrentThread.CurrentCulture = [System.Globalization.CultureInfo]::GetCultureInfo('hr-HR')
+			[System.Threading.Thread]::CurrentThread.CurrentCulture = [System.Globalization.CultureInfo]::GetCultureInfo('de-DE')
 			Write-WorkspaceBenchmark -Workspace 'MyWorkspace' -TotalSeconds 27.5 -BenchmarkPath $script:BenchmarkFile -Quiet
 		}
 		finally {

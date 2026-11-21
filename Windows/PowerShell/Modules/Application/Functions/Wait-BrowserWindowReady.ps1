@@ -19,8 +19,9 @@ function Wait-BrowserWindowReady {
 		Process name (without .exe) whose windows to wait for, e.g. "msedge".
 
 	.PARAMETER TitlePattern
-		Optional title regex a window must also match - used to tell apart
-		browsers that share a process name (Firefox vs. Tor Browser).
+		Optional title regex a window must also match - used to count only the
+		browser's own windows (Get-BrowserTitlePattern), not helper windows of
+		the same process such as a Picture-in-Picture player.
 
 	.PARAMETER TimeoutSeconds
 		Maximum time to wait. Defaults to 30 seconds; fast browsers exit the

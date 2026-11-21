@@ -19,7 +19,7 @@ The [Bootstrap module reference](../../../modules/bootstrap.md) is the authority
 | `Load-PathConfiguration` | `BasePaths`, `DefaultMachineType`, `HostnameToMachineType`, `Universal` | [Load-PathConfiguration](Load-PathConfiguration.md) |
 | `Resolve-BootstrapSteps` | `BootstrapConfig` | [Resolve-BootstrapSteps](Resolve-BootstrapSteps.md) |
 | `Resolve-PackageManagers` | `PackageManagers` | [Resolve-PackageManagers](Resolve-PackageManagers.md) |
-| `Resolve-RepositoryUpdateScope` | `BootstrapConfig`, `RepositoryUpdate` (with `-Path`) | [Resolve-RepositoryUpdateScope](Resolve-RepositoryUpdateScope.md) |
+| `Resolve-RepositoryUpdateScope` | `BootstrapConfig` (or the key `-Path` names) | [Resolve-RepositoryUpdateScope](Resolve-RepositoryUpdateScope.md) |
 | `Set-StartupTasks` | `Startup.Tasks`, `Startup.Conditions`, `BootstrapConfig.Steps.StartupTasks` | [Set-StartupTasks](Set-StartupTasks.md) |
 | `Test-MachineTypeScope` | `ValidMachineTypes` | [Test-MachineTypeScope](Test-MachineTypeScope.md) |
 

@@ -9,13 +9,13 @@ The closing audit of `Kill-All`: lists every visible application window still st
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`Universal.VisibleWindowExclusions`](../../configuration-reference.md#process-cleanup) | array of process names or `@{ Name; Machine }` entries (see [Resolve-VisibleWindowExclusions](Resolve-VisibleWindowExclusions.md)) | `Rainmeter`, `WindowsTerminal`, `Docker Desktop`, `obs64`, `PowerToys`, `PowerToys.FancyZones`, `PowerToys.Settings` | The processes whose windows are expected to outlive a `Kill-All` and are therefore never reported (matched case-insensitively on the process name). The same list `Terminate-AllProcessesWithVisibleWindows` spares. Browsers are NOT exempt here. Empty means every window still standing is reported. |
+| [`Universal.VisibleWindowExclusions`](../../configuration-reference.md#process-cleanup) | array of process names or `@{ Name; Machine }` entries (see [Resolve-VisibleWindowExclusions](Resolve-VisibleWindowExclusions.md)) | `WindowsTerminal`, `Docker Desktop`, `PowerToys`, `PowerToys.FancyZones`, `PowerToys.Settings` | The processes whose windows are expected to outlive a `Kill-All` and are therefore never reported (matched case-insensitively on the process name). The same list `Terminate-AllProcessesWithVisibleWindows` spares. Browsers are NOT exempt here. Empty means every window still standing is reported. |
 
 ## Decisions
 
 1. Which processes' windows may survive a `Kill-All` without being reported?
     - Options: Process names (no `.exe`) in `Universal.VisibleWindowExclusions`. The list is shared with `Terminate-AllProcessesWithVisibleWindows`, so a name added here is also never force-killed - keep `WindowsTerminal` and the three PowerToys entries. For a one-off, pass `-Exclude` (title or process-name patterns) to `Kill-All` instead.
-    - Default: The shipped seven names.
+    - Default: The shipped five names.
     - More detail: [`Universal.VisibleWindowExclusions`](../../configuration-reference.md#process-cleanup)
 
 ## Where to Put Values
@@ -39,10 +39,8 @@ On this page that bites on `Universal.VisibleWindowExclusions` - it is an array,
 ```powershell
 Universal = @{
     VisibleWindowExclusions = @(
-        "Rainmeter"
         "WindowsTerminal"
         "Docker Desktop"
-        "obs64"
         "PowerToys"
         "PowerToys.FancyZones"
         "PowerToys.Settings"
@@ -81,10 +79,8 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 @{
     Universal = @{
         VisibleWindowExclusions = @(
-            "Rainmeter"
             "WindowsTerminal"
             "Docker Desktop"
-            "obs64"
             "PowerToys"
             "PowerToys.FancyZones"
             "PowerToys.Settings"

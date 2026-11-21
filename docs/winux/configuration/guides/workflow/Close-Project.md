@@ -9,9 +9,9 @@ Closes all project-specific resources opened by `Open-Project` (Visual Studio wi
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`PathTemplates`](../../configuration-reference.md#path-templates--placeholder-system) | hashtable, 11 keys | hashtable, 11 keys (several ship empty) | Read through `$global:MachineSpecificPaths` (the expanded `PathTemplates`): the `Projects.<Name>.Solution` / `Projects.<Name>.Root` paths that `VisualStudioSolutions` and `VSCodeProjects` entries point at become extra window-title candidates, so a window whose title shows the real solution or folder name is matched even when it differs from the configured name. |
+| [`PathTemplates`](../../configuration-reference.md#path-templates--placeholder-system) | hashtable, 7 keys | hashtable, 7 keys (`ObsidianDirectory` ships empty) | Read through `$global:MachineSpecificPaths` (the expanded `PathTemplates`): the `Projects.<Name>.Solution` / `Projects.<Name>.Root` paths that `VisualStudioSolutions` and `VSCodeProjects` entries point at become extra window-title candidates, so a window whose title shows the real solution or folder name is matched even when it differs from the configured name. |
 | [`ProjectActions`](../../configuration-reference.md#project-actions) | ordered list of projects (one single-key hashtable each) | list of 3 | Every project `Open-Project` offers, in menu order: the project name is the key, the value is the ordered array of `@{ Action; Parameters }` entries opening it runs, where `Action` is any exported function name. `Close-Project` reads the same list to work out what to close. |
-| [`Universal`](../../configuration-reference.md#universal-constants) | hashtable, 27 keys | hashtable, 27 keys | Machine-independent constants: executable paths (`FirefoxExe`, `DockerExe`, `DbeaverExe`, ...), the `Browsers` map, `DefaultBrowser`, shared URLs, the `TerminateProcessNames` / `VisibleWindowExclusions` lists, and `Desktop` (auto-resolved at load). Expanded in place by `Load-PathConfiguration`, so placeholders work here too. `Close-Project` reads `DefaultBrowser` (the browser whose tabs it closes; empty skips browser cleanup) and `Browsers` (the name must be a key there). |
+| [`Universal`](../../configuration-reference.md#universal-constants) | hashtable, 22 keys | hashtable, 22 keys | Machine-independent constants: executable paths (`FirefoxExe`, `DockerExe`, `DbeaverExe`, ...), the `Browsers` map, `DefaultBrowser`, shared URLs, the `TerminateProcessNames` / `VisibleWindowExclusions` lists, and `Desktop` (auto-resolved at load). Expanded in place by `Load-PathConfiguration`, so placeholders work here too. `Close-Project` reads `DefaultBrowser` (the browser whose tabs it closes; empty skips browser cleanup) and `Browsers` (the name must be a key there). |
 | [`VisualStudioSolutions`](../../configuration-reference.md#visual-studio-solutions) | array of `@{ Name; Solution }` (`Solution` is a dot-notation reference into the expanded paths) | array of 1 | The solutions `Open-VisualStudio` offers. `Close-Project` looks up an `Open-VisualStudio` action's `Solution` name here to resolve the real solution path for window matching. |
 | [`VSCodeProjects`](../../configuration-reference.md#vs-code-projects) | array of `@{ Name; Path }` (`Path` is a dot-notation reference into the expanded paths) | array of 2 | The folders `Open-VSCode` offers by name. `Close-Project` looks up an `Open-VSCode` action's `Folder` name here to resolve the real folder path for window matching. |
 
@@ -32,7 +32,7 @@ Closing reads the same `ProjectActions` map the open used, so a project that ope
     - Default: The shipped three.
     - More detail: [`ProjectActions`](../../configuration-reference.md#project-actions)
 4. Which browser should be the default?
-    - Options: A key from `Universal.Browsers`: `Firefox`, `Chrome`, `Edge`, `Brave`, `Tor`. Ships empty, so `Open-Browser` warns and returns until it is set, and `Close-Project` skips browser tab cleanup.
+    - Options: A key from `Universal.Browsers`: `Firefox`, `Chrome`, `Edge`, `Brave`. Ships empty, so `Open-Browser` warns and returns until it is set, and `Close-Project` skips browser tab cleanup.
     - Default: Empty.
     - More detail: [`Universal`](../../configuration-reference.md#universal-constants)
 5. Are any of the shipped executable paths wrong on this machine?
@@ -41,7 +41,7 @@ Closing reads the same `ProjectActions` map the open used, so a project that ope
     - More detail: [`Universal`](../../configuration-reference.md#universal-constants)
 6. Do you use a browser the base `Browsers` map does not list?
     - Options: Add an entry with `Exe`, `PrivateArg` and `NewWindowArg`. Because hashtables merge per key, adding one browser does not remove the others.
-    - Default: The shipped five.
+    - Default: The shipped four.
     - More detail: [`Universal`](../../configuration-reference.md#universal-constants)
 7. Which Visual Studio solutions do you open regularly?
     - Options: One entry per solution with a `Name` and a `Solution` dot-notation reference into the expanded paths (e.g. `Projects.MyProject.Solution`), not a literal `.sln` path.

@@ -583,7 +583,7 @@ Get-Item @filtered
 
 - **Description:** Looks one entry up by name in an ordered configuration section - the lookup counterpart of `Get-OrderedNames`, which returns the menu. Accepts both shapes: the ordered array of single-key hashtables and, for a fork that has not migrated, a plain hashtable, so a consumer reads its entry the same way whichever shape the configuration has. Name matching is case-insensitive and the first match wins, so a section that lists a name twice behaves like the file reads, top to bottom. Returns `$null` when the section is empty or the name is not configured; the caller decides what an unconfigured entry means.
 - **Parameters:** -Section (accepts `$null`), -Name
-- **Usage:** `Get-OrderedEntry $Configuration.WorkspaceActions "WinuX"`, `Get-OrderedEntry $Configuration.WakeOnLanConfig "Proxmox Backup Server"`
+- **Usage:** `Get-OrderedEntry $Configuration.WorkspaceActions "WinuX"`, `Get-OrderedEntry $Configuration.WakeOnLanConfig "Backup Server"`
 
 ## [Get-OrderedNames](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Helper/Functions/Get-OrderedNames.ps1)
 
@@ -829,7 +829,7 @@ Initialize-Directory -Path "C:\Temp\MyApp\Data"
 
 - **Description:** Translates text between languages using the Google Translate API. The source language is auto-detected unless `-InputLanguage` is provided, and the target language defaults to `Configuration.psd1` → `DefaultTranslateLanguages.OutputLanguage`. Supports both positional (quick) and named parameter usage.
 - **Parameters:** -InputLanguage, -OutputLanguage, -Text, -RemainingWords (hidden; collects the positional and remaining words)
-- **Usage:** `Invoke-GoogleTranslate kako si`, `Invoke-GoogleTranslate -InputLanguage English -OutputLanguage Croatian -Text hello world`, `Invoke-GoogleTranslate -InputLanguage German -OutputLanguage English -Text guten morgen`
+- **Usage:** `Invoke-GoogleTranslate wie geht es dir`, `Invoke-GoogleTranslate -InputLanguage English -OutputLanguage German -Text hello world`, `Invoke-GoogleTranslate -InputLanguage German -OutputLanguage English -Text guten morgen`
 - **Alias:** `translate`
 
 Multi-word input does not need to be quoted: the trailing words are collected and joined automatically. Language names are mapped to Google Translate codes from a built-in table (Afrikaans through Welsh); an unsupported input or output language name produces an error listing the supported languages. The translated result is printed in green as `[OutputLanguage] => <translation>`.
@@ -843,10 +843,10 @@ Multi-word input does not need to be quoted: the trailing words are collected an
 
 ```powershell
 # Quick translation: auto-detect the input language, translate to the configured default output language
-Invoke-GoogleTranslate kako si
+Invoke-GoogleTranslate wie geht es dir
 
 # Explicit language pair with the translate alias
-translate -InputLanguage English -OutputLanguage Croatian -Text hello world
+translate -InputLanguage English -OutputLanguage German -Text hello world
 
 # Translate German to English
 Invoke-GoogleTranslate -InputLanguage German -OutputLanguage English -Text guten morgen
@@ -1657,7 +1657,7 @@ The file is created at the current user's Desktop (resolved via `[Environment]::
 
 ```powershell
 # Save manual setup steps to the Desktop
-Write-ManualInstructionsToDesktop -FileName "VPN-Setup.txt" -Title "VPN Configuration" -Content "1. Download the VPN client...`n2. Install and configure..."
+Write-ManualInstructionsToDesktop -FileName "Manual-Setup.txt" -Title "Manual Setup" -Content "1. Download the installer...`n2. Install and configure..."
 ```
 
 ## Configuration

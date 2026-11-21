@@ -224,6 +224,7 @@ Merge-Upstreams foundation
 ```
 
 See the [Fork Model](../contributing/fork-model.md) for rooms, the hallway, `root-owner` and `take`.
+
 ## [Resolve-RepositoryDefaultBranch](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Git/Functions/Resolve-RepositoryDefaultBranch.ps1)
 
 - **Description:** Resolves the name of a repository's default branch for the default-branch step of `Update-Repositories`. Returns `RepositoryUpdate.DefaultBranch` when it is set, otherwise what the remote reports (`refs/remotes/origin/HEAD`, without its `origin/` prefix), otherwise `$null`, so the caller skips the step. Read-only: nothing is fetched and no ref is written.

@@ -43,7 +43,7 @@ Which wallpaper `Set-Wallpaper` and `Set-LockScreenWallpaper` apply in dark mode
 
 ```powershell
 WallpaperDarkSettings = @{
-    Test = @{ File = "BlackSpace1.jpg"; Style = "Fill" }
+    Test = @{ File = "Black.jpg"; Style = "Fill" }
 }
 ```
 
@@ -53,7 +53,7 @@ The light-mode counterpart of `WallpaperDarkSettings`.
 
 ```powershell
 WallpaperLightSettings = @{
-    Test = @{ File = "WhiteSpace1.jpg"; Style = "Fill" }
+    Test = @{ File = "White.png"; Style = "Fill" }
 }
 ```
 
@@ -88,10 +88,10 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 # Configuration.local.psd1
 @{
     WallpaperDarkSettings = @{
-        Test = @{ File = "BlackSpace1.jpg"; Style = "Fill" }
+        Test = @{ File = "Black.jpg"; Style = "Fill" }
     }
     WallpaperLightSettings = @{
-        Test = @{ File = "WhiteSpace1.jpg"; Style = "Fill" }
+        Test = @{ File = "White.png"; Style = "Fill" }
     }
 }
 ```

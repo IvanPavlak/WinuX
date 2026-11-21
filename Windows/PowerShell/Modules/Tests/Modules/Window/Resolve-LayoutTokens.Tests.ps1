@@ -26,7 +26,6 @@ Describe "Resolve-LayoutTokens" {
 				Browsers = @{
 					Firefox = @{ Exe = "firefox.exe" }
 					Vivaldi = @{ Exe = "vivaldi.exe" }
-					Tor     = @{ Exe = "firefox.exe" }
 				}
 			}
 		}
@@ -38,7 +37,6 @@ Describe "Resolve-LayoutTokens" {
 		$result.ProcessName | Should -Match "vivaldi"
 		$result.WindowTitle | Should -Match "Firefox"
 		$result.WindowTitle | Should -Match "Vivaldi"
-		$result.WindowTitle | Should -Not -Match "Tor"
 	}
 
 	It "falls back to a legacy top-level Browsers map when Universal has none" {
@@ -48,7 +46,6 @@ Describe "Resolve-LayoutTokens" {
 			Browsers = @{
 				Firefox = @{ Exe = "firefox.exe" }
 				Chrome  = @{ Exe = "chrome.exe" }
-				Tor     = @{ Exe = "firefox.exe" }
 			}
 		}
 		$entry = @{ ProcessName = "Browser"; WindowTitle = "Browser" }
@@ -56,7 +53,6 @@ Describe "Resolve-LayoutTokens" {
 		$result = Resolve-LayoutTokens -LayoutEntry $entry
 
 		$result.ProcessName | Should -Match "firefox|chrome"
-		$result.ProcessName | Should -Not -Match "tor"
 		$result.WindowTitle | Should -Match "Firefox|Chrome"
 	}
 

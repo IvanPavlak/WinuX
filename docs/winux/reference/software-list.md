@@ -161,9 +161,3 @@ App,Version,Scope,Interactive,Source,Machine
 Obsidian.Obsidian,Latest,d,n,w,All
 BurntSushi.ripgrep.MSVC,Latest,d,n,w,All
 ```
-
-`TorProject.TorBrowser` is the one worth calling out: it is what
-[`Open-Browser -Browser Tor`](../modules/application.md#open-browser) needs, and the base bootstrap
-does not install it. WinGet installs Tor Browser as a portable build onto the Desktop; move the
-"Tor Browser" folder to `{User}\Tor Browser`, where the default `Universal.Browsers.Tor` entry
-points.

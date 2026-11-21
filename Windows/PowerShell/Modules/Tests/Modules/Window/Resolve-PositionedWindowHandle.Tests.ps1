@@ -99,12 +99,12 @@ Describe "Resolve-PositionedWindowHandle" {
 		# left the window unsnapped and on whatever desktop it had appeared on.
 		Mock Get-CachedWindows {
 			@(
-				[PSCustomObject]@{ Handle = [IntPtr]510; ProcessId = 32128; ProcessName = "Code"; Title = "asseto - Visual Studio Code" }
-				[PSCustomObject]@{ Handle = [IntPtr]511; ProcessId = 60; ProcessName = "firefox"; Title = "asseto - Mozilla Firefox" }
+				[PSCustomObject]@{ Handle = [IntPtr]510; ProcessId = 32128; ProcessName = "Code"; Title = "exampleproject - Visual Studio Code" }
+				[PSCustomObject]@{ Handle = [IntPtr]511; ProcessId = 60; ProcessName = "firefox"; Title = "exampleproject - Mozilla Firefox" }
 			)
 		}
 
-		$state = @{ WindowTitle = "asseto - Visual Studio Code"; ProcessName = "Code"; ProcessId = [uint32]31828 }
+		$state = @{ WindowTitle = "exampleproject - Visual Studio Code"; ProcessName = "Code"; ProcessId = [uint32]31828 }
 		$result = Resolve-PositionedWindowHandle -WindowState $state
 
 		$result.Handle | Should -Be ([IntPtr]510)

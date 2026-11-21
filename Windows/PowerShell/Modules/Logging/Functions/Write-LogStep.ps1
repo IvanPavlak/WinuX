@@ -27,7 +27,7 @@ function Write-LogStep {
 		Emit a blank line after the message (reproduces an original trailing-"`n" spacer). Ignored with -NoNewLine.
 
 	.EXAMPLE
-		Write-LogStep "Opening training file..."
+		Write-LogStep "Opening configuration file..."
 
 	.EXAMPLE
 		Write-LogStep " SmoothEdgesOfScreenFonts => [enabled]" -Style Success

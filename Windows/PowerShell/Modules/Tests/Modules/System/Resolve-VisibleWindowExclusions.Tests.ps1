@@ -20,7 +20,7 @@ Describe "Resolve-VisibleWindowExclusions" {
 			ValidMachineTypes = @("PC", "Laptop", "Work")
 			Universal         = @{
 				VisibleWindowExclusions = @(
-					"Rainmeter"
+					"MyWidgetApp"
 					@{ Name = "MyAgentApp"; Machine = "PC" }
 					@{ Name = "MyMeetingApp"; Machine = "Laptop/Work" }
 					@{ Name = "MyEverywhereApp" }
@@ -30,8 +30,8 @@ Describe "Resolve-VisibleWindowExclusions" {
 	}
 
 	It "keeps plain names everywhere and scoped names only on their machine types" {
-		@(Resolve-VisibleWindowExclusions -MachineType "PC") | Should -Be @("Rainmeter", "MyAgentApp", "MyEverywhereApp")
-		@(Resolve-VisibleWindowExclusions -MachineType "Work") | Should -Be @("Rainmeter", "MyMeetingApp", "MyEverywhereApp")
+		@(Resolve-VisibleWindowExclusions -MachineType "PC") | Should -Be @("MyWidgetApp", "MyAgentApp", "MyEverywhereApp")
+		@(Resolve-VisibleWindowExclusions -MachineType "Work") | Should -Be @("MyWidgetApp", "MyMeetingApp", "MyEverywhereApp")
 	}
 
 	It "never applies an entry whose scope names an unknown machine type, and reports it" {
@@ -42,9 +42,9 @@ Describe "Resolve-VisibleWindowExclusions" {
 	}
 
 	It "skips entries without a name and collapses duplicates case-insensitively" {
-		$global:Configuration.Universal.VisibleWindowExclusions = @("Rainmeter", "", @{ Machine = "PC" }, "rainmeter", $null)
+		$global:Configuration.Universal.VisibleWindowExclusions = @("MyWidgetApp", "", @{ Machine = "PC" }, "mywidgetapp", $null)
 
-		@(Resolve-VisibleWindowExclusions -MachineType "PC") | Should -Be @("Rainmeter")
+		@(Resolve-VisibleWindowExclusions -MachineType "PC") | Should -Be @("MyWidgetApp")
 	}
 
 	It "returns nothing when the key is absent" {

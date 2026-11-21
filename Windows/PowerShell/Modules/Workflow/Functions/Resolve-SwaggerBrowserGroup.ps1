@@ -109,7 +109,6 @@ function Resolve-SwaggerBrowserGroup {
 					"Chrome" { "chrome" }
 					"Firefox" { "firefox" }
 					"Edge" { "msedge" }
-					"Tor" { "firefox" }
 					default { $Browser.ToLower() }
 				}
 				$CachedBrowserWindows = @(Get-WindowHandle -ProcessName $swaggerProcessName -ErrorAction SilentlyContinue)

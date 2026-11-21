@@ -71,9 +71,6 @@ Browsers = @{
         PrivateArg   = "-private-window"
         NewWindowArg = "-new-window"
     }
-    Tor = @{
-        Exe = "{User}\Tor Browser\Browser\firefox.exe"
-    }
 }
 DefaultBrowser = "Firefox"
 ```
@@ -85,7 +82,7 @@ Repository URLs and authentication base.
 **Keys:**
 
 - `GitHub.Base` - Authentication base URL (e.g., `https://MyUser@github.com`)
-- `GitHub.Private.*` - Private repositories (dot-notation, e.g., `Private.Dotfiles`)
+- `GitHub.Private.*` - Private repositories (dot-notation, e.g., `Private.MyRepo`)
 - `GitHub.MyOrg.*` - Work organization repositories
 
 **Consumer functions:** `Initialize-Repository`, `Update-Repositories`, `Git-Obsidian`
@@ -135,7 +132,7 @@ Process lists consumed by the `Kill-All` desktop cleanup flow.
 **Keys:**
 
 - `TerminateProcessNames` - Process names force-terminated by `Terminate-AllProcessesByName`. The base configuration ships a minimal example list (`Code`); keep your real cleanup targets in `Configuration.local.psd1` (the override replaces the array wholesale on merge).
-- `VisibleWindowExclusions` - Process names `Terminate-AllProcessesWithVisibleWindows` never force-kills. An entry may instead be `@{ Name = "<process>"; Machine = "PC/Work" }` to apply only on those machine types (resolved by [Resolve-VisibleWindowExclusions](../modules/system.md#resolve-visiblewindowexclusions)). Browser processes from `Browsers` are excluded automatically. The PowerToys entries are load-bearing (see the warning in the [System module](../modules/system.md#terminate-allprocesseswithvisiblewindows)); never remove them. The list is also what a plain `Open-Workspace` will not take *ownership* of when it claims the screen for [Close-Workspace](../modules/workflow.md#close-workspace) - so the terminal window you typed the open in, Rainmeter, and the rest are never a workspace's to close simply because they happened to be running. A window an open genuinely created is still recorded, whatever its process is called.
+- `VisibleWindowExclusions` - Process names `Terminate-AllProcessesWithVisibleWindows` never force-kills. An entry may instead be `@{ Name = "<process>"; Machine = "PC/Work" }` to apply only on those machine types (resolved by [Resolve-VisibleWindowExclusions](../modules/system.md#resolve-visiblewindowexclusions)). Browser processes from `Browsers` are excluded automatically. The PowerToys entries are load-bearing (see the warning in the [System module](../modules/system.md#terminate-allprocesseswithvisiblewindows)); never remove them. The list is also what a plain `Open-Workspace` will not take *ownership* of when it claims the screen for [Close-Workspace](../modules/workflow.md#close-workspace) - so the terminal window you typed the open in, PowerToys, and the rest are never a workspace's to close simply because they happened to be running. A window an open genuinely created is still recorded, whatever its process is called.
 
 Both functions warn and terminate nothing when their list is absent or empty. To toggle whole `Kill-All` steps on/off (not just their process lists), see [Kill-All Step Toggles](#kill-all-step-toggles).
 
@@ -149,7 +146,6 @@ TerminateProcessNames   = @(
     "WhatsApp.Root"
 )
 VisibleWindowExclusions = @(
-    "Rainmeter"
     "WindowsTerminal"
     "PowerToys"
     @{ Name = "MyAgentApp"; Machine = "PC" }
@@ -258,7 +254,7 @@ Common paths and templates using placeholder tokens for machine independence.
 - `{Dev}` - Machine's development root (from `BasePaths.Dev`)
 - `{User}` - Machine's user root (from `BasePaths.User`)
 - `{MachineType}` - Current machine type (PC, Laptop, Work, Test)
-- `{RepoRoot}` - Dotfiles repository root path (auto-resolved)
+- `{RepoRoot}` - Repository root path (auto-resolved)
 - `{AppData}` - User's `AppData\Roaming` folder
 
 **Key:** `PathTemplates` - Nested hashtable of template paths
@@ -495,7 +491,7 @@ Folder holding the `.code-workspace` files that `Open-VSCodeWorkspace` (and the 
 
 **Consumer functions:** `Open-VSCodeWorkspace`, `Get-VSCodeWorkspaceNames`, `Open-Workspace`
 
-Each `*.code-workspace` file in this folder is addressed by its base name (e.g. `Consolidation.code-workspace` → `Consolidation`). This is one of the `Projects.Self` paths (alongside `Root`, `Modules`, `Layouts`, etc.) that point inside the repository via the `{RepoRoot}` placeholder.
+Each `*.code-workspace` file in this folder is addressed by its base name (e.g. `MyStack.code-workspace` → `MyStack`). This is one of the `Projects.Self` paths (alongside `Root`, `Modules`, `Layouts`, etc.) that point inside the repository via the `{RepoRoot}` placeholder.
 
 ---
 
@@ -511,7 +507,7 @@ Defines hierarchical URL groups for the `Open-Browser` function. Supports three 
 
     ```powershell
     Resources = @(
-        "https://github.com/MyUser/Dotfiles",
+        "https://github.com/MyUser/MyFork",
         "https://github.com/MyUser/Obsidian"
     )
     ```
@@ -569,7 +565,7 @@ a group is defined exactly once. Paths are dot-notation references into the expa
 ```powershell
 AcrobatPdfGroups = @(
     @{ Learning = @("Learning.CSharpInDepth") }
-    @{ Rulebooks = @("Books.ExampleRulebook") }
+    @{ ExampleManuals = @("Manuals.ExampleManual") }
 )
 ```
 
@@ -779,7 +775,7 @@ Optionally maps an `Open-Workspace` name to a `.code-workspace` base name (under
 
 ```powershell
 DefaultVSCodeWorkspaces = @{
-    dotfiles = "Consolidation"   # `w dotfiles` opens Consolidation.code-workspace instead of the folder
+    myrepo = "MyStack"   # `w myrepo` opens MyStack.code-workspace instead of the folder
 }
 ```
 
@@ -971,7 +967,7 @@ SystemTheme = @{
 
 **Keys:**
 
-- `Locales` - [Ordered section](#ordered-sections): `@( @{ Croatian = @{ Code = "hr-HR"; GeoId = 108 } } ... )`, offered in the order written
+- `Locales` - [Ordered section](#ordered-sections): `@( @{ German = @{ Code = "de-DE"; GeoId = 94 } } ... )`, offered in the order written
 - `DisplayLanguages` - Hashtable keyed by language name → language code
 - `DefaultLocale` / `DefaultDisplayLanguage` - Select which named entry Bootstrap applies (also the Enter default in the interactive menu)
 
@@ -983,9 +979,9 @@ until you set them in `Configuration.local.psd1`.
 ### Keyboard Layouts
 
 **Key:** `KeyboardLayouts` → Hashtable mapping layout name → hex layout code
-(e.g. `@{ "Croatian" = "0000041A"; "US" = "00000409" }`); `KeyboardLayoutSets` names layout
+(e.g. `@{ "German" = "00000407"; "US" = "00000409" }`); `KeyboardLayoutSets` names layout
 combinations as an [ordered section](#ordered-sections)
-(`@( @{ "Croatian-US" = @("Croatian", "US") } ... )`, offered in the order written) and
+(`@( @{ "German-US" = @("German", "US") } ... )`, offered in the order written) and
 `DefaultKeyboardLayoutSet` selects the set to apply
 
 **Consumer function:** `Set-KeyboardLayouts`
@@ -1488,7 +1484,7 @@ AiProfiles = @{
     Hosts        = @{ "WORKSTATION-01" = "Work" }
     Default      = "Personal"
     DefaultOwner = "Personal"
-    Shared       = @("github.com/MyUser/Dotfiles")
+    Shared       = @("github.com/MyUser/MyFork")
     Profiles     = @{
         Personal = @{
             Rules      = "MyRules"
@@ -1496,7 +1492,7 @@ AiProfiles = @{
             Unattended = $true
             Policies   = @{
                 autonomous = @("github.com/MyUser/MyProject")
-                branch     = @("github.com/MyUser/Dotfiles")
+                branch     = @("github.com/MyUser/MyFork")
             }
             EnvVars    = @("MY_API_KEY")
         }
@@ -1686,7 +1682,7 @@ Allows waking machines over LAN via `Send-WakeOnLan`, and checking reachability 
 
 **Keys:**
 
-- `WakeOnLanConfig` → Ordered list of `@{ <MachineName> = @{ MacAddress; SubNetSpecificBroadcastAddress; Port; Address } }`. An [ordered section](#ordered-sections): the menu offers the machines in the order written here (quote a name with spaces, e.g. `"Proxmox Backup Server"`). `Send-WakeOnLan` appends its own `All` and `None` options - they are not machines and are never configured.
+- `WakeOnLanConfig` → Ordered list of `@{ <MachineName> = @{ MacAddress; SubNetSpecificBroadcastAddress; Port; Address } }`. An [ordered section](#ordered-sections): the menu offers the machines in the order written here (quote a name with spaces, e.g. `"Backup Server"`). `Send-WakeOnLan` appends its own `All` and `None` options - they are not machines and are never configured.
 - `DefaultWakeOnLanMachine` - Default target machine
 
 The optional `Address` (IP or hostname) makes Wake-on-LAN reliable: `Send-WakeOnLan` pings it to skip machines that are already on, and polls it after sending to confirm the machine actually woke up. Omit it (or set `""`) for fire-and-forget behaviour with no ping checks.
@@ -1723,8 +1719,8 @@ Maps Git repository URLs to local paths for `Update-Repositories`, grouped by ca
 RepositoryGroups = @(
     @{ Private = @(
             @{
-                Name      = "Dotfiles"                          # Repository name (selection + by-name updates)
-                UrlPath   = "Universal.GitHub.Private.Dotfiles" # Dot-notation path to URL in config
+                Name      = "MyRepo"                            # Repository name (selection + by-name updates)
+                UrlPath   = "Universal.GitHub.Private.MyRepo"   # Dot-notation path to URL in config
                 LocalPath = "Projects.Self.Root"                # Dot-notation path to local directory
                 # ArchiveFolder = "Projects\Tools"            # Optional: where -Archive puts it under RepositoryUpdate.ArchiveRoot, any depth
                 # Shallow = $true                             # Optional: clone it --depth 1 (a large history)
@@ -1767,7 +1763,7 @@ RepositoryUpdate = @{
 
 ### Automatic Update
 
-The automatic update is one [`Startup.Tasks`](#startup-tasks) entry named `RepositoryUpdate`. Nothing in this section turns it on.
+The automatic update is a [`Startup.Tasks`](#startup-tasks) entry, by convention named `RepositoryUpdate`. Nothing in this section turns it on.
 
 ```powershell
 Startup = @{
@@ -1777,7 +1773,7 @@ Startup = @{
 }
 ```
 
-`Frequency = "Interval"` with `IntervalHours` runs it at most once per that many hours instead. To update different groups on different machine types, write one task per scope: `Machine` says where the task runs, and its command names the groups (`Update-Repositories -Group Private -NoClone -Quiet`). The run is tracked by the task's stamp, `Logs\.startup-task-RepositoryUpdate.stamp`, written only after a run that succeeded. `Invoke-StartupTask RepositoryUpdate -Force` runs it here and now, whatever its frequency says.
+`Frequency = "Interval"` with `IntervalHours` runs it at most once per that many hours instead. Task names must be unique whatever their scope, so to update different groups on different machine types, write one task per scope, each with its own `Name`: for example `RepositoryUpdate-Private` with `Machine = "PC"` and the command `Update-Repositories -Group Private -NoClone -Quiet`. Each task is tracked by its own stamp, `Logs\.startup-task-<Name>.stamp`, written only after a run that succeeded. `Invoke-StartupTask <Name> -Force` runs it here and now, whatever its frequency says (it still runs only where its `Machine` scope covers).
 
 ---
 
@@ -2120,13 +2116,13 @@ otherwise silently redirect bare `wsl` commands into the wrong distro.
 
 **Consumer function:** `Configure-WSL`
 
-Optional. When set (e.g. `"ivan"` in `Configuration.local.psd1`), `Configure-WSL` creates the
+Optional. When set (e.g. `"alice"` in `Configuration.local.psd1`), `Configure-WSL` creates the
 account non-interactively on first installation and makes it the distribution's default user
 via `/etc/wsl.conf`; only the sudo password is still prompted - passwords never live in
 configuration. The base ships it empty, which falls back to the distribution's interactive
 first-launch account wizard. Mixed-case values are lowercased automatically (Linux usernames
 are lowercase - note the WSL user routinely differs from the Windows username, e.g. Windows
-`Ivan` vs WSL `ivan`).
+`Alice` vs WSL `alice`).
 
 ---
 

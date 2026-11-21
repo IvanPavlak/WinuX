@@ -31,7 +31,7 @@ BeforeAll {
 				Personal = $selected
 				Work     = @{ Name = "Work"; Owns = @("github.com/my-org/*"); Autonomous = @("github.com/my-org/never-listed") }
 			}
-			Shared       = @("github.com/myuser/dotfiles")
+			Shared       = @("github.com/myuser/myfork")
 			DefaultOwner = "Personal"
 		}
 	}
@@ -111,7 +111,7 @@ Describe "ConvertTo-AiManagedSettings" {
 		$lines | Should -Contain "default-owner Personal"
 		$lines | Should -Contain "unattended on"
 		$lines | Should -Contain "plan Max 00000000-0000-0000-0000-00000000000a"
-		$lines | Should -Contain "shared github.com/myuser/dotfiles"
+		$lines | Should -Contain "shared github.com/myuser/myfork"
 		$lines | Should -Contain "owns Work github.com/my-org/*"
 		$lines | Should -Contain "autonomous github.com/myuser/myproject"
 		$lines | Should -Not -Contain "autonomous github.com/my-org/never-listed"

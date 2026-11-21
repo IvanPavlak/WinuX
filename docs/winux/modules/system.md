@@ -157,7 +157,7 @@ The shipped Windows Terminal payloads (`Windows/WindowsTerminal/settings_*.json`
 - **Description:** Configures SSH inside WSL for proper security. Copies the Windows `.ssh` directory into the WSL user's home directory, sets ownership, and applies appropriate Unix permissions: directory `700` (rwx------), config file and private keys `600` (rw-------), and public keys `644` (rw-r--r--). No-ops until `DefaultWSLDistribution` is configured.
 - **Usage:** `Configure-WSLSSH`
 
-Every `wsl` call targets the configured `DefaultWSLDistribution` explicitly (`wsl -d <distro>`) - Docker Desktop and podman machines routinely steal the WSL default, which would otherwise send the keys into the wrong distro. The WSL username and home directory are derived from inside that distribution (`id -un` / `$HOME`), never from `$env:USERNAME` - Linux is case-sensitive and WSL accounts are lowercase by convention (Windows `Ivan` vs WSL `ivan`), so assuming the Windows name would silently build a root-owned `/home/<WrongCase>` tree that SSH never reads. If the user cannot be determined (uninitialized distribution), the function reports it and skips.
+Every `wsl` call targets the configured `DefaultWSLDistribution` explicitly (`wsl -d <distro>`) - Docker Desktop and podman machines routinely steal the WSL default, which would otherwise send the keys into the wrong distro. The WSL username and home directory are derived from inside that distribution (`id -un` / `$HOME`), never from `$env:USERNAME` - Linux is case-sensitive and WSL accounts are lowercase by convention (Windows `Alice` vs WSL `alice`), so assuming the Windows name would silently build a root-owned `/home/<WrongCase>` tree that SSH never reads. If the user cannot be determined (uninitialized distribution), the function reports it and skips.
 
 Removes any existing `.ssh` in the WSL home directory, recreates it, then copies the SSH files over from the Windows profile. Ownership is reset to the WSL user, after which permissions are tightened (all as root): `700` on the directory, `600` on the `config` file and all private keys (everything that is not `*.pub`, `known_hosts*`, `authorized_keys*`, or `config`), and `644` on public keys. This avoids the strict-permission errors SSH raises when keys carried over from Windows are world-readable. Exit codes are checked along the way - the closing message reports failure instead of claiming success when any command failed.
 
@@ -231,7 +231,7 @@ onefetch | Format-OnefetchPanel -Separator " -> " -Colors @{ "12" = "38;2;30;144
 
 ## [Get-BrowserTitlePattern](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Get-BrowserTitlePattern.ps1)
 
-- **Description:** Returns the window title regex that identifies a browser's main windows, from a built-in map keyed by the browser names `Configuration.Universal.Browsers` uses (Firefox, Tor, Chrome, Edge, Brave) - the patterns are not read from configuration, so a browser added to `Universal.Browsers` has none; unknown names return `$null`. The single source of truth for browser window identification, shared by `Terminate-AllBrowserProcesses` (to find the windows to close) and `Open-Browser`'s `-Instances` mode (to count only the target browser's existing windows - Firefox and Tor Browser share the `firefox.exe` process name, so a process-level count cannot tell them apart).
+- **Description:** Returns the window title regex that identifies a browser's main windows, from a built-in map keyed by the browser names `Configuration.Universal.Browsers` uses (Firefox, Chrome, Edge, Brave) - the patterns are not read from configuration, so a browser added to `Universal.Browsers` has none; unknown names return `$null`. The single source of truth for browser window identification, shared by `Terminate-AllBrowserProcesses` (to find the windows to close) and `Open-Browser`'s `-Instances` mode (to count only the target browser's existing windows, not helper windows of the same process such as a Picture-in-Picture player).
 - **Parameters:** -BrowserName
 - **Usage:** `Get-BrowserTitlePattern -BrowserName "Edge"`
 
@@ -244,9 +244,6 @@ The Edge pattern (`Microsoft.{0,2}Edge`) deliberately allows up to two arbitrary
 ```powershell
 # Regex matching Microsoft Edge window titles (zero-width-space tolerant)
 Get-BrowserTitlePattern -BrowserName "Edge"
-
-# Regex distinguishing Tor Browser windows from regular Firefox ones
-Get-BrowserTitlePattern -BrowserName "Tor"
 ```
 
 **See also:** [Get-BrowserWindowsByTarget](#get-browserwindowsbytarget), [Terminate-AllBrowserProcesses](#terminate-allbrowserprocesses)
@@ -1274,7 +1271,7 @@ Set-KeyboardLayouts -LayoutSet "Development" -Override
 
 - **Description:** Sets the user culture and home location from a configured locale (the system locale itself is not changed). Reads available locales from `Locales` in `Configuration.psd1` (an ordered list of `@{ <Name> = @{ Code; GeoId } }` entries). When given a locale name it sets that locale; called without arguments it shows an interactive menu of available locales. Requires administrator privileges.
 - **Parameters:** -Locale
-- **Usage:** `Set-Locale`, `Set-Locale -Locale "English (US)"`, `Set-Locale -Locale "Croatian"`
+- **Usage:** `Set-Locale`, `Set-Locale -Locale "English (US)"`, `Set-Locale -Locale "German"`
 
 Validates admin privileges first, then resolves the target locale either from the `-Locale` argument or via an interactive selection menu (pressing Enter selects the configured `DefaultLocale`). The chosen locale's `Code` and `GeoId` are read from `Configuration.psd1`; the function applies the culture with `Set-Culture` and the home location with `Set-WinHomeLocation` (falling back to the `HKCU:\Control Panel\International\Geo` registry key if the cmdlet fails). If the current culture already matches the target, no change is made. Some settings may require a system restart to take full effect.
 
@@ -1289,8 +1286,8 @@ Set-Locale
 # Apply the locale configured as "English (US)"
 Set-Locale -Locale "English (US)"
 
-# Apply the locale configured as "Croatian"
-Set-Locale -Locale "Croatian"
+# Apply the locale configured as "German"
+Set-Locale -Locale "German"
 ```
 
 ## [Set-LockScreenWallpaper](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Set-LockScreenWallpaper.ps1)
@@ -1694,11 +1691,11 @@ Sync-AppPins -PackageManager Scoop
 
 ## [Terminate-AllBrowserProcesses](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Terminate-AllBrowserProcesses.ps1)
 
-- **Description:** Gracefully terminates every browser declared in `Configuration.Universal.Browsers` (Firefox, Tor, Chrome, Edge, Brave) by posting `WM_CLOSE` to every visible, titled top-level window of each browser's process (the process name is derived from the configured `Exe` filename; the brand-specific title regex only attributes windows to a brand for logging, and a window shared by two targets - Firefox and Tor are both `firefox.exe` - is closed once). With `-Exclude`, `WM_CLOSE` is posted only to non-matching windows - kept windows are never touched, so there is no foreground-focus race. The close is verified: it waits for the windows to go, posts `WM_CLOSE` once more to any still standing, and reports the survivors as a warning instead of its success line. Browsers are never force-killed.
+- **Description:** Gracefully terminates every browser declared in `Configuration.Universal.Browsers` (Firefox, Chrome, Edge, Brave) by posting `WM_CLOSE` to every visible, titled top-level window of each browser's process (the process name is derived from the configured `Exe` filename; the brand-specific title regex only attributes windows to a brand for logging). With `-Exclude`, `WM_CLOSE` is posted only to non-matching windows - kept windows are never touched, so there is no foreground-focus race. The close is verified: it waits for the windows to go, posts `WM_CLOSE` once more to any still standing, and reports the survivors as a warning instead of its success line. Browsers are never force-killed.
 - **Parameters:** -Exclude
 - **Usage:** `Terminate-AllBrowserProcesses`, `Terminate-AllBrowserProcesses -Exclude "*YouTube*"`, `Terminate-AllBrowserProcesses -Exclude "*YouTube*", "*Gmail*"`
 
-Browser identification is two-staged: the process name is resolved from each browser's configured executable (`firefox.exe` -> `firefox`, `chrome.exe` -> `chrome`), and a brand-specific title regex from [`Get-BrowserTitlePattern`](#get-browsertitlepattern) attributes each window to a brand for logging. The regex no longer decides WHICH windows are closed: every visible, titled window of a targeted browser process is closed, including the ones without the brand suffix - an undocked DevTools window, a Picture-in-Picture player, an installed web app (PWA), a print or download dialog - that used to be left standing after every cleanup. A window reachable through two targets that share a process name (Firefox and Tor Browser) is closed once. `WM_CLOSE` is posted directly to each non-excluded window handle (per handle, not via `SendKeys`), so it does not touch the foreground and excluded windows are never accidentally closed by a misfired keystroke.
+Browser identification is two-staged: the process name is resolved from each browser's configured executable (`firefox.exe` -> `firefox`, `chrome.exe` -> `chrome`), and a brand-specific title regex from [`Get-BrowserTitlePattern`](#get-browsertitlepattern) attributes each window to a brand for logging. The regex no longer decides WHICH windows are closed: every visible, titled window of a targeted browser process is closed, including the ones without the brand suffix - an undocked DevTools window, a Picture-in-Picture player, an installed web app (PWA), a print or download dialog - that used to be left standing after every cleanup. `WM_CLOSE` is posted directly to each non-excluded window handle (per handle, not via `SendKeys`), so it does not touch the foreground and excluded windows are never accidentally closed by a misfired keystroke.
 
 **The close is verified.** `WM_CLOSE` is posted, not sent, so the function then waits for the windows to disappear ([Wait-BrowserWindowsClosed](#wait-browserwindowsclosed), four seconds), posts `WM_CLOSE` once more to whatever is still standing, waits again (two seconds), and reports the survivors by title as a warning instead of printing its success line. Browsers are never force-killed: a window that ignores two `WM_CLOSE` rounds is holding a dialog - unsaved form data, a download in progress, "close all tabs?" - that the user has to answer, and killing the process would answer it for them.
 
@@ -1742,7 +1739,7 @@ Set-LogLevel Verbose { Terminate-AllProcessesByName }
 
 ## [Terminate-AllProcessesWithVisibleWindows](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Terminate-AllProcessesWithVisibleWindows.ps1)
 
-- **Description:** Forcefully terminates all processes that expose a visible, titled top-level window (discovered window-side through `Get-VisibleWindowProcess`, not via `MainWindowTitle`), waits for them to exit and reports any that survive, preserving the default exclusions used by the desktop cleanup flow: every browser declared in `Configuration.Universal.Browsers` (handled gracefully by `Terminate-AllBrowserProcesses` instead) plus every process named in the `Universal.VisibleWindowExclusions` configuration list (`Rainmeter`, `WindowsTerminal`, `Docker Desktop`, `obs64`, and the PowerToys supervisor/FancyZones/Settings processes by default). Warns and terminates nothing when the exclusion list is absent or empty, since running without it would force-kill `WindowsTerminal` - the shell running the cleanup. Additional windows can be spared via the `-Exclude` parameter.
+- **Description:** Forcefully terminates all processes that expose a visible, titled top-level window (discovered window-side through `Get-VisibleWindowProcess`, not via `MainWindowTitle`), waits for them to exit and reports any that survive, preserving the default exclusions used by the desktop cleanup flow: every browser declared in `Configuration.Universal.Browsers` (handled gracefully by `Terminate-AllBrowserProcesses` instead) plus every process named in the `Universal.VisibleWindowExclusions` configuration list (`WindowsTerminal`, `Docker Desktop`, and the PowerToys supervisor/FancyZones/Settings processes by default). Warns and terminates nothing when the exclusion list is absent or empty, since running without it would force-kill `WindowsTerminal` - the shell running the cleanup. Additional windows can be spared via the `-Exclude` parameter.
 - **Parameters:** -Exclude
 - **Usage:** `Terminate-AllProcessesWithVisibleWindows`, `Terminate-AllProcessesWithVisibleWindows -Exclude "*YouTube*"`, `Terminate-AllProcessesWithVisibleWindows -Exclude "*YouTube*", "*Obsidian*"`
 
@@ -1963,27 +1960,6 @@ Unpin-TaskbarApps -SkipExplorerRestart
 ```
 
 **See also:** [Configure-Taskbar](#configure-taskbar), [Clear-TaskbarPins](#clear-taskbarpins)
-
-## [Update-DirectoryNames](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Update-DirectoryNames.ps1)
-
-- **Description:** Scans directories under a given path for names ending in a date suffix (`YYYY_MM_DD`) and renames them so the date becomes today's date. Use `-WhatIf` to preview changes without renaming. Directories already carrying today's date are reported as up to date.
-- **Parameters:** -Path, -WhatIf
-- **Usage:** `Update-DirectoryNames`, `Update-DirectoryNames -Path "C:\My Folders"`, `Update-DirectoryNames -Path "C:\My Folders" -WhatIf`
-
-Only directories whose name ends in three underscore-separated segments matching `YYYY`, `MM`, and `DD` are considered. The trailing date is replaced with the current date while any leading name segments are preserved (for example `MyDocs_2024_01_15` becomes `MyDocs_2026_06_24`). Rename failures are caught and reported per directory, and when nothing needs changing a summary line confirms all directories are up to date.
-
-| Parameter | Description                                                                            |
-| --------- | -------------------------------------------------------------------------------------- |
-| `-Path`   | Root directory to scan for dated subdirectory names. Defaults to the current location. |
-| `-WhatIf` | Shows what would be renamed without performing any changes.                            |
-
-```powershell
-# Update all dated directories in the current location
-Update-DirectoryNames
-
-# Preview changes for a specific path without renaming anything
-Update-DirectoryNames -Path "C:\My Folders" -WhatIf
-```
 
 ## [Upgrade-All](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Upgrade-All.ps1)
 

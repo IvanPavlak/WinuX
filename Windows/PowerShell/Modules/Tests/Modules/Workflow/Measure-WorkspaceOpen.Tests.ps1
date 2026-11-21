@@ -222,7 +222,7 @@ Describe "Measure-WorkspaceOpen" {
 				@($Actions | Where-Object { $_.Action -ne 'Terminate-WindowsTerminalTabs' })
 			}
 
-			Measure-WorkspaceOpen Exiter Asseto -Runs 1 -WarmUp 0 -SettleSeconds 0 -Variant @{ Name = 'Only' } -Configuration $global:Configuration -ResultPath $script:ResultFile | Out-Null
+			Measure-WorkspaceOpen Exiter ExampleProject -Runs 1 -WarmUp 0 -SettleSeconds 0 -Variant @{ Name = 'Only' } -Configuration $global:Configuration -ResultPath $script:ResultFile | Out-Null
 
 			Should -Invoke Write-LogError -Times 0 -Exactly
 			Should -Invoke Resolve-WorkspaceActions -Times 1 -Exactly -ParameterFilter { $Workspace -eq 'Exiter' -and $null -ne $Configuration }
@@ -235,9 +235,9 @@ Describe "Measure-WorkspaceOpen" {
 				$Actions
 			}
 
-			Measure-WorkspaceOpen Picker Asseto -Runs 1 -WarmUp 0 -SettleSeconds 0 -Variant @{ Name = 'Only' } -Configuration $global:Configuration -ResultPath $script:ResultFile | Out-Null
+			Measure-WorkspaceOpen Picker ExampleProject -Runs 1 -WarmUp 0 -SettleSeconds 0 -Variant @{ Name = 'Only' } -Configuration $global:Configuration -ResultPath $script:ResultFile | Out-Null
 
-			Should -Invoke Resolve-WorkspaceActions -Times 1 -Exactly -ParameterFilter { (@($Project) -join ',') -eq 'Asseto' }
+			Should -Invoke Resolve-WorkspaceActions -Times 1 -Exactly -ParameterFilter { (@($Project) -join ',') -eq 'ExampleProject' }
 		}
 
 		It "refuses a workspace whose every action is scoped to another machine" {
@@ -257,10 +257,10 @@ Describe "Measure-WorkspaceOpen" {
 			Should -Invoke Write-LogError -Times 1 -Exactly
 			Should -Invoke Open-Workspace -Times 0 -Exactly
 
-			Measure-WorkspaceOpen Picker Asseto -Runs 1 -WarmUp 0 -SettleSeconds 0 -Variant @{ Name = 'Only' } -Configuration $global:Configuration -ResultPath $script:ResultFile | Out-Null
+			Measure-WorkspaceOpen Picker ExampleProject -Runs 1 -WarmUp 0 -SettleSeconds 0 -Variant @{ Name = 'Only' } -Configuration $global:Configuration -ResultPath $script:ResultFile | Out-Null
 
 			Should -Invoke Write-LogError -Times 1 -Exactly
-			Should -Invoke Open-Workspace -Times 1 -Exactly -ParameterFilter { $Workspace -eq 'Picker' -and (@($Project) -join ',') -eq 'Asseto' }
+			Should -Invoke Open-Workspace -Times 1 -Exactly -ParameterFilter { $Workspace -eq 'Picker' -and (@($Project) -join ',') -eq 'ExampleProject' }
 		}
 	}
 
@@ -314,11 +314,11 @@ Describe "Measure-WorkspaceOpen" {
 		}
 
 		It "hands the project and the remaining arguments to every open, so no open shows a menu" {
-			$result = Measure-WorkspaceOpen WinuX Asseto run -Runs 1 -WarmUp 1 -SettleSeconds 0 -Variant @{ Name = 'Only' } -Configuration $global:Configuration -ResultPath $script:ResultFile -PassThru
+			$result = Measure-WorkspaceOpen WinuX ExampleProject run -Runs 1 -WarmUp 1 -SettleSeconds 0 -Variant @{ Name = 'Only' } -Configuration $global:Configuration -ResultPath $script:ResultFile -PassThru
 
-			Should -Invoke Open-Workspace -Times 2 -Exactly -ParameterFilter { $Workspace -eq 'WinuX' -and (@($Project) -join ',') -eq 'Asseto' -and (@($ExtraArgs) -join ',') -eq 'run' }
-			$result.Runs | ForEach-Object { $_.Project | Should -Be 'Asseto' }
-			(Import-Csv -LiteralPath $script:ResultFile)[0].Project | Should -Be 'Asseto'
+			Should -Invoke Open-Workspace -Times 2 -Exactly -ParameterFilter { $Workspace -eq 'WinuX' -and (@($Project) -join ',') -eq 'ExampleProject' -and (@($ExtraArgs) -join ',') -eq 'run' }
+			$result.Runs | ForEach-Object { $_.Project | Should -Be 'ExampleProject' }
+			(Import-Csv -LiteralPath $script:ResultFile)[0].Project | Should -Be 'ExampleProject'
 		}
 
 		It "opens without a project when none is given" {

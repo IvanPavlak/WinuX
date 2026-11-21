@@ -137,13 +137,13 @@ Describe "Get-WorkspaceOpenDelta" {
 			Mock Get-WindowHandle {
 				@(
 					(New-TestWindow -Handle 1 -ProcessId 11 -ProcessName 'WindowsTerminal' -Title 'pwsh'),
-					(New-TestWindow -Handle 2 -ProcessId 22 -ProcessName 'Rainmeter' -Title 'Rainmeter'),
+					(New-TestWindow -Handle 2 -ProcessId 22 -ProcessName 'MyWidgetApp' -Title 'MyWidgetApp'),
 					(New-TestWindow -Handle 3 -ProcessId 33 -ProcessName 'claude' -Title 'Claude')
 				)
 			}
 
 			$global:Configuration = @{
-				Universal = @{ VisibleWindowExclusions = @('Rainmeter', 'WindowsTerminal') }
+				Universal = @{ VisibleWindowExclusions = @('MyWidgetApp', 'WindowsTerminal') }
 			}
 		}
 
@@ -170,7 +170,7 @@ Describe "Get-WorkspaceOpenDelta" {
 			$delta = Get-WorkspaceOpenDelta -Workspace 'Server' -ExistingWindowHandles (New-HandleSet 3) -AdoptUnclaimed
 
 			@($delta.Windows.ProcessName) | Should -Contain 'WindowsTerminal'
-			@($delta.Windows.ProcessName) | Should -Contain 'Rainmeter'
+			@($delta.Windows.ProcessName) | Should -Contain 'MyWidgetApp'
 		}
 
 		It "adopts an excluded process once it is taken off the list" {
@@ -217,7 +217,7 @@ Describe "Get-WorkspaceOpenDelta" {
 		}
 
 		It "adopts every tab on screen once WindowsTerminal is off the list" {
-			$global:Configuration.Universal.VisibleWindowExclusions = @('Rainmeter')
+			$global:Configuration.Universal.VisibleWindowExclusions = @('MyWidgetApp')
 			Mock Get-TerminalTabSnapshot { New-TabSnapshot -Window @{ 777 = @('pwsh', 'Server.Api') } }
 
 			$delta = Get-WorkspaceOpenDelta -Workspace 'Server' -ExistingTerminalTabs (New-TabSnapshot -Window @{ 777 = @('pwsh') }) -AdoptUnclaimed
@@ -228,7 +228,7 @@ Describe "Get-WorkspaceOpenDelta" {
 		It "ignores the exclusion list entirely when not adopting" {
 			$delta = Get-WorkspaceOpenDelta -Workspace 'Server' -ExistingWindowHandles (New-HandleSet 3)
 
-			@($delta.Windows.ProcessName) | Should -Be @('WindowsTerminal', 'Rainmeter')
+			@($delta.Windows.ProcessName) | Should -Be @('WindowsTerminal', 'MyWidgetApp')
 		}
 
 		It "never adopts a protected pre-existing window" {
@@ -239,7 +239,7 @@ Describe "Get-WorkspaceOpenDelta" {
 			$delta = Get-WorkspaceOpenDelta -Workspace 'Server' -ExistingWindowHandles (New-HandleSet 1, 2, 3) `
 				-ProtectedWindowHandles (New-HandleSet 3) -AdoptUnclaimed
 
-			@($delta.Windows.ProcessName) | Should -Be @('WindowsTerminal', 'Rainmeter')
+			@($delta.Windows.ProcessName) | Should -Be @('WindowsTerminal', 'MyWidgetApp')
 		}
 
 		It "still records a protected window the diff proves this open created" {

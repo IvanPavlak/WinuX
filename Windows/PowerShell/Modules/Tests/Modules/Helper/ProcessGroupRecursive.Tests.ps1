@@ -95,10 +95,10 @@ Describe "ProcessGroupRecursive" {
 
 			$groupValue = @(
 				@{ Name = "Homepage"; Url = "https://homepage.example.com" },
-				@{ Name = "Proxmox"; Url = "https://proxmox.example.com" },
-				@{ ArrStack = @(
-						@{ Name = "Radarr"; Url = "https://radarr.example.com" }
-						@{ Name = "Sonarr"; Url = "https://sonarr.example.com" }
+				@{ Name = "Hypervisor"; Url = "https://hypervisor.example.com" },
+				@{ MediaStack = @(
+						@{ Name = "ServiceA"; Url = "https://servicea.example.com" }
+						@{ Name = "ServiceB"; Url = "https://serviceb.example.com" }
 					)
 				}
 			)
@@ -107,17 +107,17 @@ Describe "ProcessGroupRecursive" {
 
 			$lookupMap["1"].StructureType | Should -Be "MixedArray"
 
-			# Parent + 2 NameUrl leaves + ArrStack sub-group + 2 ArrStack leaves = 6
+			# Parent + 2 NameUrl leaves + MediaStack sub-group + 2 MediaStack leaves = 6
 			$displayItems.Count | Should -Be 6
 
 			$lookupMap.ContainsKey("Homepage") | Should -BeTrue
-			$lookupMap.ContainsKey("Proxmox") | Should -BeTrue
-			$lookupMap.ContainsKey("ArrStack") | Should -BeTrue
-			$lookupMap.ContainsKey("Radarr") | Should -BeTrue
-			$lookupMap.ContainsKey("Sonarr") | Should -BeTrue
+			$lookupMap.ContainsKey("Hypervisor") | Should -BeTrue
+			$lookupMap.ContainsKey("MediaStack") | Should -BeTrue
+			$lookupMap.ContainsKey("ServiceA") | Should -BeTrue
+			$lookupMap.ContainsKey("ServiceB") | Should -BeTrue
 
 			$lookupMap["Homepage"].StructureType | Should -Be "Leaf"
-			$lookupMap["ArrStack"].StructureType | Should -Be "NameUrlArray"
+			$lookupMap["MediaStack"].StructureType | Should -Be "NameUrlArray"
 		}
 
 		It "Should assign correct index paths for mixed items" {

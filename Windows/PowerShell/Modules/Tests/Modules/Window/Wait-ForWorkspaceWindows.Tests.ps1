@@ -404,7 +404,7 @@ Describe "Wait-ForWorkspaceWindows" {
 		}
 
 		It "hands the desktop over once the titled entry's window carries the title" {
-			$script:browserWindows = @([PSCustomObject]@{ Handle = [IntPtr]301; Title = 'futurama - Slack - Mozilla Firefox'; ProcessName = 'firefox'; Left = 0; Top = 0; Width = 800; Height = 600 })
+			$script:browserWindows = @([PSCustomObject]@{ Handle = [IntPtr]301; Title = 'MyOrg - Slack - Mozilla Firefox'; ProcessName = 'firefox'; Left = 0; Top = 0; Width = 800; Height = 600 })
 			Mock Get-WindowHandle {
 				if ($ProcessName -match 'firefox') { return @(@($script:codeWindow) + @($script:browserWindows)) }
 				if ($ProcessName -eq 'Slow' -and @($script:readyFired).Count -gt 0) { return @([PSCustomObject]@{ Handle = [IntPtr]302; Title = 'Slow'; ProcessName = 'Slow'; Left = 0; Top = 0; Width = 800; Height = 600 }) }

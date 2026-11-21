@@ -13,7 +13,7 @@ function Configure-WSLSSH {
 
         The WSL username and home directory are derived from inside WSL - they routinely
         differ from the Windows username (Linux is case-sensitive and WSL accounts are
-        lowercase by convention, e.g. Windows `Ivan` vs WSL `ivan`).
+        lowercase by convention, e.g. Windows `Alice` vs WSL `alice`).
 
         Any existing `.ssh` in the WSL home is deleted and recreated first. Every `wsl` call
         targets `DefaultWSLDistribution` explicitly (`wsl -d`); the function does nothing until
@@ -34,8 +34,8 @@ function Configure-WSLSSH {
 	# machines routinely steal the WSL *default*, and a bare `wsl` would then run all
 	# of this inside the wrong distro (e.g. podman's `user` account).
 
-	# Never assume $env:USERNAME maps to the WSL account: `Ivan` on Windows is not
-	# `ivan` in Linux, and a wrong name silently builds a root-owned /home/<Wrong>
+	# Never assume $env:USERNAME maps to the WSL account: `Alice` on Windows is not
+	# `alice` in Linux, and a wrong name silently builds a root-owned /home/<Wrong>
 	# that SSH never reads. Ask WSL itself for the default user and their home.
 	$wslUser = "$(wsl -d $distro -e sh -c 'id -un')".Trim()
 	$wslHome = "$(wsl -d $distro -e sh -c 'echo $HOME')".Trim()

@@ -791,35 +791,35 @@ Describe "Close-Workspace" {
 		}
 
 		It "brings the desktop on screen and closes the tab that was unreachable" {
-			$script:liveTabTitles = @('pwsh', 'Dotfiles.ROOT')
-			Set-Tracker -Entry @((New-Entry -Workspace 'Dotfiles' -TerminalTabs @(
-						(New-TabRecord -WindowHandle 407 -Title 'Dotfiles.ROOT')
+			$script:liveTabTitles = @('pwsh', 'MyFork.ROOT')
+			Set-Tracker -Entry @((New-Entry -Workspace 'MyFork' -TerminalTabs @(
+						(New-TabRecord -WindowHandle 407 -Title 'MyFork.ROOT')
 					)))
 
-			Close-Workspace -Workspace 'Dotfiles' -StatePath $script:TestStatePath
+			Close-Workspace -Workspace 'MyFork' -StatePath $script:TestStatePath
 
-			$script:closedTabs | Should -Be @('Dotfiles.ROOT')
+			$script:closedTabs | Should -Be @('MyFork.ROOT')
 			$script:desktopSwitches | Should -Contain 'window:407'
 		}
 
 		It "reports nothing as refused once the tab is reachable" {
-			$script:liveTabTitles = @('pwsh', 'Dotfiles.ROOT')
-			Set-Tracker -Entry @((New-Entry -Workspace 'Dotfiles' -TerminalTabs @(
-						(New-TabRecord -WindowHandle 407 -Title 'Dotfiles.ROOT')
+			$script:liveTabTitles = @('pwsh', 'MyFork.ROOT')
+			Set-Tracker -Entry @((New-Entry -Workspace 'MyFork' -TerminalTabs @(
+						(New-TabRecord -WindowHandle 407 -Title 'MyFork.ROOT')
 					)))
 
-			Close-Workspace -Workspace 'Dotfiles' -StatePath $script:TestStatePath
+			Close-Workspace -Workspace 'MyFork' -StatePath $script:TestStatePath
 
 			Should -Invoke Write-LogList -Times 0
 		}
 
 		It "puts the view back before the desktop sweep" {
-			$script:liveTabTitles = @('pwsh', 'Dotfiles.ROOT')
-			Set-Tracker -Entry @((New-Entry -Workspace 'Dotfiles' -TerminalTabs @(
-						(New-TabRecord -WindowHandle 407 -Title 'Dotfiles.ROOT')
+			$script:liveTabTitles = @('pwsh', 'MyFork.ROOT')
+			Set-Tracker -Entry @((New-Entry -Workspace 'MyFork' -TerminalTabs @(
+						(New-TabRecord -WindowHandle 407 -Title 'MyFork.ROOT')
 					)))
 
-			Close-Workspace -Workspace 'Dotfiles' -StatePath $script:TestStatePath
+			Close-Workspace -Workspace 'MyFork' -StatePath $script:TestStatePath
 
 			$script:desktopSwitches | Should -Be @('window:407', 'restore:1')
 			Should -Invoke Remove-VirtualDesktops -Times 1

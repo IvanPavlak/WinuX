@@ -168,12 +168,12 @@ BrowserGroups = @(
     @{ Server = @(
         @{ DomainLinks = @(
             @{ Name = "Homepage"; Url = "https://homepage.example.com" }
-            @{ Name = "Proxmox"; Url = "https://proxmox.example.com" }
-            @{ Name = "TrueNAS"; Url = "https://truenas.example.com" }
-            @{ ArrStack = @(
-                @{ Name = "Sonarr"; Url = "https://sonarr.example.com" }
-                @{ Name = "Radarr"; Url = "https://radarr.example.com" }
-                @{ Name = "Prowlarr"; Url = "https://prowlarr.example.com" }
+            @{ Name = "Hypervisor"; Url = "https://hypervisor.example.com" }
+            @{ Name = "Storage"; Url = "https://storage.example.com" }
+            @{ MediaStack = @(
+                @{ Name = "ServiceB"; Url = "https://serviceb.example.com" }
+                @{ Name = "ServiceA"; Url = "https://servicea.example.com" }
+                @{ Name = "ServiceC"; Url = "https://servicec.example.com" }
             )}
         )}
     )}
@@ -183,8 +183,8 @@ BrowserGroups = @(
 Usage:
 
 ```powershell
-Open-Browser DomainLinks    # Opens ALL URLs (Homepage + Proxmox + TrueNAS + ArrStack)
-Open-Browser ArrStack       # Opens only Sonarr + Radarr + Prowlarr
+Open-Browser DomainLinks    # Opens ALL URLs (Homepage + Hypervisor + Storage + MediaStack)
+Open-Browser MediaStack     # Opens only ServiceB + ServiceA + ServiceC
 Open-Browser Homepage       # Opens single URL
 ```
 
@@ -257,7 +257,6 @@ Specify browser with `-Browser`:
 Open-Browser AI -Browser Chrome
 Open-Browser AI -Browser Edge
 Open-Browser AI -Browser Brave
-Open-Browser AI -Browser Tor       # Tor Browser
 ```
 
 The default browser ships empty in the base configuration - set it in `Configuration.local.psd1`:

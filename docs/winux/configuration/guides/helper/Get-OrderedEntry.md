@@ -62,7 +62,7 @@ Read-only checks. None of these change anything.
 Reload-PowerShellProfile
 Get-OrderedNames $global:Configuration.WorkspaceActions
 Get-OrderedEntry $global:Configuration.WorkspaceActions "WinuX"
-Get-OrderedEntry $global:Configuration.WakeOnLanConfig "Proxmox Backup Server"
+Get-OrderedEntry $global:Configuration.WakeOnLanConfig "Backup Server"
 ```
 
 A `$null` back means the name is not configured - check its spelling against `Get-OrderedNames`. If a value reads back as empty, the two usual causes are a parse error in `Configuration.local.psd1` (run `Test-ConfigurationSchema`) and a key placed at the wrong nesting level.

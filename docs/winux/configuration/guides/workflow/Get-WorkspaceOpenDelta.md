@@ -9,13 +9,13 @@ The ownership rule for `Close-Workspace`, in one place.
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`Universal`](../../configuration-reference.md#universal-constants) | hashtable, 27 keys | hashtable, 27 keys | Machine-independent constants. This function reads only `Universal.VisibleWindowExclusions` (array of process names, 7 shipped), and only with `-AdoptUnclaimed`: a window that was already on screen is never adopted when its process is named there (nor when it is one of the shell hosts `Get-ShellProcessName` lists), and `WindowsTerminal` on the list keeps pre-existing terminal tabs out too. Windows and tabs the open created are recorded regardless. |
+| [`Universal`](../../configuration-reference.md#universal-constants) | hashtable, 22 keys | hashtable, 22 keys | Machine-independent constants. This function reads only `Universal.VisibleWindowExclusions` (array of process names, 5 shipped), and only with `-AdoptUnclaimed`: a window that was already on screen is never adopted when its process is named there (nor when it is one of the shell hosts `Get-ShellProcessName` lists), and `WindowsTerminal` on the list keeps pre-existing terminal tabs out too. Windows and tabs the open created are recorded regardless. |
 
 ## Decisions
 
 1. Which already-running applications should a plain `Open-Workspace` never take ownership of?
     - Options: Process names (no `.exe`) in `Universal.VisibleWindowExclusions`, matched exactly and case-insensitively. The same list is what `Kill-All` never force-kills, so an entry affects both. Keep `WindowsTerminal` and the PowerToys entries.
-    - Default: The shipped seven: `Rainmeter`, `WindowsTerminal`, `Docker Desktop`, `obs64`, `PowerToys`, `PowerToys.FancyZones`, `PowerToys.Settings`.
+    - Default: The shipped five: `WindowsTerminal`, `Docker Desktop`, `PowerToys`, `PowerToys.FancyZones`, `PowerToys.Settings`.
     - More detail: [`Universal`](../../configuration-reference.md#universal-constants)
 
 ## Where to Put Values
@@ -39,10 +39,8 @@ The processes a plain open never adopts. Copy the shipped list and add to it.
 ```powershell
 Universal = @{
     VisibleWindowExclusions = @(
-        "Rainmeter"
         "WindowsTerminal"
         "Docker Desktop"
-        "obs64"
         "PowerToys"
         "PowerToys.FancyZones"
         "PowerToys.Settings"
@@ -81,10 +79,8 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 @{
     Universal = @{
         VisibleWindowExclusions = @(
-            "Rainmeter"
             "WindowsTerminal"
             "Docker Desktop"
-            "obs64"
             "PowerToys"
             "PowerToys.FancyZones"
             "PowerToys.Settings"

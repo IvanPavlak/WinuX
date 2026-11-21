@@ -9,7 +9,7 @@ BeforeAll {
 
 Describe "Get-BrowserTitlePattern" {
 	It "returns a pattern for every configured browser name" {
-		foreach ($browser in @("Firefox", "Tor", "Chrome", "Edge", "Brave")) {
+		foreach ($browser in @("Firefox", "Chrome", "Edge", "Brave")) {
 			Get-BrowserTitlePattern -BrowserName $browser | Should -Not -BeNullOrEmpty
 		}
 	}
@@ -31,13 +31,10 @@ Describe "Get-BrowserTitlePattern" {
 		"New tab - Microsoft Edge" -match (Get-BrowserTitlePattern -BrowserName "Edge") | Should -BeTrue
 	}
 
-	It "distinguishes Tor Browser windows from Firefox windows" {
+	It "tells Firefox browser windows from helper windows of the same process" {
 		$firefoxPattern = Get-BrowserTitlePattern -BrowserName "Firefox"
-		$torPattern = Get-BrowserTitlePattern -BrowserName "Tor"
 
 		"WinuX - Mozilla Firefox" -match $firefoxPattern | Should -BeTrue
-		"WinuX - Mozilla Firefox" -match $torPattern | Should -BeFalse
-		"Connect to Tor - Tor Browser" -match $torPattern | Should -BeTrue
-		"Connect to Tor - Tor Browser" -match $firefoxPattern | Should -BeFalse
+		"Picture-in-Picture" -match $firefoxPattern | Should -BeFalse
 	}
 }

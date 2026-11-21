@@ -122,8 +122,8 @@ WallpaperDarkSettings = @{
             @{ File = "Space2.jpg"; Style = "Stretch" }
         )
     }
-    "Laptop"  = @{ File = "BlackHole.png"; Style = "Fill" }
-    "Work"    = @{ File = "BlackHole.png"; Style = "Fill" }
+    "Laptop"  = @{ File = "Black.jpg"; Style = "Fill" }
+    "Work"    = @{ File = "Black.jpg"; Style = "Fill" }
     "Test"    = @{ File = "Black.jpg"; Style = "Fill" }
     "Default" = @{ File = "Black.jpg"; Style = "Fill" }
 }
@@ -176,10 +176,10 @@ SymbolicLinks = @{
     }
 
     # A fork payload per machine (illustrative - add your own payloads the same way)
-    Rainmeter = @{
+    MyApp = @{
         MainConfig = @{
-            Path   = "{AppData}\Rainmeter\Rainmeter.ini"
-            Target = "{RepoRoot}\Windows\Rainmeter\Rainmeter_{MachineType}.ini"
+            Path   = "{AppData}\MyApp\config.ini"
+            Target = "{RepoRoot}\MyApp\config_{MachineType}.ini"
         }
     }
 }

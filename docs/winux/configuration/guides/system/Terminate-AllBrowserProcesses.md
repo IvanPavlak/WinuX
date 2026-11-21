@@ -1,6 +1,6 @@
 # Terminate-AllBrowserProcesses
 
-Gracefully terminates every browser declared in `Configuration.Universal.Browsers` (Firefox, Tor, Chrome, Edge, Brave) by posting `WM_CLOSE` to each browser's visible top-level windows.
+Gracefully terminates every browser declared in `Configuration.Universal.Browsers` (Firefox, Chrome, Edge, Brave) by posting `WM_CLOSE` to each browser's visible top-level windows.
 
 > [!NOTE]
 > Every value on this page belongs in `Configuration.local.psd1`, never in the base `Configuration.psd1`. The base file is upstream's, it ships empty-by-default, and it is deep-merged with your local file at load time by `Load-PathConfiguration`. See [Fork Model](../../../contributing/fork-model.md).
@@ -9,7 +9,7 @@ Gracefully terminates every browser declared in `Configuration.Universal.Browser
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`Universal.Browsers`](../../configuration-reference.md#browser-configuration) | hashtable of browser name to `@{ Exe; PrivateArg; NewWindowArg }` | `Firefox`, `Tor`, `Chrome`, `Edge`, `Brave` | The browsers whose windows are closed. Only `Exe` is read here: its file name without `.exe` is the process name targeted. An entry without `Exe`, or with a name `Get-BrowserTitlePattern` does not know (anything but the shipped five), is skipped. |
+| [`Universal.Browsers`](../../configuration-reference.md#browser-configuration) | hashtable of browser name to `@{ Exe; PrivateArg; NewWindowArg }` | `Firefox`, `Chrome`, `Edge`, `Brave` | The browsers whose windows are closed. Only `Exe` is read here: its file name without `.exe` is the process name targeted. An entry without `Exe`, or with a name `Get-BrowserTitlePattern` does not know (anything but the shipped four), is skipped. |
 
 ## Decisions
 
@@ -18,8 +18,8 @@ Gracefully terminates every browser declared in `Configuration.Universal.Browser
     - Default: The shipped default install locations.
     - More detail: [`Universal.Browsers`](../../configuration-reference.md#browser-configuration)
 2. Do you use a browser the base `Browsers` map does not list?
-    - Options: You can add an entry for `Open-Browser`, but this function only closes the five browsers `Get-BrowserTitlePattern` knows, so an added browser is neither closed here nor force-killed by `Terminate-AllProcessesWithVisibleWindows` (every `Browsers` executable is excluded there) - `Report-KillAllSurvivors` lists its windows instead.
-    - Default: The shipped five.
+    - Options: You can add an entry for `Open-Browser`, but this function only closes the four browsers `Get-BrowserTitlePattern` knows, so an added browser is neither closed here nor force-killed by `Terminate-AllProcessesWithVisibleWindows` (every `Browsers` executable is excluded there) - `Report-KillAllSurvivors` lists its windows instead.
+    - Default: The shipped four.
     - More detail: [`Universal.Browsers`](../../configuration-reference.md#browser-configuration)
 
 ## Where to Put Values

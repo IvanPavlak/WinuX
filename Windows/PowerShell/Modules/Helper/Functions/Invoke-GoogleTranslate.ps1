@@ -18,7 +18,7 @@ function Invoke-GoogleTranslate {
 	.PARAMETER RemainingWords
 		Hidden (DontShow) catch-all for every positional and remaining argument
 		(ValueFromRemainingArguments). Joined after -Text with spaces to form the text
-		to translate, which is what makes `Invoke-GoogleTranslate kako si` work without
+		to translate, which is what makes `Invoke-GoogleTranslate wie geht es dir` work without
 		quotes. Not meant to be passed by name.
 
 	.PARAMETER InputLanguage
@@ -30,12 +30,12 @@ function Invoke-GoogleTranslate {
 		or English when that section is absent.
 
 	.EXAMPLE
-		Invoke-GoogleTranslate kako si
+		Invoke-GoogleTranslate wie geht es dir
 		# Auto-detects the input language and translates to English (using defaults)
 
 	.EXAMPLE
-		Invoke-GoogleTranslate -InputLanguage English -OutputLanguage Croatian -Text hello world
-		# Translates "hello world" from English to Croatian
+		Invoke-GoogleTranslate -InputLanguage English -OutputLanguage German -Text hello world
+		# Translates "hello world" from English to German ("hallo welt")
 
 	.EXAMPLE
 		Invoke-GoogleTranslate -InputLanguage German -OutputLanguage English -Text guten morgen

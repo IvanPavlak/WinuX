@@ -20,7 +20,7 @@ Configures keyboard layouts from predefined layout sets read from `KeyboardLayou
     - Default: Empty - the menu has no Enter default, so a set must be picked or passed with `-LayoutSet`.
     - More detail: [`DefaultKeyboardLayoutSet`](../../configuration-reference.md#keyboard-layouts)
 2. Which keyboard layouts do you use?
-    - Options: Friendly name to the 8-digit keyboard layout id (KLID), e.g. `US = "00000409"`, `Croatian = "0000041A"`. The language is derived from the id's last four digits.
+    - Options: Friendly name to the 8-digit keyboard layout id (KLID), e.g. `US = "00000409"`, `German = "00000407"`. The language is derived from the id's last four digits.
     - Default: Empty - `Set-KeyboardLayouts` no-ops.
     - More detail: [`KeyboardLayouts`](../../configuration-reference.md#keyboard-layouts)
 3. Which layout combinations do you want to switch between?

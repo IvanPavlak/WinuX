@@ -13,8 +13,8 @@ function Get-BrowserWindowsByTarget {
 		undocked DevTools window, a Picture-in-Picture player, an installed web app (PWA)
 		window, a print or download dialog. Those windows belong to a browser process that
 		is being shut down, so they are returned too; `MatchesPattern` records whether the
-		title carried the brand marker, for logging and for callers that still want to
-		tell two brands sharing one process name apart (Firefox vs. Tor Browser).
+		title carried the brand marker, for logging and for callers that want to tell the
+		browser's own windows from its helper windows.
 
 	.PARAMETER TargetPids
 		Process IDs whose top-level windows should be collected.

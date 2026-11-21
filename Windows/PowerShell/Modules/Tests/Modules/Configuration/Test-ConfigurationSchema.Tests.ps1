@@ -86,7 +86,7 @@ Describe "Test-ConfigurationSchema" {
 
 		It "reports an entry that is not a single-key hashtable" {
 			$script:ValidConfig.AcrobatPdfGroups = @(
-				@{ Habajec = @('Books.Wilius'); Hrkovac = @('Books.Jin') }
+				@{ GroupA = @('Manuals.First'); GroupB = @('Manuals.Second') }
 			)
 
 			Test-ConfigurationSchema -Configuration $script:ValidConfig
@@ -283,6 +283,100 @@ Describe "Test-ConfigurationSchema" {
 			}
 
 			Test-ConfigurationSchema -Configuration $config
+
+			Should -Invoke Write-Warning -Times 0
+		}
+	}
+
+	Context "deprecated configuration (-Deprecations)" {
+		# The shipped table is empty since 3.0.0, so these hand over their own through the hidden
+		# -Deprecations parameter: the mechanism stays tested for the next deprecation.
+		BeforeEach {
+			$script:DeprecationConfig = @{
+				ValidMachineTypes     = @('PC')
+				HostnameToMachineType = @{ 'PC1' = 'PC' }
+				DefaultMachineType    = 'PC'
+				LaptopChassisTypes    = @('9')
+				BasePaths             = @{ Dev = 'C:\Dev' }
+				PathTemplates         = @{ Root = '{Dev}'; Projects = @{ Self = @{ Root = '{RepoRoot}' } }; SymbolicLinks = @{ } }
+				GitConfig             = @{ UserName = 'ExampleUser'; UserEmail = 'x@y.z'; WingetPackageId = 'Git.Git' }
+				BrowserGroups         = @(@{ Work = @('https://example.com') })
+				RepositoryGroups      = @(@{ Private = @(@{ Name = 'WinuX'; UrlPath = 'Universal.GitHub.Private.WinuX'; LocalPath = 'Projects.Self.Root' }) })
+				Section               = @{ OldKey = 'set'; EmptyKey = ''; ListKey = @('C:\Shared\', 'Other') }
+			}
+			$script:Present = @{ Path = 'Section.OldKey'; Since = '3.1.0'; Removal = '4.0.0'; When = 'Present'; Replacement = 'Section.NewKey' }
+		}
+
+		It "warns once for a key in use, naming the releases and the replacement" {
+			Test-ConfigurationSchema -Configuration $script:DeprecationConfig -Deprecations @($script:Present)
+
+			Should -Invoke Write-Warning -Times 1 -Exactly
+			Should -Invoke Write-Warning -Times 1 -Exactly -ParameterFilter { $Message -match 'Section\.OldKey is deprecated since 3\.1\.0 and removed in 4\.0\.0 - use Section\.NewKey' }
+		}
+
+		It "stays silent for <Case>" -ForEach @(
+			@{ Case = 'a key that is absent'; Path = 'Section.MissingKey' }
+			@{ Case = 'a missing section on the way'; Path = 'NoSection.OldKey' }
+		) {
+			$entry = $script:Present.Clone()
+			$entry.Path = $Path
+
+			Test-ConfigurationSchema -Configuration $script:DeprecationConfig -Deprecations @($entry)
+
+			Should -Invoke Write-Warning -Times 0
+		}
+
+		It "NotEmpty warns for a value and stays silent for an empty one" {
+			$filled = @{ Path = 'Section.OldKey'; Since = '3.1.0'; Removal = '4.0.0'; When = 'NotEmpty'; Replacement = 'X' }
+			$empty = @{ Path = 'Section.EmptyKey'; Since = '3.1.0'; Removal = '4.0.0'; When = 'NotEmpty'; Replacement = 'X' }
+
+			Test-ConfigurationSchema -Configuration $script:DeprecationConfig -Deprecations @($empty)
+			Should -Invoke Write-Warning -Times 0
+
+			Test-ConfigurationSchema -Configuration $script:DeprecationConfig -Deprecations @($filled)
+			Should -Invoke Write-Warning -Times 1 -Exactly -ParameterFilter { $Message -match 'Section\.OldKey' }
+		}
+
+		It "NotDefault compares element by element, ignoring a trailing backslash" {
+			$same = @{ Path = 'Section.ListKey'; Since = '3.1.0'; Removal = '4.0.0'; When = 'NotDefault'; Default = @('C:\Shared', 'Other'); Replacement = 'X' }
+			$changed = @{ Path = 'Section.ListKey'; Since = '3.1.0'; Removal = '4.0.0'; When = 'NotDefault'; Default = @('C:\Shared', 'Another'); Replacement = 'X' }
+
+			Test-ConfigurationSchema -Configuration $script:DeprecationConfig -Deprecations @($same)
+			Should -Invoke Write-Warning -Times 0
+
+			Test-ConfigurationSchema -Configuration $script:DeprecationConfig -Deprecations @($changed)
+			Should -Invoke Write-Warning -Times 1 -Exactly -ParameterFilter { $Message -match 'Section\.ListKey' }
+		}
+
+		It "reports every key in use in one warning" {
+			$second = @{ Path = 'Section.ListKey'; Since = '3.1.0'; Removal = '4.0.0'; When = 'Present'; Replacement = 'X' }
+
+			Test-ConfigurationSchema -Configuration $script:DeprecationConfig -Deprecations @($script:Present, $second)
+
+			Should -Invoke Write-Warning -Times 1 -Exactly
+			Should -Invoke Write-Warning -Times 1 -Exactly -ParameterFilter { $Message -match 'uses 2 deprecated key' -and $Message -match 'Section\.OldKey' -and $Message -match 'Section\.ListKey' }
+		}
+
+		It "never counts a deprecation as a failure, even with -Strict" {
+			{ Test-ConfigurationSchema -Configuration $script:DeprecationConfig -Deprecations @($script:Present) -Strict } | Should -Not -Throw
+
+			Should -Invoke Write-Warning -Times 1 -Exactly
+		}
+
+		It "reports the deprecation on its own, next to a real failure" {
+			$script:DeprecationConfig.Remove('BasePaths')
+
+			Test-ConfigurationSchema -Configuration $script:DeprecationConfig -Deprecations @($script:Present)
+
+			Should -Invoke Write-Warning -Times 2 -Exactly
+			Should -Invoke Write-Warning -Times 1 -Exactly -ParameterFilter { $Message -match 'Section\.OldKey is deprecated' }
+			{ Test-ConfigurationSchema -Configuration $script:DeprecationConfig -Deprecations @($script:Present) -Strict } | Should -Throw
+		}
+
+		It "ships an empty table, so the base configuration hears no deprecation" {
+			(Get-Command Test-ConfigurationSchema).Parameters['Deprecations'].Attributes.Where({ $_ -is [System.Management.Automation.ParameterAttribute] }).DontShow | Should -BeTrue
+
+			Test-ConfigurationSchema -Configuration $script:DeprecationConfig
 
 			Should -Invoke Write-Warning -Times 0
 		}

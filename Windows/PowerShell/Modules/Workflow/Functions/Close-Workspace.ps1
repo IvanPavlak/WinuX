@@ -21,7 +21,7 @@ function Close-Workspace {
 		an application from surviving every teardown forever. Processes named in
 		Universal.VisibleWindowExclusions - the list Kill-All uses for the same purpose - are never
 		claimed that way, so a plain open does not take ownership of the terminal window it was typed
-		in, of Rainmeter, or of anything else that merely happened to be running.
+		in, of PowerToys, or of anything else that merely happened to be running.
 
 		The same tracker is why teardown works identically for -Alongside opens: an entry records
 		what one invocation did, whichever mode it ran in.

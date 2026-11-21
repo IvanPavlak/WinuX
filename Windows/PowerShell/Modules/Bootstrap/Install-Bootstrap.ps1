@@ -426,7 +426,7 @@ function Install-Bootstrap {
 		$GithubFolderPath = $config.GithubPath
 		$RepositoryUrl = $config.RepoUrl
 		# Clone into a folder named after the repository itself: a 'WinuX' URL clones to
-		# <GitHub>\WinuX, a personal fork named 'Dotfiles' clones to <GitHub>\Dotfiles. The repo
+		# <GitHub>\WinuX, a personal fork named 'MyFork' clones to <GitHub>\MyFork. The repo
 		# root is self-located at runtime ({RepoRoot}), so the folder name is free to match the
 		# repo. Override with $env:WINUX_INSTALL_DIR to force a specific folder name.
 		$RepositoryFolderName = if ($env:WINUX_INSTALL_DIR) { $env:WINUX_INSTALL_DIR } else { Get-RepositoryName -RepositoryUrl $RepositoryUrl }

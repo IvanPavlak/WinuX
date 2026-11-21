@@ -915,7 +915,6 @@ Describe "Invoke-StartupTask" {
 				InScope    = $true
 				Valid      = $true
 				Errors     = @()
-				Legacy     = $false
 				Parameters = @{
 					Name          = 'MyTask'
 					Command       = 'Invoke-TestStartupCommand'

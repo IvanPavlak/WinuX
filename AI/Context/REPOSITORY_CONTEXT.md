@@ -91,11 +91,11 @@ Expanded by `Expand-ConfigPaths` at bootstrap time. All config entries use these
 
 ```
 Hostname → Machine Type:
-  PC-Win11     → PC
-  Laptop-Win11 → Laptop
-  Work-Win11   → Work
-  Test         → Test
-  Default      → Laptop (fallback + WMI chassis detection for laptops)
+  YOUR-PC-HOSTNAME     → PC
+  YOUR-LAPTOP-HOSTNAME → Laptop
+  YOUR-WORK-HOSTNAME   → Work
+  Test                 → Test
+  Default              → Laptop (fallback + WMI chassis detection for laptops)
 ```
 
 ### Configuration Sections → Consumer Functions
@@ -163,7 +163,6 @@ When you need to add or modify something, these are the typical operations:
 | Directory             | Purpose                                                                      |
 | --------------------- | ---------------------------------------------------------------------------- |
 | `AI/`                 | AI configuration hub - instructions, context, conversations, provider guides |
-| `Codegen/`            | Code generation profiles for your projects                                   |
 | `FastFetch/`          | Per-machine FastFetch configs and ASCII art logos                            |
 | `Git/`                | Git configuration files                                                      |
 | `Docker/`             | Docker Compose configurations                                                |
@@ -171,6 +170,5 @@ When you need to add or modify something, these are the typical operations:
 | `Firefox/`            | Firefox `user.js` configuration                                              |
 | `Oh-My-Posh/`         | Per-machine terminal prompt themes (OS-agnostic: Windows, macOS and Linux)   |
 | `Windows/FancyZones/` | PowerToys FancyZones layouts                                                 |
-| `Windows/Rainmeter/`  | Per-machine Rainmeter desktop widgets                                        |
 | `Windows/VSCode/`     | VS Code settings and profiles                                                |
 | `docs/`               | Docsify documentation site                                                   |

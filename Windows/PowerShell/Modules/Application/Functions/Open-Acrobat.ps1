@@ -29,8 +29,8 @@ function Open-Acrobat {
         Shows the PDF group and recent-PDF selection menu.
 
     .EXAMPLE
-        Open-Acrobat -Pdf "ExampleRulebook"
-        Opens the PDFs of the "ExampleRulebook" group in AcrobatPdfGroups.
+        Open-Acrobat -Pdf "ExampleManuals"
+        Opens the PDFs of the "ExampleManuals" group in AcrobatPdfGroups.
     #>
 	[CmdletBinding()]
 	param(

@@ -786,7 +786,7 @@ Get-Process msedgewebview2 | Where-Object { (Get-Process -Id $_.Parent.Id -Error
 Get-Process WhatsApp.Root | Stop-Process
 ```
 
-Workarounds: switch to the WhatsApp desktop and press `Win+D` there when you need the icons, or open WhatsApp Web through the browser (`Open-Browser WhatsAppWeb`) instead of the Store app for workspaces where the desktop must stay clickable. A proper fix would move the helper window along with its parent (the same desktop move, applied to the same-titled top-level windows of child `msedgewebview2` processes) if the desktop manager accepts them.
+Workarounds: switch to the WhatsApp desktop and press `Win+D` there when you need the icons, or open WhatsApp Web through the browser (a browser group holding `https://web.whatsapp.com/`) instead of the Store app for workspaces where the desktop must stay clickable. A proper fix would move the helper window along with its parent (the same desktop move, applied to the same-titled top-level windows of child `msedgewebview2` processes) if the desktop manager accepts them.
 
 ### Kill-All Leaves A Window Or Process Behind
 

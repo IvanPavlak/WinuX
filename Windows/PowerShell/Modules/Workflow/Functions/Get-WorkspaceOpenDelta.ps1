@@ -61,8 +61,8 @@ function Get-WorkspaceOpenDelta {
 
 		Adoption reaches only for what Universal.VisibleWindowExclusions does not name, and never for
 		the shell hosts Get-ShellProcessName lists (explorer, Start menu, Search, ...). The list is the
-		same list Kill-All uses to decide what a blunt teardown must leave alone (Rainmeter,
-		WindowsTerminal, Docker Desktop, PowerToys, ...), and it means exactly what is wanted here:
+		same list Kill-All uses to decide what a blunt teardown must leave alone (WindowsTerminal,
+		Docker Desktop, PowerToys, ...), and it means exactly what is wanted here:
 		these processes are never a workspace's to close simply because they happened to be running
 		while it opened. The exclusion applies to adoption only - a window this open genuinely
 		created is always recorded, whatever its process is called, because the diff already proves

@@ -246,8 +246,8 @@ If you only need specific parts:
 ```powershell
 # Only system configuration
 Set-SystemTheme -Auto
-Set-Locale -Locale "Croatian"
-Set-KeyboardLayouts -Layout "Croatian-US"
+Set-Locale -Locale "German"
+Set-KeyboardLayouts -Layout "German-US"
 
 # Only package updates
 Upgrade-All

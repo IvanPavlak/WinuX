@@ -48,7 +48,7 @@ the [Configuration Reference](configuration-reference.md).
 | Section                    | Purpose                          | Consumer Function               |
 | -------------------------- | -------------------------------- | ------------------------------- |
 | `GitConfig`                | Git username, email, package ID  | `Install-Git`                   |
-| `Locales`                  | Regional settings (hr-HR, en-US) | `Set-Locale`                    |
+| `Locales`                  | Regional settings (de-DE, en-US) | `Set-Locale`                    |
 | `DisplayLanguages`         | UI language settings             | `Set-DisplayLanguage`           |
 | `KeyboardLayouts`          | Keyboard layout codes            | `Set-KeyboardLayouts`           |
 | `NerdFonts`                | Font configurations              | `Configure-NerdFont`            |
@@ -339,7 +339,7 @@ WallpaperDarkSettings = @{
             @{ File = "Space2.jpg"; Style = "Stretch" }
         )
     }
-    "Laptop" = @{ File = "BlackHole.png"; Style = "Fill" }
+    "Laptop" = @{ File = "Black.jpg"; Style = "Fill" }
 }
 ```
 

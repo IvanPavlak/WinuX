@@ -11,7 +11,7 @@ Expands placeholder tokens (`{Dev}`, `{User}`, `{MachineType}`, `{RepoRoot}`, `{
 | --- | ---- | -------------- | ---------------- |
 | [`BasePaths`](../../configuration-reference.md#base-paths-per-machine-type) | hashtable of machine type to `@{ Dev; User }` | hashtable, 2 keys (`Machine`, `Test`) | The two root directories every placeholder path is built from, per machine type. `{Dev}` expands to `Dev`, `{User}` to `User`. This is the single most load-bearing key: get it wrong and every templated path is wrong. |
 | [`MachineOverrides`](../../configuration-reference.md#more-sections-quick-reference) | hashtable of machine type to value map | `@{ Machine = @{}; Test = @{} }` | Values merged over the expanded paths *after* placeholder expansion - the escape hatch for the handful of things that cannot be templated. Ships empty. |
-| [`PathTemplates`](../../configuration-reference.md#path-templates--placeholder-system) | hashtable, 8 keys | hashtable, 8 keys (`ObsidianDirectory` ships empty) | Every templated path in WinuX, expanded per machine by `Expand-ConfigPaths` into `$global:MachineSpecificPaths`. Includes `Projects` (per-project roots, including `Projects.Self` - the WinuX checkout itself), `SymbolicLinks`, `DockerDirectory`, `NuGetConfig`, `NpmConfig`, `TaskbarLayoutFile`, and `ObsidianDirectory`, which ships empty. |
+| [`PathTemplates`](../../configuration-reference.md#path-templates--placeholder-system) | hashtable, 7 keys | hashtable, 7 keys (`ObsidianDirectory` ships empty) | Every templated path in WinuX, expanded per machine by `Expand-ConfigPaths` into `$global:MachineSpecificPaths`. Includes `Projects` (per-project roots, including `Projects.Self` - the WinuX checkout itself), `SymbolicLinks`, `DockerDirectory`, `NuGetConfig`, `NpmConfig`, `TaskbarLayoutFile`, and `ObsidianDirectory`, which ships empty. |
 
 ## Decisions
 
@@ -32,8 +32,8 @@ Expands placeholder tokens (`{Dev}`, `{User}`, `{MachineType}`, `{RepoRoot}`, `{
     - Default: Empty - nothing overridden.
     - More detail: [`MachineOverrides`](../../configuration-reference.md#more-sections-quick-reference)
 5. Which templated paths does this machine need?
-    - Options: Any of the 11 keys. Values use `{Dev}`, `{User}`, `{MachineType}`, `{RepoRoot}`, `{AppData}`. The personal ones ship empty and their consumers warn and return until set.
-    - Default: The shipped templates - which means the personal paths stay off.
+    - Options: Any of the 7 keys. Values use `{Dev}`, `{User}`, `{MachineType}`, `{RepoRoot}`, `{AppData}`. `ObsidianDirectory` ships empty and its consumers warn and return until it is set.
+    - Default: The shipped templates - which means `ObsidianDirectory` stays off.
     - More detail: [`PathTemplates`](../../configuration-reference.md#path-templates--placeholder-system)
 6. Do you need per-project roots under `PathTemplates.Projects`?
     - Options: One sub-hashtable per project, e.g. `MyProject = @{ Root = "{Dev}\MyProject" }`. `Projects.Self` is WinuX own checkout and is normally left alone.

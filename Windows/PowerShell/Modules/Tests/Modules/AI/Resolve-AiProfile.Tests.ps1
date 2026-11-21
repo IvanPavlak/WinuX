@@ -10,7 +10,7 @@ BeforeAll {
 				Hosts        = @{ "WORKSTATION-01" = "Work" }
 				Default      = "Personal"
 				DefaultOwner = ""
-				Shared       = @("https://github.com/MyUser/Dotfiles.git")
+				Shared       = @("https://github.com/MyUser/MyFork.git")
 				Profiles     = @{
 					Personal = @{
 						Rules      = "MyRules"
@@ -136,7 +136,7 @@ Describe "Resolve-AiProfile" {
 	It "normalises the repository patterns the way the guard normalises an origin remote" {
 		$result = Resolve-AiProfile -Configuration (New-ProfileConfig) -HostName "DESKTOP-GAMING" -Override ""
 
-		$result.Shared | Should -Be @("github.com/myuser/dotfiles")
+		$result.Shared | Should -Be @("github.com/myuser/myfork")
 		$result.Profile.Autonomous | Should -Be @("github.com/myuser/myproject")
 		$result.Profiles['Work'].Owns | Should -Be @("github.com/my-org/*")
 	}

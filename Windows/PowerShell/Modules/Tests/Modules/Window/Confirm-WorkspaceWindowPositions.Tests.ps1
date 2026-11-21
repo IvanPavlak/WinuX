@@ -175,7 +175,7 @@ Describe "Confirm-WorkspaceWindowPositions" {
 		BeforeEach {
 			Mock Import-VirtualDesktopModule { $true }
 			Mock Get-WindowHandle -ParameterFilter { $ProcessName -and -not $WindowTitle } {
-				@([PSCustomObject]@{ Handle = [IntPtr]0x9D001; Title = 'asseto - Visual Studio Code' })
+				@([PSCustomObject]@{ Handle = [IntPtr]0x9D001; Title = 'exampleproject - Visual Studio Code' })
 			}
 		}
 
@@ -186,7 +186,7 @@ Describe "Confirm-WorkspaceWindowPositions" {
 
 			$result.Success | Should -BeFalse
 			$result.Failures.Count | Should -Be 1
-			$result.Failures[0].WindowTitle | Should -Be 'asseto - Visual Studio Code'
+			$result.Failures[0].WindowTitle | Should -Be 'exampleproject - Visual Studio Code'
 			$result.Failures[0].Handle | Should -Be ([IntPtr]0x9D001)
 			$result.Failures[0].Actual | Should -Be 'On desktop 4'
 			$result.Failures[0].Expected | Should -Match 'on desktop 3$'

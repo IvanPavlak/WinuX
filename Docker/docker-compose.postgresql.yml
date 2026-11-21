@@ -5,9 +5,9 @@
 # It is part of the WinuX repository and provides a shared
 # PostgreSQL environment for local development across all projects.
 #
-# Projects connect to localhost:5432 (PG17) or localhost:5433 (PG16)
-# with the same credentials they already use (postgres/admin),
-# making this a transparent drop-in replacement for locally installed PostgreSQL.
+# Projects connect to localhost:5432 (PG17) or localhost:5433 (PG16).
+# The password below is a throwaway default for local development only -
+# change it before exposing these containers beyond your own machine.
 #
 # Usage:
 #   docker compose -f docker-compose.postgresql.yml up -d

@@ -9,14 +9,14 @@ Returns the process names of `Universal.VisibleWindowExclusions` that apply to t
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`Universal.VisibleWindowExclusions`](../../configuration-reference.md#process-cleanup) | array of process names or `@{ Name; Machine }` entries | `Rainmeter`, `WindowsTerminal`, `Docker Desktop`, `obs64`, `PowerToys`, `PowerToys.FancyZones`, `PowerToys.Settings` | The processes a teardown leaves alone. A plain name applies on every machine; `@{ Name = "<process>"; Machine = "PC/Work" }` applies only on the machine types its `Machine` scope names. |
+| [`Universal.VisibleWindowExclusions`](../../configuration-reference.md#process-cleanup) | array of process names or `@{ Name; Machine }` entries | `WindowsTerminal`, `Docker Desktop`, `PowerToys`, `PowerToys.FancyZones`, `PowerToys.Settings` | The processes a teardown leaves alone. A plain name applies on every machine; `@{ Name = "<process>"; Machine = "PC/Work" }` applies only on the machine types its `Machine` scope names. |
 | [`ValidMachineTypes`](../../configuration-reference.md#valid-machine-types) | array of machine types | `Test` | The tokens a `Machine` scope may use; an unknown one is reported and the entry never applies. |
 
 ## Decisions
 
 1. Which processes should outlive a `Kill-All` everywhere?
     - Options: Process names (no `.exe`) as plain entries. Keep `WindowsTerminal` and the three PowerToys entries.
-    - Default: The shipped seven names.
+    - Default: The shipped five names.
     - More detail: [`Universal.VisibleWindowExclusions`](../../configuration-reference.md#process-cleanup)
 2. Should any process outlive a `Kill-All` only on some machines?
     - Options: An entry `@{ Name = "<process>"; Machine = "PC" }` (several types joined with `/`), for example an agent app that keeps running on the machine that hosts the agents.
@@ -44,10 +44,8 @@ The shipped names are restated because the array replaces the base list wholesal
 ```powershell
 Universal = @{
     VisibleWindowExclusions = @(
-        "Rainmeter"
         "WindowsTerminal"
         "Docker Desktop"
-        "obs64"
         "PowerToys"
         "PowerToys.FancyZones"
         "PowerToys.Settings"
@@ -84,10 +82,8 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 @{
     Universal = @{
         VisibleWindowExclusions = @(
-            "Rainmeter"
             "WindowsTerminal"
             "Docker Desktop"
-            "obs64"
             "PowerToys"
             "PowerToys.FancyZones"
             "PowerToys.Settings"

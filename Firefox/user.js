@@ -245,11 +245,11 @@ user_pref("browser.safebrowsing.downloads.remote.enabled", false);
 
 /** MOZILLA ***/
 // Blocks all notification requests by default (value: 2)
-// (Overridden in MY OVERRIDES to 0 = ask permission)
+// (Overridden in WINUX OVERRIDES to 0 = ask permission)
 user_pref("permissions.default.desktop-notification", 2);
 
 // Blocks all location requests by default (value: 2)
-// (Overridden in MY OVERRIDES to 0 = ask permission)
+// (Overridden in WINUX OVERRIDES to 0 = ask permission)
 user_pref("permissions.default.geo", 2);
 
 // Uses BeaconDB instead of Google for geolocation API
@@ -409,8 +409,8 @@ user_pref("findbar.highlightAll", true);
 user_pref("layout.word_select.eat_space_to_next_word", false);
 
 /****************************************************************************
- * START: MY OVERRIDES                                                      *
- * Personal customizations that override Betterfox defaults                *
+ * START: WINUX OVERRIDES                                                   *
+ * WinuX defaults that override Betterfox; a fork changes them here         *
  ****************************************************************************/
 // visit https://github.com/yokoffing/Betterfox/wiki/Common-Overrides
 // visit https://github.com/yokoffing/Betterfox/wiki/Optional-Hardening
@@ -464,19 +464,15 @@ user_pref("extensions.formautofill.creditCards.enabled", false);
 
 /** CAPTIVE PORTAL DETECTION ***/
 // DISABLES auto-detection of public WiFi login pages
-// Not needed on a trusted/VPN-managed network
+// Not needed on a trusted network
 // If you use public WiFi, consider enabling this
 user_pref("captivedetect.canonicalURL", "");
 user_pref("network.captive-portal-service.enabled", true);
 user_pref("network.connectivity-service.enabled", true);
 
 /** DNS-OVER-HTTPS (DoH) ***/
-// Sets DoH provider to DNSWarden (with Hagezi blocklists)
-// Provides DNS-level ad/tracker/malware blocking
-user_pref(
-	"network.trr.uri",
-	"https://dns.dnswarden.com/00000000000000000000028",
-);
+// To use DoH, set your provider's endpoint here and pick a mode below, e.g.:
+// user_pref("network.trr.uri", "https://dns.example.com/dns-query");
 
 // DoH MODE: 0 = DISABLED (fastest)
 // DoH is disabled here for maximum speed (DNS handled elsewhere)
@@ -609,25 +605,25 @@ user_pref("browser.urlbar.scotchBonnet.enableOverride", false);
  *      %APPDATA%\Mozilla\Firefox\profiles.ini                              *
  *                                                                          *
  *    Remove these two lines from the [Profile0] section:                   *
- *      StoreID=d72bf3f7                                                    *
+ *      StoreID=XXXXXXXX                                                    *
  *      ShowSelector=1                                                      *
  *                                                                          *
  *    Before:                                                               *
  *      [Profile0]                                                          *
  *      Name=default-release                                                *
  *      IsRelative=1                                                        *
- *      Path=Profiles/lhsx19yx.default-release                              *
- *      StoreID=d72bf3f7                                                    *
+ *      Path=Profiles/xxxxxxxx.default-release                              *
+ *      StoreID=XXXXXXXX                                                    *
  *      ShowSelector=1                                                      *
  *                                                                          *
  *    After:                                                                *
  *      [Profile0]                                                          *
  *      Name=default-release                                                *
  *      IsRelative=1                                                        *
- *      Path=Profiles/lhsx19yx.default-release                              *
+ *      Path=Profiles/xxxxxxxx.default-release                              *
  *                                                                          *
  * 4. Deploy user.js to the Firefox profile folder:                         *
- *      %APPDATA%\Mozilla\Firefox\Profiles\lhsx19yx.default-release\        *
+ *      %APPDATA%\Mozilla\Firefox\Profiles\xxxxxxxx.default-release\        *
  *                                                                          *
  * 5. Relaunch Firefox. The title should now be "Google - Mozilla Firefox". *
  *                                                                          *
