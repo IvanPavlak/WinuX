@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [3.0.1] - 2026-11-21
+
+### Fixed
+
+- **The mirror files `Firefox/user.js` and `Docker/docker-compose.postgresql.yml` name no project.** Both ship byte-identical in WinuX and Foundation, so the override section of `user.js` is `SHARED OVERRIDES` (3.0.0 had named it after WinuX) and the compose file's header no longer calls itself WinuX's. Comments only; nothing changes at runtime.
+
 ## [3.0.0] - 2026-11-21
 
 3.0.0 is the release that leaves the base generic. It removes every shape that was deprecated - the personal functions of 2.17.0, the automatic repository update of 2.12.0 that the startup tasks replaced, and their configuration keys - and, without a prior deprecation, the last features and defaults that served one person's setup rather than the framework. A fork whose warnings were at zero on 2.17.0 merges the removals without edits; what changes without a warning is listed under Breaking, each with its migration, and a fork that wants any of it back keeps it in its Custom area and `Configuration.local.psd1`.
@@ -2016,7 +2022,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/winux/v3.0.0...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/winux/v3.0.1...HEAD
+[3.0.1]: https://github.com/IvanPavlak/WinuX/compare/winux/v3.0.0...winux/v3.0.1
 [3.0.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.17.0...winux/v3.0.0
 [2.17.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.16.0...winux/v2.17.0
 [2.16.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v2.15.1...winux/v2.16.0

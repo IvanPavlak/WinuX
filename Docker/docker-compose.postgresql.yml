@@ -1,8 +1,8 @@
 # ==========================================================================
-# Centralized PostgreSQL Docker Compose (WinuX)
+# Centralized PostgreSQL Docker Compose
 # ==========================================================================
 # This compose file is NOT committed to individual projects.
-# It is part of the WinuX repository and provides a shared
+# It ships with this repository and provides a shared
 # PostgreSQL environment for local development across all projects.
 #
 # Projects connect to localhost:5432 (PG17) or localhost:5433 (PG16).
