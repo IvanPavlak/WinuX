@@ -28,8 +28,8 @@ time, so a hashtable-shaped section renders sorted instead of following the file
 `Test-ConfigurationSchema` reports a section still written as a hashtable.
 
 Sections shaped this way: `BrowserGroups`, `RepositoryGroups`, `ProjectActions`,
-`WorkspaceActions`, `CampaignResources`, `AcrobatPdfGroups`, `WakeOnLanConfig`, `Locales`,
-`KeyboardLayoutSets` and `NerdFonts`. `RunnableProjectMappings` is an ordered record array (each
+`WorkspaceActions`, `AcrobatPdfGroups`, `WakeOnLanConfig`, `Locales`, `KeyboardLayoutSets` and
+`NerdFonts`. `RunnableProjectMappings` is an ordered record array (each
 record carries its own `Name`) and reads the same way.
 
 Plain hashtables stay plain where order means nothing - a lookup table keyed by machine type
@@ -60,7 +60,7 @@ Defines executable paths and command-line arguments for each browser.
   empty; `Open-Browser` warns and returns until you set one (any `Browsers` key) in
   `Configuration.local.psd1`.
 
-**Consumer functions:** `Open-Browser`, `Invoke-Browser`, `Open-SecureBrowser`, `Resolve-LayoutTokens` (expands the `Browser` layout token from this map)
+**Consumer functions:** `Open-Browser`, `Invoke-Browser`, `Resolve-LayoutTokens` (expands the `Browser` layout token from this map)
 
 **Example (opt-in via `Configuration.local.psd1`):**
 
@@ -70,9 +70,6 @@ Browsers = @{
         Exe          = "C:\Program Files\Mozilla Firefox\firefox.exe"
         PrivateArg   = "-private-window"
         NewWindowArg = "-new-window"
-    }
-    Tor = @{
-        Exe = "{User}\Tor Browser\Browser\firefox.exe"
     }
 }
 DefaultBrowser = "Firefox"
@@ -85,7 +82,7 @@ Repository URLs and authentication base.
 **Keys:**
 
 - `GitHub.Base` - Authentication base URL (e.g., `https://MyUser@github.com`)
-- `GitHub.Private.*` - Private repositories (dot-notation, e.g., `Private.Dotfiles`)
+- `GitHub.Private.*` - Private repositories (dot-notation, e.g., `Private.MyRepo`)
 - `GitHub.MyOrg.*` - Work organization repositories
 
 **Consumer functions:** `Initialize-Repository`, `Update-Repositories`, `Git-Obsidian`
@@ -96,10 +93,9 @@ Paths to installed applications used by `Open-*` functions.
 
 **Keys:**
 
-- `FirefoxExe`, `LeagueOfLegendsExe`, `SteamExe`, `RiseupVpnExe`, `DbeaverExe`, `TeamViewerExe`, `FoundryVTTExe`, `NotepadPlusPlusExe`, `VisualStudio2026Exe`, `VirtualBoxExe`, `DockerExe`, `OutlookLauncherExe` (what `Open-Outlook` starts the Outlook app through; ships `C:\Windows\explorer.exe`)
-- `LeagueOfLegendsExe`, `RiseupVpnExe` and `FoundryVTTExe` are deprecated since 2.17.0 with their functions, see [Deprecated Keys](#deprecated-keys)
+- `FirefoxExe`, `SteamExe`, `DbeaverExe`, `TeamViewerExe`, `NotepadPlusPlusExe`, `VisualStudio2026Exe`, `VirtualBoxExe`, `DockerExe`, `OutlookLauncherExe` (what `Open-Outlook` starts the Outlook app through; ships `C:\Windows\explorer.exe`)
 
-**Consumer functions:** `Open-DBeaver`, `Open-Docker`, `Open-FoundryVTT`, `Open-LeagueOfLegends`, `Open-NotepadPlusPlus`, `Open-Outlook`, `Open-RiseupVPN`, `Open-Steam`, `Open-TeamViewer`, `Open-VirtualBox`, `Open-VisualStudio` (each through `Start-Application -ConfigKey`). `Open-Discord`, `Open-Obsidian` and `Open-Acrobat` read no `*Exe` key, and nothing reads `FirefoxExe` (browsers resolve through `Browsers`).
+**Consumer functions:** `Open-DBeaver`, `Open-Docker`, `Open-NotepadPlusPlus`, `Open-Outlook`, `Open-Steam`, `Open-TeamViewer`, `Open-VirtualBox`, `Open-VisualStudio` (each through `Start-Application -ConfigKey`). `Open-Discord`, `Open-Obsidian` and `Open-Acrobat` read no `*Exe` key, and nothing reads `FirefoxExe` (browsers resolve through `Browsers`).
 
 The base ships the personal executable paths (everything except the framework's own tools) empty;
 each `Open-*` consumer warns and no-ops until you set its path in `Configuration.local.psd1`.
@@ -115,11 +111,6 @@ Common system paths that do not vary by machine.
 - `TaskbarPinFolder` - Quick Launch taskbar pins folder
 - `IconCacheDb`, `IconCacheFolder` - Windows Explorer icon cache
 - `OhMyPoshThemeFile` - Oh-My-Posh theme location
-- `WhatsAppLocalStoragePath` - WhatsApp cache directory (deprecated since 2.17.0 with
-  `Clear-WhatsAppLocalStorage`, see [Deprecated Keys](#deprecated-keys))
-- `TrainingFile` - The Word document `Open-Training` opens from `PathTemplates.TrainingDirectory`
-  (ships empty - set both in `Configuration.local.psd1` before using `Open-Training`; deprecated
-  since 2.17.0 with `Open-Training`, see [Deprecated Keys](#deprecated-keys))
 - `FastFetchImageLogo` - **Opt-in.** An image fastfetch renders instead of its text logo, in the
   terminals that can display one (WezTerm, Windows Terminal). Ships `$null`, which keeps the text
   logo everywhere. Takes either a **string** (one image for every machine) or a **hashtable keyed
@@ -131,8 +122,8 @@ Common system paths that do not vary by machine.
   [Get-FastfetchLogoArgument](guides/system/Get-FastfetchLogoArgument.md).
 
 **Consumer functions:** `Get-FastfetchLogoArgument` (`FastFetchImageLogo`), `Initialize-OhMyPosh`,
-`Clear-WhatsAppLocalStorage`, `Rebuild-IconCache`, `Configure-NerdFont` (`Fonts`), `Configure-Taskbar`
-(`TaskbarPinFolder`), `Initialize-WSLEnvironment` (`OhMyPoshThemeFile`)
+`Rebuild-IconCache`, `Configure-NerdFont` (`Fonts`), `Configure-Taskbar` (`TaskbarPinFolder`),
+`Initialize-WSLEnvironment` (`OhMyPoshThemeFile`)
 
 ### Process Cleanup
 
@@ -141,7 +132,7 @@ Process lists consumed by the `Kill-All` desktop cleanup flow.
 **Keys:**
 
 - `TerminateProcessNames` - Process names force-terminated by `Terminate-AllProcessesByName`. The base configuration ships a minimal example list (`Code`); keep your real cleanup targets in `Configuration.local.psd1` (the override replaces the array wholesale on merge).
-- `VisibleWindowExclusions` - Process names `Terminate-AllProcessesWithVisibleWindows` never force-kills. An entry may instead be `@{ Name = "<process>"; Machine = "PC/Work" }` to apply only on those machine types (resolved by [Resolve-VisibleWindowExclusions](../modules/system.md#resolve-visiblewindowexclusions)). Browser processes from `Browsers` are excluded automatically. The PowerToys entries are load-bearing (see the warning in the [System module](../modules/system.md#terminate-allprocesseswithvisiblewindows)); never remove them. The list is also what a plain `Open-Workspace` will not take *ownership* of when it claims the screen for [Close-Workspace](../modules/workflow.md#close-workspace) - so the terminal window you typed the open in, Rainmeter, and the rest are never a workspace's to close simply because they happened to be running. A window an open genuinely created is still recorded, whatever its process is called.
+- `VisibleWindowExclusions` - Process names `Terminate-AllProcessesWithVisibleWindows` never force-kills. An entry may instead be `@{ Name = "<process>"; Machine = "PC/Work" }` to apply only on those machine types (resolved by [Resolve-VisibleWindowExclusions](../modules/system.md#resolve-visiblewindowexclusions)). Browser processes from `Browsers` are excluded automatically. The PowerToys entries are load-bearing (see the warning in the [System module](../modules/system.md#terminate-allprocesseswithvisiblewindows)); never remove them. The list is also what a plain `Open-Workspace` will not take *ownership* of when it claims the screen for [Close-Workspace](../modules/workflow.md#close-workspace) - so the terminal window you typed the open in, PowerToys, and the rest are never a workspace's to close simply because they happened to be running. A window an open genuinely created is still recorded, whatever its process is called.
 
 Both functions warn and terminate nothing when their list is absent or empty. To toggle whole `Kill-All` steps on/off (not just their process lists), see [Kill-All Step Toggles](#kill-all-step-toggles).
 
@@ -155,7 +146,6 @@ TerminateProcessNames   = @(
     "WhatsApp.Root"
 )
 VisibleWindowExclusions = @(
-    "Rainmeter"
     "WindowsTerminal"
     "PowerToys"
     @{ Name = "MyAgentApp"; Machine = "PC" }
@@ -264,7 +254,7 @@ Common paths and templates using placeholder tokens for machine independence.
 - `{Dev}` - Machine's development root (from `BasePaths.Dev`)
 - `{User}` - Machine's user root (from `BasePaths.User`)
 - `{MachineType}` - Current machine type (PC, Laptop, Work, Test)
-- `{RepoRoot}` - Dotfiles repository root path (auto-resolved)
+- `{RepoRoot}` - Repository root path (auto-resolved)
 - `{AppData}` - User's `AppData\Roaming` folder
 
 **Key:** `PathTemplates` - Nested hashtable of template paths
@@ -274,7 +264,6 @@ Common paths and templates using placeholder tokens for machine independence.
 ```powershell
 PathTemplates = @{
     ObsidianDirectory                = "{Dev}\Obsidian"
-    TrainingBackupDirectory          = "{Dev}\Training_Backup"
 
     Projects = @{
         OtherProject = @{
@@ -502,7 +491,7 @@ Folder holding the `.code-workspace` files that `Open-VSCodeWorkspace` (and the 
 
 **Consumer functions:** `Open-VSCodeWorkspace`, `Get-VSCodeWorkspaceNames`, `Open-Workspace`
 
-Each `*.code-workspace` file in this folder is addressed by its base name (e.g. `Consolidation.code-workspace` → `Consolidation`). This is one of the `Projects.Self` paths (alongside `Root`, `Modules`, `Layouts`, etc.) that point inside the repository via the `{RepoRoot}` placeholder.
+Each `*.code-workspace` file in this folder is addressed by its base name (e.g. `MyStack.code-workspace` → `MyStack`). This is one of the `Projects.Self` paths (alongside `Root`, `Modules`, `Layouts`, etc.) that point inside the repository via the `{RepoRoot}` placeholder.
 
 ---
 
@@ -518,7 +507,7 @@ Defines hierarchical URL groups for the `Open-Browser` function. Supports three 
 
     ```powershell
     Resources = @(
-        "https://github.com/MyUser/Dotfiles",
+        "https://github.com/MyUser/MyFork",
         "https://github.com/MyUser/Obsidian"
     )
     ```
@@ -576,7 +565,7 @@ a group is defined exactly once. Paths are dot-notation references into the expa
 ```powershell
 AcrobatPdfGroups = @(
     @{ Learning = @("Learning.CSharpInDepth") }
-    @{ MyCampaign = @("Dnd.MyCharacter") }
+    @{ ExampleManuals = @("Manuals.ExampleManual") }
 )
 ```
 
@@ -701,10 +690,10 @@ Tokens must be `ProjectActions` names; an unknown token is reported and never ma
 ```powershell
 # One Google window everywhere (fullscreen on the Laptop and Work layouts, and on the PC while
 # LayoutMachineTypeOverrides redirects it to the Work layouts); two on the PC's own layout set
-LeagueOfLegends = @(
-    @{ Action = "Open-LeagueOfLegends" }
+Gaming = @(
+    @{ Action = "Open-Steam" }
     @{ Action = "Open-Browser"; Parameters = @{ Groups = @("Google") }; LayoutMachineParameters = @{ PC = @{ Instances = 2 } } }
-    @{ Action = "Set-WorkspaceWindowLayout"; Parameters = @{ WorkspaceName = "LeagueOfLegends" } }
+    @{ Action = "Set-WorkspaceWindowLayout"; Parameters = @{ WorkspaceName = "Gaming" } }
 )
 ```
 
@@ -712,9 +701,9 @@ LeagueOfLegends = @(
 
 ```powershell
 WorkspaceActions = @{
-    Training = @(
+    Learning = @(
         @{ Action = "Open-Terminal"; Parameters = @{} }
-        @{ Action = "Open-VSCode"; Parameters = @{ Folder = "TrainingDirectory" } }
+        @{ Action = "Open-VSCode"; Parameters = @{ Folder = "Notes" } }
         @{ Action = "Open-Browser"; Parameters = @{ Groups = @("Learning") } }
         @{ Action = "Open-Project"; Parameters = @{ Project = "Client"; RunApp = $true }; MachineParameters = @{ "Laptop/Work" = @{ RunApp = $null; Project = "ClientLite" } } }
         @{ Action = "Open-Outlook"; Machine = "Work" }
@@ -786,7 +775,7 @@ Optionally maps an `Open-Workspace` name to a `.code-workspace` base name (under
 
 ```powershell
 DefaultVSCodeWorkspaces = @{
-    dotfiles = "Consolidation"   # `w dotfiles` opens Consolidation.code-workspace instead of the folder
+    myrepo = "MyStack"   # `w myrepo` opens MyStack.code-workspace instead of the folder
 }
 ```
 
@@ -978,7 +967,7 @@ SystemTheme = @{
 
 **Keys:**
 
-- `Locales` - [Ordered section](#ordered-sections): `@( @{ Croatian = @{ Code = "hr-HR"; GeoId = 108 } } ... )`, offered in the order written
+- `Locales` - [Ordered section](#ordered-sections): `@( @{ German = @{ Code = "de-DE"; GeoId = 94 } } ... )`, offered in the order written
 - `DisplayLanguages` - Hashtable keyed by language name → language code
 - `DefaultLocale` / `DefaultDisplayLanguage` - Select which named entry Bootstrap applies (also the Enter default in the interactive menu)
 
@@ -990,9 +979,9 @@ until you set them in `Configuration.local.psd1`.
 ### Keyboard Layouts
 
 **Key:** `KeyboardLayouts` → Hashtable mapping layout name → hex layout code
-(e.g. `@{ "Croatian" = "0000041A"; "US" = "00000409" }`); `KeyboardLayoutSets` names layout
+(e.g. `@{ "German" = "00000407"; "US" = "00000409" }`); `KeyboardLayoutSets` names layout
 combinations as an [ordered section](#ordered-sections)
-(`@( @{ "Croatian-US" = @("Croatian", "US") } ... )`, offered in the order written) and
+(`@( @{ "German-US" = @("German", "US") } ... )`, offered in the order written) and
 `DefaultKeyboardLayoutSet` selects the set to apply
 
 **Consumer function:** `Set-KeyboardLayouts`
@@ -1495,7 +1484,7 @@ AiProfiles = @{
     Hosts        = @{ "WORKSTATION-01" = "Work" }
     Default      = "Personal"
     DefaultOwner = "Personal"
-    Shared       = @("github.com/MyUser/Dotfiles")
+    Shared       = @("github.com/MyUser/MyFork")
     Profiles     = @{
         Personal = @{
             Rules      = "MyRules"
@@ -1503,7 +1492,7 @@ AiProfiles = @{
             Unattended = $true
             Policies   = @{
                 autonomous = @("github.com/MyUser/MyProject")
-                branch     = @("github.com/MyUser/Dotfiles")
+                branch     = @("github.com/MyUser/MyFork")
             }
             EnvVars    = @("MY_API_KEY")
         }
@@ -1651,12 +1640,9 @@ AutoElevate = $true
 
 ## Deprecated Keys
 
-Keys and step names that still work but are removed in the next MAJOR release ([VERSIONING.md](https://github.com/IvanPavlak/WinuX/blob/master/Windows/VERSIONING.md), Deprecation policy). `Test-ConfigurationSchema` reports every one still in use - at every profile load and at the start of every `Bootstrap` - as one warning naming the key, the release that deprecated it, the removal and the replacement. A deprecation is never an error, not even under `-Strict`. A key the base still ships is reported only when it differs from the shipped default, so a vanilla configuration stays silent. The keys of the personal functions deprecated in 2.17.0 are the exception: only those functions read them, so the function's own once-per-session warning stands for its keys, and `Test-ConfigurationSchema` does not report them.
+Keys and step names that still work but are removed in the next MAJOR release ([VERSIONING.md](https://github.com/IvanPavlak/WinuX/blob/master/Windows/VERSIONING.md), Deprecation policy). `Test-ConfigurationSchema` reports every one still in use - at every profile load and at the start of every `Bootstrap` - as one warning naming the key, the release that deprecated it, the removal and the replacement. A deprecation is never an error, not even under `-Strict`. A key the base still ships is reported only when it differs from the shipped default, so a vanilla configuration stays silent.
 
-| Key | Deprecated since | Removed in | Replacement |
-| --- | ---------------- | ---------- | ----------- |
-| `Universal.LeagueOfLegendsExe`, `Universal.FoundryVTTExe`, `Universal.RiseupVpnExe`, `Universal.TrainingFile`, `Universal.WhatsAppLocalStoragePath`, `PathTemplates.TrainingDirectory`, `PathTemplates.TrainingBackupDirectory`, `PathTemplates.LearningBook`, `PathTemplates.Dnd`, `CampaignResources`, `PostgreSqlPasswords` | 2.17.0 | 3.0.0 | None in the base. The base stops shipping them together with the personal functions that read them (`Open-LeagueOfLegends`, `Open-FoundryVTT`, `Open-RiseupVPN`, `Open-SecureBrowser`, `Open-DnD`, `Open-Training`, `Training-Backup`, `Test-PrivacyStatus`, `Invoke-PrivacyRequest`, `Invoke-TorRequest`, `Clear-WhatsAppLocalStorage`, `Configure-PostgreSqlPasswords`; `PathTemplates.LearningBook` has no reader). A fork that copies a function into its Custom area keeps its keys in `Configuration.local.psd1`, unchanged. |
-| `RepositoryUpdate.Startup` (`Enabled`, `Schedule`, `DayStartHour`, `IntervalHours`, `Scope`) | 2.12.0 | 3.0.0 | One [`Startup.Tasks`](#startup-tasks) entry: `@{ Name = "RepositoryUpdate"; Command = "Update-Repositories -All -NoClone -Quiet"; Trigger = "TerminalOpen"; Frequency = "OncePerDay" }`. `Schedule = "Interval"` becomes `Frequency = "Interval"` with `IntervalHours`; a per-machine `Scope` becomes one task per scope, with `Machine` and `-Group`. The warning is raised for `RepositoryUpdate.Startup.Enabled` once it is `$true`. Migration: [Repository Update](#repository-update). |
+No key or step name is deprecated at present, so `Test-ConfigurationSchema` reports nothing here. A deprecation added by a later release is listed in this section with the release that deprecated it, the release that removes it and its replacement.
 
 The keys removed by a MAJOR release, with their migration, are listed under its `### Removed` section in the changelog.
 
@@ -1677,14 +1663,12 @@ Sections not detailed above, with their real shapes and consumers:
 | `Logging` | `@{ DefaultLevel; Colors; FileLogging; Maintenance }` | Console verbosity at session start (`Quiet`/`Normal`/`Verbose`), per-level console colors (plus `Info`, Blue, a color that belongs to no level, for `-Style Info` and `Write-LogSegments`), file-logging settings, and automatic idle-time log maintenance | Logging module (`Write-Log*`, `Set-LogLevel`, `Invoke-LogMaintenance`) |
 | `BrowserGroupMatching` | `@{ BrowserProcessNames; KeywordExtraction; Matching; ExactTitle; NegativeMatching }` | Maps browser labels to process names and tunes URL-keyword extraction for detecting already-open browser groups; `ExactTitle` holds the exact-title rules for provider homepages and `NegativeMatching` the shared-provider services excluded when checking a bare provider homepage | `Test-BrowserGroupAlreadyOpen`, `Resolve-SwaggerBrowserGroup` |
 | `LaptopChassisTypes` | array of WMI chassis type codes | The chassis types that count as a laptop (ships `@(8, 9, 10, 11, 14, 30, 31, 32)`), which decides the power plan `Test-PowerPlan` expects | `Test-PowerPlan` |
-| `CampaignResources` | [ordered section](#ordered-sections): `@( @{ <Campaign> = @{ Pdf; Browser } } ... )` | Per-campaign rulebook PDF (an `AcrobatPdfGroups` name) and resource browser group (a `BrowserGroups` name) | `Open-DnD` |
 | `RunProject` | `@{ Steps = @{ Docker = <bool or per-machine-type hashtable> } }` | Optional `Run-Project` steps, resolved like `KillAll.Steps`; `Docker` (on by default) starts the Docker stacks a project mapping declares through `DatabaseProviders` or `UsesDocker` | `Run-Project` (via `Resolve-RunProjectSteps`) |
 | `DockerCleanupActions` | array of `@{ Name; Description; Command; PreviewCommand; ConfirmationMessage }` (`Description`, `PreviewCommand` and `ConfirmationMessage` optional) | The `Docker-Cleanup` menu entries, run in this order (the menu adds an `All` option). `PreviewCommand` lists what the action would stop or remove and an empty list skips it; an entry with a `ConfirmationMessage` runs only after an explicit "Yes". Ships five actions that together wipe containers, images, volumes, unused networks and the build cache. The array replaces wholesale on merge | `Docker-Cleanup` |
 | `DockerCleanupStartMode` | `"Ask"`, `"Always"` or `"Never"` | What `Docker-Cleanup` does when the Docker daemon is not running: ask whether to start it (Enter means Yes; the shipped default, also used for an empty or unknown value), start it without asking, or warn and return. Docker is started through `DockerWizard`, so `DockerTimeouts.StartSeconds` applies | `Docker-Cleanup` |
 | `DotnetProjectsSearchPath` | path string (placeholders allowed) | Where `Determine-DotnetDependencies` searches for .NET projects (ships `"{Dev}"`). The function currently looks the key up under the expanded `PathTemplates` instead of the top level, so the shipped value is not picked up and the search falls back to `{User}\Development`; until that is fixed, set `PathTemplates.DotnetProjectsSearchPath` in your override | `Determine-DotnetDependencies` |
 | `DotnetEFVersion` | version string | The `dotnet-ef` version Bootstrap installs: empty (the shipped value) installs the latest, `"8.*"` or `"8.0.11"` pins one | `Install-DotnetEf` |
 | `CondaUpdateBase` | boolean | Whether `Create-CondaEnvironments` first runs `conda update -n base -c defaults conda -y`, on a run over every environment only (never with `-Name`). Ships `$false`: the update reaches the defaults channel, whose Terms of Service conda asks to be accepted | `Create-CondaEnvironments` |
-| `PostgreSqlPasswords` | `@{ DefaultOrCurrent; New }` | Current and new PostgreSQL password (ships empty - `Configure-PostgreSqlPasswords` does nothing until set in `Configuration.local.psd1`, and Bootstrap no longer calls it). Never put a real password in the tracked base file | `Configure-PostgreSqlPasswords` |
 | `SimpleLayoutWorkspaces` | array of workspace names | Workspaces handled as simple layouts: `Fullscreen` places every window in its monitor's fullscreen zone, `Empty` places none; neither tracks positioned windows (ships `@("Fullscreen", "Empty")`) | `Set-WorkspaceWindowLayout` (reads), `Add-WindowLayout -Simple` (writes) |
 | `FunctionDiscrepancyExclusions` | array of function names | Names `List-Functions -ListDiscrepancies` never reports (ships `Install-Bootstrap`, `fastfetch`, `Get-PoshStackCount`) | `List-Functions` |
 | `ListFunctionsColors`, `ShowFunctionDetailsColors` | `@{ Border; DiscrepancyError; DiscrepancySuccess }`, `@{ FunctionName; Description; Parameters }` | Console colors of the two function browsers; see [Console Colors](#console-colors) | `List-Functions`, `Show-FunctionDetails` |
@@ -1698,7 +1682,7 @@ Allows waking machines over LAN via `Send-WakeOnLan`, and checking reachability 
 
 **Keys:**
 
-- `WakeOnLanConfig` → Ordered list of `@{ <MachineName> = @{ MacAddress; SubNetSpecificBroadcastAddress; Port; Address } }`. An [ordered section](#ordered-sections): the menu offers the machines in the order written here (quote a name with spaces, e.g. `"Proxmox Backup Server"`). `Send-WakeOnLan` appends its own `All` and `None` options - they are not machines and are never configured.
+- `WakeOnLanConfig` → Ordered list of `@{ <MachineName> = @{ MacAddress; SubNetSpecificBroadcastAddress; Port; Address } }`. An [ordered section](#ordered-sections): the menu offers the machines in the order written here (quote a name with spaces, e.g. `"Backup Server"`). `Send-WakeOnLan` appends its own `All` and `None` options - they are not machines and are never configured.
 - `DefaultWakeOnLanMachine` - Default target machine
 
 The optional `Address` (IP or hostname) makes Wake-on-LAN reliable: `Send-WakeOnLan` pings it to skip machines that are already on, and polls it after sending to confirm the machine actually woke up. Omit it (or set `""`) for fire-and-forget behaviour with no ping checks.
@@ -1735,8 +1719,8 @@ Maps Git repository URLs to local paths for `Update-Repositories`, grouped by ca
 RepositoryGroups = @(
     @{ Private = @(
             @{
-                Name      = "Dotfiles"                          # Repository name (selection + by-name updates)
-                UrlPath   = "Universal.GitHub.Private.Dotfiles" # Dot-notation path to URL in config
+                Name      = "MyRepo"                            # Repository name (selection + by-name updates)
+                UrlPath   = "Universal.GitHub.Private.MyRepo"   # Dot-notation path to URL in config
                 LocalPath = "Projects.Self.Root"                # Dot-notation path to local directory
                 # ArchiveFolder = "Projects\Tools"            # Optional: where -Archive puts it under RepositoryUpdate.ArchiveRoot, any depth
                 # Shallow = $true                             # Optional: clone it --depth 1 (a large history)
@@ -1757,7 +1741,7 @@ RepositoryGroups = @(
 
 ## Repository Update
 
-**How** the repositories in [`RepositoryGroups`](#repository-groups) are updated. `RepositoryGroups` says which repositories exist; this section changes no list. Everything ships **off**. Whether the machine refreshes them on its own is a startup task since 2.12.0 - see [Startup Tasks](#startup-tasks); the `Startup` keys below are the deprecated way to say it.
+**How** the repositories in [`RepositoryGroups`](#repository-groups) are updated. `RepositoryGroups` says which repositories exist; this section changes no list. Everything ships **off**. Whether the machine refreshes them on its own is a startup task - see [Automatic Update](#automatic-update) below.
 
 **Key:** `RepositoryUpdate` → Hashtable
 
@@ -1766,13 +1750,6 @@ RepositoryUpdate = @{
     IncludeDefaultBranch = $false   # also fast-forward the default branch
     DefaultBranch        = ""       # "" => origin/HEAD => skipped
     ArchiveRoot          = ""       # where -Archive lands: "" => the Desktop
-    Startup              = @{       # DEPRECATED since 2.12.0, removed in 3.0.0 - use a Startup.Tasks entry
-        Enabled       = $false      # automatic update after the first prompt
-        Schedule      = "Daily"     # "Daily" (once a day) or "Interval"
-        DayStartHour  = 6           # Daily: the hour a new day starts
-        IntervalHours = 24          # Interval: minimum hours between automatic runs
-        # Scope       = @{ Default = "All" }   # absent => BootstrapConfig.RepositoryUpdateScope => "All"
-    }
 }
 ```
 
@@ -1781,22 +1758,14 @@ RepositoryUpdate = @{
 | `IncludeDefaultBranch` | bool | `$false` | After the checked-out branch is pulled, also fast-forward the repository's default branch with `git fetch origin <default>:<default>`. Git refuses anything but a fast-forward and the working tree and stash are never touched. A default branch that was never checked out locally is skipped, never created. `Update-Repositories -IncludeDefaultBranch` or `-IncludeDefaultBranch:$false` overrides it for one call. The Bootstrap repository step follows it too. |
 | `DefaultBranch` | string | `""` | The default branch's name. Empty uses what the remote reports (`refs/remotes/origin/HEAD`); when the remote reports nothing the step is skipped with a warning. Leave it empty when your repositories do not share one default branch. Replaces `BootstrapConfig.DefaultBranch`, which was removed in 0.1.86 (it was never read). |
 | `ArchiveRoot` | string | `""` | Where `Update-Repositories -Archive` lands: an absolute path, or a path relative to the Desktop (`"repos"`). Empty is the Desktop. No placeholders. `-InCurrentDirectory` replaces it for one call. An entry's `ArchiveFolder` in [`RepositoryGroups`](#repository-groups) nests below it, a relative path of any depth with either slash; without one the copy lands in the root itself. |
-| `Startup` | hashtable | see below | **Deprecated since 2.12.0, removed in 3.0.0.** The automatic update is a [startup task](#startup-tasks) now. Still honoured until then: while `Startup.Enabled` is `$true` and no startup task is named `RepositoryUpdate`, `Get-StartupTaskDefinitions` adds one that does what the keys below describe. |
-| `Startup.Enabled` | bool | `$false` | Deprecated. Update repositories automatically once the first prompt of a shell is drawn (profile stage `StartupTasks`, deferred until the shell is idle). Never clones a missing repository and never asks for Administrator. Prints one line per repository plus a totals line. Setting it `$true` is what `Test-ConfigurationSchema` warns about. |
-| `Startup.Schedule` | string | `"Daily"` | Deprecated. `"Daily"` (carried over as `Frequency = "OncePerDay"`): once per day - the first shell after the day starts runs it, and a shell already open then (a terminal left open overnight, a machine woken from sleep) runs it at its first prompt after the day starts. `"Interval"` (carried over as `Frequency = "Interval"`): at most once per `IntervalHours`, checked only when a shell starts. Anything else reads as `"Daily"`. Either way a machine that was off for days updates on its first shell back. The run is tracked by the startup task's stamp, `Logs\.startup-task-RepositoryUpdate.stamp`, written only after a run that succeeded; `Logs\.last-repository-update` is no longer written. |
-| `Startup.DayStartHour` | int | `6` | Deprecated. Daily only. The hour (0-23) a new day starts: a shell opened before it still counts as the day before. Out of range or not a number reads as `6`. |
-| `Startup.IntervalHours` | int | `24` | Deprecated. Interval only. Minimum hours between two automatic runs; `0` runs it in every shell. |
-| `Startup.Scope` | hashtable | absent | Deprecated. Which groups the automatic run updates, per machine type, in the same shape as [`BootstrapConfig.RepositoryUpdateScope`](#bootstrapconfig): `"All"`, a group name, a comma-separated string or an array, with a `Default` fallback. Absent falls back to `BootstrapConfig.RepositoryUpdateScope`, then to `"All"`. |
 
-**Migrating `Startup`:** replace the block with one [`Startup.Tasks`](#startup-tasks) entry, then delete it.
+**Consumer functions:** `Update-Repositories` (`IncludeDefaultBranch`, `ArchiveRoot`), `Resolve-RepositoryDefaultBranch` (`DefaultBranch`)
+
+### Automatic Update
+
+The automatic update is a [`Startup.Tasks`](#startup-tasks) entry, by convention named `RepositoryUpdate`. Nothing in this section turns it on.
 
 ```powershell
-# Before (deprecated)
-RepositoryUpdate = @{
-    Startup = @{ Enabled = $true; Schedule = "Daily"; DayStartHour = 6 }
-}
-
-# After
 Startup = @{
     Tasks = @(
         @{ Name = "RepositoryUpdate"; Command = "Update-Repositories -All -NoClone -Quiet"; Trigger = "TerminalOpen"; Frequency = "OncePerDay" }
@@ -1804,9 +1773,7 @@ Startup = @{
 }
 ```
 
-`Schedule = "Interval"` becomes `Frequency = "Interval"` with `IntervalHours`. A per-machine `Scope` becomes one task per scope: `Machine` says where the task runs, and its command names the groups (`Update-Repositories -Group Private -NoClone -Quiet`). Keep one task named `RepositoryUpdate` - that name is what switches the carry-over of the old keys off. The full walk is on the [Invoke-StartupRepositoryUpdate](guides/git/Invoke-StartupRepositoryUpdate.md) guide.
-
-**Consumer functions:** `Update-Repositories` (`IncludeDefaultBranch`, `ArchiveRoot`), `Resolve-RepositoryDefaultBranch` (`DefaultBranch`), `Get-StartupTaskDefinitions` (`Startup`, deprecated: carried over as the startup task `RepositoryUpdate`), and the deprecated `Get-RepositoryUpdateStartupSettings` (`Startup`, for `Register-RepositoryUpdatePromptCheck`)
+`Frequency = "Interval"` with `IntervalHours` runs it at most once per that many hours instead. Task names must be unique whatever their scope, so to update different groups on different machine types, write one task per scope, each with its own `Name`: for example `RepositoryUpdate-Private` with `Machine = "PC"` and the command `Update-Repositories -Group Private -NoClone -Quiet`. Each task is tracked by its own stamp, `Logs\.startup-task-<Name>.stamp`, written only after a run that succeeded. `Invoke-StartupTask <Name> -Force` runs it here and now, whatever its frequency says (it still runs only where its `Machine` scope covers).
 
 ---
 
@@ -2149,13 +2116,13 @@ otherwise silently redirect bare `wsl` commands into the wrong distro.
 
 **Consumer function:** `Configure-WSL`
 
-Optional. When set (e.g. `"ivan"` in `Configuration.local.psd1`), `Configure-WSL` creates the
+Optional. When set (e.g. `"alice"` in `Configuration.local.psd1`), `Configure-WSL` creates the
 account non-interactively on first installation and makes it the distribution's default user
 via `/etc/wsl.conf`; only the sudo password is still prompted - passwords never live in
 configuration. The base ships it empty, which falls back to the distribution's interactive
 first-launch account wizard. Mixed-case values are lowercased automatically (Linux usernames
 are lowercase - note the WSL user routinely differs from the Windows username, e.g. Windows
-`Ivan` vs WSL `ivan`).
+`Alice` vs WSL `alice`).
 
 ---
 

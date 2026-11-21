@@ -22,8 +22,8 @@ function Resolve-VisibleWindowExclusions {
 
 	.EXAMPLE
 		Resolve-VisibleWindowExclusions
-		With VisibleWindowExclusions = @("Rainmeter", @{ Name = "MyAgentApp"; Machine = "PC" }),
-		returns Rainmeter and MyAgentApp on a PC, and Rainmeter alone everywhere else.
+		With VisibleWindowExclusions = @("MyWidgetApp", @{ Name = "MyAgentApp"; Machine = "PC" }),
+		returns MyWidgetApp and MyAgentApp on a PC, and MyWidgetApp alone everywhere else.
 	#>
 	[CmdletBinding()]
 	[OutputType([string[]])]

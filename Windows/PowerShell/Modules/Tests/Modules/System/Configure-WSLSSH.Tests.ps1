@@ -15,7 +15,7 @@ Describe "Configure-WSLSSH" {
 
 		# `id -un` / `echo $HOME` probes and the copy/chown/chmod calls all hit this mock;
 		# a non-empty return satisfies the derived-user guard.
-		Mock wsl { "ivan" }
+		Mock wsl { "alice" }
 		Mock Write-Host { }
 	}
 
@@ -29,7 +29,7 @@ Describe "Configure-WSLSSH" {
 	It "derives the WSL user instead of using the Windows username" {
 		{ Configure-WSLSSH } | Should -Not -Throw
 
-		Should -Invoke wsl -ParameterFilter { $args -contains 'chown' -and $args -ccontains 'ivan:ivan' } -Times 1 -Exactly
+		Should -Invoke wsl -ParameterFilter { $args -contains 'chown' -and $args -ccontains 'alice:alice' } -Times 1 -Exactly
 	}
 
 	It "skips when the WSL user cannot be determined" {

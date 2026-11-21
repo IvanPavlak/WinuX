@@ -160,17 +160,17 @@ Describe "Open-Browser" {
 			Should -Invoke Wait-BrowserWindowReady -Times 1 -Exactly
 		}
 
-		It "does not count another browser's windows that share the process name" {
+		It "does not count firefox.exe windows whose title is not a Firefox window" {
 			$global:Configuration.Universal.Browsers['Firefox'] = @{
 				Exe          = 'C:\\Tools\\firefox.exe'
 				PrivateArg   = '-private-window'
 				NewWindowArg = '-new-window'
 			}
 
-			# Tor Browser runs as firefox.exe - its windows must not count as
-			# existing Firefox instances.
+			# A firefox.exe window without the Firefox title suffix (here the
+			# Picture-in-Picture player) must not count as an existing Firefox instance.
 			Mock Get-WindowHandle {
-				@([PSCustomObject]@{ Handle = [IntPtr]11; Title = 'Connect to Tor - Tor Browser' })
+				@([PSCustomObject]@{ Handle = [IntPtr]11; Title = 'Picture-in-Picture' })
 			}
 
 			Open-Browser -NoMenu -Browser Firefox -Instances 2

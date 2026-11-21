@@ -78,7 +78,6 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 
 - [`Open-Steam` in the Application module reference](../../../modules/application.md#open-steam) - parameters, usage and behaviour
 - [Application configuration guides](README.md) - every guide for this module
-- [`Open-LeagueOfLegends`](Open-LeagueOfLegends.md) - reads the same configuration
 - [`Open-NotepadPlusPlus`](Open-NotepadPlusPlus.md) - reads the same configuration
 - [`Open-VisualStudio`](Open-VisualStudio.md) - reads the same configuration
 - [WinuXConfigurator](../../winux-configurator.md) - have an AI assistant walk these decisions with you

@@ -14,7 +14,6 @@ BeforeAll {
 	# The real reader: which tasks count (valid, in scope, enabled, once per day, TerminalOpen)
 	# is decided on what it returns for a configuration, so the tests hand over configurations.
 	. "$ModuleRoot\Workflow\Functions\Get-StartupTaskDefinitions.ps1"
-	. "$ModuleRoot\Bootstrap\Functions\Resolve-RepositoryUpdateScope.ps1"
 }
 
 AfterAll {
@@ -38,7 +37,6 @@ Describe "Register-StartupTaskPromptCheck" {
 		# A Tuesday at noon, so every boundary below is a fixed moment.
 		$script:Now = [datetime]::new(2026, 3, 10, 12, 0, 0)
 		Mock Get-Date { $script:Now }
-		Mock Resolve-RepositoryUpdateScope { @{ All = $true; Groups = @() } }
 	}
 
 	Context "when there is nothing to look again for" {
@@ -99,8 +97,8 @@ Describe "Register-StartupTaskPromptCheck" {
 			${function:global:prompt}.ToString().Trim() | Should -Be "Invoke-StartupTaskPromptCheck"
 		}
 
-		It "wraps the prompt for the deprecated daily repository update" {
-			$global:Configuration = @{ RepositoryUpdate = @{ Startup = @{ Enabled = $true; DayStartHour = 9 } } }
+		It "wraps the prompt for a daily task, from its own DayStartHour" {
+			$global:Configuration = @{ Startup = @{ Tasks = @(@{ Name = 'RepositoryUpdate'; Command = 'Update-Repositories -All -NoClone -Quiet'; Trigger = 'TerminalOpen'; Frequency = 'OncePerDay'; DayStartHour = 9 }) } }
 
 			Register-StartupTaskPromptCheck
 
@@ -108,8 +106,8 @@ Describe "Register-StartupTaskPromptCheck" {
 			$global:WinuXStartupTaskPrompt.NextCheck | Should -Be ([datetime]::new(2026, 3, 11, 9, 0, 0))
 		}
 
-		It "does nothing for the deprecated repository update on the Interval schedule" {
-			$global:Configuration = @{ RepositoryUpdate = @{ Startup = @{ Enabled = $true; Schedule = 'Interval' } } }
+		It "does nothing for the RepositoryUpdate.Startup keys 3.0.0 removed" {
+			$global:Configuration = @{ RepositoryUpdate = @{ Startup = @{ Enabled = $true; DayStartHour = 9 } } }
 
 			Register-StartupTaskPromptCheck
 

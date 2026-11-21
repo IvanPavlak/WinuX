@@ -13,11 +13,11 @@ This skill is linked into the harness's user-level skills directory, so the curr
 - The skill folder (`~/.claude/skills/winux-configurator` or `~/.agents/skills/winux-configurator`) is a symbolic link to `<RepoRoot>/AI/Skills/winux/winux-configurator/`. Resolve the link and take the folder three levels above it. In PowerShell with the WinuX profile loaded, `(Get-RepositoryPath).Repo` answers directly.
 - Confirm the result by checking that `<RepoRoot>/Windows/PowerShell/Configuration.psd1` exists. If it does not, ask the user for the checkout path.
 - Note whether `<RepoRoot>/Unix/config/workspaces.conf` exists too. If it does, the checkout also holds Foundation, WinuX's macOS counterpart, and the protocol's ground rule 8 has you write the Unix counterpart of every entry in the same session, under `docs/foundation/foundation-configurator.md`.
-- If the repository cannot be reached at all, fetch the protocol from `https://raw.githubusercontent.com/IvanPavlak/WinuX/master/docs/configuration/winux-configurator.md` and tell the user that without the checkout you can interview and print fragments, but not write or verify.
+- If the repository cannot be reached at all, fetch the protocol from `https://raw.githubusercontent.com/IvanPavlak/WinuX/master/docs/winux/configuration/winux-configurator.md` and tell the user that without the checkout you can interview and print fragments, but not write or verify.
 
 ## Step 2 - Read the protocol
 
-Read `<RepoRoot>/docs/configuration/winux-configurator.md` in full before the first question. It carries the ground rules, the prerequisites, the mode choice, the interview loop, the write rules, the per-module verification and the walk order. Read each module's guides from `<RepoRoot>/docs/configuration/guides/<module>/` as you reach it, and read each decision out as written rather than from memory.
+Read `<RepoRoot>/docs/winux/configuration/winux-configurator.md` in full before the first question. It carries the ground rules, the prerequisites, the mode choice, the interview loop, the write rules, the per-module verification and the walk order. Read each module's guides from `<RepoRoot>/docs/winux/configuration/guides/<module>/` as you reach it, and read each decision out as written rather than from memory.
 
 ## Step 3 - Run the session
 

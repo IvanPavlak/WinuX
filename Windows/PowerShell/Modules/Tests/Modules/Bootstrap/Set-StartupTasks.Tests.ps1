@@ -89,7 +89,6 @@ BeforeAll {
 			InScope    = $InScope
 			Valid      = $Valid
 			Errors     = $errors
-			Legacy     = $false
 			Parameters = $parameters
 		}
 	}

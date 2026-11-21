@@ -953,7 +953,7 @@ Describe "Set-WorkspaceWindowLayout" {
 		Mock Get-VirtualDesktopCount { 1 }
 		Mock Snap-AllWindows { $script:LastSnapAllWindowsResult = [PSCustomObject]@{ SnappedCount = 1; FailedWindows = @() } }
 
-		Set-WorkspaceWindowLayout -WorkspaceName 'Dotfiles'
+		Set-WorkspaceWindowLayout -WorkspaceName 'MyFork'
 
 		Should -Invoke Set-WindowLayouts -Times 1 -Exactly -ParameterFilter {
 			$codeEntry = @($LayoutConfig | Where-Object { $_.ProcessName -eq 'Code' })
@@ -966,7 +966,7 @@ Describe "Set-WorkspaceWindowLayout" {
 		Mock Import-PowerShellDataFile {
 			@{
 				Layout   = @(
-					@{ ProcessName = 'Code'; WindowTitle = '^(?=.*Dotfiles)(?=.*Visual Studio Code).*$'; DesktopNumber = 1 }
+					@{ ProcessName = 'Code'; WindowTitle = '^(?=.*MyFork)(?=.*Visual Studio Code).*$'; DesktopNumber = 1 }
 				)
 				Monitors = @{
 					MonitorA = @{
@@ -980,10 +980,10 @@ Describe "Set-WorkspaceWindowLayout" {
 		Mock Get-VirtualDesktopCount { 1 }
 		Mock Snap-AllWindows { $script:LastSnapAllWindowsResult = [PSCustomObject]@{ SnappedCount = 1; FailedWindows = @() } }
 
-		Set-WorkspaceWindowLayout -WorkspaceName 'Dotfiles'
+		Set-WorkspaceWindowLayout -WorkspaceName 'MyFork'
 
 		Should -Invoke Set-WindowLayouts -Times 1 -Exactly -ParameterFilter {
-			($LayoutConfig | Where-Object { $_.ProcessName -eq 'Code' }).WindowTitle -match 'Dotfiles'
+			($LayoutConfig | Where-Object { $_.ProcessName -eq 'Code' }).WindowTitle -match 'MyFork'
 		}
 	}
 
@@ -992,7 +992,7 @@ Describe "Set-WorkspaceWindowLayout" {
 		Mock Import-PowerShellDataFile {
 			@{
 				Layout   = @(
-					@{ ProcessName = 'Code'; WindowTitle = 'Dotfiles'; DesktopNumber = 1; Zone = 'Left'; Monitor = 'MonitorA' }
+					@{ ProcessName = 'Code'; WindowTitle = 'MyFork'; DesktopNumber = 1; Zone = 'Left'; Monitor = 'MonitorA' }
 					@{ ProcessName = 'Code'; WindowTitle = 'OtherProj'; DesktopNumber = 1; Zone = 'Right'; Monitor = 'MonitorA' }
 				)
 				Monitors = @{
@@ -1007,10 +1007,10 @@ Describe "Set-WorkspaceWindowLayout" {
 		Mock Get-VirtualDesktopCount { 1 }
 		Mock Snap-AllWindows { $script:LastSnapAllWindowsResult = [PSCustomObject]@{ SnappedCount = 1; FailedWindows = @() } }
 
-		Set-WorkspaceWindowLayout -WorkspaceName 'Dotfiles'
+		Set-WorkspaceWindowLayout -WorkspaceName 'MyFork'
 
 		Should -Invoke Set-WindowLayouts -Times 1 -Exactly -ParameterFilter {
-			(@($LayoutConfig | Where-Object { $_.WindowTitle -eq 'Dotfiles' }).Count -eq 1) -and
+			(@($LayoutConfig | Where-Object { $_.WindowTitle -eq 'MyFork' }).Count -eq 1) -and
 			(@($LayoutConfig | Where-Object { $_.WindowTitle -eq 'OtherProj' }).Count -eq 1)
 		}
 	}

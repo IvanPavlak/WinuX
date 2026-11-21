@@ -167,22 +167,5 @@ Describe "Terminate-AllBrowserProcesses" {
 			Should -Invoke Write-LogList -Times 1 -Exactly -ParameterFilter { @($Items) -contains 'Mail - Mozilla Firefox' }
 			Should -Invoke Write-LogSuccess -Times 0
 		}
-
-		It "closes a window reachable through two targets sharing a process name only once" {
-			$global:Configuration = @{
-				Universal = @{
-					Browsers = @{
-						Firefox = @{ Exe = 'firefox.exe' }
-						Tor     = @{ Exe = 'Tor Browser\firefox.exe' }
-					}
-				}
-			}
-
-			Terminate-AllBrowserProcesses
-
-			# Both targets resolve to the same firefox PIDs and the same two windows.
-			Should -Invoke Get-BrowserWindowsByTarget -Times 2 -Exactly
-			$script:closedWindowTitles.Count | Should -Be 2
-		}
 	}
 }

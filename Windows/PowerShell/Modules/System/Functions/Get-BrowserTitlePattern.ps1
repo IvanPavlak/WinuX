@@ -11,9 +11,8 @@ function Get-BrowserTitlePattern {
 		This is the single source of truth for browser window identification,
 		shared by `Terminate-AllBrowserProcesses` (to find the windows to close)
 		and `Open-Browser`'s `-Instances` mode (to count only the target
-		browser's existing windows - Firefox and Tor Browser share the
-		firefox.exe process name, so a process-level count cannot tell them
-		apart).
+		browser's existing windows, not helper windows of the same process such
+		as a Picture-in-Picture player).
 
 		The Edge pattern allows up to two arbitrary characters between
 		"Microsoft" and "Edge" because Edge's real window title embeds a
@@ -23,15 +22,11 @@ function Get-BrowserTitlePattern {
 
 	.PARAMETER BrowserName
 		Browser name as configured in `Configuration.Universal.Browsers`
-		(e.g. "Firefox", "Tor", "Chrome", "Edge", "Brave").
+		(e.g. "Firefox", "Chrome", "Edge", "Brave").
 
 	.EXAMPLE
 		Get-BrowserTitlePattern -BrowserName "Edge"
 		Returns the regex matching Microsoft Edge window titles.
-
-	.EXAMPLE
-		Get-BrowserTitlePattern -BrowserName "Tor"
-		Returns "Tor Browser", distinguishing Tor windows from Firefox ones.
 	#>
 	[CmdletBinding()]
 	[OutputType([string])]
@@ -42,7 +37,6 @@ function Get-BrowserTitlePattern {
 
 	$browserTitlePatterns = @{
 		Firefox = "Mozilla Firefox|Firefox Developer Edition|Firefox Nightly"
-		Tor     = "Tor Browser"
 		Chrome  = "Google Chrome"
 		Edge    = "Microsoft.{0,2}Edge"
 		Brave   = "Brave"

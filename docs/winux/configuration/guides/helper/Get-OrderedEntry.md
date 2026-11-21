@@ -9,7 +9,7 @@ Looks one entry up by name in an ordered configuration section - the lookup coun
 
 `Get-OrderedEntry` takes the section it works on from its caller rather than reading a fixed key, so there is no key table for it.
 
-Where `Get-OrderedNames` returns the menu, this returns what the selected name carries: the action list behind a workspace, the PDF paths behind a group, the MAC address behind a machine. It reads the same sections - `ProjectActions`, `WorkspaceActions`, `CampaignResources`, `AcrobatPdfGroups`, `WakeOnLanConfig`, `Locales`, `KeyboardLayoutSets`, `NerdFonts` - and the same two shapes, the ordered array and, for a fork that has not migrated, a plain hashtable. Name matching is case-insensitive and the first match wins, so a section that lists a name twice behaves like the file reads, top to bottom. An unconfigured name comes back as `$null` and the caller decides what that means.
+Where `Get-OrderedNames` returns the menu, this returns what the selected name carries: the action list behind a workspace, the PDF paths behind a group, the MAC address behind a machine. It reads the same sections - `ProjectActions`, `WorkspaceActions`, `AcrobatPdfGroups`, `WakeOnLanConfig`, `Locales`, `KeyboardLayoutSets`, `NerdFonts` - and the same two shapes, the ordered array and, for a fork that has not migrated, a plain hashtable. Name matching is case-insensitive and the first match wins, so a section that lists a name twice behaves like the file reads, top to bottom. An unconfigured name comes back as `$null` and the caller decides what that means.
 
 ## Decisions
 
@@ -62,7 +62,7 @@ Read-only checks. None of these change anything.
 Reload-PowerShellProfile
 Get-OrderedNames $global:Configuration.WorkspaceActions
 Get-OrderedEntry $global:Configuration.WorkspaceActions "WinuX"
-Get-OrderedEntry $global:Configuration.WakeOnLanConfig "Proxmox Backup Server"
+Get-OrderedEntry $global:Configuration.WakeOnLanConfig "Backup Server"
 ```
 
 A `$null` back means the name is not configured - check its spelling against `Get-OrderedNames`. If a value reads back as empty, the two usual causes are a parse error in `Configuration.local.psd1` (run `Test-ConfigurationSchema`) and a key placed at the wrong nesting level.

@@ -30,7 +30,7 @@ Describe "Set-Locale" {
 	}
 
 	It "returns when requested locale is not configured" {
-		{ Set-Locale -Locale "hr-HR" } | Should -Not -Throw
+		{ Set-Locale -Locale "de-DE" } | Should -Not -Throw
 		Should -Invoke Write-LogError -Times 1
 	}
 

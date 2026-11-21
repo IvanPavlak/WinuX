@@ -246,8 +246,7 @@ function Invoke-StartupTask {
 	# By name alone: the configured task supplies what the command line left out. Where it
 	# runs stays the caller's choice - a task typed at a prompt runs in that shell.
 	if (-not $PSBoundParameters.ContainsKey('Command')) {
-		$includeLegacy = ($Name -eq 'RepositoryUpdate' -and $Force)
-		$definition = @(Get-StartupTaskDefinitions -Name $Name -IncludeLegacyDisabled:$includeLegacy) | Select-Object -First 1
+		$definition = @(Get-StartupTaskDefinitions -Name $Name) | Select-Object -First 1
 		if ($definition) {
 			if (-not $definition.Valid) {
 				$problem = "The configured task is not valid: $($definition.Errors -join '; ')"

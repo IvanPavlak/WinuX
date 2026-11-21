@@ -35,7 +35,7 @@ function Open-Browser {
 
 	.PARAMETER Browser
 		Browser to use. Defaults to `Configuration.Universal.DefaultBrowser`.
-		Valid values correspond to keys in `Configuration.Universal.Browsers` (e.g. "Firefox", "Chrome", "Tor").
+		Valid values correspond to keys in `Configuration.Universal.Browsers` (e.g. "Firefox", "Chrome").
 
 	.PARAMETER Override
 		Bypasses idempotency - opens groups even if they appear to already be open.
@@ -128,25 +128,21 @@ function Open-Browser {
 	$privateArg = $browserConfig.PrivateArg
 	$newWindowArg = $browserConfig.NewWindowArg
 	$urlGroups = @(Get-ConfigSetting -Path 'BrowserGroups' -Default @())
-	$isTor = $Browser -eq "Tor"
 
 	Try {
 		if ($PSBoundParameters.ContainsKey('Search') -and -not [string]::IsNullOrWhiteSpace($Search)) {
-			Write-LogStep "Searching [$Search]$(if ($Private -and -not $isTor) { " in private mode" })..."
+			Write-LogStep "Searching [$Search]$(if ($Private) { " in private mode" })..."
 			$encodedSearch = [System.Web.HttpUtility]::UrlEncode($Search)
 			$searchUrl = "https://www.google.com/search?q=$encodedSearch"
 
-			if ($isTor) {
-				Start-Process $browserPath -ArgumentList $searchUrl -NoNewWindow -ErrorAction Stop
-			}
-			elseif ($Private) {
+			if ($Private) {
 				Start-Process $browserPath -ArgumentList $privateArg, $searchUrl -NoNewWindow -ErrorAction Stop
 			}
 			else {
 				Start-Process $browserPath -ArgumentList $newWindowArg, $searchUrl -NoNewWindow -ErrorAction Stop
 			}
 
-			Write-LogSuccess "$Browser opened with search for [$Search]$(if ($Private -and -not $isTor) { " in private mode" })!"
+			Write-LogSuccess "$Browser opened with search for [$Search]$(if ($Private) { " in private mode" })!"
 			return
 		}
 
@@ -157,7 +153,6 @@ function Open-Browser {
 				"Chrome" { "chrome" }
 				"Firefox" { "firefox" }
 				"Edge" { "msedge" }
-				"Tor" { "firefox" }
 				default { $Browser.ToLower() }
 			}
 
@@ -166,8 +161,9 @@ function Open-Browser {
 			$existingWindows = @()
 			if ($Instances -gt 0) {
 				$existingWindows = @(Get-WindowHandle -ProcessName $browserProcessName -ErrorAction SilentlyContinue)
-				# Firefox and Tor Browser share the firefox.exe process name - keep only
-				# THIS browser's windows or each would count the other's as its own.
+				# Keep only windows whose title identifies THIS browser: a process name can be
+				# shared (another browser running from a firefox.exe build), and windows without
+				# the browser's title suffix are not browser windows to count.
 				if ($browserTitlePattern) {
 					$existingWindows = @($existingWindows | Where-Object { $_.Title -match $browserTitlePattern })
 				}
@@ -205,10 +201,7 @@ function Open-Browser {
 			}
 
 			for ($inst = 0; $inst -lt $toOpen; $inst++) {
-				if ($isTor) {
-					Start-Process $browserPath -NoNewWindow -ErrorAction Stop
-				}
-				elseif ($Private) {
+				if ($Private) {
 					Start-Process $browserPath -ArgumentList $privateArg -NoNewWindow -ErrorAction Stop
 				}
 				elseif ($newWindowArg) {
@@ -223,13 +216,13 @@ function Open-Browser {
 
 				# Cold-start gate: launches fired while the FIRST instance is still
 				# bootstrapping are dropped (Chromium's process singleton is not
-				# accepting hand-offs yet) or pile up on the profile lock (Tor).
+				# accepting hand-offs yet).
 				if ($inst -eq 0 -and $toOpen -gt 1 -and $existingWindows.Count -eq 0) {
 					[void](Wait-BrowserWindowReady -ProcessName $browserProcessName -TitlePattern $browserTitlePattern)
 				}
 			}
 
-			Write-LogSuccess "$Browser opened$(if ($Private -and -not $isTor) { " in private mode" })! ($toOpen instance(s) launched)"
+			Write-LogSuccess "$Browser opened$(if ($Private) { " in private mode" })! ($toOpen instance(s) launched)"
 			return
 		}
 
@@ -257,10 +250,7 @@ function Open-Browser {
 			}
 
 			Write-LogStep "Opening $Browser..."
-			if ($isTor) {
-				Start-Process $browserPath -NoNewWindow -ErrorAction Stop
-			}
-			elseif ($Private) {
+			if ($Private) {
 				Start-Process $browserPath -ArgumentList $privateArg -NoNewWindow -ErrorAction Stop
 			}
 			else {
@@ -268,7 +258,7 @@ function Open-Browser {
 			}
 		}
 		else {
-			if ($Private -and -not $isTor) {
+			if ($Private) {
 				Write-LogWarning "Groups cannot be opened in private mode. Continuing with normal mode..."
 				$Private = $false
 			}
@@ -284,14 +274,13 @@ function Open-Browser {
 					"Chrome" { "chrome" }
 					"Firefox" { "firefox" }
 					"Edge" { "msedge" }
-					"Tor" { "firefox" }
 					default { $Browser.ToLower() }
 				}
 				$cachedWindows = @(Get-WindowHandle -ProcessName $browserProcessName -ErrorAction SilentlyContinue)
 				Write-LogDebug " [Open-Browser] Cached $($cachedWindows.Count) [$browserProcessName] window(s) for $($resolvedGroups.Count) group check(s)"
 
 				# Cold-start detection for the Instances burst below. Filtered by title
-				# because Firefox and Tor Browser share the firefox.exe process name.
+				# so only this browser's own windows count (see the -NoMenu branch above).
 				# Deliberately computed from the UNFILTERED enumeration: a preserved window
 				# still proves the browser process is warm and accepting new-window hand-offs.
 				$groupTitlePattern = Get-BrowserTitlePattern -BrowserName $Browser
@@ -417,7 +406,7 @@ function Open-Browser {
 
 					for ($inst = 0; $inst -lt $windowsToOpen; $inst++) {
 						if ($urlsToOpen.Count -eq 1) {
-							if ($isTor) {
+							if (-not $newWindowArg) {
 								Start-Process $browserPath -ArgumentList $urlsToOpen[0] -NoNewWindow -ErrorAction Stop
 							}
 							else {
@@ -426,7 +415,7 @@ function Open-Browser {
 						}
 						else {
 							$urlString = $urlsToOpen -join " "
-							if ($isTor -or $Browser -eq "Firefox") {
+							if (-not $newWindowArg -or $Browser -eq "Firefox") {
 								Start-Process $browserPath -ArgumentList $urlString -NoNewWindow -ErrorAction Stop
 							}
 							else {
@@ -436,7 +425,7 @@ function Open-Browser {
 
 						# Cold-start gate: launches fired while the FIRST instance is still
 						# bootstrapping are dropped (Chromium's process singleton is not
-						# accepting hand-offs yet) or pile up on the profile lock (Tor).
+						# accepting hand-offs yet).
 						if (-not $browserWarm) {
 							[void](Wait-BrowserWindowReady -ProcessName $browserProcessName -TitlePattern $groupTitlePattern)
 							$browserWarm = $true
@@ -469,7 +458,7 @@ function Open-Browser {
 				}
 
 				if ($urlsToOpen.Count -eq 1) {
-					if ($isTor) {
+					if (-not $newWindowArg) {
 						Start-Process $browserPath -ArgumentList $urlsToOpen[0] -NoNewWindow -ErrorAction Stop
 					}
 					else {
@@ -478,7 +467,7 @@ function Open-Browser {
 				}
 				else {
 					$urlString = $urlsToOpen -join " "
-					if ($isTor -or $Browser -eq "Firefox") {
+					if (-not $newWindowArg -or $Browser -eq "Firefox") {
 						Start-Process $browserPath -ArgumentList $urlString -NoNewWindow -ErrorAction Stop
 					}
 					else {
@@ -492,7 +481,7 @@ function Open-Browser {
 			}
 		}
 
-		Write-LogSuccess "$Browser opened$(if ($Private -and -not $isTor) { " in private mode" })!"
+		Write-LogSuccess "$Browser opened$(if ($Private) { " in private mode" })!"
 	}
 	Catch {
 		Write-LogError "Error: $($_.Exception.Message)" -BlankLineAfter

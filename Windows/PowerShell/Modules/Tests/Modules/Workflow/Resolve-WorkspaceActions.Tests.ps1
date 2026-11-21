@@ -36,11 +36,11 @@ Describe "Resolve-WorkspaceActions" {
 		Mock Get-LayoutMachineType { 'PC' }
 
 		# The shape this exists for: one workspace, two browser openers, one per layout set.
-		$script:leagueActions = @(
-			@{ Action = 'Open-LeagueOfLegends' }
+		$script:gamingActions = @(
+			@{ Action = 'Open-Steam' }
 			@{ Action = 'Open-Browser'; Parameters = @{ Groups = @('Google'); Instances = 2 }; LayoutMachine = 'PC' }
 			@{ Action = 'Open-Browser'; Parameters = @{ Groups = @('Google') }; LayoutMachine = 'Laptop/Work' }
-			@{ Action = 'Set-WorkspaceWindowLayout'; Parameters = @{ WorkspaceName = 'LeagueOfLegends' } }
+			@{ Action = 'Set-WorkspaceWindowLayout'; Parameters = @{ WorkspaceName = 'Gaming' } }
 		)
 	}
 
@@ -101,10 +101,10 @@ Describe "Resolve-WorkspaceActions" {
 
 	Context "LayoutMachine scope - the layout set" {
 		It "matches against the layout set Get-LayoutMachineType resolves, not the detected type" {
-			# The PC redirected to the Work layouts: one Google window, like LeagueOfLegends_Work.psd1.
+			# The PC redirected to the Work layouts: one Google window, like Gaming_Work.psd1.
 			Mock Get-LayoutMachineType { 'Work' }
 
-			$result = @(Resolve-WorkspaceActions -Actions $script:leagueActions -Workspace 'LeagueOfLegends')
+			$result = @(Resolve-WorkspaceActions -Actions $script:gamingActions -Workspace 'Gaming')
 
 			$result.Count | Should -Be 3
 			$result[1].Action | Should -Be 'Open-Browser'
@@ -114,14 +114,14 @@ Describe "Resolve-WorkspaceActions" {
 		}
 
 		It "keeps the two-window opener on the PC's own layout set" {
-			$result = @(Resolve-WorkspaceActions -Actions $script:leagueActions -Workspace 'LeagueOfLegends')
+			$result = @(Resolve-WorkspaceActions -Actions $script:gamingActions -Workspace 'Gaming')
 
 			$result.Count | Should -Be 3
 			$result[1].Parameters.Instances | Should -Be 2
 		}
 
 		It "uses an explicit -LayoutMachineType and never asks Get-LayoutMachineType then" {
-			$result = @(Resolve-WorkspaceActions -Actions $script:leagueActions -Workspace 'LeagueOfLegends' -LayoutMachineType 'Laptop')
+			$result = @(Resolve-WorkspaceActions -Actions $script:gamingActions -Workspace 'Gaming' -LayoutMachineType 'Laptop')
 
 			$result.Count | Should -Be 3
 			$result[1].LayoutMachine | Should -Be 'Laptop/Work'
@@ -129,7 +129,7 @@ Describe "Resolve-WorkspaceActions" {
 		}
 
 		It "resolves the layout set once per call, and only when an entry carries LayoutMachine" {
-			@(Resolve-WorkspaceActions -Actions $script:leagueActions -Workspace 'LeagueOfLegends') | Out-Null
+			@(Resolve-WorkspaceActions -Actions $script:gamingActions -Workspace 'Gaming') | Out-Null
 			Should -Invoke Get-LayoutMachineType -Times 1 -Exactly
 
 			@(Resolve-WorkspaceActions -Actions @(@{ Action = 'A'; Machine = 'PC' }) -Workspace 'W') | Out-Null
@@ -139,7 +139,7 @@ Describe "Resolve-WorkspaceActions" {
 		It "falls back to the machine type as the layout set when Get-LayoutMachineType is not available" {
 			Mock Get-Command { $null } -ParameterFilter { $Name -eq 'Get-LayoutMachineType' }
 
-			$result = @(Resolve-WorkspaceActions -Actions $script:leagueActions -Workspace 'LeagueOfLegends' -MachineType 'Work')
+			$result = @(Resolve-WorkspaceActions -Actions $script:gamingActions -Workspace 'Gaming' -MachineType 'Work')
 
 			$result.Count | Should -Be 3
 			$result[1].LayoutMachine | Should -Be 'Laptop/Work'
@@ -191,10 +191,10 @@ Describe "Resolve-WorkspaceActions" {
 		It "reports an unknown token with the workspace and action named, and skips that entry" {
 			$scoped = @(@{ Action = 'Open-Browser'; Machine = 'Labtop' }, @{ Action = 'B' })
 
-			$result = @(Resolve-WorkspaceActions -Actions $scoped -Workspace 'Trading')
+			$result = @(Resolve-WorkspaceActions -Actions $scoped -Workspace 'MyWorkspace')
 
 			@($result | ForEach-Object { $_.Action }) | Should -Be @('B')
-			Should -Invoke Write-LogError -Times 1 -Exactly -ParameterFilter { $Message -like '*[[]Labtop]*' -and $Message -like '*WorkspaceActions.Trading [[]Open-Browser]*' }
+			Should -Invoke Write-LogError -Times 1 -Exactly -ParameterFilter { $Message -like '*[[]Labtop]*' -and $Message -like '*WorkspaceActions.MyWorkspace [[]Open-Browser]*' }
 		}
 
 		It "warns once, naming the machine type and the layout set, when every entry is scoped out" {
@@ -228,7 +228,7 @@ Describe "Resolve-WorkspaceActions" {
 
 	Context "parameter override tables - MachineParameters and LayoutMachineParameters" {
 		BeforeEach {
-			# The one-line form of the LeagueOfLegends opener: one entry, one row for the PC's own layout set.
+			# The one-line form of the Gaming opener: one entry, one row for the PC's own layout set.
 			$script:browserEntry = @{
 				Action                  = 'Open-Browser'
 				Parameters              = @{ Groups = @('Google') }
@@ -237,13 +237,13 @@ Describe "Resolve-WorkspaceActions" {
 		}
 
 		It "applies a LayoutMachineParameters row when the layout set matches, and leaves the parameter out otherwise" {
-			$onPC = @(Resolve-WorkspaceActions -Actions @($script:browserEntry) -Workspace 'LeagueOfLegends')
+			$onPC = @(Resolve-WorkspaceActions -Actions @($script:browserEntry) -Workspace 'Gaming')
 			$onPC.Count | Should -Be 1
 			$onPC[0].Parameters.Instances | Should -Be 2
 			$onPC[0].Parameters.Groups | Should -Be @('Google')
 
 			Mock Get-LayoutMachineType { 'Work' }
-			$onWork = @(Resolve-WorkspaceActions -Actions @($script:browserEntry) -Workspace 'LeagueOfLegends')
+			$onWork = @(Resolve-WorkspaceActions -Actions @($script:browserEntry) -Workspace 'Gaming')
 			$onWork.Count | Should -Be 1
 			$onWork[0].Parameters.ContainsKey('Instances') | Should -BeFalse
 			$onWork[0].Parameters.Groups | Should -Be @('Google')
@@ -403,11 +403,11 @@ Describe "Resolve-WorkspaceActions" {
 				LayoutMachineParameters = @{ Labtop = @{ Instances = 5 }; ' ' = @{ Instances = 6 }; PC = @{ Instances = 2 } }
 			}
 
-			$result = @(Resolve-WorkspaceActions -Actions @($entry) -Workspace 'Trading')[0]
+			$result = @(Resolve-WorkspaceActions -Actions @($entry) -Workspace 'MyWorkspace')[0]
 
 			$result.Parameters.Instances | Should -Be 2
-			Should -Invoke Write-LogError -Times 1 -Exactly -ParameterFilter { $Message -like '*[[]Labtop]*' -and $Message -like '*WorkspaceActions.Trading [[]Open-Browser].LayoutMachineParameters*' }
-			Should -Invoke Write-LogError -Times 1 -Exactly -ParameterFilter { $Message -like 'Empty machine scope*WorkspaceActions.Trading [[]Open-Browser].LayoutMachineParameters*' }
+			Should -Invoke Write-LogError -Times 1 -Exactly -ParameterFilter { $Message -like '*[[]Labtop]*' -and $Message -like '*WorkspaceActions.MyWorkspace [[]Open-Browser].LayoutMachineParameters*' }
+			Should -Invoke Write-LogError -Times 1 -Exactly -ParameterFilter { $Message -like 'Empty machine scope*WorkspaceActions.MyWorkspace [[]Open-Browser].LayoutMachineParameters*' }
 		}
 
 		It "accepts a layout set from LayoutMachineTypeOverrides as a row key, and reports it as unknown in MachineParameters" {

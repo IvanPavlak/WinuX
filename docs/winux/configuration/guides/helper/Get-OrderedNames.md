@@ -9,7 +9,7 @@ Returns the entry names of an ordered configuration section, in the order the fi
 
 `Get-OrderedNames` takes the section it works on from its caller rather than reading a fixed key, so there is no key table for it.
 
-It is the read side of the repository's one ordering rule, [Ordered Sections](../../configuration-reference.md#ordered-sections): a menu-bearing section is an array of single-key hashtables, and this function returns those keys in file order. The sections it is called against are `ProjectActions`, `WorkspaceActions`, `CampaignResources`, `AcrobatPdfGroups`, `WakeOnLanConfig`, `Locales`, `KeyboardLayoutSets` and `NerdFonts` - each has its own guide, listed in the [Helper guides index](README.md) and the module indexes. A section still written as a plain hashtable is accepted and comes back sorted, because `Import-PowerShellDataFile` loses key order at load time; `Test-ConfigurationSchema` is what tells you to migrate it.
+It is the read side of the repository's one ordering rule, [Ordered Sections](../../configuration-reference.md#ordered-sections): a menu-bearing section is an array of single-key hashtables, and this function returns those keys in file order. The sections it is called against are `ProjectActions`, `WorkspaceActions`, `AcrobatPdfGroups`, `WakeOnLanConfig`, `Locales`, `KeyboardLayoutSets` and `NerdFonts` - each has its own guide, listed in the [Helper guides index](README.md) and the module indexes. A section still written as a plain hashtable is accepted and comes back sorted, because `Import-PowerShellDataFile` loses key order at load time; `Test-ConfigurationSchema` is what tells you to migrate it.
 
 ## Decisions
 

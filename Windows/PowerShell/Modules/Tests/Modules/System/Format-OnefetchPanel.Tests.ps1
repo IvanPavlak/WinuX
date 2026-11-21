@@ -62,7 +62,7 @@ Describe "Format-OnefetchPanel" {
 		It "pads a continuation line by the width the separator added" {
 			# onefetch already padded this line to sit under the value; " -> " moves the value two
 			# columns right and the continuation has to follow.
-			$continuation = "        15% Ivan Pavlak 394"
+			$continuation = "        15% Alice Example 394"
 			$lines = @((New-FieldLine -Name "Authors" -Value "85%"), $continuation)
 
 			$result = @($lines | Format-OnefetchPanel -Separator " -> ")
@@ -72,7 +72,7 @@ Describe "Format-OnefetchPanel" {
 
 		It "does not pad anything above the first field" {
 			# The title and its underline are not in the value column at all.
-			$title = "$script:Esc[94mIvanPavlak$script:Esc[0m"
+			$title = "$script:Esc[94mAliceExample$script:Esc[0m"
 			$result = @(@($title, (New-FieldLine)) | Format-OnefetchPanel -Separator " -> ")
 
 			$result[0] | Should -BeExactly $title
@@ -118,7 +118,7 @@ Describe "Format-OnefetchPanel" {
 		}
 
 		It "pads nothing when the separator is no wider than the colon" {
-			$continuation = "        15% Ivan Pavlak 394"
+			$continuation = "        15% Alice Example 394"
 			$result = @(@((New-FieldLine), $continuation) | Format-OnefetchPanel -Separator " >")
 
 			$result[1] | Should -BeExactly $continuation

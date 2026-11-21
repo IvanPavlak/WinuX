@@ -21,7 +21,7 @@ Describe "Set-DisplayLanguage" {
 	}
 
 	It "returns when requested language is not configured" {
-		{ Set-DisplayLanguage -Language "hr-HR" } | Should -Not -Throw
+		{ Set-DisplayLanguage -Language "de-DE" } | Should -Not -Throw
 		Should -Invoke Write-LogError -Times 1
 	}
 }

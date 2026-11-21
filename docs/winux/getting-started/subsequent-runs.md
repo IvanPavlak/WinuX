@@ -170,7 +170,7 @@ Every time you open PowerShell, the profile (`Microsoft.PowerShell_profile.ps1`)
 > [!NOTE]
 > `Terminal-Icons`, the log maintenance and the startup tasks of a newly opened terminal run after the first prompt, from a one-shot `PowerShell.OnIdle` event. The only visible difference is a directory listing typed within the first ~300 ms of a new shell, which prints without icons - and, in a shell where a startup task with the `TerminalOpen` trigger is due (`Startup.Tasks`, empty by default), what the task prints below the prompt, with typing held until it is done. The automatic repository update is such a task: on the one shell a day where it runs, its compact summary is printed below the prompt. A shell that stays open into the next day runs its once-a-day tasks at its first prompt after the day starts (the task's `DayStartHour`, default 06:00), the output printed just above that prompt. An entry of the queue that throws is reported with one red line under the prompt (and in the session and error logs), and the prompt is drawn again under it.
 >
-> The stage is named `StartupTasks` (it was `RepositoryUpdate` before 2.12.0, which is the name to replace in a `WINUX_STARTUP_SKIP` list). The deprecated `RepositoryUpdate.Startup` keys still work until 3.0.0: they are turned into a startup task named `RepositoryUpdate`.
+> The stage is named `StartupTasks` (it was `RepositoryUpdate` before 2.12.0, which is the name to replace in a `WINUX_STARTUP_SKIP` list).
 
 > [!TIP]
 > A slow start is measured, not guessed: `Measure-ShellStartup` starts child shells with one stage added at a time and prints min / median / max per configuration. See [Slow Profile Load](../reference/troubleshooting.md#slow-profile-load).
@@ -246,8 +246,8 @@ If you only need specific parts:
 ```powershell
 # Only system configuration
 Set-SystemTheme -Auto
-Set-Locale -Locale "Croatian"
-Set-KeyboardLayouts -Layout "Croatian-US"
+Set-Locale -Locale "German"
+Set-KeyboardLayouts -Layout "German-US"
 
 # Only package updates
 Upgrade-All

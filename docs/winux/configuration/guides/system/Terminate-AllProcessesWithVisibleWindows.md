@@ -1,6 +1,6 @@
 # Terminate-AllProcessesWithVisibleWindows
 
-Forcefully terminates all processes that own a visible, titled top-level window (found window-side through `Get-VisibleWindowProcess`), preserving the default exclusions used by the desktop cleanup flow: every browser declared in `Configuration.Universal.Browsers` (handled gracefully by `Terminate-AllBrowserProcesses` instead) plus every process named in the `Universal.VisibleWindowExclusions` configuration list (`Rainmeter...
+Forcefully terminates all processes that own a visible, titled top-level window (found window-side through `Get-VisibleWindowProcess`), preserving the default exclusions used by the desktop cleanup flow: every browser declared in `Configuration.Universal.Browsers` (handled gracefully by `Terminate-AllBrowserProcesses` instead) plus every process named in the `Universal.VisibleWindowExclusions` configuration list (`WindowsTerminal`...
 
 > [!NOTE]
 > Every value on this page belongs in `Configuration.local.psd1`, never in the base `Configuration.psd1`. The base file is upstream's, it ships empty-by-default, and it is deep-merged with your local file at load time by `Load-PathConfiguration`. See [Fork Model](../../../contributing/fork-model.md).
@@ -9,18 +9,18 @@ Forcefully terminates all processes that own a visible, titled top-level window 
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`Universal.VisibleWindowExclusions`](../../configuration-reference.md#process-cleanup) | array of process names or `@{ Name; Machine }` entries (see [Resolve-VisibleWindowExclusions](Resolve-VisibleWindowExclusions.md)) | `Rainmeter`, `WindowsTerminal`, `Docker Desktop`, `obs64`, `PowerToys`, `PowerToys.FancyZones`, `PowerToys.Settings` | The processes never force-killed. An empty list makes the function warn and terminate nothing, since it would otherwise kill `WindowsTerminal` - the shell running the cleanup. The PowerToys entries are load-bearing. |
-| [`Universal.Browsers`](../../configuration-reference.md#browser-configuration) | hashtable of browser name to `@{ Exe; ... }` | `Firefox`, `Tor`, `Chrome`, `Edge`, `Brave` | Every entry's `Exe` file name (without `.exe`) is added to the exclusions, because `Terminate-AllBrowserProcesses` closes those windows gracefully instead. |
+| [`Universal.VisibleWindowExclusions`](../../configuration-reference.md#process-cleanup) | array of process names or `@{ Name; Machine }` entries (see [Resolve-VisibleWindowExclusions](Resolve-VisibleWindowExclusions.md)) | `WindowsTerminal`, `Docker Desktop`, `PowerToys`, `PowerToys.FancyZones`, `PowerToys.Settings` | The processes never force-killed. An empty list makes the function warn and terminate nothing, since it would otherwise kill `WindowsTerminal` - the shell running the cleanup. The PowerToys entries are load-bearing. |
+| [`Universal.Browsers`](../../configuration-reference.md#browser-configuration) | hashtable of browser name to `@{ Exe; ... }` | `Firefox`, `Chrome`, `Edge`, `Brave` | Every entry's `Exe` file name (without `.exe`) is added to the exclusions, because `Terminate-AllBrowserProcesses` closes those windows gracefully instead. |
 
 ## Decisions
 
 1. Which processes must survive the force-kill?
     - Options: Process names (no `.exe`) in `Universal.VisibleWindowExclusions` - tray-style apps, recorders, anything whose window you never want killed. The list is an array, so copy the whole base list and add to it: keep `WindowsTerminal` and the three PowerToys entries. For a one-off, pass `-Exclude` (window-title patterns) instead.
-    - Default: The shipped seven names.
+    - Default: The shipped five names.
     - More detail: [`Universal.VisibleWindowExclusions`](../../configuration-reference.md#process-cleanup)
 2. Are all your browsers in `Universal.Browsers`?
     - Options: A browser listed there is spared here and closed gracefully by `Terminate-AllBrowserProcesses`; a browser NOT listed is treated like any other app and force-killed. Hashtables merge per key, so adding one browser does not remove the others.
-    - Default: The shipped five.
+    - Default: The shipped four.
     - More detail: [`Universal.Browsers`](../../configuration-reference.md#browser-configuration)
 
 ## Where to Put Values
@@ -42,10 +42,8 @@ All of it goes in `Configuration.local.psd1`, at the repository's `Windows/Power
 ```powershell
 Universal = @{
     VisibleWindowExclusions = @(
-        "Rainmeter"
         "WindowsTerminal"
         "Docker Desktop"
-        "obs64"
         "PowerToys"
         "PowerToys.FancyZones"
         "PowerToys.Settings"
@@ -85,10 +83,8 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 @{
     Universal = @{
         VisibleWindowExclusions = @(
-            "Rainmeter"
             "WindowsTerminal"
             "Docker Desktop"
-            "obs64"
             "PowerToys"
             "PowerToys.FancyZones"
             "PowerToys.Settings"

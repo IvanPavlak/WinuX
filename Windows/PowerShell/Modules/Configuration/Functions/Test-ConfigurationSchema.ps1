@@ -37,7 +37,7 @@ function Test-ConfigurationSchema {
 		Finally it reports deprecated configuration (VERSIONING.md, Deprecation policy): one
 		warning per deprecated key or step name the merged configuration still uses, naming the
 		release that deprecated it, the release that removes it and its replacement. The table of
-		deprecations is the $deprecations list at the top of this function - the only thing a
+		deprecations is the default value of the hidden -Deprecations parameter - the only thing a
 		later deprecation adds to. A deprecation never counts as a failure, even under -Strict:
 		the old shape keeps working until the next MAJOR. A key that the base Configuration.psd1
 		still ships only warns when it is set to something other than the shipped default
@@ -60,6 +60,14 @@ function Test-ConfigurationSchema {
 		If specified, throws a terminating error when any required key is missing.
 		Use during bootstrap/testing; omit for profile startup (warning-only).
 
+	.PARAMETER Deprecations
+		Hidden (DontShow): the deprecation table, one hashtable per key - Path (dotted), Since,
+		Removal, Replacement and When: Present (the key exists), NotEmpty (Test-ConfigValue) or
+		NotDefault (differs from Default, the value the base Configuration.psd1 ships; an array
+		compares element by element). A later deprecation adds its entry to the default, e.g.
+		@{ Path = 'Section.OldKey'; Since = '3.1.0'; Removal = '4.0.0'; When = 'Present'; Replacement = 'Section.NewKey' }.
+		It is a parameter so the tests can hand over their own table; nothing else passes it.
+
 	.EXAMPLE
 		Test-ConfigurationSchema
 		Validates $global:Configuration and writes a warning for each missing key.
@@ -78,16 +86,13 @@ function Test-ConfigurationSchema {
 		[hashtable]$Configuration = $global:Configuration,
 
 		[Parameter()]
-		[switch]$Strict
-	)
+		[switch]$Strict,
 
-	# Deprecated configuration: Path (dotted), Since, Removal, Replacement and When - Present
-	# (the key exists), NotEmpty (Test-ConfigValue) or NotDefault (differs from Default, the
-	# value the base Configuration.psd1 ships; an array compares element by element).
-	# A later deprecation adds one entry per key, e.g.
-	#   @{ Path = 'Section.OldKey'; Since = '2.1.0'; Removal = '3.0.0'; When = 'Present'; Replacement = 'Section.NewKey' }
-	$deprecations = @(
-		@{ Path = 'RepositoryUpdate.Startup.Enabled'; Since = '2.12.0'; Removal = '3.0.0'; When = 'NotDefault'; Default = $false; Replacement = 'a Startup.Tasks entry: @{ Name = "RepositoryUpdate"; Command = "Update-Repositories -All -NoClone -Quiet"; Trigger = "TerminalOpen"; Frequency = "OncePerDay" }' }
+		# The deprecation table (see .PARAMETER Deprecations). 3.0.0 removed every earlier
+		# deprecation, so it is empty until the next one.
+		[Parameter(DontShow)]
+		[AllowEmptyCollection()]
+		[hashtable[]]$Deprecations = @()
 	)
 
 	$failures = [System.Collections.Generic.List[string]]::new()
@@ -143,7 +148,6 @@ function Test-ConfigurationSchema {
 		'RepositoryGroups'
 		'ProjectActions'
 		'WorkspaceActions'
-		'CampaignResources'
 		'AcrobatPdfGroups'
 		'WakeOnLanConfig'
 		'Locales'
@@ -320,7 +324,7 @@ function Test-ConfigurationSchema {
 
 	# Deprecated keys and step names: one warning each, never a failure.
 	$deprecationWarnings = [System.Collections.Generic.List[string]]::new()
-	foreach ($deprecation in $deprecations) {
+	foreach ($deprecation in $Deprecations) {
 		$segments = $deprecation.Path.Split('.')
 		$parent = $Configuration
 		foreach ($segment in $segments[0..($segments.Count - 2)]) {

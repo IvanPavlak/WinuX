@@ -81,7 +81,7 @@ decisions behind them, and where the values go. Each module's `README.md` indexe
 | `Logging`                                          | `Initialize-LoggingState`                          |
 | `Logging.Maintenance`                              | `Invoke-LogMaintenance`                            |
 | `Logging.FileLogging.Retention`                    | `Clear-OldLogs`                                    |
-| `RepositoryUpdate`                                 | `Update-Repositories`, `Resolve-RepositoryDefaultBranch`; the deprecated `RepositoryUpdate.Startup` keys by `Get-StartupTaskDefinitions` (carried over as the startup task `RepositoryUpdate`) and by the deprecated `Get-RepositoryUpdateStartupSettings` (for `Register-RepositoryUpdatePromptCheck`) |
+| `RepositoryUpdate`                                 | `Update-Repositories`, `Resolve-RepositoryDefaultBranch` (the automatic update itself is the startup task `RepositoryUpdate`, see `Startup`) |
 | `Startup` (`Tasks`, `Conditions`, `FailureReport`) | `Get-StartupTaskDefinitions` (reads and validates `Tasks`), `Invoke-StartupTasks` (runs one trigger's tasks; `FailureReport`), `Invoke-StartupTask` (runs one task; `Conditions`), `Test-StartupCondition` (`Conditions`), `Set-StartupTasks` (the scheduled tasks behind `SignIn` / `Unlock` / `Wake`), `Register-StartupTaskPromptCheck` and `Invoke-StartupTaskPromptCheck` (once-a-day `TerminalOpen` tasks in a shell left open); their helpers read no key: `Test-StartupTaskDue`, `Start-StartupTaskShell`, `Wait-StartupTaskResult`, `New-StartupTaskShellCommand`; shape checked by `Test-ConfigurationSchema` |
 | `BrowserGroups`                                    | `Open-Browser`, `Test-BrowserGroupAlreadyOpen`, `Resolve-SwaggerBrowserGroup`, `Get-SwaggerCloseTitlePatterns` |
 | `PathTemplates.Projects`, `ProjectActions`         | `Open-Project` (`ProjectActions` also by `Close-Project`, `Open-Workspace`, `Resolve-WorkspaceActions`, `Merge-LayoutProjectOverrides`) |
@@ -154,8 +154,8 @@ The profile (`Microsoft.PowerShell_profile.ps1`) executes this exact sequence. E
     moved aside and the import retried), Invoke-LogMaintenance, Register-StartupTaskPromptCheck (only when a
     TerminalOpen task runs OncePerDay: wraps the prompt so a shell still open the next day runs it at its first
     prompt), then Invoke-StartupTasks -Trigger TerminalOpen -RedrawPrompt (every Startup.Tasks entry with the
-    TerminalOpen trigger, inline, each when its Frequency says it is due; no-op while Startup.Tasks is empty and
-    the deprecated RepositoryUpdate.Startup.Enabled is off). An entry that throws is reported
+    TerminalOpen trigger, inline, each when its Frequency says it is due; no-op while Startup.Tasks is
+    empty). An entry that throws is reported
     through Write-LogError (console, session log and error log) and the prompt is drawn again (Restore-ShellPrompt)
 ```
 

@@ -364,14 +364,14 @@ Describe "Test-BrowserGroupAlreadyOpen" {
 			Should -Invoke Get-WindowHandle -ParameterFilter { $ProcessName -eq "msedge" }
 		}
 
-		It "Should use 'firefox' process name for Tor browser" {
-			Mock Get-WindowHandle { @() } -ParameterFilter { $ProcessName -eq "firefox" }
+		It "Should fall back to the lowercased browser name for an unmapped browser" {
+			Mock Get-WindowHandle { @() } -ParameterFilter { $ProcessName -eq "vivaldi" }
 
 			$result = Test-BrowserGroupAlreadyOpen -Urls @("https://example.com/") `
-				-Browser "Tor" -GroupDisplayName "Example"
+				-Browser "Vivaldi" -GroupDisplayName "Example"
 
 			$result | Should -Be $false
-			Should -Invoke Get-WindowHandle -ParameterFilter { $ProcessName -eq "firefox" }
+			Should -Invoke Get-WindowHandle -ParameterFilter { $ProcessName -eq "vivaldi" }
 		}
 	}
 
@@ -475,11 +475,11 @@ Describe "Test-BrowserGroupAlreadyOpen" {
 
 		It "Should handle slugified path components (dashes to spaces)" {
 			Mock Get-WindowHandle {
-				New-MockBrowserWindows @("Minor Illusion Spell - Mozilla Firefox")
+				New-MockBrowserWindows @("Getting Started Guide - Mozilla Firefox")
 			}
 
-			$result = Test-BrowserGroupAlreadyOpen -Urls @("https://dnd.example.com/spell/minor-illusion") `
-				-Browser "Firefox" -GroupDisplayName "DnD Spell"
+			$result = Test-BrowserGroupAlreadyOpen -Urls @("https://docs.example.com/guide/getting-started") `
+				-Browser "Firefox" -GroupDisplayName "Example Guide"
 
 			$result | Should -Be $true
 		}
@@ -495,13 +495,13 @@ Describe "Test-BrowserGroupAlreadyOpen" {
 			$result | Should -Be $true
 		}
 
-		It "Should extract keyword after colon in path (spell:minor-illusion pattern)" {
+		It "Should extract keyword after colon in path (topic:getting-started pattern)" {
 			Mock Get-WindowHandle {
-				New-MockBrowserWindows @("Minor Illusion - Mozilla Firefox")
+				New-MockBrowserWindows @("Getting Started - Mozilla Firefox")
 			}
 
-			$result = Test-BrowserGroupAlreadyOpen -Urls @("https://example.com/spell:minor-illusion") `
-				-Browser "Firefox" -GroupDisplayName "Spells"
+			$result = Test-BrowserGroupAlreadyOpen -Urls @("https://example.com/topic:getting-started") `
+				-Browser "Firefox" -GroupDisplayName "Topics"
 
 			$result | Should -Be $true
 		}

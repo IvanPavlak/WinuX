@@ -897,7 +897,7 @@
 				# Enforce AND logic: when ProcessName is also specified, filter title matches
 				# to only those belonging to the correct process. Without this, a broad title
 				# regex (e.g. .*\bMyProject\b.*) can match windows from other processes
-				# (e.g. "asseto - Visual Studio Code") and steal them from the correct entry.
+				# (e.g. "exampleproject - Visual Studio Code") and steal them from the correct entry.
 				if ($config.ProcessName -and $titleMatches) {
 					$processWindows = Get-WindowHandle -ProcessName $config.ProcessName
 					$processHandles = [System.Collections.Generic.HashSet[IntPtr]]::new()

@@ -37,7 +37,7 @@ function Get-OrderedNames {
 
 	.EXAMPLE
 		$resolveParams = @{
-			OptionList = @(Get-OrderedNames $Configuration.CampaignResources)
+			OptionList = @(Get-OrderedNames $Configuration.AcrobatPdfGroups)
 		}
 	#>
 	[CmdletBinding()]

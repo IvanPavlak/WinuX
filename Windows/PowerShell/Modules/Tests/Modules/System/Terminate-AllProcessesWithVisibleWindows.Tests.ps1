@@ -36,10 +36,10 @@ Describe "Terminate-AllProcessesWithVisibleWindows" {
 		$global:Configuration = @{
 			Universal = @{
 				VisibleWindowExclusions = @(
-					"Rainmeter"
+					"MyWidgetApp"
 					"WindowsTerminal"
 					"Docker Desktop"
-					"obs64"
+					"MyRecorder"
 					"PowerToys"
 					"PowerToys.FancyZones"
 					"PowerToys.Settings"
@@ -62,13 +62,13 @@ Describe "Terminate-AllProcessesWithVisibleWindows" {
 			Should -Invoke Stop-Process -Times 1 -Exactly -ParameterFilter { $Id -eq 100 -and $Force }
 		}
 
-		It "Should skip default-excluded process names (firefox, Rainmeter, WindowsTerminal, obs64)" {
+		It "Should skip default-excluded process names (firefox, MyWidgetApp, WindowsTerminal, MyRecorder)" {
 			Mock Get-VisibleWindowProcess {
 				@(
 					[PSCustomObject]@{ ProcessName = "firefox"; Id = 1; WindowTitles = @("Mozilla Firefox"); MainWindowTitle = "Mozilla Firefox" },
-					[PSCustomObject]@{ ProcessName = "Rainmeter"; Id = 2; WindowTitles = @("Rainmeter"); MainWindowTitle = "Rainmeter" },
+					[PSCustomObject]@{ ProcessName = "MyWidgetApp"; Id = 2; WindowTitles = @("MyWidgetApp"); MainWindowTitle = "MyWidgetApp" },
 					[PSCustomObject]@{ ProcessName = "WindowsTerminal"; Id = 3; WindowTitles = @("Terminal"); MainWindowTitle = "Terminal" },
-					[PSCustomObject]@{ ProcessName = "obs64"; Id = 4; WindowTitles = @("OBS Studio"); MainWindowTitle = "OBS Studio" },
+					[PSCustomObject]@{ ProcessName = "MyRecorder"; Id = 4; WindowTitles = @("OBS Studio"); MainWindowTitle = "OBS Studio" },
 					[PSCustomObject]@{ ProcessName = "notepad"; Id = 5; WindowTitles = @("Note"); MainWindowTitle = "Note" }
 				)
 			}

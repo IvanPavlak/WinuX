@@ -44,7 +44,7 @@ Describe "Repository update data safety (real git): the startup update and Initi
 			Mock Resolve-RepositoryTargets { , @([pscustomobject]@{ Name = 'work'; Group = 'G'; RepositoryUrl = 'https://example.com/acme/work.git'; LocalPath = $repo }) }
 			$before = Get-RepoFingerprint $repo
 
-			Invoke-StartupRepositoryUpdate -Force
+			Invoke-StartupTask RepositoryUpdate -Force
 			$after = Get-RepoFingerprint $repo
 
 			Get-LossViolations -Repo $repo -Before $before -After $after -Outcome 'n/a' -AnyOutcome | Should -BeNullOrEmpty

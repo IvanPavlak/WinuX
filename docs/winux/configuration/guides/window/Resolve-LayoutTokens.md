@@ -9,15 +9,15 @@ Expands layout-file tokens to regex patterns at the matching boundary.
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`Universal`](../../configuration-reference.md#universal-constants) | hashtable | shipped `Browsers` map: `Firefox`, `Tor`, `Chrome`, `Edge`, `Brave` | Only `Universal.Browsers` is read: every key except `Tor` joins the title side of the `Browser` token, and the basename of its `Exe` joins the process side. |
+| [`Universal`](../../configuration-reference.md#universal-constants) | hashtable | shipped `Browsers` map: `Firefox`, `Chrome`, `Edge`, `Brave` | Only `Universal.Browsers` is read: every key joins the title side of the `Browser` token, and the basename of its `Exe` joins the process side. |
 
-The `Browser` layout token expands from `Universal.Browsers` - the same map `Open-Browser` reads - with Tor excluded (SecureBrowser layouts target `tor` explicitly). Because hashtables deep-merge per key, adding a browser under `Universal.Browsers` in `Configuration.local.psd1` both makes it launchable by `Open-Browser` and joins it into the `Browser` token, without touching the shipped entries. A **top-level** `Browsers` map is honoured as a legacy fallback (an earlier version of this function read only that location), and when no configuration is loaded at all the token falls back to the built-in `firefox|chrome|msedge|brave` set.
+The `Browser` layout token expands from `Universal.Browsers` - the same map `Open-Browser` reads - and covers every browser configured there. Because hashtables deep-merge per key, adding a browser under `Universal.Browsers` in `Configuration.local.psd1` both makes it launchable by `Open-Browser` and joins it into the `Browser` token, without touching the shipped entries. A **top-level** `Browsers` map is honoured as a legacy fallback (an earlier version of this function read only that location), and when no configuration is loaded at all the token falls back to the built-in `firefox|chrome|msedge|brave` set.
 
 ## Decisions
 
 1. Do you use a browser the base `Browsers` map does not list?
     - Options: Add an entry with `Exe`, `PrivateArg` and `NewWindowArg`. Because hashtables merge per key, adding one browser does not remove the others, and the new browser joins the `Browser` token.
-    - Default: The shipped five; the `Browser` token covers all of them except `Tor`.
+    - Default: The shipped four; the `Browser` token covers all of them.
     - More detail: [`Universal`](../../configuration-reference.md#universal-constants)
 
 ## Where to Put Values
@@ -94,7 +94,6 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 - [Window configuration guides](README.md) - every guide for this module
 - [Configure Window Layout](configure-window-layout.md) - the 3-layer layout system, zones and visualization
 - [`Open-Browser`](../application/Open-Browser.md) - reads the same configuration
-- [`Open-LeagueOfLegends`](../application/Open-LeagueOfLegends.md) - reads the same configuration
 - [`Open-NotepadPlusPlus`](../application/Open-NotepadPlusPlus.md) - reads the same configuration
 - [`Open-Steam`](../application/Open-Steam.md) - reads the same configuration
 - [WinuXConfigurator](../../winux-configurator.md) - have an AI assistant walk these decisions with you

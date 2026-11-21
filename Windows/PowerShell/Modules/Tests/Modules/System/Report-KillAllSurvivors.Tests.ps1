@@ -27,7 +27,7 @@ Describe "Report-KillAllSurvivors" {
 
 		$global:Configuration = @{
 			Universal = @{
-				VisibleWindowExclusions = @("WindowsTerminal", "Rainmeter")
+				VisibleWindowExclusions = @("WindowsTerminal", "MyWidgetApp")
 			}
 		}
 	}
@@ -44,7 +44,7 @@ Describe "Report-KillAllSurvivors" {
 		Mock Get-VisibleWindowProcess {
 			@(
 				[PSCustomObject]@{ ProcessName = "WindowsTerminal"; Id = 1; WindowTitles = @("pwsh"); MainWindowTitle = "pwsh" },
-				[PSCustomObject]@{ ProcessName = "Rainmeter"; Id = 2; WindowTitles = @("Rainmeter"); MainWindowTitle = "Rainmeter" }
+				[PSCustomObject]@{ ProcessName = "MyWidgetApp"; Id = 2; WindowTitles = @("MyWidgetApp"); MainWindowTitle = "MyWidgetApp" }
 			)
 		}
 

@@ -17,8 +17,6 @@ Test-StartupTaskDue -StampFile (Join-Path (Get-LogPath -Directory) ".startup-tas
 
 A task writes its stamp only after a run that succeeded, so a missing stamp is always due, and a task that failed or was skipped is due again at the next trigger. `EveryTime` is always due and never reads the stamp. With Windows Fast Startup a shutdown is a hibernation, so `OncePerBoot` only counts a restart.
 
-It replaces the deprecated [`Test-RepositoryUpdateStampFresh`](../git/Test-RepositoryUpdateStampFresh.md) and [`Get-RepositoryUpdateDayStart`](../git/Get-RepositoryUpdateDayStart.md).
-
 ## Related
 
 - [`Test-StartupTaskDue` in the Workflow module reference](../../../modules/workflow.md#test-startuptaskdue) - parameters, usage and behaviour

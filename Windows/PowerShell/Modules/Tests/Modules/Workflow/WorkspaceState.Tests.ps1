@@ -96,7 +96,7 @@ Describe "Workspace state persistence" {
 	Context "Save-WorkspaceState round-trip" {
 		It "preserves window and tab records through a write and read" {
 			$entry = New-TestEntry -Workspace 'Server' -DesktopOffset 3 -Windows @(
-				[ordered]@{ Handle = 4242; ProcessId = 99; ProcessName = 'firefox'; Title = "Ivan's page" }
+				[ordered]@{ Handle = 4242; ProcessId = 99; ProcessName = 'firefox'; Title = "Alice's page" }
 			) -TerminalTabs @(
 				[ordered]@{ WindowHandle = 777; Title = 'Server.Api' }
 			)
@@ -109,7 +109,7 @@ Describe "Workspace state persistence" {
 			$read.Windows[0].Handle | Should -Be 4242
 			$read.Windows[0].ProcessName | Should -Be 'firefox'
 			# Single quotes inside a title would end the literal early if they were not doubled.
-			$read.Windows[0].Title | Should -Be "Ivan's page"
+			$read.Windows[0].Title | Should -Be "Alice's page"
 			$read.TerminalTabs[0].WindowHandle | Should -Be 777
 			$read.TerminalTabs[0].Title | Should -Be 'Server.Api'
 		}

@@ -96,7 +96,7 @@ WorkspaceActions = @{
 - `Open-Browser` - with `@{ Groups = @("...") }`
 - `Set-WorkspaceWindowLayout` - with `@{ WorkspaceName = "..." }`
 - `Open-Obsidian`, `Open-DBeaver`, `Open-Outlook`, `Open-Discord`
-- `Send-WakeOnLan`, `Training-Backup`, `Test-PrivacyStatus`
+- `Send-WakeOnLan`
 - `Return` - **special**: stops processing remaining actions
 
 **Parameter forwarding**: Command-line parameters passed to `Open-Workspace` are automatically forwarded to actions that accept them (via `Get-FilteredParams`).
@@ -234,7 +234,7 @@ BasePaths = @{
 4. Create machine-specific config files:
     - `FastFetch/Windows/config_NewMachine.jsonc`
     - `Oh-My-Posh/WinuX_NewMachine.omp.json`
-    - `Windows/Rainmeter/Rainmeter_NewMachine.ini`
+    - `Windows/WindowsTerminal/settings_NewMachine.json`
     - Window layout `.psd1` files
 
 ## General Rules

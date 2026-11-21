@@ -121,7 +121,7 @@ nothing - and the sweep itself runs at most once per `Configuration.Logging.Main
 
 - **Description:** Writes a plain step/progress statement (White), replacing the `Write-Host -ForegroundColor White` idiom. Leading-space indentation in the message is preserved so nested sub-steps keep their alignment. `-Style` renders the step in another level's color while keeping the plain Step layout, visibility, and STEP file-log tag - used for per-item outcome rows (e.g. green/red/yellow effect rows in `Set-VisualEffects`).
 - **Parameters:** `-Message` `[-Style]` `[-NoNewLine]` `[-NoLeadingNewline]` `[-BlankLineAfter]`
-- **Usage:** `Write-LogStep "Opening training file..."`, `Write-LogStep " ItemName => [enabled]" -Style Success`
+- **Usage:** `Write-LogStep "Opening configuration file..."`, `Write-LogStep " ItemName => [enabled]" -Style Success`
 
 ## [Write-LogSuccess](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Logging/Functions/Write-LogSuccess.ps1)
 

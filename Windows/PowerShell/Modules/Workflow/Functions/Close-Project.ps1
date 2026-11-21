@@ -193,7 +193,6 @@ function Close-Project {
 				"Chrome" { "chrome" }
 				"Firefox" { "firefox" }
 				"Edge" { "msedge" }
-				"Tor" { "firefox" }
 				default { $browser.ToLower() }
 			}
 

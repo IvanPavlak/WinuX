@@ -9,9 +9,9 @@ The primary browser launcher for the entire system.
 
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
-| [`BrowserGroups`](../../configuration-reference.md#browser-groups) | array of single-key hashtables | array of 12 example groups | The named URL groups `Open-Browser` opens. Groups nest without limit; a leaf is either a bare URL string or `@{ Name; Url }`. Every `Name` must be unique across the whole tree, because a name is a valid selector on its own. |
+| [`BrowserGroups`](../../configuration-reference.md#browser-groups) | array of single-key hashtables | array of 7 example groups | The named URL groups `Open-Browser` opens. Groups nest without limit; a leaf is either a bare URL string or `@{ Name; Url }`. Every `Name` must be unique across the whole tree, because a name is a valid selector on its own. |
 | [`Universal.DefaultBrowser`](../../configuration-reference.md#browser-configuration) | string (a `Browsers` key) | `""` (empty) | The browser used when `-Browser` is not given. Empty makes `Open-Browser` warn and return until you pass `-Browser` or set it. |
-| [`Universal.Browsers`](../../configuration-reference.md#browser-configuration) | hashtable of browser name to `@{ Exe; PrivateArg; NewWindowArg }` | `Firefox`, `Tor`, `Chrome`, `Edge`, `Brave` | The browsers `-Browser` (and `DefaultBrowser`) can name: the executable to start, the private-mode argument and the new-window argument. Placeholders such as `{User}` expand. |
+| [`Universal.Browsers`](../../configuration-reference.md#browser-configuration) | hashtable of browser name to `@{ Exe; PrivateArg; NewWindowArg }` | `Firefox`, `Chrome`, `Edge`, `Brave` | The browsers `-Browser` (and `DefaultBrowser`) can name: the executable to start, the private-mode argument and the new-window argument. Placeholders such as `{User}` expand. |
 
 ## Decisions
 
@@ -24,12 +24,12 @@ The primary browser launcher for the entire system.
     - Default: Flat groups.
     - More detail: [`BrowserGroups`](../../configuration-reference.md#browser-groups)
 3. Which browser should be the default?
-    - Options: A key from `Universal.Browsers`: `Firefox`, `Chrome`, `Edge`, `Brave`, `Tor`, or one you add.
+    - Options: A key from `Universal.Browsers`: `Firefox`, `Chrome`, `Edge`, `Brave`, or one you add.
     - Default: Empty - `Open-Browser` warns and opens nothing unless `-Browser` is passed.
     - More detail: [`Universal.DefaultBrowser`](../../configuration-reference.md#browser-configuration)
 4. Is a browser installed somewhere other than its shipped `Exe` path, or do you use one the base `Browsers` map does not list?
     - Options: Override that browser's `Exe`, or add an entry with `Exe`, `PrivateArg` and `NewWindowArg`. Because hashtables merge per key, changing or adding one browser does not remove the others.
-    - Default: The shipped five, at their default install locations.
+    - Default: The shipped four, at their default install locations.
     - More detail: [`Universal.Browsers`](../../configuration-reference.md#browser-configuration)
 
 ## Where to Put Values

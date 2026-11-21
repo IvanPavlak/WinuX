@@ -59,11 +59,14 @@ These are deliberate. They keep the project honest about what it is.
 - **A fork can always merge.** Breaking changes are deprecated first and removed later, in a
   MAJOR release, so a fork that keeps its warnings at zero merges every release cleanly.
 
-## Now - 1.0
+## Now - 3.0
 
-- **The contract is declared stable.** The configuration schema, the bootstrap contract and the
-  set of exported functions are versioned under strict semantic versioning from 1.0.0 onward,
-  with the deprecation policy described in VERSIONING.
+- **The contract is stable.** The configuration schema, the bootstrap contract and the set of
+  exported functions are versioned under strict semantic versioning since 1.0.0, with the
+  deprecation policy described in VERSIONING.
+- **Nothing personal ships (3.0.0).** 3.0.0 removed every deprecated shape and every function,
+  key and default that served one person's setup rather than the framework; such things live in
+  a fork's [Custom area](contributing/fork-model.md). No key is deprecated at present.
 - **Deprecation warnings where you will see them (1.6.0).** `Test-ConfigurationSchema` warns on
   every deprecated configuration key or step name still in use and names its replacement, at
   every profile load and at the start of the bootstrap, so you learn what to migrate before the
@@ -72,9 +75,9 @@ These are deliberate. They keep the project honest about what it is.
   the public project share one source of truth; see the [Fork Model](contributing/fork-model.md)
   page.
 
-## Next - the 1.x series
+## Next - the 3.x series
 
-WinuX is the maintainer's daily system, and the 1.x releases carry what daily use produces:
+WinuX is the maintainer's daily system, and the 3.x releases carry what daily use produces:
 fixes, new functions, new configuration options, and version pins that follow the tested
 machines. There is no feature list to tick off. Two things are known to be ahead, and none
 has a date:

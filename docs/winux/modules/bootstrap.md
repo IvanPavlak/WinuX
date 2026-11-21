@@ -363,9 +363,9 @@ Resolve-PackageManagers
 
 ## [Resolve-RepositoryUpdateScope](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Bootstrap/Functions/Resolve-RepositoryUpdateScope.ps1)
 
-- **Description:** Resolves which repository groups Bootstrap updates on this machine, from `BootstrapConfig.RepositoryUpdateScope`. The machine type's own value wins, falling back to `Default`, falling back to `"All"` when the key is absent entirely - so a fork that configures nothing pulls every repository it defines. Returns `@{ All = <bool>; Groups = <string[]> }`, which [`Bootstrap`](#bootstrap) turns into `Update-Repositories -All` or `Update-Repositories -Group`. `-Path` reads a scope of the same shape from another key, with the same fallbacks - [`Get-StartupTaskDefinitions`](workflow.md#get-startuptaskdefinitions) passes `RepositoryUpdate.Startup.Scope` when it builds the `RepositoryUpdate` startup task from the deprecated `RepositoryUpdate.Startup` keys.
+- **Description:** Resolves which repository groups Bootstrap updates on this machine, from `BootstrapConfig.RepositoryUpdateScope`. The machine type's own value wins, falling back to `Default`, falling back to `"All"` when the key is absent entirely - so a fork that configures nothing pulls every repository it defines. Returns `@{ All = <bool>; Groups = <string[]> }`, which [`Bootstrap`](#bootstrap) turns into `Update-Repositories -All` or `Update-Repositories -Group`. `-Path` reads a scope of the same shape from another key, with the same fallbacks, for a fork that keeps one under its own key.
 - **Parameters:** -Path
-- **Usage:** `Resolve-RepositoryUpdateScope`, `Resolve-RepositoryUpdateScope -Path 'RepositoryUpdate.Startup.Scope'`
+- **Usage:** `Resolve-RepositoryUpdateScope`, `Resolve-RepositoryUpdateScope -Path 'MyFork.RepositoryScope'`
 
 The configured value is either `"All"` (matched case-insensitively) or one or more group names from `RepositoryGroups`, written either as a comma-separated string (`"Work, Private"`) or as an array (`@("Work", "Private")`). Names are trimmed and kept in the order given. `"All"` only means "every repository" when it stands alone, so a fork is free to define a group whose name happens to be `All` and list it alongside others. A value that names nothing at all is treated like the absent key.
 
@@ -379,8 +379,8 @@ Resolve-RepositoryUpdateScope
 
 # Base configuration => @{ All = $true; Groups = @() }
 
-# What would the automatic update of the deprecated RepositoryUpdate.Startup keys pull? (absent key => All)
-Resolve-RepositoryUpdateScope -Path 'RepositoryUpdate.Startup.Scope'
+# The scope a fork keeps under its own key, same shape and fallbacks (absent key => All)
+Resolve-RepositoryUpdateScope -Path 'MyFork.RepositoryScope'
 ```
 
 | Parameter | Type     | Default                                 | Description                                         |

@@ -38,12 +38,6 @@ function Get-StartupTaskDefinitions {
 		with no condition - is returned with Valid = $false and its Errors, and is never run:
 		Invoke-StartupTasks reports it at every run.
 
-		The deprecated automatic repository update is carried over: while
-		`RepositoryUpdate.Startup.Enabled` is $true and no task is named RepositoryUpdate, one is
-		added that does what the old hook did (TerminalOpen, once per day or per interval, the
-		scope of `RepositoryUpdate.Startup.Scope`). It is marked Legacy. -IncludeLegacyDisabled
-		adds it even when the key is off, for `Invoke-StartupRepositoryUpdate -Force`.
-
 	.PARAMETER Name
 		Return only the tasks with these names.
 
@@ -51,18 +45,12 @@ function Get-StartupTaskDefinitions {
 		Return only the tasks that have this trigger.
 
 	.PARAMETER Configuration
-		The configuration to read `Startup` and `RepositoryUpdate.Startup` from. Defaults to
-		$global:Configuration. The machine scope (Test-MachineTypeScope) and the groups of the
-		carried-over repository update (Resolve-RepositoryUpdateScope) are always resolved
-		against the loaded configuration.
-
-	.PARAMETER IncludeLegacyDisabled
-		Add the carried-over RepositoryUpdate task even when `RepositoryUpdate.Startup.Enabled`
-		is not $true.
+		The configuration to read `Startup` from. Defaults to $global:Configuration. The machine
+		scope (Test-MachineTypeScope) is always resolved against the loaded configuration.
 
 	.OUTPUTS
 		[pscustomobject] per task, in configuration order: Name, Trigger (string[]), InScope
-		(this machine), Valid, Errors (string[]), Legacy, and Parameters - the hashtable to splat
+		(this machine), Valid, Errors (string[]) and Parameters - the hashtable to splat
 		onto Invoke-StartupTask (every option, without Trigger).
 
 	.EXAMPLE
@@ -85,10 +73,7 @@ function Get-StartupTaskDefinitions {
 
 		[Parameter()]
 		[AllowNull()]
-		[object]$Configuration = $global:Configuration,
-
-		[Parameter()]
-		[switch]$IncludeLegacyDisabled
+		[object]$Configuration = $global:Configuration
 	)
 
 	$validKeys = @('Name', 'Command', 'Trigger', 'Machine', 'Hostname', 'Requires', 'Window', 'KeepOpen', 'Parallel', 'Frequency', 'DayStartHour', 'IntervalHours', 'Elevation', 'Timeout', 'Enabled')
@@ -107,47 +92,12 @@ function Get-StartupTaskDefinitions {
 		if ($null -ne $entry) { $entries.Add($entry) }
 	}
 
-	# The deprecated RepositoryUpdate.Startup keys, carried over as one task unless the
-	# configuration already defines a task of that name.
-	$legacyName = 'RepositoryUpdate'
-	$legacy = Get-ConfigSetting -Path 'RepositoryUpdate.Startup' -Configuration $Configuration
-	$legacyEnabled = ($legacy -is [System.Collections.IDictionary]) -and [bool]$legacy['Enabled']
-	$definesLegacyName = @($entries | Where-Object { $_ -is [System.Collections.IDictionary] -and [string]$_['Name'] -eq $legacyName }).Count -gt 0
-	$legacyEntry = $null
-	if (($legacyEnabled -or $IncludeLegacyDisabled) -and -not $definesLegacyName) {
-		$scopePath = 'BootstrapConfig.RepositoryUpdateScope'
-		if ($null -ne (Get-ConfigSetting -Path 'RepositoryUpdate.Startup.Scope' -Configuration $Configuration)) {
-			$scopePath = 'RepositoryUpdate.Startup.Scope'
-		}
-		$scope = Resolve-RepositoryUpdateScope -Path $scopePath
-		$legacyCommand = 'Update-Repositories -All -NoClone -Quiet'
-		if ($scope -and -not $scope.All) {
-			$groups = @($scope.Groups | ForEach-Object { "'" + ([string]$_).Replace("'", "''") + "'" }) -join ', '
-			$legacyCommand = "Update-Repositories -Group $groups -NoClone -Quiet"
-		}
-
-		$legacyEntry = @{
-			Name      = $legacyName
-			Command   = $legacyCommand
-			Trigger   = 'TerminalOpen'
-			Frequency = 'OncePerDay'
-			Enabled   = $legacyEnabled
-		}
-		if ($legacy -is [System.Collections.IDictionary]) {
-			if ("$($legacy['Schedule'])" -eq 'Interval') { $legacyEntry.Frequency = 'Interval' }
-			if ($null -ne $legacy['DayStartHour']) { $legacyEntry.DayStartHour = $legacy['DayStartHour'] }
-			if ($null -ne $legacy['IntervalHours']) { $legacyEntry.IntervalHours = $legacy['IntervalHours'] }
-		}
-		$entries.Add($legacyEntry)
-	}
-
 	$seenNames = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
 	$index = 0
 
 	foreach ($entry in $entries) {
 		$index++
 		$errors = [System.Collections.Generic.List[string]]::new()
-		$isLegacy = [object]::ReferenceEquals($entry, $legacyEntry)
 
 		if (-not ($entry -is [System.Collections.IDictionary])) {
 			if ($Name -or $Trigger) { continue }
@@ -157,7 +107,6 @@ function Get-StartupTaskDefinitions {
 				InScope    = $false
 				Valid      = $false
 				Errors     = @("Startup.Tasks entry $index is not a hashtable")
-				Legacy     = $false
 				Parameters = @{}
 			}
 			continue
@@ -239,7 +188,6 @@ function Get-StartupTaskDefinitions {
 		if ($null -ne $entry['DayStartHour']) {
 			$hour = 0
 			if ([int]::TryParse("$($entry['DayStartHour'])", [ref]$hour) -and $hour -ge 0 -and $hour -le 23) { $dayStartHour = $hour }
-			elseif ($isLegacy) { $dayStartHour = 6 }
 			else { $errors.Add("DayStartHour [$($entry['DayStartHour'])] is not an hour from 0 to 23") }
 		}
 
@@ -247,7 +195,6 @@ function Get-StartupTaskDefinitions {
 		if ($null -ne $entry['IntervalHours']) {
 			$hours = 0.0
 			if ([double]::TryParse("$($entry['IntervalHours'])", [System.Globalization.NumberStyles]::Float, [System.Globalization.CultureInfo]::InvariantCulture, [ref]$hours)) { $intervalHours = $hours }
-			elseif ($isLegacy) { $intervalHours = 24.0 }
 			else { $errors.Add("IntervalHours [$($entry['IntervalHours'])] is not a number") }
 		}
 
@@ -303,7 +250,6 @@ function Get-StartupTaskDefinitions {
 			InScope    = $inScope
 			Valid      = ($errors.Count -eq 0)
 			Errors     = $errors.ToArray()
-			Legacy     = $isLegacy
 			Parameters = $parameters
 		}
 	}

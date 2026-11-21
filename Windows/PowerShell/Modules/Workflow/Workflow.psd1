@@ -30,11 +30,9 @@
 		'Invoke-StartupTasks',
 		'Measure-WorkspaceOpen',
 		'New-StartupTaskShellCommand',
-		'Open-DnD',
 		'Open-Project',
 		'Open-ProjectSwagger',
 		'Open-ProjectTerminals',
-		'Open-Training',
 		'Open-Workspace',
 		'Read-WorkspaceBenchmark',
 		'Read-WorkspaceOpenMeasurement',
@@ -50,7 +48,6 @@
 		'Test-StartupCondition',
 		'Test-StartupTaskDue',
 		'Test-TerminalTabsAlreadyOpen',
-		'Training-Backup',
 		'Wait-StartupTaskResult',
 		'Write-WorkspaceBenchmark'
 	)

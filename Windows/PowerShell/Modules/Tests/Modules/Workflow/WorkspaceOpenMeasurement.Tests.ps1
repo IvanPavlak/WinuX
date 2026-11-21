@@ -199,9 +199,9 @@ Describe "Get-WorkspaceOpenMeasurement" {
 		Write-RunRows -Path $script:ResultFile -Rows @(
 			(New-RunRow -Session '20260907-100000' -Position 1 -Total 10 -Timestamp '2026-09-07 10:00:00')
 			(New-RunRow -Session '20260907-100000' -Position 2 -Variant 'Flip' -Total 40 -Timestamp '2026-09-07 10:01:00')
-			(New-RunRow -Session '20260907-120000' -Position 1 -Measured $false -Round 0 -Total 99 -Project 'Asseto' -Timestamp '2026-09-07 12:00:00')
-			(New-RunRow -Session '20260907-120000' -Position 2 -Total 20 -Project 'Asseto' -Timestamp '2026-09-07 12:01:00')
-			(New-RunRow -Session '20260907-120000' -Position 3 -Variant 'Flip' -Total 21 -Project 'Asseto' -Timestamp '2026-09-07 12:02:00')
+			(New-RunRow -Session '20260907-120000' -Position 1 -Measured $false -Round 0 -Total 99 -Project 'ExampleProject' -Timestamp '2026-09-07 12:00:00')
+			(New-RunRow -Session '20260907-120000' -Position 2 -Total 20 -Project 'ExampleProject' -Timestamp '2026-09-07 12:01:00')
+			(New-RunRow -Session '20260907-120000' -Position 3 -Variant 'Flip' -Total 21 -Project 'ExampleProject' -Timestamp '2026-09-07 12:02:00')
 		)
 	}
 
@@ -243,7 +243,7 @@ Describe "Get-WorkspaceOpenMeasurement" {
 		$sessions[0].Session | Should -Be '20260907-100000'
 		$sessions[0].Opens | Should -Be 2
 		$sessions[0].Variants | Should -Be 2
-		$sessions[1].Project | Should -Be 'Asseto'
+		$sessions[1].Project | Should -Be 'ExampleProject'
 		$sessions[1].Opens | Should -Be 3
 		$sessions[1].Measured | Should -Be 2
 		$sessions[1].Started | Should -Be '2026-09-07 12:00:00'

@@ -8,8 +8,7 @@ function Resolve-LayoutTokens {
 		token "Browser" as a value for `ProcessName` and/or `WindowTitle`. This helper expands
 		those tokens to a regex covering every browser declared in
 		`$global:Configuration.Universal.Browsers` - the same map Open-Browser and
-		Terminate-AllBrowserProcesses read - excluding Tor (see SecureBrowser workspace for the
-		intentional opt-out). A top-level `$global:Configuration.Browsers` map is honoured as a
+		Terminate-AllBrowserProcesses read. A top-level `$global:Configuration.Browsers` map is honoured as a
 		legacy fallback: it was the only location this function used to read, so a fork may have
 		placed its map there.
 
@@ -49,7 +48,7 @@ function Resolve-LayoutTokens {
 		$browserProcesses = $null
 		$browserTitles = $null
 
-		# Preferred source: Universal.Browsers (keys + Exe basenames), minus Tor. That is where the
+		# Preferred source: Universal.Browsers (keys + Exe basenames). That is where the
 		# shipped browser map lives and what Open-Browser reads. A top-level Browsers map is kept
 		# as a legacy fallback - this function used to look ONLY there (which the base config never
 		# populates, so the built-in fallback always won), and a fork may have adopted that spot.
@@ -64,8 +63,6 @@ function Resolve-LayoutTokens {
 
 			foreach ($entry in $browserMap.GetEnumerator()) {
 				$name = $entry.Key
-				# Intentional exclusion: SecureBrowser_*.psd1 targets tor explicitly.
-				if ($name -ieq 'Tor') { continue }
 
 				# Title side: friendly browser name (e.g. "Firefox", "Chrome").
 				[void]$titleSet.Add($name)

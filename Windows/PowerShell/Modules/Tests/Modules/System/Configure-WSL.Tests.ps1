@@ -57,11 +57,11 @@ Describe "Configure-WSL" {
 
 	It "creates the configured user non-interactively and sets it as default" {
 		$script:installed = $false
-		$global:Configuration.DefaultWSLUsername = "ivan"
+		$global:Configuration.DefaultWSLUsername = "alice"
 
 		{ Configure-WSL } | Should -Not -Throw
 
-		Should -Invoke wsl -ParameterFilter { $args -contains 'useradd' -and $args -contains 'ivan' } -Times 1 -Exactly
+		Should -Invoke wsl -ParameterFilter { $args -contains 'useradd' -and $args -contains 'alice' } -Times 1 -Exactly
 		Should -Invoke wsl -ParameterFilter { $args -contains 'passwd' } -Times 1 -Exactly
 		Should -Invoke wsl -ParameterFilter { $args -contains '--terminate' } -Times 1 -Exactly
 		# No interactive first-launch wizard
@@ -70,15 +70,15 @@ Describe "Configure-WSL" {
 
 	It "lowercases a mixed-case configured username" {
 		$script:installed = $false
-		$global:Configuration.DefaultWSLUsername = "Ivan"
+		$global:Configuration.DefaultWSLUsername = "Alice"
 
 		{ Configure-WSL } | Should -Not -Throw
 
-		Should -Invoke wsl -ParameterFilter { $args -contains 'useradd' -and $args -ccontains 'ivan' } -Times 1 -Exactly
+		Should -Invoke wsl -ParameterFilter { $args -contains 'useradd' -and $args -ccontains 'alice' } -Times 1 -Exactly
 	}
 
 	It "-Force unregisters the installed distro and redoes the whole setup" {
-		$global:Configuration.DefaultWSLUsername = "ivan"
+		$global:Configuration.DefaultWSLUsername = "alice"
 
 		{ Configure-WSL -Force } | Should -Not -Throw
 

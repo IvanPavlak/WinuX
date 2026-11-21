@@ -24,8 +24,8 @@ function Get-OrderedEntry {
 		$workspaceActions = Get-OrderedEntry -Section $Configuration.WorkspaceActions -Name "WinuX"
 
 	.EXAMPLE
-		$resources = Get-OrderedEntry $Configuration.CampaignResources $Campaign
-		if ($resources.Pdf) { Open-Acrobat -Pdf $resources.Pdf }
+		$pdfs = Get-OrderedEntry $Configuration.AcrobatPdfGroups $Group
+		if ($pdfs) { Open-Acrobat -Pdf $Group }
 	#>
 	[CmdletBinding()]
 	param(

@@ -69,7 +69,7 @@ These are not suggestions. A session that breaks any of them has damaged somethi
     | `WorkspaceActions`, `WorkspaceTemplates` | `workspaces.conf`, `workspace-templates.conf` |
     | `Modules\Window\Layouts\<Type>\<Workspace>_<Type>.psd1` | `Unix/config/layouts/<Type>/<Workspace>_<Type>.conf`, one per layout set |
     | `HostnameToMachineType`, `BasePaths` | `machines.conf` |
-    | `WakeOnLanConfig`, `AcrobatPdfGroups`, `CampaignResources`, `Obsidian` | `wake-on-lan.conf`, `pdfs.conf`, `dnd.conf`, `obsidian.conf` |
+    | `WakeOnLanConfig`, `AcrobatPdfGroups`, `Obsidian` | `wake-on-lan.conf`, `pdfs.conf`, `obsidian.conf` |
     | the app-list overlays (`*.local.csv`) | `Unix/Brewfile.local`, for a package the Mac has a cask or formula for |
 
     The full file-to-key map is on Foundation's [Unix Configuration](https://ivanpavlak.github.io/Foundation/#/foundation/configuration) page.
@@ -180,7 +180,7 @@ Order matters. Machine type and base paths gate everything downstream: a wrong `
 | [system](guides/system/README.md) | Theme and wallpaper, taskbar, locale and keyboard, power, environment variables, Wake-on-LAN, WSL provisioning, symbolic links, special folders |
 | [tests](guides/tests/README.md) | Nothing. The test runner is configuration-free |
 | [window](guides/window/README.md) | FancyZones layout numbers and zone names, per-machine layout overrides, reset defaults, window sizing and snap inset |
-| [workflow](guides/workflow/README.md) | Workspaces and their action lists, projects and their action lists, terminal tabs, Docker stacks and cleanup actions, campaigns |
+| [workflow](guides/workflow/README.md) | Workspaces and their action lists, projects and their action lists, terminal tabs, Docker stacks and cleanup actions |
 
 ## If the Session Is Interrupted
 

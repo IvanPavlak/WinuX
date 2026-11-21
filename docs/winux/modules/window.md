@@ -1669,7 +1669,7 @@ Resolve-DisplayAwareProfile -Section $global:Configuration.ResizeWindowsPercent
 
 ## [Resolve-LayoutTokens](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Window/Functions/Resolve-LayoutTokens.ps1)
 
-- **Description:** Expands layout-file tokens to regex patterns at the matching boundary. Layout entries may use the literal token `"Browser"` as a value for `ProcessName` and/or `WindowTitle`; this helper returns a shallow clone of the entry with those tokens expanded to a regex covering every browser declared in `Configuration.Universal.Browsers` - the same map `Open-Browser` reads - with a legacy top-level `Configuration.Browsers` map honoured as a fallback (Tor excluded - SecureBrowser layouts opt into `tor` explicitly). Other values, including literal alternation regex like `(firefox|chrome|msedge|brave)`, are returned unchanged. Tokens are matched case-sensitively and expanded patterns are cached at module scope so it stays cheap inside the per-entry Set-WindowLayouts / Confirm-WorkspaceWindowPositions loops. The original entry is never mutated, so Visualize-Layouts still renders the raw `Browser` cell.
+- **Description:** Expands layout-file tokens to regex patterns at the matching boundary. Layout entries may use the literal token `"Browser"` as a value for `ProcessName` and/or `WindowTitle`; this helper returns a shallow clone of the entry with those tokens expanded to a regex covering every browser declared in `Configuration.Universal.Browsers` - the same map `Open-Browser` reads - with a legacy top-level `Configuration.Browsers` map honoured as a fallback. Other values, including literal alternation regex like `(firefox|chrome|msedge|brave)`, are returned unchanged. Tokens are matched case-sensitively and expanded patterns are cached at module scope so it stays cheap inside the per-entry Set-WindowLayouts / Confirm-WorkspaceWindowPositions loops. The original entry is never mutated, so Visualize-Layouts still renders the raw `Browser` cell.
 - **Parameters:** -LayoutEntry
 - **Usage:** `Resolve-LayoutTokens -LayoutEntry @{ ProcessName = "Browser"; Zone = "Left" }`, `Resolve-LayoutTokens -LayoutEntry @{ ProcessName = "firefox" }`
 
@@ -2666,7 +2666,7 @@ Both `ProcessName` and `WindowTitle` support wildcard patterns and full .NET reg
 
 ### Browser Token
 
-Layout entries can use the literal token `Browser` in `ProcessName` (and optionally `WindowTitle`) instead of a specific browser name. At match time, `Resolve-LayoutTokens` expands it to a regex covering every browser declared under `Configuration.Universal.Browsers` (Tor excluded - use `tor` explicitly for secure-browser layouts).
+Layout entries can use the literal token `Browser` in `ProcessName` (and optionally `WindowTitle`) instead of a specific browser name. At match time, `Resolve-LayoutTokens` expands it to a regex covering every browser declared under `Configuration.Universal.Browsers`.
 
 ```powershell
 @{

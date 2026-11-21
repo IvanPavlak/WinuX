@@ -79,7 +79,6 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 - [`Open-NotepadPlusPlus` in the Application module reference](../../../modules/application.md#open-notepadplusplus) - parameters, usage and behaviour
 - [Application configuration guides](README.md) - every guide for this module
 - [`Start-Application`](Start-Application.md) - the launcher a bare call goes through
-- [`Open-LeagueOfLegends`](Open-LeagueOfLegends.md) - reads the same configuration
 - [`Open-Steam`](Open-Steam.md) - reads the same configuration
 - [`Open-VisualStudio`](Open-VisualStudio.md) - reads the same configuration
 - [WinuXConfigurator](../../winux-configurator.md) - have an AI assistant walk these decisions with you

@@ -12,7 +12,7 @@ Describe "Get-ConfigSetting" {
 		$script:Source = @{
 			Universal = @{
 				DefaultBrowser          = 'Firefox'
-				VisibleWindowExclusions = @('Rainmeter', 'WindowsTerminal')
+				VisibleWindowExclusions = @('MyWidgetApp', 'WindowsTerminal')
 				OneItem                 = @('only')
 				Nothing                 = @()
 				Off                     = $false
@@ -99,7 +99,7 @@ Describe "Get-ConfigSetting" {
 			$value = @(Get-ConfigSetting -Path 'Universal.VisibleWindowExclusions' -Configuration $script:Source)
 
 			$value.Count | Should -Be 2
-			$value -contains 'Rainmeter' | Should -BeTrue
+			$value -contains 'MyWidgetApp' | Should -BeTrue
 			$value[0] | Should -BeOfType [string]
 		}
 

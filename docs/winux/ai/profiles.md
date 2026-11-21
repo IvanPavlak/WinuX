@@ -18,7 +18,7 @@ AiProfiles = @{
     Hosts        = @{ "WORKSTATION-01" = "Work" }
     Default      = "Personal"
     DefaultOwner = "Personal"
-    Shared       = @("github.com/MyUser/Dotfiles")
+    Shared       = @("github.com/MyUser/MyFork")
     Profiles     = @{
         Personal = @{
             Rules      = "MyRules"
@@ -27,7 +27,7 @@ AiProfiles = @{
             Unattended = $true
             Policies   = @{
                 autonomous = @("github.com/MyUser/MyProject")
-                branch     = @("github.com/MyUser/Dotfiles")
+                branch     = @("github.com/MyUser/MyFork")
             }
         }
         Work     = @{
@@ -82,12 +82,12 @@ profile Personal
 default-owner Personal
 unattended on
 plan Max 00000000-0000-0000-0000-000000000000
-shared github.com/myuser/dotfiles
+shared github.com/myuser/myfork
 owns Work github.com/my-org/*
 autonomous github.com/myuser/myproject
 default-policy branch
 policy autonomous github.com/myuser/myproject
-policy branch github.com/myuser/dotfiles
+policy branch github.com/myuser/myfork
 ```
 
 `autonomous`, `default-policy`, `policy` and `merge-without-checks` lines are the active profile's only.

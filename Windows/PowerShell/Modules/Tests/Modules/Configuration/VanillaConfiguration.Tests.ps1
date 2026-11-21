@@ -26,7 +26,6 @@ Describe "Vanilla Configuration (empty-by-default contract)" {
 			@{ Key = "PowerButtonActions" }
 			@{ Key = "KeyboardLayouts" }
 			@{ Key = "DisplayLanguages" }
-			@{ Key = "PostgreSqlPasswords" }
 			@{ Key = "AutoEnvironmentVariables" }
 			@{ Key = "VisualEffects" }
 			@{ Key = "TaskbarSettings" }
@@ -74,8 +73,8 @@ Describe "Vanilla Configuration (empty-by-default contract)" {
 
 		It "Should ship the personal executable paths blank" {
 			foreach ($key in @(
-					"TrainingFile", "LeagueOfLegendsExe", "SteamExe", "RiseupVpnExe", "DbeaverExe",
-					"TeamViewerExe", "FoundryVTTExe", "NotepadPlusPlusExe", "VisualStudio2026Exe", "VirtualBoxExe")) {
+					"SteamExe", "DbeaverExe", "TeamViewerExe", "NotepadPlusPlusExe", "VisualStudio2026Exe",
+					"VirtualBoxExe")) {
 				$script:BaseConfig.Universal[$key] | Should -BeNullOrEmpty -Because "Universal.$key must stay blank in the tracked base"
 			}
 		}
@@ -122,8 +121,8 @@ Describe "Vanilla Configuration (empty-by-default contract)" {
 			@($script:BaseConfig.PathTemplates.SymbolicLinks.Keys) | Sort-Object | Should -Be @("PowerShell", "PowerToys")
 		}
 
-		It "Should keep all five browser definitions" {
-			@($script:BaseConfig.Universal.Browsers.Keys) | Sort-Object | Should -Be @("Brave", "Chrome", "Edge", "Firefox", "Tor")
+		It "Should keep all four browser definitions" {
+			@($script:BaseConfig.Universal.Browsers.Keys) | Sort-Object | Should -Be @("Brave", "Chrome", "Edge", "Firefox")
 		}
 
 		It "Should keep the Kill-All defaults" {
@@ -315,13 +314,8 @@ Describe "Vanilla Configuration (empty-by-default contract)" {
 			@($script:BaseConfig.Startup.Keys) | Sort-Object | Should -Be @("Conditions", "FailureReport", "Tasks")
 		}
 
-		It "Should keep the deprecated RepositoryUpdate.Startup keys, switched off" {
-			# Deprecated in 2.12.0 and read until 3.0.0, so the keys stay (the contract gate fails
-			# a removed key); off, so a vanilla shell updates nothing and hears no deprecation.
-			$legacy = $script:BaseConfig.RepositoryUpdate.Startup
-			$legacy | Should -BeOfType [hashtable]
-			$legacy.ContainsKey('Enabled') | Should -BeTrue
-			$legacy.Enabled | Should -BeFalse
+		It "Should carry no RepositoryUpdate.Startup block (removed in 3.0.0; the update is a startup task)" {
+			$script:BaseConfig.RepositoryUpdate.ContainsKey('Startup') | Should -BeFalse
 		}
 	}
 

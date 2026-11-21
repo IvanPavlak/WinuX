@@ -91,7 +91,7 @@ Describe "Open-Obsidian" {
 		}
 
 		It "loads nothing when CurrentWorkspace has no same-named Obsidian workspace" {
-			Open-Obsidian -CurrentWorkspace Trading
+			Open-Obsidian -CurrentWorkspace MyWorkspace
 
 			Should -Invoke Start-ObsidianDetached -Times 1 -Exactly
 			$script:cliCalls.Count | Should -Be 0
@@ -229,7 +229,7 @@ Describe "Open-Obsidian" {
 		}
 
 		It "never prompts when CurrentWorkspace is injected, even without a same-named match" {
-			Open-Obsidian -CurrentWorkspace Trading
+			Open-Obsidian -CurrentWorkspace MyWorkspace
 
 			Should -Invoke Resolve-Selection -Times 0
 		}

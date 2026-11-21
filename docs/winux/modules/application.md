@@ -467,7 +467,7 @@ Open-Acrobat -Pdf "MyDocs","OtherDocs"
 - **Parameters:** -Groups, -Private, -NoMenu, -Search, -Browser, -Override, -Instances, -Alongside, -ProtectedWindowHandles
 - **Usage:** `Open-Browser`, `Open-Browser GroupName`, `Open-Browser Parent.ChildGroup`, `Open-Browser GroupA,GroupB`, `Open-Browser -Search "search terms"`, `Open-Browser -Private GroupName`, `Open-Browser GroupName -Override`, `Open-Browser -NoMenu -Browser PreferredBrowser -Instances 2`
 
-The default browser is read from `Configuration.Universal.DefaultBrowser`; the base ships it empty, so the function warns and returns until one is set in `Configuration.local.psd1`. Browser definitions (executable path, private/incognito argument, new-window argument) come from `Configuration.Universal.Browsers`, so any browser key defined there (e.g. Firefox, Chrome, Edge, Brave, Tor) can be passed to `-Browser`. Groups support unlimited hierarchical nesting and are addressed with dot-notation. Private mode cannot be combined with group opening (it falls back to normal mode for groups) but does support `-Search`. `-Instances N` is rerun-safe: it counts how many matching windows already exist and opens only the deficit. The count filters windows by the browser's title pattern ([`Get-BrowserTitlePattern`](system.md#get-browsertitlepattern)), so Firefox and Tor Browser - which share the `firefox.exe` process name - never count each other's windows. Every instance launch passes the browser's configured `NewWindowArg`: a bare launch only opens a window on some browsers (Chrome does; Brave routes it into the existing session as a tab). When the browser is not running yet, the first launch is gated through [`Wait-BrowserWindowReady`](#wait-browserwindowready) before the rest are fired, because launches that arrive while the first instance is still bootstrapping are silently dropped by Chromium's process singleton.
+The default browser is read from `Configuration.Universal.DefaultBrowser`; the base ships it empty, so the function warns and returns until one is set in `Configuration.local.psd1`. Browser definitions (executable path, private/incognito argument, new-window argument) come from `Configuration.Universal.Browsers`, so any browser key defined there (e.g. Firefox, Chrome, Edge, Brave) can be passed to `-Browser`. Groups support unlimited hierarchical nesting and are addressed with dot-notation. Private mode cannot be combined with group opening (it falls back to normal mode for groups) but does support `-Search`. `-Instances N` is rerun-safe: it counts how many matching windows already exist and opens only the deficit. The count filters windows by the browser's title pattern ([`Get-BrowserTitlePattern`](system.md#get-browsertitlepattern)), so helper windows of the same process (a Picture-in-Picture player, a dialog) never count as instances. Every instance launch passes the browser's configured `NewWindowArg`: a bare launch only opens a window on some browsers (Chrome does; Brave routes it into the existing session as a tab). When the browser is not running yet, the first launch is gated through [`Wait-BrowserWindowReady`](#wait-browserwindowready) before the rest are fired, because launches that arrive while the first instance is still bootstrapping are silently dropped by Chromium's process singleton.
 
 | Parameter    | Description                                                                                                                        |
 | ------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
@@ -541,16 +541,6 @@ The executable path is read from the `DockerExe` key in the `Universal` section 
 Open-Docker
 ```
 
-## [Open-FoundryVTT](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Open-FoundryVTT.ps1)
-
-- **Description:** **Deprecated since 2.17.0, removed in 3.0.0** - it serves one personal setup rather than the framework; to keep it, copy the function file (and its test) into your fork's Custom area under `Windows/PowerShell/Modules/Custom/<Module>/Functions/`, list it in `Custom.psd1`, and keep its keys in `Configuration.local.psd1`, where the copy goes on reading them. It keeps working until then and warns once per session. Opens the FoundryVTT virtual tabletop server by starting the FoundryVTT desktop application via `Start-Application`. Does nothing if FoundryVTT is already running. The executable path is read from the `FoundryVTTExe` key in the `Universal` section of `Configuration.psd1`.
-- **Usage:** `Open-FoundryVTT`
-
-## [Open-LeagueOfLegends](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Open-LeagueOfLegends.ps1)
-
-- **Description:** **Deprecated since 2.17.0, removed in 3.0.0** - it serves one personal setup rather than the framework; to keep it, copy the function file (and its test) into your fork's Custom area under `Windows/PowerShell/Modules/Custom/<Module>/Functions/`, list it in `Custom.psd1`, and keep its keys in `Configuration.local.psd1`, where the copy goes on reading them. It keeps working until then and warns once per session. Opens the League of Legends client via `Start-Application`. Does nothing if the client is already running. The executable path is read from `Configuration.Universal.LeagueOfLegendsExe`.
-- **Usage:** `Open-LeagueOfLegends`
-
 ## [Open-NotepadPlusPlus](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Open-NotepadPlusPlus.ps1)
 
 - **Description:** Opens Notepad++, optionally with a specific file. When given a file path it opens that file, but if a Notepad++ window title already contains the file name it warns that the file is already open and does not open a duplicate (the window is not brought to the front). Called without arguments, it opens Notepad++ without any file.
@@ -609,40 +599,6 @@ Open-Obsidian -Workspace Server
 - **Usage:** `Open-Outlook`
 
 If Outlook is already running (the `olk` process), no new instance is launched.
-
-## [Open-RiseupVPN](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Open-RiseupVPN.ps1)
-
-- **Description:** **Deprecated since 2.17.0, removed in 3.0.0** - it serves one personal setup rather than the framework; to keep it, copy the function file (and its test) into your fork's Custom area under `Windows/PowerShell/Modules/Custom/<Module>/Functions/`, list it in `Custom.psd1`, and keep its keys in `Configuration.local.psd1`, where the copy goes on reading them. It keeps working until then and warns once per session. Opens RiseupVPN via `Start-Application`. Does nothing if RiseupVPN is already running. The executable path is read from the `RiseupVpnExe` key in the `Universal` configuration section.
-- **Usage:** `Open-RiseupVPN`
-
-## [Open-SecureBrowser](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Open-SecureBrowser.ps1)
-
-- **Description:** **Deprecated since 2.17.0, removed in 3.0.0** - it serves one personal setup rather than the framework; to keep it, copy the function file (and its test) into your fork's Custom area under `Windows/PowerShell/Modules/Custom/<Module>/Functions/`, list it in `Custom.psd1`, and keep its keys in `Configuration.local.psd1`, where the copy goes on reading them. It keeps working until then and warns once per session. Establishes a VPN-protected Tor Browser session with IP verification. Retrieves and displays the current ISP IP before connecting, starts RiseupVPN and waits for manual connection confirmation, hides the RiseupVPN window to the system tray via the Win32 ShowWindow API (SW_HIDE), opens Tor Browser, then runs `Test-PrivacyStatus` in Tor mode to verify the IP has changed.
-- **Usage:** `Open-SecureBrowser`
-
-Runs a multi-step privacy workflow:
-
-1. Retrieves the current ISP IP address before connecting the VPN.
-2. Starts RiseupVPN.
-3. Waits for manual confirmation that the VPN is connected.
-4. Hides the RiseupVPN window to the system tray (Win32 `ShowWindow` SW_HIDE).
-5. Opens Tor Browser.
-6. Waits 5 seconds for Tor Browser to initialize.
-7. Calls `Test-PrivacyStatus` in Tor mode to verify the IP has changed.
-
-Requires the Window module to be loaded (for Win32 `ShowWindow` access).
-
-> **Requires Tor Browser** - the base bootstrap does not install it. Add a
-> `TorProject.TorBrowser,Latest,d,n,w,All` row to your machine-local
-> [`WinGetApps.local.csv`](../reference/software-list.md#machine-local-overlay) (WinGet installs the
-> portable build onto the Desktop; move the "Tor Browser" folder to `{User}\Tor Browser`, where the
-> default `Universal.Browsers.Tor` entry points), install it manually, or provision it in a fork via
-> `BootstrapConfig.PersonalSteps`.
-
-```powershell
-# Start the full VPN + Tor Browser privacy session
-Open-SecureBrowser
-```
 
 ## [Open-Slack](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Open-Slack.ps1)
 
@@ -1118,7 +1074,7 @@ The poll is a `Wait-Until` (Helper module) that reads time and sleeps through th
 | Parameter         | Description                                                                                                                    |
 | ----------------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | `-ProcessName`    | Process name (without `.exe`) whose windows to wait for, e.g. `"msedge"`.                                                       |
-| `-TitlePattern`   | Optional title regex a window must also match - used to tell apart browsers that share a process name (Firefox vs. Tor Browser). |
+| `-TitlePattern`   | Optional title regex a window must also match - used to count only the browser's own windows, not helper windows of the same process. |
 | `-TimeoutSeconds` | Maximum time to wait; defaults to 30 seconds. Fast browsers exit the poll in well under a second (250ms ticks).                  |
 | `-Clock`          | The wait clock (`New-WaitClock`) to read and sleep through. Defaults to a real one; tests hand in a fake.                        |
 
@@ -1164,10 +1120,9 @@ Universal = @{
     VirtualBoxExe  = "C:\Program Files\Oracle\VirtualBox\VirtualBox.exe"
     # ... one *Exe key per launcher - see the Configuration Reference for the full list
 
-    # Browser definitions consumed by Open-Browser / Open-SecureBrowser
+    # Browser definitions consumed by Open-Browser
     Browsers       = @{
         Firefox = @{ Exe = "C:\Program Files\Mozilla Firefox\firefox.exe"; PrivateArg = "-private-window"; NewWindowArg = "-new-window" }
-        Tor     = @{ Exe = "{User}\Tor Browser\Browser\firefox.exe" }
     }
     DefaultBrowser = "Firefox"
 }

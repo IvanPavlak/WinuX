@@ -85,7 +85,6 @@ For an in-session view, run `List-Functions` or `List-Functions -Category <Modul
 | `Applications` / `WingetApps` | `Install-WingetApps`            | Software install list                |
 | `Theme`                       | `Set-SystemTheme`               | Per-machine theme config             |
 | `Wallpaper`                   | `Set-Wallpaper`                 | Per-machine wallpaper paths          |
-| `PostgreSqlPasswords`         | `Configure-PostgreSqlPasswords` | DB credentials                       |
 | `WakeOnLan`                   | `Send-WakeOnLan`                | Machine MAC addresses                |
 | `PowerButtonActions`          | `Set-PowerButtonActions`        | Per-machine power config             |
 

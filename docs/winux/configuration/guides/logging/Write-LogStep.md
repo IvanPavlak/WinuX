@@ -9,7 +9,7 @@ This function reads no `Configuration.psd1` keys. There is nothing to configure.
 ## Usage
 
 ```powershell
-Write-LogStep "Opening training file..."
+Write-LogStep "Opening configuration file..."
 Write-LogStep " ItemName => [enabled]" -Style Success
 ```
 

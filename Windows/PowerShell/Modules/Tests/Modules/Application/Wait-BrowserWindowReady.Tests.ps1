@@ -30,12 +30,13 @@ Describe "Wait-BrowserWindowReady" {
 	}
 
 	It "filters candidate windows by title pattern" {
-		# A regular Firefox window must not satisfy a wait for Tor Browser.
+		# A firefox.exe helper window without the browser's title suffix must not
+		# satisfy a wait for a Firefox browser window.
 		Mock Get-WindowHandle {
-			@([PSCustomObject]@{ Handle = [IntPtr]11; Title = 'WinuX - Mozilla Firefox' })
+			@([PSCustomObject]@{ Handle = [IntPtr]11; Title = 'Picture-in-Picture' })
 		}
 
-		Wait-BrowserWindowReady -ProcessName "firefox" -TitlePattern "Tor Browser" -TimeoutSeconds 1 | Should -BeFalse
+		Wait-BrowserWindowReady -ProcessName "firefox" -TitlePattern "Mozilla Firefox" -TimeoutSeconds 1 | Should -BeFalse
 
 		# One second at 250 ms ticks.
 		@($script:clock.Sleeps) | Should -Be @(250, 250, 250, 250)

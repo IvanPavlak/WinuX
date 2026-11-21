@@ -11,13 +11,13 @@ BeforeAll {
 	$script:OrderedSection = @(
 		@{ Zulu = @{ Value = 1 } }
 		@{ Alpha = @{ Value = 2 } }
-		@{ "Proxmox Backup Server" = @{ Value = 3 } }
+		@{ "Backup Server" = @{ Value = 3 } }
 	)
 }
 
 Describe "Get-OrderedNames" {
 	It "returns the entry names in configuration order, not sorted" {
-		@(Get-OrderedNames $script:OrderedSection) | Should -Be @('Zulu', 'Alpha', 'Proxmox Backup Server')
+		@(Get-OrderedNames $script:OrderedSection) | Should -Be @('Zulu', 'Alpha', 'Backup Server')
 	}
 
 	It "returns nothing for an unconfigured section" {
@@ -42,7 +42,7 @@ Describe "Get-OrderedEntry" {
 	}
 
 	It "matches a name with spaces" {
-		(Get-OrderedEntry $script:OrderedSection 'Proxmox Backup Server').Value | Should -Be 3
+		(Get-OrderedEntry $script:OrderedSection 'Backup Server').Value | Should -Be 3
 	}
 
 	It "matches case-insensitively, the way the menus do" {

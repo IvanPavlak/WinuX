@@ -91,7 +91,7 @@ adds the leading `` `n ``, the `[ ]` title brackets, and the `=> ` result prefix
 Write-LogTitle "Kill All"
 
 # Plain step / progress (White)      ->  "`nMessage"   (leading-space indentation preserved)
-Write-LogStep "Opening training file..."
+Write-LogStep "Opening configuration file..."
 
 # Success (Green)                     ->  "`n=> Message"
 Write-LogSuccess "Operation completed successfully!"
@@ -166,7 +166,7 @@ Sections in Configuration.psd1 use this header format:
 
 ```powershell
 DefaultBrowser = "Firefox"
-DefaultLocale = "hr-HR"
+DefaultLocale = "de-DE"
 ```
 
 **Path with placeholders:**
@@ -180,7 +180,7 @@ OhMyPosh = "{RepoRoot}\Oh-My-Posh\WinuX_{MachineType}.omp.json"
 
 ```powershell
 Workspaces = @(
-    "Default", "WinuX", "Research", "Server", "Trading"
+    "Default", "WinuX", "Example", "Server", "MyWorkspace"
 )
 ```
 

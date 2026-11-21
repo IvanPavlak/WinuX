@@ -281,8 +281,7 @@ if (Test-StartupStage -Name "LogMaintenance") {
 # TerminalOpen task runs once per day, so a shell that stays open into the next day - a machine
 # woken from sleep - runs it at its first prompt then. It is registered first: a task whose
 # command asks for Administrator privileges stops the action it runs in, and must not take the
-# prompt check with it. The deprecated RepositoryUpdate.Startup keys still work:
-# Get-StartupTaskDefinitions turns them into such a task.
+# prompt check with it.
 if (Test-StartupStage -Name "StartupTasks") {
 	$deferredStartup.Add(@{
 			Name   = "StartupTasks"

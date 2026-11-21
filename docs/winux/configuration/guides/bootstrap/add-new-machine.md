@@ -171,9 +171,7 @@ Oh-My-Posh/
 └── Custom_Gaming.omp.json    # ← Create new
 
 WindowsTerminal/
-├── settings_PC.json
-├── settings_Laptop.json
-├── settings_Work.json
+├── settings_Test.json
 └── settings_Gaming.json      # ← Create new
 ```
 

@@ -254,7 +254,7 @@ WallpaperDarkSettings = @{
             @{ File = "Space2.jpg"; Style = "Stretch" }
         )
     }
-    "Laptop" = @{ File = "BlackHole.png"; Style = "Fill" }
+    "Laptop" = @{ File = "Black.jpg"; Style = "Fill" }
 }
 ```
 

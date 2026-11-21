@@ -48,14 +48,13 @@ the [Configuration Reference](configuration-reference.md).
 | Section                    | Purpose                          | Consumer Function               |
 | -------------------------- | -------------------------------- | ------------------------------- |
 | `GitConfig`                | Git username, email, package ID  | `Install-Git`                   |
-| `Locales`                  | Regional settings (hr-HR, en-US) | `Set-Locale`                    |
+| `Locales`                  | Regional settings (de-DE, en-US) | `Set-Locale`                    |
 | `DisplayLanguages`         | UI language settings             | `Set-DisplayLanguage`           |
 | `KeyboardLayouts`          | Keyboard layout codes            | `Set-KeyboardLayouts`           |
 | `NerdFonts`                | Font configurations              | `Configure-NerdFont`            |
 | `ExplorerOptions`          | Windows Explorer settings        | `Set-ExplorerOptions`           |
 | `VisualEffects`            | Visual effects (Performance tab) | `Set-VisualEffects`             |
 | `AutoEnvironmentVariables` | Environment variables            | `Set-EnvironmentVariables`      |
-| `PostgreSqlPasswords`      | Database credentials             | `Configure-PostgreSqlPasswords` |
 | `PathTemplates.NuGetConfig` | NuGet source/destination        | `Configure-NuGetConfig`         |
 | `NpmRegistries`, `PathTemplates.NpmConfig` | npm registries and the user npmrc | `Configure-NpmConfig` |
 | `Themes`                   | Dark/Light per machine           | `Set-SystemTheme`               |
@@ -105,7 +104,6 @@ the [Configuration Reference](configuration-reference.md).
 | ------------------ | ----------------------- | ----------------- |
 | `BrowserGroups`    | Hierarchical URL groups | `Open-Browser`    |
 | `AcrobatPdfGroups` | PDF groups and their files (ordered - this is the menu) | `Open-Acrobat`    |
-| `CampaignResources` | D&D campaigns and their resources (ordered - this is the menu) | `Open-DnD`        |
 
 ### Bootstrap Process
 
@@ -341,7 +339,7 @@ WallpaperDarkSettings = @{
             @{ File = "Space2.jpg"; Style = "Stretch" }
         )
     }
-    "Laptop" = @{ File = "BlackHole.png"; Style = "Fill" }
+    "Laptop" = @{ File = "Black.jpg"; Style = "Fill" }
 }
 ```
 

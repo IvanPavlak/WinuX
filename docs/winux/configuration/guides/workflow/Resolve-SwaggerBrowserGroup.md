@@ -10,8 +10,8 @@ Resolves the `Swagger` browser group for a project so it can be handed to `Open-
 | Key | Type | Default (base) | What it controls |
 | --- | ---- | -------------- | ---------------- |
 | [`BrowserGroupMatching`](../../configuration-reference.md#more-sections-quick-reference) | hashtable, 5 keys | hashtable, 5 keys | How an already-open browser group is recognised: `BrowserProcessNames` (label to process name), `ExactTitle`, `KeywordExtraction`, `Matching` thresholds and `NegativeMatching`. Tuning knobs, not a list of your own data. |
-| [`BrowserGroups`](../../configuration-reference.md#browser-groups) | array of single-key hashtables | array of 12 example groups | The named URL groups `Open-Browser` opens. Groups nest without limit; a leaf is either a bare URL string or `@{ Name; Url }`. Every `Name` must be unique across the whole tree, because a name is a valid selector on its own. |
-| [`Universal`](../../configuration-reference.md#universal-constants) | hashtable, 27 keys | hashtable, 27 keys | Machine-independent constants: executable paths (`FirefoxExe`, `DockerExe`, `DbeaverExe`, ...), the `Browsers` map, `DefaultBrowser`, shared URLs, the `TerminateProcessNames` and `VisibleWindowExclusions` lists, and `Desktop` (auto-resolved at load). Expanded in place by `Load-PathConfiguration`, so placeholders work here too. |
+| [`BrowserGroups`](../../configuration-reference.md#browser-groups) | array of single-key hashtables | array of 7 example groups | The named URL groups `Open-Browser` opens. Groups nest without limit; a leaf is either a bare URL string or `@{ Name; Url }`. Every `Name` must be unique across the whole tree, because a name is a valid selector on its own. |
+| [`Universal`](../../configuration-reference.md#universal-constants) | hashtable, 22 keys | hashtable, 22 keys | Machine-independent constants: executable paths (`FirefoxExe`, `DockerExe`, `DbeaverExe`, ...), the `Browsers` map, `DefaultBrowser`, shared URLs, the `TerminateProcessNames` and `VisibleWindowExclusions` lists, and `Desktop` (auto-resolved at load). Expanded in place by `Load-PathConfiguration`, so placeholders work here too. |
 
 ## Decisions
 
@@ -28,7 +28,7 @@ Resolves the `Swagger` browser group for a project so it can be handed to `Open-
     - Default: Flat groups.
     - More detail: [`BrowserGroups`](../../configuration-reference.md#browser-groups)
 4. Which browser should be the default?
-    - Options: A key from `Universal.Browsers`: `Firefox`, `Chrome`, `Edge`, `Brave`, `Tor`. Ships empty; with no `DefaultBrowser`, `Open-Browser` warns and opens nothing, and the functions that depend on it skip their browser step.
+    - Options: A key from `Universal.Browsers`: `Firefox`, `Chrome`, `Edge`, `Brave`. Ships empty; with no `DefaultBrowser`, `Open-Browser` warns and opens nothing, and the functions that depend on it skip their browser step.
     - Default: Empty.
     - More detail: [`Universal`](../../configuration-reference.md#universal-constants)
 5. Are any of the shipped executable paths wrong on this machine?
@@ -37,7 +37,7 @@ Resolves the `Swagger` browser group for a project so it can be handed to `Open-
     - More detail: [`Universal`](../../configuration-reference.md#universal-constants)
 6. Do you use a browser the base `Browsers` map does not list?
     - Options: Add an entry with `Exe`, `PrivateArg` and `NewWindowArg`. Because hashtables merge per key, adding one browser does not remove the others.
-    - Default: The shipped five.
+    - Default: The shipped four.
     - More detail: [`Universal`](../../configuration-reference.md#universal-constants)
 
 ## Where to Put Values

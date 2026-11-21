@@ -93,7 +93,7 @@ AiProfiles = @{
 
 ```powershell
 AiProfiles = @{
-    Shared       = @("github.com/MyUser/Dotfiles")
+    Shared       = @("github.com/MyUser/MyFork")
     DefaultOwner = "Personal"
     Profiles     = @{
         Work     = @{ Owns = @("github.com/my-org/*") }
@@ -109,7 +109,7 @@ AiProfiles = @{
         Personal = @{
             Policies           = @{
                 autonomous = @("github.com/MyUser/MyProject", "github.com/MyUser/MyPrototype")
-                branch     = @("github.com/MyUser/Dotfiles")
+                branch     = @("github.com/MyUser/MyFork")
             }
             MergeWithoutChecks = @("github.com/MyUser/MyPrototype")
         }
@@ -155,7 +155,7 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
         Hosts        = @{ "WORKSTATION-01" = "Work" }
         Default      = "Personal"
         DefaultOwner = "Personal"
-        Shared       = @("github.com/MyUser/Dotfiles")
+        Shared       = @("github.com/MyUser/MyFork")
         Profiles     = @{
             Personal = @{
                 Rules      = "MyRules"
@@ -164,7 +164,7 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
                 Unattended = $true
                 Policies   = @{
                     autonomous = @("github.com/MyUser/MyProject", "github.com/MyUser/MyPrototype")
-                    branch     = @("github.com/MyUser/Dotfiles")
+                    branch     = @("github.com/MyUser/MyFork")
                 }
                 MergeWithoutChecks = @("github.com/MyUser/MyPrototype")
                 EnvVars    = @("MY_API_KEY")
