@@ -6340,6 +6340,10 @@
           "Mandatory": false,
           "Aliases": []
         },
+        "Deprecations": {
+          "Mandatory": false,
+          "Aliases": []
+        },
         "Strict": {
           "Mandatory": false,
           "Aliases": []
@@ -6780,19 +6784,6 @@
           "Aliases": []
         },
         "Source": {
-          "Mandatory": false,
-          "Aliases": []
-        }
-      }
-    },
-    "Update-DirectoryNames": {
-      "Module": "System",
-      "Parameters": {
-        "Path": {
-          "Mandatory": false,
-          "Aliases": []
-        },
-        "WhatIf": {
           "Mandatory": false,
           "Aliases": []
         }
