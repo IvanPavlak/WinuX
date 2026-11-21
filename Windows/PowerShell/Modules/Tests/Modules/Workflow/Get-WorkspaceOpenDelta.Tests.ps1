@@ -157,7 +157,7 @@ Describe "Get-WorkspaceOpenDelta" {
 		}
 
 		It "matches the exclusion list regardless of case" {
-			$global:Configuration.Universal.VisibleWindowExclusions = @('rainmeter', 'windowsterminal')
+			$global:Configuration.Universal.VisibleWindowExclusions = @('mywidgetapp', 'windowsterminal')
 
 			$delta = Get-WorkspaceOpenDelta -Workspace 'Server' -ExistingWindowHandles (New-HandleSet 1, 2, 3) -AdoptUnclaimed
 
