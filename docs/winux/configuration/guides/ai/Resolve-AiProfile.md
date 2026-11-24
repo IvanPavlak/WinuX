@@ -36,7 +36,7 @@ Two things outside the configuration win over `Hosts` and `Default`: the environ
     - Default: Nothing is owned explicitly; every repository belongs to the `Default` profile.
     - More detail: [AI Profiles - Repository Ownership](../../../ai/profiles.md#repository-ownership)
 5. How far may agents go in each repository a profile works on?
-    - Options: `Policies` maps a level to `origin` patterns - `autonomous` (also merge a pull request whose CI checks all passed), `branch` (commit, push a feature branch, open pull requests), `draft` (draft pull requests only), `readonly` (no shell, no file edits), `blocked` (no work); `DefaultPolicy` for every other repository; `MergeWithoutChecks` for `autonomous` repositories without CI that may still merge. `Autonomous` is a synonym of `Policies.autonomous`.
+    - Options: `Policies` maps a level to `origin` patterns - `autonomous` (also merge a pull request whose CI checks all passed), `branch` (commit, push a feature branch, open pull requests), `draft` (draft pull requests only), `edit` (file edits outside `.git`, no shell, so no git), `readonly` (no shell, no file edits), `blocked` (no work); `DefaultPolicy` for every other repository; `MergeWithoutChecks` for `autonomous` repositories without CI that may still merge. `Autonomous` is a synonym of `Policies.autonomous`.
     - Default: Every repository is at `branch`; nothing merges on its own.
     - More detail: [AI Profiles - Repository Policies](../../../ai/profiles.md#repository-policies)
 6. What else differs per profile: rules item, harnesses, artifacts, MCP servers, marketplaces, unattended runs, environment variables?
@@ -118,7 +118,7 @@ AiProfiles = @{
 }
 ```
 
-A level name outside `autonomous`, `branch`, `draft`, `readonly`, `blocked` is warned about and its patterns skipped; a `DefaultPolicy` that is not a level becomes `readonly`.
+A level name outside `autonomous`, `branch`, `draft`, `edit`, `readonly`, `blocked` is warned about and its patterns skipped; a `DefaultPolicy` that is not a level becomes `readonly`.
 
 ## Step 5: Reload and confirm the merge landed
 

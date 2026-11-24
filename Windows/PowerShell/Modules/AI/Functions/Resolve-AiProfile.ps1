@@ -37,7 +37,7 @@ function Resolve-AiProfile {
 		them. McpServers and Marketplaces left out mean "all of them"; an empty list means none.
 
 		Repository policy (docs/winux/ai/profiles.md, Repository policies): Policies maps a level
-		(autonomous, branch, draft, readonly, blocked - a closed set) to origin patterns, and
+		(autonomous, branch, draft, edit, readonly, blocked - a closed set) to origin patterns, and
 		Autonomous is a synonym of Policies.autonomous. The normalised Policies is ordered from
 		most to least trust, so where patterns of several levels match one repository the least
 		trusting one wins. A level outside the set is reported and its patterns skipped.
@@ -175,7 +175,7 @@ function Resolve-AiProfile {
 		foreach ($planError in $planErrors) { $result.Warnings += $planError }
 
 		# The repository policy levels, most trust first; Autonomous joins Policies.autonomous.
-		$levels = @('autonomous', 'branch', 'draft', 'readonly', 'blocked')
+		$levels = @('autonomous', 'branch', 'draft', 'edit', 'readonly', 'blocked')
 		$policies = [ordered]@{}
 		foreach ($level in $levels) { $policies[$level] = @() }
 		$policies['autonomous'] = @(& $patterns $entry.Autonomous)
