@@ -101,6 +101,16 @@ Do NOT run the test suite yourself - no `Import-Module` + `Invoke-Pester`, and n
 
 State which tests each command covers, then wait for the developer's pass/fail report before treating the change as verified. Only run tests yourself if the developer explicitly asks you to.
 
+## Releases
+
+A pull request the maintainer has you open ships as its own release; a contributor's leaves its entries under `## [Unreleased]` (`Windows/CONTRIBUTING.md`).
+
+- Move the `## [Unreleased]` entries of `Windows/CHANGELOG.md` under a new `## [x.y.z] - YYYY-MM-DD` heading, and keep an empty `## [Unreleased]` above it. The bump follows `VERSIONING.md`: PATCH for `### Fixed` only, MINOR when there is an `### Added`, `### Changed` or `### Deprecated`, MAJOR for `### Removed` or `### Breaking`.
+- Edit the link footer at the bottom of `Windows/CHANGELOG.md`: point `[Unreleased]` at `compare/winux/vx.y.z...HEAD` and add `[x.y.z]: .../compare/winux/v<previous>...winux/vx.y.z` above the previous release's line.
+- Stamp the contract baseline yourself with `Run-Tests -UpdateContractBaseline` (it runs no tests, so it is not one of the runs you leave to the developer), so `ContractBaseline.json` names the new version.
+- Say so in the pull request: "Released as **x.y.z** (MINOR), with the contract baseline stamped."
+- In a fork that mirrors WinuX, the same changelog heading and baseline go into the fork's copies.
+
 ## AI System
 
 - Centralized AI configuration lives in `AI/` - provider-agnostic, human-readable
