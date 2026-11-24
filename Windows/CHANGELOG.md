@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [3.3.0] - 2026-11-24
+
 ### Added
 
 - **A sixth repository policy level, `edit`: agents edit a repository's files but run no shell, so no git or gh.** No level fitted a repository something else commits, such as a notes vault a sync plugin pushes: every level that allowed the file tools also allowed the shell, and with it `git commit` and a pushed feature branch, while `readonly` refused the file tools too. At `edit` the Edit, Write, MultiEdit and NotebookEdit tools work on the working tree, every Bash and PowerShell call is refused (the whole shell, since the hook reads command text and an alias, function or script would carry git past a text match), and so is an edit inside `.git` (the folder, or a worktree's `.git` file), whose hooks and config would run git. It sits between `draft` and `readonly` in the order, so where patterns of several levels match, `edit` loses to `readonly` and `blocked` and wins over the rest. The ownership guard refuses an unattended run at `edit`, as at `draft` and `readonly`. `Policies` takes the new key (`Policies.edit`) and `DefaultPolicy` the new value; nothing else changes, and a configuration without them behaves as before. The hooks now also read the `file_path` (or `notebook_path`) of a file tool call. Changed files: `AI/Hooks/ai-repository-policy.sh` and `AI/Hooks/ai-ownership-guard.sh` (mirror files, also in Foundation), `Resolve-AiProfile`. Covered by `AiRepositoryPolicy.Tests.ps1` (new "edit" context, guard cases) and `Resolve-AiProfile.Tests.ps1`; documented in AI Profiles (Repository Policies), the configuration reference, the Resolve-AiProfile guide, the AI module reference and Troubleshooting.
