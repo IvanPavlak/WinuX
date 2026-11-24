@@ -44,6 +44,19 @@ BeforeAll {
 	git -C $script:OnDevelop -c user.name=Test -c user.email=test@example.com -c commit.gpgsign=false commit -q --allow-empty -m Start 2>$null | Out-Null
 	git -C $script:OnDevelop branch develop 2>$null | Out-Null
 	git -C $script:OnDevelop symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/develop 2>$null | Out-Null
+	# A fourth, another repository next to them, for the calls that touch it from their folder.
+	$script:Notes = (Join-Path $TestDrive 'notes').Replace('\', '/')
+	git init -q -b master $script:Notes 2>$null | Out-Null
+	git -C $script:Notes remote add origin 'https://github.com/MyUser/Notes.git' 2>$null | Out-Null
+	git -C $script:Notes -c user.name=Test -c user.email=test@example.com -c commit.gpgsign=false commit -q --allow-empty -m Start 2>$null | Out-Null
+	New-Item -ItemType Directory -Path (Join-Path $script:Notes 'Folder') -Force | Out-Null
+	# Every "touches another repository" case reads this origin; without it they all pass as allow,
+	# so a broken setup is named here instead.
+	$notesOrigin = git -C $script:Notes remote get-url origin 2>&1
+	if ($notesOrigin -ne 'https://github.com/MyUser/Notes.git') {
+		$gitEnvironment = (Get-ChildItem env: | Where-Object Name -like 'GIT_*' | ForEach-Object { "$($_.Name)=$($_.Value)" }) -join ', '
+		throw "the second test repository was not set up: origin of [$($script:Notes)] => [$notesOrigin]; GIT_ variables => [$gitEnvironment]"
+	}
 	$script:Outside = (Join-Path $TestDrive 'outside').Replace('\', '/')
 	New-Item -ItemType Directory -Path $script:Outside -Force | Out-Null
 
@@ -70,13 +83,20 @@ BeforeAll {
 			[string]$Hook = $script:PolicyHook,
 			[string]$HookEvent = '',
 			[string]$Unattended = '',
-			[string]$Session = [guid]::NewGuid().ToString()
+			[string]$Session = [guid]::NewGuid().ToString(),
+			# The path a file tool edits (notebook_path for NotebookEdit, file_path otherwise).
+			[string]$FilePath = ''
 		)
+		$toolInput = @{ command = $Command }
+		if ($FilePath) {
+			$pathKey = if ($Tool -eq 'NotebookEdit') { 'notebook_path' } else { 'file_path' }
+			$toolInput = @{ $pathKey = $FilePath }
+		}
 		$hookInput = @{
 			session_id = $Session
 			cwd        = $Cwd
 			tool_name  = $Tool
-			tool_input = @{ command = $Command }
+			tool_input = $toolInput
 		} | ConvertTo-Json -Compress -EscapeHandling Default
 		$saved = @{ Conf = $env:AI_PROFILE_CONF; Tmp = $env:TMPDIR; Unattended = $env:AI_UNATTENDED; Path = $env:PATH }
 		try {
@@ -104,7 +124,7 @@ BeforeAll {
 AfterAll {
 	# Git makes its object files read-only, and Pester's removal of a file-level TestDrive refuses
 	# those (it uses Directory.Delete; a Describe's TestDrive is cleared with Remove-Item -Force).
-	foreach ($repository in @($script:Feature, $script:OnMaster, $script:OnDevelop)) {
+	foreach ($repository in @($script:Feature, $script:OnMaster, $script:OnDevelop, $script:Notes)) {
 		Remove-Item -LiteralPath $repository -Recurse -Force -ErrorAction SilentlyContinue
 	}
 }
@@ -415,6 +435,135 @@ Describe "ai-repository-policy.sh" -Tag 'Integration' -Skip:$script:NoBash {
 		}
 	}
 
+	Context "edit" {
+		BeforeEach {
+			Set-PolicyConf @('profile Personal', 'default-policy edit')
+		}
+
+		It "edit: allows the <Tool> tool on a working-tree file" -ForEach @(
+			@{ Tool = 'Edit'; Path = 'Notes/Note.md' }
+			@{ Tool = 'Write'; Path = 'Notes/New.md' }
+			@{ Tool = 'MultiEdit'; Path = 'Notes/Note.md' }
+			@{ Tool = 'NotebookEdit'; Path = 'Notebook.ipynb' }
+		) {
+			Invoke-PolicyHook -Tool $Tool -FilePath "$($script:Feature)/$Path" | Should -Be 'allow'
+		}
+
+		It "edit: allows a file whose name only starts with .git (<Path>)" -ForEach @(
+			@{ Path = '.gitignore' }
+			@{ Path = 'Notes/.github/Note.md' }
+		) {
+			Invoke-PolicyHook -Tool 'Write' -FilePath "$($script:Feature)/$Path" | Should -Be 'allow'
+		}
+
+		It "edit: denies <Tool> inside .git (<Path>)" -ForEach @(
+			@{ Tool = 'Write'; Path = '.git/hooks/pre-commit' }
+			@{ Tool = 'Edit'; Path = '.git/config' }
+			@{ Tool = 'Edit'; Path = '.GIT/config' }
+			@{ Tool = 'Write'; Path = '.git' }
+		) {
+			Invoke-PolicyHook -Tool $Tool -FilePath "$($script:Feature)/$Path" | Should -BeLike 'deny: *, edit)*.git*'
+		}
+
+		It "edit: denies a Windows path inside .git" {
+			Invoke-PolicyHook -Tool 'Edit' -FilePath ("$($script:Feature)/.git/config" -replace '/', '\') | Should -BeLike 'deny: *, edit)*.git*'
+		}
+
+		It "edit: denies the <Tool> tool, git or not (<Command>)" -ForEach @(
+			@{ Tool = 'Bash'; Command = 'ls' }
+			@{ Tool = 'Bash'; Command = 'git commit -m Note' }
+			@{ Tool = 'PowerShell'; Command = 'Get-ChildItem' }
+			@{ Tool = 'PowerShell'; Command = 'git status' }
+		) {
+			Invoke-PolicyHook -Tool $Tool -Command $Command | Should -BeLike 'deny: *, edit)*Bash and PowerShell*'
+		}
+
+		It "edit: allows the reading tools" {
+			Invoke-PolicyHook -Command '' -Tool 'Read' | Should -Be 'allow'
+			Invoke-PolicyHook -Command '' -Tool 'Grep' | Should -Be 'allow'
+		}
+
+		It "edit: is less trusting than draft and more than readonly in the line order" {
+			Set-PolicyConf @('profile Personal', 'policy draft github.com/myuser/*', 'policy edit github.com/myuser/myproject')
+			Invoke-PolicyHook -Command 'ls' | Should -BeLike 'deny: *, edit)*'
+
+			Set-PolicyConf @('profile Personal', 'policy edit github.com/myuser/*', 'policy readonly github.com/myuser/myproject')
+			Invoke-PolicyHook -Tool 'Edit' -FilePath "$($script:Feature)/Note.md" | Should -BeLike 'deny: *, readonly)*'
+		}
+	}
+
+	Context "a call that touches another repository" {
+		It "holds a shell call to the level of a repository it names (<Command>)" -ForEach @(
+			@{ Command = 'git -C NOTES commit -m Note' }
+			@{ Command = 'git -C "NOTES" status' }
+			@{ Command = 'git --no-pager -C NOTES log' }
+			@{ Command = 'cd NOTES && git commit -m Note' }
+			@{ Command = 'cd ../notes && git status' }
+			@{ Command = 'pushd NOTES; ls' }
+			@{ Command = 'git --git-dir=NOTES/.git log' }
+			@{ Command = 'git --work-tree NOTES status' }
+			@{ Command = 'GIT_DIR=NOTES/.git git log' }
+		) {
+			Set-PolicyConf @('profile Personal', 'policy edit github.com/myuser/notes')
+
+			Invoke-PolicyHook -Command $Command.Replace('NOTES', $script:Notes) | Should -BeLike 'deny: *(github.com/myuser/notes, edit)*Bash and PowerShell*'
+		}
+
+		It "reads PowerShell's Set-Location and a Windows path" {
+			Set-PolicyConf @('profile Personal', 'policy edit github.com/myuser/notes')
+			$windowsPath = $script:Notes -replace '/', '\'
+
+			Invoke-PolicyHook -Tool 'PowerShell' -Command "Set-Location -Path '$windowsPath'; git status" | Should -BeLike 'deny: *(github.com/myuser/notes, edit)*'
+			Invoke-PolicyHook -Tool 'PowerShell' -Command "git -C '$windowsPath' status" | Should -BeLike 'deny: *(github.com/myuser/notes, edit)*'
+		}
+
+		It "counts a relative folder from the last cd before it" {
+			Set-PolicyConf @('profile Personal', 'policy edit github.com/myuser/notes')
+
+			Invoke-PolicyHook -Command "cd $($script:Outside) && git -C ../notes status" | Should -BeLike 'deny: *(github.com/myuser/notes, edit)*'
+			Invoke-PolicyHook -Command "cd $($script:Notes) && cd ../feature && git -C . status" | Should -BeLike 'deny: *(github.com/myuser/notes, edit)*' -Because "the cd into the stricter repository is touched even when the call leaves it again"
+		}
+
+		It "leaves a call that touches only repositories at its own level or looser (<Command>)" -ForEach @(
+			@{ Command = 'git status' }
+			@{ Command = 'cd OUTSIDE && ls' }
+			@{ Command = 'cd $HOME/notes && git status' }
+			@{ Command = 'git -c core.pager=cat log -1' }
+		) {
+			Set-PolicyConf @('profile Personal', 'policy edit github.com/myuser/notes')
+
+			Invoke-PolicyHook -Command $Command.Replace('OUTSIDE', $script:Outside) | Should -Be 'allow'
+		}
+
+		It "holds a file tool to the level of the repository holding the file" {
+			Set-PolicyConf @('profile Personal', 'policy readonly github.com/myuser/notes')
+
+			Invoke-PolicyHook -Tool 'Edit' -FilePath "$($script:Notes)/Note.md" | Should -BeLike 'deny: *(github.com/myuser/notes, readonly)*'
+			Invoke-PolicyHook -Tool 'Write' -FilePath "$($script:Notes)/New/Folder/Note.md" | Should -BeLike 'deny: *(github.com/myuser/notes, readonly)*' -Because "a file in a folder not yet created belongs to its nearest existing folder"
+			Invoke-PolicyHook -Tool 'Write' -FilePath (("$($script:Notes)/Folder/Note.md") -replace '/', '\') | Should -BeLike 'deny: *(github.com/myuser/notes, readonly)*'
+			Invoke-PolicyHook -Tool 'Edit' -FilePath "$($script:Feature)/Note.md" | Should -Be 'allow'
+		}
+
+		It "applies edit's .git rule to a file in another repository at edit" {
+			Set-PolicyConf @('profile Personal', 'policy edit github.com/myuser/notes')
+
+			Invoke-PolicyHook -Tool 'Edit' -FilePath "$($script:Notes)/Note.md" | Should -Be 'allow'
+			Invoke-PolicyHook -Tool 'Write' -FilePath "$($script:Notes)/.git/hooks/pre-commit" | Should -BeLike 'deny: *(github.com/myuser/notes, edit)*.git*'
+		}
+
+		It "keeps the session folder's level when it is the stricter one" {
+			Set-PolicyConf @('profile Personal', 'policy readonly github.com/myuser/myproject')
+
+			Invoke-PolicyHook -Tool 'Edit' -FilePath "$($script:Notes)/Note.md" | Should -BeLike 'deny: *(github.com/myuser/myproject, readonly)*'
+		}
+
+		It "gives a file outside any repository the default-policy level" {
+			Set-PolicyConf @('profile Personal', 'default-policy readonly', 'policy branch github.com/myuser/*')
+
+			Invoke-PolicyHook -Tool 'Write' -FilePath "$($script:Outside)/Note.md" | Should -BeLike 'deny: *(no origin, readonly)*'
+		}
+	}
+
 	Context "readonly and blocked" {
 		It "<Level>: denies the <Tool> tool" -ForEach @(
 			@{ Level = 'readonly'; Tool = 'Bash' }
@@ -490,7 +639,9 @@ Describe "ai-ownership-guard.sh, repository policy" -Tag 'Integration' -Skip:$sc
 		@{ Name = 'refuses the prompt in a blocked repository'; Lines = @('policy blocked github.com/myuser/*'); Unattended = ''; Expected = 'block: *is blocked*' }
 		@{ Name = 'allows an attended session at draft'; Lines = @('policy draft github.com/myuser/*'); Unattended = ''; Expected = 'allow' }
 		@{ Name = 'refuses an unattended run at draft'; Lines = @('policy draft github.com/myuser/*'); Unattended = '1'; Expected = 'block: *unattended runs need*' }
-		@{ Name = 'refuses an unattended run at readonly'; Lines = @('default-policy readonly'); Unattended = 'on'; Expected = 'block: *unattended runs need*' }
+		@{ Name = 'refuses an unattended run at edit'; Lines = @('policy edit github.com/myuser/*'); Unattended = '1'; Expected = 'block: *unattended runs need*' }
+		@{ Name = 'allows an attended session at edit'; Lines = @('policy edit github.com/myuser/*'); Unattended = ''; Expected = 'allow' }
+		@{ Name = 'refuses an unattended run at readonly';Lines = @('default-policy readonly'); Unattended = 'on'; Expected = 'block: *unattended runs need*' }
 		@{ Name = 'allows an unattended run at branch'; Lines = @(); Unattended = 'true'; Expected = 'allow' }
 		@{ Name = 'allows an unattended run at autonomous'; Lines = @('autonomous github.com/myuser/myproject'); Unattended = 'yes'; Expected = 'allow' }
 		@{ Name = 'refuses an unattended run when the profile has unattended off'; Lines = @(); Unattended = '1'; Off = $true; Expected = 'block: *unattended runs are off*' }

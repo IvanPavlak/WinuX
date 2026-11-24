@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# ai-repository-policy.sh - Claude Code hook that applies the trust level of the repository a session
-# works in.
+# ai-repository-policy.sh - Claude Code hook that applies the trust level of every repository a tool
+# call touches.
 #
 # Deployed by Deploy-AiArtifacts next to the managed settings copy, together with ai-profile.conf,
 # and wired into the managed settings (with an AI profile active) as:
@@ -8,8 +8,14 @@
 # One file for both halves: WinuX and Foundation ship it at this path as a mirror file (a `mirror`
 # line in Windows/PowerShell/Upstream.conf and Unix/config/upstream.conf), so it stays identical.
 #
-# The repository is the one holding the hook input's `cwd`, named by its `origin` remote normalised
-# to host/owner/name (lowercase, no scheme, no user, no .git). Its level comes from ai-profile.conf:
+# A call touches the repository holding the hook input's `cwd`, the one holding the file a file tool
+# edits, and for a shell call every folder it names by a literal cd (pushd, chdir, Set-Location,
+# Push-Location, sl), git -C, --git-dir, --work-tree, GIT_DIR or GIT_WORK_TREE (a relative folder
+# counts from the last cd before it; one held in a variable is not read). The least trusting level
+# of them all applies, and a refusal names the repository it came from. A folder outside any
+# repository, or one without an origin, has the default-policy level. A repository is named by its
+# `origin` remote normalised to host/owner/name (lowercase, no scheme, no user, no .git). Its level
+# comes from ai-profile.conf:
 #   policy LEVEL PATTERN...       the repositories at LEVEL (shell globs, no braces)
 #   autonomous PATTERN...         a synonym of `policy autonomous PATTERN...`
 #   default-policy LEVEL          a repository no line matches, or a folder without an origin
@@ -22,6 +28,8 @@
 #               repository; and the one force push the list below excepts
 #   branch     commit, push a non-default branch, open and ready pull requests; no merge
 #   draft       as branch, but pull requests are opened with --draft, never readied or merged
+#   edit        the file tools (Edit, Write, MultiEdit, NotebookEdit) on the working tree only, never
+#               inside .git; no Bash or PowerShell call, so no git or gh at all
 #   readonly    no Bash or PowerShell call and no Edit, Write, MultiEdit or NotebookEdit call
 #   blocked     nothing: the ownership guard refuses the prompt and every tool call (this hook also
 #               denies the tools it sees)
@@ -113,7 +121,7 @@ conf_value() {
 }
 
 valid_level() {
-	case "$1" in autonomous | branch | draft | readonly | blocked) return 0 ;; esac
+	case "$1" in autonomous | branch | draft | edit | readonly | blocked) return 0 ;; esac
 	return 1
 }
 
@@ -258,13 +266,17 @@ function without_prose(command, count, lines, l, line, check, text, n, out, i, c
 END {
 	tool = field("tool_name")
 	shell = (tool == "Bash" || tool == "PowerShell") ? without_prose(command_text()) : ""
-	printf "%s\n%s\n%s\n%s.", tool, field("session_id"), field("cwd"), shell
+	path = field("file_path")
+	if (path == "") path = field("notebook_path")
+	printf "%s\n%s\n%s\n%s\n%s.", tool, field("session_id"), field("cwd"), path, shell
 }')"
 tool=${parsed%%$nl*}
 parsed=${parsed#*$nl}
 session=${parsed%%$nl*}
 parsed=${parsed#*$nl}
 cwd=${parsed%%$nl*}
+parsed=${parsed#*$nl}
+path=${parsed%%$nl*}
 in=${parsed#*$nl}
 in=${in%.}
 
@@ -280,28 +292,105 @@ esac
 cache_dir="${TMPDIR:-/tmp}/ai-repository-policy"
 cache_file="$cache_dir/${session//[!A-Za-z0-9_-]/_}"
 tab=$'\t'
-key="${cwd//$tab/ }"
-level=""
-repo=""
-if [ -f "$cache_file" ]; then
-	# A line is folder, level and repository (- for no origin).
-	while IFS="$tab" read -r cached_key cached_level cached_repo; do
-		if [ "$cached_key" = "$key" ] && [ -n "$cached_repo" ]; then
-			level="$cached_level"
-			repo="$cached_repo"
-		fi
-	done <"$cache_file"
-	[ "$repo" != "-" ] || repo=""
-fi
-if ! valid_level "$level"; then
-	repo=""
-	if remote="$(git -C "$cwd" remote get-url origin 2>/dev/null)" && [ -n "$remote" ]; then
-		normalise_remote "$remote"
-		repo="$normalised"
+
+folder_level() {
+	# Sets f_level and f_repo (empty: no origin) for the folder $1, cached per session and folder.
+	local key="${1//$tab/ }" level="" cached_key cached_level cached_repo remote
+	f_level=""
+	f_repo=""
+	if [ -f "$cache_file" ]; then
+		# A line is folder, level and repository (- for no origin).
+		while IFS="$tab" read -r cached_key cached_level cached_repo; do
+			if [ "$cached_key" = "$key" ] && [ -n "$cached_repo" ]; then
+				f_level="$cached_level"
+				f_repo="$cached_repo"
+			fi
+		done <"$cache_file"
+		[ "$f_repo" != "-" ] || f_repo=""
 	fi
-	policy_level "$repo"
+	valid_level "$f_level" && return 0
+	f_repo=""
+	if remote="$(git -C "$1" remote get-url origin 2>/dev/null)" && [ -n "$remote" ]; then
+		normalise_remote "$remote"
+		f_repo="$normalised"
+	fi
+	# policy_level sets level, the local above.
+	policy_level "$f_repo"
+	f_level="$level"
 	[ -d "$cache_dir" ] || mkdir -p "$cache_dir" 2>/dev/null
-	printf '%s\t%s\t%s\n' "$key" "$level" "${repo:--}" 2>/dev/null >>"$cache_file"
+	printf '%s\t%s\t%s\n' "$key" "$f_level" "${f_repo:--}" 2>/dev/null >>"$cache_file"
+}
+
+trust_rank() {
+	# Sets rank for level $1, 0 for the most trust.
+	case "$1" in
+	autonomous) rank=0 ;; branch) rank=1 ;; draft) rank=2 ;; edit) rank=3 ;; readonly) rank=4 ;; *) rank=5 ;;
+	esac
+}
+
+touch_folder() {
+	# Takes the level of the folder holding $1 (a path; its nearest existing folder) when it trusts
+	# less than the level so far, so a call is held to the strictest repository it touches.
+	local folder="$1" current
+	while [ -n "$folder" ] && [ ! -d "$folder" ]; do
+		case "$folder" in */*) folder="${folder%/*}" ;; *) folder="" ;; esac
+	done
+	[ -n "$folder" ] || return 0
+	folder_level "$folder"
+	trust_rank "$level"
+	current=$rank
+	trust_rank "$f_level"
+	if [ "$rank" -gt "$current" ]; then
+		level="$f_level"
+		repo="$f_repo"
+	fi
+}
+
+absolute() {
+	# Sets resolved to the path $1 made absolute against the folder $2 (backslashes to slashes, ~ to
+	# HOME); empty for a path the hook cannot read (a variable, a subshell, an option, cd -).
+	local p="$1"
+	resolved=""
+	case "$p" in \"*\") p="${p#\"}"; p="${p%\"}" ;; \'*\') p="${p#\'}"; p="${p%\'}" ;; esac
+	case "$p" in '' | -* | *[\$%\`]*) return 0 ;; esac
+	p="${p//\\//}"
+	case "$p" in "~") p="$HOME" ;; "~/"*) p="$HOME/${p#\~/}" ;; esac
+	case "$p" in /* | [A-Za-z]:*) resolved="$p" ;; *) resolved="$2/$p" ;; esac
+}
+
+# The level of the session's folder, then of every repository the call touches: the file a file tool
+# edits, and for a shell call the folders it names by a literal cd (pushd, chdir, Set-Location,
+# Push-Location, sl), git -C, --git-dir, --work-tree, GIT_DIR or GIT_WORK_TREE. A relative folder
+# counts from the last cd before it. The least trusting of them all applies.
+folder_level "$cwd"
+level="$f_level"
+repo="$f_repo"
+if [ "$kind" = "edit" ] && [ -n "$path" ]; then
+	case "$path" in /* | [A-Za-z]:*) target="$path" ;; *) target="$cwd/$path" ;; esac
+	case "$target" in */*) touch_folder "${target%/*}" ;; esac
+fi
+if [ "$kind" = "shell" ]; then
+	case "$in" in
+	*[cC][dD]* | *[pP][uU][sS][hH][dD]* | *[cC][hH][dD][iI][rR]* | *-[cC]* | *[lL][oO][cC][aA][tT][iI][oO][nN]* | *[sS][lL]\ * | *[gG][iI][tT][-_]* | *[wW][oO][rR][kK]-[tT][rR][eE][eE]*)
+		word='("[^"]*"|'"'"'[^'"'"']*'"'"'|[^" '"'"';&|()]+)'
+		# The folder itself: the last word, never the `--git-dir=` or `GIT_DIR=` before it.
+		tail_word='("[^"]*"|'"'"'[^'"'"']*'"'"'|[^" '"'"';&|()=]+)$'
+		targets="(^|[;&|( ])(cd|pushd|chdir|set-location|push-location|sl) +(-(literal)?path +)?$word"
+		targets="$targets|(^|[^a-z])git( +-[^ ;&|]*)* +-C *$word|--(git-dir|work-tree)[ =]+$word"
+		targets="$targets|(^|[^a-z_])(GIT_DIR|GIT_WORK_TREE) *= *$word"
+		base="$cwd"
+		while IFS= read -r found; do
+			[ -n "$found" ] || continue
+			[[ $found =~ $tail_word ]] || continue
+			absolute "${BASH_REMATCH[1]}" "$base"
+			[ -n "$resolved" ] || continue
+			touch_folder "$resolved"
+			lower "$found"
+			lowered="${lowered#"${lowered%%[a-z]*}"}"
+			case "$lowered" in cd\ * | pushd\ * | chdir\ * | set-location\ * | push-location\ * | sl\ *) base="$resolved" ;; esac
+		done <<<"$(printf '%s' "$in" | grep -oiE "$targets")"
+		;;
+	esac
 fi
 
 deny() {
@@ -311,6 +400,14 @@ deny() {
 
 case "$level" in
 blocked) deny "this repository is blocked for AI agents" ;;
+edit)
+	if [ "$kind" = "shell" ]; then deny "the repository is open to file edits only; Bash and PowerShell calls are not allowed, so no git or gh"; fi
+	# .git itself (the folder, or a worktree's .git file): hooks and config there would run git.
+	case "/$path/" in
+	*/[.][gG][iI][tT]/*) deny "the repository is open to file edits only; nothing inside .git is edited" ;;
+	esac
+	exit 0
+	;;
 readonly)
 	if [ "$kind" = "edit" ]; then deny "the repository is read-only for AI agents; files are not edited"; fi
 	deny "the repository is read-only for AI agents; Bash and PowerShell calls are not allowed"

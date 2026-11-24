@@ -185,7 +185,7 @@ Describe "Resolve-AiProfile" {
 		$result = Resolve-AiProfile -Configuration (New-ProfileConfig) -HostName "DESKTOP-GAMING" -Override ""
 
 		$result.Profile.DefaultPolicy | Should -Be "branch"
-		@($result.Profile.Policies.Keys) | Should -Be @("autonomous", "branch", "draft", "readonly", "blocked") -Because "the levels are ordered from most to least trust, so the least trusting match is rendered last"
+		@($result.Profile.Policies.Keys) | Should -Be @("autonomous", "branch", "draft", "edit", "readonly", "blocked") -Because "the levels are ordered from most to least trust, so the least trusting match is rendered last"
 		$result.Profile.Policies["autonomous"] | Should -Be @("github.com/myuser/myproject")
 		@($result.Profile.MergeWithoutChecks).Count | Should -Be 0
 	}
@@ -195,6 +195,7 @@ Describe "Resolve-AiProfile" {
 		$config.AiProfiles.Profiles.Personal.Policies = @{
 			Autonomous = @("https://github.com/MyUser/Other.git")
 			readonly   = @("github.com/My-Org/*")
+			Edit       = @("github.com/MyUser/Notes")
 		}
 		$config.AiProfiles.Profiles.Personal.DefaultPolicy = "Draft"
 		$config.AiProfiles.Profiles.Personal.MergeWithoutChecks = @("github.com/MyUser/Other")
@@ -204,6 +205,7 @@ Describe "Resolve-AiProfile" {
 		$result.Profile.Policies["autonomous"] | Should -Be @("github.com/myuser/myproject", "github.com/myuser/other")
 		$result.Profile.Autonomous | Should -Be @("github.com/myuser/myproject", "github.com/myuser/other")
 		$result.Profile.Policies["readonly"] | Should -Be @("github.com/my-org/*")
+		$result.Profile.Policies["edit"] | Should -Be @("github.com/myuser/notes")
 		$result.Profile.DefaultPolicy | Should -Be "draft"
 		$result.Profile.MergeWithoutChecks | Should -Be @("github.com/myuser/other")
 		$result.Warnings | Should -BeNullOrEmpty

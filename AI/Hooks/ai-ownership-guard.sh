@@ -21,7 +21,7 @@
 # The guard is also the one place that blocks a session for the repository policy
 # (ai-repository-policy.sh holds the levels): it refuses a repository whose level is `blocked`, and,
 # in an unattended run (the AI_UNATTENDED environment variable set to 1, on, true or yes by the
-# launcher), a profile with `unattended off` and a repository at `draft` or `readonly`.
+# launcher), a profile with `unattended off` and a repository at `draft`, `edit` or `readonly`.
 #
 # Verdicts are cached per session and folder under ${TMPDIR:-/tmp}/ai-ownership-guard/, so a tool
 # call costs one file read after the first.
@@ -104,7 +104,7 @@ owner_of() {
 }
 
 valid_level() {
-	case "$1" in autonomous | branch | draft | readonly | blocked) return 0 ;; esac
+	case "$1" in autonomous | branch | draft | edit | readonly | blocked) return 0 ;; esac
 	return 1
 }
 
@@ -205,7 +205,7 @@ if [ "$verdict" = "allow" ]; then
 			case "$value" in
 			on | yes | true | 1)
 				case "$level" in
-				draft | readonly) verdict="refuse:AI repository policy: unattended runs need a repository at the autonomous or branch level, and ${repo:-this folder} is at $level." ;;
+				draft | edit | readonly) verdict="refuse:AI repository policy: unattended runs need a repository at the autonomous or branch level, and ${repo:-this folder} is at $level." ;;
 				esac
 				;;
 			*) verdict="refuse:AI repository policy: unattended runs are off for the $profile AI profile." ;;

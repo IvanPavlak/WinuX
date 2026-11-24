@@ -94,15 +94,20 @@ policy branch github.com/myuser/myfork
 
 ## Repository Policies
 
-A profile gives each repository it works on a trust level, and one hook enforces the level of the repository a session works in. The levels are a closed set, from most to least trust:
+A profile gives each repository it works on a trust level, and one hook enforces it on every tool call that touches that repository. The levels are a closed set, from most to least trust:
 
 | Level | Agents may | Agents may not |
 | --- | --- | --- |
 | `autonomous` | everything `branch` allows, plus `gh pr merge` when every CI check of the pull request passed, and one form of force push to a named non-default branch | merge with a failing or pending check, or with no check reported (unless the repository is in `MergeWithoutChecks`) |
 | `branch` | commit, push a non-default branch, open and ready pull requests | merge |
 | `draft` | commit, push a non-default branch, open draft pull requests (`gh pr create --draft`) | `gh pr ready`, merge, a pull request without `--draft` |
+| `edit` | read, and edit the working tree with the Edit, Write, MultiEdit and NotebookEdit tools | any Bash or PowerShell call (so no git or gh at all), and any edit inside `.git` (the folder, or a worktree's `.git` file) |
 | `readonly` | read, search and explain: the reading tools | any Bash or PowerShell call, and the Edit, Write, MultiEdit and NotebookEdit tools |
 | `blocked` | nothing: the ownership guard refuses the prompt and every tool call | |
+
+The `edit` level is for a repository that something other than an agent commits, such as a notes vault a sync plugin pushes: agents change its files, and git stays with the owner and the plugin. It refuses the shell as a whole rather than the git and gh commands in it, since the hook reads command text and an alias, function or script would carry git past a text match.
+
+**Which repositories a call touches.** A tool call is held to the least trusting level of every repository it touches, not only the one the session started in: the repository of the session's folder, the one holding the file a file tool edits (its nearest existing folder, for a file in a folder not yet made), and for a shell call every folder it names by a literal `cd` (`pushd`, `chdir`, `Set-Location`, `Push-Location`, `sl`), `git -C`, `--git-dir`, `--work-tree`, `GIT_DIR` or `GIT_WORK_TREE`, a relative folder counting from the last `cd` before it. A session in a `branch` repository that runs `git -C <notes> commit` or edits a note is therefore held to the notes repository's level, and the refusal names that repository. A folder outside any repository, or without `origin`, has the `DefaultPolicy` level, so a stricter `DefaultPolicy` also covers files written outside every repository. A folder held in a variable (`cd $dir`) or reached by a script the call runs is not read. A repository is relaxed by moving it to a more trusting level.
 
 Every level keeps the always-denied list: a push to the default branch (an explicit `master`/`main`/default refspec, `refs/heads/` or not, or a push naming no branch or `HEAD` while it is checked out), a push naming no branch after a folder change (`cd`, `git -C`), whose branch the hook cannot see, a push of every branch (`--all`, `--mirror`, a glob refspec), a force push (`--force`, `--force-with-lease`, `-f`, `+refspec`; the `autonomous` exception is below), deleting a branch, changing remotes, upstream tracking or git configuration (`git -c` push, remote, branch and url settings included), a branch cut from a remote branch without `--no-track`, a merge, ref update or file commit through the GitHub API (`gh api` writes to `pulls/N/merge`, `merges`, `git/refs`, `contents/`, `branches/` and the like, or a GraphQL merge or ref mutation), `gh repo sync`, `edit`, `rename`, `delete` and `archive`, and `gh alias set` and `gh config set`. A `gh pr merge` must run in the folder of the repository it merges: one that names another repository (`-R`, `--repo`, a pull request URL, `GH_REPO`, a `cd`) is denied, so the level checked is always the merged repository's. Flags before the subcommand (`gh -R x pr merge`, `gh pr --repo x merge`) do not hide a call. The hook reads the command text: it stops the ways an agent reaches a default branch by accident or habit, not a script file it writes and runs, so GitHub branch protection, where the plan offers it, stays the backstop.
 
@@ -115,7 +120,7 @@ Every level keeps the always-denied list: a push to the default branch (an expli
 
 The hook is `AI/Hooks/ai-repository-policy.sh`, one file for WinuX and Foundation (a `mirror` line in both manifests), deployed next to the managed settings copy and wired into `PreToolUse` with matcher `*`, so the file tools are stopped too. It matches a command as a whole, with prose taken out first: the body of a heredoc fed to `cat` or to a `-F -` option, and a quoted value with whitespace given to a message option (`-m`, `--message`, `-t`, `--title`, `-b`, `--body`, `--notes`, `--subject`, a PowerShell here-string included). A commit message that mentions "configuration" or "git push --force" passes; a refspec or flag never holds whitespace, so nothing can be hidden that way. Any review a merge also needs (a judge score, say) is the agent's own check, not the hook's.
 
-**Unattended runs.** The launcher of an unattended run (the orchestrator) sets the `AI_UNATTENDED` environment variable (`1`, `on`, `true` or `yes`). The ownership guard then refuses the run when the profile has `Unattended = $false`, and in a repository at `draft` or `readonly`: unattended work needs `autonomous` or `branch`. An attended session is not affected.
+**Unattended runs.** The launcher of an unattended run (the orchestrator) sets the `AI_UNATTENDED` environment variable (`1`, `on`, `true` or `yes`). The ownership guard then refuses the run when the profile has `Unattended = $false`, and in a repository at `draft`, `edit` or `readonly`: unattended work needs `autonomous` or `branch`. An attended session is not affected.
 
 [Test-AiProfile](../modules/ai.md#test-aiprofile) lists the default level, every configured pattern with its level and the `MergeWithoutChecks` patterns; the list never changes its exit code.
 
@@ -150,7 +155,7 @@ Without arguments the configured profiles are offered in a menu, by the names `A
 2. `Deploy-AiArtifacts -Kind Rules -WhatIf` reports nothing missing after a deploy.
 3. `Test-AiProfile` exits `0`.
 4. In a repository another profile owns, a prompt in Claude Code is refused by the guard; in a shared one it is not.
-5. In a `branch` repository an agent pushes a feature branch and opens a pull request, but `gh pr merge` is refused; in an `autonomous` one with every check green it merges; in a `readonly` one it cannot run a shell command or edit a file.
+5. In a `branch` repository an agent pushes a feature branch and opens a pull request, but `gh pr merge` is refused; in an `autonomous` one with every check green it merges; in an `edit` one it edits a file but cannot run a shell command or edit inside `.git`; in a `readonly` one it cannot run a shell command or edit a file.
 
 ## Related
 

@@ -918,8 +918,9 @@
 	#                  synonym of Policies.autonomous
 	#     Policies     the repository policy: level -> origin patterns, the levels being
 	#                  autonomous (also merge a PR whose CI checks all passed), branch (commit,
-	#                  push a feature branch, open PRs), draft (draft PRs only), readonly (no
-	#                  shell, no file edits) and blocked (no work at all). Where patterns of
+	#                  push a feature branch, open PRs), draft (draft PRs only), edit (file
+	#                  edits outside .git, no shell, so no git), readonly (no shell, no file
+	#                  edits) and blocked (no work at all). Where patterns of
 	#                  several levels match a repository, the least trusting one wins
 	#     DefaultPolicy the level of a repository no pattern matches (default "branch")
 	#     MergeWithoutChecks  origin patterns of autonomous repositories that may merge a PR

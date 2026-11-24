@@ -101,13 +101,23 @@ Do NOT run the test suite yourself - no `Import-Module` + `Invoke-Pester`, and n
 
 State which tests each command covers, then wait for the developer's pass/fail report before treating the change as verified. Only run tests yourself if the developer explicitly asks you to.
 
+## Releases
+
+A pull request the maintainer has you open ships as its own release; a contributor's leaves its entries under `## [Unreleased]` (`Windows/CONTRIBUTING.md`).
+
+- Move the `## [Unreleased]` entries of `Windows/CHANGELOG.md` under a new `## [x.y.z] - YYYY-MM-DD` heading, and keep an empty `## [Unreleased]` above it. The bump follows `VERSIONING.md`: PATCH for `### Fixed` only, MINOR when there is an `### Added`, `### Changed` or `### Deprecated`, MAJOR for `### Removed` or `### Breaking`.
+- Edit the link footer at the bottom of `Windows/CHANGELOG.md`: point `[Unreleased]` at `compare/winux/vx.y.z...HEAD` and add `[x.y.z]: .../compare/winux/v<previous>...winux/vx.y.z` above the previous release's line.
+- Stamp the contract baseline yourself with `Run-Tests -UpdateContractBaseline` (it runs no tests, so it is not one of the runs you leave to the developer), so `ContractBaseline.json` names the new version.
+- Say so in the pull request: "Released as **x.y.z** (MINOR), with the contract baseline stamped."
+- In a fork that mirrors WinuX, the same changelog heading and baseline go into the fork's copies.
+
 ## AI System
 
 - Centralized AI configuration lives in `AI/` - provider-agnostic, human-readable
 - Machine-global agent guardrails are a rules item of the AI artifacts layout: the base ships the skeleton `AI/Rules/example/CoreAiRules/RULES.md`, a fork writes its own in `AI/Rules/own/<Name>/` (deployed as an opt-in Bootstrap step with Claude Code managed-settings enforcement - see `docs/winux/ai/coreairules.md`); they restate the CRITICAL SAFETY policy below and never replace it
 - AI artifacts (skills, mods, rules, prompts, agents) live under `AI/<Kind>/<source>/<item>`: `own` for the user's own, `winux` for WinuX's product skills (`winux-configurator`, `document`), `example` for the example rules, and vendored sources; `Deploy-AiArtifacts` links them into the apps `AiArtifacts.Deploy` names (see `docs/winux/ai/artifacts.md`). WinuX ships the mechanism, not the user's prompts or agents
 - Besides those folders, `AiArtifacts.Checkouts` links a local repository's items straight from its working tree and `AiArtifacts.Manifests` names a tab-separated manifest of pinned third-party items, cloned into `%LOCALAPPDATA%\WinuX\ai-manifests` (never into a repository); precedence is `own`, checkouts, `winux`, `example`, vendored, manifests
-- AI profiles (`AiProfiles`, off in the base; `docs/winux/ai/profiles.md`): one per machine, resolved by `Resolve-AiProfile` (`WINUX_AI_PROFILE`, then the profile `Switch-AiProfile` set, then the hostname map, then the default) and honoured by every AI deploy function. The Claude Code managed settings are an administrator-owned rendered copy (`Deploy-AiManagedSettings`), never a link: the profile's Plan is pinned with `forceLoginOrgUUID`, and the ownership guard `AI/Hooks/ai-ownership-guard.sh` and the repository policy hook `AI/Hooks/ai-repository-policy.sh` (each one file for WinuX and Foundation, a `mirror` line in both manifests) are wired in with `ai-profile.conf`; the profile's `Policies` give each repository a trust level (`autonomous`, `branch`, `draft`, `readonly`, `blocked`). `Test-AiProfile` checks a machine, `Initialize-AiProfile` walks its sign-ins, `Switch-AiProfile` moves it to another profile
+- AI profiles (`AiProfiles`, off in the base; `docs/winux/ai/profiles.md`): one per machine, resolved by `Resolve-AiProfile` (`WINUX_AI_PROFILE`, then the profile `Switch-AiProfile` set, then the hostname map, then the default) and honoured by every AI deploy function. The Claude Code managed settings are an administrator-owned rendered copy (`Deploy-AiManagedSettings`), never a link: the profile's Plan is pinned with `forceLoginOrgUUID`, and the ownership guard `AI/Hooks/ai-ownership-guard.sh` and the repository policy hook `AI/Hooks/ai-repository-policy.sh` (each one file for WinuX and Foundation, a `mirror` line in both manifests) are wired in with `ai-profile.conf`; the profile's `Policies` give each repository a trust level (`autonomous`, `branch`, `draft`, `edit`, `readonly`, `blocked`). `Test-AiProfile` checks a machine, `Initialize-AiProfile` walks its sign-ins, `Switch-AiProfile` moves it to another profile
 - Use the `document` skill to generate documentation from code comments
 - Configuration functions in `Modules/Configuration/` for reliable configuration modifications
 
