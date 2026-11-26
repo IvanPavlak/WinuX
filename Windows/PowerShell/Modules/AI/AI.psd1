@@ -18,6 +18,7 @@
 		'List-AiArtifacts',
 		'Resolve-AiArtifactsConfig',
 		'Resolve-AiModsPluginDirs',
+		'Resolve-AiPluginConfigs',
 		'Resolve-AiProfile',
 		'Set-ClaudeSettingsEnv',
 		'Set-ClaudeSettingsKey',

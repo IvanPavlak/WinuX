@@ -1,5 +1,5 @@
 {
-  "Version": "3.3.0",
+  "Version": "3.4.0",
   "Functions": {
     "Add-BrowserGroup": {
       "Module": "Configuration",
@@ -4455,6 +4455,15 @@
         }
       }
     },
+    "Resolve-AiPluginConfigs": {
+      "Module": "AI",
+      "Parameters": {
+        "MachineType": {
+          "Mandatory": false,
+          "Aliases": []
+        }
+      }
+    },
     "Resolve-AiProfile": {
       "Module": "AI",
       "Parameters": {
@@ -7506,6 +7515,7 @@
     "AiHarnesses.copilot",
     "AiHarnesses.gemini-cli",
     "AiMarketplaces",
+    "AiMarketplaces.MachinePluginConfigs",
     "AiMarketplaces.Marketplaces",
     "AiMarketplaces.PluginConfigs",
     "AiMcpServers",

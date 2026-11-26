@@ -7,6 +7,9 @@ BeforeAll {
 	. "$FunctionsPath\Set-ClaudeSettingsKey.ps1"
 	. "$FunctionsPath\Set-ClaudeSettingsEnv.ps1"
 	. "$FunctionsPath\Resolve-AiProfile.ps1"
+	# The options are resolved for real, machine rows included, through the real scope gate.
+	. "$FunctionsPath\Resolve-AiPluginConfigs.ps1"
+	. (Join-Path (Get-RepositoryPath).Modules "Bootstrap\Functions\Test-MachineTypeScope.ps1")
 }
 
 Describe "Deploy-AiMarketplaces" {
@@ -44,6 +47,8 @@ Describe "Deploy-AiMarketplaces" {
 		}
 		# The settings file is derived from the user profile, so the profile points into TestDrive.
 		$script:SavedUserProfile = $env:USERPROFILE
+		$script:SavedMachineType = $global:MachineType
+		$global:MachineType = "PC"
 		$env:USERPROFILE = Join-Path $TestDrive "home"
 		Mock Test-WSLDistributionInstalled { $false }
 		# Profiles off unless a test turns one on.
@@ -66,6 +71,7 @@ Describe "Deploy-AiMarketplaces" {
 
 	AfterEach {
 		$env:USERPROFILE = $script:SavedUserProfile
+		$global:MachineType = $script:SavedMachineType
 		Remove-Item -Path Env:\WINUX_TEST_MARKETPLACE_LIST -ErrorAction SilentlyContinue
 		Remove-Item -Path Env:\WINUX_TEST_PLUGIN_LIST -ErrorAction SilentlyContinue
 	}
@@ -136,6 +142,29 @@ Describe "Deploy-AiMarketplaces" {
 		Deploy-AiMarketplaces -Command $script:Stub
 
 		(Get-Content -Path $script:Settings -Raw | ConvertFrom-Json).pluginConfigs.'folder-plugin'.options.theme | Should -Be "light"
+	}
+
+	It "seeds the options of this machine type: its MachinePluginConfigs row merged over PluginConfigs" {
+		$script:Section.MachinePluginConfigs = @{
+			PC   = @{ "my-plugin" = @{ options = @{ theme = "light"; pulse = $null } } }
+			Work = @{ "my-plugin" = @{ options = @{ theme = "work" } } }
+		}
+
+		Deploy-AiMarketplaces -Command $script:Stub
+
+		$options = (Get-Content -Path $script:Settings -Raw | ConvertFrom-Json).pluginConfigs.'my-plugin@my-marketplace'.options
+		$options.theme | Should -Be "light"
+		$options.PSObject.Properties['pulse'] | Should -BeNullOrEmpty -Because "a row drops an option by setting it to null"
+	}
+
+	It "seeds the defaults on a machine type no MachinePluginConfigs row covers" {
+		$script:Section.MachinePluginConfigs = @{ Work = @{ "my-plugin" = @{ options = @{ theme = "work" } } } }
+
+		Deploy-AiMarketplaces -Command $script:Stub
+
+		$options = (Get-Content -Path $script:Settings -Raw | ConvertFrom-Json).pluginConfigs.'my-plugin@my-marketplace'.options
+		$options.theme | Should -Be "dark"
+		$options.pulse | Should -BeTrue
 	}
 
 	It "adds the marketplace through the CLI and installs a plugin it does not list yet" {

@@ -19,6 +19,7 @@ The [AI module reference](../../../modules/ai.md) is the authority on what each 
 | `Initialize-AiProfile` | `AiProfiles`, `AiMcpServers.Servers`, `BootstrapConfig.Steps.AiProfileInit` | [Initialize-AiProfile](Initialize-AiProfile.md) |
 | `List-AiArtifacts` | `AiArtifacts`, `AiHarnesses`, `AiProfiles`, `ShowFunctionDetailsColors` | [List-AiArtifacts](List-AiArtifacts.md) |
 | `Resolve-AiArtifactsConfig` | `AiArtifacts`, `AiHarnesses`, `AiProfiles`, `BasePaths`, `DefaultWSLUsername` | [Resolve-AiArtifactsConfig](Resolve-AiArtifactsConfig.md) |
+| `Resolve-AiPluginConfigs` | `AiMarketplaces.PluginConfigs`, `AiMarketplaces.MachinePluginConfigs`, `ValidMachineTypes` | [Resolve-AiPluginConfigs](Resolve-AiPluginConfigs.md) |
 | `Resolve-AiProfile` | `AiProfiles` | [Resolve-AiProfile](Resolve-AiProfile.md) |
 | `Test-AiProfile` | `AiProfiles`, `AiHarnesses`, `AiMcpServers.Servers` | [Test-AiProfile](Test-AiProfile.md) |
 | `Update-AiArtifacts` | `AiArtifacts.Sources`, `AiArtifacts.Manifests`, `AiArtifacts.Root` | [Update-AiArtifacts](Update-AiArtifacts.md) |

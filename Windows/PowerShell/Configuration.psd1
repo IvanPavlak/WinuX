@@ -1049,9 +1049,17 @@
 	#   PluginConfigs = @{
 	#       "my-plugin" = @{ options = @{ theme = "dark" } }   # written beneath pluginConfigs.my-plugin@my-marketplace
 	#   }
+	# PluginConfigs is what every machine seeds. MachinePluginConfigs (ships empty) holds the
+	# differences per machine type (Resolve-AiPluginConfigs): rows keyed by machine scope ("PC",
+	# "Laptop/Work", "All"), each shaped like PluginConfigs and merged over it on the machine
+	# types it covers, nested hashtables key by key; $null drops an option there, e.g.:
+	#   MachinePluginConfigs = @{
+	#       "PC" = @{ "my-plugin" = @{ options = @{ theme = "light" } } }
+	#   }
 	AiMarketplaces                = @{
-		Marketplaces  = @{}
-		PluginConfigs = @{}
+		Marketplaces         = @{}
+		PluginConfigs        = @{}
+		MachinePluginConfigs = @{}
 	}
 	# ==========================================================================
 	# AI MCP Servers (see docs/winux/ai/mcp-servers.md)
