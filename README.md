@@ -13,7 +13,7 @@ A comprehensive PowerShell-based dotfiles system that turns a fresh Windows 11 i
 ---
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/IvanPavlak/WinuX/master/docs/assets/showcase.svg" width="880" alt="Animated terminal tour of WinuX: one-command bootstrap, workspaces across virtual desktops, multi-machine layouts, and system theming" />
+  <img src="https://raw.githubusercontent.com/IvanPavlak/WinuX/master/docs/winux/assets/showcase.svg" width="880" alt="Animated terminal tour of WinuX: one-command bootstrap, workspaces across virtual desktops, multi-machine layouts, and system theming" />
 </p>
 
 ---
@@ -21,10 +21,10 @@ A comprehensive PowerShell-based dotfiles system that turns a fresh Windows 11 i
 <table align="center">
   <tr>
     <td align="center" valign="middle" width="50%">
-      <img src="https://raw.githubusercontent.com/IvanPavlak/WinuX/master/docs/assets/UltrawideDemo.webp" width="440" alt="WinuX demo on one ultrawide monitor" />
+      <img src="https://raw.githubusercontent.com/IvanPavlak/WinuX/master/docs/winux/assets/UltrawideDemo.webp" width="440" alt="WinuX demo on one ultrawide monitor" />
     </td>
     <td align="center" valign="middle" width="50%">
-      <img src="https://raw.githubusercontent.com/IvanPavlak/WinuX/master/docs/assets/StackedUltrawideDemo.webp" width="440" alt="WinuX demo on two stacked ultrawide monitors" />
+      <img src="https://raw.githubusercontent.com/IvanPavlak/WinuX/master/docs/winux/assets/StackedUltrawideDemo.webp" width="440" alt="WinuX demo on two stacked ultrawide monitors" />
     </td>
   </tr>
   <tr>
