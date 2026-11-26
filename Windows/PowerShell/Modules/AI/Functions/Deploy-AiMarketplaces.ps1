@@ -22,7 +22,9 @@ function Deploy-AiMarketplaces {
 		   the switch is on. Values are strings; a name must be a valid variable name.
 		   Marketplaces are written in name order, so a variable two of them name ends with
 		   the value of the last.
-		3. Options: every entry of AiMarketplaces.PluginConfigs is written beneath the plugin's
+		3. Options: every entry of AiMarketplaces.PluginConfigs, with the rows of
+		   AiMarketplaces.MachinePluginConfigs that cover this machine type merged over it
+		   (Resolve-AiPluginConfigs), is written beneath the plugin's
 		   `pluginConfigs` entry, one child key at a time, so an option the user set through
 		   /plugin and the repository does not name survives while the repository's values win
 		   for the keys it names. A plugin a configured marketplace lists is keyed the way an
@@ -86,7 +88,8 @@ function Deploy-AiMarketplaces {
 	$section = Get-ConfigSetting -Path 'AiMarketplaces'
 	if ($section -isnot [hashtable]) { $section = @{} }
 	$marketplaces = if ($section.Marketplaces -is [hashtable]) { $section.Marketplaces } else { @{} }
-	$pluginConfigs = if ($section.PluginConfigs -is [hashtable]) { $section.PluginConfigs } else { @{} }
+	# PluginConfigs as this machine type seeds them: the MachinePluginConfigs rows merged over it.
+	$pluginConfigs = Resolve-AiPluginConfigs
 
 	if ($marketplaces.Count -eq 0) {
 		Write-LogWarning "No marketplaces configured under AiMarketplaces.Marketplaces - nothing to deploy!"

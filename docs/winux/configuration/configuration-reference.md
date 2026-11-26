@@ -1541,12 +1541,13 @@ AiHarnesses = @{
 
 **Key:** `AiMarketplaces` → Hashtable: the Claude Code plugin marketplaces every machine registers, the plugins installed from them, the variables those plugins need Claude Code to read from its settings, and the options seeded for those plugins
 
-**Consumer functions:** [`Deploy-AiMarketplaces`](../modules/ai.md#deploy-aimarketplaces)
+**Consumer functions:** [`Deploy-AiMarketplaces`](../modules/ai.md#deploy-aimarketplaces), [`Resolve-AiPluginConfigs`](../modules/ai.md#resolve-aipluginconfigs)
 
 A plugin marketplace is a repository carrying `.claude-plugin\marketplace.json`; Claude Code installs its plugins as `<plugin>@<marketplace>` and keeps them updated.
 
 - `Marketplaces` - The marketplaces to register, keyed by the name Claude Code knows them by (the `name` in the marketplace manifest). Each entry: `Repository` (`owner/name` on GitHub), `Plugins` (the plugin names to install from it; optional) and `Env` (optional; a hashtable of environment variables the plugins need Claude Code to read from the `env` block of its settings file, written as strings under `env.<name>`, every other variable kept; a name must be a valid variable name; marketplaces are written in name order, so a variable two of them name ends with the value of the last). `Env` is for a switch a plugin cannot set for itself: Claude Code 2.1.286 loads hooks modules only with `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS = "1"`, and 2.1.287 and later ignore it. Ships empty.
 - `PluginConfigs` - Options written beneath the plugin's `pluginConfigs` entry of the settings file, keyed by plugin name. A plugin a configured marketplace lists is written as Claude Code keys an installed plugin, `pluginConfigs.<plugin>@<marketplace>`; any other name as given. The shape beneath the plugin is the plugin's own (a plugin that reads `options`: `options = @{ ... }`); each child key replaces the same key in the file and leaves the other children alone. Values keep their type (`$true` stays a JSON boolean; the string `"true"` stays a string, which a plugin with a boolean option drops as invalid). Ships empty.
+- `MachinePluginConfigs` - The differences from `PluginConfigs` per machine type: a hashtable of rows keyed by machine scope (`"PC"`, `"Laptop/Work"`, `"All"`; validated by `Test-MachineTypeScope` against `ValidMachineTypes`), each row shaped like `PluginConfigs` and holding only what differs. On a machine type a row covers it is deep-merged over a copy of `PluginConfigs` (nested hashtables key by key, everything else replaced), the `All` row first, then the other matching rows in alphabetical key order; a value set to `$null` removes that option on those machine types, and a row may name a plugin `PluginConfigs` does not carry. An unknown machine type, a row that is not a hashtable and a table that is not one are reported and ignored. Resolved by `Resolve-AiPluginConfigs`. Ships empty, so every machine type seeds `PluginConfigs` as it is.
 
 **Side effect:** `Deploy-AiMarketplaces` writes `extraKnownMarketplaces.<name>`, `env.<variable>` and `pluginConfigs.<plugin>@<name>.<key>` of the user's `~\.claude\settings.json` (and of `/home/<DefaultWSLUsername>/.claude/settings.json` in WSL), every other setting kept, and runs `claude plugin marketplace add <owner/name>` for marketplaces the CLI does not list yet and `claude plugin install <plugin>@<name>` for plugins it does not list yet.
 
@@ -1563,6 +1564,10 @@ AiMarketplaces = @{
     }
     PluginConfigs = @{
         "my-plugin" = @{ options = @{ theme = "dark"; pulse = $true } }
+    }
+    # Optional: the PC draws a light theme and drops the pulse option; every other machine type keeps the above.
+    MachinePluginConfigs = @{
+        "PC" = @{ "my-plugin" = @{ options = @{ theme = "light"; pulse = $null } } }
     }
 }
 ```

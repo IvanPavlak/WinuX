@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [3.4.0] - 2026-11-26
+
+### Added
+
+- **`AiMarketplaces.MachinePluginConfigs` gives some machine types other plugin options than the rest.** `AiMarketplaces.PluginConfigs` was one set for every machine: `Deploy-AiMarketplaces` wrote it as it stood, and `MachineOverrides` reaches the path templates only, so a plugin could not draw one way on one machine type and another way elsewhere without a hand edit the next Bootstrap overwrote. The new table holds the differences: rows keyed by machine scope (`"PC"`, `"Laptop/Work"`, `"All"`, validated by `Test-MachineTypeScope`), each shaped like `PluginConfigs` and holding only what differs. The new `Resolve-AiPluginConfigs` deep-merges every row covering the machine type over a copy of `PluginConfigs` (nested hashtables key by key, everything else replaced), the `All` row first, then the others in alphabetical key order; a value set to `$null` removes that option on those machine types, and a row may name a plugin `PluginConfigs` does not carry. An unknown machine type, a row that is not a hashtable and a table that is not one are reported and ignored. `Deploy-AiMarketplaces` seeds the result, on Windows and inside WSL. The key ships empty, and a configuration that never names it behaves as before. Covered by `Resolve-AiPluginConfigs.Tests.ps1` and `Deploy-AiMarketplaces.Tests.ps1`; documented in AI Mods (Marketplaces), the configuration reference, the AI module reference, the Deploy-AiMarketplaces guide and the new Resolve-AiPluginConfigs guide.
+
 ## [3.3.0] - 2026-11-24
 
 ### Added
@@ -2048,7 +2054,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/winux/v3.3.0...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/winux/v3.4.0...HEAD
+[3.4.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v3.3.0...winux/v3.4.0
 [3.3.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v3.2.0...winux/v3.3.0
 [3.2.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v3.1.0...winux/v3.2.0
 [3.1.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v3.0.1...winux/v3.1.0

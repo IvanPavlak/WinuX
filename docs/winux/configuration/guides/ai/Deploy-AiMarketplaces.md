@@ -11,6 +11,7 @@ Registers the configured Claude Code plugin marketplaces in `~\.claude\settings.
 | --- | ---- | -------------- | ---------------- |
 | [`AiMarketplaces.Marketplaces`](../../configuration-reference.md#ai-marketplaces) | hashtable | empty | The marketplaces to register, keyed by the name Claude Code knows them by. Each entry names the GitHub `Repository` (`owner/name`), the `Plugins` to install from it and, under `Env`, the environment variables those plugins need Claude Code to read from the `env` block of the settings file (strings, written as `env.<name>`). |
 | [`AiMarketplaces.PluginConfigs`](../../configuration-reference.md#ai-marketplaces) | hashtable | empty | Plugin options written beneath `pluginConfigs.<plugin>@<marketplace>` of the settings file (the key of an installed plugin), one child key at a time. |
+| [`AiMarketplaces.MachinePluginConfigs`](../../configuration-reference.md#ai-marketplaces) | hashtable | empty | Per machine type differences from `PluginConfigs`: rows keyed by machine scope (`"PC"`, `"Laptop/Work"`, `"All"`), each merged over `PluginConfigs` on the machine types it covers, through [`Resolve-AiPluginConfigs`](Resolve-AiPluginConfigs.md). |
 | [`AiProfiles`](../../configuration-reference.md#ai-profiles) | hashtable | no profile | With a profile active, its `Marketplaces` list picks the marketplaces deployed (left out: all; `@()`: none); the options of a left-out marketplace's plugins are left out too. |
 | [`BootstrapConfig.Steps.AiMarketplaces`](../../configuration-reference.md#bootstrapconfig) | boolean | `$false` | Whether Bootstrap runs this function. OFF by default - the base names no marketplaces. |
 | [`DefaultWSLDistribution`](../../configuration-reference.md#wsl-configuration) | string | empty string | The WSL distribution whose `\\wsl.localhost` share carries the WSL settings file. Empty means Windows only. |
@@ -36,7 +37,11 @@ The settings file itself is not a configuration key: it is always the user's `~\
     - Options: Put the options under `PluginConfigs.<plugin>` in the shape the plugin documents (a plugin that reads `options`: `options = @{ ... }`); they land under `pluginConfigs.<plugin>@<marketplace>`, where Claude Code keeps an installed plugin's options, and each child key replaces the same key there while the other children survive. Type each value as the plugin declares it: a boolean option takes `$true`, not the string `"true"`, which the plugin drops as invalid. Leave it out to configure through `/plugin` only.
     - Default: None.
     - More detail: [`AiMarketplaces.PluginConfigs`](../../configuration-reference.md#ai-marketplaces)
-5. Should Bootstrap register and install on every run?
+5. Should some machine types get other options than the rest?
+    - Options: Add a row to `MachinePluginConfigs`, keyed by machine scope (`"PC"`, `"Laptop/Work"`), holding only what differs, in the shape of `PluginConfigs`. Nested hashtables merge key by key, a value set to `$null` drops the option on those machine types, and several matching rows apply in alphabetical key order after an `All` row. Leave it out when every machine draws the same.
+    - Default: Empty - every machine type seeds `PluginConfigs` as it is.
+    - More detail: [`AiMarketplaces.MachinePluginConfigs`](../../configuration-reference.md#ai-marketplaces)
+6. Should Bootstrap register and install on every run?
     - Options: `$true` to register, seed, add and install (known marketplaces and installed plugins are left alone) on every Bootstrap; `$false` to run `Deploy-AiMarketplaces` by hand.
     - Default: `$false`.
     - More detail: [`BootstrapConfig.Steps`](../../configuration-reference.md#bootstrapconfig)
@@ -52,8 +57,9 @@ All of it goes in `Configuration.local.psd1`, at the repository's `Windows/Power
 
 1. Name the marketplaces, their plugins and the variables the plugins need under `AiMarketplaces.Marketplaces`
 2. Carry the plugins' options under `AiMarketplaces.PluginConfigs` (optional)
-3. Enable `BootstrapConfig.Steps.AiMarketplaces`
-4. Reload and confirm the merge landed
+3. Vary the options per machine type under `AiMarketplaces.MachinePluginConfigs` (optional)
+4. Enable `BootstrapConfig.Steps.AiMarketplaces`
+5. Reload and confirm the merge landed
 
 ## Step 1: Name the marketplaces, their plugins and the variables they need
 
@@ -90,7 +96,26 @@ AiMarketplaces = @{
 }
 ```
 
-## Step 3: Enable `BootstrapConfig.Steps.AiMarketplaces`
+## Step 3: Vary the options per machine type
+
+`PluginConfigs` is what every machine seeds; a `MachinePluginConfigs` row is the difference for the machine types its key names. Here the `PC` gets a light theme and no `pulse` option at all, and every other machine type keeps the options of step 2.
+
+```powershell
+AiMarketplaces = @{
+    MachinePluginConfigs = @{
+        "PC" = @{
+            "my-plugin" = @{
+                options = @{
+                    theme = "light"
+                    pulse = $null
+                }
+            }
+        }
+    }
+}
+```
+
+## Step 4: Enable `BootstrapConfig.Steps.AiMarketplaces`
 
 With the step on, Bootstrap runs `Deploy-AiMarketplaces` right after `Deploy-AiArtifacts`. Give each plugin one loading path: a plugin loaded from a folder as a mod by `Deploy-AiArtifacts` and installed from a marketplace would run twice. A folder in `env.CLAUDE_CODE_PLUGIN_DIRS` that holds a plugin a configured marketplace installs is reported as a warning and left in place: Claude Code would load two copies, and the folder copy reads its options from `pluginConfigs.<plugin>`, not `<plugin>@<marketplace>`, so it draws with its defaults. Load a development clone with `claude --plugin-dir <clone>` for one session instead of listing it in the settings.
 
@@ -102,11 +127,12 @@ BootstrapConfig = @{
 }
 ```
 
-## Step 4: Reload and confirm the merge landed
+## Step 5: Reload and confirm the merge landed
 
 ```powershell
 Reload-PowerShellProfile
 Get-ConfigSetting -Path 'AiMarketplaces'
+Resolve-AiPluginConfigs
 ```
 
 ## Verification
@@ -146,6 +172,13 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
                 options = @{ theme = "dark"; pulse = $true }
             }
         }
+        MachinePluginConfigs = @{
+            "PC" = @{
+                "my-plugin" = @{
+                    options = @{ theme = "light"; pulse = $null }
+                }
+            }
+        }
     }
     BootstrapConfig        = @{
         Steps = @{
@@ -160,6 +193,7 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 - [`Deploy-AiMarketplaces` in the AI module reference](../../../modules/ai.md#deploy-aimarketplaces) - parameters, usage and behaviour
 - [AI Mods](../../../ai/mods.md) - the design, including how marketplaces compare with folder-loaded mods
 - [AI configuration guides](README.md) - every guide for this module
+- [`Resolve-AiPluginConfigs`](Resolve-AiPluginConfigs.md) - the resolver that merges the `MachinePluginConfigs` rows over `PluginConfigs`
 - [`Set-ClaudeSettingsKey`](Set-ClaudeSettingsKey.md) - the settings writer this function uses for the marketplaces and options
 - [`Set-ClaudeSettingsEnv`](Set-ClaudeSettingsEnv.md) - the settings writer this function uses for the `Env` variables
 - [`Deploy-AiArtifacts`](Deploy-AiArtifacts.md) - the folder-loading alternative (mods)
