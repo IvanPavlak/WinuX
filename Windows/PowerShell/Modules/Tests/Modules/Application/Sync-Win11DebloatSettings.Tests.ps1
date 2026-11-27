@@ -19,8 +19,9 @@ Describe "Sync-Win11DebloatSettings" {
 	BeforeEach {
 		Mock Write-LogSuccess { }
 		Mock Write-LogWarning { }
-		# Creating a symbolic link needs elevation or Developer Mode, so the link itself is mocked;
-		# every other New-Item call (directories) runs for real inside TestDrive.
+		# Creating a symbolic link needs elevation or Developer Mode, so the link itself is mocked.
+		# A filtered mock leaves no fall-through to the real New-Item, so the one case that creates
+		# a directory mocks that call too.
 		Mock New-Item { } -ParameterFilter { $ItemType -eq 'SymbolicLink' }
 
 		$caseRoot = Join-Path $TestDrive ([guid]::NewGuid().ToString())
@@ -55,10 +56,11 @@ Describe "Sync-Win11DebloatSettings" {
 	It "creates the user data folder before linking when it does not exist yet" {
 		Set-Content -LiteralPath $script:RepositorySettingsPath -Value $script:SettingsJson
 		Remove-Item -LiteralPath $script:UserDataPath -Recurse -Force
+		Mock New-Item { } -ParameterFilter { $ItemType -eq 'Directory' }
 
 		Sync-Win11DebloatSettings | Should -BeTrue
 
-		Test-Path -LiteralPath $script:UserDataPath | Should -BeTrue
+		Should -Invoke New-Item -Times 1 -Exactly -ParameterFilter { $ItemType -eq 'Directory' -and $Path -eq $script:UserDataPath }
 	}
 
 	It "makes no link and returns false when neither side has settings" {
