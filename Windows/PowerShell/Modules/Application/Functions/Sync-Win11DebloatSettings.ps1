@@ -14,14 +14,15 @@ function Sync-Win11DebloatSettings {
 		- When the repository file is missing or blank, the saved file is copied into the
 		  repository, so a first interactive run starts the tracked settings.
 		- When the repository file has settings, it stays the source of truth and the saved file
-		  is kept beside the link as `LastUsedSettings.unlinked.json`, named in a warning, so
-		  nothing a run saved is lost.
+		  is kept beside the link as `LastUsedSettings.unlinked.<timestamp>.json`, named in a
+		  warning. Each one gets its own name, so an earlier one is never overwritten.
 
 		No link is made while the repository file is missing or blank: Win11Debloat deletes a blank
 		settings file on start, which would remove the link again.
 
-		Creating the link needs administrator privileges or Developer Mode. Start-Win11Debloat
-		calls this before its menu and again after an interactive run.
+		Creating the link needs administrator privileges or Developer Mode; a link that cannot be
+		created is a terminating error, never a reported success. Start-Win11Debloat calls this
+		before its menu and again after an interactive run.
 
 	.OUTPUTS
 		[bool] $true when the repository file holds settings (and is linked), otherwise $false.
@@ -58,8 +59,10 @@ function Sync-Win11DebloatSettings {
 
 		if (-not [string]::IsNullOrWhiteSpace($userContent)) {
 			if ($repositoryHasSettings) {
-				$unlinkedSettingsPath = Join-Path $userDataPath "LastUsedSettings.unlinked.json"
-				Move-Item -LiteralPath $userSettingsPath -Destination $unlinkedSettingsPath -Force
+				# Stamped and moved without -Force, so an earlier set-aside file is never overwritten;
+				# a failed move stops here instead of falling through to the removal below.
+				$unlinkedSettingsPath = Join-Path $userDataPath "LastUsedSettings.unlinked.$(Get-Date -Format 'yyyy-MM-dd_HH-mm-ss').json"
+				Move-Item -LiteralPath $userSettingsPath -Destination $unlinkedSettingsPath -ErrorAction Stop
 				Write-LogWarning "Win11Debloat settings saved outside the repo were kept at: $unlinkedSettingsPath"
 			}
 			else {
@@ -87,7 +90,7 @@ function Sync-Win11DebloatSettings {
 		Remove-Item -LiteralPath $userSettingsPath -Force
 	}
 
-	New-Item -ItemType SymbolicLink -Path $userSettingsPath -Target $repositorySettingsPath -Force | Out-Null
+	New-Item -ItemType SymbolicLink -Path $userSettingsPath -Target $repositorySettingsPath -Force -ErrorAction Stop | Out-Null
 	Write-LogSuccess "Linked Win11Debloat saved settings to the repo's LastUsedSettings.json"
 
 	return $true

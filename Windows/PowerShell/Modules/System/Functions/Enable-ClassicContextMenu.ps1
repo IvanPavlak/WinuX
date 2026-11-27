@@ -16,7 +16,8 @@ function Enable-ClassicContextMenu {
 
 		Only the current user's hive is written, so no administrator privileges are needed.
 		Explorer reads the overrides on startup, so Restart-Explorer runs when at least one was
-		written. Safe to re-run: overrides already in place are left as they are.
+		written. Safe to re-run: overrides already in place are left as they are, and only a key's
+		default value is written, so anything else under it stays.
 
 		To get the Windows 11 menu back, delete the two keys under
 		`HKCU:\Software\Classes\CLSID` and restart Explorer.
@@ -41,6 +42,7 @@ function Enable-ClassicContextMenu {
 	}
 
 	$overrideWritten = $false
+	$overrideFailed = $false
 
 	foreach ($classId in $registeredClassIds) {
 		$overridePath = "HKCU:\Software\Classes\CLSID\$classId\InprocServer32"
@@ -53,20 +55,35 @@ function Enable-ClassicContextMenu {
 		}
 
 		try {
-			New-Item -Path $overridePath -Value '' -Force -ErrorAction Stop | Out-Null
+			# -Force on an existing registry key would recreate it, so the key is only created
+			# when missing and the default value is set on its own.
+			if (-not $overrideKey) {
+				New-Item -Path $overridePath -Force -ErrorAction Stop | Out-Null
+			}
+
+			Set-Item -LiteralPath $overridePath -Value '' -ErrorAction Stop
 			$overrideWritten = $true
 		}
 		catch {
+			$overrideFailed = $true
 			Write-LogError "Failed to override context menu class $classId`: $($_.Exception.Message)"
 		}
 	}
 
 	if (-not $overrideWritten) {
-		Write-LogWarning "Classic context menu already enabled"
+		if (-not $overrideFailed) {
+			Write-LogWarning "Classic context menu already enabled"
+		}
+
 		return
 	}
 
 	Restart-Explorer
+
+	if ($overrideFailed) {
+		Write-LogWarning "Classic context menu only partly enabled - see the errors above"
+		return
+	}
 
 	Write-LogSuccess "Classic context menu enabled"
 }

@@ -117,14 +117,14 @@ Enable-ClassicContextMenu
 
 ### "Win11Debloat settings saved outside the repo were kept at: [...]"
 
-**Problem:** `Start-Win11Debloat` warns that settings were kept in `LastUsedSettings.unlinked.json`, and the choices of the last interactive Win11Debloat run are not offered under `Use saved settings`.
+**Problem:** `Start-Win11Debloat` warns that settings were kept in `LastUsedSettings.unlinked.<timestamp>.json`, and the choices of the last interactive Win11Debloat run are not offered under `Use saved settings`.
 
 **Cause:** A Win11Debloat run saved its settings while `%LOCALAPPDATA%\Win11Debloat\LastUsedSettings.json` was a real file instead of the link to the repository's `Windows\Win11Debloat\LastUsedSettings.json` - a run started outside `Start-Win11Debloat`, or one from before the link pointed there. The repository file already had settings, so it stayed the source of truth and [Sync-Win11DebloatSettings](../modules/application.md#sync-win11debloatsettings) set the other file aside instead of overwriting either.
 
-**Solution:** Compare the two files and copy what you want to keep into the repository file, then delete the set-aside one. From then on every run reads and writes the repository file through the link.
+**Solution:** Compare the file the warning names with the repository file and copy what you want to keep into the repository file, then delete the set-aside one. From then on every run reads and writes the repository file through the link.
 
 ```powershell
-code --diff (Join-Path $env:LOCALAPPDATA "Win11Debloat\LastUsedSettings.unlinked.json") (Join-Path $global:MachineSpecificPaths.Projects.Self.Root "Windows\Win11Debloat\LastUsedSettings.json")
+code --diff (Get-ChildItem (Join-Path $env:LOCALAPPDATA "Win11Debloat") -Filter "LastUsedSettings.unlinked.*.json" | Select-Object -Last 1).FullName (Join-Path $global:MachineSpecificPaths.Projects.Self.Root "Windows\Win11Debloat\LastUsedSettings.json")
 ```
 
 ## Configuration Issues

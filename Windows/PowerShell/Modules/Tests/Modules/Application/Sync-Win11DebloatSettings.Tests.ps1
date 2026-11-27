@@ -95,11 +95,44 @@ Describe "Sync-Win11DebloatSettings" {
 
 		Sync-Win11DebloatSettings | Should -BeTrue
 
-		$unlinkedSettingsPath = Join-Path $script:UserDataPath 'LastUsedSettings.unlinked.json'
+		$unlinkedSettingsFiles = @(Get-ChildItem -LiteralPath $script:UserDataPath -Filter 'LastUsedSettings.unlinked.*.json')
+		$unlinkedSettingsFiles | Should -HaveCount 1
 		(Get-Content -LiteralPath $script:RepositorySettingsPath -Raw).Trim() | Should -Be $script:SettingsJson
-		(Get-Content -LiteralPath $unlinkedSettingsPath -Raw).Trim() | Should -Be $savedOutside
+		(Get-Content -LiteralPath $unlinkedSettingsFiles[0].FullName -Raw).Trim() | Should -Be $savedOutside
 		Should -Invoke New-Item -Times 1 -Exactly -ParameterFilter { $ItemType -eq 'SymbolicLink' }
-		Should -Invoke Write-LogWarning -ParameterFilter { $Message -eq "Win11Debloat settings saved outside the repo were kept at: $unlinkedSettingsPath" }
+		Should -Invoke Write-LogWarning -ParameterFilter { $Message -eq "Win11Debloat settings saved outside the repo were kept at: $($unlinkedSettingsFiles[0].FullName)" }
+	}
+
+	It "never overwrites a file set aside earlier" {
+		$earlierPath = Join-Path $script:UserDataPath 'LastUsedSettings.unlinked.2000-01-01_00-00-00.json'
+		Set-Content -LiteralPath $earlierPath -Value 'earlier'
+		Set-Content -LiteralPath $script:RepositorySettingsPath -Value $script:SettingsJson
+		Set-Content -LiteralPath $script:UserSettingsPath -Value '{ "Version": "1.0", "Settings": [ { "Name": "RemoveApps", "Value": true } ] }'
+
+		Sync-Win11DebloatSettings | Should -BeTrue
+
+		@(Get-ChildItem -LiteralPath $script:UserDataPath -Filter 'LastUsedSettings.unlinked.*.json') | Should -HaveCount 2
+		(Get-Content -LiteralPath $earlierPath -Raw).Trim() | Should -Be 'earlier'
+	}
+
+	It "keeps the saved file where it is when it cannot be set aside" {
+		Set-Content -LiteralPath $script:RepositorySettingsPath -Value $script:SettingsJson
+		Set-Content -LiteralPath $script:UserSettingsPath -Value '{ "Version": "1.0", "Settings": [ { "Name": "RemoveApps", "Value": true } ] }'
+		Mock Move-Item { throw "the file is in use" }
+
+		{ Sync-Win11DebloatSettings } | Should -Throw
+
+		Test-Path -LiteralPath $script:UserSettingsPath | Should -BeTrue
+		Should -Invoke New-Item -Times 0 -ParameterFilter { $ItemType -eq 'SymbolicLink' }
+	}
+
+	It "does not report a link that could not be created" {
+		Set-Content -LiteralPath $script:RepositorySettingsPath -Value $script:SettingsJson
+		Mock New-Item { throw "a required privilege is not held" } -ParameterFilter { $ItemType -eq 'SymbolicLink' }
+
+		{ Sync-Win11DebloatSettings } | Should -Throw
+
+		Should -Invoke Write-LogSuccess -Times 0
 	}
 
 	It "removes a blank saved file and links when the repository has settings" {
@@ -108,7 +141,7 @@ Describe "Sync-Win11DebloatSettings" {
 
 		Sync-Win11DebloatSettings | Should -BeTrue
 
-		Test-Path -LiteralPath (Join-Path $script:UserDataPath 'LastUsedSettings.unlinked.json') | Should -BeFalse
+		@(Get-ChildItem -LiteralPath $script:UserDataPath -Filter 'LastUsedSettings.unlinked.*.json') | Should -HaveCount 0
 		Should -Invoke New-Item -Times 1 -Exactly -ParameterFilter { $ItemType -eq 'SymbolicLink' }
 	}
 
