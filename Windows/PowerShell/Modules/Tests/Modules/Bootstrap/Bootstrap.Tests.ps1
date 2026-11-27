@@ -73,6 +73,7 @@ Describe "Bootstrap" {
 		Mock Update-Repositories { }
 		Mock Set-CustomExecutionPolicy { }
 		Mock Enable-DeveloperMode { }
+		Mock Enable-ClassicContextMenu { }
 		Mock Set-PowerPlan { }
 		Mock Set-PowerButtonActions { }
 		Mock Set-SystemTheme { param([switch]$Auto, [switch]$KeepTerminalOpen) }
@@ -177,12 +178,14 @@ Describe "Bootstrap" {
 		Should -Invoke Start-Win11Debloat -Times 1 -Exactly
 	}
 
-	It "keeps the other opt-in steps off by default (DeveloperMode, NuGetConfig, NpmConfig, AiArtifacts, AiMarketplaces, AiMcpServers, ObsidianCli, VSCodeProfiles, LockedStartLayout)" {
+	It "keeps the other opt-in steps off by default (DeveloperMode, ClassicContextMenu, NuGetConfig, NpmConfig, AiArtifacts, AiMarketplaces, AiMcpServers, ObsidianCli, VSCodeProfiles, LockedStartLayout)" {
 		$global:MachineType = 'Laptop'
 
 		Bootstrap
 
 		Should -Invoke Enable-DeveloperMode -Times 0
+		Should -Invoke Enable-ClassicContextMenu -Times 0
+		Should -Invoke Write-LogWarning -ParameterFilter { $Message -eq "Classic context menu skipped - opt in via BootstrapConfig.Steps.ClassicContextMenu" }
 		Should -Invoke Configure-NuGetConfig -Times 0
 		Should -Invoke Configure-NpmConfig -Times 0
 		Should -Invoke Write-LogWarning -ParameterFilter { $Message -eq "npm config skipped - opt in via BootstrapConfig.Steps.NpmConfig" }
@@ -199,11 +202,12 @@ Describe "Bootstrap" {
 
 	It "runs the opt-in steps when BootstrapConfig.Steps enables them" {
 		$global:MachineType = 'Laptop'
-		$global:Configuration.BootstrapConfig = @{ Steps = @{ DeveloperMode = $true; NuGetConfig = $true; NpmConfig = $true; AiArtifacts = $true; AiMarketplaces = $true; AiMcpServers = $true; ObsidianCli = $true; VSCodeProfiles = $true; LockedStartLayout = $true } }
+		$global:Configuration.BootstrapConfig = @{ Steps = @{ DeveloperMode = $true; ClassicContextMenu = $true; NuGetConfig = $true; NpmConfig = $true; AiArtifacts = $true; AiMarketplaces = $true; AiMcpServers = $true; ObsidianCli = $true; VSCodeProfiles = $true; LockedStartLayout = $true } }
 
 		Bootstrap
 
 		Should -Invoke Enable-DeveloperMode -Times 1 -Exactly
+		Should -Invoke Enable-ClassicContextMenu -Times 1 -Exactly
 		Should -Invoke Configure-NuGetConfig -Times 1 -Exactly
 		Should -Invoke Configure-NpmConfig -Times 1 -Exactly
 		Should -Invoke Enable-ObsidianCli -Times 1 -Exactly -ParameterFilter { $CreateIfMissing }

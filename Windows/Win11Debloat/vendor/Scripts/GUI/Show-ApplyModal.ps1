@@ -1,14 +1,24 @@
+<#
+    .SYNOPSIS
+        Displays the modal progress window while selected changes are applied.
+
+    .PARAMETER Owner
+        The optional window that owns the modal and its overlay.
+
+    .PARAMETER InvokeRestartExplorer
+        Indicates whether the modal should run the Explorer-restart flow after applying changes.
+#>
 function Show-ApplyModal {
     param (
         [Parameter(Mandatory=$false)]
         [System.Windows.Window]$Owner = $null,
         [Parameter(Mandatory=$false)]
-        [bool]$RestartExplorer = $false
+        [bool]$InvokeRestartExplorer = $false
     )
     
     Add-Type -AssemblyName PresentationFramework,PresentationCore,WindowsBase | Out-Null
     
-    $usesDarkMode = GetSystemUsesDarkMode
+    $usesDarkMode = Get-AppUsesDarkMode
     
     # Determine owner window
     $ownerWindow = if ($Owner) { $Owner } else { $script:GuiWindow }
@@ -27,6 +37,7 @@ function Show-ApplyModal {
     
     # Load XAML from file
     $xaml = Get-Content -Path $script:ApplyChangesWindowSchema -Raw
+    $xaml = ConvertTo-LocalizedXaml -Xaml $xaml
     $reader = [System.Xml.XmlReader]::Create([System.IO.StringReader]::new($xaml))
     try {
         $applyWindow = [System.Windows.Markup.XamlReader]::Load($reader)
@@ -44,7 +55,7 @@ function Show-ApplyModal {
     }
     
     # Apply theme resources
-    SetWindowThemeResources -window $applyWindow -usesDarkMode $usesDarkMode
+    Set-WindowThemeResources -window $applyWindow -usesDarkMode $usesDarkMode
     
     # Get UI elements
     $script:ApplyInProgressPanel = $applyWindow.FindName('ApplyInProgressPanel')
@@ -64,8 +75,8 @@ function Show-ApplyModal {
     # Initialize in-progress state
     $script:ApplyInProgressPanel.Visibility = 'Visible'
     $script:ApplyCompletionPanel.Visibility = 'Collapsed'
-    $script:ApplyStepNameEl.Text = "Preparing..."
-    $script:ApplyStepCounterEl.Text = "Preparing..."
+    $script:ApplyStepNameEl.Text = Get-Translation -Key 'ApplyPreparing'
+    $script:ApplyStepCounterEl.Text = Get-Translation -Key 'ApplyStepCounter' -FormatArgs @(0, 0)
     $script:ApplyProgressBarEl.Value = 0
     $script:ApplyModalInErrorState = $false
     
@@ -73,7 +84,7 @@ function Show-ApplyModal {
     $script:ApplyProgressCallback = {
         param($currentStep, $totalSteps, $stepName)
         $script:ApplyStepNameEl.Text = $stepName
-        $script:ApplyStepCounterEl.Text = "Step $currentStep of $totalSteps"
+        $script:ApplyStepCounterEl.Text = Get-Translation -Key 'ApplyStepCounter' -FormatArgs @($currentStep, $totalSteps)
         # Store current step/total in Tag properties for sub-step interpolation
         $script:ApplyStepCounterEl.Tag = $currentStep
         $script:ApplyProgressBarEl.Tag = $totalSteps
@@ -81,7 +92,7 @@ function Show-ApplyModal {
         $pct = if ($totalSteps -gt 0) { [math]::Round((($currentStep - 1) / $totalSteps) * 100) } else { 0 }
         $script:ApplyProgressBarEl.Value = $pct
         # Process pending window messages to keep UI responsive
-        DoEvents
+        Invoke-DoEvents
     }
 
     # Sub-step callback updates step name and interpolates progress bar within the current step
@@ -96,7 +107,7 @@ function Show-ApplyModal {
             $stepFraction = ($subIndex / $subCount) / $totalSteps
             $script:ApplyProgressBarEl.Value = [math]::Round(($baseProgress + $stepFraction) * 100)
         }
-        DoEvents
+        Invoke-DoEvents
     }
     
     # Run changes in background to keep UI responsive
@@ -104,11 +115,12 @@ function Show-ApplyModal {
         try {
             Invoke-AllChanges
 
-            $registryImportFailureCount = [int]$script:RegistryImportFailures
+            $failureCount = [int]$script:FeatureFailures + [int]$script:AppRemovalFailures
+            $appRemovalVerificationUnavailable = [bool]$script:AppRemovalVerificationUnavailable
             
             # Restart explorer if requested
-            if ($RestartExplorer -and -not $script:CancelRequested) {
-                RestartExplorer
+            if ($InvokeRestartExplorer -and -not $script:CancelRequested) {
+                Invoke-RestartExplorer
                 
                 # Wait for Explorer to finish relaunching, then reclaim focus.
                 Start-Sleep -Milliseconds 800
@@ -118,11 +130,6 @@ function Show-ApplyModal {
             }
             
             Write-Host ""
-            if ($script:CancelRequested) {
-                Write-Host "Script execution was cancelled by the user. Some changes may not have been applied."
-            } elseif ($registryImportFailureCount -eq 0) {
-                Write-Host "All changes have been applied successfully!"
-            }
             
             # Show completion state
             $script:ApplyProgressBarEl.Value = 100
@@ -130,20 +137,34 @@ function Show-ApplyModal {
             $script:ApplyCompletionPanel.Visibility = 'Visible'
             
             if ($script:CancelRequested) {
+                Write-Warning "Script execution was cancelled by the user. Any remaining changes were not applied."
+
                 $script:ApplyCompletionIconEl.Text = [char]0xE7BA
                 $script:ApplyCompletionIconEl.Foreground = [System.Windows.Media.SolidColorBrush]::new([System.Windows.Media.ColorConverter]::ConvertFromString("#e8912d"))
-                $script:ApplyCompletionTitleEl.Text = "Cancelled"
-                $script:ApplyCompletionMessageEl.Text = "Script execution was cancelled by the user."
-            } elseif ($registryImportFailureCount -gt 0) {
+                $script:ApplyCompletionTitleEl.Text = Get-Translation -Key 'ApplyCompletionTitleCancelled'
+                $script:ApplyCompletionMessageEl.Text = Get-Translation -Key 'ApplyCompletionMessageCancelled'
+            } elseif ($failureCount -gt 0 -or $appRemovalVerificationUnavailable) {
+                if ($failureCount -gt 0) {
+                    Write-Host "Script completed with $failureCount error(s)."
+                }
+
                 $script:ApplyCompletionIconEl.Text = [char]0xE7BA
                 $script:ApplyCompletionIconEl.Foreground = [System.Windows.Media.SolidColorBrush]::new([System.Windows.Media.ColorConverter]::ConvertFromString("#e8912d"))
-                $script:ApplyCompletionTitleEl.Text = "Changes Applied with Errors"
-                $script:ApplyCompletionMessageEl.Text = "$registryImportFailureCount registry change(s) failed. See console for details."
+                if ($failureCount -eq 0 -and $appRemovalVerificationUnavailable) {
+                    $script:ApplyCompletionTitleEl.Text = Get-Translation -Key 'ApplyCompletionTitleSuccess'
+                    $script:ApplyCompletionMessageEl.Text = Get-Translation -Key 'ApplyCompletionMessageVerificationUnavailable'
+                }
+                else {
+                    $script:ApplyCompletionTitleEl.Text = Get-Translation -Key 'ApplyCompletionTitleErrors'
+                    $script:ApplyCompletionMessageEl.Text = Get-Translation -Key 'ApplyCompletionMessageFailures' -Count $failureCount -FormatArgs @($failureCount)
+                }
             } else {
-                $script:ApplyCompletionTitleEl.Text = "Changes Applied"
+                Write-Host "All changes have been applied successfully!"
+
+                $script:ApplyCompletionTitleEl.Text = Get-Translation -Key 'ApplyCompletionTitleSuccess'
 
                 # Show completion message with reboot instructions if any applied features require reboot
-                if ($RestartExplorer) {
+                if ($InvokeRestartExplorer) {
                     $rebootFeatures = Get-RebootFeatureLabels
 
                     if ($rebootFeatures.Count -gt 0) {
@@ -159,10 +180,24 @@ function Show-ApplyModal {
                         $applyRebootPanel.Visibility = 'Visible'
                     }
                     else {
-                        $script:ApplyCompletionMessageEl.Text = "Your system is ready. Thanks for using Win11Debloat!"
+                        $script:ApplyCompletionMessageEl.Text = Get-Translation -Key 'ApplyCompletionMessageReady'
                     }
                 }
             }
+            if ($script:WingetDeferredRemovals -and $script:WingetDeferredRemovals.Count -gt 0) {
+                foreach ($appName in @(Get-DeferredAppRemovalLabels)) {
+                    $tb = [System.Windows.Controls.TextBlock]::new()
+                    $label = Get-Translation -Key 'ApplyRebootRequiredWingetDeferred' -FormatArgs @($appName)
+                    $tb.Text = "$([char]0x2022) $label"
+                    $tb.FontSize = 12
+                    $tb.SetResourceReference([System.Windows.Controls.TextBlock]::ForegroundProperty, "AppFgColor")
+                    $tb.Opacity = 0.85
+                    $tb.Margin = [System.Windows.Thickness]::new(0, 2, 0, 0)
+                    $applyRebootList.Children.Add($tb) | Out-Null
+                }
+                $applyRebootPanel.Visibility = 'Visible'
+            }
+
             $applyWindow.Dispatcher.Invoke([System.Windows.Threading.DispatcherPriority]::Render, [action]{})
         }
         catch {
@@ -171,24 +206,24 @@ function Show-ApplyModal {
             $script:ApplyCompletionPanel.Visibility = 'Visible'
             $script:ApplyCompletionIconEl.Text = [char]0xEA39
             $script:ApplyCompletionIconEl.Foreground = [System.Windows.Media.SolidColorBrush]::new([System.Windows.Media.ColorConverter]::ConvertFromString("#c42b1c"))
-            $script:ApplyCompletionTitleEl.Text = "Error"
-            $script:ApplyCompletionMessageEl.Text = "An error occurred while applying changes: $($_.Exception.Message)"
-            
+            $script:ApplyCompletionTitleEl.Text = Get-Translation -Key 'ApplyCompletionTitleError'
+            $script:ApplyCompletionMessageEl.Text = Get-Translation -Key 'ApplyCompletionMessageError' -FormatArgs @($_.Exception.Message)
+
             # Set error state to change Kofi button to report link
             $script:ApplyModalInErrorState = $true
 
             # Update Kofi button to be a report issue button
             $applyKofiBtn.Content = $null
-            
+
             $reportText = [System.Windows.Controls.TextBlock]::new()
-            $reportText.Text = 'Report a bug'
+            $reportText.Text = Get-Translation -Key 'MenuReportBug'
             $reportText.VerticalAlignment = 'Center'
             $reportText.FontSize = 14
             $reportText.Margin = [System.Windows.Thickness]::new(0, 0, 0, 1)
 
             $applyKofiBtn.Content = $reportText
-            
-            [System.Windows.Automation.AutomationProperties]::SetName($applyKofiBtn, 'Report a bug')
+
+            [System.Windows.Automation.AutomationProperties]::SetName($applyKofiBtn, (Get-Translation -Key 'MenuReportBug'))
             
             $applyWindow.Dispatcher.Invoke([System.Windows.Threading.DispatcherPriority]::Render, [action]{})
         }

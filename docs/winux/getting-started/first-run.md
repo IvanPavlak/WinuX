@@ -46,6 +46,7 @@ Every step is individually toggleable via `BootstrapConfig.Steps` (or per invoca
 │  PHASE 3: SYSTEM CONFIGURATION                                              │
 │  ├─→ Set-CustomExecutionPolicy                                              │
 │  ├─→ Enable-DeveloperMode (opt-in via Steps; for symlinks w/o admin)        │
+│  ├─→ Enable-ClassicContextMenu (opt-in via Steps; classic right click menu) │
 │  ├─→ Set-PowerPlan -Auto                                                    │
 │  ├─→ Set-PowerButtonActions -Auto                                           │
 │  ├─→ Set-SystemTheme -Auto (Dark/Light based on Themes config)              │
@@ -139,6 +140,7 @@ execution order):
 | -------------------- | --------------------------------------------------------------- | --------------------------------------------- |
 | `RepositoryUpdate`   | Clones and pulls every repository `BootstrapConfig.RepositoryUpdateScope` names for this machine | Off - opt in via `BootstrapConfig.Steps` |
 | `DeveloperMode`      | Enables Developer Mode (symlinks without admin)                 | Off - opt in via `BootstrapConfig.Steps`      |
+| `ClassicContextMenu` | Right click opens the classic context menu on Windows 11        | Off - opt in via `BootstrapConfig.Steps`      |
 | `UpgradeAll`         | `winget upgrade --all` (+ Scoop/Chocolatey), so **every** package already on the machine, not just WinuX's | Off - opt in via `BootstrapConfig.Steps` |
 | `NuGetConfig`        | Writes a NuGet config (prompts for a GitHub PAT)                | Off - opt in via `BootstrapConfig.Steps`      |
 | `NpmConfig`          | Writes the npm registry tokens into the user npmrc (prompts for a GitHub PAT) | Off - opt in via `BootstrapConfig.Steps` |

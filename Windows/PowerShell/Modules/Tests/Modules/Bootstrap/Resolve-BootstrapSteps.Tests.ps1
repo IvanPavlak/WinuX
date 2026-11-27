@@ -35,7 +35,7 @@ Describe "Resolve-BootstrapSteps" {
 					"DotnetEf", "EnvironmentVariables", "CondaEnvironments", "Taskbar", "SymbolicLinks", "StartupTasks")) {
 				$states[$name] | Should -BeTrue -Because "step [$name] defaults to on"
 			}
-			foreach ($name in @("MicrosoftActivationScripts", "Win11Debloat", "RepositoryUpdate", "DeveloperMode", "NuGetConfig", "NpmConfig", "UpgradeAll", "AiArtifacts", "AiMarketplaces", "AiMcpServers", "AiProfileInit", "ObsidianCli", "VSCodeProfiles", "LockedStartLayout")) {
+			foreach ($name in @("MicrosoftActivationScripts", "Win11Debloat", "RepositoryUpdate", "DeveloperMode", "ClassicContextMenu", "NuGetConfig", "NpmConfig", "UpgradeAll", "AiArtifacts", "AiMarketplaces", "AiMcpServers", "AiProfileInit", "ObsidianCli", "VSCodeProfiles", "LockedStartLayout")) {
 				$states[$name] | Should -BeFalse -Because "step [$name] is opt-in"
 			}
 		}
@@ -74,7 +74,7 @@ Describe "Resolve-BootstrapSteps" {
 		It "Should list the steps in Bootstrap execution order" {
 			$states = Resolve-BootstrapSteps
 
-			@($states.Keys) -join "," | Should -Be "RenameMachine,MicrosoftActivationScripts,Win11Debloat,RepositoryUpdate,ExecutionPolicy,DeveloperMode,PowerPlan,PowerButtonActions,SystemTheme,Locale,DisplayLanguage,KeyboardLayouts,NerdFont,PowerShellModules,SpecialFolders,WSL,WinGetApps,ScoopApps,ChocolateyApps,UpgradeAll,DotnetEf,EnvironmentVariables,CondaEnvironments,NuGetConfig,NpmConfig,Taskbar,SymbolicLinks,StartupTasks,AiArtifacts,AiMarketplaces,AiMcpServers,AiProfileInit,ObsidianCli,VSCodeProfiles,LockedStartLayout"
+			@($states.Keys) -join "," | Should -Be "RenameMachine,MicrosoftActivationScripts,Win11Debloat,RepositoryUpdate,ExecutionPolicy,DeveloperMode,ClassicContextMenu,PowerPlan,PowerButtonActions,SystemTheme,Locale,DisplayLanguage,KeyboardLayouts,NerdFont,PowerShellModules,SpecialFolders,WSL,WinGetApps,ScoopApps,ChocolateyApps,UpgradeAll,DotnetEf,EnvironmentVariables,CondaEnvironments,NuGetConfig,NpmConfig,Taskbar,SymbolicLinks,StartupTasks,AiArtifacts,AiMarketplaces,AiMcpServers,AiProfileInit,ObsidianCli,VSCodeProfiles,LockedStartLayout"
 		}
 
 		It "Should return the defaults when Configuration itself is null" {

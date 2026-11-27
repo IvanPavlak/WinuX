@@ -33,6 +33,7 @@ The [Application module reference](../../../modules/application.md) is the autho
 | `Resolve-VSCodeProfilesConfig` | `VSCodeProfiles` | [Resolve-VSCodeProfilesConfig](Resolve-VSCodeProfilesConfig.md) |
 | `Start-Application` | `Universal.<ConfigKey>` (the `*Exe` paths of the `ConfigPath` launchers) | [Start-Application](Start-Application.md) |
 | `Start-Win11Debloat` | `BootstrapConfig.LocalScripts.Win11Debloat`, `PathTemplates.Projects.Self.Root`, `BootstrapConfig.Steps` | [Start-Win11Debloat](Start-Win11Debloat.md) |
+| `Sync-Win11DebloatSettings` | `PathTemplates.Projects.Self.Root` | [Sync-Win11DebloatSettings](Sync-Win11DebloatSettings.md) |
 | `Test-BrowserGroupAlreadyOpen` | `BrowserGroupMatching` | [Test-BrowserGroupAlreadyOpen](Test-BrowserGroupAlreadyOpen.md) |
 | `Update-Win11DebloatVendor` | `PathTemplates.Projects.Self.Root` | [Update-Win11DebloatVendor](Update-Win11DebloatVendor.md) |
 

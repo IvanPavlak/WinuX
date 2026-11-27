@@ -13,7 +13,7 @@ Runs the vendored Win11Debloat script from the local repository to remove bloatw
 | [`PathTemplates.Projects.Self.Root`](../../configuration-reference.md#path-templates--placeholder-system) | path template | `{RepoRoot}` | The repository root used for `{RepoRoot}`, the fallback script path and the saved-settings file `Windows\Win11Debloat\LastUsedSettings.json` (read from `$global:MachineSpecificPaths.Projects.Self.Root`). |
 | [`BootstrapConfig.Steps.Win11Debloat`](../../configuration-reference.md#bootstrapconfig) | boolean or per-machine-type hashtable | `$false` (built-in default) | Whether `Bootstrap -WithInitialSetup` runs this function. |
 
-The saved settings are not a configuration key: they are the repository file `Windows\Win11Debloat\LastUsedSettings.json`, which the function links into the vendored script's `Config` folder when it exists and is non-empty.
+The saved settings are not a configuration key: they are the repository file `Windows\Win11Debloat\LastUsedSettings.json`, which [`Sync-Win11DebloatSettings`](Sync-Win11DebloatSettings.md) links to the vendored script's own settings file, `%LOCALAPPDATA%\Win11Debloat\LastUsedSettings.json`, when it exists and is non-empty. Settings an interactive run saves while there is no link are adopted into the repository file after the run.
 
 ## Decisions
 
@@ -98,6 +98,7 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 - [`Start-Win11Debloat` in the Application module reference](../../../modules/application.md#start-win11debloat) - parameters, usage and behaviour
 - [Application configuration guides](README.md) - every guide for this module
 - [`Update-Win11DebloatVendor`](Update-Win11DebloatVendor.md) - refreshes the vendored script this function runs
+- [`Sync-Win11DebloatSettings`](Sync-Win11DebloatSettings.md) - links the saved settings this function offers
 - [`Bootstrap`](../bootstrap/Bootstrap.md) - runs this function when `BootstrapConfig.Steps.Win11Debloat` is on
 - [WinuXConfigurator](../../winux-configurator.md) - have an AI assistant walk these decisions with you
 - [Configuration reference](../../configuration-reference.md) - every key, section by section

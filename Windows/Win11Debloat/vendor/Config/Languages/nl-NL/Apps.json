@@ -1,0 +1,650 @@
+﻿{
+  "Clipchamp.Clipchamp": {
+    "FriendlyName": "Microsoft Clipchamp",
+    "Description": "Maak en bewerk video's met bijsnijden, ondertitels en audio"
+  },
+  "Microsoft.3DBuilder": {
+    "FriendlyName": "3D Builder",
+    "Description": "Eenvoudige software voor 3D-modellering (niet meer ondersteund)"
+  },
+  "Microsoft.549981C3F5F10": {
+    "FriendlyName": "Cortana",
+    "Description": "Spraakassistent van Microsoft (niet meer ondersteund)"
+  },
+  "Microsoft.BingFinance": {
+    "FriendlyName": "Geldzaken",
+    "Description": "App van Microsoft voor financieel nieuws en het volgen van de financiële markten"
+  },
+  "Microsoft.BingFoodAndDrink": {
+    "FriendlyName": "MSN Eten & drinken",
+    "Description": "Recepten en culinair nieuws (niet meer ondersteund)"
+  },
+  "Microsoft.BingHealthAndFitness": {
+    "FriendlyName": "MSN Gezondheid & fitness",
+    "Description": "Houdt je gezondheid en conditie bij en toont nieuws (niet meer ondersteund)"
+  },
+  "Microsoft.BingNews": {
+    "FriendlyName": "Nieuws",
+    "Description": "Gepersonaliseerde nieuwsfeeds en meldingen van het laatste nieuws"
+  },
+  "Microsoft.BingSports": {
+    "FriendlyName": "MSN Sport",
+    "Description": "Sportnieuws en uitslagen (niet meer ondersteund)"
+  },
+  "Microsoft.BingTranslator": {
+    "FriendlyName": "Microsoft Translator",
+    "Description": "Vertaalapp van Microsoft voor Windows (niet meer ondersteund)"
+  },
+  "Microsoft.BingTravel": {
+    "FriendlyName": "MSN Reizen",
+    "Description": "Reisplanning en reisnieuws (niet meer ondersteund)"
+  },
+  "Microsoft.BingWeather": {
+    "FriendlyName": "Weer",
+    "Description": "Weerapp van Microsoft"
+  },
+  "XP9CXNGPPJ97XX": {
+    "FriendlyName": "Microsoft Copilot",
+    "Description": "AI-assistent voor het beantwoorden van vragen, schrijven van teksten en maken van afbeeldingen"
+  },
+  "Microsoft.Windows.AIHub": {
+    "FriendlyName": "Copilot+ AI Hub",
+    "Description": "Ontdek AI-functies en apps voor Copilot+-pc's"
+  },
+  "Microsoft.PCManager": {
+    "FriendlyName": "Microsoft PC Manager",
+    "Description": "Microsoft-hulpmiddel voor systeemopruiming en optimalisatie (vaak vooraf geïnstalleerd)"
+  },
+  "Microsoft.Getstarted": {
+    "FriendlyName": "Tips",
+    "Description": "Tips en uitleg over het gebruik van Windows-functies (verouderd)"
+  },
+  "Microsoft.Messaging": {
+    "FriendlyName": "Providerberichten",
+    "Description": "Ontvang sms-berichten over data-abonnementen en facturering op pc's met mobiele verbinding; verzenden is niet mogelijk"
+  },
+  "Microsoft.Microsoft3DViewer": {
+    "FriendlyName": "3D-viewer",
+    "Description": "App om 3D-modellen te bekijken (niet meer ondersteund)"
+  },
+  "Microsoft.MicrosoftJournal": {
+    "FriendlyName": "Logboek",
+    "Description": "Maak handgeschreven notities en schetsen met een digitale pen"
+  },
+  "Microsoft.MicrosoftOfficeHub": {
+    "FriendlyName": "Microsoft 365 Copilot",
+    "Description": "AI-chat, inhoud maken, bestanden zoeken en Microsoft 365-apps openen"
+  },
+  "Microsoft.MicrosoftPowerBIForWindows": {
+    "FriendlyName": "Power BI",
+    "Description": "App voor het analyseren van bedrijfsgegevens (niet meer ondersteund)"
+  },
+  "Microsoft.MicrosoftSolitaireCollection": {
+    "FriendlyName": "Solitaire & Casual Games",
+    "Description": "Verzameling kaartspellen voor één speler"
+  },
+  "Microsoft.MicrosoftStickyNotes": {
+    "FriendlyName": "Plaknotities",
+    "Description": "Maak notities op je bureaublad en synchroniseer ze tussen apparaten"
+  },
+  "Microsoft.MixedReality.Portal": {
+    "FriendlyName": "Mixed Reality-portal",
+    "Description": "App voor het gebruik van Windows Mixed Reality-headsets (verouderd)"
+  },
+  "Microsoft.NetworkSpeedTest": {
+    "FriendlyName": "Network Speed Test",
+    "Description": "Meet de download- en uploadsnelheid en netwerkvertraging"
+  },
+  "Microsoft.Office.OneNote": {
+    "FriendlyName": "OneNote for Windows 10",
+    "Description": "Digitale notitie-app (UWP-versie; niet meer ondersteund)"
+  },
+  "Microsoft.Office.Sway": {
+    "FriendlyName": "Sway",
+    "Description": "Maak en deel interactieve presentaties, verslagen en verhalen"
+  },
+  "Microsoft.OneConnect": {
+    "FriendlyName": "Mobiele abonnementen",
+    "Description": "Kies een mobiel data-abonnement voor een geschikte pc met een ondersteunde simkaart"
+  },
+  "Microsoft.Print3D": {
+    "FriendlyName": "Print 3D",
+    "Description": "Bereid 3D-modellen voor op afdrukken (verouderd)"
+  },
+  "Microsoft.PowerAutomateDesktop": {
+    "FriendlyName": "Power Automate",
+    "Description": "Automatiseer terugkerende pc-taken met bureaubladstromen"
+  },
+  "Microsoft.SkypeApp": {
+    "FriendlyName": "Skype",
+    "Description": "Skype voor chatten en bellen (UWP-versie, niet meer ondersteund)"
+  },
+  "Microsoft.Todos": {
+    "FriendlyName": "Microsoft To Do",
+    "Description": "App voor takenlijsten en taakbeheer"
+  },
+  "Microsoft.Windows.DevHome": {
+    "FriendlyName": "Dev Home",
+    "Description": "Dashboard voor ontwikkelaars om ontwikkeltools in te stellen (niet meer ondersteund)"
+  },
+  "Microsoft.WindowsAlarms": {
+    "FriendlyName": "Klok",
+    "Description": "App voor alarmen, timers, stopwatch en focussessies"
+  },
+  "Microsoft.WindowsFeedbackHub": {
+    "FriendlyName": "Feedback-hub",
+    "Description": "App om Microsoft feedback over Windows te geven"
+  },
+  "Microsoft.WindowsMaps": {
+    "FriendlyName": "Kaarten",
+    "Description": "App voor kaarten en navigatie (niet meer ondersteund)"
+  },
+  "Microsoft.WindowsSoundRecorder": {
+    "FriendlyName": "Geluidsrecorder",
+    "Description": "Neem geluid op met een microfoon en speel opnamen af"
+  },
+  "Microsoft.XboxApp": {
+    "FriendlyName": "Xbox Console Companion",
+    "Description": "Oude Xbox Console Companion-app (niet meer ondersteund)"
+  },
+  "Microsoft.ZuneVideo": {
+    "FriendlyName": "Films en tv",
+    "Description": "App voor het afspelen van gekochte video's (nieuw huren en kopen wordt niet meer ondersteund)"
+  },
+  "MicrosoftCorporationII.MicrosoftFamily": {
+    "FriendlyName": "Family",
+    "Description": "App voor het beheren van schermtijd, inhoudsfilters en activiteitenrapporten voor je gezin"
+  },
+  "MicrosoftCorporationII.QuickAssist": {
+    "FriendlyName": "Quick Assist",
+    "Description": "Scherm delen en bediening op afstand voor hulp bij pc-problemen"
+  },
+  "MicrosoftTeams": {
+    "FriendlyName": "Microsoft Teams (oud)",
+    "Description": "Oude Teams-app voor persoonlijke chats en gesprekken"
+  },
+  "MSTeams": {
+    "FriendlyName": "Microsoft Teams (nieuw)",
+    "Description": "Chatten, bellen en vergaderen met werk-, school- en persoonlijke accounts"
+  },
+  "ACGMediaPlayer": {
+    "FriendlyName": "ACG Player",
+    "Description": "Speel lokale audio en video af met ondertitels en DLNA-streaming"
+  },
+  "ActiproSoftwareLLC": {
+    "FriendlyName": "Actipro-apps (Code Writer)",
+    "Description": "Actipro-apps, waaronder Code Writer voor tekst- en codebewerking"
+  },
+  "AdobeSystemsIncorporated.AdobePhotoshopExpress": {
+    "FriendlyName": "Adobe Express Photos",
+    "Description": "Bewerk foto's, verwijder objecten en achtergronden en maak aantekeningen op schermafbeeldingen"
+  },
+  "Amazon.com.Amazon": {
+    "FriendlyName": "Amazon",
+    "Description": "App om bij Amazon te winkelen"
+  },
+  "AmazonVideo.PrimeVideo": {
+    "FriendlyName": "Prime Video",
+    "Description": "App voor de streamingdienst Amazon Prime Video"
+  },
+  "Asphalt8Airborne": {
+    "FriendlyName": "Asphalt 8: Airborne",
+    "Description": "Arcaderacen met auto's, motoren en races tegen andere spelers"
+  },
+  "AutodeskSketchBook": {
+    "FriendlyName": "Autodesk SketchBook",
+    "Description": "Oudere teken- en schetsapp van Autodesk (niet meer ondersteund)"
+  },
+  "CaesarsSlotsFreeCasino": {
+    "FriendlyName": "Caesars Casino - Casino Slots Game",
+    "Description": "Casinospel met gokkasten"
+  },
+  "COOKINGFEVER": {
+    "FriendlyName": "Cooking Fever",
+    "Description": "Kookspel waarin je restaurants runt en bestellingen op tijd klaarmaakt"
+  },
+  "CyberLinkMediaSuiteEssentials": {
+    "FriendlyName": "CyberLink Media Suite",
+    "Description": "Pakket met multimediasoftware (vaak vooraf geïnstalleerd door fabrikanten)"
+  },
+  "DisneyMagicKingdoms": {
+    "FriendlyName": "Disney Magic Kingdoms",
+    "Description": "Spel om een Disney-pretpark te bouwen"
+  },
+  "Disney.37853FC22B2CE": {
+    "FriendlyName": "Disney+",
+    "Description": "App voor de streamingdienst Disney+"
+  },
+  "DrawboardPDF": {
+    "FriendlyName": "Drawboard PDF",
+    "Description": "Bekijk, bewerk en annoteer pdf-documenten met een pen, aanraking of muis"
+  },
+  "Duolingo-LearnLanguagesforFree": {
+    "FriendlyName": "Duolingo",
+    "Description": "App om talen te leren"
+  },
+  "FACEBOOK.FACEBOOK": {
+    "FriendlyName": "Facebook",
+    "Description": "Socialemedia-app van Facebook"
+  },
+  "FarmVille2CountryEscape": {
+    "FriendlyName": "FarmVille 2: Country Escape",
+    "Description": "Boerderijsimulatiespel"
+  },
+  "Flipboard": {
+    "FriendlyName": "Flipboard",
+    "Description": "Verzamelt nieuws en berichten van sociale netwerken in tijdschriftvorm"
+  },
+  "HiddenCity": {
+    "FriendlyName": "Hidden City: Hidden Object Adventure",
+    "Description": "Avonturenspel waarin je puzzels oplost en verborgen voorwerpen zoekt"
+  },
+  "HULULLC.HULUPLUS": {
+    "FriendlyName": "Hulu",
+    "Description": "App voor de streamingdienst Hulu"
+  },
+  "iHeartRadio": {
+    "FriendlyName": "iHeart: Radio, Music, Podcasts",
+    "Description": "Luister naar live radio, muziek en podcasts"
+  },
+  "Facebook.Instagram": {
+    "FriendlyName": "Instagram",
+    "Description": "Socialemedia-app van Instagram"
+  },
+  "king.com.BubbleWitch3Saga": {
+    "FriendlyName": "Bubble Witch 3 Saga",
+    "Description": "Bubbelschietspel met magische puzzels"
+  },
+  "king.com.CandyCrushSaga": {
+    "FriendlyName": "Candy Crush Saga",
+    "Description": "Puzzelspel waarin je drie of meer snoepjes combineert"
+  },
+  "king.com.CandyCrushSodaSaga": {
+    "FriendlyName": "Candy Crush Soda Saga",
+    "Description": "Snoepjes combineren in drie-op-een-rijpuzzels met frisdrankthema's en extra spelmodi"
+  },
+  "LinkedInforWindows": {
+    "FriendlyName": "LinkedIn",
+    "Description": "App voor het zakelijke netwerk LinkedIn"
+  },
+  "MarchofEmpires": {
+    "FriendlyName": "March of Empires",
+    "Description": "Strategiespel"
+  },
+  "4DF9E0F8.Netflix": {
+    "FriendlyName": "Netflix",
+    "Description": "App voor de streamingdienst Netflix"
+  },
+  "NYTCrossword": {
+    "FriendlyName": "NYT Crossword",
+    "Description": "Kruiswoordpuzzel-app van The New York Times"
+  },
+  "OneCalendar": {
+    "FriendlyName": "One Calendar",
+    "Description": "Bekijk en beheer agenda's van meerdere accounts op één plek"
+  },
+  "PandoraMediaInc": {
+    "FriendlyName": "Pandora",
+    "Description": "App voor het streamen van muziek via Pandora"
+  },
+  "PhototasticCollage": {
+    "FriendlyName": "Phototastic Collage",
+    "Description": "App om fotocollages te maken"
+  },
+  "PicsArt-PhotoStudio": {
+    "FriendlyName": "Picsart - Photo Studio",
+    "Description": "App voor fotobewerking en creatieve projecten"
+  },
+  "PolarrPhotoEditorAcademicEdition": {
+    "FriendlyName": "Polarr Pro Photo Editor",
+    "Description": "Bewerk foto's met filters, kleuraanpassingen en plaatselijke maskers"
+  },
+  "flaregamesGmbH.RoyalRevolt": {
+    "FriendlyName": "Royal Revolt! / Royal Revolt 2",
+    "Description": "Leid troepen en gebruik spreuken om kastelen te veroveren in strategische actiegevechten"
+  },
+  "Sidia.LiveWallpaper": {
+    "FriendlyName": "Samsung Live Wallpaper",
+    "Description": "Statische en bewegende achtergronden voor Samsung Galaxy Books"
+  },
+  "SlingTV": {
+    "FriendlyName": "Sling TV",
+    "Description": "App voor het streamen van live-tv"
+  },
+  "SpotifyAB.SpotifyMusic": {
+    "FriendlyName": "Spotify",
+    "Description": "Stream muziek en podcasts en beheer afspeellijsten"
+  },
+  "BytedancePte.Ltd.TikTok": {
+    "FriendlyName": "TikTok",
+    "Description": "TikTok-app voor korte video's"
+  },
+  "TuneInRadio": {
+    "FriendlyName": "TuneIn Radio",
+    "Description": "Luister naar live radio, sport, nieuws en podcasts"
+  },
+  "WinZipUniversal": {
+    "FriendlyName": "WinZip Universal",
+    "Description": "Hulpmiddel waarmee je bestanden kan comprimeren en uitpakken (UWP-versie)"
+  },
+  "Microsoft.BingSearch": {
+    "FriendlyName": "Microsoft Bing",
+    "Description": "Deze app integreert zoeken op internet met Microsoft Bing in Windows Zoeken"
+  },
+  "Microsoft.Edge": {
+    "FriendlyName": "Microsoft Edge",
+    "Description": "Standaardbrowser van Windows. WAARSCHUWING: als je deze app verwijdert, heeft Windows Sandbox geen browser meer. Ook kunnen andere apps hierdoor problemen krijgen"
+  },
+  "Microsoft.GamingApp": {
+    "FriendlyName": "XBOX",
+    "Description": "Xbox-app voor Windows, vereist voor het installeren van sommige pc-games"
+  },
+  "Microsoft.GetHelp": {
+    "FriendlyName": "Hulp vragen",
+    "Description": "Nodig voor sommige probleemoplossers en ondersteuningsfuncties in Windows 11"
+  },
+  "Microsoft.M365Companions": {
+    "FriendlyName": "Microsoft 365 Companions",
+    "Description": "Taakbalkapps voor Microsoft 365-agenda's, contactpersonen en bestanden (wordt uitgefaseerd)"
+  },
+  "Microsoft.MSPaint": {
+    "FriendlyName": "Paint 3D",
+    "Description": "3D-tekenapp (niet meer ondersteund)"
+  },
+  "Microsoft.OneDrive": {
+    "FriendlyName": "OneDrive",
+    "Description": "Synchroniseer bestanden en maak back-ups met OneDrive-cloudopslag"
+  },
+  "Microsoft.OutlookForWindows": {
+    "FriendlyName": "Outlook",
+    "Description": "E-mail- en agenda-app voor Microsoft-accounts en andere ondersteunde accounts"
+  },
+  "Microsoft.Paint": {
+    "FriendlyName": "Paint",
+    "Description": "Teken en bewerk afbeeldingen, snijd ze bij en pas het formaat aan"
+  },
+  "Microsoft.People": {
+    "FriendlyName": "Personen",
+    "Description": "Bewaar en beheer contactpersonen voor Mail en Agenda (niet meer ondersteund)"
+  },
+  "MicrosoftCorporationII.Windows365": {
+    "FriendlyName": "Windows App",
+    "Description": "Client voor externe bureaubladen en cloud-pc’s (vervangt de Extern bureaublad-app)"
+  },
+  "Microsoft.RemoteDesktop": {
+    "FriendlyName": "Extern bureaublad",
+    "Description": "Remote Desktop-clientapp (Microsoft Store-versie; niet meer ondersteund)"
+  },
+  "Microsoft.ScreenSketch": {
+    "FriendlyName": "Knipprogramma",
+    "Description": "Schermafbeeldingen maken, annoteren, opslaan en delen"
+  },
+  "Microsoft.StartExperiencesApp": {
+    "FriendlyName": "Ervaringen-app starten",
+    "Description": "Toont 'Mijn feed' in Windows Widgets"
+  },
+  "Microsoft.SurfaceHub": {
+    "FriendlyName": "Surface",
+    "Description": "Apparaatinstellingen en ondersteuning voor Surface, inclusief instellingen voor slim opladen op ondersteunde modellen"
+  },
+  "Microsoft.Whiteboard": {
+    "FriendlyName": "Microsoft Whiteboard",
+    "Description": "Digitaal whiteboard waarop je samen met anderen kunt werken"
+  },
+  "Microsoft.Windows.Photos": {
+    "FriendlyName": "Foto's",
+    "Description": "Bekijk en orden foto's en video's en bewerk afbeeldingen"
+  },
+  "Microsoft.WindowsCalculator": {
+    "FriendlyName": "Rekenmachine",
+    "Description": "Standaard-, wetenschappelijke en grafische berekeningen en het omrekenen van eenheden"
+  },
+  "Microsoft.WindowsCamera": {
+    "FriendlyName": "Camera",
+    "Description": "Maak foto's en video's met een ingebouwde of aangesloten camera"
+  },
+  "Microsoft.windowscommunicationsapps": {
+    "FriendlyName": "Mail en Agenda",
+    "Description": "Apps voor e-mail en agenda (niet meer ondersteund)"
+  },
+  "Microsoft.WindowsNotepad": {
+    "FriendlyName": "Kladblok",
+    "Description": "Maak en bewerk tekstbestanden, notities en scripts"
+  },
+  "Microsoft.WindowsStore": {
+    "FriendlyName": "Microsoft Store",
+    "Description": "Installeer en werk Windows-apps en games bij. Waarschuwing: de Store verwijderen kan het installeren en herstellen van apps moeilijker maken"
+  },
+  "Microsoft.WindowsTerminal": {
+    "FriendlyName": "Terminal",
+    "Description": "Standaardterminal-app in Windows 11 (Opdrachtprompt, PowerShell, WSL). WAARSCHUWING: verwijder deze app niet als je Win11Debloat vanuit Windows Terminal hebt gestart, want hierdoor zal het script mislukken."
+  },
+  "Microsoft.Xbox.TCUI": {
+    "FriendlyName": "Xbox Live (TCUI)",
+    "Description": "Toont Xbox-profielkaarten, uitnodigingen en andere Xbox-schermen in games"
+  },
+  "Microsoft.XboxGameOverlay": {
+    "FriendlyName": "Xbox Game Overlay",
+    "Description": "Game-overlay die deel uitmaakt van Xbox Game Bar. Deze app is vereist voor bepaalde games. Waarschuwing: het verwijderen van deze app kan de gameprestaties verminderen op pc’s met bepaalde moderne processors."
+  },
+  "Microsoft.XboxGamingOverlay": {
+    "FriendlyName": "Game Bar",
+    "Description": "Deze app biedt een overlay in games en integratie met Xbox-services. Deze app is vereist voor bepaalde games. Waarschuwing: het verwijderen van deze app kan de gameprestaties verminderen op pc’s met bepaalde moderne processors."
+  },
+  "Microsoft.XboxIdentityProvider": {
+    "FriendlyName": "Xbox Identity Provider",
+    "Description": "Onderdeel voor aanmelden bij Xbox, nodig voor bepaalde games en Xbox-diensten"
+  },
+  "Microsoft.XboxSpeechToTextOverlay": {
+    "FriendlyName": "Xbox Speech To Text",
+    "Description": "Spraak-naar-tekst en tekst-naar-spraak voor chat in ondersteunde games. Waarschuwing: dit Windows-onderdeel kan na verwijdering moeilijk opnieuw te installeren zijn"
+  },
+  "Microsoft.YourPhone": {
+    "FriendlyName": "Telefoonkoppeling",
+    "Description": "Verbind een Android-telefoon of iPhone om meldingen te ontvangen, berichten te bekijken en te bellen op je pc"
+  },
+  "Microsoft.ZuneMusic": {
+    "FriendlyName": "Mediaspeler",
+    "Description": "Speel lokale audio- en videobestanden af en beheer je muziekbibliotheek"
+  },
+  "MicrosoftWindows.CrossDevice": {
+    "FriendlyName": "Mobiele apparaten",
+    "Description": "Integratie van mobiele apparaten met Verkenner- en camerafuncties"
+  },
+  "MicrosoftWindows.Client.WebExperience": {
+    "FriendlyName": "Windows Widgets",
+    "Description": "Levert functies zoals Widgets en werkt ze bij via de Microsoft Store"
+  },
+  "Microsoft.WidgetsPlatformRuntime": {
+    "FriendlyName": "Widgets Platform Runtime",
+    "Description": "Vereist voor Windows Widgets"
+  },
+  "AD2F1837.OMENCommandCenter": {
+    "FriendlyName": "HP OMEN Gaming Hub",
+    "Description": "Gaminghub van HP voor prestatiebewaking en apparaatinstellingen"
+  },
+  "AcerIncorporated.AcerCareCenterS": {
+    "FriendlyName": "Acer Care Center",
+    "Description": "Apparaatinformatie, diagnostiek en onderhoudstools van Acer"
+  },
+  "B9ECED6F.ASUSPCAssistant": {
+    "FriendlyName": "MyASUS",
+    "Description": "Apparaatinstellingen, diagnostiek en ondersteuning van ASUS, inclusief batterij- en ventilatorinstellingen op ondersteunde modellen"
+  },
+  "B9ECED6F.Glidex": {
+    "FriendlyName": "ASUS GlideX",
+    "Description": "ASUS-app voor schermdeling en bestandsoverdracht tussen apparaten"
+  },
+  "SAMSUNGELECTRONICSCoLtd.SamsungQuickShare": {
+    "FriendlyName": "Samsung Quick Share",
+    "Description": "Samsung-app voor het delen van bestanden tussen apparaten in de buurt"
+  },
+  "9426MICRO-STARINTERNATION.MSICenter": {
+    "FriendlyName": "MSI Center",
+    "Description": "Apparaatinstellingen en prestatiebewaking van MSI"
+  },
+  "SAMSUNGELECTRONICSCO.LTD.PCGallery": {
+    "FriendlyName": "Samsung Galerij",
+    "Description": "Foto- en videogalerij van Samsung"
+  },
+  "SAMSUNGELECTRONICSCoLtd.SamsungFlux": {
+    "FriendlyName": "Samsung Flow",
+    "Description": "Samsung-app voor het verbinden van telefoon en pc, bestanden delen en meldingen synchroniseren"
+  },
+  "SAMSUNGELECTRONICSCoLtd.SamsungNotes": {
+    "FriendlyName": "Samsung Notes",
+    "Description": "Notities, handschrift en PDF-annotaties op ondersteunde Galaxy Books"
+  },
+  "B9ECED6F.ScreenPadMaster": {
+    "FriendlyName": "ASUS ScreenXpert",
+    "Description": "Vensterbeheer van ASUS en ScreenPad-bediening op ondersteunde modellen"
+  },
+  "SAMSUNGELECTRONICSCO.LTD.SamsungStudio": {
+    "FriendlyName": "Samsung Studio",
+    "Description": "Videobewerkingsapp van Samsung"
+  },
+  "SAMSUNGELECTRONICSCO.LTD.SamsungScreenRecording": {
+    "FriendlyName": "Samsung Scherm recorder",
+    "Description": "Neem het scherm en de webcam op ondersteunde Galaxy Books op"
+  },
+  "SAMSUNGELECTRONICSCO.LTD.Bixby": {
+    "FriendlyName": "Samsung Bixby",
+    "Description": "Spraakopdrachten voor apps, bestanden en instellingen op ondersteunde Galaxy Books"
+  },
+  "SAMSUNGELECTRONICSCO.LTD.SamsungWelcome": {
+    "FriendlyName": "Samsung Galaxy Book Experience",
+    "Description": "Samsung-appstarter en functiehandleidingen voor Galaxy Book"
+  },
+  "SAMSUNGELECTRONICSCO.LTD.SmartThingsWindows": {
+    "FriendlyName": "Samsung SmartThings",
+    "Description": "Samsung-app voor het verbinden, bewaken en bedienen van smarthomeapparaten"
+  },
+  "SAMSUNGELECTRONICSCoLtd.MultiControl": {
+    "FriendlyName": "Samsung Multi-control",
+    "Description": "Samsung-app voor het delen van toetsenbord en muis tussen compatibele Galaxy-apparaten"
+  },
+  "SAMSUNGELECTRONICSCoLtd.SecondScreen": {
+    "FriendlyName": "Samsung Tweede scherm",
+    "Description": "Samsung-app om een compatibele Galaxy-tablet als extra pc-scherm te gebruiken"
+  },
+  "SAMSUNGELECTRONICSCO.LTD.PENUP": {
+    "FriendlyName": "Samsung PENUP",
+    "Description": "Teken- en kleurapp van Samsung"
+  },
+  "9426MICRO-STARINTERNATION.BusinessCenter": {
+    "FriendlyName": "MSI Center Pro",
+    "Description": "Apparaatinstellingen, diagnostiek en prestatieoptimalisatie van MSI"
+  },
+  "AcerIncorporated.AcerRegistration": {
+    "FriendlyName": "Acer Product Registration",
+    "Description": "App voor Acer-productregistratie"
+  },
+  "E0469640.SmartAppearance": {
+    "FriendlyName": "Lenovo Smart Appearance",
+    "Description": "Camera-effecten en verbeteringen voor videogesprekken van Lenovo"
+  },
+  "LGElectronics.LGMonitorApp": {
+    "FriendlyName": "LG Monitor App Installer",
+    "Description": "Installeert geschikte hulpprogramma's voor LG-beeldschermen. Windows Update kan deze app opnieuw installeren als een LG-beeldscherm is aangesloten"
+  },
+  "AD2F1837.HPAIExperienceCenter": {
+    "FriendlyName": "HP AI Experience Center",
+    "Description": "HP-app die vooraf is geïnstalleerd op bepaalde HP AI-pc's"
+  },
+  "AD2F1837.HPConnectedMusic": {
+    "FriendlyName": "HP Connected Music",
+    "Description": "Oudere HP-app voor lokale muziek, iTunes-bibliotheken en streamingdiensten"
+  },
+  "AD2F1837.HPConnectedPhotopoweredbySnapfish": {
+    "FriendlyName": "HP Connected Photo",
+    "Description": "Oudere HP-app voor fotosynchronisatie, delen via Snapfish en afdrukbestellingen"
+  },
+  "AD2F1837.HPDesktopSupportUtilities": {
+    "FriendlyName": "HP Desktop Support Utilities",
+    "Description": "Toont het model, serienummer en BIOS-informatie van je HP-pc"
+  },
+  "AD2F1837.HPEasyClean": {
+    "FriendlyName": "HP Easy Clean",
+    "Description": "Schakelt invoerapparaten tijdelijk uit zodat je je pc kunt schoonmaken zonder onbedoelde invoer"
+  },
+  "AD2F1837.HPFileViewer": {
+    "FriendlyName": "HP File Viewer",
+    "Description": "HP-bestandsviewer; ondersteunde indelingen zijn niet bevestigd"
+  },
+  "AD2F1837.HPJumpStarts": {
+    "FriendlyName": "HP JumpStarts",
+    "Description": "HP-pc instellen, producten registreren en appaanbevelingen bekijken"
+  },
+  "AD2F1837.HPPCHardwareDiagnosticsWindows": {
+    "FriendlyName": "HP PC Hardware Diagnostics Windows",
+    "Description": "Test pc-hardware, zoals het geheugen en de opslag, om problemen op te sporen"
+  },
+  "AD2F1837.HPPowerManager": {
+    "FriendlyName": "HP Power Manager",
+    "Description": "Controleer de accugezondheid en beheer laadinstellingen op ondersteunde HP-laptops"
+  },
+  "AD2F1837.HPPrinterControl": {
+    "FriendlyName": "HP Smart",
+    "Description": "Print, scan en beheer ondersteunde HP-printers"
+  },
+  "AD2F1837.HPPrivacySettings": {
+    "FriendlyName": "HP PC Privacy Settings",
+    "Description": "Beheer privacy- en gegevensdelingsvoorkeuren voor HP-apps"
+  },
+  "AD2F1837.HPQuickDrop": {
+    "FriendlyName": "HP QuickDrop",
+    "Description": "HP-software voor snelle bestandsoverdracht tussen apparaten (niet meer ondersteund)"
+  },
+  "AD2F1837.HPQuickTouch": {
+    "FriendlyName": "HP QuickTouch",
+    "Description": "HP QuickTouch-onderdeel; exacte functie is niet bevestigd"
+  },
+  "AD2F1837.HPRegistration": {
+    "FriendlyName": "HP Registration",
+    "Description": "HP-software voor productregistratie"
+  },
+  "AD2F1837.HPSupportAssistant": {
+    "FriendlyName": "HP Support Assistant",
+    "Description": "HP-software voor ondersteuning, updates en probleemoplossing"
+  },
+  "AD2F1837.HPSureShieldAI": {
+    "FriendlyName": "HP Sure Shield AI",
+    "Description": "HP-hulpprogramma; exacte functie is niet bevestigd"
+  },
+  "AD2F1837.HPSystemInformation": {
+    "FriendlyName": "HP System Information",
+    "Description": "Toont het model, serienummer en BIOS-informatie van je HP-pc"
+  },
+  "AD2F1837.HPWelcome": {
+    "FriendlyName": "HP Welcome",
+    "Description": "Welkomst- en ondersteuningsapp van HP"
+  },
+  "AD2F1837.HPWorkWell": {
+    "FriendlyName": "HP WorkWell",
+    "Description": "Pauzeherinneringen, rekoefeningen en tips om gezonder achter de pc te werken (niet meer ondersteund)"
+  },
+  "AD2F1837.myHP": {
+    "FriendlyName": "HP",
+    "Description": "HP-apparaatinstellingen, ondersteuning en printerfuncties op ondersteunde apparaten"
+  },
+  "E046963F.LenovoCompanion": {
+    "FriendlyName": "Lenovo Vantage",
+    "Description": "Centrale Lenovo-app voor apparaatinstellingen, updates en ondersteuning"
+  },
+  "LenovoCompanyLimited.LenovoVantageService": {
+    "FriendlyName": "Lenovo Vantage Service",
+    "Description": "Achtergrondservice voor Lenovo Vantage"
+  },
+  "DellInc.DellSupportAssistforPCs": {
+    "FriendlyName": "Dell SupportAssist",
+    "Description": "Dell-software voor ondersteuning, diagnose en updates"
+  },
+  "DellInc.DellDigitalDelivery": {
+    "FriendlyName": "Dell Digital Delivery",
+    "Description": "Dell-software om vooraf aangeschafte software te downloaden en installeren (niet meer ondersteund)"
+  },
+  "DellInc.DellMobileConnect": {
+    "FriendlyName": "Dell Mobile Connect",
+    "Description": "Verbind Android-telefoons en iPhones met een Dell-pc (niet meer ondersteund)"
+  }
+}

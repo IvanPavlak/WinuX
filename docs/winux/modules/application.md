@@ -942,7 +942,7 @@ Start-VSCodeDetached
 ## [Start-Win11Debloat](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Start-Win11Debloat.ps1)
 
 - **Description:** Runs the vendored Win11Debloat script from the local repository to remove bloatware, disable telemetry, and apply system tweaks. Validates administrator privileges first, then runs with saved settings if available or shows the interactive Win11Debloat menu, launching the vendored script through Windows PowerShell because it cannot run under PowerShell 7. Called automatically during `Bootstrap -WithInitialSetup`, but only when opted in via `BootstrapConfig.Steps.Win11Debloat` (off by default - a vanilla bootstrap never runs or prompts for it).
-- **Notes:** Saved settings are symlinked into the vendored script's `Config` folder before the menu is shown, but only when `Windows\Win11Debloat\LastUsedSettings.json` already exists and is non-empty - the link points `Config\LastUsedSettings.json` at the WinuX file, so both a `-RunSavedSettings -Silent` run and a plain interactive `Debloat` run read and write it natively. Missing settings files are not created: without that file no link is made, `Use saved settings` is not offered, and Win11Debloat writes its own `vendor\Config\LastUsedSettings.json`, which the vendored `.gitignore` excludes and WinuX never picks up. To start tracking a new machine's choices, copy that file to `Windows\Win11Debloat\LastUsedSettings.json` so the next run links it.
+- **Notes:** The saved settings are the repository file `Windows\Win11Debloat\LastUsedSettings.json`. [Sync-Win11DebloatSettings](#sync-win11debloatsettings) links the vendored script's own settings file, `%LOCALAPPDATA%\Win11Debloat\LastUsedSettings.json`, to it before the menu is shown, so both a `-RunSavedSettings -Silent` run and a plain interactive `Debloat` run read and write the repository file natively. While the repository file is missing or blank no link is made and `Use saved settings` is not offered; the sync runs again after an interactive `Debloat` run and adopts what that run saved, so a first run's choices start the tracked file without a manual copy.
 - **Parameters:** -Selection (pre-selects a menu option: "Use saved settings", "Debloat", or "Don't debloat")
 - **Usage:** `Start-Win11Debloat`, `Start-Win11Debloat -Selection "Debloat"`
 
@@ -989,6 +989,19 @@ Stop-PowerToysCompletely -PreferGracefulExit -MaxGracefulWaitMs 5000
 ```
 
 **See also:** [Start-FancyZones](application.md#start-fancyzones)
+
+## [Sync-Win11DebloatSettings](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Sync-Win11DebloatSettings.ps1)
+
+- **Description:** Links Win11Debloat's saved settings to the repository file and adopts settings saved outside it. The vendored release keeps its saved settings in its user data folder, `%LOCALAPPDATA%\Win11Debloat\LastUsedSettings.json`; this makes that path a symbolic link to `Windows\Win11Debloat\LastUsedSettings.json`, so Win11Debloat reads and writes the version-controlled file natively. Returns `$true` when the repository file holds settings and is linked, otherwise `$false`. Called by [Start-Win11Debloat](#start-win11debloat) before its menu and again after an interactive run.
+- **Notes:** Creating the link needs administrator privileges or Developer Mode. A link that cannot be created is a terminating error, never a reported success.
+- **Usage:** `Sync-Win11DebloatSettings`
+
+A real file at the user data path was saved by a run that had no link to write through, and what happens to it depends on the repository file. When the repository file is missing or blank, the saved file is copied into the repository and then replaced by the link, so a first interactive run starts the tracked settings. When the repository file has settings, it stays the source of truth: the saved file is moved beside the link as `LastUsedSettings.unlinked.<timestamp>.json` and named in a warning. Each set-aside file gets its own name, so an earlier one is never overwritten, and a file that cannot be moved stays where it is and stops the sync. No link is made while the repository file is missing or blank, because Win11Debloat deletes a blank settings file on start and would remove the link again. A link that already points at the repository file is left alone; one that points elsewhere is replaced.
+
+```powershell
+# Link the saved settings; $true when "Use saved settings" can be offered
+Sync-Win11DebloatSettings
+```
 
 ## [Test-BrowserGroupAlreadyOpen](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/Application/Functions/Test-BrowserGroupAlreadyOpen.ps1)
 

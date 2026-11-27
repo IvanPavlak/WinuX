@@ -1,5 +1,5 @@
 {
-  "Version": "3.4.0",
+  "Version": "3.5.0",
   "Functions": {
     "Add-BrowserGroup": {
       "Module": "Configuration",
@@ -1025,6 +1025,10 @@
     },
     "EfCoreMigrationWizard": {
       "Module": "Workflow",
+      "Parameters": {}
+    },
+    "Enable-ClassicContextMenu": {
+      "Module": "System",
       "Parameters": {}
     },
     "Enable-DeveloperMode": {
@@ -6199,6 +6203,10 @@
           "Aliases": []
         }
       }
+    },
+    "Sync-Win11DebloatSettings": {
+      "Module": "Application",
+      "Parameters": {}
     },
     "Terminate-AllBrowserProcesses": {
       "Module": "System",

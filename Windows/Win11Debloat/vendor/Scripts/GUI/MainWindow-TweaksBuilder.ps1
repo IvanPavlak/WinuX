@@ -1,13 +1,97 @@
 # MainWindow-TweaksBuilder.ps1
 # Dynamic tweaks UI construction from Features.json, tweak state management, selection clear, and search/highlight.
 
-function Build-DynamicTweaks {
+<#
+    .SYNOPSIS
+        Resolves localized labels, tooltips, and options for a tweak control.
+
+    .DESCRIPTION
+        Provides consistent text for individual features and groups during control creation
+        and language changes.
+
+    .PARAMETER Mapping
+        A control mapping with Type and either FeatureId or GroupId and Values. Group values
+        contain FeatureIds and fallback Label text.
+
+    .PARAMETER Features
+        The feature definitions keyed by FeatureId. Defaults to $script:Features.
+
+    .OUTPUTS
+        PSCustomObject. Label, ToolTip, and Options, beginning with the No Change option.
+#>
+function Get-TweakControlText {
+    param(
+        [hashtable]$Mapping,
+        [hashtable]$Features = $script:Features
+    )
+
+    $options = @((Get-Translation -Key 'TweaksOptionNoChange'))
+    if ($Mapping.Type -eq 'group') {
+        $label = Get-Translation -Key $Mapping.GroupId -Field 'Label' -Section 'UiGroups'
+        $tooltip = Get-Translation -Key $Mapping.GroupId -Field 'ToolTip' -Section 'UiGroups'
+        $options += @($Mapping.Values | ForEach-Object {
+            Get-GroupValueTranslation -GroupId $Mapping.GroupId -FeatureId $_.FeatureIds[0] -FallbackLabel $_.Label
+        })
+    }
+    else {
+        $feature = $Features[$Mapping.FeatureId]
+        $label = Get-Translation -Key $Mapping.FeatureId -Field 'Label' -Section 'Features'
+        $tooltip = if ($feature.DisableWhenApplied -eq $true) {
+            Get-Translation -Key 'TweaksAlreadyAppliedTooltip'
+        }
+        else { Get-Translation -Key $Mapping.FeatureId -Field 'ToolTip' -Section 'Features' }
+        $optionKey = if ($Mapping.FeatureId -match '^Disable') { 'TweaksOptionDisable' }
+            elseif ($Mapping.FeatureId -match '^Enable') { 'TweaksOptionEnable' }
+            else { 'TweaksOptionApply' }
+        $options += Get-Translation -Key $optionKey
+    }
+
+    return [PSCustomObject]@{ Label = $label; ToolTip = $tooltip; Options = $options }
+}
+
+<#
+    .SYNOPSIS
+        Rebuilds localized feature and undo label lookups.
+
+    .DESCRIPTION
+        Keeps feature names used in change overviews in sync with the active language.
+
+    .PARAMETER Features
+        The feature definitions to translate. Defaults to the values of $script:Features.
+#>
+function Update-FeatureLabelLookup {
+    param([object[]]$Features = @($script:Features.Values))
+
+    $script:FeatureLabelLookup = @{}
+    $script:UndoFeatureLabelLookup = @{}
+    foreach ($feature in $Features) {
+        $script:FeatureLabelLookup[$feature.FeatureId] = Get-Translation -Key $feature.FeatureId -Field 'Label' -Section 'Features'
+        if ($feature.UndoLabel) {
+            $script:UndoFeatureLabelLookup[$feature.FeatureId] = Get-Translation -Key $feature.FeatureId -Field 'UndoLabel' -Section 'Features'
+        }
+    }
+}
+
+<#
+    .SYNOPSIS
+        Builds the main window's dynamic tweak controls from Features.json.
+
+    .PARAMETER Window
+        The main window whose category columns receive the generated controls.
+
+    .PARAMETER WinVersion
+        The Windows build number used for the category-icon fallback.
+
+    .NOTES
+        Initializes script-scoped control and category mappings used by the tweak UI.
+#>
+function New-DynamicTweakControls {
     param(
         [System.Windows.Window]$Window,
         [int]$WinVersion
     )
 
-    $featuresJson = LoadJsonFile -filePath $script:FeaturesFilePath -expectedVersion "1.0"
+    $featuresJson = Import-JsonFile -filePath $script:FeaturesFilePath -expectedVersion "1.0"
 
     if (-not $featuresJson) {
         throw "Unable to load Features.json file. The GUI cannot continue without feature definitions."
@@ -26,10 +110,30 @@ function Build-DynamicTweaks {
 
     $script:UiControlMappings = @{}
     $script:CategoryCardMap = @{}
+    $script:CategoryLanguageControls = @()
     $script:TweaksCompactMode = $null
     $script:TweaksCardsMovedFromCol2 = @()
 
-    function CreateLabeledCombo($parent, $labelText, $comboName, $items) {
+    <#
+        .SYNOPSIS
+            Creates and registers a labeled combo box or a checkbox for a tweak.
+
+        .PARAMETER Parent
+            The panel that receives the generated control.
+
+        .PARAMETER LabelText
+            The display and automation label for the tweak.
+
+        .PARAMETER ComboName
+            The name used to register the generated control.
+
+        .PARAMETER Items
+            The available tweak options; two options produce a checkbox.
+
+        .OUTPUTS
+            System.Windows.Controls.Control. The generated checkbox or combo box.
+    #>
+    function New-LabeledCombo($parent, $labelText, $comboName, $items) {
         # If only 2 items (No Change + one option), use a checkbox instead
         if ($items.Count -eq 2) {
             $checkbox = New-Object System.Windows.Controls.CheckBox
@@ -96,7 +200,67 @@ function Build-DynamicTweaks {
         return $combo
     }
 
-    function GetWikiUrlForCategory($category) {
+    <#
+        .SYNOPSIS
+            Attaches a wrapping tooltip to a tweak control and its label border.
+
+        .PARAMETER Control
+            The tweak control receiving the tooltip.
+
+        .PARAMETER TooltipText
+            The localized text displayed by the tooltip.
+
+        .PARAMETER ShowOnDisabled
+            Enables tooltip display even when the tweak control is disabled.
+    #>
+    function Set-TweakControlToolTip($control, $tooltipText, [switch]$ShowOnDisabled) {
+        $tipBlock = New-Object System.Windows.Controls.TextBlock
+        $tipBlock.Text = $tooltipText
+        $tipBlock.TextWrapping = 'Wrap'
+        $tipBlock.MaxWidth = 420
+        $control.ToolTip = $tipBlock
+        if ($ShowOnDisabled) {
+            [System.Windows.Controls.ToolTipService]::SetShowOnDisabled($control, $true)
+        }
+        $labelBorder = $Window.FindName("$($control.Name)_LabelBorder")
+        if ($labelBorder) { $labelBorder.ToolTip = $tipBlock }
+    }
+
+    <#
+        .SYNOPSIS
+            Creates and maps a localized control for an individual feature.
+
+        .PARAMETER Feature
+            The feature definition to display.
+
+        .PARAMETER Parent
+            The category panel that receives the generated control.
+
+        .PARAMETER CategoryId
+            The category identifier stored in the control mapping.
+    #>
+    function Add-FeatureTweakControl($feature, $parent, $categoryId) {
+        $mapping = @{ Type = 'feature'; FeatureId = $feature.FeatureId; CategoryId = $categoryId }
+        $text = Get-TweakControlText -Mapping $mapping -Features $featureMap
+        $controlName = ("Feature_{0}_Combo" -f $feature.FeatureId) -replace '[^a-zA-Z0-9_]', ''
+        $control = New-LabeledCombo -parent $parent -labelText $text.Label -comboName $controlName -items $text.Options
+        if ($feature.ToolTip -or $feature.DisableWhenApplied -eq $true) {
+            Set-TweakControlToolTip -control $control -tooltipText $text.ToolTip -ShowOnDisabled
+        }
+        $script:UiControlMappings[$controlName] = $mapping
+    }
+
+    <#
+        .SYNOPSIS
+            Returns the Features wiki URL for a tweak category.
+
+        .PARAMETER Category
+            The category name converted to a wiki anchor.
+
+        .OUTPUTS
+            System.String. The category URL, or the Features page for an empty category.
+    #>
+    function Get-WikiUrlForCategory($category) {
         if (-not $category) { return 'https://github.com/Raphire/Win11Debloat/wiki/Features' }
 
         $slug = $category.ToLowerInvariant()
@@ -107,9 +271,21 @@ function Build-DynamicTweaks {
         return "https://github.com/Raphire/Win11Debloat/wiki/Features#$slug"
     }
 
-    function GetOrCreateCategoryCard($categoryObj) {
+    <#
+        .SYNOPSIS
+            Returns the existing category panel or creates and registers a new one.
+
+        .PARAMETER CategoryObj
+            The category definition, with Name and Icon for internal use (the map key, the
+            wiki-link slug) and CategoryId for the translated header shown to the user.
+
+        .OUTPUTS
+            System.Windows.Controls.StackPanel. The category's content panel.
+    #>
+    function Get-OrCreateCategoryCard($categoryObj) {
         $categoryName = $categoryObj.Name
         $categoryIcon = $categoryObj.Icon
+        $categoryLabel = Get-Translation -Key $categoryObj.CategoryId -Field 'Label' -Section 'Categories'
 
         if ($script:CategoryCardMap.ContainsKey($categoryName)) { return $script:CategoryCardMap[$categoryName] }
 
@@ -141,7 +317,7 @@ function Build-DynamicTweaks {
         $headerRow.Children.Add($icon) | Out-Null
 
         $header = New-Object System.Windows.Controls.TextBlock
-        $header.Text = $categoryName
+        $header.Text = $categoryLabel
         $header.Style = $Window.Resources['CategoryHeaderTextBlock']
         $headerRow.Children.Add($header) | Out-Null
 
@@ -151,14 +327,15 @@ function Build-DynamicTweaks {
 
         $helpBtn = New-Object System.Windows.Controls.Button
         $helpBtn.Content = $helpIcon
-        $helpBtn.ToolTip = "Open the wiki for more info on '$categoryName' tweaks"
-        $helpBtn.Tag = (GetWikiUrlForCategory -category $categoryName)
+        $helpBtn.ToolTip = Get-Translation -Key 'TweaksCategoryHelpTooltip' -FormatArgs @($categoryLabel)
+        $helpBtn.Tag = (Get-WikiUrlForCategory -category $categoryName)
         $helpBtn.Style = $Window.Resources['CategoryHelpLinkButtonStyle']
         $helpBtn.Add_Click({
                 param($button, $e)
                 if ($button.Tag) { Start-Process $button.Tag }
             })
         $headerRow.Children.Add($helpBtn) | Out-Null
+        $script:CategoryLanguageControls += @{ CategoryId = $categoryObj.CategoryId; Header = $header; HelpButton = $helpBtn }
 
         $panel.Children.Add($headerRow) | Out-Null
 
@@ -182,8 +359,17 @@ function Build-DynamicTweaks {
         foreach ($c in $featuresJson.Categories) {
             $categoryName = if ($c -is [string]) { $c } else { $c.Name }
             if ($categoriesPresent.ContainsKey($categoryName)) {
-                # Store the full category object (or create one with default icon for string categories)
-                $categoryObj = if ($c -is [string]) { @{Name = $c; Icon = '&#xE712;' } } else { $c }
+                # Store the full category object (or create one with default icon for string categories).
+                # A category without its own CategoryId falls back to its Name, same as before CategoryId existed.
+                $categoryObj = if ($c -is [string]) {
+                    @{Name = $c; CategoryId = $c; Icon = '&#xE712;' }
+                }
+                elseif (-not $c.CategoryId) {
+                    @{Name = $c.Name; CategoryId = $c.Name; Icon = $c.Icon }
+                }
+                else {
+                    $c
+                }
                 $orderedCategories += $categoryObj
             }
         }
@@ -191,7 +377,7 @@ function Build-DynamicTweaks {
     else {
         # For backward compatibility, create category objects from keys
         foreach ($catName in $categoriesPresent.Keys) {
-            $orderedCategories += @{Name = $catName; Icon = '&#xE712;' }
+            $orderedCategories += @{Name = $catName; CategoryId = $catName; Icon = '&#xE712;' }
         }
     }
 
@@ -203,6 +389,7 @@ function Build-DynamicTweaks {
 
     foreach ($categoryObj in $orderedCategories) {
         $categoryName = $categoryObj.Name
+        $categoryId = $categoryObj.CategoryId
 
         # Card is created lazily on the first rendered item
         $panel = $null
@@ -231,7 +418,7 @@ function Build-DynamicTweaks {
             if ($feature.Category -ne $categoryName) { $featureIndex++; continue }
 
             # Check version and feature compatibility using Features.json
-            if (($feature.MinVersion -and $WinVersion -lt $feature.MinVersion) -or ($feature.MaxVersion -and $WinVersion -gt $feature.MaxVersion) -or ($feature.FeatureId -eq 'DisableModernStandbyNetworking' -and (-not $script:ModernStandbySupported))) {
+            if (-not (Test-FeatureSupportedOnBuild -Feature $feature -Build $WinVersion) -or ($feature.FeatureId -eq 'DisableModernStandbyNetworking' -and (-not $script:ModernStandbySupported))) {
                 $featureIndex++; continue
             }
 
@@ -264,7 +451,7 @@ function Build-DynamicTweaks {
                     foreach ($fid in $_.FeatureIds) {
                         if ($featureMap.ContainsKey($fid)) {
                             $f = $featureMap[$fid]
-                            if (($f.MinVersion -and $WinVersion -lt $f.MinVersion) -or ($f.MaxVersion -and $WinVersion -gt $f.MaxVersion)) {
+                            if (-not (Test-FeatureSupportedOnBuild -Feature $f -Build $WinVersion)) {
                                 $allCompatible = $false
                                 break
                             }
@@ -284,88 +471,31 @@ function Build-DynamicTweaks {
                     $soleFid = $featureIds[0]
 
                     if ($featureMap.ContainsKey($soleFid)) {
-                        $soleFeature = $featureMap[$soleFid]
-                        $opt = 'Apply'
-                        if ($soleFeature.FeatureId -match '^Disable') { $opt = 'Disable' } elseif ($soleFeature.FeatureId -match '^Enable') { $opt = 'Enable' }
-                        $items = @('No Change', $opt)
-                        $comboName = ("Feature_{0}_Combo" -f $soleFeature.FeatureId) -replace '[^a-zA-Z0-9_]', ''
-                        if (-not $panel) { $panel = GetOrCreateCategoryCard -categoryObj $categoryObj }
-                        $combo = CreateLabeledCombo -parent $panel -labelText $soleFeature.Label -comboName $comboName -items $items
-                        # attach tooltip from Features.json if present
-                        if ($soleFeature.ToolTip -or $soleFeature.DisableWhenApplied -eq $true) {
-                            $tooltipText = $soleFeature.ToolTip
-                            if ($soleFeature.DisableWhenApplied -eq $true) {
-                                $tooltipText = "This tweak is already applied and cannot be undone automatically. Visit the Win11Debloat wiki for instructions on how to manually revert this change."
-                            }
-                            $tipBlock = New-Object System.Windows.Controls.TextBlock
-                            $tipBlock.Text = $tooltipText
-                            $tipBlock.TextWrapping = 'Wrap'
-                            $tipBlock.MaxWidth = 420
-                            $combo.ToolTip = $tipBlock
-                            [System.Windows.Controls.ToolTipService]::SetShowOnDisabled($combo, $true)
-                            $lblBorderObj = $null
-                            try { $lblBorderObj = $Window.FindName("$comboName`_LabelBorder") } catch {}
-                            if ($lblBorderObj) { $lblBorderObj.ToolTip = $tipBlock }
-                        }
-                        $script:UiControlMappings[$comboName] = @{ Type = 'feature'; FeatureId = $soleFeature.FeatureId; Label = $soleFeature.Label; Category = $categoryName }
+                        if (-not $panel) { $panel = Get-OrCreateCategoryCard -categoryObj $categoryObj }
+                        Add-FeatureTweakControl -feature $featureMap[$soleFid] -parent $panel -categoryId $categoryId
                     }
                     continue
                 }
 
-                $items = @('No Change') + ($filteredValues | ForEach-Object { $_.Label })
+                $mapping = @{ Type = 'group'; GroupId = $group.GroupId; Values = $filteredValues; CategoryId = $categoryId }
+                $text = Get-TweakControlText -Mapping $mapping -Features $featureMap
                 $comboName = 'Group_{0}Combo' -f $group.GroupId
-                if (-not $panel) { $panel = GetOrCreateCategoryCard -categoryObj $categoryObj }
-                $combo = CreateLabeledCombo -parent $panel -labelText $group.Label -comboName $comboName -items $items
-                # attach tooltip from UiGroups if present
+                if (-not $panel) { $panel = Get-OrCreateCategoryCard -categoryObj $categoryObj }
+                $combo = New-LabeledCombo -parent $panel -labelText $text.Label -comboName $comboName -items $text.Options
                 if ($group.ToolTip) {
-                    $tipBlock = New-Object System.Windows.Controls.TextBlock
-                    $tipBlock.Text = $group.ToolTip
-                    $tipBlock.TextWrapping = 'Wrap'
-                    $tipBlock.MaxWidth = 420
-                    $combo.ToolTip = $tipBlock
-                    $lblBorderObj = $null
-                    try { $lblBorderObj = $Window.FindName("$comboName`_LabelBorder") } catch {}
-                    if ($lblBorderObj) { $lblBorderObj.ToolTip = $tipBlock }
+                    Set-TweakControlToolTip -control $combo -tooltipText $text.ToolTip
                 }
-                $script:UiControlMappings[$comboName] = @{ Type = 'group'; Values = $filteredValues; Label = $group.Label; Category = $categoryName }
+                $script:UiControlMappings[$comboName] = $mapping
             }
             elseif ($item.Type -eq 'feature') {
-                $feature = $item.Data
-                $opt = 'Apply'
-                if ($feature.FeatureId -match '^Disable') { $opt = 'Disable' } elseif ($feature.FeatureId -match '^Enable') { $opt = 'Enable' }
-                $items = @('No Change', $opt)
-                $comboName = ("Feature_{0}_Combo" -f $feature.FeatureId) -replace '[^a-zA-Z0-9_]', ''
-                if (-not $panel) { $panel = GetOrCreateCategoryCard -categoryObj $categoryObj }
-                $combo = CreateLabeledCombo -parent $panel -labelText $feature.Label -comboName $comboName -items $items
-                # attach tooltip from Features.json if present, and include the disabled-state reason
-                if ($feature.ToolTip -or $feature.DisableWhenApplied -eq $true) {
-                    $tooltipText = $feature.ToolTip
-                    if ($feature.DisableWhenApplied -eq $true) {
-                        $tooltipText = "This tweak is already applied and cannot be undone automatically. Visit the Win11Debloat wiki for instructions on how to manually revert this change."
-                    }
-
-                    $tipBlock = New-Object System.Windows.Controls.TextBlock
-                    $tipBlock.Text = $tooltipText
-                    $tipBlock.TextWrapping = 'Wrap'
-                    $tipBlock.MaxWidth = 420
-                    $combo.ToolTip = $tipBlock
-                    [System.Windows.Controls.ToolTipService]::SetShowOnDisabled($combo, $true)
-                    $lblBorderObj = $null
-                    try { $lblBorderObj = $Window.FindName("$comboName`_LabelBorder") } catch {}
-                    if ($lblBorderObj) { $lblBorderObj.ToolTip = $tipBlock }
-                }
-                $script:UiControlMappings[$comboName] = @{ Type = 'feature'; FeatureId = $feature.FeatureId; Label = $feature.Label; Category = $categoryName }
+                if (-not $panel) { $panel = Get-OrCreateCategoryCard -categoryObj $categoryObj }
+                Add-FeatureTweakControl -feature $item.Data -parent $panel -categoryId $categoryId
             }
         }
     }
 
-    # Build a feature-label lookup so GenerateOverview can resolve feature IDs without reloading JSON
-    $script:FeatureLabelLookup = @{}
-    $script:UndoFeatureLabelLookup = @{}
-    foreach ($f in $featuresJson.Features) {
-        $script:FeatureLabelLookup[$f.FeatureId] = $f.Label
-        $script:UndoFeatureLabelLookup[$f.FeatureId] = $f.UndoLabel
-    }
+    # Overview generation uses the same labels as language refresh.
+    Update-FeatureLabelLookup -Features $featuresJson.Features
 }
 
 function Update-CurrentTweakSystemState {
@@ -377,7 +507,7 @@ function Update-CurrentTweakSystemState {
     if (-not $script:UiControlMappings) { return }
     if (-not $script:Features) { return }
 
-    $featuresJson = LoadJsonFile -filePath $script:FeaturesFilePath -expectedVersion "1.0"
+    $featuresJson = Import-JsonFile -filePath $script:FeaturesFilePath -expectedVersion "1.0"
     if (-not $featuresJson) { return }
 
     $groupMap = @{}
@@ -423,7 +553,14 @@ function Update-CurrentTweakSystemState {
     }
 }
 
-function Load-CurrentTweakStateIntoUI {
+<#
+    .SYNOPSIS
+        Updates tweak controls to reflect the current system state.
+
+    .PARAMETER Window
+        The window that owns the generated tweak controls.
+#>
+function Set-CurrentTweakStateInUi {
     param([System.Windows.Window]$Window)
 
     Update-CurrentTweakSystemState -Window $Window -ApplyToUi:$true

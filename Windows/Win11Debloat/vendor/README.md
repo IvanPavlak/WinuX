@@ -57,7 +57,7 @@ This method supports command-line parameters to customize the behaviour of the s
   3. Temporarily enable PowerShell execution by entering the following command:
 
   ```PowerShell
-  Set-ExecutionPolicy Unrestricted -Scope Process -Force
+  Set-ExecutionPolicy Bypass -Scope Process -Force
   ```
 
   4. In PowerShell, navigate to the directory where the files were extracted. Example: `cd c:\Win11Debloat`
@@ -94,11 +94,10 @@ Below is an overview of the key features and functionality offered by Win11Deblo
 
 - Disable & remove Microsoft Copilot, Windows Recall and Click to Do.
 - Prevent AI service (WSAIFabricSvc) from starting automatically.
-- Disable AI Features in Edge, Paint and Notepad.
+- Disable AI Features in Edge, Chrome, Paint and Notepad.
 
 #### System
 
-- Disable the Drag Tray for sharing & moving files.
 - Restore the old Windows 10 style context menu.
 - Turn off Enhance Pointer Precision (mouse acceleration).
 - Disable the Sticky Keys keyboard shortcut.
@@ -111,13 +110,15 @@ Below is an overview of the key features and functionality offered by Win11Deblo
 
 - Prevent Windows from getting updates as soon as they're available.
 - Prevent automatic restarts after updates while signed in.
+- Disable driver updates through Windows Update.
 - Disable sharing of downloaded updates with other PCs, also known as Delivery Optimization.
-- Prevent Windows from auto-installing device companion apps.
+- Prevent Windows from auto-installing device companion apps, like LG Monitor App, Alienware Command Center and more.
 
 #### Appearance
 
 - Enable dark mode for system and apps.
 - Disable transparency, animations and visual effects.
+- Hide the 'Learn about this picture' shortcut for desktop spotlight, or disable the Windows spotlight background option entirely.
 
 #### Start Menu & Search
 

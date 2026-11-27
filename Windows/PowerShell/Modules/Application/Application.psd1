@@ -63,6 +63,7 @@
 		'Start-MicrosoftActivationScripts',
 		'Start-ProcessDetached',
 		'Start-Win11Debloat',
+		'Sync-Win11DebloatSettings',
 		'Update-Win11DebloatVendor',
 		'Wait-BrowserWindowReady',
 		'Test-BrowserGroupAlreadyOpen',

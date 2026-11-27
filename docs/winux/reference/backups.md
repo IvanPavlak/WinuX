@@ -87,10 +87,13 @@ back. An assistant that cannot create directories falls back to the legacy sidec
 
 ## What this policy does not cover
 
-- **Win11Debloat registry snapshots.** The vendored Win11Debloat tool keeps its own sink at
-  `Windows\Win11Debloat\vendor\Backups\` with its own restore UI. It is third-party code and its
-  internals are deliberately untouched; `Update-Win11DebloatVendor` preserves that folder across
-  vendor updates.
+- **Win11Debloat registry snapshots.** The vendored Win11Debloat tool keeps its own sink in its
+  user data folder, `%LOCALAPPDATA%\Win11Debloat\Backups\`, with its own restore UI. It is
+  third-party code and its internals are deliberately untouched; the folder lies outside the
+  repository, so a vendor update does not reach it. Releases up to 2026.07.11 kept the snapshots
+  in `Windows\Win11Debloat\vendor\Backups\` instead: `Update-Win11DebloatVendor` still preserves
+  that folder, but the newer restore UI no longer reads it, so move older snapshots you still
+  need into the user data folder.
 - **Legacy sidecar `.bak` files.** Older WinuX versions left `Configuration.local.psd1.bak` and
   `Data\*.local.csv.bak` beside the files they backed up. The writers no longer produce them, but
   the gitignore entries remain so stale copies on existing machines (and the AI fallback above)
