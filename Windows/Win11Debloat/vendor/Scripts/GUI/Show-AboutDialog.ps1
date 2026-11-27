@@ -1,3 +1,10 @@
+<#
+    .SYNOPSIS
+        Displays the themed About dialog for the application.
+
+    .PARAMETER Owner
+        The optional window that owns the dialog and its modal overlay.
+#>
 function Show-AboutDialog {
     param (
         [Parameter(Mandatory=$false)]
@@ -6,7 +13,7 @@ function Show-AboutDialog {
     
     Add-Type -AssemblyName PresentationFramework,PresentationCore,WindowsBase | Out-Null
     
-    $usesDarkMode = GetSystemUsesDarkMode
+    $usesDarkMode = Get-AppUsesDarkMode
     
     # Determine owner window
     $ownerWindow = if ($Owner) { $Owner } else { $script:GuiWindow }
@@ -25,6 +32,7 @@ function Show-AboutDialog {
     
     # Load XAML from file
     $xaml = Get-Content -Path $script:AboutWindowSchema -Raw
+    $xaml = ConvertTo-LocalizedXaml -Xaml $xaml
     $reader = [System.Xml.XmlReader]::Create([System.IO.StringReader]::new($xaml))
     try {
         $aboutWindow = [System.Windows.Markup.XamlReader]::Load($reader)
@@ -42,7 +50,7 @@ function Show-AboutDialog {
     }
 
     # Apply theme resources
-    SetWindowThemeResources -window $aboutWindow -usesDarkMode $usesDarkMode
+    Set-WindowThemeResources -window $aboutWindow -usesDarkMode $usesDarkMode
     
     # Get UI elements
     $titleBar = $aboutWindow.FindName('TitleBar')
@@ -60,12 +68,12 @@ function Show-AboutDialog {
     })
     
     # Project link click handler
-    $projectLink.Add_MouseLeftButtonDown({
+    $projectLink.Add_Click({
         Start-Process "https://github.com/Raphire/Win11Debloat"
     })
     
     # Ko-fi link click handler
-    $kofiLink.Add_MouseLeftButtonDown({
+    $kofiLink.Add_Click({
         Start-Process "https://ko-fi.com/raphire"
     })
     

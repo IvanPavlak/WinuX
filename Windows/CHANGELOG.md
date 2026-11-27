@@ -8,6 +8,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [3.5.0] - 2026-11-27
+
+### Added
+
+- **`Enable-ClassicContextMenu` and the opt-in Bootstrap step `ClassicContextMenu` make right click open the classic context menu on Windows 11.** The usual override of the COM class `{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}`, which is also all the vendored Win11Debloat's "Use classic Windows 10 context menu style" writes, stopped working on newer Windows 11 builds: they draw a redesigned menu from a second class, `{51668040-5e31-4023-bbe3-149163bd80f1}`, so right click kept opening the shortened menu with the override in place. The function writes an empty per-user `InprocServer32` override under `HKCU:\Software\Classes\CLSID` for each of the two classes the machine registers (an older build gets one, Windows 10 none and a warning), needs no administrator privileges, leaves overrides already in place alone and restarts Explorer only when it wrote one. The step runs it after Developer Mode and ships off, like every step that acts the moment it runs: opt in with `BootstrapConfig.Steps.ClassicContextMenu = $true` or `Bootstrap -Include ClassicContextMenu`. Covered by `Enable-ClassicContextMenu.Tests.ps1`, `Bootstrap.Tests.ps1` and `Resolve-BootstrapSteps.Tests.ps1`; documented in the System and Bootstrap module references, the configuration reference, the first-run page, a new guide and a troubleshooting entry.
+- **`Sync-Win11DebloatSettings` links Win11Debloat's saved settings to the repository file and adopts settings saved outside it.** It makes `%LOCALAPPDATA%\Win11Debloat\LastUsedSettings.json` a symbolic link to `Windows\Win11Debloat\LastUsedSettings.json` and returns whether the repository file holds settings. A real file found there was saved by a run that had no link to write through: with the repository file missing or blank it is copied into the repository, otherwise the repository file stays the source of truth and the saved one is kept beside the link as `LastUsedSettings.unlinked.json` and named in a warning. Covered by `Sync-Win11DebloatSettings.Tests.ps1`; documented in the Application module reference, a new guide and a troubleshooting entry.
+
+### Changed
+
+- **The vendored Win11Debloat is release 2026.10.30.** It was 2026.07.11. From this release on Win11Debloat keeps its saved settings, logs and registry backups in `%LOCALAPPDATA%\Win11Debloat` instead of the script's own folder, which the backups page now says.
+
+### Fixed
+
+- **`Start-Win11Debloat` reads and writes the repository's saved settings again with a Win11Debloat release that keeps them in its user data folder.** The function linked `vendor\Config\LastUsedSettings.json` to the repository file, where releases up to 2026.07.11 kept their settings. Later releases read and write `%LOCALAPPDATA%\Win11Debloat\LastUsedSettings.json`, so after a vendor update an interactive run started without the saved choices and saved the new ones where the repository never saw them, and `Use saved settings` failed on a missing file. The link is now made at the user data path by `Sync-Win11DebloatSettings`, which also runs after an interactive `Debloat` run, so a first run on a repository without saved settings starts the tracked file instead of needing a manual copy. Covered by `Start-Win11Debloat.Tests.ps1`.
+
 ## [3.4.0] - 2026-11-26
 
 ### Added
@@ -2054,7 +2069,8 @@ The first public release of WinuX.
 - Governance and licensing: MIT license, contributor guide, code of conduct, security policy, and third-party notices.
 - CI: the full Pester suite on every pull request, and a release workflow that builds `WinuX.exe` from every version tag and attaches it - with a SHA-256 checksum - to the GitHub release.
 
-[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/winux/v3.4.0...HEAD
+[Unreleased]: https://github.com/IvanPavlak/WinuX/compare/winux/v3.5.0...HEAD
+[3.5.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v3.4.0...winux/v3.5.0
 [3.4.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v3.3.0...winux/v3.4.0
 [3.3.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v3.2.0...winux/v3.3.0
 [3.2.0]: https://github.com/IvanPavlak/WinuX/compare/winux/v3.1.0...winux/v3.2.0

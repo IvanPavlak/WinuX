@@ -142,6 +142,15 @@ function Update-AppsPanelSort {
     }
 }
 
+<#
+    .SYNOPSIS
+        Updates the "N apps selected" status text and shows or hides the app-removal scope section.
+
+    .DESCRIPTION
+        The scope section only makes sense once at least one app is selected, so it's hidden
+        entirely at zero and its description text is refreshed via Update-AppRemovalScopeDescription
+        whenever the selection count changes.
+#>
 function Update-AppSelectionStatus {
     param(
         [System.Windows.Controls.Panel]$AppsPanel,
@@ -158,7 +167,7 @@ function Update-AppSelectionStatus {
             $selectedCount++
         }
     }
-    $AppSelectionStatus.Text = "$selectedCount app(s) selected for removal"
+    $AppSelectionStatus.Text = Get-Translation -Key 'AppSelectionStatusSelected' -Count $selectedCount -FormatArgs @($selectedCount)
 
     if ($AppRemovalScopeCombo -and $AppRemovalScopeSection -and $AppRemovalScopeDescription) {
         if ($selectedCount -gt 0) {
@@ -174,6 +183,10 @@ function Update-AppSelectionStatus {
     }
 }
 
+<#
+    .SYNOPSIS
+        Updates the app-removal scope description to match the selected ComboBoxItem.
+#>
 function Update-AppRemovalScopeDescription {
     param(
         [System.Windows.Controls.ComboBox]$AppRemovalScopeCombo,
@@ -182,16 +195,56 @@ function Update-AppRemovalScopeDescription {
 
     $selectedItem = $AppRemovalScopeCombo.SelectedItem
     if ($selectedItem) {
-        switch ($selectedItem.Content) {
-            "All users" {
-                $AppRemovalScopeDescription.Text = "Apps will be removed for all users and from the Windows image to prevent reinstallation for new users."
+        # Content is the display text and will change once translated; Name is stable.
+        switch ($selectedItem.Name) {
+            "AppRemovalScopeAllUsers" {
+                $AppRemovalScopeDescription.Text = Get-Translation -Key 'AppRemovalScopeDescriptionAllUsers'
             }
-            "Current user only" {
-                $AppRemovalScopeDescription.Text = "Apps will only be removed for the current user."
+            "AppRemovalScopeCurrentUser" {
+                $AppRemovalScopeDescription.Text = Get-Translation -Key 'AppRemovalScopeDescriptionCurrentUser'
             }
-            "Target user only" {
-                $AppRemovalScopeDescription.Text = "Apps will only be removed for the specified target user."
+            "AppRemovalScopeTargetUser" {
+                $AppRemovalScopeDescription.Text = Get-Translation -Key 'AppRemovalScopeDescriptionTargetUser'
             }
+        }
+    }
+}
+
+<#
+    .SYNOPSIS
+        Tests whether the app-removal scope combo is currently set to "Target user only".
+#>
+function Test-AppRemovalScopeTargetsOtherUser {
+    param(
+        [System.Windows.Controls.ComboBox]$AppRemovalScopeCombo
+    )
+
+    return ($AppRemovalScopeCombo -and $AppRemovalScopeCombo.SelectedItem -and $AppRemovalScopeCombo.SelectedItem.Name -eq 'AppRemovalScopeTargetUser')
+}
+
+<#
+    .SYNOPSIS
+        Resolves the -AppRemovalTarget value for the selected app-removal scope.
+#>
+function Get-AppRemovalScopeTarget {
+    param(
+        [System.Windows.Controls.ComboBox]$AppRemovalScopeCombo,
+        [System.Windows.Controls.TextBox]$OtherUsernameTextBox
+    )
+
+    $selectedItem = $AppRemovalScopeCombo.SelectedItem
+    if (-not $selectedItem) { return $null }
+
+    if (Test-AppRemovalScopeTargetsOtherUser -AppRemovalScopeCombo $AppRemovalScopeCombo) {
+        return $OtherUsernameTextBox.Text.Trim()
+    }
+
+    switch ($selectedItem.Name) {
+        "AppRemovalScopeAllUsers" { return 'AllUsers' }
+        "AppRemovalScopeCurrentUser" { return 'CurrentUser' }
+        default {
+            Write-Warning "Unrecognized app-removal scope item '$($selectedItem.Name)'. Skipping app removal."
+            return $null
         }
     }
 }
@@ -223,7 +276,7 @@ function Update-AppPresetStates {
     $script:UpdatingPresets = $true
     try {
         # Helper: count matching and checked apps, set checkbox state
-        function SetPresetState($CheckBox, [scriptblock]$MatchFilter) {
+        function Set-PresetState($CheckBox, [scriptblock]$MatchFilter) {
             $total = 0; $checked = 0
             foreach ($child in $AppsPanel.Children) {
                 if ($child -is [System.Windows.Controls.CheckBox]) {
@@ -241,15 +294,15 @@ function Update-AppPresetStates {
         $presetDefaultApps = $window.FindName('PresetDefaultApps')
         $presetLastUsed = $window.FindName('PresetLastUsed')
 
-        SetPresetState $presetDefaultApps { param($c) $c.SelectedByDefault -eq $true }
+        Set-PresetState $presetDefaultApps { param($c) $c.SelectedByDefault -eq $true }
         foreach ($jsonCb in $script:JsonPresetCheckboxes) {
             $localIds = $jsonCb.PresetAppIds
-            SetPresetState $jsonCb { param($c) (@($c.AppIds) | Where-Object { $localIds -contains $_ }).Count -gt 0 }.GetNewClosure()
+            Set-PresetState $jsonCb { param($c) (@($c.AppIds) | Where-Object { $localIds -contains $_ }).Count -gt 0 }.GetNewClosure()
         }
 
         # Last used preset: only update if it's visible (has saved apps)
         if ($presetLastUsed.Visibility -ne 'Collapsed' -and $script:SavedAppIds) {
-            SetPresetState $presetLastUsed { param($c) (@($c.AppIds) | Where-Object { $script:SavedAppIds -contains $_ }).Count -gt 0 }
+            Set-PresetState $presetLastUsed { param($c) (@($c.AppIds) | Where-Object { $script:SavedAppIds -contains $_ }).Count -gt 0 }
         }
     }
     finally {
@@ -304,7 +357,29 @@ function Find-ParentScrollViewer {
     return $null
 }
 
-function Load-AppsWithList {
+<#
+    .SYNOPSIS
+        Loads application details and adds their interactive checkboxes to the main window.
+
+    .PARAMETER Window
+        The main application window and resource owner.
+
+    .PARAMETER AppsPanel
+        The panel populated with application checkboxes.
+
+    .PARAMETER OnlyInstalledAppsBox
+        The filter control that determines whether only installed apps are loaded.
+
+    .PARAMETER LoadingAppsIndicator
+        The loading indicator shown while application details are prepared.
+
+    .PARAMETER ImportConfigBtn
+        The optional import control re-enabled after loading completes.
+
+    .PARAMETER ListOfApps
+        An optional pre-fetched list of installed WinGet applications.
+#>
+function Add-AppsToMainWindow {
     param(
         [System.Windows.Window]$Window,
         [System.Windows.Controls.Panel]$AppsPanel,
@@ -316,27 +391,15 @@ function Load-AppsWithList {
 
     $script:MainWindowLastSelectedCheckbox = $null
 
-    $loaderScriptPath = $script:LoadAppsDetailsScriptPath
-    $helperScriptPath = $script:TestAppInWingetListScriptPath
-    $appsFilePath = $script:AppsListFilePath
     $onlyInstalled = [bool]$OnlyInstalledAppsBox.IsChecked
 
-    # Use preloaded data if available; otherwise load in background job
+    # Use preloaded data if available; otherwise load in a background job to keep the UI responsive.
     if (-not $onlyInstalled -and $script:PreloadedAppData) {
         $rawAppData = $script:PreloadedAppData
         $script:PreloadedAppData = $null
     }
     else {
-        # Load apps details in a background job to keep the UI responsive.
-        # The helper is dot-sourced inside the job because the runspace
-        # does not inherit the parent scope's dot-sourced functions.
-        $rawAppData = Invoke-NonBlocking -ScriptBlock {
-            param($loaderScript, $helperScript, $appsListFilePath, $installedList, $onlyInstalled)
-            $script:AppsListFilePath = $appsListFilePath
-            . $helperScript
-            . $loaderScript
-            LoadAppsDetailsFromJson -OnlyInstalled:$onlyInstalled -InstalledList $installedList -InitialCheckedFromJson:$false
-        } -ArgumentList $loaderScriptPath, $helperScriptPath, $appsFilePath, $ListOfApps, $onlyInstalled
+        $rawAppData = Invoke-AppDetailsFromJsonAsync -OnlyInstalled:$onlyInstalled -InstalledList $ListOfApps
     }
 
     $appsToAdd = @($rawAppData | Where-Object { $_ -and ($_.AppId -or $_.FriendlyName) } | Sort-Object -Property FriendlyName)
@@ -368,25 +431,41 @@ function Load-AppsWithList {
         $checkbox.IsChecked = $app.IsChecked
         $checkbox.Style = $Window.Resources['AppsPanelCheckBoxStyle']
 
-        # Build table row: Recommendation dot | Name | Description | App ID
+        # Build table row: Recommendation indicator | Name | Description | App ID
         $row = New-Object System.Windows.Controls.Grid
         $row.Style = $Window.Resources['AppTableRowStyle']
         $c0 = New-Object System.Windows.Controls.ColumnDefinition; $c0.Width = $Window.Resources['AppTableDotColWidth']
         $c1 = New-Object System.Windows.Controls.ColumnDefinition; $c1.Width = $Window.Resources['AppTableNameColWidth']
+        $c1.SharedSizeGroup = 'AppTableName'
         $c2 = New-Object System.Windows.Controls.ColumnDefinition; $c2.Width = $Window.Resources['AppTableDescColWidth']
         $c3 = New-Object System.Windows.Controls.ColumnDefinition; $c3.Width = $Window.Resources['AppTableIdColWidth']
         $row.ColumnDefinitions.Add($c0); $row.ColumnDefinitions.Add($c1)
         $row.ColumnDefinitions.Add($c2); $row.ColumnDefinitions.Add($c3)
 
-        $dot = New-Object System.Windows.Shapes.Ellipse
-        $dot.Style = $Window.Resources['AppRecommendationDotStyle']
-        $dot.Fill = switch ($app.Recommendation) { 'safe' { $brushSafe } 'unsafe' { $brushUnsafe } default { $brushDefault } }
-        $dot.ToolTip = switch ($app.Recommendation) {
-            'safe'   { '[Recommended] Safe to remove for most users' }
-            'unsafe' { '[Not Recommended] Only remove if you know what you are doing' }
-            default  { "[Optional] Can be safely removed if you don't need this app" }
+        $indicator = switch ($app.Recommendation) {
+            'safe' { New-Object System.Windows.Shapes.Ellipse }
+            'unsafe' {
+                $triangle = New-Object System.Windows.Shapes.Polygon
+                $triangle.Points = [System.Windows.Media.PointCollection]::Parse('0,9 4.5,0 9,9')
+                $triangle.Stretch = 'Fill'
+                $triangle
+            }
+            default {
+                $diamond = New-Object System.Windows.Shapes.Polygon
+                $diamond.Points = [System.Windows.Media.PointCollection]::Parse('4.5,0 9,4.5 4.5,9 0,4.5')
+                $diamond.Stretch = 'Fill'
+                $diamond
+            }
         }
-        [System.Windows.Controls.Grid]::SetColumn($dot, 0)
+        $indicator.Style = $Window.Resources['AppRecommendationIndicatorStyle']
+        $indicator.Fill = switch ($app.Recommendation) { 'safe' { $brushSafe } 'unsafe' { $brushUnsafe } default { $brushDefault } }
+        $recommendationKey = switch ($app.Recommendation) {
+            'safe'   { 'AppLegendRecommendedTooltip' }
+            'unsafe' { 'AppLegendNotRecommendedTooltip' }
+            default  { 'AppLegendOptionalTooltip' }
+        }
+        $indicator.SetResourceReference([System.Windows.FrameworkElement]::ToolTipProperty, "Language_$recommendationKey")
+        [System.Windows.Controls.Grid]::SetColumn($indicator, 0)
 
         $tbName = New-Object System.Windows.Controls.TextBlock
         $tbName.Text = $app.FriendlyName
@@ -405,7 +484,7 @@ function Load-AppsWithList {
         $tbId.ToolTip = $app.AppIdDisplay
         [System.Windows.Controls.Grid]::SetColumn($tbId, 3)
 
-        $row.Children.Add($dot) | Out-Null
+        $row.Children.Add($indicator) | Out-Null
         $row.Children.Add($tbName) | Out-Null
         $row.Children.Add($tbDesc) | Out-Null
         $row.Children.Add($tbId) | Out-Null
@@ -416,6 +495,8 @@ function Load-AppsWithList {
         Add-Member -InputObject $checkbox -MemberType NoteProperty -Name 'SelectedByDefault' -Value $app.SelectedByDefault
         Add-Member -InputObject $checkbox -MemberType NoteProperty -Name 'AppIds' -Value @($app.AppId)
         Add-Member -InputObject $checkbox -MemberType NoteProperty -Name 'AppIdDisplay' -Value $app.AppIdDisplay
+        Add-Member -InputObject $checkbox -MemberType NoteProperty -Name 'AppNameText' -Value $tbName
+        Add-Member -InputObject $checkbox -MemberType NoteProperty -Name 'AppDescriptionText' -Value $tbDesc
 
         $checkbox.Add_Checked({
             $w = $script:MainWindow
@@ -435,7 +516,7 @@ function Load-AppsWithList {
                 -AppRemovalScopeDescription $w.FindName('AppRemovalScopeDescription') `
                 -UserSelectionCombo $w.FindName('UserSelectionCombo')
         })
-        AttachShiftClickBehavior -checkbox $checkbox -appsPanel $AppsPanel `
+        Attach-ShiftClickBehavior -checkbox $checkbox -appsPanel $AppsPanel `
             -lastSelectedCheckboxRef ([ref]$script:MainWindowLastSelectedCheckbox) `
             -updateStatusCallback {
                 $w = $script:MainWindow
@@ -449,7 +530,7 @@ function Load-AppsWithList {
 
         $AppsPanel.Children.Add($checkbox) | Out-Null
 
-        if (($i + 1) % $batchSize -eq 0) { DoEvents }
+        if (($i + 1) % $batchSize -eq 0) { Invoke-DoEvents }
     }
 
     $sortArrowName = $Window.FindName('SortArrowName')
@@ -480,7 +561,26 @@ function Load-AppsWithList {
     }
 }
 
-function Load-AppsIntoMainUI {
+<#
+    .SYNOPSIS
+        Starts asynchronous loading of application checkboxes for the main window.
+
+    .PARAMETER Window
+        The main application window.
+
+    .PARAMETER AppsPanel
+        The panel that receives application checkboxes.
+
+    .PARAMETER OnlyInstalledAppsBox
+        The installed-applications filter control.
+
+    .PARAMETER LoadingAppsIndicator
+        The loading indicator shown until loading completes.
+
+    .PARAMETER ImportConfigBtn
+        The optional import control disabled while loading is in progress.
+#>
+function Initialize-MainWindowApps {
     param(
         [System.Windows.Window]$Window,
         [System.Windows.Controls.Panel]$AppsPanel,
@@ -492,6 +592,8 @@ function Load-AppsIntoMainUI {
     # Prevent concurrent loads
     if ($script:IsLoadingApps) { return }
     $script:IsLoadingApps = $true
+    $settingsButton = $Window.FindName('SettingsBtn')
+    if ($settingsButton) { $settingsButton.IsEnabled = $false }
 
     if ($ImportConfigBtn) {
         $ImportConfigBtn.IsEnabled = $false
@@ -511,7 +613,7 @@ function Load-AppsIntoMainUI {
     # Force a render so the loading indicator is visible, then schedule the
     # actual loading at Background priority so this call returns immediately.
     # This is critical when called from Add_Loaded: the window must finish
-    # its initialization before we start a nested message pump via DoEvents.
+    # its initialization before we start a nested message pump via Invoke-DoEvents.
     $Window.Dispatcher.Invoke([System.Windows.Threading.DispatcherPriority]::Render, [action] {})
     $Window.Dispatcher.BeginInvoke([System.Windows.Threading.DispatcherPriority]::Background, [action] {
             try {
@@ -519,16 +621,16 @@ function Load-AppsIntoMainUI {
 
                 if ($OnlyInstalledAppsBox.IsChecked -and ($script:WingetInstalled -eq $true)) {
                     Write-Host "Retrieving installed apps via winget..."
-                    $listOfApps = GetInstalledAppsViaWinget -TimeOut 20 -NonBlocking
+                    $listOfApps = Get-WingetInstalledApps -TimeOut 20 -NonBlocking
 
                     if ($null -eq $listOfApps) {
                         Write-Warning "WinGet returned no data (command timed out or failed)"
-                        Show-MessageBox -Message 'Unable to load list of installed apps via WinGet.' -Title 'Error' -Button 'OK' -Icon 'Error' | Out-Null
+                        Show-MessageBox -Message (Get-Translation -Key 'AppSelectionWinGetLoadFailedMessage') -Title (Get-Translation -Key 'ErrorTitle') -Button 'OK' -Icon 'Error' | Out-Null
                         $OnlyInstalledAppsBox.IsChecked = $false
                     }
                 }
 
-                Load-AppsWithList -Window $Window -AppsPanel $AppsPanel -OnlyInstalledAppsBox $OnlyInstalledAppsBox `
+                Add-AppsToMainWindow -Window $Window -AppsPanel $AppsPanel -OnlyInstalledAppsBox $OnlyInstalledAppsBox `
                     -LoadingAppsIndicator $LoadingAppsIndicator -ImportConfigBtn $ImportConfigBtn -ListOfApps $listOfApps
             }
             catch {
@@ -540,6 +642,8 @@ function Load-AppsIntoMainUI {
             }
             finally {
                 $script:IsLoadingApps = $false
+                $settingsButton = $Window.FindName('SettingsBtn')
+                if ($settingsButton) { $settingsButton.IsEnabled = $true }
             }
         }) | Out-Null
 }

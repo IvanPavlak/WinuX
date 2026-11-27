@@ -175,6 +175,7 @@ Phase 2 (Repos):                 Git identity guarantee (restored from GitConfig
                                  → Update-Repositories (opt-in via BootstrapConfig.Steps.RepositoryUpdate;
                                  -All or -Group <names>, per BootstrapConfig.RepositoryUpdateScope)
 Phase 3 (System Config):         Set-CustomExecutionPolicy → Enable-DeveloperMode
+                                 → Enable-ClassicContextMenu (opt-in via BootstrapConfig.Steps.ClassicContextMenu)
                                  → Set-PowerPlan → Set-PowerButtonActions → Set-SystemTheme
                                  → Set-Locale → Set-DisplayLanguage → Set-KeyboardLayouts
                                  → Display-SystemLanguageSettings → Configure-NerdFont

@@ -1,8 +1,14 @@
-# Shows application selection window that allows the user to select what apps they want to remove or keep
+<#
+    .SYNOPSIS
+        Displays the application-selection dialog and records the confirmed selections.
+
+    .OUTPUTS
+        System.Nullable[System.Boolean]. The dialog result; confirmed application IDs are stored in $script:SelectedApps.
+#>
 function Show-AppSelectionWindow {
     Add-Type -AssemblyName PresentationFramework,PresentationCore,WindowsBase | Out-Null
 
-    $usesDarkMode = GetSystemUsesDarkMode
+    $usesDarkMode = Get-AppUsesDarkMode
     
     # Show overlay if main window exists
     $overlay = $null
@@ -18,6 +24,7 @@ function Show-AppSelectionWindow {
 
     # Load XAML from file
     $xaml = Get-Content -Path $script:AppSelectionSchema -Raw
+    $xaml = ConvertTo-LocalizedXaml -Xaml $xaml
     $reader = [System.Xml.XmlReader]::Create([System.IO.StringReader]::new($xaml))
     try {
         $window = [System.Windows.Markup.XamlReader]::Load($reader)
@@ -34,7 +41,7 @@ function Show-AppSelectionWindow {
         catch { }
     }
 
-    SetWindowThemeResources -window $window -usesDarkMode $usesDarkMode
+    Set-WindowThemeResources -window $window -usesDarkMode $usesDarkMode
 
     $appsPanel = $window.FindName('AppsPanel')
     $checkAllBox = $window.FindName('CheckAllBox')
@@ -46,8 +53,14 @@ function Show-AppSelectionWindow {
     # Track the last selected checkbox for shift-click range selection
     $script:AppSelectionWindowLastSelectedCheckbox = $null
 
-    # Loads apps into the apps UI
-    function LoadApps {
+    <#
+        .SYNOPSIS
+            Reloads the application-selection checkboxes using the current installed-apps filter.
+
+        .NOTES
+            Updates the dialog loading indicator and resets range-selection state.
+    #>
+    function Load-Apps {
         # Show loading indicator
         $loadingIndicator.Visibility = 'Visible'
         $window.Dispatcher.Invoke([System.Windows.Threading.DispatcherPriority]::Background, [action]{})
@@ -57,15 +70,15 @@ function Show-AppSelectionWindow {
 
         if ($onlyInstalledBox.IsChecked -and ($script:WingetInstalled -eq $true)) {
             # Attempt to get a list of installed apps via WinGet, times out after 10 seconds
-            $listOfApps = GetInstalledAppsViaWinget -TimeOut 10 -NonBlocking
+            $listOfApps = Get-WingetInstalledApps -TimeOut 10 -NonBlocking
             if ($null -eq $listOfApps) {
                 # Show error that the script was unable to get list of apps from WinGet
-                Show-MessageBox -Message 'Unable to load list of installed apps via WinGet.' -Title 'Error' -Button 'OK' -Icon 'Error' -Owner $window | Out-Null
+                Show-MessageBox -Message (Get-Translation -Key 'AppSelectionWinGetLoadFailedMessage') -Title (Get-Translation -Key 'ErrorTitle') -Button 'OK' -Icon 'Error' -Owner $window | Out-Null
                 $onlyInstalledBox.IsChecked = $false
             }
         }
 
-        $appsToAdd = LoadAppsDetailsFromJson -OnlyInstalled:$onlyInstalledBox.IsChecked -InstalledList $listOfApps -InitialCheckedFromJson:$true
+        $appsToAdd = Import-AppDetailsFromJson -OnlyInstalled:$onlyInstalledBox.IsChecked -InstalledList $listOfApps -InitialCheckedFromJson:$true
 
         # Reset the last selected checkbox when loading a new list
         $script:AppSelectionWindowLastSelectedCheckbox = $null
@@ -82,7 +95,7 @@ function Show-AppSelectionWindow {
             $checkbox.Style = $window.Resources["AppsPanelCheckBoxStyle"]
             
             # Attach shift-click behavior for range selection
-            AttachShiftClickBehavior -checkbox $checkbox -appsPanel $appsPanel -lastSelectedCheckboxRef ([ref]$script:AppSelectionWindowLastSelectedCheckbox)
+            Attach-ShiftClickBehavior -checkbox $checkbox -appsPanel $appsPanel -lastSelectedCheckboxRef ([ref]$script:AppSelectionWindowLastSelectedCheckbox)
             
             $appsPanel.Children.Add($checkbox) | Out-Null
         }
@@ -112,8 +125,8 @@ function Show-AppSelectionWindow {
         }
     })
 
-    $onlyInstalledBox.Add_Checked({ LoadApps })
-    $onlyInstalledBox.Add_Unchecked({ LoadApps })
+    $onlyInstalledBox.Add_Checked({ Load-Apps })
+    $onlyInstalledBox.Add_Unchecked({ Load-Apps })
 
     $confirmBtn.Add_Click({
         $selectedApps = @()
@@ -130,7 +143,7 @@ function Show-AppSelectionWindow {
             return
         }
 
-        if (-not (ConfirmUnsafeAppRemoval -SelectedApps $selectedApps -Owner $window)) {
+        if (-not (Confirm-UnsafeAppRemoval -SelectedApps $selectedApps -Owner $window)) {
             return
         }
 
@@ -141,7 +154,7 @@ function Show-AppSelectionWindow {
 
     # Load apps after window is shown (allows UI to render first)
     $window.Add_ContentRendered({ 
-        $window.Dispatcher.Invoke([System.Windows.Threading.DispatcherPriority]::Background, [action]{ LoadApps }) | Out-Null
+        $window.Dispatcher.Invoke([System.Windows.Threading.DispatcherPriority]::Background, [action]{ Load-Apps }) | Out-Null
     })
 
     # Show the window and return dialog result

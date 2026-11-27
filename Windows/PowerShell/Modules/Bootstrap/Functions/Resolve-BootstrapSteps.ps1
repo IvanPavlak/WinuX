@@ -16,7 +16,8 @@ function Resolve-BootstrapSteps {
 		because they have no configuration to be empty and act the moment
 		they run: MicrosoftActivationScripts, Win11Debloat, RepositoryUpdate
 		(clones and pulls every repository the machine's scope names),
-		DeveloperMode, NuGetConfig (prompts for a GitHub PAT), NpmConfig
+		DeveloperMode, ClassicContextMenu (overrides Explorer's context menu classes
+		for the current user and restarts Explorer), NuGetConfig (prompts for a GitHub PAT), NpmConfig
 		(prompts for a GitHub PAT for the npm registries), UpgradeAll
 		(upgrades every package already on the machine, not just WinuX's own),
 		AiArtifacts (machine-global AI skills, mods, rules, prompts and agents
@@ -72,6 +73,7 @@ function Resolve-BootstrapSteps {
 		RepositoryUpdate           = $false
 		ExecutionPolicy            = $true
 		DeveloperMode              = $false
+		ClassicContextMenu         = $false
 		PowerPlan                  = $true
 		PowerButtonActions         = $true
 		SystemTheme                = $true

@@ -1272,7 +1272,9 @@ Anything other than the three valid values is reported as unknown rather than si
   optional - missing entries use the built-in defaults. Most steps default on because their
   functions no-op when their configuration section is empty; the steps that act the moment they
   run default OFF and are opted into here: `MicrosoftActivationScripts`, `Win11Debloat`,
-  `DeveloperMode`, `NuGetConfig` (prompts for a GitHub PAT), `NpmConfig` (prompts for a GitHub
+  `DeveloperMode`, `ClassicContextMenu` (`Enable-ClassicContextMenu` overrides Explorer's context menu
+  classes for the current user and restarts Explorer, so right click opens the classic menu on Windows 11),
+  `NuGetConfig` (prompts for a GitHub PAT), `NpmConfig` (prompts for a GitHub
   PAT and writes it into the user npmrc for [`NpmRegistries`](#npm-configuration)), `UpgradeAll` (`Upgrade-All` runs
   `winget upgrade --all` and its Scoop/Chocolatey equivalents, so it upgrades every package
   already on the machine, not only the ones WinuX installs - the base spells this one out as

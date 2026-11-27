@@ -12,7 +12,7 @@ function Bootstrap {
 		no-op on their own when their configuration section is empty, so an enabled step on
 		the empty base config applies nothing. Opt-in steps that act the moment they run
 		default off: MicrosoftActivationScripts, Win11Debloat, RepositoryUpdate, DeveloperMode,
-		NuGetConfig, NpmConfig, UpgradeAll, AiArtifacts, AiMarketplaces, AiMcpServers, ObsidianCli,
+		ClassicContextMenu, NuGetConfig, NpmConfig, UpgradeAll, AiArtifacts, AiMarketplaces, AiMcpServers, ObsidianCli,
 		VSCodeProfiles, LockedStartLayout.
 
 		Execution sequence:
@@ -23,7 +23,7 @@ function Bootstrap {
 		2. Git identity guarantee (restored from GitConfig when unset), then Update-Repositories
 		   (opt-in via Steps.RepositoryUpdate) - which groups it pulls is governed by
 		   BootstrapConfig.RepositoryUpdateScope
-		3. Execution policy, Developer Mode, power plan, power button actions
+		3. Execution policy, Developer Mode, classic context menu, power plan, power button actions
 		4. System theme, locale, display language, keyboard layouts
 		5. Nerd Font, PowerShell modules, special folder redirections
 		6. WSL configuration (Steps.WSL)
@@ -177,6 +177,7 @@ function Bootstrap {
 
 		if ($steps.ExecutionPolicy) { Set-CustomExecutionPolicy } else { Write-LogWarning "Execution policy skipped (BootstrapConfig.Steps.ExecutionPolicy)" }
 		if ($steps.DeveloperMode) { Enable-DeveloperMode } else { Write-LogWarning "Developer Mode skipped - opt in via BootstrapConfig.Steps.DeveloperMode" }
+		if ($steps.ClassicContextMenu) { Enable-ClassicContextMenu } else { Write-LogWarning "Classic context menu skipped - opt in via BootstrapConfig.Steps.ClassicContextMenu" }
 
 		if ($steps.PowerPlan) { Set-PowerPlan -Auto } else { Write-LogWarning "Power plan skipped (BootstrapConfig.Steps.PowerPlan)" }
 		if ($steps.PowerButtonActions) { Set-PowerButtonActions -Auto } else { Write-LogWarning "Power button actions skipped (BootstrapConfig.Steps.PowerButtonActions)" }

@@ -2,55 +2,94 @@
   "Version": "1.0",
   "Categories": [
     {
+      "CategoryId": "PrivacySuggestedContent",
       "Name": "Privacy & Suggested Content",
       "Icon": "&#xE72E;"
     },
     {
+      "CategoryId": "System",
       "Name": "System",
       "Icon": "&#xe770;"
     },
     {
+      "CategoryId": "StartMenuSearch",
       "Name": "Start Menu & Search",
       "Icon": "&#xe8fc;"
     },
     {
+      "CategoryId": "AI",
       "Name": "AI",
       "Icon": "&#xe794;"
     },
     {
+      "CategoryId": "WindowsUpdate",
       "Name": "Windows Update",
       "Icon": "&#xe895;"
     },
     {
+      "CategoryId": "Taskbar",
       "Name": "Taskbar",
       "Icon": "&#xe75b;"
     },
     {
+      "CategoryId": "Appearance",
       "Name": "Appearance",
       "Icon": "&#xE771;"
     },
     {
+      "CategoryId": "FileExplorer",
       "Name": "File Explorer",
       "Icon": "&#xec50;"
     },
     {
+      "CategoryId": "Gaming",
       "Name": "Gaming",
       "Icon": "&#xE7FC;"
     },
     {
+      "CategoryId": "MultiTasking",
       "Name": "Multi-tasking",
       "Icon": "&#xE7C4;"
     },
     {
+      "CategoryId": "OptionalWindowsFeatures",
       "Name": "Optional Windows Features",
       "Icon": "&#xefda;"
     },
     {
+      "CategoryId": "Other",
       "Name": "Other",
       "Icon": "&#xE713;"
     }
   ],
   "UiGroups": [
+    {
+      "GroupId": "DesktopSpotlight",
+      "Label": "Windows spotlight on the desktop",
+      "ToolTip": "This setting controls the Windows spotlight desktop background option. Keep the rotating wallpaper with or without the 'Learn about this picture' shortcut, or disable Windows spotlight entirely.",
+      "Category": "Appearance",
+      "Priority": 4,
+      "Values": [
+        {
+          "Label": "Show 'Learn about this picture' shortcut (Default)",
+          "FeatureIds": [
+            "EnableDesktopSpotlight"
+          ]
+        },
+        {
+          "Label": "Hide 'Learn about this picture' shortcut",
+          "FeatureIds": [
+            "HideDesktopSpotlightIcon"
+          ]
+        },
+        {
+          "Label": "Disable Windows spotlight desktop background",
+          "FeatureIds": [
+            "DisableDesktopSpotlight"
+          ]
+        }
+      ]
+    },
     {
       "GroupId": "SearchIcon",
       "Label": "Taskbar search style",
@@ -380,6 +419,7 @@
       "Label": "Disable telemetry, tracking & targeted ads",
       "ToolTip": "This setting disables telemetry, diagnostic data collection, activity history, app-launch tracking, targeted ads and more. It limits the data that is sent to Microsoft about your device and usage. If you are a Windows Insider, updates may be blocked until optional diagnostic data collection is turned back on.",
       "Category": "Privacy & Suggested Content",
+      "Priority": 1,
       "RegistryKey": "Disable_Telemetry.reg",
       "ApplyText": "Disabling telemetry and diagnostic data collection",
       "UndoLabel": "Enable telemetry, tracking & targeted ads",
@@ -393,6 +433,7 @@
       "Label": "Disable tips, tricks & suggested content throughout Windows",
       "ToolTip": "This setting removes many annoying distractions from Windows. This includes things like notifications, reminders and sync provider ads. It also prevents automated installation of suggested apps.",
       "Category": "Privacy & Suggested Content",
+      "Priority": 2,
       "RegistryKey": "Disable_Windows_Suggestions.reg",
       "ApplyText": "Disabling tips, tricks, suggestions and ads throughout Windows",
       "UndoLabel": "Enable tips, tricks & suggested content throughout Windows",
@@ -403,9 +444,9 @@
     },
     {
       "FeatureId": "DisableNotifications",
-      "Label": "Disable Windows Notifications (From apps and other senders)",
-      "ToolTip": "Disables native Windows notifications from apps and other senders, this includes notifications from apps like Discord, WhatsApp, Teams, and Slack.",
-      "Category": "Privacy & Suggested Content",
+      "Label": "Disable Windows system and app notifications",
+      "ToolTip": "Disables native Windows system and app notifications, this includes notifications from apps like Discord, WhatsApp, Teams, and Slack.",
+      "Category": "System",
       "RegistryKey": "Disable_Notifications.reg",
       "ApplyText": "Disabling Windows notifications and reminders",
       "UndoLabel": "Enable Windows notifications and reminders",
@@ -419,6 +460,7 @@
       "Label": "Disable Windows location services & app location access",
       "ToolTip": "This will turn off Windows Location Services and deny apps access to your location. This feature uses policies, which will lock down certain settings.",
       "Category": "Privacy & Suggested Content",
+      "Priority": 4,
       "RegistryKey": "Disable_Location_Services.reg",
       "ApplyText": "Disabling Windows location services and app location access",
       "UndoLabel": "Enable Windows location services & app location access",
@@ -432,6 +474,7 @@
       "Label": "Disable Find My Device location tracking",
       "ToolTip": "This will turn off the 'Find My Device' feature, which periodically sends your device's location to Microsoft. This feature uses policies, which will lock down certain settings.",
       "Category": "Privacy & Suggested Content",
+      "Priority": 5,
       "RegistryKey": "Disable_Find_My_Device.reg",
       "ApplyText": "Disabling Find My Device location tracking",
       "UndoLabel": "Enable Find My Device location tracking",
@@ -445,6 +488,7 @@
       "Label": "Disable tips & tricks on the lock screen",
       "ToolTip": "This will turn off the lockscreen spotlight option and disable the tips, tricks and fun facts that appear on the lock screen.",
       "Category": "Privacy & Suggested Content",
+      "Priority": 6,
       "RegistryKey": "Disable_Lockscreen_Tips.reg",
       "ApplyText": "Disabling tips & tricks on the lock screen",
       "UndoLabel": "Enable tips & tricks on the lock screen",
@@ -454,15 +498,41 @@
       "MaxVersion": null
     },
     {
+      "FeatureId": "EnableDesktopSpotlight",
+      "Label": "Enable Windows spotlight desktop background and shortcut",
+      "ToolTip": "Restores the Windows spotlight desktop background and the 'Learn about this picture' shortcut.",
+      "Category": "Appearance",
+      "RegistryKey": "Enable_Desktop_Spotlight.reg",
+      "ApplyText": "Restoring the Windows spotlight desktop background and shortcut",
+      "UndoLabel": null,
+      "ApplyUndoText": null,
+      "RegistryUndoKey": null,
+      "MinVersion": null,
+      "MaxVersion": null
+    },
+    {
       "FeatureId": "DisableDesktopSpotlight",
-      "Label": "Disable Windows Spotlight for desktop",
-      "ToolTip": "This will turn off the 'Windows Spotlight' feature for the desktop background, which shows different background images and occasionally tips and fun facts on the desktop. This feature uses policies, which will lock down certain settings.",
-      "Category": "Privacy & Suggested Content",
+      "Label": "Disable Windows spotlight desktop background",
+      "ToolTip": "Turns off Windows spotlight for the desktop background, which displays rotating images and may show tips and fun facts. This feature uses policies, which will lock down certain settings.",
+      "Category": "Appearance",
       "RegistryKey": "Disable_Desktop_Spotlight.reg",
-      "ApplyText": "Disabling the 'Windows Spotlight' desktop background option",
-      "UndoLabel": "Enable Windows Spotlight for desktop",
-      "ApplyUndoText": "Enabling the 'Windows Spotlight' desktop background option",
+      "ApplyText": "Disabling the Windows spotlight desktop background",
+      "UndoLabel": "Enable Windows spotlight desktop background",
+      "ApplyUndoText": "Restoring the Windows spotlight desktop background and shortcut",
       "RegistryUndoKey": "Enable_Desktop_Spotlight.reg",
+      "MinVersion": null,
+      "MaxVersion": null
+    },
+    {
+      "FeatureId": "HideDesktopSpotlightIcon",
+      "Label": "Hide the 'Learn about this picture' desktop shortcut",
+      "ToolTip": "Hides the 'Learn about this picture' desktop shortcut while keeping Windows spotlight wallpaper rotation enabled. It does not disable Windows spotlight.",
+      "Category": "Appearance",
+      "RegistryKey": "Hide_Desktop_Spotlight_Icon.reg",
+      "ApplyText": "Hiding the Windows spotlight 'Learn about this picture' desktop shortcut",
+      "UndoLabel": "Show the 'Learn about this picture' desktop shortcut",
+      "ApplyUndoText": "Showing the Windows spotlight 'Learn about this picture' desktop shortcut",
+      "RegistryUndoKey": "Show_Desktop_Spotlight_Icon.reg",
       "MinVersion": null,
       "MaxVersion": null
     },
@@ -708,6 +778,18 @@
       "RegistryUndoKey": "Enable_Edge_AI_Features.reg",
       "MinVersion": 22621,
       "MaxVersion": null
+    },{
+      "FeatureId": "DisableChromeAI",
+      "Label": "Disable AI features in Google Chrome",
+      "ToolTip": "Disables Google Chrome's built-in AI tools and integrations, including Gemini, AI search & suggestions, writing assistance, autofill and more. It also removes local AI models. This feature uses policies, which will lock down certain settings.",
+      "Category": "AI",
+      "RegistryKey": "Disable_Chrome_AI_Features.reg",
+      "ApplyText": "Disabling AI features in Google Chrome",
+      "UndoLabel": "Enable AI features in Google Chrome",
+      "ApplyUndoText": "Enabling AI features in Google Chrome",
+      "RegistryUndoKey": "Enable_Chrome_AI_Features.reg",
+      "MinVersion": 22621,
+      "MaxVersion": null
     },
     {
       "FeatureId": "DisablePaintAI",
@@ -745,20 +827,8 @@
       "UndoLabel": "Disable dark theme for system and apps",
       "ApplyUndoText": "Disabling dark mode for system and apps",
       "RegistryUndoKey": "Enable_Light_Mode.reg",
+      "Priority": 1,
       "MinVersion": null,
-      "MaxVersion": null
-    },
-    {
-      "FeatureId": "DisableDragTray",
-      "Label": "Disable 'Drag Tray' for sharing & moving files",
-      "ToolTip": "The Drag Tray is a new feature for sharing & moving files in Windows 11, it appears at the top of the screen when dragging files.",
-      "Category": "System",
-      "RegistryKey": "Disable_Share_Drag_Tray.reg",
-      "ApplyText": "Disabling Drag Tray",
-      "UndoLabel": "Enable 'Drag Tray' for sharing & moving files",
-      "ApplyUndoText": "Enabling Drag Tray",
-      "RegistryUndoKey": "Enable_Share_Drag_Tray.reg",
-      "MinVersion": 26200,
       "MaxVersion": null
     },
     {
@@ -1164,10 +1234,10 @@
     },
     {
       "FeatureId": "MMTaskbarModeMainActive",
-      "Label": "Show app icons on main taskbar and on taskbar where the windows is open",
+      "Label": "Show app icons on main taskbar and on taskbar where the window is open",
       "Category": "Taskbar",
       "RegistryKey": "MMTaskbarMode_Main_Active.reg",
-      "ApplyText": "Setting the taskbar to show app icons on main taskbar and on taskbar where the windows is open",
+      "ApplyText": "Setting the taskbar to show app icons on main taskbar and on taskbar where the window is open",
       "UndoLabel": "Show app icons on all taskbars",
       "ApplyUndoText": "Setting the taskbar to show app icons on all taskbars",
       "RegistryUndoKey": "MMTaskbarMode_All.reg",
@@ -1279,12 +1349,12 @@
     {
       "FeatureId": "HideHome",
       "Label": "Hide 'Home' from navigation pane",
-      "ToolTip": "Hides the 'Home' section from the File Explorer navigation pane.",
+      "ToolTip": "Hides the 'Home' section from the File Explorer navigation pane. Warning: This may prevent Quick access links from updating until you restart your PC or Windows Explorer.",
       "Category": "File Explorer",
       "Priority": 5,
       "RegistryKey": "Hide_Home_from_Explorer.reg",
       "ApplyText": "Hiding the 'Home' section from the File Explorer navigation pane",
-      "UndoLabel": "Show 'Home' from navigation pane",
+      "UndoLabel": "Show 'Home' in navigation pane",
       "ApplyUndoText": "Showing the 'Home' section from the File Explorer navigation pane",
       "RegistryUndoKey": "Show_Home_in_Explorer.reg",
       "MinVersion": 22000,
@@ -1298,7 +1368,7 @@
       "Priority": 6,
       "RegistryKey": "Hide_Gallery_from_Explorer.reg",
       "ApplyText": "Hiding the 'Gallery' section from the File Explorer navigation pane",
-      "UndoLabel": "Show 'Gallery' from navigation pane",
+      "UndoLabel": "Show 'Gallery' in navigation pane",
       "ApplyUndoText": "Showing the 'Gallery' section from the File Explorer navigation pane",
       "RegistryUndoKey": "Show_Gallery_in_Explorer.reg",
       "MinVersion": 22000,
@@ -1314,6 +1384,7 @@
       "UndoLabel": "Enable transparency effects",
       "ApplyUndoText": "Enabling transparency effects",
       "RegistryUndoKey": "Enable_Transparency.reg",
+      "Priority": 2,
       "MinVersion": null,
       "MaxVersion": null
     },
@@ -1327,6 +1398,7 @@
       "UndoLabel": "Enable animations and visual effects",
       "ApplyUndoText": "Enabling animations and visual effects",
       "RegistryUndoKey": "Enable_Animations.reg",
+      "Priority": 3,
       "RequiresReboot": true,
       "MinVersion": null,
       "MaxVersion": null
@@ -1354,6 +1426,20 @@
       "UndoLabel": "Allow automatic restarts after updates while signed in",
       "ApplyUndoText": "Allowing automatic restarts after updates while signed in",
       "RegistryUndoKey": "Allow_Auto_Reboot.reg",
+      "MinVersion": null,
+      "MaxVersion": null
+    },
+    {
+      "FeatureId": "DisableDriverUpdates",
+      "Label": "Disable driver updates through Windows Update",
+      "ToolTip": "Prevents Windows from automatically downloading and installing driver updates via regular Windows quality updates. Windows can still automatically install drivers for new devices. Drivers included in security, critical, or feature updates may still be installed.",
+      "Category": "Windows Update",
+      "RegistryKey": "Disable_Driver_Updates.reg",
+      "ApplyText": "Disabling driver updates through Windows Update",
+      "UndoLabel": "Enable driver updates through Windows Update",
+      "ApplyUndoText": "Enabling driver updates through Windows Update",
+      "RegistryUndoKey": "Enable_Driver_Updates.reg",
+      "RequiresReboot": true,
       "MinVersion": null,
       "MaxVersion": null
     },
@@ -1403,7 +1489,7 @@
       "Priority": 7,
       "RegistryKey": "Hide_Onedrive_Folder.reg",
       "ApplyText": "Hiding the 'OneDrive' section from the File Explorer navigation pane",
-      "UndoLabel": "Show 'OneDrive' from navigation pane",
+      "UndoLabel": "Show 'OneDrive' in navigation pane",
       "ApplyUndoText": "Showing the 'OneDrive' section from the File Explorer navigation pane",
       "RegistryUndoKey": "Show_Onedrive_Folder.reg",
       "MinVersion": null,
@@ -1445,8 +1531,8 @@
       "Priority": 10,
       "RegistryKey": "Add_All_Folders_Under_This_PC.reg",
       "ApplyText": "Adding all common folders (Desktop, Downloads, etc.) back to 'This PC' in File Explorer",
-      "UndoLabel": "Remove common folders back to 'This PC' page",
-      "ApplyUndoText": "Removing all common folders (Desktop, Downloads, etc.) back to 'This PC' in File Explorer",
+      "UndoLabel": "Remove common folders from 'This PC' page",
+      "ApplyUndoText": "Removing all common folders (Desktop, Downloads, etc.) from 'This PC' in File Explorer",
       "RegistryUndoKey": "Remove_All_Folders_Under_This_PC.reg",
       "MinVersion": 22000,
       "MaxVersion": null

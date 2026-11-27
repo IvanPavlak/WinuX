@@ -100,6 +100,33 @@ winget install --id Microsoft.PowerShell --exact --version 7.7.0.0 --source wing
 Set-StartupTasks
 ```
 
+### Right Click Still Opens The Windows 11 Menu After Win11Debloat's Classic Menu Option
+
+**Problem:** The classic context menu option was applied (Win11Debloat's "Use classic Windows 10 context menu style", or the registry override it writes), Explorer was restarted, and right click still opens the shortened Windows 11 menu.
+
+**Cause:** That option overrides one COM class, `{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}`. Newer Windows 11 builds draw a redesigned menu from a second class, `{51668040-5e31-4023-bbe3-149163bd80f1}`, which the option leaves alone, so the override no longer has an effect on its own.
+
+**Solution:** [Enable-ClassicContextMenu](../modules/system.md#enable-classiccontextmenu) overrides every class the build registers and restarts Explorer. Run it once, or turn the Bootstrap step on:
+
+```powershell
+Enable-ClassicContextMenu
+
+# Or as a Bootstrap step, in Configuration.local.psd1:
+# BootstrapConfig = @{ Steps = @{ ClassicContextMenu = $true } }
+```
+
+### "Win11Debloat settings saved outside the repo were kept at: [...]"
+
+**Problem:** `Start-Win11Debloat` warns that settings were kept in `LastUsedSettings.unlinked.json`, and the choices of the last interactive Win11Debloat run are not offered under `Use saved settings`.
+
+**Cause:** A Win11Debloat run saved its settings while `%LOCALAPPDATA%\Win11Debloat\LastUsedSettings.json` was a real file instead of the link to the repository's `Windows\Win11Debloat\LastUsedSettings.json` - a run started outside `Start-Win11Debloat`, or one from before the link pointed there. The repository file already had settings, so it stayed the source of truth and [Sync-Win11DebloatSettings](../modules/application.md#sync-win11debloatsettings) set the other file aside instead of overwriting either.
+
+**Solution:** Compare the two files and copy what you want to keep into the repository file, then delete the set-aside one. From then on every run reads and writes the repository file through the link.
+
+```powershell
+code --diff (Join-Path $env:LOCALAPPDATA "Win11Debloat\LastUsedSettings.unlinked.json") (Join-Path $global:MachineSpecificPaths.Projects.Self.Root "Windows\Win11Debloat\LastUsedSettings.json")
+```
+
 ## Configuration Issues
 
 ### Machine Type Not Detected

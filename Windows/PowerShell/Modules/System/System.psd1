@@ -15,6 +15,7 @@
 		'Configure-WSLSSH',
 		'Determine-DotnetDependencies',
 		'Display-SystemLanguageSettings',
+		'Enable-ClassicContextMenu',
 		'Enable-DeveloperMode',
 		'Format-OnefetchPanel',
 		'Get-BrowserTitlePattern',

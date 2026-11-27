@@ -27,7 +27,7 @@
 # Chocolatey ship empty lists and are skipped entirely (see PackageManagers).
 # Individual bootstrap steps are toggleable
 # via BootstrapConfig.Steps (see that section); invasive steps such as
-# MicrosoftActivationScripts, Win11Debloat, DeveloperMode, NuGetConfig,
+# MicrosoftActivationScripts, Win11Debloat, DeveloperMode, ClassicContextMenu, NuGetConfig,
 # NpmConfig, UpgradeAll, AiArtifacts, AiMarketplaces, AiMcpServers, AiProfileInit, ObsidianCli and LockedStartLayout are OFF
 # until you opt in. A vanilla run
 # therefore installs the framework apps but upgrades nothing else already
@@ -1186,7 +1186,7 @@
 	#
 	# BOOTSTRAP STEPS (in order):
 	# - Update-Repositories (clone/pull all configured repositories)
-	# - Set-CustomExecutionPolicy, Enable-DeveloperMode
+	# - Set-CustomExecutionPolicy, Enable-DeveloperMode, Enable-ClassicContextMenu
 	# - Set-SystemTheme, Set-Locale, Set-DisplayLanguage, Set-KeyboardLayouts
 	# - Configure-NerdFont, Install-PowerShellModules
 	# - Set-SpecialFolders, Restart-Explorer
@@ -1233,7 +1233,8 @@
 		# no-op when their configuration section is empty, so on the empty base
 		# config an enabled step applies nothing. Steps that act the moment they
 		# run have no empty state to detect and default OFF - opt in here:
-		# MicrosoftActivationScripts, Win11Debloat, DeveloperMode, NuGetConfig
+		# MicrosoftActivationScripts, Win11Debloat, DeveloperMode, ClassicContextMenu (overrides
+		# Explorer's context menu classes for the current user and restarts Explorer), NuGetConfig
 		# (prompts for a GitHub PAT), NpmConfig (prompts for a GitHub PAT), UpgradeAll (upgrades every package already
 		# on the machine, not just WinuX's own), AiArtifacts (machine-global AI skills,
 		# mods, rules, prompts and agents), AiMarketplaces
@@ -1254,6 +1255,7 @@
 		#                                RepositoryUpdateScope names for this machine)
 		# - ExecutionPolicy            : Set-CustomExecutionPolicy
 		# - DeveloperMode              : Enable-DeveloperMode (OFF by default)
+		# - ClassicContextMenu         : Enable-ClassicContextMenu (OFF by default)
 		# - PowerPlan                  : Set-PowerPlan -Auto
 		# - PowerButtonActions         : Set-PowerButtonActions -Auto
 		# - SystemTheme                : Set-SystemTheme -Auto (theme + wallpapers)

@@ -6,6 +6,7 @@ BeforeAll {
 
 	$AppFunctionsPath = Join-Path (Get-RepositoryPath).Modules "Application\Functions"
 	. "$AppFunctionsPath\Start-Win11Debloat.ps1"
+	. "$AppFunctionsPath\Sync-Win11DebloatSettings.ps1"
 }
 
 AfterAll {
@@ -20,11 +21,8 @@ Describe "Start-Win11Debloat" {
 		Mock Write-LogSuccess { }
 		Mock Test-AdminPrivileges { }
 		Mock Resolve-Selection { 'Use saved settings' }
-		Mock Remove-Item { }
-		Mock New-Item { }
-		Mock Get-Item {
-			[PSCustomObject]@{ LinkType = 'SymbolicLink'; Target = @('') }
-		}
+		# The saved-settings link is Sync-Win11DebloatSettings' job and is covered by its own tests.
+		Mock Sync-Win11DebloatSettings { $true }
 	}
 
 	It "returns when configured Win11Debloat script path does not exist" {
@@ -54,11 +52,43 @@ Set-Content -LiteralPath $invocationPath -Value @($PSVersionTable.PSEdition, $Ru
 '@
 		Set-Content -Path $scriptPath -Value $scriptContent
 
-		# Win11Debloat reads saved settings from the repo's LastUsedSettings.json (via a Config symlink).
-		$savedSettingsDir = Join-Path $TestDrive 'Windows\Win11Debloat'
-		[System.IO.Directory]::CreateDirectory($savedSettingsDir) | Out-Null
-		$savedSettingsTarget = Join-Path $savedSettingsDir 'LastUsedSettings.json'
-		Set-Content -Path $savedSettingsTarget -Value '{ "Version": "1.0", "Settings": [] }'
+		$global:MachineSpecificPaths = @{
+			Projects = @{ Self = @{ Root = $TestDrive } }
+		}
+		$global:Configuration = @{
+			BootstrapConfig = @{ LocalScripts = @{ Win11Debloat = $scriptPath } }
+		}
+
+		Mock Test-Path { $true }
+
+		Start-Win11Debloat
+
+		Get-Content -LiteralPath $invocationPath | Should -Be @('Desktop', 'True', 'True')
+		Should -Invoke Write-LogSuccess -ParameterFilter { $Message -eq 'Debloating with saved settings completed!' }
+		Should -Invoke Sync-Win11DebloatSettings -Times 1 -Exactly
+	}
+
+	It "offers no saved settings when Sync-Win11DebloatSettings reports none" {
+		$global:MachineSpecificPaths = @{
+			Projects = @{ Self = @{ Root = $TestDrive } }
+		}
+		$global:Configuration = @{
+			BootstrapConfig = @{ LocalScripts = @{ Win11Debloat = (Join-Path $TestDrive 'Win11Debloat.ps1') } }
+		}
+
+		Mock Test-Path { $true }
+		Mock Sync-Win11DebloatSettings { $false }
+		Mock Resolve-Selection { "Don't debloat" }
+		Mock Write-LogWarning { }
+
+		Start-Win11Debloat
+
+		Should -Invoke Resolve-Selection -Times 1 -Exactly -ParameterFilter { $OptionList -notcontains 'Use saved settings' -and $OptionList -contains 'Debloat' }
+	}
+
+	It "syncs the saved settings again after an interactive run, so a first run's choices reach the repository" {
+		$scriptPath = Join-Path $TestDrive 'Win11Debloat-Interactive.ps1'
+		Set-Content -Path $scriptPath -Value 'exit 0'
 
 		$global:MachineSpecificPaths = @{
 			Projects = @{ Self = @{ Root = $TestDrive } }
@@ -68,25 +98,18 @@ Set-Content -LiteralPath $invocationPath -Value @($PSVersionTable.PSEdition, $Ru
 		}
 
 		Mock Test-Path { $true }
-		Mock Get-Item {
-			[PSCustomObject]@{ LinkType = 'SymbolicLink'; Target = @($savedSettingsTarget) }
-		}
+		Mock Resolve-Selection { 'Debloat' }
 
 		Start-Win11Debloat
 
-		Get-Content -LiteralPath $invocationPath | Should -Be @('Desktop', 'True', 'True')
-		Should -Invoke Write-LogSuccess -ParameterFilter { $Message -eq 'Debloating with saved settings completed!' }
+		Should -Invoke Sync-Win11DebloatSettings -Times 2 -Exactly
+		Should -Invoke Write-LogSuccess -ParameterFilter { $Message -eq 'Debloating completed!' }
 	}
 
 	It "reports an error instead of success when Win11Debloat exits with a non-zero code" {
 		$scriptPath = Join-Path $TestDrive 'Win11Debloat-Failing.ps1'
 		Set-Content -Path $scriptPath -Value 'exit 3'
 
-		$savedSettingsDir = Join-Path $TestDrive 'Windows\Win11Debloat'
-		[System.IO.Directory]::CreateDirectory($savedSettingsDir) | Out-Null
-		$savedSettingsTarget = Join-Path $savedSettingsDir 'LastUsedSettings.json'
-		Set-Content -Path $savedSettingsTarget -Value '{ "Version": "1.0", "Settings": [] }'
-
 		$global:MachineSpecificPaths = @{
 			Projects = @{ Self = @{ Root = $TestDrive } }
 		}
@@ -95,9 +118,6 @@ Set-Content -LiteralPath $invocationPath -Value @($PSVersionTable.PSEdition, $Ru
 		}
 
 		Mock Test-Path { $true }
-		Mock Get-Item {
-			[PSCustomObject]@{ LinkType = 'SymbolicLink'; Target = @($savedSettingsTarget) }
-		}
 
 		Start-Win11Debloat
 

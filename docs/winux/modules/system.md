@@ -188,6 +188,22 @@ Determine-DotnetDependencies -SearchPath C:\repos -ListProjects
 - **Description:** Displays the current system language, locale, and culture settings. Prints three sections: Display Language(s) from `Get-WinUserLanguageList`, System Locale from `Get-WinSystemLocale`, and User Culture from `Get-Culture`.
 - **Usage:** `Display-SystemLanguageSettings`
 
+## [Enable-ClassicContextMenu](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Enable-ClassicContextMenu.ps1)
+
+- **Description:** Makes right click open the classic context menu on Windows 11 instead of the shortened one that keeps the full menu behind "Show more options". Writes an empty per-user `InprocServer32` override for the COM classes Explorer builds the shortened menu from, under `HKCU:\Software\Classes\CLSID`, then restarts Explorer through [Restart-Explorer](#restart-explorer). Needs no administrator privileges.
+- **Usage:** `Enable-ClassicContextMenu`
+
+Two classes are overridden: `{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}`, which every Windows 11 release has, and `{51668040-5e31-4023-bbe3-149163bd80f1}`, which newer builds draw their redesigned menu with - on those builds the first override alone changes nothing, which is why the classic menu option of other tools stops working there. A class the machine does not register under `HKLM:\SOFTWARE\Classes\CLSID` is left alone, so an older build gets one override and Windows 10 gets none and a warning. The operation is idempotent: an override already in place (the key's default value set to an empty string) is not rewritten, and Explorer is restarted only when at least one override was written. As a Bootstrap step (`BootstrapConfig.Steps.ClassicContextMenu`) it is off by default - it changes how Explorer behaves and restarts it the moment it runs; opt in via `Steps` or `Bootstrap -Include ClassicContextMenu`.
+
+```powershell
+# Right click opens the classic menu from now on
+Enable-ClassicContextMenu
+
+# Back to the Windows 11 menu: delete both overrides, then restart Explorer
+Remove-Item -Path 'HKCU:\Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}', 'HKCU:\Software\Classes\CLSID\{51668040-5e31-4023-bbe3-149163bd80f1}' -Recurse -ErrorAction SilentlyContinue
+Restart-Explorer
+```
+
 ## [Enable-DeveloperMode](https://github.com/IvanPavlak/WinuX/blob/master/Windows/PowerShell/Modules/System/Functions/Enable-DeveloperMode.ps1)
 
 - **Description:** Enables Windows Developer Mode by setting the registry value `AllowDevelopmentWithoutDevLicense` to `1` under `HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock`. Developer Mode allows running unsigned scripts and unpacked UWP apps, and is required for creating symlinks without admin (used by SymbolicLinkMaker for Windows symlinks outside Bootstrap; WSL symlinks do not require it). Requires administrator privileges.

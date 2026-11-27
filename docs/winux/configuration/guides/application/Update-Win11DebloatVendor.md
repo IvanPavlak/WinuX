@@ -86,6 +86,7 @@ A `Configuration.local.psd1` that configures everything on this page. Values are
 - [`Update-Win11DebloatVendor` in the Application module reference](../../../modules/application.md#update-win11debloatvendor) - parameters, usage and behaviour
 - [Application configuration guides](README.md) - every guide for this module
 - [`Start-Win11Debloat`](Start-Win11Debloat.md) - runs the vendored script this function refreshes
+- [`Sync-Win11DebloatSettings`](Sync-Win11DebloatSettings.md) - reads the same `Projects.Self.Root`
 - [`Import-AppCsv`](../bootstrap/Import-AppCsv.md) - reads the same `Projects.Self.Root`
 - [`Create-CondaEnvironments`](Create-CondaEnvironments.md) - reads the same `Projects.Self.Root`
 - [WinuXConfigurator](../../winux-configurator.md) - have an AI assistant walk these decisions with you
